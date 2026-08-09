@@ -83,7 +83,7 @@ spec:
     - name: sdwan_orchestrators
       description: Arista SD-WAN Orchestrators (VCO) — on-premises or private cloud deployments
     - name: ha_domains
-      description: HA domains (firewall + load balancer) — generator target for HAInterfaceGenerator
+      description: HA domains (firewall + load balancer) — membership tracking only, no generator dispatch
     - name: mlag_domains
       description: MLAG domains — generator target for MLAGWiringGenerator
     - name: loadbalancer_vips

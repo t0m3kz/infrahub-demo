@@ -440,8 +440,6 @@ queries:
     file_path: queries/config/cloud_vpc.gql
   - name: proposed_change_artifacts
     file_path: queries/topology/add/proposed_change_artifacts.gql
-  - name: ha_domain_data
-    file_path: queries/topology/add/ha_domain.gql
   - name: mlag_domain_data
     file_path: queries/topology/add/mlag_domain.gql
   - name: customer_dc
@@ -561,15 +559,6 @@ generator_definitions:
     targets: virtual_circuits
     query: virtual_circuit_data
     class_name: VirtualCircuitGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      name: name__value
-  - name: add_ha
-    file_path: generators/topology/ha.py
-    targets: ha_domains
-    query: ha_domain_data
-    class_name: HAGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:

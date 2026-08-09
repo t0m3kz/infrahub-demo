@@ -279,18 +279,12 @@ spec:
           - attribute_name: virtual_peer_link
             value_match: any
 
-    # ── HA Interfaces ─────────────────────────────────────────────────────────
-    - name: trigger-ha-on-firewall-update
-      branch_scope: "other_branches"
-      node_kind: ManagedFirewallHA
-      mutation_action: "updated"
-      action: ha-generator
-
-    - name: trigger-ha-on-lb-update
-      branch_scope: "other_branches"
-      node_kind: ManagedLoadbalancerHA
-      mutation_action: "updated"
-      action: ha-generator
+    # HA sync interfaces/cables are no longer a separate trigger-based
+    # generator — _ensure_ha_pairs (generators/devices.py) calls
+    # _ensure_ha_interfaces directly, synchronously, right after creating or
+    # finding each ManagedFirewallHA/LoadbalancerHA domain, closing the race
+    # where two concurrent boarding customers could each fire the old
+    # ha-generator action 2-3x per domain.
 
     # ── LB Backend No-SNAT Return-Path ────────────────────────────────────────
     - name: trigger-lb-backend-nexthop-on-created
