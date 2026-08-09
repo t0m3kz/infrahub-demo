@@ -409,7 +409,7 @@ class CustomerDeploymentDCExchangeGenerator(DeviceMixin, CablingMixin, CommonGen
                 },
             )
             await context_obj.save(allow_upsert=True)
-            self.logger.info(f"Created FirewallContext '{context_name}'")
+            self.logger.info(f"Ensured FirewallContext '{context_name}'")
             return context_obj
         except Exception as exc:
             self.logger.error(f"Failed to create FirewallContext '{context_name}': {exc}")
