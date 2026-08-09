@@ -465,6 +465,7 @@ class DeviceMixin:
         for first, second in pair_device_names(device_names):
             ha_name = f"{first}-{second}-ha"
             existing = await self.client.filters(kind=ha_kind, name__value=ha_name, include=["capabilities"])
+            member_ids: list[str] | None = None
             if existing:
                 ha_obj = existing[0]
                 self.client.group_context.related_node_ids.append(ha_obj.id)
@@ -488,8 +489,9 @@ class DeviceMixin:
                 )
                 await ha_obj.save(allow_upsert=True)
                 self.logger.info(f"Created HA domain {ha_name} for {role_label}s")
+                member_ids = [dev.id for dev in devices]
 
-            await self._ensure_ha_interfaces(ha_obj, ha_name, device_kind=device_kind)
+            await self._ensure_ha_interfaces(ha_obj, ha_name, device_kind=device_kind, member_ids=member_ids)
 
     async def _ensure_ha_interfaces(
         self,
@@ -497,6 +499,7 @@ class DeviceMixin:
         ha_name: str,
         *,
         device_kind: type[Any] = DcimPhysicalDevice,
+        member_ids: list[str] | None = None,
     ) -> None:
         """Ensure each member device has a ManagedHAInterface on its HA sync
         interface, and (for physical pairs only) a DcimCable between the two
@@ -504,10 +507,19 @@ class DeviceMixin:
         existing-membership check first, so a repeat call on an unchanged
         domain performs zero writes (see _ensure_ha_pairs's docstring for why
         that matters — this used to be a separate generator invoked via
-        trigger, unconditionally create()-ing on every run)."""
-        caps = getattr(ha_obj, "capabilities")
-        await caps.fetch()
-        member_ids = [peer.id for peer in caps.peers]
+        trigger, unconditionally create()-ing on every run).
+
+        member_ids lets a caller that already knows the two device ids (the
+        freshly-created-domain path in _ensure_ha_pairs) skip capabilities.fetch()
+        entirely — a just-created ha_obj's capabilities peers only carry the id
+        each was created with, no __typename, and RelatedNode.fetch() requires
+        both. The "existing domain" path doesn't hit this: its ha_obj came from
+        client.filters(..., include=["capabilities"]), which returns real
+        typenames from the server."""
+        if member_ids is None:
+            caps = getattr(ha_obj, "capabilities")
+            await caps.fetch()
+            member_ids = [peer.id for peer in caps.peers]
         if not member_ids:
             return
 
