@@ -748,6 +748,13 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
 
         generators/topology/customer_dc.py's _ensure_firewall_context
         allocates from these once a customer boards onto this DC.
+
+        No "does the pool already exist" short-circuit: allocate_next_ip_prefix's
+        identifier makes the slice allocation idempotent, and CoreIPPrefixPool.name
+        is unique + save(allow_upsert=True) makes the pool itself idempotent too —
+        re-running this always converges on the same pool with the same resource,
+        instead of a manual existence check that (as seen live) can permanently
+        skip healing a pool left broken by a prior code version.
         """
         await self.upsert_number_pool(
             pool_name=f"{dc_name}-fw-context-vlan-pool",
@@ -759,11 +766,6 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
         )
 
         pool_name = f"{dc_name}-fw-context-p2p-pool"
-        existing = await self.client.filters(kind=CoreIPPrefixPool, name__value=pool_name)
-        if existing:
-            self.logger.info(f"FirewallContext P2P pool '{pool_name}' already exists")
-            return
-
         underlay_protocol = self.data.get("underlay_protocol", "ipv6")
         use_ipv6 = p2p_is_ipv6(underlay_protocol)
         parent_pool_name = "FW-Context-P2P-IPv6" if use_ipv6 else "FW-Context-P2P-IPv4"
@@ -789,4 +791,4 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
             },
         )
         await pool.save(allow_upsert=True)
-        self.logger.info(f"Created FirewallContext P2P pool '{pool_name}' from '{parent_pool_name}'")
+        self.logger.info(f"Ensured FirewallContext P2P pool '{pool_name}' from '{parent_pool_name}'")
