@@ -52,6 +52,10 @@ class RoutingPlanInput(BaseModel):
       - interfaces: DcimPhysicalInterface fabric-p2p SDK objects (device, cable, name)
       - loopback_interfaces: DcimVirtualInterface loopback SDK objects (device + ip_address)
       - options: RoutingOptions dict (design, asn_pool, overlay_as_id, ospf_area_id)
+      - mlag_pairs: device name -> MLAG domain name, for devices that ARE
+        MLAG-paired (leaf/tor/l2-leaf/access-leaf; border-leaf is never
+        MLAG-paired in this project). Both devices in a pair get the SAME
+        underlay ASN — see ``_plan_ebgp_underlay``.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -70,6 +74,7 @@ class RoutingPlanInput(BaseModel):
     evpn_af_id: str = ""
     underlay_password_id: str = ""
     overlay_password_id: str = ""
+    mlag_pairs: dict[str, str] = Field(default_factory=dict)
 
 
 class PendingASRef(BaseModel):
@@ -274,6 +279,7 @@ class RoutingPlanner:
         asn_pool = inp.options.get("asn_pool")
         overlay_as_id = inp.options.get("overlay_as_id")
         existing_ospf_area = inp.options.get("ospf_area_id")
+        shared_underlay_as_id = inp.options.get("shared_underlay_as_id")
 
         # ---- Underlay ----
         if not inp.options.get("skip_underlay"):
@@ -286,6 +292,8 @@ class RoutingPlanner:
                     asn_pool,
                     set(inp.top_devices),
                     password_id=inp.underlay_password_id,
+                    mlag_pairs=inp.mlag_pairs,
+                    shared_as_id=shared_underlay_as_id,
                 )
             elif underlay_type == "ospf":
                 if not inp.deployment_name:
@@ -427,6 +435,8 @@ class RoutingPlanner:
         asn_pool: Any,
         top_device_names: set[str] | None = None,
         password_id: str = "",
+        mlag_pairs: dict[str, str] | None = None,
+        shared_as_id: str | None = None,
     ) -> None:
         """Build eBGP underlay by iterating cable pairs.
 
@@ -438,36 +448,82 @@ class RoutingPlanner:
 
         Every BGP process is emitted for upsert; existing processes re-save
         cleanly (local_as is cardinality-one), so no new/existing tracking.
+
+        ASN is allocated per GROUP, not per device (.dev/bgp.txt): an
+        MLAG-paired device (present in ``mlag_pairs``, keyed by its MLAG
+        domain name) shares ONE ASN with its pair partner — both devices'
+        BGP processes point ``local_as`` at the SAME AS object, exactly one
+        ``autonomous_systems`` entry is emitted per domain, not per device.
+        A standalone (non-MLAG) device keeps today's behavior: its own name
+        is its own group, one ASN each. ``shared_as_id``, when given,
+        bypasses grouping AND the pool entirely — every bottom device reuses
+        that single pre-resolved AS id directly (pod-shared spine ASN /
+        fabric-wide super-spine ASN; those devices are never MLAG-paired in
+        this project, so the two mechanisms never overlap).
         """
         id_to_name = {info["id"]: name for name, info in device_map.items()}
         _top = top_device_names or set()
+        _mlag_pairs = mlag_pairs or {}
 
-        # Phase 1: AS + BGP process for all bottom devices (device_map, not cable-driven).
-        # Top devices are skipped — their BGP is owned by an upper generator layer.
-        # Decoupled from cables so processes exist even before cabling is complete.
+        def _group_key(name: str) -> str:
+            return _mlag_pairs.get(name, name)
+
+        # Reconcile existing AS ids per group: an MLAG pair whose two devices
+        # already have DIFFERENT existing underlay AS ids (the bug this
+        # grouping fixes, on a fabric that ran once before) converges onto
+        # one canonical id (lowest-sorted) — both devices' BGP processes
+        # re-point at it below, self-healing with no migration script.
+        existing_as_by_group: dict[str, str] = {}
+        for name, as_id in existing_as_by_device.items():
+            group = _group_key(name)
+            current = existing_as_by_group.get(group)
+            if current is None or as_id < current:
+                existing_as_by_group[group] = as_id
+
+        bottom_names = [name for name in sorted(device_map.keys()) if name not in _top]
+
+        # Phase 0: resolve one local_as value per distinct group among
+        # bottom devices, emitting at most one autonomous_systems entry
+        # per group (decoupled from the per-device BGP-process loop below).
+        local_as_by_group: dict[str, dict | PendingASRef] = {}
+        if shared_as_id is not None:
+            shared_ref = {"id": shared_as_id}
+            for name in bottom_names:
+                local_as_by_group[_group_key(name)] = shared_ref
+        else:
+            for name in bottom_names:
+                group = _group_key(name)
+                if group in local_as_by_group:
+                    continue
+                existing_as_id = existing_as_by_group.get(group)
+                if existing_as_id:
+                    plan.autonomous_systems.append({"_existing_id": existing_as_id, "_for_device": group})
+                    local_as_by_group[group] = {"id": existing_as_id}
+                elif asn_pool is not None:
+                    plan.autonomous_systems.append(
+                        {
+                            "asn": {"from_pool": {"id": asn_pool}},
+                            "description": f"{group} underlay ASN",
+                            "status": "active",
+                            "_for_device": group,
+                        }
+                    )
+                    local_as_by_group[group] = PendingASRef(device=group)
+                elif self.logger:
+                    self.logger.warning(f"No ASN pool for {group}")
+
+        # Phase 1: BGP process for every bottom device (device_map, not
+        # cable-driven — decoupled from cables so processes exist even
+        # before cabling is complete).
         bgp_planned: set[str] = set()
-        for name in sorted(device_map.keys()):
-            if name in _top or name in bgp_planned:
+        for name in bottom_names:
+            if name in bgp_planned:
                 continue
 
             info = device_map[name]
-            existing_as_id = existing_as_by_device.get(name)
-
-            if existing_as_id:
-                plan.autonomous_systems.append({"_existing_id": existing_as_id, "_for_device": name})
-            elif asn_pool is not None:
-                plan.autonomous_systems.append(
-                    {
-                        "asn": {"from_pool": {"id": asn_pool}},
-                        "description": f"{name} underlay ASN",
-                        "status": "active",
-                        "_for_device": name,
-                    }
-                )
-            else:
-                if self.logger:
-                    self.logger.warning(f"No ASN pool for {name}")
-                continue
+            local_as = local_as_by_group.get(_group_key(name))
+            if local_as is None:
+                continue  # already warned above (no pool, no existing AS)
 
             router_id = info.get("router_id")
             if not router_id:
@@ -477,7 +533,6 @@ class RoutingPlanner:
                     self.logger.warning(f"No router-id for {name}, skipping BGP")
                 continue
 
-            local_as = {"id": existing_as_id} if existing_as_id else PendingASRef(device=name)
             proc = _make_bgp_proc(
                 name,
                 "underlay",

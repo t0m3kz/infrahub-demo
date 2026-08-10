@@ -16,6 +16,7 @@ import pytest
 
 from generators.dc_config import DC_SIZE_LAYOUTS
 from generators.helpers.routing import RoutingStrategy
+from generators.protocols import RoutingAutonomousSystem
 from generators.topology.dc import DCTopologyGenerator
 
 
@@ -589,7 +590,10 @@ class TestCreateSharedRoutingObjects:
 
         await gen._create_shared_routing_objects(overlay_asn=65100)
 
-        gen.logger.warning.assert_called_once()
+        # ebgp-ibgp's underlay is also eBGP, so both the shared super-spine AS
+        # lookup and the shared overlay AS lookup hit the same failing filters()
+        # mock and are each logged independently.
+        assert gen.logger.warning.call_count == 2
 
     @pytest.mark.asyncio
     async def test_ospf_ibgp_creates_overlay_as_and_ospf_area(self) -> None:
@@ -629,6 +633,8 @@ class TestCreateSharedRoutingObjects:
 
     @pytest.mark.asyncio
     async def test_ebgp_ebgp_creates_neither_overlay_as_nor_ospf_area(self) -> None:
+        """No overlay AS or OSPF area — but the shared super-spine underlay AS
+        (also eBGP) is still looked up; with no asn_pool_id, nothing is created."""
         gen = self._make_generator_for_shared_routing()
         gen.data = MagicMock(routing_strategy=RoutingStrategy.EBGP_EBGP.value)
         gen.client.filters = AsyncMock(return_value=[])
@@ -636,5 +642,61 @@ class TestCreateSharedRoutingObjects:
 
         await gen._create_shared_routing_objects(overlay_asn=65100)
 
-        gen.client.filters.assert_not_called()
+        gen.client.filters.assert_called_once_with(
+            kind=RoutingAutonomousSystem, description__value="dc1 super-spine underlay ASN"
+        )
         gen.client.create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_ebgp_ebgp_creates_new_super_spine_as_when_pool_given(self) -> None:
+        gen = self._make_generator_for_shared_routing()
+        gen.data = MagicMock(routing_strategy=RoutingStrategy.EBGP_EBGP.value)
+        gen.client.filters = AsyncMock(return_value=[])
+        as_obj = MagicMock(id="ss-as-1")
+        as_obj.asn.value = 65001
+        as_obj.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=as_obj)
+
+        await gen._create_shared_routing_objects(overlay_asn=65100, asn_pool_id="pool-1")
+
+        gen.client.create.assert_awaited_once_with(
+            kind=RoutingAutonomousSystem,
+            data={"asn": {"from_pool": {"id": "pool-1"}}, "description": "dc1 super-spine underlay ASN"},
+        )
+        as_obj.save.assert_awaited_once_with(allow_upsert=True)
+        assert "ss-as-1" in gen.client.group_context.related_node_ids
+
+    @pytest.mark.asyncio
+    async def test_ebgp_ebgp_reuses_existing_super_spine_as(self) -> None:
+        gen = self._make_generator_for_shared_routing()
+        gen.data = MagicMock(routing_strategy=RoutingStrategy.EBGP_EBGP.value)
+        existing_as = MagicMock(id="ss-as-existing")
+        existing_as.asn.value = 65001
+        gen.client.filters = AsyncMock(return_value=[existing_as])
+        gen.client.create = AsyncMock()
+
+        await gen._create_shared_routing_objects(overlay_asn=65100, asn_pool_id="pool-1")
+
+        gen.client.create.assert_not_called()
+        assert "ss-as-existing" in gen.client.group_context.related_node_ids
+
+    @pytest.mark.asyncio
+    async def test_ospf_ibgp_skips_super_spine_as_lookup(self) -> None:
+        """ospf-ibgp's underlay is OSPF, not eBGP — no super-spine AS lookup
+        at all (super-spine's own routing skips underlay entirely for this
+        strategy, see dc.py's skip_underlay branch)."""
+        gen = self._make_generator_for_shared_routing()
+        gen.data = MagicMock(routing_strategy="ospf-ibgp")
+        gen.client.filters = AsyncMock(return_value=[])
+        gen.client.get = AsyncMock(return_value=None)
+        as_obj = MagicMock(id="as-1")
+        as_obj.asn.value = 65100
+        as_obj.save = AsyncMock()
+        area_obj = MagicMock(id="area-1")
+        area_obj.save = AsyncMock()
+        gen.client.create = AsyncMock(side_effect=[as_obj, area_obj])
+
+        await gen._create_shared_routing_objects(overlay_asn=65100, asn_pool_id="pool-1")
+
+        filters_calls = [c for c in gen.client.filters.await_args_list if "super-spine" in str(c)]
+        assert filters_calls == []
