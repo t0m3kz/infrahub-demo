@@ -1,0 +1,57 @@
+---
+version: "1.0"
+
+# ============================================================================
+# VLAN Domain — anchor for per-domain local VLAN ID allocation.
+#
+# IEEE 802.1Q VLAN ID has only LOCAL significance: within one L2 broadcast
+# domain. An MLAG pair is one shared L2 domain (both peers must use the same
+# VLAN ID for a given segment), while a standalone (non-MLAG) leaf/tor device
+# is its own independent domain. Two unrelated VLAN domains in the same DC
+# may reuse the identical numeric VLAN ID for two different segments — the
+# real DC-wide/fabric-wide segment identifier is the L2 VNI
+# (ManagedSegmentDeployment.vni), not the VLAN ID.
+#
+# ManagedGenericVlanDomain gives every domain-anchor kind one shared
+# relationship name/identifier for its own vlan_pool, so generator/transform
+# code can resolve "MLAG-or-standalone" uniformly without branching on
+# relationship name. ManagedStandaloneVlanDomain attaches to a single
+# non-MLAG device the same way ManagedMLAG attaches to a pair — through the
+# device's existing `capabilities` relationship — so both cases are modeled
+# as a service the device links to, not a new field on DcimPhysicalDevice
+# itself (device schema untouched).
+# ============================================================================
+
+generics:
+  - name: GenericVlanDomain
+    namespace: Managed
+    description: "Marker for node kinds that anchor an independent local VLAN ID allocation domain (MLAG pair or standalone device)"  # yamllint disable-line rule:line-length
+    label: "VLAN Domain"
+    include_in_menu: false
+    relationships:
+      - name: vlan_pool
+        peer: CoreNumberPool
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "vlan_domain__vlan_pool"
+        order_weight: 7300
+        on_delete: cascade
+        description: "Local VLAN ID pool for this VLAN domain. Independent domains may reuse the same numeric VLAN ID."  # yamllint disable-line rule:line-length
+
+nodes:
+  - name: StandaloneVlanDomain
+    namespace: Managed
+    description: "VLAN domain anchored on a single standalone (non-MLAG) device"
+    label: "Standalone VLAN Domain"
+    icon: "mdi:link-variant-off"
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedGeneric
+      - ManagedGenericDevice
+      - ManagedGenericVlanDomain
+    uniqueness_constraints:
+      - ["name__value"]
+    display_label: "{{name__value}}"

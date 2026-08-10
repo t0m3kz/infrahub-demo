@@ -70,6 +70,10 @@ class DeviceMixin:
     pod_name: str | None
     # CommonGenerator._resolve_pool — annotation only, no method body.
     _resolve_pool: Any
+    # PoolMixin.upsert_number_pool — every caller of _ensure_mlag_pairs
+    # (RackGenerator, DCTopologyGenerator) already mixes in PoolMixin
+    # alongside DeviceMixin; annotation only, no method body here.
+    upsert_number_pool: Any
     # Set once per generator run (dc.py/pod.py/rack.py's generate()) by
     # merging their own query's fabric_controllers/security_manager_
     # controllers/lb_manager_controllers aliased fields — see
@@ -685,6 +689,9 @@ class DeviceMixin:
                     existing_mlag.virtual_peer_link.value = wants_virtual
                     await existing_mlag.save(allow_upsert=True)
                     self.logger.info(f"Updated MLAG domain {mlag_name} to {mlag_create} peer-link")
+                await self._ensure_vlan_domain_pool(
+                    pool_owner_name=mlag_name, parent_kind="ManagedMLAG", parent_id=existing_mlag.id
+                )
                 continue
 
             devices = await self.client.filters(kind=DcimPhysicalDevice, name__values=[first, second])
@@ -707,3 +714,27 @@ class DeviceMixin:
             )
             await mlag_obj.save(allow_upsert=True)
             self.logger.info(f"Created MLAG domain {mlag_name} ({mlag_create}) for {role_label}s")
+            await self._ensure_vlan_domain_pool(
+                pool_owner_name=mlag_name, parent_kind="ManagedMLAG", parent_id=mlag_obj.id
+            )
+
+    async def _ensure_vlan_domain_pool(self, *, pool_owner_name: str, parent_kind: str, parent_id: str) -> None:
+        """Create/upsert this VLAN domain's own local VLAN ID pool.
+
+        IEEE 802.1Q VLAN ID has only local significance (within one L2
+        domain — an MLAG pair, or a standalone device). Each VLAN domain
+        gets its own independent 100-3999 pool so unrelated domains can
+        reuse the same numeric VLAN ID for different segments; the real
+        DC-wide/fabric-wide segment identifier is ManagedSegmentDeployment.vni.
+        """
+        await self.upsert_number_pool(
+            pool_name=f"{pool_owner_name}-vlan-pool",
+            description=f"Local VLAN ID pool for VLAN domain {pool_owner_name}",
+            start_range=100,
+            end_range=3999,
+            node="ManagedVlanDomainSegment",
+            node_attribute="vlan_id",
+            parent_kind=parent_kind,
+            parent_id=parent_id,
+            parent_attr="vlan_pool",
+        )

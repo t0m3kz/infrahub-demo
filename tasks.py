@@ -193,7 +193,7 @@ def validate(context: Context) -> None:
     context.run("uv run prek run --all-files", pty=True)
     log.info("Running test suites...")
     context.run(
-        "uv run pytest -vv tests/smoke tests/unit"
+        "uv run pytest -vv tests/smoke tests/unit --cov"
         " --cov=generators --cov=transforms --cov=checks"
         " --cov-report=term-missing",
         pty=True,

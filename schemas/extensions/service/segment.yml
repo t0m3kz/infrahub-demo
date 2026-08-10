@@ -125,9 +125,12 @@ nodes:
   # SegmentDeployment: per-DC realization of a VXLAN segment (VlanSegment has
   # no realization record — its vlan_id is a plain manual attribute).
   #
-  # Stores the locally-allocated VLAN ID and VNI for a segment in a
-  # specific data center. Values come from the DC's pool (vlan_pool,
-  # vni_pool) via idempotent allocation.
+  # Stores the locally-allocated VNI for a segment in a specific data
+  # center, from the DC's vni_pool via idempotent allocation. The segment's
+  # LOCAL VLAN ID is NOT stored here — VLAN ID has only local (per-switch or
+  # per-MLAG-pair) significance, so it lives on ManagedVlanDomainSegment
+  # instead, one row per (segment, VLAN domain) rather than per (segment, DC).
+  # VNI remains the correct DC-wide/fabric-wide segment identifier.
   #
   # Gateway IP is derived from segment.gateway (not stored here).
   # ARP suppression is read from segment.arp_suppression.
@@ -138,7 +141,7 @@ nodes:
 
   - name: SegmentDeployment
     namespace: Managed
-    description: "Per-DC realization of a network segment with locally-allocated VLAN ID and VNI."  # yamllint disable-line rule:line-length
+    description: "Per-DC realization of a network segment with a locally-allocated VNI."  # yamllint disable-line rule:line-length
     label: Segment Deployment
     icon: "carbon:network-overlay"
     include_in_menu: false
@@ -148,14 +151,7 @@ nodes:
     attributes:
       - name: vlan_id
         kind: Number
-        label: Local VLAN ID
-        optional: false
-        order_weight: 1000
-        description: "VLAN ID for this segment in this deployment. Allocated from DC vlan_pool."  # yamllint disable-line rule:line-length
-        parameters:
-          min_value: 1
-          max_value: 4094
-
+        state: absent
       - name: vni
         kind: Number
         label: L2 VNI
@@ -221,6 +217,57 @@ nodes:
         identifier: "segmentdeployment__deployment"
         description: "The DC or colocation metro where this segment is locally realized"
 
+  # VlanDomainSegment: per-VLAN-domain realization of a VXLAN segment's LOCAL
+  # VLAN ID. A "VLAN domain" is either one ManagedMLAG pair (both peers MUST
+  # share the same vlan_id — one L2 broadcast domain) or one standalone
+  # (non-MLAG) leaf/tor/l2-leaf/access-leaf device. Two independent VLAN
+  # domains in the same DC may reuse the same numeric vlan_id for two
+  # different segments — IEEE 802.1Q VLAN ID has only local significance.
+  # The segment's DC-wide identity remains SegmentDeployment.vni (L2 VNI).
+  #
+  # Created by: add_vxlan_segment generator, once per (segment, VLAN domain)
+  # pair it assigns the segment to.
+  # Read by: leaf-side transforms, keyed by the rendering device's own
+  # domain (its ManagedMLAG if paired, else the device itself).
+  - name: VlanDomainSegment
+    namespace: Managed
+    description: "Per-VLAN-domain (MLAG pair or standalone device) realization of a network segment's local VLAN ID."  # yamllint disable-line rule:line-length
+    label: VLAN Domain Segment
+    icon: "carbon:network-overlay"
+    include_in_menu: false
+    display_label: "{{ segment__customer_name__value }} vlan {{ vlan_id__value }}"
+    uniqueness_constraints:
+      - [segment, vlan_domain]
+    attributes:
+      - name: vlan_id
+        kind: Number
+        label: Local VLAN ID
+        optional: false
+        order_weight: 1000
+        description: "VLAN ID for this segment within this VLAN domain. Unique within the domain only, not DC-wide."  # yamllint disable-line rule:line-length
+        parameters:
+          min_value: 1
+          max_value: 4094
+    relationships:
+      - name: segment
+        peer: ManagedVxlanSegment
+        label: Network Segment
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 2000
+        identifier: "vlandomainsegment__segment"
+        description: "The VXLAN segment being locally realized"
+      - name: vlan_domain
+        peer: ManagedGenericVlanDomain
+        label: VLAN Domain
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 2100
+        identifier: "vlandomainsegment__vlan_domain"
+        description: "The MLAG pair or standalone device this VLAN ID realization belongs to"
+
 extensions:
   nodes:
     - kind: ManagedVxlanSegment
@@ -231,7 +278,14 @@ extensions:
           cardinality: many
           identifier: "segmentdeployment__segment"
           order_weight: 9000
-          description: "Per-deployment VLAN/VNI allocations for this segment"
+          description: "Per-deployment VNI allocations for this segment"
+        - name: vlan_domain_segments
+          peer: ManagedVlanDomainSegment
+          kind: Generic
+          cardinality: many
+          identifier: "vlandomainsegment__segment"
+          order_weight: 9100
+          description: "Per-VLAN-domain local VLAN ID realizations for this segment"
 
     - kind: TopologySegmentHosting
       relationships:
@@ -243,7 +297,19 @@ extensions:
           optional: true
           identifier: "segmentdeployment__deployment"
           order_weight: 7950
-          description: "Per-DC/Metro VLAN/VNI activations realized on this deployment"
+          description: "Per-DC/Metro VNI activations realized on this deployment"
+
+    - kind: ManagedGenericVlanDomain
+      relationships:
+        - name: vlan_domain_segments
+          label: VLAN Domain Segments
+          peer: ManagedVlanDomainSegment
+          kind: Generic
+          cardinality: many
+          optional: true
+          identifier: "vlandomainsegment__vlan_domain"
+          order_weight: 7950
+          description: "Segments locally realized in this VLAN domain"
 
     - kind: OrganizationCustomer
       relationships:

@@ -4,7 +4,10 @@ Coverage: Verifies end-to-end segment lifecycle:
   1. Create VRF namespace with L3 VNI
   2. Link namespace to DC1 deployment (SDK — cardinality-many)
   3. Create prefix in namespace + VXLAN segments
-  4. Run segment generator → creates ManagedSegmentDeployment with VLAN ID + VNI
+  4. Run segment generator → creates ManagedSegmentDeployment with VNI
+     (DC-wide) and ManagedVlanDomainSegment with local VLAN ID (per VLAN
+     domain — an MLAG pair or standalone device; IEEE 802.1Q VLAN ID has
+     only local significance, unlike VNI which stays DC-wide/fabric-wide)
   5. Verify segment deployments exist with correct pool allocations
   6. Merge to main
 
@@ -18,7 +21,7 @@ import pytest
 from infrahub_sdk import InfrahubClient, InfrahubClientSync
 
 from .conftest import TestInfrahubDockerWithClient
-from .test_helpers import fetch_segment_deployments
+from .test_helpers import fetch_segment_deployments, fetch_vlan_domain_segments
 from .workflow_helpers import (
     create_and_validate_proposed_change,
     merge_proposed_change,
@@ -195,7 +198,8 @@ class TestDC1Segments(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify ManagedSegmentDeployment records with correct VLAN and VNI."""
+        """Verify ManagedSegmentDeployment (VNI-and-status, DC-wide) and
+        ManagedVlanDomainSegment (local VLAN ID, per VLAN domain) records."""
         logging.info("=== %s - Step 5: Verify Segment Deployments ===", SCENARIO_NAME)
 
         result = await fetch_segment_deployments(
@@ -212,12 +216,6 @@ class TestDC1Segments(TestInfrahubDockerWithClient):
 
         deployments = result["deployments"]
 
-        # Each segment should have a unique VLAN ID from pool range 100-3999
-        vlan_ids = [d["vlan_id"] for d in deployments]
-        assert len(set(vlan_ids)) == len(vlan_ids), f"Duplicate VLAN IDs: {vlan_ids}"
-        for vid in vlan_ids:
-            assert 100 <= vid <= 3999, f"VLAN ID {vid} outside pool range 100-3999"
-
         # Each VXLAN segment should have a VNI from pool range 10001-16777215
         vnis = [d["vni"] for d in deployments if d["vni"] is not None]
         assert len(vnis) >= 2, f"Expected VNI for VXLAN segments, got {len(vnis)}"
@@ -228,11 +226,27 @@ class TestDC1Segments(TestInfrahubDockerWithClient):
         for d in deployments:
             assert d["status"] == "provisioning", f"Expected 'provisioning', got '{d['status']}'"
 
+        logging.info("Segment deployments verified: %d records, VNIs=%s", len(deployments), vnis)
+
+        # Local VLAN ID now lives on ManagedVlanDomainSegment, per VLAN
+        # domain (MLAG pair or standalone device) — NOT DC-wide-unique, so we
+        # only assert range/format, not cross-domain uniqueness.
+        vlan_domain_result = await fetch_vlan_domain_segments(
+            client=async_client_main,
+            branch=scenario_branch,
+            expected_count=2,
+        )
+        assert vlan_domain_result["record_count"] >= 2, (
+            f"Expected 2 VLAN domain segment(s), found {vlan_domain_result['record_count']}"
+        )
+        for r in vlan_domain_result["records"]:
+            assert 1 <= r["vlan_id"] <= 4094, f"VLAN ID {r['vlan_id']} outside valid 802.1Q range"
+            assert r["vlan_domain_id"], f"VLAN domain segment {r['id']} missing vlan_domain"
+
         logging.info(
-            "Segment deployments verified: %d records, VLANs=%s, VNIs=%s",
-            len(deployments),
-            vlan_ids,
-            vnis,
+            "VLAN domain segments verified: %d records, vlan_ids=%s",
+            vlan_domain_result["record_count"],
+            [r["vlan_id"] for r in vlan_domain_result["records"]],
         )
 
     # ------------------------------------------------------------------

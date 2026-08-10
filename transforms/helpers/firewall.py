@@ -5,6 +5,25 @@ from typing import Any
 
 from transforms.helpers.segments import _get_segment_prefix_str
 
+# Border-leaf platforms with a native hardware SGT/security-group matching
+# primitive — Cisco CTS ("match cts sgt") is proprietary VXLAN-GBP encoding,
+# Arista MSS-G ("match security-group") is a separate, Arista-only
+# implementation. SONiC/Nokia border-leaf have no equivalent, so they always
+# fall back to prefix-based matching — the same fallback
+# .dev/scenariusze.txt's own SONiC-BORDER-LEAF section uses (ip access-list
+# ACL_KLIENT_A_INTER_CLIENT ... permit ip 10.10.1.0/24 ... instead of
+# match cts sgt / match security-group).
+#
+# Known limitation: this only checks the BORDER-LEAF's own platform. A
+# segment's VLAN can be provisioned on leaf devices of several platforms at
+# once (DC-wide), and this query doesn't track which leaf platform(s) host
+# any given segment — so a Cisco border-leaf tag-matches even if the
+# specific leaf a packet actually came from was a non-tagging SONiC leaf for
+# that VLAN. Precisely tracking per-leaf-platform tag fidelity would need
+# additional data this project doesn't collect today; documented here
+# rather than silently assumed.
+_TAG_CAPABLE_BORDER_LEAF_PLATFORMS = frozenset({"cisco_nxos", "arista_eos"})
+
 
 def get_firewall_zones(zones_data: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     """Build a zone list from SecurityZone nodes (global query).
@@ -261,6 +280,41 @@ def _flatten_deployment_firewall_contexts(deployment: dict[str, Any] | None) -> 
     return list(deduped.values())
 
 
+def _resolve_context_nexthops(
+    firewall_contexts: list[dict[str, Any]] | None,
+) -> tuple[dict[str, str], str | None]:
+    """Shared by get_customer_pbr_rules and get_border_leaf_pbr_rules: resolve
+    each FirewallContext's own firewall-leg IP, keyed by dedicated tenant
+    deployment id, plus the one shared (tenant-less) context's nexthop if any.
+    """
+    context_nexthop_by_deployment: dict[str, str] = {}
+    shared_nexthop: str | None = None
+    for ctx in firewall_contexts or []:
+        fw_ip: str | None = None
+        for leg in ctx.get("interface_capabilities") or []:
+            device = leg.get("device") or {}
+            if device.get("role") != "firewall":
+                continue
+            ip_obj = leg.get("ip_address") or {}
+            address = ip_obj.get("address")
+            if not address:
+                continue
+            try:
+                fw_ip = str(ip_interface(address).ip)
+            except ValueError:
+                continue
+            break
+        if fw_ip is None:
+            continue
+        tenant = ctx.get("tenant") or {}
+        tenant_id = tenant.get("id")
+        if tenant_id:
+            context_nexthop_by_deployment[tenant_id] = fw_ip
+        else:
+            shared_nexthop = fw_ip
+    return context_nexthop_by_deployment, shared_nexthop
+
+
 def get_customer_pbr_rules(
     activations: list[dict[str, Any]] | None,
     firewall_contexts: list[dict[str, Any]] | None,
@@ -304,32 +358,7 @@ def get_customer_pbr_rules(
     if not activations:
         return []
 
-    context_nexthop_by_deployment: dict[str, str] = {}
-    shared_nexthop: str | None = None
-    for ctx in firewall_contexts or []:
-        fw_ip: str | None = None
-        for leg in ctx.get("interface_capabilities") or []:
-            device = leg.get("device") or {}
-            if device.get("role") != "firewall":
-                continue
-            ip_obj = leg.get("ip_address") or {}
-            address = ip_obj.get("address")
-            if not address:
-                continue
-            try:
-                fw_ip = str(ip_interface(address).ip)
-            except ValueError:
-                continue
-            break
-        if fw_ip is None:
-            continue
-        tenant = ctx.get("tenant") or {}
-        tenant_id = tenant.get("id")
-        if tenant_id:
-            context_nexthop_by_deployment[tenant_id] = fw_ip
-        else:
-            shared_nexthop = fw_ip
-
+    context_nexthop_by_deployment, shared_nexthop = _resolve_context_nexthops(firewall_contexts)
     if not context_nexthop_by_deployment and shared_nexthop is None:
         return []
 
@@ -385,6 +414,136 @@ def get_customer_pbr_rules(
         )
 
     rules.sort(key=lambda r: r["vlan_id"])
+    return rules
+
+
+def get_border_leaf_pbr_rules(
+    activations: list[dict[str, Any]] | None,
+    firewall_contexts: list[dict[str, Any]] | None,
+    border_leaf_platform: str,
+) -> list[dict[str, Any]]:
+    """Build border-leaf PBR rules per .dev/scenariusze.txt's border-leaf
+    sections ("CTS PBR + SINGLE VRF"): default-redirect every segment's
+    traffic to its firewall context's nexthop, matched by security tag when
+    the border-leaf platform can hardware-match one (Cisco CTS "match cts
+    sgt N" / Arista MSS-G "match security-group"), else falling back to a
+    source-prefix ACL match — the same fallback scenariusze.txt's own
+    SONiC-BORDER-LEAF section uses.
+
+    Rules are grouped by (customer_name, fw_nexthop) to cut TCAM usage:
+    prefix-fallback members of a group merge into ONE ACL with multiple
+    permit lines and ONE route-map sequence; tag-match members each keep
+    their own sequence (no confirmed multi-value "match cts sgt"/"match
+    security-group" syntax to merge them), but sequences for the same
+    customer are emitted together, adjacent, under one comment block.
+
+    activations here come from _flatten_deployment_segment_activations(),
+    NOT _collect_activations_from_interfaces() — border-leaf has no segment
+    capability on its own interfaces (SGT/tag travels in-band inside the
+    VXLAN header from the originating leaf), so it needs every activation in
+    its own DC instead of a per-interface traversal. Dedup key is `vni` (or
+    the segment's own id as fallback), NOT `vlan_id` — local VLAN ID is
+    per-VLAN-domain now, not DC-wide-unique, so it can't identify a segment
+    across leaves. Same fw_nexthop resolution as get_customer_pbr_rules
+    (dedicated context by deployment id, else the one shared context).
+    """
+    if not activations:
+        return []
+
+    context_nexthop_by_deployment, shared_nexthop = _resolve_context_nexthops(firewall_contexts)
+    if not context_nexthop_by_deployment and shared_nexthop is None:
+        return []
+
+    tag_capable = border_leaf_platform in _TAG_CAPABLE_BORDER_LEAF_PLATFORMS
+
+    groups: dict[tuple[str, str], dict[str, Any]] = {}
+    seen_keys: set[str] = set()
+    for act in activations:
+        seg = act.get("segment") or {}
+        dedup_key = act.get("vni") or seg.get("id")
+        if not dedup_key or dedup_key in seen_keys:
+            continue
+        seen_keys.add(dedup_key)
+
+        deployment_ids: list[str] = []
+        single_deployment = seg.get("customer_deployment")
+        if single_deployment and single_deployment.get("id"):
+            deployment_ids.append(single_deployment["id"])
+        for dep in seg.get("customer_deployments") or []:
+            if dep.get("id"):
+                deployment_ids.append(dep["id"])
+
+        fw_nexthop = next(
+            (context_nexthop_by_deployment[d] for d in deployment_ids if d in context_nexthop_by_deployment),
+            None,
+        )
+        if fw_nexthop is None:
+            fw_nexthop = shared_nexthop
+        if fw_nexthop is None:
+            continue
+
+        tag = seg.get("security_tag") or {}
+        sgt = tag.get("group_id")
+        sgt_name = tag.get("name")
+        source_prefix = _get_segment_prefix_str(seg)
+        match_by_tag = bool(tag_capable and sgt)
+        if not match_by_tag and not source_prefix:
+            # Neither a usable tag nor a resolvable source prefix — nothing
+            # to match this segment's traffic by, skip rather than emit a
+            # rule that can never hit.
+            continue
+
+        customer_name = seg.get("customer_name") or seg.get("name") or f"SEG_{dedup_key}"
+        group_key = (customer_name, fw_nexthop)
+        group = groups.setdefault(
+            group_key,
+            {
+                "customer_name": customer_name,
+                "environment": seg.get("environment"),
+                "fw_nexthop": fw_nexthop,
+                "acl_name": f"PBR-REDIRECT-{customer_name}",
+                "source_prefixes": [],
+                "tag_members": [],
+            },
+        )
+        if match_by_tag:
+            group["tag_members"].append({"sgt": sgt, "sgt_name": sgt_name})
+        else:
+            group["source_prefixes"].append(source_prefix)
+
+    rules: list[dict[str, Any]] = []
+    for group in sorted(groups.values(), key=lambda g: g["customer_name"]):
+        common = {
+            "customer_name": group["customer_name"],
+            "environment": group["environment"],
+            "fw_nexthop": group["fw_nexthop"],
+        }
+        if group["source_prefixes"]:
+            rules.append(
+                {
+                    **common,
+                    "match_by_tag": False,
+                    "sgt": None,
+                    "sgt_name": None,
+                    "acl_name": group["acl_name"],
+                    "source_prefixes": group["source_prefixes"],
+                }
+            )
+        for member in sorted(group["tag_members"], key=lambda m: m["sgt"]):
+            rules.append(
+                {
+                    **common,
+                    "match_by_tag": True,
+                    "sgt": member["sgt"],
+                    # sgt_name is Arista's own match key (MSS-G "match security-group
+                    # <name>" — .dev/scenariusze.txt's ARISTA-BORDER-LEAF section
+                    # matches by group NAME, not the numeric id Cisco CTS uses).
+                    "sgt_name": member["sgt_name"],
+                    "acl_name": None,
+                    "source_prefixes": [],
+                }
+            )
+
     return rules
 
 

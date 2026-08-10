@@ -9,6 +9,8 @@
 !
 hostname {{ name }}
 !
+system routing tcam security-group-acl
+!
 feature ospf
 feature bgp
 feature interface-vlan
@@ -130,6 +132,11 @@ vlan {{ mapping.vlan_id }}
 route-map RM-CONN-2-BGP permit 10
   match interface {{ _lb.name }}
 !
+{%- if vxlan and vxlan.anycast_gateway and vxlan.anycast_gateway.enabled %}
+! Anycast Gateway — identical MAC on every leaf/border-leaf in the fabric
+fabric forwarding anycast-gateway-mac {{ vxlan.anycast_gateway.mac | replace(':', '') | replace('.', '') }}
+!
+{%- endif %}
 {%- if vlans %}
 ! VLAN SVI Configuration
 !
@@ -157,6 +164,9 @@ interface Vlan{{ vlan.vlan_id }}
 {%- if vlan.gateway_ipv6 %}
   ipv6 address {{ vlan.gateway_ipv6 }}
 {%- endif %}
+{%- if vxlan and vxlan.anycast_gateway and vxlan.anycast_gateway.enabled %}
+  fabric forwarding mode anycast-gateway
+{%- endif %}
   no shutdown
 {%- if ns.acl_name %}
   ip access-group {{ ns.acl_name }} in
@@ -177,7 +187,9 @@ ip route 0.0.0.0/0 {{ nexthop }} vrf {{ vrf }}
 {%- endif %}
 {%- if sgt_rules %}
 !
-! CTS Security Group Tags — VXLAN GPO tier enforcement
+! CTS Security Group Tags — VXLAN GPO tier enforcement (VLAN-to-SGT mapping —
+! scales to trunk ports carrying multiple segments, unlike per-port
+! cts manual/policy-static which is single-valued)
 ! group_id is globally unique across Arista and Cisco fabrics
 !
 feature cts

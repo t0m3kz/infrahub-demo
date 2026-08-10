@@ -249,51 +249,70 @@ class TestTransformVxlanArista:
             "flooding": "evpn",
             "evpn": {"enabled": True, "rd_format": "10.0.0.1:{vni}", "rt_format": "65001:{vni}"},
             "microsegmentation": {"enabled": False, "vrf_count": 0},
+            "anycast_gateway": {"enabled": False, "mac": "00:1c:73:00:dc:01"},
         }
 
     def test_interface_set_to_vxlan1(self) -> None:
         result = _transform_vxlan_arista(self._base_config(), local_as=None)
         assert result["interface"] == "Vxlan1"
 
-    def test_anycast_gateway_disabled_when_no_gateway_ip(self) -> None:
-        mappings = [
-            {"vlan_id": 10, "vni": 10010, "name": "seg-10", "gateway_ip": None},
-            {"vlan_id": 20, "vni": 10020, "name": "seg-20", "gateway_ip": None},
-        ]
-        result = _transform_vxlan_arista(self._base_config(mappings), local_as=None)
-        assert result["anycast_gateway"]["enabled"] is False
-
-    def test_anycast_gateway_enabled_when_any_mapping_has_gateway_ip(self) -> None:
-        mappings = [
-            {"vlan_id": 10, "vni": 10010, "name": "seg-10", "gateway_ip": None},
-            {"vlan_id": 20, "vni": 10020, "name": "seg-20", "gateway_ip": "10.100.20.1/24"},
-        ]
-        result = _transform_vxlan_arista(self._base_config(mappings), local_as=None)
-        assert result["anycast_gateway"]["enabled"] is True
-
-    def test_anycast_gateway_enabled_when_all_mappings_have_gateway_ip(self) -> None:
-        mappings = [
-            {"vlan_id": 10, "vni": 10010, "name": "seg-10", "gateway_ip": "10.0.10.1/24"},
-            {"vlan_id": 20, "vni": 10020, "name": "seg-20", "gateway_ip": "10.0.20.1/24"},
-        ]
-        result = _transform_vxlan_arista(self._base_config(mappings), local_as=None)
-        assert result["anycast_gateway"]["enabled"] is True
-
-    def test_anycast_gateway_disabled_when_no_mappings(self) -> None:
-        result = _transform_vxlan_arista(self._base_config([]), local_as=None)
-        assert result["anycast_gateway"]["enabled"] is False
-
-    def test_anycast_mac_correct(self) -> None:
-        result = _transform_vxlan_arista(self._base_config(), local_as=None)
-        assert result["anycast_gateway"]["mac"] == "00:1c:73:00:dc:01"
-
     def test_original_config_not_mutated(self) -> None:
         """_transform_vxlan_arista uses .copy() — original dict is untouched."""
         mappings = [{"vlan_id": 10, "vni": 10010, "gateway_ip": "10.0.10.1/24"}]
         base = self._base_config(mappings)
         _transform_vxlan_arista(base, local_as=None)
-        assert "anycast_gateway" not in base
         assert "interface" not in base
+
+    def test_anycast_gateway_inherited_from_base_not_recomputed(self) -> None:
+        """anycast_gateway is computed once, platform-agnostically, in
+        get_vxlan_config's base_config — _transform_vxlan_arista must inherit
+        it via .copy(), not recompute it (that logic moved out; see
+        TestGetVxlanConfigAnycastGateway for the real coverage)."""
+        base = self._base_config()
+        base["anycast_gateway"] = {"enabled": True, "mac": "00:1c:73:00:dc:01"}
+        result = _transform_vxlan_arista(base, local_as=None)
+        assert result["anycast_gateway"] == {"enabled": True, "mac": "00:1c:73:00:dc:01"}
+
+
+# ===========================================================================
+# get_vxlan_config() — anycast_gateway (platform-agnostic, symmetric IRB)
+# ===========================================================================
+
+
+class TestGetVxlanConfigAnycastGateway:
+    """anycast_gateway is computed once in get_vxlan_config's base_config and
+    inherited unchanged by every _transform_vxlan_* — same standard anycast
+    MAC on every leaf/border-leaf in the fabric, matching
+    .dev/scenariusze.txt's "fabric forwarding anycast-gateway-mac" /
+    "ip virtual-router mac-address" / "ip anycast-mac-address" (identical
+    value across Cisco/Arista/SONiC)."""
+
+    def _data(self) -> dict:
+        return {"interfaces": [{"name": "Loopback0", "ip_addresses": [{"address": "10.0.0.3/32"}]}], "capabilities": []}
+
+    @pytest.mark.parametrize("platform", ["arista_eos", "cisco_nxos", "dell_sonic"])
+    def test_disabled_when_no_gateway_ip(self, platform: str) -> None:
+        acts = [_make_activation(vlan_id=10, customer_name="a", gateway_ip=None)]
+        result = get_vxlan_config(self._data(), platform, device_role="leaf", activations=acts)
+        assert result is not None
+        assert result["anycast_gateway"]["enabled"] is False
+
+    @pytest.mark.parametrize("platform", ["arista_eos", "cisco_nxos", "dell_sonic"])
+    def test_enabled_when_any_activation_has_gateway_ip(self, platform: str) -> None:
+        acts = [
+            _make_activation(vlan_id=10, customer_name="a", gateway_ip=None),
+            _make_activation(vlan_id=20, customer_name="b", gateway_ip="10.0.20.1/24"),
+        ]
+        result = get_vxlan_config(self._data(), platform, device_role="leaf", activations=acts)
+        assert result is not None
+        assert result["anycast_gateway"]["enabled"] is True
+
+    @pytest.mark.parametrize("platform", ["arista_eos", "cisco_nxos", "dell_sonic"])
+    def test_mac_identical_across_platforms(self, platform: str) -> None:
+        acts = [_make_activation(vlan_id=10, customer_name="a", gateway_ip="10.0.10.1/24")]
+        result = get_vxlan_config(self._data(), platform, device_role="leaf", activations=acts)
+        assert result is not None
+        assert result["anycast_gateway"]["mac"] == "00:1c:73:00:dc:01"
 
 
 # ===========================================================================

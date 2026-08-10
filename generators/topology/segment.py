@@ -8,16 +8,20 @@ not generator logic.
 VxlanSegmentGenerator handles:
   1. Determine target customer deployments from segment.customer_deployments
   2. Resolve each customer deployment's parent (TopologyDataCenter or
-     TopologyColocationMetro) — VLAN/VNI pools and SegmentDeployment records
+     TopologyColocationMetro) — the VNI pool and SegmentDeployment record
      live on the parent (TopologySegmentHosting), not on the customer footprint.
   3. For each resolved parent, create (or upsert) a ManagedSegmentDeployment
-     with locally-allocated VLAN ID + VNI from its pool ranges.
-  4. Assign the segment to leaf/tor customer-facing interfaces.
+     with a locally-allocated VNI from its pool range.
+  4. Assign the segment to leaf/tor customer-facing interfaces, allocating a
+     LOCAL VLAN ID per VLAN domain (MLAG pair or standalone device) —
+     independent domains may reuse the same numeric VLAN ID, since IEEE
+     802.1Q VLAN ID has only local significance (unlike VNI, which is the
+     real DC-wide/fabric-wide segment identifier).
   5. Create inline sub-interfaces when terminate_inline is set.
 
-VLAN IDs and VNIs are allocated from the parent's CoreNumberPool via from_pool.
-The idempotency check (existing SegmentDeployment lookup) ensures from_pool
-is only called for genuinely new deployments, avoiding double allocation.
+VNIs are allocated from the parent's CoreNumberPool via from_pool. The
+idempotency check (existing SegmentDeployment lookup) ensures from_pool is
+only called for genuinely new deployments, avoiding double allocation.
 """
 
 from __future__ import annotations
@@ -28,18 +32,23 @@ from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
 from ..connections import CablingMixin
+from ..pools import PoolMixin
 from ..protocols import (
     DcimPhysicalDevice,
     DcimPhysicalInterface,
     ManagedSegmentDeployment,
+    ManagedStandaloneVlanDomain,
+    ManagedVlanDomainSegment,
     ManagedVxlanSegment,
 )
 
 
-class VxlanSegmentGenerator(CablingMixin, CommonGenerator):
-    """VXLAN segment generator — allocates VLAN ID + VNI from pools, assigns
-    the segment to leaf/tor customer-facing interfaces and physical host uplinks,
-    and creates inline sub-interfaces when terminate_inline is set.
+class VxlanSegmentGenerator(PoolMixin, CablingMixin, CommonGenerator):
+    """VXLAN segment generator — allocates a VNI from the DC's pool, assigns
+    the segment to leaf/tor customer-facing interfaces and physical host uplinks
+    (allocating a LOCAL VLAN ID per VLAN domain — MLAG pair or standalone
+    device — as it goes), and creates inline sub-interfaces when
+    terminate_inline is set.
     """
 
     graphql_root_key = "ManagedVxlanSegment"
@@ -78,11 +87,11 @@ class VxlanSegmentGenerator(CablingMixin, CommonGenerator):
 
         # A segment can reference a customer that just boarded onto a DC
         # still being bootstrapped (its own add_dc/dc_pod_cascade hasn't
-        # created vlan_pool/vni_pool yet) — wait for that in-flight parent
+        # created vni_pool yet) — wait for that in-flight parent
         # and re-resolve rather than fail immediately (same race as
         # customer_dc.py's firewall/LB device read).
         missing_pool_ids = [
-            dep["id"] for dep in target_deployments if dep.get("id") and not (dep.get("vlan_pool") or {}).get("id")
+            dep["id"] for dep in target_deployments if dep.get("id") and not (dep.get("vni_pool") or {}).get("id")
         ]
         if missing_pool_ids:
             for dep_id in missing_pool_ids:
@@ -140,7 +149,6 @@ class VxlanSegmentGenerator(CablingMixin, CommonGenerator):
                 segment_name=segment_name,
                 deployment_id=dep_id,
                 deployment_name=dep_name,
-                vlan_pool=dep.get("vlan_pool"),
                 vni_pool=dep.get("vni_pool"),
                 existing_deployment=existing_by_deployment_id.get(dep_id),
                 reusable_vni=reusable_vni,
@@ -209,19 +217,20 @@ class VxlanSegmentGenerator(CablingMixin, CommonGenerator):
         segment_name: str,
         deployment_id: str,
         deployment_name: str,
-        vlan_pool: dict[str, Any] | None = None,
         vni_pool: dict[str, Any] | None = None,
         existing_deployment: Any | None = None,
         reusable_vni: int | None = None,
         stretch_scope: str = "local",
     ) -> bool:
-        """Create or upsert one SegmentDeployment record.
+        """Create or upsert one SegmentDeployment record (VNI-and-status only —
+        local VLAN ID realization is per VLAN domain, see
+        _assign_segment_to_dc_interfaces/ManagedVlanDomainSegment).
 
-        VLAN ID and VNI are always allocated from the deployment's pools.
-        vlan_pool/vni_pool are {"id": ..., "name": ...} dicts read straight
-        from the vxlan_segment query's TopologySegmentHosting parent fragment
-        (see queries/topology/add/vxlan_segment.gql) — no separate client.get()
-        round-trip per deployment needed to discover them.
+        VNI is always allocated from the deployment's vni_pool. vni_pool is a
+        {"id": ..., "name": ...} dict read straight from the vxlan_segment
+        query's TopologySegmentHosting parent fragment (see
+        queries/topology/add/vxlan_segment.gql) — no separate client.get()
+        round-trip per deployment needed to discover it.
         Idempotency: checks for existing SegmentDeployment first — from_pool
         is only called for genuinely new deployments.
         """
@@ -260,18 +269,6 @@ class VxlanSegmentGenerator(CablingMixin, CommonGenerator):
                 self.logger.warning(f"  [{deployment_name}] Failed to re-save existing activation: {exc}")
             return True
 
-        # --- VLAN ID (always from pool via from_pool) ---
-        vlan_pool_id = (vlan_pool or {}).get("id")
-        if not vlan_pool_id:
-            self.logger.error(
-                f"  [{deployment_name}] No vlan_pool for {segment_name}. Attach a CoreNumberPool to the DC's vlan_pool."
-            )
-            return False
-
-        # Unique identifier per segment+deployment ensures stable allocation
-        vlan_identifier = f"{segment_id}-{deployment_id}-vlan"
-        self.logger.info(f"  [{deployment_name}] Allocating VLAN ID from pool {(vlan_pool or {}).get('name')}")
-
         # --- VNI ---
         # VNI must be globally consistent — the same segment must carry the same VNI
         # in every DC so that EVPN type-2/3 routes stitch correctly across DCI.
@@ -300,7 +297,6 @@ class VxlanSegmentGenerator(CablingMixin, CommonGenerator):
 
         # --- Create SegmentDeployment with pool-allocated values ---
         activation_data: dict[str, Any] = {
-            "vlan_id": {"from_pool": {"id": vlan_pool_id}, "identifier": vlan_identifier},
             "segment": {"id": segment_id},
             "deployment": {"id": deployment_id},
             "status": "provisioning",
@@ -318,7 +314,7 @@ class VxlanSegmentGenerator(CablingMixin, CommonGenerator):
             await activation.save(allow_upsert=True)
             self.logger.info(
                 f"  [{deployment_name}] SegmentDeployment saved "
-                f"(segment={segment_name}, vlan=from_pool, vni={'from_pool' if vni_from_pool else 'none'})"
+                f"(segment={segment_name}, vni={'from_pool' if vni_from_pool else 'none'})"
             )
             return True
         except Exception as exc:
@@ -352,6 +348,80 @@ class VxlanSegmentGenerator(CablingMixin, CommonGenerator):
                 deployment_name=dep_name,
             )
 
+    async def _resolve_vlan_domain(self, device: Any) -> tuple[str, str]:
+        """Return (domain_kind, domain_id) for a leaf/tor device: its
+        ManagedMLAG if paired, else the device itself is its own standalone
+        VLAN domain. Requires device.capabilities to already be fetched
+        (batch-included by the caller to avoid an N+1 query pattern)."""
+        caps = getattr(device, "capabilities", None)
+        if caps is not None:
+            for peer in caps.peers:
+                if peer.typename == "ManagedMLAG":
+                    return "ManagedMLAG", peer.id
+        return "DcimPhysicalDevice", device.id
+
+    async def _ensure_standalone_vlan_domain(self, device: Any) -> str:
+        """Create/upsert the ManagedStandaloneVlanDomain (and its vlan_pool)
+        for a non-MLAG device, lazily — only when it's actually assigned a
+        segment, avoiding speculative pool creation for idle leafs/tors.
+        Returns the domain object's id."""
+        domain_name = f"{device.name.value}-vlan-domain"
+        existing = await self.client.filters(kind=ManagedStandaloneVlanDomain, name__value=domain_name)
+        if existing:
+            return existing[0].id
+
+        domain_obj = await self.client.create(
+            kind=ManagedStandaloneVlanDomain,
+            data={"name": domain_name, "status": "active", "capabilities": [{"id": device.id}]},
+        )
+        await domain_obj.save(allow_upsert=True)
+        await self.upsert_number_pool(
+            pool_name=f"{domain_name}-vlan-pool",
+            description=f"Local VLAN ID pool for standalone VLAN domain {domain_name}",
+            start_range=100,
+            end_range=3999,
+            node="ManagedVlanDomainSegment",
+            node_attribute="vlan_id",
+            parent_kind="ManagedStandaloneVlanDomain",
+            parent_id=domain_obj.id,
+            parent_attr="vlan_pool",
+        )
+        return domain_obj.id
+
+    async def _ensure_vlan_domain_segment(self, segment_id: str, segment_name: str, domain_id: str) -> None:
+        """Upsert one ManagedVlanDomainSegment (segment, VLAN domain) pair,
+        allocating vlan_id from that domain's own pool via from_pool.
+        Idempotent: skips allocation if a record for this pair already exists.
+        """
+        existing = await self.client.filters(
+            kind=ManagedVlanDomainSegment,
+            segment__ids=[segment_id],
+            vlan_domain__ids=[domain_id],
+        )
+        if existing:
+            return
+
+        domain = await self.client.get(kind="ManagedGenericVlanDomain", id=domain_id, include=["vlan_pool"])
+        vlan_pool_rel = getattr(domain, "vlan_pool", None)
+        pool_id = getattr(vlan_pool_rel, "id", None) if vlan_pool_rel else None
+        if not pool_id:
+            self.logger.error(
+                f"VLAN domain {domain_id} has no vlan_pool — cannot allocate VLAN ID for segment {segment_name}"
+            )
+            return
+
+        vlan_identifier = f"{segment_id}-{domain_id}-vlan"
+        activation = await self.client.create(
+            kind=ManagedVlanDomainSegment,
+            data={
+                "segment": {"id": segment_id},
+                "vlan_domain": {"id": domain_id},
+                "vlan_id": {"from_pool": {"id": pool_id}, "identifier": vlan_identifier},
+            },
+        )
+        await activation.save(allow_upsert=True)
+        self.logger.info(f"  Allocated VLAN ID from domain {domain_id}'s pool for segment {segment_name}")
+
     async def _assign_segment_to_dc_interfaces(
         self,
         segment_id: str,
@@ -360,15 +430,21 @@ class VxlanSegmentGenerator(CablingMixin, CommonGenerator):
         deployment_id: str,
         deployment_name: str,
     ) -> None:
-        """Find all leaf/tor customer-facing interfaces in a DC and add the segment
-        to their interface_capabilities relationship (queried by the leaf transform)."""
+        """Find all leaf/tor customer-facing interfaces in a DC, add the segment
+        to their interface_capabilities relationship (queried by the leaf
+        transform), and — per distinct VLAN domain (MLAG pair or standalone
+        device) touched — upsert a ManagedVlanDomainSegment realizing this
+        segment's LOCAL VLAN ID in that domain."""
         devices = await self.client.filters(
             kind=DcimPhysicalDevice,
             deployment__ids=[deployment_id],
-            role__values=["leaf", "tor", "l2-leaf"],
+            role__values=["leaf", "tor", "l2-leaf", "access-leaf"],
+            include=["capabilities"],
         )
         if not devices:
-            self.logger.debug(f"  [{deployment_name}] No leaf/tor/l2-leaf devices — skipping interface assignment")
+            self.logger.debug(
+                f"  [{deployment_name}] No leaf/tor/l2-leaf/access-leaf devices — skipping interface assignment"
+            )
             return
 
         device_ids = [d.id for d in devices]
@@ -376,6 +452,7 @@ class VxlanSegmentGenerator(CablingMixin, CommonGenerator):
             kind=DcimPhysicalInterface,
             device__ids=device_ids,
             role__value="customer",
+            include=["device"],
         )
         if not interfaces:
             self.logger.debug(f"  [{deployment_name}] No customer/downlink interfaces — skipping")
@@ -383,6 +460,7 @@ class VxlanSegmentGenerator(CablingMixin, CommonGenerator):
 
         assigned = 0
         updated = 0
+        touched_device_ids: set[str] = set()
         for iface in interfaces:
             iface_services = getattr(iface, "interface_capabilities")
             await iface_services.fetch()
@@ -405,10 +483,84 @@ class VxlanSegmentGenerator(CablingMixin, CommonGenerator):
                 await iface.save(allow_upsert=True, update_group_context=False)
                 updated += 1
 
+            # device is a mandatory Parent relationship (schemas/base/dcim.yml),
+            # always resolvable given include=["device"] above.
+            touched_device_ids.add(iface.device.peer.id)
+
+        # Resolve each touched device's VLAN domain (MLAG-or-standalone) and
+        # upsert one ManagedVlanDomainSegment per distinct domain.
+        touched_devices = [d for d in devices if d.id in touched_device_ids]
+        domain_ids: set[str] = set()
+        for device in touched_devices:
+            domain_kind, domain_id = await self._resolve_vlan_domain(device)
+            if domain_kind == "DcimPhysicalDevice":
+                domain_id = await self._ensure_standalone_vlan_domain(device)
+            domain_ids.add(domain_id)
+
+        for domain_id in domain_ids:
+            await self._ensure_vlan_domain_segment(segment_id, segment_name, domain_id)
+
         self.logger.info(
             f"  [{deployment_name}] Assigned segment '{segment_name}' to {assigned} interface(s) "
-            f"({len(interfaces) - assigned} already assigned, {updated} interface(s) updated)"
+            f"({len(interfaces) - assigned} already assigned, {updated} interface(s) updated) "
+            f"across {len(domain_ids)} VLAN domain(s)"
         )
+
+    async def _ensure_inline_vlan_id(self, ha_node: dict[str, Any], segment_name: str) -> int | None:
+        """Allocate (or reuse) this segment's local VLAN ID on the HA pair's
+        own inline_vlan_id/inline_vlan_pool — lazily created here on first
+        use. Both HA peers' sub-interfaces are created with this same
+        literal value, independent of the leaf/MLAG VLAN domain mechanism
+        (a firewall/LB HA pair is its own L2 domain). One HA pair supports
+        exactly one inline-terminated segment at a time (single vlan_id slot).
+
+        Mutates via a raw Upsert mutation, not client.get()+save() — from_pool
+        reassignment on an existing node is broken in the SDK for Number
+        attrs (nests under "value", server rejects BigInt); see
+        customer_dc.py's _ensure_firewall_context for the same idiom.
+        """
+        ha_id: str = ha_node.get("id", "")
+        if not ha_id:
+            self.logger.warning(f"Segment '{segment_name}' inline_service missing id — cannot allocate VLAN ID")
+            return None
+
+        existing_vlan_id = (ha_node.get("inline_vlan_id") or {}).get("value")
+        if existing_vlan_id:
+            return existing_vlan_id
+
+        pool_id = (ha_node.get("inline_vlan_pool") or {}).get("id")
+        if not pool_id:
+            pool_obj = await self.upsert_number_pool(
+                pool_name=f"{ha_id}-inline-vlan-pool",
+                description=f"Local VLAN ID pool for inline-terminated segments on HA {ha_id}",
+                start_range=100,
+                end_range=3999,
+                node="ManagedHA",
+                node_attribute="inline_vlan_id",
+                parent_kind="ManagedHA",
+                parent_id=ha_id,
+                parent_attr="inline_vlan_pool",
+            )
+            pool_id = pool_obj.id
+
+        try:
+            result = await self.client.execute_graphql(
+                query="""
+                mutation AllocateInlineVlan($id: String!, $pool_id: String!, $identifier: String!) {
+                  ManagedHAUpsert(data: {
+                    id: $id
+                    inline_vlan_id: { from_pool: { id: $pool_id, identifier: $identifier } }
+                  }) { object { id } }
+                }
+                """,
+                variables={"id": ha_id, "pool_id": pool_id, "identifier": f"{ha_id}-inline-vlan"},
+            )
+        except Exception as exc:
+            self.logger.error(f"Failed to allocate inline VLAN ID for HA '{ha_id}': {exc}")
+            return None
+
+        ha_obj = await self.client.get(kind="ManagedHA", id=result["ManagedHAUpsert"]["object"]["id"])
+        return getattr(ha_obj.inline_vlan_id, "value", None)
 
     async def _create_inline_sub_interfaces(
         self, segment: dict[str, Any], target_deployments: list[dict[str, Any]]
@@ -451,38 +603,13 @@ class VxlanSegmentGenerator(CablingMixin, CommonGenerator):
                 f"Segment '{segment_name}' has no gateway — sub-interfaces created without IP addresses"
             )
 
-        dep_ids: list[str] = [d["id"] for d in target_deployments if d.get("id")]
-
-        # Fetch SegmentDeployments to get the allocated VLAN IDs
-        vlan_by_dep: dict[str, int] = {}
-        if dep_ids:
-            try:
-                existing = await self.client.filters(
-                    kind=ManagedSegmentDeployment,
-                    segment__ids=[segment_id],
-                    deployment__ids=dep_ids,
-                )
-                for sd in existing:
-                    deployment_rel = getattr(sd, "deployment", None)
-                    if deployment_rel is not None:
-                        await deployment_rel.fetch()
-                    deployment_peer = getattr(deployment_rel, "peer", None)
-                    deployment_obj = deployment_peer or deployment_rel
-                    dep_id = getattr(deployment_obj, "id", None)
-                    vlan_val = getattr(getattr(sd, "vlan_id", None), "value", None)
-                    if dep_id and vlan_val and dep_id not in vlan_by_dep:
-                        vlan_by_dep[dep_id] = vlan_val
-            except Exception as exc:
-                self.logger.warning(f"Could not fetch SegmentDeployments for inline termination: {exc}")
-
-        if not vlan_by_dep:
-            self.logger.warning(
-                f"Segment '{segment_name}' has no allocated VLAN IDs yet — run again after pool allocation completes"
-            )
+        # Inline termination's VLAN ID is independent of the leaf/MLAG VLAN
+        # domain mechanism — the HA pair terminating this segment inline is
+        # its own local L2 domain (both peers must agree on one tag), backed
+        # by a small pool on the HA node itself (ManagedHA.inline_vlan_pool).
+        vlan_id = await self._ensure_inline_vlan_id(ha_node, segment_name)
+        if vlan_id is None:
             return
-
-        # Use the first VLAN (segments typically have one VLAN ID per DC, pick any for naming)
-        vlan_id = next(iter(vlan_by_dep.values()))
 
         # Fetch the segment SDK object for interface_capabilities linkage
         segment_obj = await self.client.get(kind=ManagedVxlanSegment, id=segment_id)

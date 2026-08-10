@@ -29,6 +29,9 @@ def _build_gen() -> Any:
     gen.client = MagicMock()
     gen.client.group_context = MagicMock()
     gen.client.group_context.related_node_ids = []
+    # PoolMixin.upsert_number_pool — _ensure_mlag_pairs calls this to create
+    # each VLAN domain's own local VLAN ID pool; not under test here.
+    gen.upsert_number_pool = AsyncMock(return_value=MagicMock(id="vlan-pool-1"))
     return gen
 
 

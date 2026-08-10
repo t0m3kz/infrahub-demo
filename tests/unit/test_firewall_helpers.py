@@ -6,11 +6,13 @@ Covers:
   - get_vrf_default_gateways()    — VRF → FW gateway IP map from activations
   - get_zone_policies()           — policy dicts with rules from SecurityPolicy nodes
   - get_customer_pbr_rules()      — default-redirect-to-firewall PBR rules per VLAN
+  - get_border_leaf_pbr_rules()   — same, but SGT/prefix-matched, DC-wide (border-leaf)
   - get_firewall_contexts()       — per-tenant FirewallContext list from this device's interfaces
 """
 
 from transforms.helpers.firewall import (
     _flatten_deployment_firewall_contexts,
+    get_border_leaf_pbr_rules,
     get_customer_pbr_rules,
     get_firewall_contexts,
     get_firewall_static_routes,
@@ -1007,3 +1009,176 @@ class TestGetFirewallContexts:
         ]
         result = get_firewall_contexts(ifaces)
         assert [c["name"] for c in result] == ["dc10-a-dedicated", "dc10-b-dedicated"]
+
+
+# ===========================================================================
+# get_border_leaf_pbr_rules()
+# ===========================================================================
+
+
+def _make_dc_activation(
+    *,
+    vni: int = 10100,
+    seg_id: str = "seg-1",
+    customer_name: str = "web",
+    deployment_id: str | None = "dep-a",
+    sgt: int | None = None,
+    gateway_prefix: str | None = "10.10.1.0/24",
+    environment: str | None = None,
+) -> dict:
+    """Models one _flatten_deployment_segment_activations() entry — border-leaf's
+    DC-wide segment_deployments traversal, NOT the per-interface
+    _collect_activations_from_interfaces() a leaf uses. Keyed by vni now
+    (not vlan_id — local VLAN ID is per-VLAN-domain, no longer DC-wide)."""
+    seg: dict = {
+        "id": seg_id,
+        "name": seg_id,
+        "customer_name": customer_name,
+        "customer_deployments": [{"id": deployment_id}] if deployment_id else [],
+    }
+    if sgt is not None:
+        seg["security_tag"] = {"name": "web-tier", "group_id": sgt}
+    if gateway_prefix is not None:
+        seg["gateway"] = {"ip_prefix": {"prefix": gateway_prefix}}
+    if environment is not None:
+        seg["environment"] = environment
+    return {"vni": vni, "segment": seg}
+
+
+class TestGetBorderLeafPbrRules:
+    def test_none_activations_returns_empty(self) -> None:
+        assert get_border_leaf_pbr_rules(None, [_make_context_leg()], "cisco_nxos") == []
+
+    def test_no_firewall_context_returns_empty(self) -> None:
+        activations = [_make_dc_activation()]
+        assert get_border_leaf_pbr_rules(activations, [], "cisco_nxos") == []
+
+    def test_cisco_platform_matches_by_tag_when_sgt_present(self) -> None:
+        activations = [_make_dc_activation(sgt=10)]
+        contexts = [_make_context_leg()]
+        result = get_border_leaf_pbr_rules(activations, contexts, "cisco_nxos")
+        assert len(result) == 1
+        assert result[0]["match_by_tag"] is True
+        assert result[0]["sgt"] == 10
+        assert result[0]["source_prefixes"] == []
+
+    def test_arista_platform_matches_by_tag_when_sgt_present(self) -> None:
+        activations = [_make_dc_activation(sgt=20)]
+        contexts = [_make_context_leg()]
+        result = get_border_leaf_pbr_rules(activations, contexts, "arista_eos")
+        assert result[0]["match_by_tag"] is True
+        assert result[0]["sgt"] == 20
+        assert result[0]["sgt_name"] == "web-tier"
+
+    def test_sgt_name_none_when_not_matching_by_tag(self) -> None:
+        """A platform without hardware tag-matching (or a segment with no
+        SGT at all) must not carry a stale sgt_name through — the template
+        renders match_by_tag as the single source of truth."""
+        activations = [_make_dc_activation(sgt=10)]
+        contexts = [_make_context_leg()]
+        result = get_border_leaf_pbr_rules(activations, contexts, "dell_sonic")
+        assert result[0]["match_by_tag"] is False
+        assert result[0]["sgt_name"] is None
+
+    def test_sonic_platform_never_matches_by_tag_even_with_sgt(self) -> None:
+        """SONiC has no hardware SGT/security-group primitive — always falls
+        back to prefix matching, same as .dev/scenariusze.txt's own
+        SONiC-BORDER-LEAF section."""
+        activations = [_make_dc_activation(sgt=10, gateway_prefix="10.10.1.0/24")]
+        contexts = [_make_context_leg()]
+        result = get_border_leaf_pbr_rules(activations, contexts, "dell_sonic")
+        assert result[0]["match_by_tag"] is False
+        assert result[0]["sgt"] is None
+        assert result[0]["source_prefixes"] == ["10.10.1.0/24"]
+
+    def test_cisco_platform_falls_back_to_prefix_when_no_sgt(self) -> None:
+        activations = [_make_dc_activation(sgt=None, gateway_prefix="10.10.1.0/24")]
+        contexts = [_make_context_leg()]
+        result = get_border_leaf_pbr_rules(activations, contexts, "cisco_nxos")
+        assert result[0]["match_by_tag"] is False
+        assert result[0]["source_prefixes"] == ["10.10.1.0/24"]
+
+    def test_no_tag_and_no_prefix_is_skipped(self) -> None:
+        """Nothing to match this segment's traffic by — must not emit an
+        unreachable rule."""
+        activations = [_make_dc_activation(sgt=None, gateway_prefix=None)]
+        contexts = [_make_context_leg()]
+        assert get_border_leaf_pbr_rules(activations, contexts, "dell_sonic") == []
+
+    def test_dedicated_context_nexthop_preferred_over_shared(self) -> None:
+        activations = [_make_dc_activation(deployment_id="dep-a", sgt=10)]
+        contexts = [
+            _make_context_leg(fw_ip="10.65.0.0/30"),  # shared
+            _make_context_leg(fw_ip="10.66.0.0/30", tenant_id="dep-a"),  # dedicated
+        ]
+        result = get_border_leaf_pbr_rules(activations, contexts, "cisco_nxos")
+        assert result[0]["fw_nexthop"] == "10.66.0.0"
+
+    def test_shared_context_used_when_no_dedicated_tenant_match(self) -> None:
+        activations = [_make_dc_activation(deployment_id="dep-a", sgt=10)]
+        contexts = [_make_context_leg(fw_ip="10.65.0.0/30")]
+        result = get_border_leaf_pbr_rules(activations, contexts, "cisco_nxos")
+        assert result[0]["fw_nexthop"] == "10.65.0.0"
+
+    def test_multiple_segments_different_customers_all_present(self) -> None:
+        activations = [
+            _make_dc_activation(vni=10100, seg_id="seg-1", customer_name="web", sgt=10),
+            _make_dc_activation(vni=10200, seg_id="seg-2", customer_name="db", sgt=20),
+        ]
+        contexts = [_make_context_leg()]
+        result = get_border_leaf_pbr_rules(activations, contexts, "cisco_nxos")
+        assert sorted(r["customer_name"] for r in result) == ["db", "web"]
+
+    def test_duplicate_vni_deduplicated(self) -> None:
+        activations = [_make_dc_activation(vni=10100, sgt=10), _make_dc_activation(vni=10100, sgt=10)]
+        contexts = [_make_context_leg()]
+        result = get_border_leaf_pbr_rules(activations, contexts, "cisco_nxos")
+        assert len(result) == 1
+
+    def test_customer_name_and_environment_passed_through(self) -> None:
+        activations = [_make_dc_activation(sgt=10, environment="production")]
+        contexts = [_make_context_leg()]
+        result = get_border_leaf_pbr_rules(activations, contexts, "cisco_nxos")
+        assert result[0]["customer_name"] == "web"
+        assert result[0]["environment"] == "production"
+
+    def test_same_customer_multiple_segments_grouped_into_one_prefix_rule(self) -> None:
+        """Two segments, same customer, same fw_nexthop, both prefix-fallback
+        — must merge into ONE rule with both prefixes, not two separate rules."""
+        activations = [
+            _make_dc_activation(vni=10100, seg_id="seg-1", customer_name="web", gateway_prefix="10.10.1.0/24"),
+            _make_dc_activation(vni=10200, seg_id="seg-2", customer_name="web", gateway_prefix="10.10.2.0/24"),
+        ]
+        contexts = [_make_context_leg()]
+        result = get_border_leaf_pbr_rules(activations, contexts, "dell_sonic")
+        assert len(result) == 1
+        assert result[0]["source_prefixes"] == ["10.10.1.0/24", "10.10.2.0/24"]
+
+    def test_same_customer_multiple_sgts_get_separate_rules(self) -> None:
+        """Two segments, same customer, both tag-matched but different SGTs
+        — each SGT keeps its own rule (no confirmed multi-value match syntax)."""
+        activations = [
+            _make_dc_activation(vni=10100, seg_id="seg-1", customer_name="web", sgt=10),
+            _make_dc_activation(vni=10200, seg_id="seg-2", customer_name="web", sgt=20),
+        ]
+        contexts = [_make_context_leg()]
+        result = get_border_leaf_pbr_rules(activations, contexts, "cisco_nxos")
+        assert len(result) == 2
+        assert sorted(r["sgt"] for r in result) == [10, 20]
+        assert all(r["customer_name"] == "web" for r in result)
+
+    def test_mixed_tag_and_prefix_same_customer_both_present(self) -> None:
+        """One customer with segments on both a tag-capable leaf and a
+        non-tagging leaf — gets one merged prefix rule AND its own tag rule."""
+        activations = [
+            _make_dc_activation(vni=10100, seg_id="seg-1", customer_name="web", sgt=10),
+            _make_dc_activation(
+                vni=10200, seg_id="seg-2", customer_name="web", sgt=None, gateway_prefix="10.10.2.0/24"
+            ),
+        ]
+        contexts = [_make_context_leg()]
+        result = get_border_leaf_pbr_rules(activations, contexts, "cisco_nxos")
+        assert len(result) == 2
+        by_tag = {r["match_by_tag"]: r for r in result}
+        assert by_tag[True]["sgt"] == 10
+        assert by_tag[False]["source_prefixes"] == ["10.10.2.0/24"]

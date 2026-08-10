@@ -142,6 +142,7 @@ fragment DeviceCapabilitiesFields on DcimCapabilities {
         ...ManagedAAAServiceFields
 
         ... on ManagedMLAG {
+          id
           domain_id { value }
           reload_delay { value }
           reload_delay_non_mlag { value }

@@ -3,6 +3,8 @@
 !
 hostname DC1-POD1-L1
 !
+system routing tcam security-group-acl
+!
 feature ospf
 feature bgp
 feature interface-vlan

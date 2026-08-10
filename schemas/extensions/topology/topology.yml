@@ -118,7 +118,7 @@ generics:
 
   - name: SegmentHosting
     namespace: Topology
-    description: "VLAN/VNI pools for network segments activated in this deployment"
+    description: "VNI pools for network segments activated in this deployment"
     human_friendly_id:
       - name__value
     include_in_menu: false
@@ -129,14 +129,7 @@ generics:
     relationships:
       - name: vlan_pool
         peer: CoreNumberPool
-        kind: Attribute
-        cardinality: one
-        optional: true
-        identifier: "segment_hosting__vlan_pool"
-        order_weight: 7300
-        on_delete: cascade
-        description: "VLAN ID pool for this deployment. Allocated per-segment by add_segment generator."  # yamllint disable-line rule:line-length
-
+        state: absent
       - name: vni_pool
         peer: CoreNumberPool
         kind: Attribute

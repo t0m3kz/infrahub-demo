@@ -112,6 +112,52 @@ class Firewall(BaseDeviceTransform):
     query = "firewall_config"
     template_subdir = "firewalls"
 
+    def _collect_activations_from_interfaces(
+        self,
+        interfaces: list[dict[str, Any]],
+        *,
+        device_id: str | None = None,
+        device_capabilities: list[dict[str, Any]] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Firewall-specific override: no VLAN-domain resolution.
+
+        BaseDeviceTransform's own _collect_activations_from_interfaces
+        resolves a VxlanSegment's LOCAL vlan_id to the RENDERING DEVICE's own
+        VLAN domain (its ManagedMLAG if paired, else itself) — a leaf/tor
+        concept that doesn't apply to a firewall (never MLAG-paired, never a
+        standalone VLAN domain). A firewall's own tagged sub-interface VLAN
+        comes from a different mechanism entirely (FirewallContext's own
+        dot1q_vlan, see transforms/helpers/vxlan.py) — _build_fw_interfaces
+        here just needs a stable vlan_id per segment name for zone/tag
+        lookup, so this simpler variant takes the first segment_deployments
+        entry directly, exactly like the pre-VLAN-domain behavior. device_id/
+        device_capabilities accepted only for signature compatibility with
+        the base class — unused here.
+        """
+        del device_id, device_capabilities
+        seen: set[str] = set()
+        activations: list[dict[str, Any]] = []
+        for iface in interfaces:
+            for cap in iface.get("interface_capabilities") or []:
+                seg_id = cap.get("id") or cap.get("name")
+                if not seg_id or seg_id in seen:
+                    continue
+                if cap.get("typename") == "ManagedVlanSegment":
+                    if cap.get("status") not in self._ACTIVE_STATUSES:
+                        continue
+                    vlan_id = cap.get("vlan_id")
+                    vni = None
+                else:
+                    seg_deps = cap.get("segment_deployments")
+                    if not seg_deps:
+                        continue
+                    dep = seg_deps[0]
+                    vlan_id = dep.get("vlan_id")
+                    vni = dep.get("vni")
+                seen.add(seg_id)
+                activations.append({"vlan_id": vlan_id, "vni": vni, "segment": cap})
+        return activations
+
     async def transform(self, data: Any) -> Any:
         cleaned = clean_data(data)
 
