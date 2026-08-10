@@ -156,24 +156,26 @@ class TestGenerateHappyPath:
         gen.logger.error.assert_called()
         gen.ensure_vlan_subinterface.assert_not_called()
 
-    def test_vxlan_segment_deployment_vlan_id_used(self) -> None:
-        """ManagedVxlanSegment has no plain vlan_id — falls back to
-        segment_deployments[0].vlan_id."""
+    def test_vxlan_backend_segment_logs_error_and_skips(self) -> None:
+        """ManagedVxlanSegment has no plain vlan_id — its LOCAL VLAN ID is
+        per VLAN domain (ManagedVlanDomainSegment), not resolvable here (no
+        device to resolve a domain against) — a known, logged gap, not a
+        crash."""
         gen = _gen()
         seg = {
             "id": "seg-2",
-            "segment_deployments": [{"vlan_id": 200}],
+            "segment_deployments": [{"vni": 10200}],
         }
         data = {"LoadbalancerVIP": [_vip(backend_segment=seg)]}
 
-        trunk_iface = MagicMock()
-        gen.find_role_interface = AsyncMock(return_value=trunk_iface)
-        gen.ensure_vlan_subinterface = AsyncMock(return_value=MagicMock())
+        gen.find_role_interface = AsyncMock()
+        gen.ensure_vlan_subinterface = AsyncMock()
         gen.client.get = AsyncMock(return_value=MagicMock(id="vip-1"))
 
         asyncio.run(gen.generate(data))
 
-        assert gen.ensure_vlan_subinterface.call_args.kwargs["vlan_id_value"] == 200
+        gen.logger.error.assert_called()
+        gen.ensure_vlan_subinterface.assert_not_called()
 
 
 class TestEnsureBackendPool:

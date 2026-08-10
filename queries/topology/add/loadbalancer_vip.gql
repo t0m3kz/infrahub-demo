@@ -19,7 +19,7 @@ query loadbalancer_vip_data($id: ID!) {
               segment_deployments(status__values: ["active", "provisioning"]) {
                 edges {
                   node {
-                    vlan_id { value }
+                    vni { value }
                   }
                 }
               }

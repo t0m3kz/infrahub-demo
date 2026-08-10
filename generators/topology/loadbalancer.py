@@ -75,18 +75,18 @@ class LoadbalancerBackendNexthopGenerator(FailOnErrorLoggerMixin, CablingMixin, 
             self.logger.error(f"VIP {vip_hostname}: load balancer has no member devices — cannot proceed")
             return
 
+        # ManagedVlanSegment.vlan_id is a manual attribute, always present
+        # directly. ManagedVxlanSegment has no plain vlan_id — its LOCAL
+        # VLAN ID is per VLAN domain (ManagedVlanDomainSegment), not
+        # per-deployment, and this generator has no device to resolve a
+        # domain against (a VIP's backend_segment isn't itself a leaf/MLAG
+        # pair) — VXLAN backend segments are a known gap here, not yet
+        # supported for no-SNAT return-path wiring.
         vlan_id_value = backend_segment.get("vlan_id")
         if vlan_id_value is None:
-            # ManagedVxlanSegment has no plain vlan_id — its VLAN is
-            # per-deployment, via segment_deployments (ManagedVlanSegment's
-            # vlan_id is a manual attribute, always present directly).
-            seg_deps = backend_segment.get("segment_deployments") or []
-            if seg_deps:
-                vlan_id_value = seg_deps[0].get("vlan_id")
-        if vlan_id_value is None:
             self.logger.error(
-                f"VIP {vip_hostname}: backend_segment '{backend_segment.get('name')}' has no allocated "
-                "VLAN ID yet — run again once its SegmentDeployment exists"
+                f"VIP {vip_hostname}: backend_segment '{backend_segment.get('name')}' has no VLAN ID "
+                "(VXLAN backend segments are not yet supported for no-SNAT return-path wiring)"
             )
             return
 
