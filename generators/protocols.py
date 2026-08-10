@@ -170,6 +170,11 @@ class ManagedGenericInterfaces(CoreNode):
     interface_capabilities: RelationshipManager[DcimInterface]
 
 
+class ManagedGenericVlanDomain(CoreNode):
+    vlan_domain_segments: RelationshipManager[ManagedVlanDomainSegment]
+    vlan_pool: RelationshipAttribute[CoreNumberPool]
+
+
 class DcimGenericSFP(CoreNode):
     form_factor: Dropdown
     serial: StringOptional
@@ -181,9 +186,11 @@ class DcimGenericSFP(CoreNode):
 
 class ManagedHA(CoreNode):
     group_id: IntegerOptional
+    inline_vlan_id: IntegerOptional
     mode: Dropdown
     preempt: Boolean
     priority: Integer
+    inline_vlan_pool: RelationshipAttribute[CoreNumberPool]
 
 
 class ManagedInlineService(CoreNode):
@@ -303,7 +310,6 @@ class ManagedSaasService(CoreNode):
 class TopologySegmentHosting(CoreNode):
     name: String
     l3_vni_pool: RelationshipAttribute[CoreNumberPool]
-    vlan_pool: RelationshipAttribute[CoreNumberPool]
     vni_pool: RelationshipAttribute[CoreNumberPool]
 
 
@@ -783,11 +789,15 @@ class ManagedLoadbalancerHA(ManagedHA, ManagedGeneric, ManagedGenericDevice, Man
     tenant: RelationshipAttribute[ManagedTenantScoped]
 
 
-class ManagedMLAG(ManagedGeneric, ManagedGenericDevice, ManagedGenericInterfaces):
+class ManagedMLAG(ManagedGeneric, ManagedGenericDevice, ManagedGenericInterfaces, ManagedGenericVlanDomain):
     domain_id: Integer
     reload_delay: Integer
     reload_delay_non_mlag: Integer
     virtual_peer_link: Boolean
+
+
+class ManagedStandaloneVlanDomain(ManagedGeneric, ManagedGenericDevice, ManagedGenericVlanDomain):
+    pass
 
 
 class VirtManagementPlane(ManagedGeneric, ManagedGenericCluster):
@@ -1325,11 +1335,17 @@ class SecuritySecurityProfile(CoreNode):
 
 
 class ManagedSegmentDeployment(CoreNode):
+    local_vni_override: IntegerOptional
     status: Dropdown
-    vlan_id: Integer
     vni: IntegerOptional
     deployment: RelationshipAttribute[TopologySegmentHosting]
     segment: RelationshipAttribute[ManagedNetworkSegment]
+
+
+class ManagedVlanDomainSegment(CoreNode):
+    vlan_id: Integer
+    segment: RelationshipAttribute[ManagedVxlanSegment]
+    vlan_domain: RelationshipAttribute[ManagedGenericVlanDomain]
 
 
 class AppServicePort(CoreNode):

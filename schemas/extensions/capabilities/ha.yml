@@ -87,6 +87,25 @@ generics:
         optional: true
         default_value: false
         order_weight: 1300
+      - name: inline_vlan_id
+        kind: Number
+        label: "Inline Segment VLAN ID"
+        description: "Local VLAN ID for the inline-terminated segment on this HA pair, allocated from inline_vlan_pool."  # yamllint disable-line rule:line-length
+        optional: true
+        order_weight: 1350
+        parameters:
+          min_value: 1
+          max_value: 4094
+    relationships:
+      - name: inline_vlan_pool
+        peer: CoreNumberPool
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "ha__inline_vlan_pool"
+        order_weight: 7300
+        on_delete: cascade
+        description: "Local VLAN ID pool for inline-terminated segments on this HA pair — independent of the leaf/MLAG VLAN domain mechanism."  # yamllint disable-line rule:line-length
 
 nodes:
   # ── Firewall HA domain ────────────────────────────────────────────────────

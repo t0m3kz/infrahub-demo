@@ -35,7 +35,7 @@ spec:
     - name: dell_sonic
       nornir_platform: sonic
       napalm_driver: sonic
-      netmiko_device_type: sonic
+      netmiko_device_type: dell_sonic
       ansible_network_os: sonic
       containerlab_os: linux
 

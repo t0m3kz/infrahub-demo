@@ -174,27 +174,46 @@ ip route vrf {{ vrf }} 0.0.0.0/0 {{ nexthop }}
 {%- endfor %}
 {%- endif %}
 
-{%- if customer_pbr_rules %}
+{%- if border_leaf_pbr_rules %}
 !
-! Customer PBR — default-redirect to firewall (TopologyCustomerDeployment's
-! FirewallContext); a SecurityPolicyRule permit is the only bypass.
+! Border-leaf PBR (.dev/scenariusze.txt "ARISTA-BORDER-LEAF") — default-
+! redirect every segment's traffic to its firewall context's nexthop.
+! Security-group (MSS-G) travels in-band from the originating leaf; tagged
+! rules match by group NAME (Arista's own match key), everything else
+! falls back to a source-prefix ACL match.
 !
-{%- for rule in customer_pbr_rules %}
-! Customer: {{ rule.customer_name or 'any' }}/{{ rule.environment or 'any' }}
-ip access-list PBR-BYPASS-VLAN{{ rule.vlan_id }}
-{%- for prefix in rule.bypass_prefixes %}
-   permit ip any {{ prefix }}
+network-security
+   hardware macro-segmentation Service-Group
+!
+{%- for rule in border_leaf_pbr_rules if rule.match_by_tag %}
+network-security
+   security-group {{ rule.sgt_name }}
+      id {{ rule.sgt }}
+!
 {%- endfor %}
-   deny ip any any
+{%- for rule in border_leaf_pbr_rules %}
+! Customer: {{ rule.customer_name or 'any' }}/{{ rule.environment or 'any' }}
+{%- if not rule.match_by_tag %}
+ip access-list {{ rule.acl_name }}
+{%- for prefix in rule.source_prefixes %}
+   permit ip {{ prefix }} any
+{%- endfor %}
 !
-route-map RM-CUSTOMER-PBR-VLAN{{ rule.vlan_id }} permit 10
-   match ip address PBR-BYPASS-VLAN{{ rule.vlan_id }}
-!
-route-map RM-CUSTOMER-PBR-VLAN{{ rule.vlan_id }} permit 20
+{%- endif %}
+route-map RM-BORDER-LEAF-PBR permit {{ loop.index * 10 }}
+{%- if rule.match_by_tag %}
+   match security-group {{ rule.sgt_name }}
+{%- else %}
+   match ip address {{ rule.acl_name }}
+{%- endif %}
    set ip next-hop {{ rule.fw_nexthop }}
 !
-interface Vlan{{ rule.vlan_id }}
-   ip policy route-map RM-CUSTOMER-PBR-VLAN{{ rule.vlan_id }}
+{%- endfor %}
+! Applied on every uplink (fabric-facing) interface — that's where traffic
+! from any leaf in this DC arrives at the border-leaf.
+{%- for interface in interfaces if interface.role == 'uplink' %}
+interface {{ interface.name }}
+   ip policy route-map RM-BORDER-LEAF-PBR
 !
 {%- endfor %}
 {%- endif %}

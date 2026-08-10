@@ -21,6 +21,7 @@ from transforms.helpers.bgp import (
 )
 from transforms.helpers.firewall import (
     _flatten_deployment_firewall_contexts,
+    get_border_leaf_pbr_rules,
     get_customer_pbr_rules,
     get_firewall_contexts,
     get_firewall_static_routes,
@@ -34,6 +35,7 @@ from transforms.helpers.management import get_management_services
 from transforms.helpers.mlag import get_mlag
 from transforms.helpers.ospf import get_ospf
 from transforms.helpers.segments import (
+    _flatten_deployment_segment_activations,
     _get_segment_gateways,
     _get_segment_namespace,
     _get_segment_prefix_str,
@@ -175,7 +177,11 @@ class BaseDeviceTransform(InfrahubTransform):
             )
 
         # Collect segment activations from interface capabilities (segment → segment_deployments)
-        activations = self._collect_activations_from_interfaces(device_data.get("interfaces") or [])
+        activations = self._collect_activations_from_interfaces(
+            device_data.get("interfaces") or [],
+            device_id=device_data.get("id"),
+            device_capabilities=device_data.get("capabilities") or [],
+        )
         if activations:
             device_data["segment_deployments"] = self._filter_segment_deployments(activations)
 
@@ -262,15 +268,38 @@ class BaseDeviceTransform(InfrahubTransform):
 
     _ACTIVE_STATUSES = ("active", "provisioning")
 
-    def _collect_activations_from_interfaces(self, interfaces: list[dict]) -> list[dict]:
+    @staticmethod
+    def _resolve_own_vlan_domain_id(device_id: str | None, device_capabilities: list[dict]) -> str | None:
+        """Return this device's own VLAN domain id: its ManagedMLAG's id if
+        paired, else its own device id (standalone VLAN domain). Local VLAN
+        ID is allocated per VLAN domain, not DC-wide — see
+        ManagedVlanDomainSegment / generators/topology/segment.py."""
+        for cap in device_capabilities:
+            if cap.get("typename") == "ManagedMLAG" and cap.get("id"):
+                return cap["id"]
+        return device_id
+
+    def _collect_activations_from_interfaces(
+        self,
+        interfaces: list[dict],
+        *,
+        device_id: str | None = None,
+        device_capabilities: list[dict] | None = None,
+    ) -> list[dict]:
         """Collect unique segment activations from interface_capabilities.
 
         VlanSegment.vlan_id is a plain manual attribute directly on the segment
         (single-site, no realization record). VxlanSegment.segment_deployments
         is cardinality:many (multi-site stretch — clean_data unwraps it to a
-        list, already filtered to active/provisioning by the query).
+        list, already filtered to active/provisioning by the query) and
+        carries only vni now — the LOCAL vlan_id for a VxlanSegment comes from
+        vlan_domain_segments, resolved to THIS device's own VLAN domain (its
+        ManagedMLAG if paired, else itself) via _resolve_own_vlan_domain_id.
+        A VxlanSegment whose vlan_domain_segments has no entry for this
+        device's own domain yet (allocation not converged) is skipped.
         We deduplicate by segment id so each segment appears once.
         """
+        own_domain_id = self._resolve_own_vlan_domain_id(device_id, device_capabilities or [])
         seen: set[str] = set()
         activations: list[dict] = []
         for iface in interfaces:
@@ -287,9 +316,18 @@ class BaseDeviceTransform(InfrahubTransform):
                     seg_deps = cap.get("segment_deployments")
                     if not seg_deps:
                         continue
-                    dep = seg_deps[0]
-                    vlan_id = dep.get("vlan_id")
-                    vni = dep.get("vni")
+                    vni = seg_deps[0].get("vni")
+                    own_domain_seg = next(
+                        (
+                            v
+                            for v in cap.get("vlan_domain_segments") or []
+                            if (v.get("vlan_domain") or {}).get("id") == own_domain_id
+                        ),
+                        None,
+                    )
+                    if own_domain_seg is None:
+                        continue
+                    vlan_id = own_domain_seg.get("vlan_id")
                 seen.add(seg_id)
                 activations.append(
                     {
@@ -326,6 +364,7 @@ __all__ = [
     "clean_data",
     "get_acls",
     "get_bgp_profile",
+    "get_border_leaf_pbr_rules",
     "get_capabilities",
     "get_customer_pbr_rules",
     "get_data",
@@ -347,6 +386,7 @@ __all__ = [
     "_collect_l3_vni_from_namespaces",
     "_flatten_deployment_firewall_contexts",
     "_flatten_deployment_lb_vips",
+    "_flatten_deployment_segment_activations",
     "_get_segment_gateways",
     "_get_segment_namespace",
     "_get_segment_prefix_str",

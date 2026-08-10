@@ -249,20 +249,15 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
             if asn_pool_obj:
                 fabric_asn_pool_id = asn_pool_obj.id
 
-        # Create VLAN pool for VxlanSegment's local VLAN allocation (per-DC).
         # VlanSegment.vlan_id is set manually — no pool involved (single-site,
         # no collision-tracking concern requiring automated allocation).
-        await self.upsert_number_pool(
-            pool_name=f"{self.fabric_name}-vlan-pool",
-            description=f"VLAN ID pool for {self.fabric_name.upper()}",
-            start_range=100,
-            end_range=3999,
-            node="ManagedSegmentDeployment",
-            node_attribute="vlan_id",
-            parent_kind="TopologyDataCenter",
-            parent_id=dc_id,
-            parent_attr="vlan_pool",
-        )
+        # VxlanSegment's LOCAL VLAN ID is allocated per VLAN domain (MLAG pair
+        # or standalone device), not per-DC — see generators/devices.py's
+        # _ensure_mlag_pairs/_ensure_standalone_vlan_domain and
+        # generators/topology/segment.py's per-domain ManagedVlanDomainSegment
+        # allocation. IEEE 802.1Q VLAN ID has only local significance; a
+        # DC-wide pool would artificially cap the whole DC to one shared
+        # ~3900-value space instead of ~3900 per independent VLAN domain.
 
         # L2 VNI pool for the VXLAN overlay (VRF-lite: no VRF stretches over
         # EVPN, so there's no L3 VNI pool — border-leaf VRFs are local-only).

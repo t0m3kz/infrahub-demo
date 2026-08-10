@@ -42,6 +42,9 @@ def _make_generator() -> Any:
     gen.client.allocate_next_ip_address = AsyncMock(return_value={"id": "ip-1"})
     gen.client.create_batch = AsyncMock(side_effect=[_DummyBatch(), _DummyBatch()])
     gen._resolve_pool = AsyncMock(return_value=MagicMock(id="pool-1"))
+    # PoolMixin.upsert_number_pool — _ensure_mlag_pairs calls this to create
+    # each VLAN domain's own local VLAN ID pool; not under test here.
+    gen.upsert_number_pool = AsyncMock(return_value=MagicMock(id="vlan-pool-1"))
     # No controllers by default — every existing test here expects normal
     # CoreStandardGroup behavior, not controller routing (see
     # TestCreateDevicesControllerRouting for the controller-routing path).

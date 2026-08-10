@@ -21,6 +21,7 @@ nodes:
       - ManagedGeneric
       - ManagedGenericDevice
       - ManagedGenericInterfaces
+      - ManagedGenericVlanDomain
     uniqueness_constraints:
       - ["name__value"]
     display_label: "{{name__value}}"

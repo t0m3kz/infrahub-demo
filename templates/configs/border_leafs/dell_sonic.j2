@@ -147,6 +147,34 @@ ip route vrf {{ vrf }} 0.0.0.0/0 {{ nexthop }}
 !
 {%- endif %}
 
+{%- if border_leaf_pbr_rules %}
+!
+! Border-leaf PBR (.dev/scenariusze.txt "SONiC-BORDER-LEAF") — default-
+! redirect every segment's traffic to its firewall context's nexthop.
+! SONiC has no hardware SGT/security-group primitive, so every rule here
+! matches by source prefix (same as scenariusze.txt's own SONiC section).
+!
+{%- for rule in border_leaf_pbr_rules %}
+! Customer: {{ rule.customer_name or 'any' }}/{{ rule.environment or 'any' }}
+ip access-list {{ rule.acl_name }}
+{%- for prefix in rule.source_prefixes %}
+  seq {{ loop.index * 10 }} permit ip {{ prefix }} any
+{%- endfor %}
+!
+route-map RM-BORDER-LEAF-PBR permit {{ loop.index * 10 }}
+  match ip address {{ rule.acl_name }}
+  set ip next-hop {{ rule.fw_nexthop }}
+!
+{%- endfor %}
+! Applied on every uplink (fabric-facing) interface — that's where traffic
+! from any leaf in this DC arrives at the border-leaf.
+{%- for interface in interfaces if interface.role == 'uplink' %}
+interface {{ interface.name }}
+  ip policy route-map RM-BORDER-LEAF-PBR
+!
+{%- endfor %}
+{%- endif %}
+
 {%- include 'common/sonic_management.j2' %}
 
 ! End of configuration

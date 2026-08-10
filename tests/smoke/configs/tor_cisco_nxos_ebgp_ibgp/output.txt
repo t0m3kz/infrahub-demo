@@ -3,6 +3,8 @@
 !
 hostname dc1-tor-01
 !
+system routing tcam security-group-acl
+!
 feature ospf
 feature bgp
 feature interface-vlan

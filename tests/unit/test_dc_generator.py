@@ -472,15 +472,17 @@ class TestGeneratePoolAllocation:
         gen.upsert_asn_pool.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_vlan_vni_pools_always_created(self) -> None:
+    async def test_vni_pool_always_created(self) -> None:
+        """VLAN ID pool creation moved off dc.py entirely — it's now per-VLAN-domain
+        (MLAG pair or standalone device), created lazily in devices.py/segment.py."""
         gen = _make_generator()
         data = _deployment(design=_design(), routing_strategy="ospf-ibgp")
 
         await gen.generate(data)
 
-        assert gen.upsert_number_pool.await_count == 2
+        assert gen.upsert_number_pool.await_count == 1
         pool_names = [c.kwargs["pool_name"] for c in gen.upsert_number_pool.await_args_list]
-        assert pool_names == ["dc1-vlan-pool", "dc1-vni-pool"]
+        assert pool_names == ["dc1-vni-pool"]
 
     @pytest.mark.asyncio
     async def test_shared_routing_objects_created_with_asn_end_plus_one(self) -> None:

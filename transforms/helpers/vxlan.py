@@ -324,6 +324,17 @@ def get_vxlan_config(
             "enabled": bool(l3_vni_mappings),
             "vrf_count": len(l3_vni_mappings),
         },
+        # Symmetric IRB: anycast gateway lives on every VTEP (leaf/border-leaf)
+        # that has at least one L2 segment with its own gateway_ip — same
+        # standard anycast MAC on every leaf in the fabric (.dev/scenariusze.txt's
+        # "fabric forwarding anycast-gateway-mac" / "ip virtual-router
+        # mac-address" / "ip anycast-mac-address", identical value everywhere).
+        # Platform-agnostic here so every _transform_vxlan_* inherits it via
+        # .copy() without recomputing per platform.
+        "anycast_gateway": {
+            "enabled": any(m.get("gateway_ip") for m in l2_vni_mappings),
+            "mac": "00:1c:73:00:dc:01",
+        },
     }
 
     # Platform-specific transformations (netlab style)
@@ -355,16 +366,13 @@ def _transform_vxlan_platform(base_config: dict, platform: str, local_as: str | 
 
 
 def _transform_vxlan_arista(vxlan_base: dict, local_as: str | None) -> dict:
-    """Transform VXLAN config for Arista EOS platform."""
+    """Transform VXLAN config for Arista EOS platform.
+
+    anycast_gateway is already computed platform-agnostically in
+    get_vxlan_config's base_config — inherited via .copy(), not recomputed here.
+    """
     config = vxlan_base.copy()
     config["interface"] = "Vxlan1"  # EOS convention
-
-    # Enable anycast gateway when any L2 segment has a gateway_ip configured
-    anycast_enabled = any(m.get("gateway_ip") for m in config.get("l2_vni_mappings", []))
-    config["anycast_gateway"] = {
-        "enabled": anycast_enabled,
-        "mac": "00:1c:73:00:dc:01",  # Standard anycast MAC
-    }
 
     return config
 

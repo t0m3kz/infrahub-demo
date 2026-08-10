@@ -11,6 +11,10 @@ query vxlan_segment_data($name: String!) {
           node {
             id
             name { value }
+            ... on ManagedHA {
+              inline_vlan_id { value }
+              inline_vlan_pool { node { id } }
+            }
             ... on ManagedGenericDevice {
               capabilities {
                 edges {
@@ -34,7 +38,6 @@ query vxlan_segment_data($name: String!) {
                     id
                     name { value }
                     ... on TopologySegmentHosting {
-                      vlan_pool { node { id name { value } } }
                       vni_pool { node { id name { value } } }
                     }
                   }
@@ -46,7 +49,6 @@ query vxlan_segment_data($name: String!) {
                     id
                     name { value }
                     ... on TopologySegmentHosting {
-                      vlan_pool { node { id name { value } } }
                       vni_pool { node { id name { value } } }
                     }
                   }

@@ -477,7 +477,6 @@ async def fetch_segment_deployments(
             edges {{
                 node {{
                     id
-                    vlan_id {{ value }}
                     vni {{ value }}
                     status {{ value }}
                     segment {{
@@ -525,7 +524,6 @@ async def fetch_segment_deployments(
     deployments = [
         {
             "id": e["node"]["id"],
-            "vlan_id": e["node"]["vlan_id"]["value"],
             "vni": (e["node"].get("vni") or {}).get("value"),
             "status": e["node"]["status"]["value"],
             "segment_name": (e["node"].get("segment") or {}).get("node", {}).get("name", {}).get("value"),
@@ -542,15 +540,120 @@ async def fetch_segment_deployments(
     )
     for d in deployments:
         logger.info(
-            "  - segment=%s, vlan=%s, vni=%s, status=%s, deployment=%s",
+            "  - segment=%s, vni=%s, status=%s, deployment=%s",
             d["segment_name"],
-            d["vlan_id"],
             d["vni"],
             d["status"],
             d["deployment_name"],
         )
 
     return {"deployment_count": deployment_count, "deployments": deployments}
+
+
+async def fetch_vlan_domain_segments(
+    *,
+    client: InfrahubClient,
+    branch: str,
+    expected_count: int = 1,
+    segment_id: str | None = None,
+    max_attempts: int = 12,
+    poll_interval: int = 5,
+) -> dict[str, Any]:
+    """Poll for ManagedVlanDomainSegment records — per-(segment, VLAN domain)
+    local VLAN ID realizations. LOCAL VLAN ID moved off ManagedSegmentDeployment
+    (DC-wide) onto this node (per-VLAN-domain: an MLAG pair or standalone
+    device) — see schemas/extensions/service/segment.yml.
+
+    Args:
+        client: Async Infrahub client
+        branch: Branch to query
+        expected_count: Minimum record count to poll for
+        segment_id: Optional segment id to filter by
+        max_attempts: Max polling attempts
+        poll_interval: Seconds between polling attempts
+
+    Returns:
+        Dictionary with record_count and list of record detail dicts
+    """
+    client.default_branch = branch
+
+    seg_filter = ""
+    variables: dict[str, Any] = {}
+    if segment_id:
+        seg_filter = "(segment__ids: $segment_id)"
+        variables["segment_id"] = [segment_id]
+
+    query = f"""
+    query GetVlanDomainSegments($segment_id: [String]) {{
+        ManagedVlanDomainSegment{seg_filter} {{
+            edges {{
+                node {{
+                    id
+                    vlan_id {{ value }}
+                    segment {{
+                        node {{
+                            id
+                            ... on ManagedVxlanSegment {{
+                                name {{ value }}
+                            }}
+                        }}
+                    }}
+                    vlan_domain {{
+                        node {{
+                            id
+                            display_label
+                        }}
+                    }}
+                }}
+            }}
+        }}
+    }}
+    """
+
+    async def _check() -> tuple[bool, list[dict]]:
+        result = await client.execute_graphql(query=query, variables=variables)
+        found = result.get("ManagedVlanDomainSegment", {}).get("edges", [])
+        return len(found) >= expected_count, found
+
+    try:
+        edges = await wait_for_condition(
+            check_fn=_check,
+            max_attempts=max_attempts,
+            poll_interval=poll_interval,
+            description=f">= {expected_count} VLAN domain segment(s) on '{branch}' (segment={segment_id})",
+        )
+    except TimeoutError:
+        result = await client.execute_graphql(query=query, variables=variables)
+        edges = result.get("ManagedVlanDomainSegment", {}).get("edges", [])
+
+    record_count = len(edges)
+
+    records = [
+        {
+            "id": e["node"]["id"],
+            "vlan_id": e["node"]["vlan_id"]["value"],
+            "segment_name": (e["node"].get("segment") or {}).get("node", {}).get("name", {}).get("value"),
+            "vlan_domain_id": (e["node"].get("vlan_domain") or {}).get("node", {}).get("id"),
+            "vlan_domain_label": (e["node"].get("vlan_domain") or {}).get("node", {}).get("display_label"),
+        }
+        for e in edges
+    ]
+
+    logger.info(
+        "Found %d VLAN domain segment(s) on branch '%s' (segment_filter=%s)",
+        record_count,
+        branch,
+        segment_id,
+    )
+    for r in records:
+        logger.info(
+            "  - segment=%s, vlan_id=%s, vlan_domain=%s",
+            r["segment_name"],
+            r["vlan_id"],
+            r["vlan_domain_label"],
+        )
+
+    return {"record_count": record_count, "records": records}
 
 
 # ======================================================================

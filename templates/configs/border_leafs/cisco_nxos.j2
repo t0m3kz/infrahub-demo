@@ -3,12 +3,19 @@
 !
 hostname {{ name }}
 !
+{%- if border_leaf_pbr_rules %}
+system routing tcam security-group-acl
+hardware access-list tcam region pbr 256
+{%- endif %}
 feature ospf
 feature bgp
 feature interface-vlan
 feature lacp
 feature vpc
 feature lldp
+{%- if border_leaf_pbr_rules %}
+feature pbr
+{%- endif %}
 !
 {%- include 'common/cisco_nxos_vpc.j2' %}
 ! VLANs
@@ -159,27 +166,46 @@ ip route 0.0.0.0/0 {{ nexthop }} vrf {{ vrf }}
 {%- endfor %}
 !
 {%- endif %}
-{%- if customer_pbr_rules %}
+{%- if border_leaf_pbr_rules %}
 !
-! Customer PBR — default-redirect to firewall (TopologyCustomerDeployment's
-! FirewallContext); a SecurityPolicyRule permit is the only bypass.
+! Border-leaf PBR (.dev/scenariusze.txt "CTS PBR + SINGLE VRF") — default-
+! redirect every segment's traffic to its firewall context's nexthop.
+! SGT/security-group travels in-band inside the VXLAN header from the
+! originating leaf; match_by_tag rules use it directly (Cisco<->Cisco
+! transit), everything else falls back to a source-prefix ACL match.
+! Rules are grouped by customer: prefix-fallback members share one ACL
+! (multiple permit lines, one sequence); tag-match members each keep their
+! own sequence but stay adjacent under the same customer comment block.
 !
-{%- for rule in customer_pbr_rules %}
+{%- for rule in border_leaf_pbr_rules %}
 ! Customer: {{ rule.customer_name or 'any' }}/{{ rule.environment or 'any' }}
-ip access-list PBR-BYPASS-VLAN{{ rule.vlan_id }}
-{%- for prefix in rule.bypass_prefixes %}
-  permit ip any {{ prefix }}
+{%- if not rule.match_by_tag %}
+ip access-list {{ rule.acl_name }}
+{%- for prefix in rule.source_prefixes %}
+  permit ip {{ prefix }} any
 {%- endfor %}
-  deny ip any any
 !
-route-map RM-CUSTOMER-PBR-VLAN{{ rule.vlan_id }} permit 10
-  match ip address PBR-BYPASS-VLAN{{ rule.vlan_id }}
-!
-route-map RM-CUSTOMER-PBR-VLAN{{ rule.vlan_id }} permit 20
+{%- endif %}
+route-map RM-BORDER-LEAF-PBR permit {{ loop.index * 10 }}
+{%- if rule.match_by_tag %}
+  match cts sgt {{ rule.sgt }}
+{%- else %}
+  match ip address {{ rule.acl_name }}
+{%- endif %}
   set ip next-hop {{ rule.fw_nexthop }}
 !
-interface Vlan{{ rule.vlan_id }}
-  ip policy route-map RM-CUSTOMER-PBR-VLAN{{ rule.vlan_id }}
+{%- endfor %}
+! Applied on every uplink (fabric-facing) interface — that's where traffic
+! from any leaf in this DC arrives at the border-leaf. .dev/scenariusze.txt
+! uses a dedicated "INCOMING_FROM_FABRIC_PBR_INTERFACE" physical port
+! because its Shared_VRF/L3-VNI model routes fabric traffic onto one
+! specific port before PBR; this project has no Shared_VRF (per-segment VRF
+! stays on the leaf, see docs/firewall_service_insertion.md), so the closest
+! equivalent is the same uplink port that already carries all fabric-bound
+! traffic today.
+{%- for interface in interfaces if interface.role == 'uplink' %}
+interface {{ interface.name }}
+  ip policy route-map RM-BORDER-LEAF-PBR
 !
 {%- endfor %}
 {%- endif %}
