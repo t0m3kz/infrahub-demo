@@ -103,6 +103,12 @@ class RoutingOptions(TypedDict, total=False):
     """Pre-resolved shared underlay BGP/OSPF auth key (RoutingPassword) ID."""
     overlay_password_id: str | None
     """Pre-resolved shared overlay BGP auth key (RoutingPassword) ID."""
+    shared_underlay_as_id: str | None
+    """Pre-resolved AS ID shared by EVERY bottom device in this call — bypasses
+    the ASN pool and MLAG-pair grouping entirely. Used for spine (one ASN per
+    pod) and super-spine (one ASN fabric-wide) underlay in eBGP-eBGP, where
+    the caller (pod.py/dc.py) already resolved a single shared AS before
+    calling create_routing()."""
 
 
 @dataclass(frozen=True)

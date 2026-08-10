@@ -146,6 +146,46 @@ class TestFindExistingOspfArea:
 
 
 # ---------------------------------------------------------------------------
+# _resolve_shared_super_spine_as — fabric-wide shared underlay AS lookup
+# ---------------------------------------------------------------------------
+
+
+class TestResolveSharedSuperSpineAs:
+    @pytest.mark.asyncio
+    async def test_returns_id_when_found(self) -> None:
+        m = _make_mixin(fabric_name="dc1")
+        as_obj = _mock_as_obj(asn=65001, obj_id="ss-as-1")
+        m.client.filters = AsyncMock(return_value=[as_obj])
+
+        result = await m._resolve_shared_super_spine_as()
+
+        assert result == "ss-as-1"
+        m.client.filters.assert_awaited_once_with(
+            kind=m.client.filters.call_args.kwargs["kind"], description__value="dc1 super-spine underlay ASN"
+        )
+
+    @pytest.mark.asyncio
+    async def test_returns_none_when_not_found(self) -> None:
+        m = _make_mixin()
+        m.client.filters = AsyncMock(return_value=[])
+        assert await m._resolve_shared_super_spine_as() is None
+
+    @pytest.mark.asyncio
+    async def test_returns_none_on_exception(self) -> None:
+        m = _make_mixin()
+        m.client.filters = AsyncMock(side_effect=Exception("timeout"))
+        assert await m._resolve_shared_super_spine_as() is None
+
+    @pytest.mark.asyncio
+    async def test_description_uses_fabric_name(self) -> None:
+        m = _make_mixin(fabric_name="katowice")
+        m.client.filters = AsyncMock(return_value=[])
+        await m._resolve_shared_super_spine_as()
+        call_kwargs = m.client.filters.call_args.kwargs
+        assert call_kwargs["description__value"] == "katowice super-spine underlay ASN"
+
+
+# ---------------------------------------------------------------------------
 # _resolve_shared_passwords — underlay/overlay RoutingPassword lookup
 # ---------------------------------------------------------------------------
 

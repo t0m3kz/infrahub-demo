@@ -219,15 +219,15 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
 
         # Derive deterministic ASN range from DC name (unique per site).
         # max_border_leafs_per_fabric is included since border-leaf devices draw
-        # from this same fabric_asn_pool (see upsert_asn_pool below).
+        # from this same fabric_asn_pool (see upsert_asn_pool below). super-spine
+        # and per-pod spine ASNs are each shared (one ASN per group, not per
+        # device — see generators/routing.py's shared_underlay_as_id), so they
+        # no longer scale the block size by device count.
         max_pods = dc_design["max_pods"]
-        max_spines_per_pod = dc_design["max_spines_per_pod"]
         max_border_leafs_per_fabric = dc_design["max_border_leafs_per_fabric"]
         asn_start, asn_end = name_to_asn_range(
             dc_name=dc_name,
             max_pods=max_pods,
-            amount_of_super_spines=amount_of_super_spines,
-            max_spines_per_pod=max_spines_per_pod,
             max_border_leafs_per_fabric=max_border_leafs_per_fabric,
         )
 
@@ -337,10 +337,12 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
                 )
                 hyper_spine_names.extend(entry_names)
 
-        # Create shared routing objects (overlay AS, OSPF area) at the DC level
-        # so pod/rack generators always find them and never create duplicates.
+        # Create shared routing objects (overlay AS, OSPF area, and — for eBGP
+        # underlay strategies — the single super-spine underlay AS shared
+        # fabric-wide, .dev/bgp.txt) at the DC level so pod/rack generators
+        # always find them and never create duplicates.
         # overlay_asn is asn_end + 1 to avoid collision with the per-device pool range [asn_start, asn_end]
-        await self._create_shared_routing_objects(overlay_asn=asn_end + 1)
+        await self._create_shared_routing_objects(overlay_asn=asn_end + 1, asn_pool_id=fabric_asn_pool_id)
 
         # Create super-spine routing objects here so they exist before any pod generator runs.
         # For eBGP strategies: underlay + overlay BGP processes.
@@ -354,6 +356,11 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
             routing_opts = RoutingOptions(design=self.data, asn_pool=fabric_asn_pool_id)
             if routing_strategy == RoutingStrategy.OSPF_IBGP.value:
                 routing_opts["skip_underlay"] = True
+            else:
+                super_spine_as_id = await self._resolve_shared_super_spine_as()
+                if super_spine_as_id:
+                    routing_opts["shared_underlay_as_id"] = super_spine_as_id
+                    self.client.group_context.related_node_ids.append(super_spine_as_id)
             await self.create_routing(
                 bottom_devices=super_spine_names,
                 top_devices=[],

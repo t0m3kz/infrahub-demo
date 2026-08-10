@@ -18,6 +18,7 @@ from .protocols import (
     DcimVirtualInterface,
     ManagedBGP,
     ManagedBGPPeering,
+    ManagedMLAG,
     ManagedOSPF,
     ManagedOSPFPeering,
     RoutingAutonomousSystem,
@@ -185,7 +186,7 @@ class RoutingMixin:
                 underlay_password_id = underlay_password_id or resolved_underlay_password_id
                 overlay_password_id = overlay_password_id or resolved_overlay_password_id
 
-            all_bgp, loopback_interfaces = await asyncio.gather(
+            all_bgp, loopback_interfaces, mlag_domains = await asyncio.gather(
                 self.client.filters(
                     kind=ManagedBGP,
                     capabilities__name__values=all_device_names,
@@ -197,6 +198,12 @@ class RoutingMixin:
                     device__name__values=all_device_names,
                     role__value="loopback",
                     include=["device", "ip_address"],
+                    prefetch_relationships=True,
+                ),
+                self.client.filters(
+                    kind=ManagedMLAG,
+                    capabilities__name__values=all_device_names,
+                    include=["capabilities"],
                     prefetch_relationships=True,
                 ),
             )
@@ -271,10 +278,24 @@ class RoutingMixin:
         # Overlay is always iBGP/eBGP (ManagedBGP) — only the underlay can be OSPF.
         overlay = [b for b in all_bgp if b.process_role.value == "overlay"]
 
+        # MLAG-paired devices among the ones being routed share ONE underlay
+        # ASN (.dev/bgp.txt) — build device name -> MLAG domain name, used
+        # by _plan_ebgp_underlay to group AS allocation. Only devices with
+        # exactly 2 member names resolve (a ManagedMLAG's capabilities are
+        # its 2 physical peers, see generators/devices.py's _ensure_mlag_pairs).
+        mlag_pairs: dict[str, str] = {}
+        for domain in mlag_domains:
+            domain_name = domain.name.value
+            member_names = [peer.display_label for peer in domain.capabilities.peers]
+            if len(member_names) == 2:
+                for member_name in member_names:
+                    mlag_pairs[member_name] = domain_name
+
         self.logger.info(
             f"Collected: {len(interfaces)} P2P interface(s), "
             f"{len(loopback_interfaces)} loopback(s), "
-            f"{len(underlay)} existing underlay, {len(overlay)} existing overlay"
+            f"{len(underlay)} existing underlay, {len(overlay)} existing overlay, "
+            f"{len(mlag_pairs)} MLAG-paired device(s)"
         )
 
         # ================================================================
@@ -301,6 +322,7 @@ class RoutingMixin:
                 evpn_af_id=evpn_af_id,
                 underlay_password_id=options.get("underlay_password_id") or "",
                 overlay_password_id=options.get("overlay_password_id") or "",
+                mlag_pairs=mlag_pairs,
             )
         )
 
@@ -449,8 +471,13 @@ class RoutingMixin:
             self.logger.error(f"Could not create RoutingPassword {name}: {exc}")
             return None
 
-    async def _create_shared_routing_objects(self, overlay_asn: int) -> None:
-        """Create shared DC-level routing state used by pod and rack generators."""
+    async def _create_shared_routing_objects(self, overlay_asn: int, asn_pool_id: str | None = None) -> None:
+        """Create shared DC-level routing state used by pod and rack generators.
+
+        ``asn_pool_id``: the DC's own fabric_asn_pool, used ONLY to allocate
+        the single shared super-spine underlay AS (see below) — every other
+        shared object here (overlay AS, OSPF area, passwords) needs no pool.
+        """
 
         await self._ensure_routing_password(
             name=f"{self.fabric_name}-underlay-key",
@@ -465,6 +492,36 @@ class RoutingMixin:
             strategy = self.data.get("routing_strategy", "ebgp-ebgp")
         else:
             strategy = self.data.routing_strategy
+
+        # Super-spine underlay is eBGP whenever underlay_type == "ebgp" (both
+        # ebgp-ebgp and ebgp-ibgp — only ospf-ibgp skips underlay for
+        # super-spine entirely, see dc.py's skip_underlay branch). All
+        # super-spines fabric-wide share ONE underlay ASN (.dev/bgp.txt) —
+        # same find-or-create-by-deterministic-description idiom as the
+        # overlay AS below.
+        if strategy.split("-")[0] == "ebgp":
+            super_spine_desc = f"{self.fabric_name} super-spine underlay ASN"
+            try:
+                existing = await self.client.filters(
+                    kind=RoutingAutonomousSystem,
+                    description__value=super_spine_desc,
+                )
+                if existing:
+                    self.client.group_context.related_node_ids.append(existing[0].id)
+                    self.logger.info(f"Found shared super-spine AS: AS{existing[0].asn.value} ({existing[0].id})")
+                elif asn_pool_id:
+                    as_obj = await self.client.create(
+                        kind=RoutingAutonomousSystem,
+                        data={
+                            "asn": {"from_pool": {"id": asn_pool_id}},
+                            "description": super_spine_desc,
+                        },
+                    )
+                    await as_obj.save(allow_upsert=True)
+                    self.client.group_context.related_node_ids.append(as_obj.id)
+                    self.logger.info(f"Created shared super-spine AS: AS{as_obj.asn.value} ({as_obj.id})")
+            except Exception as exc:
+                self.logger.warning(f"Failed to create shared super-spine AS: {exc}")
 
         if strategy in (RoutingStrategy.EBGP_IBGP.value, RoutingStrategy.OSPF_IBGP.value):
             overlay_desc = f"{self.fabric_name} overlay ASN for iBGP EVPN"
@@ -618,3 +675,18 @@ class RoutingMixin:
                 self.logger.warning(f"Error querying OSPF area {area_name}: {e}")
 
         return overlay_as_id, ospf_area_id
+
+    async def _resolve_shared_super_spine_as(self) -> str | None:
+        """Find the fabric's shared super-spine underlay AS, by deterministic
+        description — created by ``_create_shared_routing_objects`` (called
+        by dc.py before its own super-spine ``create_routing()``). One-shot
+        lookup, no retry — dc.py is the only caller and always creates it
+        first in the same generator run."""
+        super_spine_desc = f"{self.fabric_name} super-spine underlay ASN"
+        try:
+            existing = await self.client.filters(kind=RoutingAutonomousSystem, description__value=super_spine_desc)
+            if existing:
+                return existing[0].id
+        except Exception as e:
+            self.logger.warning(f"Error querying super-spine AS for {self.fabric_name}: {e}")
+        return None

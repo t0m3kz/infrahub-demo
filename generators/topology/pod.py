@@ -17,7 +17,7 @@ from ..helpers.routing import underlay_is_dual_stack, underlay_is_ipv6
 from ..helpers.template_interfaces import template_interface_names_by_role
 from ..pod_config import resolve_pod_layout, spine_slot_role, spine_slot_templates, templates_by_role
 from ..pools import PoolMixin
-from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, TopologyPod
+from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, RoutingAutonomousSystem, TopologyPod
 from ..routing import RoutingMixin
 
 _SIBLING_SPINE_MAX_RETRIES = 10
@@ -322,14 +322,21 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
         # find them and don't try to create duplicates.
         # OSPF_IBGP is excluded: spine overlay BGP needs overlay_as_id (resolved inside
         # create_routing via _resolve_shared_objects) and is created in the post-cable call below.
+        # All spines in this pod share ONE underlay ASN (.dev/bgp.txt) — resolved once,
+        # reused by both this pre-seed call and the post-cable call below.
+        pod_spine_as_id: str | None = None
         if dc_asn_pool_id and dc.get("routing_strategy", "ebgp-ebgp") in (
             RoutingStrategy.EBGP_EBGP.value,
             RoutingStrategy.EBGP_IBGP.value,
         ):
+            pod_spine_as_id = await self._ensure_pod_spine_as(dc_asn_pool_id)
+            spine_routing_opts = RoutingOptions(design=dc, asn_pool=dc_asn_pool_id)
+            if pod_spine_as_id:
+                spine_routing_opts["shared_underlay_as_id"] = pod_spine_as_id
             await self.create_routing(
                 bottom_devices=spines,
                 top_devices=super_spine_devices,
-                options=RoutingOptions(design=dc, asn_pool=dc_asn_pool_id),
+                options=spine_routing_opts,
                 p2p_interfaces=[],
                 bottom_role=spine_role,
                 top_role="super-spine",
@@ -375,6 +382,7 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
                 dc_asn_pool_id=dc_asn_pool_id,
                 pod_pools=pod_pools,
                 is_ipv6=is_ipv6,
+                pod_spine_as_id=pod_spine_as_id,
             )
 
         if not skip_cabling:
@@ -390,6 +398,8 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
             routing_opts = RoutingOptions(design=dc)
             if dc_asn_pool_id:
                 routing_opts["asn_pool"] = dc_asn_pool_id
+            if pod_spine_as_id:
+                routing_opts["shared_underlay_as_id"] = pod_spine_as_id
             p2p_pairs = await self.create_cabling(
                 bottom_devices=spines,
                 bottom_interfaces=spine_interfaces,
@@ -497,6 +507,40 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
             firewall_names=firewall_names,
             load_balancer_names=load_balancer_names,
         )
+
+    async def _ensure_pod_spine_as(self, asn_pool_id: str | None) -> str | None:
+        """Find-or-create the ONE underlay AS shared by every spine in this
+        pod (.dev/bgp.txt: all spines within a pod share the same ASN,
+        different pods get different ASNs) — same find-or-create-by-
+        deterministic-description idiom as dc.py's shared overlay/
+        super-spine AS (generators/routing.py's _create_shared_routing_objects).
+        Idempotent across repeated pod generator runs; returns None (and
+        logs a warning) if no ASN pool is available yet."""
+        spine_as_desc = f"{self.pod_name} spine underlay ASN"
+        try:
+            existing = await self.client.filters(kind=RoutingAutonomousSystem, description__value=spine_as_desc)
+            if existing:
+                self.client.group_context.related_node_ids.append(existing[0].id)
+                return existing[0].id
+        except Exception as exc:
+            self.logger.warning(f"Error querying pod spine AS for {self.pod_name}: {exc}")
+
+        if not asn_pool_id:
+            self.logger.warning(f"Pod {self.pod_name}: no ASN pool available — cannot allocate shared spine AS")
+            return None
+
+        try:
+            as_obj = await self.client.create(
+                kind=RoutingAutonomousSystem,
+                data={"asn": {"from_pool": {"id": asn_pool_id}}, "description": spine_as_desc},
+            )
+            await as_obj.save(allow_upsert=True)
+            self.client.group_context.related_node_ids.append(as_obj.id)
+            self.logger.info(f"Created shared spine AS for pod {self.pod_name}: AS{as_obj.asn.value} ({as_obj.id})")
+            return as_obj.id
+        except Exception as exc:
+            self.logger.error(f"Failed to create shared spine AS for pod {self.pod_name}: {exc}")
+            return None
 
     async def _create_role_devices(
         self,
@@ -641,6 +685,7 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
         dc_asn_pool_id: str | None,
         pod_pools: dict[str, Any],
         is_ipv6: bool,
+        pod_spine_as_id: str | None = None,
     ) -> None:
         """Cable this pod's spines to every EXISTING lower-index sibling pod (back-to-back mesh).
 
@@ -677,6 +722,8 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
 
         p2p_prefix_length = 127 if is_ipv6 else 31
         routing_opts = RoutingOptions(design=dc, asn_pool=dc_asn_pool_id)
+        if pod_spine_as_id:
+            routing_opts["shared_underlay_as_id"] = pod_spine_as_id
         sorted_lower_siblings = sorted(lower_siblings, key=lambda s: s.index.value)
         for sibling_slot, sibling in enumerate(sorted_lower_siblings):
             # Retry: during INITIAL bulk DC creation, every pod's TopologyPod object

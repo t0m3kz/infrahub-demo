@@ -15,31 +15,33 @@ DEFAULT_ASN_BASE_START = 4200000000
 
 def calculate_fabric_asn_block_size(
     max_pods: int,
-    amount_of_super_spines: int,
-    max_spines_per_pod: int = 4,
     max_border_leafs_per_fabric: int = 0,
 ) -> int:
     """Calculate ASN block size based on fabric size.
 
     Scales with the fabric to avoid wasting private ASN space:
-    - Small (≤50 estimated devices): 200 ASNs
-    - Medium (≤200 estimated devices): 500 ASNs
-    - Large (>200 estimated devices): 2000 ASNs
+    - Small (≤50 estimated ASNs): 200 ASNs
+    - Medium (≤200 estimated ASNs): 500 ASNs
+    - Large (>200 estimated ASNs): 2000 ASNs
 
-    Estimate uses design parameters: super-spines + border-leafs (both draw
-    from this same DC-level ASN pool, see dc.py's fabric_asn_pool) + pods ×
-    (spines + ~30 leafs/tors).
+    ASN is allocated per GROUP, not per device (see .dev/bgp.txt /
+    generators/helpers/routing.py's MLAG-pair/pod-spine/super-spine
+    grouping): all super-spines fabric-wide share ONE ASN, all spines
+    within one pod share ONE ASN, and an MLAG-paired leaf/tor/l2-leaf/
+    access-leaf pair shares ONE ASN (only a standalone, non-MLAG leaf still
+    draws its own). Estimate: 1 (super-spine, fabric-wide) + border-leafs
+    (not yet MLAG-paired in this project, still one ASN each — see
+    dc.py's fabric_asn_pool) + pods × (1 spine ASN + ~30 leafs/tors,
+    conservative worst-case assuming no MLAG pairing).
 
     Args:
         max_pods: Maximum pods in the DC design
-        amount_of_super_spines: Number of super-spine switches
-        max_spines_per_pod: Maximum spines per pod from DC design
         max_border_leafs_per_fabric: Maximum border-leaf switches from DC design
 
     Returns:
         Block size (200, 500, or 2000)
     """
-    estimate = amount_of_super_spines + max_border_leafs_per_fabric + max_pods * (max_spines_per_pod + 30)
+    estimate = 1 + max_border_leafs_per_fabric + max_pods * (1 + 30)
 
     if estimate <= 50:
         return 200
@@ -56,8 +58,6 @@ _MAX_ASN_BLOCK = 2000
 def name_to_asn_range(
     dc_name: str,
     max_pods: int,
-    amount_of_super_spines: int,
-    max_spines_per_pod: int = 4,
     max_border_leafs_per_fabric: int = 0,
     base_start: int = DEFAULT_ASN_BASE_START,
 ) -> tuple[int, int]:
@@ -73,8 +73,6 @@ def name_to_asn_range(
     Args:
         dc_name: Unique data center name (e.g. "DC1", "NYC-PROD")
         max_pods: Maximum pods in the DC design
-        amount_of_super_spines: Number of super-spine switches
-        max_spines_per_pod: Maximum spines per pod from DC design
         max_border_leafs_per_fabric: Maximum border-leaf switches from DC design
             (they draw from this same pool — see calculate_fabric_asn_block_size)
         base_start: Start of private ASN space
@@ -83,15 +81,13 @@ def name_to_asn_range(
         Tuple of (start_range, end_range)
 
     Examples:
-        >>> name_to_asn_range("DC1", max_pods=3, amount_of_super_spines=2)
+        >>> name_to_asn_range("DC1", max_pods=3)
         (4245880000, 4245880499)  # block=500 for medium fabric
-        >>> name_to_asn_range("DC2", max_pods=2, amount_of_super_spines=2)
+        >>> name_to_asn_range("DC2", max_pods=2)
         (4245882000, 4245882499)  # different offset, same block
     """
     max_asn = 4294967295
-    block = calculate_fabric_asn_block_size(
-        max_pods, amount_of_super_spines, max_spines_per_pod, max_border_leafs_per_fabric
-    )
+    block = calculate_fabric_asn_block_size(max_pods, max_border_leafs_per_fabric)
 
     # Hash DC name to a deterministic offset
     name_hash = 0
