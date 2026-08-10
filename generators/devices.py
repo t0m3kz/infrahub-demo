@@ -14,6 +14,7 @@ from .helpers import DeviceNameContext, DeviceNamingConfig, get_loopback_name
 from .helpers.pairing import pair_device_names
 from .protocols import (
     DcimCable,
+    DcimInterface,
     DcimPhysicalDevice,
     DcimPhysicalInterface,
     DcimVirtualDevice,
@@ -528,7 +529,6 @@ class DeviceMixin:
             return
 
         is_physical = device_kind is DcimPhysicalDevice
-        iface_kind = DcimPhysicalInterface if is_physical else DcimVirtualInterface
         member_devices = await self.client.filters(kind=device_kind, ids=member_ids, include=["deployment"])
 
         existing_ha_ifaces = await self.client.filters(
@@ -542,12 +542,20 @@ class DeviceMixin:
 
         sync_ifaces: list[Any] = []
         for device_obj in member_devices:
-            device_sync_ifaces = await self.client.filters(
-                kind=iface_kind,
-                device__ids=[device_obj.id],
-                role__value="ha",
-                include=["cable"] if is_physical else None,
-            )
+            if is_physical:
+                device_sync_ifaces = await self.client.filters(
+                    kind=DcimPhysicalInterface, device__ids=[device_obj.id], role__value="ha", include=["cable"]
+                )
+            else:
+                # Query the generic DcimInterface kind, not DcimVirtualInterface
+                # — most virtual firewall/LB templates (every CloudGuard/PANOS/
+                # NetScaler/etc. template except *_CUSTOMER_*) provision eth7 as
+                # a TemplateDcimPhysicalInterface even on a virtual device, so
+                # assuming "virtual device -> virtual iface" here missed it and
+                # tried to create a colliding duplicate.
+                device_sync_ifaces = await self.client.filters(
+                    kind=DcimInterface, device__ids=[device_obj.id], role__value="ha"
+                )
             sync_iface = device_sync_ifaces[0] if device_sync_ifaces else None
             if sync_iface is None and not is_physical:
                 # Virtual devices from the *_CUSTOMER_* templates get a fixed
