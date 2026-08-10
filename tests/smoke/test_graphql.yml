@@ -243,6 +243,14 @@ infrahub_tests:
           path: queries/topology/add/mlag_domain.gql
           kind: graphql-query-smoke
 
+  - resource: GraphQLQuery
+    resource_name: loadbalancer_vip_data
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/loadbalancer_vip.gql
+          kind: graphql-query-smoke
+
   # ==================== VALIDATION QUERIES ====================
   - resource: GraphQLQuery
     resource_name: capability_guard
