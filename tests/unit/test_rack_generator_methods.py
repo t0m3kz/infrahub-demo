@@ -5,7 +5,18 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from generators.pools import PoolMixin
 from generators.topology.rack import RackGenerator, TopologyRackData
+
+
+def test_rack_generator_mixes_in_pool_mixin() -> None:
+    """create_devices()'s MLAG-pairing path (_ensure_mlag_pairs ->
+    _ensure_vlan_domain_pool) calls self.upsert_number_pool, which only
+    PoolMixin provides. RackGenerator was missing it (unlike
+    DCTopologyGenerator/PodTopologyGenerator), so any add_rack run that
+    created an MLAG pair (leaf/tor/l2-leaf — nearly all of them) raised
+    AttributeError at runtime, uncaught by mocked-client unit tests."""
+    assert issubclass(RackGenerator, PoolMixin)
 
 
 def _build_gen() -> Any:

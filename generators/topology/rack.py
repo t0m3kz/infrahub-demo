@@ -9,6 +9,7 @@ from ..connections import CablingMixin
 from ..devices import DeviceMixin
 from ..helpers.rack import RackPlanner, RackRolesHelper, parse_rack_data
 from ..pod_config import pod_profile
+from ..pools import PoolMixin
 from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
 from ..rack import (
     MUTUALLY_EXCLUSIVE_ROLE_GROUPS,
@@ -100,7 +101,7 @@ def _base_offset(numbering_start: int) -> int:
     return max(0, numbering_start - 1)
 
 
-class RackGenerator(RackMixin, DeviceMixin, CablingMixin, RoutingMixin, CommonGenerator):
+class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, CommonGenerator):
     """Generator for creating rack infrastructure based on fabric templates."""
 
     data: TopologyRackData
