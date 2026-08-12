@@ -10,6 +10,7 @@ spec:
       routing_strategy: ebgp-ebgp
       underlay_protocol: ipv6
       naming_convention: standard
+      parent: DC
       connectivity_mode: inline
       fabric_templates:
         - ["2", "super-spine", "N9K-C9336C-FX2_SUPER_SPINE"]

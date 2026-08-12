@@ -6,6 +6,7 @@ spec:
   data:
     - name: DC4
       index: 1
+      parent: DC
       size: XL
       routing_strategy: ebgp-ebgp
       underlay_protocol: ipv6
