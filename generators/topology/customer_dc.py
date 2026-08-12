@@ -454,21 +454,17 @@ class CustomerDeploymentDCExchangeGenerator(DeviceMixin, CablingMixin, CommonGen
                 self.logger.error(f"Cannot find FW context VLAN pool for {parent_name}: {exc}")
                 return
             try:
-                await self.client.execute_graphql(
-                    query="""
-                    mutation AllocateFwContextVlan($id: String!, $pool_id: String!, $identifier: String!) {
-                      ManagedFirewallContextUpsert(data: {
-                        id: $id
-                        vlan_id: { from_pool: { id: $pool_id, identifier: $identifier } }
-                      }) { object { id } }
-                    }
-                    """,
-                    variables={
+                node = await self.client.create(
+                    kind=ManagedFirewallContext,
+                    data={
                         "id": context_obj.id,
-                        "pool_id": vlan_pool.id,
-                        "identifier": f"{context_obj.id}-fw-context-vlan",
+                        "vlan_id": {
+                            "from_pool": {"id": vlan_pool.id},
+                            "identifier": f"{context_obj.id}-fw-context-vlan",
+                        },
                     },
                 )
+                await node.save(allow_upsert=True)
             except Exception as exc:
                 self.logger.error(f"Failed to allocate VLAN for FirewallContext '{context_name}': {exc}")
                 return

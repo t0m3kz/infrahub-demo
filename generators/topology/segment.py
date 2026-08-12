@@ -514,10 +514,11 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, CommonGenerator):
         (a firewall/LB HA pair is its own L2 domain). One HA pair supports
         exactly one inline-terminated segment at a time (single vlan_id slot).
 
-        Mutates via a raw Upsert mutation, not client.get()+save() — from_pool
-        reassignment on an existing node is broken in the SDK for Number
-        attrs (nests under "value", server rejects BigInt); see
-        customer_dc.py's _ensure_firewall_context for the same idiom.
+        Uses client.create(data={"id": ..., "from_pool": ...}) + save(allow_upsert=True),
+        not client.get()+mutate-attribute+save() — from_pool reassignment on an
+        already-fetched node's attribute wrapper is broken in the SDK for Number
+        attrs (nests under "value", server rejects BigInt); passing the same shape
+        through create()'s data dict with an explicit id serializes correctly.
         """
         ha_id: str = ha_node.get("id", "")
         if not ha_id:
@@ -544,23 +545,19 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, CommonGenerator):
             pool_id = pool_obj.id
 
         try:
-            result = await self.client.execute_graphql(
-                query="""
-                mutation AllocateInlineVlan($id: String!, $pool_id: String!, $identifier: String!) {
-                  ManagedHAUpsert(data: {
-                    id: $id
-                    inline_vlan_id: { from_pool: { id: $pool_id, identifier: $identifier } }
-                  }) { object { id } }
-                }
-                """,
-                variables={"id": ha_id, "pool_id": pool_id, "identifier": f"{ha_id}-inline-vlan"},
+            node = await self.client.create(
+                kind="ManagedHA",
+                data={
+                    "id": ha_id,
+                    "inline_vlan_id": {"from_pool": {"id": pool_id}, "identifier": f"{ha_id}-inline-vlan"},
+                },
             )
+            await node.save(allow_upsert=True)
         except Exception as exc:
             self.logger.error(f"Failed to allocate inline VLAN ID for HA '{ha_id}': {exc}")
             return None
 
-        ha_obj = await self.client.get(kind="ManagedHA", id=result["ManagedHAUpsert"]["object"]["id"])
-        return getattr(ha_obj.inline_vlan_id, "value", None)
+        return getattr(node.inline_vlan_id, "value", None)
 
     async def _create_inline_sub_interfaces(
         self, segment: dict[str, Any], target_deployments: list[dict[str, Any]]
