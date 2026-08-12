@@ -379,6 +379,7 @@ class DeviceMixin(MLAGWiringMixin):
         if mlag_create != "no":
             await self._ensure_mlag_pairs(
                 device_names,
+                devices_by_name={node.name.value: node for node in created_devices},
                 role_label=device_role,
                 template=options.get("mlag_peer_template", template),
                 mlag_create=mlag_create,
@@ -646,6 +647,7 @@ class DeviceMixin(MLAGWiringMixin):
         self,
         device_names: list[str],
         *,
+        devices_by_name: dict[str, Any],
         role_label: str,
         template: dict[str, Any],
         mlag_create: Literal["back-to-back", "virtual"],
@@ -663,6 +665,12 @@ class DeviceMixin(MLAGWiringMixin):
         reached now by the two remaining ManagedMLAG "updated" triggers
         (capabilities/virtual_peer_link changed outside this flow, e.g. a
         direct API/UI edit or branch merge).
+
+        devices_by_name is create_devices()'s own created_devices batch,
+        keyed by name — every device in device_names was just created/
+        upserted there unconditionally, so a fresh MLAG domain's
+        capabilities never need a second client.filters() round-trip to
+        re-resolve devices already sitting in hand.
 
         back-to-back needs a role=mlag-peer interface on the template.
         virtual anchors on a loopback (ensure_mlag_wiring's
@@ -711,10 +719,11 @@ class DeviceMixin(MLAGWiringMixin):
                     await mlag_obj.save(allow_upsert=True)
                     self.logger.info(f"Updated MLAG domain {mlag_name} to {mlag_create} peer-link")
             else:
-                devices = await self.client.filters(kind=DcimPhysicalDevice, name__values=[first, second])
-                if len(devices) != 2:
+                first_dev, second_dev = devices_by_name.get(first), devices_by_name.get(second)
+                if first_dev is None or second_dev is None:
                     self.logger.error(f"MLAG pair {first}/{second}: could not resolve both devices.")
                     continue
+                devices = [first_dev, second_dev]
 
                 if mlag_group is None:
                     mlag_group = await self.client.get(kind=CoreStandardGroup, name__value="mlag_domains")
