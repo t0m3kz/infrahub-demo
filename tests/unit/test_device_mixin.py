@@ -263,6 +263,9 @@ class TestCreateDevicesPairingDispatch:
 
         gen.client.filters = AsyncMock(side_effect=_filters)
         gen.client.get = AsyncMock(side_effect=[_mock_group(), _mock_group()])
+        # MLAGWiringMixin.ensure_mlag_wiring — peer-link wiring is covered by
+        # tests/unit/test_mlag_wiring_helper.py; not under test here.
+        gen.ensure_mlag_wiring = AsyncMock()
 
         await gen.create_devices(
             device_role="leaf",
