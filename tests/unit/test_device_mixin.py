@@ -253,15 +253,14 @@ class TestCreateDevicesPairingDispatch:
     @pytest.mark.asyncio
     async def test_leaf_with_mlag_create_pairs_after_creation(self) -> None:
         gen = _make_generator()
-        created = [_mock_created_device(DcimPhysicalDevice.__name__, n) for n in ("dc1-leaf-01", "dc1-leaf-02")]
+        # naming_convention="flat" (the default) for fabric_name="dc1"/role="leaf" —
+        # devices_by_name (built from these very objects) is keyed by these exact names.
+        generated_names = ("dc1lf01", "dc1lf02")
+        created = [_mock_created_device(DcimPhysicalDevice.__name__, n) for n in generated_names]
+        for node, name in zip(created, generated_names):
+            node.name = MagicMock(value=name)
         gen.client.create = AsyncMock(side_effect=[*created, MagicMock(id="mlag-1", save=AsyncMock())])
-
-        async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
-            if kind is DcimPhysicalDevice:
-                return [_mock_device("dc1-leaf-01"), _mock_device("dc1-leaf-02")]
-            return []  # no existing devices, no existing MLAG domain
-
-        gen.client.filters = AsyncMock(side_effect=_filters)
+        gen.client.filters = AsyncMock(return_value=[])  # no existing devices, no existing MLAG domain
         gen.client.get = AsyncMock(side_effect=[_mock_group(), _mock_group()])
         # MLAGWiringMixin.ensure_mlag_wiring — peer-link wiring is covered by
         # tests/unit/test_mlag_wiring_helper.py; not under test here.

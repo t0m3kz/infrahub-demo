@@ -59,7 +59,9 @@ class TestEnsureMlagPairs:
         gen.client.create = AsyncMock()
         template = {"id": "tmpl", "interfaces": []}
 
-        await gen._ensure_mlag_pairs(["tor-01"], role_label="tor", template=template, mlag_create="virtual")
+        await gen._ensure_mlag_pairs(
+            ["tor-01"], devices_by_name={}, role_label="tor", template=template, mlag_create="virtual"
+        )
 
         gen.client.create.assert_not_awaited()
 
@@ -70,16 +72,22 @@ class TestEnsureMlagPairs:
         both leaf (L3) and l2-leaf (L2-only) roles must fall back to
         back-to-back for the L2-only ones regardless of what's configured."""
         gen = _build_gen()
-        gen.client.filters = AsyncMock(side_effect=[[], [_mock_device("l2-01"), _mock_device("l2-02")]])
+        gen.client.filters = AsyncMock(return_value=[])  # no existing MLAG domain
         gen.client.get = AsyncMock(return_value=_mock_group())
         mlag_obj = MagicMock()
         mlag_obj.id = "mlag-1"
         mlag_obj.save = AsyncMock()
         gen.client.create = AsyncMock(return_value=mlag_obj)
         template = {"id": "tmpl", "interfaces": [{"name": "Eth1/1", "role": "mlag-peer"}]}
+        devices_by_name = {"l2-01": _mock_device("l2-01"), "l2-02": _mock_device("l2-02")}
 
         await gen._ensure_mlag_pairs(
-            ["l2-01", "l2-02"], role_label="l2-leaf", template=template, mlag_create="virtual", supports_virtual=False
+            ["l2-01", "l2-02"],
+            devices_by_name=devices_by_name,
+            role_label="l2-leaf",
+            template=template,
+            mlag_create="virtual",
+            supports_virtual=False,
         )
 
         gen.client.create.assert_awaited_once()
@@ -96,7 +104,12 @@ class TestEnsureMlagPairs:
         template = {"id": "tmpl", "interfaces": [{"name": "Eth1/1", "role": "uplink"}]}
 
         await gen._ensure_mlag_pairs(
-            ["l2-01", "l2-02"], role_label="l2-leaf", template=template, mlag_create="virtual", supports_virtual=False
+            ["l2-01", "l2-02"],
+            devices_by_name={},
+            role_label="l2-leaf",
+            template=template,
+            mlag_create="virtual",
+            supports_virtual=False,
         )
 
         gen.client.create.assert_not_awaited()
@@ -109,7 +122,7 @@ class TestEnsureMlagPairs:
         template = {"id": "tmpl", "interfaces": [{"name": "Eth1/1", "role": "uplink"}]}
 
         await gen._ensure_mlag_pairs(
-            ["tor-01", "tor-02"], role_label="tor", template=template, mlag_create="back-to-back"
+            ["tor-01", "tor-02"], devices_by_name={}, role_label="tor", template=template, mlag_create="back-to-back"
         )
 
         gen.client.create.assert_not_awaited()
@@ -118,16 +131,21 @@ class TestEnsureMlagPairs:
     @pytest.mark.asyncio
     async def test_back_to_back_with_mlag_peer_interface_creates_domain(self) -> None:
         gen = _build_gen()
-        gen.client.filters = AsyncMock(side_effect=[[], [_mock_device("tor-01"), _mock_device("tor-02")]])
+        gen.client.filters = AsyncMock(return_value=[])  # no existing MLAG domain
         gen.client.get = AsyncMock(return_value=_mock_group())
         mlag_obj = MagicMock()
         mlag_obj.id = "mlag-1"
         mlag_obj.save = AsyncMock()
         gen.client.create = AsyncMock(return_value=mlag_obj)
         template = {"id": "tmpl", "interfaces": [{"name": "Eth1/1", "role": "mlag-peer"}]}
+        devices_by_name = {"tor-01": _mock_device("tor-01"), "tor-02": _mock_device("tor-02")}
 
         await gen._ensure_mlag_pairs(
-            ["tor-02", "tor-01"], role_label="tor", template=template, mlag_create="back-to-back"
+            ["tor-02", "tor-01"],
+            devices_by_name=devices_by_name,
+            role_label="tor",
+            template=template,
+            mlag_create="back-to-back",
         )
 
         gen.client.create.assert_awaited_once()
@@ -144,16 +162,21 @@ class TestEnsureMlagPairs:
     @pytest.mark.asyncio
     async def test_virtual_mode_creates_domain_without_interface_requirement(self) -> None:
         gen = _build_gen()
-        gen.client.filters = AsyncMock(side_effect=[[], [_mock_device("leaf-01"), _mock_device("leaf-02")]])
+        gen.client.filters = AsyncMock(return_value=[])  # no existing MLAG domain
         gen.client.get = AsyncMock(return_value=_mock_group())
         mlag_obj = MagicMock()
         mlag_obj.id = "mlag-1"
         mlag_obj.save = AsyncMock()
         gen.client.create = AsyncMock(return_value=mlag_obj)
         template = {"id": "tmpl", "interfaces": []}
+        devices_by_name = {"leaf-01": _mock_device("leaf-01"), "leaf-02": _mock_device("leaf-02")}
 
         await gen._ensure_mlag_pairs(
-            ["leaf-01", "leaf-02"], role_label="leaf", template=template, mlag_create="virtual"
+            ["leaf-01", "leaf-02"],
+            devices_by_name=devices_by_name,
+            role_label="leaf",
+            template=template,
+            mlag_create="virtual",
         )
 
         gen.client.create.assert_awaited_once()
@@ -163,16 +186,21 @@ class TestEnsureMlagPairs:
     @pytest.mark.asyncio
     async def test_odd_device_out_is_unpaired(self) -> None:
         gen = _build_gen()
-        gen.client.filters = AsyncMock(side_effect=[[], [_mock_device("tor-01"), _mock_device("tor-02")]])
+        gen.client.filters = AsyncMock(return_value=[])  # no existing MLAG domain
         gen.client.get = AsyncMock(return_value=_mock_group())
         mlag_obj = MagicMock()
         mlag_obj.id = "mlag-1"
         mlag_obj.save = AsyncMock()
         gen.client.create = AsyncMock(return_value=mlag_obj)
         template = {"id": "tmpl", "interfaces": []}
+        devices_by_name = {"tor-01": _mock_device("tor-01"), "tor-02": _mock_device("tor-02")}
 
         await gen._ensure_mlag_pairs(
-            ["tor-01", "tor-02", "tor-03"], role_label="tor", template=template, mlag_create="virtual"
+            ["tor-01", "tor-02", "tor-03"],
+            devices_by_name=devices_by_name,
+            role_label="tor",
+            template=template,
+            mlag_create="virtual",
         )
 
         gen.client.create.assert_awaited_once()
@@ -182,23 +210,21 @@ class TestEnsureMlagPairs:
         """quantity=4/6 (multiple redundant pairs) must pair all of them, not
         just the first two — the bug this generalization fixes."""
         gen = _build_gen()
-        gen.client.filters = AsyncMock(
-            side_effect=[
-                [],
-                [_mock_device("tor-01"), _mock_device("tor-02")],
-                [],
-                [_mock_device("tor-03"), _mock_device("tor-04")],
-            ]
-        )
+        gen.client.filters = AsyncMock(return_value=[])  # no existing MLAG domains
         gen.client.get = AsyncMock(return_value=_mock_group())
         mlag_obj = MagicMock()
         mlag_obj.id = "mlag-1"
         mlag_obj.save = AsyncMock()
         gen.client.create = AsyncMock(return_value=mlag_obj)
         template = {"id": "tmpl", "interfaces": []}
+        devices_by_name = {name: _mock_device(name) for name in ("tor-01", "tor-02", "tor-03", "tor-04")}
 
         await gen._ensure_mlag_pairs(
-            ["tor-01", "tor-02", "tor-03", "tor-04"], role_label="tor", template=template, mlag_create="virtual"
+            ["tor-01", "tor-02", "tor-03", "tor-04"],
+            devices_by_name=devices_by_name,
+            role_label="tor",
+            template=template,
+            mlag_create="virtual",
         )
 
         assert gen.client.create.await_count == 2
@@ -215,7 +241,9 @@ class TestEnsureMlagPairs:
         gen.client.create = AsyncMock()
         template = {"id": "tmpl", "interfaces": []}
 
-        await gen._ensure_mlag_pairs(["tor-01", "tor-02"], role_label="tor", template=template, mlag_create="virtual")
+        await gen._ensure_mlag_pairs(
+            ["tor-01", "tor-02"], devices_by_name={}, role_label="tor", template=template, mlag_create="virtual"
+        )
 
         gen.client.create.assert_not_awaited()
         existing.save.assert_not_awaited()
@@ -239,7 +267,9 @@ class TestEnsureMlagPairs:
         gen.client.create = AsyncMock()
         template = {"id": "tmpl", "interfaces": []}
 
-        await gen._ensure_mlag_pairs(["tor-01", "tor-02"], role_label="tor", template=template, mlag_create="virtual")
+        await gen._ensure_mlag_pairs(
+            ["tor-01", "tor-02"], devices_by_name={}, role_label="tor", template=template, mlag_create="virtual"
+        )
 
         gen.client.create.assert_not_awaited()
         assert existing.virtual_peer_link.value is True
