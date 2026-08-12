@@ -778,7 +778,7 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
             resource_pool=parent_pool,
             identifier=pool_name,
             prefix_length=slice_prefix_length,
-            data={"role": "technical", "identifier": pool_name},
+            data={"role": "technical"},
         )
 
         pool = await self.client.create(
