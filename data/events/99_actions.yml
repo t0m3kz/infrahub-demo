@@ -251,12 +251,19 @@ spec:
             value: endpoint
 
     # ── MLAG Wiring ───────────────────────────────────────────────────────────
-    - name: trigger-mlag-on-created
-      branch_scope: "other_branches"
-      node_kind: ManagedMLAG
-      mutation_action: "created"
-      action: mlag-generator
-
+    # Peer-link wiring on domain *creation* is no longer a separate
+    # trigger-based generator round-trip — DeviceMixin._ensure_mlag_pairs
+    # (generators/devices.py) calls ensure_mlag_wiring (also in
+    # generators/devices.py) directly, synchronously, right after creating
+    # or finding each ManagedMLAG domain, closing the storm where a bulk
+    # topology regen's ~14 concurrently-created ManagedMLAG domains each
+    # independently fired their own async add_mlag flow run and overloaded
+    # the server (HTTP 502 on the generator's own query, NODE_NOT_FOUND
+    # elsewhere from index/consistency lag under load). MLAGGenerator/
+    # mlag.py still exists (delegates to the same ensure_mlag_wiring) — the
+    # two triggers below still need it, since they react to
+    # capabilities/virtual_peer_link changes made outside this generator
+    # flow (direct API/UI edit, branch merge).
     - name: trigger-mlag-on-update-capabilities
       branch_scope: "other_branches"
       node_kind: ManagedMLAG

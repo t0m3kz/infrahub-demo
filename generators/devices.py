@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 from .helpers import DeviceNameContext, DeviceNamingConfig, get_loopback_name
 from .helpers.pairing import pair_device_names
+from .mlag import MLAGWiringMixin
 from .protocols import (
     DcimCable,
     DcimInterface,
@@ -57,7 +58,7 @@ _FABRIC_ROLES = frozenset(
 _ROLE_CONTROLLER_TYPE: dict[str, str] = {"firewall": "security_manager", "load-balancer": "lb_manager"}
 
 
-class DeviceMixin:
+class DeviceMixin(MLAGWiringMixin):
     """Mixin providing device creation methods for CommonGenerator.
 
     Expects the host class to provide: ``client``, ``logger``, ``fabric_name``,
@@ -651,16 +652,26 @@ class DeviceMixin:
         supports_virtual: bool = True,
     ) -> None:
         """Pair same-role devices two-at-a-time (sorted, odd one unpaired) into MLAG
-        domains, per pod.mlag_create ("back-to-back" / "virtual").
+        domains, per pod.mlag_create ("back-to-back" / "virtual"), then ensure
+        each pair's peer-link interfaces/cable in the same call — no separate
+        add_mlag generator/trigger round-trip for domain creation (that used
+        to run async off a ManagedMLAG "created" mutation and fired once per
+        domain from every concurrently-created ManagedMLAG — ~14 under a bulk
+        topology regen — overloading the server). Mirrors
+        _ensure_ha_pairs/_ensure_ha_interfaces exactly. MLAGGenerator/mlag.py
+        still exists and delegates to the same ensure_mlag_wiring — it's only
+        reached now by the two remaining ManagedMLAG "updated" triggers
+        (capabilities/virtual_peer_link changed outside this flow, e.g. a
+        direct API/UI edit or branch merge).
 
-        back-to-back needs a role=mlag-peer interface on the template — the mlag
-        generator (triggered on ManagedMLAG created/updated) does the actual wiring.
-        virtual anchors on a loopback (mlag.py's _ensure_virtual_peer_link) — only
-        L3/routed roles (leaf, access-leaf) can use it. supports_virtual=False
-        (l2-leaf: no loopback, L2-only by design) forces back-to-back instead of
-        erroring out — mlag_create is one pod-wide setting shared by every role,
-        so a pod with both leaf (L3) and l2-leaf (L2-only) roles must fall back
-        for the L2-only ones regardless of what's configured for the pod.
+        back-to-back needs a role=mlag-peer interface on the template.
+        virtual anchors on a loopback (ensure_mlag_wiring's
+        _ensure_virtual_peer_link) — only L3/routed roles (leaf, access-leaf)
+        can use it. supports_virtual=False (l2-leaf: no loopback, L2-only by
+        design) forces back-to-back instead of erroring out — mlag_create is
+        one pod-wide setting shared by every role, so a pod with both leaf
+        (L3) and l2-leaf (L2-only) roles must fall back for the L2-only ones
+        regardless of what's configured for the pod.
         """
         if len(device_names) < 2:
             return
@@ -684,44 +695,45 @@ class DeviceMixin:
         mlag_group = None
         for pair_index, (first, second) in enumerate(pair_device_names(device_names), start=1):
             mlag_name = f"{first}-{second}-mlag"
-            existing = await self.client.filters(kind=ManagedMLAG, name__value=mlag_name)
+            existing = await self.client.filters(kind=ManagedMLAG, name__value=mlag_name, include=["capabilities"])
+            member_ids: list[str] | None = None
             if existing:
-                existing_mlag = existing[0]
-                self.client.group_context.related_node_ids.append(existing_mlag.id)
+                mlag_obj = existing[0]
+                self.client.group_context.related_node_ids.append(mlag_obj.id)
                 # mlag_create may have changed since this domain was created (e.g.
-                # back-to-back <-> virtual) — mlag.py's peer-link wiring branches on
-                # this flag, so it must reflect the current setting, not the one at
-                # creation time, or a re-run would silently keep wiring the old mode.
+                # back-to-back <-> virtual) — ensure_mlag_wiring's peer-link wiring
+                # branches on this flag, so it must reflect the current setting, not
+                # the one at creation time, or a re-run would silently keep wiring
+                # the old mode.
                 wants_virtual = mlag_create == "virtual"
-                if existing_mlag.virtual_peer_link.value != wants_virtual:
-                    existing_mlag.virtual_peer_link.value = wants_virtual
-                    await existing_mlag.save(allow_upsert=True)
+                if mlag_obj.virtual_peer_link.value != wants_virtual:
+                    mlag_obj.virtual_peer_link.value = wants_virtual
+                    await mlag_obj.save(allow_upsert=True)
                     self.logger.info(f"Updated MLAG domain {mlag_name} to {mlag_create} peer-link")
-                await self._ensure_vlan_domain_pool(
-                    pool_owner_name=mlag_name, parent_kind="ManagedMLAG", parent_id=existing_mlag.id
+            else:
+                devices = await self.client.filters(kind=DcimPhysicalDevice, name__values=[first, second])
+                if len(devices) != 2:
+                    self.logger.error(f"MLAG pair {first}/{second}: could not resolve both devices.")
+                    continue
+
+                if mlag_group is None:
+                    mlag_group = await self.client.get(kind=CoreStandardGroup, name__value="mlag_domains")
+                mlag_obj = await self.client.create(
+                    kind=ManagedMLAG,
+                    data={
+                        "name": mlag_name,
+                        "domain_id": pair_index,
+                        "virtual_peer_link": mlag_create == "virtual",
+                        "status": "active",
+                        "capabilities": [{"id": dev.id} for dev in devices],
+                        "member_of_groups": [{"id": mlag_group.id}],
+                    },
                 )
-                continue
+                await mlag_obj.save(allow_upsert=True)
+                self.logger.info(f"Created MLAG domain {mlag_name} ({mlag_create}) for {role_label}s")
+                member_ids = [dev.id for dev in devices]
 
-            devices = await self.client.filters(kind=DcimPhysicalDevice, name__values=[first, second])
-            if len(devices) != 2:
-                self.logger.error(f"MLAG pair {first}/{second}: could not resolve both devices.")
-                continue
-
-            if mlag_group is None:
-                mlag_group = await self.client.get(kind=CoreStandardGroup, name__value="mlag_domains")
-            mlag_obj = await self.client.create(
-                kind=ManagedMLAG,
-                data={
-                    "name": mlag_name,
-                    "domain_id": pair_index,
-                    "virtual_peer_link": mlag_create == "virtual",
-                    "status": "active",
-                    "capabilities": [{"id": dev.id} for dev in devices],
-                    "member_of_groups": [{"id": mlag_group.id}],
-                },
-            )
-            await mlag_obj.save(allow_upsert=True)
-            self.logger.info(f"Created MLAG domain {mlag_name} ({mlag_create}) for {role_label}s")
+            await self.ensure_mlag_wiring(mlag_obj, mlag_name, member_ids=member_ids)
             await self._ensure_vlan_domain_pool(
                 pool_owner_name=mlag_name, parent_kind="ManagedMLAG", parent_id=mlag_obj.id
             )

@@ -32,6 +32,10 @@ def _build_gen() -> Any:
     # PoolMixin.upsert_number_pool — _ensure_mlag_pairs calls this to create
     # each VLAN domain's own local VLAN ID pool; not under test here.
     gen.upsert_number_pool = AsyncMock(return_value=MagicMock(id="vlan-pool-1"))
+    # MLAGWiringMixin.ensure_mlag_wiring — peer-link wiring is covered by
+    # tests/unit/test_mlag_wiring_helper.py; here we only assert it's called
+    # with the right args.
+    gen.ensure_mlag_wiring = AsyncMock()
     return gen
 
 
@@ -133,6 +137,9 @@ class TestEnsureMlagPairs:
         assert create_kwargs["data"]["virtual_peer_link"] is False
         assert create_kwargs["data"]["capabilities"] == [{"id": "id-tor-01"}, {"id": "id-tor-02"}]
         mlag_obj.save.assert_awaited_once_with(allow_upsert=True)
+        gen.ensure_mlag_wiring.assert_awaited_once_with(
+            mlag_obj, "tor-01-tor-02-mlag", member_ids=["id-tor-01", "id-tor-02"]
+        )
 
     @pytest.mark.asyncio
     async def test_virtual_mode_creates_domain_without_interface_requirement(self) -> None:
@@ -213,6 +220,9 @@ class TestEnsureMlagPairs:
         gen.client.create.assert_not_awaited()
         existing.save.assert_not_awaited()
         assert "existing-mlag-1" in gen.client.group_context.related_node_ids
+        gen.ensure_mlag_wiring.assert_awaited_once_with(existing, "tor-01-tor-02-mlag", member_ids=None)
+        filters_kwargs = gen.client.filters.call_args.kwargs
+        assert filters_kwargs["include"] == ["capabilities"]
 
     @pytest.mark.asyncio
     async def test_existing_domain_flag_updated_when_mlag_create_changed(self) -> None:
