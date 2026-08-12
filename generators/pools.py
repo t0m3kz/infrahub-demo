@@ -315,7 +315,6 @@ class PoolMixin:
                 prefix_length=pool_size,
                 data={
                     "role": f"{pool_name if pool_name in ['management', 'technical', 'loopback'] else pool_name.split('-')[-1]}",
-                    "identifier": pool_full_name,
                 },
             )
 
