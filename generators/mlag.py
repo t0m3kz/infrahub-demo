@@ -165,6 +165,9 @@ class MLAGWiringMixin:
             needs_status_update = getattr(existing_lag, "status").value != "active"
             if not needs_domain_update and not needs_status_update:
                 self.logger.info(f"  [{dev_name}] Peer-link LAG {existing_lag.name.value} already wired")
+                # Not saved (nothing changed) — re-track explicitly, or this run's
+                # tracking group omits it and delete_unused_nodes removes it as unused.
+                self.client.group_context.related_node_ids.append(existing_lag.id)
                 return existing_lag
 
             self.logger.info(f"  [{dev_name}] Peer-link LAG {existing_lag.name.value} already exists — updating state")
@@ -209,6 +212,9 @@ class MLAGWiringMixin:
         if existing_virt:
             if getattr(existing_virt, "status").value == "active":
                 self.logger.info(f"  [{dev_name}] Virtual peer-link {existing_virt.name.value} already wired")
+                # Not saved (nothing changed) — re-track explicitly, or this run's
+                # tracking group omits it and delete_unused_nodes removes it as unused.
+                self.client.group_context.related_node_ids.append(existing_virt.id)
                 return existing_virt
             self.logger.info(f"  [{dev_name}] Virtual peer-link {existing_virt.name.value} already exists — activating")
             getattr(existing_virt, "status").value = "active"
@@ -272,8 +278,12 @@ class MLAGWiringMixin:
         for idx, (iface_a, iface_b) in enumerate(zip(ifaces_a, ifaces_b), start=1):
             cable_name = f"CBL-{mlag_name}-PL{idx}"
 
-            if await self.client.filters(kind=DcimCable, name__value=cable_name):
+            existing_cables = await self.client.filters(kind=DcimCable, name__value=cable_name)
+            if existing_cables:
                 self.logger.info(f"  [{mlag_name}] Cable {cable_name} already exists")
+                # Not saved (nothing changed) — re-track explicitly, or this run's
+                # tracking group omits it and delete_unused_nodes removes it as unused.
+                self.client.group_context.related_node_ids.append(existing_cables[0].id)
                 continue
 
             cable_a, cable_b = getattr(iface_a, "cable", None), getattr(iface_b, "cable", None)

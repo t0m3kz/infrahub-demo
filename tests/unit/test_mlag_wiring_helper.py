@@ -24,6 +24,8 @@ from generators.protocols import (
 def _gen() -> Any:
     gen = MLAGWiringMixin.__new__(MLAGWiringMixin)
     gen.client = MagicMock()
+    gen.client.group_context = MagicMock()
+    gen.client.group_context.related_node_ids = []
     gen.logger = MagicMock()
     return gen
 
@@ -256,6 +258,9 @@ class TestEnsureLagPeerLink:
         assert result is existing_lag
         gen.client.create.assert_not_called()
         existing_lag.save.assert_not_awaited()
+        # Not saved (nothing changed) — must be re-tracked explicitly, or
+        # delete_unused_nodes removes it as untouched by this run.
+        assert existing_lag.id in gen.client.group_context.related_node_ids
 
     @pytest.mark.asyncio
     async def test_existing_lag_with_stale_domain_gets_rewired(self) -> None:
@@ -312,6 +317,9 @@ class TestEnsureVirtualPeerLink:
         assert result is existing
         gen.client.create.assert_not_called()
         existing.save.assert_not_awaited()
+        # Not saved (nothing changed) — must be re-tracked explicitly, or
+        # delete_unused_nodes removes it as untouched by this run.
+        assert existing.id in gen.client.group_context.related_node_ids
 
     @pytest.mark.asyncio
     async def test_existing_inactive_loopback_gets_activated(self) -> None:
@@ -400,15 +408,19 @@ class TestEnsurePeerLinkCables:
             if kind is DcimPhysicalInterface and kwargs.get("device__ids") == [dev_b.id]:
                 return [iface_b]
             if kind is DcimCable:
-                return [MagicMock()]  # already exists
+                return [existing_cable]  # already exists
             return []
 
+        existing_cable = MagicMock(id="cable-existing")
         gen.client.filters = AsyncMock(side_effect=_filters)
         gen.client.create = AsyncMock()
 
         await gen._ensure_peer_link_cables("tor-01-tor-02-mlag", dev_a, dev_b)
 
         gen.client.create.assert_not_called()
+        # Not saved (nothing changed) — must be re-tracked explicitly, or
+        # delete_unused_nodes removes it as untouched by this run.
+        assert existing_cable.id in gen.client.group_context.related_node_ids
 
 
 class TestDisconnectStalePeerLinkCables:
