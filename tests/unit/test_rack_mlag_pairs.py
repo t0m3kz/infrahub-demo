@@ -8,8 +8,9 @@ Covers:
   to back-to-back rather than erroring out, since mlag_create is one pod-wide
   setting shared by every role
 - deterministic pairing (sorted device names, two-at-a-time), odd device unpaired
-- idempotency — an existing ManagedMLAG with the same name is tracked in
-  group_context instead of being recreated
+- idempotency — an existing ManagedMLAG with the same name is always
+  create()+save()'d again with its existing id (upsert), never skipped —
+  mirrors create_devices()'s own always-upsert device/loopback pattern
 """
 
 from __future__ import annotations
@@ -151,6 +152,7 @@ class TestEnsureMlagPairs:
         gen.client.create.assert_awaited_once()
         create_kwargs = gen.client.create.call_args.kwargs
         assert create_kwargs["kind"] == ManagedMLAG
+        assert "id" not in create_kwargs["data"]
         assert create_kwargs["data"]["name"] == "tor-01-tor-02-mlag"
         assert create_kwargs["data"]["virtual_peer_link"] is False
         assert create_kwargs["data"]["capabilities"] == [{"id": "id-tor-01"}, {"id": "id-tor-02"}]
@@ -230,47 +232,60 @@ class TestEnsureMlagPairs:
         assert gen.client.create.await_count == 2
 
     @pytest.mark.asyncio
-    async def test_existing_domain_is_tracked_not_recreated(self) -> None:
+    async def test_existing_domain_gets_upserted_by_id_not_recreated(self) -> None:
         gen = _build_gen()
         existing = MagicMock()
         existing.id = "existing-mlag-1"
-        existing.virtual_peer_link = MagicMock(value=True)
-        existing.save = AsyncMock()
         gen.client.filters = AsyncMock(return_value=[existing])
         gen.client.get = AsyncMock(return_value=_mock_group())
-        gen.client.create = AsyncMock()
+        mlag_obj = MagicMock()
+        mlag_obj.id = "existing-mlag-1"
+        mlag_obj.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=mlag_obj)
         template = {"id": "tmpl", "interfaces": []}
+        devices_by_name = {"tor-01": _mock_device("tor-01"), "tor-02": _mock_device("tor-02")}
 
         await gen._ensure_mlag_pairs(
-            ["tor-01", "tor-02"], devices_by_name={}, role_label="tor", template=template, mlag_create="virtual"
+            ["tor-01", "tor-02"],
+            devices_by_name=devices_by_name,
+            role_label="tor",
+            template=template,
+            mlag_create="virtual",
         )
 
-        gen.client.create.assert_not_awaited()
-        existing.save.assert_not_awaited()
-        assert "existing-mlag-1" in gen.client.group_context.related_node_ids
-        gen.ensure_mlag_wiring.assert_awaited_once_with(existing, "tor-01-tor-02-mlag", member_ids=None)
-        filters_kwargs = gen.client.filters.call_args.kwargs
-        assert filters_kwargs["include"] == ["capabilities"]
+        create_kwargs = gen.client.create.call_args.kwargs
+        assert create_kwargs["data"]["id"] == "existing-mlag-1"
+        mlag_obj.save.assert_awaited_once_with(allow_upsert=True)
+        gen.ensure_mlag_wiring.assert_awaited_once_with(
+            mlag_obj, "tor-01-tor-02-mlag", member_ids=["id-tor-01", "id-tor-02"]
+        )
 
     @pytest.mark.asyncio
     async def test_existing_domain_flag_updated_when_mlag_create_changed(self) -> None:
         """mlag_create switched (e.g. back-to-back -> virtual) since this
-        domain was created — the flag must be brought in line so mlag.py wires
-        the currently-configured peer-link type, not the one from creation time."""
+        domain was created — the resent virtual_peer_link always reflects the
+        CURRENT setting, not the one from creation time (no "if changed"
+        gate — every field is always resent, same as create_devices())."""
         gen = _build_gen()
         existing = MagicMock()
         existing.id = "existing-mlag-1"
-        existing.virtual_peer_link = MagicMock(value=False)
-        existing.save = AsyncMock()
         gen.client.filters = AsyncMock(return_value=[existing])
         gen.client.get = AsyncMock(return_value=_mock_group())
-        gen.client.create = AsyncMock()
+        mlag_obj = MagicMock()
+        mlag_obj.id = "existing-mlag-1"
+        mlag_obj.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=mlag_obj)
         template = {"id": "tmpl", "interfaces": []}
+        devices_by_name = {"tor-01": _mock_device("tor-01"), "tor-02": _mock_device("tor-02")}
 
         await gen._ensure_mlag_pairs(
-            ["tor-01", "tor-02"], devices_by_name={}, role_label="tor", template=template, mlag_create="virtual"
+            ["tor-01", "tor-02"],
+            devices_by_name=devices_by_name,
+            role_label="tor",
+            template=template,
+            mlag_create="virtual",
         )
 
-        gen.client.create.assert_not_awaited()
-        assert existing.virtual_peer_link.value is True
-        existing.save.assert_awaited_once_with(allow_upsert=True)
+        create_kwargs = gen.client.create.call_args.kwargs
+        assert create_kwargs["data"]["virtual_peer_link"] is True
+        mlag_obj.save.assert_awaited_once_with(allow_upsert=True)

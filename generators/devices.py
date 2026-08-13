@@ -703,46 +703,36 @@ class DeviceMixin(MLAGWiringMixin):
         mlag_group = None
         for pair_index, (first, second) in enumerate(pair_device_names(device_names), start=1):
             mlag_name = f"{first}-{second}-mlag"
-            existing = await self.client.filters(kind=ManagedMLAG, name__value=mlag_name, include=["capabilities"])
-            member_ids: list[str] | None = None
-            if existing:
-                mlag_obj = existing[0]
-                self.client.group_context.related_node_ids.append(mlag_obj.id)
-                # mlag_create may have changed since this domain was created (e.g.
-                # back-to-back <-> virtual) — ensure_mlag_wiring's peer-link wiring
-                # branches on this flag, so it must reflect the current setting, not
-                # the one at creation time, or a re-run would silently keep wiring
-                # the old mode.
-                wants_virtual = mlag_create == "virtual"
-                if mlag_obj.virtual_peer_link.value != wants_virtual:
-                    mlag_obj.virtual_peer_link.value = wants_virtual
-                    await mlag_obj.save(allow_upsert=True)
-                    self.logger.info(f"Updated MLAG domain {mlag_name} to {mlag_create} peer-link")
-            else:
-                first_dev, second_dev = devices_by_name.get(first), devices_by_name.get(second)
-                if first_dev is None or second_dev is None:
-                    self.logger.error(f"MLAG pair {first}/{second}: could not resolve both devices.")
-                    continue
-                devices = [first_dev, second_dev]
+            first_dev, second_dev = devices_by_name.get(first), devices_by_name.get(second)
+            if first_dev is None or second_dev is None:
+                self.logger.error(f"MLAG pair {first}/{second}: could not resolve both devices.")
+                continue
 
-                if mlag_group is None:
-                    mlag_group = await self.client.get(kind=CoreStandardGroup, name__value="mlag_domains")
-                mlag_obj = await self.client.create(
-                    kind=ManagedMLAG,
-                    data={
-                        "name": mlag_name,
-                        "domain_id": pair_index,
-                        "virtual_peer_link": mlag_create == "virtual",
-                        "status": "active",
-                        "capabilities": [{"id": dev.id} for dev in devices],
-                        "member_of_groups": [{"id": mlag_group.id}],
-                    },
-                )
-                await mlag_obj.save(allow_upsert=True)
-                self.logger.info(f"Created MLAG domain {mlag_name} ({mlag_create}) for {role_label}s")
-                member_ids = [dev.id for dev in devices]
+            # Pass existing id so upsert matches by ID, not hfid lookup — mirrors
+            # create_devices()'s own upsert pattern.
+            existing = await self.client.filters(kind=ManagedMLAG, name__value=mlag_name)
+            existing_mlag = existing[0] if existing else None
 
-            await self.ensure_mlag_wiring(mlag_obj, mlag_name, member_ids=member_ids)
+            if mlag_group is None:
+                mlag_group = await self.client.get(kind=CoreStandardGroup, name__value="mlag_domains")
+            mlag_obj = await self.client.create(
+                kind=ManagedMLAG,
+                data={
+                    **({"id": existing_mlag.id} if existing_mlag else {}),
+                    "name": mlag_name,
+                    "domain_id": pair_index,
+                    "virtual_peer_link": mlag_create == "virtual",
+                    "status": "active",
+                    "capabilities": [{"id": first_dev.id}, {"id": second_dev.id}],
+                    "member_of_groups": [{"id": mlag_group.id}],
+                },
+            )
+            await mlag_obj.save(allow_upsert=True)
+            self.logger.info(
+                f"{'Updated' if existing_mlag else 'Created'} MLAG domain {mlag_name} ({mlag_create}) for {role_label}s"
+            )
+
+            await self.ensure_mlag_wiring(mlag_obj, mlag_name, member_ids=[first_dev.id, second_dev.id])
             await self._ensure_vlan_domain_pool(
                 pool_owner_name=mlag_name, parent_kind="ManagedMLAG", parent_id=mlag_obj.id
             )

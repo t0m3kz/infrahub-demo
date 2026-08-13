@@ -2,7 +2,12 @@
 DeviceMixin._ensure_mlag_pairs and MLAGGenerator. Mirrors
 test_device_mixin.py's TestEnsureHaInterfaces/TestEnsureHaCable style: a
 bare mixin instance with mocked client/logger, asserting on
-.filters/.create/.save/.delete call args."""
+.filters/.create/.save/.delete call args.
+
+Every peer-link interface/cable is always create()+save()'d with the full
+desired state (existing id passed when found) — mirrors create_devices()'s
+own device/loopback pattern — so there's no "already wired, skip" branch
+left to test; these tests instead assert the upsert-with-id-if-found shape."""
 
 from __future__ import annotations
 
@@ -24,8 +29,6 @@ from generators.protocols import (
 def _gen() -> Any:
     gen = MLAGWiringMixin.__new__(MLAGWiringMixin)
     gen.client = MagicMock()
-    gen.client.group_context = MagicMock()
-    gen.client.group_context.related_node_ids = []
     gen.logger = MagicMock()
     return gen
 
@@ -67,7 +70,6 @@ def _mock_mlag_obj(*, virtual_peer_link: bool = False) -> MagicMock:
     mlag_obj = MagicMock()
     mlag_obj.id = "mlag-1"
     mlag_obj.virtual_peer_link = MagicMock(value=virtual_peer_link)
-    mlag_obj.interface_capabilities = _mock_relmgr([])
     mlag_obj.save = AsyncMock()
     return mlag_obj
 
@@ -132,7 +134,6 @@ class TestEnsureMlagWiring:
         assert len(lag_calls) == 2
         cable_calls = [c for c in gen.client.create.call_args_list if c.kwargs["kind"] is DcimCable]
         assert len(cable_calls) == 1
-        mlag_obj.save.assert_awaited_once_with(allow_upsert=True)
 
     @pytest.mark.asyncio
     async def test_virtual_wires_loopback_and_skips_cable(self) -> None:
@@ -203,13 +204,13 @@ class TestEnsureLagPeerLink:
         mlag_obj = _mock_mlag_obj()
         gen.client.filters = AsyncMock(return_value=[])
 
-        result = await gen._ensure_lag_peer_link(device_obj, mlag_obj, "tor-01-tor-02-mlag", "nxos")
+        result = await gen._ensure_lag_peer_link(device_obj, mlag_obj, "nxos")
 
         assert result is None
         gen.logger.error.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_bundles_multiple_mlag_peer_interfaces_into_member_interfaces(self) -> None:
+    async def test_creates_new_lag_with_full_state(self) -> None:
         gen = _gen()
         device_obj = _mock_mlag_device("tor-01")
         mlag_obj = _mock_mlag_obj()
@@ -220,57 +221,35 @@ class TestEnsureLagPeerLink:
             if kind is DcimPhysicalInterface:
                 return [iface_1, iface_2]
             if kind is DcimLAGInterface:
-                return []
+                return []  # no existing LAG
             return []
 
         gen.client.filters = AsyncMock(side_effect=_filters)
         lag_obj = MagicMock(id="lag-1", save=AsyncMock())
         gen.client.create = AsyncMock(return_value=lag_obj)
 
-        result = await gen._ensure_lag_peer_link(device_obj, mlag_obj, "tor-01-tor-02-mlag", "nxos")
+        result = await gen._ensure_lag_peer_link(device_obj, mlag_obj, "nxos")
 
         assert result is lag_obj
         create_kwargs = gen.client.create.call_args.kwargs
+        assert "id" not in create_kwargs["data"]
         assert create_kwargs["data"]["member_interfaces"] == [{"id": "iface-1"}, {"id": "iface-2"}]
         assert create_kwargs["data"]["mlag_domain"] == {"id": "mlag-1"}
+        assert create_kwargs["data"]["interface_capabilities"] == [{"id": "mlag-1"}]
+        lag_obj.save.assert_awaited_once_with(allow_upsert=True)
 
     @pytest.mark.asyncio
-    async def test_existing_lag_already_wired_is_noop(self) -> None:
-        gen = _gen()
-        device_obj = _mock_mlag_device("tor-01")
-        mlag_obj = _mock_mlag_obj()
-        iface_1 = _mock_iface("iface-1", "Ethernet1/1")
-        existing_lag = _mock_iface("lag-1", "Port-Channel100")
-        existing_lag.mlag_domain = MagicMock(id="mlag-1")
-
-        async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
-            if kind is DcimPhysicalInterface:
-                return [iface_1]
-            if kind is DcimLAGInterface:
-                return [existing_lag]
-            return []
-
-        gen.client.filters = AsyncMock(side_effect=_filters)
-        gen.client.create = AsyncMock()
-
-        result = await gen._ensure_lag_peer_link(device_obj, mlag_obj, "tor-01-tor-02-mlag", "nxos")
-
-        assert result is existing_lag
-        gen.client.create.assert_not_called()
-        existing_lag.save.assert_not_awaited()
-        # Not saved (nothing changed) — must be re-tracked explicitly, or
-        # delete_unused_nodes removes it as untouched by this run.
-        assert existing_lag.id in gen.client.group_context.related_node_ids
-
-    @pytest.mark.asyncio
-    async def test_existing_lag_with_stale_domain_gets_rewired(self) -> None:
+    async def test_existing_lag_gets_upserted_by_id_with_current_domain(self) -> None:
+        """Always create()+save()'d with the full desired state, existing id
+        passed when found — no "already correct, skip" branch — so a
+        previously-wired LAG whose domain changed (or nothing changed at
+        all) both converge through the same single upsert call."""
         gen = _gen()
         device_obj = _mock_mlag_device("tor-01")
         mlag_obj = _mock_mlag_obj()
         mlag_obj.id = "mlag-new"
         iface_1 = _mock_iface("iface-1", "Ethernet1/1")
-        existing_lag = _mock_iface("lag-1", "Port-Channel100")
-        existing_lag.mlag_domain = MagicMock(id="mlag-old")
+        existing_lag = MagicMock(id="lag-1")
 
         async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
             if kind is DcimPhysicalInterface:
@@ -280,60 +259,55 @@ class TestEnsureLagPeerLink:
             return []
 
         gen.client.filters = AsyncMock(side_effect=_filters)
+        lag_obj = MagicMock(id="lag-1", save=AsyncMock())
+        gen.client.create = AsyncMock(return_value=lag_obj)
 
-        result = await gen._ensure_lag_peer_link(device_obj, mlag_obj, "tor-01-tor-02-mlag", "nxos")
+        result = await gen._ensure_lag_peer_link(device_obj, mlag_obj, "nxos")
 
-        assert result is existing_lag
-        assert existing_lag.mlag_domain is mlag_obj
-        existing_lag.save.assert_awaited_once_with(allow_upsert=True)
+        assert result is lag_obj
+        create_kwargs = gen.client.create.call_args.kwargs
+        assert create_kwargs["data"]["id"] == "lag-1"
+        assert create_kwargs["data"]["mlag_domain"] == {"id": "mlag-new"}
+        assert create_kwargs["data"]["interface_capabilities"] == [{"id": "mlag-new"}]
+        lag_obj.save.assert_awaited_once_with(allow_upsert=True)
 
 
 class TestEnsureVirtualPeerLink:
     @pytest.mark.asyncio
-    async def test_creates_new_loopback(self) -> None:
+    async def test_creates_new_loopback_with_full_state(self) -> None:
         gen = _gen()
         device_obj = _mock_mlag_device("leaf-01")
+        mlag_obj = _mock_mlag_obj()
         gen.client.filters = AsyncMock(return_value=[])
         virt_obj = MagicMock(id="virt-1", save=AsyncMock())
         gen.client.create = AsyncMock(return_value=virt_obj)
 
-        result = await gen._ensure_virtual_peer_link(device_obj, "leaf-01-leaf-02-mlag", "nxos")
+        result = await gen._ensure_virtual_peer_link(device_obj, mlag_obj, "leaf-01-leaf-02-mlag", "nxos")
 
         assert result is virt_obj
         create_kwargs = gen.client.create.call_args.kwargs
+        assert "id" not in create_kwargs["data"]
         assert create_kwargs["data"]["role"] == "mlag-peer"
         assert create_kwargs["data"]["device"] == {"id": device_obj.id}
+        assert create_kwargs["data"]["interface_capabilities"] == [{"id": "mlag-1"}]
+        virt_obj.save.assert_awaited_once_with(allow_upsert=True)
 
     @pytest.mark.asyncio
-    async def test_existing_active_loopback_returns_as_is(self) -> None:
+    async def test_existing_loopback_gets_upserted_by_id(self) -> None:
         gen = _gen()
         device_obj = _mock_mlag_device("leaf-01")
-        existing = _mock_iface("virt-1", "Loopback100", status="active")
+        mlag_obj = _mock_mlag_obj()
+        existing = MagicMock(id="virt-1")
         gen.client.filters = AsyncMock(return_value=[existing])
-        gen.client.create = AsyncMock()
+        virt_obj = MagicMock(id="virt-1", save=AsyncMock())
+        gen.client.create = AsyncMock(return_value=virt_obj)
 
-        result = await gen._ensure_virtual_peer_link(device_obj, "leaf-01-leaf-02-mlag", "nxos")
+        result = await gen._ensure_virtual_peer_link(device_obj, mlag_obj, "leaf-01-leaf-02-mlag", "nxos")
 
-        assert result is existing
-        gen.client.create.assert_not_called()
-        existing.save.assert_not_awaited()
-        # Not saved (nothing changed) — must be re-tracked explicitly, or
-        # delete_unused_nodes removes it as untouched by this run.
-        assert existing.id in gen.client.group_context.related_node_ids
-
-    @pytest.mark.asyncio
-    async def test_existing_inactive_loopback_gets_activated(self) -> None:
-        gen = _gen()
-        device_obj = _mock_mlag_device("leaf-01")
-        existing = _mock_iface("virt-1", "Loopback100", status="provisioning")
-        gen.client.filters = AsyncMock(return_value=[existing])
-        gen.client.create = AsyncMock()
-
-        result = await gen._ensure_virtual_peer_link(device_obj, "leaf-01-leaf-02-mlag", "nxos")
-
-        assert result is existing
-        assert existing.status.value == "active"
-        existing.save.assert_awaited_once_with(allow_upsert=True)
+        assert result is virt_obj
+        create_kwargs = gen.client.create.call_args.kwargs
+        assert create_kwargs["data"]["id"] == "virt-1"
+        virt_obj.save.assert_awaited_once_with(allow_upsert=True)
 
 
 class TestEnsurePeerLinkCables:
@@ -362,18 +336,17 @@ class TestEnsurePeerLinkCables:
 
         assert gen.client.create.await_count == 2
         first_call = gen.client.create.call_args_list[0].kwargs
+        assert "id" not in first_call["data"]
         assert first_call["data"]["name"] == "CBL-tor-01-tor-02-mlag-PL1"
         assert first_call["data"]["endpoints"] == [iface_a1.id, iface_b1.id]
 
     @pytest.mark.asyncio
-    async def test_orphan_cabled_interface_gets_renamed(self) -> None:
+    async def test_orphan_cabled_interface_gets_adopted_by_id(self) -> None:
         gen = _gen()
         dev_a, dev_b = _mock_mlag_device("tor-01"), _mock_mlag_device("tor-02")
         iface_a = _mock_iface("a1", "Ethernet1/1", cable_id="orphan-cable")
         iface_b = _mock_iface("b1", "Ethernet1/1")
-        orphan_obj = MagicMock()
-        orphan_obj.name = MagicMock(value="old-cable-name")
-        orphan_obj.save = AsyncMock()
+        orphan_obj = MagicMock(id="orphan-cable")
 
         async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
             if kind is DcimPhysicalInterface and kwargs.get("device__ids") == [dev_a.id]:
@@ -386,21 +359,24 @@ class TestEnsurePeerLinkCables:
 
         gen.client.filters = AsyncMock(side_effect=_filters)
         gen.client.get = AsyncMock(return_value=orphan_obj)
-        gen.client.create = AsyncMock()
+        cable_obj = MagicMock(save=AsyncMock())
+        gen.client.create = AsyncMock(return_value=cable_obj)
 
         await gen._ensure_peer_link_cables("tor-01-tor-02-mlag", dev_a, dev_b)
 
         gen.client.get.assert_awaited_once_with(kind=DcimCable, id="orphan-cable")
-        assert orphan_obj.name.value == "CBL-tor-01-tor-02-mlag-PL1"
-        orphan_obj.save.assert_awaited_once_with(allow_upsert=True)
-        gen.client.create.assert_not_called()
+        create_kwargs = gen.client.create.call_args.kwargs
+        assert create_kwargs["data"]["id"] == "orphan-cable"
+        assert create_kwargs["data"]["name"] == "CBL-tor-01-tor-02-mlag-PL1"
+        cable_obj.save.assert_awaited_once_with(allow_upsert=True)
 
     @pytest.mark.asyncio
-    async def test_existing_cable_is_a_noop(self) -> None:
+    async def test_existing_cable_gets_upserted_by_id(self) -> None:
         gen = _gen()
         dev_a, dev_b = _mock_mlag_device("tor-01"), _mock_mlag_device("tor-02")
         iface_a = _mock_iface("a1", "Ethernet1/1")
         iface_b = _mock_iface("b1", "Ethernet1/1")
+        existing_cable = MagicMock(id="cable-existing")
 
         async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
             if kind is DcimPhysicalInterface and kwargs.get("device__ids") == [dev_a.id]:
@@ -408,19 +384,18 @@ class TestEnsurePeerLinkCables:
             if kind is DcimPhysicalInterface and kwargs.get("device__ids") == [dev_b.id]:
                 return [iface_b]
             if kind is DcimCable:
-                return [existing_cable]  # already exists
+                return [existing_cable]
             return []
 
-        existing_cable = MagicMock(id="cable-existing")
         gen.client.filters = AsyncMock(side_effect=_filters)
-        gen.client.create = AsyncMock()
+        cable_obj = MagicMock(save=AsyncMock())
+        gen.client.create = AsyncMock(return_value=cable_obj)
 
         await gen._ensure_peer_link_cables("tor-01-tor-02-mlag", dev_a, dev_b)
 
-        gen.client.create.assert_not_called()
-        # Not saved (nothing changed) — must be re-tracked explicitly, or
-        # delete_unused_nodes removes it as untouched by this run.
-        assert existing_cable.id in gen.client.group_context.related_node_ids
+        create_kwargs = gen.client.create.call_args.kwargs
+        assert create_kwargs["data"]["id"] == "cable-existing"
+        cable_obj.save.assert_awaited_once_with(allow_upsert=True)
 
 
 class TestDisconnectStalePeerLinkCables:
@@ -446,28 +421,3 @@ class TestDisconnectStalePeerLinkCables:
         await gen._disconnect_stale_peer_link_cables("leaf-01-leaf-02-mlag", dev_a, dev_b)
 
         assert gen.client.delete.await_count == 2
-
-
-class TestAssertMlagInterfaceCapabilities:
-    @pytest.mark.asyncio
-    async def test_adds_new_peer_link_ifaces(self) -> None:
-        gen = _gen()
-        mlag_obj = _mock_mlag_obj()
-        iface_1, iface_2 = _mock_iface("iface-1", "Port-Channel100"), _mock_iface("iface-2", "Port-Channel100")
-
-        await gen._assert_mlag_interface_capabilities(mlag_obj, "tor-01-tor-02-mlag", [iface_1, iface_2])
-
-        assert mlag_obj.interface_capabilities.add.call_count == 2
-        mlag_obj.save.assert_awaited_once_with(allow_upsert=True)
-
-    @pytest.mark.asyncio
-    async def test_skips_already_present_ifaces(self) -> None:
-        gen = _gen()
-        mlag_obj = _mock_mlag_obj()
-        iface_1 = _mock_iface("iface-1", "Port-Channel100")
-        mlag_obj.interface_capabilities = _mock_relmgr([iface_1.id])
-
-        await gen._assert_mlag_interface_capabilities(mlag_obj, "tor-01-tor-02-mlag", [iface_1])
-
-        mlag_obj.interface_capabilities.add.assert_not_called()
-        mlag_obj.save.assert_not_awaited()
