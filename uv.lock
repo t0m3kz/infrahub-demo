@@ -926,11 +926,11 @@ wheels = [
 
 [[package]]
 name = "netutils"
-version = "1.17.2"
+version = "1.19.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/18/1f/0cfef795a6c7322dbc851e02329cba5be98220d69d2bac324f8a5ac9f137/netutils-1.17.2.tar.gz", hash = "sha256:7a0680e17667a54d627b70bd30c4fdb12d7da53562f3ffb9ee4e85c6cb553dc6", size = 521053, upload-time = "2026-04-08T17:59:07.007Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/2e/81/68132139a13f052975ff64ed365492e3ad5b4f5e1c2d3cf0ebbb154be874/netutils-1.19.1.tar.gz", hash = "sha256:330dd2d0fece3bf9507304fe77c1c905e5f88ffbf56d2a80459d067be594f126", size = 549537, upload-time = "2026-08-26T14:40:42.669Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ab/ab/5e6d9e08d2e705a708012046080515e405d721df8799b97ec277f0fbce95/netutils-1.17.2-py3-none-any.whl", hash = "sha256:ccdad5fb46ae7138ce2d1d4270cd41183c0c714cf53cf58036b151cfe40baafa", size = 535825, upload-time = "2026-04-08T17:59:04.904Z" },
+    { url = "https://files.pythonhosted.org/packages/20/37/12c0c74368337ef8d5857801c7c13edbe08b206f66a794473c65a78622d3/netutils-1.19.1-py3-none-any.whl", hash = "sha256:d23eabb46a59c9833d662730e63ca828d033a1c09e1d2a8ee39f1b3f0a9e2b57", size = 565051, upload-time = "2026-08-26T14:40:40.804Z" },
 ]
 
 [[package]]
