@@ -1,7 +1,7 @@
-import json
 from typing import Any
 
 from infrahub_sdk.transforms import InfrahubTransform
+from jinja2 import Environment, FileSystemLoader, Template
 
 from utils.data_cleaning import clean_data
 
@@ -186,9 +186,16 @@ def prepare_gcp_data(lb: dict, vips: list[dict]) -> dict:
 
 class LoadBalancerCloud(InfrahubTransform):
     """
-    Transform to generate terraform.tfvars.json for cloud load balancers.
+    Transform to generate Terraform HCL (.tf) for cloud load balancers.
 
-    Supports multiple cloud providers (AWS, Azure, GCP) using Jinja2 templates.
+    Same "one template per platform" pattern as BaseDeviceTransform._load_template (leaf/spine/tor
+    CLI configs), keyed on cloud provider instead of netmiko_device_type: each cloud gets its own
+    template under templates/configs/loadbalancers_cloud/ shaped like that provider's actual
+    Terraform resources (aws_lb/aws_lb_target_group, azurerm_lb/azurerm_lb_rule,
+    google_compute_backend_service/forwarding_rule). prepare_aws_data/prepare_azure_data/
+    prepare_gcp_data stay pure data-shaping functions (unchanged) — only the final rendering step
+    moved from json.dumps to per-provider Jinja2 templates.
+
     Output is stored as an Infrahub artifact that can be pulled by CI/CD pipelines.
 
     Usage:
@@ -198,7 +205,7 @@ class LoadBalancerCloud(InfrahubTransform):
     query = "loadbalancer_cloud"
 
     async def transform(self, data: Any) -> str:
-        """Generate terraform.tfvars.json content from CloudLoadBalancer data."""
+        """Generate Terraform HCL content from CloudLoadBalancer data."""
         cleaned = clean_data(data)
 
         lbs = cleaned.get("CloudLoadBalancer") or []
@@ -229,5 +236,12 @@ class LoadBalancerCloud(InfrahubTransform):
         else:  # gcp
             config = prepare_gcp_data(lb, vips)
 
-        # Return JSON directly
-        return json.dumps(config, indent=2)
+        template = self._load_template(cloud_provider)
+        return template.render(**config)
+
+    def _load_template(self, name: str) -> Template:
+        """Load the Jinja2 HCL template for the given cloud provider (aws/azure/gcp)."""
+        path = f"{self.root_directory}/templates/configs"
+        env = Environment(loader=FileSystemLoader(path), autoescape=False, keep_trailing_newline=True)
+        env.filters["tf_id"] = lambda value: str(value).replace(".", "_").replace("-", "_")
+        return env.get_template(f"loadbalancers_cloud/{name}.j2")

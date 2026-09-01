@@ -40,6 +40,14 @@ http_access deny !Safe_ports
 http_access deny CONNECT !SSL_ports
 http_access allow localhost manager
 http_access deny manager
+{%- if proxy_rules %}
+
+# --- Application-derived egress rules (from ProxyPolicy/ProxyPolicyRule) ---
+{%- for rule in proxy_rules %}
+acl {{ rule.acl_name }} dstdomain {{ rule.destinations | join(' ') }}
+http_access {{ 'allow' if rule.action in ('allow', 'bypass') else 'deny' }} {{ rule.acl_name }}{% if rule.description %} # {{ rule.description }}{% endif %}
+{%- endfor %}
+{%- endif %}
 http_access allow localnet
 http_access allow localhost
 http_access deny all

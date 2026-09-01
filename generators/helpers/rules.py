@@ -165,6 +165,12 @@ class RulesPlanner(RulePlanningHelper):
         return owner_name or None
 
     @staticmethod
+    def app_name_from_component(component: dict[str, Any]) -> str | None:
+        app = component.get("parent") or {}
+        app_name = str(app.get("name") or "").strip()
+        return app_name or None
+
+    @staticmethod
     def dependency_access_status(dep: dict[str, Any]) -> str:
         raw = str(dep.get("access_status") or "auto").strip().lower()
         if raw in {"auto", "pending", "approved", "denied"}:
@@ -185,13 +191,21 @@ class RulesPlanner(RulePlanningHelper):
         src_owner_org_id = cls.owner_org_id_from_component(src_comp)
         dst_owner_org_id = cls.owner_org_id_from_component(dst_comp)
 
-        if not src_owner_org_id or not dst_owner_org_id:
-            return True, None
-        if src_owner_org_id == dst_owner_org_id:
+        if src_owner_org_id and dst_owner_org_id and src_owner_org_id != dst_owner_org_id:
+            if status != "approved":
+                return False, f"cross-owner flow {src_owner_org_id}->{dst_owner_org_id} requires access_status=approved"
             return True, None
 
-        if status != "approved":
-            return False, f"cross-owner flow {src_owner_org_id}->{dst_owner_org_id} requires access_status=approved"
+        src_app_name = cls.app_name_from_component(src_comp)
+        dst_app_name = cls.app_name_from_component(dst_comp)
+        if src_app_name and dst_app_name and src_app_name != dst_app_name:
+            if status != "approved":
+                return (
+                    False,
+                    f"cross-application flow {src_app_name}->{dst_app_name} requires access_status=approved",
+                )
+            return True, None
+
         return True, None
 
     @classmethod

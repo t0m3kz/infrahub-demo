@@ -29,6 +29,61 @@ query proxy_config($device: String!) {
                 proxy_type { value }
                 proxy_vendor { value }
                 capabilities { edges { node { name { value } } } }
+                shared_policies {
+                  edges {
+                    node {
+                      name { value }
+                      default_action { value }
+                      enabled { value }
+                      rules {
+                        edges {
+                          node {
+                            name { value }
+                            priority { value }
+                            action { value }
+                            destination_type { value }
+                            destination { value }
+                            log { value }
+                            description { value }
+                            disabled { value }
+                            categories { edges { node { name { value } entries { value } } } }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                components {
+                  edges {
+                    node {
+                      name { value }
+                      proxy_policies {
+                        edges {
+                          node {
+                            name { value }
+                            default_action { value }
+                            enabled { value }
+                            rules {
+                              edges {
+                                node {
+                                  name { value }
+                                  priority { value }
+                                  action { value }
+                                  destination_type { value }
+                                  destination { value }
+                                  log { value }
+                                  description { value }
+                                  disabled { value }
+                                  categories { edges { node { name { value } entries { value } } } }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
               }
             }
           }

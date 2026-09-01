@@ -84,10 +84,17 @@ artifact_definitions:
     transformation: proxy
     parameters:
       device: name__value
-  # Cloud Load Balancer Terraform vars
+  - name: proxy_cloud_config
+    artifact_name: proxy-cloud-policy
+    content_type: application/json
+    targets: saas_proxies
+    transformation: proxy-cloud
+    parameters:
+      instance: name__value
+  # Cloud Load Balancer Terraform HCL
   - name: cloud_lb_terraform
     artifact_name: terraform-vars
-    content_type: application/json
+    content_type: text/plain
     targets: cloud_loadbalancers
     transformation: loadbalancer-cloud
     parameters:
@@ -309,6 +316,9 @@ python_transforms:
   - name: proxy
     class_name: Proxy
     file_path: transforms/config/proxy.py
+  - name: proxy-cloud
+    class_name: ProxyCloud
+    file_path: transforms/config/proxy_cloud.py
   - name: edge
     class_name: Edge
     file_path: transforms/config/edge.py
@@ -401,6 +411,8 @@ queries:
     file_path: queries/config/loadbalancer.gql
   - name: proxy_config
     file_path: queries/config/proxy.gql
+  - name: proxy_cloud_config
+    file_path: queries/config/proxy_cloud.gql
   - name: loadbalancer_cloud
     file_path: queries/config/loadbalancer_cloud.gql
   - name: firewall_config

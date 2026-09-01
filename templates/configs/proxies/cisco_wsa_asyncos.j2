@@ -42,6 +42,12 @@ accesspolicies
     protocols http https ftp
     action monitor
   !
+{%- for rule in proxy_rules %}
+  policy {{ rule.acl_name }}
+    url-domain {{ rule.destinations | join(' ') }}
+    action {{ 'allow' if rule.action in ('allow', 'bypass') else 'block' }}
+  !
+{%- endfor %}
   policy block-malware
     url-category malware
     action block

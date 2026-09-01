@@ -10,12 +10,25 @@ fragment AppComponentSecurityFields on AppComponent {
   name { value }
   slug { value }
   component_type { value }
+  fqdn { value }
+  published_via_ztna { value }
+  private_access_service {
+    node {
+      id
+    }
+  }
   load_balancer {
     node {
       id
       ... on ManagedLoadbalancerHA {
         name { value }
       }
+    }
+  }
+  proxy_service {
+    node {
+      id
+      name { value }
     }
   }
   instances {

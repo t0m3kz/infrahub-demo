@@ -38,6 +38,9 @@ inline access-log:
 
 inline policy:
   ; default explicit policy — allow all authenticated users
+{%- for rule in proxy_rules %}
+  {{ 'allow' if rule.action in ('allow', 'bypass') else 'deny' }} url.domain={{ rule.destinations | join(' url.domain=') }}{% if rule.description %} ; {{ rule.description }}{% endif %}
+{%- endfor %}
   allow client.address=10.0.0.0/8
   allow client.address=172.16.0.0/12
   allow client.address=192.168.0.0/16

@@ -2,6 +2,7 @@ from typing import Any
 
 from transforms.common import BaseDeviceTransform
 from transforms.helpers.ha import get_ha
+from transforms.helpers.proxy import collect_component_policies, flatten_proxy_rules, get_proxy_policies, merge_policies
 from utils.data_cleaning import clean_data
 
 
@@ -52,6 +53,11 @@ class Proxy(BaseDeviceTransform):
             None,
         )
 
+        shared_policies_data = (proxy_ha or {}).get("shared_policies") or []
+        component_policies_data = collect_component_policies((proxy_ha or {}).get("components"))
+        policies = get_proxy_policies(merge_policies(shared_policies_data, component_policies_data))
+        proxy_rules = flatten_proxy_rules(policies)
+
         config = self._build_config(device, platform_name)
         config.update(
             {
@@ -59,6 +65,7 @@ class Proxy(BaseDeviceTransform):
                 "ha": ha_config,
                 "proxy_type": (proxy_ha or {}).get("proxy_type", "explicit"),
                 "proxy_vendor": (proxy_ha or {}).get("proxy_vendor", "haproxy"),
+                "proxy_rules": proxy_rules,
             }
         )
 

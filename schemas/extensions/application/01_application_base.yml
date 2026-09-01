@@ -213,6 +213,22 @@ nodes:
           - name: worker
             label: "Worker"
             color: "#777777"
+          - name: external_service
+            label: "External Service"
+            color: "#9E9E9E"
+            description: "Third-party/shared destination outside this application, reached via egress proxy (no network_segment/instances)"  # yamllint disable-line rule:line-length
+      - name: fqdn
+        kind: Text
+        optional: true
+        order_weight: 450
+        description: "FQDN: egress destination (external_service) or ZTNA published address (private_access_service)"  # yamllint disable-line rule:line-length
+      - name: published_via_ztna
+        kind: Boolean
+        optional: true
+        default_value: false
+        order_weight: 452
+        label: "Published via ZTNA"
+        description: "Explicit intent to publish this component for remote access; gates private_access_service auto-resolution"  # yamllint disable-line rule:line-length
     relationships:
       - name: network_segment
         peer: ManagedNetworkSegment
@@ -258,10 +274,42 @@ nodes:
         kind: Attribute
         optional: true
         on_delete: no-action
+        direction: outbound
         identifier: "app_component__proxy_service"
         order_weight: 850
         label: "Egress Proxy"
         description: "Egress proxy — on-prem (ManagedProxyHA) or cloud SASE (ManagedCloudProxy)"
+      - name: proxy_policies
+        peer: ProxyPolicy
+        cardinality: many
+        kind: Attribute
+        optional: true
+        on_delete: no-action
+        identifier: "app_component__proxy_policies"
+        order_weight: 855
+        label: "Egress Proxy Policies"
+        description: "Component-scoped policies layered on top of shared/customer proxy policies; auto-managed from external_service dependencies"  # yamllint disable-line rule:line-length
+      - name: private_access_service
+        peer: ManagedCloudProxy
+        cardinality: one
+        kind: Attribute
+        optional: true
+        on_delete: no-action
+        direction: outbound
+        identifier: "app_component__private_access_service"
+        order_weight: 860
+        label: "Private Access (ZTNA) Broker"
+        description: "ZTNA broker this component is published through for remote access; opposite of proxy_service (egress)"  # yamllint disable-line rule:line-length
+      - name: ztna_allowed_groups
+        peer: SecurityIdentityGroup
+        cardinality: many
+        kind: Attribute
+        optional: true
+        on_delete: no-action
+        identifier: "app_component__ztna_allowed_groups"
+        order_weight: 865
+        label: "ZTNA Allowed Groups"
+        description: "Identity groups permitted to reach this component via private_access_service"
 
 extensions:
   nodes:
@@ -275,6 +323,39 @@ extensions:
           order_weight: 2200
           identifier: "vip_service__app_components"
           description: "Application components exposed by this VIP"
+
+    - kind: ManagedProxyHA
+      relationships:
+        - name: components
+          peer: AppComponent
+          cardinality: many
+          kind: Attribute
+          optional: true
+          direction: inbound
+          order_weight: 2300
+          identifier: "app_component__proxy_service"
+          description: "Application components whose egress is assigned to this proxy"
+
+    - kind: ManagedCloudProxy
+      relationships:
+        - name: components
+          peer: AppComponent
+          cardinality: many
+          kind: Attribute
+          optional: true
+          direction: inbound
+          order_weight: 2300
+          identifier: "app_component__proxy_service"
+          description: "Application components whose egress is assigned to this proxy"
+        - name: published_components
+          peer: AppComponent
+          cardinality: many
+          kind: Attribute
+          optional: true
+          direction: inbound
+          order_weight: 2310
+          identifier: "app_component__private_access_service"
+          description: "Application components published for remote access through this ZTNA broker (service_type=private_access)"  # yamllint disable-line rule:line-length
 
     - kind: OrganizationCustomer
       relationships:

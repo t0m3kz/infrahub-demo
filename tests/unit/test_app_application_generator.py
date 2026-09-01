@@ -798,3 +798,262 @@ class TestComponentRuleGenerator:
         assert index == 110
         assert gen.client.create.call_count == 2
         assert gen._allocate_policy_rule_index.await_count == 1
+
+
+# ===========================================================================
+# TestReconcileZtnaPublishing
+# ===========================================================================
+
+
+def _broker(broker_id: str, owner_id: str | None = None) -> MagicMock:
+    broker = MagicMock()
+    broker.id = broker_id
+    owner = None
+    if owner_id:
+        owner = MagicMock()
+        owner.id = owner_id
+    broker.owner = owner
+    return broker
+
+
+def _ztna_comp(comp_id: str = "comp-1", owner_id: str | None = "cust-1", has_service: bool = False) -> dict:
+    comp: dict = {
+        "id": comp_id,
+        "slug": "checkout-api",
+        "name": "api",
+        "published_via_ztna": True,
+        "parent": {"owner": {"id": owner_id}} if owner_id else {},
+    }
+    if has_service:
+        comp["private_access_service"] = {"id": "existing-broker"}
+    return comp
+
+
+class TestReconcileZtnaPublishing:
+    def _make_gen_ready(self) -> Any:
+        gen = _make_gen()
+        comp_obj = MagicMock()
+        comp_obj.save = AsyncMock()
+        gen.client.get = AsyncMock(return_value=comp_obj)
+        return gen, comp_obj
+
+    def test_no_candidates_skips_filter_lookup(self):
+        gen = _make_gen()
+        gen.client.filters = AsyncMock()
+        asyncio.run(gen._reconcile_ztna_publishing([{"published_via_ztna": False}]))
+        gen.client.filters.assert_not_called()
+
+    def test_component_with_existing_service_is_skipped(self):
+        gen = _make_gen()
+        gen.client.filters = AsyncMock()
+        asyncio.run(gen._reconcile_ztna_publishing([_ztna_comp(has_service=True)]))
+        gen.client.filters.assert_not_called()
+
+    def test_no_brokers_logs_warning_and_skips(self):
+        gen, comp_obj = self._make_gen_ready()
+        gen.client.filters = AsyncMock(return_value=[])
+        asyncio.run(gen._reconcile_ztna_publishing([_ztna_comp()]))
+        gen.logger.warning.assert_called()
+        comp_obj.save.assert_not_called()
+
+    def test_single_shared_broker_is_auto_attached(self):
+        gen, comp_obj = self._make_gen_ready()
+        broker = _broker("broker-shared")
+        gen.client.filters = AsyncMock(return_value=[broker])
+        asyncio.run(gen._reconcile_ztna_publishing([_ztna_comp(owner_id=None)]))
+        assert comp_obj.private_access_service == {"id": "broker-shared"}
+        comp_obj.save.assert_awaited_once()
+
+    def test_tenant_dedicated_broker_preferred_over_shared(self):
+        gen, comp_obj = self._make_gen_ready()
+        shared = _broker("broker-shared")
+        dedicated = _broker("broker-dedicated", owner_id="cust-1")
+        gen.client.filters = AsyncMock(return_value=[shared, dedicated])
+        asyncio.run(gen._reconcile_ztna_publishing([_ztna_comp(owner_id="cust-1")]))
+        assert comp_obj.private_access_service == {"id": "broker-dedicated"}
+
+    def test_multiple_tenant_brokers_is_ambiguous(self):
+        gen, comp_obj = self._make_gen_ready()
+        dedicated_a = _broker("broker-a", owner_id="cust-1")
+        dedicated_b = _broker("broker-b", owner_id="cust-1")
+        gen.client.filters = AsyncMock(return_value=[dedicated_a, dedicated_b])
+        asyncio.run(gen._reconcile_ztna_publishing([_ztna_comp(owner_id="cust-1")]))
+        gen.logger.warning.assert_called()
+        comp_obj.save.assert_not_called()
+
+    def test_multiple_shared_brokers_is_ambiguous_when_no_tenant_match(self):
+        gen, comp_obj = self._make_gen_ready()
+        shared_a = _broker("broker-a")
+        shared_b = _broker("broker-b")
+        gen.client.filters = AsyncMock(return_value=[shared_a, shared_b])
+        asyncio.run(gen._reconcile_ztna_publishing([_ztna_comp(owner_id="cust-1")]))
+        gen.logger.warning.assert_called()
+        comp_obj.save.assert_not_called()
+
+    def test_only_other_tenant_broker_exists_is_no_match(self):
+        gen, comp_obj = self._make_gen_ready()
+        other_tenant_broker = _broker("broker-other", owner_id="cust-2")
+        gen.client.filters = AsyncMock(return_value=[other_tenant_broker])
+        asyncio.run(gen._reconcile_ztna_publishing([_ztna_comp(owner_id="cust-1")]))
+        gen.logger.warning.assert_called()
+        comp_obj.save.assert_not_called()
+
+
+# ===========================================================================
+# TestCrossApplicationAuthorization
+# ===========================================================================
+
+
+class TestCrossApplicationAuthorization:
+    def test_same_owner_different_application_requires_approved_status(self):
+        src_comp = {"parent": {"name": "checkout", "owner": {"org_id": "C001"}}}
+        dst_comp = {"parent": {"name": "authentication", "owner": {"org_id": "C001"}}}
+        dep = {"access_status": "auto"}
+
+        allowed, reason = RulesPlanner.dependency_is_authorized(src_comp=src_comp, dst_comp=dst_comp, dep=dep)
+
+        assert allowed is False
+        assert reason is not None
+        assert "cross-application flow" in reason
+
+    def test_same_owner_different_application_allowed_when_approved(self):
+        src_comp = {"parent": {"name": "checkout", "owner": {"org_id": "C001"}}}
+        dst_comp = {"parent": {"name": "authentication", "owner": {"org_id": "C001"}}}
+        dep = {"access_status": "approved"}
+
+        allowed, reason = RulesPlanner.dependency_is_authorized(src_comp=src_comp, dst_comp=dst_comp, dep=dep)
+
+        assert allowed is True
+        assert reason is None
+
+    def test_same_owner_same_application_is_auto_authorized(self):
+        src_comp = {"parent": {"name": "checkout", "owner": {"org_id": "C001"}}}
+        dst_comp = {"parent": {"name": "checkout", "owner": {"org_id": "C001"}}}
+        dep = {"access_status": "auto"}
+
+        allowed, reason = RulesPlanner.dependency_is_authorized(src_comp=src_comp, dst_comp=dst_comp, dep=dep)
+
+        assert allowed is True
+        assert reason is None
+
+
+# ===========================================================================
+# TestReconcileProxyRule
+# ===========================================================================
+
+
+class TestReconcileProxyRule:
+    @staticmethod
+    def _src_comp(comp_id: str = "comp-src", proxy_id: str = "proxy-1") -> dict:
+        return {
+            "id": comp_id,
+            "slug": "checkout-frontend",
+            "name": "frontend",
+            "component_type": "frontend",
+            "proxy_service": {"id": proxy_id, "name": "shared-cloud-proxy"},
+        }
+
+    @staticmethod
+    def _dst_comp(fqdn: str = "api.stripe.com") -> dict:
+        return {
+            "id": "comp-dst",
+            "slug": "external-services-stripe-api",
+            "name": "stripe-api",
+            "component_type": "external_service",
+            "fqdn": fqdn,
+        }
+
+    def _make_gen_ready(self) -> Any:
+        gen = _make_gen()
+        policy = MagicMock()
+        policy.id = "policy-1"
+        policy.save = AsyncMock()
+        gen._get_or_create_proxy_policy = AsyncMock(return_value=policy)
+        gen._attach_proxy_policy_to_component = AsyncMock()
+        gen._find_existing_proxy_policy_rule = AsyncMock(return_value=None)
+        created_rule = MagicMock()
+        created_rule.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=created_rule)
+        return gen
+
+    def test_creates_policy_rule_for_external_dependency(self):
+        gen = self._make_gen_ready()
+        dep = _dep(name="checkout-to-stripe")
+
+        result = asyncio.run(
+            gen._reconcile_proxy_rule(
+                app_name="checkout",
+                src_comp=self._src_comp(),
+                dep=dep,
+                dst_comp=self._dst_comp(),
+                proxy_policies={},
+            )
+        )
+
+        assert result is True
+        gen._get_or_create_proxy_policy.assert_awaited_once_with("proxy-shared-cloud-proxy-egress")
+        gen._attach_proxy_policy_to_component.assert_awaited_once_with(component_id="comp-src", policy_id="policy-1")
+        rule_data = gen.client.create.call_args.kwargs["data"]
+        assert rule_data["policy"] == {"id": "policy-1"}
+        assert rule_data["action"] == "allow"
+        assert rule_data["destination_type"] == "fqdn"
+        assert rule_data["destination"] == "api.stripe.com"
+
+    def test_components_sharing_proxy_service_share_one_policy(self):
+        gen = self._make_gen_ready()
+        proxy_policies: dict[str, Any] = {}
+
+        asyncio.run(
+            gen._reconcile_proxy_rule(
+                app_name="checkout",
+                src_comp=self._src_comp(comp_id="comp-web"),
+                dep=_dep(name="web-to-stripe"),
+                dst_comp=self._dst_comp("api.stripe.com"),
+                proxy_policies=proxy_policies,
+            )
+        )
+        asyncio.run(
+            gen._reconcile_proxy_rule(
+                app_name="checkout",
+                src_comp=self._src_comp(comp_id="comp-backend"),
+                dep=_dep(name="backend-to-github"),
+                dst_comp=self._dst_comp("api.github.com"),
+                proxy_policies=proxy_policies,
+            )
+        )
+
+        gen._get_or_create_proxy_policy.assert_awaited_once()
+        assert gen._attach_proxy_policy_to_component.await_count == 2
+        assert gen.client.create.call_count == 2
+
+    def test_missing_proxy_service_is_skipped(self):
+        gen = self._make_gen_ready()
+        src_comp = self._src_comp()
+        src_comp["proxy_service"] = {}
+        dep = _dep(name="checkout-to-stripe")
+
+        result = asyncio.run(
+            gen._reconcile_proxy_rule(
+                app_name="checkout", src_comp=src_comp, dep=dep, dst_comp=self._dst_comp(), proxy_policies={}
+            )
+        )
+
+        assert result is False
+        gen.client.create.assert_not_called()
+
+    def test_missing_fqdn_is_skipped(self):
+        gen = self._make_gen_ready()
+        dep = _dep(name="checkout-to-stripe")
+
+        result = asyncio.run(
+            gen._reconcile_proxy_rule(
+                app_name="checkout",
+                src_comp=self._src_comp(),
+                dep=dep,
+                dst_comp=self._dst_comp(fqdn=""),
+                proxy_policies={},
+            )
+        )
+
+        assert result is False
+        gen.client.create.assert_not_called()

@@ -1,0 +1,21 @@
+{#- Zscaler ZIA — URL Filtering Rule tfvars shape for a companion Terraform module
+    (zscaler_url_filtering_rules-style). Verify field names against the zscaler/zia
+    Terraform provider docs before real use. -#}
+{
+  "proxy_name": {{ name | tojson }},
+  "provider": {{ provider | tojson }},
+  "deployment_model": {{ deployment_model | tojson }},
+  "zia_url_filtering_rules": [
+{%- for rule in proxy_rules %}
+    {
+      "name": {{ (rule.name or rule.acl_name) | tojson }},
+      "order": {{ loop.index }},
+      "state": "ENABLED",
+      "action": {{ ('ALLOW' if rule.action in ('allow', 'bypass') else 'BLOCK') | tojson }},
+      "url_categories": {{ (rule.destinations if rule.destination_type == 'category' else []) | tojson }},
+      "destinations": {{ (rule.destinations if rule.destination_type != 'category' else []) | tojson }},
+      "description": {{ (rule.description or '') | tojson }}
+    }{{ "," if not loop.last }}
+{%- endfor %}
+  ]
+}

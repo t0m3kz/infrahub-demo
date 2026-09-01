@@ -59,6 +59,10 @@ frontend http_proxy
     bind *:3128
     mode http
     option httplog
+{%- for rule in proxy_rules %}
+    acl {{ rule.acl_name }} hdr(host) -i {{ rule.destinations | join(' ') }}
+    http-request {{ 'allow' if rule.action in ('allow', 'bypass') else 'deny' }} if {{ rule.acl_name }}{% if rule.description %} # {{ rule.description }}{% endif %}
+{%- endfor %}
     default_backend http_connect
 
 frontend https_proxy
@@ -84,6 +88,10 @@ frontend transparent_http
     bind *:3128 transparent
     mode http
     option httplog
+{%- for rule in proxy_rules %}
+    acl {{ rule.acl_name }} hdr(host) -i {{ rule.destinations | join(' ') }}
+    http-request {{ 'allow' if rule.action in ('allow', 'bypass') else 'deny' }} if {{ rule.acl_name }}{% if rule.description %} # {{ rule.description }}{% endif %}
+{%- endfor %}
     default_backend transparent_backend
 
 backend transparent_backend

@@ -1,0 +1,18 @@
+{#- Netskope NPA (Netskope Private Access) — published-app tfvars shape for a companion
+    Terraform/API integration. Verify field names against Netskope's actual API docs before
+    real use. -#}
+{
+  "proxy_name": {{ name | tojson }},
+  "provider": {{ provider | tojson }},
+  "deployment_model": {{ deployment_model | tojson }},
+  "npa_private_apps": [
+{%- for seg in segments %}
+    {
+      "app_name": {{ seg.name | tojson }},
+      "host": {{ seg.fqdn | tojson }},
+      "protocols": [{% for p in seg.ports %}{"port": {{ p.port }}, "protocol": {{ p.protocol | tojson }}}{{ ", " if not loop.last }}{% endfor %}],
+      "publisher_groups": {{ seg.allowed_groups | tojson }}
+    }{{ "," if not loop.last }}
+{%- endfor %}
+  ]
+}
