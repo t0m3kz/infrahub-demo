@@ -1,0 +1,36 @@
+---
+# Shared external-service catalog — third-party destinations reached via
+# egress proxy. Model each third party ONCE here and point AppDependency
+# edges at it from any consuming application, instead of letting every app
+# define (and drift) its own copy of the same FQDN.
+#
+# Loaded after c001/c002/c003 (folder name sorts last) so 01_dependencies.yml
+# in this folder can reference components from both sides by HFID.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppApplication
+  data:
+    - label: external-services
+      environment: p
+      criticality: medium
+      security_profile: internal_standard
+      fqdn: external-services.shared.demo.local
+      ingress_mode: dns
+      owner: C001
+      member_of_groups:
+        - app_applications
+      children:
+        kind: AppComponent
+        data:
+          - name: stripe-api
+            component_type: external_service
+            fqdn: api.stripe.com
+            member_of_groups:
+              - app_components
+
+          - name: github-api
+            component_type: external_service
+            fqdn: api.github.com
+            member_of_groups:
+              - app_components

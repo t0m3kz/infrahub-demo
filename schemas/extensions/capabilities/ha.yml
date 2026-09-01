@@ -414,6 +414,7 @@ nodes:
       - ManagedSaasService
       - ManagedInlineService
       - ManagedProxyService
+      - CoreArtifactTarget
     uniqueness_constraints:
       - ["name__value"]
     display_label: "{{name__value}}"
@@ -443,18 +444,22 @@ nodes:
         choices:
           - name: zscaler_zia
             label: "Zscaler ZIA"
+            description: "Web gateway product — set service_type=web_gateway"
             color: "#00A3E0"
           - name: zscaler_zpa
             label: "Zscaler ZPA"
+            description: "Private access (ZTNA) product — set service_type=private_access"
             color: "#00A3E0"
           - name: netskope
             label: "Netskope"
+            description: "Sells both NG-SWG (web gateway) and NPA (private access) — service_type disambiguates which one this instance is"  # yamllint disable-line rule:line-length
             color: "#007DC5"
           - name: cloudflare_gateway
             label: "Cloudflare Gateway"
             color: "#F38020"
           - name: palo_prisma
             label: "Palo Alto Prisma Access"
+            description: "Sells both SWG and ZTNA under one product — service_type disambiguates which one this instance is"  # yamllint disable-line rule:line-length
             color: "#FA582D"
           - name: squid
             label: "Squid"
@@ -468,12 +473,38 @@ nodes:
           - name: other
             label: "Other"
             color: "#95A5A6"
+      - name: service_type
+        kind: Dropdown
+        label: "Service Type"
+        description: "Vendor alone can't disambiguate (e.g. Zscaler ZIA vs ZPA) — see AGENTS.md notes for rationale"  # yamllint disable-line rule:line-length
+        optional: false
+        default_value: web_gateway
+        order_weight: 1460
+        choices:
+          - name: web_gateway
+            label: "Web Gateway (SWG)"
+            description: "Egress URL/web filtering — modeled by ProxyPolicy/ProxyPolicyRule"
+            color: "#2ECC71"
+          - name: private_access
+            label: "Private Access (ZTNA)"
+            description: "Inbound app publishing via AppComponent.published_via_ztna"
+            color: "#E74C3C"
       - name: region
         kind: Text
         label: "Cloud Region"
         description: "Cloud region or availability zone (e.g. eu-west-1, westeurope)"
         optional: true
         order_weight: 1500
+    relationships:
+      - name: owner
+        peer: OrganizationCustomer
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloudproxy__owner"
+        order_weight: 1600
+        label: "Dedicated Customer"
+        description: "Customer this broker is dedicated to; unset means shared across all customers"
 
   # ── HA Interface capability ───────────────────────────────────────────────
   - name: HAInterface

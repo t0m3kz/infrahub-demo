@@ -4,14 +4,14 @@ Covers:
 - prepare_aws_data()   — listeners, backend pools, health checks, tags
 - prepare_azure_data() — lb_rules, backend addresses, health probe, tags
 - prepare_gcp_data()   — forwarding rules, backend services, health checks
-- LoadBalancerCloud.transform() — provider detection, JSON output, provider routing
+- LoadBalancerCloud.transform() — provider detection, HCL output, provider routing
 - LoadBalancer.transform()      — VIP extraction from ManagedHA capabilities, members
 """
 
 from __future__ import annotations
 
 import copy
-import json
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -511,7 +511,9 @@ class TestPrepareGcpDataMetadata:
 
 
 def _make_cloud_transform() -> LoadBalancerCloud:
-    return LoadBalancerCloud.__new__(LoadBalancerCloud)
+    transform = LoadBalancerCloud.__new__(LoadBalancerCloud)
+    transform.root_directory = str(Path(__file__).resolve().parents[2])
+    return transform
 
 
 _CLEAN_DATA_PATH = "transforms.config.loadbalancer_cloud.clean_data"
@@ -556,8 +558,7 @@ class TestLoadBalancerCloudProviderDetection:
         transform = _make_cloud_transform()
         with patch(_CLEAN_DATA_PATH, return_value=_cleaned_cloud("oracle")):
             result = await transform.transform({})
-        parsed = json.loads(result)
-        assert "listeners" in parsed
+        assert 'resource "aws_lb"' in result
 
     @pytest.mark.asyncio
     async def test_no_lb_data_raises_value_error(self) -> None:
@@ -569,41 +570,39 @@ class TestLoadBalancerCloudProviderDetection:
 
 class TestLoadBalancerCloudOutputFormat:
     @pytest.mark.asyncio
-    async def test_output_is_valid_json(self) -> None:
+    async def test_output_is_hcl_resource_block(self) -> None:
         transform = _make_cloud_transform()
         with patch(_CLEAN_DATA_PATH, return_value=_cleaned_cloud()):
             result = await transform.transform({})
-        assert isinstance(json.loads(result), dict)
+        assert 'resource "aws_lb"' in result
 
     @pytest.mark.asyncio
     async def test_aws_output_contains_lb_name(self) -> None:
         transform = _make_cloud_transform()
         with patch(_CLEAN_DATA_PATH, return_value=_cleaned_cloud()):
             result = await transform.transform({})
-        assert json.loads(result)["lb_name"] == "test-alb"
+        assert 'name               = "test-alb"' in result
 
     @pytest.mark.asyncio
     async def test_aws_output_contains_listeners(self) -> None:
         transform = _make_cloud_transform()
         with patch(_CLEAN_DATA_PATH, return_value=_cleaned_cloud()):
             result = await transform.transform({})
-        parsed = json.loads(result)
-        assert "listeners" in parsed
-        assert len(parsed["listeners"]) == 1
+        assert 'resource "aws_lb_listener"' in result
 
     @pytest.mark.asyncio
     async def test_azure_output_contains_lb_rules(self) -> None:
         transform = _make_cloud_transform()
         with patch(_CLEAN_DATA_PATH, return_value=_cleaned_cloud("azure")):
             result = await transform.transform({})
-        assert "lb_rules" in json.loads(result)
+        assert 'resource "azurerm_lb_rule"' in result
 
     @pytest.mark.asyncio
     async def test_gcp_output_contains_forwarding_rules(self) -> None:
         transform = _make_cloud_transform()
         with patch(_CLEAN_DATA_PATH, return_value=_cleaned_cloud("gcp")):
             result = await transform.transform({})
-        assert "forwarding_rules" in json.loads(result)
+        assert "forwarding_rule" in result
 
     @pytest.mark.asyncio
     async def test_default_provider_is_aws_when_virtual_network_absent(self) -> None:
@@ -612,7 +611,7 @@ class TestLoadBalancerCloudOutputFormat:
         del cleaned["CloudLoadBalancer"][0]["virtual_network"]
         with patch(_CLEAN_DATA_PATH, return_value=cleaned):
             result = await transform.transform({})
-        assert "listeners" in json.loads(result)
+        assert 'resource "aws_lb_listener"' in result
 
 
 # ===========================================================================

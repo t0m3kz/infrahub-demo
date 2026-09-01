@@ -26,6 +26,7 @@ spec:
           - name: web-frontend
             component_type: frontend
             network_segment: c001-web-frontend-p
+            proxy_service: shared-cloud-proxy
             instances:
               - ktw-pod1-server-1
             service_ports:
@@ -38,6 +39,7 @@ spec:
           - name: app-backend
             component_type: backend
             network_segment: c001-app-backend-p
+            proxy_service: shared-cloud-proxy
             instances:
               - ktw-pod2-server-1
             service_ports:

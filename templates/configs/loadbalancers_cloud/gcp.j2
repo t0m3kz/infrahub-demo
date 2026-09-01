@@ -1,0 +1,49 @@
+{#- Representative Terraform HCL for a GCP load balancer — verify resource arguments
+    against the google Terraform provider docs before real use. -#}
+locals {
+  {{ lb_name | tf_id }}_labels = {
+{%- for key, value in (labels or {}).items() %}
+    {{ key }} = "{{ value }}"
+{%- endfor %}
+  }
+}
+{% for hc in health_checks %}
+resource "google_compute_health_check" "{{ hc.name | tf_id }}" {
+  name = "{{ hc.name }}"
+{%- if hc.protocol in ('HTTP', 'HTTPS') %}
+
+  {{ hc.protocol | lower }}_health_check {
+    port = {{ hc.port }}
+{%- if hc.request_path %}
+    request_path = "{{ hc.request_path }}"
+{%- endif %}
+  }
+{%- endif %}
+
+  check_interval_sec  = {{ hc.check_interval_sec }}
+  timeout_sec         = {{ hc.timeout_sec }}
+  healthy_threshold   = {{ hc.healthy_threshold }}
+  unhealthy_threshold = {{ hc.unhealthy_threshold }}
+}
+{% endfor %}
+{% for svc in backend_services %}
+resource "google_compute_backend_service" "{{ svc.name | tf_id }}" {
+  name             = "{{ svc.name }}"
+  protocol         = "{{ svc.protocol }}"
+  session_affinity = "{{ svc.session_affinity }}"
+  health_checks    = [google_compute_health_check.{{ svc.health_check | tf_id }}.id]
+{%- for target in svc.targets %}
+
+  backend {
+    group = google_compute_instance_group.{{ target.name | tf_id }}.id
+  }
+{%- endfor %}
+}
+{% endfor %}
+{% for rule in forwarding_rules %}
+resource "{{ 'google_compute_global_forwarding_rule' if rule.is_global else 'google_compute_forwarding_rule' }}" "{{ rule.name | tf_id }}" {
+  name       = "{{ rule.name }}"
+  port_range = "{{ rule.port_range }}"
+  target     = google_compute_backend_service.{{ rule.backend_service | tf_id }}.id
+}
+{% endfor %}

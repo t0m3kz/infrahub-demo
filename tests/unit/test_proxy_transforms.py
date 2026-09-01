@@ -380,3 +380,93 @@ class TestProxyTransformProxyTypes:
                 mock_env.return_value.get_template.return_value = mock_template
                 await transform.transform({})
         assert mock_template.render.call_args[1]["proxy_type"] == "reverse"
+
+
+# ===========================================================================
+# Proxy.transform() — proxy_rules (ProxyPolicy/ProxyPolicyRule wiring)
+# ===========================================================================
+
+
+class TestProxyTransformProxyRules:
+    @pytest.mark.asyncio
+    async def test_proxy_rules_empty_when_no_policies(self) -> None:
+        transform = _make_proxy_transform()
+        with patch(_PROXY_CLEAN_DATA_PATH, return_value=_cleaned_device()):
+            with patch("transforms.common.Environment") as mock_env:
+                mock_template = MagicMock()
+                mock_template.render.return_value = ""
+                mock_env.return_value.get_template.return_value = mock_template
+                await transform.transform({})
+        assert mock_template.render.call_args[1]["proxy_rules"] == []
+
+    @pytest.mark.asyncio
+    async def test_shared_policy_rule_flows_into_proxy_rules(self) -> None:
+        transform = _make_proxy_transform()
+        cleaned = _cleaned_device()
+        cleaned["DcimPhysicalDevice"][0]["capabilities"][0]["shared_policies"] = [
+            {
+                "name": "base-egress",
+                "default_action": "block",
+                "enabled": True,
+                "rules": [
+                    {
+                        "name": "allow-stripe",
+                        "priority": 10,
+                        "action": "allow",
+                        "destination_type": "fqdn",
+                        "destination": "api.stripe.com",
+                        "log": False,
+                        "description": "Stripe API",
+                        "disabled": False,
+                    }
+                ],
+            }
+        ]
+        with patch(_PROXY_CLEAN_DATA_PATH, return_value=cleaned):
+            with patch("transforms.common.Environment") as mock_env:
+                mock_template = MagicMock()
+                mock_template.render.return_value = ""
+                mock_env.return_value.get_template.return_value = mock_template
+                await transform.transform({})
+        rules = mock_template.render.call_args[1]["proxy_rules"]
+        assert len(rules) == 1
+        assert rules[0]["destinations"] == ["api.stripe.com"]
+        assert rules[0]["action"] == "allow"
+
+    @pytest.mark.asyncio
+    async def test_component_scoped_policy_flows_into_proxy_rules(self) -> None:
+        transform = _make_proxy_transform()
+        cleaned = _cleaned_device()
+        cleaned["DcimPhysicalDevice"][0]["capabilities"][0]["components"] = [
+            {
+                "name": "web-frontend",
+                "proxy_policies": [
+                    {
+                        "name": "proxy-shared-cloud-proxy-egress",
+                        "default_action": "block",
+                        "enabled": True,
+                        "rules": [
+                            {
+                                "name": "allow-github",
+                                "priority": 20,
+                                "action": "allow",
+                                "destination_type": "fqdn",
+                                "destination": "api.github.com",
+                                "log": False,
+                                "description": "",
+                                "disabled": False,
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
+        with patch(_PROXY_CLEAN_DATA_PATH, return_value=cleaned):
+            with patch("transforms.common.Environment") as mock_env:
+                mock_template = MagicMock()
+                mock_template.render.return_value = ""
+                mock_env.return_value.get_template.return_value = mock_template
+                await transform.transform({})
+        rules = mock_template.render.call_args[1]["proxy_rules"]
+        assert len(rules) == 1
+        assert rules[0]["destinations"] == ["api.github.com"]

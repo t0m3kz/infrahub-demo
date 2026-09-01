@@ -15,6 +15,9 @@ from ..protocols import (
     AppServicePort,
     CloudSecurityGroup,
     CloudSecurityGroupRule,
+    ManagedCloudProxy,
+    ProxyPolicy,
+    ProxyPolicyRule,
     SecurityPolicy,
     SecurityPolicyRule,
     SecuritySecurityProfile,
@@ -170,6 +173,8 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
             self.logger.warning("Application %s has no components - nothing to do", app_name)
             return
 
+        await self._reconcile_ztna_publishing(components)
+
         edges: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]] = []
         warnings: list[str] = []
         if forced_edges:
@@ -194,8 +199,34 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
         rules_created = 0
         rules_skipped = 0
         segment_policies: dict[str, Any] = {}
+        proxy_policies: dict[str, Any] = {}
 
         for src_comp, dep, dst_comp in edges:
+            authorized, auth_reason = planner.dependency_is_authorized(src_comp=src_comp, dst_comp=dst_comp, dep=dep)
+            if not authorized:
+                self.logger.warning(
+                    "  Dependency '%s' (%s -> %s) is not authorized: %s",
+                    dep.get("name", dep.get("id", "?")),
+                    src_comp.get("name", "?"),
+                    dst_comp.get("name", "?"),
+                    auth_reason or "missing approval",
+                )
+                rules_skipped += 1
+                continue
+
+            if dst_comp.get("component_type") == "external_service":
+                if await self._reconcile_proxy_rule(
+                    app_name=app_name,
+                    src_comp=src_comp,
+                    dep=dep,
+                    dst_comp=dst_comp,
+                    proxy_policies=proxy_policies,
+                ):
+                    rules_created += 1
+                else:
+                    rules_skipped += 1
+                continue
+
             src_seg = src_comp.get("network_segment") or {}
             dst_seg = dst_comp.get("network_segment") or {}
 
@@ -209,18 +240,6 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
                     src_comp.get("name", "?"),
                     dst_comp.get("name", "?"),
                 )
-                continue
-
-            authorized, auth_reason = planner.dependency_is_authorized(src_comp=src_comp, dst_comp=dst_comp, dep=dep)
-            if not authorized:
-                self.logger.warning(
-                    "  Dependency '%s' (%s -> %s) is not authorized: %s",
-                    dep.get("name", dep.get("id", "?")),
-                    src_comp.get("name", "?"),
-                    dst_comp.get("name", "?"),
-                    auth_reason or "missing approval",
-                )
-                rules_skipped += 1
                 continue
 
             policy = segment_policies.get(src_seg_id)
@@ -514,6 +533,205 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
         except Exception as exc:
             self.logger.error("Failed to create policy %s: %s", policy_name, exc)
             return None
+
+    async def _reconcile_ztna_publishing(self, components: list[dict[str, Any]]) -> None:
+        """Auto-resolve private_access_service for components with published_via_ztna=true.
+
+        published_via_ztna is the explicit, safe trigger (never inferred from fqdn alone — see
+        AppComponent.published_via_ztna). Broker resolution prefers a private_access broker
+        dedicated to the component's owner (ManagedCloudProxy.owner) over a shared one, and only
+        auto-attaches when exactly one candidate matches at whichever tier resolves; otherwise
+        logs and leaves it for a human to set private_access_service explicitly.
+        """
+        candidates = [
+            comp
+            for comp in components
+            if comp.get("published_via_ztna") and not (comp.get("private_access_service") or {}).get("id")
+        ]
+        if not candidates:
+            return
+
+        try:
+            brokers = await self.client.filters(
+                kind=ManagedCloudProxy, service_type__value="private_access", include=["owner"]
+            )
+        except Exception as exc:
+            self.logger.warning("Could not look up private_access ManagedCloudProxy brokers: %s", exc)
+            return
+
+        if not brokers:
+            for comp in candidates:
+                self.logger.warning(
+                    "  Component '%s' has published_via_ztna=true but no private_access ManagedCloudProxy exists yet",  # noqa: E501
+                    comp.get("slug") or comp.get("name", "?"),
+                )
+            return
+
+        shared_brokers = [b for b in brokers if not self._broker_owner_id(b)]
+
+        for comp in candidates:
+            label = comp.get("slug") or comp.get("name", "?")
+            owner_id = ((comp.get("parent") or {}).get("owner") or {}).get("id")
+
+            tenant_matches = [b for b in brokers if owner_id and self._broker_owner_id(b) == owner_id]
+            if len(tenant_matches) == 1:
+                broker = tenant_matches[0]
+            elif len(tenant_matches) > 1:
+                self.logger.warning(
+                    "  Component '%s': multiple private_access brokers dedicated to its owner - "
+                    "set private_access_service explicitly to disambiguate",
+                    label,
+                )
+                continue
+            elif len(shared_brokers) == 1:
+                broker = shared_brokers[0]
+            elif len(shared_brokers) > 1:
+                self.logger.warning(
+                    "  Component '%s' has published_via_ztna=true but multiple shared private_access brokers "
+                    "exist - set private_access_service explicitly to disambiguate",
+                    label,
+                )
+                continue
+            else:
+                self.logger.warning(
+                    "  Component '%s' has published_via_ztna=true but no matching private_access broker "
+                    "(dedicated or shared) was found",
+                    label,
+                )
+                continue
+
+            comp_id = comp.get("id")
+            if not comp_id:
+                continue
+            try:
+                comp_obj = await self.client.get(kind=AppComponentKind, id=comp_id)
+                setattr(comp_obj, "private_access_service", {"id": broker.id})
+                await comp_obj.save(allow_upsert=True)
+                self.logger.info("  Auto-resolved private_access_service for component '%s'", label)
+            except Exception as exc:
+                self.logger.error("  Failed to auto-resolve private_access_service for %s: %s", comp_id, exc)
+
+    @staticmethod
+    def _broker_owner_id(broker: Any) -> str | None:
+        owner_rel = getattr(broker, "owner", None)
+        return getattr(owner_rel, "id", None)
+
+    async def _reconcile_proxy_rule(
+        self,
+        app_name: str,
+        src_comp: dict[str, Any],
+        dep: dict[str, Any],
+        dst_comp: dict[str, Any],
+        proxy_policies: dict[str, Any],
+    ) -> bool:
+        """Turn an external_service dependency edge into a ProxyPolicy(Rule) keyed by proxy_service.
+
+        Mirrors segment_policies in _reconcile_application_rules: components sharing the same
+        proxy_service share one auto-generated ProxyPolicy instead of one per component.
+        """
+        planner = RulesPlanner()
+        dep_ref = dep.get("name", dep.get("id", "?"))
+        src_label = src_comp.get("slug") or src_comp.get("name") or "?"
+
+        proxy_service = src_comp.get("proxy_service") or {}
+        proxy_id = proxy_service.get("id")
+        if not proxy_id:
+            self.logger.warning(
+                "  Dependency '%s' targets external service but source '%s' has no proxy_service assigned - skipping",
+                dep_ref,
+                src_label,
+            )
+            return False
+
+        external_fqdn = str(dst_comp.get("fqdn") or "").strip()
+        if not external_fqdn:
+            self.logger.warning(
+                "  Dependency '%s': external component '%s' has no fqdn - skipping",
+                dep_ref,
+                dst_comp.get("slug") or dst_comp.get("name") or "?",
+            )
+            return False
+
+        policy = proxy_policies.get(proxy_id)
+        if policy is None:
+            proxy_name = str(proxy_service.get("name") or proxy_id)
+            policy_name = f"proxy-{proxy_name}-egress"
+            policy = await self._get_or_create_proxy_policy(policy_name)
+            if policy is None:
+                return False
+            proxy_policies[proxy_id] = policy
+
+        await self._attach_proxy_policy_to_component(component_id=src_comp.get("id"), policy_id=policy.id)
+
+        rule_name = planner.rule_name(app_name, src_comp, dst_comp)
+        rule_data: dict[str, Any] = {
+            "policy": {"id": policy.id},
+            "name": rule_name,
+            "action": "allow",
+            "destination_type": "fqdn",
+            "destination": external_fqdn,
+            "description": planner.rule_description(dep, src_comp, dst_comp),
+        }
+
+        existing_rule = await self._find_existing_proxy_policy_rule(policy_id=policy.id, rule_name=rule_name)
+        try:
+            if existing_rule is not None:
+                rule_data["id"] = existing_rule.id
+            rule = await self.client.create(kind=ProxyPolicyRule, data=rule_data)
+            await rule.save(allow_upsert=True)
+            self.logger.info("  Reconciled ProxyPolicyRule '%s' (-> %s)", rule_name, external_fqdn)
+            return True
+        except Exception as exc:
+            self.logger.error("  Failed to reconcile ProxyPolicyRule '%s': %s", rule_name, exc)
+            return False
+
+    async def _get_or_create_proxy_policy(self, policy_name: str) -> Any | None:
+        try:
+            existing = await self.client.filters(kind=ProxyPolicy, name__value=policy_name)
+            if existing:
+                await existing[0].save(allow_upsert=True)
+                return existing[0]
+        except Exception as exc:
+            self.logger.warning("Could not look up proxy policy %s: %s", policy_name, exc)
+
+        try:
+            policy = await self.client.create(
+                kind=ProxyPolicy,
+                data={
+                    "name": policy_name,
+                    "description": f"Auto-generated egress rules for {policy_name.removesuffix('-egress')}",
+                    "policy_type": "customer",
+                    "default_action": "block",
+                    "enabled": True,
+                },
+            )
+            await policy.save(allow_upsert=True)
+            self.logger.info("Created proxy policy: %s", policy_name)
+            return policy
+        except Exception as exc:
+            self.logger.error("Failed to create proxy policy %s: %s", policy_name, exc)
+            return None
+
+    async def _find_existing_proxy_policy_rule(self, policy_id: str, rule_name: str) -> Any | None:
+        existing_rules = await self.client.filters(kind=ProxyPolicyRule, policy__ids=[policy_id])
+        for rule in existing_rules:
+            if getattr(rule, "name", None) and rule.name.value == rule_name:
+                return rule
+        return None
+
+    async def _attach_proxy_policy_to_component(self, component_id: str | None, policy_id: str) -> None:
+        if not component_id:
+            return
+        try:
+            component_obj = await self.client.get(kind=AppComponentKind, id=component_id)
+            policies_rel = getattr(component_obj, "proxy_policies")
+            await policies_rel.fetch()
+            existing_policy_ids = {peer.id for peer in policies_rel.peers}
+            if policy_id not in existing_policy_ids:
+                await self._safe_rel_add(policies_rel, {"id": policy_id})
+                await component_obj.save(allow_upsert=True)
+        except Exception as exc:
+            self.logger.warning("  Could not attach proxy policy to component %s: %s", component_id, exc)
 
     @staticmethod
     def _segment_policy_name(segment: dict[str, Any]) -> str:

@@ -1,0 +1,19 @@
+{#- Netskope NG-SWG — real-time web policy tfvars shape for a companion Terraform/API
+    integration. Verify field names against Netskope's actual API/provider docs before
+    real use. -#}
+{
+  "proxy_name": {{ name | tojson }},
+  "provider": {{ provider | tojson }},
+  "deployment_model": {{ deployment_model | tojson }},
+  "netskope_web_policies": [
+{%- for rule in proxy_rules %}
+    {
+      "name": {{ (rule.name or rule.acl_name) | tojson }},
+      "rule_order": {{ loop.index }},
+      "action": {{ ('allow' if rule.action in ('allow', 'bypass') else 'block') | tojson }},
+      "domains": {{ rule.destinations | tojson }},
+      "description": {{ (rule.description or '') | tojson }}
+    }{{ "," if not loop.last }}
+{%- endfor %}
+  ]
+}
