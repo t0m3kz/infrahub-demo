@@ -1,0 +1,38 @@
+---
+# Approved customer request example. The request generator materializes this
+# into AppApplication/AppComponent/AppEndpoint/AppDependency objects, while
+# the existing application generator creates the enforcement rules.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppDeploymentRequest
+  data:
+    - name: c001-checkout-request
+      description: "Checkout application with payment gateway access"
+      application_fqdn: checkout.c001.demo.local
+      environment: production
+      criticality: high
+      security_profile: internet_exposed
+      status: approved
+      customer: C001
+      components:
+        - kind: AppDeploymentRequestComponent
+          data:
+            name: frontend
+            component_type: frontend
+            replicas: 2
+            endpoints:
+              - kind: AppDeploymentRequestEndpoint
+                data:
+                  name: checkout-web
+                  endpoint_type: private_access
+                  fqdn: checkout.internal.c001.demo.local
+                  protocol: tcp
+                  port: 443
+              - kind: AppDeploymentRequestEndpoint
+                data:
+                  name: payment-gateway
+                  endpoint_type: external_service
+                  fqdn: api.paymentgw.example.com
+                  protocol: tcp
+                  port: 443

@@ -281,6 +281,12 @@ check_definitions:
   - name: validate_segment_placement
     class_name: CheckSegmentPlacement
     file_path: checks/segment_placement.py
+  - name: validate_application_deployment_request
+    class_name: CheckApplicationDeploymentRequest
+    file_path: checks/application_request.py
+    targets: app_deployment_requests
+    parameters:
+      name: name__value
 
 python_transforms:
   - name: topology_cabling
@@ -427,6 +433,8 @@ queries:
     file_path: queries/topology/add/virt_cluster_capacity.gql
   - name: application
     file_path: queries/topology/add/application.gql
+  - name: application_request
+    file_path: queries/topology/add/application_request.gql
   - name: vxlan_segment_data
     file_path: queries/topology/add/vxlan_segment.gql
   - name: loadbalancer_vip_data
@@ -441,6 +449,8 @@ queries:
     file_path: queries/validation/capability_guard.gql
   - name: segment_placement
     file_path: queries/validation/segment_placement.gql
+  - name: application_request_validation
+    file_path: queries/validation/application_request.gql
   - name: loadbalancer_validation
     file_path: queries/validation/lb.gql
   - name: proxy_validation
@@ -598,6 +608,15 @@ generator_definitions:
     targets: app_applications
     query: application
     class_name: AppApplicationGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_application_deployment_request
+    file_path: generators/topology/application_request.py
+    targets: app_deployment_requests
+    query: application_request
+    class_name: AppDeploymentRequestGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:
