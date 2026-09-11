@@ -72,21 +72,23 @@ query proxy_cloud_config($instance: String!) {
                           children {
                             edges {
                               node {
-                                name { value }
-                                endpoint_type { value }
-                                fqdn { value }
-                                service_ports {
-                                  edges {
-                                    node {
-                                      port { value }
-                                      port_end { value }
-                                      protocol { value }
+                                ... on AppEndpoint {
+                                  name { value }
+                                  endpoint_type { value }
+                                  fqdn { value }
+                                  service_ports {
+                                    edges {
+                                      node {
+                                        port { value }
+                                        port_end { value }
+                                        protocol { value }
+                                      }
                                     }
                                   }
-                                }
-                                access_profile {
-                                  node {
-                                    allowed_groups { edges { node { name { value } } } }
+                                  access_profile {
+                                    node {
+                                      allowed_groups { edges { node { name { value } } } }
+                                    }
                                   }
                                 }
                               }
