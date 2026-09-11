@@ -90,6 +90,8 @@ spec:
       description: Load balancer VIP services — generator target for LoadbalancerBackendNexthopGenerator
     - name: app_applications
       description: Application instances — generator target for AppApplicationGenerator
+    - name: app_deployment_requests
+      description: Customer application deployment requests — generator target for AppDeploymentRequestGenerator
     - name: app_components
       description: Application component instances
     - name: app_dependencies

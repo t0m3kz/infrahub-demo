@@ -50,7 +50,7 @@ spec:
     - namespace: Topology
       name: CustomerMenu
       label: Customer Deployments
-      icon: "mdi:account-network-outline"
+      icon: "mdi:account-cog-outline"
       kind: TopologyCustomer
 
     # ──────────────────────────────────────────────────────────────────────────
@@ -423,3 +423,8 @@ spec:
       label: Applications
       kind: AppApplication
       icon: "mdi:application"
+    - namespace: App
+      name: ApplicationRequestsMenu
+      label: Application Requests
+      kind: AppDeploymentRequest
+      icon: "mdi:clipboard-text-outline"

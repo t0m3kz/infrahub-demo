@@ -1,0 +1,10 @@
+---
+# Assign the customer-owned enforcement services used by the request generator.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: OrganizationCustomer
+  data:
+    - org_id: C001
+      egress_service: c001-web-gateway
+      private_access_service: c001-private-access
