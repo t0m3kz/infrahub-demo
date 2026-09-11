@@ -58,6 +58,8 @@ nodes:
     label: Application Endpoint
     icon: "mdi:connection"
     include_in_menu: false
+    inherit_from:
+      - AppGeneric
     parent: AppComponent
     children: ""
     human_friendly_id:

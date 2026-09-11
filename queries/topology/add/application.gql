@@ -153,12 +153,14 @@ fragment AppDependencySecurityFields on AppDependency {
   target {
     node {
       id
-      name { value }
-      endpoint_type { value }
-      fqdn { value }
-      parent {
-        node {
-          ...AppComponentSecurityFields
+      ... on AppEndpoint {
+        name { value }
+        endpoint_type { value }
+        fqdn { value }
+        parent {
+          node {
+            ...AppComponentSecurityFields
+          }
         }
       }
     }
