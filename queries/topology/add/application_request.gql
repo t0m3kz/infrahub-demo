@@ -25,24 +25,6 @@ fragment AppDeploymentRequestComponentFields on AppDeploymentRequestComponent {
   name { value }
   component_type { value }
   replicas { value }
-  parent {
-    node {
-      ... on AppDeploymentRequest {
-        name { value }
-        application_fqdn { value }
-        environment { value }
-        criticality { value }
-        security_profile { value }
-        customer {
-          node {
-            id
-            org_id { value }
-            name { value }
-          }
-        }
-      }
-    }
-  }
   endpoints {
     edges {
       node {
