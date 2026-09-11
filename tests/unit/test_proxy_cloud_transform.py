@@ -31,8 +31,8 @@ def _cleaned_proxy(
     provider: str = "zscaler_zia",
     service_type: str = "web_gateway",
     shared_policies: list[dict] | None = None,
-    components: list[dict] | None = None,
-    published_components: list[dict] | None = None,
+    egress_customers: list[dict] | None = None,
+    private_access_customers: list[dict] | None = None,
 ) -> dict:
     return {
         "ManagedCloudProxy": [
@@ -42,8 +42,8 @@ def _cleaned_proxy(
                 "service_type": service_type,
                 "deployment_model": "vendor_sase",
                 "shared_policies": shared_policies or [],
-                "components": components or [],
-                "published_components": published_components or [],
+                "egress_customers": egress_customers or [],
+                "private_access_customers": private_access_customers or [],
             }
         ]
     }
@@ -81,25 +81,37 @@ class TestProxyCloudTransform:
             _CLEAN_DATA_PATH,
             return_value=_cleaned_proxy(provider=provider, service_type="private_access"),
         ):
-            with pytest.raises(ValueError, match="publishes no components"):
+            with pytest.raises(ValueError, match="no private-access endpoints"):
                 await transform.transform({})
 
     @pytest.mark.asyncio
     async def test_zscaler_zpa_renders_application_segments(self) -> None:
         transform = _make_transform()
-        published = [
+        private_access_customers = [
             {
-                "name": "api",
-                "slug": "checkout-api",
-                "fqdn": "checkout-api.internal.example.com",
-                "service_ports": [{"port": 443, "port_end": None, "protocol": "tcp"}],
-                "ztna_allowed_groups": [{"name": "engineering"}],
+                "applications": [
+                    {
+                        "children": [
+                            {
+                                "children": [
+                                    {
+                                        "name": "checkout-api",
+                                        "endpoint_type": "private_access",
+                                        "fqdn": "checkout-api.internal.example.com",
+                                        "service_ports": [{"port": 443, "port_end": None, "protocol": "tcp"}],
+                                        "access_profile": {"allowed_groups": [{"name": "engineering"}]},
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
             }
         ]
         with patch(
             _CLEAN_DATA_PATH,
             return_value=_cleaned_proxy(
-                provider="zscaler_zpa", service_type="private_access", published_components=published
+                provider="zscaler_zpa", service_type="private_access", private_access_customers=private_access_customers
             ),
         ):
             result = await transform.transform({})
@@ -112,19 +124,30 @@ class TestProxyCloudTransform:
     @pytest.mark.asyncio
     async def test_netskope_private_access_renders_npa_shape(self) -> None:
         transform = _make_transform()
-        published = [
+        private_access_customers = [
             {
-                "name": "api",
-                "slug": "checkout-api",
-                "fqdn": "checkout-api.internal.example.com",
-                "service_ports": [{"port": 443, "port_end": None, "protocol": "tcp"}],
-                "ztna_allowed_groups": [],
+                "applications": [
+                    {
+                        "children": [
+                            {
+                                "children": [
+                                    {
+                                        "name": "checkout-api",
+                                        "endpoint_type": "private_access",
+                                        "fqdn": "checkout-api.internal.example.com",
+                                        "service_ports": [{"port": 443, "port_end": None, "protocol": "tcp"}],
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
             }
         ]
         with patch(
             _CLEAN_DATA_PATH,
             return_value=_cleaned_proxy(
-                provider="netskope", service_type="private_access", published_components=published
+                provider="netskope", service_type="private_access", private_access_customers=private_access_customers
             ),
         ):
             result = await transform.transform({})
@@ -134,11 +157,31 @@ class TestProxyCloudTransform:
     @pytest.mark.asyncio
     async def test_unmapped_ztna_provider_falls_back_to_generic_shape(self) -> None:
         transform = _make_transform()
-        published = [{"name": "api", "fqdn": "api.internal.example.com"}]
+        private_access_customers = [
+            {
+                "applications": [
+                    {
+                        "children": [
+                            {
+                                "children": [
+                                    {
+                                        "name": "api",
+                                        "endpoint_type": "private_access",
+                                        "fqdn": "api.internal.example.com",
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
         with patch(
             _CLEAN_DATA_PATH,
             return_value=_cleaned_proxy(
-                provider="cloudflare_gateway", service_type="private_access", published_components=published
+                provider="cloudflare_gateway",
+                service_type="private_access",
+                private_access_customers=private_access_customers,
             ),
         ):
             result = await transform.transform({})
@@ -199,10 +242,9 @@ class TestProxyCloudTransform:
         assert payload["url_filtering_rules"][0]["destinations"] == ["api.stripe.com"]
 
     @pytest.mark.asyncio
-    async def test_component_scoped_rule_included(self) -> None:
-        components = [
+    async def test_customer_scoped_rule_included(self) -> None:
+        egress_customers = [
             {
-                "name": "web-frontend",
                 "proxy_policies": [
                     {
                         "name": "proxy-shared-cloud-proxy-egress",
@@ -225,7 +267,9 @@ class TestProxyCloudTransform:
             }
         ]
         transform = _make_transform()
-        with patch(_CLEAN_DATA_PATH, return_value=_cleaned_proxy(provider="zscaler_zia", components=components)):
+        with patch(
+            _CLEAN_DATA_PATH, return_value=_cleaned_proxy(provider="zscaler_zia", egress_customers=egress_customers)
+        ):
             result = await transform.transform({})
         payload = json.loads(result)
         rule = payload["zia_url_filtering_rules"][0]

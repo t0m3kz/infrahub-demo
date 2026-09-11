@@ -2,7 +2,7 @@ from typing import Any
 
 from transforms.common import BaseDeviceTransform
 from transforms.helpers.ha import get_ha
-from transforms.helpers.proxy import collect_component_policies, flatten_proxy_rules, get_proxy_policies, merge_policies
+from transforms.helpers.proxy import flatten_proxy_rules, get_proxy_policies, merge_policies
 from utils.data_cleaning import clean_data
 
 
@@ -54,8 +54,12 @@ class Proxy(BaseDeviceTransform):
         )
 
         shared_policies_data = (proxy_ha or {}).get("shared_policies") or []
-        component_policies_data = collect_component_policies((proxy_ha or {}).get("components"))
-        policies = get_proxy_policies(merge_policies(shared_policies_data, component_policies_data))
+        customer_policies = [
+            policy
+            for customer in (proxy_ha or {}).get("customers") or []
+            for policy in customer.get("proxy_policies") or []
+        ]
+        policies = get_proxy_policies(merge_policies(shared_policies_data, customer_policies))
         proxy_rules = flatten_proxy_rules(policies)
 
         config = self._build_config(device, platform_name)

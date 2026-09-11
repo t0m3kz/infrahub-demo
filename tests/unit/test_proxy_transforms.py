@@ -434,12 +434,12 @@ class TestProxyTransformProxyRules:
         assert rules[0]["action"] == "allow"
 
     @pytest.mark.asyncio
-    async def test_component_scoped_policy_flows_into_proxy_rules(self) -> None:
+    async def test_customer_scoped_policy_flows_into_proxy_rules(self) -> None:
         transform = _make_proxy_transform()
         cleaned = _cleaned_device()
-        cleaned["DcimPhysicalDevice"][0]["capabilities"][0]["components"] = [
+        cleaned["DcimPhysicalDevice"][0]["capabilities"][0]["customers"] = [
             {
-                "name": "web-frontend",
+                "name": "customer-a",
                 "proxy_policies": [
                     {
                         "name": "proxy-shared-cloud-proxy-egress",

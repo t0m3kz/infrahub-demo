@@ -2,7 +2,7 @@
 version: "1.0"
 
 # ============================================================================
-# AppDependency — directional edge between two AppComponents
+# AppDependency — directional edge from an AppComponent to an AppEndpoint
 #
 # Replaces the bare depends_on relationship (AppComponent → AppComponent) with
 # a proper intermediary node so that port, port range, and protocol can be
@@ -15,7 +15,7 @@ version: "1.0"
 nodes:
   - name: Dependency
     namespace: App
-    description: "Directional dependency edge between two application components"
+    description: "Directional dependency from component to endpoint"
     label: "App Dependency"
     icon: "mdi:arrow-right-bold-circle-outline"
     include_in_menu: false
@@ -110,9 +110,9 @@ nodes:
         identifier: "app_dependency__source"
         order_weight: 200
       - name: target
-        peer: AppComponent
-        label: "Target Component"
-        description: "Component that receives the connection"
+        peer: AppEndpoint
+        label: "Target Endpoint"
+        description: "Endpoint that receives the connection"
         cardinality: one
         kind: Attribute
         optional: false

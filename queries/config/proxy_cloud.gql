@@ -30,10 +30,9 @@ query proxy_cloud_config($instance: String!) {
             }
           }
         }
-        components {
+        egress_customers {
           edges {
             node {
-              name { value }
               proxy_policies {
                 edges {
                   node {
@@ -61,25 +60,41 @@ query proxy_cloud_config($instance: String!) {
             }
           }
         }
-        published_components {
+        private_access_customers {
           edges {
             node {
-              name { value }
-              slug { value }
-              fqdn { value }
-              service_ports {
+              applications {
                 edges {
                   node {
-                    port { value }
-                    port_end { value }
-                    protocol { value }
-                  }
-                }
-              }
-              ztna_allowed_groups {
-                edges {
-                  node {
-                    name { value }
+                    children {
+                      edges {
+                        node {
+                          children {
+                            edges {
+                              node {
+                                name { value }
+                                endpoint_type { value }
+                                fqdn { value }
+                                service_ports {
+                                  edges {
+                                    node {
+                                      port { value }
+                                      port_end { value }
+                                      protocol { value }
+                                    }
+                                  }
+                                }
+                                access_profile {
+                                  node {
+                                    allowed_groups { edges { node { name { value } } } }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               }

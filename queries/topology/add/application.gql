@@ -10,25 +10,12 @@ fragment AppComponentSecurityFields on AppComponent {
   name { value }
   slug { value }
   component_type { value }
-  fqdn { value }
-  published_via_ztna { value }
-  private_access_service {
-    node {
-      id
-    }
-  }
   load_balancer {
     node {
       id
       ... on ManagedLoadbalancerHA {
         name { value }
       }
-    }
-  }
-  proxy_service {
-    node {
-      id
-      name { value }
     }
   }
   instances {
@@ -52,14 +39,39 @@ fragment AppComponentSecurityFields on AppComponent {
       }
     }
   }
-  service_ports {
+  children {
     edges {
       node {
         id
-        name { value }
-        port { value }
-        port_end { value }
-        protocol { value }
+        ... on AppEndpoint {
+          name { value }
+          endpoint_type { value }
+          fqdn { value }
+          service_ports {
+            edges {
+              node {
+                id
+                name { value }
+                port { value }
+                port_end { value }
+                protocol { value }
+              }
+            }
+          }
+          access_profile {
+            node {
+              id
+              allowed_groups {
+                edges {
+                  node {
+                    id
+                    name { value }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -73,6 +85,18 @@ fragment AppComponentSecurityFields on AppComponent {
             id
             org_id { value }
             name { value }
+            egress_service {
+              node {
+                id
+                name { value }
+              }
+            }
+            private_access_service {
+              node {
+                id
+                name { value }
+              }
+            }
           }
         }
       }
@@ -128,7 +152,15 @@ fragment AppDependencySecurityFields on AppDependency {
   }
   target {
     node {
-      ...AppComponentSecurityFields
+      id
+      name { value }
+      endpoint_type { value }
+      fqdn { value }
+      parent {
+        node {
+          ...AppComponentSecurityFields
+        }
+      }
     }
   }
 }
