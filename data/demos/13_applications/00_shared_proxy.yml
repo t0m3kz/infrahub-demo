@@ -1,7 +1,5 @@
 ---
-# Shared SASE egress proxy referenced by AppComponent.proxy_service across
-# multiple applications/customers. Defined first (sorts before c001/c002/c003)
-# so components in those folders can reference it by HFID.
+# Shared SASE egress proxy assigned to customers rather than components.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -13,3 +11,12 @@ spec:
       service_type: web_gateway
       member_of_groups:
         - saas_proxies
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: OrganizationCustomer
+  data:
+    - org_id: "C001"
+      egress_service: shared-cloud-proxy

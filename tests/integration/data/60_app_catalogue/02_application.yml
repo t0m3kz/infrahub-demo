@@ -1,0 +1,57 @@
+---
+# Minimal self-contained app: one real component (frontend) that both depends on
+# an external service (egress proxy generation) and is published via a ZTNA
+# endpoint, plus one external_service endpoint.
+# (payment-gateway). No network_segment on either component — deliberately
+# skips firewall-rule generation (needs DC/segment infra) to keep this scenario
+# independent of the DC deployment test chain.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppApplication
+  data:
+    - label: checkout
+      environment: p
+      criticality: high
+      security_profile: internet_exposed
+      fqdn: checkout.it001.demo.local
+      ingress_mode: dns
+      owner: "IT001"
+      member_of_groups:
+        - app_applications
+      children:
+        kind: AppComponent
+        data:
+          - name: frontend
+            component_type: frontend
+            children:
+              kind: AppEndpoint
+              data:
+                - name: it001-checkout-frontend-private
+                  endpoint_type: private_access
+                  fqdn: frontend.internal.it001.demo.local
+                  service_ports:
+                    data:
+                      - port: 443
+                        protocol: tcp
+                  access_profile:
+                    kind: SecurityAccessProfile
+                    data:
+                      name: it001-engineering
+                      allowed_groups:
+                        - kind: SecurityIdentityGroup
+                          data:
+                            name: engineering
+            member_of_groups:
+              - app_components
+
+          - name: payment-gateway
+            component_type: external_service
+            children:
+              kind: AppEndpoint
+              data:
+                - name: it001-payment-gateway-external
+                  endpoint_type: external_service
+                  fqdn: api.paymentgw.example.com
+            member_of_groups:
+              - app_components

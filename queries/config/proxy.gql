@@ -53,10 +53,9 @@ query proxy_config($device: String!) {
                     }
                   }
                 }
-                components {
+                customers {
                   edges {
                     node {
-                      name { value }
                       proxy_policies {
                         edges {
                           node {

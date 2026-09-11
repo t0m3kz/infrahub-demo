@@ -1,26 +1,14 @@
 """Proxy policy helpers for device/service transforms.
 
 Mirrors get_zone_policies() (transforms/helpers/firewall.py) but for
-ProxyPolicy/ProxyPolicyRule — normalizes a mix of shared (proxy-level) and
-component-derived (AppComponent.proxy_policies) policies into a flat,
-render-ready rule list. Category-type rules expand ProxyURLCategory.entries
+ProxyPolicy/ProxyPolicyRule — normalizes proxy-level and customer-owned policies
+into a flat, render-ready rule list. Category-type rules expand ProxyURLCategory.entries
 into a flat destination list so templates never need to know about categories.
 """
 
 from __future__ import annotations
 
 from typing import Any
-
-
-def collect_component_policies(components: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
-    """Flatten proxy_policies from a list of AppComponent dicts, deduped by name."""
-    seen: dict[str, dict[str, Any]] = {}
-    for comp in components or []:
-        for policy in comp.get("proxy_policies") or []:
-            name = policy.get("name") or policy.get("id")
-            if name and name not in seen:
-                seen[name] = policy
-    return list(seen.values())
 
 
 def merge_policies(*policy_lists: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
@@ -120,12 +108,8 @@ def flatten_proxy_rules(policies: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return flat
 
 
-def get_published_segments(components: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
-    """Build a render-ready ZTNA application-segment list from published AppComponent dicts.
-
-    Only components with a non-empty fqdn are included — fqdn is what marks a
-    component as actually published for private access (private_access_service alone isn't
-    enough; the operator must also set the FQDN clients will use).
+def get_private_access_segments(customers: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    """Build ZTNA segments from customers assigned to this private-access service.
 
     Returns:
         [{"name": "checkout-api", "fqdn": "checkout-api.internal.example.com",
@@ -133,33 +117,39 @@ def get_published_segments(components: list[dict[str, Any]] | None) -> list[dict
           "allowed_groups": ["engineering"]}]
     """
     segments: list[dict[str, Any]] = []
-    for comp in components or []:
-        fqdn = str(comp.get("fqdn") or "").strip()
-        if not fqdn:
-            continue
+    for customer in customers or []:
+        for application in customer.get("applications") or []:
+            for component in application.get("children") or []:
+                for endpoint in component.get("children") or []:
+                    if endpoint.get("endpoint_type") != "private_access":
+                        continue
+                    fqdn = str(endpoint.get("fqdn") or "").strip()
+                    if not fqdn:
+                        continue
 
-        ports: list[dict[str, Any]] = []
-        for service_port in comp.get("service_ports") or []:
-            port = service_port.get("port")
-            if port is None:
-                continue
-            ports.append(
-                {
-                    "port": port,
-                    "port_end": service_port.get("port_end"),
-                    "protocol": service_port.get("protocol") or "tcp",
-                }
-            )
+                    ports: list[dict[str, Any]] = []
+                    for service_port in endpoint.get("service_ports") or []:
+                        port = service_port.get("port")
+                        if port is None:
+                            continue
+                        ports.append(
+                            {
+                                "port": port,
+                                "port_end": service_port.get("port_end"),
+                                "protocol": service_port.get("protocol") or "tcp",
+                            }
+                        )
 
-        allowed_groups = [g.get("name") for g in (comp.get("ztna_allowed_groups") or []) if g.get("name")]
-
-        segments.append(
-            {
-                "name": comp.get("slug") or comp.get("name") or fqdn,
-                "fqdn": fqdn,
-                "ports": ports,
-                "allowed_groups": allowed_groups,
-            }
-        )
-
+                    access_profile = endpoint.get("access_profile") or {}
+                    allowed_groups = [
+                        group.get("name") for group in access_profile.get("allowed_groups") or [] if group.get("name")
+                    ]
+                    segments.append(
+                        {
+                            "name": endpoint.get("name") or fqdn,
+                            "fqdn": fqdn,
+                            "ports": ports,
+                            "allowed_groups": allowed_groups,
+                        }
+                    )
     return segments

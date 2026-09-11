@@ -28,10 +28,16 @@ spec:
             network_segment: c002-web-frontend-p
             instances:
               - ktw-pod1-server-1
-            service_ports:
+            children:
+              kind: AppEndpoint
               data:
-                - port: 443
-                  protocol: tcp
+                - name: c002-dispatch-web-https
+                  endpoint_type: internal_service
+                  fqdn: web.dispatch-hub.c002.demo.local
+                  service_ports:
+                    data:
+                      - port: 443
+                        protocol: tcp
             member_of_groups:
               - app_components
 
@@ -40,10 +46,16 @@ spec:
             network_segment: c002-app-backend-p
             instances:
               - ktw-pod2-server-1
-            service_ports:
+            children:
+              kind: AppEndpoint
               data:
-                - port: 8443
-                  protocol: tcp
+                - name: c002-dispatch-backend-https
+                  endpoint_type: internal_service
+                  fqdn: backend.dispatch-hub.c002.demo.local
+                  service_ports:
+                    data:
+                      - port: 8443
+                        protocol: tcp
             member_of_groups:
               - app_components
 
@@ -52,11 +64,17 @@ spec:
             network_segment: c002-database-p
             instances:
               - ktw-pod3-server-4
-            service_ports:
+            children:
+              kind: AppEndpoint
               data:
-                - port: 5432
-                  protocol: tcp
-                - port: 6379
-                  protocol: tcp
+                - name: c002-dispatch-data
+                  endpoint_type: internal_service
+                  fqdn: data.dispatch-hub.c002.demo.local
+                  service_ports:
+                    data:
+                      - port: 5432
+                        protocol: tcp
+                      - port: 6379
+                        protocol: tcp
             member_of_groups:
               - app_components

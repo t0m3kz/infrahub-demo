@@ -518,7 +518,6 @@ class AppComponent(AppGeneric):
     instances: RelationshipManager[AppInstance]
     load_balancer: RelationshipAttribute[ManagedLoadbalancerHA]
     network_segment: RelationshipAttribute[ManagedNetworkSegment]
-    proxy_service: RelationshipAttribute[ManagedProxyService]
 
 
 class ManagedConferencingService(ManagedSaasService):

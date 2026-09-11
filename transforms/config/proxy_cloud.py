@@ -3,7 +3,7 @@
 Same "one template per platform" pattern as BaseDeviceTransform._load_template (leaf/spine/tor/
 proxy CLI configs), just keyed on `provider` instead of netmiko_device_type: each vendor gets its
 own template shaped like that vendor's actual Terraform module/API would expect. The underlying
-data (get_proxy_policies/flatten_proxy_rules for egress; get_published_segments for private
+data (get_proxy_policies/flatten_proxy_rules for egress; get_private_access_segments for private
 access) is vendor-independent and shared by every template — only the rendering differs per
 vendor.
 
@@ -12,7 +12,7 @@ Netskope, Palo Alto Prisma Access) sell both a web-gateway product and an unrela
 private-access/ZTNA product under the same brand:
   - web_gateway: ProxyPolicy/ProxyPolicyRule (egress URL filtering) -> templates/configs/
     proxies_cloud/{zscaler_zia,cloudflare_gateway,netskope,generic}.j2
-  - private_access: AppComponent.private_access_service/fqdn/ztna_allowed_groups
+    - private_access: customer private_access_service and AppEndpoint access profiles
     (published application segments) -> templates/configs/proxies_cloud/
     {zscaler_zpa,netskope_npa,generic_ztna}.j2
 See schemas/extensions/capabilities/ha.yml's CloudProxy.service_type for the full rationale.
@@ -29,10 +29,9 @@ from infrahub_sdk.transforms import InfrahubTransform
 from jinja2 import Environment, FileSystemLoader, Template
 
 from transforms.helpers.proxy import (
-    collect_component_policies,
     flatten_proxy_rules,
+    get_private_access_segments,
     get_proxy_policies,
-    get_published_segments,
     merge_policies,
 )
 from utils.data_cleaning import clean_data
@@ -57,7 +56,7 @@ _DEFAULT_ZTNA_TEMPLATE = "generic_ztna"
 
 
 class ProxyCloud(InfrahubTransform):
-    """Transform ManagedCloudProxy + its ProxyPolicy/published-segment data into a JSON payload."""
+    """Transform ManagedCloudProxy policy and private-access endpoint data into JSON."""
 
     query = "proxy_cloud_config"
 
@@ -78,8 +77,12 @@ class ProxyCloud(InfrahubTransform):
 
     def _render_web_gateway(self, proxy: dict[str, Any], provider: str) -> str:
         shared_policies_data = proxy.get("shared_policies") or []
-        component_policies_data = collect_component_policies(proxy.get("components"))
-        policies = get_proxy_policies(merge_policies(shared_policies_data, component_policies_data))
+        customer_policies = [
+            policy
+            for customer in proxy.get("egress_customers") or []
+            for policy in customer.get("proxy_policies") or []
+        ]
+        policies = get_proxy_policies(merge_policies(shared_policies_data, customer_policies))
         rules = flatten_proxy_rules(policies)
 
         template = self._load_template(_PROVIDER_TEMPLATES.get(provider, _DEFAULT_TEMPLATE))
@@ -91,12 +94,11 @@ class ProxyCloud(InfrahubTransform):
         )
 
     def _render_private_access(self, proxy: dict[str, Any], provider: str) -> str:
-        segments = get_published_segments(proxy.get("published_components"))
+        segments = get_private_access_segments(proxy.get("private_access_customers"))
         if not segments:
             raise ValueError(
                 f"ManagedCloudProxy '{proxy.get('name')}' has service_type=private_access but "
-                "publishes no components — set AppComponent.private_access_service and "
-                "fqdn on at least one component before generating this artifact."
+                "has no private-access endpoints for its assigned customers."
             )
 
         template = self._load_template(_ZTNA_PROVIDER_TEMPLATES.get(provider, _DEFAULT_ZTNA_TEMPLATE))

@@ -29,10 +29,16 @@ spec:
             network_segment: c003-web-frontend-p
             instances:
               - ktw-pod1-server-2
-            service_ports:
+            children:
+              kind: AppEndpoint
               data:
-                - port: 443
-                  protocol: tcp
+                - name: c003-ledger-web-https
+                  endpoint_type: internal_service
+                  fqdn: web.custody-ledger.c003.demo.local
+                  service_ports:
+                    data:
+                      - port: 443
+                        protocol: tcp
             member_of_groups:
               - app_components
 
@@ -41,10 +47,16 @@ spec:
             network_segment: c003-app-backend-p
             instances:
               - ktw-pod2-server-2
-            service_ports:
+            children:
+              kind: AppEndpoint
               data:
-                - port: 8443
-                  protocol: tcp
+                - name: c003-ledger-backend-https
+                  endpoint_type: internal_service
+                  fqdn: backend.custody-ledger.c003.demo.local
+                  service_ports:
+                    data:
+                      - port: 8443
+                        protocol: tcp
             member_of_groups:
               - app_components
 
@@ -53,10 +65,16 @@ spec:
             network_segment: c003-database-p
             instances:
               - ktw-pod3-server-5
-            service_ports:
+            children:
+              kind: AppEndpoint
               data:
-                - port: 5432
-                  protocol: tcp
+                - name: c003-ledger-db-postgres
+                  endpoint_type: internal_service
+                  fqdn: db.custody-ledger.c003.demo.local
+                  service_ports:
+                    data:
+                      - port: 5432
+                        protocol: tcp
             member_of_groups:
               - app_components
 
@@ -65,10 +83,16 @@ spec:
             network_segment: c003-cache-p
             instances:
               - ktw-pod3-server-6
-            service_ports:
+            children:
+              kind: AppEndpoint
               data:
-                - port: 6379
-                  protocol: tcp
+                - name: c003-ledger-cache
+                  endpoint_type: internal_service
+                  fqdn: cache.custody-ledger.c003.demo.local
+                  service_ports:
+                    data:
+                      - port: 6379
+                        protocol: tcp
             member_of_groups:
               - app_components
 
@@ -77,12 +101,18 @@ spec:
             network_segment: c003-message-queue-p
             instances:
               - ktw-pod1-server-2
-            service_ports:
+            children:
+              kind: AppEndpoint
               data:
-                - port: 5672
-                  protocol: tcp
-                - port: 15672
-                  port_end: 15673
-                  protocol: tcp
+                - name: c003-ledger-queue
+                  endpoint_type: internal_service
+                  fqdn: queue.custody-ledger.c003.demo.local
+                  service_ports:
+                    data:
+                      - port: 5672
+                        protocol: tcp
+                      - port: 15672
+                        port_end: 15673
+                        protocol: tcp
             member_of_groups:
               - app_components

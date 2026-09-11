@@ -1,8 +1,7 @@
 """Unit tests for transforms/helpers/proxy.py.
 
 Covers:
-- collect_component_policies() — flatten + dedupe proxy_policies from components
-- merge_policies()             — dedupe across shared + component-derived lists
+- merge_policies()             — dedupe across shared + customer-owned lists
 - get_proxy_policies()         — ProxyPolicy/ProxyPolicyRule -> render-ready shape,
                                   category expansion, disabled/enabled filtering
 - flatten_proxy_rules()        — global ordering + unique acl_name assignment
@@ -11,10 +10,9 @@ Covers:
 from __future__ import annotations
 
 from transforms.helpers.proxy import (
-    collect_component_policies,
     flatten_proxy_rules,
+    get_private_access_segments,
     get_proxy_policies,
-    get_published_segments,
     merge_policies,
 )
 
@@ -43,33 +41,6 @@ def _category_rule(name: str, priority: int, categories: list[dict], action: str
         "description": "",
         "disabled": False,
     }
-
-
-class TestCollectComponentPolicies:
-    def test_flattens_policies_from_multiple_components(self) -> None:
-        components = [
-            {"name": "web", "proxy_policies": [{"name": "policy-a"}]},
-            {"name": "backend", "proxy_policies": [{"name": "policy-b"}]},
-        ]
-        result = collect_component_policies(components)
-        names = {p["name"] for p in result}
-        assert names == {"policy-a", "policy-b"}
-
-    def test_dedupes_shared_policy_across_components(self) -> None:
-        components = [
-            {"name": "web", "proxy_policies": [{"name": "shared-policy"}]},
-            {"name": "backend", "proxy_policies": [{"name": "shared-policy"}]},
-        ]
-        result = collect_component_policies(components)
-        assert len(result) == 1
-
-    def test_empty_input_returns_empty_list(self) -> None:
-        assert collect_component_policies(None) == []
-        assert collect_component_policies([]) == []
-
-    def test_component_without_policies_is_skipped(self) -> None:
-        components = [{"name": "db"}]
-        assert collect_component_policies(components) == []
 
 
 class TestMergePolicies:
@@ -209,36 +180,37 @@ class TestFlattenProxyRules:
         assert flatten_proxy_rules([]) == []
 
 
-class TestGetPublishedSegments:
-    def test_component_without_fqdn_is_skipped(self) -> None:
-        components = [{"name": "db", "slug": "app-db", "service_ports": [], "ztna_allowed_groups": []}]
-        assert get_published_segments(components) == []
-
-    def test_component_with_fqdn_is_included(self) -> None:
-        components = [
+class TestGetPrivateAccessSegments:
+    def test_private_access_endpoint_is_included(self) -> None:
+        customers = [
             {
-                "name": "api",
-                "slug": "checkout-api",
-                "fqdn": "checkout-api.internal.example.com",
-                "service_ports": [{"port": 443, "port_end": None, "protocol": "tcp"}],
-                "ztna_allowed_groups": [{"name": "engineering"}],
+                "applications": [
+                    {
+                        "children": [
+                            {
+                                "children": [
+                                    {
+                                        "name": "checkout-api",
+                                        "endpoint_type": "private_access",
+                                        "fqdn": "checkout-api.internal.example.com",
+                                        "service_ports": [{"port": 443, "port_end": None, "protocol": "tcp"}],
+                                        "access_profile": {"allowed_groups": [{"name": "engineering"}]},
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
             }
         ]
-        result = get_published_segments(components)
+        result = get_private_access_segments(customers)
         assert len(result) == 1
         assert result[0]["name"] == "checkout-api"
         assert result[0]["fqdn"] == "checkout-api.internal.example.com"
         assert result[0]["ports"] == [{"port": 443, "port_end": None, "protocol": "tcp"}]
         assert result[0]["allowed_groups"] == ["engineering"]
 
-    def test_falls_back_to_name_when_no_slug(self) -> None:
-        components = [{"name": "api", "fqdn": "api.internal.example.com"}]
-        assert get_published_segments(components)[0]["name"] == "api"
-
-    def test_no_allowed_groups_returns_empty_list(self) -> None:
-        components = [{"name": "api", "fqdn": "api.internal.example.com"}]
-        assert get_published_segments(components)[0]["allowed_groups"] == []
-
-    def test_empty_input_returns_empty_list(self) -> None:
-        assert get_published_segments(None) == []
-        assert get_published_segments([]) == []
+    def test_non_private_endpoint_and_empty_input_are_skipped(self) -> None:
+        customers = [{"applications": [{"children": [{"children": [{"endpoint_type": "internal_service"}]}]}]}]
+        assert get_private_access_segments(customers) == []
+        assert get_private_access_segments(None) == []

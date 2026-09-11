@@ -25,12 +25,22 @@ spec:
         data:
           - name: stripe-api
             component_type: external_service
-            fqdn: api.stripe.com
+            children:
+              kind: AppEndpoint
+              data:
+                - name: stripe-api-external
+                  endpoint_type: external_service
+                  fqdn: api.stripe.com
             member_of_groups:
               - app_components
 
           - name: github-api
             component_type: external_service
-            fqdn: api.github.com
+            children:
+              kind: AppEndpoint
+              data:
+                - name: github-api-external
+                  endpoint_type: external_service
+                  fqdn: api.github.com
             member_of_groups:
               - app_components
