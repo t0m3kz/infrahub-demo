@@ -39,7 +39,22 @@ query application_request_validation($name: String!) {
               access_status { value }
               approved_by { node { id } }
               target { node { id } }
-              existing_target { node { id parent { node { parent { node { parent { node { owner { node { id } } } } } } } } } }
+              existing_target {
+                node {
+                  id
+                  parent {
+                    node {
+                      parent {
+                        node {
+                          ... on AppApplication {
+                            owner { node { id } }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         }
