@@ -2,19 +2,26 @@
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
+  kind: AppDeploymentRequestDependency
+  data:
+    - name: c001-checkout-to-payment-gateway
+      source: checkout-frontend
+      target: payment-gateway
+      protocol: tcp
+      port_start: 443
+      access_status: approved
+      approved_by: C001
+      decision_reason: "Payment authorization is required by checkout"
+      business_justification: "Checkout must authorize payments through the approved payment gateway"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
   kind: AppDeploymentRequest
   data:
     - name: c001-checkout-request
       application_fqdn: checkout.c001.demo.local
       customer: C001
       dependencies:
-        data:
-          - name: c001-checkout-to-payment-gateway
-            source: checkout-frontend
-            target: payment-gateway
-            protocol: tcp
-            port_start: 443
-            access_status: approved
-            approved_by: C001
-            decision_reason: "Payment authorization is required by checkout"
-            business_justification: "Checkout must authorize payments through the approved payment gateway"
+        - c001-checkout-to-payment-gateway
