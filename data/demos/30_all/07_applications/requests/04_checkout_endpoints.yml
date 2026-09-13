@@ -1,0 +1,19 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppDeploymentRequestEndpoint
+  data:
+    - name: checkout-web
+      endpoint_type: private_access
+      fqdn: checkout.internal.c001.demo.local
+      protocol: tcp
+      port: 443
+      access_profile: c001-private-access-standard
+      parent: checkout-frontend
+    - name: payment-gateway
+      endpoint_type: external_service
+      fqdn: api.paymentgw.example.com
+      protocol: tcp
+      port: 443
+      parent: checkout-frontend

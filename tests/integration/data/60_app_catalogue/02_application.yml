@@ -24,6 +24,7 @@ spec:
         data:
           - name: frontend
             component_type: frontend
+            network_segment: it001-checkout-frontend-p
             children:
               kind: AppEndpoint
               data:
@@ -53,5 +54,21 @@ spec:
                 - name: it001-payment-gateway-external
                   endpoint_type: external_service
                   fqdn: api.paymentgw.example.com
+            member_of_groups:
+              - app_components
+
+          - name: backend
+            component_type: backend
+            network_segment: it001-checkout-backend-p
+            children:
+              kind: AppEndpoint
+              data:
+                - name: it001-checkout-backend-internal
+                  endpoint_type: internal_service
+                  fqdn: backend.internal.it001.demo.local
+                  service_ports:
+                    data:
+                      - port: 8443
+                        protocol: tcp
             member_of_groups:
               - app_components

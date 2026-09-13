@@ -245,6 +245,15 @@ nodes:
         default_value: 1
         order_weight: 300
     relationships:
+      - name: network_segment
+        peer: ManagedNetworkSegment
+        cardinality: one
+        kind: Attribute
+        optional: true
+        on_delete: no-action
+        identifier: "request_component__network_segment"
+        order_weight: 900
+        label: Network Segment
       - name: endpoints
         peer: AppDeploymentRequestEndpoint
         cardinality: many

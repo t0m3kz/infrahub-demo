@@ -18,11 +18,8 @@ spec:
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: OrganizationCustomer
+  kind: ManagedCloudProxy
   data:
-    - org_id: "IT001"
-      egress_service: it001-web-gateway
-      private_access_service: it001-ztna-broker
     - name: it001-ztna-broker
       description: "IT001 private access broker"
       provider: zscaler_zpa
@@ -30,3 +27,13 @@ spec:
       owner: "IT001"
       member_of_groups:
         - saas_proxies
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: OrganizationCustomer
+  data:
+    - name: "IT001 Test Customer"
+      org_id: "IT001"
+      egress_service: it001-web-gateway
+      private_access_service: it001-ztna-broker

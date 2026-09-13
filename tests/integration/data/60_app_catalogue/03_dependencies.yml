@@ -14,3 +14,11 @@ spec:
       port_start: 443
       access_status: auto
       description: "Checkout frontend calls the payment gateway"
+
+    - name: it001-checkout-p-frontend-to-backend
+      source: it001-checkout-p-frontend
+      target: it001-checkout-backend-internal
+      protocol: tcp
+      port_start: 8443
+      access_status: auto
+      description: "Checkout frontend calls the internal backend API"
