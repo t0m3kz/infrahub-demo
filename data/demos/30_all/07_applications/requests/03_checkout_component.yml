@@ -8,3 +8,15 @@ spec:
       component_type: frontend
       replicas: 2
       parent: c001-checkout-request
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppDeploymentRequest
+  data:
+    - name: c001-checkout-request
+      application_fqdn: checkout.c001.demo.local
+      customer: C001
+      components:
+        - checkout-frontend
