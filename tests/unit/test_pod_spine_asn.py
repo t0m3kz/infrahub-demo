@@ -123,3 +123,28 @@ class TestEnsurePodSpineAs:
         desc1 = gen1.client.filters.call_args.kwargs["description__value"]
         desc2 = gen2.client.filters.call_args.kwargs["description__value"]
         assert desc1 != desc2
+
+
+class TestSuperSpineOverlayReadiness:
+    @pytest.mark.asyncio
+    async def test_requires_an_overlay_process_for_each_super_spine(self) -> None:
+        gen = _make_generator()
+        first = MagicMock()
+        first.process_role.value = "overlay"
+        first.capabilities.peers = [MagicMock(display_label="ss-dc1101")]
+        second = MagicMock()
+        second.process_role.value = "overlay"
+        second.capabilities.peers = [MagicMock(display_label="ss-dc1102")]
+        gen.client.filters = AsyncMock(return_value=[first, second])
+
+        assert await gen._super_spine_overlay_ready(["ss-dc1101", "ss-dc1102"])
+
+    @pytest.mark.asyncio
+    async def test_rejects_missing_super_spine_overlay_process(self) -> None:
+        gen = _make_generator()
+        process = MagicMock()
+        process.process_role.value = "overlay"
+        process.capabilities.peers = [MagicMock(display_label="ss-dc1101")]
+        gen.client.filters = AsyncMock(return_value=[process])
+
+        assert not await gen._super_spine_overlay_ready(["ss-dc1101", "ss-dc1102"])

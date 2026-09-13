@@ -17,7 +17,7 @@ from ..helpers.routing import underlay_is_dual_stack, underlay_is_ipv6
 from ..helpers.template_interfaces import template_interface_names_by_role
 from ..pod_config import resolve_pod_layout, spine_slot_role, spine_slot_templates, templates_by_role
 from ..pools import PoolMixin
-from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, RoutingAutonomousSystem, TopologyPod
+from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, ManagedBGP, RoutingAutonomousSystem, TopologyPod
 from ..routing import RoutingMixin
 
 _SIBLING_SPINE_MAX_RETRIES = 10
@@ -318,6 +318,13 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
             else []
         )
 
+        if super_spine_devices and not await self._super_spine_overlay_ready(super_spine_devices):
+            self.logger.info(
+                "Pod %s: deferring bootstrap until parent DC super-spine overlay BGP is ready",
+                pod_name,
+            )
+            return
+
         # Pre-seed spine eBGP processes before cabling exists so parallel rack generators
         # find them and don't try to create duplicates.
         # OSPF_IBGP is excluded: spine overlay BGP needs overlay_as_id (resolved inside
@@ -462,6 +469,21 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
         # add_pod run (including each pod during a bulk multi-DC load) would fire
         # its own concurrent dc_pod_cascade re-run against the same DC-level pools/
         # ASN pool, racing the DC's own already-in-flight bootstrap.
+
+    async def _super_spine_overlay_ready(self, super_spine_devices: list[str]) -> bool:
+        """Return whether every parent super-spine has its overlay BGP process."""
+        processes = await self.client.filters(
+            kind=ManagedBGP,
+            capabilities__name__values=super_spine_devices,
+            include=["capabilities"],
+            prefetch_relationships=True,
+        )
+        overlay_devices = {
+            process.capabilities.peers[0].display_label
+            for process in processes
+            if process.process_role.value == "overlay" and len(process.capabilities.peers) == 1
+        }
+        return set(super_spine_devices).issubset(overlay_devices)
 
     async def _generate_pod_scoped_border_services(self, *, spines: list[str]) -> None:
         """Create this pod's own firewall/load-balancer and cable them to this
