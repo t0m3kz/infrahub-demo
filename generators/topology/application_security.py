@@ -571,7 +571,7 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
             )
             return False
 
-        owner_id = str(owner.get("id") or owner.get("org_id") or "")
+        owner_id = str(owner.get("org_id") or owner.get("id") or "")
         if not owner_id:
             self.logger.warning("  Dependency '%s' source '%s' has no owner identifier - skipping", dep_ref, src_label)
             return False
