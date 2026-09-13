@@ -32,7 +32,7 @@ DATA_PATH = "tests/integration/data/60_app_catalogue"
 APP_NAME = "it001-checkout-p"
 BROKER_NAME = "it001-ztna-broker"
 PROXY_POLICY_NAME = "proxy-IT001-it001-web-gateway-egress"
-SEGMENT_POLICY_NAME = "seg-it001-checkout-frontend-p-egress"
+SEGMENT_POLICY_NAME = "seg-checkout-frontend-p-egress"
 
 
 class TestAppCatalogue(TestInfrahubDockerWithClient):

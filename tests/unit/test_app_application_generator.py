@@ -898,8 +898,8 @@ class TestReconcileProxyRule:
         )
 
         assert result is True
-        gen._get_or_create_proxy_policy.assert_awaited_once_with("proxy-customer-1-shared-cloud-proxy-egress")
-        gen._attach_proxy_policy_to_owner.assert_awaited_once_with(owner_id="customer-1", policy_id="policy-1")
+        gen._get_or_create_proxy_policy.assert_awaited_once_with("proxy-C001-shared-cloud-proxy-egress")
+        gen._attach_proxy_policy_to_owner.assert_awaited_once_with(owner_id="C001", policy_id="policy-1")
         rule_data = gen.client.create.call_args.kwargs["data"]
         assert rule_data["policy"] == {"id": "policy-1"}
         assert rule_data["action"] == "allow"
