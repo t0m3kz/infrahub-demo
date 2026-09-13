@@ -89,7 +89,7 @@ class AppDeploymentRequestGenerator(CommonGenerator):
             kind="AppApplication",
             data={
                 "label": label,
-                "environment": request.get("environment", "production"),
+                "environment": self._application_environment(request.get("environment")),
                 "criticality": request.get("criticality", "medium"),
                 "security_profile": request.get("security_profile", "internal_standard"),
                 "fqdn": request.get("application_fqdn"),
@@ -100,6 +100,16 @@ class AppDeploymentRequestGenerator(CommonGenerator):
         )
         await application.save(allow_upsert=True)
         return application
+
+    @staticmethod
+    def _application_environment(value: Any) -> str:
+        """Translate request lifecycle labels to catalogue environment keys."""
+        environments = {
+            "production": "p",
+            "staging": "s",
+            "development": "d",
+        }
+        return environments.get(str(value or "production").lower(), "p")
 
     async def _get_or_create_component(self, request_component: dict[str, Any], application_id: str) -> Any | None:
         name = str(request_component.get("name") or "").strip()
