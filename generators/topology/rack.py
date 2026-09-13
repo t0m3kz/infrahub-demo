@@ -10,7 +10,7 @@ from ..devices import DeviceMixin
 from ..helpers.rack import RackPlanner, RackRolesHelper, parse_rack_data
 from ..pod_config import pod_profile
 from ..pools import PoolMixin
-from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
+from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack, ManagedBGP
 from ..rack import (
     MUTUALLY_EXCLUSIVE_ROLE_GROUPS,
     ROLES_BY_DEPLOYMENT_TYPE,
@@ -522,6 +522,21 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
                 top_role=top_role,
             )
 
+    async def _spine_underlay_ready(self, spine_names: list[str]) -> bool:
+        """Return whether every parent POD spine has its underlay BGP process."""
+        processes = await self.client.filters(
+            kind=ManagedBGP,
+            capabilities__name__values=spine_names,
+            include=["capabilities"],
+            prefetch_relationships=True,
+        )
+        underlay_devices = {
+            process.capabilities.peers[0].display_label
+            for process in processes
+            if process.process_role.value == "underlay" and len(process.capabilities.peers) == 1
+        }
+        return set(spine_names).issubset(underlay_devices)
+
     async def generate(self, data: dict) -> None:
         """Generate rack topology with special handling for OOB and console devices."""
         if not data:
@@ -551,6 +566,13 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
                     return
 
         pod = self.data["pod"]
+        spine_names = [device["name"] for device in pod.get("devices", [])]
+        if spine_names and not await self._spine_underlay_ready(spine_names):
+            self.logger.info(
+                "Rack %s: deferring bootstrap until parent POD spine underlay BGP is ready",
+                self.data["name"],
+            )
+            return
         deployment_type = pod["deployment_type"]
 
         # Merge the grandparent DC's own pre-fetched, role-bucketed controller
