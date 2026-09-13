@@ -17,3 +17,16 @@ spec:
       protocol: tcp
       port: 443
       parent: checkout-frontend
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppDeploymentRequestComponent
+  data:
+    - name: checkout-frontend
+      component_type: frontend
+      parent: c001-checkout-request
+      endpoints:
+        - checkout-web
+        - payment-gateway
