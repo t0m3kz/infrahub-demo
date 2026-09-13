@@ -1,0 +1,20 @@
+---
+# Typed service endpoints for the firewall-path proof. The source and target
+# components already live on different C005 segments in 01_application.yml.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppEndpoint
+  data:
+    - name: web-frontend-api
+      endpoint_type: internal_service
+      fqdn: api.payment-core.c005.demo.local
+      parent: c005-payment-core-p-web-frontend
+    - name: app-backend-api
+      endpoint_type: internal_service
+      fqdn: backend.payment-core.c005.demo.local
+      service_ports:
+        data:
+          - port: 8443
+            protocol: tcp
+      parent: c005-payment-core-p-app-backend

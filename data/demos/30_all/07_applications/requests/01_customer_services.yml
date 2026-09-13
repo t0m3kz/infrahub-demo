@@ -5,6 +5,7 @@ kind: Object
 spec:
   kind: OrganizationCustomer
   data:
-    - org_id: C001
+    - name: "Nordix Ltd."
+      org_id: C001
       egress_service: c001-web-gateway
       private_access_service: c001-private-access

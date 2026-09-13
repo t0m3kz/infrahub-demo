@@ -1,0 +1,16 @@
+---
+# Internal firewall-path proof: web-frontend reaches app-backend on TCP/8443.
+# The source/target components use different network segments, so the
+# application generator must create a SecurityPolicyRule between them.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppDependency
+  data:
+    - name: c005-payment-web-to-backend
+      source: c005-payment-core-p-web-frontend
+      target: app-backend-api
+      protocol: tcp
+      port_start: 8443
+      access_status: auto
+      description: "Payment web frontend calls the internal backend API"

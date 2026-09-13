@@ -32,6 +32,7 @@ DATA_PATH = "tests/integration/data/60_app_catalogue"
 APP_NAME = "it001-checkout-p"
 BROKER_NAME = "it001-ztna-broker"
 PROXY_POLICY_NAME = "proxy-IT001-it001-web-gateway-egress"
+SEGMENT_POLICY_NAME = "seg-it001-checkout-frontend-p-egress"
 
 
 class TestAppCatalogue(TestInfrahubDockerWithClient):
@@ -183,3 +184,35 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
         assert action_value == "allow", f"Expected action 'allow' for the payment-gateway rule, got '{action_value}'"
 
         logging.info("ProxyPolicyRule correctly generated for the external_service dependency")
+
+    @pytest.mark.order(405)
+    @pytest.mark.dependency(
+        scope="session", name="app_catalogue_verify_firewall_policy", depends=["app_catalogue_no_failures"]
+    )
+    @pytest.mark.asyncio
+    async def test_06_verify_firewall_policy_rule(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """Verify the internal endpoint dependency produced a firewall rule."""
+        logging.info("=== %s - Step 6: Verify Firewall Policy Rule ===", SCENARIO_NAME)
+
+        client = async_client_main
+        client.default_branch = scenario_branch
+
+        policy = await client.get(kind="SecurityPolicy", name__value=SEGMENT_POLICY_NAME)
+        assert policy, f"SecurityPolicy '{SEGMENT_POLICY_NAME}' not found — firewall rule was not generated"
+
+        rules = await client.filters(kind="SecurityPolicyRule", policy__ids=[policy.id])
+        assert rules, f"No SecurityPolicyRule found under policy '{SEGMENT_POLICY_NAME}'"
+
+        matching_rules = []
+        for rule in rules:
+            protocol = getattr(getattr(rule, "protocol", None), "value", None)
+            port_start = getattr(getattr(rule, "port_start", None), "value", None)
+            if protocol == "tcp" and port_start == 8443:
+                matching_rules.append(rule)
+
+        assert matching_rules, "Expected a TCP/8443 firewall rule for frontend-to-backend dependency"
+        logging.info("SecurityPolicyRule correctly generated for the internal_service dependency")

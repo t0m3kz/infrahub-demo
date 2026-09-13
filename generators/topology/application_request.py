@@ -110,14 +110,16 @@ class AppDeploymentRequestGenerator(CommonGenerator):
         if existing:
             return existing[0]
 
-        component = await self.client.create(
-            kind="AppComponent",
-            data={
-                "name": name,
-                "component_type": request_component.get("component_type", "backend"),
-                "parent": {"id": application_id},
-            },
-        )
+        component_data: dict[str, Any] = {
+            "name": name,
+            "component_type": request_component.get("component_type", "backend"),
+            "parent": {"id": application_id},
+        }
+        network_segment = request_component.get("network_segment") or {}
+        if network_segment:
+            segment_id = network_segment.get("id") if isinstance(network_segment, dict) else network_segment
+            component_data["network_segment"] = {"id": segment_id}
+        component = await self.client.create(kind="AppComponent", data=component_data)
         await component.save(allow_upsert=True)
         return component
 

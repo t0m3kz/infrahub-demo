@@ -1,0 +1,20 @@
+---
+# Two isolated IT001 segments used to prove the internal firewall rule path.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: OrganizationCustomer
+  data:
+    - name: "IT001 Test Customer"
+      org_id: "IT001"
+      network_segments:
+        - kind: ManagedVlanSegment
+          data:
+            customer_name: "checkout-frontend"
+            environment: p
+            vlan_id: 201
+        - kind: ManagedVlanSegment
+          data:
+            customer_name: "checkout-backend"
+            environment: p
+            vlan_id: 202
