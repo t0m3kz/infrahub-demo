@@ -57,8 +57,15 @@ class AppDeploymentRequestGenerator(CommonGenerator):
                     await self._ensure_endpoint_port(endpoint, request_endpoint)
                     endpoint_map[str(request_endpoint.get("id"))] = endpoint
 
+        request_dependencies = request.get("dependencies") or []
+        discovered_dependencies = [
+            dependency
+            for dependency in cleaned.get("AppDeploymentRequestDependency") or []
+            if str(((dependency.get("source") or {}).get("parent") or {}).get("id") or "") == str(request.get("id"))
+        ]
+        dependencies = request_dependencies or discovered_dependencies
         generated_dependencies: list[Any] = []
-        for dependency in request.get("dependencies") or []:
+        for dependency in dependencies:
             materialized = await self._materialize_dependency(
                 dependency=dependency,
                 component_map=component_map,
