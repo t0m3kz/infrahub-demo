@@ -23,6 +23,7 @@ SCENARIO_NAME = "App Catalogue: 30_all Enforcement"
 BRANCH_NAME = "app-catalogue-scenario"
 DATA_PATH = "data/demos/30_all"
 CHECKOUT_REQUEST_NAME = "c001-checkout-request"
+CHECKOUT_DEPENDENCY_NAME = "c001-checkout-to-payment-gateway"
 C005_APPLICATION_NAME = "c005-payment-core-p"
 BROKER_NAME = "c001-private-access"
 PROXY_POLICY_NAME = "proxy-C001-c001-web-gateway-egress"
@@ -98,6 +99,10 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
         checkout_apps = await client.filters(kind="AppApplication", label__value=CHECKOUT_REQUEST_NAME)
         assert len(checkout_apps) == 1, (
             f"Expected request '{CHECKOUT_REQUEST_NAME}' to materialize one AppApplication, found {len(checkout_apps)}"
+        )
+        checkout_dependency = await client.get(kind="AppDependency", name__value=CHECKOUT_DEPENDENCY_NAME)
+        assert checkout_dependency, (
+            f"Expected request '{CHECKOUT_REQUEST_NAME}' to materialize dependency '{CHECKOUT_DEPENDENCY_NAME}'"
         )
         c005_app = await client.get(kind="AppApplication", name__value=C005_APPLICATION_NAME)
         assert c005_app, f"AppApplication '{C005_APPLICATION_NAME}' not found"
