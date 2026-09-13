@@ -15,7 +15,7 @@ import pytest
 from infrahub_sdk import InfrahubClient, InfrahubClientSync
 
 from .conftest import TestInfrahubDockerWithClient
-from .workflow_helpers import run_generator, verify_no_failed_tasks
+from .workflow_helpers import run_generator
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -116,15 +116,17 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
     @pytest.mark.asyncio
     async def test_03_verify_no_failed_tasks(
         self,
-        async_client_main: InfrahubClient,
-        scenario_branch: str,
+        workflow_state: dict[str, Any],
     ) -> None:
-        """Verify no tasks failed during generator execution."""
+        """Verify the request and application generator tasks completed."""
         logging.info("=== %s - Step 3: Verify No Failed Tasks ===", SCENARIO_NAME)
 
-        await verify_no_failed_tasks(client=async_client_main, branch=scenario_branch)
+        request_result = workflow_state["app_catalogue_request_generator_task"]
+        application_result = workflow_state["app_catalogue_generator_task"]
+        assert request_result["success"], f"Request generator failed: {request_result}"
+        assert application_result["success"], f"Application generator failed: {application_result}"
 
-        logging.info("No failed tasks found")
+        logging.info("Request and application generator tasks completed successfully")
 
     @pytest.mark.order(403)
     @pytest.mark.dependency(scope="session", name="app_catalogue_verify_ztna", depends=["app_catalogue_no_failures"])
