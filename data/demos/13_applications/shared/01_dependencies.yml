@@ -2,7 +2,7 @@
 # Cross-application dependency examples: c001's storefront components calling
 # shared external services. AppApplicationGenerator turns these into
 # ProxyPolicy/ProxyPolicyRule entries (target component_type is
-# external_service) instead of firewall rules. web-frontend and app-backend
+# external endpoint) instead of firewall rules. web-frontend and app-backend
 # both use "shared-cloud-proxy" — they must end up sharing ONE auto-generated
 # ProxyPolicy scoped to C001 and shared-cloud-proxy, with two rules, not one
 # policy per component.

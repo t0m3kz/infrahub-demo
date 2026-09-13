@@ -1,7 +1,7 @@
 ---
 # Minimal self-contained app: one real component (frontend) that both depends on
 # an external service (egress proxy generation) and is published via a ZTNA
-# endpoint, plus one external_service endpoint.
+# endpoint, plus one external endpoint.
 # (payment-gateway). No network_segment on either component — deliberately
 # skips firewall-rule generation (needs DC/segment infra) to keep this scenario
 # independent of the DC deployment test chain.
@@ -43,14 +43,6 @@ spec:
                         - kind: SecurityIdentityGroup
                           data:
                             name: engineering
-            member_of_groups:
-              - app_components
-
-          - name: payment-gateway
-            component_type: external_service
-            children:
-              kind: AppEndpoint
-              data:
                 - name: it001-payment-gateway-external
                   endpoint_type: external_service
                   fqdn: api.paymentgw.example.com
