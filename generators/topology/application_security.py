@@ -45,22 +45,6 @@ def _resolve_port(dep: dict) -> tuple[str, int | None, int | None] | None:
 class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
     """Generate segment-scoped security rules from app dependencies."""
 
-    async def run(self, identifier: str, data: dict[str, Any] | None = None) -> None:
-        """Run without deleting shared infrastructure referenced by policy rules."""
-        if not data:
-            data = await self.collect_data()
-        unpacked = data.get("data") or data
-        await self.process_nodes(data=unpacked)
-
-        group_type = "CoreGeneratorGroup" if self.execute_after_merge else "CoreGeneratorAwareGroup"
-        async with self._init_client.start_tracking(
-            identifier=identifier,
-            params=self.params,
-            delete_unused_nodes=False,
-            group_type=group_type,
-        ) as self.client:
-            await self.generate(data=unpacked)
-
     async def generate(self, data: dict[str, Any]) -> None:
         cleaned = clean_data(data)
 
@@ -263,9 +247,6 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
                     dst_comp.get("name", "?"),
                 )
                 continue
-
-            self._retain_existing_node(src_seg_id)
-            self._retain_existing_node(dst_seg_id)
 
             policy = segment_policies.get(src_seg_id)
             if policy is None:
@@ -620,7 +601,6 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
                 return False
             proxy_policies[policy_key] = policy
 
-        self._retain_existing_node(owner_node_id)
         await self._attach_proxy_policy_to_owner(owner_id=owner_node_id, policy_id=policy.id)
 
         dst_comp = dst_endpoint.get("parent") or {}
@@ -687,15 +667,9 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
             await policies_rel.fetch()
             if policy_id not in {peer.id for peer in policies_rel.peers}:
                 await self._safe_rel_add(policies_rel, {"id": policy_id})
-                await owner_obj.save(allow_upsert=True)
+                await owner_obj.save(allow_upsert=True, update_group_context=False)
         except Exception as exc:
             self.logger.warning("  Could not attach proxy policy to owner %s: %s", owner_id, exc)
-
-    def _retain_existing_node(self, node_id: str | None) -> None:
-        """Keep referenced infrastructure from generator tracking cleanup."""
-        related_node_ids = getattr(self.client.group_context, "related_node_ids", None)
-        if isinstance(related_node_ids, list) and node_id and node_id not in related_node_ids:
-            related_node_ids.append(node_id)
 
     @staticmethod
     def _segment_policy_name(segment: dict[str, Any]) -> str:
@@ -796,10 +770,10 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
             existing_policy_ids = {peer.id for peer in policies_rel.peers}
             if policy_id not in existing_policy_ids:
                 await self._safe_rel_add(policies_rel, {"id": policy_id})
-                await seg_obj.save(allow_upsert=True)
+                await seg_obj.save(allow_upsert=True, update_group_context=False)
                 self.logger.info("  Attached source policy to segment %s", segment.get("name", seg_id))
             else:
-                await seg_obj.save(allow_upsert=True)
+                await seg_obj.save(allow_upsert=True, update_group_context=False)
         except Exception as exc:
             self.logger.warning(
                 "  Could not attach source policy to segment %s: %s",
