@@ -70,6 +70,12 @@ class AppDeploymentRequestGenerator(CommonGenerator):
 
         request_obj = await self.client.get(kind="AppDeploymentRequest", id=request.get("id"))
         if request_obj is not None and status == "approved":
+            generated_dependencies_rel = getattr(request_obj, "generated_dependencies")
+            await generated_dependencies_rel.fetch()
+            existing_dependency_ids = {peer.id for peer in generated_dependencies_rel.peers}
+            for dependency in generated_dependencies:
+                if dependency.id not in existing_dependency_ids:
+                    generated_dependencies_rel.add(dependency)
             setattr(request_obj, "generated_application", {"id": application.id})
             setattr(request_obj, "status", "completed")
             setattr(request_obj, "completed_at", datetime.now(timezone.utc).isoformat())
