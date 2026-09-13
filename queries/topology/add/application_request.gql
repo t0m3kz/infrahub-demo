@@ -25,7 +25,6 @@ fragment AppDeploymentRequestComponentFields on AppDeploymentRequestComponent {
   name { value }
   component_type { value }
   replicas { value }
-  parent { node { id } }
   network_segment { node { id name { value } } }
   endpoints {
     edges {
@@ -134,11 +133,4 @@ query application_request($name: String!) {
     }
   }
 
-  AppDeploymentRequestDependency {
-    edges {
-      node {
-        ...AppDeploymentRequestDependencyFields
-      }
-    }
-  }
 }
