@@ -15,7 +15,7 @@ import pytest
 from infrahub_sdk import InfrahubClient, InfrahubClientSync
 
 from .conftest import TestInfrahubDockerWithClient
-from .workflow_helpers import run_generator
+from .workflow_helpers import run_generator, wait_for_tasks_completion
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -95,6 +95,7 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
             branch=scenario_branch,
         )
         workflow_state["app_catalogue_request_generator_task"] = request_result
+        await wait_for_tasks_completion(async_client_main, scenario_branch)
 
         checkout_apps = await client.filters(kind="AppApplication", label__value=CHECKOUT_REQUEST_NAME)
         assert len(checkout_apps) == 1, (
@@ -125,6 +126,7 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
             checkout_result["task_state"],
             c005_result["task_state"],
         )
+        await wait_for_tasks_completion(async_client_main, scenario_branch)
 
     @pytest.mark.order(402)
     @pytest.mark.dependency(scope="session", name="app_catalogue_no_failures", depends=["app_catalogue_run_gen"])
