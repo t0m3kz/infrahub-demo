@@ -17,3 +17,5 @@ spec:
       region: eu-central
       status: approved
       customer: C001
+      member_of_groups:
+        - app_deployment_requests
