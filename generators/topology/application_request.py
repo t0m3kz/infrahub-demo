@@ -102,6 +102,7 @@ class AppDeploymentRequestGenerator(CommonGenerator):
                 "ingress_mode": "dns",
                 "application_orchestrator": "manual",
                 "owner": {"id": customer_id},
+                "member_of_groups": ["app_applications"],
             },
         )
         await application.save(allow_upsert=True)

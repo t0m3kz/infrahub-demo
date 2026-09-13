@@ -61,6 +61,7 @@ class TestDeploymentRequestGenerator:
         assert payload["environment"] == "p"
         assert payload["owner"] == {"id": "customer-source"}
         assert payload["fqdn"] == "checkout.example.com"
+        assert payload["member_of_groups"] == ["app_applications"]
 
     def test_approved_external_dependency_creates_app_dependency(self) -> None:
         generator = _make_generator()
