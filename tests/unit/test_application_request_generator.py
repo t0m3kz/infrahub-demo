@@ -58,6 +58,7 @@ class TestDeploymentRequestGenerator:
         generator.client.create.assert_awaited_once()
         payload = generator.client.create.call_args.kwargs["data"]
         assert payload["label"] == "checkout"
+        assert payload["environment"] == "p"
         assert payload["owner"] == {"id": "customer-source"}
         assert payload["fqdn"] == "checkout.example.com"
 
