@@ -102,14 +102,24 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
         c005_app = await client.get(kind="AppApplication", name__value=C005_APPLICATION_NAME)
         assert c005_app, f"AppApplication '{C005_APPLICATION_NAME}' not found"
 
-        result = await run_generator(
+        checkout_result = await run_generator(
             client=client,
             generator_name="add_app_application",
-            node_ids=[checkout_apps[0].id, c005_app.id],
+            node_ids=[checkout_apps[0].id],
             branch=scenario_branch,
         )
-        workflow_state["app_catalogue_generator_task"] = result
-        logging.info("Generator task completed: %s", result["task_state"])
+        c005_result = await run_generator(
+            client=client,
+            generator_name="add_app_application",
+            node_ids=[c005_app.id],
+            branch=scenario_branch,
+        )
+        workflow_state["app_catalogue_generator_tasks"] = [checkout_result, c005_result]
+        logging.info(
+            "Application generator tasks completed: checkout=%s, C005=%s",
+            checkout_result["task_state"],
+            c005_result["task_state"],
+        )
 
     @pytest.mark.order(402)
     @pytest.mark.dependency(scope="session", name="app_catalogue_no_failures", depends=["app_catalogue_run_gen"])
@@ -122,9 +132,11 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
         logging.info("=== %s - Step 3: Verify No Failed Tasks ===", SCENARIO_NAME)
 
         request_result = workflow_state["app_catalogue_request_generator_task"]
-        application_result = workflow_state["app_catalogue_generator_task"]
+        application_results = workflow_state["app_catalogue_generator_tasks"]
         assert request_result["success"], f"Request generator failed: {request_result}"
-        assert application_result["success"], f"Application generator failed: {application_result}"
+        assert all(result["success"] for result in application_results), (
+            f"Application generator failed: {application_results}"
+        )
 
         logging.info("Request and application generator tasks completed successfully")
 
