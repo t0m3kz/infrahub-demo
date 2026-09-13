@@ -57,22 +57,15 @@ spec:
             value: active
             value_previous: provisioning
 
-    # pod_rack_cascade is the same pattern one level down: it subclasses
-    # PodTopologyGenerator (add_pod) and runs its entire bootstrap via
-    # super().generate() before fanning out to add_rack (see generators/topology/
-    # pod_rack_cascade.py's docstring). A pod created standalone (e.g. a bulk
-    # pod+rack load, or bulk-loaded alongside its DC) only needs its own
-    # bootstrap — fanning out to racks that were just bulk-loaded alongside it
-    # would be redundant with the manual pod_rack_cascade/dc_pod_cascade run
-    # that follows the load, so `created` fires plain add_pod, not the cascade.
-    # Structural pod-level changes that EXISTING racks need to reconcile
-    # against fire the cascade instead.
+    # pod_rack_cascade runs POD bootstrap before fanning out to the POD's racks.
+    # Created PODs use it too, so racks in a bulk object load only start after
+    # their parent spines and routing prerequisites exist.
 
     - name: trigger-pod-generator-on-created
       branch_scope: "other_branches"
       node_kind: TopologyPod
       mutation_action: "created"
-      action: run-pod-generator
+      action: run-pod-rack-cascade
 
     - name: trigger-pod-update-index
       branch_scope: "other_branches"
