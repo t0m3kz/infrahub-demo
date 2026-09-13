@@ -248,6 +248,9 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
                 )
                 continue
 
+            self._retain_existing_node(src_seg_id)
+            self._retain_existing_node(dst_seg_id)
+
             policy = segment_policies.get(src_seg_id)
             if policy is None:
                 policy_name = planner.segment_policy_name(src_seg)
@@ -586,21 +589,23 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
             )
             return False
 
-        owner_id = str(owner.get("org_id") or owner.get("id") or "")
-        if not owner_id:
+        owner_org_id = str(owner.get("org_id") or owner.get("id") or "")
+        owner_node_id = str(owner.get("id") or "")
+        if not owner_org_id or not owner_node_id:
             self.logger.warning("  Dependency '%s' source '%s' has no owner identifier - skipping", dep_ref, src_label)
             return False
-        policy_key = f"{owner_id}:{proxy_id}"
+        policy_key = f"{owner_org_id}:{proxy_id}"
         policy = proxy_policies.get(policy_key)
         if policy is None:
             proxy_name = str(proxy_service.get("name") or proxy_id)
-            policy_name = f"proxy-{owner_id}-{proxy_name}-egress"
+            policy_name = f"proxy-{owner_org_id}-{proxy_name}-egress"
             policy = await self._get_or_create_proxy_policy(policy_name)
             if policy is None:
                 return False
             proxy_policies[policy_key] = policy
 
-        await self._attach_proxy_policy_to_owner(owner_id=owner_id, policy_id=policy.id)
+        self._retain_existing_node(owner_node_id)
+        await self._attach_proxy_policy_to_owner(owner_id=owner_node_id, policy_id=policy.id)
 
         dst_comp = dst_endpoint.get("parent") or {}
         rule_name = planner.rule_name(app_name, src_comp, dst_comp)
@@ -669,6 +674,12 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
                 await owner_obj.save(allow_upsert=True)
         except Exception as exc:
             self.logger.warning("  Could not attach proxy policy to owner %s: %s", owner_id, exc)
+
+    def _retain_existing_node(self, node_id: str | None) -> None:
+        """Keep referenced infrastructure from generator tracking cleanup."""
+        related_node_ids = getattr(self.client.group_context, "related_node_ids", None)
+        if isinstance(related_node_ids, list) and node_id and node_id not in related_node_ids:
+            related_node_ids.append(node_id)
 
     @staticmethod
     def _segment_policy_name(segment: dict[str, Any]) -> str:
