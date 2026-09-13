@@ -439,6 +439,7 @@ extensions:
           kind: Attribute
           optional: true
           on_delete: cascade
+          direction: outbound
           identifier: "deployment_request__dependencies"
           order_weight: 1300
           label: Requested Dependencies
