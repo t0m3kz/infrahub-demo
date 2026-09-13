@@ -45,6 +45,22 @@ def _resolve_port(dep: dict) -> tuple[str, int | None, int | None] | None:
 class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
     """Generate segment-scoped security rules from app dependencies."""
 
+    async def run(self, identifier: str, data: dict[str, Any] | None = None) -> None:
+        """Run without deleting shared infrastructure referenced by policy rules."""
+        if not data:
+            data = await self.collect_data()
+        unpacked = data.get("data") or data
+        await self.process_nodes(data=unpacked)
+
+        group_type = "CoreGeneratorGroup" if self.execute_after_merge else "CoreGeneratorAwareGroup"
+        async with self._init_client.start_tracking(
+            identifier=identifier,
+            params=self.params,
+            delete_unused_nodes=False,
+            group_type=group_type,
+        ) as self.client:
+            await self.generate(data=unpacked)
+
     async def generate(self, data: dict[str, Any]) -> None:
         cleaned = clean_data(data)
 
