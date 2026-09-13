@@ -867,7 +867,7 @@ class TestReconcileProxyRule:
             "name": "stripe-api-public",
             "endpoint_type": "external_service",
             "fqdn": fqdn,
-            "parent": {"id": "comp-dst", "name": "stripe-api", "component_type": "external_service"},
+            "parent": {"id": "comp-dst", "name": "stripe-api", "component_type": "backend"},
         }
 
     def _make_gen_ready(self) -> Any:

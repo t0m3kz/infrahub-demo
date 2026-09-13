@@ -24,7 +24,7 @@ spec:
         kind: AppComponent
         data:
           - name: stripe-api
-            component_type: external_service
+            component_type: backend
             children:
               kind: AppEndpoint
               data:
@@ -35,7 +35,7 @@ spec:
               - app_components
 
           - name: github-api
-            component_type: external_service
+            component_type: backend
             children:
               kind: AppEndpoint
               data:

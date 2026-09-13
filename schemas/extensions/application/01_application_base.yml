@@ -213,10 +213,6 @@ nodes:
           - name: worker
             label: "Worker"
             color: "#777777"
-          - name: external_service
-            label: "External Service"
-            color: "#9E9E9E"
-            description: "Third-party/shared destination outside this application, reached via egress proxy (no network_segment/instances)"  # yamllint disable-line rule:line-length
     relationships:
       - name: network_segment
         peer: ManagedNetworkSegment

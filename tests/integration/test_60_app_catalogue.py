@@ -5,7 +5,7 @@ ManagedCloudProxy brokers) — deliberately independent of the DC/customer-board
 demo chain so it only depends on schema + bootstrap data, not on any DC scenario.
 
 Coverage:
-  1. Load a minimal AppApplication (frontend + payment-gateway external_service
+    1. Load a minimal AppApplication (frontend + payment-gateway external endpoint
      components) with an AppDependency between them, plus a web_gateway and a
      private_access ManagedCloudProxy, both owned by IT001.
   2. Run the add_app_application generator.
@@ -161,7 +161,7 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify the external_service dependency produced a ProxyPolicy/ProxyPolicyRule."""
+        """Verify the external endpoint dependency produced a ProxyPolicy/ProxyPolicyRule."""
         logging.info("=== %s - Step 5: Verify Proxy Policy Rule ===", SCENARIO_NAME)
 
         client = async_client_main
@@ -183,7 +183,7 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
         action_value = getattr(getattr(matching_rule, "action", None), "value", None)
         assert action_value == "allow", f"Expected action 'allow' for the payment-gateway rule, got '{action_value}'"
 
-        logging.info("ProxyPolicyRule correctly generated for the external_service dependency")
+        logging.info("ProxyPolicyRule correctly generated for the external endpoint dependency")
 
     @pytest.mark.order(405)
     @pytest.mark.dependency(
