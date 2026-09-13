@@ -293,6 +293,8 @@ nodes:
         choices:
           - name: internal_service
             label: Internal Service
+          - name: external_service
+            label: External Service
           - name: private_access
             label: Private Access
       - name: fqdn

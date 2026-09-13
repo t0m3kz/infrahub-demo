@@ -1,18 +1,11 @@
-"""Integration test — App catalogue: dependencies, egress proxy, ZTNA publishing.
-
-Self-contained scenario (own throwaway OrganizationCustomer IT001, own
-ManagedCloudProxy brokers) — deliberately independent of the DC/customer-boarding
-demo chain so it only depends on schema + bootstrap data, not on any DC scenario.
+"""Integration test — App catalogue enforcement against the 30_all demo.
 
 Coverage:
-    1. Load a minimal AppApplication (frontend + payment-gateway external endpoint
-     components) with an AppDependency between them, plus a web_gateway and a
-     private_access ManagedCloudProxy, both owned by IT001.
-  2. Run the add_app_application generator.
-  3. Verify IT001 is assigned to the private-access service.
-  4. Verify the frontend -> payment-gateway external endpoint dependency
-     produced a ProxyPolicy/ProxyPolicyRule on the web_gateway broker instead
-     of a firewall rule.
+     1. Load the canonical 30_all demo data.
+     2. Materialize the approved C001 checkout request and enforce its external
+         payment-gateway dependency through the customer egress proxy.
+     3. Enforce the predeclared C005 payment-core web-to-backend dependency
+         through a firewall policy between its provisioned VXLAN segments.
 """
 
 import logging
@@ -26,17 +19,18 @@ from .workflow_helpers import run_generator, verify_no_failed_tasks, wait_for_ta
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-SCENARIO_NAME = "App Catalogue: Dependencies, Egress Proxy, ZTNA"
+SCENARIO_NAME = "App Catalogue: 30_all Enforcement"
 BRANCH_NAME = "app-catalogue-scenario"
-DATA_PATH = "tests/integration/data/60_app_catalogue"
-APP_NAME = "it001-checkout-p"
-BROKER_NAME = "it001-ztna-broker"
-PROXY_POLICY_NAME = "proxy-IT001-it001-web-gateway-egress"
-SEGMENT_POLICY_NAME = "seg-checkout-frontend-p-egress"
+DATA_PATH = "data/demos/30_all"
+CHECKOUT_REQUEST_NAME = "c001-checkout-request"
+C005_APPLICATION_NAME = "c005-payment-core-p"
+BROKER_NAME = "c001-private-access"
+PROXY_POLICY_NAME = "proxy-C001-c001-web-gateway-egress"
+SEGMENT_POLICY_NAME = "seg-c005-web-frontend-local-dc10-p-egress"
 
 
 class TestAppCatalogue(TestInfrahubDockerWithClient):
-    """Test application dependencies, egress proxy, and ZTNA publishing end-to-end."""
+    """Test request materialization and application enforcement against 30_all."""
 
     @pytest.fixture(scope="class")
     def scenario_branch(self) -> str:
@@ -49,7 +43,7 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
         client_main: InfrahubClientSync,
         scenario_branch: str,
     ) -> None:
-        """Create branch and load customer, proxies, application, and dependency."""
+        """Create branch and load the canonical 30_all demo data."""
         logging.info("=== %s - Step 1: Load Data ===", SCENARIO_NAME)
 
         existing_branches = client_main.branch.all()
@@ -84,19 +78,35 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
         scenario_branch: str,
         workflow_state: dict[str, Any],
     ) -> None:
-        """Run add_app_application for the checkout AppApplication."""
+        """Materialize C001 checkout, then enforce C001 and C005 applications."""
         logging.info("=== %s - Step 2: Run Generator ===", SCENARIO_NAME)
 
         client = async_client_main
         client.default_branch = scenario_branch
 
-        app = await client.get(kind="AppApplication", name__value=APP_NAME)
-        assert app, f"AppApplication '{APP_NAME}' not found"
+        request = await client.get(kind="AppDeploymentRequest", name__value=CHECKOUT_REQUEST_NAME)
+        assert request, f"AppDeploymentRequest '{CHECKOUT_REQUEST_NAME}' not found"
+
+        request_result = await run_generator(
+            client=client,
+            generator_name="add_application_deployment_request",
+            node_ids=[request.id],
+            branch=scenario_branch,
+        )
+        workflow_state["app_catalogue_request_generator_task"] = request_result
+        await wait_for_tasks_completion(async_client_main, scenario_branch)
+
+        checkout_apps = await client.filters(kind="AppApplication", label__value=CHECKOUT_REQUEST_NAME)
+        assert len(checkout_apps) == 1, (
+            f"Expected request '{CHECKOUT_REQUEST_NAME}' to materialize one AppApplication, found {len(checkout_apps)}"
+        )
+        c005_app = await client.get(kind="AppApplication", name__value=C005_APPLICATION_NAME)
+        assert c005_app, f"AppApplication '{C005_APPLICATION_NAME}' not found"
 
         result = await run_generator(
             client=client,
             generator_name="add_app_application",
-            node_ids=[app.id],
+            node_ids=[checkout_apps[0].id, c005_app.id],
             branch=scenario_branch,
         )
         workflow_state["app_catalogue_generator_task"] = result
@@ -127,7 +137,7 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify IT001's customer-level private access service assignment."""
+        """Verify C001's customer-level private access service assignment."""
         logging.info("=== %s - Step 4: Verify Customer Private Access Assignment ===", SCENARIO_NAME)
 
         client = async_client_main
@@ -137,16 +147,14 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
         assert broker, f"ManagedCloudProxy '{BROKER_NAME}' not found"
 
         customer = await client.get(
-            kind="OrganizationCustomer", org_id__value="IT001", include=["private_access_service"]
+            kind="OrganizationCustomer", org_id__value="C001", include=["private_access_service"]
         )
-        assert customer, "OrganizationCustomer 'IT001' not found"
+        assert customer, "OrganizationCustomer 'C001' not found"
         private_access_rel = getattr(customer, "private_access_service", None)
-        assert private_access_rel is not None and private_access_rel.id, (
-            "IT001 has no private_access_service assignment"
-        )
+        assert private_access_rel is not None and private_access_rel.id, "C001 has no private_access_service assignment"
         assert private_access_rel.id == broker.id, (
             f"customer private_access_service resolved to {private_access_rel.id}, expected the "
-            f"IT001-owned broker {broker.id} ('{BROKER_NAME}')"
+            f"C001-owned broker {broker.id} ('{BROKER_NAME}')"
         )
 
         logging.info("customer private_access_service correctly assigned to '%s'", BROKER_NAME)
