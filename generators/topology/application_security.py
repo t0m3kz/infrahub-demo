@@ -181,6 +181,8 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
                 deduped[key] = (src_comp, dep, dst_comp)
             edges = list(deduped.values())
             self.logger.info("Applied %d dependency edge(s) from trigger context", len(forced_edges))
+        else:
+            edges = self._dependency_edges_from_components(components)
         for warning in warnings:
             self.logger.warning(warning)
 
@@ -379,6 +381,19 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
             if src_app_name != app_name:
                 continue
             edges.append((src_comp, dep, dst_endpoint))
+        return edges
+
+    @staticmethod
+    def _dependency_edges_from_components(
+        components: list[dict[str, Any]],
+    ) -> list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]]:
+        """Build dependency edges from the source component's reverse relation."""
+        edges: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]] = []
+        for component in components:
+            for dependency in component.get("depends_on") or []:
+                target = dependency.get("target") or {}
+                if target:
+                    edges.append((component, dependency, target))
         return edges
 
     async def _get_or_create_sg(self, sg_name: str, vnet_id: str, acct_id: str | None) -> Any | None:
