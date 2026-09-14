@@ -1,3 +1,9 @@
+{%- set _lb = namespace(name='Loopback0') -%}
+{%- for iface in interfaces -%}
+{%- if iface.name | lower | truncate(8, true, '') == 'loopback' and _lb.name == 'Loopback0' -%}
+{%- set _lb.name = iface.name -%}
+{%- endif -%}
+{%- endfor -%}
 !
 ! Arista EOS Spine Configuration
 ! Device: {{ hostname }}
@@ -52,7 +58,7 @@ interface {{ interface.name }}
 
 ! Configure route-maps
 route-map RM-CONN-2-BGP permit 10
-   match interface Loopback0
+   match interface {{ _lb.name }}
 
 {%- include 'common/arista_eos_management.j2' %}
 

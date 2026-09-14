@@ -1,0 +1,118 @@
+---
+# C003 (Vaultex Inc.) — "custody-ledger" application: portfolio + frontend/
+# backend/database/cache/message-queue components, wired to the segments
+# (data/demos/08_segments/c003/02_segments.yml) and to the shared DC6
+# servers boarded in data/demos/06_servers/ (bonds shared across customers:
+# ktw-pod1-server-2/bond0 = web, ktw-pod2-server-2/bond0 = app,
+# ktw-pod3-server-5 = db, ktw-pod3-server-6 = cache,
+# ktw-pod1-server-2/bond1 = message-queue).
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppApplication
+  data:
+    - label: custody-ledger
+      environment: p
+      criticality: critical
+      security_profile: fintech_strict
+      fqdn: custody-ledger.c003.demo.local
+      ingress_mode: frontend
+      owner: C003
+      member_of_groups:
+        - app_applications
+      children:
+        kind: AppComponent
+        data:
+          - name: web-frontend
+            component_type: frontend
+            network_segment: c003-web-frontend-p
+            instances:
+              - ktw-pod1-server-2
+            children:
+              kind: AppEndpoint
+              data:
+                - name: c003-ledger-web-https
+                  endpoint_type: internal_service
+                  fqdn: web.custody-ledger.c003.demo.local
+                  service_ports:
+                    data:
+                      - port: 443
+                        protocol: tcp
+            member_of_groups:
+              - app_components
+
+          - name: app-backend
+            component_type: backend
+            network_segment: c003-app-backend-p
+            instances:
+              - ktw-pod2-server-2
+            children:
+              kind: AppEndpoint
+              data:
+                - name: c003-ledger-backend-https
+                  endpoint_type: internal_service
+                  fqdn: backend.custody-ledger.c003.demo.local
+                  service_ports:
+                    data:
+                      - port: 8443
+                        protocol: tcp
+            member_of_groups:
+              - app_components
+
+          - name: order-db
+            component_type: database
+            network_segment: c003-database-p
+            instances:
+              - ktw-pod3-server-5
+            children:
+              kind: AppEndpoint
+              data:
+                - name: c003-ledger-db-postgres
+                  endpoint_type: internal_service
+                  fqdn: db.custody-ledger.c003.demo.local
+                  service_ports:
+                    data:
+                      - port: 5432
+                        protocol: tcp
+            member_of_groups:
+              - app_components
+
+          - name: session-cache
+            component_type: cache
+            network_segment: c003-cache-p
+            instances:
+              - ktw-pod3-server-6
+            children:
+              kind: AppEndpoint
+              data:
+                - name: c003-ledger-cache
+                  endpoint_type: internal_service
+                  fqdn: cache.custody-ledger.c003.demo.local
+                  service_ports:
+                    data:
+                      - port: 6379
+                        protocol: tcp
+            member_of_groups:
+              - app_components
+
+          - name: ledger-queue
+            component_type: message_queue
+            network_segment: c003-message-queue-p
+            instances:
+              - ktw-pod1-server-2
+            children:
+              kind: AppEndpoint
+              data:
+                - name: c003-ledger-queue
+                  endpoint_type: internal_service
+                  fqdn: queue.custody-ledger.c003.demo.local
+                  service_ports:
+                    data:
+                      - port: 5672
+                        protocol: tcp
+                      - port: 15672
+                        port_end: 15673
+                        protocol: tcp
+            member_of_groups:
+              - app_components

@@ -14,29 +14,19 @@ nodes:
     description: "MLAG domain shared between two peer devices"
     label: MLAG Domain
     icon: "mdi:link-variant"
-    include_in_menu: true
-    menu_placement: ManagedGeneric
+    include_in_menu: false
     human_friendly_id:
       - "name__value"
     inherit_from:
       - ManagedGeneric
       - ManagedGenericDevice
+      - ManagedGenericInterfaces
+      - ManagedGenericVlanDomain
     uniqueness_constraints:
       - ["name__value"]
     display_label: "{{name__value}}"
     order_by:
       - name__value
-    relationships:
-      - name: device_capabilities
-        peer: DcimDevice
-        label: "Peer Devices"
-        description: "The two devices that form this MLAG domain"
-        cardinality: many
-        optional: false
-        kind: Generic
-        direction: inbound
-        identifier: device_capabilities
-        order_weight: 900
     attributes:
       - name: domain_id
         kind: Number
@@ -58,6 +48,13 @@ nodes:
         optional: true
         default_value: 330
         order_weight: 1250
+      - name: virtual_peer_link
+        kind: Boolean
+        label: "Virtual Peer-Link"
+        description: "When true, generator creates a virtual peer-link interface instead of a physical LAG"
+        optional: true
+        default_value: false
+        order_weight: 1300
 
 extensions:
   nodes:

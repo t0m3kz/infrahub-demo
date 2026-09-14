@@ -1,0 +1,39 @@
+---
+# C016 cloud-native application sample for Azure West Europe.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppApplication
+  data:
+    - label: billing-cloud
+      environment: p
+      criticality: medium
+      security_profile: internet_exposed
+      fqdn: billing-cloud.c016.demo.local
+      ingress_mode: dns
+      application_orchestrator: argocd
+      owner: C016
+      member_of_groups:
+        - app_applications
+      children:
+        kind: AppComponent
+        data:
+          - name: billing-frontend
+            component_type: frontend
+            network_segment: c016-prolexar-subnet-prod-p
+            service_ports:
+              data:
+                - port: 443
+                  protocol: tcp
+            member_of_groups:
+              - app_components
+
+          - name: billing-worker
+            component_type: worker
+            network_segment: c016-prolexar-subnet-prod-p
+            service_ports:
+              data:
+                - port: 9000
+                  protocol: tcp
+            member_of_groups:
+              - app_components

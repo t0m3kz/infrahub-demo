@@ -1067,11 +1067,13 @@ topology diagram
 ```
 
 <!-- ✅ Correct: Table separator with spaces -->
+
 | Column1 | Column2 | Column3 |
 | ------- | ------- | ------- |
 | Value1  | Value2  | Value3  |
 
 <!-- ❌ Wrong: Table separator without spaces -->
+
 | Column1 | Column2 | Column3 |
 |---------|---------|---------|
 | Value1  | Value2  | Value3  |
@@ -1452,5 +1454,4 @@ deployment_model:
 ## Resources
 
 - [InfraHub Documentation](https://docs.infrahub.app)
-- [Project README](../README.md)
 - [InfraHub SDK Documentation](https://docs.infrahub.app/python-sdk/)

@@ -1,0 +1,59 @@
+fragment FirewallContextLegFields on ManagedFirewallContext {
+  id
+  tenant { node { id } }
+  interface_capabilities {
+    edges {
+      node {
+        device { node { role { value } } }
+        ... on DcimVirtualInterface {
+          ip_address { node { address { value } } }
+        }
+      }
+    }
+  }
+}
+
+fragment FirewallContextsOnDeviceHostingFields on TopologyDeviceHosting {
+  devices(role__value: "firewall") {
+    edges {
+      node {
+        ... on DcimPhysicalDevice {
+          capabilities {
+            edges {
+              node {
+                __typename
+                ... on ManagedFirewallHA {
+                  contexts {
+                    edges {
+                      node {
+                        ...FirewallContextLegFields
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+# A device's own `deployment` is the DC directly for DC-level tiers
+# (border-leaf, firewall, spine, super-spine) but the POD for pod-level
+# tiers (leaf, tor, access-leaf) — see generators/topology/rack.py's
+# deployment_id=self.data["pod"]["id"] vs generators/topology/dc.py's
+# deployment_id=dc_id. One extra `parent` hop covers the pod case; DC-level
+# devices' deployment has no `parent` fragment match, so only the direct
+# TopologyDeviceHosting fragment applies for them.
+fragment FirewallContextsOnDeploymentFields on TopologyDeployment {
+  ...FirewallContextsOnDeviceHostingFields
+  ... on TopologyPod {
+    parent {
+      node {
+        ...FirewallContextsOnDeviceHostingFields
+      }
+    }
+  }
+}

@@ -1,0 +1,175 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVxlanSegment
+  data:
+    - owner: "C001"
+      customer_name: "web-frontend"
+      environment: "p"
+      arp_suppression: true
+      customer_deployments: [["C001", "p"]]
+      gateway:
+        data:
+          address: "10.1.10.1/24"
+          description: "Anycast GW — C001 prod web-frontend (DC6)"
+          ip_namespace: "C001-P"
+          ip_prefix:
+            kind: IpamPrefix
+            data:
+              prefix: "10.1.10.0/24"
+              description: "C001 prod web-frontend subnet (DC6)"
+              status: active
+              role: customer
+              ip_namespace: "C001-P"
+      member_of_groups:
+        - vxlan_segments
+
+    - owner: "C001"
+      customer_name: "app-backend"
+      environment: "p"
+      arp_suppression: true
+      customer_deployments: [["C001", "p"]]
+      gateway:
+        data:
+          address: "10.1.20.1/24"
+          description: "Anycast GW — C001 prod app-backend (DC6)"
+          ip_namespace: "C001-P"
+          ip_prefix:
+            kind: IpamPrefix
+            data:
+              prefix: "10.1.20.0/24"
+              description: "C001 prod app-backend subnet (DC6)"
+              status: active
+              role: customer
+              ip_namespace: "C001-P"
+      member_of_groups:
+        - vxlan_segments
+
+    - owner: "C001"
+      customer_name: "database"
+      environment: "p"
+      arp_suppression: true
+      customer_deployments: [["C001", "p"]]
+      gateway:
+        data:
+          address: "10.1.30.1/24"
+          description: "Anycast GW — C001 prod database (DC6)"
+          ip_namespace: "C001-P"
+          ip_prefix:
+            kind: IpamPrefix
+            data:
+              prefix: "10.1.30.0/24"
+              description: "C001 prod database subnet (DC6)"
+              status: active
+              role: customer
+              ip_namespace: "C001-P"
+      member_of_groups:
+        - vxlan_segments
+
+    - owner: "C001"
+      customer_name: "cache"
+      environment: "p"
+      arp_suppression: true
+      customer_deployments: [["C001", "p"]]
+      gateway:
+        data:
+          address: "10.1.40.1/24"
+          description: "Anycast GW — C001 prod cache (DC6)"
+          ip_namespace: "C001-P"
+          ip_prefix:
+            kind: IpamPrefix
+            data:
+              prefix: "10.1.40.0/24"
+              description: "C001 prod cache subnet (DC6)"
+              status: active
+              role: customer
+              ip_namespace: "C001-P"
+      member_of_groups:
+        - vxlan_segments
+
+    # ── Test (environment "t") ────────────────────────────────────────────
+
+    - owner: "C001"
+      customer_name: "web-frontend"
+      environment: "t"
+      arp_suppression: true
+      customer_deployments: [["C001", "t"]]
+      gateway:
+        data:
+          address: "10.1.110.1/24"
+          description: "Anycast GW — C001 test web-frontend (DC6)"
+          ip_namespace: "C001-T"
+          ip_prefix:
+            kind: IpamPrefix
+            data:
+              prefix: "10.1.110.0/24"
+              description: "C001 test web-frontend subnet (DC6)"
+              status: active
+              role: customer
+              ip_namespace: "C001-T"
+      member_of_groups:
+        - vxlan_segments
+
+    - owner: "C001"
+      customer_name: "app-backend"
+      environment: "t"
+      arp_suppression: true
+      customer_deployments: [["C001", "t"]]
+      gateway:
+        data:
+          address: "10.1.120.1/24"
+          description: "Anycast GW — C001 test app-backend (DC6)"
+          ip_namespace: "C001-T"
+          ip_prefix:
+            kind: IpamPrefix
+            data:
+              prefix: "10.1.120.0/24"
+              description: "C001 test app-backend subnet (DC6)"
+              status: active
+              role: customer
+              ip_namespace: "C001-T"
+      member_of_groups:
+        - vxlan_segments
+
+    - owner: "C001"
+      customer_name: "database"
+      environment: "t"
+      arp_suppression: true
+      customer_deployments: [["C001", "t"]]
+      gateway:
+        data:
+          address: "10.1.130.1/24"
+          description: "Anycast GW — C001 test database (DC6)"
+          ip_namespace: "C001-T"
+          ip_prefix:
+            kind: IpamPrefix
+            data:
+              prefix: "10.1.130.0/24"
+              description: "C001 test database subnet (DC6)"
+              status: active
+              role: customer
+              ip_namespace: "C001-T"
+      member_of_groups:
+        - vxlan_segments
+
+    - owner: "C001"
+      customer_name: "cache"
+      environment: "t"
+      arp_suppression: true
+      customer_deployments: [["C001", "t"]]
+      gateway:
+        data:
+          address: "10.1.140.1/24"
+          description: "Anycast GW — C001 test cache (DC6)"
+          ip_namespace: "C001-T"
+          ip_prefix:
+            kind: IpamPrefix
+            data:
+              prefix: "10.1.140.0/24"
+              description: "C001 test cache subnet (DC6)"
+              status: active
+              role: customer
+              ip_namespace: "C001-T"
+      member_of_groups:
+        - vxlan_segments

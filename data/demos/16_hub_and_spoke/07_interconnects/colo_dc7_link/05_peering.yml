@@ -1,0 +1,15 @@
+---
+# eBGP peering for the C004-EDGE1 <-> DC7-BL1 link (see 04_bgp.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGPPeering
+  data:
+    - name: "C004-EDGE1-DC7-BL1-ebgp"
+      session_type: EBGP
+      bgp_processes:
+        - "C004-EDGE1-bgp"
+        - "DC7-BL1-bgp-fw"
+      interface_capabilities:
+        - ["C004-EDGE1", "ge-0/0/0"]
+        - ["DC7-BL1", "Ethernet1/1"]

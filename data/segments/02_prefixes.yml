@@ -4,52 +4,87 @@
 # Each segment gets a /24 prefix in its customer's VRF namespace.
 # The prefix determines:
 #   - VRF membership (via ip_namespace)
-#   - Gateway IP (via prefix.gateway)
 #   - Customer ownership (via ip_namespace.owner)
 #
 # Prefix → ip_namespace links are set via the `ip_namespace` field.
-# Gateway IPs should be created separately as IpamIPAddress objects.
+# Gateway IPs are created separately as IpamIPAddress objects, then linked
+# from the ManagedVxlanSegment/ManagedVlanSegment via its `gateway` field
+# (segment.gateway.ip_prefix resolves back to this prefix automatically).
 
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: IpamPrefix
   data:
-    # Customer 1 production segments
+    # Nordix Ltd. production segments
     - prefix: "10.1.10.0/24"
-      description: "Customer 1 prod — web frontend"
+      description: "Nordix prod — web frontend"
       status: active
-      ip_namespace: "CUST001-PROD"
+      ip_namespace: "C001-PROD"
 
     - prefix: "10.1.20.0/24"
-      description: "Customer 1 prod — app backend"
+      description: "Nordix prod — app backend"
       status: active
-      ip_namespace: "CUST001-PROD"
+      ip_namespace: "C001-PROD"
 
     - prefix: "10.1.30.0/24"
-      description: "Customer 1 prod — database"
+      description: "Nordix prod — database"
       status: active
-      ip_namespace: "CUST001-PROD"
+      ip_namespace: "C001-PROD"
 
-    # Customer 1 non-production
+    # Nordix Ltd. non-production
     - prefix: "10.1.110.0/24"
-      description: "Customer 1 dev — web frontend"
+      description: "Nordix dev — web frontend"
       status: active
-      ip_namespace: "CUST001-NONPROD"
+      ip_namespace: "C001-NONPROD"
 
-    # Customer 2 production segments
+    # SwiftGo production segments
     - prefix: "10.2.10.0/24"
-      description: "Customer 2 prod — web frontend"
+      description: "SwiftGo prod — web frontend"
       status: active
-      ip_namespace: "CUST002-PROD"
+      ip_namespace: "C002-PROD"
 
     - prefix: "10.2.20.0/24"
-      description: "Customer 2 prod — app backend"
+      description: "SwiftGo prod — app backend"
       status: active
-      ip_namespace: "CUST002-PROD"
+      ip_namespace: "C002-PROD"
 
     # Shared services
     - prefix: "10.255.1.0/24"
       description: "Shared services — DNS, NTP, monitoring"
       status: active
-      ip_namespace: "SHARED-SERVICES"
+      ip_namespace: "default"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamIPAddress
+  data:
+    - address: "10.1.10.1/24"
+      description: "Anycast GW — Nordix prod web frontend"
+      ip_namespace: "C001-PROD"
+
+    - address: "10.1.20.1/24"
+      description: "Anycast GW — Nordix prod app backend"
+      ip_namespace: "C001-PROD"
+
+    - address: "10.1.30.1/24"
+      description: "Anycast GW — Nordix prod database"
+      ip_namespace: "C001-PROD"
+
+    - address: "10.1.110.1/24"
+      description: "Anycast GW — Nordix dev web frontend"
+      ip_namespace: "C001-NONPROD"
+
+    - address: "10.2.10.1/24"
+      description: "Anycast GW — SwiftGo prod web frontend"
+      ip_namespace: "C002-PROD"
+
+    - address: "10.2.20.1/24"
+      description: "Anycast GW — SwiftGo prod app backend"
+      ip_namespace: "C002-PROD"
+
+    - address: "10.255.1.1/24"
+      description: "Anycast GW — Shared services"
+      ip_namespace: "default"

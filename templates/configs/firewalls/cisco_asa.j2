@@ -12,11 +12,15 @@ interface {{ iface.parent_interface.name }}.{{ iface.vlan_id }}
 interface {{ iface.name }}
 {%- endif %}
 {%- if iface.ip_address %}
+{%- if ':' in iface.ip_address.address %}
+ ipv6 address {{ iface.ip_address.address }}
+{%- else %}
  ip address {{ iface.ip_address.address | replace('/', ' ') }}
+{%- endif %}
 {%- endif %}
 {%- if iface.security_zone %}
  nameif {{ iface.security_zone.name }}
- security-level {{ iface.security_level if iface.security_level is not none else iface.security_zone.trust_level }}
+ security-level {{ iface.security_zone.trust_level }}
 {%- endif %}
 {%- if iface.description %}
  description {{ iface.description }}
@@ -48,5 +52,62 @@ access-group {{ iface.security_zone.name }}-in in interface {{ iface.security_zo
 {%- endif %}
 {%- endfor %}
 {%- endif %}
+{%- if contexts %}
 !
+! --- Firewall Contexts (Security Contexts) — one per tenant, per ManagedFirewallContext ---
+! mode multiple must already be set on this ASA (system exec space, requires reload) —
+! not idempotently re-set here.
+{%- for context in contexts %}
+{%- if context.vlan_id and context.parent_interface.name %}
+interface {{ context.parent_interface.name }}.{{ context.vlan_id }}
+ vlan {{ context.vlan_id }}
+ no shutdown
+!
+{%- endif %}
+{%- endfor %}
+{%- for context in contexts %}
+context {{ context.name }}
+{%- if context.vlan_id and context.parent_interface.name %}
+ allocate-interface {{ context.parent_interface.name }}.{{ context.vlan_id }}
+{%- endif %}
+ config-url disk0:/{{ context.name }}.cfg
+{%- if context.tenant_name %}
+ description {{ context.tenant_name }}
+{%- endif %}
+!
+{%- endfor %}
+{%- for context in contexts %}
+{%- if context.vlan_id and context.parent_interface.name and context.ip_address %}
+changeto context {{ context.name }}
+interface {{ context.parent_interface.name }}.{{ context.vlan_id }}
+{%- if ':' in context.ip_address %}
+ ipv6 address {{ context.ip_address }}
+{%- else %}
+ ip address {{ context.ip_address | replace('/', ' ') }}
+{%- endif %}
+ nameif customer-pbr
+ security-level 50
+ no shutdown
+!
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+{%- if ha %}
+!
+! --- Failover (HA) ---
+failover
+failover group {{ ha.group_id }}
+{%- if ha.mode == 'active-active' %}
+failover group {{ ha.group_id }}
+ primary
+{%- endif %}
+{%- if ha.ha_link %}
+failover interface ip {{ ha.ha_link }} standby
+failover link {{ ha.ha_link }}
+{%- endif %}
+{%- if ha.virtual_ip %}
+failover interface ip mgmt {{ ha.virtual_ip }} 255.255.255.0 standby {{ ha.virtual_ip }}
+{%- endif %}
+!
+{%- endif %}
 end

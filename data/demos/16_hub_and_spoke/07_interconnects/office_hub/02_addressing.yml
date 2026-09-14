@@ -1,0 +1,67 @@
+---
+# Addressing for the C001/C002 SD-WAN tunnels to the shared hub (see
+# 01_edges.yml). `locations` in 03_circuits.yml is set via the object
+# loader's `kind:`+`data:` form (see https://docs.infrahub.app/python-sdk/
+# topics/object_file#load-object-files-into-infrahub) with the SAME full
+# data already created in ../../06_customer_boarding/ /
+# ../../02_cloud/aws/01_cloud_pop.yml — this upserts onto the existing node
+# (same uniqueness_constraint: owner + environment) rather than creating a
+# duplicate. A bare HFID/string reference can't be used instead: the object
+# loader can't resolve one against the generic TopologyConnectableLocation
+# peer when the concrete subtype's HFID has multiple elements
+# (owner__org_id__value, environment__value).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamIPAddress
+  data:
+    - address: "100.64.1.1/30"
+      description: "C001-EDGE1 GE1 (WAN, tunnel source)"
+    - address: "100.64.1.2/30"
+      description: "SDWAN-HUB-GW1 eth1.1001 (C001 tunnel destination)"
+    - address: "100.64.2.1/30"
+      description: "C002-EDGE1 GE1 (WAN, tunnel source)"
+    - address: "100.64.2.2/30"
+      description: "SDWAN-HUB-GW1 eth1.1002 (C002 tunnel destination)"
+    - address: "10.99.1.1/32"
+      description: "C001-EDGE1 BGP router-id"
+    - address: "10.99.2.1/32"
+      description: "C002-EDGE1 BGP router-id"
+    - address: "10.99.7.1/32"
+      description: "SDWAN-HUB-GW1 BGP router-id"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - name: "GE1"
+      device: "C001-EDGE1"
+      status: active
+      ip_address:
+        data:
+          address: "100.64.1.1/30"
+    - name: "GE1"
+      device: "C002-EDGE1"
+      status: active
+      ip_address:
+        data:
+          address: "100.64.2.1/30"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: "eth1.1001"
+      device: "SDWAN-HUB-GW1"
+      ip_address:
+        data:
+          address: "100.64.1.2/30"
+    - name: "eth1.1002"
+      device: "SDWAN-HUB-GW1"
+      ip_address:
+        data:
+          address: "100.64.2.2/30"

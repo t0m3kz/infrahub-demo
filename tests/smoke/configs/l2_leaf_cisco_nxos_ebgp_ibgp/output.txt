@@ -1,0 +1,34 @@
+!
+! dc1-l2-leaf-01 Configuration
+!
+hostname dc1-l2-leaf-01
+!
+feature interface-vlan
+feature lacp
+feature vpc
+feature lldp
+!
+
+! VLANs
+!
+! Interfaces
+interface Ethernet1
+  no shutdown
+  ip address 10.1.0.1/31
+
+!
+interface Ethernet2
+  no shutdown
+  ip address 10.1.0.3/31
+
+!
+interface Loopback0
+  no shutdown
+  ip address 10.0.0.1/32
+
+!
+!
+! Management
+line console
+line vty
+!

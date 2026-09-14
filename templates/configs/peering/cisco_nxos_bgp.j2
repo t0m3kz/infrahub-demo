@@ -9,8 +9,9 @@
 {%- set session = peering %}
 {%- set local_as = session.local_as.asn %}
 {%- set remote_as = session.remote_as.asn %}
-{%- set local_ip = session.local_ip.address.split('/')[0] %}
-{%- set remote_ip = session.remote_ip.address.split('/')[0] %}
+{%- set is_unnumbered = session.get('interface_name') and not session.get('remote_ip') %}
+{%- set local_ip = session.local_ip.address.split('/')[0] if session.get('local_ip') else '' %}
+{%- set remote_ip = session.interface_name if is_unnumbered else session.remote_ip.address.split('/')[0] %}
 
 {%- if session.session_scope == 'EXTERNAL' and session.external_organization %}
 ! External peering with {{ session.external_organization.name }}

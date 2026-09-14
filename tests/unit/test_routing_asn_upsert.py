@@ -5,13 +5,14 @@ Tests verify:
 - New device path: from_pool allocation for genuinely new devices
 - Mixed scenarios: existing + new devices in same plan
 - Rerun idempotency: identical plans from identical inputs
-- BGP process references: existing AS by id, new AS by _for_device
+- BGP process references: existing AS by id, new AS by PendingASRef
 """
 
 from typing import Any
 from unittest.mock import MagicMock
 
-from generators.helpers.routing import RoutingPlanInput, RoutingPlanner
+from generators.helpers.routing import PendingASRef, RoutingPlanInput, RoutingPlanner
+from generators.types import RoutingOptions
 
 # ================================================================
 # Helpers
@@ -48,8 +49,7 @@ def _make_existing_bgp(
     bgp = MagicMock()
     bgp.id = f"bgp-{device_name}-underlay"
     bgp.name.value = name
-    bgp.device_capabilities.peers[0].name.value = device_name
-    bgp.device_capabilities.peers[0].id = f"dev-{device_name}"
+    bgp.capabilities.peers = [MagicMock(display_label=device_name, id=f"dev-{device_name}")]
     bgp.local_as.id = as_id
     return bgp
 
@@ -113,7 +113,7 @@ def _make_plan_input(
             seen.add(n)
             unique_names.append(n)
 
-    options: dict[str, Any] = {}
+    options: RoutingOptions = RoutingOptions()
     if pool is not None:
         options["asn_pool"] = pool
     if design is not None:
@@ -333,7 +333,7 @@ class TestEbgpOverlayWithExistingAS:
 
         overlay_procs = [p for p in plan.bgp_processes if p["name"] == "leaf-1-bgp-overlay"]
         assert len(overlay_procs) == 1
-        assert overlay_procs[0]["local_as"] == {"_for_device": "leaf-1"}
+        assert overlay_procs[0]["local_as"] == PendingASRef(device="leaf-1")
 
     def test_mixed_overlay_processes(self) -> None:
         """Overlay processes: existing by id, new by _for_device."""
@@ -355,7 +355,7 @@ class TestEbgpOverlayWithExistingAS:
 
         overlay_procs = {p["name"]: p["local_as"] for p in plan.bgp_processes if p["name"].endswith("-bgp-overlay")}
         assert overlay_procs["spine-1-bgp-overlay"] == {"id": "as-s1"}
-        assert overlay_procs["leaf-1-bgp-overlay"] == {"_for_device": "leaf-1"}
+        assert overlay_procs["leaf-1-bgp-overlay"] == PendingASRef(device="leaf-1")
 
 
 # ================================================================
@@ -470,7 +470,9 @@ class TestRoutingPlanIdempotency:
             _make_p2p_interface("if3", "Ethernet1/2", "s1", "c2"),
             _make_p2p_interface("if4", "Ethernet1/1", "l2", "c2"),
         ]
-        design = MagicMock(bgp_topology="route_reflector", model_dump=MagicMock(return_value={}))
+        design = MagicMock(
+            routing_strategy="ebgp-ebgp", bgp_topology="route_reflector", model_dump=MagicMock(return_value={})
+        )
 
         planner = RoutingPlanner(deployment_id="dc-1")
         inp1 = _make_plan_input(loopbacks, pool=pool, underlay=underlay, interfaces=interfaces, design=design)
@@ -483,8 +485,8 @@ class TestRoutingPlanIdempotency:
         ids2 = sorted(o["_existing_id"] for o in _existing_as(plan2))
         assert ids1 == ids2
 
-        bgp1 = [(p["name"], p["device_capabilities"][0]["id"]) for p in plan1.bgp_processes]
-        bgp2 = [(p["name"], p["device_capabilities"][0]["id"]) for p in plan2.bgp_processes]
+        bgp1 = [(p["name"], p["capabilities"][0]["id"]) for p in plan1.bgp_processes]
+        bgp2 = [(p["name"], p["capabilities"][0]["id"]) for p in plan2.bgp_processes]
         assert bgp1 == bgp2
 
     def test_overlay_peerings_deterministic(self) -> None:
@@ -512,7 +514,9 @@ class TestRoutingPlanIdempotency:
             _make_p2p_interface("if7", "Ethernet1/2", "s2", "c4"),
             _make_p2p_interface("if8", "Ethernet1/2", "l2", "c4"),
         ]
-        design = MagicMock(bgp_topology="route_reflector", model_dump=MagicMock(return_value={}))
+        design = MagicMock(
+            routing_strategy="ebgp-ebgp", bgp_topology="route_reflector", model_dump=MagicMock(return_value={})
+        )
 
         planner = RoutingPlanner(deployment_id="dc-1")
         inp1 = _make_plan_input(loopbacks, pool=pool, underlay=underlay, interfaces=interfaces, design=design)

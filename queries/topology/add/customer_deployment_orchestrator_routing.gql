@@ -1,0 +1,77 @@
+query customer_deployment_orchestrator_routing($name: String!) {
+  TopologyCustomerDC(name__value: $name) {
+    edges {
+      node {
+        id
+        __typename
+        name { value }
+        infrastructure_orchestrator { value }
+        member_of_groups {
+          edges {
+            node {
+              id
+              name { value }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  TopologyCustomerColocation(name__value: $name) {
+    edges {
+      node {
+        id
+        __typename
+        name { value }
+        infrastructure_orchestrator { value }
+        member_of_groups {
+          edges {
+            node {
+              id
+              name { value }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  TopologyCustomerOffice(name__value: $name) {
+    edges {
+      node {
+        id
+        __typename
+        name { value }
+        infrastructure_orchestrator { value }
+        member_of_groups {
+          edges {
+            node {
+              id
+              name { value }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  TopologyCustomerCloud(name__value: $name) {
+    edges {
+      node {
+        id
+        __typename
+        name { value }
+        infrastructure_orchestrator { value }
+        member_of_groups {
+          edges {
+            node {
+              id
+              name { value }
+            }
+          }
+        }
+      }
+    }
+  }
+}

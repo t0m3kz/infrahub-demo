@@ -1,0 +1,68 @@
+---
+# Emulated internet underlay for SD-WAN virtual circuits.
+#
+# These TopologyPhysicalCircuit objects do not represent a literal cable.
+# They are intentional "physical-underlay placeholders" so virtual internet
+# paths can be traced and impact-analyzed consistently across all transports.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyPhysicalCircuit
+  data:
+    - circuit_id: "INET-C001-WAW-HUB"
+      name: "INET-C001-WAW-HUB"
+      circuit_type: internet_underlay
+      status: active
+      provider: "P029"
+      owner: "C001"
+      locations:
+        - kind: TopologyCustomerOffice
+          data:
+            owner:
+              kind: OrganizationCustomer
+              data:
+                name: "Nordix Ltd."
+                org_id: "C001"
+            environment: "p"
+            parent: "OFFICES"
+            locations: ["waw-hq-c16"]
+        - kind: TopologyCustomerCloud
+          data:
+            owner:
+              kind: OrganizationProvider
+              data:
+                name: "Network Operator"
+                org_id: "OPERATOR"
+            environment: "p"
+            customer_name: "sdwan-hub"
+            parent: "eu-central-1"
+            namespace: "INTERNET"
+
+    - circuit_id: "INET-C002-WAW-HUB"
+      name: "INET-C002-WAW-HUB"
+      circuit_type: internet_underlay
+      status: active
+      provider: "P029"
+      owner: "C002"
+      locations:
+        - kind: TopologyCustomerOffice
+          data:
+            owner:
+              kind: OrganizationCustomer
+              data:
+                name: "SwiftGo GmbH"
+                org_id: "C002"
+            environment: "p"
+            parent: "OFFICES"
+            locations: ["waw-br1-c16"]
+        - kind: TopologyCustomerCloud
+          data:
+            owner:
+              kind: OrganizationProvider
+              data:
+                name: "Network Operator"
+                org_id: "OPERATOR"
+            environment: "p"
+            customer_name: "sdwan-hub"
+            parent: "eu-central-1"
+            namespace: "INTERNET"

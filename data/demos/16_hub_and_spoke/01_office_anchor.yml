@@ -1,0 +1,39 @@
+---
+# TopologyOffice is a shared SITE anchor only (TopologyDeployment +
+# TopologyConnectableLocation) — it carries no building/cabling/devices of
+# its own. Those belong to whichever customer occupies the building, so they
+# live on TopologyCustomerOffice instead (see schemas/extensions/topology/
+# topology_customer.yml) — same reasoning as TopologyClusterHosting living on
+# the customer footprint, not the physical DC/Colocation/Cloud container.
+# TopologyCustomerOffice footprints (one per customer, parent: TopologyOffice)
+# are created in 06_customer_boarding/, BEFORE the per-customer SD-WAN
+# circuits (07_interconnects/office_hub/03_circuits.yml) exist — so
+# ExchangeGatewayGenerator's created-trigger fires on each of these before
+# its circuit exists (for DC it doesn't need one at all), so Office/Cloud
+# will log a warning and skip on first run — re-run `infrahubctl generator
+# add_customer_deployment_exchange name=<computed-name>` once circuits are loaded.
+# LocationCountry "pl" already exists via data/bootstrap/01_locations.yml.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationMetro
+  data:
+    - name: "Warsaw"
+      shortname: "waw"
+      parent: "pl"
+      children:
+        kind: LocationFacility
+        data:
+          - name: "Warsaw HQ C16"
+            shortname: "waw-hq-c16"
+          - name: "Warsaw Branch C16"
+            shortname: "waw-br1-c16"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyOffice
+  data:
+    - name: "OFFICES"
+      site_type: hq

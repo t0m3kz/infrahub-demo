@@ -1,0 +1,40 @@
+query RackDevicesWithInterfaces(
+  $pod_id: ID!
+  $row_index: BigInt!
+  $role_filter: String
+  $interface_role: String
+) {
+  LocationRack(row_index__value: $row_index, pod__ids: [$pod_id]) {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        devices(role__value: $role_filter) {
+          edges {
+            node {
+              id
+              name {
+                value
+              }
+              role {
+                value
+              }
+              interfaces(role__value: $interface_role) {
+                edges {
+                  node {
+                    id
+                    name {
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

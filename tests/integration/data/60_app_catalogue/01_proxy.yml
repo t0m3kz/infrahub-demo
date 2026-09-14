@@ -1,0 +1,39 @@
+---
+# Two brokers for the app-catalogue scenario: one web_gateway (egress) and one
+# private_access (ZTNA), assigned to IT001 through customer-level intent.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedCloudProxy
+  data:
+    - name: it001-web-gateway
+      description: "IT001 egress web gateway"
+      provider: zscaler_zia
+      service_type: web_gateway
+      owner: "IT001"
+      member_of_groups:
+        - saas_proxies
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedCloudProxy
+  data:
+    - name: it001-ztna-broker
+      description: "IT001 private access broker"
+      provider: zscaler_zpa
+      service_type: private_access
+      owner: "IT001"
+      member_of_groups:
+        - saas_proxies
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: OrganizationCustomer
+  data:
+    - name: "IT001 Test Customer"
+      org_id: "IT001"
+      egress_service: it001-web-gateway
+      private_access_service: it001-ztna-broker

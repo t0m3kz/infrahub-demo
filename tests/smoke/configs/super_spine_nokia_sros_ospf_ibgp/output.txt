@@ -36,7 +36,7 @@ A admin configure router "Base" interface "Loopback0" ipv4 primary address "10.0
 
 A admin configure router "Base" ospf 1 admin-state enable
 A admin configure router "Base" ospf 1 router-id "10.0.0.1"
-A admin configure router "Base" ospf 1 reference-bandwidth 100000
+A admin configure router "Base" ospf 1 reference-bandwidth 10000
 A admin configure router "Base" ospf 1 traffic-engineering admin-state enable
 A admin configure router "Base" ospf 1 interface "Ethernet1" admin-state enable
 A admin configure router "Base" ospf 1 interface "Ethernet1" area "0.0.0.0"
@@ -59,7 +59,7 @@ A admin configure router "Base" bgp 1 group "EVPN-PEERS" peer-as 65000
 A admin configure router "Base" bgp 1 group "EVPN-PEERS" local-address "10.0.0.1"
 A admin configure router "Base" bgp 1 group "EVPN-PEERS" family evpn
 A admin configure router "Base" bgp 1 group "EVPN-PEERS" cluster 10.0.0.1
-A admin configure router "Base" bgp 1 group "EVPN-PEERS" send-community extended
+A admin configure router "Base" bgp 1 group "EVPN-PEERS" send-community standard
 A admin configure router "Base" bgp 1 neighbor "10.0.0.100" admin-state enable
 A admin configure router "Base" bgp 1 neighbor "10.0.0.100" peer-as 65000
 A admin configure router "Base" bgp 1 neighbor "10.0.0.100" description "spine-01"

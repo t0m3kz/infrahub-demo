@@ -37,11 +37,17 @@ Perfect for:
 
 ## Deployment
 
+> This scenario is currently illustrative only. The directory contains no YAML object fixture, so the commands below describe the intended workflow rather than a loadable demo.
+
 ```bash
 uv run infrahubctl branch create your_branch
 # Edit DC1-1-POD-3 and increase number of Spines to 4
 uv run infrahubctl object load data/demos/05_llm_time/ --branch your_branch
 ```
+
+## Validation
+
+Run `uv run invoke test-integration-routing` for generator and routing changes, or `uv run invoke test-integration` for the complete topology matrix. The spines may be for AI, but the test runner still prefers evidence.
 
 Here you just sit back, sip your coffee, and watch the magic happen—no clicking, no frantic tab switching,
 just pure event-driven automation.

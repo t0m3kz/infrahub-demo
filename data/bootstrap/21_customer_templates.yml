@@ -1,0 +1,200 @@
+---
+# Customer Deployment Templates - Boarding Blueprints
+# These define the reusable capacity/capability tiers applied when boarding
+# a customer into a DC, colocation metro, or cloud region.
+# Loaded at bootstrap time, referenced by TopologyCustomer* instances.
+#
+# Naming convention: {SIZE}_{DEPLOYMENT_TYPE}
+#   size:            S, M, L, XL (t-shirt sizing — label only, see below)
+#   deployment_type: DC, COLO, CLOUD
+#
+# size is a naming-convention label, not an enforced default:
+#   S  - shared firewall/LB/proxy, single network segment
+#   M  - shared firewall/LB/proxy, a few network segments
+#   L  - dedicated firewall and/or LB, several network segments
+#   XL - dedicated firewall, LB, and proxy; many network segments
+#
+# uplink_*_count fields (DC/Colo only) provision physical cross-connect /
+# uplink ports at the given speed; Cloud templates are virtual and have no
+# physical port fields.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerTemplateDC
+  data:
+    - name: "S_DC"
+      description: >
+        Small DC customer footprint. Shared firewall/LB/proxy capacity,
+        single network segment. Minimal physical uplinks.
+      default_environment: "p"
+      size: "s"
+      dedicated_firewall: false
+      dedicated_loadbalancer: false
+      dedicated_proxy: false
+      network_segment_count: 1
+      uplink_10g_count: 2
+      uplink_40g_count: 0
+      uplink_100g_count: 0
+      uplink_400g_count: 0
+
+    - name: "M_DC"
+      description: >
+        Medium DC customer footprint. Shared firewall/LB/proxy capacity,
+        a few network segments, 10G/40G uplinks.
+      default_environment: "p"
+      size: "m"
+      dedicated_firewall: false
+      dedicated_loadbalancer: false
+      dedicated_proxy: false
+      network_segment_count: 3
+      uplink_10g_count: 2
+      uplink_40g_count: 2
+      uplink_100g_count: 0
+      uplink_400g_count: 0
+
+    - name: "L_DC"
+      description: >
+        Large DC customer footprint. Dedicated firewall and load balancer,
+        several network segments, 100G uplinks.
+      default_environment: "p"
+      size: "l"
+      dedicated_firewall: true
+      dedicated_loadbalancer: true
+      dedicated_proxy: false
+      network_segment_count: 6
+      uplink_10g_count: 0
+      uplink_40g_count: 2
+      uplink_100g_count: 2
+      uplink_400g_count: 0
+
+    - name: "XL_DC"
+      description: >
+        Extra large DC customer footprint. Dedicated firewall, load balancer,
+        and proxy; many network segments; 400G uplinks.
+      default_environment: "p"
+      size: "xl"
+      dedicated_firewall: true
+      dedicated_loadbalancer: true
+      dedicated_proxy: true
+      network_segment_count: 12
+      uplink_10g_count: 0
+      uplink_40g_count: 0
+      uplink_100g_count: 2
+      uplink_400g_count: 2
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerTemplateColo
+  data:
+    - name: "S_COLO"
+      description: >
+        Small colocation customer footprint. Shared firewall/LB/proxy
+        capacity, single network segment. Minimal cross-connects.
+      default_environment: "p"
+      size: "s"
+      dedicated_firewall: false
+      dedicated_loadbalancer: false
+      dedicated_proxy: false
+      network_segment_count: 1
+      uplink_10g_count: 2
+      uplink_40g_count: 0
+      uplink_100g_count: 0
+      uplink_400g_count: 0
+
+    - name: "M_COLO"
+      description: >
+        Medium colocation customer footprint. Shared firewall/LB/proxy
+        capacity, a few network segments, 10G/40G cross-connects.
+      default_environment: "p"
+      size: "m"
+      dedicated_firewall: false
+      dedicated_loadbalancer: false
+      dedicated_proxy: false
+      network_segment_count: 3
+      uplink_10g_count: 2
+      uplink_40g_count: 2
+      uplink_100g_count: 0
+      uplink_400g_count: 0
+
+    - name: "L_COLO"
+      description: >
+        Large colocation customer footprint. Dedicated firewall and load
+        balancer, several network segments, 100G cross-connects.
+      default_environment: "p"
+      size: "l"
+      dedicated_firewall: true
+      dedicated_loadbalancer: true
+      dedicated_proxy: false
+      network_segment_count: 6
+      uplink_10g_count: 0
+      uplink_40g_count: 2
+      uplink_100g_count: 2
+      uplink_400g_count: 0
+
+    - name: "XL_COLO"
+      description: >
+        Extra large colocation customer footprint. Dedicated firewall, load
+        balancer, and proxy; many network segments; 400G cross-connects.
+      default_environment: "p"
+      size: "xl"
+      dedicated_firewall: true
+      dedicated_loadbalancer: true
+      dedicated_proxy: true
+      network_segment_count: 12
+      uplink_10g_count: 0
+      uplink_40g_count: 0
+      uplink_100g_count: 2
+      uplink_400g_count: 2
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerTemplateCloud
+  data:
+    - name: "S_CLOUD"
+      description: >
+        Small cloud customer footprint. Shared firewall/LB/proxy capacity,
+        single network segment.
+      default_environment: "p"
+      size: "s"
+      dedicated_firewall: false
+      dedicated_loadbalancer: false
+      dedicated_proxy: false
+      network_segment_count: 1
+
+    - name: "M_CLOUD"
+      description: >
+        Medium cloud customer footprint. Shared firewall/LB/proxy capacity,
+        a few network segments.
+      default_environment: "p"
+      size: "m"
+      dedicated_firewall: false
+      dedicated_loadbalancer: false
+      dedicated_proxy: false
+      network_segment_count: 3
+
+    - name: "L_CLOUD"
+      description: >
+        Large cloud customer footprint. Dedicated firewall and load
+        balancer, several network segments.
+      default_environment: "p"
+      size: "l"
+      dedicated_firewall: true
+      dedicated_loadbalancer: true
+      dedicated_proxy: false
+      network_segment_count: 6
+
+    - name: "XL_CLOUD"
+      description: >
+        Extra large cloud customer footprint. Dedicated firewall, load
+        balancer, and proxy; many network segments.
+      default_environment: "p"
+      size: "xl"
+      dedicated_firewall: true
+      dedicated_loadbalancer: true
+      dedicated_proxy: true
+      network_segment_count: 12

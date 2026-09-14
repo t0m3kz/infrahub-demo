@@ -12,12 +12,6 @@ feature lldp
 !
 
 ! VLANs
-vlan 100
-  name Customer-A
-!
-vlan 200
-  name Customer-A
-!
 !
 ! Interfaces
 interface Ethernet1
@@ -56,7 +50,6 @@ router bgp 65000
   !
   template peer-policy EVPN-PEERS-POLICY
     send-community
-    send-community extended
   !
   template peer-session EVPN-PEERS-SESSION
     update-source loopback0
@@ -88,7 +81,6 @@ router bgp 65001
   !
   template peer-policy UNDERLAY-PEERS-POLICY
     send-community
-    send-community extended
   !
   template peer-session UNDERLAY-PEERS-SESSION
     bfd
@@ -115,6 +107,8 @@ router bgp 65001
     !
 !
 
+!
+!
 !
 
 !

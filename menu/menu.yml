@@ -45,6 +45,15 @@ spec:
       kind: TopologyDeployment
 
     # ──────────────────────────────────────────────────────────────────────────
+    # CUSTOMER DEPLOYMENTS — customer footprints inside DC/Colo/Cloud topology
+    # ──────────────────────────────────────────────────────────────────────────
+    - namespace: Topology
+      name: CustomerMenu
+      label: Customer Deployments
+      icon: "mdi:account-cog-outline"
+      kind: TopologyCustomer
+
+    # ──────────────────────────────────────────────────────────────────────────
     # DESIGN — fabric and pod layout blueprints
     # ──────────────────────────────────────────────────────────────────────────
     - namespace: Topology
@@ -54,22 +63,34 @@ spec:
       children:
         data:
           - namespace: Topology
-            name: DesignDataCenterItem
-            label: Fabric Designs
-            kind: TopologyDataCenterDesign
-            icon: "mdi:floor-plan"
-
-          - namespace: Topology
-            name: DesignPodItem
-            label: Pod Designs
-            kind: TopologyPodDesign
-            icon: "mdi:view-grid-outline"
-
-          - namespace: Topology
             name: DesignElementItem
             label: Network Elements
             kind: TopologyElement
             icon: "mdi:view-grid-outline"
+
+          - namespace: Topology
+            name: DesignCustomerTemplateMenu
+            label: Customer Templates
+            icon: "mdi:account-network"
+            children:
+              data:
+                - namespace: Topology
+                  name: DesignCustomerTemplateDCItem
+                  label: Data Center
+                  kind: TopologyCustomerTemplateDC
+                  icon: "mdi:floor-plan"
+
+                - namespace: Topology
+                  name: DesignCustomerTemplateColoItem
+                  label: Colocation
+                  kind: TopologyCustomerTemplateColo
+                  icon: "mdi:office-building-outline"
+
+                - namespace: Topology
+                  name: DesignCustomerTemplateCloudItem
+                  label: Cloud
+                  kind: TopologyCustomerTemplateCloud
+                  icon: "mdi:cloud-outline"
 
     # ──────────────────────────────────────────────────────────────────────────
     # INVENTORY — physical devices and hardware
@@ -115,6 +136,27 @@ spec:
                   icon: "mdi:cable-data"
                   kind: DcimCable
                   description: "Cabling between devices"
+
+                - name: Mlag
+                  namespace: Managed
+                  label: MLAG
+                  icon: "mdi:link-variant"
+                  kind: ManagedMLAG
+                  description: "Multi-chassis link aggregation groups"
+
+                - name: HA
+                  namespace: Managed
+                  label: HA Domains
+                  icon: "mdi:heart-pulse"
+                  kind: ManagedHA
+                  description: "High availability domains (firewall, proxy, load balancer, cloud)"
+
+                - name: Controller
+                  namespace: Managed
+                  label: Controllers
+                  icon: "mdi:remote-desktop"
+                  kind: ManagedController
+                  description: "Management/orchestration controllers (WLC, ACI APIC, DNA Center, security/LB managers, etc.)"  # yamllint disable-line rule:line-length
           # --------- Device Catalog ---------
           - namespace: Dcim
             name: CatalogMenu
@@ -136,6 +178,13 @@ spec:
                   kind: DcimPlatform
                   icon: "mdi:chip"
                   description: "Operating system and firmware platforms"
+
+                - namespace: Dcim
+                  name: SoftwareImage
+                  label: Software Images
+                  kind: DcimSoftwareImage
+                  icon: "mdi:package-variant"
+                  description: "Versioned OS and firmware images"
           # ── Circuits ───────────────────────────────────────────────────────
           - namespace: Topology
             name: CircuitsMenu
@@ -221,18 +270,6 @@ spec:
                   kind: RoutingAutonomousSystem
                   icon: "mdi:numeric"
 
-                - namespace: Managed
-                  name: ExternalFabricPeeringItem
-                  label: External Fabric Peerings
-                  kind: ManagedExternalFabricPeering
-                  icon: "mdi:wan"
-
-                - namespace: Managed
-                  name: ExternalPeerItem
-                  label: External Peers
-                  kind: ManagedExternalPeer
-                  icon: "mdi:account-network"
-
 
           # ── OSPF ───────────────────────────────────────────────────────────
           - namespace: Managed
@@ -252,12 +289,6 @@ spec:
                   label: OSPF Areas
                   kind: RoutingOSPFArea
                   icon: "mdi:hexagon-outline"
-
-                - namespace: Managed
-                  name: OspfLinkItem
-                  label: OSPF Link Services
-                  kind: ManagedOSPFLinkService
-                  icon: "mdi:link-variant"
 
           # ── Static Routes ───────────────────────────────────────────────────
           - namespace: Cloud
@@ -326,12 +357,6 @@ spec:
                   kind: ManagedLoadBalancer
                   icon: "mdi:scale-balance"
 
-                - namespace: Managed
-                  name: ForwardingProxyItem
-                  label: Proxy & Forwarding
-                  kind: ManagedForwardingProxy
-                  icon: "mdi:web"
-
     # ──────────────────────────────────────────────────────────────────────────
     # SECURITY — zones, profiles, policies
     # ──────────────────────────────────────────────────────────────────────────
@@ -359,17 +384,36 @@ spec:
             kind: SecurityPolicy
             icon: "mdi:shield-check"
 
-          - namespace: Service
+          - namespace: Security
+            name: SecurityPolicyRuleItem
+            label: Security Policy Rules
+            kind: SecurityPolicyRule
+            icon: "mdi:file-document-edit-outline"
+
+          - namespace: Security
+            name: SecurityTagItem
+            label: Security Tags
+            kind: SecurityTag
+            icon: "mdi:tag-outline"
+
+          - namespace: Security
+            name: SecurityTagRuleItem
+            label: Security Tag Rules
+            kind: SecurityTagRule
+            icon: "mdi:tag-arrow-right-outline"
+
+          - namespace: Proxy
             name: ProxyURLCategoryItem
             label: URL Categories
-            kind: ServiceProxyURLCategory
-            icon: "mdi:tag-multiple"
+            kind: ProxyURLCategory
+            icon: "mdi:web"
 
-          - namespace: Service
+          - namespace: Proxy
             name: ProxyPolicyItem
             label: Proxy Policies
-            kind: ServiceProxyPolicy
-            icon: "mdi:file-document-outline"
+            kind: ProxyPolicy
+            icon: "mdi:shield-key-outline"
+
 
     # ──────────────────────────────────────────────────────────────────────────
     # APPLICATIONS — business applications and virtual clouds
@@ -377,17 +421,10 @@ spec:
     - namespace: App
       name: ApplicationsMenu
       label: Applications
+      kind: AppApplication
       icon: "mdi:application"
-      children:
-        data:
-          - namespace: App
-            name: ApplicationItem
-            label: Applications
-            kind: AppApplication
-            icon: "mdi:application-outline"
-
-          - namespace: App
-            name: ComponentItem
-            label: Components
-            kind: AppComponent
-            icon: "mdi:application-brackets"
+    - namespace: App
+      name: ApplicationRequestsMenu
+      label: Application Requests
+      kind: AppDeploymentRequest
+      icon: "mdi:clipboard-text-outline"

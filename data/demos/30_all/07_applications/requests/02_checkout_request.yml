@@ -1,0 +1,21 @@
+---
+# Full customer application request example for the all-in-one demo.
+# The approved request is materialized by add_application_deployment_request
+# into catalogue objects, then the application generator creates enforcement.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppDeploymentRequest
+  data:
+    - name: c001-checkout-request
+      description: "Checkout application with private access and payment dependency"
+      application_fqdn: checkout.c001.demo.local
+      environment: production
+      criticality: high
+      security_profile: internet_exposed
+      deployment_type: shared_platform
+      region: eu-central
+      status: approved
+      customer: C001
+      member_of_groups:
+        - app_deployment_requests

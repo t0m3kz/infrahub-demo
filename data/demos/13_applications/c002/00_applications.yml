@@ -1,0 +1,80 @@
+---
+# C002 (SwiftGo GmbH) — "dispatch-hub" application: portfolio + frontend/
+# backend/database components, wired to the segments (data/demos/
+# 08_segments/c002/02_segments.yml) and to the shared DC6 servers
+# boarded in data/demos/06_servers/ (bonds shared across customers:
+# ktw-pod1-server-1/bond1 = web, ktw-pod2-server-1/bond1 = app,
+# ktw-pod3-server-4 = db).
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppApplication
+  data:
+    - label: dispatch-hub
+      environment: p
+      criticality: high
+      security_profile: internet_exposed
+      fqdn: dispatch-hub.c002.demo.local
+      ingress_mode: frontend
+      owner: C002
+      member_of_groups:
+        - app_applications
+      children:
+        kind: AppComponent
+        data:
+          - name: web-frontend
+            component_type: frontend
+            network_segment: c002-web-frontend-p
+            instances:
+              - ktw-pod1-server-1
+            children:
+              kind: AppEndpoint
+              data:
+                - name: c002-dispatch-web-https
+                  endpoint_type: internal_service
+                  fqdn: web.dispatch-hub.c002.demo.local
+                  service_ports:
+                    data:
+                      - port: 443
+                        protocol: tcp
+            member_of_groups:
+              - app_components
+
+          - name: app-backend
+            component_type: backend
+            network_segment: c002-app-backend-p
+            instances:
+              - ktw-pod2-server-1
+            children:
+              kind: AppEndpoint
+              data:
+                - name: c002-dispatch-backend-https
+                  endpoint_type: internal_service
+                  fqdn: backend.dispatch-hub.c002.demo.local
+                  service_ports:
+                    data:
+                      - port: 8443
+                        protocol: tcp
+            member_of_groups:
+              - app_components
+
+          - name: order-db
+            component_type: database
+            network_segment: c002-database-p
+            instances:
+              - ktw-pod3-server-4
+            children:
+              kind: AppEndpoint
+              data:
+                - name: c002-dispatch-data
+                  endpoint_type: internal_service
+                  fqdn: data.dispatch-hub.c002.demo.local
+                  service_ports:
+                    data:
+                      - port: 5432
+                        protocol: tcp
+                      - port: 6379
+                        protocol: tcp
+            member_of_groups:
+              - app_components

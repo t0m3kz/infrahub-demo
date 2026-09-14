@@ -86,19 +86,3 @@ nodes:
             label: Loopback VTEP
             description: Virtualized network communications within loopback.
             color: "#CDB4DB"
-      - name: gateway_ip
-        label: L3 Gateway IP
-        kind: Text
-        optional: true
-        order_weight: 1400
-        description: "Anycast/L3 gateway address for this prefix (e.g. 10.10.1.1/24)"
-    relationships:
-      - name: gateway
-        label: L3 Gateway
-        identifier: prefix__gateway
-        peer: IpamIPAddress
-        optional: true
-        cardinality: one
-        kind: Component
-        on_delete: cascade
-        order_weight: 1500

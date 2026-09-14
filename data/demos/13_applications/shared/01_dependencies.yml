@@ -1,0 +1,28 @@
+---
+# Cross-application dependency examples: c001's storefront components calling
+# shared external services. AppApplicationGenerator turns these into
+# ProxyPolicy/ProxyPolicyRule entries (target component_type is
+# external endpoint) instead of firewall rules. web-frontend and app-backend
+# both use "shared-cloud-proxy" — they must end up sharing ONE auto-generated
+# ProxyPolicy scoped to C001 and shared-cloud-proxy, with two rules, not one
+# policy per component.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppDependency
+  data:
+    - name: c001-storefront-p-web-frontend-to-stripe-api
+      source: c001-storefront-p-web-frontend
+      target: stripe-api-external
+      protocol: tcp
+      port_start: 443
+      access_status: auto
+      description: "Checkout frontend calls the Stripe payment API"
+
+    - name: c001-storefront-p-app-backend-to-github-api
+      source: c001-storefront-p-app-backend
+      target: github-api-external
+      protocol: tcp
+      port_start: 443
+      access_status: auto
+      description: "Checkout backend calls the GitHub API for deployment status"

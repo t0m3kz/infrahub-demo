@@ -1,0 +1,61 @@
+{#- Representative Terraform HCL for an Azure Load Balancer — verify resource arguments
+    against the azurerm Terraform provider docs before real use. -#}
+resource "azurerm_lb" "{{ lb_name | tf_id }}" {
+  name                = "{{ lb_name }}"
+  sku                 = "{{ sku }}"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+
+  frontend_ip_configuration {
+    name                 = "{{ lb_name | tf_id }}-frontend"
+{%- if type == 'Public' %}
+    public_ip_address_id = azurerm_public_ip.{{ lb_name | tf_id }}.id
+{%- elif subnet_names %}
+    subnet_id            = data.azurerm_subnet.{{ subnet_names[0] | tf_id }}.id
+{%- endif %}
+  }
+
+  tags = {
+{%- for key, value in (tags or {}).items() %}
+    {{ key }} = "{{ value }}"
+{%- endfor %}
+  }
+}
+{% for pool in backend_pools %}
+resource "azurerm_lb_backend_address_pool" "{{ pool.name | tf_id }}" {
+  loadbalancer_id = azurerm_lb.{{ lb_name | tf_id }}.id
+  name            = "{{ pool.name }}"
+}
+{% for addr in pool.backend_addresses %}
+resource "azurerm_lb_backend_address_pool_address" "{{ pool.name | tf_id }}_{{ loop.index }}" {
+  name                     = "{{ addr.name }}"
+  backend_address_pool_id = azurerm_lb_backend_address_pool.{{ pool.name | tf_id }}.id
+  virtual_network_id      = data.azurerm_virtual_network.{{ vnet_name | tf_id }}.id
+  ip_address              = "{{ addr.ip_address }}"
+}
+{% endfor %}
+{%- if pool.health_probe %}
+resource "azurerm_lb_probe" "{{ pool.name | tf_id }}" {
+  loadbalancer_id     = azurerm_lb.{{ lb_name | tf_id }}.id
+  name                = "{{ pool.name }}-probe"
+  protocol            = "{{ pool.health_probe.protocol }}"
+  port                = {{ pool.health_probe.port }}
+  interval_in_seconds = {{ pool.health_probe.interval_in_seconds }}
+  number_of_probes    = {{ pool.health_probe.number_of_probes }}
+{%- if pool.health_probe.request_path %}
+  request_path        = "{{ pool.health_probe.request_path }}"
+{%- endif %}
+}
+{%- endif %}
+{% endfor %}
+{% for rule in lb_rules %}
+resource "azurerm_lb_rule" "{{ rule.name | tf_id }}" {
+  loadbalancer_id                = azurerm_lb.{{ lb_name | tf_id }}.id
+  name                           = "{{ rule.name }}"
+  protocol                       = "{{ rule.protocol | capitalize }}"
+  frontend_port                  = {{ rule.frontend_port }}
+  backend_port                   = {{ rule.backend_port }}
+  frontend_ip_configuration_name = "{{ lb_name | tf_id }}-frontend"
+  backend_address_pool_ids       = [azurerm_lb_backend_address_pool.{{ rule.backend_pool_name | tf_id }}.id]
+}
+{% endfor %}

@@ -26,8 +26,40 @@ spec:
       resources:
         kind: IpamPrefix
         data:
-          - prefix: 100.64.0.0/16
+          # Shrunk from /16 to /18 to make room for FW-Context-P2P-IPv4 (below)
+          # within the same RFC 6598 /10 block — /18 still covers 8192 /31 links.
+          - prefix: 100.64.0.0/18
             description: "RFC 6598 Shared Address Space for DCI P2P links (IPv4 exception)"
+            status: active
+            member_type: prefix
+            is_pool: true
+            role: technical
+      ip_namespace: default
+
+    - name: FW-Context-P2P-IPv4
+      description: "FirewallContext P2P Pool — RFC 6598 /30 links between border-leaf and firewall context (IPv4 exception)"  # yamllint disable-line rule:line-length
+      default_prefix_type: IpamPrefix
+      default_prefix_length: 24
+      resources:
+        kind: IpamPrefix
+        data:
+          - prefix: 100.65.0.0/16
+            description: "RFC 6598 Shared Address Space for FirewallContext P2P links"
+            status: active
+            member_type: prefix
+            is_pool: true
+            role: technical
+      ip_namespace: default
+
+    - name: FW-Context-P2P-IPv6
+      description: "FirewallContext P2P Pool — ULA space for border-leaf/firewall-context /127 links (default, preferred over IPv4)"  # yamllint disable-line rule:line-length
+      default_prefix_type: IpamPrefix
+      default_prefix_length: 56
+      resources:
+        kind: IpamPrefix
+        data:
+          - prefix: fd00:2300::/40
+            description: "ULA IPv6 for FirewallContext P2P links"
             status: active
             member_type: prefix
             is_pool: true

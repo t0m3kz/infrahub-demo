@@ -1,0 +1,202 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TemplateDcimVirtualDevice
+  data:
+    - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_S
+      owner: "P027"
+      device_type: NetScaler-ADC-VPX
+      role: load-balancer
+      platform: netscaler
+      software_image: netscaler-14.1.17.16
+      status: active
+      cpu: 2
+      memory: 8
+      storage: 60
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_S_mgmt
+            name: eth0
+            role: management
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_S_eth[1-4]
+            name: eth[1-4]
+            role: customer
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_S_ha
+            name: eth5
+            role: ha
+    - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_M
+      owner: "P027"
+      device_type: NetScaler-ADC-VPX
+      role: load-balancer
+      platform: netscaler
+      software_image: netscaler-14.1.17.16
+      status: active
+      cpu: 4
+      memory: 16
+      storage: 120
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_M_mgmt
+            name: eth0
+            role: management
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_M_eth[1-4]
+            name: eth[1-4]
+            role: customer
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_M_ha
+            name: eth5
+            role: ha
+    - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_L
+      owner: "P027"
+      device_type: NetScaler-ADC-VPX
+      role: load-balancer
+      platform: netscaler
+      software_image: netscaler-14.1.17.16
+      status: active
+      cpu: 8
+      memory: 32
+      storage: 240
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_L_mgmt
+            name: eth0
+            role: management
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_L_eth[1-4]
+            name: eth[1-4]
+            role: customer
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_L_ha
+            name: eth5
+            role: ha
+    - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_XL
+      owner: "P027"
+      device_type: NetScaler-ADC-VPX
+      role: load-balancer
+      platform: netscaler
+      software_image: netscaler-14.1.17.16
+      status: active
+      cpu: 16
+      memory: 64
+      storage: 480
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_XL_mgmt
+            name: eth0
+            role: management
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_XL_eth[1-4]
+            name: eth[1-4]
+            role: customer
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_XL_ha
+            name: eth5
+            role: ha
+
+    # ── Dedicated per-customer instances — same sizing tiers, not part of the
+    # shared production/non-production pair dc.py auto-provisions; reserved
+    # for a future customer-boarding generator to instantiate on demand.
+    - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_S
+      owner: "P027"
+      device_type: NetScaler-ADC-VPX
+      role: load-balancer
+      platform: netscaler
+      software_image: netscaler-14.1.17.16
+      status: active
+      cpu: 2
+      memory: 8
+      storage: 60
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_S_mgmt
+            name: eth0
+            role: management
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_S_eth[1-4]
+            name: eth[1-4]
+            role: customer
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_S_ha
+            name: eth5
+            role: ha
+    - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_M
+      owner: "P027"
+      device_type: NetScaler-ADC-VPX
+      role: load-balancer
+      platform: netscaler
+      software_image: netscaler-14.1.17.16
+      status: active
+      cpu: 4
+      memory: 16
+      storage: 120
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_M_mgmt
+            name: eth0
+            role: management
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_M_eth[1-4]
+            name: eth[1-4]
+            role: customer
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_M_ha
+            name: eth5
+            role: ha
+    - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_L
+      owner: "P027"
+      device_type: NetScaler-ADC-VPX
+      role: load-balancer
+      platform: netscaler
+      software_image: netscaler-14.1.17.16
+      status: active
+      cpu: 8
+      memory: 32
+      storage: 240
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_L_mgmt
+            name: eth0
+            role: management
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_L_eth[1-4]
+            name: eth[1-4]
+            role: customer
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_L_ha
+            name: eth5
+            role: ha
+    - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_XL
+      owner: "P027"
+      device_type: NetScaler-ADC-VPX
+      role: load-balancer
+      platform: netscaler
+      software_image: netscaler-14.1.17.16
+      status: active
+      cpu: 16
+      memory: 64
+      storage: 480
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_XL_mgmt
+            name: eth0
+            role: management
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_XL_eth[1-4]
+            name: eth[1-4]
+            role: customer
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_XL_ha
+            name: eth5
+            role: ha

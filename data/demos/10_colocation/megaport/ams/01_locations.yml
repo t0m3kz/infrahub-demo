@@ -1,0 +1,15 @@
+---
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationMetro
+  data:
+    - name: "Amsterdam"
+      shortname: "ams"
+      children:
+        kind: LocationFacility
+        data:
+          - name: "MCR-AMS1"
+            shortname: "mcr-ams1"
+            parent: "ams"

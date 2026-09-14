@@ -17,7 +17,6 @@ def _collect_l3_vni_from_namespaces(namespaces) -> list[dict[str, Any]]:
             seen[ns_name] = {
                 "vrf_name": ns_name,
                 "l3_vni": l3_vni,
-                "owner": (ns.get("owner") or {}).get("name", ""),
             }
     return sorted(seen.values(), key=lambda v: v.get("vrf_name", ""))
 
@@ -36,6 +35,7 @@ def _l2_from_activations(activations: list[dict[str, Any]]) -> list[dict[str, An
             continue
         seg = act.get("segment") or {}
         gateway_ip, gateway_ipv6, vrf, l3_vni = _get_segment_gateways(seg)
+        sgt = seg.get("security_tag") or {}
         mappings.append(
             {
                 "vlan_id": vlan_id,
@@ -46,6 +46,8 @@ def _l2_from_activations(activations: list[dict[str, Any]]) -> list[dict[str, An
                 "arp_suppression": seg.get("arp_suppression", True),
                 "vrf": vrf,
                 "l3_vni": l3_vni,
+                "sgt": sgt.get("group_id"),
+                "sgt_name": sgt.get("name"),
             }
         )
         seen.add(vlan_id)
@@ -61,6 +63,7 @@ def _l3_from_activations(activations: list[dict[str, Any]]) -> list[dict[str, An
 def get_interfaces(
     data: list,
     activations: list[dict[str, Any]] | None = None,
+    device_name: str = "",
 ) -> list[dict[str, Any]]:
     """
     Returns a list of interface dictionaries sorted by interface name.
@@ -93,13 +96,45 @@ def get_interfaces(
             if s.get("typename") in ("ManagedVlanSegment", "ManagedVxlanSegment") and s.get("name") in segment_vlan
         ]
 
-        # Extract OSPF area information
+        # FirewallContext sub-interface (role="service", created by
+        # generators/topology/customer_dc.py's _create_context_subinterface)
+        # needs its own dot1q tag rendered — the border-leaf/firewall leg of a
+        # PBR p2p link isn't part of any customer segment's own VLAN, so it
+        # can't come from `segment_vlan` above like a trunk's access/trunk
+        # VLANs do. The context capability carries its own vlan_id directly.
+        context_vlan_id = next(
+            (
+                s.get("vlan_id")
+                for s in (iface.get("interface_capabilities") or [])
+                if s.get("typename") == "ManagedFirewallContext" and s.get("vlan_id")
+            ),
+            None,
+        )
+
+        # Extract OSPF interface configuration. Area/network_type/cost live on the
+        # peering (ManagedOSPFPeering), reached via the interface's `peering`
+        # relationship — not on RoutingOSPFInterface itself (mode/metric/auth/password
+        # are the only OSPF fields still on the interface). The peering's
+        # ospf_process is cardinality-many (both ends of the link, like a BGP
+        # peering's bgp_processes) — select this device's own process by matching
+        # its capabilities.device name, mirroring _extract_remote_asn_from_peering.
         # After clean_data: area is a dict like {"area": 0, "name": "backbone", "area_type": "standard"}
-        ospf_areas = [
-            s.get("area", {}).get("area")
-            for s in (iface.get("interface_capabilities") or [])
-            if s.get("typename") == "RoutingOSPFInterface" and s.get("area")
+        ospf_configs = [
+            s for s in (iface.get("interface_capabilities") or []) if s.get("typename") == "RoutingOSPFInterface"
         ]
+        ospf_peerings = [s.get("peering") or {} for s in ospf_configs if s.get("peering")]
+        ospf_areas = [p.get("ospf_area", {}).get("area") for p in ospf_peerings if p.get("ospf_area")]
+        ospf_modes = [s.get("mode") for s in ospf_configs if s.get("mode")]
+        ospf_metrics = [s.get("metric") for s in ospf_configs if s.get("metric") is not None]
+        ospf_process_ids = []
+        for p in ospf_peerings:
+            for proc in p.get("ospf_process") or []:
+                proc_devices = {d.get("name") for d in (proc.get("capabilities") or []) if isinstance(d, dict)}
+                if not device_name or device_name in proc_devices:
+                    ospf_process_ids.append(proc.get("process_id"))
+                    break
+        ospf_auth_modes = [s.get("authentication_mode") for s in ospf_configs if s.get("authentication_mode")]
+        ospf_passwords = [(s.get("password") or {}).get("password") for s in ospf_configs if s.get("password")]
 
         # Extract circuit services (physical circuits)
         circuits = [
@@ -149,7 +184,7 @@ def get_interfaces(
 
         is_loopback = "loopback" in name.lower()
         is_svi = "vlan" in name.lower()
-        is_lag = iface.get("__typename") == "DcimLAGInterface"
+        is_lag = iface.get("typename") == "DcimLAGInterface"
         is_bgp_unnumbered = not ip_addresses and iface.get("cable") is not None and not is_loopback and not is_svi
 
         iface_dict = {
@@ -162,6 +197,8 @@ def get_interfaces(
             "mtu": iface.get("mtu"),
             "ip_addresses": ip_addresses,
             "is_bgp_unnumbered": is_bgp_unnumbered,
+            "dot1q_vlan": context_vlan_id,
+            "parent_interface": iface.get("parent_interface"),
         }
 
         if is_lag:
@@ -171,8 +208,15 @@ def get_interfaces(
             member_interfaces = iface.get("member_interfaces") or []
             iface_dict["member_interfaces"] = [m.get("name") for m in member_interfaces if m.get("name")]
 
-        if ospf_areas:
-            iface_dict["ospf"] = {"area": ospf_areas[0]}
+        if ospf_areas or ospf_modes or ospf_metrics or ospf_process_ids:
+            iface_dict["ospf"] = {
+                "area": ospf_areas[0] if ospf_areas else None,
+                "mode": ospf_modes[0] if ospf_modes else None,
+                "metric": ospf_metrics[0] if ospf_metrics else None,
+                "process_id": ospf_process_ids[0] if ospf_process_ids else None,
+                "authentication_mode": ospf_auth_modes[0] if ospf_auth_modes else None,
+                "password": ospf_passwords[0] if ospf_passwords else None,
+            }
 
         if circuits:
             iface_dict["circuits"] = circuits
@@ -189,6 +233,9 @@ def get_interfaces(
 # VXLAN Configuration (Unified across all device types)
 # ============================================================================
 # Following netlab's approach: single implementation, platform-agnostic data model
+
+
+_VTEP_ROLES = frozenset({"leaf", "border-leaf", "border_leaf", "tor", "l2-leaf", "access-leaf", "border-spine"})
 
 
 def get_vxlan_config(
@@ -210,6 +257,13 @@ def get_vxlan_config(
     Returns:
         VXLAN configuration dict or None if VXLAN not needed
     """
+    # Spine/super-spine/hyper-spine are underlay+EVPN-route-reflector only —
+    # never VTEPs, never terminate VXLAN. Gated here (not just by callers'
+    # query shape or generator wiring) so this function is self-defending
+    # regardless of what data happens to reach it.
+    if device_role not in _VTEP_ROLES:
+        return None
+
     interfaces = data.get("interfaces", [])
 
     if not activations:
@@ -232,7 +286,7 @@ def get_vxlan_config(
             vtep_ipv4 = ip_address.get("address", "").split("/")[0]
 
     # Get BGP config for EVPN
-    device_capabilities = data.get("device_capabilities", [])
+    device_capabilities = data.get("capabilities", [])
     bgp_services = [svc for svc in device_capabilities if svc.get("service_type") == "bgp"]
     local_as = None
     router_id = vtep_ipv4  # Use VTEP IP as router ID
@@ -270,6 +324,17 @@ def get_vxlan_config(
             "enabled": bool(l3_vni_mappings),
             "vrf_count": len(l3_vni_mappings),
         },
+        # Symmetric IRB: anycast gateway lives on every VTEP (leaf/border-leaf)
+        # that has at least one L2 segment with its own gateway_ip — same
+        # standard anycast MAC on every leaf in the fabric (.dev/scenariusze.txt's
+        # "fabric forwarding anycast-gateway-mac" / "ip virtual-router
+        # mac-address" / "ip anycast-mac-address", identical value everywhere).
+        # Platform-agnostic here so every _transform_vxlan_* inherits it via
+        # .copy() without recomputing per platform.
+        "anycast_gateway": {
+            "enabled": any(m.get("gateway_ip") for m in l2_vni_mappings),
+            "mac": "00:1c:73:00:dc:01",
+        },
     }
 
     # Platform-specific transformations (netlab style)
@@ -301,16 +366,13 @@ def _transform_vxlan_platform(base_config: dict, platform: str, local_as: str | 
 
 
 def _transform_vxlan_arista(vxlan_base: dict, local_as: str | None) -> dict:
-    """Transform VXLAN config for Arista EOS platform."""
+    """Transform VXLAN config for Arista EOS platform.
+
+    anycast_gateway is already computed platform-agnostically in
+    get_vxlan_config's base_config — inherited via .copy(), not recomputed here.
+    """
     config = vxlan_base.copy()
     config["interface"] = "Vxlan1"  # EOS convention
-
-    # Enable anycast gateway when any L2 segment has a gateway_ip configured
-    anycast_enabled = any(m.get("gateway_ip") for m in config.get("l2_vni_mappings", []))
-    config["anycast_gateway"] = {
-        "enabled": anycast_enabled,
-        "mac": "00:1c:73:00:dc:01",  # Standard anycast MAC
-    }
 
     return config
 

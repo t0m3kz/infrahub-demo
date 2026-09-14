@@ -1,0 +1,32 @@
+---
+version: "1.0"
+
+# ============================================================================
+# Every device belongs to a customer or a provider — a device with no owner
+# is a modeling gap (who does this box belong to?). OrganizationEntity
+# (schemas/base/organization.yml) is the generic both Customer and Provider
+# inherit from, so the same field accepts either without forcing a choice at
+# the schema level: an operator's own infrastructure is typically Provider-
+# owned, a dedicated customer appliance is Customer-owned.
+#
+# Devices created via `object_template:` inherit this from their template
+# (confirmed: setting `owner` on a TemplateDcimPhysicalDevice/
+# TemplateDcimVirtualDevice propagates it to every instance created from
+# that template) — see data/bootstrap/09_*/10_* templates, all defaulted to
+# P027 (Technology Partner). Devices NOT created via object_template must
+# set `owner` explicitly (e.g. data/demos/06_servers/).
+# ============================================================================
+
+extensions:
+  nodes:
+    - kind: DcimDevice
+      relationships:
+        - name: owner
+          peer: OrganizationEntity
+          label: "Owner"
+          cardinality: one
+          kind: Attribute
+          optional: false
+          order_weight: 1650
+          identifier: "device__owner"
+          description: "Customer or provider that owns this device"

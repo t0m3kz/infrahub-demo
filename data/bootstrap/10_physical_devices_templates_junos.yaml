@@ -5,8 +5,10 @@ spec:
   kind: TemplateDcimPhysicalDevice
   data:
     - template_name: SRX-1500_EDGE_FIREWALL
+      owner: "P027"
       device_type: SRX-1500
       platform: junos
+      software_image: junos-23.4R2
       role: firewall
       status: provisioning
       interfaces:
@@ -24,8 +26,10 @@ spec:
             interface_type: 1000base-t
 
     - template_name: SRX-1500_DC_FIREWALL
+      owner: "P027"
       device_type: SRX-1500
       platform: junos
+      software_image: junos-23.4R2
       role: firewall
       status: provisioning
       interfaces:
@@ -37,30 +41,15 @@ spec:
             name: fxp0
             role: management
             interface_type: 1000base-t
-          - template_name: SRX-1500_DC_FIREWALL_ge-0/0/[0-3]
-            name: ge-0/0/[0-3]
+          - template_name: SRX-1500_DC_FIREWALL_ge-0/0/[0-1]
+            name: ge-0/0/[0-1]
+            role: uplink
+            interface_type: 1000base-t
+          - template_name: SRX-1500_DC_FIREWALL_ge-0/0/2
+            name: ge-0/0/2
+            role: ha
+            interface_type: 1000base-t
+          - template_name: SRX-1500_DC_FIREWALL_ge-0/0/3
+            name: ge-0/0/3
             role: downlink
             interface_type: 1000base-t
-    # console
-    - template_name: SRX-1500_EDGE_FIREWALL
-      device_type: SRX-1500
-      platform: juniper_junos
-      role: firewall
-      status: provisioning
-      interfaces:
-        kind: TemplateDcimConsoleInterface
-        data:
-          - template_name: SRX-1500_EDGE_FIREWALL_con
-            name: con
-            role: console
-    - template_name: SRX-1500_DC_FIREWALL
-      device_type: SRX-1500
-      platform: juniper_junos
-      role: firewall
-      status: provisioning
-      interfaces:
-        kind: TemplateDcimConsoleInterface
-        data:
-          - template_name: SRX-1500_DC_FIREWALL_con
-            name: con
-            role: console

@@ -37,12 +37,13 @@ interface Loopback0
 
 router bgp 65000
   router-id 10.0.0.1
+  bgp cluster-id 10.0.0.1
   graceful-restart
   !
   template peer-policy EVPN-PEERS-POLICY
     send-community
-    send-community extended
     route-reflector-client
+    next-hop-unchanged
   !
   template peer-session EVPN-PEERS-SESSION
     update-source loopback0
@@ -74,7 +75,6 @@ router bgp 65001
   !
   template peer-policy UNDERLAY-PEERS-POLICY
     send-community
-    send-community extended
   !
   template peer-session UNDERLAY-PEERS-SESSION
     bfd

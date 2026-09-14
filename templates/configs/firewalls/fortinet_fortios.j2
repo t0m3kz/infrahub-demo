@@ -16,7 +16,11 @@ config system interface
     edit "{{ iface.name }}"
 {%- endif %}
 {%- if iface.ip_address %}
+{%- if ':' in iface.ip_address.address %}
+        set ip6-address {{ iface.ip_address.address }}
+{%- else %}
         set ip {{ iface.ip_address.address }}
+{%- endif %}
 {%- endif %}
         set allowaccess ping https ssh
         set status up
@@ -87,4 +91,57 @@ config firewall policy
 {%- endfor %}
 {%- endfor %}
 end
+{%- endif %}
+{%- if contexts %}
+#
+# --- Firewall Contexts (VDOMs) — one per tenant, per ManagedFirewallContext ---
+config system vdom
+{%- for context in contexts %}
+    edit "{{ context.name }}"
+    next
+{%- endfor %}
+end
+{%- for context in contexts %}
+{%- if context.vlan_id and context.parent_interface.name %}
+config global
+    config system interface
+        edit "{{ context.parent_interface.name }}.{{ context.vlan_id }}"
+            set type vlan
+            set vlanid {{ context.vlan_id }}
+            set interface "{{ context.parent_interface.name }}"
+            set vdom "{{ context.name }}"
+{%- if context.ip_address %}
+{%- if ':' in context.ip_address %}
+            set ip6-address {{ context.ip_address }}
+{%- else %}
+            set ip {{ context.ip_address }}
+{%- endif %}
+{%- endif %}
+            set allowaccess ping https ssh
+            set status up
+{%- if context.tenant_name %}
+            set description "{{ context.tenant_name }}"
+{%- endif %}
+        next
+    end
+end
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+{%- if ha %}
+#
+# --- HA Configuration ---
+config system ha
+    set group-id {{ ha.group_id }}
+    set mode {{ 'a-p' if ha.mode == 'active-passive' else 'a-a' }}
+    set priority {{ ha.priority }}
+    set override {{ 'enable' if ha.preempt else 'disable' }}
+{%- if ha.ha_link %}
+    set hbdev "{{ ha.ha_link }}" 50
+{%- endif %}
+{%- if ha.virtual_ip %}
+    set vcluster-id {{ ha.group_id }}
+{%- endif %}
+end
+#
 {%- endif %}

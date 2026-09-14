@@ -1,0 +1,16 @@
+---
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationMetro
+  data:
+    - name: "Frankfurt"
+      shortname: "fra"
+      children:
+        kind: LocationFacility
+        data:
+          - name: "FR2"
+            shortname: "fr2"
+          - name: "FR6"
+            shortname: "fr6"

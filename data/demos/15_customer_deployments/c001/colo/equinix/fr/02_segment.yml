@@ -1,0 +1,16 @@
+---
+# VLAN segment activated in C001's colocation footprint (FR).
+# customer_deployment references TopologyCustomerColocation by its
+# human_friendly_id: [owner__org_id__value, environment__value].
+# vlan_id is set manually — no pool allocation for VlanSegment.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVlanSegment
+  data:
+    - owner: "C001"
+      customer_name: "nordix-prod"
+      environment: "p"
+      vlan_id: 101
+      customer_deployment: ["C001", "p"]

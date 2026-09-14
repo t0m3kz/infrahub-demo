@@ -13,6 +13,11 @@ A admin configure router "Base" ospf 1 traffic-engineering admin-state enable
 A admin configure router "Base" ospf 1 interface "{{ interface.name }}" admin-state enable
 A admin configure router "Base" ospf 1 interface "{{ interface.name }}" area "{{ interface.ospf.area }}"
 A admin configure router "Base" ospf 1 interface "{{ interface.name }}" passive disable
+{%- if interface.ospf.get('password') %}
+{#- NOTE: authentication leaf path unverified for SR OS MD-CLI — best-effort guess -#}
+A admin configure router "Base" ospf 1 interface "{{ interface.name }}" authentication-type password
+A admin configure router "Base" ospf 1 interface "{{ interface.name }}" authentication-key "{{ interface.ospf.password }}"
+{%- endif %}
 {%- else %}
 A admin configure router "Base" ospf 1 interface "{{ interface.name }}" passive enable
 {%- endif %}

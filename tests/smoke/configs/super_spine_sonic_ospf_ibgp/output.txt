@@ -47,7 +47,7 @@
     "EVPN-PEERS": {
       "asn": "65000",
       "local_addr": "10.0.0.1",
-      "send_community": "extended"
+      "send_community": "standard"
     }
   },
   "DEVICE_METADATA": {
@@ -58,8 +58,16 @@
     }
   },
   "INTERFACE": {
-    "Ethernet1": {},
-    "Ethernet2": {}
+    "Ethernet1": {
+      "admin_status": "up",
+      "description": "to spine-01",
+      "mtu": "9000"
+    },
+    "Ethernet2": {
+      "admin_status": "up",
+      "description": "to spine-02",
+      "mtu": "9000"
+    }
   },
   "INTERFACE_IP": {
     "Ethernet1|10.1.0.1/31": {},
@@ -70,7 +78,7 @@
   },
   "OSPF_ROUTER": {
     "default": {
-      "reference_bandwidth": 100000,
+      "reference_bandwidth": 10000,
       "router_id": "10.0.0.1"
     }
   },

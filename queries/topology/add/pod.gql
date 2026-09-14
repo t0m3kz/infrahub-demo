@@ -11,10 +11,17 @@ fragment DeviceTemplateFields on TemplateDcimPhysicalDevice {
       id
     }
   }
-  interfaces(role__value: "uplink") {
+  # Covers every role pod.py's own fabric_templates entries can use: plain
+  # spine ("uplink" toward super-spine/mesh, "downlink" toward leafs) or
+  # border-spine (same two roles, plus "firewall"/"load-balancer" toward its
+  # own per-pod FW/LB — see PodTopologyGenerator._generate_pod_scoped_
+  # border_services). border-leaf's uplink lands on the spine's downlink-role
+  # ports, mirroring rack.py's own leaf/tor<->spine pattern.
+  interfaces(role__values: ["uplink", "downlink", "firewall", "load-balancer"]) {
     edges {
       node {
         name { value }
+        role { value }
       }
     }
   }
@@ -27,18 +34,6 @@ fragment SuperSpineTemplateFields on TemplateDcimPhysicalDevice {
   interfaces(role__value: "downlink") {
     edges { node { name { value } } }
   }
-}
-
-fragment PodDesignFields on TopologyPodDesign {
-  id
-  name { value }
-  rows { value }
-  compute_racks_per_row { value }
-  network_racks_per_row { value }
-  max_leafs_per_network_rack { value }
-  max_tors_per_network_rack { value }
-  max_tors_per_compute_rack { value }
-  max_spines_per_pod { value }
 }
 
 fragment DataCenterFields on TopologyDataCenter {
@@ -54,22 +49,22 @@ fragment DataCenterFields on TopologyDataCenter {
   }
   name { value }
   index { value }
-  amount_of_super_spines { value }
   naming_convention { value }
-  overlay_technology { value }
   fabric_interface_sorting_method { value }
-  super_spine_template { node { ...SuperSpineTemplateFields } }
-  design {
-    node {
-      id
-      max_pods { value }
-      max_super_spines_per_fabric { value }
-      max_spines_per_pod { value }
-      routing_strategy { value }
-      underlay_protocol { value }
+  connectivity_mode { value }
+  routing_strategy { value }
+  underlay_protocol { value }
+  fabric_templates {
+    edges {
+      node {
+        role { value }
+        quantity { value }
+        template { node { ...SuperSpineTemplateFields } }
+      }
     }
   }
-  super_spine_asn_pool {
+  size { value }
+  fabric_asn_pool {
     node {
       id
       name { value }
@@ -81,6 +76,44 @@ fragment DataCenterFields on TopologyDataCenter {
       name { value }
     }
   }
+  fabric_controllers: controllers(controller_type__values: ["aci_apic", "dcnm", "nsx_manager", "ucs_manager"]) {
+    edges {
+      node {
+        id
+        controller_type { value }
+      }
+    }
+  }
+  security_manager_controllers: controllers(controller_type__value: "security_manager") {
+    edges {
+      node {
+        id
+        controller_type { value }
+        ... on DcimDevice {
+          platform {
+            node {
+              id
+            }
+          }
+        }
+      }
+    }
+  }
+  lb_manager_controllers: controllers(controller_type__value: "lb_manager") {
+    edges {
+      node {
+        id
+        controller_type { value }
+        ... on DcimDevice {
+          platform {
+            node {
+              id
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 query topology_pod($name: String!) {
@@ -89,16 +122,20 @@ query topology_pod($name: String!) {
       node {
         id
         name { value }
-        checksum { value }
         index { value }
-        # New three-layer architecture
-        design { node { ...PodDesignFields } }
-        # Legacy attributes (for backward compatibility)
         deployment_type { value }
-        amount_of_spines { value }
+        layout { value }
         leaf_interface_sorting_method { value }
         spine_interface_sorting_method { value }
-        spine_template { node { ...DeviceTemplateFields } }
+        fabric_templates {
+          edges {
+            node {
+              role { value }
+              quantity { value }
+              template { node { ...DeviceTemplateFields } }
+            }
+          }
+        }
         loopback_pool { node { id name { value } } }
         prefix_pool { node { id name { value } } }
         asn_pool { node { id name { value } } }

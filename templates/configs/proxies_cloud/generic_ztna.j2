@@ -1,0 +1,18 @@
+{#- Fallback ZTNA/private-access published-segment shape for providers without their own
+    template yet (cloudflare_gateway/palo_prisma currently lack a dedicated ZTNA product
+    choice in the provider dropdown — see transforms/config/proxy_cloud.py). -#}
+{
+  "proxy_name": {{ name | tojson }},
+  "provider": {{ provider | tojson }},
+  "deployment_model": {{ deployment_model | tojson }},
+  "application_segments": [
+{%- for seg in segments %}
+    {
+      "name": {{ seg.name | tojson }},
+      "fqdn": {{ seg.fqdn | tojson }},
+      "ports": [{% for p in seg.ports %}{"port": {{ p.port }}, "protocol": {{ p.protocol | tojson }}}{{ ", " if not loop.last }}{% endfor %}],
+      "allowed_groups": {{ seg.allowed_groups | tojson }}
+    }{{ "," if not loop.last }}
+{%- endfor %}
+  ]
+}

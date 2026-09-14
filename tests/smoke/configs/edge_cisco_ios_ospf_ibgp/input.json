@@ -45,7 +45,7 @@
           "tags": {
             "edges": []
           },
-          "device_capabilities": {
+          "capabilities": {
             "edges": [
               {
                 "node": {
@@ -94,7 +94,25 @@
                             "value": true
                           },
                           "send_community": {
-                            "value": "standard-extended"
+                            "value": true
+                          },
+                          "send_extended_community": {
+                            "value": false
+                          },
+                          "maximum_routes": {
+                            "value": null
+                          },
+                          "local_pref": {
+                            "value": null
+                          },
+                          "med": {
+                            "value": null
+                          },
+                          "remove_private_as": {
+                            "value": false
+                          },
+                          "password": {
+                            "node": null
                           },
                           "ttl": {
                             "value": 2
@@ -102,7 +120,7 @@
                           "route_reflector_client": {
                             "value": true
                           },
-                          "interfaces": {
+                          "interface_capabilities": {
                             "edges": [
                               {
                                 "node": {
@@ -155,12 +173,16 @@
                               {
                                 "node": {
                                   "id": "bgp-dc1-edge-01",
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "dc1-edge-01"
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "dc1-edge-01"
+                                          }
+                                        }
                                       }
-                                    }
+                                    ]
                                   },
                                   "router_id": {
                                     "node": {
@@ -181,12 +203,16 @@
                               {
                                 "node": {
                                   "id": "bgp-spine-01",
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "spine-01"
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "spine-01"
+                                          }
+                                        }
                                       }
-                                    }
+                                    ]
                                   },
                                   "router_id": {
                                     "node": {
@@ -221,7 +247,25 @@
                             "value": true
                           },
                           "send_community": {
-                            "value": "standard-extended"
+                            "value": true
+                          },
+                          "send_extended_community": {
+                            "value": false
+                          },
+                          "maximum_routes": {
+                            "value": null
+                          },
+                          "local_pref": {
+                            "value": null
+                          },
+                          "med": {
+                            "value": null
+                          },
+                          "remove_private_as": {
+                            "value": false
+                          },
+                          "password": {
+                            "node": null
                           },
                           "ttl": {
                             "value": 2
@@ -229,7 +273,7 @@
                           "route_reflector_client": {
                             "value": true
                           },
-                          "interfaces": {
+                          "interface_capabilities": {
                             "edges": [
                               {
                                 "node": {
@@ -282,12 +326,16 @@
                               {
                                 "node": {
                                   "id": "bgp-dc1-edge-01",
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "dc1-edge-01"
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "dc1-edge-01"
+                                          }
+                                        }
                                       }
-                                    }
+                                    ]
                                   },
                                   "router_id": {
                                     "node": {
@@ -308,12 +356,16 @@
                               {
                                 "node": {
                                   "id": "bgp-spine-02",
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "spine-02"
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "spine-02"
+                                          }
+                                        }
                                       }
-                                    }
+                                    ]
                                   },
                                   "router_id": {
                                     "node": {
@@ -503,32 +555,66 @@
                           "name": {
                             "value": "ospf-Ethernet1"
                           },
-                          "ospf_process": {
-                            "node": {
-                              "router_id": {
-                                "node": {
-                                  "address": {
-                                    "value": "10.0.0.1/32"
-                                  }
-                                }
-                              }
-                            }
-                          },
-                          "area": {
-                            "node": {
-                              "area": {
-                                "value": "0.0.0.0"
-                              },
-                              "area_type": {
-                                "value": "standard"
-                              }
-                            }
-                          },
                           "mode": {
                             "value": "point-to-point"
                           },
                           "metric": {
                             "value": null
+                          },
+                          "authentication_mode": {
+                            "value": null
+                          },
+                          "password": {
+                            "node": null
+                          },
+                          "peering": {
+                            "node": {
+                              "ospf_process": {
+                                "edges": [
+                                  {
+                                    "node": {
+                                      "process_id": {
+                                        "value": 1
+                                      },
+                                      "router_id": {
+                                        "node": {
+                                          "address": {
+                                            "value": "10.0.0.1/32"
+                                          }
+                                        }
+                                      },
+                                      "capabilities": {
+                                        "edges": [
+                                          {
+                                            "node": {
+                                              "name": {
+                                                "value": "dc1-edge-01"
+                                              }
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              "ospf_area": {
+                                "node": {
+                                  "area": {
+                                    "value": "0.0.0.0"
+                                  },
+                                  "area_type": {
+                                    "value": "standard"
+                                  }
+                                }
+                              },
+                              "network_type": {
+                                "value": "point-to-point"
+                              },
+                              "cost": {
+                                "value": null
+                              }
+                            }
                           }
                         }
                       }
@@ -632,32 +718,66 @@
                           "name": {
                             "value": "ospf-Ethernet2"
                           },
-                          "ospf_process": {
-                            "node": {
-                              "router_id": {
-                                "node": {
-                                  "address": {
-                                    "value": "10.0.0.1/32"
-                                  }
-                                }
-                              }
-                            }
-                          },
-                          "area": {
-                            "node": {
-                              "area": {
-                                "value": "0.0.0.0"
-                              },
-                              "area_type": {
-                                "value": "standard"
-                              }
-                            }
-                          },
                           "mode": {
                             "value": "point-to-point"
                           },
                           "metric": {
                             "value": null
+                          },
+                          "authentication_mode": {
+                            "value": null
+                          },
+                          "password": {
+                            "node": null
+                          },
+                          "peering": {
+                            "node": {
+                              "ospf_process": {
+                                "edges": [
+                                  {
+                                    "node": {
+                                      "process_id": {
+                                        "value": 1
+                                      },
+                                      "router_id": {
+                                        "node": {
+                                          "address": {
+                                            "value": "10.0.0.1/32"
+                                          }
+                                        }
+                                      },
+                                      "capabilities": {
+                                        "edges": [
+                                          {
+                                            "node": {
+                                              "name": {
+                                                "value": "dc1-edge-01"
+                                              }
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              "ospf_area": {
+                                "node": {
+                                  "area": {
+                                    "value": "0.0.0.0"
+                                  },
+                                  "area_type": {
+                                    "value": "standard"
+                                  }
+                                }
+                              },
+                              "network_type": {
+                                "value": "point-to-point"
+                              },
+                              "cost": {
+                                "value": null
+                              }
+                            }
                           }
                         }
                       }

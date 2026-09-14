@@ -1,0 +1,605 @@
+---
+version: "1.0"
+
+# ============================================================================
+# HA — High Availability schema
+#
+# ManagedHA is an abstract generic holding shared HA attributes.
+# ManagedInlineService is an abstract type anchor for all services that sit
+# inline in a network segment (firewalls and load balancers).
+# Concrete types inherit from ManagedHA + ManagedGeneric + ManagedInlineService,
+# plus ManagedGenericDevice for on-prem devices.
+#
+# ManagedHAInterface is a capability node that models the sync/heartbeat/
+# control link on a specific device interface.
+# ============================================================================
+
+generics:
+  - name: TenantScoped
+    namespace: Managed
+    description: "Marker for deployment kinds that can be a dedicated FirewallContext/LoadbalancerHA tenant."
+    label: Tenant-Scoped Deployment
+    include_in_menu: false
+
+  - name: InlineService
+    namespace: Managed
+    description: "Abstract type anchor for services that sit inline in a network segment"
+    label: Inline Service
+    icon: "mdi:transit-connection-variant"
+    include_in_menu: false
+
+  - name: ProxyService
+    namespace: Managed
+    description: "Abstract type anchor for all proxy services (on-prem and cloud/SASE)"
+    label: Proxy Service
+    icon: "mdi:swap-horizontal-bold"
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    attributes:
+      - name: name
+        kind: Text
+        label: Name
+        optional: false
+        order_weight: 1
+
+  - name: HA
+    namespace: Managed
+    description: "Base for all HA domain types"
+    label: HA Domain
+    icon: "mdi:shield-half-full"
+    include_in_menu: false
+    attributes:
+      - name: group_id
+        kind: Number
+        label: "HA Group ID"
+        description: "HA group / cluster ID (must match on both peers); not applicable for cloud-native services"
+        optional: true
+        order_weight: 1000
+      - name: mode
+        kind: Dropdown
+        label: "HA Mode"
+        description: "HA operating mode"
+        optional: true
+        default_value: active-passive
+        choices:
+          - name: active-passive
+            label: "Active-Passive"
+            color: "#2ECC71"
+          - name: active-active
+            label: "Active-Active"
+            color: "#3498DB"
+          - name: cloud_managed
+            label: "Cloud Managed"
+            color: "#7FA7FF"
+        order_weight: 1100
+      - name: priority
+        kind: Number
+        label: "Election Priority"
+        description: "Election priority — higher value wins active role"
+        optional: true
+        default_value: 100
+        order_weight: 1200
+      - name: preempt
+        kind: Boolean
+        label: "Preempt"
+        description: "Reclaim active role when priority is higher than peer"
+        optional: true
+        default_value: false
+        order_weight: 1300
+      - name: inline_vlan_id
+        kind: Number
+        label: "Inline Segment VLAN ID"
+        description: "Local VLAN ID for the inline-terminated segment on this HA pair, allocated from inline_vlan_pool."  # yamllint disable-line rule:line-length
+        optional: true
+        order_weight: 1350
+        parameters:
+          min_value: 1
+          max_value: 4094
+    relationships:
+      - name: inline_vlan_pool
+        peer: CoreNumberPool
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "ha__inline_vlan_pool"
+        order_weight: 7300
+        on_delete: cascade
+        description: "Local VLAN ID pool for inline-terminated segments on this HA pair — independent of the leaf/MLAG VLAN domain mechanism."  # yamllint disable-line rule:line-length
+
+nodes:
+  # ── Firewall HA domain ────────────────────────────────────────────────────
+  - name: FirewallHA
+    namespace: Managed
+    description: "HA domain shared between two peer firewall devices"
+    label: Firewall HA Domain
+    icon: "mdi:shield-half-full"
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedHA
+      - ManagedGeneric
+      - ManagedGenericDevice
+      - ManagedInlineService
+    uniqueness_constraints:
+      - ["name__value"]
+    display_label: "{{name__value}}"
+    order_by:
+      - name__value
+    relationships:
+      - name: capabilities
+        peer: DcimCapabilities
+        label: "Peer Devices"
+        description: "The two firewall devices that form this HA domain"
+        cardinality: many
+        optional: false
+        kind: Generic
+        direction: inbound
+        identifier: device_capabilities
+        order_weight: 900
+    attributes:
+      - name: ha_protocol
+        kind: Dropdown
+        label: "HA Protocol"
+        description: "Redundancy protocol used for this firewall HA domain"
+        optional: true
+        default_value: vrrp
+        choices:
+          - name: vrrp
+            label: "VRRP"
+            color: "#3498DB"
+          - name: clusterxl
+            label: "ClusterXL"
+            color: "#2ECC71"
+          - name: vsx
+            label: "VSX"
+            color: "#9B59B6"
+          - name: carp
+            label: "CARP"
+            color: "#E67E22"
+          - name: keepalived
+            label: "Keepalived"
+            color: "#1ABC9C"
+        order_weight: 1400
+      - name: ha_timer
+        kind: Dropdown
+        label: "HA Timer Profile"
+        description: "HA hello/dead timer profile"
+        optional: true
+        default_value: standard
+        choices:
+          - name: aggressive
+            label: "Aggressive"
+            color: "#E74C3C"
+          - name: standard
+            label: "Standard"
+            color: "#2ECC71"
+        order_weight: 1500
+
+  # ── Firewall Context (VDOM/vsys) — tenant-scoped slice of a shared cluster ─
+  # One ManagedFirewallHA cluster hosts many contexts: one dedicated context
+  # per high-risk tenant (critical/fintech_strict/dedicated_firewall), plus a
+  # shared "low-risk" context (tenant unset) for everyone else — see
+  # docs/firewall_service_insertion.md's namespace-per-zone pattern, now with
+  # an explicit node instead of an implicit VDOM name. network_segment.
+  # inline_service (peer: ManagedGeneric) can target this directly, the same
+  # way it targets a bare ManagedFirewallHA today.
+  - name: FirewallContext
+    namespace: Managed
+    description: "Tenant-scoped firewall context (VDOM/vsys) on a shared FirewallHA cluster"
+    label: Firewall Context
+    icon: "mdi:shield-account"
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedGeneric
+      - ManagedGenericInterfaces
+      - ManagedInlineService
+    uniqueness_constraints:
+      - ["name__value"]
+    display_label: "{{name__value}}"
+    order_by:
+      - name__value
+    attributes:
+      - name: context_id
+        kind: Text
+        label: "Context ID"
+        description: "Vendor-side VDOM/vsys/context identifier"
+        optional: true
+        order_weight: 1400
+      - name: vlan_id
+        kind: Number
+        label: "Sub-interface VLAN ID"
+        description: "802.1Q tag for this context's sub-interface on the cluster's trunk uplink — allocated from FW-CONTEXT-VLAN-POOL"  # yamllint disable-line rule:line-length
+        optional: true
+        order_weight: 1450
+        parameters:
+          min_value: 1
+          max_value: 4094
+    relationships:
+      - name: cluster
+        peer: ManagedFirewallHA
+        label: "Firewall Cluster"
+        description: "Physical HA pair hosting this context"
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: firewall_context__cluster
+        order_weight: 900
+      - name: tenant
+        peer: ManagedTenantScoped
+        label: "Dedicated Tenant"
+        description: "Customer this context is dedicated to; unset means a shared low-risk context"
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: firewall_context__tenant
+        order_weight: 950
+
+  # ── Load Balancer HA domain (on-prem, physical devices) ───────────────────
+  - name: LoadbalancerHA
+    namespace: Managed
+    description: "HA domain shared between two peer load balancer devices"
+    label: Load Balancer HA Domain
+    icon: "mdi:shield-half-full"
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedHA
+      - ManagedGeneric
+      - ManagedGenericDevice
+      - ManagedInlineService
+      - ManagedLoadBalancer
+    uniqueness_constraints:
+      - ["name__value"]
+    display_label: "{{name__value}}"
+    order_by:
+      - name__value
+    relationships:
+      - name: capabilities
+        peer: DcimCapabilities
+        label: "Peer Devices"
+        description: "The two load balancer devices that form this HA domain"
+        cardinality: many
+        optional: false
+        kind: Generic
+        direction: inbound
+        identifier: device_capabilities
+        order_weight: 900
+      - name: tenant
+        peer: ManagedTenantScoped
+        label: "Dedicated Tenant"
+        description: "Customer this HA domain is dedicated to; unset means shared capacity"
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: loadbalancer_ha__tenant
+        order_weight: 950
+
+  # ── Cloud Firewall HA ─────────────────────────────────────────────────────
+  - name: CloudFirewallHA
+    namespace: Managed
+    description: "Cloud-native firewall HA service (AWS NFW, Azure Firewall, GCP NGFW, Zscaler)"
+    label: Cloud Firewall HA
+    icon: "mdi:cloud-lock"
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedHA
+      - ManagedGeneric
+      - ManagedInlineService
+    uniqueness_constraints:
+      - ["name__value"]
+    display_label: "{{name__value}}"
+    order_by:
+      - name__value
+    attributes:
+      - name: provider
+        kind: Dropdown
+        label: "Cloud Provider / Product"
+        optional: false
+        order_weight: 1400
+        choices:
+          - name: aws_nfw
+            label: "AWS Network Firewall"
+            color: "#FF9900"
+          - name: azure_firewall
+            label: "Azure Firewall"
+            color: "#0078D4"
+          - name: gcp_ngfw
+            label: "GCP Cloud NGFW"
+            color: "#4285F4"
+          - name: other
+            label: "Other"
+            color: "#95A5A6"
+      - name: region
+        kind: Text
+        label: "Region / Zone"
+        optional: true
+        order_weight: 1500
+        description: "Cloud region or availability zone"
+      - name: policy_arn
+        kind: Text
+        label: "Policy ARN / Resource ID"
+        optional: true
+        order_weight: 1600
+        description: "Cloud resource identifier for the firewall policy"
+
+  # ── On-prem Proxy HA ─────────────────────────────────────────────────────
+  - name: ProxyHA
+    namespace: Managed
+    description: "On-premises explicit or transparent proxy HA pair (Squid, BlueCoat, ProxySG)"
+    label: Proxy HA
+    icon: "mdi:swap-horizontal-bold"
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedHA
+      - ManagedGeneric
+      - ManagedGenericDevice
+      - ManagedInlineService
+      - ManagedProxyService
+    uniqueness_constraints:
+      - ["name__value"]
+    display_label: "{{name__value}}"
+    order_by:
+      - name__value
+    relationships:
+      - name: capabilities
+        peer: DcimCapabilities
+        label: "Peer Devices"
+        description: "The two proxy devices that form this HA pair"
+        cardinality: many
+        optional: false
+        kind: Generic
+        direction: inbound
+        identifier: device_capabilities
+        order_weight: 900
+    attributes:
+      - name: proxy_type
+        kind: Dropdown
+        label: "Proxy Type"
+        optional: true
+        order_weight: 1400
+        choices:
+          - name: explicit
+            label: "Explicit"
+            description: "Clients are configured to use the proxy directly"
+            color: "#3498DB"
+          - name: transparent
+            label: "Transparent"
+            description: "Traffic is intercepted without client configuration"
+            color: "#2ECC71"
+          - name: reverse
+            label: "Reverse"
+            description: "Reverse proxy / content cache in front of servers"
+            color: "#E67E22"
+      - name: proxy_vendor
+        kind: Dropdown
+        label: "Vendor / Product"
+        optional: true
+        order_weight: 1450
+        choices:
+          - name: haproxy
+            label: "HAProxy"
+            color: "#1ABC9C"
+          - name: squid
+            label: "Squid"
+            color: "#9B59B6"
+          - name: bluecoat
+            label: "BlueCoat / ProxySG"
+            color: "#2C3E50"
+          - name: cisco_wsa
+            label: "Cisco WSA"
+            color: "#1BA0D7"
+          - name: other
+            label: "Other"
+            color: "#95A5A6"
+
+  # ── Cloud Proxy / SASE ────────────────────────────────────────────────────
+  - name: CloudProxy
+    namespace: Managed
+    description: "Cloud proxy service — vendor SASE (Zscaler, Netskope) or self-managed on cloud VM"
+    label: Cloud Proxy
+    icon: "mdi:cloud-sync"
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedSaasService
+      - ManagedInlineService
+      - ManagedProxyService
+      - CoreArtifactTarget
+    uniqueness_constraints:
+      - ["name__value"]
+    display_label: "{{name__value}}"
+    order_by:
+      - name__value
+    attributes:
+      - name: deployment_model
+        kind: Dropdown
+        label: "Deployment Model"
+        optional: false
+        default_value: vendor_sase
+        order_weight: 1400
+        choices:
+          - name: vendor_sase
+            label: "Vendor SASE"
+            description: "Fully managed by vendor (Zscaler, Netskope, Cloudflare)"
+            color: "#00A3E0"
+          - name: self_managed
+            label: "Self-Managed"
+            description: "Self-operated proxy on cloud VM (Squid, HAProxy, Nginx)"
+            color: "#F39C12"
+      - name: provider
+        kind: Dropdown
+        label: "Provider / Product"
+        optional: false
+        order_weight: 1450
+        choices:
+          - name: zscaler_zia
+            label: "Zscaler ZIA"
+            description: "Web gateway product — set service_type=web_gateway"
+            color: "#00A3E0"
+          - name: zscaler_zpa
+            label: "Zscaler ZPA"
+            description: "Private access (ZTNA) product — set service_type=private_access"
+            color: "#00A3E0"
+          - name: netskope
+            label: "Netskope"
+            description: "Sells both NG-SWG (web gateway) and NPA (private access) — service_type disambiguates which one this instance is"  # yamllint disable-line rule:line-length
+            color: "#007DC5"
+          - name: cloudflare_gateway
+            label: "Cloudflare Gateway"
+            color: "#F38020"
+          - name: palo_prisma
+            label: "Palo Alto Prisma Access"
+            description: "Sells both SWG and ZTNA under one product — service_type disambiguates which one this instance is"  # yamllint disable-line rule:line-length
+            color: "#FA582D"
+          - name: squid
+            label: "Squid"
+            color: "#9B59B6"
+          - name: haproxy
+            label: "HAProxy"
+            color: "#1ABC9C"
+          - name: nginx
+            label: "Nginx"
+            color: "#2ECC71"
+          - name: other
+            label: "Other"
+            color: "#95A5A6"
+      - name: service_type
+        kind: Dropdown
+        label: "Service Type"
+        description: "Vendor alone can't disambiguate (e.g. Zscaler ZIA vs ZPA) — see AGENTS.md notes for rationale"  # yamllint disable-line rule:line-length
+        optional: false
+        default_value: web_gateway
+        order_weight: 1460
+        choices:
+          - name: web_gateway
+            label: "Web Gateway (SWG)"
+            description: "Egress URL/web filtering — modeled by ProxyPolicy/ProxyPolicyRule"
+            color: "#2ECC71"
+          - name: private_access
+            label: "Private Access (ZTNA)"
+            description: "Inbound app publishing via AppComponent.published_via_ztna"
+            color: "#E74C3C"
+      - name: region
+        kind: Text
+        label: "Cloud Region"
+        description: "Cloud region or availability zone (e.g. eu-west-1, westeurope)"
+        optional: true
+        order_weight: 1500
+    relationships:
+      - name: owner
+        peer: OrganizationCustomer
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloudproxy__owner"
+        order_weight: 1600
+        label: "Dedicated Customer"
+        description: "Customer this broker is dedicated to; unset means shared across all customers"
+
+  # ── HA Interface capability ───────────────────────────────────────────────
+  - name: HAInterface
+    namespace: Managed
+    description: "Interface-level HA service — models sync/heartbeat/control link on a specific interface"
+    label: HA Interface
+    icon: "mdi:link-variant"
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedGeneric
+      - ManagedGenericInterfaces
+    uniqueness_constraints:
+      - ["name__value"]
+    display_label: "{{name__value}}"
+    order_by:
+      - name__value
+    relationships:
+      - name: ha_domain
+        peer: ManagedHA
+        label: "HA Domain"
+        description: "HA domain this interface link belongs to"
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: ha_interface__domain
+        order_weight: 900
+    attributes:
+      - name: link_type
+        kind: Dropdown
+        label: "Link Type"
+        description: "HA link role on this interface"
+        optional: true
+        default_value: sync
+        choices:
+          - name: sync
+            label: "Sync"
+            color: "#3498DB"
+          - name: heartbeat
+            label: "Heartbeat"
+            color: "#2ECC71"
+          - name: control
+            label: "Control"
+            color: "#E67E22"
+        order_weight: 1000
+
+extensions:
+  nodes:
+    - kind: ManagedVxlanSegment
+      relationships:
+        - name: inline_service
+          peer: ManagedGeneric
+          label: Inline Service
+          cardinality: one
+          kind: Attribute
+          optional: true
+          order_weight: 3100
+          identifier: network_segment__inline_service
+          description: "Inline service (firewall or load balancer HA) terminating this segment."
+    # Reverse lookup for FirewallContext.cluster (above) — lets a device
+    # query find every context (shared + dedicated) on its own cluster in
+    # one hop, without a name-based lookup.
+    - kind: ManagedFirewallHA
+      relationships:
+        - name: contexts
+          label: "Firewall Contexts"
+          peer: ManagedFirewallContext
+          kind: Generic
+          cardinality: many
+          optional: true
+          identifier: firewall_context__cluster
+          order_weight: 1000
+          description: "FirewallContexts (VDOMs/vsys) hosted on this HA cluster"
+
+    # Reverse lookups for FirewallContext.tenant / LoadbalancerHA.tenant
+    # (above) — lets a TopologyCustomerDC/Colocation query find its own
+    # dedicated FirewallContext/LoadbalancerHA (if any) in one hop.
+    - kind: ManagedTenantScoped
+      relationships:
+        - name: firewall_context
+          label: "Dedicated Firewall Context"
+          peer: ManagedFirewallContext
+          kind: Generic
+          cardinality: one
+          optional: true
+          identifier: firewall_context__tenant
+          order_weight: 900
+          description: "Dedicated FirewallContext (VDOM/vsys), if any, this deployment is the tenant of."
+        - name: loadbalancer_ha
+          label: "Dedicated Load Balancer HA"
+          peer: ManagedLoadbalancerHA
+          kind: Generic
+          cardinality: one
+          optional: true
+          identifier: loadbalancer_ha__tenant
+          order_weight: 950
+          description: "Dedicated LoadbalancerHA domain, if any, this deployment is the tenant of."

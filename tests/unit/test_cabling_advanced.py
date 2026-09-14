@@ -7,7 +7,7 @@ Covers untested classes and methods in generators/helpers/cabling.py:
 - CableTypeDetector.get_cable_description()      – human-readable descriptions
 - ConnectionValidator.validate_plan()            – min/max/duplicate checks
 - PodCablingStrategy.build_plan()               – pod-to-pod with offset
-- RackCablingStrategy.build_plan()              – offset overflow → skip + log
+- RackCablingStrategy.build_plan()              – offset overflow → fail-fast + log
 - IntraRackMiddleCablingStrategy._create_leaf_pairs()      – even/odd counts
 - IntraRackMiddleCablingStrategy._validate_min_top_devices() – < 2 logs warning
 - IntraRackMiddleCablingStrategy._connect_tor_to_leaf_pair() – insufficient intfs
@@ -21,11 +21,14 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock, Mock, patch
 
+import pytest
 from conftest import MockInterface, create_mock_interfaces
 
 from generators.helpers import (
     CableTypeDetector,
+    CablingPlanError,
     CablingPlanner,
+    ChainCablingStrategy,
     ConnectionValidator,
     InterfaceSpeedMatcher,
     IntraRackMiddleCablingStrategy,
@@ -268,7 +271,7 @@ class TestPodCablingStrategy:
     def test_pod_plan_with_offset(self) -> None:
         """Offset shifts which top interface is used per bottom device.
 
-        PodCablingStrategy.build_plan appends (top_intf, bottom_intf).
+        PodCablingStrategy.build_plan appends (bottom_intf, top_intf).
         top_intf_index = (bottom_index + cabling_offset) % len(top_interfaces)
         offset=0: leaf-01→Eth1, leaf-02→Eth2  →  top intfs: ['Eth1','Eth2']
         offset=1: leaf-01→Eth2, leaf-02→Eth1  →  top intfs: ['Eth2','Eth1']
@@ -282,9 +285,9 @@ class TestPodCablingStrategy:
         plan_offset0 = strategy.build_plan(cabling_offset=0)
         plan_offset1 = strategy.build_plan(cabling_offset=1)
 
-        # First element of each tuple is the top (spine) interface
-        top_intfs_offset0 = [top.name.value for top, _ in plan_offset0]
-        top_intfs_offset1 = [top.name.value for top, _ in plan_offset1]
+        # Second element of each tuple is the top (spine) interface
+        top_intfs_offset0 = [top.name.value for _, top in plan_offset0]
+        top_intfs_offset1 = [top.name.value for _, top in plan_offset1]
         assert top_intfs_offset0 != top_intfs_offset1
 
     def test_pod_plan_empty_bottom(self) -> None:
@@ -303,16 +306,16 @@ class TestPodCablingStrategy:
 
 
 class TestRackCablingStrategyOverflow:
-    def test_offset_overflow_skips_connection_and_logs(self) -> None:
-        """When bottom_index + cabling_offset >= max_top_interfaces, skip and log error."""
+    def test_offset_overflow_raises_and_logs(self) -> None:
+        """When bottom_index + cabling_offset >= max_top_interfaces, fail fast."""
         planner = _make_planner(
             bottom_devices={"leaf-01": ["Eth1"]},
             top_devices={"spine-01": ["Eth1", "Eth2"]},  # 2 top interfaces
         )
         strategy = RackCablingStrategy(planner)
         # offset=2 → index=0+2=2 >= 2 top interfaces → overflow
-        plan = strategy.build_plan(cabling_offset=2)
-        assert plan == []
+        with pytest.raises(CablingPlanError, match="OFFSET OVERFLOW"):
+            strategy.build_plan(cabling_offset=2)
 
     def test_overflow_logs_error(self) -> None:
         planner = _make_planner(
@@ -322,9 +325,9 @@ class TestRackCablingStrategyOverflow:
         strategy = RackCablingStrategy(planner)
 
         strategy.logger = MagicMock()
-        plan = strategy.build_plan(cabling_offset=1)  # 0+1=1 >= 1 → overflow
-
-        assert plan == []
+        with pytest.raises(CablingPlanError):
+            strategy.build_plan(cabling_offset=1)  # 0+1=1 >= 1 → overflow
+        strategy.logger.error.assert_called_once()
 
     def test_no_overflow_creates_connections(self) -> None:
         planner = _make_planner(
@@ -336,6 +339,118 @@ class TestRackCablingStrategyOverflow:
 
         # leaf-01 → spine-01 Eth1, leaf-02 → spine-01 Eth2
         assert len(plan) == 2
+
+
+# ---------------------------------------------------------------------------
+# ChainCablingStrategy
+# ---------------------------------------------------------------------------
+
+
+class TestChainCablingStrategy:
+    def test_one_to_one_with_two_ports_each_creates_two_parallel_cables(self) -> None:
+        """A single index-paired pair uses every mutually available port
+        as its own parallel (redundant) cable between the SAME two devices."""
+        planner = _make_planner(
+            bottom_devices={"fw-01": ["eth1", "eth2"]},
+            top_devices={"bl-01": ["Eth1/25", "Eth1/26"]},
+        )
+        strategy = ChainCablingStrategy(planner)
+        plan = strategy.build_plan()
+
+        assert len(plan) == 2
+        bottom_names = {b.name.value for b, _ in plan}
+        top_names = {t.name.value for _, t in plan}
+        assert bottom_names == {"eth1", "eth2"}
+        assert top_names == {"Eth1/25", "Eth1/26"}
+
+    def test_two_by_two_pairs_by_index_not_any_to_any(self) -> None:
+        """2 bottom x 2 top devices form TWO fully independent chains —
+        fw-01<->bl-01 and fw-02<->bl-02 — never fw-01<->bl-02. This is the
+        key difference from RackCablingStrategy's any-to-any mesh: multiple
+        independent redundant paths (e.g. border-leaf<->fw1<->lb1<->...<->
+        border-leaf and border-leaf<->fw2<->lb2<->...<->border-leaf) must
+        never cross-cable between path 1's and path 2's devices."""
+        planner = _make_planner(
+            bottom_devices={"fw-01": ["eth1", "eth2"], "fw-02": ["eth1", "eth2"]},
+            top_devices={"bl-01": ["p1", "p2"], "bl-02": ["p1", "p2"]},
+        )
+        strategy = ChainCablingStrategy(planner)
+        plan = strategy.build_plan()
+
+        assert len(plan) == 4
+        pairs = {(b.device.display_label, t.device.display_label) for b, t in plan}
+        assert pairs == {("fw-01", "bl-01"), ("fw-02", "bl-02")}
+
+    def test_five_ports_each_uses_all_of_them_on_the_same_pair(self) -> None:
+        """1x1 with 5 ports each: all 5 become parallel cables between the
+        same two devices — no cap at "1 per neighbor" like RackCablingStrategy,
+        since there IS only one neighbor per side in an index-paired chain."""
+        planner = _make_planner(
+            bottom_devices={"fw-01": [f"p{i}" for i in range(1, 6)]},
+            top_devices={"bl-01": [f"p{i}" for i in range(1, 6)]},
+        )
+        strategy = ChainCablingStrategy(planner)
+        plan = strategy.build_plan()
+
+        assert len(plan) == 5
+        bottom_keys = [(b.device.display_label, b.name.value) for b, _ in plan]
+        top_keys = [(t.device.display_label, t.name.value) for _, t in plan]
+        assert len(bottom_keys) == len(set(bottom_keys)) == 5
+        assert len(top_keys) == len(set(top_keys)) == 5
+
+    def test_fewer_devices_on_one_side_reused_round_robin(self) -> None:
+        """1 border-leaf shared by 2 independent firewall paths (2 firewalls,
+        each with its own dedicated port pair on the border-leaf) — the
+        border-leaf is reused round-robin (index % 1 == 0 for both pairs),
+        but each pair still gets its OWN distinct ports on the border-leaf."""
+        planner = _make_planner(
+            bottom_devices={"fw-01": ["eth1", "eth2"], "fw-02": ["eth1", "eth2"]},
+            top_devices={"bl-01": ["p1", "p2", "p3", "p4"]},
+        )
+        strategy = ChainCablingStrategy(planner)
+        plan = strategy.build_plan()
+
+        assert len(plan) == 4
+        top_names_used = [t.name.value for _, t in plan]
+        assert len(top_names_used) == len(set(top_names_used))  # no port reused
+        pairs = {(b.device.display_label, t.device.display_label) for b, t in plan}
+        assert pairs == {("fw-01", "bl-01"), ("fw-02", "bl-01")}
+
+    def test_mismatched_port_counts_capped_by_the_smaller_side(self) -> None:
+        """1x1 pair, bottom has 3 ports but top only has 2 — only 2
+        parallel cables possible (capped by the smaller side); bottom's
+        3rd port stays unused, no error (partial connectivity is valid)."""
+        planner = _make_planner(
+            bottom_devices={"fw-01": ["p1", "p2", "p3"]},
+            top_devices={"bl-01": ["p1", "p2"]},
+        )
+        strategy = ChainCablingStrategy(planner)
+        plan = strategy.build_plan()
+
+        assert len(plan) == 2
+        assert all(b.name.value != "p3" for b, _ in plan)
+
+    def test_shared_device_exhausted_by_earlier_pair_logs_error(self) -> None:
+        """2 firewalls (bottom) sharing 1 border-leaf (top) with only 1
+        port: the first pair (fw-01<->bl-01) consumes bl-01's only port,
+        leaving the second pair (fw-02<->bl-01) with zero free ports on
+        the border-leaf side — logged as an error, first pair still cabled."""
+        planner = _make_planner(
+            bottom_devices={"fw-01": ["eth1"], "fw-02": ["eth1"]},
+            top_devices={"bl-01": ["Eth1/25"]},
+        )
+        strategy = ChainCablingStrategy(planner)
+        strategy.logger = MagicMock()
+        plan = strategy.build_plan()
+
+        assert len(plan) == 1
+        strategy.logger.error.assert_called_once()
+
+    def test_empty_bottom_or_top_returns_empty(self) -> None:
+        planner = _make_planner(bottom_devices={}, top_devices={"bl-01": ["Eth1"]})
+        strategy = ChainCablingStrategy(planner)
+
+        assert strategy.build_plan() == []
 
 
 # ---------------------------------------------------------------------------
@@ -487,18 +602,16 @@ class TestValidateInterfaceSpeeds:
         assert result == []
         planner.logger.error.assert_called()
 
-    def test_missing_speed_info_does_not_filter(self) -> None:
-        """Interfaces without interface_type are not filtered out."""
-        from typing import cast
-
-        from generators.protocols import DcimPhysicalInterface
-
+    def test_unrecognized_speed_pattern_does_not_filter(self) -> None:
+        """interface_type values that don't match the speed pattern (e.g. "other")
+        are not filtered out — interface_type is mandatory with a default on the
+        real schema, so it's never actually None, but plenty of real values (patch
+        panels, consoles, "other") carry no parseable speed."""
         planner = self._planner()
-        a = _make_interface("Eth1", "leaf-01", None)  # no interface_type
+        a = _make_speed_interface("Eth1", "leaf-01", "other")
         b = _make_speed_interface("Eth1", "spine-01", "100GBASE-SR4")
 
-        plan = cast(list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]], [(a, b)])
-        result = planner._validate_interface_speeds(plan, strict=True)
+        result = planner._validate_interface_speeds([(a, b)], strict=True)
         # At least one speed is unknown → no mismatch check, connection kept
         assert len(result) == 1
 
@@ -561,3 +674,41 @@ class TestBuildSpeedAwarePlan:
             planner.build_cabling_plan(scenario="rack", speed_aware=False)
 
         mock_speed.assert_not_called()
+
+    def test_build_cabling_plan_forwards_strict_speed_validation_true(self) -> None:
+        """When strict_speed_validation=True, build path forwards strict=True."""
+        bottom = [_make_speed_interface("Eth1", "leaf-01", "100GBASE-SR4")]
+        top = [_make_speed_interface("Eth1", "spine-01", "100GBASE-LR4")]
+
+        planner = CablingPlanner(bottom, top)
+        fake_plan = [(bottom[0], top[0])]
+
+        with patch.object(planner._strategies["rack"], "build_plan", return_value=fake_plan):
+            with patch.object(planner, "_validate_interface_speeds", return_value=fake_plan) as mock_validate:
+                planner.build_cabling_plan(
+                    scenario="rack",
+                    speed_aware=False,
+                    validate_speeds=True,
+                    strict_speed_validation=True,
+                )
+
+        mock_validate.assert_called_once_with(cabling_plan=fake_plan, strict=True)
+
+    def test_build_cabling_plan_forwards_strict_speed_validation_false(self) -> None:
+        """When strict_speed_validation=False, build path forwards strict=False."""
+        bottom = [_make_speed_interface("Eth1", "leaf-01", "100GBASE-SR4")]
+        top = [_make_speed_interface("Eth1", "spine-01", "100GBASE-LR4")]
+
+        planner = CablingPlanner(bottom, top)
+        fake_plan = [(bottom[0], top[0])]
+
+        with patch.object(planner._strategies["rack"], "build_plan", return_value=fake_plan):
+            with patch.object(planner, "_validate_interface_speeds", return_value=fake_plan) as mock_validate:
+                planner.build_cabling_plan(
+                    scenario="rack",
+                    speed_aware=False,
+                    validate_speeds=True,
+                    strict_speed_validation=False,
+                )
+
+        mock_validate.assert_called_once_with(cabling_plan=fake_plan, strict=False)

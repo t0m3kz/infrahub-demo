@@ -1,0 +1,113 @@
+query border_spine_config(
+  $device: String!
+) {
+  DcimDevice(name__value: $device) {
+    edges {
+      node {
+        __typename
+        id
+        name { value }
+        role { value }
+        platform {
+          node {
+            name { value }
+            netmiko_device_type { value }
+          }
+        }
+        primary_address {
+          node {
+            address { value }
+            ip_namespace { node { name { value } } }
+          }
+        }
+        tags {
+          edges {
+            node { name { value } }
+          }
+        }
+
+        # Device Services (BGP, OSPF) with nested peerings
+        ...DeviceCapabilitiesOnDeviceFields
+
+        # Interface Information
+        interfaces {
+          edges {
+            node {
+              __typename
+              name { value }
+              description { value }
+              status { value }
+              role { value }
+              ...InterfaceCapabilitiesWithSegmentOnInterfaceFields
+              ... on DcimPhysicalInterface {
+                interface_type { value }
+                mtu { value }
+                ip_address {
+                  node {
+                    address { value }
+                    ip_namespace { node { name { value } } }
+                  }
+                }
+                cable {
+                  node {
+                    id
+                    endpoints {
+                      edges {
+                        node {
+                          __typename
+                          ... on DcimPhysicalInterface {
+                            name { value }
+                            ip_address {
+                              node {
+                                address { value }
+                              }
+                            }
+                            device {
+                              node {
+                                name { value }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+
+              ... on DcimVirtualInterface {
+                ip_address {
+                  node {
+                    address { value }
+                    ip_namespace { node { name { value } } }
+                  }
+                }
+              }
+
+              ... on DcimLAGInterface {
+                lag_id { value }
+                lacp_mode { value }
+                mtu { value }
+                minimum_links { value }
+                ip_address {
+                  node {
+                    address { value }
+                    ip_namespace { node { name { value } } }
+                  }
+                }
+                member_interfaces {
+                  edges {
+                    node {
+                      name { value }
+                    }
+                  }
+                }
+              }
+
+            }
+          }
+        }
+      }
+    }
+  }
+}

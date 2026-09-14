@@ -35,22 +35,28 @@ interface Loopback0
 
 router ospf 1
   router-id 10.0.0.1
-  auto-cost reference-bandwidth 100000
-  area None authentication message-digest
+  auto-cost reference-bandwidth 10000
   passive-interface default
+  no passive-interface Ethernet1
+  no passive-interface Ethernet2
 !
+interface Ethernet1
+  ip router ospf 1 area 0.0.0.0
+interface Ethernet2
+  ip router ospf 1 area 0.0.0.0
 
 !
 ! BGP Configuration
 
 router bgp 65000
   router-id 10.0.0.1
+  bgp cluster-id 10.0.0.1
   graceful-restart
   !
   template peer-policy EVPN-PEERS-POLICY
     send-community
-    send-community extended
     route-reflector-client
+    next-hop-unchanged
   !
   template peer-session EVPN-PEERS-SESSION
     update-source loopback0

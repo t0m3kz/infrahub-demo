@@ -1,0 +1,22 @@
+---
+# BGP process for C004-EDGE1's side of the link (see 02_addressing.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingAutonomousSystem
+  data:
+    - asn: 65072
+      description: "C004-EDGE1 AS"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGP
+  data:
+    - name: "C004-EDGE1-bgp"
+      status: active
+      local_as: "AS65072"
+      router_id: ["10.71.0.1/30", "default"]
+      capabilities:
+        - "C004-EDGE1"

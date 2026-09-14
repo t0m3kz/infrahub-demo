@@ -1,0 +1,15 @@
+---
+# eBGP peering session for the DC7-BL1 <-> DC7-FW1 link (see 04_bgp.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGPPeering
+  data:
+    - name: "DC7-BL1-DC7-FW1-ebgp"
+      session_type: EBGP
+      bgp_processes:
+        - "DC7-BL1-bgp-fw"
+        - "DC7-FW1-bgp-fabric"
+      interface_capabilities:
+        - ["DC7-BL1", "Ethernet25/1"]
+        - ["DC7-FW1", "eth1"]

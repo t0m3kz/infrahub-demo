@@ -1,0 +1,12 @@
+---
+# VLAN segment activated in C012's colocation footprint (VA).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVlanSegment
+  data:
+    - owner: "C012"
+      customer_name: "quelion-prod"
+      environment: "p"
+      vlan_id: 112
+      customer_deployment: ["C012", "p"]

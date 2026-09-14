@@ -67,11 +67,11 @@
     "EVPN-PEERS": {
       "asn": "65000",
       "local_addr": "10.0.0.1",
-      "send_community": "extended"
+      "send_community": "standard"
     },
     "UNDERLAY-PEERS": {
       "bfd": "true",
-      "send_community": "extended"
+      "send_community": "standard"
     }
   },
   "DEVICE_METADATA": {
@@ -81,10 +81,23 @@
       "type": "BorderLeafRouter"
     }
   },
+  "EVPN_NVO": {},
   "INTERFACE": {
-    "Ethernet1": {},
-    "Ethernet10": {},
-    "Ethernet2": {}
+    "Ethernet1": {
+      "admin_status": "up",
+      "description": "to spine-01",
+      "mtu": "9000"
+    },
+    "Ethernet10": {
+      "admin_status": "up",
+      "description": "to server-01",
+      "mtu": "9000"
+    },
+    "Ethernet2": {
+      "admin_status": "up",
+      "description": "to spine-02",
+      "mtu": "9000"
+    }
   },
   "INTERFACE_IP": {
     "Ethernet1|10.1.0.1/31": {},
@@ -94,16 +107,10 @@
     "Loopback0|10.0.0.1/32": {}
   },
   "OSPF_ROUTER": {},
-  "VLAN": {
-    "Vlan100": {
-      "vlanid": "100"
-    },
-    "Vlan200": {
-      "vlanid": "200"
-    }
-  },
-  "VLAN_INTERFACE": {
-    "Vlan100": {},
-    "Vlan200": {}
-  }
+  "STATIC_ROUTE": {},
+  "VLAN": {},
+  "VLAN_INTERFACE": {},
+  "VRF": {},
+  "VXLAN_TUNNEL": {},
+  "VXLAN_TUNNEL_MAP": {}
 }

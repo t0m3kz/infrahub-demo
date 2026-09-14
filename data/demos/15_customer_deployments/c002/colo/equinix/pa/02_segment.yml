@@ -1,0 +1,12 @@
+---
+# VLAN segment activated in C002's colocation footprint (PA).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVlanSegment
+  data:
+    - owner: "C002"
+      customer_name: "swiftgo-prod"
+      environment: "p"
+      vlan_id: 102
+      customer_deployment: ["C002", "p"]

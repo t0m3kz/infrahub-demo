@@ -1,0 +1,24 @@
+---
+# Frontend calls the payment-gateway external service — the generator should
+# turn this into a ProxyPolicy/ProxyPolicyRule through IT001's egress service,
+# not a firewall rule (target is an external endpoint).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppDependency
+  data:
+    - name: it001-checkout-p-frontend-to-payment-gateway
+      source: it001-checkout-p-frontend
+      target: it001-payment-gateway-external
+      protocol: tcp
+      port_start: 443
+      access_status: auto
+      description: "Checkout frontend calls the payment gateway"
+
+    - name: it001-checkout-p-frontend-to-backend
+      source: it001-checkout-p-frontend
+      target: it001-checkout-backend-internal
+      protocol: tcp
+      port_start: 8443
+      access_status: auto
+      description: "Checkout frontend calls the internal backend API"

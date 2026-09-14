@@ -48,7 +48,7 @@
     "EVPN-PEERS": {
       "asn": "65000",
       "local_addr": "10.0.0.1",
-      "send_community": "extended"
+      "send_community": "standard"
     }
   },
   "DEVICE_METADATA": {
@@ -60,9 +60,21 @@
   },
   "EVPN_NVO": {},
   "INTERFACE": {
-    "Ethernet1": {},
-    "Ethernet10": {},
-    "Ethernet2": {}
+    "Ethernet1": {
+      "admin_status": "up",
+      "description": "to spine-01",
+      "mtu": "9000"
+    },
+    "Ethernet10": {
+      "admin_status": "up",
+      "description": "to server-01",
+      "mtu": "9000"
+    },
+    "Ethernet2": {
+      "admin_status": "up",
+      "description": "to spine-02",
+      "mtu": "9000"
+    }
   },
   "INTERFACE_IP": {
     "Ethernet1|10.1.0.1/31": {},
@@ -73,47 +85,14 @@
   },
   "OSPF_ROUTER": {
     "default": {
-      "reference_bandwidth": 100000,
+      "reference_bandwidth": 10000,
       "router_id": "10.0.0.1"
     }
   },
-  "STATIC_ROUTE": {
-    "VRF_A|0.0.0.0/0": {
-      "ifname": "",
-      "nexthop": "10.100.0.254",
-      "nexthop-vrf": ""
-    }
-  },
-  "VLAN": {
-    "Vlan100": {
-      "vlanid": "100"
-    },
-    "Vlan200": {
-      "vlanid": "200"
-    }
-  },
-  "VLAN_INTERFACE": {
-    "Vlan100": {},
-    "Vlan200": {}
-  },
-  "VRF": {
-    "VRF_A": {
-      "vni": "50001"
-    }
-  },
-  "VXLAN_TUNNEL": {
-    "vtep": {
-      "src_ip": "10.0.0.1"
-    }
-  },
-  "VXLAN_TUNNEL_MAP": {
-    "vtep|map_10100_Vlan100": {
-      "vlan": "Vlan100",
-      "vni": "10100"
-    },
-    "vtep|map_50001_VRF_A": {
-      "vni": "50001",
-      "vrf": "VRF_A"
-    }
-  }
+  "STATIC_ROUTE": {},
+  "VLAN": {},
+  "VLAN_INTERFACE": {},
+  "VRF": {},
+  "VXLAN_TUNNEL": {},
+  "VXLAN_TUNNEL_MAP": {}
 }

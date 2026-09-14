@@ -10,328 +10,828 @@ spec:
       height: 1
       full_depth: false
       manufacturer: Arista
+      cpu_count: 1
+      memory_gb: 16
+      max_routes: 128000
+      tcam_entries: 128000
+      unit_price: 24500
     - name: DCS-7050PX4-32S-R
       part_number: DCS-7050PX4-32S-R
       height: 1
       full_depth: false
       manufacturer: Arista
+      cpu_count: 1
+      memory_gb: 16
+      max_routes: 128000
+      tcam_entries: 128000
+      unit_price: 29500
     - name: DCS-7050CX4M-48D8-F
       part_number: DCS-7050CX4M-48D8-F
       height: 1
       full_depth: false
       manufacturer: Arista
+      cpu_count: 1
+      memory_gb: 16
+      max_routes: 512000
+      tcam_entries: 256000
+      unit_price: 34500
     - name: DCS-7050SX3-24YC4C-S-R
       part_number: DCS-7050SX3-24YC4C-S-R
       height: 1
       full_depth: false
       manufacturer: Arista
+      cpu_count: 1
+      memory_gb: 16
+      max_routes: 128000
+      tcam_entries: 128000
+      unit_price: 17800
     # CheckPoint
     - name: CloudGuard
       part_number: CloudGuard-Network-Security
       height: 0
       full_depth: false
       manufacturer: Check Point
-    # Cisco
+      cpu_count: 4
+      memory_gb: 8
+      unit_price: 18000
     - name: ASR1002-HX
       part_number: ASR1002-HX
       height: 2
       full_depth: true
       manufacturer: Cisco
+      cpu_count: 2
+      memory_gb: 16
+      max_routes: 4000000
+      tcam_entries: 256000
+      unit_price: 22000
     - name: C8000V
       height: 0
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 4
+      memory_gb: 8
+      unit_price: 3500
     - name: C9200L-24P-4G
       part_number: C9200L-24P-4G
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 4
+      max_routes: 24000
+      tcam_entries: 3072
+      unit_price: 4200
     - name: C9200L-48P-4G
       part_number: C9200L-48P-4G
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 4
+      max_routes: 24000
+      tcam_entries: 3072
+      unit_price: 6200
     - name: C9130AXI-B
       part_number: C9130AXI-B
       height: 0
       full_depth: false
       manufacturer: Cisco
+      unit_price: 1200
     - name: ISR4451-X
       part_number: ISR4451-X/K9
       height: 2
       full_depth: true
       manufacturer: Cisco
+      cpu_count: 1
+      core_count: 4
+      memory_gb: 4
+      max_routes: 1000000
+      unit_price: 15000
     - name: DL360-Gen11
-      manufacturer: Cisco
+      manufacturer: Dell
       height: 1
       full_depth: true
+      cpu_count: 2
+      core_count: 60
+      memory_gb: 512
+      storage_gb: 7680
+      unit_price: 9500
     - name: DL380-Gen11
-      manufacturer: Cisco
-      height: 1
+      manufacturer: Dell
+      height: 2
       full_depth: true
+      cpu_count: 2
+      core_count: 60
+      memory_gb: 512
+      storage_gb: 7680
+      unit_price: 12500
     - name: N77-C7710
       part_number: N77-C7710
       height: 24
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 2
+      memory_gb: 64
+      max_routes: 1000000
+      tcam_entries: 1000000
+      unit_price: 185000
     - name: N77-F324FQ-25
       part_number: N77-F324FQ-25
       height: 0
       full_depth: false
       manufacturer: Cisco
+      unit_price: 42000
     - name: N77-M312CQ-26L
       part_number: N77-M312CQ-26L
       height: 0
       full_depth: false
       manufacturer: Cisco
+      unit_price: 38000
     - name: N77-SUP2E
       part_number: N77-SUP2E
       height: 0
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 32
+      unit_price: 28000
     - name: N9K-C9000V
       part_number: N9K-C9000V
-      height: 1
+      height: 0
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 2
+      memory_gb: 8
+      unit_price: 0
+    - name: APIC-L3
+      part_number: APIC-L3
+      height: 1
+      full_depth: true
+      manufacturer: Cisco
+      cpu_count: 2
+      core_count: 20
+      memory_gb: 128
+      storage_gb: 2400
+      unit_price: 32000
+    - name: C9800-40
+      part_number: C9800-40-K9
+      height: 1
+      full_depth: true
+      manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 16
+      unit_price: 24000
+    - name: MDS-NDFC
+      part_number: ND-APP-L2-16C
+      height: 2
+      full_depth: true
+      manufacturer: Cisco
+      cpu_count: 2
+      core_count: 16
+      memory_gb: 128
+      storage_gb: 4000
+      unit_price: 45000
+    - name: DN2-HW
+      part_number: DN2-HW-APL
+      height: 2
+      full_depth: true
+      manufacturer: Cisco
+      cpu_count: 2
+      core_count: 16
+      memory_gb: 256
+      storage_gb: 4800
+      unit_price: 55000
     - name: N9K-C93108TC-FX
       part_number: N9K-C93108TC-FX
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 24
+      max_routes: 128000
+      tcam_entries: 128000
+      unit_price: 18500
     - name: N9K-C93108TC-FX3
       part_number: N9K-C93108TC-FX3
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 32
+      max_routes: 256000
+      tcam_entries: 256000
+      unit_price: 21000
     - name: N9K-C93108TC-FX3P
       part_number: N9K-C93108TC-FX3P
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 32
+      max_routes: 256000
+      tcam_entries: 256000
+      unit_price: 22500
     - name: N9K-C93120TX
       part_number: N9K-C93120TX
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 24
+      max_routes: 128000
+      tcam_entries: 128000
+      unit_price: 19500
     - name: N9K-C93128TX
       part_number: N9K-C93128TX
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 24
+      max_routes: 128000
+      tcam_entries: 128000
+      unit_price: 20500
     - name: N9K-C9316D-GX
       part_number: N9K-C9316D-GX
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 32
+      max_routes: 512000
+      tcam_entries: 512000
+      unit_price: 32000
     - name: N9K-C93180YC-EX
       part_number: N9K-C93180YC-EX
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 24
+      max_routes: 128000
+      tcam_entries: 128000
+      unit_price: 23000
     - name: N9K-C93180YC-FX
       part_number: N9K-C93180YC-FX
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 24
+      max_routes: 128000
+      tcam_entries: 128000
+      unit_price: 24500
     - name: N9K-C93180YC-FX3
       part_number: N9K-C93180YC-FX3
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 32
+      max_routes: 256000
+      tcam_entries: 256000
+      unit_price: 26000
     - name: N9K-C93180YC-FX3S
       part_number: N9K-C93180YC-FX3S
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 32
+      max_routes: 256000
+      tcam_entries: 256000
+      unit_price: 27500
     - name: N9K-C93216TC-FX2
       part_number: N9K-C93216TC-FX2
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 24
+      max_routes: 128000
+      tcam_entries: 128000
+      unit_price: 29000
     - name: N9K-C93240YC-FX2
       part_number: N9K-C93240YC-FX2
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 24
+      max_routes: 128000
+      tcam_entries: 128000
+      unit_price: 31000
     - name: N9K-C9332C
       part_number: N9K-C9332C
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 32
+      max_routes: 128000
+      tcam_entries: 128000
+      unit_price: 25000
     - name: N9K-C9332D-GX2B
       part_number: N9K-C9332D-GX2B
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 32
+      max_routes: 512000
+      tcam_entries: 512000
+      unit_price: 33000
     - name: N9K-C9332PQ
       part_number: N9K-C9332PQ
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 16
+      max_routes: 128000
+      tcam_entries: 128000
+      unit_price: 22000
     - name: N9K-C9336C-FX2
       part_number: N9K-C9336C-FX2
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 32
+      max_routes: 128000
+      tcam_entries: 128000
+      unit_price: 26500
     - name: N9K-C9336PQ
       part_number: N9K-C9336PQ
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 16
+      max_routes: 128000
+      tcam_entries: 128000
+      unit_price: 26000
     - name: N9K-C9348D-GX2A
       part_number: N9K-C9348D-GX2A
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 32
+      max_routes: 512000
+      tcam_entries: 512000
+      unit_price: 36000
     - name: N9K-C9348GC-FX3
       part_number: N9K-C9348GC-FX3
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 32
+      max_routes: 256000
+      tcam_entries: 256000
+      unit_price: 27000
     - name: N9K-C9348GC-FX3PH
       part_number: N9K-C9348GC-FX3PH
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 32
+      max_routes: 256000
+      tcam_entries: 256000
+      unit_price: 28500
     - name: N9K-C9348GC-FXP
       part_number: N9K-C9348GC-FXP
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 24
+      max_routes: 128000
+      tcam_entries: 128000
+      unit_price: 21500
     - name: N9K-C93600CD-GX
       part_number: N9K-C93600CD-GX
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 32
+      max_routes: 512000
+      tcam_entries: 512000
+      unit_price: 52000
     - name: N9K-C9364C
       part_number: N9K-C9364C
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 32
+      max_routes: 128000
+      tcam_entries: 128000
+      unit_price: 38000
     - name: N9K-C9364C-GX
       part_number: N9K-C9364C-GX
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 32
+      max_routes: 512000
+      tcam_entries: 512000
+      unit_price: 41000
     - name: N9K-C9364D-GX2A
       part_number: N9K-C9364D-GX2A
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 32
+      max_routes: 512000
+      tcam_entries: 512000
+      unit_price: 47000
     - name: N9K-C9372PX
       part_number: N9K-C9372PX
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 16
+      max_routes: 64000
+      tcam_entries: 64000
+      unit_price: 17000
     - name: N9K-C9372PX-E
       part_number: N9K-C9372PX-E
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 16
+      max_routes: 64000
+      tcam_entries: 64000
+      unit_price: 18000
     - name: N9K-C9372TX
       part_number: N9K-C9372TX
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 16
+      max_routes: 64000
+      tcam_entries: 64000
+      unit_price: 16500
     - name: N9K-C9372TX-E
       part_number: N9K-C9372TX-E
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 16
+      max_routes: 64000
+      tcam_entries: 64000
+      unit_price: 17500
     - name: N9K-C9396PX
       part_number: N9K-C9396PX
       height: 1
       full_depth: false
       manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 16
+      max_routes: 64000
+      tcam_entries: 64000
+      unit_price: 19000
     - name: NCS-5501-SE
       part_number: NCS-5501-SE
       height: 1
       full_depth: false
       manufacturer: Cisco
-    # Dell
+      cpu_count: 1
+      memory_gb: 32
+      max_routes: 4000000
+      tcam_entries: 4000000
+      unit_price: 42000
     - name: PowerSwitch S5224F-ON
       part_number: S5224F-ON
       height: 1
       full_depth: true
       manufacturer: Dell
+      cpu_count: 1
+      memory_gb: 8
+      max_routes: 128000
+      tcam_entries: 128000
+      unit_price: 14200
     - name: PowerSwitch S5232F-ON
       part_number: S5232F-ON
       height: 1
       full_depth: true
       manufacturer: Dell
+      cpu_count: 1
+      memory_gb: 8
+      max_routes: 128000
+      tcam_entries: 128000
+      unit_price: 21500
     - name: PowerSwitch S5248F-ON
       part_number: S5248F-ON
       height: 1
       full_depth: true
       manufacturer: Dell
+      cpu_count: 1
+      memory_gb: 8
+      max_routes: 128000
+      tcam_entries: 128000
+      unit_price: 16800
     - name: Dell-H625cdw-MFP
       part_number: H625cdw
       height: 0
       full_depth: false
       manufacturer: Dell
+      unit_price: 650
     - name: PowerEdge-R640
       part_number: PowerEdge-R640
       height: 1
       full_depth: true
       manufacturer: Dell
-
-    # EdgeCore
+      cpu_count: 2
+      core_count: 40
+      memory_gb: 384
+      storage_gb: 3840
+      unit_price: 8500
     - name: 7726-32X-O
       height: 1
       full_depth: false
       manufacturer: Edgecore
+      cpu_count: 1
+      memory_gb: 8
+      max_routes: 128000
+      tcam_entries: 128000
+      unit_price: 11500
     - name: 7AS7326-56X-O-48V-F
       part_number: 7AS7326-56X-O-48V-F
       height: 1
       full_depth: true
       manufacturer: Edgecore
+      cpu_count: 1
+      memory_gb: 8
+      max_routes: 128000
+      tcam_entries: 128000
+      unit_price: 9800
     # LBs
+    - name: BIG-IP-i5800
+      part_number: F5-BIG-IP-I5800-25G
+      height: 2
+      full_depth: true
+      manufacturer: F5 Networks
+      cpu_count: 2
+      core_count: 18
+      memory_gb: 64
+      max_routes: 1000000
+      unit_price: 65000
+    - name: BIG-IP-VE
+      part_number: F5-BIG-IP-VE
+      height: 0
+      full_depth: false
+      manufacturer: F5 Networks
+      cpu_count: 2
+      memory_gb: 8
+      unit_price: 0
     - name: NGINX
       part_number: NGINX
       height: 1
       full_depth: false
       manufacturer: F5 Networks
+      cpu_count: 2
+      memory_gb: 4
+      unit_price: 0
     - name: HA-PROXY
       part_number: HA-PROXY
       height: 1
       full_depth: false
       manufacturer: HAProxy Technologies
-    # Juniper
+      cpu_count: 2
+      memory_gb: 2
+      unit_price: 0
+    - name: SQUID-PROXY
+      part_number: SQUID-PROXY
+      height: 1
+      full_depth: false
+      manufacturer: Squid
+      cpu_count: 4
+      memory_gb: 16
+      unit_price: 0
+    - name: LINUX-SVC
+      part_number: LINUX-SVC
+      height: 1
+      full_depth: false
+      manufacturer: Generic
+      cpu_count: 2
+      memory_gb: 4
+      unit_price: 0
+    - name: BLUECOAT-SG900
+      part_number: SG900
+      height: 2
+      full_depth: true
+      manufacturer: Broadcom
+      cpu_count: 4
+      memory_gb: 32
+      unit_price: 28000
+    - name: CISCO-WSA-S195
+      part_number: WSA-S195
+      height: 1
+      full_depth: true
+      manufacturer: Cisco
+      cpu_count: 2
+      memory_gb: 16
+      unit_price: 21000
+    - name: NetScaler-MPX-26000-100G
+      part_number: MPX-26000-100G
+      height: 2
+      full_depth: true
+      manufacturer: Citrix
+      cpu_count: 2
+      core_count: 28
+      memory_gb: 128
+      max_routes: 2000000
+      unit_price: 58000
+    - name: NetScaler-MPX-26100-100G
+      part_number: MPX-26100-100G
+      height: 2
+      full_depth: true
+      manufacturer: Citrix
+      cpu_count: 2
+      core_count: 32
+      memory_gb: 256
+      max_routes: 2000000
+      unit_price: 68000
+    - name: NetScaler-MPX-26160-100G
+      part_number: MPX-26160-100G
+      height: 2
+      full_depth: true
+      manufacturer: Citrix
+      cpu_count: 2
+      core_count: 32
+      memory_gb: 256
+      max_routes: 2000000
+      unit_price: 78000
+    - name: NetScaler-MPX-26200-100G
+      part_number: MPX-26200-100G
+      height: 2
+      full_depth: true
+      manufacturer: Citrix
+      cpu_count: 2
+      core_count: 40
+      memory_gb: 512
+      max_routes: 4000000
+      unit_price: 95000
+    - name: NetScaler-ADC-VPX
+      part_number: NS-VPX-ADC
+      height: 0
+      full_depth: false
+      manufacturer: Citrix
+      cpu_count: 2
+      memory_gb: 4
+      unit_price: 0
     - name: SRX-1500
       height: 1
       full_depth: false
       manufacturer: Juniper
+      cpu_count: 1
+      memory_gb: 16
+      max_routes: 2000000
+      unit_price: 12000
+    - name: vSRX
+      height: 0
+      full_depth: false
+      manufacturer: Juniper
+      cpu_count: 2
+      memory_gb: 8
+      unit_price: 0
     - name: MX204
       part_number: MX204-HWBASE-AC-FS
       height: 1
       full_depth: false
       manufacturer: Juniper
-    # Perle
+      cpu_count: 1
+      memory_gb: 32
+      max_routes: 4000000
+      tcam_entries: 2000000
+      unit_price: 19500
     - name: SCG50R
       part_number: SCG50R
       height: 1
       full_depth: false
       manufacturer: Perle
-    # Arista SD-WAN (formerly VeloCloud)
+      unit_price: 1800
     - name: VCE-610
       part_number: VCE-610
       height: 1
       full_depth: false
       manufacturer: Arista
+      cpu_count: 1
+      memory_gb: 4
+      unit_price: 3200
     - name: VCG-VA
       part_number: VCG-VA
       height: 0
       full_depth: false
       manufacturer: Arista
+      cpu_count: 4
+      memory_gb: 8
+      unit_price: 0
     - name: VCO-VA
       part_number: VCO-VA
       height: 0
       full_depth: false
       manufacturer: Arista
+      cpu_count: 4
+      memory_gb: 16
+      unit_price: 0
+    - name: CP-26000
+      part_number: CP-26000
+      height: 2
+      full_depth: true
+      manufacturer: Check Point
+      cpu_count: 2
+      core_count: 24
+      memory_gb: 256
+      max_routes: 4000000
+      unit_price: 88000
+    - name: CP-SMS
+      part_number: CP-SMS-VIRTUAL
+      height: 0
+      full_depth: false
+      manufacturer: Check Point
+      cpu_count: 4
+      memory_gb: 16
+      storage_gb: 500
+      unit_price: 0
+    - name: Panorama
+      part_number: PANORAMA-VIRTUAL
+      height: 0
+      full_depth: false
+      manufacturer: Palo Alto Networks
+      cpu_count: 4
+      memory_gb: 16
+      storage_gb: 500
+      unit_price: 0
+    - name: Security-Director
+      part_number: SECURITY-DIRECTOR-VIRTUAL
+      height: 0
+      full_depth: false
+      manufacturer: Juniper
+      cpu_count: 4
+      memory_gb: 16
+      storage_gb: 500
+      unit_price: 0
+    - name: BIG-IQ
+      part_number: F5-BIG-IQ-VIRTUAL
+      height: 0
+      full_depth: false
+      manufacturer: F5 Networks
+      cpu_count: 4
+      memory_gb: 16
+      storage_gb: 500
+      unit_price: 0
+    - name: NetScaler-ADM
+      part_number: NS-ADM-VIRTUAL
+      height: 0
+      full_depth: false
+      manufacturer: Citrix
+      cpu_count: 4
+      memory_gb: 16
+      storage_gb: 500
+      unit_price: 0
+    - name: PA-5260
+      part_number: PA-5260
+      height: 2
+      full_depth: true
+      manufacturer: Palo Alto Networks
+      cpu_count: 2
+      core_count: 32
+      memory_gb: 512
+      max_routes: 4000000
+      unit_price: 92000
+    - name: PA-VM
+      part_number: PA-VM-100
+      height: 0
+      full_depth: false
+      manufacturer: Palo Alto Networks
+      cpu_count: 2
+      memory_gb: 8
+      unit_price: 0
+    - name: linux-vm
+      part_number: linux-vm
+      height: 0
+      full_depth: false
+      manufacturer: Generic
+      cpu_count: 2
+      memory_gb: 8
+      storage_gb: 100
+      unit_price: 0
     # Passive patch panel — used for provider cross-connect handoffs
     - name: PATCH-PANEL-24
       part_number: PATCH-PANEL-24
       height: 1
       full_depth: false
       manufacturer: Generic
+      unit_price: 250

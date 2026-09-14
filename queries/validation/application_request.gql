@@ -1,0 +1,64 @@
+query application_request_validation($name: String!) {
+  AppDeploymentRequest(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        status { value }
+        application_fqdn { value }
+        customer { node { id org_id { value } } }
+        components {
+          edges {
+            node {
+              id
+              name { value }
+              endpoints {
+                edges {
+                  node {
+                    id
+                    endpoint_type { value }
+                    fqdn { value }
+                    access_profile {
+                      node {
+                        id
+                        allowed_groups { edges { node { id } } }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        dependencies {
+          edges {
+            node {
+              id
+              name { value }
+              business_justification { value }
+              access_status { value }
+              approved_by { node { id } }
+              target { node { id } }
+              existing_target {
+                node {
+                  id
+                  parent {
+                    node {
+                      parent {
+                        node {
+                          ... on AppApplication {
+                            owner { node { id } }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

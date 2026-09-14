@@ -1,0 +1,167 @@
+---
+version: "1.0"
+
+# Application connectivity intent is modeled as endpoints and reusable access
+# profiles. Device/proxy selections are resolved from the owning customer or
+# deployment rather than authored on every AppComponent.
+nodes:
+  - name: AccessProfile
+    namespace: Security
+    description: "Reusable identity-based access requirements for published application endpoints"
+    label: Access Profile
+    icon: "mdi:shield-account-outline"
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    order_by:
+      - name__value
+    uniqueness_constraints:
+      - [name__value]
+    attributes:
+      - name: name
+        kind: Text
+        optional: false
+        unique: true
+        order_weight: 100
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 200
+      - name: mfa_required
+        kind: Boolean
+        optional: true
+        default_value: false
+        order_weight: 300
+      - name: device_posture_required
+        kind: Boolean
+        optional: true
+        default_value: false
+        order_weight: 400
+      - name: session_timeout_minutes
+        kind: Number
+        optional: true
+        order_weight: 500
+    relationships:
+      - name: allowed_groups
+        peer: SecurityIdentityGroup
+        cardinality: many
+        kind: Attribute
+        optional: true
+        on_delete: no-action
+        identifier: "security_access_profile__allowed_groups"
+        order_weight: 1000
+
+  - name: Endpoint
+    namespace: App
+    description: "Addressable application service or external dependency endpoint"
+    label: Application Endpoint
+    icon: "mdi:connection"
+    include_in_menu: false
+    inherit_from:
+      - AppGeneric
+    parent: AppComponent
+    children: ""
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    order_by:
+      - name__value
+    uniqueness_constraints:
+      - [parent, name__value]
+    attributes:
+      - name: name
+        kind: Text
+        optional: false
+        order_weight: 100
+      - name: endpoint_type
+        kind: Dropdown
+        optional: false
+        order_weight: 200
+        choices:
+          - name: internal_service
+            label: "Internal Service"
+            color: "#3498DB"
+          - name: external_service
+            label: "External Service"
+            color: "#95A5A6"
+          - name: private_access
+            label: "Private Access"
+            color: "#2ECC71"
+      - name: fqdn
+        kind: Text
+        optional: false
+        order_weight: 300
+        description: "Canonical service address; direction is defined by endpoint_type"
+    relationships:
+      - name: service_ports
+        peer: AppServicePort
+        cardinality: many
+        kind: Attribute
+        optional: true
+        on_delete: no-action
+        identifier: "app_endpoint__service_ports"
+        order_weight: 1000
+      - name: access_profile
+        peer: SecurityAccessProfile
+        cardinality: one
+        kind: Attribute
+        optional: true
+        on_delete: no-action
+        identifier: "app_endpoint__access_profile"
+        order_weight: 1100
+
+extensions:
+  nodes:
+    - kind: OrganizationCustomer
+      relationships:
+        - name: egress_service
+          peer: ManagedProxyService
+          cardinality: one
+          kind: Attribute
+          optional: true
+          on_delete: no-action
+          direction: outbound
+          identifier: "customer__egress_service"
+          order_weight: 2100
+          label: "Egress Service"
+        - name: private_access_service
+          peer: ManagedCloudProxy
+          cardinality: one
+          kind: Attribute
+          optional: true
+          on_delete: no-action
+          direction: outbound
+          identifier: "customer__private_access_service"
+          order_weight: 2110
+          label: "Private Access Service"
+
+    - kind: ManagedProxyHA
+      relationships:
+        - name: customers
+          peer: OrganizationCustomer
+          cardinality: many
+          kind: Attribute
+          optional: true
+          direction: inbound
+          identifier: "customer__egress_service"
+          order_weight: 2310
+
+    - kind: ManagedCloudProxy
+      relationships:
+        - name: egress_customers
+          peer: OrganizationCustomer
+          cardinality: many
+          kind: Attribute
+          optional: true
+          direction: inbound
+          identifier: "customer__egress_service"
+          order_weight: 2320
+        - name: private_access_customers
+          peer: OrganizationCustomer
+          cardinality: many
+          kind: Attribute
+          optional: true
+          direction: inbound
+          identifier: "customer__private_access_service"
+          order_weight: 2330

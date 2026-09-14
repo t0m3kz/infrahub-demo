@@ -13,12 +13,33 @@
       "type": "BorderLeafRouter"
     }
   },
+  "EVPN_NVO": {},
   "INTERFACE": {
-    "Ethernet1": {},
-    "Ethernet2": {},
-    "Ethernet33": {},
-    "Ethernet34": {},
-    "Port-Channel100": {}
+    "Ethernet1": {
+      "admin_status": "up",
+      "description": "to spine-01",
+      "mtu": "9000"
+    },
+    "Ethernet2": {
+      "admin_status": "up",
+      "description": "to spine-02",
+      "mtu": "9000"
+    },
+    "Ethernet33": {
+      "admin_status": "up",
+      "description": "MLAG peer-link member 1",
+      "mtu": "9000"
+    },
+    "Ethernet34": {
+      "admin_status": "up",
+      "description": "MLAG peer-link member 2",
+      "mtu": "9000"
+    },
+    "Port-Channel100": {
+      "admin_status": "up",
+      "description": "MLAG Peer-Link",
+      "mtu": "9000"
+    }
   },
   "INTERFACE_IP": {
     "Ethernet1|10.1.2.1/31": {},
@@ -28,10 +49,17 @@
     "Loopback0|10.0.2.1/32": {}
   },
   "OSPF_ROUTER": {},
+  "STATIC_ROUTE": {},
   "VLAN": {},
-  "VLAN_INTERFACE": {}
+  "VLAN_INTERFACE": {},
+  "VRF": {},
+  "VXLAN_TUNNEL": {},
+  "VXLAN_TUNNEL_MAP": {}
 }
 
 # MC-LAG Configuration
 sudo config mclag add 1
+sudo config portchannel add Port-Channel100
+sudo config portchannel member add Port-Channel100 Ethernet33
+sudo config portchannel member add Port-Channel100 Ethernet34
 sudo config mclag peer-link add Port-Channel100

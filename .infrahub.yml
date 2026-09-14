@@ -28,11 +28,32 @@ artifact_definitions:
     transformation: border_leaf
     parameters:
       device: name__value
+  - name: borderspine_config
+    artifact_name: border-spine
+    content_type: text/plain
+    targets: border-spines
+    transformation: border_spine
+    parameters:
+      device: name__value
   - name: tor_config
     artifact_name: tor
     content_type: text/plain
     targets: tors
     transformation: tor
+    parameters:
+      device: name__value
+  - name: l2_leaf_config
+    artifact_name: l2-leaf
+    content_type: text/plain
+    targets: l2-leafs
+    transformation: l2_leaf
+    parameters:
+      device: name__value
+  - name: access_leaf_config
+    artifact_name: access-leaf
+    content_type: text/plain
+    targets: access-leafs
+    transformation: access_leaf
     parameters:
       device: name__value
   - name: spine_config
@@ -55,11 +76,25 @@ artifact_definitions:
     targets: loadbalancers
     transformation: loadbalancer
     parameters:
+      device: name__value
+  - name: proxy_config
+    artifact_name: proxy
+    content_type: text/plain
+    targets: onprem_proxies
+    transformation: proxy
+    parameters:
+      device: name__value
+  - name: proxy_cloud_config
+    artifact_name: proxy-cloud-policy
+    content_type: application/json
+    targets: saas_proxies
+    transformation: proxy-cloud
+    parameters:
       instance: name__value
-  # Cloud Load Balancer Terraform vars
+  # Cloud Load Balancer Terraform HCL
   - name: cloud_lb_terraform
     artifact_name: terraform-vars
-    content_type: application/json
+    content_type: text/plain
     targets: cloud_loadbalancers
     transformation: loadbalancer-cloud
     parameters:
@@ -96,6 +131,19 @@ artifact_definitions:
     transformation: firewall
     parameters:
       device: name__value
+  # Controller payload — one artifact_definition for every ManagedController
+  # in managed_controllers; controller_type/vendor are passed alongside the
+  # object's own name so the transform can dispatch to the right vendor
+  # builder without any per-controller querying/matching in Python.
+  - name: controller_payload
+    artifact_name: controller-payload
+    content_type: application/json
+    targets: managed_controllers
+    transformation: controller-payload
+    parameters:
+      controller: name__value
+      controller_type: controller_type__value
+      vendor: platform__name__value
   # - name: rack_elevation
   #   artifact_name: rack_elevation
   #   content_type: image/svg+xml
@@ -110,29 +158,55 @@ artifact_definitions:
     transformation: cloud-vpc-terraform
     parameters:
       account: name__value
-  - name: cloud_vpc_pulumi
-    artifact_name: vpc-pulumi
+  - name: topology_orchestrator_ansible_inventory
+    artifact_name: ansible-inventory
     content_type: text/plain
-    targets: cloud_accounts
-    transformation: cloud-vpc-pulumi
+    targets: topology_ansible
+    transformation: topology-orchestrator-ansible
     parameters:
-      account: name__value
-  # SaaS Proxy policy export (Zscaler, Prisma, etc.)
-  - name: proxy_saas_config
-    artifact_name: proxy-policy
+      name: name__value
+  - name: topology_orchestrator_terraform_vars
+    artifact_name: terraform-vars
+    content_type: text/plain
+    targets: topology_terraform
+    transformation: topology-orchestrator-terraform
+    parameters:
+      name: name__value
+  - name: topology_orchestrator_argocd_manifest
+    artifact_name: argocd-application
     content_type: application/json
-    targets: saas_proxies
-    transformation: proxy-saas
+    targets: topology_argocd
+    transformation: topology-orchestrator-argocd
     parameters:
-      instance: name__value
-  # On-prem proxy config (Squid squid.conf)
-  - name: proxy_onprem_config
-    artifact_name: proxy-config
+      name: name__value
+  - name: topology_orchestrator_github_actions_dispatch
+    artifact_name: github-actions-dispatch
+    content_type: application/json
+    targets: topology_github_actions
+    transformation: topology-orchestrator-github-actions
+    parameters:
+      name: name__value
+  - name: application_orchestrator_ansible_inventory
+    artifact_name: ansible-inventory
     content_type: text/plain
-    targets: onprem_proxies
-    transformation: proxy-onprem
+    targets: application_ansible
+    transformation: application-orchestrator-ansible
     parameters:
-      instance: name__value
+      name: name__value
+  - name: application_orchestrator_argocd_manifest
+    artifact_name: argocd-application
+    content_type: application/json
+    targets: application_argocd
+    transformation: application-orchestrator-argocd
+    parameters:
+      name: name__value
+  - name: application_orchestrator_github_actions_dispatch
+    artifact_name: github-actions-dispatch
+    content_type: application/json
+    targets: application_github_actions
+    transformation: application-orchestrator-github-actions
+    parameters:
+      name: name__value
 
 check_definitions:
   - name: validate_spine
@@ -156,19 +230,37 @@ check_definitions:
   - name: validate_loadbalancer
     class_name: CheckLoadBalancer
     file_path: checks/loadbalancer.py
-    targets: loadbalancers
+    targets: loadbalancer_devices
     parameters:
-      instance: name__value
+      device: name__value
+  - name: validate_proxy
+    class_name: CheckProxy
+    file_path: checks/proxy.py
+    targets: onprem_proxies
+    parameters:
+      device: name__value
   - name: validate_tor
     class_name: CheckToR
     file_path: checks/tor.py
     targets: tors
     parameters:
       device: name__value
+  - name: validate_access_leaf
+    class_name: CheckAccessLeaf
+    file_path: checks/access_leaf.py
+    targets: access-leafs
+    parameters:
+      device: name__value
   - name: validate_border_leaf
     class_name: CheckBorderLeaf
     file_path: checks/border_leaf.py
     targets: border-leafs
+    parameters:
+      device: name__value
+  - name: validate_border_spine
+    class_name: CheckBorderSpine
+    file_path: checks/border_spine.py
+    targets: border-spines
     parameters:
       device: name__value
   - name: validate_super_spine
@@ -186,57 +278,112 @@ check_definitions:
   - name: validate_capability_guard
     class_name: CheckCapabilityGuard
     file_path: checks/capability_guard.py
+  - name: validate_segment_placement
+    class_name: CheckSegmentPlacement
+    file_path: checks/segment_placement.py
+  - name: validate_application_deployment_request
+    class_name: CheckApplicationDeploymentRequest
+    file_path: checks/application_request.py
+    targets: app_deployment_requests
+    parameters:
+      name: name__value
 
 python_transforms:
   - name: topology_cabling
     class_name: TopologyCabling
-    file_path: transforms/topology_cabling.py
+    file_path: transforms/topology/cabling.py
   - name: leaf
     class_name: Leaf
-    file_path: transforms/leaf.py
+    file_path: transforms/config/leaf.py
   - name: border_leaf
     class_name: BorderLeaf
-    file_path: transforms/border_leaf.py
+    file_path: transforms/config/border_leaf.py
+  - name: border_spine
+    class_name: BorderSpine
+    file_path: transforms/config/border_spine.py
   - name: tor
     class_name: ToR
-    file_path: transforms/tor.py
+    file_path: transforms/config/tor.py
+  - name: l2_leaf
+    class_name: L2Leaf
+    file_path: transforms/config/l2_leaf.py
+  - name: access_leaf
+    class_name: AccessLeaf
+    file_path: transforms/config/access_leaf.py
   - name: spine
     class_name: Spine
-    file_path: transforms/spine.py
+    file_path: transforms/config/spine.py
   - name: super_spine
     class_name: SuperSpine
-    file_path: transforms/super_spine.py
+    file_path: transforms/config/super_spine.py
   - name: loadbalancer
     class_name: LoadBalancer
-    file_path: transforms/loadbalancer.py
+    file_path: transforms/config/loadbalancer.py
+  - name: proxy
+    class_name: Proxy
+    file_path: transforms/config/proxy.py
+  - name: proxy-cloud
+    class_name: ProxyCloud
+    file_path: transforms/config/proxy_cloud.py
   - name: edge
     class_name: Edge
-    file_path: transforms/edge.py
+    file_path: transforms/config/edge.py
   - name: equinix_pop
     class_name: EquinixPOP
-    file_path: transforms/equinix_pop.py
+    file_path: transforms/config/equinix_pop.py
   - name: loadbalancer-cloud
     class_name: LoadBalancerCloud
-    file_path: transforms/loadbalancer_cloud.py
+    file_path: transforms/config/loadbalancer_cloud.py
   - name: firewall
     class_name: Firewall
-    file_path: transforms/firewall.py
+    file_path: transforms/config/firewall.py
+  - name: controller-payload
+    class_name: ControllerPayload
+    file_path: transforms/config/controller.py
+  - name: topology-orchestrator-ansible
+    class_name: TopologyOrchestratorAnsible
+    file_path: transforms/topology/orchestrator_routing.py
+  - name: topology-orchestrator-terraform
+    class_name: TopologyOrchestratorTerraform
+    file_path: transforms/topology/orchestrator_routing.py
+  - name: topology-orchestrator-argocd
+    class_name: TopologyOrchestratorArgoCD
+    file_path: transforms/topology/orchestrator_routing.py
+  - name: topology-orchestrator-github-actions
+    class_name: TopologyOrchestratorGitHubActions
+    file_path: transforms/topology/orchestrator_routing.py
+  - name: application-orchestrator-ansible
+    class_name: ApplicationOrchestratorAnsible
+    file_path: transforms/topology/orchestrator_routing.py
+  - name: application-orchestrator-argocd
+    class_name: ApplicationOrchestratorArgoCD
+    file_path: transforms/topology/orchestrator_routing.py
+  - name: application-orchestrator-github-actions
+    class_name: ApplicationOrchestratorGitHubActions
+    file_path: transforms/topology/orchestrator_routing.py
   - name: rack_elevation
     class_name: RackElevation
-    file_path: transforms/rack.py
+    file_path: transforms/topology/rack.py
   - name: cloud-vpc-terraform
     class_name: CloudVpcTerraform
-    file_path: transforms/cloud_vpc_terraform.py
-  - name: cloud-vpc-pulumi
-    class_name: CloudVpcPulumi
-    file_path: transforms/cloud_vpc_pulumi.py
-  - name: proxy-saas
-    class_name: ProxySaas
-    file_path: transforms/proxy_saas.py
-  - name: proxy-onprem
-    class_name: ProxyOnprem
-    file_path: transforms/proxy_onprem.py
+    file_path: transforms/cloud/vpc_terraform.py
+  - name: virt_cluster_total_cpu
+    class_name: VirtClusterTotalCpu
+    file_path: transforms/fields/virt_cluster_capacity.py
+  - name: virt_cluster_total_memory_gb
+    class_name: VirtClusterTotalMemoryGb
+    file_path: transforms/fields/virt_cluster_capacity.py
+  - name: virt_cluster_total_storage_gb
+    class_name: VirtClusterTotalStorageGb
+    file_path: transforms/fields/virt_cluster_capacity.py
+
+graphql_fragments:
+  - name: all_fragments
+    file_path: queries/fragments/
+
 queries:
+  - name: placeholder
+    file_path: queries/placeholder.gql
   - name: endpoint_connectivity
     file_path: queries/topology/add/endpoint.gql
   - name: topology_dc
@@ -245,6 +392,8 @@ queries:
     file_path: queries/topology/add/pod.gql
   - name: rack
     file_path: queries/topology/add/rack.gql
+  - name: rack_devices_with_interfaces
+    file_path: queries/topology/add/rack_devices_with_interfaces.gql
   - name: topology_pop
     file_path: queries/topology/add/pop.gql
   - name: topology_simulator
@@ -256,6 +405,8 @@ queries:
     file_path: queries/config/leaf.gql
   - name: border_leaf_config
     file_path: queries/config/border_leaf.gql
+  - name: border_spine_config
+    file_path: queries/config/border_spine.gql
   - name: spine_config
     file_path: queries/config/spine.gql
   - name: super_spine_config
@@ -264,18 +415,30 @@ queries:
     file_path: queries/config/edge.gql
   - name: loadbalancer_config
     file_path: queries/config/loadbalancer.gql
+  - name: proxy_config
+    file_path: queries/config/proxy.gql
+  - name: proxy_cloud_config
+    file_path: queries/config/proxy_cloud.gql
   - name: loadbalancer_cloud
     file_path: queries/config/loadbalancer_cloud.gql
   - name: firewall_config
     file_path: queries/config/firewall.gql
+  - name: controller_payload
+    file_path: queries/config/controller.gql
   - name: oob_config
     file_path: queries/config/oob.gql
   - name: pod_decommission
     file_path: queries/topology/decomission/pod.gql
-  - name: vlan_segment_data
-    file_path: queries/topology/add/vlan_segment.gql
+  - name: virt_cluster_capacity
+    file_path: queries/topology/add/virt_cluster_capacity.gql
+  - name: application
+    file_path: queries/topology/add/application.gql
+  - name: application_request
+    file_path: queries/topology/add/application_request.gql
   - name: vxlan_segment_data
     file_path: queries/topology/add/vxlan_segment.gql
+  - name: loadbalancer_vip_data
+    file_path: queries/topology/add/loadbalancer_vip.gql
   - name: vrf_namespace_data
     file_path: queries/topology/add/vrf_namespace.gql
   - name: circuit_data
@@ -284,21 +447,47 @@ queries:
     file_path: queries/topology/add/virtual_circuit.gql
   - name: capability_guard
     file_path: queries/validation/capability_guard.gql
+  - name: segment_placement
+    file_path: queries/validation/segment_placement.gql
+  - name: application_request_validation
+    file_path: queries/validation/application_request.gql
   - name: loadbalancer_validation
     file_path: queries/validation/lb.gql
+  - name: proxy_validation
+    file_path: queries/validation/proxy.gql
 
   - name: rack_elevation_query
     file_path: queries/topology/rack.gql
   - name: cloud_vpc_config
     file_path: queries/config/cloud_vpc.gql
-  - name: proxy_saas_config
-    file_path: queries/config/proxy.gql
-  - name: proxy_onprem_config
-    file_path: queries/config/proxy.gql
+  - name: proposed_change_artifacts
+    file_path: queries/topology/add/proposed_change_artifacts.gql
+  - name: mlag_domain_data
+    file_path: queries/topology/add/mlag_domain.gql
+  - name: customer_dc
+    file_path: queries/topology/add/customer_dc.gql
+  - name: customer_colocation
+    file_path: queries/topology/add/customer_colocation.gql
+  - name: customer_cloud
+    file_path: queries/topology/add/customer_cloud.gql
+  - name: customer_office
+    file_path: queries/topology/add/customer_office.gql
+  - name: application_orchestrator_routing
+    file_path: queries/topology/add/application_orchestrator_routing.gql
+  - name: customer_deployment_orchestrator_routing
+    file_path: queries/topology/add/customer_deployment_orchestrator_routing.gql
+  - name: topology_orchestrator_routing_data
+    file_path: queries/topology/add/topology_orchestrator_routing_data.gql
+  - name: application_orchestrator_routing_data
+    file_path: queries/topology/add/application_orchestrator_routing_data.gql
+  - name: quotation_data
+    file_path: queries/quotation/add_quotation.gql
+  - name: quotation_office_data
+    file_path: queries/quotation/add_quotation_office.gql
 
 generator_definitions:
   - name: add_dc
-    file_path: generators/add/dc.py
+    file_path: generators/topology/dc.py
     targets: topologies_dc
     query: topology_dc
     class_name: DCTopologyGenerator
@@ -307,10 +496,28 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_pod
-    file_path: generators/add/pod.py
+    file_path: generators/topology/pod.py
     targets: topologies_pod
     query: topology_pod
     class_name: PodTopologyGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: dc_pod_cascade
+    file_path: generators/topology/dc_pod_cascade.py
+    targets: topologies_dc
+    query: topology_dc
+    class_name: DCPodCascadeGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: pod_rack_cascade
+    file_path: generators/topology/pod_rack_cascade.py
+    targets: topologies_pod
+    query: topology_pod
+    class_name: PodRackCascadeGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:
@@ -334,7 +541,7 @@ generator_definitions:
   #   parameters:
   #     name: name__value
   - name: add_rack
-    file_path: generators/add/rack.py
+    file_path: generators/topology/rack.py
     targets: topologies_rack
     query: rack
     class_name: RackGenerator
@@ -343,7 +550,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_endpoint
-    file_path: generators/add/endpoint.py
+    file_path: generators/topology/endpoint.py
     targets: endpoints
     query: endpoint_connectivity
     class_name: EndpointConnectivityGenerator
@@ -351,26 +558,8 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       device_name: name__value
-  - name: add_vrf_namespace
-    file_path: generators/add/vrf.py
-    targets: vrf_namespaces
-    query: vrf_namespace_data
-    class_name: VrfNamespaceGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      name: name__value
-  - name: add_vlan_segment
-    file_path: generators/add/segment.py
-    targets: vlan_segments
-    query: vlan_segment_data
-    class_name: VlanSegmentGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      name: name__value
   - name: add_vxlan_segment
-    file_path: generators/add/segment.py
+    file_path: generators/topology/segment.py
     targets: vxlan_segments
     query: vxlan_segment_data
     class_name: VxlanSegmentGenerator
@@ -379,7 +568,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_circuit
-    file_path: generators/add/circuit.py
+    file_path: generators/topology/circuit.py
     targets: physical_circuits
     query: circuit_data
     class_name: PhysicalCircuitGenerator
@@ -388,7 +577,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_virtual_circuit
-    file_path: generators/add/circuit.py
+    file_path: generators/topology/circuit.py
     targets: virtual_circuits
     query: virtual_circuit_data
     class_name: VirtualCircuitGenerator
@@ -396,7 +585,114 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-
+  - name: add_mlag
+    file_path: generators/topology/mlag.py
+    targets: mlag_domains
+    query: mlag_domain_data
+    class_name: MLAGGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_lb_backend_nexthop
+    file_path: generators/topology/loadbalancer.py
+    targets: loadbalancer_vips
+    query: loadbalancer_vip_data
+    class_name: LoadbalancerBackendNexthopGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      id: id
+  - name: add_app_application
+    file_path: generators/topology/application_security.py
+    targets: app_applications
+    query: application
+    class_name: AppApplicationGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_application_deployment_request
+    file_path: generators/topology/application_request.py
+    targets: app_deployment_requests
+    query: application_request
+    class_name: AppDeploymentRequestGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_customer_deployment_dc
+    file_path: generators/topology/customer_dc.py
+    targets: customer_deployments_dc
+    query: customer_dc
+    class_name: CustomerDeploymentDCExchangeGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_customer_deployment_colocation
+    file_path: generators/topology/customer_colocation.py
+    targets: customer_deployments_colocation
+    query: customer_colocation
+    class_name: CustomerDeploymentColocationExchangeGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_customer_deployment_cloud
+    file_path: generators/topology/customer_cloud.py
+    targets: customer_deployments_cloud
+    query: customer_cloud
+    class_name: CustomerDeploymentCloudExchangeGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_customer_deployment_office
+    file_path: generators/topology/customer_office.py
+    targets: customer_deployments_office
+    query: customer_office
+    class_name: CustomerDeploymentOfficeExchangeGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_application_orchestrator_routing
+    file_path: generators/topology/orchestrator_routing.py
+    targets: app_applications
+    query: application_orchestrator_routing
+    class_name: ApplicationOrchestratorRoutingGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_customer_deployment_orchestrator_routing
+    file_path: generators/topology/orchestrator_routing.py
+    targets: customer_deployments
+    query: customer_deployment_orchestrator_routing
+    class_name: TopologyOrchestratorRoutingGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_quotation_dc
+    file_path: generators/quotations/dc.py
+    targets: customer_quotations
+    query: quotation_data
+    class_name: QuotationDCGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_quotation_office
+    file_path: generators/quotations/office.py
+    targets: customer_quotations
+    query: quotation_office_data
+    class_name: OfficeQuotationGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
 # - name: create_pop
 #   file_path: generators/generate_pop.py
 #   targets: topologies_pop

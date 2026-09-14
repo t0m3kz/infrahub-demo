@@ -1,0 +1,39 @@
+---
+# BGP processes for the C001/C002 <-> hub SD-WAN sessions (see
+# 03_circuits.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingAutonomousSystem
+  data:
+    - asn: 65000
+      description: "SD-WAN hub AS (SDWAN-HUB-GW1)"
+    - asn: 65101
+      description: "C001 SD-WAN edge AS"
+    - asn: 65102
+      description: "C002 SD-WAN edge AS"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGP
+  data:
+    - name: "SDWAN-HUB-GW1-bgp"
+      status: active
+      local_as: "AS65000"
+      router_id: ["10.99.7.1/32", "default"]
+      capabilities:
+        - "SDWAN-HUB-GW1"
+    - name: "C001-EDGE1-bgp"
+      status: active
+      local_as: "AS65101"
+      router_id: ["10.99.1.1/32", "default"]
+      capabilities:
+        - "C001-EDGE1"
+    - name: "C002-EDGE1-bgp"
+      status: active
+      local_as: "AS65102"
+      router_id: ["10.99.2.1/32", "default"]
+      capabilities:
+        - "C002-EDGE1"

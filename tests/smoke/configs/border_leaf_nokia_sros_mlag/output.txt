@@ -8,7 +8,12 @@ A admin configure system dns resolver admin-state enable
 !
 A admin configure redundancy mc-lag admin-state enable
 A admin configure redundancy mc-lag system-priority 1
-A admin configure redundancy mc-lag peer-link port lag-100
+A admin configure lag 100 admin-state enable
+A admin configure lag 100 lacp admin-state enable
+A admin configure lag 100 lacp mode active
+A admin configure lag 100 port Ethernet33
+A admin configure lag 100 port Ethernet34
+A admin configure redundancy mc-lag peer-link lag 100
 
 A admin configure router "Base" admin-state enable
 A admin configure router "Base" router-id "0.0.0.0"A admin configure port "system" admin-state enable

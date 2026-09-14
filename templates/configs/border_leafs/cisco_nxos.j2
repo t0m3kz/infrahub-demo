@@ -3,12 +3,19 @@
 !
 hostname {{ name }}
 !
+{%- if border_leaf_pbr_rules %}
+system routing tcam security-group-acl
+hardware access-list tcam region pbr 256
+{%- endif %}
 feature ospf
 feature bgp
 feature interface-vlan
 feature lacp
 feature vpc
 feature lldp
+{%- if border_leaf_pbr_rules %}
+feature pbr
+{%- endif %}
 !
 {%- include 'common/cisco_nxos_vpc.j2' %}
 ! VLANs
@@ -27,6 +34,9 @@ interface {{ interface.name }}
   description {{ interface.circuits[0].circuit_type|upper }} - {{ interface.circuits[0].circuit_id }} - {{ interface.circuits[0].provider }}
 {%- elif interface.virtual_links %}
   description {{ interface.virtual_links[0].link_type|upper }} - {{ interface.virtual_links[0].link_name }} - {{ interface.virtual_links[0].provider }}
+{%- endif %}
+{%- if interface.dot1q_vlan %}
+  encapsulation dot1q {{ interface.dot1q_vlan }}
 {%- endif %}
 {%- if interface.status == 'active' %}
   no shutdown
@@ -65,6 +75,140 @@ interface {{ interface.name }}
 ! BGP Configuration
 {% include 'common/cisco_nxos_bgp.j2' %}
 !
+{%- if vxlan and vxlan.enabled %}
+!
+! VXLAN Configuration (netlab-style multivendor) — border-leaf is a VTEP too,
+! terminating customer/shared VNIs the same as a regular leaf.
+!
+{%- for feature in vxlan.features %}
+feature {{ feature }}
+{%- endfor %}
+!
+interface {{ vxlan.nve_interface }}
+{%- if vxlan.vtep.ipv4 %}
+  source-interface {{ vxlan.vtep.source_interface }}
+{%- endif %}
+{%- for mapping in vxlan.l2_vni_mappings %}
+  member vni {{ mapping.vni }}
+    {%- if vxlan.evpn and vxlan.evpn.enabled %}
+    ingress-replication protocol bgp
+    {%- elif vxlan.flooding == "static" and vxlan.remote_vteps %}
+    ingress-replication protocol static
+      peer-list {{ vxlan.remote_vteps | join(' ') }}
+    {%- endif %}
+{%- endfor %}
+  no shutdown
+!
+{%- if vxlan.evpn and vxlan.evpn.enabled %}
+!
+! EVPN Configuration
+!
+evpn
+{%- for mapping in vxlan.l2_vni_mappings %}
+  vni {{ mapping.vni }} l2
+    rd {{ vxlan.evpn.rd_format }}
+    route-target import {{ bgp[0].local_as.asn }}:{{ mapping.vni }}
+    route-target export {{ bgp[0].local_as.asn }}:{{ mapping.vni }}
+{%- endfor %}
+!
+{%- endif %}
+!
+! VLAN to VNI mapping
+!
+{%- for mapping in vxlan.l2_vni_mappings %}
+vlan {{ mapping.vlan_id }}
+  vn-segment {{ mapping.vni }}
+{%- endfor %}
+{%- endif %}
+!
+{%- if vlans %}
+! VLAN SVI Configuration
+!
+{%- for vlan in vlans %}
+{%- if vlan.gateway_ip or vlan.gateway_ipv6 %}
+{%- set ns = namespace(acl_name=None) %}
+{%- for acl in acls %}
+{%- if acl.vlan_id == vlan.vlan_id %}
+{%- set ns.acl_name = acl.name %}
+{%- endif %}
+{%- endfor %}
+interface Vlan{{ vlan.vlan_id }}
+  description {{ vlan.name }}
+{%- if vlan.isolation_mode == 'isolated' %}
+  ! Isolation Mode: ISOLATED — intra-segment host-to-host traffic blocked via port-isolation
+{%- elif vlan.isolation_mode == 'microsegmented' %}
+  ! Isolation Mode: MICROSEGMENTED — intra+inter segment rules enforced via SVI ACL (and firewall if present)
+{%- endif %}
+{%- if vlan.vrf %}
+  vrf member {{ vlan.vrf }}
+{%- endif %}
+{%- if vlan.gateway_ip %}
+  ip address {{ vlan.gateway_ip }}
+{%- endif %}
+{%- if vlan.gateway_ipv6 %}
+  ipv6 address {{ vlan.gateway_ipv6 }}
+{%- endif %}
+  no shutdown
+{%- if ns.acl_name %}
+  ip access-group {{ ns.acl_name }} in
+{%- endif %}
+!
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+!
+{%- if vrf_gateways %}
+!
+! VRF Default Routes — inter-VRF hop on this device (TopologyRoutedExchange)
+!
+{%- for vrf, nexthop in vrf_gateways.items() %}
+ip route 0.0.0.0/0 {{ nexthop }} vrf {{ vrf }}
+{%- endfor %}
+!
+{%- endif %}
+{%- if border_leaf_pbr_rules %}
+!
+! Border-leaf PBR (.dev/scenariusze.txt "CTS PBR + SINGLE VRF") — default-
+! redirect every segment's traffic to its firewall context's nexthop.
+! SGT/security-group travels in-band inside the VXLAN header from the
+! originating leaf; match_by_tag rules use it directly (Cisco<->Cisco
+! transit), everything else falls back to a source-prefix ACL match.
+! Rules are grouped by customer: prefix-fallback members share one ACL
+! (multiple permit lines, one sequence); tag-match members each keep their
+! own sequence but stay adjacent under the same customer comment block.
+!
+{%- for rule in border_leaf_pbr_rules %}
+! Customer: {{ rule.customer_name or 'any' }}/{{ rule.environment or 'any' }}
+{%- if not rule.match_by_tag %}
+ip access-list {{ rule.acl_name }}
+{%- for prefix in rule.source_prefixes %}
+  permit ip {{ prefix }} any
+{%- endfor %}
+!
+{%- endif %}
+route-map RM-BORDER-LEAF-PBR permit {{ loop.index * 10 }}
+{%- if rule.match_by_tag %}
+  match cts sgt {{ rule.sgt }}
+{%- else %}
+  match ip address {{ rule.acl_name }}
+{%- endif %}
+  set ip next-hop {{ rule.fw_nexthop }}
+!
+{%- endfor %}
+! Applied on every uplink (fabric-facing) interface — that's where traffic
+! from any leaf in this DC arrives at the border-leaf. .dev/scenariusze.txt
+! uses a dedicated "INCOMING_FROM_FABRIC_PBR_INTERFACE" physical port
+! because its Shared_VRF/L3-VNI model routes fabric traffic onto one
+! specific port before PBR; this project has no Shared_VRF (per-segment VRF
+! stays on the leaf, see docs/firewall_service_insertion.md), so the closest
+! equivalent is the same uplink port that already carries all fabric-bound
+! traffic today.
+{%- for interface in interfaces if interface.role == 'uplink' %}
+interface {{ interface.name }}
+  ip policy route-map RM-BORDER-LEAF-PBR
+!
+{%- endfor %}
+{%- endif %}
 {%- include 'common/cisco_nxos_management.j2' %}
 !
 ! Management

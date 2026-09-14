@@ -1,7 +1,10 @@
 """BGP configuration helpers for device transforms."""
 
+import logging
 from ipaddress import ip_address
-from typing import Any
+from typing import Any, cast
+
+_log = logging.getLogger(__name__)
 
 
 def _sort_key_ip(ip_obj: Any) -> tuple:
@@ -54,8 +57,9 @@ def _extract_remote_asn_from_peering(peering_node: dict, remote_device_name: str
         return None
 
     for proc in bgp_procs:
-        dev_name = (proc.get("device") or {}).get("name", "")
-        if dev_name == remote_device_name:
+        proc_devices = proc.get("capabilities") or []
+        dev_names = {d.get("name") for d in proc_devices if isinstance(d, dict)}
+        if remote_device_name in dev_names:
             local_as = proc.get("local_as")
             if isinstance(local_as, dict):
                 return local_as.get("asn")
@@ -65,18 +69,26 @@ def _extract_remote_asn_from_peering(peering_node: dict, remote_device_name: str
 def _build_session_from_peering(
     peering_node: dict[str, Any],
     device_name: str,
-    local_as: dict | None,
+    local_as: dict[str, Any],
     interfaces: list[dict[str, Any]] | None,
+    warnings: list[str] | None = None,
 ) -> dict[str, Any] | None:
     """Build a BGP session dict from a peering node using interfaces.
 
     Determines local vs remote by matching device name in interfaces.
-    Returns None if the peering cannot be processed.
+    Returns None only for valid "skip" conditions (for example no physical
+    underlay path, or unresolved remote ASN on eBGP session).
+
+    Raises:
+        ValueError: When peering data shape is malformed.
     """
     # Get interfaces (2 entries: local + remote)
-    peering_ifaces = peering_node.get("interfaces", [])
+    peering_ifaces = peering_node.get("interface_capabilities", [])
     if not isinstance(peering_ifaces, list) or len(peering_ifaces) != 2:
-        return None
+        raise ValueError(
+            f"Overlay peering '{peering_node.get('name')}' expected 2 interface_capabilities, "
+            f"got {len(peering_ifaces) if isinstance(peering_ifaces, list) else 'invalid'}"
+        )
 
     # Determine local vs remote interface by device name
     local_iface = None
@@ -89,13 +101,22 @@ def _build_session_from_peering(
             remote_iface = iface
 
     if not local_iface or not remote_iface:
-        return None
+        raise ValueError(
+            f"Overlay peering '{peering_node.get('name')}' missing local/remote interface mapping for {device_name}"
+        )
 
+    password_rel = peering_node.get("password") or {}
     session: dict[str, Any] = {
         "name": peering_node.get("name"),
         "session_type": peering_node.get("session_type"),
         "bfd_enabled": peering_node.get("bfd_enabled"),
         "send_community": peering_node.get("send_community"),
+        "send_extended_community": peering_node.get("send_extended_community"),
+        "maximum_routes": peering_node.get("maximum_routes"),
+        "local_pref": peering_node.get("local_pref"),
+        "med": peering_node.get("med"),
+        "remove_private_as": peering_node.get("remove_private_as"),
+        "password": password_rel.get("password"),
         "ttl": peering_node.get("ttl"),
         "route_reflector_client": peering_node.get("route_reflector_client", False),
         "enabled": True,
@@ -127,7 +148,7 @@ def _build_session_from_peering(
             # Inter-site circuit: circuit appears in interface_capabilities (ManagedGeneric pattern)
             for iface in interfaces:
                 for svc in iface.get("interface_capabilities") or []:
-                    typename = svc.get("__typename", "")
+                    typename = svc.get("typename", "")
                     if typename not in ("TopologyPhysicalCircuit", "TopologyVirtualCircuit"):
                         continue
                     # circuits use cardinality-many `interfaces` list (2 entries: local + remote)
@@ -143,7 +164,17 @@ def _build_session_from_peering(
                     break
 
         if not local_interface_ip and not local_iface_name:
-            return None  # No cable or circuit connects this device to the remote — skip session
+            # No cable or circuit resolved an IP — fall back to the IP already set
+            # directly on the peering's own interface_capabilities (e.g. a VTI/
+            # sub-interface addressed inline, with no DcimCable and no separate
+            # TopologyCircuit object to traverse).
+            local_interface_ip = local_iface.get("ip_address")
+            remote_interface_ip = remote_iface.get("ip_address")
+            if local_interface_ip:
+                local_iface_name = local_iface.get("name")
+
+        if not local_interface_ip and not local_iface_name:
+            return None  # No cable, circuit, or direct IP connects this device to the remote — skip session
 
         if local_interface_ip:
             session["local_ip"] = local_interface_ip
@@ -163,7 +194,7 @@ def _build_session_from_peering(
 
     # Remote ASN resolution
     session_type = str(peering_node.get("session_type", "")).upper()
-    if session_type == "IBGP" and local_as:
+    if session_type == "IBGP":
         session["remote_as"] = local_as
     else:
         remote_asn = _extract_remote_asn_from_peering(peering_node, remote_device_name)
@@ -179,14 +210,18 @@ def _build_session_from_peering(
         return None
 
     # Address families: use explicit schema config if set, otherwise derive from TTL.
-    # Overlay (TTL != 1) → EVPN; underlay (TTL == 1) → IPv4 (empty = template default).
+    # Overlay (TTL != 1) → EVPN. Underlay (TTL == 1) → IPv4 or IPv6 unicast, based on
+    # the neighbor address family — never empty, so templates can rely on membership
+    # checks ('ipv4' in / 'evpn' in) instead of truthiness to decide what to activate.
     schema_afs = peering_node.get("address_families") or []
     if schema_afs:
         session["address_families"] = _normalize_afs(schema_afs)
     elif ttl != 1:
         session["address_families"] = ["evpn"]
     else:
-        session["address_families"] = []
+        remote_ip = session.get("remote_ip") or {}
+        remote_addr = remote_ip.get("address", "") if isinstance(remote_ip, dict) else ""
+        session["address_families"] = ["ipv6"] if ":" in remote_addr else ["ipv4"]
 
     return session
 
@@ -212,14 +247,20 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
 
     if underlay:
         pg_name = "UNDERLAY-PEERS"
+        underlay_afs: list[str] = []
+        for af in ("ipv4", "ipv6"):
+            if any(af in (s.get("address_families") or []) for s in underlay) and af not in underlay_afs:
+                underlay_afs.append(af)
         peer_groups.append(
             {
                 "name": pg_name,
                 "type": "underlay",
                 "session_type": "EBGP",
                 "bfd_enabled": any(bool(s.get("bfd_enabled")) for s in underlay),
-                "send_community_extended": True,
-                "address_families": ["ipv4"],
+                "send_community": any(bool(s.get("send_community")) for s in underlay),
+                "send_extended_community": any(bool(s.get("send_extended_community")) for s in underlay),
+                "remove_private_as": any(bool(s.get("remove_private_as")) for s in underlay),
+                "address_families": underlay_afs or ["ipv4"],
             }
         )
         for session in underlay:
@@ -233,7 +274,7 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
             if isinstance(ra, dict) and ra.get("asn"):
                 remote_as = ra["asn"]
                 break
-        _RR_ROLES = ("spine", "super-spine", "super_spine")
+        _RR_ROLES = ("spine", "super-spine", "super_spine", "border-spine")
         has_rr_flag = any(bool(s.get("route_reflector_client")) for s in overlay_ibgp)
         # Spines/super-spines are always RRs when peerings have the RR flag.
         # Leafs become intermediate RRs in middle_rack/mixed deployments
@@ -251,8 +292,11 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
                 "type": "overlay",
                 "session_type": "IBGP",
                 "remote_as": remote_as,
-                "send_community_extended": True,
+                "send_community": any(bool(s.get("send_community")) for s in overlay_ibgp),
+                "send_extended_community": any(bool(s.get("send_extended_community")) for s in overlay_ibgp),
+                "remove_private_as": any(bool(s.get("remove_private_as")) for s in overlay_ibgp),
                 "route_reflector_client": rr_client,
+                "next_hop_unchanged": rr_client,  # RRs must not change next-hop for EVPN clients
                 "address_families": ["evpn"],
             }
         )
@@ -267,7 +311,9 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
                 "name": pg_name,
                 "type": "overlay",
                 "session_type": "EBGP",
-                "send_community_extended": True,
+                "send_community": any(bool(s.get("send_community")) for s in overlay_ebgp),
+                "send_extended_community": any(bool(s.get("send_extended_community")) for s in overlay_ebgp),
+                "remove_private_as": any(bool(s.get("remove_private_as")) for s in overlay_ebgp),
                 "ebgp_multihop": 255,
                 "address_families": ["evpn"],
             }
@@ -300,67 +346,74 @@ def get_bgp_profile(
     if not device_capabilities:
         return []
 
+    bgp_services = [svc for svc in device_capabilities if svc.get("typename") == "ManagedBGP"]
+    if not bgp_services:
+        return []
+
     bgp_configs = []
 
-    for service in device_capabilities:
-        if service.get("typename") != "ManagedBGP":
-            continue
+    for service in bgp_services:
+        service_name = service.get("name")
+
+        local_as = cast(dict[str, Any], service["local_as"])
 
         bgp_config = {
-            "name": service.get("name"),
+            "name": service_name,
             "status": service.get("status"),
             "multipath": service.get("multipath"),
             "graceful_restart": service.get("graceful_restart"),
             "confederation_identifier": service.get("confederation_identifier"),
+            "local_as": local_as,
+            "router_id": cast(dict[str, Any], service["router_id"]),
         }
 
-        local_as = service.get("local_as")
-        if local_as:
-            bgp_config["local_as"] = local_as
-
-        router_id = service.get("router_id")
-        if router_id:
-            bgp_config["router_id"] = router_id
-
         sessions = []
+        dropped_warnings: list[str] = []
         peerings = service.get("peerings", [])
 
         if isinstance(peerings, list):
             for peering_node in peerings:
-                session = _build_session_from_peering(peering_node, device_name, local_as, interfaces)
+                session = _build_session_from_peering(
+                    peering_node, device_name, local_as, interfaces, warnings=dropped_warnings
+                )
                 if session:
+                    # Peering templates expect local_as on each session object.
+                    session["local_as"] = local_as
                     sessions.append(session)
+
+        for msg in dropped_warnings:
+            _log.warning(msg)
 
         bgp_config["sessions"] = sessions
         bgp_configs.append(bgp_config)
 
     # Merge BGP processes that share the same local ASN into a single config block.
     # This handles eBGP-eBGP where underlay and overlay processes reuse the same per-device ASN.
-    by_asn: dict[int, dict] = {}
-    ungrouped: list[dict] = []
+    by_asn: dict[Any, dict] = {}
     for bgp_config in bgp_configs:
-        local_as = bgp_config.get("local_as") or {}
-        asn = local_as.get("asn") if isinstance(local_as, dict) else None
-        if asn is None:
-            ungrouped.append(bgp_config)
-            continue
+        asn = cast(dict[str, Any], bgp_config["local_as"])["asn"]
         if asn not in by_asn:
             by_asn[asn] = bgp_config
         else:
             existing = by_asn[asn]
             existing["sessions"].extend(bgp_config.get("sessions", []))
-            if not existing.get("router_id") and bgp_config.get("router_id"):
-                existing["router_id"] = bgp_config["router_id"]
 
-    merged = list(by_asn.values()) + ungrouped
+    merged = list(by_asn.values())
 
     # Sort BGP configs by local ASN for deterministic output
-    merged.sort(key=lambda c: (c.get("local_as") or {}).get("asn") or 0)
+    merged.sort(key=lambda c: cast(dict[str, Any], c["local_as"])["asn"])
 
     # Assign peer groups to sessions with common attributes
     for bgp_config in merged:
         # Sort sessions (neighbors) by (ttl group, IP address) for deterministic config output
         bgp_config["sessions"].sort(key=lambda s: (s.get("ttl") or 255, _sort_key_ip(s.get("remote_ip"))))
         bgp_config["peer_groups"] = _build_peer_groups(bgp_config["sessions"], device_role=device_role)
+
+        # RR devices get an explicit cluster-id equal to their router-id for loop prevention.
+        # Cisco/Arista/FRR default cluster-id to router-id when unset, but being explicit
+        # makes the intent clear and is considered best practice.
+        is_rr = any(pg.get("route_reflector_client") for pg in bgp_config["peer_groups"])
+        if is_rr:
+            bgp_config["cluster_id"] = cast(dict[str, Any], bgp_config["router_id"])["address"].split("/")[0]
 
     return merged

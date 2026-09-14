@@ -13,10 +13,10 @@ spec:
   data:
     # Management VLAN — OOB access to switches
     - customer_name: "mgmt-oob"
-      environment: "production"
-      owner: "Customer 1"
+      environment: "p"
+      owner: "Nordix Ltd."
 
     # Guest WiFi VLAN — isolated, no internal access
     - customer_name: "guest-wifi"
-      environment: "production"
-      owner: "Customer 1"
+      environment: "p"
+      owner: "Nordix Ltd."

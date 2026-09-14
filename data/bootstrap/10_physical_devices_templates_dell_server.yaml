@@ -5,6 +5,7 @@ spec:
   kind: TemplateDcimPhysicalDevice
   data:
     - template_name: PowerEdge-R640_SERVER
+      owner: "P027"
       device_type: PowerEdge-R640
       role: endpoint
       status: provisioning

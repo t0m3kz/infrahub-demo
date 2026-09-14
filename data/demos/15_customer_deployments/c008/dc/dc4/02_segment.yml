@@ -1,0 +1,14 @@
+---
+# VXLAN segment activated in C008's DC footprint (DC4).
+# VLAN ID + VNI are not set here — the add_vxlan_segment generator
+# allocates them from DC4's vlan_pool/vni_pool (see 00_dc_fabric/) and
+# creates the ManagedSegmentDeployment realization record.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVxlanSegment
+  data:
+    - owner: "C008"
+      customer_name: "krafven-prod"
+      environment: "p"
+      customer_deployments: [["C008", "p"]]

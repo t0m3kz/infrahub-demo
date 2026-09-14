@@ -1,4 +1,4 @@
-# DC2 - Croissants & 4-Spine Reality
+# DC2 - Back-to-Back: No Super-Spine, Still Grown-Up
 
 ## Overview
 
@@ -6,65 +6,57 @@
 
 **Platform:** Arista EOS - So API-driven, even your croissant can trigger a config change.
 
-**Fabric Design:** `S_OSPF_IBGP` — OSPF underlay + iBGP overlay, IPv4 P2P links.
-The classic combo: OSPF because "everyone knows OSPF", iBGP because you still want route reflectors
-and an excuse to explain SPF trees to new joiners at 2am. IPv4 underlay — the only DC in this fleet
-still rocking the legacy addressing. Paris may have invented the internet café, but it hasn't adopted
-IPv6 underlay yet. C'est la vie.
+**Fabric Design:** `M` + `ebgp-ebgp` routing — no super-spine tier at all: every pod's spines mesh
+directly with every other pod's spines (full mesh, not a star through some aggregation
+layer above them). But unlike the old micro-fabric border-spine pattern, DC2 keeps a real,
+separate **border-leaf** tier at the DC level, fronted by its own firewall/load-balancer pair —
+nothing here is collapsed into a single device. eBGP underlay + eBGP overlay, IPv6 P2P links.
 
-**Use Case:** When the CFO says "make it work but don't make me cry" and you actually deliver. DC2 proves
-you don't need four pods and a mortgage to build reliable infrastructure. Just 2 pods, 4 racks, and a
-healthy respect for hierarchical aggregation. It's the Parisian café of data centers - small, efficient, and
-everyone knows everyone.
+**Use Case:** When you want the port/latency savings of skipping a super-spine tier, but
+you're not small enough (or don't want) to collapse spine+border-leaf into one device like
+the border-spine pattern does. DC2 proves those two decisions — "skip the super-spine tier"
+and "keep border-leaf separate" — are independent choices, not a package deal.
 
 ---
 
-## Architecture (Minimalism with a French Accent)
+## Architecture (Flat but Still Organized)
 
 ### Fabric Scale
 
-- **Super Spines:** 2 (Arista DCS-7050CX3-32C-R)
-- **Pods:** 2 | **Spines:** 4 (2+2) | **Racks:** 4
-- **Deployment:** `middle_rack` (both pods) - Direct ToR was too mainstream
+- **Border-Leaf:** 2 (Arista DCS-7050CX3-32C-R), with its own firewall + load-balancer pair
+- **Pods:** 4 | **Spines:** 8 (2 per pod) | **Racks:** 4
+- **Mesh:** every pod's spines connect directly to every other pod's spines — no super-spine
+  tier to route through, no DC-level orchestration required (each pod cables itself to its
+  existing lower-index siblings as soon as it comes up)
 
-| Pod | Spines | Design   | Deployment  | Site Layout | Personality      |
-| --- | ------ | -------- | ----------- | ----------- | ---------------- |
-| 1   | 2      | S_MIDDLE | middle_rack | medium-dc   | Responsible Twin |
-| 2   | 2      | S_MIDDLE | middle_rack | medium-dc   | Copy-Paste Twin  |
+| Pod | Spines | Design   | Deployment  | Personality          |
+| --- | ------ | -------- | ----------- | -------------------- |
+| 1   | 2      | S_MIDDLE | middle_rack | First Mover          |
+| 2   | 2      | S_MIDDLE | middle_rack | Meshes with Pod 1    |
+| 3   | 2      | S_MIDDLE | middle_rack | Meshes with 1 & 2    |
+| 4   | 2      | S_MIDDLE | middle_rack | Meshes with 1, 2 & 3 |
+
+### Tier Summary
+
+```text
+Leaf → Spine ⇄ Spine (every pod, full mesh — no super-spine tier)
+                  |
+             Border-Leaf → Firewall → Load-Balancer (independent legs, PBR)
+```
 
 ## Quick Start
 
 ```bash
-uv run inv deploy-dc --scenario dc2 --branch your_branch
+# See Deployment Steps below for the current load and generator commands.
 ```
 
 **Warning:** May cause spontaneous optimization and French food cravings
-
-### ToR Layer
-
-- **Model:** Arista DCS-7050CX3-32C-R
-- **Count:** 2 per rack
-- **Role:** Server connectivity
-
----
-
-## Deployment Strategy (Middle Rack Mastery)
-
-**ToR Connectivity Pattern:**
-
-```bash
-ToR → Local Leafs (same rack)
-     ↓
-   Leaf → Spine
-          ↓
-        Spine → Super Spine
-```
 
 ## Deployment Steps
 
 ```bash
 # really quick
-uv run inv deploy-dc --scenario dc2 --branch your_branch
+# See the manual commands below, or use the automatic created-object trigger.
 
 # I'm the control nerd
 uv run infrahubctl branch create you_branch
@@ -73,11 +65,15 @@ uv run infrahubctl branch create you_branch
 uv run infrahubctl object load data/demos/01_data_center/dc2/ --branch you_branch
 
 # Generate fabric (grab coffee, this might take a while)
-uv run infrahubctl generator generate_dc name=DC2 --branch you_branch
+uv run infrahubctl generator add_dc name=DC2 --branch you_branch
 
 ```
 
-Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc DC2-Fabric-1
+Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → add_dc for DC2.
+
+## Validation
+
+Run `uv run invoke test-integration` to validate this OSPF/iBGP, no-super-spine design with the full DC matrix. Use `uv run invoke test-integration-routing` for the faster automatic cascade check.
 
 ## Fun Fact
 

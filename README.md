@@ -38,6 +38,10 @@ Infrahub changed that. It's not another tool forcing strict data definitions or 
 
 This demo is trying prove it: from topology design to device generation, from configuration templates to validation checks—all driven by my data structures, all automated through my code. That's the infrastructure revolution I was waiting for.
 
+But topology is just the appetizer. The main course—the part that makes seasoned network engineers put down their coffee and stare into the middle distance—is turning the whole request process inside out. No more filing a ticket, waiting three sprints, and getting back a firewall rule that's subtly wrong. Instead, an application team declares *what their application actually needs*: "checkout-service talks to payment-gateway on 443, full stop." That single declaration is the source of truth, and Infrahub's generators do the tedious, error-prone plumbing on your behalf—the firewall rule, the proxy config, the security policy, the routing, all derived from the same intent, all consistent with each other, all versioned in a branch you can review before it touches anything real.
+
+This is application-driven infrastructure: the network exists to serve the application, not the other way around. No more "just open a change request and we'll get to it eventually." No more hand-carved ACLs that nobody dares touch because nobody remembers why they're there. You declare intent, the generators do the honest work, and the humans get their Friday afternoons back.
+
 **Special thanks to [OpsMill](https://opsmill.com) for making this happen** – they built Infrahub with the vision that infrastructure teams should have complete control, not be prisoners to vendor constraints. (And yes, I'm bloody jealous I didn't have the power and motivation to come up with such a brilliant idea myself – like Prometheus watching others steal the fire of the gods!)
 
 **To companies/vendors** who may borrow ideas from this repo for your customer environments: please sponsor at least 3 open source communities. Odds are, open source powers half your commercial products anyway. The volunteers who build these tools deserve more than just a "thanks" and a GitHub star. And if you’ve ever filed a bug report and then complained about how long it takes to fix, remember: a few dollars a month for open source won’t even dent your coffee budget—so go ahead, give back and help keep these communities caffeinated and strong.
@@ -56,6 +60,7 @@ This demo is trying prove it: from topology design to device generation, from co
 ## Features
 
 - Design-driven network automation demo using [Infrahub](https://docs.infrahub.app)
+- Application-driven infrastructure: declare app dependencies once ("app A talks to app B on 443") and let generators materialize the firewall rules, proxy config, security policy, and routing—no three-sprint change request required
 - Example data, schemas, and menu for rapid onboarding
 - Scripts for bootstrapping, demo use cases, and CI integration
 - Modular structure for easy extension and experimentation
@@ -155,29 +160,12 @@ Explore LLM upgrades and organic growth patterns—all in one place, please make
 
 | Scenario | Location | Type/Architecture | Description |
 | ---------- | ---------- | ------------------- | ------------- |
-| **[switch](data/demos/02_switch/)** | Munich 🇩🇪 | Rack Expansion | "Just TWO more switches"—organic chaos. |
-| **[rack](data/demos/03_rack/)** | Munich 🇩🇪 | Minimal ToR | Minimalist rack: started as a test, now it's critical. |
-| **[pod](data/demos/04_pod/)** | Munich 🇩🇪 | Pod Expansion | Pod 4: because 3 wasn't enough. |
+| **[switch](data/demos/02_switch_dc6/)** | Munich 🇩🇪 | Rack Expansion | "Just TWO more switches"—organic chaos. |
+| **[rack](data/demos/03_rack_dc6/)** | Munich 🇩🇪 | Minimal ToR | Minimalist rack: started as a test, now it's critical. |
+| **[pod](data/demos/04_pod_dc6/)** | Munich 🇩🇪 | Pod Expansion | Pod 4: because 3 wasn't enough. |
 | **[llm time](data/demos/05_llm_time/)** | Munich 🇩🇪 | Spine Expansion | Extra spines for LLMs—plausible deniability included. |
 
 Brace yourself: even more questionable use cases, wild topologies, and vendor drama are coming soon. If you want to see even more chaos, star this repo—so the author can unlock extra GitHub tools and automate his caffeine intake. Your star may be the difference between a new feature and another debugging session at midnight!
-
-### **[Universal Topology](data/demos/100_universal_topology/)** — End-to-End Graph Tracing
-
-The flagship demo. Every layer — datacenters, colocation, cloud, offices, external providers,
-and interconnects — lives in a single unified model. Because everything shares the same graph,
-you can trace a path from a server NIC to a cloud VM, from a branch office to a partner gateway,
-or from a VXLAN segment through its firewalls to AWS — **in a single traversal**, without
-pivoting between tools.
-
-```text
-DC1-POD1-SRV-01 → leaf → spine → super-spine → Equinix cross-connect → edge router
-  → virtual circuit → cloud Direct Connect → CUST1-APP-EU-CENTRAL-1A-01 (EC2)
-```
-
-Covers 3 datacenters (DC1–DC3), 2 cloud regions (AWS + Azure), 5 offices, 3 Equinix metros,
-Coresite, Megaport, ISPs, and partners. Includes 13 traced end-to-end paths and full
-virtualisation capability trees for Kubernetes, vSphere, and Nutanix.
 
 ## CI/CD
 
@@ -217,6 +205,30 @@ uv run invoke test-integration
 ```
 
 These tasks run pytest with `--basetemp .pytest-tmp`.
+
+### Integration Test Profiles
+
+The integration suite shares one Docker stack per pytest invocation. Running several scenarios in one command is therefore much cheaper than starting a fresh small universe for every file.
+
+Use the focused profiles when you want useful feedback before the full topology marathon:
+
+```bash
+# Setup and repository prerequisites only
+uv run invoke test-integration-fast
+
+# Application catalogue: request materialization, proxy, and firewall rules
+uv run invoke test-integration-apps
+
+# Automatic DC/POD/rack trigger and routing regression
+uv run invoke test-integration-routing
+
+# Everything, including the full DC matrix
+uv run invoke test-integration
+```
+
+The `apps` and `fast` profiles both load the shared setup and repository prerequisites, but only `apps` runs the canonical `30_all` application acceptance scenario. The full profile is deliberately heavier: it exercises the long-running DC lifecycle and all dependent workflows. It is excellent at finding trouble and less excellent at respecting your afternoon.
+
+Integration task waits now fail with the active branch task titles and states when the queue does not settle within the timeout. That is intentional: a later assertion against half-generated infrastructure is rarely the thrilling plot twist anyone requested.
 
 Alternative (manual):
 
@@ -273,12 +285,12 @@ Contributions, questions, and feedback are welcome! Please use [GitHub Discussio
 
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+This project is licensed under the MIT License.
 
 [ruff-badge]:
 <https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json>
 [ruff-link]:
-(https://github.com/astral-sh/ruff)
+(<https://github.com/astral-sh/ruff>)
 [github-discussions-link]:
 <https://github.com/t0m3kz/infrahub-demo/discussions/>
 [github-discussions-badge]:
@@ -288,9 +300,9 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE) for detai
 [github-link]:
 <https://github.com/t0m3kz/infrahub-demo/actions/workflows/main.yml>
 [coverage-badge]:
-https://img.shields.io/codecov/c/github/t0m3kz/infrahub-demo?label=coverage
+<https://img.shields.io/codecov/c/github/t0m3kz/infrahub-demo?label=coverage>
 [coverage-link]:
-https://codecov.io/gh/t0m3kz/infrahub-demo
+<https://codecov.io/gh/t0m3kz/infrahub-demo>
 [python-badge]:
 <https://img.shields.io/badge/python-3.10%7C3.11%7C3.12-000000?logo=python>
 [python-link]:

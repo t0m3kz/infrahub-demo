@@ -1,4 +1,6 @@
-query border_leaf_config($device: String!) {
+query border_leaf_config(
+  $device: String!
+) {
   DcimDevice(name__value: $device) {
     edges {
       node {
@@ -10,8 +12,6 @@ query border_leaf_config($device: String!) {
           node {
             name { value }
             netmiko_device_type { value }
-            napalm_driver { value }
-            ansible_network_os { value }
           }
         }
         primary_address {
@@ -26,173 +26,15 @@ query border_leaf_config($device: String!) {
           }
         }
 
-        # Deployment context — segment activations for VLAN/VNI database
+        # Device Services (BGP, OSPF) with nested peerings
+        ...DeviceCapabilitiesOnDeviceFields
+
         ... on DcimPhysicalDevice {
           deployment {
             node {
-              id
-              name { value }
-              ...BorderLeafSegmentsDC
-              ... on TopologyPod {
-                parent {
-                  node {
-                    ...BorderLeafSegmentsDC
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        # Device Services (BGP, OSPF) with nested peerings
-        device_capabilities {
-          edges {
-            node {
-              __typename
-
-              ... on ManagedGeneric {
-                name { value }
-                status { value }
-              }
-
-              ... on ManagedBGP {
-                multipath { value }
-                graceful_restart { value }
-                confederation_identifier { value }
-                local_as { node { asn { value } } }
-                router_id { node { address { value } } }
-                address_families {
-                  edges {
-                    node {
-                      afi { value }
-                      safi { value }
-                      advertise_all_vni { value }
-                      advertise_default_gw { value }
-                      advertise_svi_ip { value }
-                    }
-                  }
-                }
-                peerings {
-                  edges {
-                    node {
-                      id
-                      name { value }
-                      session_type { value }
-                      bfd_enabled { value }
-                      send_community { value }
-                      ttl { value }
-                      route_reflector_client { value }
-                      address_families {
-                        edges {
-                          node {
-                            afi { value }
-                            safi { value }
-                            advertise_all_vni { value }
-                            advertise_default_gw { value }
-                            advertise_svi_ip { value }
-                          }
-                        }
-                      }
-                      interfaces {
-                        edges {
-                          node {
-                            name { value }
-                            ... on DcimPhysicalInterface {
-                              ip_address { node { address { value } } }
-                            }
-                            ... on DcimVirtualInterface {
-                              ip_address { node { address { value } } }
-                            }
-                            device { node { name { value } } }
-                          }
-                        }
-                      }
-                      bgp_processes {
-                        edges {
-                          node {
-                            id
-                            device_capabilities { edges { node { name { value } } } }
-                            router_id { node { address { value } } }
-                            local_as { node { asn { value } } }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-
-              ... on ManagedOSPF {
-                process_id { value }
-                version { value }
-                router_type { value }
-                reference_bandwidth { value }
-                router_id { node { address { value } } }
-              }
-
-
-              ... on ManagedNTP {
-                timezone { value }
-                servers {
-                  edges {
-                    node {
-                      address { node { address { value } } }
-                      prefer { value }
-                      version { value }
-                    }
-                  }
-                }
-              }
-
-              ... on ManagedSyslog {
-                servers {
-                  edges {
-                    node {
-                      address { node { address { value } } }
-                      port { value }
-                      severity { value }
-                    }
-                  }
-                }
-              }
-
-              ... on ManagedSNMP {
-                version { value }
-                community_ro { value }
-                location { value }
-                contact { value }
-                trap_targets {
-                  edges {
-                    node {
-                      address { node { address { value } } }
-                      port { value }
-                    }
-                  }
-                }
-              }
-
-              ... on ManagedAAA {
-                authentication_order { value }
-                authorization_commands { value }
-                accounting_enabled { value }
-                servers {
-                  edges {
-                    node {
-                      address { node { address { value } } }
-                      protocol { value }
-                      port { value }
-                      timeout { value }
-                    }
-                  }
-                }
-              }
-
-              ... on ManagedMLAG {
-                domain_id { value }
-                reload_delay { value }
-                reload_delay_non_mlag { value }
-                device_capabilities { edges { node { name { value } } } }
-              }
+              ...FirewallContextsOnDeploymentFields
+              ...LoadbalancerVipsOnDeploymentFields
+              ...SegmentDeploymentsOnDeploymentFields
             }
           }
         }
@@ -206,6 +48,7 @@ query border_leaf_config($device: String!) {
               description { value }
               status { value }
               role { value }
+              ...InterfaceCapabilitiesWithSegmentOnInterfaceFields
               ... on DcimPhysicalInterface {
                 interface_type { value }
                 mtu { value }
@@ -249,6 +92,7 @@ query border_leaf_config($device: String!) {
                     ip_namespace { node { name { value } } }
                   }
                 }
+                parent_interface { node { name { value } } }
               }
 
               ... on DcimLAGInterface {
@@ -270,121 +114,7 @@ query border_leaf_config($device: String!) {
                   }
                 }
               }
-              interface_capabilities {
-                edges {
-                  node {
-                    __typename
-                    ... on RoutingOSPFInterface {
-                      name { value }
-                      ospf_process { node { router_id { node { address { value } } } } }
-                      area { node { area { value } area_type { value } } }
-                      mode { value }
-                      metric { value }
-                    }
-                    ...NetworkSegmentFields
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
 
-fragment NetworkSegmentFields on ManagedNetworkSegment {
-  ... on ManagedVlanSegment {
-    name { value }
-    description { value }
-    status { value }
-    prefix {
-      edges {
-        node {
-          prefix { value }
-          gateway_ip { value }
-          ip_namespace {
-            node {
-              name { value }
-              l3_vni { value }
-              owner { node { name { value } } }
-            }
-          }
-        }
-      }
-    }
-  }
-  ... on ManagedVxlanSegment {
-    name { value }
-    description { value }
-    status { value }
-    arp_suppression { value }
-    prefix {
-      edges {
-        node {
-          prefix { value }
-          gateway_ip { value }
-          ip_namespace {
-            node {
-              name { value }
-              l3_vni { value }
-              owner { node { name { value } } }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-fragment BorderLeafSegmentsDC on TopologyDataCenter {
-  segment_deployments {
-    edges {
-      node {
-        vlan_id { value }
-        vni { value }
-        status { value }
-        segment {
-          node {
-            id
-            ... on ManagedVlanSegment {
-              name { value }
-              customer_name { value }
-              prefix {
-                edges {
-                  node {
-                    prefix { value }
-                    gateway_ip { value }
-                    ip_namespace {
-                      node {
-                        name { value }
-                        l3_vni { value }
-                        owner { node { name { value } } }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-            ... on ManagedVxlanSegment {
-              name { value }
-              customer_name { value }
-              arp_suppression { value }
-              prefix {
-                edges {
-                  node {
-                    prefix { value }
-                    gateway_ip { value }
-                    ip_namespace {
-                      node {
-                        name { value }
-                        l3_vni { value }
-                        owner { node { name { value } } }
-                      }
-                    }
-                  }
-                }
-              }
             }
           }
         }

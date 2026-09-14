@@ -7,7 +7,7 @@ query circuit_data($name: String!) {
         circuit_id { value }
         circuit_type { value }
         status { value }
-        interfaces {
+        customer_interfaces {
           edges {
             node {
               id
@@ -24,26 +24,16 @@ query circuit_data($name: String!) {
             }
           }
         }
-        provider_a {
-          node {
-            id
-            name { value }
-            device {
-              node {
-                id
-                name { value }
-              }
-            }
-          }
-        }
-        provider_z {
-          node {
-            id
-            name { value }
-            device {
-              node {
-                id
-                name { value }
+        provider_interfaces {
+          edges {
+            node {
+              id
+              name { value }
+              device {
+                node {
+                  id
+                  name { value }
+                }
               }
             }
           }

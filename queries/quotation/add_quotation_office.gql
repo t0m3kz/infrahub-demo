@@ -1,0 +1,149 @@
+query add_quotation_office($name: String!) {
+  CustomerQuotationOffice(name__value: $name) {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        preferred_switch_vendor {
+          value
+        }
+        users_per_ap {
+          value
+        }
+        m2_per_ap {
+          value
+        }
+        endpoint_growth_ratio {
+          value
+        }
+        access_switch_port_density {
+          value
+        }
+        access_switch_reserved_ports {
+          value
+        }
+        access_switch_utilization_target {
+          value
+        }
+        distribution_switch_port_density {
+          value
+        }
+        dist_switch_reserved_ports {
+          value
+        }
+        dist_switch_util_target {
+          value
+        }
+        core_router_port_density {
+          value
+        }
+        core_router_reserved_ports {
+          value
+        }
+        core_router_utilization_target {
+          value
+        }
+        uplinks_per_access_switch {
+          value
+        }
+        min_distribution_switches {
+          value
+        }
+        dist_core_uplinks_per_dist {
+          value
+        }
+        min_core_routers {
+          value
+        }
+        wifi_mbps_per_user {
+          value
+        }
+        conference_room_mbps {
+          value
+        }
+        printer_mbps {
+          value
+        }
+        user_concurrency {
+          value
+        }
+        conference_concurrency {
+          value
+        }
+        printer_concurrency {
+          value
+        }
+        access_to_distribution_oversub {
+          value
+        }
+        distribution_to_core_oversub {
+          value
+        }
+        size_for_single_link_failure {
+          value
+        }
+        buildings {
+          edges {
+            node {
+              id
+              name {
+                value
+              }
+              floors {
+                value
+              }
+              people_per_floor {
+                value
+              }
+              area_m2_per_floor {
+                value
+              }
+              conference_rooms_per_floor {
+                value
+              }
+              printers_per_floor {
+                value
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  DcimDeviceType(limit: 500) {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        unit_price {
+          value
+        }
+        manufacturer {
+          node {
+            name {
+              value
+            }
+          }
+        }
+      }
+    }
+  }
+  TemplateDcimPhysicalDevice(limit: 500) {
+    edges {
+      node {
+        role {
+          value
+        }
+        device_type {
+          node {
+            id
+          }
+        }
+      }
+    }
+  }
+}

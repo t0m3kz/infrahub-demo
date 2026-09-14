@@ -1,22 +1,41 @@
+{%- set _lb = namespace(name='loopback0') %}
+{%- for iface in interfaces %}
+{%- if iface.name | lower | truncate(8, true, '') == 'loopback' and _lb.name == 'loopback0' %}
+{%- set _lb.name = iface.name %}
+{%- endif %}
+{%- endfor %}
 {%- if capabilities is not defined or capabilities.bgp_enabled is not defined or capabilities.bgp_enabled %}
 {%- for bgp_config in bgp %}
 router bgp {{ bgp_config.local_as.asn }}
   router-id {{ bgp_config.router_id.address.split('/')[0] }}
+{%- if bgp_config.get('cluster_id') %}
+  bgp cluster-id {{ bgp_config.cluster_id }}
+{%- endif %}
 {%- if bgp_config.graceful_restart %}
   graceful-restart
 {%- endif %}
 {%- for pg in bgp_config.peer_groups | default([]) %}
   !
   template peer-policy {{ pg.name }}-POLICY
+{%- if pg.get('send_community') %}
     send-community
+{%- endif %}
+{%- if pg.get('send_extended_community') %}
     send-community extended
+{%- endif %}
+{%- if pg.get('remove_private_as') %}
+    remove-private-as
+{%- endif %}
 {%- if pg.route_reflector_client is defined and pg.route_reflector_client %}
     route-reflector-client
+{%- endif %}
+{%- if pg.get('next_hop_unchanged') %}
+    next-hop-unchanged
 {%- endif %}
   !
   template peer-session {{ pg.name }}-SESSION
 {%- if pg.type == 'overlay' %}
-    update-source loopback0
+    update-source {{ _lb.name }}
 {%- endif %}
 {%- if pg.get('ebgp_multihop') %}
     ebgp-multihop {{ pg.ebgp_multihop }}
@@ -26,6 +45,18 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- endif %}
   !
 {%- endfor %}
+{%- for session in bgp_config.sessions %}
+{%- if session.get('local_pref') %}
+  route-map {{ session.name }}-LOCAL-PREF-IN permit 10
+    set local-preference {{ session.local_pref }}
+  !
+{%- endif %}
+{%- if session.get('med') %}
+  route-map {{ session.name }}-MED-OUT permit 10
+    set metric {{ session.med }}
+  !
+{%- endif %}
+{%- endfor %}
   address-family ipv4 unicast
     redistribute direct route-map RM-CONN-2-BGP
 {%- if bgp_config.multipath %}
@@ -34,7 +65,7 @@ router bgp {{ bgp_config.local_as.asn }}
   !
 {%- set ns = namespace(has_ipv6=false) %}
 {%- for session in bgp_config.sessions %}
-{%- if not session.address_families and ':' in session.remote_ip.address %}{% set ns.has_ipv6 = true %}{% endif %}
+{%- if 'ipv6' in (session.address_families | default([])) %}{% set ns.has_ipv6 = true %}{% endif %}
 {%- endfor %}
 {%- if ns.has_ipv6 %}
   address-family ipv6 unicast
@@ -47,43 +78,99 @@ router bgp {{ bgp_config.local_as.asn }}
   address-family l2vpn evpn
   !
 {%- for session in bgp_config.sessions %}
-{%- set remote_ip = session.remote_ip.address.split('/')[0] %}
-  neighbor {{ remote_ip }}
+{%- set is_unnumbered = session.get('interface_name') and not session.get('remote_ip') %}
+{%- set neighbor_id = session.interface_name if is_unnumbered else session.remote_ip.address.split('/')[0] %}
+  neighbor {{ neighbor_id }}
     remote-as {{ session.remote_as.asn }}
 {%- if session.get('remote_device') %}
     description {{ session.remote_device }}
+{%- endif %}
+{%- if session.get('password') %}
+    password {{ session.password }}
 {%- endif %}
 {%- if session.peer_group is defined %}
     inherit peer-session {{ session.peer_group }}-SESSION
 {%- else %}
 {%- if session.get('ttl') != 1 %}
-    update-source loopback0
+    update-source {{ _lb.name }}
 {%- endif %}
 {%- if session.get('bfd_enabled') %}
     bfd
 {%- endif %}
 {%- endif %}
-{%- if not session.address_families %}
-{%- if ':' in session.remote_ip.address %}
+{%- set _afs = session.address_families | default([]) %}
+{%- if 'ipv6' in _afs %}
     address-family ipv6 unicast
-{%- else %}
-    address-family ipv4 unicast
-{%- endif %}
 {%- if session.peer_group is defined %}
       inherit peer-policy {{ session.peer_group }}-POLICY
 {%- else %}
+{%- if session.get('send_community') %}
       send-community
+{%- endif %}
+{%- if session.get('send_extended_community') %}
       send-community extended
+{%- endif %}
+{%- if session.get('remove_private_as') %}
+      remove-private-as
+{%- endif %}
+{%- endif %}
+{%- if session.get('maximum_routes') %}
+      maximum-prefix {{ session.maximum_routes }}
+{%- endif %}
+{%- if session.get('local_pref') %}
+      route-map {{ session.name }}-LOCAL-PREF-IN in
+{%- endif %}
+{%- if session.get('med') %}
+      route-map {{ session.name }}-MED-OUT out
 {%- endif %}
     !
 {%- endif %}
-{%- if session.address_families %}
+{%- if 'ipv4' in _afs %}
+    address-family ipv4 unicast
+{%- if session.peer_group is defined %}
+      inherit peer-policy {{ session.peer_group }}-POLICY
+{%- else %}
+{%- if session.get('send_community') %}
+      send-community
+{%- endif %}
+{%- if session.get('send_extended_community') %}
+      send-community extended
+{%- endif %}
+{%- if session.get('remove_private_as') %}
+      remove-private-as
+{%- endif %}
+{%- endif %}
+{%- if session.get('maximum_routes') %}
+      maximum-prefix {{ session.maximum_routes }}
+{%- endif %}
+{%- if session.get('local_pref') %}
+      route-map {{ session.name }}-LOCAL-PREF-IN in
+{%- endif %}
+{%- if session.get('med') %}
+      route-map {{ session.name }}-MED-OUT out
+{%- endif %}
+    !
+{%- endif %}
+{%- if 'evpn' in _afs %}
     address-family l2vpn evpn
 {%- if session.peer_group is defined %}
       inherit peer-policy {{ session.peer_group }}-POLICY
 {%- else %}
+{%- if session.get('send_community') %}
       send-community
+{%- endif %}
+{%- if session.get('send_extended_community') %}
       send-community extended
+{%- endif %}
+{%- if session.get('remove_private_as') %}
+      remove-private-as
+{%- endif %}
+{%- if session.get('route_reflector_client') %}
+      route-reflector-client
+{%- endif %}
+{%- if session.get('next_hop_unchanged') %}
+      next-hop-unchanged
+{%- endif %}
 {%- endif %}
     !
 {%- endif %}

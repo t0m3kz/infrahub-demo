@@ -1,0 +1,12 @@
+---
+# Cloud account for C015 (Novantis GmbH) in AWS.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudAccount
+  data:
+    - name: "novantis-aws-prod"
+      account_id: "112233445566"
+      environment: "p"
+      provider: "P004"
+      owner: "C015"

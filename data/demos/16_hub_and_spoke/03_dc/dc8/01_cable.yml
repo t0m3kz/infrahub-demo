@@ -1,0 +1,19 @@
+---
+# DC8-BL1 <-> DC8-FW1 cabling — mirrors ../dc7/01_cable.yml for the second
+# site.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - name: "CBL-DC8-BL1-FW1-1"
+      type: smf
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "DC8-BL1"
+            name: "Ethernet25/1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "DC8-FW1"
+            name: "eth1"

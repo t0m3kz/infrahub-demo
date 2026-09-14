@@ -1,0 +1,36 @@
+---
+# Campus access switches at the Warsaw HQ office, managed by a DNA Center
+# controller — same pattern as 06_access_points.yml's WLC/AP pair, just for
+# wired campus switching instead of Wi-Fi. Switches attach to the shared
+# TopologyOffice site anchor ("OFFICES"), not a per-customer footprint —
+# campus wiring-closet infrastructure is shared, same reasoning as the APs.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: "OFFICES-ACC-SW1"
+      object_template: C9200L-24P-4G_ACCESS
+      status: active
+      # References the C001 TopologyCustomerOffice footprint created in
+      # ../../06_customer_boarding/c001.yml by its hfid
+      # [parent__owner__org_id__value, environment__value].
+      deployment: ["C001", "p"]
+    - name: "OFFICES-ACC-SW2"
+      object_template: C9200L-24P-4G_ACCESS
+      status: active
+      deployment: ["C001", "p"]
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedControllerPhysical
+  data:
+    - name: "WAW1-DNAC1"
+      object_template: DN2-HW_DNAC
+      status: active
+      deployment: "WAW1"
+      managed_devices:
+        - "OFFICES-ACC-SW1"
+        - "OFFICES-ACC-SW2"

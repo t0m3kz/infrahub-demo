@@ -1,0 +1,100 @@
+set deviceconfig system hostname dc1-fw-01
+#
+#
+# --- Interfaces & Zone Assignments ---
+set network interface ethernet ethernet1/1 layer3 units ethernet1/1.10 tag 10
+set network interface ethernet ethernet1/1 layer3 units ethernet1/1.10 ipv4 addr 10.0.1.1/30
+set network interface ethernet ethernet1/1.10 comment "Internal LAN link"
+set zone internal network layer3 ethernet1/1.10
+set network interface ethernet ethernet1/1 layer3 units ethernet1/1.20 tag 20
+set network interface ethernet ethernet1/1 layer3 units ethernet1/1.20 ipv4 addr 10.0.2.1/30
+set network interface ethernet ethernet1/1.20 comment "DMZ link"
+set zone dmz network layer3 ethernet1/1.20
+set network interface ethernet ethernet1/1 layer3 units ethernet1/1.30 tag 30
+set network interface ethernet ethernet1/1 layer3 units ethernet1/1.30 ipv4 addr 10.0.3.1/30
+set network interface ethernet ethernet1/1.30 comment "External link"
+set zone external network layer3 ethernet1/1.30
+#
+#
+# --- Address Objects (one per zone member CIDR) ---
+set address addr-10-0-1-0-24 ip-netmask 10.0.1.0/24
+set address addr-10-0-1-0-24 description "Zone: internal"
+set address addr-10-0-10-0-24 ip-netmask 10.0.10.0/24
+set address addr-10-0-10-0-24 description "Zone: internal"
+set address addr-10-0-2-0-24 ip-netmask 10.0.2.0/24
+set address addr-10-0-2-0-24 description "Zone: dmz"
+#
+# --- Address Groups (one per zone) ---
+set address-group ag-internal static [ addr-10-0-1-0-24 addr-10-0-10-0-24 ]
+set address-group ag-dmz static [ addr-10-0-2-0-24 ]
+set address-group ag-external static [ any ]
+#
+#
+# --- Static Routes (return path to leaf per zone) ---
+set network virtual-router default routing-table ip static-route VRF-DMZ-1 destination 10.0.2.0/24
+set network virtual-router default routing-table ip static-route VRF-DMZ-1 nexthop ip-address 10.0.2.2
+set network virtual-router default routing-table ip static-route VRF-DMZ-1 interface ethernet1/1.20
+set network virtual-router default routing-table ip static-route VRF-INTERNAL-2 destination 10.0.1.0/24
+set network virtual-router default routing-table ip static-route VRF-INTERNAL-2 nexthop ip-address 10.0.1.2
+set network virtual-router default routing-table ip static-route VRF-INTERNAL-2 interface ethernet1/1.10
+set network virtual-router default routing-table ip static-route VRF-INTERNAL-3 destination 10.0.10.0/24
+set network virtual-router default routing-table ip static-route VRF-INTERNAL-3 nexthop ip-address 10.0.1.2
+set network virtual-router default routing-table ip static-route VRF-INTERNAL-3 interface ethernet1/1.10
+#
+#
+# --- Security Policies ---
+set rulebase security rules allow-https from dmz
+set rulebase security rules allow-https to internal
+set rulebase security rules allow-https source ag-dmz
+set rulebase security rules allow-https destination ag-internal
+set rulebase security rules allow-https application any
+set rulebase security rules allow-https service any
+set rulebase security rules allow-https action allow
+set rulebase security rules allow-https profile-setting profiles virus strict-av
+set rulebase security rules allow-https log-end yes
+set rulebase security rules allow-https description "Allow HTTPS from DMZ to Internal"
+set rulebase security rules allow-ssh from dmz
+set rulebase security rules allow-ssh to internal
+set rulebase security rules allow-ssh source ag-dmz
+set rulebase security rules allow-ssh destination ag-internal
+set rulebase security rules allow-ssh application any
+set rulebase security rules allow-ssh service any
+set rulebase security rules allow-ssh action allow
+set rulebase security rules allow-ssh log-end yes
+set rulebase security rules allow-ssh description "Allow SSH from DMZ to Internal"
+set rulebase security rules implicit-deny-all from any
+set rulebase security rules implicit-deny-all to any
+set rulebase security rules implicit-deny-all source any
+set rulebase security rules implicit-deny-all destination any
+set rulebase security rules implicit-deny-all application any
+set rulebase security rules implicit-deny-all service any
+set rulebase security rules implicit-deny-all action deny
+set rulebase security rules implicit-deny-all log-end yes
+set rulebase security rules implicit-deny-all description "Implicit deny all"
+set rulebase security rules allow-any from internal
+set rulebase security rules allow-any to dmz
+set rulebase security rules allow-any source ag-internal
+set rulebase security rules allow-any destination ag-dmz
+set rulebase security rules allow-any application any
+set rulebase security rules allow-any service any
+set rulebase security rules allow-any action allow
+set rulebase security rules allow-any description "Allow all from Internal to DMZ"
+set rulebase security rules implicit-deny-all from any
+set rulebase security rules implicit-deny-all to any
+set rulebase security rules implicit-deny-all source any
+set rulebase security rules implicit-deny-all destination any
+set rulebase security rules implicit-deny-all application any
+set rulebase security rules implicit-deny-all service any
+set rulebase security rules implicit-deny-all action deny
+set rulebase security rules implicit-deny-all log-end yes
+set rulebase security rules implicit-deny-all description "Implicit deny all"
+#
+#
+# --- High Availability ---
+set deviceconfig high-availability enabled yes
+set deviceconfig high-availability group 1
+set deviceconfig high-availability group mode active-passive
+set deviceconfig high-availability group election-option priority 100
+set deviceconfig high-availability group election-option preemptive no
+set deviceconfig high-availability group timers aggressive
+#

@@ -1,0 +1,120 @@
+---
+# DC6 POD-1 (M_MIDDLE) — web-frontend tier compute. 2 servers, 2 bonds each
+# (bond0/bond1), so each server hosts two customers' web-frontend tier.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: ktw-pod1-server-1
+      owner: "P027"
+      rack: ktw-1-s-1-r-1-1
+      role: endpoint
+      status: active
+      position: 10
+      device_type: [DELL-R740XD2]
+      platform: linux
+      member_of_groups:
+        - endpoints
+      interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            name: eth0
+            interface_type: 100gbase-x-qsfp28
+            role: lag
+        - kind: DcimPhysicalInterface
+          data:
+            name: eth1
+            interface_type: 100gbase-x-qsfp28
+            role: lag
+        - kind: DcimPhysicalInterface
+          data:
+            name: eth2
+            interface_type: 100gbase-x-qsfp28
+            role: lag
+        - kind: DcimPhysicalInterface
+          data:
+            name: eth3
+            interface_type: 100gbase-x-qsfp28
+            role: lag
+        - kind: DcimLAGInterface
+          data:
+            name: bond0
+            status: active
+            role: lag
+            lag_id: 1
+            lacp_mode: active
+            mtu: 9000
+            minimum_links: 1
+            member_interfaces:
+              - ["ktw-pod1-server-1", "eth0"]
+              - ["ktw-pod1-server-1", "eth1"]
+        - kind: DcimLAGInterface
+          data:
+            name: bond1
+            status: active
+            role: lag
+            lag_id: 2
+            lacp_mode: active
+            mtu: 9000
+            minimum_links: 1
+            member_interfaces:
+              - ["ktw-pod1-server-1", "eth2"]
+              - ["ktw-pod1-server-1", "eth3"]
+
+    - name: ktw-pod1-server-2
+      owner: "P027"
+      rack: ktw-1-s-1-r-2-1
+      role: endpoint
+      status: active
+      position: 10
+      device_type: [DELL-R740XD2]
+      platform: linux
+      member_of_groups:
+        - endpoints
+      interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            name: eth0
+            interface_type: 100gbase-x-qsfp28
+            role: lag
+        - kind: DcimPhysicalInterface
+          data:
+            name: eth1
+            interface_type: 100gbase-x-qsfp28
+            role: lag
+        - kind: DcimPhysicalInterface
+          data:
+            name: eth2
+            interface_type: 100gbase-x-qsfp28
+            role: lag
+        - kind: DcimPhysicalInterface
+          data:
+            name: eth3
+            interface_type: 100gbase-x-qsfp28
+            role: lag
+        - kind: DcimLAGInterface
+          data:
+            name: bond0
+            status: active
+            role: lag
+            lag_id: 1
+            lacp_mode: active
+            mtu: 9000
+            minimum_links: 1
+            member_interfaces:
+              - ["ktw-pod1-server-2", "eth0"]
+              - ["ktw-pod1-server-2", "eth1"]
+        - kind: DcimLAGInterface
+          data:
+            name: bond1
+            status: active
+            role: lag
+            lag_id: 2
+            lacp_mode: active
+            mtu: 9000
+            minimum_links: 1
+            member_interfaces:
+              - ["ktw-pod1-server-2", "eth2"]
+              - ["ktw-pod1-server-2", "eth3"]

@@ -4,31 +4,60 @@ query vxlan_segment_data($name: String!) {
       node {
         id
         name { value }
+        stretch_scope { value }
         arp_suppression { value }
-        deployments {
-          edges {
-            node {
-              id
-              name { value }
+        terminate_inline { value }
+        inline_service {
+          node {
+            id
+            name { value }
+            ... on ManagedHA {
+              inline_vlan_id { value }
+              inline_vlan_pool { node { id } }
             }
-          }
-        }
-        prefix {
-          edges {
-            node {
-              id
-              prefix { value }
-              gateway_ip { value }
-              ip_namespace {
-                node {
-                  id
-                  name { value }
-                  l3_vni { value }
+            ... on ManagedGenericDevice {
+              capabilities {
+                edges {
+                  node {
+                    id
+                    __typename
+                  }
                 }
               }
             }
           }
         }
+        customer_deployments {
+          edges {
+            node {
+              id
+              name { value }
+              ... on TopologyCustomerDC {
+                parent {
+                  node {
+                    id
+                    name { value }
+                    ... on TopologySegmentHosting {
+                      vni_pool { node { id name { value } } }
+                    }
+                  }
+                }
+              }
+              ... on TopologyCustomerColocation {
+                parent {
+                  node {
+                    id
+                    name { value }
+                    ... on TopologySegmentHosting {
+                      vni_pool { node { id name { value } } }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        gateway { node { id address { value } } }
       }
     }
   }

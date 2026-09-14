@@ -1,13 +1,14 @@
 """Integration test - Scenario 5: Extend Pod with New Spine.
 
-Coverage: Verifies that increasing amount_of_spines on an existing pod
-triggers the pod generator automatically (via event) and creates the
-additional spine device with proper cabling and routing.
+Coverage: Verifies that increasing the quantity on POD-1's spine-role
+fabric_templates entry (TopologyElement) triggers the pod generator
+automatically (via event) and creates the additional spine device with
+proper cabling and routing.
 
 Prerequisites: DC1 merged (Scenario 1), pod added (Scenario 4).
 
 Steps:
-1.  Create branch and update POD-1 amount_of_spines from 2 to 3
+1.  Create branch and bump POD-1's spine fabric_templates entry quantity from 2 to 3
 2.  Wait for event-triggered generators to complete
 3.  Verify no failed tasks
 4.  Verify devices created
@@ -24,7 +25,7 @@ import pytest
 from infrahub_sdk import InfrahubClient, InfrahubClientSync
 
 from .conftest import TestInfrahubDockerWithClient
-from .verify_helpers import verify_artifacts_generated, verify_devices_created, verify_proposed_change_diff
+from .test_helpers import fetch_artifacts, fetch_device_counts, fetch_proposed_change_diff
 from .workflow_helpers import (
     create_and_validate_proposed_change,
     merge_proposed_change,
@@ -74,14 +75,22 @@ class TestDC1AddSpine(TestInfrahubDockerWithClient):
         workflow_state["dc1_add_spine_before"] = before
         logging.info("Baseline spines before update: pod1=%d pod2=%d", before["pod1_count"], before["pod2_count"])
 
-        # Find POD-1
+        # Find POD-1 and its spine-role fabric_templates (TopologyElement) entry
         query = """
         query {
             TopologyPod(name__value: "DC1-1-POD-1") {
                 edges {
                     node {
                         id
-                        amount_of_spines { value }
+                        fabric_templates {
+                            edges {
+                                node {
+                                    id
+                                    role { value }
+                                    quantity { value }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -91,24 +100,32 @@ class TestDC1AddSpine(TestInfrahubDockerWithClient):
         pods = result["TopologyPod"]["edges"]
         assert pods, "POD-1 not found"
 
-        pod_id = pods[0]["node"]["id"]
-        current_spines = pods[0]["node"]["amount_of_spines"]["value"]
+        spine_entries = [
+            edge["node"]
+            for edge in pods[0]["node"]["fabric_templates"]["edges"]
+            if edge["node"]["role"]["value"] == "spine"
+        ]
+        assert spine_entries, "POD-1 has no spine fabric_templates entry"
+
+        spine_element = spine_entries[0]
+        element_id = spine_element["id"]
+        current_spines = spine_element["quantity"]["value"]
         new_spine_count = current_spines + 1
 
-        # Update amount_of_spines
+        # Bump the spine TopologyElement's quantity
         mutation = """
-        mutation UpdatePod($pod_id: String!, $spines: BigInt!) {
-            TopologyPodUpdate(
+        mutation UpdateSpineElement($element_id: String!, $quantity: BigInt!) {
+            TopologyElementUpdate(
                 data: {
-                    id: $pod_id,
-                    amount_of_spines: { value: $spines }
+                    id: $element_id,
+                    quantity: { value: $quantity }
                 }
             ) { ok object { id } }
         }
         """
         await async_client_main.execute_graphql(
             query=mutation,
-            variables={"pod_id": pod_id, "spines": new_spine_count},
+            variables={"element_id": element_id, "quantity": new_spine_count},
         )
 
         logging.info("Updated POD-1 spines: %d -> %d", current_spines, new_spine_count)
@@ -158,18 +175,20 @@ class TestDC1AddSpine(TestInfrahubDockerWithClient):
         """Verify devices exist on the branch after generator ran."""
         logging.info("=== %s - Step 3: Verify Devices ===", SCENARIO_NAME)
 
-        result = await verify_devices_created(
+        result = await fetch_device_counts(
             client=async_client_main,
             branch=scenario_branch,
-            expected_min_count=1,
             device_types=["spine"],
+        )
+        assert result["device_count"] >= 1, (
+            f"Expected at least 1 device, found {result['device_count']}\n  Branch: {scenario_branch}"
         )
 
         before = workflow_state["dc1_add_spine_before"]
         after = await self._snapshot_spines_by_pod(async_client_main, scenario_branch)
 
         assert after["pod1_count"] == before["pod1_count"] + 1, (
-            "Expected exactly one new POD-1 spine after increasing amount_of_spines.\n"
+            "Expected exactly one new POD-1 spine after increasing the spine fabric_templates quantity.\n"
             f"  POD-1 before: {before['pod1_count']}\n"
             f"  POD-1 after: {after['pod1_count']}\n"
             f"  POD-1 spines after: {after['pod1']}"
@@ -228,13 +247,20 @@ class TestDC1AddSpine(TestInfrahubDockerWithClient):
         """Verify the proposed change diff contains expected changed objects."""
         logging.info("=== %s - Step 5b: Verify PC Diff ===", SCENARIO_NAME)
 
-        result = await verify_proposed_change_diff(
-            client=async_client_main,
-            branch=scenario_branch,
-            expected_counts={
-                "DcimPhysicalDevice": {"added": 1},
-                "TopologyPod": {"updated": 1},
-            },
+        result = await fetch_proposed_change_diff(client=async_client_main, branch=scenario_branch)
+
+        expected_counts = {
+            "DcimPhysicalDevice": {"added": 1},
+            "TopologyPod": {"updated": 1},
+        }
+        errors = []
+        for kind, action_counts in expected_counts.items():
+            for action, expected in action_counts.items():
+                actual = result["by_kind"].get(kind, {}).get(action, 0)
+                if actual < expected:
+                    errors.append(f"{kind}.{action}: expected >= {expected}, got {actual}")
+        assert not errors, f"DiffTree verification failed for branch '{scenario_branch}':\n" + "\n".join(
+            f"  - {e}" for e in errors
         )
 
         logging.info("Diff verified: %d nodes changed", result["node_count"])
@@ -250,10 +276,9 @@ class TestDC1AddSpine(TestInfrahubDockerWithClient):
         """Verify artifacts generated in the proposed change."""
         logging.info("=== %s - Step 5c: Verify Artifacts ===", SCENARIO_NAME)
 
-        result = await verify_artifacts_generated(
-            client=async_client_main,
-            branch=scenario_branch,
-        )
+        result = await fetch_artifacts(client=async_client_main, branch=scenario_branch)
+        for art in result["failed"]:
+            raise AssertionError(f"Artifact '{art['name']}' for {art['object']} has status '{art['status']}'")
 
         logging.info("Artifacts verified: %d total", result["total"])
 
@@ -290,11 +315,13 @@ class TestDC1AddSpine(TestInfrahubDockerWithClient):
         """Verify devices still present on main after merge."""
         logging.info("=== %s - Step 7: Verify in Main ===", SCENARIO_NAME)
 
-        result = await verify_devices_created(
+        result = await fetch_device_counts(
             client=async_client_main,
             branch="main",
-            expected_min_count=1,
             device_types=["spine"],
+        )
+        assert result["device_count"] >= 1, (
+            f"Expected at least 1 device, found {result['device_count']}\n  Branch: main"
         )
 
         logging.info("Spines in main: %d", result["breakdown"].get("spine", 0))

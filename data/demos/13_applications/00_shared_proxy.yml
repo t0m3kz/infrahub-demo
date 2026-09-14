@@ -1,0 +1,22 @@
+---
+# Shared SASE egress proxy assigned to customers rather than components.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedCloudProxy
+  data:
+    - name: shared-cloud-proxy
+      description: "Shared SASE egress proxy for outbound application dependencies"
+      provider: zscaler_zia
+      service_type: web_gateway
+      member_of_groups:
+        - saas_proxies
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: OrganizationCustomer
+  data:
+    - org_id: "C001"
+      egress_service: shared-cloud-proxy

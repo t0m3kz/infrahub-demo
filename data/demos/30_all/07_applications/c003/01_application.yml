@@ -1,0 +1,39 @@
+---
+# C003 cloud-native sample application bound to existing AWS subnet segment.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppApplication
+  data:
+    - label: custody-api
+      environment: p
+      criticality: high
+      security_profile: internet_exposed
+      fqdn: custody-api.c003.demo.local
+      ingress_mode: dns
+      application_orchestrator: argocd
+      owner: C003
+      member_of_groups:
+        - app_applications
+      children:
+        kind: AppComponent
+        data:
+          - name: api-frontend
+            component_type: frontend
+            network_segment: c003-vaultex-subnet-prod-p
+            service_ports:
+              data:
+                - port: 443
+                  protocol: tcp
+            member_of_groups:
+              - app_components
+
+          - name: api-backend
+            component_type: backend
+            network_segment: c003-vaultex-subnet-prod-p
+            service_ports:
+              data:
+                - port: 8443
+                  protocol: tcp
+            member_of_groups:
+              - app_components

@@ -84,8 +84,30 @@ class TestSetup(TestInfrahubDockerWithClient):
     @pytest.mark.order(4)
     @pytest.mark.dependency(scope="session", name="bootstrap_data", depends=["schema_extensions"])
     def test_04_load_bootstrap_data(self, client_main: InfrahubClientSync) -> None:
-        """Load bootstrap data."""
+        """Load bootstrap data.
+
+        Providers are loaded first, sequentially: hundreds of device/template
+        objects in data/bootstrap/09_*/10_* reference a provider (e.g. owner:
+        "P027") by HFID. Loading the whole directory at concurrent_execution=30
+        races those lookups against the provider's own creation in the same
+        run — some referencing objects get dispatched before the provider node
+        they depend on is visible yet, failing with "Unable to find the node
+        <id> / OrganizationEntity in the database." Loading providers alone
+        first (no concurrency) guarantees they're committed before anything
+        concurrently references them.
+        """
         logging.info("Starting test: test_04_load_bootstrap_data")
+
+        load_providers = self.execute_command(
+            "infrahubctl object load data/bootstrap/02_providers.yml",
+            address=client_main.config.address,
+        )
+        assert load_providers.returncode == 0, (
+            f"Provider bootstrap load failed.\n"
+            f"  Return code: {load_providers.returncode}\n"
+            f"  stdout: {load_providers.stdout}\n"
+            f"  stderr: {load_providers.stderr}"
+        )
 
         load_data = self.execute_command(
             "infrahubctl object load data/bootstrap/",

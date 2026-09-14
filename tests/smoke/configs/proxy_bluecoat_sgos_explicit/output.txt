@@ -1,0 +1,42 @@
+;
+; Device:     DC3-PRX-01
+; Proxy type: explicit
+; HA mode:    active-passive
+;
+inline proxy:
+  enable yes
+  mode explicit
+  http-port 3128
+  https-port 3129
+
+inline network:
+  ssl-verify-server no
+  ssl-verify-client no
+  interface mgmt
+    ip-address 192.168.1.1
+    enabled yes
+
+inline dns:
+  primary-server 8.8.8.8
+  secondary-server 8.8.4.4
+
+inline access-log:
+  enabled yes
+  upload-type none
+  filename /logs/access.log
+
+inline policy:
+  ; default explicit policy — allow all authenticated users
+  allow client.address=10.0.0.0/8
+  allow client.address=172.16.0.0/12
+  allow client.address=192.168.0.0/16
+  deny all
+
+; --- HA (SGOS Active-Passive) ---
+; HA group: 1  mode: active-passive  priority: 100
+; Peers: DC3-PRX-01, DC3-PRX-02
+inline ha:
+  enabled yes
+  group-id 1
+  priority 100
+  preempt no

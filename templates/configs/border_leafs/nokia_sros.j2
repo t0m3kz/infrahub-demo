@@ -75,6 +75,16 @@ A admin configure port "{{ interface.name }}" ethernet access vlan {{ interface.
 {#- BGP Configuration -#}
 {% include 'common/nokia_sros_bgp.j2' %}
 
+{%- if vrf_gateways %}
+!
+! VRF Default Routes — inter-VRF hop on this device (TopologyRoutedExchange)
+!
+{%- for vrf, nexthop in vrf_gateways.items() %}
+A admin configure service vprn 1000 static-routes route 0.0.0.0/0 next-hop {{ nexthop }} admin-state enable
+{%- endfor %}
+!
+{%- endif %}
+
 {%- include 'common/nokia_sros_management.j2' %}
 
 ! End of configuration

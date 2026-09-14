@@ -6,14 +6,17 @@ spec:
   data:
     - name: DC1
       index: 1
-      design: M_EBGP_EBGP
+      size: L
+      routing_strategy: ebgp-ebgp
+      underlay_protocol: ipv6
       naming_convention: standard
-      overlay_technology: vxlan_evpn
-      loopback_prefix_length: 23
-      technical_prefix_length: 19
-      management_prefix_length: 25
-      amount_of_super_spines: 2
-      super_spine_template: N9K-C9336C-FX2_SUPER_SPINE
+      parent: DC
+      connectivity_mode: inline
+      fabric_templates:
+        - ["2", "super-spine", "N9K-C9336C-FX2_SUPER_SPINE"]
+        - ["2", "border-leaf", "N9K-C9336C-FX2_BORDER_LEAF"]
+        - ["2", "firewall", "CP-26000_FIREWALL"]
+        - ["2", "load-balancer", "BIG-IP-i5800_LOAD_BALANCER"]
       fabric_interface_sorting_method: top_down
       member_of_groups:
         - topologies_dc
@@ -21,23 +24,60 @@ spec:
         kind: TopologyPod
         data:
           - index: 1
-            design: M_MIDDLE
-            amount_of_spines: 2
+            layout: S_MIDDLE
             deployment_type: middle_rack
-            spine_template: N9K-C9336C-FX2_SPINE
+            suites: [muc-1-s-1]
+            fabric_templates:
+              - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             member_of_groups:
               - topologies_pod
+            racks:
+              kind: LocationRack
+              data:
+                - index: 1
+                  row_index: 1
+                  shortname: muc-1-s-1-r-1-1
+                  rack_type: network
+                  parent: muc-1-s-1
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MR"]
+                    - ["2", "l2-leaf", "N9K-C9336C-FX2_TOR"]
+                - index: 1
+                  row_index: 2
+                  shortname: muc-1-s-1-r-2-1
+                  rack_type: network
+                  parent: muc-1-s-1
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MR"]
+                    - ["2", "l2-leaf", "N9K-C9336C-FX2_TOR"]
           - index: 2
-            design: M_MIXED
-            amount_of_spines: 2
-            deployment_type: mixed
-            spine_template: N9K-C9336C-FX2_SPINE
+            layout: S_MIDDLE
+            deployment_type: middle_rack
+            suites: [muc-1-s-2]
+            fabric_templates:
+              - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             member_of_groups:
               - topologies_pod
-          - index: 3
-            design: S_TOR
-            amount_of_spines: 2
-            deployment_type: tor
-            spine_template: N9K-C9336C-FX2_SPINE
-            member_of_groups:
-              - topologies_pod
+            racks:
+              kind: LocationRack
+              data:
+                - index: 1
+                  row_index: 1
+                  shortname: muc-1-s-2-r-1-1
+                  rack_type: network
+                  parent: muc-1-s-2
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MR"]
+                    - ["2", "l2-leaf", "N9K-C9336C-FX2_TOR"]
+                - index: 1
+                  row_index: 2
+                  shortname: muc-1-s-2-r-2-1
+                  rack_type: network
+                  parent: muc-1-s-2
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MR"]
+                    - ["2", "l2-leaf", "N9K-C9336C-FX2_TOR"]

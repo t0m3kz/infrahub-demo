@@ -1,0 +1,11 @@
+---
+# ASNs for the DC8-BL1 <-> DC8-FW1 eBGP session (see 01_cable.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingAutonomousSystem
+  data:
+    - asn: 65080
+      description: "DC8 fabric AS"
+    - asn: 65081
+      description: "DC8-FW1 AS"

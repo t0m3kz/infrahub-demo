@@ -1,0 +1,75 @@
+!
+! {{ name }} Configuration
+!
+hostname {{ name }}
+!
+{%- if vlans and vlans|length > 0 %}
+! VLANs
+{%- for vlan in vlans %}
+vlan {{ vlan.vlan_id }}
+  name {{ vlan.name }}
+!
+{%- endfor %}
+{%- endif %}
+!
+! Interfaces
+{%- for interface in interfaces %}
+interface {{ interface.name }}
+{%- if interface.description %}
+  description {{ interface.description }}
+{%- elif interface.circuits %}
+  description {{ interface.circuits[0].circuit_type|upper }} - {{ interface.circuits[0].circuit_id }} - {{ interface.circuits[0].provider }}
+{%- elif interface.virtual_links %}
+  description {{ interface.virtual_links[0].link_type|upper }} - {{ interface.virtual_links[0].link_name }} - {{ interface.virtual_links[0].provider }}
+{%- endif %}
+{%- if interface.status == 'active' %}
+  no shutdown
+{%- endif %}
+{%- include 'common/cisco_nxos_interface_ip.j2' %}
+{%- if interface.vlans and interface.vlans|length > 0 %}
+  switchport
+  switchport mode access
+  switchport access vlan {{ interface.vlans[0] }}
+{%- endif %}
+{%- if interface.get('ospf') %}
+  ip ospf area {{ interface.ospf.area }}
+{%- endif %}
+{%- if interface.circuits %}
+  ! Circuit: {{ interface.circuits[0].circuit_id }} ({{ interface.circuits[0].bandwidth }} Mbps)
+  ! Provider: {{ interface.circuits[0].provider }}
+  ! Side: {{ interface.circuits[0].side }}
+{%- endif %}
+{%- if interface.virtual_links %}
+  ! Virtual Link: {{ interface.virtual_links[0].link_name }}
+  ! Type: {{ interface.virtual_links[0].link_type }}
+  ! Bandwidth: {{ interface.virtual_links[0].bandwidth }} Mbps
+{%- if interface.virtual_links[0].encryption %}
+  ! Encryption: Enabled
+{%- endif %}
+{%- if interface.virtual_links[0].cloud_resource_id %}
+  ! Cloud Resource: {{ interface.virtual_links[0].cloud_resource_id }}
+{%- endif %}
+{%- endif %}
+!
+{%- endfor %}
+!
+{%- if ospf and ospf|length > 0 %}
+! OSPF Configuration
+{% include 'common/cisco_nxos_ospf.j2' %}
+{%- endif %}
+!
+{%- if bgp and bgp|length > 0 %}
+! BGP Configuration
+{% include 'common/cisco_ios_bgp.j2' %}
+{%- endif %}
+!
+! Route-maps
+route-map RM-CONN-2-BGP permit 10
+  match interface Loopback0
+!
+{%- include 'common/cisco_ios_management.j2' %}
+!
+! Management
+line console
+line vty
+!

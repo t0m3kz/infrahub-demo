@@ -5,8 +5,10 @@ spec:
   kind: TemplateDcimVirtualDevice
   data:
     - template_name: VCG-VA_CLOUD
+      owner: "P027"
       device_type: VCG-VA
       platform: velocloud
+      software_image: velocloud-6.0.0
       role: edge
       status: active
       cpu: 4
@@ -29,24 +31,3 @@ spec:
             interface_type: 1000base-t
       member_of_groups:
         - sdwan_gateways
-    - template_name: VCO-VA_ORCHESTRATOR
-      device_type: VCO-VA
-      platform: velocloud
-      role: edge
-      status: active
-      cpu: 8
-      memory: 32
-      storage: 100
-      interfaces:
-        kind: TemplateDcimPhysicalInterface
-        data:
-          - template_name: VCO-VA_ORCHESTRATOR_eth0
-            name: eth0
-            role: management
-            interface_type: 1000base-t
-          - template_name: VCO-VA_ORCHESTRATOR_eth1
-            name: eth1
-            role: uplink
-            interface_type: 1000base-t
-      member_of_groups:
-        - sdwan_orchestrators

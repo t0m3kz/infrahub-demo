@@ -10,24 +10,11 @@ query topology_dc($name: String!) {
           index {
             value
           }
-          amount_of_super_spines {
-            value
-          }
           naming_convention { value }
-          overlay_technology { value }
-          loopback_prefix_length { value }
-          technical_prefix_length { value }
-          management_prefix_length { value }
-          design {
-            node {
-              # New schema structure
-              routing_strategy { value }
-              underlay_protocol { value }
-              max_pods { value }
-              max_super_spines_per_fabric { value }
-              max_spines_per_pod { value }
-            }
-          }
+          connectivity_mode { value }
+          routing_strategy { value }
+          underlay_protocol { value }
+          size { value }
           loopback_pool {
             node {
               id
@@ -46,7 +33,7 @@ query topology_dc($name: String!) {
               name { value }
             }
           }
-          super_spine_asn_pool {
+          fabric_asn_pool {
             node {
               id
               name { value }
@@ -56,28 +43,78 @@ query topology_dc($name: String!) {
             edges {
               node {
                 id
-                ... on TopologyPod {
-                  checksum {
-                    value
+              }
+            }
+          }
+          fabric_controllers: controllers(controller_type__values: ["aci_apic", "dcnm", "nsx_manager", "ucs_manager"]) {
+            edges {
+              node {
+                id
+                controller_type { value }
+              }
+            }
+          }
+          security_manager_controllers: controllers(controller_type__value: "security_manager") {
+            edges {
+              node {
+                id
+                controller_type { value }
+                ... on DcimDevice {
+                  platform {
+                    node {
+                      id
+                    }
                   }
                 }
               }
             }
           }
-          super_spine_template {
-            node {
-              id
-              template_name {
-                value
-              }
-              platform {
-                node {
-                  id
+          lb_manager_controllers: controllers(controller_type__value: "lb_manager") {
+            edges {
+              node {
+                id
+                controller_type { value }
+                ... on DcimDevice {
+                  platform {
+                    node {
+                      id
+                    }
+                  }
                 }
               }
-              device_type {
-                node {
-                  id
+            }
+          }
+          fabric_templates {
+            edges {
+              node {
+                role { value }
+                quantity { value }
+                template {
+                  node {
+                    id
+                    ... on TemplateDcimPhysicalDevice {
+                      template_name { value }
+                      platform {
+                        node {
+                          id
+                          name { value }
+                        }
+                      }
+                      device_type {
+                        node {
+                          id
+                        }
+                      }
+                      interfaces {
+                        edges {
+                          node {
+                            name { value }
+                            role { value }
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }

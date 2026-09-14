@@ -1,0 +1,12 @@
+---
+# VLAN segment activated in C011's colocation footprint (NY).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVlanSegment
+  data:
+    - owner: "C011"
+      customer_name: "flarex-prod"
+      environment: "p"
+      vlan_id: 111
+      customer_deployment: ["C011", "p"]

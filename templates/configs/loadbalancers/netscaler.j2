@@ -1,0 +1,79 @@
+#- Citrix NetScaler ADC — load balancer configuration -#
+set ns config -IPAddress {{ (lb_interfaces | selectattr('role', 'equalto', 'management') | map(attribute='ip_address.address') | first | default('') ).split('/')[0] }} -netmask 255.255.255.0
+set ns hostName {{ name }}
+{%- if lb_interfaces %}
+#
+# --- SNIPs (Subnet IPs) ---
+{%- for iface in lb_interfaces %}
+{%- if iface.role != 'management' %}
+add ns ip {{ iface.ip_address.address.split('/')[0] }} {{ iface.ip_address.address.split('/')[0] }} -netmask 255.255.255.0 -type SNIP
+{%- if iface.description %}
+# {{ iface.name }}: {{ iface.description }}
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+#
+{%- endif %}
+# --- Health Monitors ---
+add lb monitor http_monitor HTTP -httpRequest "HEAD /health" -respCode 200 -LRTM DISABLED
+add lb monitor tcp_monitor TCP -LRTM DISABLED
+{%- if vips %}
+#
+# --- Servers, Service Groups and Bindings ---
+{%- set seen_members = [] %}
+{%- for vip in vips %}
+{%- for member in vip.members %}
+{%- if member.ip and member.name not in seen_members %}
+{%- set _ = seen_members.append(member.name) %}
+add server {{ member.name }} {{ member.ip.split('/')[0] }}
+{%- endif %}
+{%- endfor %}
+{%- endfor %}
+{%- for vip in vips %}
+{%- set sg_name = vip.hostname | replace('.', '_') | replace('-', '_') ~ '_' ~ vip.protocol ~ '_' ~ vip.port ~ '_sg' %}
+{%- if vip.members %}
+add serviceGroup {{ sg_name }} {{ 'TCP' if vip.protocol == 'tcp' else 'HTTP' }} -maxClient 0 -maxReq 0 -cip DISABLED -usip NO -useproxyport YES -cltTimeout 180 -svrTimeout 360
+bind serviceGroup {{ sg_name }} -monitorName {{ 'tcp_monitor' if vip.protocol == 'tcp' else 'http_monitor' }}
+{%- for member in vip.members %}
+{%- if member.ip %}
+bind serviceGroup {{ sg_name }} {{ member.name }} {{ member.port if member.port else vip.port }}
+{%- if member.weight and member.weight != 1 %} -weight {{ member.weight }}{%- endif %}
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+{%- endfor %}
+#
+# --- Virtual Servers (VIPs) ---
+{%- for vip in vips %}
+{%- set vs_name = vip.hostname | replace('.', '_') | replace('-', '_') ~ '_' ~ vip.protocol ~ '_' ~ vip.port %}
+{%- set sg_name = vs_name ~ '_sg' %}
+add lb vserver {{ vs_name }} {{ 'TCP' if vip.protocol == 'tcp' else 'HTTP' }} {{ vip.vip_ip if vip.vip_ip else '0.0.0.0' }} {{ vip.port }} -persistenceType {{ 'SOURCEIP' if vip.session_persistence else 'NONE' }}
+{%- if vip.members %}
+bind lb vserver {{ vs_name }} {{ sg_name }}
+{%- endif %}
+{%- if vip.protocol == 'https' %}
+set ssl vserver {{ vs_name }} -tls1 ENABLED -tls11 ENABLED -tls12 ENABLED
+{%- endif %}
+{%- if vip.status == 'active' %}
+enable lb vserver {{ vs_name }}
+{%- else %}
+disable lb vserver {{ vs_name }}
+{%- endif %}
+# {{ vip.description if vip.description else vip.hostname }}  [tenant: {{ vip.lb_name }}]
+{%- endfor %}
+#
+{%- endif %}
+{%- if ha %}
+#
+# --- High Availability (HA Node Pair) ---
+{%- set mgmt_ip = (lb_interfaces | selectattr('role', 'equalto', 'management') | map(attribute='ip_address.address') | first | default('')) %}
+{%- if ha.devices %}
+{%- for peer in ha.devices %}
+{%- if peer != name %}
+add ha node 1 {{ mgmt_ip.split('/')[0] if mgmt_ip else peer }}
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+#
+{%- endif %}
+save ns config

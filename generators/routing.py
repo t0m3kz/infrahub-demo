@@ -3,23 +3,73 @@
 from __future__ import annotations
 
 import asyncio
+import secrets
 from typing import TYPE_CHECKING, Any
+
+from infrahub_sdk.exceptions import GraphQLError
 
 if TYPE_CHECKING:
     import logging
 
-from .helpers import RoutingPlanInput, RoutingPlanner, RoutingStrategy
+from .helpers import PendingASRef, RoutingPlanInput, RoutingPlanner, RoutingStrategy
+from .helpers.common import retry_delay
+from .helpers.routing import _safe_device_name
 from .protocols import (
-    DcimPhysicalInterface,
     DcimVirtualInterface,
     ManagedBGP,
     ManagedBGPPeering,
+    ManagedMLAG,
     ManagedOSPF,
+    ManagedOSPFPeering,
     RoutingAutonomousSystem,
+    RoutingBGPAddressFamily,
     RoutingOSPFArea,
     RoutingOSPFInterface,
+    RoutingPassword,
 )
 from .types import RoutingOptions
+
+_PEERING_SAVE_MAX_RETRIES = 5
+_PEERING_SAVE_RETRY_DELAY = 2.0
+_OVERLAY_BGP_MAX_RETRIES = 5
+_OVERLAY_BGP_RETRY_DELAY = 3.0
+_SHARED_OBJECT_MAX_RETRIES = 10
+_SHARED_OBJECT_RETRY_DELAY = 3.0
+_SHARED_OBJECT_RETRY_CAP = 20.0
+
+
+async def _save_peering_with_retry(obj: Any, logger: logging.Logger) -> None:
+    """Save a peering/interface object, retrying on a NODE_NOT_FOUND write race.
+
+    Peerings reference sibling processes/interfaces by direct id where possible
+    (see ``_resolve_hfid`` below) specifically to avoid the search-index lag a
+    plain HFID lookup would hit. But when several devices' ``create_routing()``
+    calls run concurrently and write onto the SAME shared node (e.g. every pod's
+    spines peering to the same 2 super-spine ManagedBGP processes — pod.py's
+    pre-seed/post-cable calls), that write contention can make a just-created
+    process transiently NODE_NOT_FOUND to a peering save issued a moment later
+    in a different concurrent call. Retrying resolves it without needing to
+    serialize those calls. Mirrors the interface-readiness retry already in
+    ``CommonGenerator.create_cabling``.
+    """
+    name = getattr(getattr(obj, "name", None), "value", obj.id)
+    for attempt in range(_PEERING_SAVE_MAX_RETRIES):
+        try:
+            await obj.save(allow_upsert=True)
+            logger.info(f"  Saved: {name}")
+            return
+        except GraphQLError as exc:
+            if not any(e.get("extensions", {}).get("code") == "NODE_NOT_FOUND" for e in exc.errors):
+                raise
+            if attempt == _PEERING_SAVE_MAX_RETRIES - 1:
+                raise
+            delay = retry_delay(_PEERING_SAVE_RETRY_DELAY, attempt)
+            logger.info(
+                f"  NODE_NOT_FOUND saving {name} (referenced node not yet visible — "
+                f"likely concurrent write contention on a shared process) — "
+                f"retrying in {delay:.2f}s (attempt {attempt + 1}/{_PEERING_SAVE_MAX_RETRIES})"
+            )
+            await asyncio.sleep(delay)
 
 
 class RoutingMixin:
@@ -42,27 +92,37 @@ class RoutingMixin:
         bottom_devices: list[str],
         top_devices: list[str],
         options: RoutingOptions | None = None,
+        p2p_interfaces: list[tuple[Any, Any]] | None = None,
+        bottom_role: str = "",
+        top_role: str = "",
     ) -> None:
-        """Create routing configuration between device layers.
+        """Create routing configuration for a layer pair.
 
-        Follows create_cabling pattern: collect data, plan, create objects sequentially.
+        ``p2p_interfaces`` is the list of ``(src, dst)`` interface pairs returned by
+        ``create_cabling``.  Pass ``[]`` when there are no cables yet (process-only
+        calls such as the pre-cable spine BGP seeding in pod.py).
 
-        Underlay always uses P2P interfaces, overlay always uses loopback interfaces.
-        Overlay is either iBGP (shared ASN) or eBGP (per-device ASN from underlay).
-
-        Existing shared objects (iBGP ASN, OSPF area) are queried here and passed
-        to the routing helper so it stays pure (no DB access).
-        See ``RoutingOptions`` for available option keys.
+        ``bottom_role``/``top_role`` are the caller's known role for every
+        device in ``bottom_devices``/``top_devices`` (e.g. "leaf"/"spine").
+        Every caller creates or selects these devices for exactly one role,
+        so pass it — it's used as the authoritative role source instead of
+        querying ``DcimDevice.role``, which has been observed to
+        intermittently resolve to None when queried from a different worker
+        process than the one that wrote it.
         """
         if options is None:
             options = RoutingOptions()
+        if p2p_interfaces is None:
+            p2p_interfaces = []
         design = options.get("design")
+        if isinstance(design, dict):
+            routing_strategy = design.get("routing_strategy")
+        else:
+            routing_strategy = getattr(design, "routing_strategy", None)
 
-        if not design or not hasattr(design, "routing_strategy"):
+        if not design or not routing_strategy:
             self.logger.warning("No design or routing strategy provided")
             return
-
-        routing_strategy = design.routing_strategy
         if routing_strategy not in {s.value for s in RoutingStrategy}:
             self.logger.warning(f"Routing strategy '{routing_strategy}' not supported")
             return
@@ -74,8 +134,19 @@ class RoutingMixin:
         )
 
         # ================================================================
-        # RESOLVE SHARED OBJECTS (created by dc.py, reused by pod/rack)
+        # RESOLVE SHARED/CROSS-GENERATOR STATE + DATA COLLECTION
         # ================================================================
+        # One combined polling loop for everything this call needs but doesn't
+        # own: dc.py-level shared objects (overlay AS, OSPF area, auth keys)
+        # and a sibling pod's overlay BGP (pod.py's decentralized mesh cabling
+        # queries a sibling pod's spines directly, no dc.py-level wait). A
+        # pod's/rack's own task-list check for an in-flight add_dc only catches
+        # "still running" — not the narrow window between add_dc's task
+        # completing and this call's own queries landing, nor a sibling
+        # generator's independent in-flight run. Every such lookup shares one
+        # retry loop and one backoff per round instead of each waiting (and
+        # re-sleeping) independently in sequence.
+        interfaces = [iface for pair in p2p_interfaces for iface in pair]
 
         needs_overlay_as = not options.get("overlay_as_id") and routing_strategy in (
             RoutingStrategy.EBGP_IBGP,
@@ -86,73 +157,145 @@ class RoutingMixin:
             and not options.get("skip_underlay")
             and routing_strategy == RoutingStrategy.OSPF_IBGP
         )
+        # Shared underlay/overlay BGP/OSPF auth keys — created once by the DC generator.
+        # Unlike overlay AS / OSPF area, a missing key is non-fatal: auth is a hardening
+        # add-on, not required for connectivity, so routing creation proceeds without it
+        # even if the retry loop below never finds them.
+        needs_underlay_password = not options.get("underlay_password_id") and not options.get("skip_underlay")
+        needs_overlay_password = not options.get("overlay_password_id")
 
-        if needs_overlay_as or needs_ospf_area:
-            overlay_as_id, ospf_area_id = await self._resolve_shared_objects(routing_strategy)
+        overlay_as_id = options.get("overlay_as_id")
+        ospf_area_id = options.get("ospf_area_id")
+        underlay_password_id = options.get("underlay_password_id")
+        overlay_password_id = options.get("overlay_password_id")
 
-            if needs_overlay_as:
-                if not overlay_as_id:
-                    self.logger.error(
-                        f"Shared overlay AS not found for {self.fabric_name}. "
-                        "The DC generator must run first to create it."
-                    )
-                    return
-                options["overlay_as_id"] = overlay_as_id
+        top_device_set = set(top_devices)
+        all_bgp: list[Any] = []
+        loopback_interfaces: list[Any] = []
 
-            if needs_ospf_area:
-                if not ospf_area_id:
-                    self.logger.error(
-                        f"Shared OSPF area not found for {self.fabric_name}. "
-                        "The DC generator must run first to create it."
-                    )
-                    return
-                options["ospf_area_id"] = ospf_area_id
+        for attempt in range(_SHARED_OBJECT_MAX_RETRIES):
+            if (needs_overlay_as and not overlay_as_id) or (needs_ospf_area and not ospf_area_id):
+                resolved_overlay_as_id, resolved_ospf_area_id = await self._resolve_shared_objects(routing_strategy)
+                overlay_as_id = overlay_as_id or resolved_overlay_as_id
+                ospf_area_id = ospf_area_id or resolved_ospf_area_id
+
+            if (needs_underlay_password and not underlay_password_id) or (
+                needs_overlay_password and not overlay_password_id
+            ):
+                resolved_underlay_password_id, resolved_overlay_password_id = await self._resolve_shared_passwords()
+                underlay_password_id = underlay_password_id or resolved_underlay_password_id
+                overlay_password_id = overlay_password_id or resolved_overlay_password_id
+
+            all_bgp, loopback_interfaces, mlag_domains = await asyncio.gather(
+                self.client.filters(
+                    kind=ManagedBGP,
+                    capabilities__name__values=all_device_names,
+                    include=["local_as", "capabilities"],
+                    prefetch_relationships=True,
+                ),
+                self.client.filters(
+                    kind=DcimVirtualInterface,
+                    device__name__values=all_device_names,
+                    role__value="loopback",
+                    include=["device", "ip_address"],
+                    prefetch_relationships=True,
+                ),
+                self.client.filters(
+                    kind=ManagedMLAG,
+                    capabilities__name__values=all_device_names,
+                    include=["capabilities"],
+                    prefetch_relationships=True,
+                ),
+            )
+            overlay_device_names = {
+                name for b in all_bgp if b.process_role.value == "overlay" and (name := _safe_device_name(b))
+            }
+            missing_overlay_bgp = top_device_set - overlay_device_names
+
+            still_missing = (
+                (needs_overlay_as and not overlay_as_id)
+                or (needs_ospf_area and not ospf_area_id)
+                or bool(missing_overlay_bgp)
+            )
+            if not still_missing:
+                break
+            if attempt < _SHARED_OBJECT_MAX_RETRIES - 1:
+                waiting_on = []
+                if needs_overlay_as and not overlay_as_id:
+                    waiting_on.append("shared overlay AS")
+                if needs_ospf_area and not ospf_area_id:
+                    waiting_on.append("shared OSPF area")
+                if missing_overlay_bgp:
+                    waiting_on.append(f"overlay BGP for {sorted(missing_overlay_bgp)}")
+                delay = retry_delay(_SHARED_OBJECT_RETRY_DELAY, attempt, cap=_SHARED_OBJECT_RETRY_CAP)
+                self.logger.info(
+                    f"Waiting on: {', '.join(waiting_on)} — retrying in {delay:.2f}s "
+                    f"(attempt {attempt + 1}/{_SHARED_OBJECT_MAX_RETRIES})"
+                )
+                await asyncio.sleep(delay)
+
+        if needs_overlay_as:
+            if not overlay_as_id:
+                self.logger.error(
+                    f"Shared overlay AS not found for {self.fabric_name}. The DC generator must run first to create it."
+                )
+                return
+            options["overlay_as_id"] = overlay_as_id
+
+        if needs_ospf_area:
+            if not ospf_area_id:
+                self.logger.error(
+                    f"Shared OSPF area not found for {self.fabric_name}. The DC generator must run first to create it."
+                )
+                return
+            options["ospf_area_id"] = ospf_area_id
+
+        if needs_underlay_password and underlay_password_id:
+            options["underlay_password_id"] = underlay_password_id
+        if needs_overlay_password and overlay_password_id:
+            options["overlay_password_id"] = overlay_password_id
 
         # Protect shared DC-level objects from generator group cleanup
-        for shared_id in [options.get("overlay_as_id"), options.get("ospf_area_id")]:
-            if shared_id and shared_id not in self.client.group_context.related_node_ids:
+        for shared_id in [
+            options.get("overlay_as_id"),
+            options.get("ospf_area_id"),
+            options.get("underlay_password_id"),
+            options.get("overlay_password_id"),
+        ]:
+            if shared_id:
                 self.client.group_context.related_node_ids.append(shared_id)
 
-        # ================================================================
-        # PHASE 1: DATA COLLECTION (4 parallel queries)
-        # ================================================================
+        underlay_type = routing_strategy.split("-")[0]
 
-        all_bgp, interfaces, loopback_interfaces = await asyncio.gather(
-            self.client.filters(
-                kind=ManagedBGP,
-                device_capabilities__name__values=all_device_names,
-                include=["local_as", "device_capabilities"],
-                prefetch_relationships=True,
-            ),
-            self.client.filters(
-                kind=DcimPhysicalInterface,
-                device__name__values=all_device_names,
-                tags__name__value="fabric-p2p",
-                include=["device", "cable"],
-                prefetch_relationships=True,
-            ),
-            self.client.filters(
-                kind=DcimVirtualInterface,
-                device__name__values=all_device_names,
-                role__value="loopback",
-                include=["device", "ip_address"],
-                prefetch_relationships=True,
-            ),
-        )
-        underlay = [b for b in all_bgp if "underlay" in b.name.value]
-
-        if routing_strategy == RoutingStrategy.OSPF_IBGP:
-            overlay = await self.client.filters(
+        if underlay_type == "ospf":
+            underlay = await self.client.filters(
                 kind=ManagedOSPF,
-                device_capabilities__name__values=all_device_names,
+                capabilities__name__values=all_device_names,
             )
         else:
-            overlay = [b for b in all_bgp if "overlay" in b.name.value]
+            underlay = [b for b in all_bgp if b.process_role.value == "underlay"]
+
+        # Overlay is always iBGP/eBGP (ManagedBGP) — only the underlay can be OSPF.
+        overlay = [b for b in all_bgp if b.process_role.value == "overlay"]
+
+        # MLAG-paired devices among the ones being routed share ONE underlay
+        # ASN (.dev/bgp.txt) — build device name -> MLAG domain name, used
+        # by _plan_ebgp_underlay to group AS allocation. Only devices with
+        # exactly 2 member names resolve (a ManagedMLAG's capabilities are
+        # its 2 physical peers, see generators/devices.py's _ensure_mlag_pairs).
+        mlag_pairs: dict[str, str] = {}
+        for domain in mlag_domains:
+            domain_name = domain.name.value
+            member_names = [peer.display_label for peer in domain.capabilities.peers]
+            if len(member_names) == 2:
+                for member_name in member_names:
+                    mlag_pairs[member_name] = domain_name
 
         self.logger.info(
             f"Collected: {len(interfaces)} P2P interface(s), "
             f"{len(loopback_interfaces)} loopback(s), "
-            f"{len(underlay)} existing underlay, {len(overlay)} existing overlay"
+            f"{len(underlay)} existing underlay, {len(overlay)} existing overlay, "
+            f"{len(mlag_pairs)} MLAG-paired device(s)"
         )
 
         # ================================================================
@@ -161,10 +304,14 @@ class RoutingMixin:
 
         planner = RoutingPlanner(deployment_id=self.deployment_id, logger=self.logger)
 
+        evpn_af_id = await self._ensure_evpn_af_node()
+
         plan = planner.build_routing_plan(
             RoutingPlanInput(
                 bottom_devices=bottom_devices,
                 top_devices=top_devices,
+                bottom_role=bottom_role,
+                top_role=top_role,
                 underlay=underlay,
                 overlay=overlay,
                 interfaces=interfaces,
@@ -172,6 +319,10 @@ class RoutingMixin:
                 options={**options},
                 routing_strategy=routing_strategy,
                 deployment_name=self.fabric_name,
+                evpn_af_id=evpn_af_id,
+                underlay_password_id=options.get("underlay_password_id") or "",
+                overlay_password_id=options.get("overlay_password_id") or "",
+                mlag_pairs=mlag_pairs,
             )
         )
 
@@ -179,21 +330,14 @@ class RoutingMixin:
         # PHASE 3: CREATE SDK OBJECTS, SAVE IN DEPENDENCY ORDER
         # ================================================================
 
-        def _clean(d: dict, strip_local_as: bool = False) -> dict:
-            """Remove internal keys (prefixed with _) before passing to SDK."""
-            result = {k: v for k, v in d.items() if not k.startswith("_")}
-            if strip_local_as:
-                result.pop("local_as", None)
-            return result
-
         # Step 1: Create + save AS objects, build device -> AS ID mapping
         device_to_as_id = await self._save_autonomous_systems(plan.autonomous_systems)
 
-        # Step 2: Resolve local_as placeholders in BGP processes
+        # Step 2: Resolve PendingASRef placeholders in BGP processes
         for bgp in plan.bgp_processes:
-            local_as = bgp.get("local_as", {})
-            if isinstance(local_as, dict) and "_for_device" in local_as:
-                as_id = device_to_as_id.get(local_as["_for_device"])
+            local_as = bgp.get("local_as")
+            if isinstance(local_as, PendingASRef):
+                as_id = device_to_as_id.get(local_as.device)
                 if as_id:
                     bgp["local_as"] = {"id": as_id}
                 else:
@@ -204,22 +348,58 @@ class RoutingMixin:
         # existing ManagedBGP is safe: local_as is cardinality-one and upserts cleanly
         # (replaces, never duplicates — verified on Infrahub 1.9.6), so the upsert
         # also (re)registers it in the group context with no new/existing split.
-        plan.bgp_processes = [await self.client.create(kind=ManagedBGP, data=_clean(d)) for d in plan.bgp_processes]
-        plan.ospf_processes = [await self.client.create(kind=ManagedOSPF, data=_clean(d)) for d in plan.ospf_processes]
+        plan.bgp_processes = [await self.client.create(kind=ManagedBGP, data=d) for d in plan.bgp_processes]
+        plan.ospf_processes = [await self.client.create(kind=ManagedOSPF, data=d) for d in plan.ospf_processes]
         for obj in plan.bgp_processes + plan.ospf_processes:
             await obj.save(allow_upsert=True)
             self.logger.info(f"  Saved: {getattr(getattr(obj, 'name', None), 'value', obj.id)}")
 
-        # Step 4: Create peering + OSPF interface SDK objects, save sequentially
-        plan.bgp_peerings = [
-            await self.client.create(kind=ManagedBGPPeering, data=_clean(d)) for d in plan.bgp_peerings
-        ]
+        # Step 4: Resolve HFID refs to processes saved in this same run into direct id
+        # refs. HFID lookups go through the search index, which can lag just behind a
+        # write that landed a moment earlier in this run (NODE_NOT_FOUND). Refs to
+        # processes from earlier generator runs are left as HFID — no race there,
+        # those have had plenty of time to be indexed.
+        process_id_by_name = {obj.name.value: obj.id for obj in plan.bgp_processes + plan.ospf_processes}
+
+        def _resolve_hfid(ref: dict) -> dict:
+            fresh_id = process_id_by_name.get(ref.get("hfid"))
+            return {"id": fresh_id} if fresh_id else ref
+
+        for peering in plan.bgp_peerings:
+            peering["bgp_processes"] = [_resolve_hfid(ref) for ref in peering["bgp_processes"]]
+        for ospf_peering in plan.ospf_peerings:
+            ospf_peering["ospf_process"] = [_resolve_hfid(ref) for ref in ospf_peering["ospf_process"]]
+
+        # Step 5: Create peering + OSPF interface SDK objects, save sequentially.
+        # ospf_interfaces are created before ospf_peerings so the latter's
+        # ospf_interface HFID refs can be resolved to direct ids the same way
+        # process refs are resolved above — they reference objects created in
+        # this same run, so the same NODE_NOT_FOUND-avoidance applies.
+        # Peerings additionally retry on save (_save_peering_with_retry): unlike
+        # processes, a peering can reference a process id created by a DIFFERENT,
+        # concurrently-running create_routing() call against the same shared
+        # device (e.g. every pod's spines peering to the same super-spines) — a
+        # write-contention race the HFID resolution above doesn't cover.
+        plan.bgp_peerings = [await self.client.create(kind=ManagedBGPPeering, data=d) for d in plan.bgp_peerings]
         plan.ospf_interfaces = [
-            await self.client.create(kind=RoutingOSPFInterface, data=_clean(d)) for d in plan.ospf_interfaces
+            await self.client.create(kind=RoutingOSPFInterface, data=d) for d in plan.ospf_interfaces
         ]
-        for obj in plan.bgp_peerings + plan.ospf_interfaces:
+        for obj in plan.bgp_peerings:
+            await _save_peering_with_retry(obj, self.logger)
+        for obj in plan.ospf_interfaces:
             await obj.save(allow_upsert=True)
             self.logger.info(f"  Saved: {getattr(getattr(obj, 'name', None), 'value', obj.id)}")
+
+        ospf_iface_id_by_name = {obj.name.value: obj.id for obj in plan.ospf_interfaces}
+        for ospf_peering in plan.ospf_peerings:
+            ospf_peering["ospf_interface"] = [
+                {"id": ospf_iface_id_by_name[ref["hfid"]]} if ref.get("hfid") in ospf_iface_id_by_name else ref
+                for ref in ospf_peering["ospf_interface"]
+            ]
+
+        plan.ospf_peerings = [await self.client.create(kind=ManagedOSPFPeering, data=d) for d in plan.ospf_peerings]
+        for obj in plan.ospf_peerings:
+            await _save_peering_with_retry(obj, self.logger)
 
         total = (
             len(plan.autonomous_systems)
@@ -227,6 +407,7 @@ class RoutingMixin:
             + len(plan.ospf_processes)
             + len(plan.ospf_interfaces)
             + len(plan.bgp_peerings)
+            + len(plan.ospf_peerings)
         )
         self.logger.info(f"Routing completed: {total} object(s) saved")
 
@@ -249,8 +430,7 @@ class RoutingMixin:
             existing_id = as_dict.get("_existing_id")
 
             if existing_id:
-                if existing_id not in self.client.group_context.related_node_ids:
-                    self.client.group_context.related_node_ids.append(existing_id)
+                self.client.group_context.related_node_ids.append(existing_id)
                 device_to_as_id[device_name] = existing_id
                 self.logger.info(f"  Tracked existing AS for {device_name}")
             else:
@@ -262,8 +442,215 @@ class RoutingMixin:
 
         return device_to_as_id
 
+    async def _ensure_routing_password(self, *, name: str, description: str) -> str | None:
+        """Create or reuse a shared RoutingPassword node by deterministic name."""
+
+        try:
+            existing = await self.client.get(kind=RoutingPassword, name__value=name, raise_when_missing=False)
+            if existing:
+                self.client.group_context.related_node_ids.append(existing.id)
+                return existing.id
+        except Exception as exc:
+            self.logger.debug(f"Error querying RoutingPassword {name}: {exc}")
+            return None
+
+        try:
+            obj = await self.client.create(
+                kind=RoutingPassword,
+                data={
+                    "name": name,
+                    "description": description,
+                    "password": secrets.token_urlsafe(32),
+                },
+            )
+            await obj.save(allow_upsert=True)
+            self.client.group_context.related_node_ids.append(obj.id)
+            self.logger.info(f"Created shared RoutingPassword: {name}")
+            return obj.id
+        except Exception as exc:
+            self.logger.error(f"Could not create RoutingPassword {name}: {exc}")
+            return None
+
+    async def _create_shared_routing_objects(self, overlay_asn: int, asn_pool_id: str | None = None) -> None:
+        """Create shared DC-level routing state used by pod and rack generators.
+
+        ``asn_pool_id``: the DC's own fabric_asn_pool, used ONLY to allocate
+        the single shared super-spine underlay AS (see below) — every other
+        shared object here (overlay AS, OSPF area, passwords) needs no pool.
+        """
+
+        await self._ensure_routing_password(
+            name=f"{self.fabric_name}-underlay-key",
+            description=f"Shared eBGP/OSPF underlay auth key for {self.fabric_name}",
+        )
+        await self._ensure_routing_password(
+            name=f"{self.fabric_name}-overlay-key",
+            description=f"Shared BGP overlay/EVPN auth key for {self.fabric_name}",
+        )
+
+        if isinstance(self.data, dict):
+            strategy = self.data.get("routing_strategy", "ebgp-ebgp")
+        else:
+            strategy = self.data.routing_strategy
+
+        # Super-spine underlay is eBGP whenever underlay_type == "ebgp" (both
+        # ebgp-ebgp and ebgp-ibgp — only ospf-ibgp skips underlay for
+        # super-spine entirely, see dc.py's skip_underlay branch). All
+        # super-spines fabric-wide share ONE underlay ASN (.dev/bgp.txt) —
+        # same find-or-create-by-deterministic-description idiom as the
+        # overlay AS below.
+        if strategy.split("-")[0] == "ebgp":
+            super_spine_desc = f"{self.fabric_name} super-spine underlay ASN"
+            try:
+                existing = await self.client.filters(
+                    kind=RoutingAutonomousSystem,
+                    description__value=super_spine_desc,
+                )
+                if existing:
+                    self.client.group_context.related_node_ids.append(existing[0].id)
+                    self.logger.info(f"Found shared super-spine AS: AS{existing[0].asn.value} ({existing[0].id})")
+                elif asn_pool_id:
+                    as_obj = await self.client.create(
+                        kind=RoutingAutonomousSystem,
+                        data={
+                            "asn": {"from_pool": {"id": asn_pool_id}},
+                            "description": super_spine_desc,
+                        },
+                    )
+                    await as_obj.save(allow_upsert=True)
+                    self.client.group_context.related_node_ids.append(as_obj.id)
+                    self.logger.info(f"Created shared super-spine AS: AS{as_obj.asn.value} ({as_obj.id})")
+            except Exception as exc:
+                self.logger.warning(f"Failed to create shared super-spine AS: {exc}")
+
+        if strategy in (RoutingStrategy.EBGP_IBGP.value, RoutingStrategy.OSPF_IBGP.value):
+            overlay_desc = f"{self.fabric_name} overlay ASN for iBGP EVPN"
+            try:
+                existing = await self.client.filters(
+                    kind=RoutingAutonomousSystem,
+                    description__value=overlay_desc,
+                )
+                if existing:
+                    as_obj = existing[0]
+                    as_obj.asn.value = overlay_asn
+                    await as_obj.save(allow_upsert=True)
+                    self.logger.info(f"Updated shared overlay AS: AS{as_obj.asn.value} ({as_obj.id})")
+                else:
+                    as_obj = await self.client.create(
+                        kind=RoutingAutonomousSystem,
+                        data={"asn": overlay_asn, "description": overlay_desc},
+                    )
+                    await as_obj.save(allow_upsert=True)
+                    self.logger.info(f"Created shared overlay AS: AS{as_obj.asn.value} ({as_obj.id})")
+                self.client.group_context.related_node_ids.append(as_obj.id)
+            except Exception as exc:
+                self.logger.warning(f"Failed to create shared overlay AS: {exc}")
+
+        if strategy == RoutingStrategy.OSPF_IBGP.value:
+            area_name = f"{self.fabric_name}-ospf-area-0"
+            try:
+                area_obj = await self.client.get(kind=RoutingOSPFArea, name__value=area_name, raise_when_missing=False)
+                if area_obj:
+                    self.client.group_context.related_node_ids.append(area_obj.id)
+                else:
+                    area_obj = await self.client.create(
+                        kind=RoutingOSPFArea,
+                        data={
+                            "name": area_name,
+                            "area": 0,
+                            "area_type": "standard",
+                            "description": f"OSPF backbone area for {self.fabric_name}",
+                        },
+                    )
+                    await area_obj.save(allow_upsert=True)
+                    self.client.group_context.related_node_ids.append(area_obj.id)
+                    self.logger.info(f"Created shared OSPF area: {area_name}")
+            except Exception as exc:
+                self.logger.warning(f"Failed to create shared OSPF area: {exc}")
+
+    async def _ensure_evpn_af_node(self) -> str:
+        """Upsert the L2VPN/EVPN RoutingBGPAddressFamily node and return its ID.
+
+        This node must exist before any BGP process or peering can reference it
+        via the address_families relationship. The DC1 static demo creates it via
+        YAML load; generator-driven topologies need it created here.
+        """
+        try:
+            existing = await self.client.filters(
+                kind=RoutingBGPAddressFamily,
+                afi__value="l2vpn",
+                safi__value="evpn",
+            )
+            if existing:
+                node_id = existing[0].id
+                self.client.group_context.related_node_ids.append(node_id)
+                return node_id
+        except Exception as exc:
+            self.logger.debug(f"Could not query RoutingBGPAddressFamily: {exc}")
+
+        try:
+            obj = await self.client.create(
+                kind=RoutingBGPAddressFamily,
+                data={
+                    "afi": "l2vpn",
+                    "safi": "evpn",
+                    "advertise_all_vni": True,
+                    "advertise_default_gw": True,
+                    "description": "L2VPN EVPN overlay",
+                },
+            )
+            await obj.save(allow_upsert=True)
+            self.logger.info(f"Upserted RoutingBGPAddressFamily l2vpn/evpn: {obj.id}")
+            return obj.id
+        except Exception as exc:
+            self.logger.warning(f"Could not upsert RoutingBGPAddressFamily l2vpn/evpn: {exc}")
+            return ""
+
+    async def _resolve_shared_passwords(self) -> tuple[str | None, str | None]:
+        """Find the fabric's shared underlay/overlay RoutingPassword IDs, by deterministic name.
+
+        These are created once by the DC generator (``_create_shared_routing_objects``);
+        pod/rack layers only look them up here — one-shot lookup, no retry: the
+        caller (``create_routing``'s readiness loop) retries this alongside every
+        other shared-object lookup in one combined polling loop. A missing
+        password is non-fatal even after that loop exhausts: it just means auth
+        wasn't configured (e.g. DC generator hasn't run yet, or ran before this
+        feature existed) — routing creation proceeds without it.
+        """
+        underlay_id: str | None = None
+        overlay_id: str | None = None
+
+        underlay_name = f"{self.fabric_name}-underlay-key"
+        try:
+            existing = await self.client.get(kind=RoutingPassword, name__value=underlay_name, raise_when_missing=False)
+            if existing:
+                underlay_id = existing.id
+        except Exception as e:
+            self.logger.debug(f"Error querying RoutingPassword {underlay_name}: {e}")
+
+        overlay_name = f"{self.fabric_name}-overlay-key"
+        try:
+            existing = await self.client.get(kind=RoutingPassword, name__value=overlay_name, raise_when_missing=False)
+            if existing:
+                overlay_id = existing.id
+        except Exception as e:
+            self.logger.debug(f"Error querying RoutingPassword {overlay_name}: {e}")
+
+        return underlay_id, overlay_id
+
     async def _resolve_shared_objects(self, routing_strategy: str) -> tuple[str | None, str | None]:
-        """Find shared DC-level overlay AS and OSPF area. Returns (overlay_as_id, ospf_area_id)."""
+        """Find shared DC-level overlay AS and OSPF area. Returns (overlay_as_id, ospf_area_id).
+
+        One-shot lookup, no retry: the caller (``create_routing``'s readiness
+        loop) retries this alongside every other shared-object lookup in one
+        combined polling loop — see that loop's docstring for the race this
+        closes.
+
+        Protecting the resolved IDs from generator group cleanup is the caller's
+        job (create_routing already does this for every shared_id it collects,
+        from here or from options) — see the "Protect shared DC-level objects"
+        block there.
+        """
         overlay_as_id: str | None = None
         ospf_area_id: str | None = None
 
@@ -288,3 +675,18 @@ class RoutingMixin:
                 self.logger.warning(f"Error querying OSPF area {area_name}: {e}")
 
         return overlay_as_id, ospf_area_id
+
+    async def _resolve_shared_super_spine_as(self) -> str | None:
+        """Find the fabric's shared super-spine underlay AS, by deterministic
+        description — created by ``_create_shared_routing_objects`` (called
+        by dc.py before its own super-spine ``create_routing()``). One-shot
+        lookup, no retry — dc.py is the only caller and always creates it
+        first in the same generator run."""
+        super_spine_desc = f"{self.fabric_name} super-spine underlay ASN"
+        try:
+            existing = await self.client.filters(kind=RoutingAutonomousSystem, description__value=super_spine_desc)
+            if existing:
+                return existing[0].id
+        except Exception as e:
+            self.logger.warning(f"Error querying super-spine AS for {self.fabric_name}: {e}")
+        return None

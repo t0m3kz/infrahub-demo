@@ -1,12 +1,61 @@
-query GetDCDevices($dc_name: String!) {
+fragment PeeringParticipant on DcimDevice {
+  name { value }
+  role { value }
+}
+
+fragment DeviceRoutingFields on DcimDevice {
+  name { value }
+  role { value }
+  ... on DcimCapabilities {
+    capabilities {
+      edges {
+        node {
+          __typename
+          ... on ManagedBGP {
+            name { value }
+            local_as { node { asn { value } } }
+            peerings {
+              edges {
+                node {
+                  name { value }
+                  session_type { value }
+                  bgp_processes {
+                    edges {
+                      node {
+                        capabilities {
+                          edges {
+                            node {
+                              ...PeeringParticipant
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+          ... on ManagedOSPF {
+            name { value }
+          }
+        }
+      }
+    }
+  }
+}
+
+query GetDCTopology($dc_name: String!) {
+  all_cables: DcimCable {
+    count
+  }
   TopologyDataCenter(name__value: $dc_name) {
     edges {
       node {
         devices {
           edges {
             node {
-              name { value }
-              role { value }
+              ...DeviceRoutingFields
             }
           }
         }
@@ -19,8 +68,7 @@ query GetDCDevices($dc_name: String!) {
         devices {
           edges {
             node {
-              name { value }
-              role { value }
+              ...DeviceRoutingFields
             }
           }
         }
@@ -30,8 +78,7 @@ query GetDCDevices($dc_name: String!) {
               devices {
                 edges {
                   node {
-                    name { value }
-                    role { value }
+                    ...DeviceRoutingFields
                   }
                 }
               }

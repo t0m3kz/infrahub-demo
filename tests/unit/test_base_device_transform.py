@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from transforms.common import BaseDeviceTransform, get_capabilities
-from transforms.tor import ToR
+from transforms.config.tor import ToR
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -44,15 +44,13 @@ def _device_data(
     role: str = "leaf",
     interfaces: list | None = None,
     device_capabilities: list | None = None,
-    deployment: dict | None = None,
 ) -> dict:
     return {
         "name": name,
         "role": role,
         "platform": {"netmiko_device_type": platform} if platform else None,
         "interfaces": interfaces or [],
-        "device_capabilities": device_capabilities or [],
-        "deployment": deployment or {},
+        "capabilities": device_capabilities or [],
     }
 
 
@@ -77,6 +75,7 @@ class TestGetCapabilitiesEdgeCases:
             "bgp_enabled": False,
             "ospf_enabled": False,
             "mlag_enabled": False,
+            "ha_enabled": False,
             "ntp_enabled": False,
             "syslog_enabled": False,
             "snmp_enabled": False,
@@ -84,14 +83,14 @@ class TestGetCapabilitiesEdgeCases:
         }
 
     def test_unknown_service_type_ignored(self) -> None:
-        result = get_capabilities({"device_capabilities": [{"typename": "UnknownService"}]})
+        result = get_capabilities({"capabilities": [{"typename": "UnknownService"}]})
         assert result["bgp_enabled"] is False
         assert result["ospf_enabled"] is False
 
     def test_multiple_bgp_entries_still_true_once(self) -> None:
         result = get_capabilities(
             {
-                "device_capabilities": [
+                "capabilities": [
                     {"typename": "ManagedBGP"},
                     {"typename": "ManagedBGP"},
                 ]
@@ -154,7 +153,16 @@ class TestBuildConfig:
 
     def test_capabilities_bgp_true_when_service_present(self) -> None:
         t = _make_transform()
-        data = _device_data(device_capabilities=[{"typename": "ManagedBGP"}])
+        data = _device_data(
+            device_capabilities=[
+                {
+                    "typename": "ManagedBGP",
+                    "local_as": {"asn": 65001},
+                    "router_id": {"address": "10.0.0.1/32"},
+                    "peerings": [],
+                }
+            ]
+        )
         cfg = t._build_config(data, "arista_eos")
         assert cfg["capabilities"]["bgp_enabled"] is True
         assert cfg["capabilities"]["ospf_enabled"] is False
@@ -167,6 +175,7 @@ class TestBuildConfig:
             "bgp_enabled": False,
             "ospf_enabled": False,
             "mlag_enabled": False,
+            "ha_enabled": False,
             "ntp_enabled": False,
             "syslog_enabled": False,
             "snmp_enabled": False,
@@ -224,11 +233,24 @@ class TestTransformDataRouting:
         assert "No configuration generated" in result
 
     @pytest.mark.asyncio
-    async def test_activation_from_deployment_direct(self) -> None:
-        """Activations at deployment.segment_deployments are injected into device_data."""
+    async def test_activation_from_interface_capabilities(self) -> None:
+        """Activations on segment.segment_deployments within interface_capabilities are collected."""
         t = _make_transform(device_role="leaf")
-        activations = [{"id": "seg-1", "vlan_id": 100}]
-        device = _device_data(deployment={"segment_deployments": activations})
+        interfaces = [
+            {
+                "name": "Ethernet10",
+                "interface_capabilities": [
+                    {
+                        "id": "seg-1",
+                        "typename": "ManagedVxlanSegment",
+                        "name": "seg-100",
+                        "customer_name": "seg-100",
+                        "segment_deployments": [{"vlan_id": 100, "vni": 10100}],
+                    }
+                ],
+            }
+        ]
+        device = _device_data(interfaces=interfaces)
 
         fake_template = MagicMock()
         fake_template.render.return_value = "! rendered"
@@ -244,11 +266,27 @@ class TestTransformDataRouting:
         assert rendered_kwargs.get("vlans") is not None
 
     @pytest.mark.asyncio
-    async def test_activation_fallback_via_parent(self) -> None:
-        """Activations at deployment.parent.segment_deployments are used as fallback."""
+    async def test_vlan_segment_activation_collected(self) -> None:
+        """ManagedVlanSegment.vlan_id is a plain manual attribute directly on
+        the segment (no realization record). An active VLAN activation is
+        still collected."""
         t = _make_transform(device_role="leaf")
-        activations = [{"id": "seg-2", "vlan_id": 200}]
-        device = _device_data(deployment={"parent": {"segment_deployments": activations}})
+        interfaces = [
+            {
+                "name": "Ethernet10",
+                "interface_capabilities": [
+                    {
+                        "id": "seg-1",
+                        "typename": "ManagedVlanSegment",
+                        "name": "seg-100",
+                        "customer_name": "seg-100",
+                        "status": "active",
+                        "vlan_id": 100,
+                    }
+                ],
+            }
+        ]
+        device = _device_data(interfaces=interfaces)
 
         fake_template = MagicMock()
         fake_template.render.return_value = "! rendered"
@@ -260,7 +298,64 @@ class TestTransformDataRouting:
             mock_clean.return_value = {"DcimPhysicalDevice": [device]}
             await t.transform({"raw": "data"})
 
-        fake_template.render.assert_called_once()
+        rendered_kwargs = fake_template.render.call_args[1]
+        assert rendered_kwargs.get("vlans")
+
+    @pytest.mark.asyncio
+    async def test_vlan_segment_non_active_status_excluded(self) -> None:
+        """A VLAN segment whose status is not active/provisioning (e.g.
+        decommissioned) is excluded — VlanSegment has no server-side status
+        filter (it's a plain attribute, not a filterable relationship), so
+        this must be enforced client-side."""
+        t = _make_transform(device_role="leaf")
+        interfaces = [
+            {
+                "name": "Ethernet10",
+                "interface_capabilities": [
+                    {
+                        "id": "seg-1",
+                        "typename": "ManagedVlanSegment",
+                        "name": "seg-100",
+                        "status": "decommissioned",
+                        "vlan_id": 100,
+                    }
+                ],
+            }
+        ]
+        device = _device_data(interfaces=interfaces)
+
+        fake_template = MagicMock()
+        fake_template.render.return_value = "! rendered"
+
+        with (
+            patch("transforms.common.clean_data") as mock_clean,
+            patch.object(t, "_load_template", return_value=fake_template),
+        ):
+            mock_clean.return_value = {"DcimPhysicalDevice": [device]}
+            await t.transform({"raw": "data"})
+
+        rendered_kwargs = fake_template.render.call_args[1]
+        assert rendered_kwargs.get("vlans") == []
+
+    @pytest.mark.asyncio
+    async def test_activation_missing_yields_no_vlans(self) -> None:
+        """No segment_deployments on interface_capabilities → vlans is empty in rendered config."""
+        t = _make_transform(device_role="leaf")
+        # Interfaces with no interface_capabilities carrying segment_deployments
+        device = _device_data(interfaces=[{"name": "Ethernet1", "interface_capabilities": []}])
+
+        fake_template = MagicMock()
+        fake_template.render.return_value = "! rendered"
+
+        with (
+            patch("transforms.common.clean_data") as mock_clean,
+            patch.object(t, "_load_template", return_value=fake_template),
+        ):
+            mock_clean.return_value = {"DcimPhysicalDevice": [device]}
+            await t.transform({"raw": "data"})
+
+        rendered_kwargs = fake_template.render.call_args[1]
+        assert rendered_kwargs.get("vlans") == []
 
     @pytest.mark.asyncio
     async def test_template_render_called_with_config_keys(self) -> None:
