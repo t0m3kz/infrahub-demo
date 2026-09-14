@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Any, Literal, TypedDict, cast
+from typing import Any, Literal, cast
+
+from typing_extensions import TypedDict
 
 from ..common import CablingOptions, CommonGenerator
 from ..connections import CablingMixin
