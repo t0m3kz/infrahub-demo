@@ -45,6 +45,29 @@ def _resolve_port(dep: dict) -> tuple[str, int | None, int | None] | None:
 class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
     """Generate segment-scoped security rules from app dependencies."""
 
+    async def run(self, identifier: str, data: dict[str, Any] | None = None) -> None:
+        """Track generated policy objects independently for each application."""
+        if not data:
+            data = await self.collect_data()
+        unpacked = data.get("data") or data
+        await self.process_nodes(data=unpacked)
+
+        params = dict(self.params)
+        if not params:
+            cleaned = clean_data(unpacked)
+            applications = cleaned.get("AppApplication") or []
+            if applications and applications[0].get("name"):
+                params["name"] = str(applications[0]["name"])
+
+        group_type = "CoreGeneratorGroup" if self.execute_after_merge else "CoreGeneratorAwareGroup"
+        async with self._init_client.start_tracking(
+            identifier=identifier,
+            params=params,
+            delete_unused_nodes=True,
+            group_type=group_type,
+        ) as self.client:
+            await self.generate(data=unpacked)
+
     async def generate(self, data: dict[str, Any]) -> None:
         cleaned = clean_data(data)
 
