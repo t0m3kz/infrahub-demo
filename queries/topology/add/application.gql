@@ -177,38 +177,6 @@ fragment AppComponentSecurityFields on AppComponent {
   }
 }
 
-fragment AppDependencySecurityFields on AppDependency {
-  id
-  name { value }
-  protocol { value }
-  port_start { value }
-  port_end { value }
-  description { value }
-  access_status { value }
-  decision_reason { value }
-  access_expires_at { value }
-  source {
-    node {
-      ...AppComponentSecurityFields
-    }
-  }
-  target {
-    node {
-      id
-      ... on AppEndpoint {
-        name { value }
-        endpoint_type { value }
-        fqdn { value }
-        parent {
-          node {
-            ...AppComponentSecurityFields
-          }
-        }
-      }
-    }
-  }
-}
-
 fragment AppApplicationSecurityFields on AppApplication {
   id
   name { value }
@@ -229,14 +197,6 @@ query application($name: String!) {
     edges {
       node {
         ...AppApplicationSecurityFields
-      }
-    }
-  }
-
-  AppDependency {
-    edges {
-      node {
-        ...AppDependencySecurityFields
       }
     }
   }

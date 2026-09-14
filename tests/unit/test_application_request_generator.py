@@ -66,6 +66,9 @@ class TestDeploymentRequestGenerator:
     def test_approved_external_dependency_creates_app_dependency(self) -> None:
         generator = _make_generator()
         source = MagicMock(id="component-1")
+        source.depends_on.fetch = AsyncMock()
+        source.depends_on.peers = []
+        source.save = AsyncMock()
         target = MagicMock(id="endpoint-1")
         materialized = MagicMock()
         materialized.save = AsyncMock()

@@ -245,6 +245,11 @@ class AppDeploymentRequestGenerator(CommonGenerator):
             data["id"] = existing[0].id
         materialized = await self.client.create(kind="AppDependency", data=data)
         await materialized.save(allow_upsert=True)
+        dependencies_rel = getattr(source, "depends_on")
+        await dependencies_rel.fetch()
+        if materialized.id not in {peer.id for peer in dependencies_rel.peers}:
+            await self._safe_rel_add(dependencies_rel, {"id": materialized.id})
+            await source.save(allow_upsert=True)
         return materialized
 
     @staticmethod
