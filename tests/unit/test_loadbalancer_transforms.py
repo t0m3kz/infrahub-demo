@@ -282,7 +282,7 @@ class TestPrepareAzureDataLbRules:
 
     def test_lb_rule_name_includes_hostname(self) -> None:
         name = prepare_azure_data(_lb(), _vips())["lb_rules"][0]["name"]
-        assert "app.example.com" in name  # lgtm[py/incomplete-url-substring-sanitization]
+        assert name == "app.example.com-rule"
 
     def test_lb_rule_frontend_port_set(self) -> None:
         assert prepare_azure_data(_lb(), _vips())["lb_rules"][0]["frontend_port"] == 443
@@ -397,9 +397,7 @@ class TestPrepareGcpDataForwardingRules:
 
     def test_forwarding_rule_name_includes_hostname_protocol_port(self) -> None:
         name = prepare_gcp_data(_lb(), _vips())["forwarding_rules"][0]["name"]
-        assert "app.example.com" in name  # lgtm[py/incomplete-url-substring-sanitization]
-        assert "HTTPS" in name
-        assert "443" in name
+        assert name == "app.example.com-HTTPS-443"
 
     def test_forwarding_rule_protocol_uppercased(self) -> None:
         assert prepare_gcp_data(_lb(), _vips())["forwarding_rules"][0]["protocol"] == "HTTPS"
