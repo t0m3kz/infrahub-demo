@@ -1,6 +1,8 @@
 """Infrastructure generator for data center topology."""
 
-from typing import Any, Literal, TypedDict, cast
+from typing import Any, Literal, cast
+
+from typing_extensions import TypedDict
 
 from utils.data_cleaning import clean_data
 

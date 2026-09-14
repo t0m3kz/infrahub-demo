@@ -13,9 +13,10 @@ Features:
 
 from __future__ import annotations
 
-from typing import Any, Literal, TypedDict, cast
+from typing import Any, Literal, cast
 
 from netutils.interface import sort_interface_list
+from typing_extensions import TypedDict
 
 from utils.data_cleaning import clean_data
 

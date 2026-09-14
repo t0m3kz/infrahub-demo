@@ -10,10 +10,11 @@ CustomerQuotation fields:
 from __future__ import annotations
 
 import math
-from typing import Any, TypedDict, cast
+from typing import Any, cast
 
 from infrahub_sdk.exceptions import ValidationError
 from infrahub_sdk.generator import InfrahubGenerator
+from typing_extensions import TypedDict
 
 from utils.data_cleaning import clean_data
 
