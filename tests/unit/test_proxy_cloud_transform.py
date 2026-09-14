@@ -214,6 +214,7 @@ class TestProxyCloudTransform:
         payload = json.loads(result)
         policy = payload["gateway_policies"][0]
         assert policy["action"] == "allow"
+        # codeql[py/incomplete-url-substring-sanitization] -- asserting the rendered traffic string contains the domain, not a URL trust decision
         assert "api.stripe.com" in policy["traffic"]
 
     @pytest.mark.asyncio
