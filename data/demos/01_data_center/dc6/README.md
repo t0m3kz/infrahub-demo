@@ -33,7 +33,7 @@ Medium-sized multi-vendor data center with middle_rack deployment. It's the perf
 ## Quick Start
 
 ```bash
-uv run inv deploy-dc --scenario dc6 --branch your_branch
+# See Deployment Steps below for the current load and generator commands.
 ```
 
 **Warning:** Vendor interop at scale. May cause spontaneous VLAN migrations and philosophical debates.
@@ -46,7 +46,7 @@ uv run inv deploy-dc --scenario dc6 --branch your_branch
 
 ```bash
 # really quick
-uv run inv deploy-dc --scenario dc6 --branch your_branch
+# See the manual commands below, or use the automatic created-object trigger.
 
 # I'm the control nerd
 uv run infrahubctl branch create you_branch
@@ -55,11 +55,15 @@ uv run infrahubctl branch create you_branch
 uv run infrahubctl object load data/demos/01_data_center/dc6/ --branch you_branch
 
 # Generate fabric (grab coffee, this might take a while)
-uv run infrahubctl generator generate_dc name=DC6 --branch you_branch
+uv run infrahubctl generator add_dc name=DC6 --branch you_branch
 
 ```
 
-Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc DC6-Fabric-1
+Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → add_dc for DC6.
+
+## Validation
+
+Run `uv run invoke test-integration` to validate the mixed-vendor topology and routing sessions. Use `uv run invoke test-integration-routing` for the focused automatic cascade regression.
 
 ## Fun Fact
 

@@ -214,20 +214,8 @@ def test_unit(context: Context, basetemp: str = ".pytest-tmp") -> None:
     context.run(f"uv run pytest -vv tests/unit --basetemp {base}", pty=True)
 
 
-@_task(optional=["basetemp", "server_port", "tests"])
-def test_integration(
-    context: Context,
-    basetemp: str = "~/.pytest-tmp/infrahub-demo",
-    server_port: int = 8100,
-    tests: str = "tests/integration",
-) -> None:
-    """Run integration tests (requires Docker).
-
-    Example:
-        uv run invoke dev.test-integration
-        uv run invoke dev.test-integration --server-port 8200
-        uv run invoke dev.test-integration --tests "tests/integration/test_01_setup.py tests/integration/test_02_repository.py tests/integration/test_80_dc1_dc6_flow.py"
-    """
+def _run_integration_suite(context: Context, tests: str, basetemp: str, server_port: int) -> None:
+    """Run one integration profile against a shared test stack."""
     base = _ensure_pytest_basetemp(basetemp)
     context.run(
         f"uv run pytest -vv {tests} --basetemp {base}",
@@ -236,6 +224,66 @@ def test_integration(
             "INFRAHUB_TESTING_ENABLE_INTEGRATION": "1",
             "INFRAHUB_TESTING_SERVER_PORT": str(server_port),
         },
+    )
+
+
+@_task(optional=["basetemp", "server_port", "tests"])
+def test_integration(
+    context: Context,
+    basetemp: str = "~/.pytest-tmp/infrahub-demo",
+    server_port: int = 8100,
+    tests: str = "tests/integration",
+) -> None:
+    """Run all integration tests (requires Docker).
+
+    Example:
+        uv run invoke dev.test-integration
+        uv run invoke dev.test-integration --server-port 8200
+        uv run invoke dev.test-integration --tests "tests/integration/test_01_setup.py tests/integration/test_02_repository.py tests/integration/test_80_dc1_dc6_flow.py"
+    """
+    _run_integration_suite(context, tests=tests, basetemp=basetemp, server_port=server_port)
+
+
+@_task(optional=["basetemp", "server_port"])
+def test_integration_fast(
+    context: Context, basetemp: str = "~/.pytest-tmp/infrahub-demo", server_port: int = 8100
+) -> None:
+    """Run setup and repository prerequisites only."""
+    _run_integration_suite(
+        context,
+        tests="tests/integration/test_01_setup.py tests/integration/test_02_repository.py",
+        basetemp=basetemp,
+        server_port=server_port,
+    )
+
+
+@_task(optional=["basetemp", "server_port"])
+def test_integration_routing(
+    context: Context,
+    basetemp: str = "~/.pytest-tmp/infrahub-demo",
+    server_port: int = 8100,
+) -> None:
+    """Run setup, repository, and automatic DC/POD routing regression tests."""
+    _run_integration_suite(
+        context,
+        tests="tests/integration/test_01_setup.py tests/integration/test_02_repository.py "
+        "tests/integration/test_09_bulk_dc_trigger_routing.py",
+        basetemp=basetemp,
+        server_port=server_port,
+    )
+
+
+@_task(optional=["basetemp", "server_port"])
+def test_integration_apps(
+    context: Context, basetemp: str = "~/.pytest-tmp/infrahub-demo", server_port: int = 8100
+) -> None:
+    """Run the application catalogue acceptance workflow."""
+    _run_integration_suite(
+        context,
+        tests="tests/integration/test_01_setup.py tests/integration/test_02_repository.py "
+        "tests/integration/test_60_app_catalogue.py",
+        basetemp=basetemp,
+        server_port=server_port,
     )
 
 
@@ -347,6 +395,9 @@ dev_ns.add_task(cast(Task, setup_precommit), name="setup-precommit")
 dev_ns.add_task(cast(Task, validate))
 dev_ns.add_task(cast(Task, test_unit), name="test-unit")
 dev_ns.add_task(cast(Task, test_integration), name="test-integration")
+dev_ns.add_task(cast(Task, test_integration_fast), name="test-integration-fast")
+dev_ns.add_task(cast(Task, test_integration_routing), name="test-integration-routing")
+dev_ns.add_task(cast(Task, test_integration_apps), name="test-integration-apps")
 dev_ns.add_task(cast(Task, release))
 dev_ns.add_task(cast(Task, upgrade))
 dev_ns.add_task(cast(Task, clean_testcontainers), name="clean-testcontainers")
@@ -368,6 +419,9 @@ ns.add_task(cast(Task, validate))
 ns.add_task(cast(Task, setup_precommit), name="setup-precommit")
 ns.add_task(cast(Task, test_unit), name="test-unit")
 ns.add_task(cast(Task, test_integration), name="test-integration")
+ns.add_task(cast(Task, test_integration_fast), name="test-integration-fast")
+ns.add_task(cast(Task, test_integration_routing), name="test-integration-routing")
+ns.add_task(cast(Task, test_integration_apps), name="test-integration-apps")
 ns.add_task(cast(Task, clean_testcontainers), name="clean-testcontainers")
 ns.add_task(cast(Task, upgrade))
 ns.add_task(cast(Task, release))

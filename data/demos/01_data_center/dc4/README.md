@@ -46,7 +46,7 @@ Leaf → Spine → Super-Spine ⇄ Hyper-Spine (full mesh, DC-level, cabled by d
 ## Quick Start
 
 ```bash
-uv run inv deploy-dc --scenario dc4 --branch your_branch
+# See Deployment Steps below for the current load and generator commands.
 ```
 
 **Warning:** May cause identity crisis. Perfect for flexing multi-deployment AND
@@ -56,7 +56,7 @@ multi-tier skills at the same time.
 
 ```bash
 # really quick
-uv run inv deploy-dc --scenario dc4 --branch your_branch
+# See the manual commands below, or use the automatic created-object trigger.
 
 # I'm the control nerd
 uv run infrahubctl branch create you_branch
@@ -65,11 +65,15 @@ uv run infrahubctl branch create you_branch
 uv run infrahubctl object load data/demos/01_data_center/dc4/ --branch you_branch
 
 # Generate fabric (grab coffee)
-uv run infrahubctl generator generate_dc name=DC4 --branch you_branch
+uv run infrahubctl generator add_dc name=DC4 --branch you_branch
 
 ```
 
-Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc DC4-Fabric-1
+Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → add_dc for DC4.
+
+## Validation
+
+Run `uv run invoke test-integration-routing` before committing generator-ordering changes, then use `uv run invoke test-integration` for the complete mixed-topology validation.
 
 ## Fun Fact
 

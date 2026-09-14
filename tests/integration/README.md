@@ -78,6 +78,24 @@ data/
 uv run pytest tests/integration/ -v
 ```
 
+The repository also provides focused Invoke profiles. They reuse one Docker stack per command and keep the feedback loop from becoming a small infrastructure project of its own:
+
+```bash
+# Setup and repository prerequisites
+uv run invoke test-integration-fast
+
+# Application catalogue acceptance workflow
+uv run invoke test-integration-apps
+
+# Automatic DC/POD/rack routing regression
+uv run invoke test-integration-routing
+
+# Full integration matrix
+uv run invoke test-integration
+```
+
+The fast profile intentionally stops after setup and repository synchronization. The application and routing profiles add one focused acceptance workflow each. The full profile runs the complete scenario chain and is the right choice for release-level validation.
+
 ### Run Setup Only
 
 ```bash

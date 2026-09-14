@@ -4,7 +4,7 @@ When you just need two more switches (famous last words)
 
 ## Overview
 
-**Purpose:** Add 2 ToRs to an existing rack in DC1's Pod 1. Because "temporary" upgrades are forever.
+**Purpose:** Add switches to an existing network rack in DC6's Pod 1. Because "temporary" upgrades are forever.
 
 **Philosophy:** "We just need a FEW more switches" - said everyone before their topology doubled and their cable management became performance art.
 
@@ -14,10 +14,10 @@ When you just need two more switches (famous last words)
 
 ## What's Inside
 
-Enhancing existing rack (`muc-1-s-1-r-1-1`) with:
+Enhancing existing rack (`ktw-1-s-1-r-2-5`) with:
 
-- **+2x Cisco ToRs** (N9K-C9336C-FX2) - More ToRs than a fantasy trilogy marathon
-- **Location:** Munich DC1, Pod 1, Suite 1, Row 1 - Where it all began (and will never end)
+- **+2x Dell PowerSwitch leafs and 4x L2 leafs** - More switches than the original request admitted
+- **Location:** Katowice DC6, Pod 1, Suite 1, Row 2 - Where "just a small expansion" goes to retire
 
 ---
 
@@ -37,15 +37,19 @@ Perfect for when your team says:
 
 ```bash
 uv run infrahubctl branch create your_branch
-uv run infrahubctl object load data/demos/02_switch/ --branch your_branch
+uv run infrahubctl object load data/demos/02_switch_dc6/ --branch your_branch
 ```
 
 The rack generator will trigger **automatically** when the rack fabric_templates are updated! ✨
 
 **Note:** After the rack generator completes, manually regenerate the cabling artifact:
 
-- In InfraHub UI → Artifacts → Find "Cable matrix for DC" (DC1) → Click "Regenerate"
-- Or run: `uv run infrahubctl artifact generate "Cable matrix for DC" DC1 --branch your_branch`
+- In InfraHub UI → Artifacts → Find "Cable matrix for DC" (DC6) → Click "Regenerate"
+- Or run: `uv run infrahubctl artifact generate "Cable matrix for DC" DC6 --branch your_branch`
+
+## Validation
+
+Use `uv run invoke test-integration` for the complete DC lifecycle. For a quick preflight before loading expansion data, use `uv run invoke test-integration-fast`.
 
 ---
 

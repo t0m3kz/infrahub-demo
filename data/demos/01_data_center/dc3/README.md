@@ -30,7 +30,7 @@ fabric.
 ## Quick Start
 
 ```bash
-uv run inv deploy-dc --scenario dc3 --branch your_branch
+# See Deployment Steps below for the current load and generator commands.
 ```
 
 **Warning:** Spine port consumption rates may cause existential dread. Multi-vendor peace of
@@ -52,7 +52,7 @@ Server → ToR/L2-Leaf → Leaf → Spine → Super-Spine
 
 ```bash
 # really quick
-uv run inv deploy-dc --scenario dc3 --branch your_branch
+# See the manual commands below, or use the automatic created-object trigger.
 
 # I'm the control nerd
 uv run infrahubctl branch create you_branch
@@ -61,11 +61,15 @@ uv run infrahubctl branch create you_branch
 uv run infrahubctl object load data/demos/01_data_center/dc3/ --branch you_branch
 
 # Generate fabric (grab coffee, this might take a while)
-uv run infrahubctl generator generate_dc name=DC3 --branch you_branch
+uv run infrahubctl generator add_dc name=DC3 --branch you_branch
 
 ```
 
-Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc DC3-Fabric-1
+Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → add_dc for DC3.
+
+## Validation
+
+Use `uv run invoke test-integration-routing` for automatic routing changes and `uv run invoke test-integration` for the full multi-DC matrix. More vendors do not make the test faster; they merely diversify the excuses.
 
 ## Fun Fact
 

@@ -69,8 +69,12 @@ Where Your Infrastructure Meets Other People's Infrastructure (And Everyone Pret
 uv run infrahubctl branch create pop_deployment
 
 # Load the colocation structure
-uv run infrahubctl object load data/demos/10_pop/ --branch pop_deployment
+uv run infrahubctl object load data/demos/10_colocation/ --branch pop_deployment
 ```
+
+## Validation
+
+Use `uv run invoke test-integration-fast` to verify shared setup and repository prerequisites before exercising a colocation branch manually. Use `uv run invoke test-integration` for the full integration matrix.
 
 ## Fun Facts
 

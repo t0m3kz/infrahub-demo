@@ -1,6 +1,6 @@
 # Test Scenario 4: Add New Pod to Existing Data Center
 
-This scenario demonstrates adding a new pod (POD-4) to an existing data center (DC1).
+This scenario demonstrates adding a new pod (POD-4) to the existing DC6 data center.
 
 ## Purpose
 
@@ -20,10 +20,10 @@ Tests the `add_pod` generator's ability to:
 ## Pod Configuration
 
 - **Suite**: Suite-4 (ktw-1-s-4)
-- **Parent**: DC1 (created in scenario 1)
+- **Parent**: DC6 (created in the DC6 scenario)
 - **Index**: 4
 - **Deployment Type**: middle_rack (compute and storage, no direct server connections)
-- **Spines**: 2x N9K-C9364C-GX_SPINE
+- **Spines**: 2x N9K-C9336C-FX2_SPINE
 - **Rows**: 3
 - **Max Leafs per Row**: 3
 - **Max ToRs per Row**: 0 (middle_rack deployment)
@@ -43,11 +43,15 @@ The add_pod generator will:
 
 ## Dependencies
 
-- Scenario 1 (DC deployment) must complete successfully
-- DC1 with super-spines must exist
+- The DC6 deployment must complete successfully
+- DC6 with super-spines must exist
 
 ## Load Command
 
 ```bash
-uv run infrahubctl object load tests/integration/data/04_pod/ --branch <branch-name>
+uv run infrahubctl object load data/demos/04_pod_dc6/ --branch <branch-name>
 ```
+
+## Validation
+
+Use `uv run invoke test-integration-routing` to validate the automatic DC/POD/rack cascade. The full topology matrix remains available through `uv run invoke test-integration` when you want every moving part invited.

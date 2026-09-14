@@ -40,7 +40,7 @@ Leaf → Spine → Super-Spine
 ## Quick Start
 
 ```bash
-uv run inv deploy-dc --scenario dc1 --branch your_branch
+# See Deployment Steps below for the current load and generator commands.
 ```
 
 **Warning:** May cause a feeling of "wait, that's it?" — yes, that's the point.
@@ -49,7 +49,7 @@ uv run inv deploy-dc --scenario dc1 --branch your_branch
 
 ```bash
 # really quick
-uv run inv deploy-dc --scenario dc1 --branch your_branch
+# See the manual commands below, or use the automatic created-object trigger.
 
 # I'm the control nerd
 uv run infrahubctl branch create you_branch
@@ -58,10 +58,15 @@ uv run infrahubctl branch create you_branch
 uv run infrahubctl object load data/demos/01_data_center/dc1/ --branch you_branch
 
 # Generate fabric (grab coffee, this might take a while)
-uv run infrahubctl generator generate_dc name=DC1 --branch you_branch
+uv run infrahubctl generator add_dc name=DC1 --branch you_branch
 ```
 
-Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc DC1-Fabric-1
+Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → add_dc for DC1.
+
+## Validation
+
+Run the focused automatic DC/POD/rack routing regression with `uv run invoke test-integration-routing`.
+Use `uv run invoke test-integration` for the complete DC matrix. The harness waits for cascading tasks and names any branch that refuses to settle.
 
 ## Fun Fact
 

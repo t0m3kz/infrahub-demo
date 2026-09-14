@@ -4,7 +4,7 @@ The minimalist's approach (or "I ran out of budget")
 
 ## Overview
 
-**Purpose:** Deploy a single ToR rack to DC1's Pod 2. Because sometimes "minimal" is just code for "we ran out of money."
+**Purpose:** Deploy a single network rack to DC6's Pod 1. Because sometimes "minimal" is just code for "we ran out of money."
 
 **Philosophy:** Sometimes less is more. Sometimes it's just all you can afford. Sometimes it's a lie.
 
@@ -14,11 +14,11 @@ The minimalist's approach (or "I ran out of budget")
 
 ## What's Inside
 
-One humble rack (`muc-1-s-2-r-1-2`) containing:
+One humble rack (`ktw-1-s-1-r-4-5`) containing:
 
-- **2x Cisco ToRs** (N9K-C9336C-FX2) - The bare minimum for redundancy and plausible deniability
-- **Deployment Type:** Mixed deployment - connects to existing middle rack leafs in row 2
-- **Location:** Munich DC1, Pod 2, Row 2, Index 1
+- **2x Dell PowerSwitch access leafs** - The bare minimum for redundancy and plausible deniability
+- **Deployment Type:** Network rack - connects to the existing DC6 Pod 1 fabric
+- **Location:** Katowice DC6, Pod 1, Row 4, Index 5
 
 ---
 
@@ -38,7 +38,7 @@ This rack is perfect for:
 
 ```bash
 uv run infrahubctl branch create your_branch
-uv run infrahubctl object load data/demos/03_rack/ --branch your_branch
+uv run infrahubctl object load data/demos/03_rack_dc6/ --branch your_branch
 ```
 
 The rack generator will trigger **automatically** when the rack object is created! ✨
@@ -53,16 +53,20 @@ The generator will:
 **After generator completes,** manually regenerate the cabling artifact:
 
 ```bash
-uv run infrahubctl artifact generate "Cable matrix for DC" DC1 --branch your_branch
+uv run infrahubctl artifact generate "Cable matrix for DC" DC6 --branch your_branch
 ```
 
-Or in InfraHub UI → Artifacts → "Cable matrix for DC" (DC1) → Regenerate
+Or in InfraHub UI → Artifacts → "Cable matrix for DC" (DC6) → Regenerate
+
+## Validation
+
+Run `uv run invoke test-integration` for the full rack lifecycle. If the change affects parent-to-child generator ordering, start with `uv run invoke test-integration-routing`.
 
 ---
 
 ## What Actually Happens
 
-**Prerequisite:** Pod 2 must already exist with mixed deployment (created via Scenario 01).
+**Prerequisite:** DC6 Pod 1 must already exist with its parent fabric (created via the DC6 scenario).
 
 Pod 2's mixed deployment means:
 
