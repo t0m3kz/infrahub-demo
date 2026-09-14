@@ -214,7 +214,7 @@ class TestProxyCloudTransform:
         payload = json.loads(result)
         policy = payload["gateway_policies"][0]
         assert policy["action"] == "allow"
-        assert "api.stripe.com" in policy["traffic"]  # lgtm[py/incomplete-url-substring-sanitization]
+        assert policy["traffic"] == 'any(http.request.domains[*] in {"api.stripe.com"})'
 
     @pytest.mark.asyncio
     async def test_netskope_uses_web_policy_shape(self) -> None:

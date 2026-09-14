@@ -200,12 +200,11 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
         assert rules, f"No ProxyPolicyRule found under policy '{PROXY_POLICY_NAME}'"
 
         rule_destinations = {r.id: getattr(getattr(r, "destination", None), "value", None) for r in rules}
-        destinations = set(rule_destinations.values())
-        assert "api.paymentgw.example.com" in destinations, (  # lgtm[py/incomplete-url-substring-sanitization]
-            f"Expected a rule with destination 'api.paymentgw.example.com', found: {destinations}"
+        matching_rule = next((r for r in rules if rule_destinations[r.id] == "api.paymentgw.example.com"), None)
+        assert matching_rule is not None, (
+            f"Expected a rule with destination 'api.paymentgw.example.com', found: {set(rule_destinations.values())}"
         )
 
-        matching_rule = next(r for r in rules if rule_destinations[r.id] == "api.paymentgw.example.com")
         action_value = getattr(getattr(matching_rule, "action", None), "value", None)
         assert action_value == "allow", f"Expected action 'allow' for the payment-gateway rule, got '{action_value}'"
 
