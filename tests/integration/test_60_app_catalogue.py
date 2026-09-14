@@ -201,6 +201,7 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
 
         rule_destinations = {r.id: getattr(getattr(r, "destination", None), "value", None) for r in rules}
         destinations = set(rule_destinations.values())
+        # codeql[py/incomplete-url-substring-sanitization] -- exact-value membership in a set, not a URL substring check
         assert "api.paymentgw.example.com" in destinations, (
             f"Expected a rule with destination 'api.paymentgw.example.com', found: {destinations}"
         )
