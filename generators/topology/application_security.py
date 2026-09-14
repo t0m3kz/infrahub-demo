@@ -53,11 +53,10 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
         await self.process_nodes(data=unpacked)
 
         params = dict(self.params)
-        if not params:
-            cleaned = clean_data(unpacked)
-            applications = cleaned.get("AppApplication") or []
-            if applications and applications[0].get("name"):
-                params["name"] = str(applications[0]["name"])
+        cleaned = clean_data(unpacked)
+        applications = cleaned.get("AppApplication") or []
+        if applications and applications[0].get("name"):
+            params["name"] = str(applications[0]["name"])
 
         group_type = "CoreGeneratorGroup" if self.execute_after_merge else "CoreGeneratorAwareGroup"
         async with self._init_client.start_tracking(
