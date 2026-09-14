@@ -38,6 +38,10 @@ Infrahub changed that. It's not another tool forcing strict data definitions or 
 
 This demo is trying prove it: from topology design to device generation, from configuration templates to validation checks—all driven by my data structures, all automated through my code. That's the infrastructure revolution I was waiting for.
 
+But topology is just the appetizer. The main course—the part that makes seasoned network engineers put down their coffee and stare into the middle distance—is turning the whole request process inside out. No more filing a ticket, waiting three sprints, and getting back a firewall rule that's subtly wrong. Instead, an application team declares *what their application actually needs*: "checkout-service talks to payment-gateway on 443, full stop." That single declaration is the source of truth, and Infrahub's generators do the tedious, error-prone plumbing on your behalf—the firewall rule, the proxy config, the security policy, the routing, all derived from the same intent, all consistent with each other, all versioned in a branch you can review before it touches anything real.
+
+This is application-driven infrastructure: the network exists to serve the application, not the other way around. No more "just open a change request and we'll get to it eventually." No more hand-carved ACLs that nobody dares touch because nobody remembers why they're there. You declare intent, the generators do the honest work, and the humans get their Friday afternoons back.
+
 **Special thanks to [OpsMill](https://opsmill.com) for making this happen** – they built Infrahub with the vision that infrastructure teams should have complete control, not be prisoners to vendor constraints. (And yes, I'm bloody jealous I didn't have the power and motivation to come up with such a brilliant idea myself – like Prometheus watching others steal the fire of the gods!)
 
 **To companies/vendors** who may borrow ideas from this repo for your customer environments: please sponsor at least 3 open source communities. Odds are, open source powers half your commercial products anyway. The volunteers who build these tools deserve more than just a "thanks" and a GitHub star. And if you’ve ever filed a bug report and then complained about how long it takes to fix, remember: a few dollars a month for open source won’t even dent your coffee budget—so go ahead, give back and help keep these communities caffeinated and strong.
@@ -56,6 +60,7 @@ This demo is trying prove it: from topology design to device generation, from co
 ## Features
 
 - Design-driven network automation demo using [Infrahub](https://docs.infrahub.app)
+- Application-driven infrastructure: declare app dependencies once ("app A talks to app B on 443") and let generators materialize the firewall rules, proxy config, security policy, and routing—no three-sprint change request required
 - Example data, schemas, and menu for rapid onboarding
 - Scripts for bootstrapping, demo use cases, and CI integration
 - Modular structure for easy extension and experimentation
