@@ -5,39 +5,50 @@ spec:
   kind: CoreNodeTriggerRule
   data:
 
-    # - name: trigger-dc-generator-on-merge
-    #   branch_scope: "default_branch"
-    #   node_kind: TopologyDataCenter
-    #   mutation_action: "created"
-    #   action: run-dc-generator
+    # dc_pod_cascade subclasses DCTopologyGenerator (add_dc) and runs its entire
+    # bootstrap via super().generate() before fanning out — a strict superset of
+    # add_dc's own work (see generators/topology/dc_pod_cascade.py's docstring).
+    # A DC created with pods/racks needs ordered bootstrap: complete the DC work,
+    # then fan out to the existing PODs. Structural DC-level changes use the
+    # same ordering guarantee.
 
-    - name: trigger-dc-generator-update-super-spines
+    - name: trigger-dc-generator-on-created
+      branch_scope: "other_branches"
+      node_kind: TopologyDataCenter
+      mutation_action: "created"
+      action: run-dc-pod-cascade
+
+    - name: trigger-dc-update-fabric-templates
       branch_scope: "other_branches"
       node_kind: TopologyDataCenter
       mutation_action: "updated"
-      action: run-dc-generator
-      matches:
-        kind: CoreNodeTriggerAttributeMatch
-        data:
-          - attribute_name: amount_of_super_spines
-            value_match: any
-
-    - name: trigger-dc-generator-update-super-spine-template
-      branch_scope: "other_branches"
-      node_kind: TopologyDataCenter
-      mutation_action: "updated"
-      action: run-dc-generator
+      action: run-dc-pod-cascade
       matches:
         kind: CoreNodeTriggerRelationshipMatch
         data:
-          - relationship_name: super_spine_template
+          - relationship_name: fabric_templates
             modification_type: updated
 
-    - name: trigger-dc-generator-status
+    # Re-cables every rack's firewall/load-balancer links to match the new
+    # mode — pbr and inline target different ports/far-ends on the same
+    # firewall/load-balancer uplink interfaces, so an existing rack must be
+    # re-run, not just newly-provisioned ones.
+    - name: trigger-dc-update-connectivity-mode
+      branch_scope: "other_branches"
+      node_kind: TopologyDataCenter
+      mutation_action: "updated"
+      action: run-dc-pod-cascade
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: connectivity_mode
+            value_match: any
+
+    - name: trigger-dc-status
       branch_scope: "other_branches"
       node_kind: TopologyDataCenter
       mutation_action: updated
-      action: run-dc-generator
+      action: run-dc-pod-cascade
       matches:
         kind: CoreNodeTriggerAttributeMatch
         data:
@@ -46,83 +57,64 @@ spec:
             value: active
             value_previous: provisioning
 
-    # Auto-trigger for pod generator on creation commented out to
-    # prevent race conditions. Pod updates are still active and safe
+    # pod_rack_cascade runs POD bootstrap before fanning out to the POD's racks.
+    # Created PODs use it too, so racks in a bulk object load only start after
+    # their parent spines and routing prerequisites exist.
 
-    # # Pod triggers on creation (DC generator sets checksum) or updates
-    # - name: trigger-pod-generator-on-create
-    #   branch_scope: "other_branches"
-    #   node_kind: TopologyPod
-    #   mutation_action: "created"
-    #   action: run-pod-generator
+    - name: trigger-pod-generator-on-created
+      branch_scope: "other_branches"
+      node_kind: TopologyPod
+      mutation_action: "created"
+      action: run-pod-rack-cascade
 
-    - name: trigger-pod-generator-update-checksum
+    - name: trigger-pod-update-index
       branch_scope: "other_branches"
       node_kind: TopologyPod
       mutation_action: "updated"
-      action: run-pod-generator
-      matches:
-        kind: CoreNodeTriggerAttributeMatch
-        data:
-          - attribute_name: checksum
-            value_match: any
-
-    - name: trigger-pod-generator-update-index
-      branch_scope: "other_branches"
-      node_kind: TopologyPod
-      mutation_action: "updated"
-      action: run-pod-generator
+      action: run-pod-rack-cascade
       matches:
         kind: CoreNodeTriggerAttributeMatch
         data:
           - attribute_name: index
             value_match: any
 
-    - name: trigger-pod-generator-update-amount-of-spines
+    - name: trigger-pod-update-fabric-templates
       branch_scope: "other_branches"
       node_kind: TopologyPod
       mutation_action: "updated"
-      action: run-pod-generator
+      action: run-pod-rack-cascade
       matches:
-        kind: CoreNodeTriggerAttributeMatch
+        kind: CoreNodeTriggerRelationshipMatch
         data:
-          - attribute_name: amount_of_spines
-            value_match: any
+          - relationship_name: fabric_templates
+            modification_type: updated
 
-    - name: trigger-pod-generator-update-deployment
+    - name: trigger-pod-update-mlag-create
       branch_scope: "other_branches"
       node_kind: TopologyPod
       mutation_action: "updated"
-      action: run-pod-generator
+      action: run-pod-rack-cascade
       matches:
         kind: CoreNodeTriggerAttributeMatch
         data:
-          - attribute_name: deployment_type
+          - attribute_name: mlag_create
             value_match: any
 
+    # A rack created standalone under an already-existing, unchanged pod (e.g. a
+    # standalone switch add) needs its own created-trigger to bootstrap — a bulk
+    # pod+rack load is also covered by this, since add_rack.generate() waits for
+    # an in-flight add_pod/pod_rack_cascade on its parent pod before reading
+    # pod-level data (see rack.py's generate()), so this can never race the
+    # cascade fan-out from trigger-pod-update-* above. A network rack's own
+    # tor/compute row-dependents are, in turn, started unconditionally by that
+    # network rack's own generate() (RackGenerator._fan_out_to_row_dependent_racks)
+    # — this one level is not split into its own cascade generator.
 
-    # Auto-trigger for rack generator on creation commented out to
-    # prevent race conditions. Rack updates are still active and safe
-
-    # # Racks trigger on creation (skips if no checksum, waits for update)
-    # # or on checksum update (when pod/middle rack generator sets it)
-    # # Checksum is NEVER set manually - always calculated by generators
-    # - name: trigger-rack-generator-on-create
-    #   branch_scope: "other_branches"
-    #   node_kind: LocationRack
-    #   mutation_action: "created"
-    #   action: run-rack-generator
-
-    - name: trigger-rack-generator-update-checksum
+    - name: trigger-rack-generator-on-created
       branch_scope: "other_branches"
       node_kind: LocationRack
-      mutation_action: "updated"
+      mutation_action: "created"
       action: run-rack-generator
-      matches:
-        kind: CoreNodeTriggerAttributeMatch
-        data:
-          - attribute_name: checksum
-            value_match: any
 
     - name: trigger-rack-generator-update-index
       branch_scope: "other_branches"
@@ -187,18 +179,21 @@ spec:
     # VRF namespace: generator auto-triggers via group membership (execute_in_proposed_change: true)
     # No deployment-based trigger needed — L3 VNI comes from global pool
 
-    # Segment triggers: re-run generator when deployments are added/updated
-    - name: trigger-vlan-segment-deployment-updated
+    # Segment triggers: `created` fires when customer_deployments is set inline
+    # during object creation (e.g. nested under OrganizationCustomer.network_
+    # segments — see data/demos/30_all/07_applications/*/00_segment*.yml), which
+    # is a `created` mutation on the segment itself, not an `updated` relationship
+    # mutation. Without this, a segment created with customer_deployments already
+    # populated never gets a SegmentDeployment realization until something later
+    # updates customer_deployments and happens to trigger the rule below.
+    - name: trigger-vxlan-segment-generator-on-created
       branch_scope: "other_branches"
-      node_kind: ManagedVlanSegment
-      mutation_action: "updated"
-      action: run-vlan-segment-generator
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: deployment
-            modification_type: updated
+      node_kind: ManagedVxlanSegment
+      mutation_action: "created"
+      action: run-vxlan-segment-generator
 
+    # Re-run generator when customer deployments are added/updated after creation
+    # (e.g. a stretched segment gaining its second DC leg later).
     - name: trigger-vxlan-segment-deployments-updated
       branch_scope: "other_branches"
       node_kind: ManagedVxlanSegment
@@ -207,7 +202,154 @@ spec:
       matches:
         kind: CoreNodeTriggerRelationshipMatch
         data:
-          - relationship_name: deployments
+          - relationship_name: customer_deployments
             modification_type: updated
 
-            # Endpoint trigger when server device added to endpoints
+    # Re-run generator when stretch_scope changes (e.g. local -> dc_pair) —
+    # it picks the VNI identifier strategy (per-deployment vs shared, see
+    # generators/topology/segment.py's _activate_segment_in_deployment), so a
+    # scope flip needs re-processing even without a customer_deployments change.
+    - name: trigger-vxlan-segment-generator-update-stretch-scope
+      branch_scope: "other_branches"
+      node_kind: ManagedVxlanSegment
+      mutation_action: "updated"
+      action: run-vxlan-segment-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: stretch_scope
+            value_match: any
+
+    # ── Endpoint Connectivity ────────────────────────────────────────────────
+    # Endpoint targets (data/bootstrap/00_groups.yml's `endpoints` group) are
+    # server devices with role=endpoint. `created` bootstraps a fresh server's
+    # uplink cabling immediately. No relationship-based `interfaces added`
+    # trigger here: that fires on ANY DcimPhysicalDevice (border-leafs, ToRs,
+    # spines all gain interfaces during add_rack), and add_endpoint's target
+    # group (`endpoints`) rejects non-member node ids outright — see the
+    # ValueError this caused in production before removal.
+    - name: trigger-endpoint-generator-on-created
+      branch_scope: "other_branches"
+      node_kind: DcimPhysicalDevice
+      mutation_action: "created"
+      action: run-endpoint-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: role
+            value_match: value
+            value: endpoint
+
+    # ── MLAG Wiring ───────────────────────────────────────────────────────────
+    # Peer-link wiring on domain *creation* is no longer a separate
+    # trigger-based generator round-trip — DeviceMixin._ensure_mlag_pairs
+    # (generators/devices.py) calls ensure_mlag_wiring (also in
+    # generators/devices.py) directly, synchronously, right after creating
+    # or finding each ManagedMLAG domain, closing the storm where a bulk
+    # topology regen's ~14 concurrently-created ManagedMLAG domains each
+    # independently fired their own async add_mlag flow run and overloaded
+    # the server (HTTP 502 on the generator's own query, NODE_NOT_FOUND
+    # elsewhere from index/consistency lag under load). MLAGGenerator/
+    # mlag.py still exists (delegates to the same ensure_mlag_wiring) — the
+    # two triggers below still need it, since they react to
+    # capabilities/virtual_peer_link changes made outside this generator
+    # flow (direct API/UI edit, branch merge).
+    - name: trigger-mlag-on-update-capabilities
+      branch_scope: "other_branches"
+      node_kind: ManagedMLAG
+      mutation_action: "updated"
+      action: mlag-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: capabilities
+            modification_type: updated
+
+    - name: trigger-mlag-on-update-virtual-peer-link
+      branch_scope: "other_branches"
+      node_kind: ManagedMLAG
+      mutation_action: "updated"
+      action: mlag-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: virtual_peer_link
+            value_match: any
+
+    # HA sync interfaces/cables are no longer a separate trigger-based
+    # generator — _ensure_ha_pairs (generators/devices.py) calls
+    # _ensure_ha_interfaces directly, synchronously, right after creating or
+    # finding each ManagedFirewallHA/LoadbalancerHA domain, closing the race
+    # where two concurrent boarding customers could each fire the old
+    # ha-generator action 2-3x per domain.
+
+    # ── LB Backend No-SNAT Return-Path ────────────────────────────────────────
+    - name: trigger-lb-backend-nexthop-on-created
+      branch_scope: "other_branches"
+      node_kind: LoadbalancerVIP
+      mutation_action: "created"
+      action: lb-backend-nexthop-generator
+
+    - name: trigger-lb-backend-nexthop-update-snat
+      branch_scope: "other_branches"
+      node_kind: LoadbalancerVIP
+      mutation_action: "updated"
+      action: lb-backend-nexthop-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: snat_enabled
+            value_match: any
+
+    - name: trigger-lb-backend-nexthop-update-backend-segment
+      branch_scope: "other_branches"
+      node_kind: LoadbalancerVIP
+      mutation_action: "updated"
+      action: lb-backend-nexthop-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: backend_segment
+            modification_type: updated
+
+    # ── App Security Rules ────────────────────────────────────────────────────
+    # Single trigger path: AppApplication events invoke the canonical app generator.
+
+    - name: trigger-app-security-rules-on-application-created
+      branch_scope: "other_branches"
+      node_kind: AppApplication
+      mutation_action: "created"
+      action: run-app-application-generator
+
+    # ── Customer Deployment Exchange (FirewallContext/dedicated LB/routing) ───
+    # Same generator/query shape for all four deployment kinds — each generator
+    # class is kind-specific (see generators/topology/customer_dc.py and its
+    # colocation/cloud/office siblings). Regressed in c1b686e7 (removed
+    # trigger-exchange-gateway-on-customer-*-created without a replacement,
+    # leaving these generators — targets: customer_deployments, a
+    # CoreStandardGroup, never a CoreGeneratorGroup — permanently
+    # undispatched): no ManagedFirewallContext/dedicated LoadbalancerHA was
+    # ever created for any TopologyCustomerDC/Colocation boarded since.
+    - name: trigger-customer-deployment-dc-on-created
+      branch_scope: "other_branches"
+      node_kind: TopologyCustomerDC
+      mutation_action: "created"
+      action: run-customer-deployment-dc-generator
+
+    - name: trigger-customer-deployment-colocation-on-created
+      branch_scope: "other_branches"
+      node_kind: TopologyCustomerColocation
+      mutation_action: "created"
+      action: run-customer-deployment-colocation-generator
+
+    - name: trigger-customer-deployment-cloud-on-created
+      branch_scope: "other_branches"
+      node_kind: TopologyCustomerCloud
+      mutation_action: "created"
+      action: run-customer-deployment-cloud-generator
+
+    - name: trigger-customer-deployment-office-on-created
+      branch_scope: "other_branches"
+      node_kind: TopologyCustomerOffice
+      mutation_action: "created"
+      action: run-customer-deployment-office-generator

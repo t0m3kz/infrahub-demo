@@ -1,0 +1,81 @@
+{#- Juniper JunOS SRX — zone-based firewall configuration -#}
+set system host-name {{ name }}
+#
+{%- if fw_interfaces %}
+#
+# --- Interfaces & Zone Assignments ---
+{%- for iface in fw_interfaces %}
+{%- if iface.vlan_id and iface.parent_interface %}
+{%- set iface_ref = iface.parent_interface.name + '.' + iface.vlan_id | string %}
+set interfaces {{ iface.parent_interface.name }} unit {{ iface.vlan_id }} vlan-id {{ iface.vlan_id }}
+{%- if iface.ip_address %}
+set interfaces {{ iface.parent_interface.name }} unit {{ iface.vlan_id }} family inet address {{ iface.ip_address.address }}
+{%- endif %}
+{%- if iface.description %}
+set interfaces {{ iface.parent_interface.name }} unit {{ iface.vlan_id }} description "{{ iface.description }}"
+{%- endif %}
+{%- if iface.security_zone %}
+set security zones security-zone {{ iface.security_zone.name }} interfaces {{ iface_ref }}
+{%- endif %}
+{%- else %}
+set interfaces {{ iface.name }} unit 0 description "{{ iface.description }}"
+{%- if iface.ip_address %}
+set interfaces {{ iface.name }} unit 0 family inet address {{ iface.ip_address.address }}
+{%- endif %}
+{%- if iface.security_zone %}
+set security zones security-zone {{ iface.security_zone.name }} interfaces {{ iface.name }}.0
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+#
+{%- endif %}
+{%- if zones %}
+#
+# --- Address Books (one per zone) ---
+{%- for zone in zones %}
+{%- for cidr in zone.member_cidrs %}
+{%- set addr_name = 'addr-' + cidr | replace('/', '-') | replace('.', '-') %}
+set security zones security-zone {{ zone.name }} address-book address {{ addr_name }} {{ cidr }}
+{%- endfor %}
+{%- endfor %}
+#
+{%- endif %}
+{%- if static_routes %}
+#
+# --- Static Routes (return path to leaf per zone) ---
+{%- for route in static_routes %}
+set routing-instances {{ route.vrf | replace(' ', '-') }} routing-options static route {{ route.destination }} next-hop {{ route.nexthop }}
+{%- endfor %}
+#
+{%- endif %}
+{%- if zone_policies %}
+#
+# --- Security Policies ---
+{%- for policy in zone_policies %}
+{%- for rule in policy.rules %}
+set security policies from-zone {{ rule.src_zone or 'any' }} to-zone {{ rule.dst_zone or 'any' }} policy {{ rule.name | replace(' ', '-') }} match source-address {{ rule.src or 'any' }}
+set security policies from-zone {{ rule.src_zone or 'any' }} to-zone {{ rule.dst_zone or 'any' }} policy {{ rule.name | replace(' ', '-') }} match destination-address {{ rule.dst or 'any' }}
+set security policies from-zone {{ rule.src_zone or 'any' }} to-zone {{ rule.dst_zone or 'any' }} policy {{ rule.name | replace(' ', '-') }} match application any
+set security policies from-zone {{ rule.src_zone or 'any' }} to-zone {{ rule.dst_zone or 'any' }} policy {{ rule.name | replace(' ', '-') }} then {{ 'permit' if rule.action == 'permit' else 'deny' }}
+{%- if rule.log %}
+set security policies from-zone {{ rule.src_zone or 'any' }} to-zone {{ rule.dst_zone or 'any' }} policy {{ rule.name | replace(' ', '-') }} then log session-close
+{%- endif %}
+{%- endfor %}
+{%- endfor %}
+#
+{%- endif %}
+{%- if ha %}
+#
+# --- Chassis Cluster ---
+set chassis cluster reth-count 2
+set chassis cluster redundancy-group 0 node 0 priority {{ ha.priority }}
+set chassis cluster redundancy-group 1 node 0 priority {{ ha.priority }}
+set chassis cluster redundancy-group 1 preempt {{ 'on' if ha.preempt else 'off' }}
+{%- if ha.ha_link %}
+set interfaces {{ ha.ha_link }} fabric-options member-interfaces {{ ha.ha_link }}
+{%- endif %}
+{%- if ha.virtual_ip %}
+set interfaces reth0 unit 0 family inet address {{ ha.virtual_ip }}
+{%- endif %}
+#
+{%- endif %}

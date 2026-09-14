@@ -1,0 +1,20 @@
+query application_orchestrator_routing($name: String!) {
+  AppApplication(name__value: $name) {
+    edges {
+      node {
+        id
+        __typename
+        name { value }
+        application_orchestrator { value }
+        member_of_groups {
+          edges {
+            node {
+              id
+              name { value }
+            }
+          }
+        }
+      }
+    }
+  }
+}

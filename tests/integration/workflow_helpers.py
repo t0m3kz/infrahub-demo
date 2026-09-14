@@ -206,8 +206,19 @@ async def wait_for_tasks_completion(
             poll_interval=poll_interval,
             description=f"in-flight tasks on branch '{branch}'",
         )
-    except TimeoutError:
-        logger.warning("Timed out waiting for in-flight tasks on branch '%s'", branch)
+    except TimeoutError as exc:
+        remaining = await client.task.filter(
+            filter=TaskFilter(state=in_flight_states, branch=branch),
+        )
+        details = "; ".join(f"{task.title} [{task.state}]" for task in remaining[:10])
+        message = (
+            f"Timed out waiting for in-flight tasks on branch '{branch}' after "
+            f"{max_wait_attempts * poll_interval}s; remaining={len(remaining)}"
+        )
+        if details:
+            message += f": {details}"
+        logger.error(message)
+        raise TimeoutError(message) from exc
 
 
 # ------------------------------------------------------------------

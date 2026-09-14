@@ -21,6 +21,20 @@
 {%- set ospf_router = {} -%}
 {%- include 'common/sonic_common.j2' %}
 
+{%- set vxlan_tunnel = {} -%}
+{%- set vxlan_tunnel_map = {} -%}
+{%- set vrf_config = {} -%}
+{%- set vrf_loopback_interfaces = {} -%}
+{%- set evpn_nvo = {} -%}
+{%- include 'common/sonic_vxlan.j2' %}
+
+{%- set static_route_table = {} -%}
+{%- if vrf_gateways %}
+{%- for vrf, nexthop in vrf_gateways.items() %}
+{%- set _ = static_route_table.update({vrf + '|0.0.0.0/0': {'nexthop': nexthop, 'ifname': '', 'nexthop-vrf': ''}}) -%}
+{%- endfor %}
+{%- endif %}
+
 {{ {
   'DEVICE_METADATA': device_metadata,
   'VLAN': vlan_config,
@@ -32,7 +46,12 @@
   'BGP_GLOBALS_AF': bgp_globals_af,
   'BGP_PEER_GROUP': bgp_peer_groups,
   'BGP_NEIGHBOR': bgp_neighbors,
-  'OSPF_ROUTER': ospf_router
+  'OSPF_ROUTER': ospf_router,
+  'VXLAN_TUNNEL': vxlan_tunnel,
+  'VXLAN_TUNNEL_MAP': vxlan_tunnel_map,
+  'VRF': vrf_config,
+  'EVPN_NVO': evpn_nvo,
+  'STATIC_ROUTE': static_route_table
 } | tojson(indent=2) }}
 {%- include 'common/sonic_mclag.j2' -%}
 {%- include 'common/sonic_management.j2' %}

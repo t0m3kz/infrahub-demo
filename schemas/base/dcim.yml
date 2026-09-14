@@ -2,6 +2,19 @@
 version: "1.0"
 
 generics:
+  - name: Capabilities
+    namespace: Dcim
+    description: "Unified compute endpoint — any node that can host managed capabilities"
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    display_label: "{{name__value}}"
+    attributes:
+      - name: name
+        kind: Text
+        optional: true
+        order_weight: 1000
+
   - name: Device
     namespace: Dcim
     description: Generic Device object.
@@ -18,14 +31,9 @@ generics:
         unique: true
         order_weight: 1000
       - name: description
-        state: absent
         kind: Text
         optional: true
         order_weight: 2000
-      - name: os_version
-        kind: Text
-        optional: true
-        order_weight: 2200
       - name: role
         kind: Dropdown
         optional: true
@@ -51,6 +59,19 @@ generics:
             label: Super Spine Router
             description: Aggregation router part of a Fabric.
             color: "#aeeeee"
+          - name: hyper-spine
+            label: Hyper Spine Router
+            description: >
+              Aggregates multiple super-spine groups; sits above super-spine
+              in very large (XL) fabrics.
+            color: "#8fd4d4"
+          - name: border-spine
+            label: Border Spine Router
+            description: >
+              Collapsed spine + border-leaf for micro-fabrics — connects to
+              this pod's leafs, this pod's own firewall/load-balancer, and
+              sibling pods, on one device.
+            color: "#c58fdd"
           - name: leaf
             label: Leaf Switch
             description: Top of Rack part of a Fabric.
@@ -61,8 +82,16 @@ generics:
             color: "#dda0dd"
           - name: tor
             label: ToR Switch
-            description: ToR/Lavel2 switch part of a Fabric.
+            description: ToR switch acting as VTEP in a tor-deployment fabric (connects directly to spines).
             color: "#e8e7fd"
+          - name: l2-leaf
+            label: L2 Leaf Switch
+            description: L2-only aggregation switch (connects to leafs, not spines; no VXLAN/overlay BGP).
+            color: "#d0e8fd"
+          - name: access-leaf
+            label: Access Leaf Switch
+            description: Routed VTEP aggregation switch (connects to leafs, not spines; full VXLAN/overlay BGP).
+            color: "#a8d8b8"
           - name: oob
             label: Out of Band Switch
             description: OOB switch part of a Fabric.
@@ -99,10 +128,22 @@ generics:
             label: Provider Device
             description: "Virtual/physical device representing a carrier or provider handoff point."
             color: "#c8a2c8"
+          - name: proxy
+            label: Proxy
+            description: "Forward, transparent, or reverse proxy appliance."
+            color: "#5ba85b"
           - name: patch-panel
             label: Patch Panel
             description: "Passive patch panel used as cable interconnect."
             color: "#d4b8a0"
+          - name: access-switch
+            label: Access Switch
+            description: "Campus wiring-closet switch — SD-Access edge node."
+            color: "#b4d6ff"
+          - name: distribution-switch
+            label: Distribution Switch
+            description: "Campus aggregation switch — SD-Access intermediate/border node."
+            color: "#87b8e8"
       - name: status
         kind: Dropdown
         optional: false
@@ -289,10 +330,29 @@ generics:
             label: MLAG Peer-Link
             description: "Interface used as the MLAG/vPC peer-link between two paired devices"
             color: "#FDE68A"
+          - name: firewall
+            label: Firewall
+            description: "Dedicated port for firewall attachment on a border-leaf"
+            color: "#FF6B6B"
+          - name: load-balancer
+            label: Load Balancer
+            description: "Dedicated port for load-balancer attachment on a border-leaf"
+            color: "#4ECDC4"
+          - name: ha
+            label: High Availability
+            description: "Dedicated port for high availability attachment"
+            color: "#4EDEC4"
+          - name: dci
+            label: DCI
+            description: "Dedicated port for data center interconnect on a border-leaf"
+            color: "#8B5CF6"
+          - name: service
+            label: Service
+            description: "VLAN-tagged sub-interface terminating a tenant-facing service (e.g. FirewallContext, inline FW/LB)"  # yamllint disable-line rule:line-length
+            color: "#F97316"
         order_weight: 1250
       - name: index
         kind: Text
-        state: absent
         read_only: true
         optional: true
         computed_attribute:
@@ -360,7 +420,7 @@ nodes:
         order_weight: 1200
       - name: height
         label: Height (U)
-        optional: false
+        optional: true
         default_value: 1
         kind: Number
         order_weight: 1400
@@ -374,6 +434,48 @@ nodes:
         optional: true
         kind: Number
         order_weight: 1600
+      - name: cpu_count
+        label: CPU Count
+        description: "Number of CPU sockets (servers) or management CPUs (network devices)"
+        optional: true
+        kind: Number
+        order_weight: 1700
+      - name: core_count
+        label: Core Count
+        description: "Total CPU core count"
+        optional: true
+        kind: Number
+        order_weight: 1710
+      - name: memory_gb
+        label: Memory (GB)
+        description: "Installed or maximum memory in GB"
+        optional: true
+        kind: Number
+        order_weight: 1720
+      - name: storage_gb
+        label: Storage (GB)
+        description: "Internal storage capacity in GB (servers only)"
+        optional: true
+        kind: Number
+        order_weight: 1730
+      - name: max_routes
+        label: Max Routes
+        description: "Maximum routing table entries (network devices)"
+        optional: true
+        kind: Number
+        order_weight: 1740
+      - name: tcam_entries
+        label: TCAM Entries
+        description: "Hardware TCAM entries for ACL/FIB (network devices)"
+        optional: true
+        kind: Number
+        order_weight: 1750
+      - name: unit_price
+        label: Unit Price (USD)
+        description: "List price per unit, for cost-based design selection (e.g. cheapest device type meeting a port-speed/count requirement)."
+        optional: true
+        kind: Number
+        order_weight: 1760
     relationships:
       - name: platform
         peer: DcimPlatform
@@ -457,6 +559,8 @@ nodes:
     inherit_from:
       - CoreArtifactTarget
       - DcimDevice
+      - DcimCapabilities
+      - AppInstance
     attributes:
       - name: position
         label: Position (U)
@@ -472,7 +576,7 @@ nodes:
         label: Rack Face
         description: On which face of the rack the device is mounted.
         kind: Dropdown
-        optional: false
+        optional: true
         default_value: front
         order_weight: 1515
         choices:
@@ -495,6 +599,8 @@ nodes:
     inherit_from:
       - CoreArtifactTarget
       - DcimDevice
+      - DcimCapabilities
+      - AppInstance
     attributes:
       - name: cpu
         label: CPU Number
@@ -635,8 +741,7 @@ nodes:
         peer: IpamIPAddress
         optional: true
         cardinality: one
-        kind: Component
-        on_delete: cascade
+        kind: Attribute
 
   - name: LAGInterface
     namespace: Dcim
@@ -700,49 +805,6 @@ nodes:
         cardinality: one
         kind: Component
         on_delete: cascade
-
-  - name: FirewallInterface
-    namespace: Dcim
-    label: Firewall Interface
-    description: "Firewall interface with security zone binding"
-    inherit_from:
-      - DcimInterface
-    include_in_menu: false
-    attributes:
-      - name: security_level
-        kind: Number
-        label: Security Level
-        description: "Trust level 0-100 (e.g. Cisco ASA security-level). Defaults to zone trust_level when empty."
-        optional: true
-        order_weight: 1400
-        parameters:
-          min_value: 0
-          max_value: 100
-      - name: vlan_id
-        kind: Number
-        label: VLAN ID
-        description: "802.1Q VLAN tag for sub-interface. Set when this interface is a sub-interface on a trunk uplink."
-        optional: true
-        order_weight: 1450
-        parameters:
-          min_value: 1
-          max_value: 4094
-    relationships:
-      - name: ip_address
-        peer: IpamIPAddress
-        optional: true
-        cardinality: one
-        kind: Component
-        on_delete: cascade
-      - name: parent_interface
-        peer: DcimPhysicalInterface
-        label: Parent Interface
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: fw_iface__parent
-        order_weight: 1600
-        description: "Physical trunk interface this sub-interface belongs to"
 
   # --------------------  Cables  --------------------
   - name: Cable

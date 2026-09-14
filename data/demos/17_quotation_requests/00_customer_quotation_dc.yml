@@ -1,0 +1,92 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CustomerQuotationDC
+  data:
+    - name: "Q-DC-Nordix-Auto-Buffer20"
+      description: "Auto topology selection with 20% demand growth buffer"
+      request_type: "datacenter"
+      status: "draft"
+      owner: "Nordix Ltd."
+      pod_count: 2
+      topology_strategy: "auto"
+      growth_buffer_percent: 20
+      preferred_switch_vendor: "Cisco"
+      preferred_firewall_vendor: "Checkpoint"
+      preferred_load_balancer_vendor: "F5"
+      rooms:
+        data:
+          - name: "Room-A"
+            rows: 4
+            racks_per_row: 10
+            compute_rack_count: 18
+            storage_rack_count: 4
+            port_count_25g: 320
+            port_count_100g: 64
+            rack_assignment_strategy: "round_robin"
+          - name: "Room-B"
+            rows: 3
+            racks_per_row: 10
+            compute_rack_count: 12
+            storage_rack_count: 3
+            port_count_25g: 220
+            port_count_100g: 32
+            rack_assignment_strategy: "round_robin"
+
+    - name: "Q-DC-SwiftGo-BackToBack"
+      description: "Force back-to-back spine mesh, no super-spine tier"
+      request_type: "datacenter"
+      status: "draft"
+      owner: "SwiftGo GmbH"
+      pod_count: 3
+      topology_strategy: "back_to_back"
+      growth_buffer_percent: 10
+      preferred_switch_vendor: "Arista"
+      rooms:
+        data:
+          - name: "Room-1"
+            rows: 5
+            racks_per_row: 12
+            compute_rack_count: 24
+            storage_rack_count: 6
+            port_count_25g: 480
+            port_count_100g: 120
+            rack_assignment_strategy: "dedicated_room_per_pod"
+          - name: "Room-2"
+            rows: 4
+            racks_per_row: 12
+            compute_rack_count: 18
+            storage_rack_count: 4
+            port_count_25g: 360
+            port_count_100g: 80
+            rack_assignment_strategy: "dedicated_room_per_pod"
+
+    - name: "Q-DC-Vaultex-Classic3Tier"
+      description: "Force classic 3-tier when super-spine capacity is available"
+      request_type: "datacenter"
+      status: "draft"
+      owner: "Vaultex Inc."
+      pod_count: 4
+      topology_strategy: "classic_3tier"
+      growth_buffer_percent: 30
+      rooms:
+        data:
+          - name: "East-Suite"
+            rows: 6
+            racks_per_row: 14
+            compute_rack_count: 30
+            storage_rack_count: 8
+            port_count_25g: 640
+            port_count_100g: 220
+            port_count_400g: 8
+            rack_assignment_strategy: "sequential"
+          - name: "West-Suite"
+            rows: 6
+            racks_per_row: 14
+            compute_rack_count: 30
+            storage_rack_count: 8
+            port_count_25g: 640
+            port_count_100g: 220
+            port_count_400g: 8
+            rack_assignment_strategy: "sequential"

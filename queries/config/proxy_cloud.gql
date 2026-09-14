@@ -1,0 +1,109 @@
+query proxy_cloud_config($instance: String!) {
+  ManagedCloudProxy(name__value: $instance) {
+    edges {
+      node {
+        name { value }
+        provider { value }
+        service_type { value }
+        deployment_model { value }
+        shared_policies {
+          edges {
+            node {
+              name { value }
+              default_action { value }
+              enabled { value }
+              rules {
+                edges {
+                  node {
+                    name { value }
+                    priority { value }
+                    action { value }
+                    destination_type { value }
+                    destination { value }
+                    log { value }
+                    description { value }
+                    disabled { value }
+                    categories { edges { node { name { value } entries { value } } } }
+                  }
+                }
+              }
+            }
+          }
+        }
+        egress_customers {
+          edges {
+            node {
+              proxy_policies {
+                edges {
+                  node {
+                    name { value }
+                    default_action { value }
+                    enabled { value }
+                    rules {
+                      edges {
+                        node {
+                          name { value }
+                          priority { value }
+                          action { value }
+                          destination_type { value }
+                          destination { value }
+                          log { value }
+                          description { value }
+                          disabled { value }
+                          categories { edges { node { name { value } entries { value } } } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        private_access_customers {
+          edges {
+            node {
+              applications {
+                edges {
+                  node {
+                    children {
+                      edges {
+                        node {
+                          children {
+                            edges {
+                              node {
+                                ... on AppEndpoint {
+                                  name { value }
+                                  endpoint_type { value }
+                                  fqdn { value }
+                                  service_ports {
+                                    edges {
+                                      node {
+                                        port { value }
+                                        port_end { value }
+                                        protocol { value }
+                                      }
+                                    }
+                                  }
+                                  access_profile {
+                                    node {
+                                      allowed_groups { edges { node { name { value } } } }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

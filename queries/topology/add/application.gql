@@ -1,0 +1,203 @@
+fragment SegmentSecurityFields on ManagedNetworkSegment {
+  name { value }
+  isolation_mode { value }
+  security_zone { node { name { value } trust_level { value } } }
+  security_tag { node { id name { value } } }
+  gateway { node { ip_prefix { node { prefix { value } } } } }
+}
+
+fragment AppComponentSecurityFields on AppComponent {
+  id
+  name { value }
+  slug { value }
+  component_type { value }
+  load_balancer {
+    node {
+      id
+      ... on ManagedLoadbalancerHA {
+        name { value }
+      }
+    }
+  }
+  instances {
+    edges {
+      node {
+        id
+        name { value }
+        __typename
+        ... on DcimPhysicalDevice {
+          role { value }
+        }
+        ... on DcimVirtualDevice {
+          role { value }
+          hosting_device {
+            node {
+              id
+              name { value }
+            }
+          }
+        }
+      }
+    }
+  }
+  children {
+    edges {
+      node {
+        id
+        ... on AppEndpoint {
+          name { value }
+          endpoint_type { value }
+          fqdn { value }
+          service_ports {
+            edges {
+              node {
+                id
+                name { value }
+                port { value }
+                port_end { value }
+                protocol { value }
+              }
+            }
+          }
+          access_profile {
+            node {
+              id
+              allowed_groups {
+                edges {
+                  node {
+                    id
+                    name { value }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  depends_on {
+    edges {
+      node {
+        id
+        name { value }
+        protocol { value }
+        port_start { value }
+        port_end { value }
+        description { value }
+        access_status { value }
+        decision_reason { value }
+        access_expires_at { value }
+        target {
+          node {
+            id
+            ... on AppEndpoint {
+              name { value }
+              endpoint_type { value }
+              fqdn { value }
+              parent {
+                node {
+                  ... on AppComponent {
+                    id
+                    name { value }
+                    component_type { value }
+                    network_segment {
+                      node {
+                        id
+                        name { value }
+                        ...SegmentSecurityFields
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  parent {
+    node {
+      id
+      ... on AppApplication {
+        name { value }
+        owner {
+          node {
+            id
+            org_id { value }
+            name { value }
+            egress_service {
+              node {
+                id
+                name { value }
+              }
+            }
+            private_access_service {
+              node {
+                id
+                name { value }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  network_segment {
+    node {
+      id
+      __typename
+      ...SegmentSecurityFields
+      ... on CloudNetworkSegment {
+        name { value }
+        segment_type { value }
+        cidr_block { value }
+        virtual_network {
+          node {
+            id
+            name { value }
+            account {
+              node {
+                id
+                name { value }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  health_checks {
+    edges {
+      node {
+        id
+      }
+    }
+  }
+}
+
+fragment AppApplicationSecurityFields on AppApplication {
+  id
+  name { value }
+  environment { value }
+  criticality { value }
+  security_profile { value }
+  children {
+    edges {
+      node {
+        ...AppComponentSecurityFields
+      }
+    }
+  }
+}
+
+query application($name: String!) {
+  AppApplication(name__value: $name) {
+    edges {
+      node {
+        ...AppApplicationSecurityFields
+      }
+    }
+  }
+}

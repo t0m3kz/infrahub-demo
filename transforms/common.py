@@ -20,15 +20,22 @@ from transforms.helpers.bgp import (
     get_bgp_profile,
 )
 from transforms.helpers.firewall import (
+    _flatten_deployment_firewall_contexts,
+    get_border_leaf_pbr_rules,
+    get_customer_pbr_rules,
+    get_firewall_contexts,
     get_firewall_static_routes,
     get_firewall_zones,
     get_vrf_default_gateways,
     get_zone_policies,
 )
-from transforms.helpers.management import get_aaa, get_ntp, get_snmp, get_syslog
+from transforms.helpers.ha import _HA_TYPENAMES, get_ha
+from transforms.helpers.loadbalancer_pbr import _flatten_deployment_lb_vips, get_lb_backend_pbr_rules
+from transforms.helpers.management import get_management_services
 from transforms.helpers.mlag import get_mlag
 from transforms.helpers.ospf import get_ospf
 from transforms.helpers.segments import (
+    _flatten_deployment_segment_activations,
     _get_segment_gateways,
     _get_segment_namespace,
     _get_segment_prefix_str,
@@ -49,6 +56,49 @@ from transforms.helpers.vxlan import (
 from utils.data_cleaning import clean_data, get_data
 
 
+def _get_sgt_rules(activations: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    """Derive SecurityTagRule list from segment activations.
+
+    Traverses segment → security_tag → rules_as_source to collect only the
+    rules relevant to segments present on this device. Deduplicates by
+    (src_sgt, dst_sgt) pair.
+    """
+    if not activations:
+        return []
+    seen: set[tuple[int, int]] = set()
+    rules: list[dict[str, Any]] = []
+    for act in activations:
+        segment = act.get("segment") or {}
+        tag = segment.get("security_tag") or {}
+        src_sgt = tag.get("group_id")
+        src_name = tag.get("name")
+        if not src_sgt:
+            continue
+        for rule in tag.get("rules_as_source") or []:
+            dst = rule.get("destination_tag") or {}
+            dst_sgt = dst.get("group_id")
+            dst_name = dst.get("name")
+            if not dst_sgt:
+                continue
+            key = (src_sgt, dst_sgt)
+            if key in seen:
+                continue
+            seen.add(key)
+            rules.append(
+                {
+                    "src_name": src_name,
+                    "src_sgt": src_sgt,
+                    "dst_name": dst_name,
+                    "dst_sgt": dst_sgt,
+                    "action": rule.get("action", "permit"),
+                    "log": rule.get("log", False),
+                    "src_customer": segment.get("customer_name"),
+                    "src_environment": segment.get("environment"),
+                }
+            )
+    return rules
+
+
 def get_capabilities(data: dict[str, Any]) -> dict[str, Any]:
     """Derive device capabilities from services.
 
@@ -60,7 +110,7 @@ def get_capabilities(data: dict[str, Any]) -> dict[str, Any]:
     Returns:
         Dict with capability flags for template rendering.
     """
-    services = data.get("device_capabilities") or []
+    services = data.get("capabilities") or []
     bgp_enabled = any(s.get("typename") == "ManagedBGP" for s in services)
     ospf_enabled = any(s.get("typename") == "ManagedOSPF" for s in services)
     mlag_enabled = any(s.get("typename") == "ManagedMLAG" for s in services)
@@ -68,6 +118,7 @@ def get_capabilities(data: dict[str, Any]) -> dict[str, Any]:
     syslog_enabled = any(s.get("typename") == "ManagedSyslog" for s in services)
     snmp_enabled = any(s.get("typename") == "ManagedSNMP" for s in services)
     aaa_enabled = any(s.get("typename") == "ManagedAAA" for s in services)
+    ha_enabled = any(s.get("typename") in _HA_TYPENAMES for s in services)
 
     return {
         "bgp_enabled": bgp_enabled,
@@ -77,6 +128,7 @@ def get_capabilities(data: dict[str, Any]) -> dict[str, Any]:
         "syslog_enabled": syslog_enabled,
         "snmp_enabled": snmp_enabled,
         "aaa_enabled": aaa_enabled,
+        "ha_enabled": ha_enabled,
     }
 
 
@@ -124,13 +176,12 @@ class BaseDeviceTransform(InfrahubTransform):
                 f"netmiko_device_type defined.\n! No configuration generated.\n"
             )
 
-        # Extract segment activations from deployment context (if present in query)
-        deployment = device_data.get("deployment") or {}
-        activations = deployment.get("segment_deployments")
-        # Fallback: device deployed in TopologyPod — traverse to parent DC
-        if not activations:
-            parent = deployment.get("parent") or {}
-            activations = parent.get("segment_deployments")
+        # Collect segment activations from interface capabilities (segment → segment_deployments)
+        activations = self._collect_activations_from_interfaces(
+            device_data.get("interfaces") or [],
+            device_id=device_data.get("id"),
+            device_capabilities=device_data.get("capabilities") or [],
+        )
         if activations:
             device_data["segment_deployments"] = self._filter_segment_deployments(activations)
 
@@ -143,37 +194,38 @@ class BaseDeviceTransform(InfrahubTransform):
     def _build_config(self, data: dict, platform_name: str) -> dict:
         """Build the base template context shared by all device transforms."""
         interfaces = data.get("interfaces") or []
-        device_capabilities = data.get("device_capabilities") or []
+        device_capabilities = data.get("capabilities") or []
         device_name = data.get("name", "")
         activations = data.get("segment_deployments")
+        management_services = get_management_services(device_capabilities)
         config = {
             "name": device_name,
             "hostname": device_name,
             "device_role": data.get("role", ""),
-            "interfaces": get_interfaces(interfaces, activations=activations),
+            "interfaces": get_interfaces(interfaces, activations=activations, device_name=device_name),
             "bgp": get_bgp_profile(
                 device_capabilities,
                 interfaces,
                 device_name=device_name,
                 device_role=data.get("role", ""),
             ),
-            "ospf": get_ospf(device_capabilities),
+            "ospf": get_ospf(device_capabilities, interfaces),
             "mlag": get_mlag(device_capabilities, interfaces),
-            "ntp": get_ntp(device_capabilities),
-            "syslog": get_syslog(device_capabilities),
-            "snmp": get_snmp(device_capabilities),
-            "aaa": get_aaa(device_capabilities),
+            "ntp": management_services["ntp"],
+            "syslog": management_services["syslog"],
+            "snmp": management_services["snmp"],
+            "aaa": management_services["aaa"],
         }
         capabilities = get_capabilities(data)
         if capabilities:
             config["capabilities"] = capabilities
         return config
 
-    def _extra_config(self, data: dict, platform_name: str, extra_roots: dict | None = None) -> dict:  # noqa: ARG002
+    def _extra_config(self, data: dict, platform_name: str, extra_roots: dict | None = None) -> dict:
         """Return device-specific template variables.
 
-        Default implementation adds VLANs, VXLAN config, ACLs, and VRF default
-        gateways (Option A: FW as inter-VRF router) when device_role is set.
+        Default implementation adds VLANs, VXLAN config, ACLs, VRF default
+        gateways, and SGT rules when device_role is set.
         Override in subclasses for different behavior.
         """
         if not self.device_role:
@@ -181,15 +233,110 @@ class BaseDeviceTransform(InfrahubTransform):
         activations = data.get("segment_deployments")
         vlans = get_vlans(activations=activations)
 
-        # VRF default gateways: derived from segment → security_zone → firewall_interface
-        vrf_gateways = get_vrf_default_gateways(activations)
+        # VRF default gateways: from TopologyRoutedExchange capabilities on this
+        # device's own interfaces — both legs of the inter-VRF hop live here.
+        vrf_gateways = get_vrf_default_gateways(data.get("interfaces"))
+
+        # SGT rules derived from segment activations (via security_tag.rules_as_source)
+        sgt_rules = _get_sgt_rules(activations)
+
+        # Customer PBR: default-redirect to the firewall context serving this
+        # segment's owner; a SecurityPolicyRule permit is the only bypass.
+        # ManagedFirewallContext is reached via a device-scoped traversal —
+        # this device's own `deployment` (queries/fragments/firewall_contexts.gql's
+        # FirewallContextsOnDeploymentFields), not a global query root — no
+        # leaf ever owns a FirewallContext interface itself, only the
+        # firewall/border-leaf do.
+        firewall_contexts = _flatten_deployment_firewall_contexts(data.get("deployment"))
+        customer_pbr_rules = get_customer_pbr_rules(activations, firewall_contexts)
+
+        # LB backend no-SNAT return-path PBR: same device-scoped deployment
+        # traversal as firewall_contexts above, leaf-only in practice since
+        # border-leaf never hosts pool members (no activations there).
+        lb_vips = _flatten_deployment_lb_vips(data.get("deployment"))
+        lb_backend_pbr_rules = get_lb_backend_pbr_rules(activations, lb_vips)
 
         return {
             "vlans": vlans,
             "vxlan": get_vxlan_config(data, platform_name, device_role=self.device_role, activations=activations),
             "acls": get_acls(activations=activations),
             "vrf_gateways": vrf_gateways,
+            "sgt_rules": sgt_rules,
+            "customer_pbr_rules": customer_pbr_rules,
+            "lb_backend_pbr_rules": lb_backend_pbr_rules,
         }
+
+    _ACTIVE_STATUSES = ("active", "provisioning")
+
+    @staticmethod
+    def _resolve_own_vlan_domain_id(device_id: str | None, device_capabilities: list[dict]) -> str | None:
+        """Return this device's own VLAN domain id: its ManagedMLAG's id if
+        paired, else its own device id (standalone VLAN domain). Local VLAN
+        ID is allocated per VLAN domain, not DC-wide — see
+        ManagedVlanDomainSegment / generators/topology/segment.py."""
+        for cap in device_capabilities:
+            if cap.get("typename") == "ManagedMLAG" and cap.get("id"):
+                return cap["id"]
+        return device_id
+
+    def _collect_activations_from_interfaces(
+        self,
+        interfaces: list[dict],
+        *,
+        device_id: str | None = None,
+        device_capabilities: list[dict] | None = None,
+    ) -> list[dict]:
+        """Collect unique segment activations from interface_capabilities.
+
+        VlanSegment.vlan_id is a plain manual attribute directly on the segment
+        (single-site, no realization record). VxlanSegment.segment_deployments
+        is cardinality:many (multi-site stretch — clean_data unwraps it to a
+        list, already filtered to active/provisioning by the query) and
+        carries only vni now — the LOCAL vlan_id for a VxlanSegment comes from
+        vlan_domain_segments, resolved to THIS device's own VLAN domain (its
+        ManagedMLAG if paired, else itself) via _resolve_own_vlan_domain_id.
+        A VxlanSegment whose vlan_domain_segments has no entry for this
+        device's own domain yet (allocation not converged) is skipped.
+        We deduplicate by segment id so each segment appears once.
+        """
+        own_domain_id = self._resolve_own_vlan_domain_id(device_id, device_capabilities or [])
+        seen: set[str] = set()
+        activations: list[dict] = []
+        for iface in interfaces:
+            for cap in iface.get("interface_capabilities") or []:
+                seg_id = cap.get("id") or cap.get("name")
+                if not seg_id or seg_id in seen:
+                    continue
+                if cap.get("typename") == "ManagedVlanSegment":
+                    if cap.get("status") not in self._ACTIVE_STATUSES:
+                        continue
+                    vlan_id = cap.get("vlan_id")
+                    vni = None
+                else:
+                    seg_deps = cap.get("segment_deployments")
+                    if not seg_deps:
+                        continue
+                    vni = seg_deps[0].get("vni")
+                    own_domain_seg = next(
+                        (
+                            v
+                            for v in cap.get("vlan_domain_segments") or []
+                            if (v.get("vlan_domain") or {}).get("id") == own_domain_id
+                        ),
+                        None,
+                    )
+                    if own_domain_seg is None:
+                        continue
+                    vlan_id = own_domain_seg.get("vlan_id")
+                seen.add(seg_id)
+                activations.append(
+                    {
+                        "vlan_id": vlan_id,
+                        "vni": vni,
+                        "segment": cap,
+                    }
+                )
+        return activations
 
     def _filter_segment_deployments(self, activations: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Filter segment activations before they are used in config generation.
@@ -213,14 +360,20 @@ class BaseDeviceTransform(InfrahubTransform):
 
 __all__ = [
     "BaseDeviceTransform",
+    "_get_sgt_rules",
     "clean_data",
     "get_acls",
     "get_bgp_profile",
+    "get_border_leaf_pbr_rules",
     "get_capabilities",
+    "get_customer_pbr_rules",
     "get_data",
+    "get_firewall_contexts",
     "get_firewall_static_routes",
+    "get_ha",
     "get_firewall_zones",
     "get_interfaces",
+    "get_lb_backend_pbr_rules",
     "get_ospf",
     "get_vlans",
     "get_vrf_default_gateways",
@@ -231,6 +384,9 @@ __all__ = [
     "_build_peer_groups",
     "_build_session_from_peering",
     "_collect_l3_vni_from_namespaces",
+    "_flatten_deployment_firewall_contexts",
+    "_flatten_deployment_lb_vips",
+    "_flatten_deployment_segment_activations",
     "_get_segment_gateways",
     "_get_segment_namespace",
     "_get_segment_prefix_str",

@@ -3,7 +3,9 @@ version: "1.0"
 
 nodes:
   # Traditional 802.1Q VLAN segment.
-  # VLAN ID is allocated per-deployment via SegmentDeployment.
+  # Single-site by design (customer_deployment is cardinality:one), so the
+  # VLAN ID is a direct attribute — no separate SegmentDeployment realization
+  # record is needed (unlike VxlanSegment, which can stretch across sites).
   - name: VlanSegment
     namespace: Managed
     description: "Traditional 802.1Q VLAN segment"
@@ -16,18 +18,7 @@ nodes:
       - ManagedGenericInterfaces
     uniqueness_constraints:
       - [owner, environment__value, customer_name__value]
-    human_friendly_id:
-      - owner__name__value
-      - environment__value
-      - customer_name__value
     attributes:
-      - name: name
-        kind: Text
-        computed_attribute:
-          kind: Jinja2
-          jinja2_template: "{{ owner__name__value }} - {{ environment__value }} - {{ customer_name__value }}"  # yamllint disable-line rule:line-length
-        read_only: true
-        optional: false
       - name: segment_type
         kind: Dropdown
         default_value: vlan
@@ -37,19 +28,30 @@ nodes:
             label: VLAN
             description: "IEEE 802.1Q VLAN"
             color: "#7FBF7F"
+      - name: vlan_id
+        kind: Number
+        label: VLAN ID
+        optional: true
+        order_weight: 15
+        description: "Local VLAN ID, set manually (single-site, no pool allocation)."
+        parameters:
+          min_value: 1
+          max_value: 4094
     relationships:
-      - name: deployment
-        peer: TopologyDeployment
+      - name: customer_deployment
+        peer: TopologyCustomer
         cardinality: one
         kind: Attribute
         order_weight: 110
         optional: true
-        identifier: "segment__deployments"
-        description: "Data centre this VLAN segment is activated in."
+        identifier: "segment__customer_deployments"
+        description: "Customer deployment footprint this VLAN segment is activated in."
 
   # VXLAN overlay segment with EVPN multi-tenancy.
-  # Zero trust: prefix → ip_namespace (VRF with l3_vni + owner) → per-customer isolation.
-  # L2 VNI allocated per-deployment via SegmentDeployment.
+  # Zero trust: prefix → ip_namespace (VRF+l3_vni+owner) → tenant isolation.
+  # For stretched segments, generator behavior is local-pool-first: first
+  # SegmentDeployment allocates VNI from deployment vni_pool, then reuses the
+  # same value in other deployments.
   - name: VxlanSegment
     namespace: Managed
     description: "VXLAN overlay segment with EVPN multi-tenancy"
@@ -62,18 +64,7 @@ nodes:
       - ManagedGenericInterfaces
     uniqueness_constraints:
       - [owner, environment__value, customer_name__value]
-    human_friendly_id:
-      - owner__name__value
-      - environment__value
-      - customer_name__value
     attributes:
-      - name: name
-        kind: Text
-        computed_attribute:
-          kind: Jinja2
-          jinja2_template: "{{ owner__name__value }} - {{ environment__value }} - {{ customer_name__value }}"  # yamllint disable-line rule:line-length
-        read_only: true
-        optional: false
       - name: segment_type
         kind: Dropdown
         default_value: vxlan
@@ -90,57 +81,93 @@ nodes:
         default_value: true
         order_weight: 3
         description: "EVPN ARP suppression for this VXLAN segment."
-    relationships:
-      - name: deployments
-        peer: TopologyDeployment
-        cardinality: many
-        kind: Generic
-        order_weight: 110
+      - name: terminate_inline
+        kind: Boolean
+        label: Terminate Inline
         optional: true
-        identifier: "segment__deployments"
-        description: "Deployments this segment is activated in (VXLAN stretch across DCs or single-site VLAN)."
+        default_value: false
+        order_weight: 4
+        description: "When true, FW/LB terminates traffic inline. Leaf is pure L2."
+      - name: stretch_scope
+        kind: Dropdown
+        label: Stretch Scope
+        optional: true
+        default_value: local
+        order_weight: 5
+        description: "Intended L2 stretch scope for this segment."
+        choices:
+          - name: local
+            label: Local
+            description: "Single deployment only"
+            color: "#7FBF7F"
+          - name: metro
+            label: Metro
+            description: "Stretched between deployments in one metro"
+            color: "#3498DB"
+          - name: dc_pair
+            label: DC Pair
+            description: "Stretched between two data center deployments"
+            color: "#9B59B6"
+          - name: global
+            label: Global
+            description: "Stretched across multiple metros/regions"
+            color: "#E67E22"
+    relationships:
+      - name: customer_deployments
+        peer: TopologyCustomer
+        cardinality: many
+        kind: Attribute
+        order_weight: 100
+        optional: true
+        identifier: "segment__customer_deployments"
+        description: "Customer deployment footprints this VXLAN segment is activated in (stretch across DCs or single-site)."  # yamllint disable-line rule:line-length
 
-  # SegmentDeployment: per-DC realization of a network segment.
+  # SegmentDeployment: per-DC realization of a VXLAN segment (VlanSegment has
+  # no realization record — its vlan_id is a plain manual attribute).
   #
-  # Stores the locally-allocated VLAN ID and VNI for a segment in a
-  # specific data center. Values come from the DC's pool (vlan_pool,
-  # vni_pool) via idempotent allocation.
+  # Stores the locally-allocated VNI for a segment in a specific data
+  # center, from the DC's vni_pool via idempotent allocation. The segment's
+  # LOCAL VLAN ID is NOT stored here — VLAN ID has only local (per-switch or
+  # per-MLAG-pair) significance, so it lives on ManagedVlanDomainSegment
+  # instead, one row per (segment, VLAN domain) rather than per (segment, DC).
+  # VNI remains the correct DC-wide/fabric-wide segment identifier.
   #
-  # Gateway IP is derived from segment.prefix.gateway (not stored here).
-  # ARP suppression is read from segment.arp_suppression (VXLAN only).
-  # Target DCs are derived from segment.deployments.
+  # Gateway IP is derived from segment.gateway (not stored here).
+  # ARP suppression is read from segment.arp_suppression.
+  # Target DCs are derived from segment.customer_deployments.
   #
-  # Created by: add_vlan_segment / add_vxlan_segment generators
+  # Created by: add_vxlan_segment generator
   # Read by:    transforms — query deployment.segment_deployments
 
   - name: SegmentDeployment
     namespace: Managed
-    description: "Per-DC realization of a network segment with locally-allocated VLAN ID and VNI."
+    description: "Per-DC realization of a network segment with a locally-allocated VNI."  # yamllint disable-line rule:line-length
     label: Segment Deployment
     icon: "carbon:network-overlay"
     include_in_menu: false
-    display_label: "{{ segment__customer_name__value }} @ {{ deployment__name__value }}"
+    display_label: "{{ segment__customer_name__value }} @ {{ deployment__name__value }}"  # yamllint disable-line rule:line-length
     uniqueness_constraints:
       - [segment, deployment]
     attributes:
       - name: vlan_id
         kind: Number
-        label: Local VLAN ID
-        optional: false
-        order_weight: 1000
-        description: "VLAN ID for this segment in this deployment. Allocated from DC vlan_pool."
-        parameters:
-          min_value: 1
-          max_value: 4094
-
+        state: absent
       - name: vni
         kind: Number
         label: L2 VNI
         optional: true
         order_weight: 1050
-        description: >-
-          L2 VNI for this segment in this deployment. Null means no VXLAN
-          overlay (traditional VLAN). Allocated from DC vni_pool.
+        description: "L2 VNI for this deployment; stretched segments share one value across deployments."
+        parameters:
+          min_value: 1
+          max_value: 16777215
+
+      - name: local_vni_override
+        kind: Number
+        label: Local VNI Override
+        optional: true
+        order_weight: 1055
+        description: "Optional local VNI override for exceptional migration/interoperability cases."
         parameters:
           min_value: 1
           max_value: 16777215
@@ -148,7 +175,7 @@ nodes:
       - name: status
         kind: Dropdown
         label: Status
-        optional: false
+        optional: true
         default_value: provisioning
         order_weight: 1100
         choices:
@@ -181,11 +208,133 @@ nodes:
         description: "The network segment being activated"
 
       - name: deployment
-        peer: TopologyDataCenter
-        label: Data Center
+        peer: TopologySegmentHosting
+        label: Deployment
         cardinality: one
         kind: Attribute
         optional: false
         order_weight: 2100
         identifier: "segmentdeployment__deployment"
-        description: "The data center where this segment is active"
+        description: "The DC or colocation metro where this segment is locally realized"
+
+  # VlanDomainSegment: per-VLAN-domain realization of a VXLAN segment's LOCAL
+  # VLAN ID. A "VLAN domain" is either one ManagedMLAG pair (both peers MUST
+  # share the same vlan_id — one L2 broadcast domain) or one standalone
+  # (non-MLAG) leaf/tor/l2-leaf/access-leaf device. Two independent VLAN
+  # domains in the same DC may reuse the same numeric vlan_id for two
+  # different segments — IEEE 802.1Q VLAN ID has only local significance.
+  # The segment's DC-wide identity remains SegmentDeployment.vni (L2 VNI).
+  #
+  # Created by: add_vxlan_segment generator, once per (segment, VLAN domain)
+  # pair it assigns the segment to.
+  # Read by: leaf-side transforms, keyed by the rendering device's own
+  # domain (its ManagedMLAG if paired, else the device itself).
+  - name: VlanDomainSegment
+    namespace: Managed
+    description: "Per-VLAN-domain (MLAG pair or standalone device) realization of a network segment's local VLAN ID."  # yamllint disable-line rule:line-length
+    label: VLAN Domain Segment
+    icon: "carbon:network-overlay"
+    include_in_menu: false
+    display_label: "{{ segment__customer_name__value }} vlan {{ vlan_id__value }}"
+    uniqueness_constraints:
+      - [segment, vlan_domain]
+    attributes:
+      - name: vlan_id
+        kind: Number
+        label: Local VLAN ID
+        optional: false
+        order_weight: 1000
+        description: "VLAN ID for this segment within this VLAN domain. Unique within the domain only, not DC-wide."  # yamllint disable-line rule:line-length
+        parameters:
+          min_value: 1
+          max_value: 4094
+    relationships:
+      - name: segment
+        peer: ManagedVxlanSegment
+        label: Network Segment
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 2000
+        identifier: "vlandomainsegment__segment"
+        description: "The VXLAN segment being locally realized"
+      - name: vlan_domain
+        peer: ManagedGenericVlanDomain
+        label: VLAN Domain
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 2100
+        identifier: "vlandomainsegment__vlan_domain"
+        description: "The MLAG pair or standalone device this VLAN ID realization belongs to"
+
+extensions:
+  nodes:
+    - kind: ManagedVxlanSegment
+      relationships:
+        - name: segment_deployments
+          peer: ManagedSegmentDeployment
+          kind: Generic
+          cardinality: many
+          identifier: "segmentdeployment__segment"
+          order_weight: 9000
+          description: "Per-deployment VNI allocations for this segment"
+        - name: vlan_domain_segments
+          peer: ManagedVlanDomainSegment
+          kind: Generic
+          cardinality: many
+          identifier: "vlandomainsegment__segment"
+          order_weight: 9100
+          description: "Per-VLAN-domain local VLAN ID realizations for this segment"
+
+    - kind: TopologySegmentHosting
+      relationships:
+        - name: segment_deployments
+          label: Segment Deployments
+          peer: ManagedSegmentDeployment
+          kind: Generic
+          cardinality: many
+          optional: true
+          identifier: "segmentdeployment__deployment"
+          order_weight: 7950
+          description: "Per-DC/Metro VNI activations realized on this deployment"
+
+    - kind: ManagedGenericVlanDomain
+      relationships:
+        - name: vlan_domain_segments
+          label: VLAN Domain Segments
+          peer: ManagedVlanDomainSegment
+          kind: Generic
+          cardinality: many
+          optional: true
+          identifier: "vlandomainsegment__vlan_domain"
+          order_weight: 7950
+          description: "Segments locally realized in this VLAN domain"
+
+    - kind: OrganizationCustomer
+      relationships:
+        - name: network_segments
+          label: Network Segments
+          peer: ManagedNetworkSegment
+          kind: Generic
+          cardinality: many
+          optional: true
+          identifier: "network_segment__owner"
+          order_weight: 2200
+          description: "VLAN/VXLAN/cloud network segments owned by this customer"
+
+    # Reverse lookup for VlanSegment.customer_deployment / VxlanSegment.
+    # customer_deployments / CloudNetworkSegment.customer_deployment (all
+    # share this identifier) — lets any TopologyCustomer* deployment find
+    # its own activated segments in one hop.
+    - kind: TopologyCustomer
+      relationships:
+        - name: network_segments
+          label: Network Segments
+          peer: ManagedNetworkSegment
+          kind: Generic
+          cardinality: many
+          optional: true
+          identifier: "segment__customer_deployments"
+          order_weight: 2100
+          description: "VLAN/VXLAN/cloud network segments activated in this customer deployment footprint"

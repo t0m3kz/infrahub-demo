@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from generators.helpers.routing import RoutingPlan, RoutingPlanInput, RoutingPlanner
+from generators.helpers.routing import PendingASRef, RoutingPlan, RoutingPlanInput, RoutingPlanner
 
 
 def _make_pool() -> str:
@@ -50,8 +50,7 @@ def _make_existing_overlay_bgp(device_name: str, as_id: str, as_asn: int = 65500
     bgp.id = f"bgp-{device_name}-overlay"
     bgp.name.value = f"{device_name}-bgp-overlay"
     bgp.local_as.id = as_id
-    bgp.device_capabilities.peers[0].name.value = device_name
-    bgp.device_capabilities.peers[0].id = f"dev-{device_name}"
+    bgp.capabilities.peers = [MagicMock(display_label=device_name, id=f"dev-{device_name}")]
     return bgp
 
 
@@ -235,8 +234,9 @@ class TestOverlayASNSharing:
         )
 
         overlay_bgps = [p for p in result.bgp_processes if p["name"].endswith("-bgp-overlay")]
+        assert overlay_bgps
         for bgp in overlay_bgps:
-            assert bgp["local_as"].get("id") != "should-be-ignored"
+            assert isinstance(bgp["local_as"], PendingASRef)
 
     def test_multi_generator_simulation(self) -> None:
         """All overlay BGP processes share one ASN across multiple generator calls."""

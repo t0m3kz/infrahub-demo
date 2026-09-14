@@ -1,0 +1,24 @@
+---
+# BGP processes for the DC7-BL1 <-> DC7-FW1 eBGP session (see 01_cable.yml,
+# 02_asn.yml, 03_addressing.yml).
+#
+# router_id uses ["address", "namespace_name"] — IpamIPAddress's HFID is
+# [address__value, ip_namespace__name__value] — since these addresses were
+# created above without an explicit ip_namespace, they land in "default".
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGP
+  data:
+    - name: "DC7-BL1-bgp-fw"
+      status: active
+      local_as: "AS65070"
+      router_id: ["10.70.0.1/30", "default"]
+      capabilities:
+        - "DC7-BL1"
+    - name: "DC7-FW1-bgp-fabric"
+      status: active
+      local_as: "AS65071"
+      router_id: ["10.70.0.2/30", "default"]
+      capabilities:
+        - "DC7-FW1"

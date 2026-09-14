@@ -1,0 +1,23 @@
+---
+# Shared infrastructure services (DNS/NTP/monitoring) — one LINUX-SVC virtual
+# server per physical location (DC7, DC8, EQUINIX/WAW1), each with an
+# interface in the "default" namespace — the same namespace every customer
+# deployment (DC7/DC8/WAW1) already lives in, so no exchange gateway is
+# needed to reach it.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualDevice
+  data:
+    - name: "DC7-SVC1"
+      object_template: LINUX-SVC
+      status: active
+      deployment: DC7
+    - name: "DC8-SVC1"
+      object_template: LINUX-SVC
+      status: active
+      deployment: DC8
+    - name: "WAW1-SVC1"
+      object_template: LINUX-SVC
+      status: active
+      deployment: WAW1

@@ -1,0 +1,29 @@
+---
+# All customer deployments (DC/Colocation/Cloud/Office) share Infrahub's
+# built-in "default" namespace — there is no VRF-per-customer or
+# VRF-per-environment. Every customer already has non-overlapping addressing,
+# so there's no address-space reason to keep tenants in separate VRFs;
+# tenant isolation on shared L2 segments is enforced by ACL/firewall, not by
+# a routing boundary. Shared services (DNS/NTP/monitoring) live in that same
+# "default" namespace too, so no exchange gateway is needed to reach them.
+#
+# TRANSIT and INTERNET remain distinct namespaces: they're real VRF
+# boundaries the operator's hub-and-spoke topology routes across via
+# TopologyRoutedExchange (see generators/topology/customer_colocation.py,
+# customer_cloud.py, customer_office.py's _exchange_via_circuit and
+# docs/exchange_gateway.md) — unrelated to per-customer/per-environment VRF
+# assignment, so they're kept as-is.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamNamespace
+  data:
+    - name: "TRANSIT"
+      description: "Transit VRF for inter-site connectivity"
+      l3_vni: 20000
+      namespace_type: transit
+    - name: "INTERNET"
+      description: "Internet egress VRF — hub-and-spoke via per-site TopologyRoutedExchange"
+      l3_vni: 30000
+      namespace_type: internet

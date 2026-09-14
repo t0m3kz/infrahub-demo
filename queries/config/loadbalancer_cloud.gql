@@ -3,32 +3,18 @@ query loadbalancer_cloud($instance: String!) {
     edges {
       node {
         id
-        name {
-          value
-        }
-        lb_type {
-          value
-        }
-        scheme {
-          value
-        }
+        name { value }
+        lb_type { value }
+        scheme { value }
         virtual_network {
           node {
             id
-            name {
-              value
-            }
+            name { value }
             account {
               node {
-                name {
-                  value
-                }
+                name { value }
                 provider {
-                  node {
-                    name {
-                      value
-                    }
-                  }
+                  node { name { value } }
                 }
               }
             }
@@ -38,86 +24,47 @@ query loadbalancer_cloud($instance: String!) {
           edges {
             node {
               id
-              name {
-                value
-              }
+              name { value }
               availability_zone {
-                node {
-                  name {
-                    value
-                  }
-                }
+                node { name { value } }
               }
             }
           }
         }
-        vip_services {
+      }
+    }
+  }
+
+  LoadbalancerVIP(load_balancer__name__value: $instance) {
+    edges {
+      node {
+        id
+        hostname { value }
+        protocol { value }
+        port { value }
+        ssl_certificate { value }
+        load_balancing_algorithm { value }
+        session_persistence { value }
+        health_checks {
           edges {
             node {
-              id
-              hostname {
-                value
-              }
-              protocol {
-                value
-              }
-              port {
-                value
-              }
-              ssl_certificate {
-                value
-              }
-              health_checks {
+              check { value }
+              rise { value }
+              fall { value }
+              timeout { value }
+            }
+          }
+        }
+        members {
+          edges {
+            node {
+              name { value }
+              weight { value }
+              pool_interfaces {
                 edges {
                   node {
-                    check {
-                      value
-                    }
-                    rise {
-                      value
-                    }
-                    fall {
-                      value
-                    }
-                    timeout {
-                      value
-                    }
-                  }
-                }
-              }
-              backend_pool {
-                node {
-                  id
-                  name {
-                    value
-                  }
-                  load_balancing_algorithm {
-                    value
-                  }
-                  onprem_servers {
-                    edges {
-                      node {
-                        hostname {
-                          value
-                        }
-                        ip_address {
-                          node {
-                            address {
-                              value
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                  cloud_instances {
-                    edges {
-                      node {
-                        name {
-                          value
-                        }
-                      }
-                    }
+                    port { value }
+                    ip_address { node { address { value } } }
                   }
                 }
               }

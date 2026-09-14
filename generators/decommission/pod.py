@@ -24,19 +24,20 @@ from ..protocols import (
 class PodDecommissionGenerator(CommonGenerator):
     async def generate(self, data: dict[str, Any]) -> None:
         try:
-            pod_list_clean = clean_data(data).get("TopologyPod", [])
-            if not pod_list_clean:
+            deployment_list = clean_data(data).get("TopologyPod", [])
+            if not deployment_list:
                 self.logger.error("No Pod data found in GraphQL response")
                 return
 
-            raw_pod = pod_list_clean[0]
             # Keep raw pod dict; only id/name are required for decommission workflow.
-            self.data = raw_pod
+            self.data = deployment_list[0]
         except (ValueError, KeyError, IndexError) as exc:
             self.logger.error("Generation failed due to %s", exc)
             return
 
-        devices: list = [device.get("id") for device in raw_pod.get("devices", []) if device.get("status") == "active"]
+        devices: list = [
+            device.get("id") for device in self.data.get("devices", []) if device.get("status") == "active"
+        ]
 
         physical_interfaces: list[str] = [
             interface.get("id")

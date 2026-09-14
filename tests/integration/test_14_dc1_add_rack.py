@@ -24,12 +24,11 @@ import pytest
 from infrahub_sdk import InfrahubClient, InfrahubClientSync
 
 from .conftest import TestInfrahubDockerWithClient
-from .verify_helpers import (
+from .test_helpers import (
+    fetch_artifacts,
+    fetch_device_counts,
+    fetch_proposed_change_diff,
     snapshot_underlay_asn_by_role,
-    verify_artifacts_generated,
-    verify_devices_created,
-    verify_proposed_change_diff,
-    verify_underlay_asn_unchanged,
 )
 from .workflow_helpers import (
     create_and_validate_proposed_change,
@@ -44,6 +43,26 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 DC1_RACK_DATA = "tests/integration/data/03_racks"
 SCENARIO_NAME = "Scenario 3: Add Rack to Pod"
 BRANCH_NAME = "dc1-add-rack"
+
+
+def _assert_asn_unchanged(branch: str, role: str, current: dict[str, int], baseline: dict[str, int]) -> None:
+    missing = sorted([name for name in baseline if name not in current])
+    changed = sorted(
+        [
+            (name, baseline[name], current[name])
+            for name in baseline
+            if name in current and current[name] != baseline[name]
+        ]
+    )
+    errors = []
+    if missing:
+        errors.append(f"Missing {role} device(s): {missing}")
+    if changed:
+        changed_str = ", ".join(f"{name}: AS{old} -> AS{new}" for name, old, new in changed)
+        errors.append(f"ASN changed for {role} device(s): {changed_str}")
+    assert not errors, f"Underlay ASN stability check failed on branch '{branch}' for role '{role}':\n" + "\n".join(
+        f"  - {e}" for e in errors
+    )
 
 
 class TestDC1AddRack(TestInfrahubDockerWithClient):
@@ -197,11 +216,13 @@ class TestDC1AddRack(TestInfrahubDockerWithClient):
         """Verify devices exist on the branch after generator ran."""
         logging.info("=== %s - Step 4: Verify Devices ===", SCENARIO_NAME)
 
-        result = await verify_devices_created(
+        result = await fetch_device_counts(
             client=async_client_main,
             branch=scenario_branch,
-            expected_min_count=1,
             device_types=["leaf", "tor"],
+        )
+        assert result["device_count"] >= 1, (
+            f"Expected at least 1 device, found {result['device_count']}\n  Branch: {scenario_branch}"
         )
 
         logging.info("Devices verified: %d total", result["device_count"])
@@ -251,13 +272,20 @@ class TestDC1AddRack(TestInfrahubDockerWithClient):
         """Verify the proposed change diff contains expected changed objects."""
         logging.info("=== %s - Step 6b: Verify PC Diff ===", SCENARIO_NAME)
 
-        result = await verify_proposed_change_diff(
-            client=async_client_main,
-            branch=scenario_branch,
-            expected_counts={
-                "DcimPhysicalDevice": {"added": 4},
-                "DcimCable": {"added": 1},
-            },
+        result = await fetch_proposed_change_diff(client=async_client_main, branch=scenario_branch)
+
+        expected_counts = {
+            "DcimPhysicalDevice": {"added": 4},
+            "DcimCable": {"added": 1},
+        }
+        errors = []
+        for kind, action_counts in expected_counts.items():
+            for action, expected in action_counts.items():
+                actual = result["by_kind"].get(kind, {}).get(action, 0)
+                if actual < expected:
+                    errors.append(f"{kind}.{action}: expected >= {expected}, got {actual}")
+        assert not errors, f"DiffTree verification failed for branch '{scenario_branch}':\n" + "\n".join(
+            f"  - {e}" for e in errors
         )
 
         logging.info("Diff verified: %d nodes changed", result["node_count"])
@@ -273,10 +301,9 @@ class TestDC1AddRack(TestInfrahubDockerWithClient):
         """Verify artifacts generated in the proposed change."""
         logging.info("=== %s - Step 6c: Verify Artifacts ===", SCENARIO_NAME)
 
-        result = await verify_artifacts_generated(
-            client=async_client_main,
-            branch=scenario_branch,
-        )
+        result = await fetch_artifacts(client=async_client_main, branch=scenario_branch)
+        for art in result["failed"]:
+            raise AssertionError(f"Artifact '{art['name']}' for {art['object']} has status '{art['status']}'")
 
         logging.info("Artifacts verified: %d total", result["total"])
 
@@ -314,30 +341,33 @@ class TestDC1AddRack(TestInfrahubDockerWithClient):
         """Verify devices and baseline routing state in main after merge."""
         logging.info("=== %s - Step 8: Verify in Main ===", SCENARIO_NAME)
 
-        result = await verify_devices_created(
+        result = await fetch_device_counts(
             client=async_client_main,
             branch="main",
-            expected_min_count=1,
             device_types=["leaf", "tor"],
         )
+        assert result["device_count"] >= 1, (
+            f"Expected at least 1 device, found {result['device_count']}\n  Branch: main"
+        )
 
-        asn_checks: dict[str, Any] = {}
+        checked_counts: dict[str, int] = {}
         for role in ["spine", "leaf", "tor"]:
             baseline_asn = workflow_state.get(f"dc1_add_rack_{role}_asn_baseline", {})
-            asn_checks[role] = await verify_underlay_asn_unchanged(
+            current_asn = await snapshot_underlay_asn_by_role(
                 client=async_client_main,
                 branch="main",
                 dc_name="DC1",
                 role=role,
-                expected_asn_by_device=baseline_asn,
             )
+            _assert_asn_unchanged("main", role, current_asn, baseline_asn)
+            checked_counts[role] = len(baseline_asn)
 
         logging.info("Devices in main: %d total", result["device_count"])
         for role in ["spine", "leaf", "tor"]:
             logging.info(
                 "Underlay ASN stability verified for role '%s' on %d baseline devices",
                 role,
-                asn_checks[role]["checked_count"],
+                checked_counts[role],
             )
 
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)

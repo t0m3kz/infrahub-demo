@@ -1,0 +1,10 @@
+query mlag_domain_data($name: String!) {
+  ManagedMLAG(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+      }
+    }
+  }
+}

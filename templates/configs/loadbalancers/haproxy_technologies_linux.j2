@@ -117,3 +117,10 @@ backend {{ vip.hostname | replace('.', '_') | replace('-', '_') }}_backend
 {%- endif %}
 {%- endfor %}
 {%- endif %}
+{%- if ha %}
+# --- HAProxy Peers (HA State Sync) ---
+peers haproxy_cluster
+{%- for peer_name in ha.devices %}
+    peer {{ peer_name }} {{ peer_name }}:1024
+{%- endfor %}
+{%- endif %}

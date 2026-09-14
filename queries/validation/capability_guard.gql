@@ -4,12 +4,14 @@ query capability_guard {
       node {
         name { value }
         role { value }
-        device_capabilities {
-          edges {
-            node {
-              __typename
-              ... on ManagedGeneric {
-                name { value }
+        ... on DcimCapabilities {
+          capabilities {
+            edges {
+              node {
+                __typename
+                ... on ManagedGeneric {
+                  name { value }
+                }
               }
             }
           }

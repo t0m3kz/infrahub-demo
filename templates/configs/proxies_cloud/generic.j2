@@ -1,0 +1,21 @@
+{#- Fallback web-gateway egress policy for providers without their own template
+    (squid/haproxy/nginx self-managed, palo_prisma, other). Terraform tfvars for a
+    companion module, not a literal vendor API payload — see zscaler_zia.j2/
+    cloudflare_gateway.j2/netskope.j2 for vendor-specific shapes. -#}
+{
+  "proxy_name": {{ name | tojson }},
+  "provider": {{ provider | tojson }},
+  "deployment_model": {{ deployment_model | tojson }},
+  "url_filtering_rules": [
+{%- for rule in proxy_rules %}
+    {
+      "name": {{ (rule.name or rule.acl_name) | tojson }},
+      "order": {{ loop.index }},
+      "action": {{ ('allow' if rule.action in ('allow', 'bypass') else 'block') | tojson }},
+      "url_categories": {{ (rule.destinations if rule.destination_type == 'category' else []) | tojson }},
+      "destinations": {{ (rule.destinations if rule.destination_type != 'category' else []) | tojson }},
+      "description": {{ (rule.description or '') | tojson }}
+    }{{ "," if not loop.last }}
+{%- endfor %}
+  ]
+}

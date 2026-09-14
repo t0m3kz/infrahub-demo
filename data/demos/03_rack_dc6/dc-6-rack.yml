@@ -1,0 +1,16 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationRack
+  data:
+    - index: 5
+      row_index: 4
+      shortname: ktw-1-s-1-r-4-5
+      rack_type: network
+      pod: DC6-1-POD-1
+      parent: ktw-1-s-1
+      member_of_groups: [topologies_rack]
+      fabric_templates:
+        - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
+        - ["2", "access-leaf", "PowerSwitch-S5224F-ON_ACCESS"]

@@ -1,0 +1,347 @@
+fragment SegmentBaseFields on ManagedNetworkSegment {
+  name { value }
+  description { value }
+  status { value }
+}
+
+fragment SegmentStatusFields on ManagedNetworkSegment {
+  name { value }
+  status { value }
+}
+
+fragment SegmentDeploymentsFields on ManagedNetworkSegment {
+  ... on ManagedVlanSegment {
+    vlan_id { value }
+  }
+  ... on ManagedVxlanSegment {
+    segment_deployments {
+      edges {
+        node {
+          vni { value }
+        }
+      }
+    }
+  }
+}
+
+fragment SegmentDeploymentsActiveFields on ManagedNetworkSegment {
+  ... on ManagedVlanSegment {
+    status { value }
+    vlan_id { value }
+  }
+  ... on ManagedVxlanSegment {
+    segment_deployments(status__values: $segment_status_values) {
+      edges {
+        node {
+          vni { value }
+        }
+      }
+    }
+  }
+}
+
+fragment SegmentGatewayWithNamespaceFields on ManagedNetworkSegment {
+  gateway {
+    node {
+      address { value }
+      ip_prefix {
+        node {
+          prefix { value }
+          ip_namespace {
+            node {
+              name { value }
+              l3_vni { value }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment SegmentSecurityZoneFields on ManagedNetworkSegment {
+  security_zone {
+    node {
+      name { value }
+      trust_level { value }
+      zone_type { value }
+    }
+  }
+}
+
+fragment SegmentSecurityPolicyFields on ManagedNetworkSegment {
+  ... on ManagedVxlanSegment {
+    inline_service {
+      node { id name { value } }
+    }
+    customer_deployments {
+      edges {
+        node { id }
+      }
+    }
+  }
+  ... on ManagedVlanSegment {
+    customer_deployment {
+      node { id }
+    }
+  }
+  isolation_mode { value }
+  owner {
+    node {
+      id
+      org_id { value }
+    }
+  }
+  security_tag {
+    node {
+      name { value }
+      group_id { value }
+      rules_as_source {
+        edges {
+          node {
+            action { value }
+            log { value }
+            destination_tag {
+              node {
+                name { value }
+                group_id { value }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  security_policies {
+    edges {
+      node {
+        id
+        name { value }
+        enabled { value }
+        default_action { value }
+        rules {
+          edges {
+            node {
+              index { value }
+              name { value }
+              action { value }
+              protocol { value }
+              port_start { value }
+              port_end { value }
+              log { value }
+              disabled { value }
+              source_zone { node { name { value } } }
+              destination_zone { node { name { value } } }
+              source_segment {
+                node {
+                  id
+                  ... on ManagedVlanSegment {
+                    name { value }
+                    customer_name { value }
+                    environment { value }
+                    gateway { node { ip_prefix { node { prefix { value } } } } }
+                  }
+                  ... on ManagedVxlanSegment {
+                    name { value }
+                    customer_name { value }
+                    environment { value }
+                    gateway { node { ip_prefix { node { prefix { value } } } } }
+                  }
+                }
+              }
+              destination_segment {
+                node {
+                  id
+                  ... on ManagedVlanSegment {
+                    name { value }
+                    customer_name { value }
+                    environment { value }
+                    gateway { node { ip_prefix { node { prefix { value } } } } }
+                  }
+                  ... on ManagedVxlanSegment {
+                    name { value }
+                    customer_name { value }
+                    environment { value }
+                    gateway { node { ip_prefix { node { prefix { value } } } } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment NetworkSegmentFields on ManagedNetworkSegment {
+  ... on ManagedVlanSegment {
+    id
+    name { value }
+    description { value }
+    status { value }
+    vlan_id { value }
+    customer_name { value }
+    environment { value }
+    gateway {
+      node {
+        address { value }
+        ip_prefix {
+          node {
+            prefix { value }
+            ip_namespace {
+              node {
+                name { value }
+                l3_vni { value }
+              }
+            }
+          }
+        }
+      }
+    }
+    ...SegmentSecurityZoneFields
+    ...SegmentSecurityPolicyFields
+  }
+  ... on ManagedVxlanSegment {
+    id
+    name { value }
+    description { value }
+    status { value }
+    customer_name { value }
+    environment { value }
+    arp_suppression { value }
+    segment_deployments(status__values: ["active", "provisioning"]) {
+      edges {
+        node {
+          vni { value }
+        }
+      }
+    }
+    # LOCAL VLAN ID is per VLAN domain (MLAG pair or standalone device), not
+    # DC-wide — the rendering transform resolves the entry whose vlan_domain
+    # matches THIS device's own domain (its MLAG if paired, else itself).
+    # See transforms/common.py's _collect_activations_from_interfaces.
+    vlan_domain_segments {
+      edges {
+        node {
+          vlan_id { value }
+          vlan_domain { node { id } }
+        }
+      }
+    }
+    gateway {
+      node {
+        address { value }
+        ip_prefix {
+          node {
+            prefix { value }
+            ip_namespace {
+              node {
+                name { value }
+                l3_vni { value }
+              }
+            }
+          }
+        }
+      }
+    }
+    ...SegmentSecurityZoneFields
+    ...SegmentSecurityPolicyFields
+  }
+}
+
+# Border-leaf PBR (.dev/scenariusze.txt's "match cts sgt N" / "match
+# security-group" / SONiC prefix-ACL fallback): SGT travels in-band inside
+# the VXLAN header (GBP/MSS-G) end-to-end, so border-leaf never needs its
+# OWN customer-facing interface_capabilities the way a leaf does — it just
+# needs every segment activation IN ITS OWN DC, reached via
+# TopologySegmentHosting.segment_deployments (see
+# schemas/extensions/service/segment.yml — TopologyDataCenter inherits
+# TopologySegmentHosting directly). vni is the dedup/naming key here (NOT
+# vlan_id — local VLAN ID is per VLAN domain, not DC-wide, so the same
+# segment can have a different vlan_id on every leaf; VNI is the only
+# value that's genuinely DC-wide/fabric-wide unique). security_tag.group_id
+# is the tag border-leaf matches on for same-platform (Cisco->Cisco,
+# Arista->Arista) leaf<->border-leaf paths; gateway.ip_prefix.prefix is the
+# source-prefix fallback for everything else (SONiC leaf, or mixed-vendor
+# paths where the tag can't be trusted to survive transit).
+fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
+  segment_deployments(status__values: ["active", "provisioning"]) {
+    edges {
+      node {
+        vni { value }
+        segment {
+          node {
+            id
+            ... on ManagedVlanSegment {
+              customer_name { value }
+              environment { value }
+              security_tag { node { name { value } group_id { value } } }
+              gateway { node { ip_prefix { node { prefix { value } } } } }
+              customer_deployment { node { id } }
+              security_policies {
+                edges {
+                  node {
+                    enabled { value }
+                    rules {
+                      edges {
+                        node {
+                          action { value }
+                          disabled { value }
+                          destination_segment {
+                            node {
+                              id
+                              ... on ManagedVlanSegment {
+                                gateway { node { ip_prefix { node { prefix { value } } } } }
+                              }
+                              ... on ManagedVxlanSegment {
+                                gateway { node { ip_prefix { node { prefix { value } } } } }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            ... on ManagedVxlanSegment {
+              customer_name { value }
+              environment { value }
+              security_tag { node { name { value } group_id { value } } }
+              gateway { node { ip_prefix { node { prefix { value } } } } }
+              customer_deployments { edges { node { id } } }
+              security_policies {
+                edges {
+                  node {
+                    enabled { value }
+                    rules {
+                      edges {
+                        node {
+                          action { value }
+                          disabled { value }
+                          destination_segment {
+                            node {
+                              id
+                              ... on ManagedVlanSegment {
+                                gateway { node { ip_prefix { node { prefix { value } } } } }
+                              }
+                              ... on ManagedVxlanSegment {
+                                gateway { node { ip_prefix { node { prefix { value } } } } }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

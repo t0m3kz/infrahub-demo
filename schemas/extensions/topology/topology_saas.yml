@@ -8,10 +8,12 @@ nodes:
       - TopologyDeployment
       - CoreArtifactTarget
     label: SaaS Cloud
+    icon: "mdi:cloud-outline"
     include_in_menu: false
+    parent: TopologyLabel
     children: TopologySaasRegion
     uniqueness_constraints:
-      - ["name__value"]
+      - ["name__value", "parent"]
     human_friendly_id:
       - name__value
     display_label: "{{ name__value|upper}} SAAS"
@@ -19,7 +21,7 @@ nodes:
       - name: provider
         kind: Dropdown
         label: Provider
-        optional: false
+        optional: true
         default_value: other
         order_weight: 200
         choices:
@@ -54,7 +56,7 @@ nodes:
       - name: service_type
         kind: Dropdown
         label: Service Type
-        optional: false
+        optional: true
         default_value: other
         order_weight: 300
         choices:
@@ -79,7 +81,7 @@ nodes:
       - name: status
         kind: Dropdown
         label: Status
-        optional: false
+        optional: true
         default_value: active
         order_weight: 400
         choices:
@@ -100,19 +102,17 @@ nodes:
         label: Description
         optional: true
         order_weight: 500
-
   - name: SaasRegion
     namespace: Topology
     inherit_from:
       - TopologyDeployment
       - TopologyConnectableLocation
     parent: TopologySaas
-    children: ""
-    human_friendly_id:
-      - region_name__value
+    children: TopologyCustomerSaas
+    icon: "mdi:map-marker-network"
     display_label: "{{ name__value }}"
     uniqueness_constraints:
-      - ["region_name__value"]
+      - [name__value, parent]
     include_in_menu: false
     attributes:
       - name: name
@@ -132,7 +132,7 @@ nodes:
       - name: status
         kind: Dropdown
         label: "Region Status"
-        optional: false
+        optional: true
         default_value: active
         order_weight: 300
         choices:
@@ -165,3 +165,12 @@ nodes:
         order_weight: 1000
         identifier: "saas__region__location"
         description: "Geographic mapping for provider region"
+      - name: saas_services
+        peer: ManagedSaasService
+        label: "Regional Services"
+        description: "Per-region service capabilities (data residency, media PoP, enforcement point)"
+        cardinality: many
+        kind: Component
+        optional: true
+        order_weight: 1100
+        identifier: "topology_saas_region__saas_services"

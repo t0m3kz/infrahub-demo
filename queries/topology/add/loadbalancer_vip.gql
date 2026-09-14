@@ -1,0 +1,47 @@
+query loadbalancer_vip_data($id: ID!) {
+  LoadbalancerVIP(ids: [$id]) {
+    edges {
+      node {
+        id
+        hostname { value }
+        snat_enabled { value }
+        backend_segment {
+          node {
+            id
+            ... on ManagedVlanSegment {
+              name { value }
+              vlan_id { value }
+              gateway { node { ip_prefix { node { id } } } }
+            }
+            ... on ManagedVxlanSegment {
+              name { value }
+              gateway { node { ip_prefix { node { id } } } }
+              segment_deployments(status__values: ["active", "provisioning"]) {
+                edges {
+                  node {
+                    vni { value }
+                  }
+                }
+              }
+            }
+          }
+        }
+        load_balancer {
+          node {
+            id
+            ... on ManagedLoadbalancerHA {
+              capabilities {
+                edges {
+                  node {
+                    id
+                    name { value }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

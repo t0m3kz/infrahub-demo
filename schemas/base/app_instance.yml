@@ -1,0 +1,18 @@
+---
+version: "1.0"
+
+generics:
+  - name: Instance
+    namespace: App
+    description: "Marker generic — any node that can back an AppComponent (physical, virtual, or cloud)"
+    label: "App Instance"
+    icon: "mdi:server-outline"
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    attributes:
+      - name: name
+        kind: Text
+        optional: false
+        order_weight: 100

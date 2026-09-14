@@ -7,15 +7,24 @@ Covers:
   - _l3_from_activations()       — L3 VNI (VRF) mappings from activations
   - _transform_vxlan_arista()    — anycast_gateway enabled from gateway_ip presence
   - get_acls()                   — zero-trust ACL list from security_policies on segments
+  - isolation_mode propagation   — _vlans_from_activations and arista_eos.j2 rendering
 """
 
+from pathlib import Path
+
+import jinja2
+import pytest
+
 from transforms.common import (
+    _build_acl_rule,
     _l2_from_activations,
     _l3_from_activations,
     _transform_vxlan_arista,
     _vlans_from_activations,
     get_acls,
+    get_interfaces,
     get_vlans,
+    get_vxlan_config,
 )
 
 # ---------------------------------------------------------------------------
@@ -41,20 +50,22 @@ def _make_activation(
     if owner_name is not None:
         ns["owner"] = {"name": owner_name}
 
-    prefix: dict = {"ip_namespace": ns}
+    gateway: dict = {"ip_prefix": {"ip_namespace": ns}}
     if gateway_ip is not None:
-        prefix["gateway_ip"] = gateway_ip
+        gateway["address"] = gateway_ip
+
+    segment: dict = {
+        "name": f"Owner - production - {customer_name}",
+        "customer_name": customer_name,
+        "arp_suppression": arp_suppression,
+        "gateway": gateway,
+    }
 
     return {
         "vlan_id": vlan_id,
         "vni": vni,
         "status": "active",
-        "segment": {
-            "name": f"Owner - production - {customer_name}",
-            "customer_name": customer_name,
-            "arp_suppression": arp_suppression,
-            "prefix": prefix,
-        },
+        "segment": segment,
     }
 
 
@@ -238,51 +249,111 @@ class TestTransformVxlanArista:
             "flooding": "evpn",
             "evpn": {"enabled": True, "rd_format": "10.0.0.1:{vni}", "rt_format": "65001:{vni}"},
             "microsegmentation": {"enabled": False, "vrf_count": 0},
+            "anycast_gateway": {"enabled": False, "mac": "00:1c:73:00:dc:01"},
         }
 
     def test_interface_set_to_vxlan1(self) -> None:
         result = _transform_vxlan_arista(self._base_config(), local_as=None)
         assert result["interface"] == "Vxlan1"
 
-    def test_anycast_gateway_disabled_when_no_gateway_ip(self) -> None:
-        mappings = [
-            {"vlan_id": 10, "vni": 10010, "name": "seg-10", "gateway_ip": None},
-            {"vlan_id": 20, "vni": 10020, "name": "seg-20", "gateway_ip": None},
-        ]
-        result = _transform_vxlan_arista(self._base_config(mappings), local_as=None)
-        assert result["anycast_gateway"]["enabled"] is False
-
-    def test_anycast_gateway_enabled_when_any_mapping_has_gateway_ip(self) -> None:
-        mappings = [
-            {"vlan_id": 10, "vni": 10010, "name": "seg-10", "gateway_ip": None},
-            {"vlan_id": 20, "vni": 10020, "name": "seg-20", "gateway_ip": "10.100.20.1/24"},
-        ]
-        result = _transform_vxlan_arista(self._base_config(mappings), local_as=None)
-        assert result["anycast_gateway"]["enabled"] is True
-
-    def test_anycast_gateway_enabled_when_all_mappings_have_gateway_ip(self) -> None:
-        mappings = [
-            {"vlan_id": 10, "vni": 10010, "name": "seg-10", "gateway_ip": "10.0.10.1/24"},
-            {"vlan_id": 20, "vni": 10020, "name": "seg-20", "gateway_ip": "10.0.20.1/24"},
-        ]
-        result = _transform_vxlan_arista(self._base_config(mappings), local_as=None)
-        assert result["anycast_gateway"]["enabled"] is True
-
-    def test_anycast_gateway_disabled_when_no_mappings(self) -> None:
-        result = _transform_vxlan_arista(self._base_config([]), local_as=None)
-        assert result["anycast_gateway"]["enabled"] is False
-
-    def test_anycast_mac_correct(self) -> None:
-        result = _transform_vxlan_arista(self._base_config(), local_as=None)
-        assert result["anycast_gateway"]["mac"] == "00:1c:73:00:dc:01"
-
     def test_original_config_not_mutated(self) -> None:
         """_transform_vxlan_arista uses .copy() — original dict is untouched."""
         mappings = [{"vlan_id": 10, "vni": 10010, "gateway_ip": "10.0.10.1/24"}]
         base = self._base_config(mappings)
         _transform_vxlan_arista(base, local_as=None)
-        assert "anycast_gateway" not in base
         assert "interface" not in base
+
+    def test_anycast_gateway_inherited_from_base_not_recomputed(self) -> None:
+        """anycast_gateway is computed once, platform-agnostically, in
+        get_vxlan_config's base_config — _transform_vxlan_arista must inherit
+        it via .copy(), not recompute it (that logic moved out; see
+        TestGetVxlanConfigAnycastGateway for the real coverage)."""
+        base = self._base_config()
+        base["anycast_gateway"] = {"enabled": True, "mac": "00:1c:73:00:dc:01"}
+        result = _transform_vxlan_arista(base, local_as=None)
+        assert result["anycast_gateway"] == {"enabled": True, "mac": "00:1c:73:00:dc:01"}
+
+
+# ===========================================================================
+# get_vxlan_config() — anycast_gateway (platform-agnostic, symmetric IRB)
+# ===========================================================================
+
+
+class TestGetVxlanConfigAnycastGateway:
+    """anycast_gateway is computed once in get_vxlan_config's base_config and
+    inherited unchanged by every _transform_vxlan_* — same standard anycast
+    MAC on every leaf/border-leaf in the fabric, matching
+    .dev/scenariusze.txt's "fabric forwarding anycast-gateway-mac" /
+    "ip virtual-router mac-address" / "ip anycast-mac-address" (identical
+    value across Cisco/Arista/SONiC)."""
+
+    def _data(self) -> dict:
+        return {"interfaces": [{"name": "Loopback0", "ip_addresses": [{"address": "10.0.0.3/32"}]}], "capabilities": []}
+
+    @pytest.mark.parametrize("platform", ["arista_eos", "cisco_nxos", "dell_sonic"])
+    def test_disabled_when_no_gateway_ip(self, platform: str) -> None:
+        acts = [_make_activation(vlan_id=10, customer_name="a", gateway_ip=None)]
+        result = get_vxlan_config(self._data(), platform, device_role="leaf", activations=acts)
+        assert result is not None
+        assert result["anycast_gateway"]["enabled"] is False
+
+    @pytest.mark.parametrize("platform", ["arista_eos", "cisco_nxos", "dell_sonic"])
+    def test_enabled_when_any_activation_has_gateway_ip(self, platform: str) -> None:
+        acts = [
+            _make_activation(vlan_id=10, customer_name="a", gateway_ip=None),
+            _make_activation(vlan_id=20, customer_name="b", gateway_ip="10.0.20.1/24"),
+        ]
+        result = get_vxlan_config(self._data(), platform, device_role="leaf", activations=acts)
+        assert result is not None
+        assert result["anycast_gateway"]["enabled"] is True
+
+    @pytest.mark.parametrize("platform", ["arista_eos", "cisco_nxos", "dell_sonic"])
+    def test_mac_identical_across_platforms(self, platform: str) -> None:
+        acts = [_make_activation(vlan_id=10, customer_name="a", gateway_ip="10.0.10.1/24")]
+        result = get_vxlan_config(self._data(), platform, device_role="leaf", activations=acts)
+        assert result is not None
+        assert result["anycast_gateway"]["mac"] == "00:1c:73:00:dc:01"
+
+
+# ===========================================================================
+# get_vxlan_config() — VTEP-role gate
+# ===========================================================================
+
+
+class TestGetVxlanConfigVtepGate:
+    """Spine/super-spine/hyper-spine are underlay+EVPN-route-reflector only —
+    never VTEPs — so get_vxlan_config() must return None for those roles
+    regardless of what activations/data it's given."""
+
+    def _data(self) -> dict:
+        return {"interfaces": [{"name": "Loopback0", "ip_addresses": [{"address": "10.0.0.1/32"}]}], "capabilities": []}
+
+    def test_spine_role_returns_none_even_with_activations(self) -> None:
+        acts = [_make_activation(vlan_id=100, customer_name="web")]
+        assert get_vxlan_config(self._data(), "arista_eos", device_role="spine", activations=acts) is None
+
+    def test_super_spine_role_returns_none_even_with_activations(self) -> None:
+        acts = [_make_activation(vlan_id=100, customer_name="web")]
+        assert get_vxlan_config(self._data(), "arista_eos", device_role="super_spine", activations=acts) is None
+
+    def test_super_spine_hyphenated_role_returns_none(self) -> None:
+        acts = [_make_activation(vlan_id=100, customer_name="web")]
+        assert get_vxlan_config(self._data(), "arista_eos", device_role="super-spine", activations=acts) is None
+
+    def test_hyper_spine_role_returns_none(self) -> None:
+        acts = [_make_activation(vlan_id=100, customer_name="web")]
+        assert get_vxlan_config(self._data(), "arista_eos", device_role="hyper-spine", activations=acts) is None
+
+    def test_leaf_role_still_builds_config(self) -> None:
+        acts = [_make_activation(vlan_id=100, customer_name="web")]
+        result = get_vxlan_config(self._data(), "arista_eos", device_role="leaf", activations=acts)
+        assert result is not None
+
+    def test_border_spine_role_still_builds_config(self) -> None:
+        """border-spine collapses spine+border-leaf — it IS a VTEP."""
+        acts = [_make_activation(vlan_id=100, customer_name="web")]
+        result = get_vxlan_config(self._data(), "arista_eos", device_role="border-spine", activations=acts)
+        assert result is not None
 
 
 # ===========================================================================
@@ -306,7 +377,7 @@ def _make_acl_activation(
         "name": f"Owner - production - {customer_name}",
         "customer_name": customer_name,
         "arp_suppression": True,
-        "prefix": {"ip_namespace": {"name": "tenant-a", "l3_vni": 50001}},
+        "gateway": {"ip_prefix": {"ip_namespace": {"name": "tenant-a", "l3_vni": 50001}}},
     }
     if seg_id is not None:
         seg["id"] = seg_id
@@ -351,8 +422,13 @@ def _rule(
     return rule
 
 
-def _seg_ref(prefix: str) -> dict:
-    return {"id": "x", "name": "other", "prefix": {"prefix": prefix}}
+def _seg_ref(prefix: str, *, customer_name: str | None = None, environment: str | None = None) -> dict:
+    ref: dict = {"id": "x", "name": "other", "gateway": {"ip_prefix": {"prefix": prefix}}}
+    if customer_name is not None:
+        ref["customer_name"] = customer_name
+    if environment is not None:
+        ref["environment"] = environment
+    return ref
 
 
 class TestGetAclsEmpty:
@@ -488,7 +564,7 @@ class TestGetAclsMultipleActivations:
 
 def _seg_id_ref(seg_id: str, prefix: str) -> dict:
     """Build a destination_segment dict as clean_data() would produce (with id)."""
-    return {"id": seg_id, "name": "some-segment", "prefix": {"prefix": prefix}}
+    return {"id": seg_id, "name": "some-segment", "gateway": {"ip_prefix": {"prefix": prefix}}}
 
 
 class TestGetAclsEastWestMirroring:
@@ -649,3 +725,462 @@ class TestGetAclsZoneSupport:
         r = get_acls(activations=acts)[0]["rules"][0]
         assert r["src_zone"] == "external"
         assert r["dst_zone"] is None
+
+
+class TestGetAclsCustomerAttribution:
+    """src_customer/src_environment/dst_customer/dst_environment let a policy
+    mixing rules from different customers' segments be attributed per-rule,
+    not just at the whole-ACL segment_name level."""
+
+    def test_customer_environment_fields_passed_through(self) -> None:
+        rule = _rule(
+            index=10,
+            src=_seg_ref("10.1.0.0/16", customer_name="acme", environment="p"),
+            dst=_seg_ref("192.168.10.0/24", customer_name="globex", environment="s"),
+        )
+        acts = [_make_acl_activation(vlan_id=100, security_policies=[_policy(rules=[rule])])]
+        r = get_acls(activations=acts)[0]["rules"][0]
+        assert r["src_customer"] == "acme"
+        assert r["src_environment"] == "p"
+        assert r["dst_customer"] == "globex"
+        assert r["dst_environment"] == "s"
+
+    def test_customer_fields_none_when_absent(self) -> None:
+        acts = [_make_acl_activation(vlan_id=100, security_policies=[_policy(rules=[_rule()])])]
+        r = get_acls(activations=acts)[0]["rules"][0]
+        assert r["src_customer"] is None
+        assert r["src_environment"] is None
+        assert r["dst_customer"] is None
+        assert r["dst_environment"] is None
+
+    def test_implicit_deny_has_null_customer_fields(self) -> None:
+        acts = [_make_acl_activation(vlan_id=100, security_policies=[])]
+        deny = get_acls(activations=acts)[0]["rules"][-1]
+        assert deny["src_customer"] is None
+        assert deny["dst_customer"] is None
+
+    def test_mirrored_rule_dst_customer_is_this_segments_own_identity(self) -> None:
+        """A mirrored rule fires on the DESTINATION segment's own VLAN — its
+        dst_customer/dst_environment must be the segment it's rendering for,
+        not whatever the original rule's destination_segment happened to be."""
+        rule = _rule(index=10, dst=_seg_ref("10.0.2.0/24", customer_name="other-customer", environment="d"))
+        acts = [
+            _make_acl_activation(
+                vlan_id=100, customer_name="src-seg", seg_id="seg-a", security_policies=[_policy(rules=[rule])]
+            ),
+            _make_acl_activation(vlan_id=200, customer_name="this-customer", seg_id="seg-b", security_policies=[]),
+        ]
+        # Point the rule's destination_segment id at seg-b so it mirrors onto it.
+        rule["destination_segment"]["id"] = "seg-b"
+        result = get_acls(activations=acts)
+        acl_200 = next(a for a in result if a["vlan_id"] == 200)
+        mirrored = acl_200["rules"][0]
+        assert mirrored["dst_customer"] == "this-customer"
+        assert mirrored["dst_environment"] is None
+
+
+# ===========================================================================
+# isolation_mode and firewall-skip logic
+# ===========================================================================
+
+
+def _make_isolation_activation(
+    vlan_id: int,
+    seg_id: str,
+    policies: list | None = None,
+    firewall_id: str | None = None,
+    isolation_mode: str = "normal",
+) -> dict:
+    """Return a single activation dict for isolation_mode / firewall-skip tests.
+
+    The segment always has ``security_policies`` present so that the skip vs.
+    render decision is exercised rather than the "field not queried" early-exit.
+    """
+    seg: dict = {
+        "id": seg_id,
+        "name": f"owner - prod - vlan{vlan_id}",
+        "customer_name": f"vlan{vlan_id}",
+        "arp_suppression": True,
+        "prefix": {"ip_namespace": {"name": "tenant-a", "l3_vni": 50001}},
+        "security_policies": policies if policies is not None else [],
+        "isolation_mode": isolation_mode,
+    }
+    if firewall_id is not None:
+        seg["inline_service"] = {"id": firewall_id}
+    return {"vlan_id": vlan_id, "vni": 10000 + vlan_id, "status": "active", "segment": seg}
+
+
+class TestGetAclsIsolationMode:
+    """Firewall-skip logic gated by isolation_mode on the segment."""
+
+    def test_normal_segment_with_firewall_skips_acl(self) -> None:
+        """A segment with a firewall and isolation_mode='normal' produces no ACL."""
+        act = _make_isolation_activation(
+            vlan_id=100, seg_id="seg-fw-normal", firewall_id="fw-1", isolation_mode="normal"
+        )
+        result = get_acls(activations=[act])
+        assert result == []
+
+    def test_isolated_segment_with_firewall_skips_acl(self) -> None:
+        """'isolated' is not 'microsegmented' — firewall skip still applies."""
+        act = _make_isolation_activation(
+            vlan_id=101, seg_id="seg-fw-isolated", firewall_id="fw-1", isolation_mode="isolated"
+        )
+        result = get_acls(activations=[act])
+        assert result == []
+
+    def test_microsegmented_segment_with_firewall_renders_acl(self) -> None:
+        """isolation_mode='microsegmented' bypasses the firewall skip — ACL must be generated."""
+        policies = [_policy(rules=[_rule(index=10)])]
+        act = _make_isolation_activation(
+            vlan_id=102,
+            seg_id="seg-fw-micro",
+            firewall_id="fw-1",
+            isolation_mode="microsegmented",
+            policies=policies,
+        )
+        result = get_acls(activations=[act])
+        assert len(result) == 1
+        assert result[0]["isolation_mode"] == "microsegmented"
+
+    def test_microsegmented_without_firewall_renders_acl(self) -> None:
+        """Microsegmented segment with no firewall still renders its ACL normally."""
+        policies = [_policy(rules=[_rule(index=10)])]
+        act = _make_isolation_activation(
+            vlan_id=103, seg_id="seg-micro-nofw", isolation_mode="microsegmented", policies=policies
+        )
+        result = get_acls(activations=[act])
+        assert len(result) == 1
+
+    def test_normal_without_firewall_renders_acl(self) -> None:
+        """Baseline: no firewall, isolation_mode='normal' → ACL rendered as always."""
+        policies = [_policy(rules=[_rule(index=10)])]
+        act = _make_isolation_activation(
+            vlan_id=104, seg_id="seg-normal-nofw", isolation_mode="normal", policies=policies
+        )
+        result = get_acls(activations=[act])
+        assert len(result) == 1
+
+    def test_isolation_mode_propagated_to_acl_dict(self) -> None:
+        """isolation_mode value from the segment must appear in the output ACL dict."""
+        policies = [_policy(rules=[_rule(index=10)])]
+        act = _make_isolation_activation(
+            vlan_id=105, seg_id="seg-isolated-nofw", isolation_mode="isolated", policies=policies
+        )
+        result = get_acls(activations=[act])
+        assert len(result) == 1
+        assert result[0]["isolation_mode"] == "isolated"
+
+    def test_missing_isolation_mode_defaults_to_normal(self) -> None:
+        """When 'isolation_mode' key is absent from the segment dict, it defaults to 'normal'."""
+        act = _make_isolation_activation(
+            vlan_id=106, seg_id="seg-no-iso-key", policies=[_policy(rules=[_rule(index=10)])]
+        )
+        # Remove the key entirely — _make_isolation_activation always sets it, so pop it
+        del act["segment"]["isolation_mode"]
+        result = get_acls(activations=[act])
+        assert len(result) == 1
+        assert result[0]["isolation_mode"] == "normal"
+
+    def test_apply_on_switch_field_present_in_rule(self) -> None:
+        """_build_acl_rule must not crash when 'apply_on_switch' appears in the rule dict."""
+        rule_dict = {
+            "index": 10,
+            "name": "r",
+            "action": "permit",
+            "protocol": "tcp",
+            "apply_on_switch": True,
+        }
+        result = _build_acl_rule(rule_dict)
+        assert result["action"] == "permit"
+
+
+# ===========================================================================
+# isolation_mode propagation in _vlans_from_activations()
+# ===========================================================================
+
+
+def _make_iso_activation(vlan_id: int, isolation_mode: str | None = None) -> dict:
+    """Build a minimal activation dict, optionally with isolation_mode on the segment."""
+    seg: dict = {
+        "name": f"seg-{vlan_id}",
+        "customer_name": f"seg-{vlan_id}",
+        "arp_suppression": True,
+        "prefix": {"ip_namespace": {"name": "default"}},
+    }
+    if isolation_mode is not None:
+        seg["isolation_mode"] = isolation_mode
+    return {"vlan_id": vlan_id, "vni": 10000 + vlan_id, "status": "active", "segment": seg}
+
+
+class TestVlansFromActivationsIsolationMode:
+    """isolation_mode is read from segment dict and stored verbatim in the VLAN dict."""
+
+    def test_isolation_mode_normal_propagated(self) -> None:
+        acts = [_make_iso_activation(vlan_id=100, isolation_mode="normal")]
+        result = _vlans_from_activations(acts)
+        assert result[0]["isolation_mode"] == "normal"
+
+    def test_isolation_mode_isolated_propagated(self) -> None:
+        acts = [_make_iso_activation(vlan_id=101, isolation_mode="isolated")]
+        result = _vlans_from_activations(acts)
+        assert result[0]["isolation_mode"] == "isolated"
+
+    def test_isolation_mode_microsegmented_propagated(self) -> None:
+        acts = [_make_iso_activation(vlan_id=102, isolation_mode="microsegmented")]
+        result = _vlans_from_activations(acts)
+        assert result[0]["isolation_mode"] == "microsegmented"
+
+    def test_isolation_mode_missing_defaults_to_normal(self) -> None:
+        """When segment dict has no isolation_mode key the VLAN dict gets 'normal'."""
+        acts = [_make_iso_activation(vlan_id=103, isolation_mode=None)]
+        result = _vlans_from_activations(acts)
+        assert result[0]["isolation_mode"] == "normal"
+
+
+# ===========================================================================
+# Arista EOS leaf template — isolation_mode rendering smoke tests
+# ===========================================================================
+
+# The template uses includes like 'common/arista_eos_mlag.j2' so the loader
+# root must be templates/configs/ (one level above both 'leafs/' and 'common/').
+_TEMPLATES_CONFIGS_DIR = Path(__file__).parent.parent.parent / "templates" / "configs"
+_LEAF_TEMPLATE_NAME = "leafs/arista_eos.j2"
+
+
+@pytest.fixture
+def arista_env() -> jinja2.Environment:
+    return jinja2.Environment(
+        loader=jinja2.FileSystemLoader(str(_TEMPLATES_CONFIGS_DIR)),
+        undefined=jinja2.Undefined,  # silent undefined — avoids errors from optional ctx keys
+    )
+
+
+def _minimal_ctx(**overrides) -> dict:
+    """Minimal rendering context that avoids template errors for optional sections."""
+    ctx: dict = {
+        "hostname": "test-leaf",
+        "vlans": [],
+        "acls": [],
+        "interfaces": [],
+        "ospf": None,
+        "bgp": None,
+        "vxlan": {"enabled": False},
+        "vrf_gateways": {},
+        # Management-section variables expected by arista_eos_management.j2
+        "ntp": None,
+        "syslog": None,
+        "snmp": None,
+        "aaa": None,
+        # MLAG section
+        "mlag": None,
+    }
+    ctx.update(overrides)
+    return ctx
+
+
+def _vxlan_with_anycast(mac: str = "00:1c:73:00:dc:01") -> dict:
+    """Return a minimal vxlan dict with anycast gateway enabled (SVI block condition)."""
+    return {
+        "enabled": True,
+        "interface": "Vxlan1",
+        "vtep": {"source_interface": "Loopback0", "ipv4": "10.0.0.1", "udp_port": 4789},
+        "l2_vni_mappings": [],
+        "l3_vni_mappings": [],
+        "flooding": "evpn",
+        "evpn": {"enabled": False},
+        "microsegmentation": {"enabled": False, "vrf_count": 0},
+        "anycast_gateway": {"enabled": True, "mac": mac},
+    }
+
+
+class TestAristaLeafTemplateIsolationMode:
+    """Smoke tests: isolation_mode values produce the expected comment lines in rendered output."""
+
+    def test_isolated_vlan_renders_pvlan_comment(self, arista_env: jinja2.Environment) -> None:
+        """VLAN block for isolation_mode='isolated' must contain the private-vlan remark."""
+        vlans = [{"vlan_id": 100, "name": "test-isolated", "isolation_mode": "isolated"}]
+        ctx = _minimal_ctx(vlans=vlans)
+        rendered = arista_env.get_template(_LEAF_TEMPLATE_NAME).render(**ctx)
+        assert "private-vlan type: isolated" in rendered
+
+    def test_normal_vlan_no_pvlan_comment(self, arista_env: jinja2.Environment) -> None:
+        """VLAN block for isolation_mode='normal' must NOT contain the private-vlan remark."""
+        vlans = [{"vlan_id": 200, "name": "test-normal", "isolation_mode": "normal"}]
+        ctx = _minimal_ctx(vlans=vlans)
+        rendered = arista_env.get_template(_LEAF_TEMPLATE_NAME).render(**ctx)
+        assert "private-vlan" not in rendered
+
+    def test_microsegmented_svi_renders_mode_comment(self, arista_env: jinja2.Environment) -> None:
+        """SVI block for isolation_mode='microsegmented' must contain the MICROSEGMENTED comment."""
+        vlans = [
+            {
+                "vlan_id": 300,
+                "name": "test-micro",
+                "isolation_mode": "microsegmented",
+                "gateway_ip": "10.0.3.1/24",
+                "gateway_ipv6": None,
+                "vrf": None,
+            }
+        ]
+        ctx = _minimal_ctx(vlans=vlans, vxlan=_vxlan_with_anycast())
+        rendered = arista_env.get_template(_LEAF_TEMPLATE_NAME).render(**ctx)
+        assert "MICROSEGMENTED" in rendered
+
+    def test_isolated_svi_renders_mode_comment(self, arista_env: jinja2.Environment) -> None:
+        """SVI block for isolation_mode='isolated' with a gateway must contain the ISOLATED comment."""
+        vlans = [
+            {
+                "vlan_id": 400,
+                "name": "test-iso-svi",
+                "isolation_mode": "isolated",
+                "gateway_ip": "10.0.4.1/24",
+                "gateway_ipv6": None,
+                "vrf": None,
+            }
+        ]
+        ctx = _minimal_ctx(vlans=vlans, vxlan=_vxlan_with_anycast())
+        rendered = arista_env.get_template(_LEAF_TEMPLATE_NAME).render(**ctx)
+        assert "ISOLATED" in rendered
+
+
+# ---------------------------------------------------------------------------
+# get_interfaces() — OSPF interface authentication (password relationship)
+# ---------------------------------------------------------------------------
+
+
+def _make_ospf_interface(
+    *,
+    area: int = 0,
+    mode: str | None = None,
+    metric: int | None = None,
+    process_id: str | None = "1",
+    authentication_mode: str | None = None,
+    password: str | None = None,
+) -> dict:
+    """Build a cleaned RoutingOSPFInterface dict as it appears in interface_capabilities."""
+    entry: dict = {
+        "typename": "RoutingOSPFInterface",
+        "peering": {
+            "ospf_area": {"area": area},
+            "ospf_process": [{"process_id": process_id, "capabilities": [{"name": "dev1"}]}],
+        },
+    }
+    if mode is not None:
+        entry["mode"] = mode
+    if metric is not None:
+        entry["metric"] = metric
+    if authentication_mode is not None:
+        entry["authentication_mode"] = authentication_mode
+    if password is not None:
+        entry["password"] = {"password": password}
+    return entry
+
+
+class TestGetInterfacesOspfAuthentication:
+    """get_interfaces() must thread OSPF authentication_mode/password through
+    the RoutingPassword relationship into interface.ospf, mirroring how BGP
+    resolves its own password relationship in _build_session_from_peering()."""
+
+    def test_password_and_mode_pass_through(self):
+        iface = {
+            "name": "Ethernet1",
+            "interface_capabilities": [
+                _make_ospf_interface(area=0, authentication_mode="md5", password="s3cr3t"),
+            ],
+        }
+        result = get_interfaces([iface])
+        assert result[0]["ospf"]["authentication_mode"] == "md5"
+        assert result[0]["ospf"]["password"] == "s3cr3t"
+
+    def test_no_password_defaults_to_none(self):
+        iface = {
+            "name": "Ethernet1",
+            "interface_capabilities": [_make_ospf_interface(area=0)],
+        }
+        result = get_interfaces([iface])
+        assert result[0]["ospf"]["authentication_mode"] is None
+        assert result[0]["ospf"]["password"] is None
+
+
+class TestBorderLeafTemplateFirewallContextDot1q:
+    """FirewallContext sub-interface (role='service') must render its own
+    802.1Q encapsulation on border-leaf — the IP address alone isn't enough
+    to scope it to the right VLAN on real hardware."""
+
+    def _ctx_with_context_subinterface(self) -> dict:
+        return _minimal_ctx(
+            interfaces=[
+                {
+                    "name": "Ethernet1/49.150",
+                    "role": "service",
+                    "status": "active",
+                    "description": None,
+                    "ip_addresses": [{"address": "10.99.99.1/31", "ip_namespace": {"name": "default"}}],
+                    "dot1q_vlan": 150,
+                    "vlans": [],
+                }
+            ],
+        )
+
+    def test_cisco_nxos_renders_encapsulation_dot1q(self) -> None:
+        env = jinja2.Environment(
+            loader=jinja2.FileSystemLoader(str(_TEMPLATES_CONFIGS_DIR)),
+            undefined=jinja2.Undefined,
+        )
+        ctx = self._ctx_with_context_subinterface()
+        ctx["name"] = "test-border-leaf"
+        ctx["ospf"] = []
+        ctx["bgp"] = []
+        rendered = env.get_template("border_leafs/cisco_nxos.j2").render(**ctx)
+        assert "interface Ethernet1/49.150" in rendered
+        assert "encapsulation dot1q 150" in rendered
+
+    def test_arista_eos_renders_encapsulation_dot1q(self, arista_env: jinja2.Environment) -> None:
+        ctx = self._ctx_with_context_subinterface()
+        rendered = arista_env.get_template("border_leafs/arista_eos.j2").render(**ctx)
+        assert "interface Ethernet1/49.150" in rendered
+        assert "encapsulation dot1q vlan 150" in rendered
+
+    def test_no_dot1q_vlan_omits_encapsulation_line(self, arista_env: jinja2.Environment) -> None:
+        ctx = _minimal_ctx(
+            interfaces=[
+                {
+                    "name": "Ethernet1",
+                    "role": "uplink",
+                    "status": "active",
+                    "description": None,
+                    "ip_addresses": [],
+                    "dot1q_vlan": None,
+                    "vlans": [],
+                }
+            ],
+        )
+        rendered = arista_env.get_template("border_leafs/arista_eos.j2").render(**ctx)
+        assert "encapsulation" not in rendered
+
+
+class TestGetInterfacesFirewallContextDot1q:
+    """get_interfaces() must expose the FirewallContext sub-interface's own
+    vlan_id as a scalar `dot1q_vlan` (border-leaf/firewall PBR leg) — distinct
+    from `vlans` (customer segment trunk/access VLANs), since a context
+    sub-interface's VLAN comes from the FW-context VLAN pool, not any
+    customer segment."""
+
+    def test_firewall_context_capability_sets_dot1q_vlan(self):
+        iface = {
+            "name": "Ethernet1/49.150",
+            "parent_interface": {"name": "Ethernet1/49"},
+            "interface_capabilities": [
+                {"typename": "ManagedFirewallContext", "name": "dc10-shared", "vlan_id": 150},
+            ],
+        }
+        result = get_interfaces([iface])
+        assert result[0]["dot1q_vlan"] == 150
+        assert result[0]["parent_interface"] == {"name": "Ethernet1/49"}
+
+    def test_no_firewall_context_capability_leaves_dot1q_vlan_none(self):
+        iface = {"name": "Ethernet1", "interface_capabilities": []}
+        result = get_interfaces([iface])
+        assert result[0]["dot1q_vlan"] is None
+        assert result[0]["parent_interface"] is None

@@ -1,0 +1,33 @@
+---
+# AMERICAS region + US metros used by CoreSite buildings
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationMetro
+  data:
+    - name: "New York"
+      shortname: "nyc"
+      children:
+        kind: LocationFacility
+        data:
+          - name: "NY1"
+            shortname: "ny1"
+          - name: "NY2"
+            shortname: "ny2"
+    - name: "Northern Virginia"
+      shortname: "iad"
+      children:
+        kind: LocationFacility
+        data:
+          - name: "VA1"
+            shortname: "va1"
+          - name: "VA2"
+            shortname: "va2"
+    - name: "Silicon Valley"
+      shortname: "sjc"
+      children:
+        kind: LocationFacility
+        data:
+          - name: "SV1"
+            shortname: "sv1"

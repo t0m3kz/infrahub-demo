@@ -45,7 +45,7 @@
           "tags": {
             "edges": []
           },
-          "device_capabilities": {
+          "capabilities": {
             "edges": [
               {
                 "node": {
@@ -94,7 +94,25 @@
                             "value": true
                           },
                           "send_community": {
-                            "value": "standard-extended"
+                            "value": true
+                          },
+                          "send_extended_community": {
+                            "value": false
+                          },
+                          "maximum_routes": {
+                            "value": null
+                          },
+                          "local_pref": {
+                            "value": null
+                          },
+                          "med": {
+                            "value": null
+                          },
+                          "remove_private_as": {
+                            "value": false
+                          },
+                          "password": {
+                            "node": null
                           },
                           "ttl": {
                             "value": 1
@@ -102,7 +120,7 @@
                           "route_reflector_client": {
                             "value": false
                           },
-                          "interfaces": {
+                          "interface_capabilities": {
                             "edges": [
                               {
                                 "node": {
@@ -155,12 +173,16 @@
                               {
                                 "node": {
                                   "id": "bgp-dc1-super-spine-01",
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "dc1-super-spine-01"
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "dc1-super-spine-01"
+                                          }
+                                        }
                                       }
-                                    }
+                                    ]
                                   },
                                   "router_id": {
                                     "node": {
@@ -181,12 +203,16 @@
                               {
                                 "node": {
                                   "id": "bgp-spine-01",
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "spine-01"
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "spine-01"
+                                          }
+                                        }
                                       }
-                                    }
+                                    ]
                                   },
                                   "router_id": {
                                     "node": {
@@ -221,7 +247,25 @@
                             "value": true
                           },
                           "send_community": {
-                            "value": "standard-extended"
+                            "value": true
+                          },
+                          "send_extended_community": {
+                            "value": false
+                          },
+                          "maximum_routes": {
+                            "value": null
+                          },
+                          "local_pref": {
+                            "value": null
+                          },
+                          "med": {
+                            "value": null
+                          },
+                          "remove_private_as": {
+                            "value": false
+                          },
+                          "password": {
+                            "node": null
                           },
                           "ttl": {
                             "value": 1
@@ -229,7 +273,7 @@
                           "route_reflector_client": {
                             "value": false
                           },
-                          "interfaces": {
+                          "interface_capabilities": {
                             "edges": [
                               {
                                 "node": {
@@ -282,12 +326,16 @@
                               {
                                 "node": {
                                   "id": "bgp-dc1-super-spine-01",
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "dc1-super-spine-01"
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "dc1-super-spine-01"
+                                          }
+                                        }
                                       }
-                                    }
+                                    ]
                                   },
                                   "router_id": {
                                     "node": {
@@ -308,12 +356,16 @@
                               {
                                 "node": {
                                   "id": "bgp-spine-02",
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "spine-02"
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "spine-02"
+                                          }
+                                        }
                                       }
-                                    }
+                                    ]
                                   },
                                   "router_id": {
                                     "node": {
@@ -386,7 +438,25 @@
                             "value": true
                           },
                           "send_community": {
-                            "value": "standard-extended"
+                            "value": true
+                          },
+                          "send_extended_community": {
+                            "value": false
+                          },
+                          "maximum_routes": {
+                            "value": null
+                          },
+                          "local_pref": {
+                            "value": null
+                          },
+                          "med": {
+                            "value": null
+                          },
+                          "remove_private_as": {
+                            "value": false
+                          },
+                          "password": {
+                            "node": null
                           },
                           "ttl": {
                             "value": 2
@@ -394,7 +464,7 @@
                           "route_reflector_client": {
                             "value": true
                           },
-                          "interfaces": {
+                          "interface_capabilities": {
                             "edges": [
                               {
                                 "node": {
@@ -447,12 +517,16 @@
                               {
                                 "node": {
                                   "id": "bgp-dc1-super-spine-01",
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "dc1-super-spine-01"
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "dc1-super-spine-01"
+                                          }
+                                        }
                                       }
-                                    }
+                                    ]
                                   },
                                   "router_id": {
                                     "node": {
@@ -473,12 +547,16 @@
                               {
                                 "node": {
                                   "id": "bgp-spine-01",
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "spine-01"
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "spine-01"
+                                          }
+                                        }
                                       }
-                                    }
+                                    ]
                                   },
                                   "router_id": {
                                     "node": {
@@ -513,7 +591,25 @@
                             "value": true
                           },
                           "send_community": {
-                            "value": "standard-extended"
+                            "value": true
+                          },
+                          "send_extended_community": {
+                            "value": false
+                          },
+                          "maximum_routes": {
+                            "value": null
+                          },
+                          "local_pref": {
+                            "value": null
+                          },
+                          "med": {
+                            "value": null
+                          },
+                          "remove_private_as": {
+                            "value": false
+                          },
+                          "password": {
+                            "node": null
                           },
                           "ttl": {
                             "value": 2
@@ -521,7 +617,7 @@
                           "route_reflector_client": {
                             "value": true
                           },
-                          "interfaces": {
+                          "interface_capabilities": {
                             "edges": [
                               {
                                 "node": {
@@ -574,12 +670,16 @@
                               {
                                 "node": {
                                   "id": "bgp-dc1-super-spine-01",
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "dc1-super-spine-01"
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "dc1-super-spine-01"
+                                          }
+                                        }
                                       }
-                                    }
+                                    ]
                                   },
                                   "router_id": {
                                     "node": {
@@ -600,12 +700,16 @@
                               {
                                 "node": {
                                   "id": "bgp-spine-02",
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "spine-02"
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "spine-02"
+                                          }
+                                        }
                                       }
-                                    }
+                                    ]
                                   },
                                   "router_id": {
                                     "node": {

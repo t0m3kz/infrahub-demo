@@ -11,13 +11,21 @@ spec:
     - name: leafs
       description: All leaf switches
     - name: tors
-      description: All ToR/Level2 switches
+      description: All ToR switches (VTEP — tor-deployment, connects to spines)
+    - name: l2-leafs
+      description: All L2-leaf switches (L2-only aggregation — middle_rack/mixed, connects to leafs)
+    - name: access-leafs
+      description: All access-leaf switches (VXLAN-EVPN VTEP — connects to leafs, not spines)
     - name: border-leafs
       description: All border leafs
+    - name: border-spines
+      description: All border spines (collapsed spine + border-leaf, micro-fabric pods)
     - name: spines
       description: All spines
     - name: super-spines
       description: All super spines
+    - name: hyper-spines
+      description: All hyper spines
     - name: firewalls
       description: All firewalls
     - name: loadbalancers
@@ -52,8 +60,6 @@ spec:
       description: Group for servers in topologies
     - name: virtual_fabrics
       description: Virtual Fabric Customer Deployments
-    - name: vlan_segments
-      description: VLAN Segments (traditional 802.1Q)
     - name: vxlan_segments
       description: VXLAN Segments (EVPN overlay)
     - name: vrf_namespaces
@@ -76,3 +82,52 @@ spec:
       description: Arista SD-WAN hub gateways (VCG) deployed at colocation or cloud sites
     - name: sdwan_orchestrators
       description: Arista SD-WAN Orchestrators (VCO) — on-premises or private cloud deployments
+    - name: ha_domains
+      description: HA domains (firewall + load balancer) — membership tracking only, no generator dispatch
+    - name: mlag_domains
+      description: MLAG domains — generator target for MLAGWiringGenerator
+    - name: loadbalancer_vips
+      description: Load balancer VIP services — generator target for LoadbalancerBackendNexthopGenerator
+    - name: app_applications
+      description: Application instances — generator target for AppApplicationGenerator
+    - name: app_deployment_requests
+      description: Customer application deployment requests — generator target for AppDeploymentRequestGenerator
+    - name: app_components
+      description: Application component instances
+    - name: app_dependencies
+      description: Application dependency edges
+    - name: topology_ansible
+      description: Customer deployment footprints routed to Ansible-based infrastructure orchestration
+    - name: topology_github_actions
+      description: Customer deployment footprints routed to GitHub Actions-based infrastructure orchestration
+    - name: topology_terraform
+      description: Customer deployment footprints routed to Terraform/OpenTofu-based infrastructure orchestration
+    - name: topology_argocd
+      description: Customer deployment footprints routed to Argo CD-based platform orchestration
+    - name: application_ansible
+      description: Applications routed to Ansible Automation Platform delivery workflows
+    - name: application_github_actions
+      description: Applications routed to GitHub Actions delivery workflows
+    - name: application_argocd
+      description: Applications routed to Argo CD delivery workflows
+    - name: customer_deployments
+      description: All customer deployment footprints (TopologyCustomerDC/Colocation/Cloud/Office) — generator target for TopologyOrchestratorRoutingGenerator, which queries all 4 kinds in one pass  # yamllint disable-line rule:line-length
+    - name: customer_quotations
+      description: Customer sizing/pricing requests for QuotationDCGenerator and OfficeQuotationGenerator
+    - name: managed_controllers
+      description: Management/orchestration controllers (ACI APIC, DCNM, Panorama, Check Point SMS, F5 BIG-IQ, NetScaler-ADM, ...) — target for controller payload artifacts  # yamllint disable-line rule:line-length
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CoreGeneratorGroup
+  data:
+    - name: customer_deployments_dc
+      description: TopologyCustomerDC footprints — generator target for CustomerDeploymentDCExchangeGenerator
+    - name: customer_deployments_colocation
+      description: TopologyCustomerColocation footprints — generator target for CustomerDeploymentColocationExchangeGenerator  # yamllint disable-line rule:line-length
+    - name: customer_deployments_cloud
+      description: TopologyCustomerCloud footprints — generator target for CustomerDeploymentCloudExchangeGenerator
+    - name: customer_deployments_office
+      description: TopologyCustomerOffice footprints — generator target for CustomerDeploymentOfficeExchangeGenerator

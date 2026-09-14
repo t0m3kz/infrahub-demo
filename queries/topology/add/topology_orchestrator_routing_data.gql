@@ -1,0 +1,62 @@
+query topology_orchestrator_routing_data($name: String!) {
+  TopologyCustomerDC(name__value: $name) {
+    edges {
+      node {
+        __typename
+        id
+        name { value }
+        environment { value }
+        infrastructure_orchestrator { value }
+        owner { node { org_id { value } } }
+        parent { node { name { value } } }
+      }
+    }
+  }
+
+  TopologyCustomerColocation(name__value: $name) {
+    edges {
+      node {
+        __typename
+        id
+        name { value }
+        environment { value }
+        infrastructure_orchestrator { value }
+        owner { node { org_id { value } } }
+        parent { node { name { value } } }
+      }
+    }
+  }
+
+  TopologyCustomerOffice(name__value: $name) {
+    edges {
+      node {
+        __typename
+        id
+        name { value }
+        environment { value }
+        infrastructure_orchestrator { value }
+        parent {
+          node {
+            ... on TopologyOfficeCustomer {
+              owner { node { org_id { value } } }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  TopologyCustomerCloud(name__value: $name) {
+    edges {
+      node {
+        __typename
+        id
+        name { value }
+        environment { value }
+        infrastructure_orchestrator { value }
+        owner { node { org_id { value } } }
+        parent { node { name { value } } }
+      }
+    }
+  }
+}

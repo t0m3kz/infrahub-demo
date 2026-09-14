@@ -1,0 +1,25 @@
+---
+# DC7-BL1 <-> DC7-FW1 cabling — the only link in this demo that's a
+# real physical DcimCable (both devices sit in the same DC). The border-leaf
+# already has a dedicated role:firewall interface range
+# (Ethernet[25-28]/1, see data/bootstrap/10_physical_devices_templates_
+# arista_eos.yaml); the firewall's eth1/eth2 are its uplinks.
+# This gives C003's dedicated ManagedFirewallContext (06_customer_boarding/
+# c003.yml) an actual routed path to verify, instead of a floating
+# capabilities-only HA domain with no wire behind it.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - name: "CBL-DC7-BL1-FW1-1"
+      type: smf
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "DC7-BL1"
+            name: "Ethernet25/1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "DC7-FW1"
+            name: "eth1"

@@ -1,0 +1,7 @@
+query PlaceholderQuery {
+  InfrahubStatus {
+    summary {
+      schema_hash_synced
+    }
+  }
+}

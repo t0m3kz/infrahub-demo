@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING, Any, Literal, Sequence
 
 from netutils.interface import sort_interface_list
 
+from utils.interface_speed import InterfaceSpeedMatcher
+
 if TYPE_CHECKING:
     from generators.protocols import DcimPhysicalInterface
 
@@ -34,53 +36,10 @@ UPLINKS_PER_TOR_IN_PAIRED_MODE = 2
 # ============================================================================
 # Interface Utilities
 # ============================================================================
-
-
-class InterfaceSpeedMatcher:
-    """Extract and group interfaces by speed for mixed-speed deployments."""
-
-    SPEED_PATTERN = re.compile(r"(\d+)gbase", re.IGNORECASE)
-
-    @classmethod
-    def extract_speed(cls, interface_type: Any) -> int | None:
-        """Extract speed in Gbps from interface type."""
-        if hasattr(interface_type, "value"):
-            interface_type = str(interface_type.value)
-
-        if not isinstance(interface_type, str):
-            return None
-
-        match = cls.SPEED_PATTERN.search(interface_type)
-        return int(match.group(1)) if match else None
-
-    @classmethod
-    def group_by_speed(
-        cls, server_interfaces: list[Any], switch_interfaces: list[Any]
-    ) -> dict[int, tuple[list[Any], list[Any]]]:
-        """Group interfaces by speed for matched connectivity."""
-        speed_groups: dict[int, tuple[list[Any], list[Any]]] = {}
-
-        # Group server interfaces
-        server_by_speed: dict[int, list[Any]] = {}
-        for intf in server_interfaces:
-            if intf.interface_type:
-                speed = cls.extract_speed(intf.interface_type)
-                if speed:
-                    server_by_speed.setdefault(speed, []).append(intf)
-
-        # Group switch interfaces
-        switch_by_speed: dict[int, list[Any]] = {}
-        for intf in switch_interfaces:
-            if intf.interface_type and intf.interface_type.value:
-                speed = cls.extract_speed(intf.interface_type.value)
-                if speed:
-                    switch_by_speed.setdefault(speed, []).append(intf)
-
-        speed_groups = {
-            speed: (server_by_speed[speed], switch_by_speed[speed])
-            for speed in server_by_speed.keys() & switch_by_speed.keys()
-        }
-        return speed_groups
+#
+# InterfaceSpeedMatcher lives in utils.interface_speed (shared with
+# transforms/, which also derives speed from interface_type for OSPF
+# reference-bandwidth). Re-exported here for existing importers.
 
 
 class CableTypeDetector:
@@ -124,6 +83,26 @@ class CableTypeDetector:
             if cable_type == "mmf"
             else "Media converter or transceiver"
         )
+
+
+def pick_matched_switch_port_name(
+    free_names_by_switch: dict[str, list[str]],
+    switch_names: tuple[str, str],
+) -> str | None:
+    """Pick the lowest free interface name shared by BOTH switches of a
+    dual-homed pair (e.g. Ethernet1/1/8 on both), so a server's two links
+    land on matching port numbers instead of independently-chosen ones
+    (port 6 free on one switch, port 8 on the other).
+
+    Returns None when the two switches have no free name in common (e.g.
+    different port-naming schemes) — callers should fall back to picking
+    independently from each switch's own free-port list in that case.
+    """
+    switch_a, switch_b = switch_names
+    common_names = set(free_names_by_switch.get(switch_a, [])) & set(free_names_by_switch.get(switch_b, []))
+    if not common_names:
+        return None
+    return sort_interface_list(list(common_names))[0]
 
 
 class ConnectionValidator:
@@ -173,6 +152,10 @@ class CablingStrategy(ABC):
         pass
 
 
+class CablingPlanError(ValueError):
+    """Raised when a cabling plan cannot be built safely."""
+
+
 class PodCablingStrategy(CablingStrategy):
     """Pod-to-pod cabling strategy."""
 
@@ -188,7 +171,7 @@ class PodCablingStrategy(CablingStrategy):
                 top_intf_index = (bottom_index + cabling_offset) % len(top_interfaces)
                 top_intf = top_interfaces[top_intf_index]
                 bottom_intf = self.planner.bottom_by_device[bottom_device][(top_index)]
-                cabling_plan.append((top_intf, bottom_intf))
+                cabling_plan.append((bottom_intf, top_intf))
 
         return cabling_plan
 
@@ -199,7 +182,12 @@ class RackCablingStrategy(CablingStrategy):
     def build_plan(
         self, cabling_offset: int = 0, **kwargs
     ) -> list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]]:
-        """Builds a cabling plan for any-to-any connectivity (e.g., ToRs/Leafs to Spines)."""
+        """Builds a cabling plan for any-to-any connectivity (e.g., ToRs/Leafs to Spines).
+
+        Raises CablingPlanError when the computed top interface index exceeds available
+        interfaces. This fail-fast behavior prevents partial cabling where some devices
+        silently remain disconnected.
+        """
         cabling_plan: list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]] = []
 
         for bottom_index, bottom_device in enumerate(self.planner._sorted_bottom_devices):
@@ -212,19 +200,77 @@ class RackCablingStrategy(CablingStrategy):
                     if bottom_index < len(self.planner._sorted_bottom_devices)
                     else f"index={bottom_index}"
                 )
-                self.logger.error(
+                msg = (
                     f"OFFSET OVERFLOW - bottom device {bottom_label}: "
                     f"top_interface_index={top_interface_index} (offset={cabling_offset} + device={bottom_index}) "
                     f"exceeds {max_top_interfaces} available top interfaces. "
                     f"Reduce the offset or add more interfaces to top devices."
                 )
-                continue
+                self.logger.error(msg)
+                raise CablingPlanError(msg)
 
             for top_index, top_device in enumerate(self.planner._sorted_top_devices):
                 top_intf = self.planner.top_by_device[top_device][top_interface_index]
                 bottom_interface_index = top_index % len(self.planner.bottom_by_device[bottom_device])
                 bottom_intf = self.planner.bottom_by_device[bottom_device][bottom_interface_index]
                 cabling_plan.append((bottom_intf, top_intf))
+
+        return cabling_plan
+
+
+class ChainCablingStrategy(CablingStrategy):
+    """Index-paired strategy for multi-hop chains (e.g. border-leaf<->
+    firewall<->load-balancer<->...<->border-leaf): device i on one side
+    cables ONLY to device i on the other, forming N independent redundant
+    paths — never any-to-any like RackCablingStrategy. Fewer devices on one
+    side are reused round-robin (index i % count). Within a pair, every
+    mutually available port becomes its own parallel cable.
+    """
+
+    def build_plan(self, **kwargs) -> list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]]:
+        """Pairs bottom[i % num_bottom] with top[i % num_top] for each index
+        i, using every mutually available port on each pair as a cable."""
+        cabling_plan: list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]] = []
+
+        num_bottom = len(self.planner._sorted_bottom_devices)
+        num_top = len(self.planner._sorted_top_devices)
+        if num_bottom == 0 or num_top == 0:
+            return cabling_plan
+
+        # Per-device "next free port" cursor for devices reused across pairs.
+        bottom_cursor: dict[str, int] = {device: 0 for device in self.planner._sorted_bottom_devices}
+        top_cursor: dict[str, int] = {device: 0 for device in self.planner._sorted_top_devices}
+
+        num_pairs = max(num_bottom, num_top)
+        any_pair_cabled = False
+        for pair_index in range(num_pairs):
+            bottom_device = self.planner._sorted_bottom_devices[pair_index % num_bottom]
+            top_device = self.planner._sorted_top_devices[pair_index % num_top]
+            bottom_ports = self.planner.bottom_by_device[bottom_device]
+            top_ports = self.planner.top_by_device[top_device]
+
+            bottom_free = len(bottom_ports) - bottom_cursor[bottom_device]
+            top_free = len(top_ports) - top_cursor[top_device]
+            links_for_pair = min(bottom_free, top_free)
+            if links_for_pair <= 0:
+                self.logger.error(
+                    f"INSUFFICIENT INTERFACES - {bottom_device}<->{top_device} (chain pair {pair_index}): "
+                    f"no free ports left on at least one side (bottom_free={bottom_free}, top_free={top_free})."
+                )
+                continue
+
+            for _ in range(links_for_pair):
+                bottom_intf = bottom_ports[bottom_cursor[bottom_device]]
+                top_intf = top_ports[top_cursor[top_device]]
+                bottom_cursor[bottom_device] += 1
+                top_cursor[top_device] += 1
+                cabling_plan.append((bottom_intf, top_intf))
+            any_pair_cabled = True
+
+        if not any_pair_cabled:
+            self.logger.error(
+                "INSUFFICIENT INTERFACES - No chain pair had a free port on both sides; no connections created."
+            )
 
         return cabling_plan
 
@@ -474,6 +520,7 @@ class CablingPlanner:
         self._strategies: dict[str, CablingStrategy] = {
             "pod": PodCablingStrategy(self),
             "rack": RackCablingStrategy(self),
+            "chain": ChainCablingStrategy(self),
             "intra_rack": IntraRackCablingStrategy(self),
             "intra_rack_middle": IntraRackMiddleCablingStrategy(self),
             "intra_rack_mixed": IntraRackMixedCablingStrategy(self),
@@ -566,13 +613,7 @@ class CablingPlanner:
 
     def _get_interface_speed(self, interface: DcimPhysicalInterface) -> int | None:
         """Extract speed from interface type."""
-        if not hasattr(interface, "interface_type") or not interface.interface_type:
-            return None
-
-        interface_type = (
-            interface.interface_type.value if hasattr(interface.interface_type, "value") else interface.interface_type
-        )
-        return InterfaceSpeedMatcher.extract_speed(str(interface_type)) if interface_type else None
+        return InterfaceSpeedMatcher.extract_speed(str(interface.interface_type.value))
 
     def _validate_interface_speeds(
         self,
@@ -588,16 +629,8 @@ class CablingPlanner:
             bottom_speed = self._get_interface_speed(bottom_intf)
             top_speed = self._get_interface_speed(top_intf)
 
-            bottom_type = (
-                getattr(bottom_intf.interface_type, "value", bottom_intf.interface_type)
-                if hasattr(bottom_intf, "interface_type")
-                else "unknown"
-            )
-            top_type = (
-                getattr(top_intf.interface_type, "value", top_intf.interface_type)
-                if hasattr(top_intf, "interface_type")
-                else "unknown"
-            )
+            bottom_type = bottom_intf.interface_type.value
+            top_type = top_intf.interface_type.value
 
             if bottom_speed and top_speed and bottom_speed != top_speed:
                 mismatch_msg = (

@@ -1,3 +1,9 @@
+{%- set _lb = namespace(name='Loopback0') -%}
+{%- for iface in interfaces -%}
+{%- if iface.name | lower | truncate(8, true, '') == 'loopback' and _lb.name == 'Loopback0' -%}
+{%- set _lb.name = iface.name -%}
+{%- endif -%}
+{%- endfor -%}
 !
 ! Arista EOS Border Leaf Configuration
 ! Device: {{ hostname }}
@@ -28,6 +34,9 @@ interface {{ interface.name }}
 {%- else %}
    description {{ interface.role|title }} interface
 {%- endif %}
+{%- if interface.dot1q_vlan %}
+   encapsulation dot1q vlan {{ interface.dot1q_vlan }}
+{%- endif %}
 {%- include 'common/arista_eos_interface_ip.j2' %}
 {%- if interface.vlans %}
 {%- if interface.vlans|length == 1 %}
@@ -56,7 +65,158 @@ interface {{ interface.name }}
 
 ! Configure route-maps
 route-map RM-CONN-2-BGP permit 10
-   match interface Loopback0
+   match interface {{ _lb.name }}
+
+{%- if vxlan and vxlan.enabled %}
+!
+! VXLAN Configuration — border-leaf is a VTEP too, terminating customer/shared
+! VNIs the same as a regular leaf.
+!
+interface {{ vxlan.interface }}
+{%- if vxlan.vtep.ipv4 %}
+   vxlan source-interface {{ vxlan.vtep.source_interface }}
+{%- endif %}
+{%- if vxlan.vtep.udp_port != 4789 %}
+   vxlan udp-port {{ vxlan.vtep.udp_port }}
+{%- endif %}
+{%- if vxlan.l2_vni_mappings %}
+   !
+   ! L2 VNI Mappings (VLAN segments)
+{%- for mapping in vxlan.l2_vni_mappings %}
+   vxlan vlan {{ mapping.vlan_id }} vni {{ mapping.vni }}
+{%- endfor %}
+{%- endif %}
+{%- if vxlan.l3_vni_mappings %}
+   !
+   ! L3 VNI Mappings (VRF segments for microsegmentation)
+{%- for mapping in vxlan.l3_vni_mappings %}
+   vxlan vrf {{ mapping.vrf_name }} vni {{ mapping.l3_vni }}
+{%- endfor %}
+{%- endif %}
+{%- if vxlan.flooding == "static" and vxlan.remote_vteps and vxlan.l2_vni_mappings %}
+{%- for mapping in vxlan.l2_vni_mappings %}
+   vxlan vlan {{ mapping.vlan_id }} flood vtep {{ vxlan.remote_vteps | join(' ') }}
+{%- endfor %}
+{%- endif %}
+!
+{%- if vxlan.evpn and vxlan.evpn.enabled and bgp %}
+!
+! EVPN Configuration (L2 + L3 VNI)
+!
+{%- for bgp_config in bgp %}
+router bgp {{ bgp_config.local_as.asn }}
+{%- if vxlan.l2_vni_mappings %}
+   !
+   ! L2 EVPN (VLAN-based)
+{%- for mapping in vxlan.l2_vni_mappings %}
+   vlan {{ mapping.vlan_id }}
+      rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.vni | string) }}
+      route-target both {{ vxlan.evpn.rt_format | replace('{vni}', mapping.vni | string) }}
+      redistribute learned
+{%- endfor %}
+{%- endif %}
+{%- if vxlan.l3_vni_mappings %}
+   !
+   ! L3 EVPN (VRF-based for microsegmentation)
+{%- for mapping in vxlan.l3_vni_mappings %}
+   vrf {{ mapping.vrf_name }}
+      rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.l3_vni | string) }}
+      route-target import evpn {{ vxlan.evpn.rt_format | replace('{vni}', mapping.l3_vni | string) }}
+      route-target export evpn {{ vxlan.evpn.rt_format | replace('{vni}', mapping.l3_vni | string) }}
+      redistribute connected
+{%- endfor %}
+{%- endif %}
+{% endfor %}
+{%- endif %}
+{%- endif %}
+
+{%- if vxlan.anycast_gateway and vxlan.anycast_gateway.enabled %}
+!
+! Anycast Gateway Configuration
+!
+ip virtual-router mac-address {{ vxlan.anycast_gateway.mac }}
+{%- for vlan in vlans %}
+{%- if vlan.gateway_ip or vlan.gateway_ipv6 %}
+{%- set ns = namespace(acl_name=None) %}
+{%- for acl in acls %}
+{%- if acl.vlan_id == vlan.vlan_id %}
+{%- set ns.acl_name = acl.name %}
+{%- endif %}
+{%- endfor %}
+interface Vlan{{ vlan.vlan_id }}
+{%- if vlan.isolation_mode == 'isolated' %}
+   ! Isolation Mode: ISOLATED — intra-segment host-to-host traffic blocked via port-isolation
+{%- elif vlan.isolation_mode == 'microsegmented' %}
+   ! Isolation Mode: MICROSEGMENTED — intra+inter segment rules enforced via SVI ACL (and firewall if present)
+{%- endif %}
+{%- if vlan.vrf %}
+   vrf {{ vlan.vrf }}
+{%- endif %}
+{%- if vlan.gateway_ip %}
+   ip address virtual {{ vlan.gateway_ip }}
+{%- endif %}
+{%- if vlan.gateway_ipv6 %}
+   ipv6 address virtual {{ vlan.gateway_ipv6 }}
+{%- endif %}
+{%- if ns.acl_name %}
+   ip access-group {{ ns.acl_name }} in
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+
+{%- if vrf_gateways %}
+!
+! VRF Default Routes — inter-VRF hop on this device (TopologyRoutedExchange)
+!
+{%- for vrf, nexthop in vrf_gateways.items() %}
+ip route vrf {{ vrf }} 0.0.0.0/0 {{ nexthop }}
+{%- endfor %}
+{%- endif %}
+
+{%- if border_leaf_pbr_rules %}
+!
+! Border-leaf PBR (.dev/scenariusze.txt "ARISTA-BORDER-LEAF") — default-
+! redirect every segment's traffic to its firewall context's nexthop.
+! Security-group (MSS-G) travels in-band from the originating leaf; tagged
+! rules match by group NAME (Arista's own match key), everything else
+! falls back to a source-prefix ACL match.
+!
+network-security
+   hardware macro-segmentation Service-Group
+!
+{%- for rule in border_leaf_pbr_rules if rule.match_by_tag %}
+network-security
+   security-group {{ rule.sgt_name }}
+      id {{ rule.sgt }}
+!
+{%- endfor %}
+{%- for rule in border_leaf_pbr_rules %}
+! Customer: {{ rule.customer_name or 'any' }}/{{ rule.environment or 'any' }}
+{%- if not rule.match_by_tag %}
+ip access-list {{ rule.acl_name }}
+{%- for prefix in rule.source_prefixes %}
+   permit ip {{ prefix }} any
+{%- endfor %}
+!
+{%- endif %}
+route-map RM-BORDER-LEAF-PBR permit {{ loop.index * 10 }}
+{%- if rule.match_by_tag %}
+   match security-group {{ rule.sgt_name }}
+{%- else %}
+   match ip address {{ rule.acl_name }}
+{%- endif %}
+   set ip next-hop {{ rule.fw_nexthop }}
+!
+{%- endfor %}
+! Applied on every uplink (fabric-facing) interface — that's where traffic
+! from any leaf in this DC arrives at the border-leaf.
+{%- for interface in interfaces if interface.role == 'uplink' %}
+interface {{ interface.name }}
+   ip policy route-map RM-BORDER-LEAF-PBR
+!
+{%- endfor %}
+{%- endif %}
 
 {%- include 'common/arista_eos_management.j2' %}
 

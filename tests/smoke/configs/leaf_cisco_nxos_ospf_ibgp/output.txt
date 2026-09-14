@@ -3,6 +3,8 @@
 !
 hostname dc1-leaf-01
 !
+system routing tcam security-group-acl
+!
 feature ospf
 feature bgp
 feature interface-vlan
@@ -12,12 +14,6 @@ feature lldp
 !
 
 ! VLANs
-vlan 100
-  name Customer-A
-!
-vlan 200
-  name Customer-A
-!
 !
 !
 ! Interfaces
@@ -47,10 +43,15 @@ interface Loopback0
 
 router ospf 1
   router-id 10.0.0.1
-  auto-cost reference-bandwidth 100000
-  area None authentication message-digest
+  auto-cost reference-bandwidth 10000
   passive-interface default
+  no passive-interface Ethernet1
+  no passive-interface Ethernet2
 !
+interface Ethernet1
+  ip router ospf 1 area 0.0.0.0
+interface Ethernet2
+  ip router ospf 1 area 0.0.0.0
 
 !
 ! BGP Configuration
@@ -61,7 +62,6 @@ router bgp 65000
   !
   template peer-policy EVPN-PEERS-POLICY
     send-community
-    send-community extended
   !
   template peer-session EVPN-PEERS-SESSION
     update-source loopback0
@@ -90,45 +90,10 @@ router bgp 65000
 
 !
 !
-! VXLAN Configuration (netlab-style multivendor)
-!
-feature nv overlay
-feature vn-segment-vlan-based
-feature nve
-!
-interface nve1
-  source-interface Loopback0
-  member vni 10100
-  no shutdown
-!
-!
-! VLAN to VNI mapping
-!
-vlan 100
-  vn-segment 10100
-!
 ! Route-maps
 route-map RM-CONN-2-BGP permit 10
   match interface loopback0
 !
-! VLAN SVI Configuration
-!
-interface Vlan100
-  description Customer-A
-  vrf member VRF_A
-  ip address 10.100.0.1/24
-  no shutdown
-!
-interface Vlan200
-  description Customer-A
-  ip address 10.200.0.1/24
-  no shutdown
-!
-!
-!
-! VRF Default Routes — firewall gateway per namespace (Option A: FW as inter-VRF router)
-!
-ip route 0.0.0.0/0 10.100.0.254 vrf VRF_A
 !
 
 !

@@ -10,6 +10,12 @@ spec:
     - name: run-pod-generator
       description: Run Pod Generator
       generator: add_pod
+    - name: run-dc-pod-cascade
+      description: Re-run every existing pod's generator after a DC-level capacity change
+      generator: dc_pod_cascade
+    - name: run-pod-rack-cascade
+      description: Re-run the racks a pod is directly responsible for after a pod-level capacity change
+      generator: pod_rack_cascade
     - name: run-rack-generator
       description: Run Rack Generator
       generator: add_rack
@@ -20,12 +26,30 @@ spec:
       description: Decommission all devices within a pod
       generator: decommission_pod
     # VRF generator runs via group membership only — no action needed
-    - name: run-vlan-segment-generator
-      description: Run VLAN Segment Generator
-      generator: add_vlan_segment
     - name: run-vxlan-segment-generator
       description: Run VXLAN Segment Generator
       generator: add_vxlan_segment
-# - name: run-endpoint-generator
-#   description: Run Endpoint Connectivity Generator
-#   generator: add_endpoint
+    - name: mlag-generator
+      description: Create MLAG peer-link interfaces and cables for an MLAG domain
+      generator: add_mlag
+    - name: lb-backend-nexthop-generator
+      description: Wire a no-SNAT VIP's backend return-path VLAN sub-interface + IP
+      generator: add_lb_backend_nexthop
+    - name: run-app-application-generator
+      description: Derive security policy rules from application component dependencies
+      generator: add_app_application
+    - name: run-endpoint-generator
+      description: Run Endpoint Connectivity Generator
+      generator: add_endpoint
+    - name: run-customer-deployment-dc-generator
+      description: Provision FirewallContext/dedicated LB and exchange routing for a DC customer deployment
+      generator: add_customer_deployment_dc
+    - name: run-customer-deployment-colocation-generator
+      description: Provision FirewallContext/dedicated LB and exchange routing for a colocation customer deployment
+      generator: add_customer_deployment_colocation
+    - name: run-customer-deployment-cloud-generator
+      description: Provision exchange routing for a cloud customer deployment
+      generator: add_customer_deployment_cloud
+    - name: run-customer-deployment-office-generator
+      description: Provision exchange routing for an office customer deployment
+      generator: add_customer_deployment_office

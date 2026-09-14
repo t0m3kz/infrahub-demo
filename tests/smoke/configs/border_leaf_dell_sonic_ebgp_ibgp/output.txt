@@ -8,14 +8,6 @@ feature bgp
 feature interface-vlan
 feature vn-segment-vlan-based
 feature nv overlay
-vlan 100
-  name Customer-A
-  vn-segment 100
-
-vlan 200
-  name Customer-A
-  vn-segment 200
-
 interface Ethernet1
   description to spine-01
   ip address 10.1.0.1/31
@@ -49,8 +41,7 @@ router bgp 65000
   neighbor EVPN-PEERS peer-group
   neighbor EVPN-PEERS remote-as 65000
   neighbor EVPN-PEERS update-source Loopback0
-  neighbor EVPN-PEERS send-community extended
-  neighbor EVPN-PEERS maximum-routes 0
+  neighbor EVPN-PEERS send-community
   neighbor 10.0.0.100 peer-group EVPN-PEERS
   neighbor 10.0.0.100 description spine-01
   neighbor 10.0.0.101 peer-group EVPN-PEERS
@@ -71,8 +62,7 @@ router bgp 65001
   maximum-paths 4 ecmp 64
   !
   neighbor UNDERLAY-PEERS peer-group
-  neighbor UNDERLAY-PEERS send-community extended
-  neighbor UNDERLAY-PEERS maximum-routes 0
+  neighbor UNDERLAY-PEERS send-community
   neighbor UNDERLAY-PEERS bfd
   neighbor 10.1.0.0 peer-group UNDERLAY-PEERS
   neighbor 10.1.0.0 remote-as 65100
@@ -93,5 +83,6 @@ router bgp 65001
 ! Configure route-maps
 route-map RM-CONN-2-BGP permit 10
   match interface Loopback0
+!
 
 ! End of configuration

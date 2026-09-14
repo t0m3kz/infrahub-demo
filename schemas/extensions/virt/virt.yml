@@ -107,7 +107,7 @@ nodes:
 
       - name: status
         kind: Dropdown
-        optional: false
+        optional: true
         default_value: active
         order_weight: 1300
         choices:
@@ -136,9 +136,42 @@ nodes:
         kind: Boolean
         label: "HA Enabled"
         description: "Control plane HA (3+ nodes / vCenter HA / multi-AZ managed)."
-        optional: false
+        optional: true
         default_value: true
         order_weight: 1400
+
+      - name: total_cpu
+        kind: Text
+        label: "Total CPU"
+        description: "Aggregate vCPU count across all node pools (computed)."
+        optional: true
+        read_only: true
+        order_weight: 1500
+        computed_attribute:
+          kind: TransformPython
+          transform: virt_cluster_total_cpu
+
+      - name: total_memory_gb
+        kind: Text
+        label: "Total Memory (GB)"
+        description: "Aggregate RAM in GB across all node pools (computed)."
+        optional: true
+        read_only: true
+        order_weight: 1510
+        computed_attribute:
+          kind: TransformPython
+          transform: virt_cluster_total_memory_gb
+
+      - name: total_storage_gb
+        kind: Text
+        label: "Total Storage (GB)"
+        description: "Aggregate storage in GB across all node pools (computed)."
+        optional: true
+        read_only: true
+        order_weight: 1520
+        computed_attribute:
+          kind: TransformPython
+          transform: virt_cluster_total_storage_gb
 
     relationships:
       # Works for all locations:
@@ -184,16 +217,6 @@ nodes:
         optional: true
         order_weight: 1900
 
-      - name: segments
-        peer: ManagedNetworkSegment
-        label: "Network Segments"
-        description: "VXLAN/VLAN segments reachable from this cluster."
-        cardinality: many
-        kind: Attribute
-        optional: true
-        identifier: "virt_cluster__segments"
-        order_weight: 1950
-
       - name: node_pools
         peer: VirtNodePool
         label: "Node Pools"
@@ -203,6 +226,26 @@ nodes:
         on_delete: cascade
         identifier: "virt_cluster__node_pools"
         order_weight: 2000
+
+      - name: vip_service
+        peer: LoadbalancerVIP
+        label: "VIP Service"
+        description: "External VIP fronting this cluster's ingress controller."
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "virt_cluster__vip_service"
+        order_weight: 2100
+
+      - name: proxy_service
+        peer: ManagedProxyService
+        label: "Egress Proxy"
+        description: "Cluster-wide egress proxy — on-prem (ManagedProxyHA) or cloud SASE (ManagedCloudProxy)."
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "virt_cluster__proxy_service"
+        order_weight: 2200
 
       - name: tags
         peer: BuiltinTag
@@ -242,7 +285,7 @@ nodes:
       - name: pool_type
         kind: Dropdown
         label: "Pool Type"
-        optional: false
+        optional: true
         default_value: worker
         order_weight: 1100
         choices:
@@ -275,7 +318,7 @@ nodes:
       - name: scaling_mode
         kind: Dropdown
         label: "Scaling Mode"
-        optional: false
+        optional: true
         default_value: static
         order_weight: 1150
         choices:
@@ -294,7 +337,7 @@ nodes:
 
       - name: status
         kind: Dropdown
-        optional: false
+        optional: true
         default_value: active
         order_weight: 1200
         choices:
@@ -395,6 +438,27 @@ nodes:
         optional: true
         order_weight: 1550
 
+      - name: cpu_per_node
+        kind: Number
+        label: "CPU per Node"
+        description: "vCPU or physical CPU count per node/host in this pool."
+        optional: true
+        order_weight: 1560
+
+      - name: memory_per_node_gb
+        kind: Number
+        label: "Memory per Node (GB)"
+        description: "RAM in GB per node/host in this pool."
+        optional: true
+        order_weight: 1570
+
+      - name: storage_per_node_gb
+        kind: Number
+        label: "Storage per Node (GB)"
+        description: "Usable storage in GB per node/host in this pool."
+        optional: true
+        order_weight: 1580
+
     relationships:
       - name: cluster
         peer: VirtCluster
@@ -462,19 +526,3 @@ nodes:
         cardinality: many
         kind: Attribute
         order_weight: 3000
-
-
-extensions:
-  nodes:
-    # Back-reference: segment → clusters (symmetric with cloud model)
-    - kind: ManagedNetworkSegment
-      relationships:
-        - name: virt_clusters
-          peer: VirtCluster
-          label: "Virt Clusters"
-          description: "Virtualisation clusters (on-prem, colo, or cloud) consuming this segment."
-          cardinality: many
-          kind: Attribute
-          optional: true
-          identifier: "virt_cluster__segments"
-          order_weight: 3200

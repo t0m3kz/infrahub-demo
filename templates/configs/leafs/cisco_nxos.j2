@@ -1,7 +1,15 @@
+{%- set _lb = namespace(name='loopback0') -%}
+{%- for iface in interfaces -%}
+{%- if iface.name | lower | truncate(8, true, '') == 'loopback' and _lb.name == 'loopback0' -%}
+{%- set _lb.name = iface.name -%}
+{%- endif -%}
+{%- endfor -%}
 !
 ! {{ name }} Configuration
 !
 hostname {{ name }}
+!
+system routing tcam security-group-acl
 !
 feature ospf
 feature bgp
@@ -15,6 +23,9 @@ feature lldp
 {%- for vlan in vlans %}
 vlan {{ vlan.vlan_id }}
   name {{ vlan.name }}
+{%- if vlan.isolation_mode == 'isolated' %}
+  ! private-vlan type: isolated  (configure PVLAN or port-protection separately)
+{%- endif %}
 !
 {%- endfor %}
 !
@@ -26,6 +37,9 @@ ip access-list {{ acl.name }}
 {%- for rule in acl.rules %}
 {%- if rule.src_zone or rule.dst_zone %}
   remark Zone: {{ rule.src_zone or 'any' }} -> {{ rule.dst_zone or 'any' }}
+{%- endif %}
+{%- if rule.src_customer or rule.dst_customer %}
+  remark Customer: {{ rule.src_customer or 'any' }}/{{ rule.src_environment or 'any' }} -> {{ rule.dst_customer or 'any' }}/{{ rule.dst_environment or 'any' }}
 {%- endif %}
   {{ rule.seq }} {{ rule.action }} {{ rule.protocol }} {{ rule.src }} {{ rule.dst -}}
 {%- if rule.dst_port %} {{ rule.dst_port }}{% endif -%}
@@ -47,6 +61,15 @@ interface {{ interface.name }}
   switchport
   switchport mode access
   switchport access vlan {{ interface.vlans[0] }}
+{%- set ns_vlan = namespace(isolation_mode='normal') %}
+{%- for vlan in vlans %}
+{%- if vlan.vlan_id == interface.vlans[0] %}
+{%- set ns_vlan.isolation_mode = vlan.isolation_mode %}
+{%- endif %}
+{%- endfor %}
+{%- if ns_vlan.isolation_mode == 'isolated' %}
+  ! TODO: configure port-isolation group X (NX-OS port isolation requires interface-level group assignment)
+{%- endif %}
 {%- endif %}
 {%- if interface.get('ospf') %}
   ip ospf area {{ interface.ospf.area }}
@@ -107,8 +130,13 @@ vlan {{ mapping.vlan_id }}
 !
 ! Route-maps
 route-map RM-CONN-2-BGP permit 10
-  match interface loopback0
+  match interface {{ _lb.name }}
 !
+{%- if vxlan and vxlan.anycast_gateway and vxlan.anycast_gateway.enabled %}
+! Anycast Gateway — identical MAC on every leaf/border-leaf in the fabric
+fabric forwarding anycast-gateway-mac {{ vxlan.anycast_gateway.mac | replace(':', '') | replace('.', '') }}
+!
+{%- endif %}
 {%- if vlans %}
 ! VLAN SVI Configuration
 !
@@ -122,6 +150,11 @@ route-map RM-CONN-2-BGP permit 10
 {%- endfor %}
 interface Vlan{{ vlan.vlan_id }}
   description {{ vlan.name }}
+{%- if vlan.isolation_mode == 'isolated' %}
+  ! Isolation Mode: ISOLATED — intra-segment host-to-host traffic blocked via port-isolation
+{%- elif vlan.isolation_mode == 'microsegmented' %}
+  ! Isolation Mode: MICROSEGMENTED — intra+inter segment rules enforced via SVI ACL (and firewall if present)
+{%- endif %}
 {%- if vlan.vrf %}
   vrf member {{ vlan.vrf }}
 {%- endif %}
@@ -130,6 +163,9 @@ interface Vlan{{ vlan.vlan_id }}
 {%- endif %}
 {%- if vlan.gateway_ipv6 %}
   ipv6 address {{ vlan.gateway_ipv6 }}
+{%- endif %}
+{%- if vxlan and vxlan.anycast_gateway and vxlan.anycast_gateway.enabled %}
+  fabric forwarding mode anycast-gateway
 {%- endif %}
   no shutdown
 {%- if ns.acl_name %}
@@ -148,6 +184,73 @@ interface Vlan{{ vlan.vlan_id }}
 ip route 0.0.0.0/0 {{ nexthop }} vrf {{ vrf }}
 {%- endfor %}
 !
+{%- endif %}
+{%- if sgt_rules %}
+!
+! CTS Security Group Tags — VXLAN GPO tier enforcement (VLAN-to-SGT mapping —
+! scales to trunk ports carrying multiple segments, unlike per-port
+! cts manual/policy-static which is single-valued)
+! group_id is globally unique across Arista and Cisco fabrics
+!
+feature cts
+!
+{%- for vlan in vlans if vlan.sgt %}
+! Segment: {{ vlan.name }} — tier: {{ vlan.sgt_name }}
+cts role-based sgt-map vlan {{ vlan.vlan_id }} sgt {{ vlan.sgt }}
+{%- endfor %}
+!
+! CTS role-based permissions (SecurityTagRule — coarse tier-to-tier)
+{%- for rule in sgt_rules %}
+cts role-based permissions from {{ rule.src_sgt }} to {{ rule.dst_sgt }} {{ rule.action }}
+  ! {{ rule.src_name }} → {{ rule.dst_name }}
+  ! Customer: {{ rule.src_customer or 'any' }}/{{ rule.src_environment or 'any' }}
+{%- endfor %}
+!
+{%- endif %}
+{%- if customer_pbr_rules %}
+!
+! Customer PBR — default-redirect to firewall (TopologyCustomerDeployment's
+! FirewallContext); a SecurityPolicyRule permit is the only bypass.
+!
+{%- for rule in customer_pbr_rules %}
+! Customer: {{ rule.customer_name or 'any' }}/{{ rule.environment or 'any' }}
+ip access-list PBR-BYPASS-VLAN{{ rule.vlan_id }}
+{%- for prefix in rule.bypass_prefixes %}
+  permit ip any {{ prefix }}
+{%- endfor %}
+  deny ip any any
+!
+route-map RM-CUSTOMER-PBR-VLAN{{ rule.vlan_id }} permit 10
+  match ip address PBR-BYPASS-VLAN{{ rule.vlan_id }}
+!
+route-map RM-CUSTOMER-PBR-VLAN{{ rule.vlan_id }} permit 20
+  set ip next-hop {{ rule.fw_nexthop }}
+!
+interface Vlan{{ rule.vlan_id }}
+  ip policy route-map RM-CUSTOMER-PBR-VLAN{{ rule.vlan_id }}
+!
+{%- endfor %}
+{%- endif %}
+{%- if lb_backend_pbr_rules %}
+!
+! LB Backend No-SNAT Return-Path — redirect backend pool member response
+! traffic to the load balancer instead of the anycast gateway.
+!
+{%- for rule in lb_backend_pbr_rules %}
+! Customer: {{ rule.customer_name or 'any' }}/{{ rule.environment or 'any' }}
+ip access-list LB-BACKEND-VLAN{{ rule.vlan_id }}
+{%- for ip in rule.backend_ips %}
+  permit ip host {{ ip }} any
+{%- endfor %}
+!
+route-map RM-LB-BACKEND-VLAN{{ rule.vlan_id }} permit 10
+  match ip address LB-BACKEND-VLAN{{ rule.vlan_id }}
+  set ip next-hop {{ rule.lb_nexthop }}
+!
+interface Vlan{{ rule.vlan_id }}
+  ip policy route-map RM-LB-BACKEND-VLAN{{ rule.vlan_id }}
+!
+{%- endfor %}
 {%- endif %}
 {%- include 'common/cisco_nxos_management.j2' %}
 !

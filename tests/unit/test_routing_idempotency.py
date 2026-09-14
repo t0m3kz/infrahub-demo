@@ -12,7 +12,14 @@ Two properties that make routing "as stable as p2p cabling":
 from typing import Any
 from unittest.mock import MagicMock
 
-from generators.helpers.routing import RoutingPlan, RoutingPlanInput, RoutingPlanner
+from generators.helpers.routing import PendingASRef, RoutingPlan, RoutingPlanInput, RoutingPlanner
+from generators.types import RoutingOptions
+
+
+def _local_as_signature(local_as: Any) -> tuple:
+    if isinstance(local_as, PendingASRef):
+        return ("pending", local_as.device)
+    return tuple(sorted(local_as.items()))
 
 
 def _make_loopback(name: str, device_id: str, role: str, ip: str, lb_id: str | None = None) -> MagicMock:
@@ -36,7 +43,7 @@ def _make_p2p_interface(iface_id: str, iface_name: str, device_id: str, cable_id
 
 
 def _design() -> MagicMock:
-    d = MagicMock()
+    d = MagicMock(routing_strategy="ebgp-ebgp")
     d.model_dump = MagicMock(return_value={})
     return d
 
@@ -63,7 +70,7 @@ def _spine_leaf_topology() -> tuple[list, list]:
 
 
 def _plan_input(loopbacks: list, interfaces: list, strategy: str = "ebgp-ebgp") -> RoutingPlanInput:
-    options: dict[str, Any] = {"asn_pool": "pool-1", "design": _design()}
+    options: RoutingOptions = RoutingOptions(asn_pool="pool-1", design=_design())
     if strategy != "ebgp-ebgp":
         options["overlay_as_id"] = "shared-as-1"
     if strategy.startswith("ospf"):
@@ -84,9 +91,9 @@ def _signature(plan: RoutingPlan) -> dict[str, Any]:
         "bgp_processes": sorted(
             (
                 p["name"],
-                tuple(sorted(p.get("local_as", {}).items())),
+                _local_as_signature(p.get("local_as", {})),
                 p["router_id"]["id"],
-                p["device_capabilities"][0]["id"],
+                p["capabilities"][0]["id"],
             )
             for p in plan.bgp_processes
         ),
@@ -155,3 +162,79 @@ class TestOrderIndependence:
 
         assert dm_forward["spine-1"]["router_id"] == {"id": "ip-low"}
         assert dm_forward["spine-1"] == dm_reverse["spine-1"]
+
+
+class TestSelfLoopGuard:
+    """Regression tests for the self-loop peering bug.
+
+    Parallel rack generators can race such that both fabric-p2p endpoints of a
+    cable temporarily appear to belong to the same device (e.g., a spine gets its
+    interface tagged twice before the TOR side is committed).  The planner must
+    silently drop these entries rather than emitting a peering that references
+    only one device.
+    """
+
+    def test_self_loop_cable_produces_no_peering(self) -> None:
+        """A cable whose both endpoints resolve to the same device must be skipped."""
+        loopbacks = [
+            _make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
+            _make_loopback("spine-2", "s2", "spine", "10.0.0.2"),
+            _make_loopback("leaf-1", "l1", "leaf", "10.0.1.1"),
+        ]
+        interfaces = [
+            # Normal cable: spine-1 ↔ leaf-1
+            _make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
+            _make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
+            # Self-loop: both endpoints on spine-2 (race-condition artefact)
+            _make_p2p_interface("if3", "Ethernet1/8", "s2", "c-selfloop"),
+            _make_p2p_interface("if4", "Ethernet1/8", "s2", "c-selfloop"),
+        ]
+        planner = RoutingPlanner(deployment_id="dc-1")
+        plan = planner.build_routing_plan(
+            RoutingPlanInput(
+                bottom_devices=["leaf-1"],
+                top_devices=["spine-1", "spine-2"],
+                interfaces=interfaces,
+                loopback_interfaces=loopbacks,
+                options={"asn_pool": "pool-1", "design": _design()},
+                routing_strategy="ebgp-ebgp",
+                deployment_name="dc1",
+            )
+        )
+        peering_names = [p["name"] for p in plan.bgp_peerings]
+        assert not any("spine-2--Ethernet1_8--spine-2" in n for n in peering_names), (
+            f"Self-loop peering was created: {peering_names}"
+        )
+
+    def test_normal_peerings_still_created_alongside_self_loop(self) -> None:
+        """Self-loop guard must not suppress valid peerings on the same run."""
+        loopbacks = [
+            _make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
+            _make_loopback("leaf-1", "l1", "leaf", "10.0.1.1"),
+        ]
+        interfaces = [
+            _make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
+            _make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
+            # Self-loop on spine-1 (race artefact)
+            _make_p2p_interface("if3", "Ethernet1/99", "s1", "c-selfloop"),
+            _make_p2p_interface("if4", "Ethernet1/99", "s1", "c-selfloop"),
+        ]
+        planner = RoutingPlanner(deployment_id="dc-1")
+        plan = planner.build_routing_plan(
+            RoutingPlanInput(
+                bottom_devices=["leaf-1"],
+                top_devices=["spine-1"],
+                interfaces=interfaces,
+                loopback_interfaces=loopbacks,
+                options={"asn_pool": "pool-1", "design": _design()},
+                routing_strategy="ebgp-ebgp",
+                deployment_name="dc1",
+            )
+        )
+        peering_names = [p["name"] for p in plan.bgp_peerings]
+        # The valid leaf-1 ↔ spine-1 peering must exist
+        assert any("leaf-1" in n and "spine-1" in n for n in peering_names), f"Valid peering missing: {peering_names}"
+        # The self-loop must not exist
+        assert not any("spine-1--Ethernet1_99--spine-1" in n for n in peering_names), (
+            f"Self-loop peering was created: {peering_names}"
+        )

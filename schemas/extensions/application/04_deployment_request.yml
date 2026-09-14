@@ -1,0 +1,458 @@
+---
+version: "1.0"
+
+# Customer-facing application intent. Approved requests are later translated
+# into AppApplication/AppComponent/AppEndpoint objects by a generator.
+nodes:
+  - name: DeploymentRequest
+    namespace: App
+    description: "Customer request for an application and its required connectivity and security posture"
+    label: Application Deployment Request
+    icon: "mdi:clipboard-text-outline"
+    include_in_menu: true
+    menu_placement: ApplicationsMenu
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    order_by:
+      - name__value
+    uniqueness_constraints:
+      - [name__value]
+    attributes:
+      - name: name
+        kind: Text
+        optional: false
+        unique: true
+        order_weight: 100
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 150
+      - name: application_fqdn
+        kind: Text
+        optional: false
+        order_weight: 160
+        description: "Primary FQDN for the requested application"
+      - name: environment
+        kind: Dropdown
+        optional: false
+        default_value: production
+        order_weight: 200
+        choices:
+          - name: production
+            label: Production
+            color: "#2ECC71"
+          - name: staging
+            label: Staging
+            color: "#F1C40F"
+          - name: development
+            label: Development
+            color: "#3498DB"
+      - name: criticality
+        kind: Dropdown
+        optional: false
+        default_value: medium
+        order_weight: 300
+        choices:
+          - name: low
+            label: Low
+            color: "#95A5A6"
+          - name: medium
+            label: Medium
+            color: "#F1C40F"
+          - name: high
+            label: High
+            color: "#E67E22"
+          - name: critical
+            label: Critical
+            color: "#E74C3C"
+      - name: deployment_type
+        kind: Dropdown
+        optional: false
+        default_value: shared_platform
+        order_weight: 340
+        choices:
+          - name: shared_platform
+            label: Shared Platform
+          - name: managed_datacenter
+            label: Managed Data Center
+          - name: colocation
+            label: Colocation
+          - name: public_cloud
+            label: Public Cloud
+      - name: region
+        kind: Text
+        optional: true
+        order_weight: 345
+      - name: security_profile
+        kind: Dropdown
+        optional: false
+        default_value: internal_standard
+        order_weight: 350
+        choices:
+          - name: fintech_strict
+            label: Fintech Strict
+          - name: internal_standard
+            label: Internal Standard
+          - name: internet_exposed
+            label: Internet Exposed
+      - name: status
+        kind: Dropdown
+        optional: false
+        default_value: draft
+        order_weight: 400
+        choices:
+          - name: draft
+            label: Draft
+            color: "#95A5A6"
+          - name: submitted
+            label: Submitted
+            color: "#F1C40F"
+          - name: security_review
+            label: Security Review
+            color: "#9B59B6"
+          - name: infrastructure_review
+            label: Infrastructure Review
+            color: "#3498DB"
+          - name: approved
+            label: Approved
+            color: "#2ECC71"
+          - name: provisioning
+            label: Provisioning
+            color: "#1ABC9C"
+          - name: failed
+            label: Failed
+            color: "#C0392B"
+          - name: completed
+            label: Completed
+            color: "#27AE60"
+          - name: rejected
+            label: Rejected
+            color: "#E74C3C"
+          - name: cancelled
+            label: Cancelled
+            color: "#7F8C8D"
+      - name: rejection_reason
+        kind: Text
+        optional: true
+        order_weight: 450
+      - name: submitted_at
+        kind: DateTime
+        optional: true
+        order_weight: 500
+      - name: approved_at
+        kind: DateTime
+        optional: true
+        order_weight: 510
+      - name: completed_at
+        kind: DateTime
+        optional: true
+        order_weight: 520
+      - name: provisioning_error
+        kind: Text
+        optional: true
+        order_weight: 530
+    relationships:
+      - name: customer
+        peer: OrganizationCustomer
+        cardinality: one
+        kind: Attribute
+        optional: false
+        direction: outbound
+        identifier: "customer__deployment_requests"
+        order_weight: 1000
+        label: Customer
+      - name: components
+        peer: AppDeploymentRequestComponent
+        cardinality: many
+        kind: Component
+        optional: true
+        on_delete: cascade
+        identifier: "deployment_request__components"
+        order_weight: 1100
+        label: Requested Components
+      - name: access_profile
+        peer: SecurityAccessProfile
+        cardinality: one
+        kind: Attribute
+        optional: true
+        on_delete: no-action
+        identifier: "deployment_request__access_profile"
+        order_weight: 1200
+        label: Default Access Profile
+      - name: generated_application
+        peer: AppApplication
+        cardinality: one
+        kind: Attribute
+        optional: true
+        on_delete: no-action
+        identifier: "deployment_request__generated_application"
+        order_weight: 2000
+        label: Generated Application
+      - name: generated_dependencies
+        peer: AppDependency
+        cardinality: many
+        kind: Attribute
+        optional: true
+        on_delete: no-action
+        identifier: "deployment_request__generated_dependencies"
+        order_weight: 2010
+        label: Generated Dependencies
+
+  - name: DeploymentRequestComponent
+    namespace: App
+    description: "Requested application component and its exposed or consumed endpoints"
+    label: Requested Component
+    icon: "mdi:cube-outline"
+    include_in_menu: false
+    inherit_from:
+      - AppGeneric
+    parent: AppDeploymentRequest
+    children: AppDeploymentRequestEndpoint
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    order_by:
+      - name__value
+    uniqueness_constraints:
+      - [name__value]
+    attributes:
+      - name: name
+        kind: Text
+        optional: false
+        unique: true
+        order_weight: 100
+      - name: component_type
+        kind: Dropdown
+        optional: false
+        order_weight: 200
+        choices:
+          - name: frontend
+            label: Frontend
+          - name: backend
+            label: Backend
+          - name: worker
+            label: Worker
+          - name: database
+            label: Database
+          - name: cache
+            label: Cache
+          - name: message_queue
+            label: Message Queue
+      - name: replicas
+        kind: Number
+        optional: true
+        default_value: 1
+        order_weight: 300
+    relationships:
+      - name: network_segment
+        peer: ManagedNetworkSegment
+        cardinality: one
+        kind: Attribute
+        optional: true
+        on_delete: no-action
+        identifier: "request_component__network_segment"
+        order_weight: 900
+        label: Network Segment
+      - name: endpoints
+        peer: AppDeploymentRequestEndpoint
+        cardinality: many
+        kind: Component
+        optional: true
+        on_delete: cascade
+        identifier: "request_component__endpoints"
+        order_weight: 1000
+        label: Endpoints
+
+  - name: DeploymentRequestEndpoint
+    namespace: App
+    description: "Requested addressable service or external dependency"
+    label: Requested Endpoint
+    icon: "mdi:connection"
+    include_in_menu: false
+    parent: AppDeploymentRequestComponent
+    children: ""
+    inherit_from:
+      - AppGeneric
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    order_by:
+      - name__value
+    uniqueness_constraints:
+      - [name__value]
+    attributes:
+      - name: name
+        kind: Text
+        optional: false
+        order_weight: 100
+      - name: endpoint_type
+        kind: Dropdown
+        optional: false
+        order_weight: 200
+        choices:
+          - name: internal_service
+            label: Internal Service
+          - name: external_service
+            label: External Service
+          - name: private_access
+            label: Private Access
+      - name: fqdn
+        kind: Text
+        optional: false
+        order_weight: 300
+      - name: protocol
+        kind: Dropdown
+        optional: true
+        default_value: tcp
+        order_weight: 400
+        choices:
+          - name: tcp
+            label: TCP
+          - name: udp
+            label: UDP
+      - name: port
+        kind: Number
+        optional: true
+        order_weight: 410
+    relationships:
+      - name: access_profile
+        peer: SecurityAccessProfile
+        cardinality: one
+        kind: Attribute
+        optional: true
+        on_delete: no-action
+        identifier: "request_endpoint__access_profile"
+        order_weight: 1000
+
+  - name: DeploymentRequestDependency
+    namespace: App
+    description: "Requested connectivity from a component to an endpoint"
+    label: Requested Dependency
+    icon: "mdi:arrow-right-bold-circle-outline"
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    order_by:
+      - name__value
+    uniqueness_constraints:
+      - [name__value]
+    attributes:
+      - name: name
+        kind: Text
+        optional: false
+        order_weight: 100
+      - name: protocol
+        kind: Dropdown
+        optional: false
+        default_value: tcp
+        order_weight: 200
+        choices:
+          - name: tcp
+            label: TCP
+          - name: udp
+            label: UDP
+          - name: icmp
+            label: ICMP
+      - name: port_start
+        kind: Number
+        optional: true
+        order_weight: 300
+      - name: port_end
+        kind: Number
+        optional: true
+        order_weight: 310
+      - name: business_justification
+        kind: Text
+        optional: false
+        order_weight: 400
+      - name: access_status
+        kind: Dropdown
+        optional: false
+        default_value: pending
+        order_weight: 500
+        choices:
+          - name: pending
+            label: Pending
+          - name: approved
+            label: Approved
+          - name: denied
+            label: Denied
+      - name: decision_reason
+        kind: Text
+        optional: true
+        order_weight: 510
+        description: "Reason supplied by the target application owner when approving or denying access"
+      - name: decision_at
+        kind: DateTime
+        optional: true
+        order_weight: 520
+      - name: access_expires_at
+        kind: DateTime
+        optional: true
+        order_weight: 530
+        description: "Optional expiry for the approved access request"
+    relationships:
+      - name: source
+        peer: AppDeploymentRequestComponent
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: "request_dependency__source"
+        order_weight: 1000
+      - name: target
+        peer: AppDeploymentRequestEndpoint
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "request_dependency__target"
+        order_weight: 1010
+      - name: existing_target
+        peer: AppEndpoint
+        cardinality: one
+        kind: Attribute
+        optional: true
+        on_delete: no-action
+        identifier: "request_dependency__existing_target"
+        order_weight: 1015
+        label: "Hosted Target Endpoint"
+        description: "Existing application endpoint whose owner must approve this request"
+      - name: approved_by
+        peer: OrganizationCustomer
+        cardinality: one
+        kind: Attribute
+        optional: true
+        on_delete: no-action
+        identifier: "request_dependency__approved_by"
+        order_weight: 1020
+        label: "Approved By"
+        description: "Customer that owns the target application and approved this dependency"
+
+extensions:
+  nodes:
+    - kind: AppDeploymentRequest
+      relationships:
+        - name: dependencies
+          peer: AppDeploymentRequestDependency
+          cardinality: many
+          kind: Attribute
+          optional: true
+          on_delete: cascade
+          direction: outbound
+          identifier: "deployment_request__dependencies"
+          order_weight: 1300
+          label: Requested Dependencies
+
+    - kind: OrganizationCustomer
+      relationships:
+        - name: application_requests
+          peer: AppDeploymentRequest
+          cardinality: many
+          kind: Attribute
+          optional: true
+          on_delete: cascade
+          direction: inbound
+          identifier: "customer__deployment_requests"
+          order_weight: 2200
+          label: Application Requests

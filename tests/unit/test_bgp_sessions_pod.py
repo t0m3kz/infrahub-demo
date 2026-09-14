@@ -11,10 +11,13 @@ from generators.helpers.routing import _BGPSessionPlanner as BGPSessionPlanner
 
 
 class TestPodDeploymentSpinesTors:
-    """Test BGP sessions for Pod deployments with only Spines and ToRs."""
+    """Test BGP sessions for Pod deployments with only Spines and ToRs.
+
+    In tor-deployment, ToRs are VTEPs and participate in overlay BGP as RR clients.
+    """
 
     def test_route_reflector_pod_spines_tors_only(self) -> None:
-        """Spines act as RRs, ToRs are clients — 4 ToRs × 2 Spines = 8 sessions."""
+        """In tor-deployment, ToRs are VTEPs — 4 ToRs × 2 Spines = 8 sessions."""
         devices = [
             _BGPDevice("pod1-spine-01", "spine-1", "spine"),
             _BGPDevice("pod1-spine-02", "spine-2", "spine"),
@@ -62,7 +65,7 @@ class TestPodMixedDeployment:
     """Test BGP sessions for Pod deployments with mixed device types."""
 
     def test_pod_with_spines_leafs_and_tors(self) -> None:
-        """All clients (Leafs + ToRs) peer with Spines — (2+2) × 2 = 8 sessions."""
+        """Leafs and tors both get overlay BGP. l2-leafs would be excluded."""
         devices = [
             _BGPDevice("pod1-spine-01", "spine-1", "spine"),
             _BGPDevice("pod1-spine-02", "spine-2", "spine"),
@@ -75,6 +78,7 @@ class TestPodMixedDeployment:
         planner = BGPSessionPlanner(devices=devices)
         sessions = planner.build_session_plan(session_type="ibgp")
 
+        # (2 leafs + 2 tors) × 2 spines = 8 sessions
         assert len(sessions) == 8
 
         spine_names = {"pod1-spine-01", "pod1-spine-02"}

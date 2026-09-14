@@ -5,9 +5,11 @@ spec:
   kind: TemplateDcimVirtualDevice
   data:
     - template_name: C8000V_EDGE
+      owner: "P027"
       device_type: C8000V
       role: edge
       platform: cisco_xe
+      software_image: cisco_xe-17.12.4
       status: active
       cpu: 2
       memory: 8

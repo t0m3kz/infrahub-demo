@@ -1,4 +1,6 @@
-query firewall_config($device: String!) {
+query firewall_config(
+  $device: String!
+) {
   DcimPhysicalDevice(name__value: $device) {
     edges {
       node {
@@ -11,6 +13,28 @@ query firewall_config($device: String!) {
             ansible_network_os { value }
           }
         }
+        ... on DcimCapabilities {
+        capabilities {
+          edges {
+            node {
+              __typename
+              ... on ManagedGeneric {
+                name { value }
+                status { value }
+              }
+              ... on ManagedFirewallHA {
+                group_id { value }
+                mode { value }
+                priority { value }
+                preempt { value }
+                ha_protocol { value }
+                ha_timer { value }
+                capabilities { edges { node { name { value } } } }
+              }
+            }
+          }
+        }
+        }
         interfaces {
           edges {
             node {
@@ -19,21 +43,34 @@ query firewall_config($device: String!) {
               description { value }
               status { value }
               role { value }
-              ... on DcimFirewallInterface {
-                security_level { value }
-                vlan_id { value }
+              ... on DcimPhysicalInterface {
+                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+              }
+              ... on DcimVirtualInterface {
+                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
                 parent_interface { node { name { value } } }
-                security_zone {
+              }
+              ... on DcimLAGInterface {
+                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+              }
+              interface_capabilities {
+                edges {
                   node {
-                    name { value }
-                    trust_level { value }
-                    zone_type { value }
-                  }
-                }
-                ip_address {
-                  node {
-                    address { value }
-                    ip_namespace { node { name { value } } }
+                    __typename
+                    ...NetworkSegmentFields
+                    ... on ManagedFirewallContext {
+                      id
+                      name { value }
+                      context_id { value }
+                      vlan_id { value }
+                      tenant {
+                        node {
+                          id
+                          ... on TopologyCustomerDC { name { value } }
+                          ... on TopologyCustomerColocation { name { value } }
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -55,8 +92,8 @@ query firewall_config($device: String!) {
           edges {
             node {
               id
-              ... on ManagedVlanSegment { name { value } prefix { edges { node { prefix { value } } } } }
-              ... on ManagedVxlanSegment { name { value } prefix { edges { node { prefix { value } } } } }
+              ... on ManagedVlanSegment { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
+              ... on ManagedVxlanSegment { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
             }
           }
         }
@@ -67,6 +104,7 @@ query firewall_config($device: String!) {
   SecurityPolicy {
     edges {
       node {
+        id
         name { value }
         enabled { value }
         default_action { value }
@@ -81,27 +119,46 @@ query firewall_config($device: String!) {
               port_end { value }
               log { value }
               disabled { value }
+              apply_on_switch { value }
               description { value }
               source_zone { node { name { value } } }
               destination_zone { node { name { value } } }
               source_segment {
                 node {
                   id
-                  ... on ManagedVlanSegment { name { value } prefix { edges { node { prefix { value } } } } }
-                  ... on ManagedVxlanSegment { name { value } prefix { edges { node { prefix { value } } } } }
+                  security_zone { node { name { value } } }
+                  security_tag { node { id name { value } } }
+                  ... on ManagedVlanSegment { name { value } customer_name { value } environment { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
+                  ... on ManagedVxlanSegment { name { value } customer_name { value } environment { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
                 }
               }
               destination_segment {
                 node {
                   id
-                  ... on ManagedVlanSegment { name { value } prefix { edges { node { prefix { value } } } } }
-                  ... on ManagedVxlanSegment { name { value } prefix { edges { node { prefix { value } } } } }
+                  security_zone { node { name { value } } }
+                  security_tag { node { id name { value } } }
+                  ... on ManagedVlanSegment { name { value } customer_name { value } environment { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
+                  ... on ManagedVxlanSegment { name { value } customer_name { value } environment { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
                 }
               }
+              source_ip_addresses { edges { node { id address { value } } } }
+              destination_ip_addresses { edges { node { id address { value } } } }
+              source_prefixes { edges { node { id prefix { value } } } }
+              destination_prefixes { edges { node { id prefix { value } } } }
               security_profile { node { name { value } } }
             }
           }
         }
+      }
+    }
+  }
+
+  SecurityTagRule {
+    edges {
+      node {
+        source_tag { node { id name { value } } }
+        destination_tag { node { id name { value } } }
+        action { value }
       }
     }
   }

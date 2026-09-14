@@ -1,0 +1,52 @@
+---
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationMetro
+  data:
+    - name: "Paris"
+      shortname: "par"
+      parent: "fr"
+      children:
+        kind: LocationCampus
+        data:
+          - name: "Paris HQ"
+            shortname: "par-7"
+            children:
+              kind: LocationCampusBuilding
+              data:
+                - name: "Building 1"
+                  shortname: "par-7-1"
+                  children:
+                    kind: LocationCampusFloor
+                    data:
+                      - name: "Floor 1"
+                        shortname: "par-7-1-1"
+                        index: 1
+                        conference_rooms: 5
+                        employee_count: 50
+                        area_sqm: 500
+                      - name: "Floor 2"
+                        shortname: "par-7-1-2"
+                        index: 2
+                        conference_rooms: 3
+                        employee_count: 30
+                        area_sqm: 300
+                - name: "Building 2"
+                  shortname: "par-7-2"
+                  children:
+                    kind: LocationCampusFloor
+                    data:
+                      - name: "Floor 1"
+                        shortname: "par-7-2-1"
+                        index: 1
+                        conference_rooms: 4
+                        employee_count: 40
+                        area_sqm: 400
+                      - name: "Floor 2"
+                        shortname: "par-7-2-2"
+                        index: 2
+                        conference_rooms: 2
+                        employee_count: 20
+                        area_sqm: 200

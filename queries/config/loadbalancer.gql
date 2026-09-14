@@ -1,107 +1,90 @@
-query loadbalancer_config($instance: String!) {
-  OnpremLoadbalancer(name__value: $instance) {
+query loadbalancer_config($device: String!) {
+  DcimPhysicalDevice(name__value: $device) {
     edges {
       node {
-        id
-        name {
-          value
+        name { value }
+        platform {
+          node {
+            name { value }
+            netmiko_device_type { value }
+            napalm_driver { value }
+            ansible_network_os { value }
+          }
         }
-        lb_type {
-          value
-        }
-        lb_vendor {
-          value
-        }
-        scheme {
-          value
-        }
-        frontend_servers {
-          count
+        ... on DcimCapabilities {
+        capabilities {
           edges {
             node {
-              id
-              name {
-                value
+              __typename
+              ... on ManagedGeneric {
+                name { value }
+                status { value }
               }
-              status {
-                value
+              ... on ManagedLoadbalancerHA {
+                name { value }
+                group_id { value }
+                mode { value }
+                priority { value }
+                preempt { value }
+                capabilities { edges { node { name { value } } } }
               }
             }
           }
         }
-        vip_services {
+        }
+        interfaces {
           edges {
             node {
-              id
-              hostname {
-                value
+              __typename
+              name { value }
+              description { value }
+              status { value }
+              role { value }
+              ... on DcimPhysicalInterface {
+                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
               }
-              protocol {
-                value
+              ... on DcimVirtualInterface {
+                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+                parent_interface { node { name { value } } }
               }
-              port {
-                value
-              }
-              ssl_certificate {
-                value
-              }
-              vip_ip {
-                node {
-                  address {
-                    value
-                  }
-                }
-              }
-              health_checks {
+              interface_capabilities {
                 edges {
                   node {
-                    check {
-                      value
-                    }
-                    rise {
-                      value
-                    }
-                    fall {
-                      value
-                    }
-                    timeout {
-                      value
-                    }
-                  }
-                }
-              }
-              backend_pool {
-                node {
-                  id
-                  name {
-                    value
-                  }
-                  load_balancing_algorithm {
-                    value
-                  }
-                  onprem_servers {
-                    count
-                    edges {
-                      node {
-                        hostname {
-                          value
-                        }
-                        ip_address {
+                    __typename
+                    ... on LoadbalancerVIP {
+                      hostname { value }
+                      protocol { value }
+                      port { value }
+                      status { value }
+                      description { value }
+                      load_balancing_algorithm { value }
+                      session_persistence { value }
+                      vip_ip { node { address { value } } }
+                      load_balancer { node { name { value } } }
+                      health_checks {
+                        edges {
                           node {
-                            address {
-                              value
-                            }
+                            check { value }
+                            rise { value }
+                            fall { value }
+                            timeout { value }
                           }
                         }
                       }
-                    }
-                  }
-                  cloud_instances {
-                    count
-                    edges {
-                      node {
-                        name {
-                          value
+                      members {
+                        edges {
+                          node {
+                            name { value }
+                            weight { value }
+                            pool_interfaces {
+                              edges {
+                                node {
+                                  port { value }
+                                  ip_address { node { address { value } } }
+                                }
+                              }
+                            }
+                          }
                         }
                       }
                     }

@@ -11,6 +11,11 @@ devices get their known AS ID for re-save.
 
 Save order: AS -> BGP + OSPF -> Peerings + OSPF Interfaces.
 
+Underlay/overlay peerings and OSPF interfaces optionally reference a shared
+RoutingPassword auth key (underlay_password_id / overlay_password_id on
+RoutingPlanInput), created once by the DC generator and resolved by
+RoutingMixin.create_routing — same conditional-add pattern as evpn_af_id.
+
 Strategies:
     - ebgp-ebgp: eBGP underlay + eBGP overlay (per-device ASN)
     - ebgp-ibgp: eBGP underlay + iBGP overlay (shared ASN)
@@ -20,41 +25,78 @@ Strategies:
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, NamedTuple
 
+from pydantic import BaseModel, ConfigDict, Field
 
-@dataclass
-class RoutingPlanInput:
+from ..types import RoutingOptions
+
+
+class RoutingPlanInput(BaseModel):
     """Input for routing plan builder.
 
     All objects come pre-queried by the generator as SDK objects:
       - bottom_devices / top_devices: device name strings
+      - bottom_role / top_role: the caller's known role for every name in the
+        respective list (e.g. "leaf"/"spine", "border-leaf"/"spine",
+        "spine"/"super-spine") — every caller of create_routing() creates or
+        selects these devices for exactly one role, so this is always known
+        statically. Used as the authoritative role source in _build_device_map
+        instead of the queried DcimDevice.role, which has been observed to
+        intermittently resolve to None when queried from a different worker
+        process than the one that wrote it (a client/server consistency gap,
+        not a data bug — the role is correctly set in the database).
       - underlay: ManagedBGP underlay processes (SDK objects with device + local_as)
       - overlay: ManagedBGP overlay or ManagedOSPF (existing) SDK objects
       - interfaces: DcimPhysicalInterface fabric-p2p SDK objects (device, cable, name)
       - loopback_interfaces: DcimVirtualInterface loopback SDK objects (device + ip_address)
       - options: RoutingOptions dict (design, asn_pool, overlay_as_id, ospf_area_id)
+      - mlag_pairs: device name -> MLAG domain name, for devices that ARE
+        MLAG-paired (leaf/tor/l2-leaf/access-leaf; border-leaf is never
+        MLAG-paired in this project). Both devices in a pair get the SAME
+        underlay ASN — see ``_plan_ebgp_underlay``.
     """
 
-    bottom_devices: list[str] = field(default_factory=list)
-    top_devices: list[str] = field(default_factory=list)
-    underlay: list[Any] = field(default_factory=list)
-    overlay: list[Any] = field(default_factory=list)
-    interfaces: list[Any] = field(default_factory=list)
-    loopback_interfaces: list[Any] = field(default_factory=list)
-    options: dict[str, Any] = field(default_factory=dict)
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    bottom_devices: list[str] = Field(default_factory=list)
+    top_devices: list[str] = Field(default_factory=list)
+    bottom_role: str = ""
+    top_role: str = ""
+    underlay: list[Any] = Field(default_factory=list)
+    overlay: list[Any] = Field(default_factory=list)
+    interfaces: list[Any] = Field(default_factory=list)
+    loopback_interfaces: list[Any] = Field(default_factory=list)
+    options: RoutingOptions = Field(default_factory=RoutingOptions)
     routing_strategy: str = "ebgp-ebgp"
     deployment_name: str = ""
+    evpn_af_id: str = ""
+    underlay_password_id: str = ""
+    overlay_password_id: str = ""
+    mlag_pairs: dict[str, str] = Field(default_factory=dict)
 
 
-@dataclass
-class RoutingPlan:
+class PendingASRef(BaseModel):
+    """Placeholder for a BGP process's ``local_as`` before its AS is created.
+
+    The AS for ``device`` is allocated from a pool as part of the same plan,
+    so its id isn't known until after ``autonomous_systems`` is saved. The
+    generator swaps this for a real ``{"id": ...}`` ref once that happens —
+    see ``RoutingMixin.create_routing``.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    device: str
+
+
+class RoutingPlan(BaseModel):
     """Flat routing plan — all dicts, saved with allow_upsert=True.
 
     Save order: autonomous_systems -> bgp_processes + ospf_processes
-                -> bgp_peerings + ospf_interfaces.
+                -> bgp_peerings + ospf_interfaces -> ospf_peerings (references
+                the just-created ospf_interfaces, so it saves last).
 
     AS dicts have either:
         - "_existing_id": known AS ID (re-save for group tracking)
@@ -63,14 +105,17 @@ class RoutingPlan:
 
     BGP dicts have "local_as" as either:
         - {"id": "known-id"} (existing AS)
-        - {"_for_device": "device-name"} (resolved after AS creation)
+        - PendingASRef(device="device-name") (resolved after AS creation)
     """
 
-    autonomous_systems: list[dict] = field(default_factory=list)
-    bgp_processes: list[Any] = field(default_factory=list)
-    ospf_processes: list[Any] = field(default_factory=list)
-    ospf_interfaces: list[Any] = field(default_factory=list)
-    bgp_peerings: list[Any] = field(default_factory=list)
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    autonomous_systems: list[dict] = Field(default_factory=list)
+    bgp_processes: list[Any] = Field(default_factory=list)
+    ospf_processes: list[Any] = Field(default_factory=list)
+    ospf_interfaces: list[Any] = Field(default_factory=list)
+    bgp_peerings: list[Any] = Field(default_factory=list)
+    ospf_peerings: list[Any] = Field(default_factory=list)
 
 
 class BGPSession(NamedTuple):
@@ -96,15 +141,42 @@ class RoutingStrategy(str, Enum):
     OSPF_IBGP = "ospf-ibgp"
 
 
+def underlay_is_ipv6(underlay_protocol: str) -> bool:
+    return underlay_protocol == "ipv6"
+
+
+def underlay_is_dual_stack(underlay_protocol: str) -> bool:
+    return underlay_protocol == "dual_stack"
+
+
+def p2p_is_ipv6(underlay_protocol: str) -> bool:
+    """Whether P2P fabric links use IPv6 addressing."""
+    return underlay_protocol in ("ipv6", "dual_stack")
+
+
+def p2p_addressing(underlay_protocol: str) -> str:
+    """P2P link prefix: /31 for IPv4, /127 for IPv6/dual-stack."""
+    return "/127" if p2p_is_ipv6(underlay_protocol) else "/31"
+
+
 def _safe_device_name(bgp: Any) -> str | None:
-    """Extract device name from a prefetched ManagedBGP/ManagedOSPF object."""
+    """Extract device name from a ManagedBGP/ManagedOSPF object via its
+    `capabilities` relationship (the device this process is attached to).
+    Requires the caller to have queried with include=["capabilities"],
+    prefetch_relationships=True.
+
+    Schema-wise `capabilities` is cardinality=many, but every process created
+    by `_make_bgp_proc`/`_plan_ospf_underlay` in this module attaches exactly
+    one device. Anything other than exactly one peer is treated as unresolved
+    (None) rather than guessing which device it belongs to.
+    """
     try:
-        peers = bgp.device_capabilities.peers
-        if peers:
-            return peers[0].name.value
+        peers = bgp.capabilities.peers
+    except AttributeError:
         return None
-    except (AttributeError, ValueError, IndexError):
+    if len(peers) != 1:
         return None
+    return peers[0].display_label
 
 
 def _safe_as_id(bgp: Any) -> str | None:
@@ -112,22 +184,39 @@ def _safe_as_id(bgp: Any) -> str | None:
     return bgp.local_as.id or None
 
 
+def _bgp_process_ref(bgp_process: dict) -> dict:
+    """Reference a planned BGP process by direct id when known, else by HFID.
+
+    A direct id (set when the process was found already existing — see
+    ``build_routing_plan``'s "existing overlay BGP" block) avoids a search-index
+    lookup that can race a concurrent generator call's write to the same process.
+    """
+    process_id = bgp_process.get("id")
+    return {"id": process_id} if process_id else {"hfid": bgp_process["name"]}
+
+
 def _make_bgp_proc(
     name: str,
     suffix: str,
     description: str,
-    local_as: dict,
+    local_as: dict | PendingASRef,
     router_id: dict,
     device_id: str,
+    process_role: str,
+    multipath: bool = False,
 ) -> dict[str, Any]:
-    return {
+    proc: dict[str, Any] = {
         "name": f"{name}-bgp-{suffix}",
         "description": description,
         "status": "active",
         "local_as": local_as,
         "router_id": router_id,
-        "device_capabilities": [{"id": device_id}],
+        "capabilities": [{"id": device_id}],
+        "process_role": process_role,
     }
+    if multipath:
+        proc["multipath"] = True
+    return proc
 
 
 class RoutingPlanner:
@@ -161,25 +250,36 @@ class RoutingPlanner:
                 self.logger.warning("No routing devices provided")
             return plan
 
-        # Build device map from loopback interfaces
-        device_map = self._build_device_map(inp.loopback_interfaces)
+        # Build device map from loopback interfaces. Known roles for
+        # bottom_devices/top_devices override the queried role (see
+        # RoutingPlanInput.bottom_role/top_role docstring).
+        known_roles: dict[str, str] = {}
+        if inp.bottom_role:
+            known_roles.update({name: inp.bottom_role for name in inp.bottom_devices})
+        if inp.top_role:
+            known_roles.update({name: inp.top_role for name in inp.top_devices})
+        device_map = self._build_device_map(inp.loopback_interfaces, known_roles=known_roles)
 
         # Extract existing AS IDs from underlay BGP so existing devices reuse their
         # ASN instead of drawing a new one from the pool (Number-pool allocation is
         # not idempotent across create()). BGP processes themselves are always
         # re-saved with allow_upsert=True — local_as is cardinality-one and upserts
         # cleanly (verified on Infrahub 1.9.6), so no new/existing split is needed.
+        # Only applies to eBGP underlay — inp.underlay holds ManagedOSPF objects
+        # (no local_as) when underlay_type == "ospf".
         existing_as_by_device: dict[str, str] = {}
-        for bgp in inp.underlay:
-            dev_name = _safe_device_name(bgp)
-            as_id = _safe_as_id(bgp)
-            if dev_name and as_id:
-                existing_as_by_device[dev_name] = as_id
+        if underlay_type == "ebgp":
+            for bgp in inp.underlay:
+                dev_name = _safe_device_name(bgp)
+                as_id = _safe_as_id(bgp)
+                if dev_name and as_id:
+                    existing_as_by_device[dev_name] = as_id
 
         design = inp.options.get("design")
         asn_pool = inp.options.get("asn_pool")
         overlay_as_id = inp.options.get("overlay_as_id")
         existing_ospf_area = inp.options.get("ospf_area_id")
+        shared_underlay_as_id = inp.options.get("shared_underlay_as_id")
 
         # ---- Underlay ----
         if not inp.options.get("skip_underlay"):
@@ -191,6 +291,9 @@ class RoutingPlanner:
                     existing_as_by_device,
                     asn_pool,
                     set(inp.top_devices),
+                    password_id=inp.underlay_password_id,
+                    mlag_pairs=inp.mlag_pairs,
+                    shared_as_id=shared_underlay_as_id,
                 )
             elif underlay_type == "ospf":
                 if not inp.deployment_name:
@@ -206,6 +309,7 @@ class RoutingPlanner:
                     inp.interfaces,
                     inp.deployment_name,
                     existing_ospf_area,
+                    password_id=inp.underlay_password_id,
                 )
             else:
                 raise ValueError(f"Unknown underlay: {underlay_type}")
@@ -225,24 +329,30 @@ class RoutingPlanner:
 
         # ---- Overlay peerings ----
         if design:
-            overlay_bgp = [b for b in plan.bgp_processes if b["name"].endswith("-bgp-overlay")]
-            planned_device_ids = {b["device_capabilities"][0]["id"] for b in overlay_bgp}
+            overlay_bgp = [b for b in plan.bgp_processes if b.get("process_role") == "overlay"]
+            planned_device_ids = {b["capabilities"][0]["id"] for b in overlay_bgp}
 
-            # Include remote devices with existing overlay BGP not yet in plan
-            existing_overlay_names: set[str] = set()
+            # Include remote devices with existing overlay BGP not yet in plan.
+            # Carry the process's real id (obj.id) rather than only its name — the
+            # process was saved by a different, possibly concurrent generator call
+            # (e.g. a sibling rack), so an HFID-only ref risks NODE_NOT_FOUND if the
+            # search index hasn't caught up yet with that other call's write.
+            existing_overlay_id_by_name: dict[str, str] = {}
             for obj in inp.overlay:
                 dev_name = _safe_device_name(obj)
                 if dev_name:
-                    existing_overlay_names.add(dev_name)
+                    existing_overlay_id_by_name[dev_name] = obj.id
 
             for name, info in device_map.items():
                 if info["id"] in planned_device_ids:
                     continue
-                if name in existing_overlay_names and info.get("router_id"):
+                overlay_process_id = existing_overlay_id_by_name.get(name)
+                if overlay_process_id and info.get("router_id"):
                     overlay_bgp.append(
                         {
+                            "id": overlay_process_id,
                             "name": f"{name}-bgp-overlay",
-                            "device_capabilities": [{"id": info["id"]}],
+                            "capabilities": [{"id": info["id"]}],
                         }
                     )
 
@@ -254,6 +364,8 @@ class RoutingPlanner:
                     device_map=device_map,
                     bottom_device_names=set(inp.bottom_devices),
                     top_device_names=set(inp.top_devices),
+                    evpn_af_id=inp.evpn_af_id,
+                    password_id=inp.overlay_password_id,
                 )
 
         return plan
@@ -263,7 +375,9 @@ class RoutingPlanner:
     # ================================================================
 
     @staticmethod
-    def _build_device_map(loopback_interfaces: list[Any]) -> dict[str, dict[str, Any]]:
+    def _build_device_map(
+        loopback_interfaces: list[Any], known_roles: dict[str, str] | None = None
+    ) -> dict[str, dict[str, Any]]:
         """Build device info from loopback interfaces.
 
         Returns dict keyed by device name::
@@ -274,8 +388,17 @@ class RoutingPlanner:
 
         Loopback interfaces must be queried with:
             include=["device", "ip_address"], prefetch_relationships=True
+
+        ``known_roles`` (device name -> role), when provided, takes priority
+        over the queried ``DcimDevice.role`` — the role has been observed to
+        intermittently resolve to None when queried from a worker process
+        other than the one that wrote it, even though it's correctly set in
+        the database (a client/server consistency gap). Callers that already
+        know a device's role statically (every create_routing() caller does)
+        should pass it here instead of trusting the query.
         """
         device_map: dict[str, dict[str, Any]] = {}
+        known_roles = known_roles or {}
 
         # Sort by interface id so router_id selection is deterministic regardless of
         # query-return order: the lowest-id loopback with a valid IP wins per device.
@@ -283,7 +406,7 @@ class RoutingPlanner:
             dev = lb.device.peer
             name = dev.name.value
             dev_id = dev.id
-            role = dev.role.value
+            role = known_roles.get(name) or dev.role.value
 
             if name not in device_map:
                 device_map[name] = {"id": dev_id, "role": role}
@@ -311,6 +434,9 @@ class RoutingPlanner:
         existing_as_by_device: dict[str, str],
         asn_pool: Any,
         top_device_names: set[str] | None = None,
+        password_id: str = "",
+        mlag_pairs: dict[str, str] | None = None,
+        shared_as_id: str | None = None,
     ) -> None:
         """Build eBGP underlay by iterating cable pairs.
 
@@ -322,36 +448,82 @@ class RoutingPlanner:
 
         Every BGP process is emitted for upsert; existing processes re-save
         cleanly (local_as is cardinality-one), so no new/existing tracking.
+
+        ASN is allocated per GROUP, not per device (.dev/bgp.txt): an
+        MLAG-paired device (present in ``mlag_pairs``, keyed by its MLAG
+        domain name) shares ONE ASN with its pair partner — both devices'
+        BGP processes point ``local_as`` at the SAME AS object, exactly one
+        ``autonomous_systems`` entry is emitted per domain, not per device.
+        A standalone (non-MLAG) device keeps today's behavior: its own name
+        is its own group, one ASN each. ``shared_as_id``, when given,
+        bypasses grouping AND the pool entirely — every bottom device reuses
+        that single pre-resolved AS id directly (pod-shared spine ASN /
+        fabric-wide super-spine ASN; those devices are never MLAG-paired in
+        this project, so the two mechanisms never overlap).
         """
         id_to_name = {info["id"]: name for name, info in device_map.items()}
         _top = top_device_names or set()
+        _mlag_pairs = mlag_pairs or {}
 
-        # Phase 1: AS + BGP process for all bottom devices (device_map, not cable-driven).
-        # Top devices are skipped — their BGP is owned by an upper generator layer.
-        # Decoupled from cables so processes exist even before cabling is complete.
+        def _group_key(name: str) -> str:
+            return _mlag_pairs.get(name, name)
+
+        # Reconcile existing AS ids per group: an MLAG pair whose two devices
+        # already have DIFFERENT existing underlay AS ids (the bug this
+        # grouping fixes, on a fabric that ran once before) converges onto
+        # one canonical id (lowest-sorted) — both devices' BGP processes
+        # re-point at it below, self-healing with no migration script.
+        existing_as_by_group: dict[str, str] = {}
+        for name, as_id in existing_as_by_device.items():
+            group = _group_key(name)
+            current = existing_as_by_group.get(group)
+            if current is None or as_id < current:
+                existing_as_by_group[group] = as_id
+
+        bottom_names = [name for name in sorted(device_map.keys()) if name not in _top]
+
+        # Phase 0: resolve one local_as value per distinct group among
+        # bottom devices, emitting at most one autonomous_systems entry
+        # per group (decoupled from the per-device BGP-process loop below).
+        local_as_by_group: dict[str, dict | PendingASRef] = {}
+        if shared_as_id is not None:
+            shared_ref = {"id": shared_as_id}
+            for name in bottom_names:
+                local_as_by_group[_group_key(name)] = shared_ref
+        else:
+            for name in bottom_names:
+                group = _group_key(name)
+                if group in local_as_by_group:
+                    continue
+                existing_as_id = existing_as_by_group.get(group)
+                if existing_as_id:
+                    plan.autonomous_systems.append({"_existing_id": existing_as_id, "_for_device": group})
+                    local_as_by_group[group] = {"id": existing_as_id}
+                elif asn_pool is not None:
+                    plan.autonomous_systems.append(
+                        {
+                            "asn": {"from_pool": {"id": asn_pool}},
+                            "description": f"{group} underlay ASN",
+                            "status": "active",
+                            "_for_device": group,
+                        }
+                    )
+                    local_as_by_group[group] = PendingASRef(device=group)
+                elif self.logger:
+                    self.logger.warning(f"No ASN pool for {group}")
+
+        # Phase 1: BGP process for every bottom device (device_map, not
+        # cable-driven — decoupled from cables so processes exist even
+        # before cabling is complete).
         bgp_planned: set[str] = set()
-        for name in sorted(device_map.keys()):
-            if name in _top or name in bgp_planned:
+        for name in bottom_names:
+            if name in bgp_planned:
                 continue
 
             info = device_map[name]
-            existing_as_id = existing_as_by_device.get(name)
-
-            if existing_as_id:
-                plan.autonomous_systems.append({"_existing_id": existing_as_id, "_for_device": name})
-            elif asn_pool is not None:
-                plan.autonomous_systems.append(
-                    {
-                        "asn": {"from_pool": {"id": asn_pool}},
-                        "description": f"{name} underlay ASN",
-                        "status": "active",
-                        "_for_device": name,
-                    }
-                )
-            else:
-                if self.logger:
-                    self.logger.warning(f"No ASN pool for {name}")
-                continue
+            local_as = local_as_by_group.get(_group_key(name))
+            if local_as is None:
+                continue  # already warned above (no pool, no existing AS)
 
             router_id = info.get("router_id")
             if not router_id:
@@ -361,9 +533,15 @@ class RoutingPlanner:
                     self.logger.warning(f"No router-id for {name}, skipping BGP")
                 continue
 
-            local_as = {"id": existing_as_id} if existing_as_id else {"_for_device": name}
             proc = _make_bgp_proc(
-                name, "underlay", f"eBGP process for {name} underlay", local_as, router_id, info["id"]
+                name,
+                "underlay",
+                f"eBGP process for {name} underlay",
+                local_as,
+                router_id,
+                info["id"],
+                process_role="underlay",
+                multipath=True,
             )
             plan.bgp_processes.append(proc)
             bgp_planned.add(name)
@@ -382,6 +560,17 @@ class RoutingPlanner:
             a_name = id_to_name.get(a.device.id)
             b_name = id_to_name.get(b.device.id)
             if not a_name or not b_name:
+                continue
+            if a_name == b_name:
+                # Self-loop: both cable endpoints on the same device.
+                # Can occur due to a race between parallel rack generators tagging
+                # a spine interface twice before the TOR side is committed.
+                # Skipping prevents a BGP peering that references only one device.
+                if self.logger:
+                    self.logger.warning(
+                        f"Self-loop cable detected: both endpoints on '{a_name}' "
+                        f"({a.name.value} / {b.name.value}) — skipping"
+                    )
                 continue
             if a_name > b_name:
                 a, b = b, a
@@ -413,11 +602,13 @@ class RoutingPlanner:
                     "bfd_enabled": True,
                     "send_community": True,
                     "ttl": 1,
-                    "interfaces": [{"id": a.id}, {"id": b.id}],
+                    "peering_role": "underlay",
+                    "interface_capabilities": [{"id": a.id}, {"id": b.id}],
                     "bgp_processes": [
                         {"hfid": f"{a_name}-bgp-underlay"},
                         {"hfid": f"{b_name}-bgp-underlay"},
                     ],
+                    **({"password": {"id": password_id}} if password_id else {}),
                 }
             )
 
@@ -444,22 +635,30 @@ class RoutingPlanner:
         desc_prefix = "iBGP process for" if is_ibgp else "eBGP process for"
         _top = top_device_names or set()
 
-        device_as_refs: dict[str, dict] = {}
+        device_as_refs: dict[str, dict | PendingASRef] = {}
         if not is_ibgp:
             for as_dict in plan.autonomous_systems:
                 dev_name = as_dict["_for_device"]
                 if "_existing_id" in as_dict:
                     device_as_refs[dev_name] = {"id": as_dict["_existing_id"]}
                 else:
-                    device_as_refs[dev_name] = {"_for_device": dev_name}
+                    device_as_refs[dev_name] = PendingASRef(device=dev_name)
+
+        _OVERLAY_ROLES = frozenset(
+            ("leaf", "border-leaf", "tor", "access-leaf", "spine", "border-spine", "super-spine", "hyper-spine")
+        )
 
         for name in sorted(device_map.keys()):
             if name in _top:
                 continue
             info = device_map[name]
+            # ToRs are L2 aggregation only — they are not VTEPs and don't run overlay BGP
+            if info.get("role") not in _OVERLAY_ROLES:
+                continue
 
+            as_ref: dict | PendingASRef
             if is_ibgp:
-                as_ref: dict = {"id": overlay_as_id}
+                as_ref = {"id": overlay_as_id}
             else:
                 maybe_as_ref = device_as_refs.get(name)
                 if not maybe_as_ref:
@@ -482,6 +681,7 @@ class RoutingPlanner:
                 as_ref,
                 router_id,
                 info["id"],
+                process_role="overlay",
             )
             plan.bgp_processes.append(proc)
 
@@ -496,16 +696,20 @@ class RoutingPlanner:
         interfaces: list[Any],
         deployment_name: str,
         existing_area_id: str,
+        password_id: str = "",
     ) -> None:
-        """Build OSPF underlay: processes and P2P interface bindings."""
+        """Build OSPF underlay: processes, per-interface configs, and cable-paired peerings.
+
+        Mirrors ``_plan_ebgp_underlay``'s shape: one OSPF process per device
+        (decoupled from cabling), one RoutingOSPFInterface per device-interface
+        (interface-level settings — mode/metric/auth/password — are genuinely
+        per-device, so this stays 1:1), and ONE ManagedOSPFPeering per cable
+        pair, referencing BOTH devices' process + interface-config and both
+        physical interfaces — the same "one peering object models the session,
+        not just one side of it" shape as BGPPeering.
+        """
         area_ref: dict[str, Any] = {"id": existing_area_id}
         id_to_name = {info["id"]: name for name, info in device_map.items()}
-        # Group interfaces by device name
-        device_interfaces: dict[str, list] = defaultdict(list)
-        for iface in interfaces:
-            dev_name = id_to_name.get(iface.device.id)
-            if dev_name:
-                device_interfaces[dev_name].append(iface)
 
         for name in sorted(device_map.keys()):
             info = device_map[name]
@@ -526,25 +730,86 @@ class RoutingPlanner:
                     "process_id": "1",
                     "version": "ospf",
                     "router_type": "internal",
-                    "device_capabilities": [{"id": info["id"]}],
+                    "capabilities": [{"id": info["id"]}],
                     "router_id": router_id,
                 }
             )
 
-            for iface in device_interfaces.get(name, []):
-                if not (iface.cable and iface.cable.id):
-                    continue
-                iname = iface.name.value
-                plan.ospf_interfaces.append(
-                    {
-                        "name": f"{name}-{iname}-ospf-underlay",
-                        "description": f"OSPF config for {name}:{iname}",
-                        "mode": "peer_to_peer",
-                        "ospf_process": {"hfid": ospf_name},
-                        "area": area_ref,
-                        "interfaces": [{"id": iface.id}],
-                    }
-                )
+        # Interface configs — decoupled from pairing, one per device-interface.
+        for iface in interfaces:
+            dev_name = id_to_name.get(iface.device.id)
+            if not dev_name or not (iface.cable and iface.cable.id):
+                continue
+            iname = iface.name.value
+            ospf_iface_name = f"{dev_name}-{iname}-ospf-underlay"
+            plan.ospf_interfaces.append(
+                {
+                    "name": ospf_iface_name,
+                    "description": f"OSPF config for {dev_name}:{iname}",
+                    "mode": "peer_to_peer",
+                    "interface_capabilities": [{"id": iface.id}],
+                    **({"password": {"id": password_id}} if password_id else {}),
+                }
+            )
+
+        # Peerings — cable-driven, one ManagedOSPFPeering per physical link.
+        cable_map: dict[str, list] = defaultdict(list)
+        for iface in interfaces:
+            if iface.cable and iface.cable.id:
+                cable_map[iface.cable.id].append(iface)
+
+        cable_pairs: list[tuple] = []
+        for ifaces in cable_map.values():
+            if len(ifaces) != 2:
+                continue
+            a, b = ifaces
+            a_name = id_to_name.get(a.device.id)
+            b_name = id_to_name.get(b.device.id)
+            if not a_name or not b_name:
+                continue
+            if a_name == b_name:
+                if self.logger:
+                    self.logger.warning(
+                        f"Self-loop cable detected: both endpoints on '{a_name}' "
+                        f"({a.name.value} / {b.name.value}) — skipping"
+                    )
+                continue
+            if a_name > b_name:
+                a, b = b, a
+                a_name, b_name = b_name, a_name
+            cable_pairs.append((a, b, a_name, b_name))
+
+        cable_pairs.sort(key=lambda x: (x[2], x[3]))
+        seen_pairs: set[tuple[str, str]] = set()
+
+        for a, b, a_name, b_name in cable_pairs:
+            pair = (a_name, b_name)
+            if pair in seen_pairs:
+                continue
+            seen_pairs.add(pair)
+
+            ia = a.name.value
+            ib = b.name.value
+            ia_h = ia.replace("/", "_")
+            ib_h = ib.replace("/", "_")
+
+            plan.ospf_peerings.append(
+                {
+                    "name": f"{a_name}--{ia_h}--{b_name}--{ib_h}-ospf-peering",
+                    "description": f"OSPF peering: {a_name} ({ia}) <-> {b_name} ({ib})",
+                    "network_type": "point-to-point",
+                    "ospf_area": area_ref,
+                    "interface_capabilities": [{"id": a.id}, {"id": b.id}],
+                    "ospf_process": [
+                        {"hfid": f"{a_name}-ospf-underlay"},
+                        {"hfid": f"{b_name}-ospf-underlay"},
+                    ],
+                    "ospf_interface": [
+                        {"hfid": f"{a_name}-{ia}-ospf-underlay"},
+                        {"hfid": f"{b_name}-{ib}-ospf-underlay"},
+                    ],
+                }
+            )
 
     # ================================================================
     # Overlay Peerings (loopback-based)
@@ -558,18 +823,20 @@ class RoutingPlanner:
         device_map: dict[str, dict],
         bottom_device_names: set[str] | None = None,
         top_device_names: set[str] | None = None,
+        evpn_af_id: str = "",
+        password_id: str = "",
     ) -> None:
         """Build overlay peerings using device loopback IPs from device_map."""
         id_to_name = {info["id"]: name for name, info in device_map.items()}
         device_bgp_map: dict[str, dict] = {}
 
         for bgp in bgp_processes:
-            did = bgp["device_capabilities"][0]["id"]
+            did = bgp["capabilities"][0]["id"]
             device_bgp_map[did] = bgp
 
         device_data: list[_BGPDevice] = []
         for bgp in bgp_processes:
-            did = bgp["device_capabilities"][0]["id"]
+            did = bgp["capabilities"][0]["id"]
             name = id_to_name.get(did)
             if not name:
                 continue
@@ -609,13 +876,33 @@ class RoutingPlanner:
         if not session_plan:
             return
 
+        _SUPER_SPINE = frozenset(("super-spine",))
+        _HYPER_SPINE = frozenset(("hyper-spine",))
+        _SPINE = frozenset(("spine", "border-spine"))
+        _LEAF_CLIENTS = frozenset(("leaf", "border-leaf", "tor", "access-leaf"))
+
         for d1_name, d1_id, d2_name, d2_id, stype, af_types in session_plan:
             if d1_id not in device_bgp_map or d2_id not in device_bgp_map:
                 continue
 
             bgp1, bgp2 = device_bgp_map[d1_id], device_bgp_map[d2_id]
             left_name, right_name = sorted([d1_name, d2_name])
-            is_rr = overlay_type == "ibgp"
+
+            d1_role = device_map.get(d1_name, {}).get("role", "")
+            d2_role = device_map.get(d2_name, {}).get("role", "")
+
+            # An RR-client session exists when there is a genuine client→RR relationship:
+            # - leaf/border-leaf/tor are clients of spines
+            # - spines are clients of super-spines
+            # - super-spines are clients of hyper-spines
+            rr_client_session = stype == "ibgp" and (
+                (d1_role in _LEAF_CLIENTS and d2_role in (_SPINE | _SUPER_SPINE))
+                or (d1_role in (_SPINE | _SUPER_SPINE) and d2_role in _LEAF_CLIENTS)
+                or (d1_role in _SPINE and d2_role in _SUPER_SPINE)
+                or (d1_role in _SUPER_SPINE and d2_role in _SPINE)
+                or (d1_role in _SUPER_SPINE and d2_role in _HYPER_SPINE)
+                or (d1_role in _HYPER_SPINE and d2_role in _SUPER_SPINE)
+            )
 
             # Overlay peers via loopback interfaces
             peering_interfaces = []
@@ -632,11 +919,14 @@ class RoutingPlanner:
                 "bfd_enabled": True,
                 "send_community": True,
                 "send_extended_community": True,
-                "route_reflector_client": bool(stype == "ibgp" and is_rr),
-                "bgp_processes": [{"hfid": bgp1["name"]}, {"hfid": bgp2["name"]}],
+                "route_reflector_client": rr_client_session,
+                "peering_role": "overlay",
+                **({"address_families": [{"id": evpn_af_id}]} if evpn_af_id else {}),
+                **({"password": {"id": password_id}} if password_id else {}),
+                "bgp_processes": [_bgp_process_ref(bgp1), _bgp_process_ref(bgp2)],
             }
             if peering_interfaces:
-                peering["interfaces"] = peering_interfaces
+                peering["interface_capabilities"] = peering_interfaces
 
             plan.bgp_peerings.append(peering)
 
@@ -658,16 +948,29 @@ class _BGPSessionPlanner:
         return [s if isinstance(s, BGPSession) else BGPSession(*s) for s in sessions]
 
     def _build_route_reflector(self, session_type: str) -> list[tuple]:
-        """Spines + super-spines as RR, leafs/tors as clients."""
+        """Spines + super-spines + hyper-spines as RR, leafs/border-leafs/tors/
+        access-leafs as clients.
+
+        l2-leaf is L2-only and never appears here. access-leaf has no physical link to
+        spines (it cables to leafs) but still peers overlay EVPN with them as an RR client,
+        same as leaf/tor.
+
+        Special cases:
+        - Super-spines only (no clients): full mesh between super-spines (DC-level seeding)
+        - Hyper-spines only (no clients): full mesh between hyper-spines (DC-level seeding,
+          same reasoning as super-spines — a hyper-spine tier's own RRs mesh each other)
+        - Spines only (no clients, no super-spines): full mesh between spines
+          (back-to-back design: spines from different pods peer as equals)
+        """
         roles = {d.role for d in self.devices}
-        rrs = [d for d in self.devices if d.role in ("super-spine", "super_spine", "spine")]
-        clients = [d for d in self.devices if d.role in ("leaf", "border-leaf", "tor")]
-        if not rrs:
-            rrs = [d for d in self.devices if d.role in ("leaf", "border-leaf")]
-            clients = [d for d in self.devices if d.role == "tor"]
+        rrs = [d for d in self.devices if d.role in ("super-spine", "hyper-spine", "spine", "border-spine")]
+        clients = [d for d in self.devices if d.role in ("leaf", "border-leaf", "tor", "access-leaf")]
         af = ["evpn"]
-        has_super_spine = "super-spine" in roles or "super_spine" in roles
-        if rrs and not clients and has_super_spine:
+        has_super_spine = "super-spine" in roles
+        has_hyper_spine = "hyper-spine" in roles
+        # back-to-back: spines (or border-spines, in micro-fabric mode) peer as equals
+        has_only_spines = roles in ({"spine"}, {"border-spine"})
+        if rrs and not clients and (has_super_spine or has_hyper_spine or has_only_spines):
             return [
                 (rrs[i].name, rrs[i].id, rrs[j].name, rrs[j].id, session_type, af)
                 for i in range(len(rrs))

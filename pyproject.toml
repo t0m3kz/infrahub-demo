@@ -5,11 +5,14 @@ authors = [
 requires-python = "<3.14,>=3.10"
 dependencies = [
     "invoke<3.0.0,>=2.2.0",
-    "infrahub-sdk[all]>=1.15.0b0,<2.0.0",
+    "infrahub-sdk[ctl]>=1.15.0b0,<2.0.0",
+    "jinja2>=3.1.6,<4.0.0",
     "netutils>=1.8.0",
+    "pydantic>=2.10.0,<3.0.0",
+    "typing-extensions>=4.12.0",
 ]
 name = "infrahub-demo"
-version = "0.2.1"
+version = "0.3.0"
 description = "Design driven automation"
 readme = "README.md"
 
@@ -47,6 +50,10 @@ changelog_start_rev = "v0.1.0"
 line-length = 120
 exclude = [".venv/", ".dev/"]
 
+[tool.rumdl]
+line-length = 120
+disable = ["MD013", "MD024"]
+
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -73,6 +80,7 @@ Apache Software License; BSD License;
 Apache Software License; MIT License;
 Apache-2.0;
 Apache-2.0 AND BSD-2-Clause;
+Apache-2.0 OR BSD-2-Clause;
 Apache-2.0 AND CNRI-Python;
 Apache-2.0 OR GPL-2.0-or-later;
 MIT OR Apache-2.0;

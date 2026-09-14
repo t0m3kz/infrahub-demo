@@ -1,0 +1,20 @@
+{#- Cloudflare Gateway — Zero Trust Gateway policy tfvars shape for a companion Terraform
+    module (cloudflare_zero_trust_gateway_policy-style). Verify field names against the
+    cloudflare/cloudflare Terraform provider docs before real use. -#}
+{
+  "proxy_name": {{ name | tojson }},
+  "provider": {{ provider | tojson }},
+  "deployment_model": {{ deployment_model | tojson }},
+  "gateway_policies": [
+{%- for rule in proxy_rules %}
+    {
+      "name": {{ (rule.name or rule.acl_name) | tojson }},
+      "precedence": {{ loop.index * 100 }},
+      "action": {{ ('allow' if rule.action in ('allow', 'bypass') else 'block') | tojson }},
+      "enabled": true,
+      "traffic": {{ ("any(http.request.domains[*] in {" ~ (rule.destinations | map('tojson') | join(' ')) ~ "})") | tojson }},
+      "description": {{ (rule.description or '') | tojson }}
+    }{{ "," if not loop.last }}
+{%- endfor %}
+  ]
+}

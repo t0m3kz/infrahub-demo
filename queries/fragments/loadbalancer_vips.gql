@@ -1,0 +1,75 @@
+fragment LoadbalancerVipFields on LoadbalancerVIP {
+  id
+  hostname { value }
+  snat_enabled { value }
+  backend_segment {
+    node {
+      id
+      ... on ManagedVlanSegment { name { value } customer_name { value } environment { value } }
+      ... on ManagedVxlanSegment { name { value } customer_name { value } environment { value } }
+    }
+  }
+  members {
+    edges {
+      node {
+        pool_interfaces {
+          edges {
+            node {
+              ip_address { node { address { value } } }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment LoadbalancerVipsOnDeviceHostingFields on TopologyDeviceHosting {
+  # Aliased: FirewallContextsOnDeviceHostingFields also selects `devices` on
+  # the same TopologyDeviceHosting with a different role__value argument —
+  # GraphQL rejects two same-named fields with differing arguments at one
+  # selection set, so this one needs its own alias.
+  lb_devices: devices(role__value: "load-balancer") {
+    edges {
+      node {
+        ... on DcimDevice {
+          interfaces {
+            edges {
+              node {
+                __typename
+                ... on DcimVirtualInterface {
+                  ip_address { node { address { value } } }
+                }
+                interface_capabilities {
+                  edges {
+                    node {
+                      __typename
+                      ... on LoadbalancerVIP {
+                        ...LoadbalancerVipFields
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+# Same DC-vs-pod tiering as FirewallContextsOnDeploymentFields
+# (queries/fragments/firewall_contexts.gql) — a device's own `deployment` is
+# the DC directly for DC-level tiers but the POD for pod-level tiers, so one
+# extra `parent` hop covers the pod case.
+fragment LoadbalancerVipsOnDeploymentFields on TopologyDeployment {
+  ...LoadbalancerVipsOnDeviceHostingFields
+  ... on TopologyPod {
+    parent {
+      node {
+        ...LoadbalancerVipsOnDeviceHostingFields
+      }
+    }
+  }
+}

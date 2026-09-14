@@ -1,49 +1,62 @@
-# DC4 - Mixed Chaos: Can't Decide? Deploy Both
+# DC4 - Extra Large: When Super-Spine Isn't Enough
 
 ## Overview
 
 **Location:** Berlin 🇩🇪 (The hipster capital - your infrastructure is as edgy as the local techno scene)
 
-**Platform:** Edgecore with SONiC - So vendor-neutral, even your hipster barista could deploy it between DJ sets.
+**Platform:** Arista EOS at the DC level — so API-driven, even the hyper-spine tier could
+probably deploy itself if you left the terminal unattended.
 
-**Fabric Design:** `S_EBGP_EBGP` — eBGP underlay + eBGP overlay (RFC 7938), IPv6 P2P links.
-Pure eBGP because Berlin doesn't do link-state. OSPF is too hierarchical, iBGP route reflectors
-are too authoritarian, and anything with "area 0" smells like legacy infrastructure. IPv6 underlay
-because Edgecore SONiC engineers live in the future and refuse to apologise for it.
-Every router has an ASN. Every session is a political statement.
+**Fabric Design:** `XL` + `ebgp-ebgp` routing — the same eBGP-eBGP pattern as DC1/DC3, but Extra Large,
+which means the fabric grew a 4th tier: **hyper-spine**. Leaf → spine → super-spine →
+hyper-spine, full-mesh cabled and routed between super-spine and hyper-spine (every
+super-spine talks to every hyper-spine, same fan-out logic as spine↔super-spine, just one
+tier higher — and dc.py cables this pair itself, since both tiers live at the DC level).
 
-**Use Case:** When the architecture team can't agree on mixed vs flat ToR and someone says "why not both?"
-Pod 1 goes full mixed deployment, Pod 2 goes pure flat ToR. It's like having a hybrid car that's also a
-motorcycle. Confusing? Yes. Flexible? Absolutely.
+**Use Case:** When 4 super-spines start feeling like a chokepoint and you need one more
+level of aggregation before things get truly hyperscale. Also: proof that "wymieszane, co
+jest dostępne" (mixed, whatever's available) is a legitimate pod strategy when your fabric
+is big enough that nobody's going to audit every pod's deployment type anyway.
 
 ---
 
-## Architecture (Identity Crisis with a Beat)
+## Architecture (One Tier Higher Than Everyone Else)
 
 ### Fabric Scale
 
-- **Super Spines:** 2 (Edgecore 7726-32X-O)
-- **Pods:** 2 | **Spines:** 4 (2+2) | **Racks:** 6
-- **Deployment:** `mixed` (Pod 1), `tor` (Pod 2) - Because commitment is overrated
+- **Hyper-Spines:** 2 (Arista DCS-7050CX3-32C-R) — full mesh to every super-spine, nothing above them
+- **Super-Spines:** 4 (Arista DCS-7050CX3-32C-R)
+- **Border-Leaf:** 4 (Arista DCS-7050CX3-32C-R), own firewall + load-balancer pair
+- **Pods:** 3, deliberately mixed deployment types
 
-| Pod | Spines | Design  | Deployment | Site Layout | Personality  |
-| --- | ------ | ------- | ---------- | ----------- | ------------ |
-| 1   | 2      | S_MIXED | mixed      | small-dc    | Overachiever |
-| 2   | 2      | S_TOR   | tor        | small-dc    | Minimalist   |
+| Pod | Spines | Design   | Deployment  | Personality                         |
+| --- | ------ | -------- | ----------- | ----------------------------------- |
+| 1   | 2      | S_MIDDLE | middle_rack | The Overachiever                    |
+| 2   | 4      | S_MIXED  | mixed       | Can't commit to one rack type       |
+| 3   | 4      | S_TOR    | tor         | Skipped the middle-management layer |
+
+### Tier Summary
+
+```text
+Leaf → Spine → Super-Spine ⇄ Hyper-Spine (full mesh, DC-level, cabled by dc.py itself)
+                   |
+              Border-Leaf → Firewall → Load-Balancer (independent legs, PBR)
+```
 
 ## Quick Start
 
 ```bash
-uv run inv deploy-dc --scenario dc4 --branch your_branch
+# See Deployment Steps below for the current load and generator commands.
 ```
 
-**Warning:** May cause identity crisis. Perfect for flexing multi-deployment skills
+**Warning:** May cause identity crisis. Perfect for flexing multi-deployment AND
+multi-tier skills at the same time.
 
 ## Deployment Steps
 
 ```bash
 # really quick
-uv run inv deploy-dc --scenario dc4 --branch your_branch
+# See the manual commands below, or use the automatic created-object trigger.
 
 # I'm the control nerd
 uv run infrahubctl branch create you_branch
@@ -52,11 +65,15 @@ uv run infrahubctl branch create you_branch
 uv run infrahubctl object load data/demos/01_data_center/dc4/ --branch you_branch
 
 # Generate fabric (grab coffee)
-uv run infrahubctl generator generate_dc name=DC4 --branch you_branch
+uv run infrahubctl generator add_dc name=DC4 --branch you_branch
 
 ```
 
-Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc DC4-Fabric-1
+Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → add_dc for DC4.
+
+## Validation
+
+Run `uv run invoke test-integration-routing` before committing generator-ordering changes, then use `uv run invoke test-integration` for the complete mixed-topology validation.
 
 ## Fun Fact
 

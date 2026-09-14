@@ -12,7 +12,7 @@ fragment TemplateDeviceFields on TemplateDcimPhysicalDevice {
       id
     }
   }
-  interfaces(role__value: "uplink") {
+  interfaces(role__values: ["uplink", "mlag-peer"]) {
     edges {
       node {
         name {
@@ -55,6 +55,7 @@ fragment SpineInterfaceFields on DcimPhysicalInterface {
 fragment SpineDeviceFields on DcimPhysicalDevice {
   id
   name { value }
+  role { value }
   interfaces(role__value: "downlink") {
     edges {
       node {
@@ -62,17 +63,6 @@ fragment SpineDeviceFields on DcimPhysicalDevice {
       }
     }
   }
-}
-
-fragment PodDesignFields on TopologyPodDesign {
-  id
-  name { value }
-  rows { value }
-  compute_racks_per_row { value }
-  network_racks_per_row { value }
-  max_leafs_per_network_rack { value }
-  max_tors_per_compute_rack { value }
-  max_spines_per_pod { value }
 }
 
 fragment PodFields on TopologyPod {
@@ -83,12 +73,8 @@ fragment PodFields on TopologyPod {
   index {
     value
   }
-  # New three-layer architecture
-  design { node { ...PodDesignFields } }
-  # Legacy attributes (for backward compatibility)
-  deployment_type {
-    value
-  }
+  deployment_type { value }
+  layout { value }
   parent {
     node {
       ... on TopologyDataCenter {
@@ -102,33 +88,97 @@ fragment PodFields on TopologyPod {
         naming_convention {
           value
         }
+        fabric_interface_sorting_method {
+          value
+        }
+        connectivity_mode {
+          value
+        }
+        routing_strategy {
+          value
+        }
+        underlay_protocol {
+          value
+        }
         management_pool {
           node {
             id
             name { value }
           }
         }
-        design {
-          node {
-            id
-            routing_strategy {
-              value
+        size { value }
+        fabric_controllers: controllers(controller_type__values: ["aci_apic", "dcnm", "nsx_manager", "ucs_manager"]) {
+          edges {
+            node {
+              id
+              controller_type { value }
             }
-            underlay_protocol {
-              value
+          }
+        }
+        security_manager_controllers: controllers(controller_type__value: "security_manager") {
+          edges {
+            node {
+              id
+              controller_type { value }
+              ... on DcimDevice {
+                platform {
+                  node {
+                    id
+                  }
+                }
+              }
+            }
+          }
+        }
+        lb_manager_controllers: controllers(controller_type__value: "lb_manager") {
+          edges {
+            node {
+              id
+              controller_type { value }
+              ... on DcimDevice {
+                platform {
+                  node {
+                    id
+                  }
+                }
+              }
             }
           }
         }
       }
     }
   }
-  amount_of_spines {
-    value
+  fabric_templates {
+    edges {
+      node {
+        role { value }
+        quantity { value }
+        template {
+          node {
+            id
+            ... on TemplateDcimPhysicalDevice {
+              interfaces(role__value: "downlink") {
+                edges {
+                  node {
+                    name {
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
   }
   leaf_interface_sorting_method {
     value
   }
   spine_interface_sorting_method {
+    value
+  }
+  mlag_create {
     value
   }
   loopback_pool {
@@ -147,23 +197,11 @@ fragment PodFields on TopologyPod {
       name { value }
     }
   }
-  spine_template {
-    node {
-      id
-      interfaces(role__value: "downlink") {
-        edges {
-          node {
-            name {
-              value
-            }
-          }
-        }
-      }
-    }
-  }
-  # Spine devices with cable info — used by rack generator to detect
-  # already-cabled spine ports and avoid duplicate relationship upserts
-  devices(role__value: "spine") {
+  # Spine (or border-spine, in micro-fabric mode — the two fill the same
+  # pod slot, see PodModel.spine_slot_templates) devices with cable info —
+  # used by rack generator to detect already-cabled spine ports and avoid
+  # duplicate relationship upserts
+  devices(role__values: ["spine", "border-spine"]) {
     edges {
       node {
         ...SpineDeviceFields
@@ -180,16 +218,10 @@ query RackGenerator($name: String) {
         name {
           value
         }
-        checksum {
-          value
-        }
         index {
           value
         }
         rack_type {
-          value
-        }
-        checksum {
           value
         }
         row_index {
@@ -212,6 +244,20 @@ query RackGenerator($name: String) {
           }
         }
         tors: fabric_templates(role__value: "tor") {
+          edges {
+            node {
+              ...FabricTemplateFields
+            }
+          }
+        }
+        l2_leafs: fabric_templates(role__value: "l2-leaf") {
+          edges {
+            node {
+              ...FabricTemplateFields
+            }
+          }
+        }
+        access_leafs: fabric_templates(role__value: "access-leaf") {
           edges {
             node {
               ...FabricTemplateFields

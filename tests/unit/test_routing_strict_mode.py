@@ -120,8 +120,8 @@ class TestStrictOverlayValidation:
             "leaf-1": {"id": "l1", "role": "leaf", "router_id": {"id": "ip-l1"}},  # no loopback_ip
         }
         bgp_procs = [
-            {"name": "spine-1-bgp-overlay", "device_capabilities": [{"id": "s1"}]},
-            {"name": "leaf-1-bgp-overlay", "device_capabilities": [{"id": "l1"}]},
+            {"name": "spine-1-bgp-overlay", "capabilities": [{"id": "s1"}]},
+            {"name": "leaf-1-bgp-overlay", "capabilities": [{"id": "l1"}]},
         ]
         plan = RoutingPlan()
 
@@ -140,8 +140,8 @@ class TestStrictOverlayValidation:
             "leaf-1": {"id": "l1", "role": "leaf", "router_id": {"id": "ip-l1"}},  # no loopback_ip
         }
         bgp_procs = [
-            {"name": "spine-1-bgp-overlay", "device_capabilities": [{"id": "s1"}]},
-            {"name": "leaf-1-bgp-overlay", "device_capabilities": [{"id": "l1"}]},
+            {"name": "spine-1-bgp-overlay", "capabilities": [{"id": "s1"}]},
+            {"name": "leaf-1-bgp-overlay", "capabilities": [{"id": "l1"}]},
         ]
         plan = RoutingPlan()
 

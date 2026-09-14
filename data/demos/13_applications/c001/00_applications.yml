@@ -1,0 +1,99 @@
+---
+# C001 (Nordix Ltd.) — "storefront" application: portfolio + frontend/backend
+# components, wired to the segments (data/demos/07_customers/c001/
+# 01_network_segments.yml) and to the shared DC6 servers boarded in
+# data/demos/06_servers/ (bonds shared across customers:
+# ktw-pod1-server-1/bond0 = web, ktw-pod2-server-1/bond0 = app,
+# ktw-pod3-server-3 = db, ktw-pod3-server-1/bond1 = cache).
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppApplication
+  data:
+    - label: storefront
+      environment: p
+      criticality: high
+      security_profile: internet_exposed
+      fqdn: storefront.c001.demo.local
+      ingress_mode: frontend
+      owner: C001
+      member_of_groups:
+        - app_applications
+      children:
+        kind: AppComponent
+        data:
+          - name: web-frontend
+            component_type: frontend
+            network_segment: c001-web-frontend-p
+            instances:
+              - ktw-pod1-server-1
+            children:
+              kind: AppEndpoint
+              data:
+                - name: c001-storefront-web-https
+                  endpoint_type: internal_service
+                  fqdn: storefront.c001.demo.local
+                  service_ports:
+                    data:
+                      - port: 443
+                        protocol: tcp
+            member_of_groups:
+              - app_components
+
+          - name: app-backend
+            component_type: backend
+            network_segment: c001-app-backend-p
+            instances:
+              - ktw-pod2-server-1
+            children:
+              kind: AppEndpoint
+              data:
+                - name: c001-storefront-backend-https
+                  endpoint_type: internal_service
+                  fqdn: backend.storefront.c001.demo.local
+                  service_ports:
+                    data:
+                      - port: 8443
+                        protocol: tcp
+            member_of_groups:
+              - app_components
+
+          - name: order-db
+            component_type: database
+            network_segment: c001-database-p
+            instances:
+              - ktw-pod3-server-3
+            children:
+              kind: AppEndpoint
+              data:
+                - name: c001-storefront-db-postgres
+                  endpoint_type: internal_service
+                  fqdn: db.storefront.c001.demo.local
+                  service_ports:
+                    data:
+                      - port: 5432
+                        protocol: tcp
+            member_of_groups:
+              - app_components
+
+          - name: session-cache
+            component_type: cache
+            network_segment: c001-cache-p
+            instances:
+              - ktw-pod3-server-1
+            children:
+              kind: AppEndpoint
+              data:
+                - name: c001-storefront-cache
+                  endpoint_type: internal_service
+                  fqdn: cache.storefront.c001.demo.local
+                  service_ports:
+                    data:
+                      - port: 6379
+                        protocol: tcp
+                      - port: 30000
+                        port_end: 30010
+                        protocol: udp
+            member_of_groups:
+              - app_components

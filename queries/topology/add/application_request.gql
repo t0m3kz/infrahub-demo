@@ -1,0 +1,136 @@
+fragment AppDeploymentRequestEndpointFields on AppDeploymentRequestEndpoint {
+  id
+  name { value }
+  endpoint_type { value }
+  fqdn { value }
+  protocol { value }
+  port { value }
+  access_profile {
+    node {
+      id
+      allowed_groups {
+        edges {
+          node {
+            id
+            name { value }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment AppDeploymentRequestComponentFields on AppDeploymentRequestComponent {
+  id
+  name { value }
+  component_type { value }
+  replicas { value }
+  network_segment { node { id name { value } } }
+  endpoints {
+    edges {
+      node {
+        ...AppDeploymentRequestEndpointFields
+      }
+    }
+  }
+}
+
+fragment AppDeploymentRequestDependencyFields on AppDeploymentRequestDependency {
+  id
+  name { value }
+  protocol { value }
+  port_start { value }
+  port_end { value }
+  business_justification { value }
+  access_status { value }
+  decision_reason { value }
+  decision_at { value }
+  access_expires_at { value }
+  approved_by {
+    node {
+      id
+      org_id { value }
+      name { value }
+    }
+  }
+  source {
+    node {
+      ...AppDeploymentRequestComponentFields
+    }
+  }
+  target {
+    node {
+      ...AppDeploymentRequestEndpointFields
+    }
+  }
+  existing_target {
+    node {
+      id
+      name { value }
+      endpoint_type { value }
+      fqdn { value }
+      parent {
+        node {
+          ... on AppComponent {
+            id
+            name { value }
+            parent {
+              node {
+                ... on AppApplication {
+                  id
+                  name { value }
+                  owner {
+                    node {
+                      id
+                      org_id { value }
+                      name { value }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+query application_request($name: String!) {
+  AppDeploymentRequest(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        description { value }
+        application_fqdn { value }
+        environment { value }
+        criticality { value }
+        security_profile { value }
+        status { value }
+        customer {
+          node {
+            id
+            org_id { value }
+            name { value }
+          }
+        }
+        components {
+          edges {
+            node {
+              ...AppDeploymentRequestComponentFields
+            }
+          }
+        }
+        dependencies {
+          edges {
+            node {
+              ...AppDeploymentRequestDependencyFields
+            }
+          }
+        }
+      }
+    }
+  }
+
+}

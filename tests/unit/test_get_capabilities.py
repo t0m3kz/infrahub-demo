@@ -15,12 +15,12 @@ class TestGetCapabilities:
         [
             ({}, False, False),
             ({"name": "leaf-1"}, False, False),
-            ({"device_capabilities": None}, False, False),
-            ({"device_capabilities": [{"typename": "ManagedBGP", "name": "bgp"}]}, True, False),
-            ({"device_capabilities": [{"typename": "ManagedOSPF", "name": "ospf"}]}, False, True),
+            ({"capabilities": None}, False, False),
+            ({"capabilities": [{"typename": "ManagedBGP", "name": "bgp"}]}, True, False),
+            ({"capabilities": [{"typename": "ManagedOSPF", "name": "ospf"}]}, False, True),
             (
                 {
-                    "device_capabilities": [
+                    "capabilities": [
                         {"typename": "ManagedBGP", "name": "bgp"},
                         {"typename": "ManagedOSPF", "name": "ospf"},
                     ]
@@ -28,7 +28,7 @@ class TestGetCapabilities:
                 True,
                 True,
             ),
-            ({"device_capabilities": [{"typename": "ManagedDHCP", "name": "dhcp"}]}, False, False),
+            ({"capabilities": [{"typename": "ManagedDHCP", "name": "dhcp"}]}, False, False),
         ],
     )
     def test_get_capabilities(self, data: dict, bgp: bool, ospf: bool) -> None:

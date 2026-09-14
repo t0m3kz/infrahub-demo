@@ -1,0 +1,39 @@
+---
+# C011 colocation sample application on customer VLAN segment in NY metro.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppApplication
+  data:
+    - label: edge-analytics
+      environment: p
+      criticality: medium
+      security_profile: internal_standard
+      fqdn: edge-analytics.c011.demo.local
+      ingress_mode: frontend
+      application_orchestrator: github_actions
+      owner: C011
+      member_of_groups:
+        - app_applications
+      children:
+        kind: AppComponent
+        data:
+          - name: edge-ingress
+            component_type: frontend
+            network_segment: c011-nordix-prod-p
+            service_ports:
+              data:
+                - port: 443
+                  protocol: tcp
+            member_of_groups:
+              - app_components
+
+          - name: stream-worker
+            component_type: worker
+            network_segment: c011-nordix-prod-p
+            service_ports:
+              data:
+                - port: 9092
+                  protocol: tcp
+            member_of_groups:
+              - app_components

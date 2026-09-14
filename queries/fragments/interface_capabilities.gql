@@ -1,0 +1,104 @@
+fragment OspfInterfaceCapabilityFields on RoutingOSPFInterface {
+  name { value }
+  mode { value }
+  metric { value }
+  authentication_mode { value }
+  password { node { password { value } } }
+  peering {
+    node {
+      ospf_process {
+        edges {
+          node {
+            process_id { value }
+            router_id { node { address { value } } }
+            capabilities { edges { node { name { value } } } }
+          }
+        }
+      }
+      ospf_area { node { area { value } area_type { value } } }
+      network_type { value }
+      cost { value }
+      interface_capabilities {
+        edges {
+          node {
+            name { value }
+            device { node { name { value } } }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment ExchangeGatewayInterfaceCapabilityFields on TopologyExchangeGateway {
+  name { value }
+  description { value }
+  status { value }
+  namespace_a { node { name { value } l3_vni { value } } }
+  namespace_z { node { name { value } l3_vni { value } } }
+  ... on TopologyRoutedExchange {
+    id
+    # Both legs of the inter-VRF hop live on the same device — for a leaf
+    # rendering its own default route, "the other leg" (any interface here
+    # not equal to the one this capability was found on) gives the nexthop
+    # IP and confirms both interfaces belong to this device, purely from
+    # local interface_capabilities traversal, no second query root needed.
+    interface_capabilities {
+      edges {
+        node {
+          id
+          name { value }
+          device { node { name { value } } }
+          ... on DcimPhysicalInterface {
+            ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+          }
+          ... on DcimVirtualInterface {
+            ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+          }
+        }
+      }
+    }
+  }
+  ... on TopologyRouteLeakExchange {
+    direction { value }
+    route_target { value }
+  }
+}
+
+fragment InterfaceCapabilitiesFields on DcimInterface {
+  interface_capabilities {
+    edges {
+      node {
+        __typename
+        ...OspfInterfaceCapabilityFields
+      }
+    }
+  }
+}
+
+fragment FirewallContextInterfaceCapabilityFields on ManagedFirewallContext {
+  name { value }
+  tenant { node { id } }
+}
+
+fragment InterfaceCapabilitiesWithSegmentFields on DcimInterface {
+  interface_capabilities {
+    edges {
+      node {
+        __typename
+        ...OspfInterfaceCapabilityFields
+        ...NetworkSegmentFields
+        ...ExchangeGatewayInterfaceCapabilityFields
+        ...FirewallContextInterfaceCapabilityFields
+      }
+    }
+  }
+}
+
+fragment InterfaceCapabilitiesOnInterfaceFields on DcimInterface {
+  ...InterfaceCapabilitiesFields
+}
+
+fragment InterfaceCapabilitiesWithSegmentOnInterfaceFields on DcimInterface {
+  ...InterfaceCapabilitiesWithSegmentFields
+}
