@@ -281,8 +281,8 @@ class TestPrepareAzureDataLbRules:
         assert len(prepare_azure_data(_lb(), _vips())["lb_rules"]) == 1
 
     def test_lb_rule_name_includes_hostname(self) -> None:
-        # codeql[py/incomplete-url-substring-sanitization] -- asserting a generated name contains the hostname, not a URL trust decision
-        assert "app.example.com" in prepare_azure_data(_lb(), _vips())["lb_rules"][0]["name"]
+        name = prepare_azure_data(_lb(), _vips())["lb_rules"][0]["name"]
+        assert "app.example.com" in name  # lgtm[py/incomplete-url-substring-sanitization]
 
     def test_lb_rule_frontend_port_set(self) -> None:
         assert prepare_azure_data(_lb(), _vips())["lb_rules"][0]["frontend_port"] == 443
@@ -397,8 +397,7 @@ class TestPrepareGcpDataForwardingRules:
 
     def test_forwarding_rule_name_includes_hostname_protocol_port(self) -> None:
         name = prepare_gcp_data(_lb(), _vips())["forwarding_rules"][0]["name"]
-        # codeql[py/incomplete-url-substring-sanitization] -- asserting a generated name contains the hostname, not a URL trust decision
-        assert "app.example.com" in name
+        assert "app.example.com" in name  # lgtm[py/incomplete-url-substring-sanitization]
         assert "HTTPS" in name
         assert "443" in name
 
