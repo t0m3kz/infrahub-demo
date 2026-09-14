@@ -45,7 +45,7 @@ your LinkedIn profile.
 ## Quick Start
 
 ```bash
-uv run inv deploy-dc --scenario dc5 --branch your_branch
+# See Deployment Steps below for the current load and generator commands.
 ```
 
 **Warning:** Vendor blame games sold separately. Update your LinkedIn profile accordingly.
@@ -59,7 +59,7 @@ uv run inv deploy-dc --scenario dc5 --branch your_branch
 
 ```bash
 # really quick
-uv run inv deploy-dc --scenario dc5 --branch your_branch
+# See the manual commands below, or use the automatic created-object trigger.
 
 # I'm the control nerd
 uv run infrahubctl branch create you_branch
@@ -68,12 +68,16 @@ uv run infrahubctl branch create you_branch
 uv run infrahubctl object load data/demos/01_data_center/dc5/ --branch you_branch
 
 # Generate fabric (grab coffee, this might take a while)
-uv run infrahubctl generator generate_dc name=DC5 --branch you_branch
+uv run infrahubctl generator add_dc name=DC5 --branch you_branch
 
 ```
 
 Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions →
-generate_dc DC5-Fabric-1
+add_dc for DC5.
+
+## Validation
+
+Use `uv run invoke test-integration` for the full multi-vendor matrix. For automatic DC/POD/rack ordering changes, start with `uv run invoke test-integration-routing`; Eurovision for switches deserves at least one rehearsal.
 
 ## Fun Fact
 

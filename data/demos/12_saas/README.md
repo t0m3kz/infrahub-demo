@@ -1,4 +1,4 @@
-# 21 - Zscaler Secure Internet Breakout Demo
+# 12 - Zscaler Secure Internet Breakout Demo
 
 Quick sample to model Zscaler POPs, underlay tunnels, web policies, and their placement in topology via SaaS regions.
 
@@ -23,7 +23,7 @@ Quick sample to model Zscaler POPs, underlay tunnels, web policies, and their pl
 uv run infrahubctl branch create zscaler_demo
 
 # load the demo objects
-uv run infrahubctl object load data/demos/21_zscaler/ --branch zscaler_demo
+uv run infrahubctl object load data/demos/12_saas/ --branch zscaler_demo
 ```
 
 ## Next steps
@@ -31,3 +31,5 @@ uv run infrahubctl object load data/demos/21_zscaler/ --branch zscaler_demo
 - Attach `VPNConnection` objects to your edge devices pointing at the Zscaler endpoints
 - Map specific user groups or network segments to the cloud policy via the `network_segments` relationship on `SecurityPolicy`
 - Extend rules with `application_categories` if you also populate application data
+
+For the application and proxy acceptance workflow, run `uv run invoke test-integration-apps`. Use `uv run invoke test-integration` when the SaaS changes are part of a broader topology update.

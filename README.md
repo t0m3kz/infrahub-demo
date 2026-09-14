@@ -201,6 +201,30 @@ uv run invoke test-integration
 
 These tasks run pytest with `--basetemp .pytest-tmp`.
 
+### Integration Test Profiles
+
+The integration suite shares one Docker stack per pytest invocation. Running several scenarios in one command is therefore much cheaper than starting a fresh small universe for every file.
+
+Use the focused profiles when you want useful feedback before the full topology marathon:
+
+```bash
+# Setup and repository prerequisites only
+uv run invoke test-integration-fast
+
+# Application catalogue: request materialization, proxy, and firewall rules
+uv run invoke test-integration-apps
+
+# Automatic DC/POD/rack trigger and routing regression
+uv run invoke test-integration-routing
+
+# Everything, including the full DC matrix
+uv run invoke test-integration
+```
+
+The `apps` and `fast` profiles both load the shared setup and repository prerequisites, but only `apps` runs the canonical `30_all` application acceptance scenario. The full profile is deliberately heavier: it exercises the long-running DC lifecycle and all dependent workflows. It is excellent at finding trouble and less excellent at respecting your afternoon.
+
+Integration task waits now fail with the active branch task titles and states when the queue does not settle within the timeout. That is intentional: a later assertion against half-generated infrastructure is rarely the thrilling plot twist anyone requested.
+
 Alternative (manual):
 
 ```bash
