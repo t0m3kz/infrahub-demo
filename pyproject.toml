@@ -4,7 +4,7 @@ authors = [
 ]
 requires-python = "<3.14,>=3.10"
 dependencies = [
-    "invoke<3.0.0,>=2.2.0",
+    "invoke>=2.2.0,<4.0.0",
     "infrahub-sdk[ctl]>=1.15.0b0,<2.0.0",
     "jinja2>=3.1.6,<4.0.0",
     "netutils>=1.8.0",
@@ -29,7 +29,7 @@ dev = [
     "pytest-cov>=7.1.0",
     "pytest-dependency>=0.6.0",
     "pytest-order>=1.3.0",
-    "ruff>=0.11.4",
+    "ruff>=0.11.4,<0.16.0",  # ariadne-codegen (pulled in via infrahub-sdk[ctl]) pins ruff<0.16.0
     "ty>=0.0.7",
     "yamllint>=1.37.1",
 ]
