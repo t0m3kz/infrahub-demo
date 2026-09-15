@@ -29,7 +29,7 @@ dev = [
     "pytest-cov>=7.1.0",
     "pytest-dependency>=0.6.0",
     "pytest-order>=1.3.0",
-    "ruff>=0.11.4",
+    "ruff>=0.11.4,<0.16.0",  # ariadne-codegen (pulled in via infrahub-sdk[ctl]) pins ruff<0.16.0
     "ty>=0.0.7",
     "yamllint>=1.37.1",
 ]
