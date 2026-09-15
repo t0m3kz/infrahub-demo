@@ -149,8 +149,15 @@ class TestSharedAsIdBypass:
             plan, device_map, interfaces=[], existing_as_by_device={}, asn_pool="pool-1", shared_as_id="as-shared-1"
         )
 
-        # No pool draw at all — shared_as_id bypasses autonomous_systems entirely.
-        assert plan.autonomous_systems == []
+        # No pool draw — shared_as_id bypasses the pool entirely. It's still
+        # registered in autonomous_systems (one entry per group, "_existing_id")
+        # so eBGP overlay planning (which sources per-device AS refs from
+        # autonomous_systems, not from local_as_by_group) can find it too.
+        assert plan.autonomous_systems == [
+            {"_existing_id": "as-shared-1", "_for_device": "spine-01"},
+            {"_existing_id": "as-shared-1", "_for_device": "spine-02"},
+            {"_existing_id": "as-shared-1", "_for_device": "spine-03"},
+        ]
         assert len(plan.bgp_processes) == 3
         for bgp in plan.bgp_processes:
             assert bgp["local_as"] == {"id": "as-shared-1"}
@@ -173,7 +180,10 @@ class TestSharedAsIdBypass:
             shared_as_id="as-shared-new",
         )
 
-        assert plan.autonomous_systems == []
+        assert plan.autonomous_systems == [
+            {"_existing_id": "as-shared-new", "_for_device": "spine-01"},
+            {"_existing_id": "as-shared-new", "_for_device": "spine-02"},
+        ]
         for bgp in plan.bgp_processes:
             assert bgp["local_as"] == {"id": "as-shared-new"}
 
@@ -196,7 +206,9 @@ class TestSharedAsIdBypass:
             shared_as_id="as-shared-1",
         )
 
-        assert plan.autonomous_systems == []
+        # Both devices share one MLAG-domain group — one autonomous_systems
+        # entry for the group, not one per device.
+        assert plan.autonomous_systems == [{"_existing_id": "as-shared-1", "_for_device": "spine-01-spine-02-mlag"}]
         for bgp in plan.bgp_processes:
             assert bgp["local_as"] == {"id": "as-shared-1"}
 

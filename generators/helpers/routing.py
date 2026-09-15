@@ -488,8 +488,19 @@ class RoutingPlanner:
         local_as_by_group: dict[str, dict | PendingASRef] = {}
         if shared_as_id is not None:
             shared_ref = {"id": shared_as_id}
+            seen_shared_groups: set[str] = set()
             for name in bottom_names:
-                local_as_by_group[_group_key(name)] = shared_ref
+                group = _group_key(name)
+                local_as_by_group[group] = shared_ref
+                # _plan_overlay_processes (eBGP overlay) sources its per-device AS
+                # refs from plan.autonomous_systems, not from local_as_by_group —
+                # without this, a shared underlay AS (pod-shared spine ASN /
+                # fabric-wide super-spine ASN) is invisible to overlay planning,
+                # so eBGP overlay BGP processes silently never get created for
+                # these devices even though their underlay BGP does.
+                if group not in seen_shared_groups:
+                    seen_shared_groups.add(group)
+                    plan.autonomous_systems.append({"_existing_id": shared_as_id, "_for_device": group})
         else:
             for name in bottom_names:
                 group = _group_key(name)
