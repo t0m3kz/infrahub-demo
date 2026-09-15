@@ -5,6 +5,8 @@ jinja2_transforms:
     description: Template to generate a containerlab topology
     query: topology_simulator
     template_path: templates/clab_topology.j2
+    watch:
+      files: []
 
 artifact_definitions:
   - name: edge_config
@@ -292,90 +294,235 @@ python_transforms:
   - name: topology_cabling
     class_name: TopologyCabling
     file_path: transforms/topology/cabling.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: leaf
     class_name: Leaf
     file_path: transforms/config/leaf.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: border_leaf
     class_name: BorderLeaf
     file_path: transforms/config/border_leaf.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: border_spine
     class_name: BorderSpine
     file_path: transforms/config/border_spine.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: tor
     class_name: ToR
     file_path: transforms/config/tor.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: l2_leaf
     class_name: L2Leaf
     file_path: transforms/config/l2_leaf.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: access_leaf
     class_name: AccessLeaf
     file_path: transforms/config/access_leaf.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: spine
     class_name: Spine
     file_path: transforms/config/spine.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: super_spine
     class_name: SuperSpine
     file_path: transforms/config/super_spine.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: loadbalancer
     class_name: LoadBalancer
     file_path: transforms/config/loadbalancer.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: proxy
     class_name: Proxy
     file_path: transforms/config/proxy.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: proxy-cloud
     class_name: ProxyCloud
     file_path: transforms/config/proxy_cloud.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: edge
     class_name: Edge
     file_path: transforms/config/edge.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: equinix_pop
     class_name: EquinixPOP
     file_path: transforms/config/equinix_pop.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: loadbalancer-cloud
     class_name: LoadBalancerCloud
     file_path: transforms/config/loadbalancer_cloud.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: firewall
     class_name: Firewall
     file_path: transforms/config/firewall.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: controller-payload
     class_name: ControllerPayload
     file_path: transforms/config/controller.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: topology-orchestrator-ansible
     class_name: TopologyOrchestratorAnsible
     file_path: transforms/topology/orchestrator_routing.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: topology-orchestrator-terraform
     class_name: TopologyOrchestratorTerraform
     file_path: transforms/topology/orchestrator_routing.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: topology-orchestrator-argocd
     class_name: TopologyOrchestratorArgoCD
     file_path: transforms/topology/orchestrator_routing.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: topology-orchestrator-github-actions
     class_name: TopologyOrchestratorGitHubActions
     file_path: transforms/topology/orchestrator_routing.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: application-orchestrator-ansible
     class_name: ApplicationOrchestratorAnsible
     file_path: transforms/topology/orchestrator_routing.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: application-orchestrator-argocd
     class_name: ApplicationOrchestratorArgoCD
     file_path: transforms/topology/orchestrator_routing.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: application-orchestrator-github-actions
     class_name: ApplicationOrchestratorGitHubActions
     file_path: transforms/topology/orchestrator_routing.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: rack_elevation
     class_name: RackElevation
     file_path: transforms/topology/rack.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: cloud-vpc-terraform
     class_name: CloudVpcTerraform
     file_path: transforms/cloud/vpc_terraform.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: virt_cluster_total_cpu
     class_name: VirtClusterTotalCpu
     file_path: transforms/fields/virt_cluster_capacity.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: virt_cluster_total_memory_gb
     class_name: VirtClusterTotalMemoryGb
     file_path: transforms/fields/virt_cluster_capacity.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: virt_cluster_total_storage_gb
     class_name: VirtClusterTotalStorageGb
     file_path: transforms/fields/virt_cluster_capacity.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
 
 graphql_fragments:
   - name: all_fragments
@@ -495,6 +642,10 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
   - name: add_pod
     file_path: generators/topology/pod.py
     targets: topologies_pod
@@ -504,6 +655,10 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
   - name: dc_pod_cascade
     file_path: generators/topology/dc_pod_cascade.py
     targets: topologies_dc
@@ -513,6 +668,10 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
   - name: pod_rack_cascade
     file_path: generators/topology/pod_rack_cascade.py
     targets: topologies_pod
@@ -522,6 +681,10 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
   - name: decommission_pod
     file_path: generators/decommission/pod.py
     targets: topologies_pod
@@ -531,6 +694,10 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
   # - name: decommission_device
   #   file_path: generators/decommission_device.py
   #   targets: devices
@@ -549,6 +716,10 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
   - name: add_endpoint
     file_path: generators/topology/endpoint.py
     targets: endpoints
@@ -558,6 +729,10 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       device_name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
   - name: add_vxlan_segment
     file_path: generators/topology/segment.py
     targets: vxlan_segments
@@ -567,6 +742,10 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
   - name: add_circuit
     file_path: generators/topology/circuit.py
     targets: physical_circuits
@@ -576,6 +755,10 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
   - name: add_virtual_circuit
     file_path: generators/topology/circuit.py
     targets: virtual_circuits
@@ -585,6 +768,10 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
   - name: add_mlag
     file_path: generators/topology/mlag.py
     targets: mlag_domains
@@ -594,6 +781,10 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
   - name: add_lb_backend_nexthop
     file_path: generators/topology/loadbalancer.py
     targets: loadbalancer_vips
@@ -603,6 +794,10 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       id: id
+    watch:
+      files:
+        - generators/
+        - utils/
   - name: add_app_application
     file_path: generators/topology/application_security.py
     targets: app_applications
@@ -612,6 +807,10 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
   - name: add_application_deployment_request
     file_path: generators/topology/application_request.py
     targets: app_deployment_requests
@@ -621,6 +820,10 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
   - name: add_customer_deployment_dc
     file_path: generators/topology/customer_dc.py
     targets: customer_deployments_dc
@@ -630,6 +833,10 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
   - name: add_customer_deployment_colocation
     file_path: generators/topology/customer_colocation.py
     targets: customer_deployments_colocation
@@ -639,6 +846,10 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
   - name: add_customer_deployment_cloud
     file_path: generators/topology/customer_cloud.py
     targets: customer_deployments_cloud
@@ -648,6 +859,10 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
   - name: add_customer_deployment_office
     file_path: generators/topology/customer_office.py
     targets: customer_deployments_office
@@ -657,6 +872,10 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
   - name: add_application_orchestrator_routing
     file_path: generators/topology/orchestrator_routing.py
     targets: app_applications
@@ -666,6 +885,10 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
   - name: add_customer_deployment_orchestrator_routing
     file_path: generators/topology/orchestrator_routing.py
     targets: customer_deployments
@@ -675,6 +898,10 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
   - name: add_quotation_dc
     file_path: generators/quotations/dc.py
     targets: customer_quotations
@@ -684,6 +911,10 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
   - name: add_quotation_office
     file_path: generators/quotations/office.py
     targets: customer_quotations
@@ -693,6 +924,10 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
 # - name: create_pop
 #   file_path: generators/generate_pop.py
 #   targets: topologies_pop

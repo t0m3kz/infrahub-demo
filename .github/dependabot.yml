@@ -14,10 +14,7 @@ updates:
     groups:
       all:
         patterns:
-          - "^(?!infrahub-sdk$).*"  # Exclude infrahub-sdk from this group
-      infrahub-sdk:
-        patterns:
-          - "infrahub-sdk"
+          - "*"
   # Maintain dependencies for GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"

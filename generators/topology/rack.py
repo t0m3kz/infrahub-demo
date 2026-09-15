@@ -568,6 +568,16 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
                     return
 
         pod = self.data["pod"]
+        if "deployment_type" not in pod:
+            # LocationRack.pod accepts any TopologyRackHosting peer, not just TopologyPod
+            # (e.g. a colocation rack's pod is a TopologyColocationZone). Those don't carry
+            # DC-fabric fields like deployment_type — nothing for this generator to build.
+            self.logger.info(
+                "Rack %s: parent %s is not a DC-fabric pod, nothing to generate",
+                self.data["name"],
+                pod.get("id"),
+            )
+            return
         spine_names = [device["name"] for device in pod.get("devices", [])]
         if spine_names and not await self._spine_underlay_ready(spine_names):
             self.logger.info(
