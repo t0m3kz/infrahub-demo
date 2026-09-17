@@ -127,17 +127,6 @@ nodes:
     display_label: "{{name__value}}"
     order_by:
       - name__value
-    relationships:
-      - name: capabilities
-        peer: DcimCapabilities
-        label: "Peer Devices"
-        description: "The two firewall devices that form this HA domain"
-        cardinality: many
-        optional: false
-        kind: Generic
-        direction: inbound
-        identifier: device_capabilities
-        order_weight: 900
     attributes:
       - name: ha_protocol
         kind: Dropdown
@@ -259,16 +248,6 @@ nodes:
     order_by:
       - name__value
     relationships:
-      - name: capabilities
-        peer: DcimCapabilities
-        label: "Peer Devices"
-        description: "The two load balancer devices that form this HA domain"
-        cardinality: many
-        optional: false
-        kind: Generic
-        direction: inbound
-        identifier: device_capabilities
-        order_weight: 900
       - name: tenant
         peer: ManagedTenantScoped
         label: "Dedicated Tenant"
@@ -349,17 +328,6 @@ nodes:
     display_label: "{{name__value}}"
     order_by:
       - name__value
-    relationships:
-      - name: capabilities
-        peer: DcimCapabilities
-        label: "Peer Devices"
-        description: "The two proxy devices that form this HA pair"
-        cardinality: many
-        optional: false
-        kind: Generic
-        direction: inbound
-        identifier: device_capabilities
-        order_weight: 900
     attributes:
       - name: proxy_type
         kind: Dropdown
