@@ -275,7 +275,12 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
             pod_obj = await self.client.get(kind=TopologyPod, id=pod_id)
             if pod_obj:
                 pod_obj.asn_pool = {"id": dc_fabric_asn_pool["id"]}
-                await pod_obj.save(allow_upsert=True)
+                # Plain save(): pod_obj is a known-existing node (just fetched) —
+                # allow_upsert=True would route through create()'s Upsert mutation,
+                # which sends every attribute/relationship (even unmodified ones),
+                # spuriously re-firing unrelated `updated` triggers (index/
+                # fabric_templates/mlag_create) on every ASN-pool link.
+                await pod_obj.save()
                 self.logger.info(f"Pod {pod_name}: linked to DC ASN pool '{dc_asn_pool_name}'")
 
         # Pass management pool ID from DC parent (create_devices resolves ID to SDK object)

@@ -217,7 +217,12 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
             for pool_name, pool_obj in dc_pools.items():
                 if pool_name in pool_attr_map:
                     setattr(dc, pool_attr_map[pool_name], {"id": pool_obj.id})
-            await dc.save(allow_upsert=True)
+            # Plain save(): dc is a known-existing node (just fetched) — allow_upsert=True
+            # would route through create()'s Upsert mutation, which sends every
+            # attribute/relationship (even unmodified ones), spuriously re-firing
+            # unrelated `updated` triggers (fabric_templates/connectivity_mode/status)
+            # on every pool attach and double-firing dc_pod_cascade.
+            await dc.save()
 
         # Derive deterministic ASN range from DC name (unique per site).
         # max_border_leafs_per_fabric is included since border-leaf devices draw

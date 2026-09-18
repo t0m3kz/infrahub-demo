@@ -186,7 +186,14 @@ class PoolMixin:
             if parent:
                 pool_ref = {"id": pool.id} if pool.id else {"hfid": pool.hfid}
                 setattr(parent, parent_attr, pool_ref)
-                await parent.save(allow_upsert=True)
+                # Plain save(), not allow_upsert=True: `parent` was just fetched via
+                # client.get() so it's a known-existing node — update() sends only the
+                # modified fields. allow_upsert=True would route through create()'s
+                # Upsert mutation instead, which always sends every attribute/relationship
+                # (even unmodified ones), spuriously re-firing any `updated` trigger
+                # watching those other fields (e.g. index/fabric_templates/mlag_create)
+                # on every pool-reference attach.
+                await parent.save()
                 self.logger.info("- Updated %s with %s (id: %s)", parent_kind, parent_attr, pool.id)
 
         return pool
@@ -364,7 +371,11 @@ class PoolMixin:
                     self.logger.info(f"- Attaching pool {pool_obj.hfid} to pod (id: {pool_obj.id})")
                     pod_updated = True
             if pod_updated:
-                await pod.save(allow_upsert=True)
+                # Plain save(): pod is a known-existing node (fetched above via
+                # client.get()) — see comment on the parent.save() call above for why
+                # allow_upsert=True here would spuriously re-fire unrelated `updated`
+                # triggers (index/fabric_templates/mlag_create) on every pool attach.
+                await pod.save()
                 self.logger.info(f"- Saved pod {pod.name.value} with all pool references")
 
         return created_pools

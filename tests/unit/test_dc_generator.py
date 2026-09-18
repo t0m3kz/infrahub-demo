@@ -510,7 +510,11 @@ class TestGenerateDCPoolAttachment:
         await gen.generate(_deployment(design=_design()))
 
         assert dc_obj.loopback_pool == {"id": "lo-1"}
-        dc_obj.save.assert_awaited_once_with(allow_upsert=True)
+        # Plain save(), not allow_upsert=True: dc_obj is a known-existing node
+        # (just fetched via client.get()) — allow_upsert=True would force the
+        # full-payload Upsert mutation path and spuriously re-fire `updated`
+        # triggers on unrelated fields (fabric_templates/connectivity_mode/status).
+        dc_obj.save.assert_awaited_once_with()
 
     @pytest.mark.asyncio
     async def test_dc_not_found_skips_pool_attachment_without_error(self) -> None:
