@@ -26,6 +26,15 @@ _SIBLING_SPINE_MAX_RETRIES = 10
 _SIBLING_SPINE_RETRY_DELAY = 3.0
 _DC_READY_MAX_RETRIES = 10
 _DC_READY_RETRY_DELAY = 3.0
+# Short/bounded on purpose: most pods host zero border-leaf devices (only
+# the design-designated pod(s) do), so this fires on every pod's bootstrap —
+# a long retry here would slow down the common no-op case for every pod that
+# will never find any, just to bridge the rare, short residual lag on the one
+# that actually hosts them (border-leaf is created in the same add_dc pass as
+# super-spine, so it's usually already visible by the time _DC_READY_* above
+# is satisfied).
+_BORDER_LEAF_MAX_RETRIES = 3
+_BORDER_LEAF_RETRY_DELAY = 2.0
 
 # FW/LB "uplink" interfaces face border-spine; border-spine's "firewall"/
 # "load-balancer" interfaces are the dedicated counterpart ports — same
@@ -651,9 +660,21 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
             role="border-leaf",
             quantity=max_border_leafs_per_fabric,
         )
-        border_leafs = await self.client.filters(
-            kind=DcimPhysicalDevice, name__values=sorted(candidate_names), role__value="border-leaf"
-        )
+        # Bounded retry: candidate_names is a live query (not the DC snapshot
+        # _DC_READY_* above already waited on), so a pod that *does* host
+        # border-leaf can still read it before add_dc's write is visible here
+        # — confirmed live: a border-leaf ended up with 0 underlay peerings
+        # because this lookup found nothing and silently no-opped instead of
+        # retrying, unlike every other "might not exist yet" lookup in this
+        # file.
+        border_leafs: list[Any] = []
+        for attempt in range(_BORDER_LEAF_MAX_RETRIES):
+            border_leafs = await self.client.filters(
+                kind=DcimPhysicalDevice, name__values=sorted(candidate_names), role__value="border-leaf"
+            )
+            if border_leafs or attempt == _BORDER_LEAF_MAX_RETRIES - 1:
+                break
+            await asyncio.sleep(self._retry_delay(_BORDER_LEAF_RETRY_DELAY, attempt))
         if not border_leafs:
             return
         border_leaf_names = sorted(bl.name.value for bl in border_leafs)
