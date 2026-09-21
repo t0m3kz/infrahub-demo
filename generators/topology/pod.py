@@ -814,10 +814,19 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
                 )
                 return
 
-            # Peer-facing offset must be unique per (source pod, sibling pod) pair,
-            # otherwise multiple higher-index pods can select the same sibling
-            # spine uplink slot and collide on one endpoint.
-            pair_slot = max(0, pod_index - sibling.index.value - 1)
+            # Peer-facing offset must be unique per (source pod, sibling pod) pair
+            # AND must not collide with the sibling's own outbound slots. The
+            # sibling's own generate() reserves its first (sibling.index - 1)
+            # uplink groups for its own links to *its* lower siblings (mirrors
+            # slot_start above, computed from the sibling's perspective) — so
+            # inbound callers must start past those, not at 0. Without the base
+            # offset, the immediately-next higher pod (pair_slot=0) always lands
+            # on the sibling's own slot 0, which the sibling itself is already
+            # using for its own lowest-index link — a deterministic collision,
+            # not a timing race (confirmed live: pod2's own link to pod1 and
+            # pod3's inbound link to pod2 both claimed pod2's first uplink pair).
+            sibling_own_outbound_slots = sibling.index.value - 1
+            pair_slot = sibling_own_outbound_slots + max(0, pod_index - sibling.index.value - 1)
             spine_link_base_offset = _base_offset(self.data.get("spine_link_numbering_start", 1))
             cabling_offset = spine_link_base_offset + (pair_slot * links_per_sibling)
             self.logger.info(
