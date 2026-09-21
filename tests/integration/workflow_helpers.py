@@ -310,15 +310,13 @@ async def run_dc_generator_pipeline(
       4. Ensure no failed tasks on branch for this DC
 
     A DC's pods are all created together by the object loader, each firing its
-    own independent `trigger-pod-generator-on-created` -> pod_rack_cascade event
-    (see data/events/99_actions.yml). Dispatch of those per-pod events is not
+    own independent `trigger-pod-generator-on-created` -> add_pod event (see
+    data/events/99_actions.yml). Dispatch of those per-pod events is not
     synchronized, so the task queue can go briefly quiet between one pod's
-    cascade landing and the next pod's cascade being enqueued — a real gap,
-    not stalled work. stable_zero_count=10 (50s of quiet, at the default 5s
+    bootstrap landing and the next pod's being enqueued — a real gap, not
+    stalled work. stable_zero_count=10 (50s of quiet, at the default 5s
     poll_interval) needs to comfortably exceed that dispatch spread across a
-    DC's pods so we don't mistake "waiting on the next pod" for "done" (see
-    the fix in 79398d3e, which removed a spurious duplicate cascade fire that
-    had been accidentally padding this window).
+    DC's pods so we don't mistake "waiting on the next pod" for "done".
     """
     original_branch = client.default_branch
     client.default_branch = branch

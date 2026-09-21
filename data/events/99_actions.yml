@@ -8,15 +8,20 @@ spec:
     # dc_pod_cascade subclasses DCTopologyGenerator (add_dc) and runs its entire
     # bootstrap via super().generate() before fanning out — a strict superset of
     # add_dc's own work (see generators/topology/dc_pod_cascade.py's docstring).
-    # A DC created with pods/racks needs ordered bootstrap: complete the DC work,
-    # then fan out to the existing PODs. Structural DC-level changes use the
-    # same ordering guarantee.
+    # Structural DC-level changes (updated triggers below) need the fan-out: an
+    # existing pod isn't touched by the DC-level change, so its own created/
+    # updated triggers won't fire it. A freshly created DC does NOT need it —
+    # every pod nested under it in the same bulk load gets its own
+    # trigger-pod-generator-on-created, so fanning out here as well double-runs
+    # every pod (and, one level down, every rack). Plain add_dc keeps ordering
+    # correct on its own: pod.py already waits for an in-flight add_dc/
+    # dc_pod_cascade on its parent DC before reading DC-level data.
 
     - name: trigger-dc-generator-on-created
       branch_scope: "other_branches"
       node_kind: TopologyDataCenter
       mutation_action: "created"
-      action: run-dc-pod-cascade
+      action: run-dc-generator
 
     - name: trigger-dc-update-fabric-templates
       branch_scope: "other_branches"
@@ -58,14 +63,20 @@ spec:
             value_previous: provisioning
 
     # pod_rack_cascade runs POD bootstrap before fanning out to the POD's racks.
-    # Created PODs use it too, so racks in a bulk object load only start after
-    # their parent spines and routing prerequisites exist.
+    # Structural updates (below) need the fan-out for the same reason as the DC
+    # triggers above: an existing rack isn't touched by a pod-level change, so
+    # its own trigger won't fire it. A freshly created pod does NOT need it —
+    # every rack nested under it in the same bulk load gets its own
+    # trigger-rack-generator-on-created, so fanning out here too double-runs
+    # every rack. Plain add_pod keeps ordering correct on its own: rack.py
+    # already waits for an in-flight add_pod/pod_rack_cascade on its parent pod
+    # before reading pod-level data.
 
     - name: trigger-pod-generator-on-created
       branch_scope: "other_branches"
       node_kind: TopologyPod
       mutation_action: "created"
-      action: run-pod-rack-cascade
+      action: run-pod-generator
 
     - name: trigger-pod-update-index
       branch_scope: "other_branches"
