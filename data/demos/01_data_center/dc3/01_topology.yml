@@ -23,7 +23,7 @@ spec:
         kind: TopologyPod
         data:
           - index: 1
-            layout: L_MIDDLE
+            layout: M_MIDDLE
             deployment_type: middle_rack
             suites: [lon-1-s-1]
             fabric_templates:
@@ -43,7 +43,7 @@ spec:
                     - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MR"]
                     - ["2", "l2-leaf", "N9K-C9336C-FX2_TOR"]
           - index: 2
-            layout: L_MIDDLE
+            layout: M_MIDDLE
             deployment_type: middle_rack
             suites: [lon-1-s-2]
             fabric_templates:
@@ -63,7 +63,7 @@ spec:
                     - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
                     - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
           - index: 3
-            layout: L_MIDDLE
+            layout: M_MIDDLE
             deployment_type: middle_rack
             suites: [lon-1-s-3]
             fabric_templates:
@@ -83,7 +83,7 @@ spec:
                     - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
                     - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]
           - index: 4
-            layout: L_MIDDLE
+            layout: M_MIDDLE
             deployment_type: middle_rack
             suites: [lon-1-s-4]
             fabric_templates:
