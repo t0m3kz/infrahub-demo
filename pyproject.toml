@@ -2,7 +2,7 @@
 authors = [
     {name = "Tomek Zajac", email = "tomek@mastuazi.com"},
 ]
-requires-python = "<3.14,>=3.10"
+requires-python = "<3.15,>=3.11"
 dependencies = [
     "invoke<3.0.0,>=2.2.0",
     "infrahub-sdk[ctl]>=1.23.2,<2.0.0",
