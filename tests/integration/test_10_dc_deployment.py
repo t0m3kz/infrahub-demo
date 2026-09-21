@@ -171,7 +171,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 _PARAMS_DC_SEQUENCE = []
 for i, dc_key in enumerate(DC_ORDER):
     dependency_name = f"{dc_key}_verify_after_merge"
-    dependency_prev = "repository_sync" if i == 0 else f"{DC_ORDER[i - 1]}_verify_after_merge"
+    dependency_prev = "triggers_active" if i == 0 else f"{DC_ORDER[i - 1]}_verify_after_merge"
     _PARAMS_DC_SEQUENCE.append(
         pytest.param(
             dc_key,
