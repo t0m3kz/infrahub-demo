@@ -34,9 +34,15 @@ logger = logging.getLogger(__name__)
 async def verify_no_failed_tasks(
     client: InfrahubClient,
     branch: str,
-    dc_name: str | None = None,
 ) -> dict[str, Any]:
-    """Verify no tasks failed on the branch during generator execution."""
+    """Verify no tasks failed on the branch during generator execution.
+
+    Each DC (or scenario) deploys on its own dedicated branch, so scoping by
+    branch alone is sufficient — do not additionally filter by DC name in the
+    task title: task titles are generic ("Run generator pod_rack_cascade",
+    "Execute generator add_rack") and never contain the DC name, so a
+    title-substring filter silently discards every real failure.
+    """
     await asyncio.sleep(DATA_PROPAGATION_DELAY)
 
     clean_checks = 0
@@ -49,10 +55,6 @@ async def verify_no_failed_tasks(
             filter=TaskFilter(state=failure_states, branch=branch),
             include_logs=True,
         )
-
-        if dc_name and failed_tasks:
-            dc_lower = dc_name.lower()
-            failed_tasks = [t for t in failed_tasks if dc_lower in t.title.lower()]
 
         failed_details = []
         for task in failed_tasks:
@@ -89,7 +91,7 @@ async def verify_no_failed_tasks(
         detail_str = "\n".join(detail_lines)
         logger.error("Found %d failed task(s) on branch '%s':\n%s", len(failed_details), branch, detail_str)
     else:
-        logger.info("No failed tasks on branch '%s' (dc_filter=%s)", branch, dc_name)
+        logger.info("No failed tasks on branch '%s'", branch)
 
     assert not failed_details, f"Found {len(failed_details)} failed task(s) on branch '{branch}':\n" + "\n".join(
         f"  - {d['title']} ({d['state']})"
@@ -297,7 +299,7 @@ async def run_dc_generator_pipeline(
     branch: str,
     dc_name: str,
     generator_name: str = "add_dc",
-    stable_zero_count: int = 4,
+    stable_zero_count: int = 10,
 ) -> dict[str, Any]:
     """Run a DC generator workflow and verify task health.
 
@@ -306,6 +308,17 @@ async def run_dc_generator_pipeline(
       2. Run generator
       3. Wait for cascading tasks to settle
       4. Ensure no failed tasks on branch for this DC
+
+    A DC's pods are all created together by the object loader, each firing its
+    own independent `trigger-pod-generator-on-created` -> pod_rack_cascade event
+    (see data/events/99_actions.yml). Dispatch of those per-pod events is not
+    synchronized, so the task queue can go briefly quiet between one pod's
+    cascade landing and the next pod's cascade being enqueued — a real gap,
+    not stalled work. stable_zero_count=10 (50s of quiet, at the default 5s
+    poll_interval) needs to comfortably exceed that dispatch spread across a
+    DC's pods so we don't mistake "waiting on the next pod" for "done" (see
+    the fix in 79398d3e, which removed a spurious duplicate cascade fire that
+    had been accidentally padding this window).
     """
     original_branch = client.default_branch
     client.default_branch = branch
@@ -316,8 +329,8 @@ async def run_dc_generator_pipeline(
     generator_result = await run_generator(
         client=client, generator_name=generator_name, node_ids=[dc.id], branch=branch
     )
-    await wait_for_tasks_completion(client, branch, stable_zero_count=stable_zero_count)
-    no_failed_result = await verify_no_failed_tasks(client=client, branch=branch, dc_name=dc_name)
+    await wait_for_tasks_completion(client, branch, initial_delay=10, stable_zero_count=stable_zero_count)
+    no_failed_result = await verify_no_failed_tasks(client=client, branch=branch)
 
     client.default_branch = original_branch
     return {
