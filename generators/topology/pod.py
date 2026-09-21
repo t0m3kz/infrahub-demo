@@ -24,8 +24,8 @@ from ..routing import RoutingMixin
 
 _SIBLING_SPINE_MAX_RETRIES = 10
 _SIBLING_SPINE_RETRY_DELAY = 3.0
-_DC_ASN_POOL_MAX_RETRIES = 10
-_DC_ASN_POOL_RETRY_DELAY = 3.0
+_DC_READY_MAX_RETRIES = 10
+_DC_READY_RETRY_DELAY = 3.0
 
 # FW/LB "uplink" interfaces face border-spine; border-spine's "firewall"/
 # "load-balancer" interfaces are the dedicated counterpart ports — same
@@ -150,23 +150,29 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
             dc_name = dc["name"]
 
             # add_dc's own task can finish (dropping out of the tasklist check above)
-            # a moment before its write of fabric_asn_pool is visible to this query —
-            # the wait above only catches "still running", not that narrow window.
-            # Poll for the pool directly when the DC's routing strategy requires one,
-            # so the pre-seed BGP call below never silently skips for a missing pool
-            # that's actually just not visible yet.
+            # a moment before its writes (fabric_asn_pool, super-spine devices) are
+            # visible to this query — the wait above only catches "still running",
+            # not that narrow window (confirmed live: this pod started generating
+            # before the DC's super-spine devices existed, with zero underlay
+            # peerings as the result). Poll the DC directly, via collect_data() —
+            # the same query this generator was invoked with — for whatever it
+            # still needs, so the pre-seed BGP/cabling calls below never silently
+            # skip for data that's actually just not visible yet.
             needs_asn_pool = dc.get("routing_strategy", "ebgp-ebgp") in (
                 RoutingStrategy.EBGP_EBGP.value,
                 RoutingStrategy.EBGP_IBGP.value,
             )
-            for attempt in range(_DC_ASN_POOL_MAX_RETRIES):
-                if not needs_asn_pool or dc.get("fabric_asn_pool"):
+            for attempt in range(_DC_READY_MAX_RETRIES):
+                asn_pool_ready = not needs_asn_pool or dc.get("fabric_asn_pool")
+                super_spines_expected = templates_by_role(dc.get("fabric_templates", []), "super-spine")
+                super_spine_ready = not super_spines_expected or dc.get("devices")
+                if asn_pool_ready and super_spine_ready:
                     break
-                if attempt < _DC_ASN_POOL_MAX_RETRIES - 1:
-                    delay = self._retry_delay(_DC_ASN_POOL_RETRY_DELAY, attempt)
+                if attempt < _DC_READY_MAX_RETRIES - 1:
+                    delay = self._retry_delay(_DC_READY_RETRY_DELAY, attempt)
                     self.logger.info(
-                        f"Pod {pod_name}: parent DC's fabric_asn_pool not visible yet — "
-                        f"retrying in {delay:.2f}s (attempt {attempt + 1}/{_DC_ASN_POOL_MAX_RETRIES})"
+                        f"Pod {pod_name}: parent DC's fabric_asn_pool/super-spine devices not visible yet — "
+                        f"retrying in {delay:.2f}s (attempt {attempt + 1}/{_DC_READY_MAX_RETRIES})"
                     )
                     await asyncio.sleep(delay)
                     data = await self.collect_data()
