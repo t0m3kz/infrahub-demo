@@ -24,7 +24,7 @@ class TestBulkDCTriggerRouting(TestInfrahubDockerWithClient):
         return BRANCH_NAME
 
     @pytest.mark.order(90)
-    @pytest.mark.dependency(scope="session", name="bulk_dc_data_loaded", depends=["repository_sync"])
+    @pytest.mark.dependency(scope="session", name="bulk_dc_data_loaded", depends=["triggers_active"])
     def test_01_bulk_load_dc_data(self, client_main: InfrahubClientSync, scenario_branch: str) -> None:
         """Load DC1 with nested PODs, relying only on created-node triggers."""
         if scenario_branch in client_main.branch.all():

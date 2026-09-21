@@ -7,6 +7,7 @@ This module contains tests for:
 4. Verifying repository content availability
 """
 
+import asyncio
 import logging
 import shutil
 import tempfile
@@ -18,7 +19,7 @@ from infrahub_sdk import InfrahubClient, InfrahubClientSync
 from infrahub_sdk.testing.repository import GitRepo
 
 from .conftest import PROJECT_DIRECTORY, TestInfrahubDockerWithClient
-from .test_constants import REPO_SYNC_MAX_ATTEMPTS, REPO_SYNC_POLL_INTERVAL
+from .test_constants import REPO_SYNC_MAX_ATTEMPTS, REPO_SYNC_POLL_INTERVAL, TRIGGER_ACTIVATION_DELAY
 from .test_helpers import wait_for_condition
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -169,3 +170,20 @@ class TestRepository(TestInfrahubDockerWithClient):
             f"  stdout: {load_events.stdout}\n"
             f"  stderr: {load_events.stderr}"
         )
+
+    @pytest.mark.order(9)
+    @pytest.mark.dependency(scope="session", name="triggers_active", depends=["events_data"])
+    @pytest.mark.asyncio
+    async def test_04_wait_for_trigger_activation(self) -> None:
+        """Wait for CoreNodeTriggerRule automations to actually be listening.
+
+        test_03 only confirms the trigger *nodes* exist in the graph — the
+        underlying Prefect automations that watch for created/updated events
+        are registered separately and asynchronously by a background worker,
+        consistently 12-20s behind (see TRIGGER_ACTIVATION_DELAY). Every DC/
+        pod/rack bulk load downstream depends on this, not on events_data
+        directly, so the first DC doesn't race that gap and silently lose
+        pods/racks whose created events fire before anything is listening.
+        """
+        logging.info("Waiting %ds for trigger automations to activate", TRIGGER_ACTIVATION_DELAY)
+        await asyncio.sleep(TRIGGER_ACTIVATION_DELAY)

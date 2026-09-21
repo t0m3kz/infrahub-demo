@@ -23,3 +23,15 @@ VALIDATION_POLL_INTERVAL = 10  # seconds
 DATA_PROPAGATION_DELAY = 3  # seconds
 MERGE_PROPAGATION_DELAY = 5  # seconds
 BRANCH_ENDPOINT_TIMEOUT = 120  # seconds
+
+# CoreNodeTriggerRule nodes (loaded by test_03_load_events) exist in the graph
+# as soon as `infrahubctl object load` returns, but the underlying Prefect
+# automations that actually listen for created/updated events are registered
+# separately and asynchronously by a background worker — confirmed live at a
+# consistent 12-20s lag behind the object-load command completing. A DC bulk
+# load that starts before that registration finishes has its pods'/racks'
+# created events fired into a system with nothing listening yet, silently
+# dropping them (no error — the objects just never get generated). This has
+# only ever bitten the very first DC in the suite; by the time later DCs run,
+# the gap has long closed on its own.
+TRIGGER_ACTIVATION_DELAY = 30  # seconds
