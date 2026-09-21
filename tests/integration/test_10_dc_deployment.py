@@ -1,6 +1,6 @@
-"""Integration test — Phase 01: DC Deployments (DC1 – DC6).
+"""Integration test — Phase 01: DC Deployments (DC1 – DC7).
 
-Each DC runs sequentially on its own branch (deploy-dc1 … deploy-dc6):
+Each DC runs sequentially on its own branch (deploy-dc1 … deploy-dc7):
   1. Load demo data from data/demos/01_data_center/<dc>/
   2. Run add_dc generator, wait for cascade (add_pod, add_rack)
   3. Verify no failed tasks
@@ -12,7 +12,8 @@ Each DC runs sequentially on its own branch (deploy-dc1 … deploy-dc6):
   9. Verify devices and routing on main (post-merge)
 
 Subsequent scenarios (add-switch, add-rack …) depend on ``dc6_verify_after_merge``
-so they only start after all six DCs are verified in main.
+so they only start once DC1 – DC6 are verified in main; DC7 runs after them as
+an additional end-to-end scenario (micro-fabric / border-spine pattern).
 
 Per-DC configuration and expected results are defined in ``DC_CONFIGS`` below.
 Per-DC execution is modeled as one end-to-end test function that performs all
@@ -21,7 +22,6 @@ steps in sequence for that DC. DC-level ordering/dependencies are expressed via
 """
 
 import logging
-import re
 from typing import Any, Literal
 
 import pytest
@@ -60,35 +60,36 @@ DC_CONFIGS: dict[str, dict[str, Any]] = {
         "routing_strategy": "ebgp-ebgp",
         "naming_convention": "standard",
         "branch": "deploy-dc1",
-        # 3 pods: middle_rack(2sp)+mixed(2sp)+tor(2sp) + 2 super-spines + 22 leafs
-        # + 22 l2-leafs + 24 tors + 2 border-leafs
-        "expected_devices": 78,
-        "expected_roles": {"super-spine": 2, "spine": 6, "leaf": 22, "l2-leaf": 22, "tor": 24, "border-leaf": 2},
-        "expected_min_cables": 78,
+        # 2 pods: middle_rack(2sp each, 2 racks/pod) + 2 super-spines + 8 leafs
+        # + 8 l2-leafs + 2 border-leafs (design L)
+        "expected_devices": 24,
+        "expected_roles": {"super-spine": 2, "spine": 4, "leaf": 8, "l2-leaf": 8, "border-leaf": 2},
+        "expected_min_cables": 24,
     },
     "dc2": {
         "data_path": f"{DEMO_DC_DATA_ROOT}/dc2",
         "dc_name": "DC2",
-        "routing_strategy": "ospf-ibgp",
+        "routing_strategy": "ebgp-ebgp",
         "naming_convention": "hierarchical",
         "branch": "deploy-dc2",
-        # 2 pods: middle_rack(2sp each), no super-spines (data's fabric_templates
-        # has no super-spine role entry) + 8 leafs + 8 l2-leafs + 2 border-leafs
-        "expected_devices": 22,
-        "expected_roles": {"spine": 4, "leaf": 8, "l2-leaf": 8, "border-leaf": 2},
-        "expected_min_cables": 22,
+        # 4 pods: middle_rack(2sp each), no super-spines (design M — data's
+        # fabric_templates has no super-spine role entry) + 8 leafs + 8 l2-leafs
+        # + 2 border-leafs
+        "expected_devices": 26,
+        "expected_roles": {"spine": 8, "leaf": 8, "l2-leaf": 8, "border-leaf": 2},
+        "expected_min_cables": 26,
     },
     "dc3": {
         "data_path": f"{DEMO_DC_DATA_ROOT}/dc3",
         "dc_name": "DC3",
-        "routing_strategy": "ospf-ibgp",
+        "routing_strategy": "ebgp-ebgp",
         "naming_convention": "flat",
         "branch": "deploy-dc3",
-        # 2 pods: mixed(2sp each), no super-spines (data's fabric_templates has
-        # no super-spine role entry) + 8 leafs + 8 l2-leafs + 2 border-leafs
-        "expected_devices": 22,
-        "expected_roles": {"spine": 4, "leaf": 8, "l2-leaf": 8, "border-leaf": 2},
-        "expected_min_cables": 22,
+        # 4 pods: middle_rack(2sp each) + 4 super-spines + 8 leafs + 8 l2-leafs
+        # + 2 border-leafs (design L)
+        "expected_devices": 30,
+        "expected_roles": {"super-spine": 4, "spine": 8, "leaf": 8, "l2-leaf": 8, "border-leaf": 2},
+        "expected_min_cables": 30,
     },
     "dc4": {
         "data_path": f"{DEMO_DC_DATA_ROOT}/dc4",
@@ -96,11 +97,19 @@ DC_CONFIGS: dict[str, dict[str, Any]] = {
         "routing_strategy": "ebgp-ebgp",
         "naming_convention": "hierarchical",
         "branch": "deploy-dc4",
-        # 2 pods: mixed(2sp)+tor(2sp), no super-spines (data's fabric_templates has
-        # no super-spine role entry) + 4 leafs + 4 l2-leafs + 4 tors + 2 border-leafs
-        "expected_devices": 18,
-        "expected_roles": {"spine": 4, "leaf": 4, "l2-leaf": 4, "tor": 4, "border-leaf": 2},
-        "expected_min_cables": 18,
+        # 3 pods: middle_rack(2sp)+mixed(4sp)+tor(4sp) + 4 super-spines + 2
+        # hyper-spines + 4 leafs + 4 l2-leafs + 2 tors + 4 border-leafs (design XL)
+        "expected_devices": 30,
+        "expected_roles": {
+            "super-spine": 4,
+            "hyper-spine": 2,
+            "spine": 10,
+            "leaf": 4,
+            "l2-leaf": 4,
+            "tor": 2,
+            "border-leaf": 4,
+        },
+        "expected_min_cables": 30,
     },
     "dc5": {
         "data_path": f"{DEMO_DC_DATA_ROOT}/dc5",
@@ -125,6 +134,18 @@ DC_CONFIGS: dict[str, dict[str, Any]] = {
         "expected_roles": {"super-spine": 2, "spine": 6, "leaf": 8, "l2-leaf": 12, "tor": 8, "border-leaf": 2},
         "expected_min_cables": 38,
     },
+    "dc7": {
+        "data_path": f"{DEMO_DC_DATA_ROOT}/dc7",
+        "dc_name": "DC7",
+        "routing_strategy": "ebgp-ebgp",
+        "naming_convention": "hierarchical",
+        "branch": "deploy-dc7",
+        # 2 pods: middle_rack(2 border-spine each), no super-spine tier and no
+        # DC-level border-leaf (border-spine collapses spine+border-leaf) + 16 leafs
+        "expected_devices": 20,
+        "expected_roles": {"border-spine": 4, "leaf": 16},
+        "expected_min_cables": 20,
+    },
 }
 
 # l2-leaf is L2-only aggregation (not a VTEP) — it never runs BGP/OSPF, so routing
@@ -136,14 +157,14 @@ for _cfg in DC_CONFIGS.values():
     }
 
 # Sequential deployment order — determines dependency chain and order numbers
-DC_ORDER = ["dc1", "dc2", "dc3", "dc4", "dc5", "dc6"]
+DC_ORDER = ["dc1", "dc2", "dc3", "dc4", "dc5", "dc6", "dc7"]
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # ---------------------------------------------------------------------------
 # Build one pytest.param per DC.
 #
-# Execution order is linear by DC (dc1 -> dc6). Each DC test is an end-to-end
+# Execution order is linear by DC (dc1 -> dc7). Each DC test is an end-to-end
 # flow containing all deployment steps.
 # ---------------------------------------------------------------------------
 
@@ -175,23 +196,31 @@ def _check_naming_convention(
     dc_name: str,
     naming_convention: Literal["flat", "standard", "hierarchical"],
 ) -> list[str]:
+    """Sanity-check names against DeviceNamingConfig's actual output shape
+    (see generators/helpers/naming.py):
+      - flat: no separators at all, fabric_name first, e.g. "dc123lf01"
+      - standard: role code, one hyphen, then fabric_name+indexes, e.g. "lf-dc11312401"
+      - hierarchical: dot-joined fabric_name + indexes + role, e.g. "dc1.2.3.lf01"
+
+    Shared HA virtual-instance names (``{dev1}-{dev2}-shared-<env>-NN``) use an
+    explicit name_override that deliberately bypasses naming_convention (see
+    generators/types.py's DeviceOptions.name_override) — skip them.
+    """
     dc_lower = dc_name.lower()
     mismatches = []
     for name in device_names:
         name_lower = name.lower()
-        if not name_lower.startswith(dc_lower):
+        if "-shared-" in name_lower:
             continue
-        rest = name_lower[len(dc_lower) :]
         if naming_convention == "flat":
-            if re.search(r"-(fab|pod|suite|row|rack)\d+", rest):
+            if "-" in name_lower or "." in name_lower or not name_lower.startswith(dc_lower):
                 mismatches.append(name)
         elif naming_convention == "standard":
-            if not re.search(r"-(fab|pod)\d+", rest):
+            role_code, _, rest = name_lower.partition("-")
+            if not rest or "-" in rest or "." in name_lower or not rest.startswith(dc_lower):
                 mismatches.append(name)
         elif naming_convention == "hierarchical":
-            if re.search(r"-(fab|pod|suite|row|rack)\d+", rest):
-                mismatches.append(name)
-            if not re.search(r"-\d+-", rest):
+            if "-" in name_lower or not name_lower.startswith(f"{dc_lower}."):
                 mismatches.append(name)
     return [f"Naming '{naming_convention}' mismatches: {mismatches}"] if mismatches else []
 
@@ -349,7 +378,7 @@ def _check_routing(
 
 
 class TestDCDeployment(TestInfrahubDockerWithClient):
-    """Deploy DC1 – DC6 sequentially, each on its own branch."""
+    """Deploy DC1 – DC7 sequentially, each on its own branch."""
 
     @pytest.mark.parametrize("dc_key", _PARAMS_DC_SEQUENCE)
     @pytest.mark.asyncio
@@ -387,7 +416,6 @@ class TestDCDeployment(TestInfrahubDockerWithClient):
             branch=branch,
             dc_name=dc_name,
             generator_name="add_dc",
-            stable_zero_count=4,
         )
         logging.info("Generator task: %s", pipeline_result["generator"]["task_state"])
 
