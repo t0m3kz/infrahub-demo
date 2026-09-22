@@ -1,0 +1,44 @@
+---
+# The hub itself, plus its two routing domains.
+#
+# Two route tables, not one, because that is what makes the blast radius
+# interesting: attachments associated with `rt-hub-shared` can reach each other
+# through the hub, and an attachment parked on `rt-hub-isolated` cannot. A change
+# that moves an attachment between them, or that edits the shared table, has a
+# very different reach than one touching a single VPC.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudTransitGateway
+  data:
+    - name: "tgw-30all-euc1"
+      cloud_id: "tgw-0a1b2c3d4e5f60718"
+      description: "30_all shared Transit Gateway hub, AWS eu-central-1"
+      status: active
+      dns_support: true
+      vpn_ecmp_support: true
+      # Boolean "does this TGW auto-associate a default route table", not a
+      # pointer — which table is default is carried by rt-hub-shared.is_default.
+      default_route_table: true
+      region: "eu-central-1"
+      account: "net-hub-aws-prod"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudTransitGatewayRouteTable
+  data:
+    - name: "rt-hub-shared"
+      cloud_id: "tgw-rtb-00shared0euc1"
+      description: "Shared routing domain: attachments here reach each other through the hub"
+      status: active
+      is_default: true
+      transit_gateway: "tgw-30all-euc1"
+
+    - name: "rt-hub-isolated"
+      cloud_id: "tgw-rtb-00isolated0euc1"
+      description: "Isolated routing domain: on-prem reachable, no tenant-to-tenant path"
+      status: active
+      is_default: false
+      transit_gateway: "tgw-30all-euc1"

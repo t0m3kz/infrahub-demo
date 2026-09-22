@@ -1,0 +1,109 @@
+---
+# The overlay half of the connectable-set split: per-customer virtual circuits
+# riding the shared physical underlay of ../01_colo_onramp/03_physical_circuits.yml.
+#
+# Every circuit here carries its own `owner`, and every one names its underlay in
+# `physical_circuits`. That pair is what the change-risk traversal needs: a change
+# to an unowned dark fibre or cage port has no customer on it directly, and only
+# becomes a customer-visible risk through the overlays bound to it. Editing
+# DF-DC10-EQXFR2 hits exactly the tenants whose virtual circuits list it.
+#
+# Termination is expressed through `interface_capabilities` (ManagedGenericInterfaces)
+# rather than any circuit-specific relationship on the interface — that is the one
+# uniform answer to "what is this port doing", and the traversal walks outward from
+# a changed interface along it.
+#
+# The cloud side is NOT set here. `cloud_endpoints` peers the CloudHybridAttachment
+# generic, an attribute-less marker with no human_friendly_id, so it is set from the
+# concrete CloudVirtualInterface in ../05_cloud_endpoints/01_transit_vif.yml.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyVirtualCircuit
+  data:
+    # --- DC -> AWS eu-central-1 over the Equinix FR2 cage --------------------
+    # Two hops of underlay each: the dark fibre out of the DC and the cage's
+    # cross-connect into the region. A tenant's reach into AWS therefore depends
+    # on both, which is precisely the DC-boundary blind spot this leg closes.
+    - name: "VC-C005-DC10-AWS-EUC1"
+      link_type: direct_connect_aws
+      transport_mode: physical_backed
+      status: active
+      bandwidth: 1000
+      encryption: false
+      provider: "P004"
+      owner: "C005"
+      description: "Drentec DC10 production footprint into the AWS transit hub"
+      locations:
+        - "C005-P-DC10"
+        - "eu-central-1"
+      physical_circuits:
+        - "DF-DC10-EQXFR2"
+        - "XC-EQXFR2-AWS-EUC1"
+      interface_capabilities:
+        - ["bl-dc101101", "Ethernet1/35"]
+        - ["EQX-FR2-GW1", "Ethernet1/13"]
+
+    - name: "VC-C006-DC11-AWS-EUC1"
+      link_type: direct_connect_aws
+      transport_mode: physical_backed
+      status: active
+      bandwidth: 1000
+      encryption: false
+      provider: "P004"
+      owner: "C006"
+      description: "Lumivex DC11 production footprint into the AWS transit hub"
+      locations:
+        - "C006-P-DC11"
+        - "eu-central-1"
+      physical_circuits:
+        - "DF-DC11-EQXFR2"
+        - "XC-EQXFR2-AWS-EUC1"
+      interface_capabilities:
+        - ["bl-dc1111101", "Ethernet1/35"]
+        - ["EQX-FR2-GW1", "Ethernet1/13"]
+
+    # --- DC -> Azure westeurope over the Equinix PA4 cage --------------------
+    # No cloud endpoint: only the AWS hub is modelled, so this one terminates at
+    # the region. It still proves the second colo is on a genuinely separate
+    # underlay — a PA4 change cannot reach the FR2 tenants and vice versa.
+    - name: "VC-C008-DC12-AZURE-WEU"
+      link_type: express_route_azure
+      transport_mode: physical_backed
+      status: active
+      bandwidth: 1000
+      encryption: false
+      provider: "P005"
+      owner: "C008"
+      description: "Krafven DC12 production footprint into Azure westeurope"
+      locations:
+        - "C008-P-DC12"
+        - "westeurope"
+      physical_circuits:
+        - "DF-DC12-EQXPA4"
+        - "XC-EQXPA4-AZURE-WEU"
+      interface_capabilities:
+        - ["bl-dc1212101", "Ethernet1/35"]
+        - ["EQX-PA4-GW1", "Ethernet1/13"]
+
+    # --- Colo cage -> cloud, no DC in the path ------------------------------
+    # C001 buys Equinix Fabric from its own FR cage rather than backhauling from
+    # a DC, so this circuit rides only the cross-connect. It shares that one
+    # underlay with the two DC circuits above, which is what makes
+    # XC-EQXFR2-AWS-EUC1 the highest-fan-out object in the leg.
+    - name: "VC-C001-EQXFR-AWS-EUC1"
+      link_type: equinix_fabric
+      transport_mode: physical_backed
+      status: active
+      bandwidth: 500
+      encryption: false
+      provider: "P016"
+      owner: "C001"
+      description: "Nordix Equinix FR cage into the AWS transit hub over Fabric"
+      locations:
+        - "C001-P-FR"
+        - "eu-central-1"
+      physical_circuits:
+        - "XC-EQXFR2-AWS-EUC1"
+      interface_capabilities:
+        - ["EQX-FR2-GW1", "Ethernet1/13"]
