@@ -1,0 +1,55 @@
+---
+# CoreSite cage racks, same shape as ../equinix/fr/03_racks.yml: a suite per
+# building, racks inside it, each rack pinned to the TopologyColocationZone it
+# physically sits in via `pod`.
+#
+# Only the two buildings that actually hold customer kit get a rack — NY1
+# (C011's cage) and VA1 (C012's cage). NY2/VA2/SV1 stay location-only until
+# something is installed in them.
+#
+# These racks deliberately carry no rack_type/fabric_templates and no
+# topologies_rack membership: LocationRack.pod here is a colocation zone, not
+# a TopologyPod, so the rack generator has nothing to build (it bails out on
+# the missing deployment_type — see generators/topology/rack.py's generate()).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationFacility
+  data:
+    - name: NY1
+      shortname: ny1
+      parent: nyc
+      children:
+        kind: LocationSuite
+        data:
+          - suite_name: NY1
+            index: 1
+            shortname: ny1-s1
+            rows: 1
+            racks_per_row: 1
+            children:
+              kind: LocationRack
+              data:
+                - shortname: ny1-s1-r-1
+                  index: 1
+                  row_index: 1
+                  pod: NY1
+
+    - name: VA1
+      shortname: va1
+      parent: iad
+      children:
+        kind: LocationSuite
+        data:
+          - suite_name: VA1
+            index: 1
+            shortname: va1-s1
+            rows: 1
+            racks_per_row: 1
+            children:
+              kind: LocationRack
+              data:
+                - shortname: va1-s1-r-1
+                  index: 1
+                  row_index: 1
+                  pod: VA1

@@ -20,6 +20,9 @@ spec:
           - name: scoring-api
             component_type: backend
             network_segment: c013-nordix-prod-p
+            instances:
+              - c013-scoring-api-ams-1
+              - c013-scoring-api-ams-2
             service_ports:
               data:
                 - port: 8443
@@ -30,6 +33,9 @@ spec:
           - name: feature-cache
             component_type: cache
             network_segment: c013-nordix-prod-p
+            instances:
+              - c013-feature-cache-ams-1
+              - c013-feature-cache-ams-2
             service_ports:
               data:
                 - port: 6379

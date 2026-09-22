@@ -44,6 +44,14 @@ spec:
     - quantity: 4
       role: access-leaf
       template: N9K-C9336C-FX2_ACCESS
+    # 25G access-leaf — the customer ports match the server templates' NICs, so
+    # this is the element to pick for a rack that has endpoints cabled to it.
+    - quantity: 2
+      role: access-leaf
+      template: N9K-C93180YC-EX_ACCESS
+    - quantity: 4
+      role: access-leaf
+      template: N9K-C93180YC-EX_ACCESS
     # Cisco L2-Leaf (L2-only — middle_rack/mixed deployments, connects to leafs)
     - quantity: 2
       role: l2-leaf

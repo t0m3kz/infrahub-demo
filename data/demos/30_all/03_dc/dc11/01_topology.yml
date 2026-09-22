@@ -56,14 +56,55 @@ spec:
       children:
         kind: TopologyPod
         data:
+          # POD-1 carries the compute layer: one network rack per row with a
+          # leaf pair plus a 25G access-leaf pair, and one compute rack per row
+          # holding the application servers (05_servers.yml). POD-2 stays
+          # greenfield — spare fabric capacity.
           - index: 1
             layout: S_MIDDLE
             deployment_type: middle_rack
             suites: [lyo-1-s-1]
             fabric_templates:
               - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
+            mlag_create: virtual
             member_of_groups:
               - topologies_pod
+            racks:
+              kind: LocationRack
+              data:
+                - index: 5
+                  row_index: 1
+                  shortname: lyo-1-s-1-r-1-5
+                  rack_type: network
+                  parent: lyo-1-s-1
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MR"]
+                    - ["2", "access-leaf", "N9K-C93180YC-EX_ACCESS"]
+                - index: 5
+                  row_index: 2
+                  shortname: lyo-1-s-1-r-2-5
+                  rack_type: network
+                  parent: lyo-1-s-1
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MR"]
+                    - ["2", "access-leaf", "N9K-C93180YC-EX_ACCESS"]
+                # Compute racks: no fabric templates of their own. The endpoint
+                # generator cables their servers to the access-leaf pair in the
+                # network rack that shares their row.
+                - index: 1
+                  row_index: 1
+                  shortname: lyo-1-s-1-r-1-1
+                  rack_type: compute
+                  parent: lyo-1-s-1
+                  member_of_groups: [topologies_rack]
+                - index: 1
+                  row_index: 2
+                  shortname: lyo-1-s-1-r-2-1
+                  rack_type: compute
+                  parent: lyo-1-s-1
+                  member_of_groups: [topologies_rack]
           - index: 2
             layout: S_MIDDLE
             deployment_type: middle_rack

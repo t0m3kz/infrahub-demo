@@ -320,6 +320,32 @@ spec:
             name: mgmt0
             role: management
             interface_type: 1000base-t
+    # 25G access-leaf: the only cisco template whose customer ports match the
+    # 25G NICs on the PowerEdge server templates, so servers can be cabled to it.
+    - template_name: N9K-C93180YC-EX_ACCESS
+      owner: "P027"
+      device_type: N9K-C93180YC-EX
+      platform: cisco_nxos
+      software_image: cisco_nxos-10.3.3
+      role: access-leaf
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: N9K-C93180YC-EX_ACCESS_Ethernet1/[1-48]
+            name: Ethernet1/[1-48]
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: N9K-C93180YC-EX_ACCESS_Ethernet1/[49-54]
+            name: Ethernet1/[49-54]
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C93180YC-EX_ACCESS_mgmt0
+            name: mgmt0
+            role: management
+            interface_type: 1000base-t
     - template_name: N9K-C9316D-GX_EDGE
       owner: "P027"
       device_type: N9K-C9316D-GX
