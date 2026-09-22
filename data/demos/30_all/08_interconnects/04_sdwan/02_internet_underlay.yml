@@ -1,0 +1,58 @@
+---
+# Internet access at each office — the underlay the SD-WAN overlays ride.
+#
+# `circuit_type: internet` is the "logical physical-underlay for public internet
+# delivery" choice; there is no literal cable here, and deliberately no
+# `provider_interfaces`: the ISP hands off at the office, so the only port this
+# circuit terminates on is the branch edge's WAN uplink. The far end of the tunnel
+# is reached through the overlay in 03_overlays.yml, not through this circuit.
+#
+# Each office buys its own access from its own ISP, which is what keeps the three
+# spokes independent: losing Orange in Warsaw is one tenant, losing the FR2 cage is
+# all three.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyPhysicalCircuit
+  data:
+    - circuit_id: "INET-C001-WAW-FR2"
+      name: "INET-C001-WAW-FR2"
+      circuit_type: internet
+      status: active
+      bandwidth: 1000
+      provider: "P019"
+      owner: "C001"
+      description: "Nordix Warsaw HQ internet access, 1G DIA"
+      locations:
+        - "C001-P"
+        - "FR2"
+      customer_interfaces:
+        - ["C001-EDGE1", "GE1"]
+
+    - circuit_id: "INET-C003-MUC-FR2"
+      name: "INET-C003-MUC-FR2"
+      circuit_type: internet
+      status: active
+      bandwidth: 1000
+      provider: "P003"
+      owner: "C003"
+      description: "Vaultex Munich HQ internet access, 1G DIA"
+      locations:
+        - "C003-P"
+        - "FR2"
+      customer_interfaces:
+        - ["C003-EDGE1", "GE1"]
+
+    - circuit_id: "INET-C015-PAR-FR2"
+      name: "INET-C015-PAR-FR2"
+      circuit_type: internet
+      status: active
+      bandwidth: 500
+      provider: "P019"
+      owner: "C015"
+      description: "Novantis Paris Office internet access, 500M DIA"
+      locations:
+        - "C015-P"
+        - "FR2"
+      customer_interfaces:
+        - ["C015-EDGE1", "GE1"]

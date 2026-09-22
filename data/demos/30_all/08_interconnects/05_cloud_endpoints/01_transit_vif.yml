@@ -1,0 +1,39 @@
+---
+# The transit VIF — the object that closes the on-prem-to-cloud path, and the only
+# file in this tree that has to load last.
+#
+# A virtual circuit's customer end is a DcimInterface, but its cloud end is a
+# CloudVirtualInterface, not a device port. Both edges that express that are
+# declared on the CloudHybridAttachment generic (see
+# schemas/extensions/topology/topology_cloud.yml), which is an attribute-less marker
+# and so declares no human_friendly_id — nothing can reference it by name. Hence
+# both are set from this, the concrete side:
+#
+#   transit_gateway_attachment -> the hybrid TGW attachment (02_cloud_hub/)
+#   virtual_circuits           -> every circuit landing here (03_virtual_circuits/,
+#                                 04_sdwan/)
+#
+# Which is why the VIF is defined here rather than next to its Direct Connect: it
+# needs every circuit to already exist.
+#
+# VC-C008-DC12-AZURE-WEU is absent on purpose — it lands in Azure westeurope, and
+# only the AWS hub is modelled.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudVirtualInterface
+  data:
+    - name: "vif-transit-hub-euc1"
+      cloud_id: "dxvif-ffh2k3l4"
+      description: "Transit VIF from dx-eqx-fr2-euc1 onto tgw-30all-euc1"
+      status: active
+      vif_type: transit
+      vlan_id: 1000
+      direct_connect: "dx-eqx-fr2-euc1"
+      transit_gateway: "tgw-30all-euc1"
+      transit_gateway_attachment: "tgwa-hybrid-eqx-fr2"
+      virtual_circuits:
+        - "VC-C001-EQXFR-AWS-EUC1"
+        - "VC-C005-DC10-AWS-EUC1"
+        - "VC-C006-DC11-AWS-EUC1"
+        - "VC-SDWAN-FR2-AWS-EUC1"

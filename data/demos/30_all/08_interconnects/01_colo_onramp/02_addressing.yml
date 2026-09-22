@@ -1,0 +1,72 @@
+---
+# Point-to-point addressing for the DC <-> cage dark fibre.
+#
+# Ethernet1/35 is the first free `uplink` port on each border leaf (Ethernet1/33
+# and 1/34 already face the spines), and Ethernet1/10-12 are the cage router's
+# `dci` ports. The DC end is always .2, the cage end .1.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "10.255.0.0/30"
+      description: "EQX-FR2-GW1 <-> bl-dc101101 (DC10) point-to-point"
+      status: active
+    - prefix: "10.255.0.4/30"
+      description: "EQX-FR2-GW1 <-> bl-dc1111101 (DC11) point-to-point"
+      status: active
+    - prefix: "10.255.0.8/30"
+      description: "EQX-PA4-GW1 <-> bl-dc1212101 (DC12) point-to-point"
+      status: active
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    # Cage side — `dci` ports, one per DC served by the cage.
+    - name: "Ethernet1/10"
+      device: "EQX-FR2-GW1"
+      status: active
+      description: "Dark fibre to DC10 (bl-dc101101)"
+      ip_address:
+        data:
+          address: "10.255.0.1/30"
+    - name: "Ethernet1/11"
+      device: "EQX-FR2-GW1"
+      status: active
+      description: "Dark fibre to DC11 (bl-dc1111101)"
+      ip_address:
+        data:
+          address: "10.255.0.5/30"
+    - name: "Ethernet1/10"
+      device: "EQX-PA4-GW1"
+      status: active
+      description: "Dark fibre to DC12 (bl-dc1212101)"
+      ip_address:
+        data:
+          address: "10.255.0.9/30"
+
+    # DC side — the border leaves' first free uplink.
+    - name: "Ethernet1/35"
+      device: "bl-dc101101"
+      status: active
+      description: "Dark fibre to Equinix FR2 (EQX-FR2-GW1)"
+      ip_address:
+        data:
+          address: "10.255.0.2/30"
+    - name: "Ethernet1/35"
+      device: "bl-dc1111101"
+      status: active
+      description: "Dark fibre to Equinix FR2 (EQX-FR2-GW1)"
+      ip_address:
+        data:
+          address: "10.255.0.6/30"
+    - name: "Ethernet1/35"
+      device: "bl-dc1212101"
+      status: active
+      description: "Dark fibre to Equinix PA4 (EQX-PA4-GW1)"
+      ip_address:
+        data:
+          address: "10.255.0.10/30"
