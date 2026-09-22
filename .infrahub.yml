@@ -283,6 +283,11 @@ check_definitions:
   - name: validate_segment_placement
     class_name: CheckSegmentPlacement
     file_path: checks/segment_placement.py
+  # Targetless: runs once per Proposed Change, seeded from the branch diff
+  # rather than from a group of devices. See docs/change_risk.md.
+  - name: change_risk
+    class_name: CheckChangeRisk
+    file_path: checks/change_risk.py
   - name: validate_application_deployment_request
     class_name: CheckApplicationDeploymentRequest
     file_path: checks/application_request.py
@@ -631,6 +636,15 @@ queries:
     file_path: queries/quotation/add_quotation.gql
   - name: quotation_office_data
     file_path: queries/quotation/add_quotation_office.gql
+
+  # Change-risk exposure (docs/change_risk.md). The traversal itself is
+  # Infrahub's own (InfrahubReachableNodes to shortlist, InfrahubPathTraversal to
+  # confirm), and both return node identity only; this query supplies the
+  # attributes the risk score is weighted by. Registered as a named query rather
+  # than embedded in the check so franc-mcp's interactive what-if tool reads
+  # exposure the same way.
+  - name: impact_exposure
+    file_path: queries/risk/impact_exposure.gql
 
 generator_definitions:
   - name: add_dc
