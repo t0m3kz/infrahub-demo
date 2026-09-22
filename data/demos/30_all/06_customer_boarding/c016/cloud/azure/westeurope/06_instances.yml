@@ -1,0 +1,55 @@
+---
+# Compute instances backing C016's billing-cloud components — see
+# ../../../../c003/cloud/aws/eu-central-1/06_instances.yml for the pattern.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudInstance
+  data:
+    - name: "c016-billing-frontend-weu-1"
+      cloud_id: "vm-c016-billing-frontend-1"
+      status: active
+      instance_type: "Standard_D2s_v5"
+      os_type: linux
+      cpu_count: 2
+      memory_gb: 8
+      private_ip: "10.160.1.11/24"
+      availability_zone: ["westeurope", "westeurope-2"]
+      account: "prolexar-azure-prod"
+      network_segment: "c016-prolexar-subnet-prod-p"
+
+    - name: "c016-billing-frontend-weu-2"
+      cloud_id: "vm-c016-billing-frontend-2"
+      status: active
+      instance_type: "Standard_D2s_v5"
+      os_type: linux
+      cpu_count: 2
+      memory_gb: 8
+      private_ip: "10.160.1.12/24"
+      availability_zone: ["westeurope", "westeurope-2"]
+      account: "prolexar-azure-prod"
+      network_segment: "c016-prolexar-subnet-prod-p"
+
+    - name: "c016-billing-worker-weu-1"
+      cloud_id: "vm-c016-billing-worker-1"
+      status: active
+      instance_type: "Standard_D4s_v5"
+      os_type: linux
+      cpu_count: 4
+      memory_gb: 16
+      private_ip: "10.160.1.21/24"
+      availability_zone: ["westeurope", "westeurope-2"]
+      account: "prolexar-azure-prod"
+      network_segment: "c016-prolexar-subnet-prod-p"
+
+    - name: "c016-billing-worker-weu-2"
+      cloud_id: "vm-c016-billing-worker-2"
+      status: active
+      instance_type: "Standard_D4s_v5"
+      os_type: linux
+      cpu_count: 4
+      memory_gb: 16
+      private_ip: "10.160.1.22/24"
+      availability_zone: ["westeurope", "westeurope-2"]
+      account: "prolexar-azure-prod"
+      network_segment: "c016-prolexar-subnet-prod-p"

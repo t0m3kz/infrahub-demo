@@ -1,0 +1,28 @@
+---
+# DC12 POD-1 application hosts — see ../dc10/05_servers.yml for the pattern.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: dc12-pod1-server-1
+      object_template: PowerEdge-R640_SERVER
+      owner: "P027"
+      rack: mil-1-s-1-r-1-1
+      status: active
+      position: 10
+      platform: linux
+      description: "DC12 POD-1 row 1 application host"
+      member_of_groups:
+        - endpoints
+
+    - name: dc12-pod1-server-2
+      object_template: PowerEdge-R640_SERVER
+      owner: "P027"
+      rack: mil-1-s-1-r-2-1
+      status: active
+      position: 10
+      platform: linux
+      description: "DC12 POD-1 row 2 application host"
+      member_of_groups:
+        - endpoints

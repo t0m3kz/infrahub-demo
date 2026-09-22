@@ -1,0 +1,41 @@
+---
+# C005 payment-core instances running in DC10.
+#
+# DcimVirtualDevice implements AppInstance, so these are what
+# AppComponent.instances points at (see ../../07_applications/c005/
+# 01_application.yml). hosting_device pins each VM to a physical host, which
+# is the hop that ties an application component to a rack, a cable and a
+# switch port — the compute half of the blast radius the change-risk check
+# walks (checks/risk_model.py's TRAVERSAL_EDGES).
+#
+# Placement mirrors each segment's stretch_scope:
+#   - web-frontend (local dc10) -> both DC10 hosts
+#   - app-backend / event-bus (dc_pair stretch) -> one host here, one in DC12
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualDevice
+  data:
+    - name: c005-web-frontend-dc10-1
+      object_template: LINUX-SVC
+      status: active
+      hosting_device: dc10-pod1-server-1
+      deployment: "C005-P-DC10"
+
+    - name: c005-web-frontend-dc10-2
+      object_template: LINUX-SVC
+      status: active
+      hosting_device: dc10-pod1-server-2
+      deployment: "C005-P-DC10"
+
+    - name: c005-app-backend-dc10-1
+      object_template: LINUX-SVC
+      status: active
+      hosting_device: dc10-pod1-server-1
+      deployment: "C005-P-DC10"
+
+    - name: c005-event-bus-dc10-1
+      object_template: LINUX-SVC
+      status: active
+      hosting_device: dc10-pod1-server-2
+      deployment: "C005-P-DC10"

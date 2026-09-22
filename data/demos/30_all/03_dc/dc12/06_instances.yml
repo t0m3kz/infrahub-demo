@@ -1,0 +1,32 @@
+---
+# C005 payment-core instances running in DC12 — the second leg of the two
+# dc_pair-stretched segments, plus the DC12-local database tier.
+# See ../dc10/06_instances.yml for the placement rationale.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualDevice
+  data:
+    - name: c005-order-db-dc12-1
+      object_template: LINUX-SVC
+      status: active
+      hosting_device: dc12-pod1-server-1
+      deployment: "C005-D-DC12"
+
+    - name: c005-order-db-dc12-2
+      object_template: LINUX-SVC
+      status: active
+      hosting_device: dc12-pod1-server-2
+      deployment: "C005-D-DC12"
+
+    - name: c005-app-backend-dc12-1
+      object_template: LINUX-SVC
+      status: active
+      hosting_device: dc12-pod1-server-1
+      deployment: "C005-D-DC12"
+
+    - name: c005-event-bus-dc12-1
+      object_template: LINUX-SVC
+      status: active
+      hosting_device: dc12-pod1-server-2
+      deployment: "C005-D-DC12"
