@@ -44,6 +44,10 @@ nodes:
         order_weight: 1000
         description: "Geographic location mapping for this region"
 
+  # The cage, and the only colocation kind a circuit can terminate on: it is
+  # where the racks and the cross-connect panel physically are. A dark fibre
+  # into "Equinix" or "the Frankfurt metro" does not identify an endpoint, so
+  # neither of those two inherits TopologyConnectableLocation.
   - name: ColocationZone
     namespace: Topology
     inherit_from:
@@ -51,6 +55,7 @@ nodes:
       - TopologyPhysicalDeployment
       - TopologyRackHosting
       - TopologyDeviceHosting
+      - TopologyConnectableLocation
     parent: TopologyColocationMetro
     label: Colocation Availability Zone
     icon: "mdi:rack"

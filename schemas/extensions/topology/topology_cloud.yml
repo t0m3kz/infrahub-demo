@@ -62,11 +62,16 @@ nodes:
       - name__value
     display_label: "{{ name__value|upper}} CLOUD"
 
+  # A Direct Connect or an ExpressRoute lands in a region, so the region is the
+  # cloud-side endpoint of a shared circuit. Not the zone (an AZ is finer than
+  # any provider commits to) and not TopologyCloud (which groups the provider's
+  # regions and identifies no location at all).
   - name: CloudRegion
     namespace: Topology
     icon: mdi:earth
     inherit_from:
       - TopologyDeployment
+      - TopologyConnectableLocation
     parent: TopologyCloud
     children: TopologyCloudZone
     human_friendly_id:
