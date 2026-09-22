@@ -455,7 +455,7 @@ class ManagedCloudProxy(ManagedSaasService, ManagedInlineService, ManagedProxySe
     region: StringOptional
 
 
-class TopologyCloudRegion(TopologyDeployment):
+class TopologyCloudRegion(TopologyDeployment, TopologyConnectableLocation):
     status: Dropdown
     direct_connects: RelationshipManager[CloudDirectConnect]
     location: RelationshipAttribute[LocationMetro]
@@ -497,7 +497,11 @@ class TopologyColocationMetro(CoreArtifactTarget, TopologyDeployment, TopologySe
 
 
 class TopologyColocationZone(
-    TopologyDeployment, TopologyPhysicalDeployment, TopologyRackHosting, TopologyDeviceHosting
+    TopologyDeployment,
+    TopologyPhysicalDeployment,
+    TopologyRackHosting,
+    TopologyDeviceHosting,
+    TopologyConnectableLocation,
 ):
     deployment_type: Dropdown
 
