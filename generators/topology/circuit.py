@@ -64,7 +64,8 @@ class VirtualCircuitGenerator(CommonGenerator):
     """Validate and register a TopologyVirtualCircuit.
 
     Validates a simplified direct model:
-    - technical interfaces are attached directly to the virtual circuit
+    - technical interfaces are attached via interface_capabilities (the circuit
+      is a ManagedGenericInterfaces, so it surfaces on each terminating port)
     - underlay physical circuits are attached directly to the virtual circuit
     - transport mode aligns with available underlay mappings
     """
@@ -106,7 +107,7 @@ class VirtualCircuitGenerator(CommonGenerator):
 
         self.logger.info(f"Processing virtual circuit: {circuit_name}")
 
-        interfaces = circuit.get("interfaces") or []
+        interfaces = circuit.get("interface_capabilities") or []
         if len(interfaces) != 2:
             self.logger.warning(f"  Virtual circuit {circuit_name}: expected 2 interfaces, found {len(interfaces)}")
         if interfaces:

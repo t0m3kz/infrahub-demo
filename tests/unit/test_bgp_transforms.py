@@ -473,13 +473,15 @@ def _make_circuit_iface(
 ) -> dict:
     """Build a device interface dict with a circuit in interface_capabilities.
 
-    Circuits inherit ManagedGeneric and use identifier: interface_capabilities,
-    so they appear in interface_capabilities alongside OSPF/segment services.
-    The circuit uses a cardinality-many `interfaces` list (local + remote).
+    TopologyVirtualCircuit inherits ManagedGenericInterfaces, so it appears in a
+    terminating port's interface_capabilities alongside OSPF/segment services,
+    and its own interface_capabilities are the circuit's endpoints (local +
+    remote). TopologyPhysicalCircuit does not inherit it and so can never appear
+    here — pass that typename to assert the helper ignores it.
     """
     circuit = {
         "typename": circuit_typename,
-        "interfaces": [
+        "interface_capabilities": [
             {
                 "name": local_iface,
                 "ip_address": {"address": local_ip},
@@ -553,8 +555,15 @@ class TestCircuitServiceTraversal:
         assert session["remote_device"] == "dc2-super-spine-01"
         assert session["remote_as"] == {"asn": 65002}
 
-    def test_physical_circuit_traversal_resolves_ips(self):
-        """Session with TopologyPhysicalCircuit interface service finds peer IP."""
+    def test_physical_circuit_is_not_traversed_as_a_capability(self):
+        """A physical circuit is not a ManagedGenericInterfaces, so it never
+        appears in interface_capabilities and must not be traversed there.
+
+        Its endpoints carry a customer/provider role instead, and the helper has
+        no business guessing which side is local. With no cable, no virtual
+        circuit and no IP on the peering's own interfaces, the session is
+        skipped rather than resolved from an edge that cannot exist.
+        """
         local_iface = _make_circuit_iface(
             circuit_typename="TopologyPhysicalCircuit",
             local_device="dc1-super-spine-01",
@@ -571,9 +580,7 @@ class TestCircuitServiceTraversal:
             local_as={"asn": 65001},
             interfaces=[local_iface],
         )
-        assert session is not None
-        assert session["local_ip"] == {"address": "100.64.0.0/31"}
-        assert session["remote_ip"] == {"address": "100.64.0.1/31"}
+        assert session is None
 
     def test_cable_takes_precedence_over_circuit(self):
         """When a cable is present it is preferred over circuit traversal."""
@@ -681,7 +688,7 @@ class TestCircuitServiceTraversal:
         """The Z-side device resolves its peer via interface_capabilities circuit lookup."""
         circuit = {
             "typename": "TopologyVirtualCircuit",
-            "interfaces": [
+            "interface_capabilities": [
                 {
                     "name": "Ethernet1/31",
                     "ip_address": {"address": "fd00:2200::1/127"},

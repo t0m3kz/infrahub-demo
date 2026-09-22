@@ -25,7 +25,7 @@ query customer_cloud($name: String!) {
               __typename
               ... on TopologyVirtualCircuit {
                 name { value }
-                interfaces {
+                interface_capabilities {
                   edges {
                     node {
                       id

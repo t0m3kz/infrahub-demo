@@ -145,14 +145,21 @@ def _build_session_from_peering(
                 break
 
         if not local_iface_name:
-            # Inter-site circuit: circuit appears in interface_capabilities (ManagedGeneric pattern)
+            # Inter-site circuit with no DcimCable: a TopologyVirtualCircuit is a
+            # ManagedGenericInterfaces, so it shows up in its terminating port's
+            # interface_capabilities, and its own interface_capabilities are the
+            # circuit endpoints (local + remote). Only virtual circuits appear
+            # here — TopologyPhysicalCircuit deliberately does not inherit
+            # ManagedGenericInterfaces, keeping the customer/provider split that
+            # carries an endpoint role the flat capability edge cannot express.
+            # This path also needs the caller's query to select circuit fields
+            # under interface_capabilities; queries/fragments/*.gql do not yet,
+            # so today the fallback below resolves inter-site underlay IPs.
             for iface in interfaces:
                 for svc in iface.get("interface_capabilities") or []:
-                    typename = svc.get("typename", "")
-                    if typename not in ("TopologyPhysicalCircuit", "TopologyVirtualCircuit"):
+                    if svc.get("typename") != "TopologyVirtualCircuit":
                         continue
-                    # circuits use cardinality-many `interfaces` list (2 entries: local + remote)
-                    for other_iface in svc.get("interfaces") or []:
+                    for other_iface in svc.get("interface_capabilities") or []:
                         if (other_iface.get("device") or {}).get("name") == remote_device_name:
                             local_interface_ip = iface.get("ip_address")
                             remote_interface_ip = other_iface.get("ip_address")

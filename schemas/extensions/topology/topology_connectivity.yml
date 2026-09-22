@@ -181,9 +181,17 @@ nodes:
     label: "Virtual Circuit"
     icon: "mdi:cloud-sync"
     include_in_menu: false
+    # ManagedGenericInterfaces is what puts this circuit into a terminating
+    # interface's `interface_capabilities` list, alongside RoutingOSPFInterface,
+    # ManagedVxlanSegment and TopologyExchangeGateway. That is the one uniform
+    # way in this schema to ask "what is this port doing", and it is the edge
+    # the change-risk traversal (docs/change_risk.md) walks outward from a
+    # changed interface. It replaces the bespoke `interfaces` relationship this
+    # node used to declare — two edges for the same fact could disagree.
     inherit_from:
       - TopologyCircuit
       - ManagedGeneric
+      - ManagedGenericInterfaces
     human_friendly_id:
       - name__value
     display_label: "{{ name__value }} ({{ link_type__value|upper }})"
@@ -303,15 +311,8 @@ nodes:
             color: "#9b59b6"
 
     relationships:
-      - name: interfaces
-        label: "Virtual Circuit Interfaces"
-        peer: DcimInterface
-        cardinality: many
-        optional: true
-        identifier: "virtual_circuit__interfaces"
-        order_weight: 1050
-        description: "A/Z (or more) technical interfaces used by this virtual circuit"
-
+      # interface_capabilities (many DcimInterface, via ManagedGenericInterfaces)
+      # — the A/Z (or more) technical interfaces this circuit terminates on.
       - name: physical_circuits
         label: "Physical Underlay Circuits"
         peer: TopologyPhysicalCircuit
