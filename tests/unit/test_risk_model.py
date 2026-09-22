@@ -33,7 +33,7 @@ from checks.risk_model import (
     index_exposure,
     resolve_relationship_filter,
     severity_of,
-    shortlist_from_reachable,
+    shortlist_from_targets,
 )
 
 REPO = Path(__file__).resolve().parents[2]
@@ -69,18 +69,6 @@ SOURCE = ChangedNode(id="src", kind="DcimPhysicalInterface", action="updated", l
 
 def _path_node(node_id: str, kind: str) -> dict[str, Any]:
     return {"id": node_id, "kind": kind, "label": kind, "display_label": node_id, "hfid": []}
-
-
-def _reachable_payload(dependencies: list[tuple[str, str]], source: ChangedNode = SOURCE) -> dict[str, Any]:
-    """An `InfrahubReachableNodes` result, from [(id, kind), …]."""
-    return {
-        "source": _path_node(source.id, source.kind),
-        "dependencies": [
-            {"node": _path_node(node_id, kind), "depth": 1, "path": {"hops": [], "depth": 1}}
-            for node_id, kind in dependencies
-        ],
-        "count": len(dependencies),
-    }
 
 
 def _paths_payload(
@@ -280,65 +268,82 @@ class TestResolveRelationshipFilter:
 
 
 # ---------------------------------------------------------------------------
-# Pass 1: the shortlist
+# Pass 1: the candidate set
 # ---------------------------------------------------------------------------
+
+TARGETS = {"comp1": "AppComponent", "seg1": "ManagedVlanSegment"}
 
 
 class TestShortlist:
     def test_collects_candidates_with_their_kinds(self) -> None:
-        shortlist = shortlist_from_reachable(
-            SOURCE, _reachable_payload([("comp1", "AppComponent"), ("seg1", "ManagedVlanSegment")])
-        )
-        assert shortlist.candidates == {"comp1": "AppComponent", "seg1": "ManagedVlanSegment"}
+        shortlist = shortlist_from_targets(SOURCE, TARGETS, present=True)
+        assert shortlist.candidates == TARGETS
         assert not shortlist.missing
         assert not shortlist.truncated
 
     def test_selects_by_kind_for_the_confirming_pass(self) -> None:
-        shortlist = shortlist_from_reachable(
-            SOURCE, _reachable_payload([("comp1", "AppComponent"), ("seg1", "ManagedVlanSegment")])
-        )
+        shortlist = shortlist_from_targets(SOURCE, TARGETS, present=True)
         assert shortlist.of_kinds(["AppComponent"]) == {"comp1"}
 
-    def test_no_payload_means_the_source_is_not_on_this_branch(self) -> None:
-        shortlist = shortlist_from_reachable(SOURCE, None)
+    def test_an_absent_source_is_not_on_this_branch(self) -> None:
+        shortlist = shortlist_from_targets(SOURCE, TARGETS, present=False)
         assert shortlist.missing
         assert shortlist.source_id == SOURCE.id
         assert shortlist.candidates == {}
 
-    def test_result_at_the_cap_is_truncated(self) -> None:
-        payload = _reachable_payload([(f"comp{i}", "AppComponent") for i in range(3)])
-        assert shortlist_from_reachable(SOURCE, payload, max_results=3).truncated
+    def test_more_targets_than_the_cap_is_truncated(self) -> None:
+        targets = {f"comp{i}": "AppComponent" for i in range(4)}
+        shortlist = shortlist_from_targets(SOURCE, targets, present=True, max_results=3)
+        assert shortlist.truncated
+        assert len(shortlist.candidates) == 3
 
-    def test_result_below_the_cap_is_not_truncated(self) -> None:
-        payload = _reachable_payload([("comp1", "AppComponent")])
-        assert not shortlist_from_reachable(SOURCE, payload, max_results=3).truncated
+    def test_targets_at_the_cap_are_not_truncated(self) -> None:
+        targets = {f"comp{i}": "AppComponent" for i in range(3)}
+        assert not shortlist_from_targets(SOURCE, targets, present=True, max_results=3).truncated
 
 
 class TestNoteShortlist:
     def test_records_the_source_and_candidate_kinds(self) -> None:
         reach = ReachSet()
-        reach.note_shortlist(shortlist_from_reachable(SOURCE, _reachable_payload([("comp1", "AppComponent")])))
+        reach.note_shortlist(shortlist_from_targets(SOURCE, {"comp1": "AppComponent"}, present=True))
         assert set(reach.sources) == {"src"}
         assert reach.kinds["comp1"] == "AppComponent"
 
     def test_a_shortlisted_candidate_is_not_thereby_reachable(self) -> None:
-        """The shortlist is a superset. Until a path is confirmed, a candidate is
-        a name the check knows, not an object the change reaches."""
+        """A candidate is every scoring target on the branch. Until a path is
+        confirmed, it is a name the check knows, not an object the change reaches."""
         reach = ReachSet()
-        reach.note_shortlist(shortlist_from_reachable(SOURCE, _reachable_payload([("comp1", "AppComponent")])))
+        reach.note_shortlist(shortlist_from_targets(SOURCE, {"comp1": "AppComponent"}, present=True))
         assert reach.nodes == {}
 
     def test_missing_source_is_recorded_without_candidates(self) -> None:
         reach = ReachSet()
-        reach.note_shortlist(shortlist_from_reachable(SOURCE, None))
+        reach.note_shortlist(shortlist_from_targets(SOURCE, TARGETS, present=False))
         assert reach.missing_sources == {"src"}
         assert reach.sources == {}
 
     def test_truncated_shortlist_marks_the_source(self) -> None:
         reach = ReachSet()
-        payload = _reachable_payload([(f"comp{i}", "AppComponent") for i in range(3)])
-        reach.note_shortlist(shortlist_from_reachable(SOURCE, payload, max_results=3))
+        targets = {f"comp{i}": "AppComponent" for i in range(4)}
+        reach.note_shortlist(shortlist_from_targets(SOURCE, targets, present=True, max_results=3))
         assert reach.truncated_sources == {"src"}
+
+
+class TestNoteError:
+    def test_a_failed_traversal_is_unknown_not_empty(self) -> None:
+        """The distinction the check exists to make: a server that refused the
+        traversal must not read as a change that reaches nothing."""
+        reach = ReachSet()
+        reach.note_error("src", "max_targets must be in [1, 200], got 500")
+        assert reach.errors == {"src": "max_targets must be in [1, 200], got 500"}
+        assert reach.truncated_sources == {"src"}
+        assert reach.nodes == {}
+
+    def test_the_first_error_per_source_is_kept(self) -> None:
+        reach = ReachSet()
+        reach.note_error("src", "first")
+        reach.note_error("src", "second")
+        assert reach.errors == {"src": "first"}
 
 
 # ---------------------------------------------------------------------------
@@ -492,6 +497,12 @@ class TestComponentSeverity:
     def test_no_instance_recorded_does_not_soften_an_outage(self) -> None:
         component = {"id": "comp", "name": "api", "instances": []}
         assert component_severity(component, _reach({"comp": 2}), _reach({})) == "outage"
+
+    def test_a_newly_reached_component_is_ok_without_consulting_redundancy(self) -> None:
+        """The change opened a path rather than closing one, so there was nothing
+        to fall back on and nothing for `instances` to say."""
+        component = {"id": "comp", "name": "api", "instances": []}
+        assert component_severity(component, _reach({}), _reach({"comp": 2})) == "ok"
 
 
 # ---------------------------------------------------------------------------
@@ -810,6 +821,16 @@ class TestBuildReport:
         report = self._report([], before=_reach({}), after=_reach({}))
         assert report.verdict == "PASS"
         assert "no_exposure" in {f.code for f in report.findings}
+
+    def test_a_failed_traversal_is_named_and_lowers_confidence(self) -> None:
+        """Otherwise a check that never managed to run reads exactly like a
+        change that turned out to be harmless."""
+        after = _reach({})
+        after.note_error("src", "Java heap space")
+        report = self._report([], before=_reach({}), after=after)
+        failed = [f for f in report.findings if f.code == "traversal_failed"]
+        assert failed and "Java heap space" in failed[0].message
+        assert report.confidence < 1.0
 
     def test_report_serialises_for_an_artifact(self) -> None:
         report = self._report(

@@ -49,8 +49,10 @@ EXPOSURE_QUERY = "impact_exposure"
 #: attachment → VPC → segment → component → application.
 MAX_DEPTH = 14
 #: Candidates per source from the shortlisting pass. Hitting it is reported as
-#: unknown impact, never as no impact.
-MAX_RESULTS = 500
+#: unknown impact, never as no impact. 200 is the server's own ceiling on
+#: `max_targets`/`max_paths` — asking for more is rejected outright
+#: ("max_targets must be in [1, 200]"), so this is a hard limit, not a tuning knob.
+MAX_RESULTS = 200
 #: Ids per `impact_exposure` call.
 BATCH_SIZE = 200
 
@@ -276,18 +278,25 @@ def resolve_relationship_filter(
 
 
 # ---------------------------------------------------------------------------
-# Pass 1: the shortlist, from InfrahubReachableNodes
+# Pass 1: the candidate set, from the scoring targets on the branch
 # ---------------------------------------------------------------------------
 
 
 @dataclass
 class Shortlist:
-    """Candidates reachable from one source when *no* edge filter applies.
+    """The scoring targets one source is worth deciding, on one branch.
 
-    Unrestricted reachability is a superset of reachability over
-    `TRAVERSAL_EDGES`, so anything absent here is certainly not impacted and
-    needs no further call. Nothing present here is thereby impacted: the site's
-    shared containers alone connect most of a location to most of it.
+    `InfrahubReachableNodes` looked like the natural first pass — unrestricted
+    reachability is a superset of reachability over `TRAVERSAL_EDGES`, so it
+    could have pruned the candidate list for free. It cannot be used: being
+    unfiltered, it fans out through every shared container in a site, and past
+    depth 5 on demo-sized data the server answers `Java heap space`. The depth
+    this model needs is 14.
+
+    So the candidate list is not pruned by reachability at all — it is every
+    application, component and segment on the branch, and pass 2 decides each one
+    over the curated edges. That is affordable because the things risk is
+    *scored* on are few (tens), while the things a change can reach are many.
     """
 
     source_id: str = ""
@@ -306,35 +315,31 @@ class Shortlist:
         return {node_id for node_id, kind in self.candidates.items() if kind in wanted}
 
 
-def shortlist_from_reachable(
+def shortlist_from_targets(
     source: ChangedNode,
-    payload: Mapping[str, Any] | None,
+    targets: Mapping[str, str],
+    *,
+    present: bool,
     max_results: int = MAX_RESULTS,
 ) -> Shortlist:
-    """Fold one `InfrahubReachableNodes` result into a `Shortlist`.
+    """Pair one source with the branch's scoring targets.
 
-    `payload` is `result.model_dump()`, or None when the source does not exist on
-    the branch being walked.
+    `targets` is id -> kind for every candidate on the branch, and `present` is
+    whether the source itself exists there. A missing source is the change
+    itself — added, or deleted — and is established by asking for the node
+    rather than by inferring it from a traversal that failed, because a traversal
+    can fail for reasons that have nothing to do with the node being there.
     """
-    if payload is None:
+    if not present:
         return Shortlist(source_id=source.id, source_label=source.label, source_kind=source.kind, missing=True)
 
-    source_node = payload.get("source") or {}
-    shortlist = Shortlist(
+    return Shortlist(
         source_id=source.id,
-        source_label=source_node.get("display_label") or source.label,
-        source_kind=source_node.get("kind") or source.kind,
+        source_label=source.label,
+        source_kind=source.kind,
+        candidates=dict(list(targets.items())[:max_results]),
+        truncated=len(targets) > max_results,
     )
-    dependencies = payload.get("dependencies") or []
-    shortlist.truncated = len(dependencies) >= max_results
-    for dependency in dependencies:
-        if not isinstance(dependency, Mapping):
-            continue
-        node = dependency.get("node") or {}
-        node_id = node.get("id")
-        if isinstance(node_id, str) and node_id:
-            shortlist.candidates[node_id] = node.get("kind") or ""
-    return shortlist
 
 
 # ---------------------------------------------------------------------------
@@ -373,6 +378,21 @@ class ReachSet:
     kinds: dict[str, str] = field(default_factory=dict)
     #: source id -> the ids one hop out from it.
     rings: dict[str, set[str]] = field(default_factory=lambda: defaultdict(set))
+    #: source id -> what went wrong, for pairs the server refused to answer. Kept
+    #: apart from `truncated_sources` only to name the error in the report; both
+    #: mean the same thing for the score, which is that the radius is a floor.
+    errors: dict[str, str] = field(default_factory=dict)
+
+    def note_error(self, source_id: str, message: str) -> None:
+        """Record a traversal that failed rather than returning no path.
+
+        A refused call and an unreachable destination arrive at the same place in
+        the code and mean opposite things: one is "no impact", the other is "not
+        known". Conflating them is how a risk check comes to pass a change it
+        never managed to look at.
+        """
+        self.errors.setdefault(source_id, message)
+        self.truncated_sources.add(source_id)
 
     def note_shortlist(self, shortlist: Shortlist) -> None:
         """Record what the shortlisting pass learned, before anything is confirmed."""
@@ -485,8 +505,16 @@ def component_severity(component: Mapping[str, Any], before: ReachSet, after: Re
     be a full outage however its own path fared — and a component that kept its
     path but lost a copy is not untouched either. A component with no instance
     recorded cannot be called safe at all, because there is nothing to divide by.
+
+    The exception is a component the change *newly* reaches: redundancy answers
+    "was there a copy to fall back on", and nothing fell over. Without this,
+    every addition reports as unknown on a dataset that does not model instances,
+    and a branch that only adds circuits can never clear the confidence floor.
     """
-    base = severity_of(str(component["id"]), before, after)
+    component_id = str(component["id"])
+    base = severity_of(component_id, before, after)
+    if base == "ok" and component_id not in before.nodes:
+        return "ok"
     instances = list(component.get("instances") or [])
     if not instances:
         return base if base != "ok" else "unknown"
@@ -911,6 +939,30 @@ def _collect_findings(
                 ),
             )
         )
+
+    # Reported as a warning rather than swallowed: a server that refuses the
+    # traversal produces the same empty result as a change that reaches nothing,
+    # and only this finding tells the two apart.
+    errors = {**before.errors, **after.errors}
+    for source_id, message in list(errors.items())[:MAX_FINDINGS_PER_CODE]:
+        label = after.sources.get(source_id) or before.sources.get(source_id) or source_id
+        findings.append(
+            Finding(
+                code="traversal_failed",
+                # Informational, like every non-verdict finding: the failure
+                # lands in the score through confidence, which is what forces
+                # REVIEW. Failing the Proposed Change here would fail it for an
+                # Infrahub hiccup rather than for anything about the change.
+                level="info",
+                message=(
+                    f"The traversal from '{label}' failed ({message}), so its blast radius is unknown "
+                    "rather than empty."
+                ),
+                object_id=source_id,
+                object_kind=after.kinds.get(source_id) or before.kinds.get(source_id),
+            )
+        )
+    findings.extend(_overflow("traversal_failed", len(errors), "failed traversal(s)"))
 
     for source_id in sorted(after.missing_sources):
         findings.append(

@@ -12,14 +12,16 @@ Three things shape the flow:
 * The counterfactual is not a simulation. The proposed branch already contains
   the change, so "what breaks" is the same traversal run on the branch and on
   its base, then compared.
-* `client.reachable_nodes()` takes no relationship filter, so it is used only to
-  *shortlist*: unrestricted reachability is a superset of reachability over
-  `TRAVERSAL_EDGES`, one call per changed object, and anything it does not
-  return needs no further thought.
-* `client.traverse_paths()` does take a relationship filter, so it decides each
-  shortlisted candidate exactly. That is one call per (source, candidate) pair,
-  which is why the pair count is budgeted and a cut budget is reported as
-  unknown impact rather than quietly dropped.
+* `client.traverse_paths()` is the only traversal endpoint that takes a
+  relationship filter, so it is the one that decides anything. That is one call
+  per (source, candidate) pair, which is why the pair count is budgeted and a
+  cut budget is reported as unknown impact rather than quietly dropped.
+* `client.reachable_nodes()` is not used, though it looks made for pass 1. It
+  takes no relationship filter, so on demo-sized data it fans out through every
+  shared container in a site and the server runs out of heap past depth 5 —
+  while a colo-to-cloud path is 10 hops and the model allows 14. Pass 1 is
+  therefore an enumeration of the branch's scoring targets, which are few, and
+  pass 2 decides each one over the curated edges, which is cheap.
 """
 
 from __future__ import annotations
@@ -46,8 +48,24 @@ from .risk_model import (
     changes_from_diff,
     index_exposure,
     resolve_relationship_filter,
-    shortlist_from_reachable,
+    shortlist_from_targets,
 )
+
+#: Every scoring target on the branch, id and kind only — the candidate set of
+#: pass 1. Generated from `SHORTLIST_KINDS` so the two cannot drift apart.
+TARGETS_QUERY = (
+    "query RiskTargets {\n"
+    + "\n".join(f"  {kind} {{ edges {{ node {{ id __typename }} }} }}" for kind in SHORTLIST_KINDS)
+    + "\n}\n"
+)
+
+#: Which of a set of ids exist on a branch. Asked directly rather than inferred
+#: from a traversal that came back empty.
+PRESENT_QUERY = """
+query RiskSourcesPresent($ids: [ID]) {
+  CoreNode(ids: $ids) { edges { node { id } } }
+}
+"""
 
 #: Changed objects to traverse from. A diff larger than this is a bulk import or
 #: a schema migration, not a change whose blast radius is worth walking one node
@@ -56,8 +74,16 @@ MAX_SOURCES = 25
 #: Traversals in flight. Each is a graph query on a shared repository worker.
 MAX_CONCURRENCY = 8
 #: (source, candidate) pairs the confirming pass may spend, across both branches.
-#: Reached only by a change whose shortlist is enormous, and reported when it is.
+#: One pair is one filtered traversal, measured at roughly half a second on demo
+#: data, so this is about a minute of wall clock at `MAX_CONCURRENCY`. A change
+#: with more pairs than this is under-reported, and says so.
 MAX_PAIRS = 600
+
+
+def _brief(exc: Exception) -> str:
+    """One readable line from an exception whose text may embed a whole query."""
+    text = " ".join(str(exc).split())
+    return text if len(text) <= 160 else f"{text[:160]}…"
 
 
 class CheckChangeRisk(InfrahubCheck):
@@ -131,15 +157,15 @@ class CheckChangeRisk(InfrahubCheck):
         for shortlist in after_lists:
             after.note_shortlist(shortlist)
 
-        # Shortlisted candidates are named before anything is confirmed, because
-        # the confirming pass needs to know which instances belong to which
-        # component in order to decide redundancy.
+        # Which instances belong to which component, needed *before* anything is
+        # confirmed because the confirming pass decides redundancy from it. Read
+        # over the whole candidate set, and deliberately not kept for the report:
+        # the candidate set is every application on the branch, so scoring it
+        # would report every application as impacted-with-unknown-fate.
         candidates = {node_id for shortlist in before_lists + after_lists for node_id in shortlist.candidates}
-        payloads = await self._exposure(candidates | set(before.sources) | set(after.sources), branch)
-        payloads += await self._exposure(candidates | set(before.sources) | set(after.sources), base)
         instances = {
             component["id"]: list(component.get("instances") or [])
-            for component in index_exposure(payloads).components.values()
+            for component in index_exposure(await self._exposure(candidates, branch)).components.values()
         }
 
         await asyncio.gather(
@@ -156,10 +182,14 @@ class CheckChangeRisk(InfrahubCheck):
             self._reseed(after, before, branch, relationship_filter, instances),
         )
 
-        # Whatever the confirmed paths turned up that the first pass did not
-        # name: the circuits, accounts and customers along the way.
+        # Exposure is read for what the traversal actually confirmed — the
+        # applications and segments it reached, the changed objects themselves,
+        # and the circuits, accounts and customers along the way. On both
+        # branches, because an object deleted on the proposed branch can only be
+        # named from the base.
         seen = set(before.nodes) | set(after.nodes) | set(before.sources) | set(after.sources)
-        payloads += await self._exposure(seen - candidates, branch)
+        payloads = await self._exposure(seen, branch)
+        payloads += await self._exposure(seen, base)
 
         return build_report(
             changes=sources,
@@ -169,40 +199,59 @@ class CheckChangeRisk(InfrahubCheck):
             unresolved_edges=unresolved,
         )
 
-    # -- pass 1: shortlist -------------------------------------------------
+    # -- pass 1: candidate set ---------------------------------------------
 
     async def _shortlist(self, sources: list[ChangedNode], branch: str) -> list[Shortlist]:
-        """One `reachable_nodes` call per source, unfiltered, on one branch."""
-        semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
+        """Pair every source with the branch's scoring targets.
 
-        async def one(source: ChangedNode) -> Shortlist:
-            async with semaphore:
-                payload = await self._reachable(source.id, branch)
-            return shortlist_from_reachable(source, payload, max_results=MAX_RESULTS)
+        Two cheap queries for the whole pass, and no traversal at all.
+        `reachable_nodes` was the obvious way to prune this list and cannot be
+        used: unfiltered reachability fans out through every shared container in
+        a site, and past depth 5 the server answers `Java heap space` — where
+        this model needs depth 14. Pruning is not needed anyway; there are tens
+        of scoring targets, not thousands.
 
-        return list(await asyncio.gather(*(one(source) for source in sources)))
+        Enumerated per branch on purpose: an application added on the proposed
+        branch must not be searched for on the base, where its id does not
+        resolve and the failure would be indistinguishable from a real one.
+        """
+        targets, present = await asyncio.gather(
+            self._targets(branch),
+            self._present([source.id for source in sources], branch),
+        )
+        return [
+            shortlist_from_targets(source, targets, present=source.id in present, max_results=MAX_RESULTS)
+            for source in sources
+        ]
 
-    async def _reachable(self, source_id: str, branch: str) -> dict[str, Any] | None:
-        """Shortlist one source, or None when it does not exist on this branch."""
-        # `target_kinds` is declared as `list[str | type[SchemaType]]`, and `list`
-        # is invariant, so a plain `list[str]` is not assignable to it.
-        target_kinds: list[Any] = list(SHORTLIST_KINDS)
-        try:
-            result = await self.client.reachable_nodes(
-                source=source_id,
-                target_kinds=target_kinds,
-                max_depth=MAX_DEPTH,
-                max_results=MAX_RESULTS,
-                branch=branch,
+    async def _targets(self, branch: str) -> dict[str, str]:
+        """Every application, component and segment on the branch: id -> kind."""
+        response = await self.client.execute_graphql(query=TARGETS_QUERY, branch_name=branch)
+        targets: dict[str, str] = {}
+        for kind in SHORTLIST_KINDS:
+            for edge in (response.get(kind) or {}).get("edges") or []:
+                node = edge.get("node") or {}
+                node_id = node.get("id")
+                if isinstance(node_id, str) and node_id:
+                    targets[node_id] = node.get("__typename") or kind
+        return targets
+
+    async def _present(self, source_ids: list[str], branch: str) -> set[str]:
+        """The subset of these ids that exists on the branch."""
+        if not source_ids:
+            return set()
+        present: set[str] = set()
+        for start in range(0, len(source_ids), BATCH_SIZE):
+            response = await self.client.execute_graphql(
+                query=PRESENT_QUERY,
+                variables={"ids": source_ids[start : start + BATCH_SIZE]},
+                branch_name=branch,
             )
-        except VersionNotSupportedError:
-            raise
-        except SdkError:
-            # The usual cause is the node not existing on this branch, which is
-            # a result rather than a failure. A genuine transport error would
-            # also land here; the missing-source finding names it either way.
-            return None
-        return result.model_dump()
+            for edge in (response.get("CoreNode") or {}).get("edges") or []:
+                node_id = (edge.get("node") or {}).get("id")
+                if isinstance(node_id, str) and node_id:
+                    present.add(node_id)
+        return present
 
     # -- pass 2: confirm ---------------------------------------------------
 
@@ -228,7 +277,13 @@ class CheckChangeRisk(InfrahubCheck):
             if not self._spend(source_id, reach):
                 return
             async with semaphore:
-                payload = await self._paths(source_id, destination_id, branch, relationship_filter)
+                try:
+                    payload = await self._paths(source_id, destination_id, branch, relationship_filter)
+                except VersionNotSupportedError:
+                    raise
+                except SdkError as exc:
+                    reach.note_error(source_id, _brief(exc))
+                    return
             reach.absorb_paths(payload)
 
         await asyncio.gather(
@@ -281,22 +336,22 @@ class CheckChangeRisk(InfrahubCheck):
         destination_id: str,
         branch: str,
         relationship_filter: list[str],
-    ) -> dict[str, Any] | None:
-        """Shortest path from source to destination over the curated edges."""
-        try:
-            result = await self.client.traverse_paths(
-                source=source_id,
-                destination=destination_id,
-                max_depth=MAX_DEPTH,
-                max_paths=1,
-                relationship_filter=relationship_filter,
-                shortest_paths_only=True,
-                branch=branch,
-            )
-        except VersionNotSupportedError:
-            raise
-        except SdkError:
-            return None
+    ) -> dict[str, Any]:
+        """Shortest path from source to destination over the curated edges.
+
+        Errors are deliberately not caught here: the caller records them as an
+        unknown radius, because "the server refused" and "there is no path" are
+        the same empty result and opposite conclusions.
+        """
+        result = await self.client.traverse_paths(
+            source=source_id,
+            destination=destination_id,
+            max_depth=MAX_DEPTH,
+            max_paths=1,
+            relationship_filter=relationship_filter,
+            shortest_paths_only=True,
+            branch=branch,
+        )
         return result.model_dump()
 
     def _spend(self, source_id: str, reach: ReachSet) -> bool:
