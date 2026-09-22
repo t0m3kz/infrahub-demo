@@ -23,13 +23,20 @@ query impact_exposure($ids: [ID]) {
         environment { value }
         criticality { value }
         owner { node { id __typename name { value } } }
+        # AppGeneric is `hierarchical: true`, so Infrahub peers the generated
+        # parent/children at the generic itself — the `children: AppComponent`
+        # key only constrains placement. Everything past id/__typename needs
+        # narrowing.
         children {
           edges {
             node {
               id
-              name { value }
-              component_type { value }
-              network_segment { node { id __typename name { value } } }
+              __typename
+              ... on AppComponent {
+                name { value }
+                component_type { value }
+                network_segment { node { id __typename name { value } } }
+              }
             }
           }
         }
@@ -51,10 +58,12 @@ query impact_exposure($ids: [ID]) {
           node {
             id
             __typename
-            name { value }
-            environment { value }
-            criticality { value }
-            owner { node { id __typename name { value } } }
+            ... on AppApplication {
+              name { value }
+              environment { value }
+              criticality { value }
+              owner { node { id __typename name { value } } }
+            }
           }
         }
         network_segment { node { id __typename name { value } status { value } } }
@@ -85,7 +94,13 @@ query impact_exposure($ids: [ID]) {
         __typename
         name { value }
         component_type { value }
-        parent { node { id __typename name { value } criticality { value } environment { value } } }
+        parent {
+          node {
+            id
+            __typename
+            ... on AppApplication { name { value } criticality { value } environment { value } }
+          }
+        }
         network_segment { node { id __typename name { value } } }
         instances { edges { node { id __typename name { value } } } }
       }
@@ -99,7 +114,13 @@ query impact_exposure($ids: [ID]) {
         __typename
         name { value }
         component_type { value }
-        parent { node { id __typename name { value } criticality { value } environment { value } } }
+        parent {
+          node {
+            id
+            __typename
+            ... on AppApplication { name { value } criticality { value } environment { value } }
+          }
+        }
         network_segment { node { id __typename name { value } } }
         instances { edges { node { id __typename name { value } } } }
       }
