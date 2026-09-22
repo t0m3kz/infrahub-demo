@@ -86,6 +86,12 @@ TRAVERSAL_EDGES: tuple[tuple[str, str], ...] = (
     # inherits — a virtual or LAG interface has no cable to walk.
     ("DcimEndpoint", "cable"),
     ("DcimCable", "endpoints"),
+    # A virtual device shares the fate of the hardware it runs on, so the walk
+    # has to step from the VM onto its host to reach the host's NICs, cables and
+    # leaf pair. This is the on-premises counterpart of
+    # CloudVirtualNetwork.instances — without it an AppComponent's instances are
+    # dead ends and the redundancy verdict has nothing underneath it.
+    ("DcimVirtualDevice", "hosting_device"),
     # ── Capability edges ────────────────────────────────────────────────────
     # The uniform "what is this port doing" and "what does this device host"
     # edges. Declared on the generic that owns them, so a device or interface

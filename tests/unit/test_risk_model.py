@@ -207,6 +207,17 @@ class TestEdgeSet:
         assert ("CloudTransitGatewayRouteTable", "propagated_attachments") in TRAVERSAL_EDGES
         assert ("CloudTransitGatewayAttachment", "propagates_to_route_tables") in TRAVERSAL_EDGES
 
+    def test_the_compute_leg_is_walked_end_to_end(self) -> None:
+        """A component's instances have to reach the hardware they share.
+
+        Dropping any one of these three turns the instance leg into a dead end:
+        the redundancy verdict still runs, but over instances whose underlying
+        host, NICs and leaf pair are invisible to it.
+        """
+        assert ("AppComponent", "instances") in TRAVERSAL_EDGES
+        assert ("DcimVirtualDevice", "hosting_device") in TRAVERSAL_EDGES
+        assert ("DcimDevice", "interfaces") in TRAVERSAL_EDGES
+
     def test_shortlist_and_shared_fate_kinds_exist_in_the_schemas(self) -> None:
         kinds = self._schemas()
         wanted = sorted(set(SHORTLIST_KINDS) | set(CONFIRM_KINDS) | SHARED_FATE_KINDS)
