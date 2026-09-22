@@ -218,6 +218,40 @@ nodes:
             description: Non-production environment
             color: "#A9DFBF"
         order_weight: 1400
+      # What the account is FOR, in a hub-and-spoke landing zone. This is not
+      # cosmetic: the change-risk check (docs/change_risk.md) treats any change
+      # inside a `network` account as shared-fate by construction — that
+      # account owns the Transit Gateway every other account transits — and
+      # escalates it even when the local blast radius looks small. Without the
+      # role there is no way to tell a hub account from a workload account
+      # except by noticing it happens to own a TGW.
+      - name: account_role
+        kind: Dropdown
+        label: "Account Role"
+        optional: true
+        order_weight: 1450
+        description: "Function of this account within the landing zone"
+        choices:
+          - name: network
+            label: Network
+            description: Owns shared connectivity — transit gateways, DX, inspection
+            color: "#9B59B6"
+          - name: workload
+            label: Workload
+            description: Runs application workloads; a spoke of the network account
+            color: "#3498DB"
+          - name: security
+            label: Security
+            description: Logging, audit, and guardrail tooling
+            color: "#E74C3C"
+          - name: shared_services
+            label: Shared Services
+            description: DNS, directory, CI, artifact registries used by many spokes
+            color: "#F39C12"
+          - name: sandbox
+            label: Sandbox
+            description: Experimentation account, not expected to carry production traffic
+            color: "#BFBFBF"
     relationships:
       - name: provider
         peer: OrganizationProvider
@@ -920,6 +954,184 @@ nodes:
     uniqueness_constraints:
       - [account, name__value]
 
+  # ── Transit Gateway routing domains and attachments ───────────────────────
+  # `attached_virtual_networks` above is a flat list: it says a VPC hangs off
+  # this hub and nothing else. That is enough to draw a picture and not enough
+  # to reason about a change, because it cannot express the two facts that
+  # decide blast radius in a hub-and-spoke cloud:
+  #
+  #   1. WHICH ACCOUNT owns the attachment. The attachment resource lives in
+  #      the spoke account while the Transit Gateway lives in the network
+  #      account; a change in one is not a change in the other.
+  #   2. WHICH ROUTING DOMAIN it joins. Two spokes on separate route tables
+  #      cannot reach each other at all.
+  #
+  # Without (2) every spoke looks like it reaches every other spoke, so a
+  # blast-radius answer computed off the flat list is "everything" — which is
+  # the same as no answer. See docs/change_risk.md.
+
+  - name: TransitGatewayRouteTable
+    namespace: Cloud
+    label: Transit Gateway Route Table
+    icon: mdi:routes
+    description: "Routing domain inside a Transit Gateway — the unit of spoke-to-spoke isolation"
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [transit_gateway, name__value]
+    attributes:
+      - name: is_default
+        kind: Boolean
+        label: "Default Route Table"
+        optional: true
+        default_value: false
+        order_weight: 350
+        description: "Route table new attachments join when not told otherwise"
+    relationships:
+      - name: transit_gateway
+        label: "Transit Gateway"
+        peer: CloudTransitGateway
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: "transit_gateway__route_tables"
+        order_weight: 600
+        description: "Transit Gateway this route table belongs to"
+      # "Who else is in this routing domain" is the blast-radius question for a
+      # cloud change, and it is answered by the PROPAGATION set, not the
+      # association set: association says where a spoke's own lookups happen,
+      # propagation says whose lookups can see the spoke.
+      - name: associated_attachments
+        label: "Associated Attachments"
+        peer: CloudTransitGatewayAttachment
+        cardinality: many
+        optional: true
+        identifier: "transit_gateway_attachment__associated_route_table"
+        order_weight: 700
+        description: "Attachments whose outbound lookups resolve in this route table"
+      - name: propagated_attachments
+        label: "Propagated Attachments"
+        peer: CloudTransitGatewayAttachment
+        cardinality: many
+        optional: true
+        identifier: "transit_gateway_attachment__propagated_route_tables"
+        order_weight: 800
+        description: "Attachments advertising their prefixes into this route table"
+
+  - name: TransitGatewayAttachment
+    namespace: Cloud
+    label: Transit Gateway Attachment
+    icon: mdi:transit-connection-variant
+    description: "One spoke's connection into a Transit Gateway"
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }} ({{ attachment_type__value }})"
+    uniqueness_constraints:
+      - [transit_gateway, name__value]
+    attributes:
+      - name: attachment_type
+        kind: Dropdown
+        label: "Attachment Type"
+        order_weight: 300
+        optional: false
+        choices:
+          - name: vpc
+            label: "VPC"
+            description: Spoke virtual network attached via ENIs, one subnet per zone
+            color: "#3498DB"
+          - name: hybrid
+            label: "Hybrid (DX / VPN)"
+            description: On-premises attachment via a transit VIF or VPN gateway
+            color: "#F39C12"
+          - name: connect
+            label: "Connect (GRE)"
+            description: GRE/BGP attachment, typically an SD-WAN appliance
+            color: "#2ECC71"
+    relationships:
+      - name: transit_gateway
+        label: "Transit Gateway"
+        peer: CloudTransitGateway
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: "transit_gateway__attachments"
+        order_weight: 600
+        description: "Transit Gateway this attachment lands on"
+      # For a cross-account attachment this is the SPOKE account, not the
+      # Transit Gateway's account. That asymmetry is why the attachment is a
+      # node: it is the only place a per-spoke fact can be recorded.
+      - name: owner_account
+        label: "Owner Account"
+        peer: CloudAccount
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: "transit_gateway_attachment__owner_account"
+        order_weight: 650
+        description: "Account the attachment itself lives in (the spoke, when cross-account)"
+      - name: virtual_network
+        label: "Virtual Network"
+        peer: CloudVirtualNetwork
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "transit_gateway_attachment__virtual_network"
+        order_weight: 700
+        description: "Spoke virtual network — set when attachment_type is vpc"
+      # Fewer entries than the virtual network has zones means the attachment
+      # is single-zone, which the risk check reports as its own finding.
+      - name: network_segments
+        label: "Attachment Subnets"
+        peer: CloudNetworkSegment
+        cardinality: many
+        optional: true
+        identifier: "transit_gateway_attachment__network_segments"
+        order_weight: 750
+        description: "Subnets hosting the attachment interfaces, one per zone"
+      # One relationship for both hybrid endpoint kinds rather than a separate
+      # direct_connect/vpn pair — CloudHybridAttachment is the generic that
+      # CloudVirtualInterface and CloudVPNGateway already share.
+      - name: hybrid_endpoint
+        label: "Hybrid Endpoint"
+        peer: CloudHybridAttachment
+        kind: Generic
+        cardinality: one
+        optional: true
+        identifier: "transit_gateway_attachment__hybrid_endpoint"
+        order_weight: 800
+        description: "Transit VIF or VPN gateway — set when attachment_type is hybrid"
+      - name: associated_route_table
+        label: "Associated Route Table"
+        peer: CloudTransitGatewayRouteTable
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "transit_gateway_attachment__associated_route_table"
+        order_weight: 850
+        description: "Route table resolving traffic leaving this spoke"
+      # Association and propagation are separate on purpose: a spoke that
+      # associates to a shared table but propagates nowhere can reach its peers
+      # and cannot be reached by them. Collapsing them hides exactly that case.
+      - name: propagates_to_route_tables
+        label: "Propagates Into"
+        peer: CloudTransitGatewayRouteTable
+        cardinality: many
+        optional: true
+        identifier: "transit_gateway_attachment__propagated_route_tables"
+        order_weight: 900
+        description: "Route tables this spoke's prefixes are advertised into — who can reach it"
+
   - name: VPNGateway
     namespace: Cloud
     label: VPN Gateway
@@ -1175,3 +1387,96 @@ extensions:
           identifier: "virt_pool__instances"
           description: "Node pool / ASG that manages this instance."
           order_weight: 2600
+
+    # Reverse lookups for the hub attachment/route-table pair above. Every one
+    # of these is a direction the change-risk traversal walks; a relationship
+    # declared on only one side is a direction GraphQL cannot express.
+    - kind: CloudTransitGateway
+      relationships:
+        - name: attachments
+          label: "Attachments"
+          peer: CloudTransitGatewayAttachment
+          cardinality: many
+          optional: true
+          identifier: "transit_gateway__attachments"
+          order_weight: 2000
+          description: "All attachments landing on this Transit Gateway, across accounts"
+        - name: route_tables
+          label: "Route Tables"
+          peer: CloudTransitGatewayRouteTable
+          cardinality: many
+          optional: true
+          identifier: "transit_gateway__route_tables"
+          order_weight: 2100
+          description: "Routing domains configured on this Transit Gateway"
+
+    - kind: CloudAccount
+      relationships:
+        - name: transit_gateway_attachments
+          label: "Transit Gateway Attachments"
+          peer: CloudTransitGatewayAttachment
+          cardinality: many
+          optional: true
+          identifier: "transit_gateway_attachment__owner_account"
+          order_weight: 2000
+          description: "Transit Gateway attachments owned by this account"
+
+    - kind: CloudVirtualNetwork
+      relationships:
+        - name: transit_gateway_attachments
+          label: "Transit Gateway Attachments"
+          peer: CloudTransitGatewayAttachment
+          cardinality: many
+          optional: true
+          identifier: "transit_gateway_attachment__virtual_network"
+          order_weight: 2500
+          description: "Transit Gateway attachment(s) for this virtual network"
+
+    - kind: CloudNetworkSegment
+      relationships:
+        - name: transit_gateway_attachments
+          label: "Transit Gateway Attachments"
+          peer: CloudTransitGatewayAttachment
+          cardinality: many
+          optional: true
+          identifier: "transit_gateway_attachment__network_segments"
+          order_weight: 2500
+          description: "Attachment(s) with interfaces in this subnet"
+
+    # On the generic, so both CloudVirtualInterface (transit VIF) and
+    # CloudVPNGateway pick it up from one declaration.
+    - kind: CloudHybridAttachment
+      relationships:
+        - name: transit_gateway_attachment
+          label: "Transit Gateway Attachment"
+          peer: CloudTransitGatewayAttachment
+          cardinality: one
+          kind: Attribute
+          optional: true
+          identifier: "transit_gateway_attachment__hybrid_endpoint"
+          order_weight: 2000
+          description: "Transit Gateway attachment this hybrid endpoint feeds"
+        # The edge that closes the colo leg. A virtual circuit's customer end is
+        # a DcimInterface, but its cloud end is a CloudVirtualInterface, not a
+        # device port. Without this the traversal walks from a DC border leaf
+        # out to the colo cage and then stops at an island boundary.
+        - name: virtual_circuits
+          label: "Virtual Circuits"
+          peer: TopologyVirtualCircuit
+          cardinality: many
+          optional: true
+          identifier: "virtual_circuit__cloud_endpoints"
+          order_weight: 2100
+          description: "Circuit(s) terminating on this cloud attachment"
+
+    - kind: TopologyVirtualCircuit
+      relationships:
+        - name: cloud_endpoints
+          label: "Cloud Endpoints"
+          peer: CloudHybridAttachment
+          kind: Generic
+          cardinality: many
+          optional: true
+          identifier: "virtual_circuit__cloud_endpoints"
+          order_weight: 1080
+          description: "Cloud-side terminations of this circuit (transit VIF or VPN gateway)"

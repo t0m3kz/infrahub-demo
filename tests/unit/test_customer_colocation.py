@@ -68,7 +68,7 @@ class TestColocationNoCircuit:
             "typename": "TopologyVirtualCircuit",
             "id": "circ-1",
             "name": "circuit-1",
-            "interfaces": [{"id": "iface-a"}, {"id": "iface-b"}],
+            "interface_capabilities": [{"id": "iface-a"}, {"id": "iface-b"}],
             "locations": [
                 {"id": "cust-1"},
                 {"id": "other-loc", "namespace": None},
@@ -87,7 +87,7 @@ class TestColocationHubExchange:
         "typename": "TopologyVirtualCircuit",
         "id": "circ-1",
         "name": "circuit-1",
-        "interfaces": [{"id": "iface-a"}, {"id": "iface-b"}],
+        "interface_capabilities": [{"id": "iface-a"}, {"id": "iface-b"}],
         "locations": [
             {"id": "cust-1"},
             {"id": "hub-1", "namespace": {"id": "ns-internet", "name": "INTERNET"}},
@@ -160,7 +160,7 @@ class TestColocationHubExchange:
     @pytest.mark.asyncio
     async def test_wrong_interface_count_skips_exchange(self) -> None:
         circuit = dict(self._CIRCUIT)
-        circuit["interfaces"] = [{"id": "iface-a"}]
+        circuit["interface_capabilities"] = [{"id": "iface-a"}]
         gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
 
         await gen.generate(_colo_payload(circuits=[circuit]))

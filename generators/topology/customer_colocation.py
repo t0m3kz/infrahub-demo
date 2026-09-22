@@ -537,7 +537,7 @@ class CustomerDeploymentColocationExchangeGenerator(DeviceMixin, CablingMixin, C
         if hub_namespace is None:
             return
 
-        circuit_interfaces = circuit.get("interfaces") or circuit.get("customer_interfaces") or []
+        circuit_interfaces = circuit.get("interface_capabilities") or circuit.get("customer_interfaces") or []
         if len(circuit_interfaces) != 2:
             self.logger.error(
                 f"Deployment {customer.get('name', customer_id)}: circuit '{circuit.get('name', circuit.get('id'))}' "
