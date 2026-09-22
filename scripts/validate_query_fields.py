@@ -88,6 +88,10 @@ class Kind:
     relationships: dict[str, tuple[str, str]] = field(default_factory=dict)
     inherit_from: list[str] = field(default_factory=list)
     is_generic: bool = False
+    # `hierarchical: true` on this kind. Recorded rather than resolved on the
+    # spot because it has to beat the `parent:`/`children:` keys of every kind
+    # that inherits it, which are not read yet — see _resolve_inheritance.
+    hierarchical: bool = False
     # False when the kind was only ever seen as the target of an
     # `extensions.nodes` block — i.e. Infrahub owns its definition (IpamIPAddress,
     # BuiltinIPNamespace, CoreStandardGroup) and we know a couple of added
@@ -116,11 +120,8 @@ def _absorb(kind: Kind, entry: dict[str, Any]) -> None:
         kind.relationships.setdefault("parent", (entry["parent"], "one"))
     if entry.get("children"):
         kind.relationships.setdefault("children", (entry["children"], "many"))
-    # `hierarchical: true` makes Infrahub generate parent/children peered to the
-    # hierarchy generic itself.
     if entry.get("hierarchical"):
-        kind.relationships.setdefault("parent", (kind.name, "one"))
-        kind.relationships.setdefault("children", (kind.name, "many"))
+        kind.hierarchical = True
 
 
 #: Infrahub core kinds this repo inherits from. Their definitions are not in
@@ -217,6 +218,7 @@ def _resolve_inheritance(kinds: dict[str, Kind]) -> None:
         if name in resolved or name in seen or name not in kinds:
             return
         kind = kinds[name]
+        hierarchy: str | None = kind.name if kind.hierarchical else None
         for parent_name in kind.inherit_from:
             resolve(parent_name, seen | {name})
             parent = kinds.get(parent_name)
@@ -225,6 +227,18 @@ def _resolve_inheritance(kinds: dict[str, Kind]) -> None:
             kind.attributes |= parent.attributes
             for rel_name, spec in parent.relationships.items():
                 kind.relationships.setdefault(rel_name, spec)
+            if parent.hierarchical:
+                kind.hierarchical = True
+                hierarchy = parent.name
+        # Inheriting a `hierarchical: true` generic peers the generated
+        # parent/children at that generic, whatever the `parent:`/`children:`
+        # keys say — those only constrain which kinds may be placed where, so
+        # they overstate the peer type and let queries select a subkind's fields
+        # without an inline fragment. Assigned, not setdefault: the keys were
+        # absorbed already and would otherwise win.
+        if hierarchy:
+            kind.relationships["parent"] = (hierarchy, "one")
+            kind.relationships["children"] = (hierarchy, "many")
         resolved.add(name)
 
     for name in list(kinds):
