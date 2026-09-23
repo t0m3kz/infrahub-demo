@@ -262,6 +262,43 @@ class TestRackMixinAdditional:
         gen.logger.error.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_prepare_generation_context_spine_failure_fails_spine_dependent_rack(self) -> None:
+        """A rack with leafs/tors/access-leafs must not proceed without spine info.
+
+        logger.error() raises GeneratorError in production (FailOnErrorLogger);
+        the mocked logger here does not, so the explicit re-raise is what this
+        asserts on.
+        """
+        gen = _build_gen()
+        gen.data["pod"]["fabric_templates"] = []  # makes _derive_spine_info raise
+
+        with pytest.raises(RuntimeError, match="Cannot derive spine info"):
+            await gen._prepare_generation_context()
+
+        gen.logger.error.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_prepare_generation_context_spine_failure_tolerated_for_l2_leaf_only(self) -> None:
+        """An l2-leaf-only rack reads no spine info, so it must not fail on it.
+
+        l2-leafs cable to the local leaf pair and never to a spine — unlike
+        access-leafs, which open an overlay EVPN session straight to the pod's
+        spines. Failing this rack was a false failure; the attributes are left
+        empty and generation continues.
+        """
+        gen = _build_gen()
+        gen.data["pod"]["fabric_templates"] = []  # makes _derive_spine_info raise
+        gen.data["leafs"] = []
+        gen.data["tors"] = []
+        gen.data["l2_leafs"] = [{"role": "l2_leaf", "quantity": 2, "template": {"id": "tmpl-l2", "interfaces": []}}]
+
+        await gen._prepare_generation_context()
+
+        gen.logger.error.assert_not_called()
+        assert gen._spine_device_names == []
+        assert gen._spine_interfaces == []
+
+    @pytest.mark.asyncio
     async def test_prepare_generation_context_success_sets_fields(self) -> None:
         gen = _build_gen()
 

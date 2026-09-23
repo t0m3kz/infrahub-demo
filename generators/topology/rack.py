@@ -780,8 +780,11 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         if not (tor_roles := self.data.get("tors", [])):
             return
 
-        if not self._spine_device_names:
-            self.logger.error(f"Rack {self.data['name']}: No spine devices found in pod - cannot cable ToRs to spines.")
+        # The "if not self._spine_device_names" guard that used to sit here is
+        # gone: _derive_spine_info() now raises on every way of ending up with
+        # no spine names, during _prepare_generation_context() and therefore
+        # before any device exists. Guarding here only ever covered ToRs, and
+        # only after _generate_leafs() had already run without a guard of its own.
 
         # Both invariant across tor_roles (not derived from any single role) —
         # computed once rather than once per role template.

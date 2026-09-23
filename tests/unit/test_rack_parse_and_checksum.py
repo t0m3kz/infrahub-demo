@@ -229,6 +229,25 @@ class TestDeriveSpineInfo:
         with pytest.raises(RuntimeError, match="Cannot derive spine info"):
             gen._derive_spine_info()
 
+    def test_raises_when_every_spine_entry_has_zero_quantity(self) -> None:
+        """A zero-quantity spine entry is the same case as no entry at all.
+
+        spine_slot_templates -> templates_by_role filters to quantity > 0, so
+        _derive_spine_info never has to handle an empty device_names list of its
+        own: it can only get there via the no-entries branch, which already
+        raises. Pinned because a guard against empty device_names downstream
+        would be unreachable code.
+        """
+        gen = _build_rack_generator(deployment_type="tor", rack_type="tor")
+        gen.fabric_name = "dc1"
+        gen.data["pod"]["index"] = 1
+        gen.data["pod"]["parent"]["index"] = 1
+        gen.data["pod"]["parent"]["naming_convention"] = "standard"
+        gen.data["pod"]["fabric_templates"][0]["quantity"] = 0
+
+        with pytest.raises(RuntimeError, match="no spine/border-spine fabric_templates entries"):
+            gen._derive_spine_info()
+
     def test_template_all_interfaces_returned(self) -> None:
         """All template interfaces are returned (GQL pre-filters, no role check needed)."""
         gen = _build_rack_generator(deployment_type="tor", rack_type="tor")
