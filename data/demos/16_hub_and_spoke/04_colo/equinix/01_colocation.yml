@@ -16,6 +16,8 @@ spec:
         data:
           - name: WAW
             location: "waw"
+            member_of_groups:
+              - colocation_metros
             children:
               kind: TopologyColocationZone
               data:

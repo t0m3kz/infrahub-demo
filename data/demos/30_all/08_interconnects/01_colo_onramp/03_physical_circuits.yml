@@ -33,7 +33,7 @@ spec:
       customer_interfaces:
         - ["bl-dc101101", "Ethernet1/35"]
       provider_interfaces:
-        - ["EQX-FR2-GW1", "Ethernet1/10"]
+        - ["eg-fr01", "Ethernet1/10"]
 
     - circuit_id: "DF-DC11-EQXFR2"
       name: "DF-DC11-EQXFR2"
@@ -48,7 +48,7 @@ spec:
       customer_interfaces:
         - ["bl-dc1111101", "Ethernet1/35"]
       provider_interfaces:
-        - ["EQX-FR2-GW1", "Ethernet1/11"]
+        - ["eg-fr01", "Ethernet1/11"]
 
     - circuit_id: "DF-DC12-EQXPA4"
       name: "DF-DC12-EQXPA4"
@@ -63,7 +63,7 @@ spec:
       customer_interfaces:
         - ["bl-dc1212101", "Ethernet1/35"]
       provider_interfaces:
-        - ["EQX-PA4-GW1", "Ethernet1/10"]
+        - ["eg-pa01", "Ethernet1/10"]
 
     # --- cage <-> cloud region cross-connects --------------------------------
     # The cloud end is the region, not a zone: an AZ is finer than any provider
@@ -79,7 +79,7 @@ spec:
         - "FR2"
         - "eu-central-1"
       customer_interfaces:
-        - ["EQX-FR2-GW1", "Ethernet1/13"]
+        - ["eg-fr01", "Ethernet1/13"]
 
     - circuit_id: "XC-EQXPA4-AZURE-WEU"
       name: "XC-EQXPA4-AZURE-WEU"
@@ -92,4 +92,4 @@ spec:
         - "PA4"
         - "westeurope"
       customer_interfaces:
-        - ["EQX-PA4-GW1", "Ethernet1/13"]
+        - ["eg-pa01", "Ethernet1/13"]

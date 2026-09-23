@@ -131,3 +131,5 @@ spec:
       description: TopologyCustomerCloud footprints — generator target for CustomerDeploymentCloudExchangeGenerator
     - name: customer_deployments_office
       description: TopologyCustomerOffice footprints — generator target for CustomerDeploymentOfficeExchangeGenerator
+    - name: colocation_metros
+      description: "TopologyColocationMetro regions — generator target for ColocationMetroGenerator. Every metro joins, even one without fabric_templates, because the created-trigger fires per kind and would raise on a non-member"  # yamllint disable-line rule:line-length

@@ -10,10 +10,35 @@ spec:
       children:
         kind: TopologyColocationMetro
         data:
+          # Frankfurt's on-ramp routers are declared, not hand-written:
+          # add_colocation_metro (generators/topology/colocation.py) creates
+          # them plus the metro's own loopback/management/technical/ASN pools.
+          # They are declared here rather than on a cage for the same reason a
+          # DC declares its border-leafs rather than a pod doing it — one pair
+          # fronts the whole metro, and FR6 reaches it over a cross-connect.
+          # N9K-C9316D-GX_EDGE carries the port roles this leg needs —
+          # Ethernet1/[1-8] `customer`, Ethernet1/[9-12] `dci` (facing the DC
+          # border leafs), Ethernet1/[13-16] `uplink` (facing the cloud
+          # fabric). Frankfurt fronts DC10 and DC11.
+          #
+          # The firewall pair is the on-ramp's perimeter, declared exactly the
+          # way a DC declares its own: quantity 2 of a template carrying a
+          # role=ha sync port (PA-5260_FIREWALL's HA1/HA2), which is what lets
+          # the generator build the ManagedFirewallHA domain and the sync cable
+          # between the two members. panos matches DC11's firewalls, but unlike
+          # DC11's these are not Panorama-managed — the metro declares no
+          # controllers, so they land in the plain `firewalls` group.
           - name: FR
             location: ["fra"]
+            member_of_groups:
+              - colocation_metros
+            fabric_templates:
+              - ["2", "edge", "N9K-C9316D-GX_EDGE"]
+              - ["2", "firewall", "PA-5260_FIREWALL"]
             children:
               kind: TopologyColocationZone
               data:
+                # FR2 holds the on-ramp kit and FR6 customer cages only —
+                # neither declares anything of its own.
                 - name: FR2
                 - name: FR6

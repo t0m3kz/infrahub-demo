@@ -492,8 +492,20 @@ class TopologyColocation(CoreArtifactTarget, TopologyDeployment):
     pass
 
 
-class TopologyColocationMetro(CoreArtifactTarget, TopologyDeployment, TopologySegmentHosting):
+class TopologyColocationMetro(
+    CoreArtifactTarget,
+    TopologyDeployment,
+    TopologyPhysicalDeployment,
+    TopologyDeviceHosting,
+    TopologySegmentHosting,
+):
+    deployment_type: Dropdown
+    asn_pool: RelationshipAttribute[CoreNumberPool]
+    fabric_templates: RelationshipManager[TopologyElement]
     location: RelationshipAttribute[LocationMetro]
+    loopback_pool: RelationshipAttribute[CoreIPAddressPool]
+    management_pool: RelationshipAttribute[CoreIPAddressPool]
+    technical_pool: RelationshipAttribute[CoreIPPrefixPool]
 
 
 class TopologyColocationZone(

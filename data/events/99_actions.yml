@@ -364,3 +364,39 @@ spec:
       node_kind: TopologyCustomerOffice
       mutation_action: "created"
       action: run-customer-deployment-office-generator
+
+    # ── Colocation Metro Bootstrap ────────────────────────────────────────────
+    # `created` covers a metro loaded with fabric_templates already populated
+    # inline (the normal bulk-load shape, nested under TopologyColocation),
+    # which is a `created` mutation on the metro itself and never an `updated`
+    # relationship mutation — the same gap documented on the segment triggers
+    # above.
+    #
+    # This fires for EVERY metro, so every TopologyColocationMetro in data/demos
+    # declares `member_of_groups: [colocation_metros]` — including the ones with
+    # no fabric_templates, which the generator no-ops on. That is not optional
+    # tidiness: a trigger firing for a node outside the generator's target group
+    # raises, as the endpoint note above records. Metros we hold no kit in
+    # therefore cost one no-op flow each, the same trade add_rack already makes
+    # for colocation cage racks.
+    - name: trigger-colocation-metro-on-created
+      branch_scope: "other_branches"
+      node_kind: TopologyColocationMetro
+      mutation_action: "created"
+      action: run-colocation-metro-generator
+
+    # Only fabric_templates is watched, deliberately. The generator itself
+    # writes loopback_pool/management_pool/technical_pool/asn_pool back onto
+    # the metro, so a rule matching those relationships — or an unguarded
+    # `updated` rule — would re-fire itself on every run. No cascade generator
+    # either: the cages nested below a metro declare no kit of their own.
+    - name: trigger-colocation-metro-update-fabric-templates
+      branch_scope: "other_branches"
+      node_kind: TopologyColocationMetro
+      mutation_action: "updated"
+      action: run-colocation-metro-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: fabric_templates
+            modification_type: updated
