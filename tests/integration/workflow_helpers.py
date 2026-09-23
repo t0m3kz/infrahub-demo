@@ -660,3 +660,31 @@ async def run_full_dc_pipeline(
     logger.info("Full DC pipeline completed for %s on branch '%s'", dc_name, branch)
 
     return result
+
+
+async def materialize_branch_diff(client: InfrahubClient, branch: str) -> None:
+    """Compute and store the branch's diff against main.
+
+    ``DiffTree`` — and therefore ``client.get_diff_summary()`` — returns nothing
+    at all until a ``DiffUpdate`` has run for the branch. Anything that reads a
+    diff outside a Proposed Change (the change-risk check, for one) has to ask
+    for it first, and wait: a diff over a full demo load takes a while and the
+    caller's next query would otherwise read an empty tree and conclude the
+    branch changed nothing.
+    """
+    logger.info("Materializing diff for branch '%s'", branch)
+
+    mutation = Mutation(
+        mutation="DiffUpdate",
+        input_data={"data": {"name": f"diff-{branch}", "branch": branch, "wait_for_completion": False}},
+        query={"ok": None, "task": {"id": None}},
+    )
+    response = await client.execute_graphql(query=mutation.render())
+    task_id = response["DiffUpdate"]["task"]["id"]
+
+    task = await client.task.wait_for_completion(id=task_id, timeout=DIFF_TASK_TIMEOUT)
+    assert task.state == TaskState.COMPLETED, (
+        f"DiffUpdate failed for branch '{branch}'.\n  Task ID: {task_id}\n  Task state: {task.state}"
+    )
+
+    logger.info("Diff materialized for branch '%s'", branch)
