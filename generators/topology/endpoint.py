@@ -198,7 +198,23 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, PoolMixin, CablingMixin
 
         rack = self.data["rack"]
         assert rack is not None
-        pod = rack["pod"]
+        pod = rack.get("pod") or {}
+        if "deployment_type" not in pod:
+            # Same shape as RackGenerator's guard: LocationRack.pod takes any
+            # TopologyRackHosting peer, and endpoint.gql's PodFields fragment is on
+            # TopologyPod, so a colocation cage rack (pod = TopologyColocationZone)
+            # arrives as an empty pod dict. There is no fabric to dual-home into —
+            # colocation kit is cabled explicitly in the object data (see
+            # data/demos/30_all/06_customer_boarding/*/colo/*/02_compute.yml). Every
+            # role=endpoint device reaches this generator regardless of where it
+            # sits, since trigger-endpoint-generator-on-created
+            # (data/events/99_actions.yml) matches on the attribute, not the site.
+            self.logger.info(
+                "Endpoint %s: rack %s does not hang off a DC-fabric pod, nothing to cable",
+                endpoint_name,
+                rack.get("name"),
+            )
+            return
         # deployment_type is derived from pod.design's layout (EndpointPod.deployment_type)
         deployment_type = pod["deployment_type"]
         self.pod_name = pod["name"].lower()

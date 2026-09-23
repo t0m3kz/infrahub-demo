@@ -2,7 +2,7 @@
 # C005 sample application bound to demo VXLAN segments.
 #
 # Each component also names its instances — the VMs from
-# ../../03_dc/dc10/06_instances.yml and ../../03_dc/dc12/06_instances.yml.
+# ../../06_customer_boarding/c005/dc/dc10/02_instances.yml and its dc12 sibling.
 # That is the compute leg of the graph: component -> VM -> hosting server ->
 # cable -> access-leaf. Two instances per component, on hosts in different
 # rows (and, for the stretched segments, different DCs), so losing one
