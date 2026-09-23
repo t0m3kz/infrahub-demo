@@ -1,0 +1,35 @@
+---
+# Office footprint for C015 (Novantis), the isolated-route-table counterpart to
+# c003/office/01_deployment.yml.
+#
+# C015's TGW attachment sits on rt-hub-isolated, so its office reaches on-prem
+# and AWS but no other tenant. Two spokes with deliberately different route-table
+# placement is what lets the change-risk check *show* that an edit to
+# rt-hub-shared has a wider reach than one to rt-hub-isolated, rather than assert
+# it.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationFacility
+  data:
+    - name: "Paris Office"
+      shortname: "par-office"
+      parent: "par"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyOfficeCustomer
+  data:
+    - owner: "C015"
+      parent: "Campus and Office"
+      children:
+        - kind: TopologyCustomerOffice
+          data:
+            environment: "p"
+            locations:
+              - "par-office"
+            member_of_groups:
+              - customer_deployments_office

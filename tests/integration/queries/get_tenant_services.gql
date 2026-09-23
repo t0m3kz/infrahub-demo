@@ -1,0 +1,83 @@
+query GetTenantServices {
+  ManagedFirewallContext {
+    edges {
+      node {
+        name {
+          value
+        }
+        cluster {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        tenant {
+          node {
+            __typename
+            ... on TopologyCustomerDC {
+              name {
+                value
+              }
+              design {
+                node {
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  ManagedLoadbalancerHA {
+    edges {
+      node {
+        name {
+          value
+        }
+        tenant {
+          node {
+            __typename
+            ... on TopologyCustomerDC {
+              name {
+                value
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  ManagedSegmentDeployment {
+    edges {
+      node {
+        vni {
+          value
+        }
+        status {
+          value
+        }
+        segment {
+          node {
+            __typename
+            ... on ManagedNetworkSegment {
+              name {
+                value
+              }
+            }
+          }
+        }
+        deployment {
+          node {
+            name {
+              value
+            }
+          }
+        }
+      }
+    }
+  }
+}

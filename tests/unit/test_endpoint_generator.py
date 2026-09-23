@@ -172,6 +172,37 @@ class TestGenerateGuardClauses:
         gen.client.get.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_colocation_rack_returns_without_touching_the_device(self) -> None:
+        """A host in a rack that does not hang off a DC-fabric pod is a no-op.
+
+        endpoint.gql's PodFields fragment is on TopologyPod, so a colocation cage
+        rack (pod = TopologyColocationZone) arrives as an empty pod dict. There is
+        no fabric to dual-home into — that kit is cabled explicitly in the object
+        data. The guard must fire before pod["deployment_type"] is read, which sits
+        outside the try/except and would otherwise raise KeyError and fail the task.
+        Those hosts do reach this generator: trigger-endpoint-generator-on-created
+        matches on role=endpoint, not on the site.
+        """
+        gen = _make_generator()
+
+        await gen.generate(_endpoint_data(rack={"id": "rack-1", "name": "NY1-NY1-R1-1", "pod": {}, "devices": []}))
+
+        gen.client.get.assert_not_awaited()
+        gen.client.filters.assert_not_awaited()
+        gen.logger.error.assert_not_called()
+        assert any("does not hang off a DC-fabric pod" in str(call.args[0]) for call in gen.logger.info.call_args_list)
+
+    @pytest.mark.asyncio
+    async def test_rack_without_pod_returns_without_error(self) -> None:
+        """Same guard covers a rack whose `pod` relationship is unset."""
+        gen = _make_generator()
+
+        await gen.generate(_endpoint_data(rack={"id": "rack-1", "name": "ORPHAN-RACK", "devices": []}))
+
+        gen.client.get.assert_not_awaited()
+        gen.logger.error.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_filters_empty_interface_nodes(self) -> None:
         """Empty {} entries in `interfaces` (virtual interfaces not matching the
         PhysicalInterfaceFields fragment) must be dropped before model construction,

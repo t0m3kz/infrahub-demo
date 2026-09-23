@@ -1,5 +1,9 @@
 ---
 # C006 on-prem sample application on customer VLAN segment in DC11.
+#
+# instances are the VMs from ../../06_customer_boarding/c006/dc/dc11/02_instances.yml — every tier
+# runs on both POD-1 hosts, one per row, so neither access-leaf pair is a
+# single point of failure for a whole tier.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -21,6 +25,9 @@ spec:
           - name: web-ui
             component_type: frontend
             network_segment: c006-nordix-prod-p
+            instances:
+              - c006-web-ui-dc11-1
+              - c006-web-ui-dc11-2
             service_ports:
               data:
                 - port: 443
@@ -31,6 +38,9 @@ spec:
           - name: erp-backend
             component_type: backend
             network_segment: c006-nordix-prod-p
+            instances:
+              - c006-erp-backend-dc11-1
+              - c006-erp-backend-dc11-2
             service_ports:
               data:
                 - port: 8443
@@ -41,6 +51,9 @@ spec:
           - name: erp-db
             component_type: database
             network_segment: c006-nordix-prod-p
+            instances:
+              - c006-erp-db-dc11-1
+              - c006-erp-db-dc11-2
             service_ports:
               data:
                 - port: 5432

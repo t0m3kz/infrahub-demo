@@ -145,26 +145,33 @@ class TestRackRolesHelper:
         assert "skip_underlay" not in gen._routing_options
 
 
-def _mock_pod_pools(*, loopback_id: str | None, prefix_id: str | None) -> MagicMock:
+def _mock_pod_pools(*, loopback_id: str | None, prefix_id: str | None, asn_id: str | None = "asn-pool") -> MagicMock:
     """Mirror RelatedNode.id, which returns None when unset (unlike .peer.id,
     which raises ValueError if neither an id nor an hfid is set — see
     RelatedNode.get()'s docstring)."""
     pod_obj = MagicMock()
     pod_obj.loopback_pool = MagicMock(id=loopback_id)
     pod_obj.prefix_pool = MagicMock(id=prefix_id)
+    pod_obj.asn_pool = MagicMock(id=asn_id)
     return pod_obj
 
 
 class TestRackMixinAdditional:
     @pytest.mark.asyncio
     async def test_prepare_generation_context_missing_pools(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Pools stay missing across every retry attempt — error fires after exhausting retries."""
+        """Pools stay missing across every retry attempt — the rack refuses to generate.
+
+        Carrying on would build devices and cabling with no routing behind them,
+        which looks healthy until you count BGP processes. Raising fails the
+        generator task instead, and nothing has been created yet at this point.
+        """
         gen = _build_gen()
         gen.data["pod"]["loopback_pool"] = None
         gen.client.get = AsyncMock(return_value=_mock_pod_pools(loopback_id=None, prefix_id=None))
         monkeypatch.setattr("generators.rack.asyncio.sleep", AsyncMock())
 
-        await gen._prepare_generation_context()
+        with pytest.raises(RuntimeError, match="loopback_pool"):
+            await gen._prepare_generation_context()
 
         gen.logger.error.assert_called_once()
 
@@ -189,6 +196,107 @@ class TestRackMixinAdditional:
         sleep_mock.assert_awaited_once()
         assert gen._loopback_pool_id == "lo-pool-2"
         assert gen._technical_pool_id == "p2p-pool-2"
+
+    @pytest.mark.asyncio
+    async def test_prepare_generation_context_waits_for_asn_pool_alone(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An eBGP rack waits for asn_pool even when loopback/prefix are already there.
+
+        add_pod creates the loopback/prefix pools first and only links the DC's
+        fabric ASN pool onto the pod afterwards, so this exact snapshot — both
+        IP pools resolved, asn_pool still None — is what a racing rack reads.
+        Proceeding on it produced devices with no BGP process at all and no
+        failed task to show for it.
+        """
+        gen = _build_gen()
+        gen.data["pod"]["asn_pool"] = None
+        gen.client.get = AsyncMock(
+            side_effect=[
+                _mock_pod_pools(loopback_id="lo-pool", prefix_id="p2p-pool", asn_id=None),
+                _mock_pod_pools(loopback_id="lo-pool", prefix_id="p2p-pool", asn_id="asn-pool-late"),
+            ]
+        )
+        sleep_mock = AsyncMock()
+        monkeypatch.setattr("generators.rack.asyncio.sleep", sleep_mock)
+
+        await gen._prepare_generation_context()
+
+        gen.logger.error.assert_not_called()
+        sleep_mock.assert_awaited_once()
+        assert gen._routing_options["asn_pool"] == "asn-pool-late"
+
+    @pytest.mark.asyncio
+    async def test_prepare_generation_context_ospf_underlay_ignores_asn_pool(self) -> None:
+        """An OSPF underlay allocates no per-device ASN, so a missing asn_pool
+        is neither waited on nor an error."""
+        gen = _build_gen()
+        gen.data["pod"]["parent"]["routing_strategy"] = "ospf-ibgp"
+        gen.data["pod"]["asn_pool"] = None
+        gen.client.get = AsyncMock()
+
+        await gen._prepare_generation_context()
+
+        gen.client.get.assert_not_awaited()
+        gen.logger.error.assert_not_called()
+        assert "asn_pool" not in gen._routing_options
+
+    @pytest.mark.asyncio
+    async def test_prepare_generation_context_missing_asn_pool_refuses_to_generate(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """asn_pool never arrives on an eBGP rack — the whole run fails.
+
+        There is no legitimate state in which it is absent (add_dc creates the
+        fabric ASN pool, add_pod links it onto the pod), so a rack that still
+        cannot see it must not generate devices it will be unable to route.
+        """
+        gen = _build_gen()
+        gen.data["pod"]["asn_pool"] = None
+        gen.client.get = AsyncMock(
+            return_value=_mock_pod_pools(loopback_id="lo-pool", prefix_id="p2p-pool", asn_id=None)
+        )
+        monkeypatch.setattr("generators.rack.asyncio.sleep", AsyncMock())
+
+        with pytest.raises(RuntimeError, match="asn_pool"):
+            await gen._prepare_generation_context()
+
+        gen.logger.error.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_prepare_generation_context_spine_failure_fails_spine_dependent_rack(self) -> None:
+        """A rack with leafs/tors/access-leafs must not proceed without spine info.
+
+        logger.error() raises GeneratorError in production (FailOnErrorLogger);
+        the mocked logger here does not, so the explicit re-raise is what this
+        asserts on.
+        """
+        gen = _build_gen()
+        gen.data["pod"]["fabric_templates"] = []  # makes _derive_spine_info raise
+
+        with pytest.raises(RuntimeError, match="Cannot derive spine info"):
+            await gen._prepare_generation_context()
+
+        gen.logger.error.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_prepare_generation_context_spine_failure_tolerated_for_l2_leaf_only(self) -> None:
+        """An l2-leaf-only rack reads no spine info, so it must not fail on it.
+
+        l2-leafs cable to the local leaf pair and never to a spine — unlike
+        access-leafs, which open an overlay EVPN session straight to the pod's
+        spines. Failing this rack was a false failure; the attributes are left
+        empty and generation continues.
+        """
+        gen = _build_gen()
+        gen.data["pod"]["fabric_templates"] = []  # makes _derive_spine_info raise
+        gen.data["leafs"] = []
+        gen.data["tors"] = []
+        gen.data["l2_leafs"] = [{"role": "l2_leaf", "quantity": 2, "template": {"id": "tmpl-l2", "interfaces": []}}]
+
+        await gen._prepare_generation_context()
+
+        gen.logger.error.assert_not_called()
+        assert gen._spine_device_names == []
+        assert gen._spine_interfaces == []
 
     @pytest.mark.asyncio
     async def test_prepare_generation_context_success_sets_fields(self) -> None:

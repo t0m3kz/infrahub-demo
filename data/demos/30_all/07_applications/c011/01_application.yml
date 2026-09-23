@@ -21,6 +21,9 @@ spec:
           - name: edge-ingress
             component_type: frontend
             network_segment: c011-nordix-prod-p
+            instances:
+              - c011-edge-ingress-ny1-1
+              - c011-edge-ingress-ny1-2
             service_ports:
               data:
                 - port: 443
@@ -31,6 +34,9 @@ spec:
           - name: stream-worker
             component_type: worker
             network_segment: c011-nordix-prod-p
+            instances:
+              - c011-stream-worker-ny1-1
+              - c011-stream-worker-ny1-2
             service_ports:
               data:
                 - port: 9092

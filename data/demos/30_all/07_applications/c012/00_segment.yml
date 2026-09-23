@@ -4,6 +4,15 @@
 # Nested under OrganizationCustomer (owner) via the network_segments reverse
 # relationship — owner is set automatically from the parent, no need to
 # repeat it on the segment itself.
+#
+# interface_capabilities pins the segment to the cage switch ports the
+# customer's hosts are cabled to (see that cage's 02_compute.yml) — the
+# same ManagedGenericInterfaces mechanism the VXLAN segment generator uses
+# in the DCs (generators/topology/segment.py), hand-written here because
+# ManagedVlanSegment has no generator. It lives with the segment rather
+# than next to the cables so the segment has exactly one definition: a
+# second document upserting it by its uniqueness constraint would have to
+# guess whether vlan_id was already set.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -18,3 +27,8 @@ spec:
             environment: "p"
             vlan_id: 105
             customer_deployment: "C012-P-VA"
+            interface_capabilities:
+              - ["CS-VA1-SW1", "Ethernet1/1/1"]
+              - ["CS-VA1-SW1", "Ethernet1/1/2"]
+              - ["CS-VA1-SW1", "Ethernet1/1/3"]
+              - ["CS-VA1-SW1", "Ethernet1/1/4"]

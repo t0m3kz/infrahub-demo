@@ -138,7 +138,7 @@ def _virt_circuit_response(
                         "name": {"value": name},
                         "link_type": {"value": link_type},
                         "transport_mode": {"value": inferred_transport},
-                        "interfaces": _iface_edges(interfaces),
+                        "interface_capabilities": _iface_edges(interfaces),
                         "physical_circuits": _pc_edges(physical_circuits),
                     }
                 }

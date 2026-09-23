@@ -346,9 +346,10 @@ class TestGroupContextProtection:
         monkeypatch.setattr("generators.routing.asyncio.sleep", sleep_mock)
 
         class _NoopPlanner:
-            def __init__(self, deployment_id: str, logger: Any) -> None:
+            def __init__(self, deployment_id: str, logger: Any, strict: bool = False) -> None:
                 self.deployment_id = deployment_id
                 self.logger = logger
+                self.strict = strict
 
             def build_routing_plan(self, _plan_input: Any) -> SimpleNamespace:
                 return SimpleNamespace(
@@ -417,6 +418,52 @@ class TestGroupContextProtection:
         )
 
         assert "as-overlay-99" in m.client.group_context.related_node_ids
+
+    @pytest.mark.asyncio
+    async def test_planner_is_constructed_in_strict_mode(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """create_routing must opt into strict mode, or none of it ever runs.
+
+        RoutingPlanner's strict branches (no router-id, no loopback IP) were
+        implemented and unit-tested in tests/unit/test_routing_strict_mode.py
+        while this caller constructed the planner without the flag — so every
+        real generator run took the tolerant path, warning and skipping instead
+        of failing, and could leave a device created, cabled and addressed with
+        no BGP or OSPF process while reporting success.
+        """
+        from generators.helpers.routing import RoutingStrategy
+        from generators.types import RoutingOptions
+
+        m = _make_mixin()
+        design = MagicMock()
+        design.routing_strategy = RoutingStrategy.EBGP_EBGP.value
+        captured: dict[str, Any] = {}
+
+        class _CapturingPlanner:
+            def __init__(self, deployment_id: str, logger: Any, strict: bool = False) -> None:
+                captured["strict"] = strict
+
+            def build_routing_plan(self, _plan_input: Any) -> SimpleNamespace:
+                return SimpleNamespace(
+                    autonomous_systems=[],
+                    bgp_processes=[],
+                    ospf_processes=[],
+                    ospf_interfaces=[],
+                    bgp_peerings=[],
+                    ospf_peerings=[],
+                )
+
+        monkeypatch.setattr("generators.routing.RoutingPlanner", _CapturingPlanner)
+        monkeypatch.setattr("generators.routing.asyncio.sleep", AsyncMock())
+        m.client.filters = AsyncMock(return_value=[])
+        m._ensure_evpn_af_node = AsyncMock(return_value="evpn-af-1")
+
+        await m.create_routing(
+            bottom_devices=["leaf-01"],
+            top_devices=["spine-01"],
+            options=RoutingOptions(design=design),
+        )
+
+        assert captured["strict"] is True
 
     @pytest.mark.asyncio
     async def test_resolved_passwords_added_to_related_node_ids(self, monkeypatch: pytest.MonkeyPatch) -> None:

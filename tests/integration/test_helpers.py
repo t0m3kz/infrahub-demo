@@ -10,12 +10,14 @@ conditions visible where the test is, not buried in a shared module.
 
 import asyncio
 import logging
+import re
 import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any, TypeVar
 
 from infrahub_sdk import InfrahubClient
+from infrahub_sdk.task.models import TaskFilter
 
 from utils.data_cleaning import clean_data
 
@@ -194,6 +196,10 @@ def _load_query(filename: str) -> str:
 
 
 QUERY_GET_DC_DEVICES = _load_query("get_dc_devices.gql")
+QUERY_GET_ENDPOINT_CABLING = _load_query("get_endpoint_cabling.gql")
+QUERY_GET_APPLICATION_GRAPH = _load_query("get_application_graph.gql")
+QUERY_GET_INTERCONNECT_INVENTORY = _load_query("get_interconnect_inventory.gql")
+QUERY_GET_TENANT_SERVICES = _load_query("get_tenant_services.gql")
 
 
 def _peering_participants(peering: dict[str, Any]) -> set[tuple[str, str]]:
@@ -827,3 +833,334 @@ async def fetch_artifacts(
         logger.info("  %s: %s", defn, statuses)
 
     return {"total": total, "by_definition": by_definition, "failed": failed}
+
+
+# ======================================================================
+# Generator dispatch
+# ======================================================================
+
+
+async def fetch_generator_runs(client: InfrahubClient, branch: str) -> dict[str, int]:
+    """Count, per generator name, how many task runs a branch recorded.
+
+    Task titles are generic and phrased two ways depending on which layer
+    created the task ("Run generator add_rack" for the trigger-dispatched
+    flow, "Execute generator add_rack" for the run it spawns), so the
+    generator name is matched as a whole word anywhere in the title and the
+    two phrasings are deliberately counted separately — a dispatch that never
+    reached execution is the failure mode worth seeing.
+
+    Returns:
+        {"run:<generator>": int, "execute:<generator>": int, "<generator>": int}
+        where the bare key is the number of *dispatches* (the "Run generator"
+        form), which is what a trigger rule is responsible for.
+    """
+    tasks = await client.task.filter(filter=TaskFilter(branch=branch))
+
+    runs: dict[str, int] = {}
+    for task in tasks:
+        title = str(task.title or "")
+        match = re.match(r"^(Run|Execute) generator (?P<name>[\w-]+)", title)
+        if not match:
+            continue
+        name = match.group("name")
+        verb = match.group(1).lower()
+        runs[f"{verb}:{name}"] = runs.get(f"{verb}:{name}", 0) + 1
+        if verb == "run":
+            runs[name] = runs.get(name, 0) + 1
+
+    logger.info("Generator runs on branch '%s' (%d task(s) inspected):", branch, len(tasks))
+    for name, count in sorted(runs.items()):
+        if ":" not in name:
+            logger.info("  %s: %d dispatch(es)", name, count)
+
+    return runs
+
+
+async def fetch_object_counts(client: InfrahubClient, branch: str, kinds: list[str]) -> dict[str, int]:
+    """Count nodes per kind on a branch in a single round-trip."""
+    client.default_branch = branch
+    await asyncio.sleep(DATA_PROPAGATION_DELAY)
+
+    aliases = {kind: f"k{index}" for index, kind in enumerate(kinds)}
+    fragments = "\n".join(f"  {alias}: {kind} {{ count }}" for kind, alias in aliases.items())
+    result = await client.execute_graphql(query=f"query {{\n{fragments}\n}}")
+
+    counts = {kind: int((result.get(alias) or {}).get("count") or 0) for kind, alias in aliases.items()}
+    logger.info("Object counts on branch '%s':", branch)
+    for kind, count in sorted(counts.items()):
+        logger.info("  %s: %d", kind, count)
+    return counts
+
+
+# ======================================================================
+# Endpoint cabling, applications, interconnects
+# ======================================================================
+
+
+async def fetch_endpoint_cabling(client: InfrahubClient, branch: str) -> list[dict[str, Any]]:
+    """Fetch every endpoint host with its rack position and cabled peers.
+
+    The peer list a cable exposes includes the host's own interface, so the
+    local end is filtered out here — callers only ever care about what the host
+    is attached *to* (queries/get_endpoint_cabling.gql).
+
+    Returns:
+        [{"name": str, "rack": str | None, "rack_row": int | None,
+          "rack_type": str | None,
+          "links": [{"local_interface": str, "cable": str,
+                     "peer_device": str, "peer_role": str,
+                     "peer_interface": str}]}]
+    """
+    client.default_branch = branch
+    await asyncio.sleep(DATA_PROPAGATION_DELAY)
+
+    raw = await client.execute_graphql(query=QUERY_GET_ENDPOINT_CABLING)
+    result = clean_data(raw)
+
+    hosts: list[dict[str, Any]] = []
+    for device in result.get("DcimPhysicalDevice", []) or []:
+        host_name = str(device.get("name") or "")
+        rack = device.get("rack") or {}
+        links: list[dict[str, Any]] = []
+        for interface in device.get("interfaces", []) or []:
+            cable = interface.get("cable")
+            if not cable:
+                continue
+            for peer in cable.get("endpoints", []) or []:
+                peer_device = peer.get("device") or {}
+                if str(peer_device.get("name") or "") == host_name:
+                    continue
+                links.append(
+                    {
+                        "local_interface": str(interface.get("name") or ""),
+                        "cable": str(cable.get("name") or ""),
+                        "peer_device": str(peer_device.get("name") or ""),
+                        "peer_role": str(peer_device.get("role") or ""),
+                        "peer_interface": str(peer.get("name") or ""),
+                    }
+                )
+        hosts.append(
+            {
+                "name": host_name,
+                "rack": rack.get("name"),
+                "rack_row": rack.get("row_index"),
+                "rack_type": rack.get("rack_type"),
+                "links": links,
+            }
+        )
+
+    logger.info("Endpoint cabling on branch '%s': %d host(s)", branch, len(hosts))
+    for host in sorted(hosts, key=lambda h: h["name"]):
+        peers = ", ".join(f"{link['peer_device']}:{link['peer_interface']}" for link in host["links"])
+        logger.info("  %s (rack=%s row=%s) -> %s", host["name"], host["rack"], host["rack_row"], peers or "<uncabled>")
+    return hosts
+
+
+async def fetch_application_graph(client: InfrahubClient, branch: str) -> list[dict[str, Any]]:
+    """Fetch every application with its components, segments and instances.
+
+    Returns:
+        [{"name": str, "criticality": str,
+          "components": [{"slug": str, "component_type": str,
+                          "segment": str | None, "segment_kind": str | None,
+                          "instances": [{"name": str, "kind": str,
+                                         "host": str | None,
+                                         "host_role": str | None}]}]}]
+    """
+    client.default_branch = branch
+    await asyncio.sleep(DATA_PROPAGATION_DELAY)
+
+    raw = await client.execute_graphql(query=QUERY_GET_APPLICATION_GRAPH)
+    result = clean_data(raw)
+
+    applications: list[dict[str, Any]] = []
+    for app in result.get("AppApplication", []) or []:
+        components: list[dict[str, Any]] = []
+        for component in app.get("children", []) or []:
+            segment = component.get("network_segment") or {}
+            instances: list[dict[str, Any]] = []
+            for instance in component.get("instances", []) or []:
+                host = instance.get("hosting_device") or {}
+                instances.append(
+                    {
+                        "name": str(instance.get("name") or ""),
+                        "kind": str(instance.get("typename") or ""),
+                        "host": host.get("name"),
+                        "host_role": host.get("role"),
+                    }
+                )
+            components.append(
+                {
+                    "slug": str(component.get("slug") or ""),
+                    "component_type": str(component.get("component_type") or ""),
+                    "segment": segment.get("name"),
+                    "segment_kind": segment.get("typename"),
+                    "instances": instances,
+                }
+            )
+        applications.append(
+            {
+                "name": str(app.get("name") or ""),
+                "criticality": str(app.get("criticality") or ""),
+                "components": components,
+            }
+        )
+
+    total_components = sum(len(app["components"]) for app in applications)
+    logger.info(
+        "Application graph on branch '%s': %d app(s), %d component(s)",
+        branch,
+        len(applications),
+        total_components,
+    )
+    for app in sorted(applications, key=lambda a: a["name"]):
+        logger.info("  %s (%s)", app["name"], app["criticality"])
+        for component in app["components"]:
+            hosts = ", ".join(f"{i['name']}@{i['host'] or i['kind']}" for i in component["instances"])
+            logger.info(
+                "    %s [%s] segment=%s -> %s",
+                component["slug"],
+                component["component_type"],
+                component["segment"],
+                hosts,
+            )
+    return applications
+
+
+async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> dict[str, list[dict[str, Any]]]:
+    """Fetch the physical and virtual circuit layer of a branch.
+
+    Returns:
+        {"physical": [{"circuit_id", "circuit_type", "status", "provider",
+                       "owner", "locations": [str]}],
+         "virtual": [{"name", "link_type", "transport_mode", "owner",
+                      "locations": [str], "physical_circuits": [str],
+                      "interfaces": [(device, interface)],
+                      "cloud_endpoints": [str]}]}
+    """
+    client.default_branch = branch
+    await asyncio.sleep(DATA_PROPAGATION_DELAY)
+
+    raw = await client.execute_graphql(query=QUERY_GET_INTERCONNECT_INVENTORY)
+    result = clean_data(raw)
+
+    physical: list[dict[str, Any]] = [
+        {
+            "circuit_id": str(circuit.get("circuit_id") or ""),
+            "circuit_type": str(circuit.get("circuit_type") or ""),
+            "status": str(circuit.get("status") or ""),
+            "provider": (circuit.get("provider") or {}).get("name"),
+            "owner": (circuit.get("owner") or {}).get("name"),
+            "locations": sorted(str(loc.get("name") or "") for loc in circuit.get("locations", []) or []),
+        }
+        for circuit in result.get("TopologyPhysicalCircuit", []) or []
+    ]
+
+    virtual: list[dict[str, Any]] = [
+        {
+            "name": str(circuit.get("name") or ""),
+            "link_type": str(circuit.get("link_type") or ""),
+            "transport_mode": str(circuit.get("transport_mode") or ""),
+            "owner": (circuit.get("owner") or {}).get("name"),
+            "locations": sorted(str(loc.get("name") or "") for loc in circuit.get("locations", []) or []),
+            "physical_circuits": sorted(
+                str(phys.get("circuit_id") or "") for phys in circuit.get("physical_circuits", []) or []
+            ),
+            "interfaces": sorted(
+                (str((iface.get("device") or {}).get("name") or ""), str(iface.get("name") or ""))
+                for iface in circuit.get("interface_capabilities", []) or []
+            ),
+            "cloud_endpoints": sorted(
+                str(endpoint.get("name") or endpoint.get("typename") or "")
+                for endpoint in circuit.get("cloud_endpoints", []) or []
+            ),
+        }
+        for circuit in result.get("TopologyVirtualCircuit", []) or []
+    ]
+
+    logger.info(
+        "Interconnects on branch '%s': %d physical, %d virtual",
+        branch,
+        len(physical),
+        len(virtual),
+    )
+    for circuit in sorted(physical, key=lambda c: str(c["circuit_id"])):
+        logger.info(
+            "  PHY %s [%s] %s owner=%s",
+            circuit["circuit_id"],
+            circuit["circuit_type"],
+            circuit["locations"],
+            circuit["owner"],
+        )
+    for circuit in sorted(virtual, key=lambda c: str(c["name"])):
+        logger.info(
+            "  VC  %s [%s/%s] owner=%s phys=%s ifaces=%d cloud=%s",
+            circuit["name"],
+            circuit["link_type"],
+            circuit["transport_mode"],
+            circuit["owner"],
+            circuit["physical_circuits"],
+            len(circuit["interfaces"]),
+            circuit["cloud_endpoints"],
+        )
+    return {"physical": physical, "virtual": virtual}
+
+
+async def fetch_tenant_services(client: InfrahubClient, branch: str) -> dict[str, list[dict[str, Any]]]:
+    """Fetch the tenant-scoped inline services and segment deployment legs.
+
+    Returns:
+        {"firewall_contexts": [{"name", "cluster", "tenant", "tenant_design"}],
+         "loadbalancer_ha": [{"name", "tenant"}],
+         "segment_deployments": [{"segment", "segment_kind", "vni", "status",
+                                  "deployment"}]}
+    """
+    client.default_branch = branch
+    await asyncio.sleep(DATA_PROPAGATION_DELAY)
+
+    raw = await client.execute_graphql(query=QUERY_GET_TENANT_SERVICES)
+    result = clean_data(raw)
+
+    firewall_contexts = [
+        {
+            "name": str(context.get("name") or ""),
+            "cluster": (context.get("cluster") or {}).get("name"),
+            "tenant": (context.get("tenant") or {}).get("name"),
+            "tenant_design": ((context.get("tenant") or {}).get("design") or {}).get("name"),
+        }
+        for context in result.get("ManagedFirewallContext", []) or []
+    ]
+
+    loadbalancer_ha = [
+        {"name": str(domain.get("name") or ""), "tenant": (domain.get("tenant") or {}).get("name")}
+        for domain in result.get("ManagedLoadbalancerHA", []) or []
+    ]
+
+    segment_deployments = [
+        {
+            "segment": (deployment.get("segment") or {}).get("name"),
+            "segment_kind": (deployment.get("segment") or {}).get("typename"),
+            "vni": deployment.get("vni"),
+            "status": str(deployment.get("status") or ""),
+            "deployment": (deployment.get("deployment") or {}).get("name"),
+        }
+        for deployment in result.get("ManagedSegmentDeployment", []) or []
+    ]
+
+    logger.info(
+        "Tenant services on branch '%s': %d firewall context(s), %d LB HA domain(s), %d segment leg(s)",
+        branch,
+        len(firewall_contexts),
+        len(loadbalancer_ha),
+        len(segment_deployments),
+    )
+    for context in sorted(firewall_contexts, key=lambda c: str(c["name"])):
+        logger.info("  FW %s tenant=%s design=%s", context["name"], context["tenant"], context["tenant_design"])
+    for leg in sorted(segment_deployments, key=lambda d: (str(d["segment"]), str(d["deployment"]))):
+        logger.info("  SEG %s -> %s (vni=%s, %s)", leg["segment"], leg["deployment"], leg["vni"], leg["status"])
+    return {
+        "firewall_contexts": firewall_contexts,
+        "loadbalancer_ha": loadbalancer_ha,
+        "segment_deployments": segment_deployments,
+    }

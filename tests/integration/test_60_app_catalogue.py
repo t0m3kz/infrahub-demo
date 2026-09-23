@@ -1,27 +1,35 @@
 """Integration test — App catalogue enforcement against the 30_all demo.
 
-Coverage:
-     1. Load the canonical 30_all demo data.
-     2. Materialize the approved C001 checkout request and enforce its external
-         payment-gateway dependency through the customer egress proxy.
-     3. Enforce the predeclared C005 payment-core web-to-backend dependency
-         through a firewall policy between its provisioned VXLAN segments.
+Runs against the branch test_59 builds; it never loads data of its own. Where
+test_61-test_63 assert on what the load *produced*, this module drives the two
+enforcement paths the catalogue is for:
+
+  1. Materialize the approved C001 checkout request and enforce its external
+     payment-gateway dependency through the customer egress proxy.
+  2. Enforce the predeclared C005 payment-core web-to-backend dependency
+     through a firewall policy between its provisioned VXLAN segments.
+
+The two generator runs here are the only ones in the 30_all suite the tests
+invoke by hand. Everything else is trigger-dispatched, and test_59 counts those
+dispatches. ``add_application_deployment_request`` has no trigger rule on
+purpose — a deployment request is materialized on approval, not on creation —
+and the application it materializes needs ``add_app_application`` run over it
+afterwards, since it was born from a generator rather than from the loader.
 """
 
 import logging
 from typing import Any
 
 import pytest
-from infrahub_sdk import InfrahubClient, InfrahubClientSync
+from infrahub_sdk import InfrahubClient
 
 from .conftest import TestInfrahubDockerWithClient
+from .test_constants import ALL_DEMO_BRANCH
 from .workflow_helpers import run_generator, wait_for_tasks_completion
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-SCENARIO_NAME = "App Catalogue: 30_all Enforcement"
-BRANCH_NAME = "app-catalogue-scenario"
-DATA_PATH = "data/demos/30_all"
+SCENARIO_NAME = "Scenario 30_all: App Catalogue Enforcement"
 CHECKOUT_REQUEST_NAME = "c001-checkout-request"
 CHECKOUT_DEPENDENCY_NAME = "c001-checkout-to-payment-gateway"
 C005_APPLICATION_NAME = "c005-payment-core-p"
@@ -35,52 +43,19 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
 
     @pytest.fixture(scope="class")
     def scenario_branch(self) -> str:
-        return BRANCH_NAME
-
-    @pytest.mark.order(400)
-    @pytest.mark.dependency(scope="session", name="app_catalogue_load", depends=["bootstrap_data"])
-    def test_01_load_data(
-        self,
-        client_main: InfrahubClientSync,
-        scenario_branch: str,
-    ) -> None:
-        """Create branch and load the canonical 30_all demo data."""
-        logging.info("=== %s - Step 1: Load Data ===", SCENARIO_NAME)
-
-        existing_branches = client_main.branch.all()
-        if scenario_branch not in existing_branches:
-            client_main.branch.create(
-                branch_name=scenario_branch,
-                sync_with_git=False,
-                wait_until_completion=True,
-            )
-            logging.info("Created branch: %s", scenario_branch)
-
-        load_result = self.execute_command(
-            f"infrahubctl object load {DATA_PATH} --branch {scenario_branch}",
-            address=client_main.config.address,
-        )
-
-        assert load_result.returncode == 0, (
-            f"Failed to load app-catalogue data.\n"
-            f"  Return code: {load_result.returncode}\n"
-            f"  stdout: {load_result.stdout}\n"
-            f"  stderr: {load_result.stderr}"
-        )
-
-        logging.info("App-catalogue data loaded successfully")
+        return ALL_DEMO_BRANCH
 
     @pytest.mark.order(401)
-    @pytest.mark.dependency(scope="session", name="app_catalogue_run_gen", depends=["app_catalogue_load"])
+    @pytest.mark.dependency(scope="session", name="app_catalogue_run_gen", depends=["all_demo_inventory"])
     @pytest.mark.asyncio
-    async def test_02_run_generator(
+    async def test_01_run_generator(
         self,
         async_client_main: InfrahubClient,
         scenario_branch: str,
         workflow_state: dict[str, Any],
     ) -> None:
         """Materialize C001 checkout, then enforce C001 and C005 applications."""
-        logging.info("=== %s - Step 2: Run Generator ===", SCENARIO_NAME)
+        logging.info("=== %s - Step 1: Run Generator ===", SCENARIO_NAME)
 
         client = async_client_main
         client.default_branch = scenario_branch
@@ -131,12 +106,12 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
     @pytest.mark.order(402)
     @pytest.mark.dependency(scope="session", name="app_catalogue_no_failures", depends=["app_catalogue_run_gen"])
     @pytest.mark.asyncio
-    async def test_03_verify_no_failed_tasks(
+    async def test_02_verify_no_failed_tasks(
         self,
         workflow_state: dict[str, Any],
     ) -> None:
         """Verify the request and application generator tasks completed."""
-        logging.info("=== %s - Step 3: Verify No Failed Tasks ===", SCENARIO_NAME)
+        logging.info("=== %s - Step 2: Verify No Failed Tasks ===", SCENARIO_NAME)
 
         request_result = workflow_state["app_catalogue_request_generator_task"]
         application_results = workflow_state["app_catalogue_generator_tasks"]
@@ -150,13 +125,13 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
     @pytest.mark.order(403)
     @pytest.mark.dependency(scope="session", name="app_catalogue_verify_ztna", depends=["app_catalogue_no_failures"])
     @pytest.mark.asyncio
-    async def test_04_verify_customer_private_access_assignment(
+    async def test_03_verify_customer_private_access_assignment(
         self,
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
         """Verify C001's customer-level private access service assignment."""
-        logging.info("=== %s - Step 4: Verify Customer Private Access Assignment ===", SCENARIO_NAME)
+        logging.info("=== %s - Step 3: Verify Customer Private Access Assignment ===", SCENARIO_NAME)
 
         client = async_client_main
         client.default_branch = scenario_branch
@@ -182,13 +157,13 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
         scope="session", name="app_catalogue_verify_proxy_policy", depends=["app_catalogue_no_failures"]
     )
     @pytest.mark.asyncio
-    async def test_05_verify_proxy_policy_rule(
+    async def test_04_verify_proxy_policy_rule(
         self,
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
         """Verify the external endpoint dependency produced a ProxyPolicy/ProxyPolicyRule."""
-        logging.info("=== %s - Step 5: Verify Proxy Policy Rule ===", SCENARIO_NAME)
+        logging.info("=== %s - Step 4: Verify Proxy Policy Rule ===", SCENARIO_NAME)
 
         client = async_client_main
         client.default_branch = scenario_branch
@@ -215,13 +190,13 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
         scope="session", name="app_catalogue_verify_firewall_policy", depends=["app_catalogue_no_failures"]
     )
     @pytest.mark.asyncio
-    async def test_06_verify_firewall_policy_rule(
+    async def test_05_verify_firewall_policy_rule(
         self,
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
         """Verify the internal endpoint dependency produced a firewall rule."""
-        logging.info("=== %s - Step 6: Verify Firewall Policy Rule ===", SCENARIO_NAME)
+        logging.info("=== %s - Step 5: Verify Firewall Policy Rule ===", SCENARIO_NAME)
 
         client = async_client_main
         client.default_branch = scenario_branch

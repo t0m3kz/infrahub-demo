@@ -21,6 +21,9 @@ spec:
           - name: api-frontend
             component_type: frontend
             network_segment: c003-vaultex-subnet-prod-p
+            instances:
+              - c003-api-frontend-euc1-1
+              - c003-api-frontend-euc1-2
             service_ports:
               data:
                 - port: 443
@@ -31,6 +34,9 @@ spec:
           - name: api-backend
             component_type: backend
             network_segment: c003-vaultex-subnet-prod-p
+            instances:
+              - c003-api-backend-euc1-1
+              - c003-api-backend-euc1-2
             service_ports:
               data:
                 - port: 8443

@@ -1,0 +1,46 @@
+---
+# C006 erp-core instances running in DC11. Every tier is spread across both
+# hosts, so no single access-leaf pair takes the whole application down.
+#
+# Filed next to the C006-P-DC11 deployment these VMs point at, for the load-order
+# reason spelled out in ../../../c005/dc/dc10/02_instances.yml.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualDevice
+  data:
+    - name: c006-web-ui-dc11-1
+      object_template: LINUX-SVC
+      status: active
+      hosting_device: dc11-pod1-server-1
+      deployment: "C006-P-DC11"
+
+    - name: c006-web-ui-dc11-2
+      object_template: LINUX-SVC
+      status: active
+      hosting_device: dc11-pod1-server-2
+      deployment: "C006-P-DC11"
+
+    - name: c006-erp-backend-dc11-1
+      object_template: LINUX-SVC
+      status: active
+      hosting_device: dc11-pod1-server-1
+      deployment: "C006-P-DC11"
+
+    - name: c006-erp-backend-dc11-2
+      object_template: LINUX-SVC
+      status: active
+      hosting_device: dc11-pod1-server-2
+      deployment: "C006-P-DC11"
+
+    - name: c006-erp-db-dc11-1
+      object_template: LINUX-SVC
+      status: active
+      hosting_device: dc11-pod1-server-1
+      deployment: "C006-P-DC11"
+
+    - name: c006-erp-db-dc11-2
+      object_template: LINUX-SVC
+      status: active
+      hosting_device: dc11-pod1-server-2
+      deployment: "C006-P-DC11"

@@ -32,4 +32,4 @@ uv run infrahubctl object load data/demos/12_saas/ --branch zscaler_demo
 - Map specific user groups or network segments to the cloud policy via the `network_segments` relationship on `SecurityPolicy`
 - Extend rules with `application_categories` if you also populate application data
 
-For the application and proxy acceptance workflow, run `uv run invoke test-integration-apps`. Use `uv run invoke test-integration` when the SaaS changes are part of a broader topology update.
+For the application and proxy acceptance workflow, run `uv run invoke test-integration-all-demo`. Use `uv run invoke test-integration` when the SaaS changes are part of a broader topology update.

@@ -1,0 +1,65 @@
+fragment CablePeer on DcimInterface {
+  name {
+    value
+  }
+  device {
+    node {
+      name {
+        value
+      }
+      role {
+        value
+      }
+    }
+  }
+}
+
+query GetEndpointCabling {
+  DcimPhysicalDevice(role__value: "endpoint") {
+    edges {
+      node {
+        name {
+          value
+        }
+        rack {
+          node {
+            name {
+              value
+            }
+            row_index {
+              value
+            }
+            rack_type {
+              value
+            }
+          }
+        }
+        interfaces {
+          edges {
+            node {
+              name {
+                value
+              }
+              ... on DcimEndpoint {
+                cable {
+                  node {
+                    name {
+                      value
+                    }
+                    endpoints {
+                      edges {
+                        node {
+                          ...CablePeer
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

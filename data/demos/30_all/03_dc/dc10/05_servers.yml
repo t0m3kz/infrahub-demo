@@ -1,0 +1,35 @@
+---
+# DC10 POD-1 application hosts.
+#
+# One host per row, so the two rows' access-leaf pairs are genuinely
+# independent failure domains: a component with an instance on each host
+# survives losing either pair. PowerEdge-R640_SERVER brings two 25G uplink
+# NICs (eno1/eno2); add_endpoint dual-homes them across the access-leaf pair
+# in the network rack that shares the host's row, and sets the host's
+# deployment to POD-1 on the way.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: dc10-pod1-server-1
+      object_template: PowerEdge-R640_SERVER
+      owner: "P027"
+      rack: fra-1-s-1-r-1-1
+      status: active
+      position: 10
+      platform: linux
+      description: "DC10 POD-1 row 1 application host"
+      member_of_groups:
+        - endpoints
+
+    - name: dc10-pod1-server-2
+      object_template: PowerEdge-R640_SERVER
+      owner: "P027"
+      rack: fra-1-s-1-r-2-1
+      status: active
+      position: 10
+      platform: linux
+      description: "DC10 POD-1 row 2 application host"
+      member_of_groups:
+        - endpoints

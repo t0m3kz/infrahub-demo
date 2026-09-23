@@ -68,3 +68,14 @@ spec:
       org_id: "P031"
     - name: "GLOBEX"
       org_id: "P032"
+    # The two colocation operators 30_all deploys into besides Equinix. Needed
+    # as providers, not just as TopologyColocation trees, because they are the
+    # party a cross-connect or a fabric circuit is bought from.
+    - name: "Megaport"
+      org_id: "P033"
+    - name: "CoreSite"
+      org_id: "P034"
+    # SD-WAN overlay operator. Deliberately its own provider rather than reusing
+    # Arista (P029), which is the switch vendor.
+    - name: "VMware VeloCloud"
+      org_id: "P035"

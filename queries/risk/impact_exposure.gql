@@ -1,0 +1,174 @@
+# Exposure side of the change-risk report — see docs/change_risk.md.
+#
+# Infrahub's own graph traversal answers "what does this change reach", and
+# returns node identity only — id, kind, label, no attributes. This query answers
+# "how much does that cost", for the id set the traversal settled on.
+#
+# It is run more than once per check: on both branches, because an object deleted
+# on the proposed branch still has to be named in the report and only the base
+# branch can name it; and in batches, because the id set can be large.
+#
+# Exposure is weighted by AppApplication.criticality, so every root here exists
+# to reach an application from something the change touched, or to name the
+# blast radius in terms an operator recognises (customer, footprint, account).
+query impact_exposure($ids: [ID]) {
+  # Applications already in the impacted set, plus their components — one hop
+  # down, so a change to the application node itself still reports a footprint.
+  AppApplication(ids: $ids) {
+    edges {
+      node {
+        id
+        __typename
+        name { value }
+        environment { value }
+        criticality { value }
+        owner { node { id __typename name { value } } }
+        # AppGeneric is `hierarchical: true`, so Infrahub peers the generated
+        # parent/children at the generic itself — the `children: AppComponent`
+        # key only constrains placement. Everything past id/__typename needs
+        # narrowing.
+        children {
+          edges {
+            node {
+              id
+              __typename
+              ... on AppComponent {
+                name { value }
+                component_type { value }
+                network_segment { node { id __typename name { value } } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  # Components in the impacted set. `instances` is the redundancy count the
+  # single-homed finding is computed from: exactly one instance means there is
+  # no second path for the counterfactual to fall back to.
+  AppComponent(ids: $ids) {
+    edges {
+      node {
+        id
+        __typename
+        name { value }
+        component_type { value }
+        parent {
+          node {
+            id
+            __typename
+            ... on AppApplication {
+              name { value }
+              environment { value }
+              criticality { value }
+              owner { node { id __typename name { value } } }
+            }
+          }
+        }
+        network_segment { node { id __typename name { value } status { value } } }
+        load_balancer { node { id __typename } }
+        instances {
+          edges {
+            node {
+              id
+              __typename
+              name { value }
+              ... on DcimPhysicalDevice { status { value } role { value } }
+              ... on DcimVirtualDevice { status { value } role { value } hosting_device { node { id name { value } } } }
+              ... on CloudInstance { status { value } }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  # Components reached through an impacted segment or an impacted instance.
+  # Both hops are filters: AppComponent.network_segment has no declared reverse,
+  # and AppInstance is a bare marker generic.
+  components_via_segment: AppComponent(network_segment__ids: $ids) {
+    edges {
+      node {
+        id
+        __typename
+        name { value }
+        component_type { value }
+        parent {
+          node {
+            id
+            __typename
+            ... on AppApplication { name { value } criticality { value } environment { value } }
+          }
+        }
+        network_segment { node { id __typename name { value } } }
+        instances { edges { node { id __typename name { value } } } }
+      }
+    }
+  }
+
+  components_via_instance: AppComponent(instances__ids: $ids) {
+    edges {
+      node {
+        id
+        __typename
+        name { value }
+        component_type { value }
+        parent {
+          node {
+            id
+            __typename
+            ... on AppApplication { name { value } criticality { value } environment { value } }
+          }
+        }
+        network_segment { node { id __typename name { value } } }
+        instances { edges { node { id __typename name { value } } } }
+      }
+    }
+  }
+
+  # Impacted segments, for the case where no application is attached yet. A
+  # segment with no component is reported as exposure of unknown size, not as
+  # zero exposure — see the confidence axis in docs/change_risk.md.
+  ManagedNetworkSegment(ids: $ids) {
+    edges {
+      node {
+        id
+        __typename
+        name { value }
+        customer_name { value }
+        environment { value }
+        status { value }
+        segment_role { value }
+        owner { node { id __typename name { value } } }
+      }
+    }
+  }
+
+  # Naming the blast radius: which customer footprints and which cloud accounts
+  # the impacted set lands in. `account_role: network` is the shared-fate flag.
+  TopologyCustomer(ids: $ids) {
+    edges {
+      node {
+        id
+        __typename
+        name { value }
+        network_segments { edges { node { id __typename name { value } } } }
+        exchange_gateways { edges { node { id __typename name { value } } } }
+      }
+    }
+  }
+
+  CloudAccount(ids: $ids) {
+    edges {
+      node {
+        id
+        __typename
+        name { value }
+        account_id { value }
+        environment { value }
+        account_role { value }
+      }
+    }
+  }
+}
