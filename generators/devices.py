@@ -538,6 +538,15 @@ class DeviceMixin(MLAGWiringMixin):
         )
         existing_sync_iface_ids: set[str] = set()
         for node in existing_ha_ifaces:
+            # Re-register with this run's tracking group, for the same reason
+            # _ensure_ha_pairs re-registers an existing HA domain: a generator
+            # body runs inside client.start_tracking(delete_unused_nodes=True),
+            # so every node it created in an EARLIER run and does not touch in
+            # this one is deleted as "no longer required". Left unregistered,
+            # these ManagedHAInterfaces (and the sync cable below) vanish on the
+            # first idempotent re-run and come back on the next one — a
+            # flip-flop, since the run that re-creates them registers them again.
+            self.client.group_context.related_node_ids.append(node.id)
             node_caps = getattr(node, "interface_capabilities")
             await node_caps.fetch()
             existing_sync_iface_ids.update(peer.id for peer in node_caps.peers)
@@ -580,6 +589,20 @@ class DeviceMixin(MLAGWiringMixin):
                 continue
             sync_ifaces.append((device_obj, sync_iface))
 
+            # A port carrying an HA domain's sync link is in service, so it must
+            # not stay at DcimInterface's `free` default — same flip, and same
+            # reason, as create_connections() applies to both ends of every cable
+            # it lays and _ensure_mlag_pairs applies to the peer-link members.
+            # Deliberately outside the existing_sync_iface_ids skip below, so a
+            # pair created before this was fixed self-heals on its next run.
+            #
+            # update_group_context=False: a physical sync port belongs to the
+            # device's object_template, not to this generator run — it must never
+            # become a delete_unused_nodes candidate.
+            if getattr(sync_iface, "status").value != "active":
+                getattr(sync_iface, "status").value = "active"
+                await sync_iface.save(allow_upsert=True, update_group_context=False)
+
             if sync_iface.id in existing_sync_iface_ids:
                 continue
 
@@ -612,6 +635,11 @@ class DeviceMixin(MLAGWiringMixin):
 
         existing = await self.client.filters(kind=DcimCable, name__value=cable_name)
         if existing:
+            # Keep it in this run's tracking group — see the note in
+            # _ensure_ha_interfaces. Returning without registering made the
+            # cable oscillate: created on one run, deleted as unused at the end
+            # of the next.
+            self.client.group_context.related_node_ids.append(existing[0].id)
             return
 
         existing_cable_a = getattr(iface_a, "cable", None)
