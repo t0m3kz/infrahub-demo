@@ -145,13 +145,14 @@ class TestRackRolesHelper:
         assert "skip_underlay" not in gen._routing_options
 
 
-def _mock_pod_pools(*, loopback_id: str | None, prefix_id: str | None) -> MagicMock:
+def _mock_pod_pools(*, loopback_id: str | None, prefix_id: str | None, asn_id: str | None = "asn-pool") -> MagicMock:
     """Mirror RelatedNode.id, which returns None when unset (unlike .peer.id,
     which raises ValueError if neither an id nor an hfid is set — see
     RelatedNode.get()'s docstring)."""
     pod_obj = MagicMock()
     pod_obj.loopback_pool = MagicMock(id=loopback_id)
     pod_obj.prefix_pool = MagicMock(id=prefix_id)
+    pod_obj.asn_pool = MagicMock(id=asn_id)
     return pod_obj
 
 
@@ -189,6 +190,66 @@ class TestRackMixinAdditional:
         sleep_mock.assert_awaited_once()
         assert gen._loopback_pool_id == "lo-pool-2"
         assert gen._technical_pool_id == "p2p-pool-2"
+
+    @pytest.mark.asyncio
+    async def test_prepare_generation_context_waits_for_asn_pool_alone(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An eBGP rack waits for asn_pool even when loopback/prefix are already there.
+
+        add_pod creates the loopback/prefix pools first and only links the DC's
+        fabric ASN pool onto the pod afterwards, so this exact snapshot — both
+        IP pools resolved, asn_pool still None — is what a racing rack reads.
+        Proceeding on it produced devices with no BGP process at all and no
+        failed task to show for it.
+        """
+        gen = _build_gen()
+        gen.data["pod"]["asn_pool"] = None
+        gen.client.get = AsyncMock(
+            side_effect=[
+                _mock_pod_pools(loopback_id="lo-pool", prefix_id="p2p-pool", asn_id=None),
+                _mock_pod_pools(loopback_id="lo-pool", prefix_id="p2p-pool", asn_id="asn-pool-late"),
+            ]
+        )
+        sleep_mock = AsyncMock()
+        monkeypatch.setattr("generators.rack.asyncio.sleep", sleep_mock)
+
+        await gen._prepare_generation_context()
+
+        gen.logger.error.assert_not_called()
+        sleep_mock.assert_awaited_once()
+        assert gen._routing_options["asn_pool"] == "asn-pool-late"
+
+    @pytest.mark.asyncio
+    async def test_prepare_generation_context_ospf_underlay_ignores_asn_pool(self) -> None:
+        """An OSPF underlay allocates no per-device ASN, so a missing asn_pool
+        is neither waited on nor an error."""
+        gen = _build_gen()
+        gen.data["pod"]["parent"]["routing_strategy"] = "ospf-ibgp"
+        gen.data["pod"]["asn_pool"] = None
+        gen.client.get = AsyncMock()
+
+        await gen._prepare_generation_context()
+
+        gen.client.get.assert_not_awaited()
+        gen.logger.error.assert_not_called()
+        assert "asn_pool" not in gen._routing_options
+
+    @pytest.mark.asyncio
+    async def test_prepare_generation_context_missing_asn_pool_is_an_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """asn_pool never arrives on an eBGP rack — loud, because the devices
+        would otherwise be created, cabled and silently unrouted."""
+        gen = _build_gen()
+        gen.data["pod"]["asn_pool"] = None
+        gen.client.get = AsyncMock(
+            return_value=_mock_pod_pools(loopback_id="lo-pool", prefix_id="p2p-pool", asn_id=None)
+        )
+        monkeypatch.setattr("generators.rack.asyncio.sleep", AsyncMock())
+
+        await gen._prepare_generation_context()
+
+        gen.logger.error.assert_called_once()
+        assert "asn_pool" in gen.logger.error.call_args.args[0]
 
     @pytest.mark.asyncio
     async def test_prepare_generation_context_success_sets_fields(self) -> None:
