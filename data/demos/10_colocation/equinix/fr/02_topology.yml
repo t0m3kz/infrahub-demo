@@ -6,13 +6,35 @@ spec:
   kind: TopologyColocation
   data:
     - name: EQUINIX
+      parent: "Colocation"
       children:
         kind: TopologyColocationMetro
         data:
+          # Frankfurt's on-ramp is declared, not hand-written:
+          # add_colocation_metro (generators/topology/colocation.py) creates the
+          # devices plus this metro's own loopback/management/technical/ASN
+          # pools, sliced out of the global bootstrap supernets. Declared on the
+          # metro rather than on a cage for the same reason a DC declares its
+          # border-leafs rather than a pod doing it — one pair fronts the whole
+          # metro, and FR6 reaches it over a cross-connect.
+          #
+          # This demo loads no data centers, so the `dci` ports on
+          # N9K-C9316D-GX_EDGE (Ethernet1/[9-12], facing DC border-leafs) stay
+          # free here. See data/demos/30_all for the on-ramp with DCs behind it.
+          #
+          # The firewall pair is the on-ramp's perimeter, declared the way a DC
+          # declares its own: quantity 2 of a template carrying a role=ha sync
+          # port (PA-5260_FIREWALL's HA1/HA2), which is what lets the generator
+          # build the ManagedFirewallHA domain and the sync cable between the
+          # two members. Not Panorama-managed — the metro declares no
+          # controllers, so they land in the plain `firewalls` group.
           - name: FR
             location: ["fra"]
             member_of_groups:
               - colocation_metros
+            fabric_templates:
+              - ["2", "edge", "N9K-C9316D-GX_EDGE"]
+              - ["2", "firewall", "PA-5260_FIREWALL"]
             children:
               kind: TopologyColocationZone
               data:
