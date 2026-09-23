@@ -521,7 +521,11 @@ class RoutingPlanner:
                     )
                     local_as_by_group[group] = PendingASRef(device=group)
                 elif self.logger:
-                    self.logger.warning(f"No ASN pool for {group}")
+                    # Neither a pool nor an existing AS means no local_as, which
+                    # means no BGP process for any device in the group below —
+                    # an error, not a note: the caller finishes and reports
+                    # success, leaving silently unrouted devices behind.
+                    self.logger.error(f"No ASN pool for {group} — its device(s) will have no BGP process")
 
         # Phase 1: BGP process for every bottom device (device_map, not
         # cable-driven — decoupled from cables so processes exist even

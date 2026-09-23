@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     import logging
 
 from .helpers import DeviceNameContext, DeviceNamingConfig
-from .helpers.routing import p2p_is_ipv6, underlay_is_ipv6
+from .helpers.routing import RoutingStrategy, p2p_is_ipv6, underlay_is_ipv6
 from .helpers.template_interfaces import template_interface_names_by_role
 from .pod_config import spine_slot_role, spine_slot_templates
 from .protocols import LocationRack, TopologyPod
@@ -20,6 +20,14 @@ _POD_POOL_MAX_RETRIES = 10
 _POD_POOL_RETRY_DELAY = 3.0
 _POD_POOL_RETRY_CAP = 20.0
 _POD_POOL_RETRY_JITTER = 0.25
+
+# Pod-level pools this generator cannot proceed without, in the order add_pod
+# writes them. asn_pool comes last and is conditional — see _wait_for_pod_pools.
+_POD_POOL_FIELDS = ("loopback_pool", "prefix_pool", "asn_pool")
+
+# Underlays that allocate a per-device ASN from the pod's ASN pool. An OSPF
+# underlay never does, so a missing asn_pool is not worth waiting for there.
+_EBGP_UNDERLAY_STRATEGIES = frozenset({RoutingStrategy.EBGP_EBGP.value, RoutingStrategy.EBGP_IBGP.value})
 
 # Which fabric_templates roles a pod's deployment_type knows how to cable.
 #
@@ -148,7 +156,15 @@ class RackMixin:
         )
         return device_names, interface_names
 
-    async def _wait_for_pod_pools(self, pod: dict[str, Any]) -> dict[str, Any]:
+    def _missing_pod_pools(self, pod: dict[str, Any], *, needs_asn_pool: bool) -> list[str]:
+        """Which of this pod's required pools are still unresolved."""
+        return [
+            field
+            for field in _POD_POOL_FIELDS
+            if not (pod.get(field) or {}).get("id") and (field != "asn_pool" or needs_asn_pool)
+        ]
+
+    async def _wait_for_pod_pools(self, pod: dict[str, Any], *, needs_asn_pool: bool) -> dict[str, Any]:
         """Retry-refetch the pod directly until add_pod has written its pools.
 
         A rack's own created-trigger can fire and reach here before add_pod's
@@ -158,21 +174,34 @@ class RackMixin:
         reliable in practice. Checking the pod NODE's actual persisted state
         (not the task list) closes that race regardless of task-list indexing
         timing.
+
+        asn_pool has to be waited on alongside the other two, not assumed to
+        arrive with them: add_pod creates the loopback/prefix pools first and
+        only links the DC's fabric ASN pool onto the pod afterwards (see
+        generators/topology/pod.py). A rack that stopped polling the moment
+        loopback/prefix appeared kept the None asn_pool from its own query
+        snapshot, so _prepare_generation_context built RoutingOptions without a
+        pool — and RoutingPlanner then emitted "No ASN pool for <device>" as a
+        *warning*, created no AS and therefore no BGP process for any device in
+        the rack, while the run still reported "generation completed". Observed
+        on DC12's second network rack in a 30_all load: four devices cabled,
+        addressed and entirely unrouted, with no failed task to show for it.
         """
         for attempt in range(_POD_POOL_MAX_RETRIES):
-            pod_obj = await self.client.get(kind=TopologyPod, id=pod["id"], include=["loopback_pool", "prefix_pool"])
-            loopback_pool_id = pod_obj.loopback_pool.id
-            prefix_pool_id = pod_obj.prefix_pool.id
-            if loopback_pool_id and prefix_pool_id:
-                pod["loopback_pool"] = {"id": loopback_pool_id}
-                pod["prefix_pool"] = {"id": prefix_pool_id}
+            pod_obj = await self.client.get(kind=TopologyPod, id=pod["id"], include=list(_POD_POOL_FIELDS))
+            for field in _POD_POOL_FIELDS:
+                if pool_id := getattr(pod_obj, field).id:
+                    pod[field] = {"id": pool_id}
+
+            missing = self._missing_pod_pools(pod, needs_asn_pool=needs_asn_pool)
+            if not missing:
                 return pod
             if attempt < _POD_POOL_MAX_RETRIES - 1:
                 delay = self._retry_delay(
                     _POD_POOL_RETRY_DELAY, attempt, cap=_POD_POOL_RETRY_CAP, jitter=_POD_POOL_RETRY_JITTER
                 )
                 self.logger.info(
-                    f"Rack {self.data['name']}: Pod {pod['name']} pools not ready yet — "
+                    f"Rack {self.data['name']}: Pod {pod['name']} {', '.join(missing)} not ready yet — "
                     f"retrying in {delay:.2f}s (attempt {attempt + 1}/{_POD_POOL_MAX_RETRIES})"
                 )
                 await asyncio.sleep(delay)
@@ -186,12 +215,15 @@ class RackMixin:
         self.pod_name = pod["name"].lower()
         self.fabric_name = dc["name"].lower()
 
-        if not pod.get("loopback_pool") or not pod.get("prefix_pool"):
-            pod = await self._wait_for_pod_pools(pod)
+        needs_asn_pool = dc.get("routing_strategy", "ebgp-ebgp") in _EBGP_UNDERLAY_STRATEGIES
+        if self._missing_pod_pools(pod, needs_asn_pool=needs_asn_pool):
+            pod = await self._wait_for_pod_pools(pod, needs_asn_pool=needs_asn_pool)
 
-        if not pod.get("loopback_pool") or not pod.get("prefix_pool"):
+        if missing_pools := self._missing_pod_pools(pod, needs_asn_pool=needs_asn_pool):
+            # Loud on purpose: without asn_pool an eBGP rack generates devices
+            # and cabling but no routing at all, and nothing else fails.
             self.logger.error(
-                f"Rack {self.data['name']}: Pod {pod['name']} pools not found. "
+                f"Rack {self.data['name']}: Pod {pod['name']} {', '.join(missing_pools)} not found. "
                 f"Run pod generator first: infrahubctl generator generate_pod name={pod['name']}"
             )
 
