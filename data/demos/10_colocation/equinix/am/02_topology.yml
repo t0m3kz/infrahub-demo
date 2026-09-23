@@ -12,14 +12,23 @@ spec:
   kind: TopologyColocation
   data:
     - name: EQUINIX
+      parent: "Colocation"
       children:
         kind: TopologyColocationMetro
         data:
+          # C8000V_EDGE, not the N9K the other metros use: this is the virtual
+          # half of that gate. It is a TemplateDcimVirtualDevice, so the
+          # generator creates DcimVirtualDevices — an Equinix Network Edge
+          # instance we rent, not hardware we rack — and a `physical` template
+          # would be rejected here. The one metro in the demo data that
+          # exercises the virtual path at all.
           - name: AM
             location: ["ams"]
             deployment_type: virtual
             member_of_groups:
               - colocation_metros
+            fabric_templates:
+              - ["2", "edge", "C8000V_EDGE"]
             children:
               kind: TopologyColocationZone
               data:

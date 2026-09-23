@@ -6,13 +6,19 @@ spec:
   kind: TopologyColocation
   data:
     - name: EQUINIX
+      parent: "Colocation"
       children:
         kind: TopologyColocationMetro
         data:
+          # Declared on-ramp kit, no firewall pair — Paris is the plain case, so
+          # the contrast with Frankfurt is visible in one diff. See the note in
+          # ../fr/02_topology.yml for what the generator builds from this.
           - name: PA
             location: ["par"]
             member_of_groups:
               - colocation_metros
+            fabric_templates:
+              - ["2", "edge", "N9K-C9316D-GX_EDGE"]
             children:
               kind: TopologyColocationZone
               data:

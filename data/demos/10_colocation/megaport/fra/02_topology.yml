@@ -1,11 +1,19 @@
 ---
 # Megaport Frankfurt access topology
+#
+# No fabric_templates, deliberately: an MCR is Megaport's own virtual router in
+# Megaport's cloud, reached over a virtual cross-connect — we buy a port on it,
+# we do not deploy kit into it. The metro still joins colocation_metros because
+# trigger-colocation-metro-on-created fires per kind and Infrahub fails a run
+# whose target sits outside the generator definition's group, so
+# add_colocation_metro runs here and no-ops.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: TopologyColocation
   data:
     - name: MEGAPORT
+      parent: "Colocation"
       children:
         kind: TopologyColocationMetro
         data:
