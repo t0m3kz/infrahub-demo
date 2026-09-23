@@ -220,12 +220,22 @@ class RackMixin:
             pod = await self._wait_for_pod_pools(pod, needs_asn_pool=needs_asn_pool)
 
         if missing_pools := self._missing_pod_pools(pod, needs_asn_pool=needs_asn_pool):
-            # Loud on purpose: without asn_pool an eBGP rack generates devices
-            # and cabling but no routing at all, and nothing else fails.
-            self.logger.error(
-                f"Rack {self.data['name']}: Pod {pod['name']} {', '.join(missing_pools)} not found. "
-                f"Run pod generator first: infrahubctl generator generate_pod name={pod['name']}"
+            # Refuse rather than carry on. There is no legitimate state in which
+            # these are absent: add_dc creates the fabric ASN pool, add_pod
+            # creates the loopback/prefix pools and links the ASN pool onto the
+            # pod, and the retry loop above already covers the visibility lag.
+            # Carrying on builds a rack whose devices are cabled and addressed
+            # but have no BGP process — indistinguishable from a healthy rack
+            # unless you count processes. Raising fails this generator's task,
+            # which is how such a rack becomes visible at all. Nothing has been
+            # created at this point, so the failed run leaves no partial state.
+            message = (
+                f"Rack {self.data['name']}: Pod {pod['name']} {', '.join(missing_pools)} not found after "
+                f"{_POD_POOL_MAX_RETRIES} attempts — refusing to generate devices that would have no routing. "
+                f"Run the pod generator first: infrahubctl generator generate_pod name={pod['name']}"
             )
+            self.logger.error(message)
+            raise RuntimeError(message)
 
         dc_management_pool = dc.get("management_pool")
         self._management_pool_id = dc_management_pool["id"] if dc_management_pool else None

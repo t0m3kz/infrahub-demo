@@ -159,13 +159,19 @@ def _mock_pod_pools(*, loopback_id: str | None, prefix_id: str | None, asn_id: s
 class TestRackMixinAdditional:
     @pytest.mark.asyncio
     async def test_prepare_generation_context_missing_pools(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Pools stay missing across every retry attempt — error fires after exhausting retries."""
+        """Pools stay missing across every retry attempt — the rack refuses to generate.
+
+        Carrying on would build devices and cabling with no routing behind them,
+        which looks healthy until you count BGP processes. Raising fails the
+        generator task instead, and nothing has been created yet at this point.
+        """
         gen = _build_gen()
         gen.data["pod"]["loopback_pool"] = None
         gen.client.get = AsyncMock(return_value=_mock_pod_pools(loopback_id=None, prefix_id=None))
         monkeypatch.setattr("generators.rack.asyncio.sleep", AsyncMock())
 
-        await gen._prepare_generation_context()
+        with pytest.raises(RuntimeError, match="loopback_pool"):
+            await gen._prepare_generation_context()
 
         gen.logger.error.assert_called_once()
 
@@ -234,11 +240,15 @@ class TestRackMixinAdditional:
         assert "asn_pool" not in gen._routing_options
 
     @pytest.mark.asyncio
-    async def test_prepare_generation_context_missing_asn_pool_is_an_error(
+    async def test_prepare_generation_context_missing_asn_pool_refuses_to_generate(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """asn_pool never arrives on an eBGP rack — loud, because the devices
-        would otherwise be created, cabled and silently unrouted."""
+        """asn_pool never arrives on an eBGP rack — the whole run fails.
+
+        There is no legitimate state in which it is absent (add_dc creates the
+        fabric ASN pool, add_pod links it onto the pod), so a rack that still
+        cannot see it must not generate devices it will be unable to route.
+        """
         gen = _build_gen()
         gen.data["pod"]["asn_pool"] = None
         gen.client.get = AsyncMock(
@@ -246,10 +256,10 @@ class TestRackMixinAdditional:
         )
         monkeypatch.setattr("generators.rack.asyncio.sleep", AsyncMock())
 
-        await gen._prepare_generation_context()
+        with pytest.raises(RuntimeError, match="asn_pool"):
+            await gen._prepare_generation_context()
 
         gen.logger.error.assert_called_once()
-        assert "asn_pool" in gen.logger.error.call_args.args[0]
 
     @pytest.mark.asyncio
     async def test_prepare_generation_context_success_sets_fields(self) -> None:
