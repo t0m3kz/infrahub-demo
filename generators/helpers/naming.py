@@ -28,6 +28,7 @@ ROLE_CODES: dict[str, str] = {
     "super-spine": "ss",
     "hyper-spine": "hs",
     "border-spine": "bs",
+    "edge": "eg",
     "leaf": "lf",
     "border-leaf": "bl",
     "tor": "tor",

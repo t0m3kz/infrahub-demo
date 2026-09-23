@@ -10,8 +10,14 @@ spec:
       children:
         kind: TopologyColocationMetro
         data:
+          # Declared on-ramp kit — see the FR note in ../fr/02_topology.yml for
+          # the port roles N9K-C9316D-GX_EDGE brings. Paris fronts DC12.
           - name: PA
             location: ["par"]
+            member_of_groups:
+              - colocation_metros
+            fabric_templates:
+              - ["2", "edge", "N9K-C9316D-GX_EDGE"]
             children:
               kind: TopologyColocationZone
               data:

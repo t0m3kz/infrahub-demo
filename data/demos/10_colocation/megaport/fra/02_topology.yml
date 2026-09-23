@@ -11,6 +11,8 @@ spec:
         data:
           - name: FRA
             location: ["fra"]
+            member_of_groups:
+              - colocation_metros
             children:
               kind: TopologyColocationZone
               data:

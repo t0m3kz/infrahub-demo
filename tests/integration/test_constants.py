@@ -42,8 +42,10 @@ ALL_DEMO_BRANCH = "all-demo-scenario"
 # before moving to the next stage.
 ALL_DEMO_LOAD_STAGES: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
-        # Customers, cloud regions/zones, colocation cages and racks, SaaS,
-        # office buildings. Nothing here dispatches a generator.
+        # Customers, cloud regions/zones, colocation metros/cages and racks,
+        # SaaS, office buildings. Dispatches add_colocation_metro (one run per
+        # metro), which is why this stage has to settle before the interconnects
+        # stage references the on-ramp routers it generates.
         "foundation",
         (
             "00_customer",
@@ -121,6 +123,13 @@ ALL_DEMO_EXPECTED_GENERATORS: dict[str, int] = {
     # those are in topologies_rack too, so they dispatch add_rack and it
     # no-ops on them (LocationRack.pod is a colocation zone, not a pod).
     "add_rack": 25,
+    # One run per declared metro (3 CoreSite + 3 Equinix + 3 Megaport). Only FR
+    # and PA carry fabric_templates and actually build anything; the other 7 are
+    # members of colocation_metros (required — a trigger firing for a non-member
+    # node raises, see the endpoint note in data/events/99_actions.yml) and the
+    # generator no-ops on them, same as add_rack does on the colocation cage
+    # racks.
+    "add_colocation_metro": 9,
     "add_endpoint": 12,  # 6 DC hosts + 6 colocation cage hosts
     "add_vxlan_segment": 4,  # C005's four application segments
     "add_app_application": 7,  # one per declared AppApplication
