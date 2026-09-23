@@ -126,24 +126,33 @@ class TestAllDemoCompute(TestInfrahubDockerWithClient):
             if routing["bgp_breakdown"]["ebgp"] == 0:
                 errors.append(f"{dc_name}: no eBGP sessions")
 
-            for device_name, info in sorted(routing["device_routing"].items()):
-                role = info["role"]
-                if role in ALL_DEMO_DC_UNDERLAY_ROLES:
-                    if not info["underlay_process"]:
-                        errors.append(f"{dc_name}/{device_name} ({role}): no underlay BGP process")
-                    if info["underlay_peerings"] == 0:
-                        errors.append(f"{dc_name}/{device_name} ({role}): 0 underlay peerings")
+            # Walk the *device* list, not the routing summary: a device with no
+            # routing at all never appears in device_routing, so iterating that
+            # would silently skip exactly the devices worth complaining about.
+            device_routing = routing["device_routing"]
+            for device in sorted(topology["devices"], key=lambda d: str(d.get("name") or "")):
+                device_name = str(device.get("name") or "")
+                role = str(device.get("role") or "unknown")
+                if role not in ALL_DEMO_DC_UNDERLAY_ROLES:
+                    continue
+
+                info = device_routing.get(device_name)
+                if info is None:
+                    errors.append(
+                        f"{dc_name}/{device_name} ({role}): no routing capabilities at all — the device "
+                        "was created but its BGP process was never generated"
+                    )
+                    continue
+
+                if not info["underlay_process"]:
+                    errors.append(f"{dc_name}/{device_name} ({role}): no underlay BGP process")
+                if info["underlay_peerings"] == 0:
+                    errors.append(f"{dc_name}/{device_name} ({role}): 0 underlay peerings")
                 if role in ALL_DEMO_DC_OVERLAY_ROLES:
                     if not info["overlay_process"]:
                         errors.append(f"{dc_name}/{device_name} ({role}): no overlay BGP process")
                     if info["overlay_peerings"] == 0:
                         errors.append(f"{dc_name}/{device_name} ({role}): 0 overlay peerings")
-
-            for role in ALL_DEMO_DC_UNDERLAY_ROLES:
-                expected = ALL_DEMO_DC_ROLE_COUNTS[role]
-                actual = routing["role_summary"].get(role, {}).get("count", 0)
-                if actual != expected:
-                    errors.append(f"{dc_name} role '{role}': {actual} device(s) with routing, expected {expected}")
 
             logging.info(
                 "%s routing: %d BGP process(es), %d session(s) (%s)",
