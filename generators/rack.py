@@ -29,6 +29,13 @@ _POD_POOL_FIELDS = ("loopback_pool", "prefix_pool", "asn_pool")
 # underlay never does, so a missing asn_pool is not worth waiting for there.
 _EBGP_UNDERLAY_STRATEGIES = frozenset({RoutingStrategy.EBGP_EBGP.value, RoutingStrategy.EBGP_IBGP.value})
 
+# Roles whose generation reads _spine_device_names/_spine_interfaces: "leaf"
+# and "tor" cable to the pod's spines, and "access_leaf" opens a second,
+# underlay-less overlay EVPN session straight to them. An l2-leaf-only rack
+# touches neither, so spine info it cannot derive is genuinely harmless there
+# and only there.
+_SPINE_DEPENDENT_ROLES: frozenset[str] = frozenset({"leaf", "tor", "access_leaf"})
+
 # Which fabric_templates roles a pod's deployment_type knows how to cable.
 #
 # - "tor" cables to the pod spines: directly (tor deployment, cumulative
@@ -86,6 +93,10 @@ class RackMixin:
         role_filter: str | None = None,
         interface_role: str = "downlink",
     ) -> list[dict]:
+        """Implemented by RackGenerator; declared here for static type checking."""
+        raise NotImplementedError
+
+    def _present_roles(self) -> set[str]:
         """Implemented by RackGenerator; declared here for static type checking."""
         raise NotImplementedError
 
@@ -264,10 +275,23 @@ class RackMixin:
         self._is_ipv6 = underlay_is_ipv6(dc.get("underlay_protocol", "ipv6"))
 
         self._spine_role: Literal["spine", "border-spine"] = spine_slot_role(pod.get("fabric_templates", []))
+        self._spine_device_names: list[str] = []
+        self._spine_interfaces: list[str] = []
         try:
             self._spine_device_names, self._spine_interfaces = self._derive_spine_info()
         except RuntimeError as exc:
-            self.logger.error(str(exc))
+            # logger.error() raises GeneratorError (FailOnErrorLogger), so this
+            # already failed the task — but it failed it for every rack, including
+            # an l2-leaf-only one, which reads neither attribute and does not need
+            # a spine to exist at all. Fail only the racks that actually cable or
+            # route to a spine; tolerate the rest at INFO with the defaults above.
+            if spine_dependent := self._present_roles() & _SPINE_DEPENDENT_ROLES:
+                self.logger.error(
+                    f"{exc} — refusing to generate role(s) {sorted(spine_dependent)}, which cannot be "
+                    f"cabled or routed to a spine that could not be derived."
+                )
+                raise
+            self.logger.info(f"{exc} — rack has no spine-dependent roles, continuing.")
 
         routing_options: RoutingOptions = RoutingOptions(design=dc)
         pod_asn_pool = pod.get("asn_pool")

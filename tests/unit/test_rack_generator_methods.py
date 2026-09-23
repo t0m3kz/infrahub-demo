@@ -313,22 +313,11 @@ class TestRackGeneratorMethods:
         # second pass should skip as duplicate
         await gen._generate_leafs(created)
 
-    @pytest.mark.asyncio
-    async def test_generate_tors_no_spine_devices_logs_error(self) -> None:
-        gen = _build_gen()
-        gen.create_devices = AsyncMock(return_value=["tor-a"])
-        gen.calculate_cabling_offsets = MagicMock(return_value=1)
-        gen.client.filters = AsyncMock(return_value=[])
-        gen._spine_device_names = []
-        # In production self.logger.error() raises GeneratorError immediately
-        # (FailOnErrorLoggerMixin), stopping before cabling is attempted. The
-        # mocked logger here doesn't raise, so _cable_and_route must be stubbed
-        # to avoid a real create_cabling retry loop against an empty spine list.
-        gen._cable_and_route = AsyncMock()
-
-        await gen._generate_tors()
-
-        gen.logger.error.assert_called()
+    # _generate_tors()' own "no spine devices" guard is gone — see
+    # TestDeriveSpineInfo.test_raises_when_every_spine_entry_has_zero_quantity
+    # for its replacement. Guarding inside _generate_tors() was both too late
+    # (_generate_leafs() runs first, unguarded) and too narrow; the check now
+    # lives in _derive_spine_info(), which runs before any device is created.
 
     @pytest.mark.asyncio
     async def test_generate_tors_uses_planned_slots_without_live_sibling_query(self) -> None:
