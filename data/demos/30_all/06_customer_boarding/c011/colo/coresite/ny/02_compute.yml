@@ -9,6 +9,12 @@
 # end to end, which is also why the cables below are declared explicitly
 # instead of being left to add_endpoint (that generator needs
 # rack.pod.deployment_type, and a TopologyColocationZone has none).
+#
+# The hosts are in the endpoints group all the same. They carry role=endpoint
+# from their template, so trigger-endpoint-generator-on-created fires add_endpoint
+# for them whatever the site, and Infrahub fails a generator run whose target is
+# outside the definition's group. In the group the run reaches the generator, which
+# recognizes the colocation rack and does nothing (generators/topology/endpoint.py).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -32,6 +38,8 @@ spec:
       platform: linux
       deployment: "NY1"
       description: "C011 CoreSite NY1 application host"
+      member_of_groups:
+        - endpoints
 
     - name: "cs-ny1-server-2"
       object_template: PowerEdge-R640_SERVER
@@ -42,6 +50,8 @@ spec:
       platform: linux
       deployment: "NY1"
       description: "C011 CoreSite NY1 application host"
+      member_of_groups:
+        - endpoints
 
 ---
 # Both NICs of each host land on the single cage switch: NIC-level redundancy
@@ -101,30 +111,6 @@ spec:
           data:
             device: "CS-NY1-SW1"
             name: "Ethernet1/1/4"
-
----
-# C011's VLAN segment surfaces on the cage switch ports the hosts are cabled
-# to, through interface_capabilities — the same ManagedGenericInterfaces
-# mechanism the VXLAN segment generator uses in the DCs
-# (generators/topology/segment.py's _assign_segment_to_dc_interfaces). Hand-
-# written here because ManagedVlanSegment has no generator.
-#
-# Upserted by its uniqueness constraint (owner + environment + customer_name),
-# so this extends the segment created in
-# ../../../../../07_applications/c011/00_segment.yml rather than a second one.
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: ManagedVlanSegment
-  data:
-    - owner: "C011"
-      environment: "p"
-      customer_name: "nordix-prod"
-      interface_capabilities:
-        - ["CS-NY1-SW1", "Ethernet1/1/1"]
-        - ["CS-NY1-SW1", "Ethernet1/1/2"]
-        - ["CS-NY1-SW1", "Ethernet1/1/3"]
-        - ["CS-NY1-SW1", "Ethernet1/1/4"]
 
 ---
 # edge-analytics instances, one of each component per host.

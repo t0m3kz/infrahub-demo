@@ -7,10 +7,16 @@
 # (C011's cage) and VA1 (C012's cage). NY2/VA2/SV1 stay location-only until
 # something is installed in them.
 #
-# These racks deliberately carry no rack_type/fabric_templates and no
-# topologies_rack membership: LocationRack.pod here is a colocation zone, not
-# a TopologyPod, so the rack generator has nothing to build (it bails out on
-# the missing deployment_type — see generators/topology/rack.py's generate()).
+# These racks deliberately carry no rack_type/fabric_templates: LocationRack.pod
+# here is a colocation zone, not a TopologyPod, so the rack generator has nothing
+# to build (it bails out on the missing deployment_type — see
+# generators/topology/rack.py's generate()).
+#
+# topologies_rack membership is still required. trigger-rack-generator-on-created
+# (data/events/99_actions.yml) fires add_rack for every LocationRack created, and
+# Infrahub rejects a generator run whose target is outside the definition's group
+# ("Target <id> is not part of the group <id>") — a non-member colocation rack
+# turns into a FAILED task on every load instead of a no-op run.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -34,6 +40,7 @@ spec:
                   index: 1
                   row_index: 1
                   pod: NY1
+                  member_of_groups: [topologies_rack]
 
     - name: VA1
       shortname: va1
@@ -53,3 +60,4 @@ spec:
                   index: 1
                   row_index: 1
                   pod: VA1
+                  member_of_groups: [topologies_rack]

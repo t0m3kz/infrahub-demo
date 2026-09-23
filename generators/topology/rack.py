@@ -555,10 +555,27 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         shape = "direct node data" if "name" in data and isinstance(data.get("name"), dict) else "query result"
         self.logger.info(f"Processing {shape}")
 
+        # LocationRack.pod accepts any TopologyRackHosting peer, not just TopologyPod
+        # (e.g. a colocation rack's pod is a TopologyColocationZone). Those don't carry
+        # DC-fabric fields like deployment_type — nothing for this generator to build.
+        # Checked before anything reads pod["id"]: rack.gql's PodFields fragment is on
+        # TopologyPod, so a colocation zone comes back as an empty pod dict and every
+        # later access raises. Every LocationRack reaches this generator, since
+        # trigger-rack-generator-on-created (data/events/99_actions.yml) fires on the
+        # node kind and cannot filter on which topology the rack hangs off.
+        pod = self.data.get("pod") or {}
+        if "deployment_type" not in pod:
+            self.logger.info(
+                "Rack %s: parent %s is not a DC-fabric pod, nothing to generate",
+                self.data["name"],
+                pod.get("id"),
+            )
+            return
+
         # Wait for an in-flight add_pod/pod_rack_cascade on our pod before reading
         # pod-level data (spine devices, ASN/loopback pools) — avoid partial data.
         for parent_generator in ("add_pod", "pod_rack_cascade"):
-            refreshed = await self.wait_for_parent_generator_and_refetch(parent_generator, self.data["pod"]["id"])
+            refreshed = await self.wait_for_parent_generator_and_refetch(parent_generator, pod["id"])
             if refreshed is not None:
                 data = refreshed
                 try:
@@ -568,16 +585,6 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
                     return
 
         pod = self.data["pod"]
-        if "deployment_type" not in pod:
-            # LocationRack.pod accepts any TopologyRackHosting peer, not just TopologyPod
-            # (e.g. a colocation rack's pod is a TopologyColocationZone). Those don't carry
-            # DC-fabric fields like deployment_type — nothing for this generator to build.
-            self.logger.info(
-                "Rack %s: parent %s is not a DC-fabric pod, nothing to generate",
-                self.data["name"],
-                pod.get("id"),
-            )
-            return
         spine_names = [device["name"] for device in pod.get("devices", [])]
         if spine_names and not await self._spine_underlay_ready(spine_names):
             self.logger.info(

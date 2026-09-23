@@ -28,6 +28,8 @@ spec:
       platform: linux
       deployment: "MCR-AMS1"
       description: "C013 Megaport AMS1 application host"
+      member_of_groups:
+        - endpoints
 
     - name: "mcr-ams1-server-2"
       object_template: PowerEdge-R640_SERVER
@@ -38,6 +40,8 @@ spec:
       platform: linux
       deployment: "MCR-AMS1"
       description: "C013 Megaport AMS1 application host"
+      member_of_groups:
+        - endpoints
 
 ---
 apiVersion: infrahub.app/v1
@@ -92,21 +96,6 @@ spec:
           data:
             device: "MCR-AMS1-SW1"
             name: "Ethernet1/1/4"
-
----
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: ManagedVlanSegment
-  data:
-    - owner: "C013"
-      environment: "p"
-      customer_name: "nordix-prod"
-      interface_capabilities:
-        - ["MCR-AMS1-SW1", "Ethernet1/1/1"]
-        - ["MCR-AMS1-SW1", "Ethernet1/1/2"]
-        - ["MCR-AMS1-SW1", "Ethernet1/1/3"]
-        - ["MCR-AMS1-SW1", "Ethernet1/1/4"]
 
 ---
 # fraud-detection instances, one of each component per host.
