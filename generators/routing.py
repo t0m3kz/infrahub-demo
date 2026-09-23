@@ -302,7 +302,17 @@ class RoutingMixin:
         # PHASE 2: BUILD ROUTING PLAN (pure helper, no DB access)
         # ================================================================
 
-        planner = RoutingPlanner(deployment_id=self.deployment_id, logger=self.logger)
+        # strict=True: refuse to skip a device out of routing. The planner's four
+        # "no router-id / no loopback IP" branches otherwise warn and continue,
+        # leaving a device created, cabled and addressed but with no BGP or OSPF
+        # process — the DC12 shape: indistinguishable from a healthy device
+        # unless you count processes, and the task still reports success. Strict
+        # mode was already implemented and unit-tested (tests/unit/
+        # test_routing_strict_mode.py) but no caller had ever opted in, so every
+        # production run took the tolerant path. A full 30_all load hits none of
+        # the four branches, so this changes no current outcome — it only stops
+        # the next regression from being invisible.
+        planner = RoutingPlanner(deployment_id=self.deployment_id, logger=self.logger, strict=True)
 
         evpn_af_id = await self._ensure_evpn_af_node()
 
