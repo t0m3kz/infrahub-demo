@@ -1,0 +1,67 @@
+fragment ComponentGraph on AppComponent {
+  slug {
+    value
+  }
+  component_type {
+    value
+  }
+  network_segment {
+    node {
+      __typename
+      ... on ManagedNetworkSegment {
+        name {
+          value
+        }
+      }
+    }
+  }
+  instances {
+    edges {
+      node {
+        __typename
+        ... on DcimVirtualDevice {
+          name {
+            value
+          }
+          hosting_device {
+            node {
+              name {
+                value
+              }
+              role {
+                value
+              }
+            }
+          }
+        }
+        ... on CloudInstance {
+          name {
+            value
+          }
+        }
+      }
+    }
+  }
+}
+
+query GetApplicationGraph {
+  AppApplication {
+    edges {
+      node {
+        name {
+          value
+        }
+        criticality {
+          value
+        }
+        children {
+          edges {
+            node {
+              ...ComponentGraph
+            }
+          }
+        }
+      }
+    }
+  }
+}

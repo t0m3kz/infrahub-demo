@@ -1,0 +1,38 @@
+---
+# Office footprint for C003 (Vaultex), mirroring c001/office/01_deployment.yml.
+#
+# C003 already has an AWS eu-central-1 footprint (../cloud/aws/eu-central-1/)
+# and a TGW attachment on the shared route table
+# (../../../08_interconnects/02_cloud_hub/04_attachments.yml). Giving it a branch
+# office is what makes the end-to-end path exist: office -> SD-WAN overlay ->
+# Equinix FR2 gateway -> cross-connect -> transit VIF -> TGW -> its own VPC.
+# Without an on-prem spoke the cloud hub has nothing upstream of it and the
+# blast radius of an FR2 change stops at the cage.
+#
+# name is computed ({parent_owner_org_id}-{environment}) — read-only.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationFacility
+  data:
+    - name: "Munich HQ"
+      shortname: "muc-hq"
+      parent: "muc"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyOfficeCustomer
+  data:
+    - owner: "C003"
+      parent: "Campus and Office"
+      children:
+        - kind: TopologyCustomerOffice
+          data:
+            environment: "p"
+            locations:
+              - "muc-hq"
+            member_of_groups:
+              - customer_deployments_office

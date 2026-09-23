@@ -1,0 +1,27 @@
+---
+# The cloud-side landing of the Equinix FR2 cross-connect.
+#
+# `physical_devices` points back at the cage router and `location` at the FR2
+# facility, so the Direct Connect is anchored to the same physical place as
+# XC-EQXFR2-AWS-EUC1 (../01_colo_onramp/03_physical_circuits.yml) rather than
+# floating in the region.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudDirectConnect
+  data:
+    - name: "dx-eqx-fr2-euc1"
+      cloud_id: "dxcon-fh7a2b3c"
+      description: "10G Direct Connect from Equinix FR2 into AWS eu-central-1"
+      status: active
+      connection_type: dedicated
+      # Text on CloudDirectConnect ("10Gbps"), unlike the Number bandwidth on
+      # TopologyCircuit which is in Mbps.
+      bandwidth: "10Gbps"
+      vlan_id: 1000
+      region: "eu-central-1"
+      account: "net-hub-aws-prod"
+      # LocationFacility's hfid is shortname, not name — "fr2", not "FR2".
+      location: "fr2"
+      physical_devices:
+        - "EQX-FR2-GW1"

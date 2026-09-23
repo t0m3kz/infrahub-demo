@@ -8,7 +8,7 @@ query virtual_circuit_data($name: String!) {
         transport_mode { value }
         vni { value }
         tunnel_id { value }
-        interfaces {
+        interface_capabilities {
           edges {
             node {
               id

@@ -336,6 +336,7 @@ class ManagedAAAServer(CoreNode):
 
 class CloudAccount(CloudResource, CoreArtifactTarget):
     account_id: StringOptional
+    account_role: DropdownOptional
     environment: DropdownOptional
     owner: RelationshipAttribute[OrganizationEntity]
     provider: RelationshipAttribute[OrganizationProvider]
@@ -454,7 +455,7 @@ class ManagedCloudProxy(ManagedSaasService, ManagedInlineService, ManagedProxySe
     region: StringOptional
 
 
-class TopologyCloudRegion(TopologyDeployment):
+class TopologyCloudRegion(TopologyDeployment, TopologyConnectableLocation):
     status: Dropdown
     direct_connects: RelationshipManager[CloudDirectConnect]
     location: RelationshipAttribute[LocationMetro]
@@ -496,7 +497,11 @@ class TopologyColocationMetro(CoreArtifactTarget, TopologyDeployment, TopologySe
 
 
 class TopologyColocationZone(
-    TopologyDeployment, TopologyPhysicalDeployment, TopologyRackHosting, TopologyDeviceHosting
+    TopologyDeployment,
+    TopologyPhysicalDeployment,
+    TopologyRackHosting,
+    TopologyDeviceHosting,
+    TopologyConnectableLocation,
 ):
     deployment_type: Dropdown
 
@@ -1433,6 +1438,24 @@ class CloudTransitGateway(CloudResource):
     region: RelationshipAttribute[TopologyCloudRegion]
 
 
+class CloudTransitGatewayAttachment(CloudResource):
+    attachment_type: Dropdown
+    associated_route_table: RelationshipAttribute[CloudTransitGatewayRouteTable]
+    hybrid_endpoint: RelationshipAttribute[CloudHybridAttachment]
+    network_segments: RelationshipManager[CloudNetworkSegment]
+    owner_account: RelationshipAttribute[CloudAccount]
+    propagates_to_route_tables: RelationshipManager[CloudTransitGatewayRouteTable]
+    transit_gateway: RelationshipAttribute[CloudTransitGateway]
+    virtual_network: RelationshipAttribute[CloudVirtualNetwork]
+
+
+class CloudTransitGatewayRouteTable(CloudResource):
+    is_default: Boolean
+    associated_attachments: RelationshipManager[CloudTransitGatewayAttachment]
+    propagated_attachments: RelationshipManager[CloudTransitGatewayAttachment]
+    transit_gateway: RelationshipAttribute[CloudTransitGateway]
+
+
 class ProxyURLCategory(CoreNode):
     category_type: Dropdown
     description: StringOptional
@@ -1470,14 +1493,13 @@ class CloudVPNGateway(CloudResource, CloudHybridAttachment):
     virtual_network: RelationshipAttribute[CloudVirtualNetwork]
 
 
-class TopologyVirtualCircuit(TopologyCircuit, ManagedGeneric):
+class TopologyVirtualCircuit(TopologyCircuit, ManagedGeneric, ManagedGenericInterfaces):
     cloud_resource_id: StringOptional
     encryption: Boolean
     link_type: Dropdown
     transport_mode: DropdownOptional
     tunnel_id: IntegerOptional
     vni: IntegerOptional
-    interfaces: RelationshipManager[DcimInterface]
     physical_circuits: RelationshipManager[TopologyPhysicalCircuit]
 
 

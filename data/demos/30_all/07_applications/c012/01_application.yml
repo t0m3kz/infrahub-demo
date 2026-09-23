@@ -20,6 +20,9 @@ spec:
           - name: payment-ui
             component_type: frontend
             network_segment: c012-nordix-prod-p
+            instances:
+              - c012-payment-ui-va1-1
+              - c012-payment-ui-va1-2
             service_ports:
               data:
                 - port: 443
@@ -30,6 +33,9 @@ spec:
           - name: payment-engine
             component_type: backend
             network_segment: c012-nordix-prod-p
+            instances:
+              - c012-payment-engine-va1-1
+              - c012-payment-engine-va1-2
             service_ports:
               data:
                 - port: 8443

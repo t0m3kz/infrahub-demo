@@ -1,0 +1,111 @@
+query GetInterconnectInventory {
+  TopologyPhysicalCircuit {
+    edges {
+      node {
+        circuit_id {
+          value
+        }
+        circuit_type {
+          value
+        }
+        status {
+          value
+        }
+        provider {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        owner {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        locations {
+          edges {
+            node {
+              name {
+                value
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  TopologyVirtualCircuit {
+    edges {
+      node {
+        name {
+          value
+        }
+        link_type {
+          value
+        }
+        transport_mode {
+          value
+        }
+        owner {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        locations {
+          edges {
+            node {
+              name {
+                value
+              }
+            }
+          }
+        }
+        physical_circuits {
+          edges {
+            node {
+              circuit_id {
+                value
+              }
+            }
+          }
+        }
+        interface_capabilities {
+          edges {
+            node {
+              name {
+                value
+              }
+              device {
+                node {
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+        cloud_endpoints {
+          edges {
+            node {
+              __typename
+              ... on CloudVirtualInterface {
+                name {
+                  value
+                }
+                vif_type {
+                  value
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

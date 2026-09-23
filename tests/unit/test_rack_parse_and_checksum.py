@@ -229,6 +229,25 @@ class TestDeriveSpineInfo:
         with pytest.raises(RuntimeError, match="Cannot derive spine info"):
             gen._derive_spine_info()
 
+    def test_raises_when_every_spine_entry_has_zero_quantity(self) -> None:
+        """A zero-quantity spine entry is the same case as no entry at all.
+
+        spine_slot_templates -> templates_by_role filters to quantity > 0, so
+        _derive_spine_info never has to handle an empty device_names list of its
+        own: it can only get there via the no-entries branch, which already
+        raises. Pinned because a guard against empty device_names downstream
+        would be unreachable code.
+        """
+        gen = _build_rack_generator(deployment_type="tor", rack_type="tor")
+        gen.fabric_name = "dc1"
+        gen.data["pod"]["index"] = 1
+        gen.data["pod"]["parent"]["index"] = 1
+        gen.data["pod"]["parent"]["naming_convention"] = "standard"
+        gen.data["pod"]["fabric_templates"][0]["quantity"] = 0
+
+        with pytest.raises(RuntimeError, match="no spine/border-spine fabric_templates entries"):
+            gen._derive_spine_info()
+
     def test_template_all_interfaces_returned(self) -> None:
         """All template interfaces are returned (GQL pre-filters, no role check needed)."""
         gen = _build_rack_generator(deployment_type="tor", rack_type="tor")
@@ -354,6 +373,43 @@ class TestGenerateRackGating:
 
         gen.logger.error.assert_called_once()
         assert "Generation failed due to boom" in gen.logger.error.call_args.args[0]
+
+    @pytest.mark.asyncio
+    async def test_colocation_rack_stops_before_reading_pod_id(self) -> None:
+        """A rack whose `pod` is not a TopologyPod must no-op, not raise.
+
+        LocationRack.pod accepts any TopologyRackHosting peer, so a colocation
+        rack's pod is a TopologyColocationZone. rack.gql's PodFields fragment is
+        on TopologyPod, so such a pod arrives as an empty dict — the guard has to
+        fire before wait_for_parent_generator_and_refetch(…, pod["id"]) reads it.
+        Every LocationRack lands here because trigger-rack-generator-on-created
+        fires on the node kind and cannot filter on the parent topology.
+        """
+        gen = _build_rack_generator(deployment_type="mixed", rack_type="network")
+        gen.data["pod"] = {}
+        gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
+        gen._prepare_generation_context = MagicMock()
+
+        with patch("generators.topology.rack.parse_rack_data", return_value=gen.data):
+            await gen.generate({"any": "shape"})
+
+        gen.wait_for_parent_generator_and_refetch.assert_not_awaited()
+        gen._prepare_generation_context.assert_not_called()
+        gen.logger.error.assert_not_called()
+        assert any("not a DC-fabric pod" in str(call.args[0]) for call in gen.logger.info.call_args_list)
+
+    @pytest.mark.asyncio
+    async def test_missing_pod_key_stops_without_error(self) -> None:
+        """Same guard covers a pod key that is absent or explicitly null."""
+        gen = _build_rack_generator(deployment_type="mixed", rack_type="network")
+        gen.data["pod"] = None  # type: ignore[typeddict-item]
+        gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
+
+        with patch("generators.topology.rack.parse_rack_data", return_value=gen.data):
+            await gen.generate({"any": "shape"})
+
+        gen.wait_for_parent_generator_and_refetch.assert_not_awaited()
+        gen.logger.error.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_endpoint_only_rack_skips_before_role_check(self) -> None:

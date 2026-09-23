@@ -1,0 +1,20 @@
+---
+# The network account that owns the hub.
+#
+# It is deliberately *not* a customer account: `owner` is Internal (P028) and
+# `account_role: network`. Everything else in the graph is owned by an
+# OrganizationCustomer, so this is the one account whose failure is shared-fate
+# across tenants — which is exactly why the change-risk check treats
+# `account_role: network` as an escalation signal rather than just a label.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudAccount
+  data:
+    - name: "net-hub-aws-prod"
+      account_id: "990011223344"
+      description: "Shared AWS network account holding the 30_all Transit Gateway hub"
+      environment: "p"
+      account_role: network
+      provider: "P004"
+      owner: "P028"

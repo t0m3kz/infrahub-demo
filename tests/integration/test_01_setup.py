@@ -88,13 +88,23 @@ class TestSetup(TestInfrahubDockerWithClient):
 
         Providers are loaded first, sequentially: hundreds of device/template
         objects in data/bootstrap/09_*/10_* reference a provider (e.g. owner:
-        "P027") by HFID. Loading the whole directory at concurrent_execution=30
-        races those lookups against the provider's own creation in the same
-        run — some referencing objects get dispatched before the provider node
-        they depend on is visible yet, failing with "Unable to find the node
-        <id> / OrganizationEntity in the database." Loading providers alone
-        first (no concurrency) guarantees they're committed before anything
-        concurrently references them.
+        "P027") by HFID. Loading the whole directory at high concurrency races
+        those lookups against the provider's own creation in the same run —
+        some referencing objects get dispatched before the provider node they
+        depend on is visible yet, failing with "Unable to find the node <id> /
+        OrganizationEntity in the database." Loading providers alone first (no
+        concurrency) guarantees they're committed before anything concurrently
+        references them.
+
+        The rest of the directory then loads at the default concurrency, not a
+        raised one. The same visibility race exists one level deeper and
+        ordering cannot fix it: every 09_*/10_* template device carries its
+        interfaces as nested objects, so each group's children reference a
+        parent created moments earlier in the same run. Raising concurrency to
+        30 put 30 such groups in flight at once and was observed to fail with
+        "Unable to find the node <id> / TemplateDcimDevice in the database"
+        partway through the Edgecore SONiC spine templates — intermittently,
+        which is worse than slowly.
         """
         logging.info("Starting test: test_04_load_bootstrap_data")
 
@@ -112,7 +122,6 @@ class TestSetup(TestInfrahubDockerWithClient):
         load_data = self.execute_command(
             "infrahubctl object load data/bootstrap/",
             address=client_main.config.address,
-            concurrent_execution=30,
             pagination_size=200,
         )
 

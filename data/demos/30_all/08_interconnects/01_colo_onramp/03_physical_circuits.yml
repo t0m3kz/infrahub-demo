@@ -1,0 +1,95 @@
+---
+# The shared underlay of the colo on-ramp.
+#
+# Every circuit here is deliberately *unowned*: no `owner`, because these are
+# shared facilities carrying every tenant. That is the underlay half of the
+# connectable-set split — the per-customer overlays that ride these circuits
+# live in ../03_virtual_circuits/ and each carry their own `owner`.
+#
+# Two circuit shapes, and the two connectable kinds the earlier schema commit
+# added exist precisely so both can be expressed:
+#
+#   dark_fiber    DC <-> colocation cage   (TopologyDataCenter <-> ColocationZone)
+#   cross_connect cage <-> cloud region    (ColocationZone <-> CloudRegion)
+#
+# Without the second shape the traversal reaches the cage and stops, which is
+# the DC-boundary blind spot this whole leg exists to close.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyPhysicalCircuit
+  data:
+    # --- DC <-> cage dark fibre (addressing in 02_addressing.yml) -------------
+    - circuit_id: "DF-DC10-EQXFR2"
+      name: "DF-DC10-EQXFR2"
+      circuit_type: dark_fiber
+      status: active
+      bandwidth: 100000
+      provider: "P016"
+      description: "DC10 border leaf to Equinix FR2 cage, 100G dark fibre"
+      locations:
+        - "DC10"
+        - "FR2"
+      customer_interfaces:
+        - ["bl-dc101101", "Ethernet1/35"]
+      provider_interfaces:
+        - ["EQX-FR2-GW1", "Ethernet1/10"]
+
+    - circuit_id: "DF-DC11-EQXFR2"
+      name: "DF-DC11-EQXFR2"
+      circuit_type: dark_fiber
+      status: active
+      bandwidth: 100000
+      provider: "P016"
+      description: "DC11 border leaf to Equinix FR2 cage, 100G dark fibre"
+      locations:
+        - "DC11"
+        - "FR2"
+      customer_interfaces:
+        - ["bl-dc1111101", "Ethernet1/35"]
+      provider_interfaces:
+        - ["EQX-FR2-GW1", "Ethernet1/11"]
+
+    - circuit_id: "DF-DC12-EQXPA4"
+      name: "DF-DC12-EQXPA4"
+      circuit_type: dark_fiber
+      status: active
+      bandwidth: 100000
+      provider: "P016"
+      description: "DC12 border leaf to Equinix PA4 cage, 100G dark fibre"
+      locations:
+        - "DC12"
+        - "PA4"
+      customer_interfaces:
+        - ["bl-dc1212101", "Ethernet1/35"]
+      provider_interfaces:
+        - ["EQX-PA4-GW1", "Ethernet1/10"]
+
+    # --- cage <-> cloud region cross-connects --------------------------------
+    # The cloud end is the region, not a zone: an AZ is finer than any provider
+    # commits to for a Direct Connect or ExpressRoute hand-off.
+    - circuit_id: "XC-EQXFR2-AWS-EUC1"
+      name: "XC-EQXFR2-AWS-EUC1"
+      circuit_type: cross_connect
+      status: active
+      bandwidth: 10000
+      provider: "P016"
+      description: "Equinix FR2 cage to AWS eu-central-1, shared 10G fabric port"
+      locations:
+        - "FR2"
+        - "eu-central-1"
+      customer_interfaces:
+        - ["EQX-FR2-GW1", "Ethernet1/13"]
+
+    - circuit_id: "XC-EQXPA4-AZURE-WEU"
+      name: "XC-EQXPA4-AZURE-WEU"
+      circuit_type: cross_connect
+      status: active
+      bandwidth: 10000
+      provider: "P016"
+      description: "Equinix PA4 cage to Azure westeurope, shared 10G fabric port"
+      locations:
+        - "PA4"
+        - "westeurope"
+      customer_interfaces:
+        - ["EQX-PA4-GW1", "Ethernet1/13"]

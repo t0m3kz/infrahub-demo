@@ -70,7 +70,7 @@ class TestOfficeHubExchange:
         "typename": "TopologyVirtualCircuit",
         "id": "circ-1",
         "name": "circuit-1",
-        "interfaces": [{"id": "iface-a"}, {"id": "iface-b"}],
+        "interface_capabilities": [{"id": "iface-a"}, {"id": "iface-b"}],
         "locations": [
             {"id": "cust-1"},
             {"id": "hub-1", "namespace": {"id": "ns-internet", "name": "INTERNET"}},
@@ -100,7 +100,7 @@ class TestOfficeHubExchange:
             "typename": "TopologyVirtualCircuit",
             "id": "circ-1",
             "name": "circuit-1",
-            "interfaces": [{"id": "iface-a"}, {"id": "iface-b"}],
+            "interface_capabilities": [{"id": "iface-a"}, {"id": "iface-b"}],
             "locations": [
                 {"id": "cust-1"},
                 {"id": "other-loc", "namespace": None},

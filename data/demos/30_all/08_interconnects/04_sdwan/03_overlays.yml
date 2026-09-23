@@ -1,0 +1,94 @@
+---
+# The SD-WAN overlays themselves, plus the gateway's backhaul into the cloud hub.
+#
+# Three tenant tunnels, each from its own branch edge to its own sub-interface on
+# the shared gateway, and one unowned backhaul circuit from the gateway's trunk to
+# the AWS transit hub. That last circuit is what makes the office leg reach the
+# cloud at all: without it the traversal walks office -> gateway and stops, because
+# the gateway's onward path is a virtual circuit, not a cable.
+#
+# The tenant tunnels are `internet_backed` (they ride the DIA circuits of
+# 02_internet_underlay.yml and are encrypted); the backhaul is `physical_backed`
+# because it rides the real cross-connect out of the cage.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyVirtualCircuit
+  data:
+    - name: "C001-SDWAN-FR2"
+      link_type: sd_wan
+      transport_mode: internet_backed
+      status: active
+      bandwidth: 1000
+      encryption: true
+      tunnel_id: 1001
+      provider: "P035"
+      owner: "C001"
+      description: "Nordix Warsaw HQ SD-WAN tunnel to the FR2 gateway"
+      locations:
+        - "C001-P"
+        - "FR2"
+      physical_circuits:
+        - "INET-C001-WAW-FR2"
+      interface_capabilities:
+        - ["C001-EDGE1", "GE1"]
+        - ["EQX-FR2-SDWAN-GW1", "eth0.1001"]
+
+    - name: "C003-SDWAN-FR2"
+      link_type: sd_wan
+      transport_mode: internet_backed
+      status: active
+      bandwidth: 1000
+      encryption: true
+      tunnel_id: 1003
+      provider: "P035"
+      owner: "C003"
+      description: "Vaultex Munich HQ SD-WAN tunnel to the FR2 gateway"
+      locations:
+        - "C003-P"
+        - "FR2"
+      physical_circuits:
+        - "INET-C003-MUC-FR2"
+      interface_capabilities:
+        - ["C003-EDGE1", "GE1"]
+        - ["EQX-FR2-SDWAN-GW1", "eth0.1003"]
+
+    - name: "C015-SDWAN-FR2"
+      link_type: sd_wan
+      transport_mode: internet_backed
+      status: active
+      bandwidth: 500
+      encryption: true
+      tunnel_id: 1015
+      provider: "P035"
+      owner: "C015"
+      description: "Novantis Paris Office SD-WAN tunnel to the FR2 gateway"
+      locations:
+        - "C015-P"
+        - "FR2"
+      physical_circuits:
+        - "INET-C015-PAR-FR2"
+      interface_capabilities:
+        - ["C015-EDGE1", "GE1"]
+        - ["EQX-FR2-SDWAN-GW1", "eth0.1015"]
+
+    # Shared, therefore unowned — the same rule the physical underlay follows.
+    # It terminates on the gateway's trunk (eth0, parent of all three tunnel
+    # sub-interfaces) and on the cage router's fabric port, so every tenant tunnel
+    # depends on it transitively while no tenant owns it.
+    - name: "VC-SDWAN-FR2-AWS-EUC1"
+      link_type: direct_connect_aws
+      transport_mode: physical_backed
+      status: active
+      bandwidth: 1000
+      encryption: false
+      provider: "P004"
+      description: "Shared SD-WAN gateway backhaul from FR2 into the AWS transit hub"
+      locations:
+        - "FR2"
+        - "eu-central-1"
+      physical_circuits:
+        - "XC-EQXFR2-AWS-EUC1"
+      interface_capabilities:
+        - ["EQX-FR2-SDWAN-GW1", "eth0"]
+        - ["EQX-FR2-GW1", "Ethernet1/13"]

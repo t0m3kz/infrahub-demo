@@ -335,9 +335,15 @@ nodes:
     parent: TopologyOfficeCustomer
     children: ""
     include_in_menu: false
+    # name__value, like CustomerDC's and CustomerColocation's, rather than the
+    # [parent__name__value, environment__value] pair this used to declare. The
+    # pair identifies the same row, but a relationship whose peer is the
+    # TopologyDeployment generic resolves references against the *generic's* hfid
+    # — a single name__value — so a two-element hfid made this the one deployment
+    # kind that could not be referenced by an object file at all (a device could
+    # say `deployment: "FR2"` but not `deployment: "C001-P"`).
     human_friendly_id:
-      - parent__name__value
-      - environment__value
+      - name__value
     order_by:
       - name__value
     display_label: "{{ name__value }}"
@@ -351,7 +357,7 @@ nodes:
           kind: Jinja2
           jinja2_template: "{{ parent__name__value|upper }}-{{ environment__value|upper }}"  # yamllint disable-line rule:line-length
         read_only: true
-        optional: true
+        optional: false
       - name: environment
         kind: Dropdown
         description: "Environment this customer deployment footprint represents"

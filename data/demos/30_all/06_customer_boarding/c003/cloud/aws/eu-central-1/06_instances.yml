@@ -1,0 +1,60 @@
+---
+# Compute instances backing C003's custody-api components.
+#
+# CloudInstance implements AppInstance, exactly like DcimVirtualDevice does
+# on-prem, so AppComponent.instances is the same relationship on both sides
+# of the hybrid estate (../../../../../07_applications/c003/01_application.yml).
+# The cloud side has no hosting_device/cable to walk — network_segment is
+# where the graph continues, out through the VPC to the transit gateway.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudInstance
+  data:
+    - name: "c003-api-frontend-euc1-1"
+      cloud_id: "i-0c003frontend001"
+      status: active
+      instance_type: "m6i.large"
+      os_type: linux
+      cpu_count: 2
+      memory_gb: 8
+      private_ip: "10.30.1.11/24"
+      availability_zone: ["eu-central-1", "eu-central-1a"]
+      account: "vaultex-aws-prod"
+      network_segment: "c003-vaultex-subnet-prod-p"
+
+    - name: "c003-api-frontend-euc1-2"
+      cloud_id: "i-0c003frontend002"
+      status: active
+      instance_type: "m6i.large"
+      os_type: linux
+      cpu_count: 2
+      memory_gb: 8
+      private_ip: "10.30.1.12/24"
+      availability_zone: ["eu-central-1", "eu-central-1a"]
+      account: "vaultex-aws-prod"
+      network_segment: "c003-vaultex-subnet-prod-p"
+
+    - name: "c003-api-backend-euc1-1"
+      cloud_id: "i-0c003backend001"
+      status: active
+      instance_type: "m6i.xlarge"
+      os_type: linux
+      cpu_count: 4
+      memory_gb: 16
+      private_ip: "10.30.1.21/24"
+      availability_zone: ["eu-central-1", "eu-central-1a"]
+      account: "vaultex-aws-prod"
+      network_segment: "c003-vaultex-subnet-prod-p"
+
+    - name: "c003-api-backend-euc1-2"
+      cloud_id: "i-0c003backend002"
+      status: active
+      instance_type: "m6i.xlarge"
+      os_type: linux
+      cpu_count: 4
+      memory_gb: 16
+      private_ip: "10.30.1.22/24"
+      availability_zone: ["eu-central-1", "eu-central-1a"]
+      account: "vaultex-aws-prod"
+      network_segment: "c003-vaultex-subnet-prod-p"

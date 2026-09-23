@@ -274,14 +274,22 @@ def test_integration_routing(
 
 
 @_task(optional=["basetemp", "server_port"])
-def test_integration_apps(
+def test_integration_all_demo(
     context: Context, basetemp: str = "~/.pytest-tmp/infrahub-demo", server_port: int = 8100
 ) -> None:
-    """Run the application catalogue acceptance workflow."""
+    """Run the 30_all demo suite: staged load, then every layer it produces.
+
+    test_59 builds the branch the rest assert against, so the modules have to
+    run together and in order: load and generator dispatch (59), the app
+    catalogue enforcement workflow (60), compute and the application graph
+    (61), interconnects and tenant services (62), change risk (63).
+    """
     _run_integration_suite(
         context,
         tests="tests/integration/test_01_setup.py tests/integration/test_02_repository.py "
-        "tests/integration/test_60_app_catalogue.py",
+        "tests/integration/test_59_all_demo_load.py tests/integration/test_60_app_catalogue.py "
+        "tests/integration/test_61_all_demo_compute.py tests/integration/test_62_all_demo_interconnects.py "
+        "tests/integration/test_63_all_demo_change_risk.py",
         basetemp=basetemp,
         server_port=server_port,
     )
@@ -397,7 +405,7 @@ dev_ns.add_task(cast(Task, test_unit), name="test-unit")
 dev_ns.add_task(cast(Task, test_integration), name="test-integration")
 dev_ns.add_task(cast(Task, test_integration_fast), name="test-integration-fast")
 dev_ns.add_task(cast(Task, test_integration_routing), name="test-integration-routing")
-dev_ns.add_task(cast(Task, test_integration_apps), name="test-integration-apps")
+dev_ns.add_task(cast(Task, test_integration_all_demo), name="test-integration-all-demo")
 dev_ns.add_task(cast(Task, release))
 dev_ns.add_task(cast(Task, upgrade))
 dev_ns.add_task(cast(Task, clean_testcontainers), name="clean-testcontainers")
@@ -421,7 +429,7 @@ ns.add_task(cast(Task, test_unit), name="test-unit")
 ns.add_task(cast(Task, test_integration), name="test-integration")
 ns.add_task(cast(Task, test_integration_fast), name="test-integration-fast")
 ns.add_task(cast(Task, test_integration_routing), name="test-integration-routing")
-ns.add_task(cast(Task, test_integration_apps), name="test-integration-apps")
+ns.add_task(cast(Task, test_integration_all_demo), name="test-integration-all-demo")
 ns.add_task(cast(Task, clean_testcontainers), name="clean-testcontainers")
 ns.add_task(cast(Task, upgrade))
 ns.add_task(cast(Task, release))

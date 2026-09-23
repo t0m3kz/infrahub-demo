@@ -1,5 +1,12 @@
 ---
 # C005 sample application bound to demo VXLAN segments.
+#
+# Each component also names its instances — the VMs from
+# ../../06_customer_boarding/c005/dc/dc10/02_instances.yml and its dc12 sibling.
+# That is the compute leg of the graph: component -> VM -> hosting server ->
+# cable -> access-leaf. Two instances per component, on hosts in different
+# rows (and, for the stretched segments, different DCs), so losing one
+# access-leaf pair degrades a component instead of taking it out.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -21,6 +28,9 @@ spec:
           - name: web-frontend
             component_type: frontend
             network_segment: c005-web-frontend-local-dc10-p
+            instances:
+              - c005-web-frontend-dc10-1
+              - c005-web-frontend-dc10-2
             service_ports:
               data:
                 - port: 443
@@ -31,6 +41,9 @@ spec:
           - name: app-backend
             component_type: backend
             network_segment: c005-app-backend-stretch-p
+            instances:
+              - c005-app-backend-dc10-1
+              - c005-app-backend-dc12-1
             service_ports:
               data:
                 - port: 8443
@@ -41,6 +54,9 @@ spec:
           - name: order-db
             component_type: database
             network_segment: c005-database-local-dc12-d
+            instances:
+              - c005-order-db-dc12-1
+              - c005-order-db-dc12-2
             service_ports:
               data:
                 - port: 5432
@@ -51,6 +67,9 @@ spec:
           - name: event-bus
             component_type: message_queue
             network_segment: c005-message-queue-stretch-p
+            instances:
+              - c005-event-bus-dc10-1
+              - c005-event-bus-dc12-1
             service_ports:
               data:
                 - port: 5672

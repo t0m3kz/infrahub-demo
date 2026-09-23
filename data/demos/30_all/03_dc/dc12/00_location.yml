@@ -20,7 +20,9 @@ spec:
                   shortname: "mil-1-s-1"
                   parent: mil-1
                   rows: 2
-                  racks_per_row: 1
+                  # One network rack (leaf + access-leaf pair) and one compute
+                  # rack (application servers) per row — see 01_topology.yml.
+                  racks_per_row: 2
                 - suite_name: "Suite-2"
                   index: 2
                   shortname: "mil-1-s-2"

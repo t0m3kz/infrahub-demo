@@ -34,6 +34,7 @@ Each scenario creates infrastructure incrementally and merges to main:
 - `test_30_add_rack.py` - **Scenario 3:** Add new rack to existing pod
 - `test_40_add_pod.py` - **Scenario 4:** Add new pod to existing DC
 - `test_50_endpoint_connectivity.py` - **Scenario 5:** Add endpoint servers across deployment types
+- `test_59` - `test_63` - **Scenario 6:** The `30_all` demo, end to end (see [The 30_all Suite](#the-30_all-suite)). This one deviates from the pattern above: it loads in stages, shares one branch across five modules, and does not merge to main.
 
 ### Shared Utilities
 
@@ -84,8 +85,8 @@ The repository also provides focused Invoke profiles. They reuse one Docker stac
 # Setup and repository prerequisites
 uv run invoke test-integration-fast
 
-# Application catalogue acceptance workflow
-uv run invoke test-integration-apps
+# The 30_all demo, end to end
+uv run invoke test-integration-all-demo
 
 # Automatic DC/POD/rack routing regression
 uv run invoke test-integration-routing
@@ -94,7 +95,21 @@ uv run invoke test-integration-routing
 uv run invoke test-integration
 ```
 
-The fast profile intentionally stops after setup and repository synchronization. The application and routing profiles add one focused acceptance workflow each. The full profile runs the complete scenario chain and is the right choice for release-level validation.
+The fast profile intentionally stops after setup and repository synchronization. The routing profile adds one focused acceptance workflow. The full profile runs the complete scenario chain and is the right choice for release-level validation.
+
+### The 30_all Suite
+
+`test_59` through `test_63` are one scenario split across five modules. They share a single branch (`ALL_DEMO_BRANCH`) and run in dependency order:
+
+| Module | Covers |
+| --- | --- |
+| `test_59_all_demo_load.py` | The staged load, no failed tasks, every trigger-dispatched generator, declared-object inventory |
+| `test_60_app_catalogue.py` | Deployment-request materialization, proxy egress rule, inter-segment firewall rule |
+| `test_61_all_demo_compute.py` | The three fabrics, their routing, host cabling, and the application graph down to hosting devices |
+| `test_62_all_demo_interconnects.py` | Physical and virtual circuits, cloud terminations, firewall contexts, segment legs |
+| `test_63_all_demo_change_risk.py` | `CheckChangeRisk` over the branch diff: traversal resolves and reaches a verdict |
+
+Only `test_59` loads data, and the load is deliberately staged — later stages reference objects that only exist once an earlier stage's generators have finished. `ALL_DEMO_LOAD_STAGES` in `test_constants.py` documents which stage needs what. Running `test_60`-`test_63` on their own will skip: their session-scoped dependencies are unmet without `test_59`.
 
 ### Run Setup Only
 

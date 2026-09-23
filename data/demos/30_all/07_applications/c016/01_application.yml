@@ -21,6 +21,9 @@ spec:
           - name: billing-frontend
             component_type: frontend
             network_segment: c016-prolexar-subnet-prod-p
+            instances:
+              - c016-billing-frontend-weu-1
+              - c016-billing-frontend-weu-2
             service_ports:
               data:
                 - port: 443
@@ -31,6 +34,9 @@ spec:
           - name: billing-worker
             component_type: worker
             network_segment: c016-prolexar-subnet-prod-p
+            instances:
+              - c016-billing-worker-weu-1
+              - c016-billing-worker-weu-2
             service_ports:
               data:
                 - port: 9000

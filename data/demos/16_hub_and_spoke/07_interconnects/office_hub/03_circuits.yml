@@ -55,7 +55,7 @@ spec:
             customer_name: "sdwan-hub"
             parent: "eu-central-1"
             namespace: "INTERNET"
-      interfaces:
+      interface_capabilities:
         - ["C001-EDGE1", "GE1"]
         - ["SDWAN-HUB-GW1", "eth1.1001"]
       physical_circuits:
@@ -88,7 +88,7 @@ spec:
             customer_name: "sdwan-hub"
             parent: "eu-central-1"
             namespace: "INTERNET"
-      interfaces:
+      interface_capabilities:
         - ["C002-EDGE1", "GE1"]
         - ["SDWAN-HUB-GW1", "eth1.1002"]
       physical_circuits:
