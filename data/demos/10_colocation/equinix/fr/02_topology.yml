@@ -28,6 +28,12 @@ spec:
           # build the ManagedFirewallHA domain and the sync cable between the
           # two members. Not Panorama-managed — the metro declares no
           # controllers, so they land in the plain `firewalls` group.
+          #
+          # Declaring both roles on one metro is also what makes this the only
+          # metro here that gets cabled: the generator wires the firewall pair to
+          # the edge pair on Ethernet1/[15-16] (role `firewall`) index-paired,
+          # eg-fr01 to fw-fr01 only. Two links per couple, so five cables in all
+          # once the HA sync link is counted.
           - name: FR
             location: ["fra"]
             member_of_groups:

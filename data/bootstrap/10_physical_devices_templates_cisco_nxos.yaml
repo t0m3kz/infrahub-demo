@@ -366,9 +366,21 @@ spec:
             name: Ethernet1/[9-12]
             role: dci
             interface_type: 100gbase-x-qsfp28
-          - template_name: N9K-C9316D-GX_EDGE_Ethernet1/[13-16]
-            name: Ethernet1/[13-16]
+          - template_name: N9K-C9316D-GX_EDGE_Ethernet1/[13-14]
+            name: Ethernet1/[13-14]
             role: uplink
+            interface_type: 100gbase-x-qsfp28
+          # Carved out of what used to be four uplinks (Ethernet1/[13-16]), so
+          # add_colocation_metro can cable a metro's firewall pair to its edge
+          # pair the same way dc.py cables a DC's: on a dedicated `firewall`-role
+          # port block, matching N9K-C9336C-FX2_BORDER_LEAF's Ethernet1/[25-28].
+          # A 9316D has exactly 16 ports and all of them were already spoken for
+          # (8 customer + 4 dci + 4 uplink), so this had to come from somewhere;
+          # uplink is where the slack was, since the on-ramp reaches the cloud
+          # fabric over one or two of these, not four.
+          - template_name: N9K-C9316D-GX_EDGE_Ethernet1/[15-16]
+            name: Ethernet1/[15-16]
+            role: firewall
             interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9316D-GX_EDGE_mgmt0
             name: mgmt0
