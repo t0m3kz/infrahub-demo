@@ -1,5 +1,43 @@
 # Changelog
 
+## v0.4.0 (2026-09-24)
+
+### Feat
+
+- **colocation**: cable a metro's service pair to its on-ramp, physical only
+- **topology**: generate a colocation metro's on-ramp from templates
+- **checks**: walk the VM-to-host edge in change risk
+- **data**: model the 30_all compute layer end to end
+- **data**: 30_all interconnects over colo, cloud hub and SD-WAN
+- **data**: add Megaport, CoreSite and VeloCloud providers
+- **schema**: let shared colo cages and cloud regions terminate circuits
+- **checks**: change-risk blast radius from a branch diff
+- **schema**: cloud hub attachments, and circuits over interface capabilities
+
+### Fix
+
+- **generators**: stop HA nodes flip-flopping and mark sync ports active
+- **generators**: fail only the racks that actually need a spine
+- **generators**: turn on the routing planner's strict mode
+- **generators**: refuse to generate a rack that cannot be routed
+- **generators**: wait for the pod ASN pool before routing a rack
+- **data**: make a clean 30_all load produce no failed generator tasks
+- **data**: give the US metros their country parent
+- **checks**: make change-risk pass 1 enumerate targets, not guess
+- **queries**: narrow AppGeneric hierarchy hops in impact_exposure
+- **deps**: pin infrahub-sdk floor to 1.23.2 to prevent silent downgrades
+- **data**: use M_MIDDLE layout for DC3's pods, not L_MIDDLE
+- retry border-leaf lookup instead of silently no-opping
+- account for a sibling's own outbound slots in inter-pod mesh offset
+- wait for trigger automations to activate before any bulk DC load
+- also poll for DC super-spine devices in the existing DC-readiness retry
+- point DC/pod created-triggers at plain bootstrap, not cascade
+- stop verify_no_failed_tasks from dropping real failures
+- stop pool-reference resaves from spuriously re-firing update triggers
+- remove orphaned device_capabilities identifier override on HA nodes
+- register shared-AS-id devices in autonomous_systems for overlay planning
+- add missing watch blocks and guard non-DC racks in generator
+
 ## v0.3.0 (2026-09-14)
 
 ### Feat
