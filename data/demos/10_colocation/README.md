@@ -30,6 +30,7 @@ something behind it, load `data/demos/30_all/` instead.
 | Cages (AZs) | 14 |
 | Racks | 11 |
 | Generated devices | 8 |
+| Generated cables | 5 |
 
 ### Metro Structure
 
@@ -68,10 +69,46 @@ From that the generator creates, per metro:
   for the edge routers only
 - an **HA domain** for a firewall or load-balancer pair (`ManagedFirewallHA`), its two `ManagedHAInterface` nodes,
   and the sync cable between the members
+- the **cabling** from the edge pair to that service pair, on the edge's `firewall`-role ports
+  (`Ethernet1/[15-16]`) and the firewall's `uplink` ports
 
 The kit is declared on the **metro**, not on a cage, for the same reason a data center declares its border-leafs
 rather than one of its pods doing it: one pair fronts the whole metro, and the other cages reach it over a
 cross-connect.
+
+### What gets cabled, and what does not
+
+Frankfurt is the only metro here with two tiers to join, and it ends up with five cables:
+
+```text
+eg-fr01:Ethernet1/15 <-> fw-fr01:ethernet1/1     eg-fr02:Ethernet1/15 <-> fw-fr02:ethernet1/1
+eg-fr01:Ethernet1/16 <-> fw-fr01:ethernet1/2     eg-fr02:Ethernet1/16 <-> fw-fr02:ethernet1/2
+                        fw-fr01:HA1 <-> fw-fr02:HA1
+```
+
+Index-paired, never any-to-any: `eg-fr01` reaches only `fw-fr01`, so each edge/firewall couple is one independent
+redundant path. This is the same leg — and the same helper — a data center uses between its border-leafs and its
+shared services, because it is the same shape: the appliance is not in the underlay, it hangs off the tier that is.
+
+A `DcimCable` means fibre someone pulled between two chassis, so the generator lays one only where both ends are
+**our own hardware** in **one cage**. That is the whole rule, and it is what keeps two other kinds of link out:
+
+**Links that leave the cage.** The on-ramp's links to the DC border-leafs (the edge's `dci` ports) and to the cloud
+fabrics (its `uplink` ports) are the colocation operator's cross-connect, not fibre we pull, so the model is a
+`TopologyPhysicalCircuit` with per-customer `TopologyVirtualCircuit`s riding it — see
+`data/demos/30_all/08_interconnects/`. They also need both endpoints, and a colocation-side generator can only see
+one. In this demo, which loads no data centers and no clouds, those ports stay `free` by design. The same applies
+between two cages of one metro: FR6 reaches the on-ramp in FR2 over a cross-connect, never over a cable.
+
+This one is a **convention, not an invariant** — worth knowing if you extend the model. Nothing records which cage
+holds the on-ramp: the kit is declared on the metro, and neither `fabric_templates` nor the generated devices carry
+a `TopologyColocationZone`. The demo data puts the whole on-ramp in one cage; spread it across two and these cables
+would be wrong, but so would the single management and loopback pool the pair shares.
+
+**Links involving virtual kit.** A `virtual` metro gets no cabling: two rented instances are joined by a connection
+inside the provider's platform, which is neither a cable nor something this schema has a node kind for. Amsterdam
+therefore has two routers and no cables. The generator decides this per `fabric_templates` entry, from the template's
+kind, so a `hybrid` metro cables its physical half only.
 
 ### Physical vs virtual
 
@@ -109,9 +146,10 @@ uv run infrahubctl object load data/demos/10_colocation/ --branch pop_deployment
 
 The generator fires automatically on each metro as it is created — no manual run needed. When the tasks finish the
 branch holds eight devices that are in none of these files: `eg-fr01`, `eg-fr02`, `fw-fr01`, `fw-fr02`, `eg-pa01`,
-`eg-pa02`, `eg-am01`, `eg-am02`.
+`eg-pa02`, `eg-am01`, `eg-am02` — plus Frankfurt's five cables, with every cabled port flipped from `DcimInterface`'s
+`free` default to `active`.
 
-To re-run one metro by hand (idempotent — same devices, same addresses):
+To re-run one metro by hand (idempotent — same devices, same addresses, same cables):
 
 ```bash
 uv run infrahubctl generator add_colocation_metro name=FR --branch pop_deployment

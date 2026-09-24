@@ -32,14 +32,26 @@ own kind decides whether a slot becomes a DcimPhysicalDevice or a
 DcimVirtualDevice; deployment_type decides whether the metro may host that kind
 at all. See _COLO_ALLOWED_TEMPLATE_KINDS.
 
-Scope note — this generator deliberately does NOT cable the on-ramp to anything.
-An on-ramp router's only links are its interconnects to the DCs it fronts, which
-belong to the interconnect generator (it owns both endpoints; a colocation-side
-generator can only see one). ``technical_pool`` is created here because the
-metro owns it, but its first consumer is that interconnect cabling, not this
-file. The one cable that does come out of a run is internal to a single HA pair
-— create_devices() cables firewall/load-balancer members' sync ports to each
-other, both endpoints being devices this generator just created.
+Scope note — every cable a run lays is internal to the metro, between two
+PHYSICAL devices this generator itself just created: the HA sync link between a
+firewall/load-balancer pair's members (create_devices()), and the leg from the
+edge pair to that pair (_cable_metro_services). Those two conditions — our own
+hardware, one facility — are what a DcimCable means, and they are what bounds
+this file. Two kinds of link consequently do NOT appear:
+
+* anything involving virtual kit, because a link between provider-hosted
+  instances is a connection inside the provider's platform rather than fibre;
+* anything leaving the cage — the on-ramp's links to the DCs and cloud fabrics
+  it fronts. Those are the colocation operator's cross-connects, modelled as
+  TopologyPhysicalCircuits with per-customer TopologyVirtualCircuits riding them
+  (see data/demos/30_all/08_interconnects/), and they need both endpoints, which
+  a colocation-side generator cannot see — they belong to the interconnect
+  generator.
+
+``technical_pool`` is created here because the metro
+owns it, but its first consumer is that interconnect cabling, not this file:
+the intra-metro legs carry no P2P addressing, matching dc.py's border-to-service
+cabling.
 """
 
 from __future__ import annotations
@@ -52,6 +64,7 @@ from typing_extensions import TypedDict
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator, DeviceOptions
+from ..connections import CablingMixin
 from ..devices import DeviceMixin
 from ..helpers.pools import name_to_asn_range
 from ..pools import PoolMixin
@@ -142,7 +155,7 @@ class TopologyColocationMetroData(TypedDict, total=False):
     fabric_templates: list[dict[str, Any]]
 
 
-class ColocationMetroGenerator(PoolMixin, DeviceMixin, CommonGenerator):
+class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, CommonGenerator):
     """Create a colocation metro's resource pools and its own on-ramp devices."""
 
     data: TopologyColocationMetroData
@@ -182,7 +195,8 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CommonGenerator):
             return
 
         await self._ensure_colocation_pools(metro_id=metro_id)
-        await self._create_metro_devices(templates=templates, metro_id=metro_id)
+        physical_names_by_role = await self._create_metro_devices(templates=templates, metro_id=metro_id)
+        await self._cable_metro_services(physical_names_by_role=physical_names_by_role)
 
     def _valid_fabric_templates(self) -> list[dict[str, Any]]:
         """Drop entries this generator cannot act on, warning per entry.
@@ -364,8 +378,15 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CommonGenerator):
         self.logger.info(f"- Created [{'CoreIPAddressPool' if kind == 'address' else 'CoreIPPrefixPool'}] {pool_name}")
         return pool
 
-    async def _create_metro_devices(self, *, templates: list[dict[str, Any]], metro_id: str) -> None:
+    async def _create_metro_devices(self, *, templates: list[dict[str, Any]], metro_id: str) -> dict[str, list[str]]:
         """Instantiate every fabric_templates entry as this metro's devices.
+
+        Returns the created PHYSICAL device names keyed by role, so
+        _cable_metro_services can wire the service appliances to the on-ramp
+        routers. Physical only, because that is all a DcimCable can join — virtual
+        kit is created and then withheld, see the branch below. Names accumulate
+        per role rather than being overwritten, because nothing stops a metro
+        declaring two entries for the same role (two firewall models, say).
 
         indexes=[] — a metro's on-ramp is flat, with no fabric/pod/suite/row/rack
         path to encode, so the "standard" naming strategy yields
@@ -389,6 +410,7 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CommonGenerator):
             (self.data.get("naming_convention") or "standard").lower(),
         )
 
+        physical_names_by_role: dict[str, list[str]] = {}
         for entry in templates:
             role = entry["role"]
             ha_kind = _COLO_HA_KIND_BY_ROLE.get(role)
@@ -424,3 +446,106 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CommonGenerator):
             )
             kind_label = "virtual" if virtual else "physical"
             self.logger.info(f"Metro {self.fabric_name}: created {len(names)} {kind_label} {role} device(s): {names}")
+            if virtual:
+                # Deliberately withheld from the cabling pass. A DcimCable is
+                # fibre someone pulls between two chassis in one room; these are
+                # rented instances on the colocation operator's own platform, and
+                # the link between them is a connection inside that platform, not
+                # a cable. It is a real link and it is not modelled here: there is
+                # no virtual-link node kind in the schema, and the thing that does
+                # express a link we do not own — a TopologyVirtualCircuit over a
+                # TopologyPhysicalCircuit — needs both endpoints and a provider,
+                # which is the interconnect generator's input, not this one's.
+                #
+                # Not merely cosmetic: PA-VM_EDGE_CUSTOMER_* exposes `uplink` on
+                # eth[1-6], the exact role _cable_border_services claims on the
+                # service side, so without this a deployment_type=virtual metro
+                # declaring an edge+firewall pair would reach create_chain_cabling
+                # and fail the task on C8000V_EDGE's missing `firewall` ports.
+                self.logger.info(
+                    f"Metro {self.fabric_name}: {role} kit is virtual, so it is not cabled — a link between "
+                    "provider-hosted instances is a connection inside the provider's platform, not a DcimCable"
+                )
+                continue
+            physical_names_by_role.setdefault(role, []).extend(names)
+        return physical_names_by_role
+
+    async def _cable_metro_services(self, *, physical_names_by_role: dict[str, list[str]]) -> None:
+        """Cable this metro's firewall/load-balancer pair to its edge pair.
+
+        The same leg dc.py builds between its border-leafs and its shared
+        services, and built with the same helper, because it is the same shape:
+        the appliance is not in the underlay, it hangs off the tier that is.
+        Index-paired (eg-fr01<->fw-fr01, eg-fr02<->fw-fr02), so each edge/service
+        couple is one independent redundant path rather than an any-to-any mesh.
+
+        When a DcimCable is the right model, and when it is not
+        ------------------------------------------------------
+        A DcimCable means fibre someone pulled between two chassis, so it is only
+        correct when both ends are kit we own, in one room. Two conditions have to
+        hold, and this method satisfies both by construction rather than by
+        checking:
+
+        1. Both ends are physical. Virtual kit never reaches here — the device
+           pass drops it (see _create_metro_devices), because a link between two
+           provider-hosted instances lives inside the provider's platform.
+        2. Both ends are in one facility. A link that leaves the cage is the
+           colocation operator's cross-connect, modelled as a
+           TopologyPhysicalCircuit with per-customer TopologyVirtualCircuits
+           riding it (data/demos/30_all/08_interconnects/), never as a cable. That
+           is why the on-ramp's links to the DCs and cloud fabrics it fronts are
+           absent here and not merely deferred.
+
+        Condition 2 is an assumption, not an assertion, and worth naming as such:
+        the on-ramp pair is declared on the metro and neither
+        TopologyColocationMetro.fabric_templates nor the devices it creates carry
+        a TopologyColocationZone, so nothing in the model says which cage holds
+        them. The convention the demo data follows is that one cage holds the
+        whole on-ramp (FR2 in Frankfurt, with FR6 customer cages only) and the
+        other cages reach it over a cross-connect. Split an on-ramp across two
+        cages and these cables would be wrong — but so would the single
+        management/loopback pool they share, so the fix belongs in the schema
+        (a zone on the kit) rather than in a guard here.
+
+        Always "pbr": TopologyColocationMetro has no connectivity_mode attribute
+        to read, and the DC's "inline" alternative needs a tier that both hands
+        traffic to the appliance and takes it back (border-leaf), which an
+        on-ramp router pair is not — it forwards on to a DC or a cloud fabric
+        instead of returning it. So each service role gets its own independent
+        leg off the edges.
+
+        No P2P addressing, for the same reason dc.py's call passes no pool:
+        _cable_border_services hands create_chain_cabling no CablingOptions, so
+        _resolve_pool(None, fallback_name=None) returns None. The metro's
+        technical_pool therefore still has no consumer here.
+        """
+        edge_names = physical_names_by_role.get("edge", [])
+        firewall_names = physical_names_by_role.get("firewall", [])
+        load_balancer_names = physical_names_by_role.get("load-balancer", [])
+        if not edge_names or not (firewall_names or load_balancer_names):
+            # Nothing to cable: a metro with no services (Paris), one whose kit is
+            # all virtual (Amsterdam), or — a real possibility worth not crashing
+            # on — services declared with no edge pair to hang them off.
+            # create_chain_cabling would no-op on the empty side anyway; returning
+            # early keeps the log quiet. Note this also covers the mixed case a
+            # deployment_type=hybrid metro allows: physical services declared
+            # against virtual edges leave edge_names empty, and the cage-crossing
+            # question never arises because no cable is laid.
+            return
+
+        # Role names on the EDGE side of each leg. Deliberately the same values
+        # dc.py uses for its border-leafs: a `firewall`-role port faces a
+        # firewall. N9K-C9316D-GX_EDGE provides Ethernet1/[15-16] for that (see
+        # data/bootstrap/10_physical_devices_templates_cisco_nxos.yaml) and
+        # provides no `load-balancer` ports at all, so a metro declaring a
+        # load-balancer against that template gets create_chain_cabling's
+        # explicit "cannot cable ... load-balancer_ports=0" error rather than a
+        # silently uncabled appliance. Point such a metro at an edge template
+        # that has the ports.
+        await self._cable_border_services(
+            border_role_for={"firewall": "firewall", "load-balancer": "load-balancer"},
+            connectivity_mode="pbr",
+            border_names=edge_names,
+            firewall_names=firewall_names,
+            load_balancer_names=load_balancer_names,
+        )

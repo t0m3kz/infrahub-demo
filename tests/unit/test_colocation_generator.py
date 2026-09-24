@@ -195,7 +195,8 @@ class TestGenerateEntry:
         an {"edges": [...]} dict and nothing is ever iterated."""
         gen = _make_generator()
         gen._ensure_colocation_pools = AsyncMock()
-        gen._create_metro_devices = AsyncMock()
+        gen._create_metro_devices = AsyncMock(return_value={"edge": ["eg-fr01", "eg-fr02"]})
+        gen._cable_metro_services = AsyncMock()
         raw = {
             "TopologyColocationMetro": {
                 "edges": [
@@ -240,6 +241,9 @@ class TestGenerateEntry:
                 "template": {"id": "tpl-edge", "template_kind": "TemplateDcimPhysicalDevice"},
             }
         ]
+        # The names the device pass produced are what the cabling pass acts on —
+        # passed through, not re-queried.
+        gen._cable_metro_services.assert_awaited_once_with(physical_names_by_role={"edge": ["eg-fr01", "eg-fr02"]})
 
     @pytest.mark.asyncio
     async def test_metro_without_templates_creates_no_pools(self) -> None:
@@ -255,6 +259,22 @@ class TestGenerateEntry:
         gen._ensure_colocation_pools.assert_not_awaited()
         gen._create_metro_devices.assert_not_awaited()
         gen.logger.error.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_cabling_runs_after_devices_not_before(self) -> None:
+        """Ordering is load-bearing, not incidental: _cable_metro_services
+        resolves interfaces by device name, so a cabling pass that ran first
+        would find no devices and log create_chain_cabling's missing-ports
+        error — a task failure."""
+        gen = _make_generator()
+        gen._ensure_colocation_pools = AsyncMock()
+        calls: list[str] = []
+        gen._create_metro_devices = AsyncMock(side_effect=lambda **_: calls.append("devices") or {})
+        gen._cable_metro_services = AsyncMock(side_effect=lambda **_: calls.append("cabling"))
+
+        await gen.generate({"TopologyColocationMetro": [_metro()]})
+
+        assert calls == ["devices", "cabling"]
 
 
 class TestPools:
@@ -482,6 +502,152 @@ class TestMetroDevices:
         await gen._create_metro_devices(templates=templates, metro_id="metro-1")
 
         assert [c.kwargs["device_role"] for c in gen.create_devices.await_args_list] == ["edge", "firewall"]
+
+    @pytest.mark.asyncio
+    async def test_created_names_are_returned_keyed_by_role(self) -> None:
+        """_cable_metro_services needs to know which names are edges and which
+        are appliances, and nothing else records that — the devices all deploy to
+        the same metro, so a later query by deployment cannot tell them apart
+        without re-reading each device's role."""
+        gen = _make_generator()
+        gen.create_devices = AsyncMock(side_effect=[["eg-fr01", "eg-fr02"], ["fw-fr01", "fw-fr02"]])
+        templates = [
+            {"role": "edge", "quantity": 2, "template": _EDGE_TEMPLATE},
+            {"role": "firewall", "quantity": 2, "template": _EDGE_TEMPLATE},
+        ]
+        gen.data = _metro(fabric_templates=templates)
+
+        physical_names_by_role = await gen._create_metro_devices(templates=templates, metro_id="metro-1")
+
+        assert physical_names_by_role == {"edge": ["eg-fr01", "eg-fr02"], "firewall": ["fw-fr01", "fw-fr02"]}
+
+    @pytest.mark.asyncio
+    async def test_two_entries_for_one_role_accumulate(self) -> None:
+        """Nothing in the schema stops a metro declaring two firewall entries
+        (two models), and the second must not overwrite the first — both pairs
+        hang off the same edges."""
+        gen = _make_generator()
+        gen.create_devices = AsyncMock(side_effect=[["fw-fr01", "fw-fr02"], ["fw-fr03", "fw-fr04"]])
+        templates = [
+            {"role": "firewall", "quantity": 2, "template": _EDGE_TEMPLATE},
+            {"role": "firewall", "quantity": 2, "template": _EDGE_TEMPLATE},
+        ]
+        gen.data = _metro(fabric_templates=templates)
+
+        physical_names_by_role = await gen._create_metro_devices(templates=templates, metro_id="metro-1")
+
+        assert physical_names_by_role == {"firewall": ["fw-fr01", "fw-fr02", "fw-fr03", "fw-fr04"]}
+
+    @pytest.mark.asyncio
+    async def test_virtual_devices_are_created_but_never_cabled(self) -> None:
+        """A DcimCable is fibre between two chassis, so provider-hosted instances
+        must not be handed to the cabling pass — the link between two of them is a
+        connection inside the provider's platform.
+
+        Not hypothetical: PA-VM_EDGE_CUSTOMER_* exposes `uplink` on eth[1-6],
+        exactly the role _cable_border_services claims on the service side, so
+        without this a deployment_type=virtual metro declaring an edge and a
+        firewall would reach create_chain_cabling and fail the task on
+        C8000V_EDGE's missing `firewall` ports.
+        """
+        gen = _make_generator()
+        gen.create_devices = AsyncMock(side_effect=[["eg-am01", "eg-am02"], ["fw-am01", "fw-am02"]])
+        templates = [
+            {"role": "edge", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE},
+            {"role": "firewall", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE},
+        ]
+        gen.data = _metro(fabric_templates=templates, deployment_type="virtual")
+
+        physical_names_by_role = await gen._create_metro_devices(templates=templates, metro_id="metro-1")
+
+        # Created — withholding them from cabling must not mean skipping them.
+        assert [c.kwargs["device_role"] for c in gen.create_devices.await_args_list] == ["edge", "firewall"]
+        assert all(c.kwargs["options"]["virtual"] for c in gen.create_devices.await_args_list)
+        assert physical_names_by_role == {}
+
+    @pytest.mark.asyncio
+    async def test_hybrid_metro_reports_only_its_physical_kit(self) -> None:
+        """deployment_type=hybrid allows both kinds in one metro, so the split is
+        per fabric_templates entry rather than per metro."""
+        gen = _make_generator()
+        gen.create_devices = AsyncMock(side_effect=[["eg-fr01", "eg-fr02"], ["fw-fr01", "fw-fr02"]])
+        templates = [
+            {"role": "edge", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE},
+            {"role": "firewall", "quantity": 2, "template": _EDGE_TEMPLATE},
+        ]
+        gen.data = _metro(fabric_templates=templates, deployment_type="hybrid")
+
+        physical_names_by_role = await gen._create_metro_devices(templates=templates, metro_id="metro-1")
+
+        assert physical_names_by_role == {"firewall": ["fw-fr01", "fw-fr02"]}
+
+
+class TestMetroServiceCabling:
+    """The leg from the metro's edge pair to its firewall/load-balancer pair.
+
+    PR-1 as first written created a firewall pair wired to nothing but itself:
+    the HA sync cable joined fw-fr01 to fw-fr02 and no cable reached either from
+    the on-ramp routers that are supposed to front them.
+    """
+
+    @pytest.mark.asyncio
+    async def test_firewall_pair_is_cabled_to_the_edge_pair(self) -> None:
+        gen = _make_generator()
+        gen._cable_border_services = AsyncMock()
+
+        await gen._cable_metro_services(
+            physical_names_by_role={"edge": ["eg-fr01", "eg-fr02"], "firewall": ["fw-fr01", "fw-fr02"]}
+        )
+
+        kwargs = gen._cable_border_services.await_args_list[-1].kwargs
+        # The edges are the "border" side of the leg: they are the tier in the
+        # underlay that the appliance hangs off, exactly as a DC's border-leafs
+        # are for its own shared services.
+        assert kwargs["border_names"] == ["eg-fr01", "eg-fr02"]
+        assert kwargs["firewall_names"] == ["fw-fr01", "fw-fr02"]
+        assert kwargs["load_balancer_names"] == []
+        # Same role names dc.py uses, so a `firewall`-role port faces a firewall.
+        # N9K-C9316D-GX_EDGE provides Ethernet1/[15-16] for this.
+        assert kwargs["border_role_for"] == {"firewall": "firewall", "load-balancer": "load-balancer"}
+
+    @pytest.mark.asyncio
+    async def test_mode_is_always_pbr(self) -> None:
+        """The inline mode would chain edge->fw->lb->edge, which needs a tier
+        that both hands traffic to the appliance and takes it back. An on-ramp
+        router pair forwards on to a DC or a cloud fabric instead, and the metro
+        carries no connectivity_mode attribute to say otherwise."""
+        gen = _make_generator()
+        gen._cable_border_services = AsyncMock()
+
+        await gen._cable_metro_services(
+            physical_names_by_role={"edge": ["eg-fr01"], "firewall": ["fw-fr01"], "load-balancer": ["lb-fr01"]}
+        )
+
+        assert gen._cable_border_services.await_args_list[-1].kwargs["connectivity_mode"] == "pbr"
+
+    @pytest.mark.parametrize(
+        "physical_names_by_role",
+        [
+            # Paris: an on-ramp with no appliances at all.
+            {"edge": ["eg-pa01", "eg-pa02"]},
+            # Appliances declared with no edge pair to hang them off.
+            {"firewall": ["fw-pa01", "fw-pa02"]},
+            # Amsterdam re-run before anything was declared.
+            {},
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_nothing_to_cable_is_a_no_op(self, physical_names_by_role: dict[str, list[str]]) -> None:
+        """Most metros in the demo data have no services, and one side missing
+        must not reach create_chain_cabling — it would log a missing-ports error,
+        which FailOnErrorLogger turns into a task failure."""
+        gen = _make_generator()
+        gen._cable_border_services = AsyncMock()
+
+        await gen._cable_metro_services(physical_names_by_role=physical_names_by_role)
+
+        gen._cable_border_services.assert_not_awaited()
+        gen.logger.error.assert_not_called()
 
 
 class TestGeneratedMetroDeviceNames:
