@@ -50,6 +50,9 @@ spec:
     - name: run-customer-deployment-cloud-generator
       description: Provision exchange routing for a cloud customer deployment
       generator: add_customer_deployment_cloud
+    - name: run-colocation-metro-generator
+      description: Create a colocation metro's resource pools and its own on-ramp devices
+      generator: add_colocation_metro
     - name: run-customer-deployment-office-generator
       description: Provision exchange routing for an office customer deployment
       generator: add_customer_deployment_office

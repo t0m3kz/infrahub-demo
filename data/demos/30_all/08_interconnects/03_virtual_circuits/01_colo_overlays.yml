@@ -42,7 +42,7 @@ spec:
         - "XC-EQXFR2-AWS-EUC1"
       interface_capabilities:
         - ["bl-dc101101", "Ethernet1/35"]
-        - ["EQX-FR2-GW1", "Ethernet1/13"]
+        - ["eg-fr01", "Ethernet1/13"]
 
     - name: "VC-C006-DC11-AWS-EUC1"
       link_type: direct_connect_aws
@@ -61,7 +61,7 @@ spec:
         - "XC-EQXFR2-AWS-EUC1"
       interface_capabilities:
         - ["bl-dc1111101", "Ethernet1/35"]
-        - ["EQX-FR2-GW1", "Ethernet1/13"]
+        - ["eg-fr01", "Ethernet1/13"]
 
     # --- DC -> Azure westeurope over the Equinix PA4 cage --------------------
     # No cloud endpoint: only the AWS hub is modelled, so this one terminates at
@@ -84,7 +84,7 @@ spec:
         - "XC-EQXPA4-AZURE-WEU"
       interface_capabilities:
         - ["bl-dc1212101", "Ethernet1/35"]
-        - ["EQX-PA4-GW1", "Ethernet1/13"]
+        - ["eg-pa01", "Ethernet1/13"]
 
     # --- Colo cage -> cloud, no DC in the path ------------------------------
     # C001 buys Equinix Fabric from its own FR cage rather than backhauling from
@@ -106,4 +106,4 @@ spec:
       physical_circuits:
         - "XC-EQXFR2-AWS-EUC1"
       interface_capabilities:
-        - ["EQX-FR2-GW1", "Ethernet1/13"]
+        - ["eg-fr01", "Ethernet1/13"]

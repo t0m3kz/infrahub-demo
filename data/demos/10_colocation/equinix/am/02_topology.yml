@@ -1,16 +1,34 @@
 ---
 # Amsterdam colocation metro and zones (nested from colocation root)
+#
+# deployment_type: virtual twice over, and the two say different things: on the
+# metro it means anything add_colocation_metro builds here has to be
+# provider-hosted kit (Equinix Network Edge), never our own hardware (see
+# _COLO_ALLOWED_TEMPLATE_KINDS in generators/topology/colocation.py); on each
+# cage it means that footprint holds no racks of ours.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: TopologyColocation
   data:
     - name: EQUINIX
+      parent: "Colocation"
       children:
         kind: TopologyColocationMetro
         data:
+          # C8000V_EDGE, not the N9K the other metros use: this is the virtual
+          # half of that gate. It is a TemplateDcimVirtualDevice, so the
+          # generator creates DcimVirtualDevices — an Equinix Network Edge
+          # instance we rent, not hardware we rack — and a `physical` template
+          # would be rejected here. The one metro in the demo data that
+          # exercises the virtual path at all.
           - name: AM
             location: ["ams"]
+            deployment_type: virtual
+            member_of_groups:
+              - colocation_metros
+            fabric_templates:
+              - ["2", "edge", "C8000V_EDGE"]
             children:
               kind: TopologyColocationZone
               data:

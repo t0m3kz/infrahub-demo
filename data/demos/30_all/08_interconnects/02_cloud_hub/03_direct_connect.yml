@@ -24,4 +24,4 @@ spec:
       # LocationFacility's hfid is shortname, not name — "fr2", not "FR2".
       location: "fr2"
       physical_devices:
-        - "EQX-FR2-GW1"
+        - "eg-fr01"

@@ -1,0 +1,110 @@
+query topology_colocation_metro($name: String!) {
+  TopologyColocationMetro(name__value: $name) {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        deployment_type {
+          value
+        }
+        naming_convention {
+          value
+        }
+        parent {
+          node {
+            id
+            name {
+              value
+            }
+          }
+        }
+        loopback_pool {
+          node {
+            id
+            name {
+              value
+            }
+          }
+        }
+        technical_pool {
+          node {
+            id
+            name {
+              value
+            }
+          }
+        }
+        management_pool {
+          node {
+            id
+            name {
+              value
+            }
+          }
+        }
+        asn_pool {
+          node {
+            id
+            name {
+              value
+            }
+          }
+        }
+        fabric_templates {
+          edges {
+            node {
+              role {
+                value
+              }
+              quantity {
+                value
+              }
+              template {
+                node {
+                  id
+                  # Aliased deliberately: clean_data() strips "__" out of any
+                  # key it finds, so a bare __typename would arrive as
+                  # "typename". The generator reads template_kind to decide
+                  # between a DcimPhysicalDevice and a DcimVirtualDevice.
+                  template_kind: __typename
+                  ... on TemplateDcimPhysicalDevice {
+                    template_name {
+                      value
+                    }
+                    platform {
+                      node {
+                        id
+                        name {
+                          value
+                        }
+                      }
+                    }
+                    device_type {
+                      node {
+                        id
+                      }
+                    }
+                    interfaces {
+                      edges {
+                        node {
+                          name {
+                            value
+                          }
+                          role {
+                            value
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

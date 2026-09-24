@@ -495,10 +495,15 @@ def _mock_relmgr(peer_ids: list[str]) -> MagicMock:
     return rel
 
 
-def _mock_iface(iface_id: str, name: str, *, cable_id: str | None = None) -> MagicMock:
+def _mock_iface(iface_id: str, name: str, *, cable_id: str | None = None, status: str = "free") -> MagicMock:
     iface = MagicMock()
     iface.id = iface_id
     iface.name = MagicMock(value=name)
+    # `free` is DcimInterface's schema default, so that is what a sync port
+    # inherited from a device's object_template really looks like before
+    # _ensure_ha_interfaces flips it.
+    iface.status = MagicMock(value=status)
+    iface.save = AsyncMock()
     cable = MagicMock()
     cable.initialized = cable_id is not None
     if cable_id is not None:
@@ -520,6 +525,8 @@ class TestEnsureHaInterfaces:
         gen.client.filters = AsyncMock(return_value=[])
         gen.client.create = AsyncMock()
         gen.client.get = AsyncMock()
+        gen.client.group_context = MagicMock()
+        gen.client.group_context.related_node_ids = []
         return gen
 
     @pytest.mark.asyncio
@@ -608,7 +615,9 @@ class TestEnsureHaInterfaces:
         dev_2.name = MagicMock(value="fw-02")
         iface_1 = _mock_iface("iface-1", "sync0")
         iface_2 = _mock_iface("iface-2", "sync0")
-        existing_ha_iface = MagicMock(interface_capabilities=_mock_relmgr(["iface-1", "iface-2"]))
+        existing_ha_iface = MagicMock(
+            id="existing-ha-iface", interface_capabilities=_mock_relmgr(["iface-1", "iface-2"])
+        )
 
         async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
             if kind is DcimPhysicalDevice:
@@ -625,6 +634,49 @@ class TestEnsureHaInterfaces:
 
         ha_iface_calls = [c for c in gen.client.create.call_args_list if c.kwargs["kind"] is ManagedHAInterface]
         assert len(ha_iface_calls) == 0
+        # ... and it must stay in the run's tracking group, or the next run
+        # deletes it as unused — same trap as the sync cable, see
+        # TestEnsureHaCable.
+        assert gen.client.group_context.related_node_ids == ["existing-ha-iface"]
+        # The status flip still happens on this path: a pair built before the
+        # flip existed has cabled-but-`free` sync ports, and re-running the
+        # generator is what repairs them.
+        assert iface_1.status.value == "active"
+        assert iface_2.status.value == "active"
+
+    @pytest.mark.asyncio
+    async def test_sync_ports_are_flipped_to_active(self) -> None:
+        """A port carrying the HA sync link must not keep DcimInterface's
+        `free` default — it is in service, exactly like both ends of any cable
+        create_connections() lays. Caught live on a colocation metro, where
+        fw-fr01:HA1 sat at `free` while cabled to fw-fr02:HA1."""
+        gen = self._gen()
+        ha_obj = MagicMock(id="ha-1", capabilities=_mock_relmgr(["dev-1", "dev-2"]))
+        dev_1 = MagicMock(id="dev-1", deployment=MagicMock(initialized=False))
+        dev_1.name = MagicMock(value="fw-01")
+        dev_2 = MagicMock(id="dev-2", deployment=MagicMock(initialized=False))
+        dev_2.name = MagicMock(value="fw-02")
+        iface_1 = _mock_iface("iface-1", "HA1")
+        # Already active — a re-run must not spend a write reaffirming it.
+        iface_2 = _mock_iface("iface-2", "HA1", status="active")
+
+        async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
+            if kind is DcimPhysicalDevice:
+                return [dev_1, dev_2]
+            if kind is DcimPhysicalInterface:
+                return [iface_1] if kwargs.get("device__ids") == ["dev-1"] else [iface_2]
+            return []
+
+        gen.client.filters = AsyncMock(side_effect=_filters)
+        gen.client.create = AsyncMock(return_value=MagicMock(save=AsyncMock()))
+
+        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02-ha")
+
+        assert iface_1.status.value == "active"
+        # update_group_context=False: the port belongs to the device's
+        # object_template, so it must never be a delete_unused_nodes candidate.
+        iface_1.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
+        iface_2.save.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_missing_sync_iface_on_physical_device_logs_error(self) -> None:
@@ -755,12 +807,20 @@ class TestEnsureHaCable:
         gen.client = MagicMock()
         gen.client.filters = AsyncMock(return_value=[])
         gen.client.create = AsyncMock()
+        gen.client.group_context = MagicMock()
+        gen.client.group_context.related_node_ids = []
         return gen
 
     @pytest.mark.asyncio
-    async def test_existing_named_cable_skips_create(self) -> None:
+    async def test_existing_named_cable_skips_create_but_stays_tracked(self) -> None:
+        """Skipping the create is only half of idempotency: the generator body
+        runs inside client.start_tracking(delete_unused_nodes=True), so a cable
+        created by an earlier run and left unregistered here is deleted as
+        "no longer required" at the end of this one — caught live on a
+        colocation metro, where the HA sync cable appeared and disappeared on
+        alternate generator runs."""
         gen = self._gen()
-        gen.client.filters = AsyncMock(return_value=[MagicMock()])
+        gen.client.filters = AsyncMock(return_value=[MagicMock(id="existing-cbl")])
         dev_1 = MagicMock()
         dev_1.name = MagicMock(value="fw-01")
         dev_2 = MagicMock()
@@ -771,6 +831,7 @@ class TestEnsureHaCable:
         await gen._ensure_ha_cable("fw-01-fw-02-ha", [(dev_1, iface_1), (dev_2, iface_2)])
 
         gen.client.create.assert_not_called()
+        assert gen.client.group_context.related_node_ids == ["existing-cbl"]
 
     @pytest.mark.asyncio
     async def test_orphan_cabled_interface_skips_create(self) -> None:

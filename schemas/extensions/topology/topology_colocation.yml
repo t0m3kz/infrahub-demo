@@ -18,11 +18,25 @@ nodes:
     icon: "mdi:office-building"
     children: TopologyColocationMetro
 
+  # The metro, and the tier that owns our on-ramp kit. A metro is where the
+  # shared edge routers live, exactly as a TopologyDataCenter — not one of its
+  # pods — owns its border-leafs: one pair of routers fronts every cage in
+  # Frankfurt, and the other cages reach it over a cross-connect. Hence
+  # TopologyDeviceHosting here as well as on the cage below: the metro hosts the
+  # shared fabric tier, the cage hosts whatever is physically installed in it
+  # (customer compute, SD-WAN gateways, controllers).
+  #
+  # TopologyPhysicalDeployment comes with the devices: DcimCable.deployment
+  # peers at that generic (schemas/extensions/topology/topology.yml), so without
+  # it every cable between two of the metro's own devices — starting with the
+  # sync cable inside a firewall HA pair — fails to save.
   - name: ColocationMetro
     namespace: Topology
     inherit_from:
       - CoreArtifactTarget
       - TopologyDeployment
+      - TopologyPhysicalDeployment
+      - TopologyDeviceHosting
       - TopologySegmentHosting
     uniqueness_constraints:
       - ["name__value", "parent"]
@@ -34,6 +48,29 @@ nodes:
     icon: "mdi:city-variant-outline"
     parent: TopologyColocation
     children: ""
+    attributes:
+      # Gates which device kind fabric_templates may instantiate here, see
+      # _COLO_ALLOWED_TEMPLATE_KINDS in generators/topology/colocation.py:
+      # `virtual` means we own no hardware in this metro and so host
+      # provider-hosted instances only (DcimVirtualDevice — Equinix Network
+      # Edge, a Megaport MCR), `physical` means our own hardware in our own
+      # cage racks, `hybrid` both.
+      - name: deployment_type
+        kind: Dropdown
+        label: Strategy
+        optional: true
+        order_weight: 650
+        choices:
+          - name: virtual
+            label: Virtual
+            color: "#aedcee"
+          - name: physical
+            label: Physical
+            color: "#7f7fff"
+          - name: hybrid
+            label: Hybrid
+            color: "#38e7fb"
+        default_value: physical
     relationships:
       - name: location
         peer: LocationMetro
@@ -43,11 +80,77 @@ nodes:
         identifier: "colocation__metro__location"
         order_weight: 1000
         description: "Geographic location mapping for this region"
+      # The metro's own device slots, same intent surface as
+      # TopologyDataCenter's fabric_templates (topology_dc.yml) — an on-ramp
+      # router is declared as "2 x edge on template X", never hand-written as a
+      # DcimPhysicalDevice. Validated against _COLO_VALID_FABRIC_ROLES in
+      # generators/topology/colocation.py, which deliberately differs from
+      # dc.py's _DC_VALID_FABRIC_ROLES: `edge` is valid here and nowhere else.
+      # The peer is CoreObjectTemplate (see TopologyElement in topology_dc.yml),
+      # so an entry can name a virtual device template as well as a physical one
+      # — which of the two is allowed depends on deployment_type above.
+      - name: fabric_templates
+        peer: TopologyElement
+        label: "Metro Elements"
+        description: "Edge-router, firewall, and load-balancer templates for this metro's own devices"
+        optional: true
+        cardinality: many
+        kind: Attribute
+        identifier: "colocation_metro__fabric_templates"
+        order_weight: 1100
+      # CoreIPAddressPool, not CoreIPPrefixPool as on TopologyDataCenter: a DC's
+      # loopback_pool is a supernet its pods slice their own address pools from,
+      # whereas a metro has no pod tier — DeviceMixin.create_devices() allocates
+      # on-ramp loopbacks straight out of this pool via
+      # allocate_next_ip_address(), which requires an address pool.
+      - name: loopback_pool
+        peer: CoreIPAddressPool
+        label: "Loopback Pool"
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "colocation_metro__loopback_pool"
+        order_weight: 6000
+        on_delete: cascade
+      - name: technical_pool
+        peer: CoreIPPrefixPool
+        label: "Technical Pool"
+        description: "P2P prefixes for intra-metro links (edge router <-> metro firewall/load-balancer)"
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "colocation_metro__technical_pool"
+        order_weight: 7000
+        on_delete: cascade
+      - name: management_pool
+        peer: CoreIPAddressPool
+        label: "Management Pool"
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "colocation_metro__management_pool"
+        order_weight: 7100
+        on_delete: cascade
+      - name: asn_pool
+        label: "Metro ASN Pool"
+        description: "ASN pool for this metro's edge routers (eBGP towards the interconnected DCs)"
+        peer: CoreNumberPool
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "colocation_metro__asn_pool"
+        order_weight: 7200
+        on_delete: cascade
 
   # The cage, and the only colocation kind a circuit can terminate on: it is
   # where the racks and the cross-connect panel physically are. A dark fibre
   # into "Equinix" or "the Frankfurt metro" does not identify an endpoint, so
   # neither of those two inherits TopologyConnectableLocation.
+  #
+  # It hosts devices but does not declare any: whatever is installed in this
+  # cage deploys here (customer compute, SD-WAN gateways, controllers), while
+  # our shared on-ramp routers are declared on and deploy to the metro above —
+  # see its fabric_templates.
   - name: ColocationZone
     namespace: Topology
     inherit_from:
@@ -67,6 +170,13 @@ nodes:
       - [name__value, parent]
     include_in_menu: false
     attributes:
+      # This cage's own nature, not a gate on anything generated: `virtual` is a
+      # provider-hosted footprint (an Equinix Network Edge slot, a Megaport MCR)
+      # with no racks of ours in it, `physical` is cage space we rent and rack.
+      # The metro above carries an attribute of the same name that does gate its
+      # declared fabric_templates — per-tier deployment_type with a tier-specific
+      # meaning, the same way TopologyPod's (middle_rack/tor/mixed) has nothing
+      # to do with this one.
       - name: deployment_type
         kind: Dropdown
         label: Strategy

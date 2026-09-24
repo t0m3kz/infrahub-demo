@@ -91,4 +91,4 @@ spec:
         - "XC-EQXFR2-AWS-EUC1"
       interface_capabilities:
         - ["EQX-FR2-SDWAN-GW1", "eth0"]
-        - ["EQX-FR2-GW1", "Ethernet1/13"]
+        - ["eg-fr01", "Ethernet1/13"]
