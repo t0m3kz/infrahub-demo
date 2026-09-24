@@ -12,6 +12,8 @@ spec:
         data:
           - name: PAR
             location: ["par"]
+            member_of_groups:
+              - colocation_metros
             children:
               kind: TopologyColocationZone
               data:

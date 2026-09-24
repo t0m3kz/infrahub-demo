@@ -2,21 +2,28 @@
 # Point-to-point addressing for the DC <-> cage dark fibre.
 #
 # Ethernet1/35 is the first free `uplink` port on each border leaf (Ethernet1/33
-# and 1/34 already face the spines), and Ethernet1/10-12 are the cage router's
+# and 1/34 already face the spines), and Ethernet1/[9-12] are the cage router's
 # `dci` ports. The DC end is always .2, the cage end .1.
+#
+# Both ends are generated devices — bl-* by add_dc, eg-* by add_colocation_metro
+# (from the metro's fabric_templates, see ../../02_colo/equinix/*/02_topology.yml)
+# — so this file only loads once those generators have settled. The 30_all staged
+# load guarantees that: `interconnects` is the last stage and waits for a quiet
+# task queue after each earlier one (tests/integration/test_constants.py's
+# ALL_DEMO_LOAD_STAGES).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: IpamPrefix
   data:
     - prefix: "10.255.0.0/30"
-      description: "EQX-FR2-GW1 <-> bl-dc101101 (DC10) point-to-point"
+      description: "eg-fr01 <-> bl-dc101101 (DC10) point-to-point"
       status: active
     - prefix: "10.255.0.4/30"
-      description: "EQX-FR2-GW1 <-> bl-dc1111101 (DC11) point-to-point"
+      description: "eg-fr01 <-> bl-dc1111101 (DC11) point-to-point"
       status: active
     - prefix: "10.255.0.8/30"
-      description: "EQX-PA4-GW1 <-> bl-dc1212101 (DC12) point-to-point"
+      description: "eg-pa01 <-> bl-dc1212101 (DC12) point-to-point"
       status: active
 
 ---
@@ -27,21 +34,21 @@ spec:
   data:
     # Cage side — `dci` ports, one per DC served by the cage.
     - name: "Ethernet1/10"
-      device: "EQX-FR2-GW1"
+      device: "eg-fr01"
       status: active
       description: "Dark fibre to DC10 (bl-dc101101)"
       ip_address:
         data:
           address: "10.255.0.1/30"
     - name: "Ethernet1/11"
-      device: "EQX-FR2-GW1"
+      device: "eg-fr01"
       status: active
       description: "Dark fibre to DC11 (bl-dc1111101)"
       ip_address:
         data:
           address: "10.255.0.5/30"
     - name: "Ethernet1/10"
-      device: "EQX-PA4-GW1"
+      device: "eg-pa01"
       status: active
       description: "Dark fibre to DC12 (bl-dc1212101)"
       ip_address:
@@ -52,21 +59,21 @@ spec:
     - name: "Ethernet1/35"
       device: "bl-dc101101"
       status: active
-      description: "Dark fibre to Equinix FR2 (EQX-FR2-GW1)"
+      description: "Dark fibre to Equinix FR2 (eg-fr01)"
       ip_address:
         data:
           address: "10.255.0.2/30"
     - name: "Ethernet1/35"
       device: "bl-dc1111101"
       status: active
-      description: "Dark fibre to Equinix FR2 (EQX-FR2-GW1)"
+      description: "Dark fibre to Equinix FR2 (eg-fr01)"
       ip_address:
         data:
           address: "10.255.0.6/30"
     - name: "Ethernet1/35"
       device: "bl-dc1212101"
       status: active
-      description: "Dark fibre to Equinix PA4 (EQX-PA4-GW1)"
+      description: "Dark fibre to Equinix PA4 (eg-pa01)"
       ip_address:
         data:
           address: "10.255.0.10/30"

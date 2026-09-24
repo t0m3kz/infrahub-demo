@@ -29,12 +29,15 @@ Each scenario creates infrastructure incrementally and merges to main:
 
 **Scenario Tests:**
 
+- `test_09_bulk_dc_trigger_routing.py` - **Scenario 0:** Bulk DC load, trigger-dispatched routing
 - `test_10_dc_deployment.py` - **Scenario 1:** Initial datacenter deployment
-- `test_20_add_switches.py` - **Scenario 2:** Add switches to existing DC
-- `test_30_add_rack.py` - **Scenario 3:** Add new rack to existing pod
-- `test_40_add_pod.py` - **Scenario 4:** Add new pod to existing DC
-- `test_50_endpoint_connectivity.py` - **Scenario 5:** Add endpoint servers across deployment types
-- `test_59` - `test_63` - **Scenario 6:** The `30_all` demo, end to end (see [The 30_all Suite](#the-30_all-suite)). This one deviates from the pattern above: it loads in stages, shares one branch across five modules, and does not merge to main.
+- `test_12_dc1_add_switch.py` - **Scenario 2:** Add a switch to an existing DC
+- `test_14_dc1_add_rack.py` - **Scenario 3:** Add a rack to an existing pod
+- `test_16_dc1_add_pod.py` - **Scenario 4:** Add a pod to an existing DC
+- `test_18_dc1_add_spine.py` - **Scenario 5:** Add a spine to an existing fabric
+- `test_19_dc1_segments.py` - **Scenario 6:** Segments and their legs
+- `test_20_dc1_add_endpoints.py` - **Scenario 7:** Endpoint servers across deployment types
+- `test_59` - `test_63` - **Scenario 8:** The `30_all` demo, end to end (see [The 30_all Suite](#the-30_all-suite)). This one deviates from the pattern above: it loads in stages, shares one branch across five modules, and does not merge to main.
 
 ### Shared Utilities
 
@@ -64,22 +67,51 @@ Test data is organized by scenario in `tests/integration/data/`:
 
 ```text
 data/
-├── 01_dc/          # Scenario 1: Initial DC topology
-├── 02_switches/    # Scenario 2: Switch additions
-├── 03_racks/       # Scenario 3: New rack additions
-├── 04_pod/         # Scenario 4: New pod additions
-└── 05_endpoint_connectivity/  # Scenario 5: Endpoint servers in various deployments
+├── 02_switch/                 # Switch additions
+├── 03_racks/                  # Rack additions
+├── 05_endpoint_connectivity/  # Endpoint servers in various deployments
+├── 12_dc1_add_rack/           # Rack added to an existing DC1 pod
+├── 20_segments/               # Segments and their legs
+└── 60_app_catalogue/          # Application catalogue and deployment requests
 ```
+
+The `30_all` suite (`test_59`-`test_63`) is the exception: it loads from `data/demos/30_all/` at the repository
+root, not from here, because it exercises the shipped demo rather than test-only fixtures.
 
 ## Running Tests
 
 ### Run All Integration Tests
 
 ```bash
-uv run pytest tests/integration/ -v
+uv run invoke test-integration
 ```
 
-The repository also provides focused Invoke profiles. They reuse one Docker stack per command and keep the feedback loop from becoming a small infrastructure project of its own:
+Run them through Invoke rather than calling `pytest` directly. `_run_integration_suite` in `tasks.py` sets two
+things bare `pytest` does not, and each one fails in a way that does not look like its cause:
+
+| Set by the task | What happens without it |
+| --- | --- |
+| `INFRAHUB_TESTING_ENABLE_INTEGRATION=1` | Every test is **silently skipped**. A run reporting `16 skipped` tested nothing, and exits 0. |
+| `--basetemp ~/.pytest-tmp/infrahub-demo` | On Docker Desktop the stack dies ~20s in, before collection. See below. |
+
+**The basetemp trap.** `InfrahubDockerCompose.init()` writes `docker-compose.yml` and `haproxy.cfg` into pytest's
+basetemp, and the `infrahub-server-lb` service bind-mounts `./haproxy.cfg`. pytest's default basetemp is under
+`/private/var/folders/...`, which Docker Desktop does not share with its VM by default. Docker answers an
+unshareable bind source by creating an **empty directory** at the mount point, so HAProxy is handed a directory
+where its config should be, prints its usage text and exits 1 — and `up --wait` then aborts the whole stack with
+every other service healthy. The symptom is `Failed to start docker compose ... returned non-zero exit status 1`
+plus `infrahub-server-lb-1 exited (1)`, which reads like a port conflict and is not one. Confirm a path is
+shareable with:
+
+```bash
+docker run --rm -v /tmp/somefile:/x --entrypoint sh haproxy:3.1-alpine \
+  -c 'if [ -d /x ]; then echo "DIRECTORY (mount broken)"; else echo "file, $(wc -c </x) bytes"; fi'
+```
+
+`~/.pytest-tmp` sits under `/Users`, which Docker Desktop shares out of the box. Use the tasks, or add your
+basetemp to Docker Desktop → Settings → Resources → File sharing.
+
+The focused profiles reuse one Docker stack per command and keep the feedback loop from becoming a small infrastructure project of its own:
 
 ```bash
 # Setup and repository prerequisites
@@ -114,24 +146,26 @@ Only `test_59` loads data, and the load is deliberately staged — later stages 
 ### Run Setup Only
 
 ```bash
-uv run pytest tests/integration/test_01_setup.py tests/integration/test_02_repository.py -v
+uv run invoke test-integration-fast
 ```
 
 ### Run Specific Scenario
 
-```bash
-# Run only DC deployment scenario
-uv run pytest tests/integration/test_10_dc_deployment.py -v
-
-# Run DC + switches scenarios
-uv run pytest tests/integration/test_10_dc_deployment.py tests/integration/test_20_add_switches.py -v
-```
-
-### Run with Explicit Ordering
+Pass a module list to `--tests`, keeping the setup pair in front — session-scoped dependencies mean a module run
+without its prerequisites skips rather than fails:
 
 ```bash
-uv run pytest tests/integration/ -v --order-scope=session
+# DC deployment scenario
+uv run invoke test-integration --tests "tests/integration/test_01_setup.py \
+  tests/integration/test_02_repository.py tests/integration/test_10_dc_deployment.py"
+
+# DC + switches
+uv run invoke test-integration --tests "tests/integration/test_01_setup.py \
+  tests/integration/test_02_repository.py tests/integration/test_10_dc_deployment.py \
+  tests/integration/test_12_dc1_add_switch.py"
 ```
+
+`--server-port` moves the stack off the default 8100 if you need two runs side by side.
 
 ## Scenario Test Template
 
@@ -260,10 +294,15 @@ class TestScenarioName(TestInfrahubDockerWithClient):
 
 ### Test Failures
 
-- **Container logs**: Check `.pytest-tmp/` directory
-- **Infrahub logs**: Run `docker compose logs infrahub-server`
-- **Branch state**: Inspect via GraphQL UI at `http://localhost:8000/graphql`
+- **Generated compose project**: `~/.pytest-tmp/infrahub-demo/` — the compose file, `haproxy.cfg` and the logs
+- **Infrahub logs**: `docker compose ls -a` to find the live `infrahub-test-*` project, then
+  `docker logs <project>-infrahub-server-1`
+- **Branch state**: the suite's own GraphQL UI is on the test port (8100 by default), not 8000
 - **Task details**: Check `workflow_state` for task IDs and results
+- **A stack that never becomes healthy**: on Docker Desktop this is almost always the basetemp/file-sharing trap
+  described under [Run All Integration Tests](#run-all-integration-tests), not anything wrong with the tests.
+  Work from the outside in: `docker compose ls -a` to find the project, then read *one* service's log rather than
+  the conftest's dump of all of them
 
 ### Branch Cleanup
 
@@ -305,22 +344,20 @@ The legacy test has been renamed to `test_worflow_deprecated.py.bak` and should 
 
 ```bash
 # Run everything
-uv run pytest tests/integration/ -v
+uv run invoke test-integration
 
 # Run foundation only
-uv run pytest tests/integration/test_01_setup.py tests/integration/test_02_repository.py -v
+uv run invoke test-integration-fast
 
-# Run specific scenario
-uv run pytest tests/integration/test_10_dc_deployment.py -v
+# The 30_all demo
+uv run invoke test-integration-all-demo
 
-# Run with dependencies
-uv run pytest tests/integration/ -v --dependency
+# One scenario, with its prerequisites in front
+uv run invoke test-integration --tests "tests/integration/test_01_setup.py \
+  tests/integration/test_02_repository.py tests/integration/test_10_dc_deployment.py"
 
-# Run with explicit ordering
-uv run pytest tests/integration/ -v --order-scope=session
-
-# Run and show logs
-uv run pytest tests/integration/ -v -s
+# Two runs side by side
+uv run invoke test-integration-fast --server-port 8200
 ```
 
 ### Key Workflow Helper Functions

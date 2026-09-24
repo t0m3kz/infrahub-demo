@@ -1,16 +1,25 @@
 ---
 # CoreSite real-world colocation topology
+#
+# Every metro joins colocation_metros: trigger-colocation-metro-on-created
+# (data/events/99_actions.yml) fires add_colocation_metro for each one, and
+# Infrahub fails a run whose target is outside the definition's group. None of
+# these metros declares fabric_templates — we rent cage space here, we do not
+# run our own on-ramp in it — so each run is a no-op.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: TopologyColocation
   data:
     - name: CORESITE
+      parent: "Colocation"
       children:
         kind: TopologyColocationMetro
         data:
           - name: NY
             location: ["nyc"]
+            member_of_groups:
+              - colocation_metros
             children:
               kind: TopologyColocationZone
               data:
@@ -19,6 +28,8 @@ spec:
 
           - name: VA
             location: ["iad"]
+            member_of_groups:
+              - colocation_metros
             children:
               kind: TopologyColocationZone
               data:
@@ -27,6 +38,8 @@ spec:
 
           - name: SV
             location: ["sjc"]
+            member_of_groups:
+              - colocation_metros
             children:
               kind: TopologyColocationZone
               data:

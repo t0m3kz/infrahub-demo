@@ -1,5 +1,11 @@
 ---
 # Amsterdam colocation metro and zones (nested from colocation root)
+#
+# deployment_type: virtual twice over, and the two say different things: on the
+# metro it means anything add_colocation_metro builds here has to be
+# provider-hosted kit (Equinix Network Edge), never our own hardware (see
+# _COLO_ALLOWED_TEMPLATE_KINDS in generators/topology/colocation.py); on each
+# cage it means that footprint holds no racks of ours.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -12,6 +18,9 @@ spec:
         data:
           - name: AM
             location: ["ams"]
+            deployment_type: virtual
+            member_of_groups:
+              - colocation_metros
             children:
               kind: TopologyColocationZone
               data:

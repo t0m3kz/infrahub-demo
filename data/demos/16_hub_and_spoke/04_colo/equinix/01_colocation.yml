@@ -11,11 +11,14 @@ spec:
   kind: TopologyColocation
   data:
     - name: EQUINIX
+      parent: "Colocation"
       children:
         kind: TopologyColocationMetro
         data:
           - name: WAW
             location: "waw"
+            member_of_groups:
+              - colocation_metros
             children:
               kind: TopologyColocationZone
               data:
