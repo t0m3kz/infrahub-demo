@@ -1,0 +1,196 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: OrganizationContact
+  data:
+    # Manufacturers
+    - name: John Smith
+      title: Account Manager
+      email: john.smith@cisco.com
+      phone: 123-456-7890
+      organization: Cisco
+    - name: Jim Halpert
+      title: Support Manager
+      email: jim.halpert@cisco.com
+      phone: 123-456-7891
+      organization: Cisco
+    - name: Dwight Schrute
+      title: Sales Engineer
+      email: dwight.schrute@juniper.net
+      phone: 123-456-7892
+      organization: Juniper
+    - name: Ryan Howard
+      title: Product Manager
+      email: ryan.howard@arista.com
+      phone: 123-456-7893
+      organization: Arista
+    - name: Andy Bernard
+      title: Regional Director
+      email: andy.bernard@dell.com
+      phone: 123-456-7894
+      organization: Dell
+    - name: Gabe Lewis
+      title: Compliance Officer
+      email: gabe.lewis@fortinet.com
+      phone: 123-456-7895
+      organization: Fortinet
+    - name: Robert California
+      title: Security Consultant
+      email: robert.california@checkpoint.com
+      phone: 123-456-7896
+      organization: Check Point
+
+    # Providers
+    - name: Jan Levinson
+      title: VP of Sales
+      email: jan.levinson@aws.amazon.com
+      phone: 123-456-7900
+      organization: AWS
+    - name: David Wallace
+      title: Cloud Solution Architect
+      email: david.wallace@microsoft.com
+      phone: 123-456-7901
+      organization: Azure
+    - name: Karen Filippelli
+      title: Regional Manager
+      email: karen.filippelli@google.com
+      phone: 123-456-7902
+      organization: Google Cloud
+    - name: Roy Anderson
+      title: Facility Manager
+      email: roy.anderson@equinix.com
+      phone: 123-456-7903
+      organization: Equinix
+    - name: Stanley Hudson
+      title: Sales Representative
+      email: stanley.hudson@lumen.com
+      phone: 123-456-7904
+      organization: Lumen
+    - name: Todd Packer
+      title: Account Executive
+      email: todd.packer@zayo.com
+      phone: 123-456-7905
+      organization: Zayo
+    - name: Charles Miner
+      title: VP of North East
+      email: charles.miner@verizon.com
+      phone: 123-456-7906
+      organization: Verizon Business
+    - name: Danny Cordray
+      title: Traveling Salesman
+      email: danny.cordray@att.com
+      phone: 123-456-7907
+      organization: AT&T Services
+
+    # Customers
+    - name: Michael Scott
+      title: Regional Manager
+      email: michael.scott@customer1.com
+      phone: 123-456-8001
+      organization: Customer 1
+    - name: Darryl Philbin
+      title: IT Operations Manager
+      email: darryl.philbin@customer1.com
+      phone: 123-456-8002
+      organization: Customer 1
+    - name: Pam Beesly
+      title: Office Administrator
+      email: pam.beesly@customer2.com
+      phone: 123-456-8003
+      organization: Customer 2
+    - name: Angela Martin
+      title: Head of Accounting
+      email: angela.martin@customer3.com
+      phone: 123-456-8004
+      organization: Customer 3
+    - name: Oscar Martinez
+      title: Senior Accountant
+      email: oscar.martinez@customer4.com
+      phone: 123-456-8005
+      organization: Customer 4
+    - name: Kevin Malone
+      title: Accountant
+      email: kevin.malone@customer5.com
+      phone: 123-456-8006
+      organization: Customer 5
+    - name: Bob Vance
+      title: Owner
+      email: bob.vance@customer5.com
+      phone: 123-456-8007
+      organization: Customer 5
+    - name: Kelly Kapoor
+      title: Customer Service Rep
+      email: kelly.kapoor@customer6.com
+      phone: 123-456-8008
+      organization: Customer 6
+    - name: Toby Flenderson
+      title: HR Representative
+      email: toby.flenderson@customer7.com
+      phone: 123-456-8009
+      organization: Customer 7
+    - name: Creed Bratton
+      title: Quality Assurance
+      email: creed.bratton@customer8.com
+      phone: 123-456-8010
+      organization: Customer 8
+    - name: Meredith Palmer
+      title: Supplier Relations
+      email: meredith.palmer@customer9.com
+      phone: 123-456-8011
+      organization: Customer 9
+    - name: Phyllis Lapin
+      title: Sales Representative
+      email: phyllis.lapin@customer10.com
+      phone: 123-456-8012
+      organization: Customer 10
+    - name: Nellie Bertram
+      title: Special Projects Manager
+      email: nellie.bertram@customer11.com
+      phone: 123-456-8013
+      organization: Customer 11
+    - name: Pete Miller
+      title: Customer Support
+      email: pete.miller@customer12.com
+      phone: 123-456-8014
+      organization: Customer 12
+    - name: Clark Green
+      title: Junior Sales
+      email: clark.green@customer13.com
+      phone: 123-456-8015
+      organization: Customer 13
+    - name: Erin Hannon
+      title: IT Support Specialist
+      email: erin.hannon@customer14.com
+      phone: 123-456-8016
+      organization: Customer 14
+    - name: Jo Bennett
+      title: CEO
+      email: jo.bennett@customer15.com
+      phone: 123-456-8017
+      organization: Customer 15
+    - name: Deangelo Vickers
+      title: Executive Manager
+      email: deangelo.vickers@customer16.com
+      phone: 123-456-8018
+      organization: Customer 16
+    - name: Holly Flax
+      title: HR Director
+      email: holly.flax@customer17.com
+      phone: 123-456-8019
+      organization: Customer 17
+    - name: David Brent
+      title: General Manager
+      email: david.brent@customer18.com
+      phone: 123-456-8020
+      organization: Customer 18
+    - name: Mose Schrute
+      title: Facilities
+      email: mose.schrute@customer19.com
+      phone: 123-456-8021
+      organization: Customer 19
+    - name: John Doe
+      title: Consultant
+      email: john.doe@customer20.com
+      phone: 123-456-8022
+      organization: Customer 20
