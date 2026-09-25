@@ -1282,11 +1282,15 @@ class TestReconcileApplicationRulesCloudDispatch:
 
 class TestReconcileComponentServicePorts:
     """AppEndpoint is user-authored data this generator only enriches, not a
-    generated artifact it owns — it must be fetched/saved via _init_client
-    (untracked), not self.client (tracked). Using self.client would register
-    the endpoint as a group member only on runs that link a *new* port; an
-    idempotent re-run linking nothing would then see it as unused and the
-    SDK's delete_unused_nodes would try to delete it."""
+    generated artifact it owns. self.client and self._init_client are the
+    SAME object — start_tracking() mutates it in place (sets .mode =
+    TRACKING) rather than swapping in a separate instance — so fetching via
+    one vs. the other makes no difference. The only real lever is passing
+    update_group_context=False to save(): without it, save() while
+    self.client.mode == TRACKING registers the endpoint as a group member
+    only on runs that link a *new* port; an idempotent re-run linking
+    nothing then leaves it unregistered and the SDK's delete_unused_nodes
+    tries to delete it."""
 
     @staticmethod
     def _edge(endpoint_id: str = "ep-1") -> tuple[dict, dict, dict]:
@@ -1313,27 +1317,19 @@ class TestReconcileComponentServicePorts:
         service_ports_rel.peers = []
         service_ports_rel.add = MagicMock()
         endpoint_obj.service_ports = service_ports_rel
-        gen._init_client.get = AsyncMock(return_value=endpoint_obj)
+        gen.client.get = AsyncMock(return_value=endpoint_obj)
         port_obj = MagicMock()
         port_obj.id = "port-443-tcp"
         port_obj.save = AsyncMock()
         gen.client.create = AsyncMock(return_value=port_obj)
         return gen, endpoint_obj
 
-    def test_endpoint_fetched_via_init_client_not_tracked_client(self):
-        gen, _endpoint_obj = self._make_gen_ready()
-
-        asyncio.run(gen._reconcile_component_service_ports(self._components(), [self._edge()]))
-
-        gen._init_client.get.assert_awaited_once_with(kind="AppEndpoint", id="ep-1")
-        gen.client.get.assert_not_awaited()
-
-    def test_endpoint_saved_via_init_client_when_new_port_linked(self):
+    def test_endpoint_saved_with_update_group_context_false_when_new_port_linked(self):
         gen, endpoint_obj = self._make_gen_ready()
 
         asyncio.run(gen._reconcile_component_service_ports(self._components(), [self._edge()]))
 
-        endpoint_obj.save.assert_awaited_once_with(allow_upsert=True)
+        endpoint_obj.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
 
     def test_service_port_object_still_created_via_tracked_client(self):
         gen, _endpoint_obj = self._make_gen_ready()

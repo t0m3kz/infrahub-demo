@@ -1100,14 +1100,7 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
         self,
         endpoint_id: str,
     ) -> tuple[Any, Any, set[str]] | None:
-        # Fetched via _init_client (untracked), not self.client: AppEndpoint is
-        # user-authored data this generator merely enriches, not a generated
-        # artifact it owns. Fetching/saving it through the tracked client would
-        # register it as a group member only on runs that link a *new* port;
-        # an idempotent re-run that links nothing then sees it as unused and
-        # the SDK's delete_unused_nodes tries to delete it (blocked here only
-        # because AppDependency.target is mandatory — a near-miss data loss).
-        endpoint_obj = await self._init_client.get(kind="AppEndpoint", id=endpoint_id)
+        endpoint_obj = await self.client.get(kind="AppEndpoint", id=endpoint_id)
         if endpoint_obj is None:
             self.logger.error("Could not fetch AppEndpoint object for id %s", endpoint_id)
             return None
@@ -1188,6 +1181,15 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
 
             if endpoint_updated:
                 try:
-                    await endpoint_obj.save(allow_upsert=True)
+                    # update_group_context=False: AppEndpoint is user-authored
+                    # data this generator only enriches, not a generated
+                    # artifact it owns. Without this, save() while self.client
+                    # is in TRACKING mode registers the endpoint as a group
+                    # member only on runs that link a *new* port; an
+                    # idempotent re-run linking nothing then leaves it
+                    # unregistered and the SDK's delete_unused_nodes tries to
+                    # delete it (previously blocked only by AppDependency.target
+                    # being a mandatory relationship — a near-miss data loss).
+                    await endpoint_obj.save(allow_upsert=True, update_group_context=False)
                 except Exception as exc:
                     self.logger.error("  Failed to save endpoint %s service_ports: %s", endpoint_name, exc)
