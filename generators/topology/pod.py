@@ -8,7 +8,7 @@ from typing_extensions import TypedDict
 from utils.data_cleaning import clean_data
 
 from ..common import CablingOptions, CommonGenerator, DeviceOptions, RoutingOptions
-from ..connections import CablingMixin
+from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
 from ..dc_config import host_bits_to_prefix_length, resolve_dc_size_layout
 from ..devices import DeviceMixin
 from ..helpers.naming import DeviceNamingConfig
@@ -40,16 +40,8 @@ _BORDER_LEAF_RETRY_DELAY = 2.0
 # "load-balancer" interfaces are the dedicated counterpart ports — same
 # convention as dc.py's DC-wide border-leaf, just scoped to one pod's own
 # border-spine instead. See DCS-7050CX3-32C-R_BORDER_SPINE's template for
-# the canonical port layout.
-_BS_ROLE_FOR: dict[str, str] = {"firewall": "firewall", "load-balancer": "load-balancer"}
-
-# device_role -> HA node kind. HA pairing itself happens inside
-# DeviceMixin.create_devices() (see DeviceOptions.ha_kind) — only the right
-# kind per role needs picking here.
-_HA_KIND_BY_ROLE: dict[str, str] = {
-    "firewall": "ManagedFirewallHA",
-    "load-balancer": "ManagedLoadbalancerHA",
-}
+# the canonical port layout. BORDER_ROLE_FOR_SERVICES (generators/
+# connections.py) supplies the border_role_for mapping below.
 
 
 class TopologyPodParentData(TypedDict, total=False):
@@ -530,22 +522,30 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
         )
         device_indexes = [dc["index"], self.data["index"]]
 
-        firewall_names = await self._create_role_devices(
-            role="firewall",
-            entries=firewall_entries,
-            deployment_id=self.data["id"],
-            naming_convention=naming_conv,
-            indexes=device_indexes,
-        )
-        load_balancer_names = await self._create_role_devices(
-            role="load-balancer",
-            entries=load_balancer_entries,
-            deployment_id=self.data["id"],
-            naming_convention=naming_conv,
-            indexes=device_indexes,
-        )
+        firewall_names = [
+            name
+            for _, names in await self.create_ha_role_devices(
+                role="firewall",
+                entries=firewall_entries,
+                deployment_id=self.data["id"],
+                naming_convention=naming_conv,
+                indexes=device_indexes,
+            )
+            for name in names
+        ]
+        load_balancer_names = [
+            name
+            for _, names in await self.create_ha_role_devices(
+                role="load-balancer",
+                entries=load_balancer_entries,
+                deployment_id=self.data["id"],
+                naming_convention=naming_conv,
+                indexes=device_indexes,
+            )
+            for name in names
+        ]
         await self._cable_border_services(
-            border_role_for=_BS_ROLE_FOR,
+            border_role_for=BORDER_ROLE_FOR_SERVICES,
             connectivity_mode=cast(Literal["pbr", "inline"], dc.get("connectivity_mode", "pbr")),
             border_names=spines,
             firewall_names=firewall_names,
@@ -585,40 +585,6 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
         except Exception as exc:
             self.logger.error(f"Failed to create shared spine AS for pod {self.pod_name}: {exc}")
             return None
-
-    async def _create_role_devices(
-        self,
-        *,
-        role: Literal["firewall", "load-balancer"],
-        entries: list[dict[str, Any]],
-        deployment_id: str,
-        naming_convention: Literal["standard", "hierarchical", "flat", "computed"],
-        indexes: list[int],
-    ) -> list[str]:
-        """Create firewall/load-balancer devices for this pod's own border-spine
-        (deployment_id=pod.id). Each entry's devices are paired into an HA
-        domain two-at-a-time by create_devices() itself (any quantity, not
-        just 2 — an odd device is left unpaired). No loopback allocation — not
-        part of underlay/overlay routing."""
-        device_options = DeviceOptions(indexes=indexes, ha_kind=_HA_KIND_BY_ROLE[role])
-        if role == "load-balancer":
-            # create_devices()'s default group_name is f"{device_role}s" = "load-balancers",
-            # but the bootstrap group is named "loadbalancers" (no hyphen) — override.
-            device_options["group_name"] = "loadbalancers"
-
-        all_names: list[str] = []
-        for entry in entries:
-            names = await self.create_devices(
-                deployment_id=deployment_id,
-                device_role=role,
-                quantity=entry["quantity"],
-                template=entry["template"],
-                naming_convention=naming_convention,
-                options=device_options,
-            )
-            all_names.extend(names)
-
-        return all_names
 
     async def _cable_border_leafs_to_spines(
         self,

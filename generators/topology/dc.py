@@ -7,7 +7,7 @@ from typing_extensions import TypedDict
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator, DeviceOptions
-from ..connections import CablingMixin
+from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
 from ..dc_config import host_bits_to_prefix_length, resolve_dc_size_layout
 from ..devices import DeviceMixin
 from ..helpers import name_to_asn_range
@@ -568,26 +568,18 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
         indexes: list[int],
     ) -> list[str]:
         """Create firewall/load-balancer devices for one fabric_templates role,
-        DC-wide (deployment_id=dc.id). Each entry's devices are paired into an
-        HA domain two-at-a-time by create_devices() itself (any quantity, not
-        just 2 — an odd device is left unpaired). No loopback allocation — not
-        part of underlay/overlay routing."""
-        device_options = DeviceOptions(indexes=indexes, ha_kind=_HA_KIND_BY_ROLE[role])
-        if role == "load-balancer":
-            # create_devices()'s default group_name is f"{device_role}s" = "load-balancers",
-            # but the bootstrap group is named "loadbalancers" (no hyphen) — override.
-            device_options["group_name"] = "loadbalancers"
-
+        DC-wide (deployment_id=dc.id), via the shared HA-paired creation shape
+        (DeviceMixin.create_ha_role_devices — also used by pod.py and
+        colocation.py). DC-specific on top of that shared shape: each physical
+        entry also gets its own shared virtual instances provisioned."""
         all_names: list[str] = []
-        for entry in entries:
-            names = await self.create_devices(
-                deployment_id=deployment_id,
-                device_role=role,
-                quantity=entry["quantity"],
-                template=entry["template"],
-                naming_convention=naming_convention,
-                options=device_options,
-            )
+        for entry, names in await self.create_ha_role_devices(
+            role=role,
+            entries=entries,
+            deployment_id=deployment_id,
+            naming_convention=naming_convention,
+            indexes=indexes,
+        ):
             all_names.extend(names)
             await self._provision_shared_virtual_instances(
                 role=role,
@@ -731,7 +723,7 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
             await self._ensure_firewall_context_pools(dc_name=self.fabric_name)
 
         await self._cable_border_services(
-            border_role_for={"firewall": "firewall", "load-balancer": "load-balancer"},
+            border_role_for=BORDER_ROLE_FOR_SERVICES,
             connectivity_mode=cast(Literal["pbr", "inline"], data.get("connectivity_mode", "pbr")),
             border_names=border_leaf_names,
             firewall_names=firewall_names,

@@ -23,9 +23,9 @@ import pytest
 
 from generators.helpers.naming import DeviceNameContext, DeviceNamingConfig
 from generators.topology.colocation import (
-    _COLO_HA_KIND_BY_ROLE,
     _COLO_LOOPBACK_PREFIX_LENGTH,
     _COLO_MANAGEMENT_PREFIX_LENGTH,
+    _COLO_SERVICE_ROLES,
     _COLO_TECHNICAL_PREFIX_LENGTH,
     _COLO_VALID_FABRIC_ROLES,
     ColocationMetroGenerator,
@@ -40,6 +40,32 @@ _EDGE_TEMPLATE = {
     "template_name": "N9K-C9316D-GX_EDGE",
     "platform": {"id": "plat-nxos", "name": "cisco_nxos"},
     "device_type": "dt-9316d",
+}
+
+# Same edge template, but with the real N9K-C9316D-GX_EDGE port layout
+# attached (see data/bootstrap/10_physical_devices_templates_cisco_nxos.yaml):
+# a `firewall`-role port block, no `load-balancer`-role ports at all.
+_EDGE_TEMPLATE_WITH_FIREWALL_PORTS = {
+    **_EDGE_TEMPLATE,
+    "id": "tpl-edge-fw-ports",
+    "interfaces": [
+        {"name": "Ethernet1/15", "role": "firewall"},
+        {"name": "Ethernet1/16", "role": "firewall"},
+    ],
+}
+
+# A hypothetical edge template with BOTH firewall- and load-balancer-role
+# ports (mirrors N9K-C9336C-FX2_BORDER_LEAF's layout) — used where a test
+# wants every colocation role to be cablable, not just structurally valid.
+_EDGE_TEMPLATE_WITH_ALL_SERVICE_PORTS = {
+    **_EDGE_TEMPLATE,
+    "id": "tpl-edge-all-ports",
+    "interfaces": [
+        {"name": "Ethernet1/15", "role": "firewall"},
+        {"name": "Ethernet1/16", "role": "firewall"},
+        {"name": "Ethernet1/17", "role": "load-balancer"},
+        {"name": "Ethernet1/18", "role": "load-balancer"},
+    ],
 }
 
 _VIRTUAL_EDGE_TEMPLATE = {
@@ -115,13 +141,78 @@ class TestFabricTemplateValidation:
         assert gen._valid_fabric_templates() == [good]
 
     def test_every_colocation_role_is_accepted(self) -> None:
+        """Every colocation role is structurally valid — given an edge
+        template with the matching ports, none of them get dropped as
+        uncablable either (see TestUncablableServiceEntries for the
+        edge-lacks-the-port case)."""
         gen = _make_generator()
         entries = [
-            {"role": role, "quantity": 2, "template": _EDGE_TEMPLATE} for role in ("edge", "firewall", "load-balancer")
+            {"role": "edge", "quantity": 2, "template": _EDGE_TEMPLATE_WITH_ALL_SERVICE_PORTS},
+            {"role": "firewall", "quantity": 2, "template": _EDGE_TEMPLATE},
+            {"role": "load-balancer", "quantity": 2, "template": _EDGE_TEMPLATE},
         ]
         gen.data = _metro(fabric_templates=entries)
 
         assert gen._valid_fabric_templates() == entries
+        gen.logger.warning.assert_not_called()
+
+
+class TestUncablableServiceEntries:
+    """_drop_uncablable_service_entries: a physical firewall/load-balancer
+    entry is only usable if some physical edge template in the same metro
+    exposes a same-named port role — otherwise create_devices() would build
+    a real HA pair and create_chain_cabling would fail the task on it right
+    after, with the appliance already left behind."""
+
+    def test_service_role_with_no_matching_edge_port_is_dropped(self) -> None:
+        """N9K-C9316D-GX_EDGE has `firewall` ports but no `load-balancer`
+        ports — exactly the gap that used to reach create_chain_cabling."""
+        gen = _make_generator()
+        entries = [
+            {"role": "edge", "quantity": 2, "template": _EDGE_TEMPLATE_WITH_FIREWALL_PORTS},
+            {"role": "load-balancer", "quantity": 2, "template": _EDGE_TEMPLATE},
+        ]
+        gen.data = _metro(fabric_templates=entries)
+
+        assert gen._valid_fabric_templates() == [entries[0]]
+        gen.logger.warning.assert_called_once()
+        gen.logger.error.assert_not_called()
+
+    def test_service_role_with_a_matching_edge_port_is_kept(self) -> None:
+        gen = _make_generator()
+        entries = [
+            {"role": "edge", "quantity": 2, "template": _EDGE_TEMPLATE_WITH_FIREWALL_PORTS},
+            {"role": "firewall", "quantity": 2, "template": _EDGE_TEMPLATE},
+        ]
+        gen.data = _metro(fabric_templates=entries)
+
+        assert gen._valid_fabric_templates() == entries
+        gen.logger.warning.assert_not_called()
+
+    def test_no_physical_edge_entry_at_all_is_not_this_checks_concern(self) -> None:
+        """A metro can legitimately declare a service role with no edge pair
+        at all (Paris-style) — _cable_metro_services's own no-op guard covers
+        that already, so this check must not also drop the entry."""
+        gen = _make_generator()
+        entries = [{"role": "firewall", "quantity": 2, "template": _EDGE_TEMPLATE}]
+        gen.data = _metro(fabric_templates=entries)
+
+        assert gen._valid_fabric_templates() == entries
+        gen.logger.warning.assert_not_called()
+
+    def test_virtual_service_entry_is_exempt(self) -> None:
+        """A virtual firewall is never cabled in the first place (see
+        _create_metro_devices), so a physical edge lacking the port is
+        irrelevant to it."""
+        gen = _make_generator()
+        entries = [
+            {"role": "edge", "quantity": 2, "template": _EDGE_TEMPLATE_WITH_FIREWALL_PORTS},
+            {"role": "load-balancer", "quantity": 2, "template": _VIRTUAL_EDGE_TEMPLATE},
+        ]
+        gen.data = _metro(deployment_type="hybrid", fabric_templates=entries)
+
+        assert gen._valid_fabric_templates() == entries
+        gen.logger.warning.assert_not_called()
 
 
 class TestDeploymentStrategy:
@@ -470,10 +561,10 @@ class TestMetroDevices:
         assert gen.create_devices.await_args_list[-1].kwargs["deployment_id"] == "metro-1"
 
     def test_ha_roles_are_a_subset_of_the_valid_colocation_roles(self) -> None:
-        """An HA mapping for a role the metro would never build is dead code,
-        and a role the metro builds but cannot pair is a silent single point of
+        """A service role the metro would never build is dead code, and a
+        role the metro builds but cannot pair is a silent single point of
         failure — keep the two in step."""
-        assert set(_COLO_HA_KIND_BY_ROLE) < _COLO_VALID_FABRIC_ROLES
+        assert _COLO_SERVICE_ROLES < _COLO_VALID_FABRIC_ROLES
 
     @pytest.mark.asyncio
     async def test_naming_convention_is_lowercased_and_defaulted(self) -> None:
