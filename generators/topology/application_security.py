@@ -1100,7 +1100,14 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
         self,
         endpoint_id: str,
     ) -> tuple[Any, Any, set[str]] | None:
-        endpoint_obj = await self.client.get(kind="AppEndpoint", id=endpoint_id)
+        # Fetched via _init_client (untracked), not self.client: AppEndpoint is
+        # user-authored data this generator merely enriches, not a generated
+        # artifact it owns. Fetching/saving it through the tracked client would
+        # register it as a group member only on runs that link a *new* port;
+        # an idempotent re-run that links nothing then sees it as unused and
+        # the SDK's delete_unused_nodes tries to delete it (blocked here only
+        # because AppDependency.target is mandatory — a near-miss data loss).
+        endpoint_obj = await self._init_client.get(kind="AppEndpoint", id=endpoint_id)
         if endpoint_obj is None:
             self.logger.error("Could not fetch AppEndpoint object for id %s", endpoint_id)
             return None
