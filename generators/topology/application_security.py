@@ -274,6 +274,26 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
             src_seg = src_comp.get("network_segment") or {}
             dst_seg = dst_comp.get("network_segment") or {}
 
+            if planner.is_cloud_dependency(src_seg, dst_seg):
+                # At least one side is a CloudNetworkSegment: route to the
+                # cloud-security-group path instead of the on-prem
+                # SecurityPolicy/SecurityPolicyRule one below. Previously
+                # nothing dispatched here at all, so an on-prem<->cloud
+                # dependency silently got an on-prem-shaped rule referencing
+                # a segment id that rule couldn't actually enforce against.
+                rule_name = planner.rule_name(app_name, src_comp, dst_comp)
+                if await self._create_cloud_rule(
+                    app_name=app_name,
+                    src_comp=src_comp,
+                    dst_comp=dst_comp,
+                    dep=dep,
+                    rule_name=rule_name,
+                ):
+                    rules_created += 1
+                else:
+                    rules_skipped += 1
+                continue
+
             src_seg_id = src_seg.get("id")
             dst_seg_id = dst_seg.get("id")
             src_seg_name = str(src_seg.get("name") or src_seg_id or "")
@@ -387,15 +407,33 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
                     dep_name=dep.get("name", dep.get("id", "?")),
                     log=cross_zone,
                 )
+                if rule_data.get("apply_on_switch"):
+                    await self._reconcile_return_rule_for_microsegmented(
+                        app_name=app_name,
+                        src_comp=src_comp,
+                        dst_comp=dst_comp,
+                        dep=dep,
+                        src_seg=src_seg,
+                        dst_seg=dst_seg,
+                        dst_seg_id=dst_seg_id,
+                        protocol=protocol,
+                        port_start=port_start,
+                        port_end=port_end,
+                        cross_zone=cross_zone,
+                        segment_policies=segment_policies,
+                    )
             except Exception as exc:
                 self.logger.error("  Failed to create rule '%s': %s", rule_name, exc)
 
-        for src_comp, _dep, _dst_endpoint in edges:
-            src_seg = src_comp.get("network_segment") or {}
-            src_seg_id = src_seg.get("id")
-            if not src_seg_id or src_seg_id not in segment_policies:
-                continue
-            await self._attach_policy_to_source_segment(segment=src_seg, policy_id=segment_policies[src_seg_id].id)
+        attached_seg_ids: set[str] = set()
+        for src_comp, _dep, dst_endpoint in edges:
+            for comp in (src_comp, dst_endpoint.get("parent") or {}):
+                seg = comp.get("network_segment") or {}
+                seg_id = seg.get("id")
+                if not seg_id or seg_id not in segment_policies or seg_id in attached_seg_ids:
+                    continue
+                await self._attach_policy_to_source_segment(segment=seg, policy_id=segment_policies[seg_id].id)
+                attached_seg_ids.add(seg_id)
 
         self.logger.info(
             "Application %s: %d rule(s) created, %d already existed",
@@ -435,34 +473,25 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
         return edges
 
     async def _get_or_create_sg(self, sg_name: str, vnet_id: str, acct_id: str | None) -> Any | None:
-        """Legacy cloud-SG helper retained for backward compatibility/tests."""
+        """Get-or-create the CloudSecurityGroup an app's cloud-side dependency
+        rules attach to. Cached per-run since multiple dependencies for the
+        same app typically share one SG."""
         cache: dict[str, Any] = getattr(self, "_sg_cache", {})
         if sg_name in cache:
             return cache[sg_name]
-        try:
-            existing = await self.client.filters(kind=CloudSecurityGroup, name__value=sg_name)
-            if existing:
-                await existing[0].save(allow_upsert=True)
-                cache[sg_name] = existing[0]
-                self._sg_cache = cache
-                return existing[0]
-        except Exception:
-            pass
+
         data: dict[str, Any] = {"name": sg_name, "virtual_network": {"id": vnet_id}}
         if acct_id:
             data["account"] = {"id": acct_id}
-        try:
-            sg = await self.client.create(kind=CloudSecurityGroup, data=data)
-            await sg.save(allow_upsert=True)
-            self.logger.info("Created CloudSecurityGroup: %s", sg_name)
-            cache[sg_name] = sg
-            self._sg_cache = cache
-            return sg
-        except Exception as exc:
-            self.logger.error("Failed to create CloudSecurityGroup %s: %s", sg_name, exc)
-            cache[sg_name] = None
-            self._sg_cache = cache
-            return None
+        sg = await self._get_or_create_by_name(
+            kind=CloudSecurityGroup,
+            name=sg_name,
+            create_data=data,
+            created_log="Created CloudSecurityGroup: %s",
+        )
+        cache[sg_name] = sg
+        self._sg_cache = cache
+        return sg
 
     async def _create_cloud_rule(
         self,
@@ -472,7 +501,11 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
         dep: dict,
         rule_name: str,
     ) -> bool:
-        """Legacy cloud-rule helper retained for backward compatibility/tests."""
+        """Create a CloudSecurityGroupRule for a dependency where either side
+        is a CloudNetworkSegment — dispatched from _reconcile_application_rules
+        via RulesPlanner.is_cloud_dependency() instead of the on-prem
+        SecurityPolicy/SecurityPolicyRule path, which can't reference a cloud
+        segment's virtual_network/account the way this can."""
         planner = RulesPlanner()
         src_seg = src_comp.get("network_segment") or {}
         dst_seg = dst_comp.get("network_segment") or {}
@@ -564,32 +597,52 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
             self.logger.error("  Failed to create cloud rule '%s': %s", rule_name, exc)
             return False
 
-    async def _get_or_create_policy(self, policy_name: str, app_name: str) -> Any | None:
+    async def _get_or_create_by_name(
+        self,
+        *,
+        kind: Any,
+        name: str,
+        create_data: dict[str, Any],
+        found_log: str | None = None,
+        created_log: str | None = None,
+    ) -> Any | None:
+        """Shared get-or-create-by-name-value shape: filter, upsert-and-return
+        if found; else create, save, and return. Used by every policy/SG
+        lookup in this file (they previously hand-rolled this same try/
+        filter/try/create dance independently ~8 times)."""
         try:
-            existing = await self.client.filters(kind=SecurityPolicy, name__value=policy_name)
+            existing = await self.client.filters(kind=kind, name__value=name)
             if existing:
-                self.logger.info("Using existing policy: %s", policy_name)
+                if found_log:
+                    self.logger.info(found_log, name)
                 await existing[0].save(allow_upsert=True)
                 return existing[0]
         except Exception as exc:
-            self.logger.warning("Could not look up policy %s: %s", policy_name, exc)
+            self.logger.warning("Could not look up %s: %s", name, exc)
 
         try:
-            policy = await self.client.create(
-                kind=SecurityPolicy,
-                data={
-                    "name": policy_name,
-                    "description": f"Auto-generated dependency rules for source segment {app_name}",
-                    "default_action": "deny",
-                    "enabled": True,
-                },
-            )
-            await policy.save(allow_upsert=True)
-            self.logger.info("Created policy: %s", policy_name)
-            return policy
+            obj = await self.client.create(kind=kind, data=create_data)
+            await obj.save(allow_upsert=True)
+            if created_log:
+                self.logger.info(created_log, name)
+            return obj
         except Exception as exc:
-            self.logger.error("Failed to create policy %s: %s", policy_name, exc)
+            self.logger.error("Failed to create %s: %s", name, exc)
             return None
+
+    async def _get_or_create_policy(self, policy_name: str, app_name: str) -> Any | None:
+        return await self._get_or_create_by_name(
+            kind=SecurityPolicy,
+            name=policy_name,
+            create_data={
+                "name": policy_name,
+                "description": f"Auto-generated dependency rules for source segment {app_name}",
+                "default_action": "deny",
+                "enabled": True,
+            },
+            found_log="Using existing policy: %s",
+            created_log="Created policy: %s",
+        )
 
     async def _reconcile_proxy_rule(
         self,
@@ -665,31 +718,19 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
             return False
 
     async def _get_or_create_proxy_policy(self, policy_name: str) -> Any | None:
-        try:
-            existing = await self.client.filters(kind=ProxyPolicy, name__value=policy_name)
-            if existing:
-                await existing[0].save(allow_upsert=True)
-                return existing[0]
-        except Exception as exc:
-            self.logger.warning("Could not look up proxy policy %s: %s", policy_name, exc)
-
-        try:
-            policy = await self.client.create(
-                kind=ProxyPolicy,
-                data={
-                    "name": policy_name,
-                    "description": f"Auto-generated egress rules for {policy_name.removesuffix('-egress')}",
-                    "policy_type": "customer",
-                    "default_action": "block",
-                    "enabled": True,
-                },
-            )
-            await policy.save(allow_upsert=True)
-            self.logger.info("Created proxy policy: %s", policy_name)
-            return policy
-        except Exception as exc:
-            self.logger.error("Failed to create proxy policy %s: %s", policy_name, exc)
-            return None
+        description_subject = policy_name.removesuffix("-egress").removesuffix("-private-access")
+        return await self._get_or_create_by_name(
+            kind=ProxyPolicy,
+            name=policy_name,
+            create_data={
+                "name": policy_name,
+                "description": f"Auto-generated egress rules for {description_subject}",
+                "policy_type": "customer",
+                "default_action": "block",
+                "enabled": True,
+            },
+            created_log="Created proxy policy: %s",
+        )
 
     async def _find_existing_proxy_policy_rule(self, policy_id: str, rule_name: str) -> Any | None:
         existing_rules = await self.client.filters(kind=ProxyPolicyRule, policy__ids=[policy_id])
@@ -873,27 +914,26 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
             default_validity_days=RULE_DEFAULT_VALIDITY_DAYS,
         )
 
-    async def _get_zone(self, zone_name: str) -> Any | None:
-        cache: dict[str, Any] = getattr(self, "_zone_cache", {})
-        if zone_name not in cache:
+    async def _cached_lookup_by_name(self, *, cache_attr: str, kind: Any, name: str) -> Any | None:
+        """Shared cache-or-fetch-by-name-value shape (read-only — never
+        creates on a miss, unlike _get_or_create_by_name)."""
+        cache: dict[str, Any] = getattr(self, cache_attr, {})
+        if name not in cache:
             try:
-                zones = await self.client.filters(kind=SecurityZone, name__value=zone_name)
-                cache[zone_name] = zones[0] if zones else None
+                found = await self.client.filters(kind=kind, name__value=name)
+                cache[name] = found[0] if found else None
             except Exception:
-                cache[zone_name] = None
-            self._zone_cache = cache
-        return cache[zone_name]
+                cache[name] = None
+            setattr(self, cache_attr, cache)
+        return cache[name]
+
+    async def _get_zone(self, zone_name: str) -> Any | None:
+        return await self._cached_lookup_by_name(cache_attr="_zone_cache", kind=SecurityZone, name=zone_name)
 
     async def _get_profile(self, profile_name: str) -> Any | None:
-        cache: dict[str, Any] = getattr(self, "_profile_cache", {})
-        if profile_name not in cache:
-            try:
-                profiles = await self.client.filters(kind=SecuritySecurityProfile, name__value=profile_name)
-                cache[profile_name] = profiles[0] if profiles else None
-            except Exception:
-                cache[profile_name] = None
-            self._profile_cache = cache
-        return cache[profile_name]
+        return await self._cached_lookup_by_name(
+            cache_attr="_profile_cache", kind=SecuritySecurityProfile, name=profile_name
+        )
 
     async def _attach_policy_to_source_segment(self, segment: dict[str, Any], policy_id: str) -> None:
         seg_id = segment.get("id")
@@ -971,6 +1011,73 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
                 dst_tag.get("name", dst_tag_id),
                 exc,
             )
+
+    async def _reconcile_return_rule_for_microsegmented(
+        self,
+        *,
+        app_name: str,
+        src_comp: dict[str, Any],
+        dst_comp: dict[str, Any],
+        dep: dict[str, Any],
+        src_seg: dict[str, Any],
+        dst_seg: dict[str, Any],
+        dst_seg_id: str,
+        protocol: str,
+        port_start: int | None,
+        port_end: int | None,
+        cross_zone: bool,
+        segment_policies: dict[str, Any],
+    ) -> bool:
+        """Mirror a microsegmented (apply_on_switch) permit with a return rule.
+
+        A microsegmented rule is enforced at a stateless switch ACL, which has
+        no connection tracking to auto-permit response traffic the way a
+        stateful firewall would — so the forward permit alone silently drops
+        the return leg. Scoped to the destination segment's own policy
+        (reusing the same segment_policies cache the forward pass built), so
+        it composes with the existing per-source-segment policy attachment.
+        """
+        planner = RulesPlanner()
+        dst_seg_name = str(dst_seg.get("name") or dst_seg_id or "")
+
+        policy = segment_policies.get(dst_seg_id)
+        if policy is None:
+            policy_name = planner.segment_policy_name(dst_seg)
+            policy = await self._get_or_create_policy(policy_name, dst_seg_name)
+            if policy is None:
+                return False
+            segment_policies[dst_seg_id] = policy
+
+        return_rule_name = f"{planner.rule_name(app_name, dst_comp, src_comp)}-return"
+        existing_rule = await self._find_existing_policy_rule(policy_id=policy.id, rule_name=return_rule_name)
+        if existing_rule is not None:
+            await existing_rule.save(allow_upsert=True)
+            return True
+
+        return_rule_data = planner.build_rule_payload(
+            policy_id=policy.id,
+            rule_name=return_rule_name,
+            dep=dep,
+            src_comp=dst_comp,
+            dst_comp=src_comp,
+            src_seg=dst_seg,
+            dst_seg=src_seg,
+            protocol=protocol,
+            port_start=port_start,
+            port_end=port_end,
+            cross_zone=cross_zone,
+        )
+        try:
+            await self._create_or_update_policy_rule(
+                policy_id=policy.id,
+                rule_name=return_rule_name,
+                rule_data=return_rule_data,
+            )
+            self.logger.info("  Created microsegmented return rule '%s'", return_rule_name)
+            return True
+        except Exception as exc:
+            self.logger.error("  Failed to create return rule '%s': %s", return_rule_name, exc)
+            return False
 
     @staticmethod
     def _pick_profile(app_security_profile: str, cross_zone: bool) -> str | None:
