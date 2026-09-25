@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from infrahub_sdk.exceptions import NodeNotFoundError, ValidationError
 from infrahub_sdk.protocols import CoreIPAddressPool, CoreStandardGroup
@@ -56,6 +56,14 @@ _FABRIC_ROLES = frozenset(
 # firewall must never route to a Panorama (panos) controller just because
 # both happen to be controller_type=security_manager.
 _ROLE_CONTROLLER_TYPE: dict[str, str] = {"firewall": "security_manager", "load-balancer": "lb_manager"}
+
+# device_role -> HA node kind for create_ha_role_devices below. Pairing
+# itself happens inside create_devices() (DeviceOptions.ha_kind) — this only
+# picks the right kind per role.
+_HA_ROLE_KIND: dict[str, str] = {
+    "firewall": "ManagedFirewallHA",
+    "load-balancer": "ManagedLoadbalancerHA",
+}
 
 
 class DeviceMixin(MLAGWiringMixin):
@@ -387,6 +395,59 @@ class DeviceMixin(MLAGWiringMixin):
             )
 
         return device_names
+
+    async def create_ha_role_devices(
+        self,
+        *,
+        role: Literal["firewall", "load-balancer"],
+        entries: list[dict[str, Any]],
+        deployment_id: str,
+        naming_convention: Literal["standard", "hierarchical", "flat", "computed"],
+        indexes: list[int],
+        virtual_template_kind: str | None = None,
+    ) -> list[tuple[dict[str, Any], list[str]]]:
+        """Create HA-paired firewall/load-balancer devices for one fabric_templates role.
+
+        Shared shape used by dc.py (DC-wide), pod.py (per-pod border-spine),
+        and colocation.py (metro on-ramp): each entry's devices are paired
+        into an HA domain two-at-a-time by create_devices() itself (any
+        quantity — an odd device is left unpaired). No loopback allocation —
+        these appliances sit off the underlay/overlay, not in it.
+
+        Returns (entry, created_names) per fabric_templates entry rather than
+        one flat list, so a caller that needs per-entry follow-up (dc.py's
+        _provision_shared_virtual_instances) still has the entry at hand.
+
+        virtual_template_kind: when given, an entry whose own
+        template["template_kind"] matches it gets DeviceOptions.virtual=True
+        (colocation.py's on-ramp appliances can themselves be provider-hosted,
+        unlike dc.py's/pod.py's, which are always physical).
+        """
+        options = DeviceOptions(indexes=indexes, ha_kind=_HA_ROLE_KIND[role])
+        if role == "load-balancer":
+            # create_devices()'s default group_name is f"{device_role}s" =
+            # "load-balancers", but the bootstrap group is named
+            # "loadbalancers" (no hyphen) — override.
+            options["group_name"] = "loadbalancers"
+
+        results: list[tuple[dict[str, Any], list[str]]] = []
+        for entry in entries:
+            entry_options = dict(options)
+            if (
+                virtual_template_kind is not None
+                and (entry.get("template") or {}).get("template_kind") == virtual_template_kind
+            ):
+                entry_options["virtual"] = True
+            names = await self.create_devices(
+                deployment_id=deployment_id,
+                device_role=role,
+                quantity=entry["quantity"],
+                template=entry["template"],
+                naming_convention=naming_convention,
+                options=cast("DeviceOptions", entry_options),
+            )
+            results.append((entry, names))
+        return results
 
     def _resolve_role_controller(self, *, device_role: str, template: dict[str, Any]) -> dict[str, Any] | None:
         """Find the pre-fetched controller (if any) governing this

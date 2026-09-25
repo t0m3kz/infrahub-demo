@@ -64,7 +64,7 @@ from typing_extensions import TypedDict
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator, DeviceOptions
-from ..connections import CablingMixin
+from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
 from ..devices import DeviceMixin
 from ..helpers.pools import name_to_asn_range
 from ..pools import PoolMixin
@@ -77,12 +77,12 @@ from ..protocols import TopologyColocationMetro
 # fabric.
 _COLO_VALID_FABRIC_ROLES = frozenset({"edge", "firewall", "load-balancer"})
 
-# device_role -> HA node kind, same mapping and same reason as dc.py's
-# _HA_KIND_BY_ROLE: the pairing itself happens inside
-# DeviceMixin.create_devices() (DeviceOptions.ha_kind), two devices at a time in
-# name order, so only the right kind per role needs picking here. A role in this
-# mapping is a service appliance hanging off the on-ramp rather than a router in
-# it, which is also why it gets no loopback — see _create_metro_devices.
+# Roles that are a service appliance hanging off the on-ramp rather than a
+# router in it — HA-paired two devices at a time via the shared
+# DeviceMixin.create_ha_role_devices() (also used by dc.py and pod.py for
+# their own border-leaf/border-spine firewall/load-balancer pairs), and given
+# no loopback, since they take no part in the underlay/overlay — see
+# _create_metro_devices.
 #
 # The template a firewall/load-balancer entry points at MUST provide an
 # interface with role=ha (CP-26000_FIREWALL's `sync`, PA-5260_FIREWALL's
@@ -90,10 +90,7 @@ _COLO_VALID_FABRIC_ROLES = frozenset({"edge", "firewall", "load-balancer"})
 # ManagedHAInterface pair and the sync cable, and logs an error — i.e. fails the
 # generator task — when a physical member has none. SRX-1500_EDGE_FIREWALL, for
 # instance, has only fxp0 + four downlinks and cannot be paired.
-_COLO_HA_KIND_BY_ROLE: dict[str, str] = {
-    "firewall": "ManagedFirewallHA",
-    "load-balancer": "ManagedLoadbalancerHA",
-}
+_COLO_SERVICE_ROLES = frozenset({"firewall", "load-balancer"})
 
 # Which device kind each metro strategy (TopologyColocationMetro.deployment_type)
 # is allowed to instantiate. The template itself says whether it is physical or
@@ -250,6 +247,65 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, CommonGener
                 )
                 continue
             usable.append(entry)
+        return self._drop_uncablable_service_entries(usable)
+
+    def _drop_uncablable_service_entries(self, entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Drop a physical firewall/load-balancer entry no physical edge template
+        in this metro can cable to, warning why.
+
+        _cable_metro_services hangs each service role off a same-named port
+        role (`firewall`, `load-balancer`) on the edge devices — see
+        N9K-C9316D-GX_EDGE's Ethernet1/[15-16]=firewall. Without this check,
+        an entry for a role no edge template exposes still passes every other
+        check above, so create_devices() builds its HA pair — only for
+        create_chain_cabling to fail the whole generator task afterwards with
+        "cannot cable ... load-balancer_ports=0", leaving a real, uncabled
+        appliance behind. Catching it here instead means the entry is
+        dropped, with a clear reason, before any device for it exists — same
+        as every other drop above.
+
+        Virtual entries are exempt: a virtual edge/service pair is never
+        cabled in the first place (see _create_metro_devices), so its
+        template carries no `interfaces` to check against.
+
+        No physical edge entry at all is a DIFFERENT, already-handled case —
+        _cable_metro_services's own no-op guard covers "services declared
+        with no edge pair to hang them off" — so this check does nothing
+        when there is none, rather than dropping every service entry.
+        """
+        physical_edge_entries = [
+            entry
+            for entry in entries
+            if entry.get("role") == "edge"
+            and (entry.get("template") or {}).get("template_kind") == _COLO_TEMPLATE_KIND_PHYSICAL
+        ]
+        if not physical_edge_entries:
+            return entries
+
+        physical_edge_port_roles: set[str] = set()
+        for entry in physical_edge_entries:
+            for iface in (entry.get("template") or {}).get("interfaces") or []:
+                role = iface.get("role")
+                if role:
+                    physical_edge_port_roles.add(role)
+
+        usable: list[dict[str, Any]] = []
+        for entry in entries:
+            role = entry.get("role")
+            template = entry.get("template") or {}
+            is_physical_service = role in _COLO_SERVICE_ROLES and template.get("template_kind") == (
+                _COLO_TEMPLATE_KIND_PHYSICAL
+            )
+            if is_physical_service and role not in physical_edge_port_roles:
+                self.logger.warning(
+                    f"Metro {self.fabric_name}: fabric_templates entry for role={role!r} has no matching "
+                    f"{role!r}-role port on any physical edge template in this metro (available edge port "
+                    f"roles: {sorted(physical_edge_port_roles) or 'none'}) — skipping this entry rather than "
+                    "creating an appliance with nothing to cable it to. Point the edge template at a device "
+                    f"with a {role!r}-role port block, or drop this entry."
+                )
+                continue
+            usable.append(entry)
         return usable
 
     async def _ensure_colocation_pools(self, *, metro_id: str) -> None:
@@ -402,8 +458,10 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, CommonGener
                                     the DCs it fronts.
           firewall, load-balancer — a service appliance hanging off that on-ramp.
                                     No loopback (it is not part of the underlay
-                                    or overlay), and its devices are paired into
-                                    an HA domain by create_devices() itself.
+                                    or overlay), HA-paired two-at-a-time via the
+                                    shared DeviceMixin.create_ha_role_devices()
+                                    — the same shape dc.py and pod.py use for
+                                    their own border-leaf/border-spine pairs.
         """
         naming_convention = cast(
             Literal["standard", "hierarchical", "flat", "computed"],
@@ -411,20 +469,13 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, CommonGener
         )
 
         physical_names_by_role: dict[str, list[str]] = {}
-        for entry in templates:
-            role = entry["role"]
-            ha_kind = _COLO_HA_KIND_BY_ROLE.get(role)
-            options = DeviceOptions(indexes=[])
-            if ha_kind:
-                # Pairing is two-at-a-time in name order, for any quantity — an
-                # odd device is simply left unpaired, so a metro declaring
-                # quantity 3 firewalls gets fw-fr01/fw-fr02 in a domain and
-                # fw-fr03 standalone.
-                options["ha_kind"] = ha_kind
-            else:
-                options["allocate_loopback"] = True
-                options["loopback_prefix_length"] = 32
+
+        for entry in (e for e in templates if e["role"] == "edge"):
             virtual = entry["template"].get("template_kind") == _COLO_TEMPLATE_KIND_VIRTUAL
+            # Always allocated, virtual or physical: an edge router runs the
+            # routing that peers with the DCs it fronts either way — an MCR
+            # still has a loopback and still peers over it.
+            options = DeviceOptions(indexes=[], allocate_loopback=True, loopback_prefix_length=32)
             if virtual:
                 # Provider-hosted virtual kit, so a DcimVirtualDevice. No
                 # hosting_device: the colocation operator's own platform runs
@@ -432,43 +483,70 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, CommonGener
                 # model — contrast dc.py's virtual firewall/load-balancer
                 # instances, which sit on physical hardware we do own.
                 options["virtual"] = True
-            if role == "load-balancer":
-                # The pre-existing group is "loadbalancers", not the
-                # "load-balancers" create_devices() would derive from the role.
-                options["group_name"] = "loadbalancers"
             names = await self.create_devices(
                 deployment_id=metro_id,
-                device_role=role,
+                device_role="edge",
                 quantity=entry["quantity"],
                 template=entry["template"],
                 naming_convention=naming_convention,
                 options=options,
             )
-            kind_label = "virtual" if virtual else "physical"
-            self.logger.info(f"Metro {self.fabric_name}: created {len(names)} {kind_label} {role} device(s): {names}")
-            if virtual:
-                # Deliberately withheld from the cabling pass. A DcimCable is
-                # fibre someone pulls between two chassis in one room; these are
-                # rented instances on the colocation operator's own platform, and
-                # the link between them is a connection inside that platform, not
-                # a cable. It is a real link and it is not modelled here: there is
-                # no virtual-link node kind in the schema, and the thing that does
-                # express a link we do not own — a TopologyVirtualCircuit over a
-                # TopologyPhysicalCircuit — needs both endpoints and a provider,
-                # which is the interconnect generator's input, not this one's.
-                #
-                # Not merely cosmetic: PA-VM_EDGE_CUSTOMER_* exposes `uplink` on
-                # eth[1-6], the exact role _cable_border_services claims on the
-                # service side, so without this a deployment_type=virtual metro
-                # declaring an edge+firewall pair would reach create_chain_cabling
-                # and fail the task on C8000V_EDGE's missing `firewall` ports.
-                self.logger.info(
-                    f"Metro {self.fabric_name}: {role} kit is virtual, so it is not cabled — a link between "
-                    "provider-hosted instances is a connection inside the provider's platform, not a DcimCable"
-                )
+            self._register_metro_devices(physical_names_by_role, role="edge", virtual=virtual, names=names)
+
+        for role in sorted(_COLO_SERVICE_ROLES):
+            service_entries = [e for e in templates if e["role"] == role]
+            if not service_entries:
                 continue
-            physical_names_by_role.setdefault(role, []).extend(names)
+            results = await self.create_ha_role_devices(
+                role=cast(Literal["firewall", "load-balancer"], role),
+                entries=service_entries,
+                deployment_id=metro_id,
+                naming_convention=naming_convention,
+                indexes=[],
+                virtual_template_kind=_COLO_TEMPLATE_KIND_VIRTUAL,
+            )
+            for entry, names in results:
+                virtual = entry["template"].get("template_kind") == _COLO_TEMPLATE_KIND_VIRTUAL
+                self._register_metro_devices(physical_names_by_role, role=role, virtual=virtual, names=names)
+
         return physical_names_by_role
+
+    def _register_metro_devices(
+        self,
+        physical_names_by_role: dict[str, list[str]],
+        *,
+        role: str,
+        virtual: bool,
+        names: list[str],
+    ) -> None:
+        """Log one fabric_templates entry's just-created devices and, if
+        physical, accumulate their names for _cable_metro_services.
+
+        Virtual devices are logged and then deliberately withheld from that
+        accumulation. A DcimCable is fibre someone pulls between two chassis
+        in one room; these are rented instances on the colocation operator's
+        own platform, and the link between them is a connection inside that
+        platform, not a cable. It is a real link and it is not modelled here:
+        there is no virtual-link node kind in the schema, and the thing that
+        does express a link we do not own — a TopologyVirtualCircuit over a
+        TopologyPhysicalCircuit — needs both endpoints and a provider, which
+        is the interconnect generator's input, not this one's.
+
+        Not merely cosmetic: PA-VM_EDGE_CUSTOMER_* exposes `uplink` on
+        eth[1-6], the exact role _cable_border_services claims on the service
+        side, so without this a deployment_type=virtual metro declaring an
+        edge+firewall pair would reach create_chain_cabling and fail the task
+        on C8000V_EDGE's missing `firewall` ports.
+        """
+        kind_label = "virtual" if virtual else "physical"
+        self.logger.info(f"Metro {self.fabric_name}: created {len(names)} {kind_label} {role} device(s): {names}")
+        if virtual:
+            self.logger.info(
+                f"Metro {self.fabric_name}: {role} kit is virtual, so it is not cabled — a link between "
+                "provider-hosted instances is a connection inside the provider's platform, not a DcimCable"
+            )
+            return
+        physical_names_by_role.setdefault(role, []).extend(names)
 
     async def _cable_metro_services(self, *, physical_names_by_role: dict[str, list[str]]) -> None:
         """Cable this metro's firewall/load-balancer pair to its edge pair.
@@ -533,17 +611,17 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, CommonGener
             # question never arises because no cable is laid.
             return
 
-        # Role names on the EDGE side of each leg. Deliberately the same values
-        # dc.py uses for its border-leafs: a `firewall`-role port faces a
-        # firewall. N9K-C9316D-GX_EDGE provides Ethernet1/[15-16] for that (see
-        # data/bootstrap/10_physical_devices_templates_cisco_nxos.yaml) and
-        # provides no `load-balancer` ports at all, so a metro declaring a
-        # load-balancer against that template gets create_chain_cabling's
-        # explicit "cannot cable ... load-balancer_ports=0" error rather than a
-        # silently uncabled appliance. Point such a metro at an edge template
-        # that has the ports.
+        # Role names on the EDGE side of each leg — BORDER_ROLE_FOR_SERVICES
+        # (generators/connections.py), the same mapping dc.py and pod.py use
+        # for their own border-leaf/border-spine: a `firewall`-role port
+        # faces a firewall. N9K-C9316D-GX_EDGE provides Ethernet1/[15-16] for
+        # that (see data/bootstrap/10_physical_devices_templates_cisco_nxos.
+        # yaml) and provides no `load-balancer` ports at all — a metro
+        # declaring a load-balancer against an edge template with no such
+        # port never gets this far: _drop_uncablable_service_entries drops
+        # that entry at validation time, before any device for it exists.
         await self._cable_border_services(
-            border_role_for={"firewall": "firewall", "load-balancer": "load-balancer"},
+            border_role_for=BORDER_ROLE_FOR_SERVICES,
             connectivity_mode="pbr",
             border_names=edge_names,
             firewall_names=firewall_names,
