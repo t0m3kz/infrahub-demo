@@ -107,6 +107,7 @@ nodes:
         cardinality: one
         kind: Attribute
         optional: false
+        direction: outbound
         identifier: "app_dependency__source"
         order_weight: 200
       - name: target
@@ -128,8 +129,8 @@ extensions:
           cardinality: many
           kind: Attribute
           optional: true
-          identifier: "app_component__depends_on"
+          identifier: "app_dependency__source"
           order_weight: 900
           label: "Depends On"
           description: "Outbound dependency edges originating from this component"
-          direction: outbound
+          direction: inbound

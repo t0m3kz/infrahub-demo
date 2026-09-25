@@ -257,6 +257,12 @@ ALL_DEMO_EXPECTED_APPLICATIONS: dict[str, tuple[str, int]] = {
 # the change-risk traversal walk from a switch port to a customer application.
 ALL_DEMO_CLOUD_APPLICATIONS = ("c003-custody-api-p", "c016-billing-cloud-p")
 
+# c001-checkout-p is a private-access-only frontend (access_profile-gated, no
+# instances or network_segment declared) — it has no compute footprint, so it
+# is out of scope for test_61's switch-port-to-application chain and is not
+# listed in ALL_DEMO_EXPECTED_APPLICATIONS.
+ALL_DEMO_NO_COMPUTE_APPLICATIONS = ("c001-checkout-p",)
+
 # Each component is deployed as an HA pair.
 ALL_DEMO_COMPONENT_INSTANCE_COUNT = 2
 
