@@ -160,9 +160,6 @@ ALL_DEMO_EXPECTED_OBJECTS: dict[str, int] = {
     # re-declares web-frontend to attach its depends_on — an upsert, not a
     # 18th component.
     "AppComponent": 17,
-    # Three files build up c001-checkout-request progressively (request,
-    # components, dependencies); all three upsert the same node.
-    "AppDeploymentRequest": 1,
     "DcimVirtualDevice": 26,
     "TopologyPhysicalCircuit": 8,
     "TopologyVirtualCircuit": 8,

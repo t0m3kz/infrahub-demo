@@ -1048,7 +1048,7 @@ class TestReconcilePrivateAccessEndpoints:
         name: str = "checkout-web",
         endpoint_type: str = "private_access",
         fqdn: str = "checkout.internal.c001.demo.local",
-    ) -> dict:  # noqa: E501
+    ) -> dict:
         return {"id": f"endpoint-{name}", "name": name, "endpoint_type": endpoint_type, "fqdn": fqdn}
 
     def _make_gen_ready(self) -> Any:
