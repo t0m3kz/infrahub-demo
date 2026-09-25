@@ -963,4 +963,110 @@ class TestReconcileProxyRule:
         )
 
         assert result is False
+
+
+class TestReconcilePrivateAccessEndpoints:
+    """private_access endpoints used to have no code path at all: this
+    dispatch previously fell through to the segment-firewall branch, found
+    no network_segment, and silently skipped — the endpoint was never
+    published anywhere. Published independently of any AppDependency edge,
+    since who may reach it is gated by its own access_profile, not by which
+    component "depends on" it."""
+
+    @staticmethod
+    def _component(endpoints: list[dict], comp_id: str = "comp-frontend", broker_id: str = "broker-1") -> dict:
+        return {
+            "id": comp_id,
+            "slug": "checkout-frontend",
+            "name": "frontend",
+            "component_type": "frontend",
+            "parent": {
+                "owner": {
+                    "id": "customer-1",
+                    "org_id": "C001",
+                    "private_access_service": ({"id": broker_id, "name": "c001-private-access"} if broker_id else {}),
+                }
+            },
+            "children": endpoints,
+        }
+
+    @staticmethod
+    def _endpoint(
+        name: str = "checkout-web",
+        endpoint_type: str = "private_access",
+        fqdn: str = "checkout.internal.c001.demo.local",
+    ) -> dict:  # noqa: E501
+        return {"id": f"endpoint-{name}", "name": name, "endpoint_type": endpoint_type, "fqdn": fqdn}
+
+    def _make_gen_ready(self) -> Any:
+        gen = _make_gen()
+        policy = MagicMock()
+        policy.id = "policy-1"
+        policy.save = AsyncMock()
+        gen._get_or_create_proxy_policy = AsyncMock(return_value=policy)
+        gen._attach_proxy_policy_to_owner = AsyncMock()
+        gen._find_existing_proxy_policy_rule = AsyncMock(return_value=None)
+        created_rule = MagicMock()
+        created_rule.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=created_rule)
+        return gen
+
+    def test_publishes_a_private_access_endpoint(self):
+        gen = self._make_gen_ready()
+        component = self._component([self._endpoint()])
+
+        created, skipped = asyncio.run(gen._reconcile_private_access_endpoints("checkout", [component]))
+
+        assert (created, skipped) == (1, 0)
+        gen._get_or_create_proxy_policy.assert_awaited_once_with("proxy-C001-c001-private-access-private-access")
+        gen._attach_proxy_policy_to_owner.assert_awaited_once_with(owner_id="customer-1", policy_id="policy-1")
+        rule_data = gen.client.create.call_args.kwargs["data"]
+        assert rule_data["destination_type"] == "fqdn"
+        assert rule_data["destination"] == "checkout.internal.c001.demo.local"
+
+    def test_internal_and_external_endpoints_are_not_published(self):
+        gen = self._make_gen_ready()
+        component = self._component(
+            [
+                self._endpoint(name="internal-api", endpoint_type="internal_service"),
+                self._endpoint(name="external-api", endpoint_type="external_service"),
+            ]
+        )
+
+        created, skipped = asyncio.run(gen._reconcile_private_access_endpoints("checkout", [component]))
+
+        assert (created, skipped) == (0, 0)
         gen.client.create.assert_not_called()
+
+    def test_missing_broker_is_skipped(self):
+        gen = self._make_gen_ready()
+        component = self._component([self._endpoint()], broker_id="")
+
+        created, skipped = asyncio.run(gen._reconcile_private_access_endpoints("checkout", [component]))
+
+        assert (created, skipped) == (0, 1)
+        gen.client.create.assert_not_called()
+
+    def test_missing_fqdn_is_skipped(self):
+        gen = self._make_gen_ready()
+        component = self._component([self._endpoint(fqdn="")])
+
+        created, skipped = asyncio.run(gen._reconcile_private_access_endpoints("checkout", [component]))
+
+        assert (created, skipped) == (0, 1)
+        gen.client.create.assert_not_called()
+
+    def test_two_endpoints_sharing_a_broker_share_one_policy(self):
+        gen = self._make_gen_ready()
+        component = self._component(
+            [
+                self._endpoint(name="checkout-web"),
+                self._endpoint(name="admin-web", fqdn="admin.internal.c001.demo.local"),
+            ]
+        )
+
+        created, skipped = asyncio.run(gen._reconcile_private_access_endpoints("checkout", [component]))
+
+        assert (created, skipped) == (2, 0)
+        gen._get_or_create_proxy_policy.assert_awaited_once()
+        assert gen.client.create.call_count == 2

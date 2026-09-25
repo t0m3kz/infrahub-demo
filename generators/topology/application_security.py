@@ -221,6 +221,10 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
         segment_policies: dict[str, Any] = {}
         proxy_policies: dict[str, Any] = {}
 
+        pa_created, pa_skipped = await self._reconcile_private_access_endpoints(app_name, components)
+        rules_created += pa_created
+        rules_skipped += pa_skipped
+
         for src_comp, dep, dst_endpoint in edges:
             dst_comp = dst_endpoint.get("parent") or {}
             if not dst_comp:
@@ -253,6 +257,18 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
                     rules_created += 1
                 else:
                     rules_skipped += 1
+                continue
+
+            if dst_endpoint.get("endpoint_type") == "private_access":
+                # Published separately below via _reconcile_private_access_endpoints:
+                # a private_access endpoint is reachable by anyone its own
+                # access_profile (MFA/device posture/allowed_groups) admits, not by
+                # a specific component "depending on" it, so this isn't dependency-
+                # edge-driven the way external_service/internal_service are. An
+                # edge that happens to target one anyway (e.g. an explicit intra-app
+                # call) still gets its port linked above by
+                # _reconcile_component_service_ports; it just contributes no
+                # separate firewall/proxy rule of its own here.
                 continue
 
             src_seg = src_comp.get("network_segment") or {}
@@ -692,6 +708,106 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
                 await owner_obj.save(allow_upsert=True, update_group_context=False)
         except Exception as exc:
             self.logger.warning("  Could not attach proxy policy to owner %s: %s", owner_id, exc)
+
+    async def _reconcile_private_access_endpoints(
+        self,
+        app_name: str,
+        components: list[dict[str, Any]],
+    ) -> tuple[int, int]:
+        """Publish every private_access endpoint via its owning customer's
+        private_access_service (ZTNA broker: e.g. Zscaler ZPA).
+
+        Not dependency-edge-driven like external_service/internal_service:
+        who may reach a private_access endpoint is gated by its own
+        access_profile (MFA/device posture/allowed_groups), not by which
+        component "depends on" it, so every such endpoint gets published
+        here regardless of whether any AppDependency targets it — matching
+        this file's own module docstring ("Device/proxy selections are
+        resolved from the owning customer... rather than authored on every
+        AppComponent").
+        """
+        created = 0
+        skipped = 0
+        policies: dict[str, Any] = {}
+
+        for component in components:
+            owner = (component.get("parent") or {}).get("owner") or {}
+            for endpoint in component.get("children") or []:
+                if endpoint.get("endpoint_type") != "private_access":
+                    continue
+
+                endpoint_name = str(endpoint.get("name") or endpoint.get("id") or "?")
+                comp_label = component.get("slug") or component.get("name") or "?"
+
+                broker = owner.get("private_access_service") or {}
+                broker_id = broker.get("id")
+                if not broker_id:
+                    self.logger.warning(
+                        "  Endpoint '%s' on '%s' is private_access but its owner has no"
+                        " private_access_service - skipping publish",
+                        endpoint_name,
+                        comp_label,
+                    )
+                    skipped += 1
+                    continue
+
+                endpoint_fqdn = str(endpoint.get("fqdn") or "").strip()
+                if not endpoint_fqdn:
+                    self.logger.warning(
+                        "  Endpoint '%s' on '%s' is private_access but has no fqdn - skipping publish",
+                        endpoint_name,
+                        comp_label,
+                    )
+                    skipped += 1
+                    continue
+
+                owner_org_id = str(owner.get("org_id") or owner.get("id") or "")
+                owner_node_id = str(owner.get("id") or "")
+                if not owner_org_id or not owner_node_id:
+                    self.logger.warning(
+                        "  Endpoint '%s' on '%s' has no resolvable owner - skipping publish",
+                        endpoint_name,
+                        comp_label,
+                    )
+                    skipped += 1
+                    continue
+
+                policy_key = f"{owner_org_id}:{broker_id}"
+                policy = policies.get(policy_key)
+                if policy is None:
+                    broker_name = str(broker.get("name") or broker_id)
+                    policy_name = f"proxy-{owner_org_id}-{broker_name}-private-access"
+                    policy = await self._get_or_create_proxy_policy(policy_name)
+                    if policy is None:
+                        skipped += 1
+                        continue
+                    policies[policy_key] = policy
+
+                await self._attach_proxy_policy_to_owner(owner_id=owner_node_id, policy_id=policy.id)
+
+                rule_name = f"publish-{comp_label}-{endpoint_name}"
+                rule_data: dict[str, Any] = {
+                    "policy": {"id": policy.id},
+                    "name": rule_name,
+                    "action": "allow",
+                    "destination_type": "fqdn",
+                    "destination": endpoint_fqdn,
+                    "description": f"Publish {comp_label}/{endpoint_name} via private access broker",
+                }
+
+                existing_rule = await self._find_existing_proxy_policy_rule(policy_id=policy.id, rule_name=rule_name)
+                try:
+                    if existing_rule is not None:
+                        rule_data["id"] = existing_rule.id
+                    rule = await self.client.create(kind=ProxyPolicyRule, data=rule_data)
+                    await rule.save(allow_upsert=True)
+                    self.logger.info("  Published private-access endpoint '%s' (-> %s)", rule_name, endpoint_fqdn)
+                    created += 1
+                except Exception as exc:
+                    self.logger.error("  Failed to publish private-access endpoint '%s': %s", rule_name, exc)
+                    skipped += 1
+
+        return created, skipped
 
     @staticmethod
     def _segment_policy_name(segment: dict[str, Any]) -> str:

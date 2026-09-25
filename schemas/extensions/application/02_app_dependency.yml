@@ -32,7 +32,7 @@ nodes:
         kind: Text
         optional: false
         order_weight: 100
-        description: "Unique name for this dependency edge (auto-set by loader)"
+        description: "Short human-picked identifier (e.g. 'checkout-to-payment-gateway'); also how depends_on references it"  # yamllint disable-line rule:line-length
       - name: access_status
         kind: Dropdown
         optional: true

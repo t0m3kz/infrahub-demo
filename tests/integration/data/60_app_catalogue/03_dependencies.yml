@@ -9,7 +9,7 @@ spec:
   data:
     - name: it001-checkout-p-frontend-to-payment-gateway
       source: it001-checkout-p-frontend
-      target: it001-payment-gateway-external
+      target: ["it001-checkout-p-frontend", "it001-payment-gateway-external"]
       protocol: tcp
       port_start: 443
       access_status: auto
@@ -17,7 +17,7 @@ spec:
 
     - name: it001-checkout-p-frontend-to-backend
       source: it001-checkout-p-frontend
-      target: it001-checkout-backend-internal
+      target: ["it001-checkout-p-backend", "it001-checkout-backend-internal"]
       protocol: tcp
       port_start: 8443
       access_status: auto
