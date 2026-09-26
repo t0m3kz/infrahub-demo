@@ -1,7 +1,6 @@
 """Generator: office/campus sizing quotation.
 
-Computes AP/access/distribution/core quantities using the same sizing model as
-scripts/campus_office_network_calculator.py and writes results into generic
+Computes AP/access/distribution/core quantities and writes results into generic
 CustomerQuotation fields:
 - estimated_total_cost
 - CustomerQuotationLineItem children

@@ -9,9 +9,6 @@ scoring turns that into the documented verdict.
 
 from __future__ import annotations
 
-import importlib.util
-import sys
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -35,30 +32,7 @@ from checks.risk_model import (
     severity_of,
     shortlist_from_targets,
 )
-
-REPO = Path(__file__).resolve().parents[2]
-
-
-def _load_schemas() -> dict[str, Any]:
-    """The YAML schema reader from `scripts/validate_query_fields.py`.
-
-    Loaded by path because `scripts/` is a directory of standalone entry points,
-    not an importable package, and putting it on `sys.path` for one helper would
-    make every module in it importable from every test.
-    """
-    name = "validate_query_fields"
-    if (cached := sys.modules.get(name)) is not None:
-        return cached.load_schemas()
-    spec = importlib.util.spec_from_file_location(name, REPO / "scripts" / f"{name}.py")
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    # Registered before execution because the script's `@dataclass`es use
-    # postponed annotations, and `dataclasses` resolves those through
-    # `sys.modules[cls.__module__]`.
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module.load_schemas()
-
+from tests.unit.schema_reader import load_schemas
 
 # ---------------------------------------------------------------------------
 # Helpers — payloads in the shape the SDK's `model_dump()` produces
@@ -174,7 +148,7 @@ class TestEdgeSet:
 
     @staticmethod
     def _schemas() -> dict[str, Any]:
-        return _load_schemas()
+        return load_schemas()
 
     def test_every_traversal_edge_exists_in_the_schemas(self) -> None:
         kinds = self._schemas()
