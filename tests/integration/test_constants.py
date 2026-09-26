@@ -160,9 +160,6 @@ ALL_DEMO_EXPECTED_OBJECTS: dict[str, int] = {
     # re-declares web-frontend to attach its depends_on — an upsert, not a
     # 18th component.
     "AppComponent": 17,
-    # Three files build up c001-checkout-request progressively (request,
-    # components, dependencies); all three upsert the same node.
-    "AppDeploymentRequest": 1,
     "DcimVirtualDevice": 26,
     "TopologyPhysicalCircuit": 8,
     "TopologyVirtualCircuit": 8,
@@ -259,6 +256,12 @@ ALL_DEMO_EXPECTED_APPLICATIONS: dict[str, tuple[str, int]] = {
 # nodes that MUST name the physical host they run on — that edge is what lets
 # the change-risk traversal walk from a switch port to a customer application.
 ALL_DEMO_CLOUD_APPLICATIONS = ("c003-custody-api-p", "c016-billing-cloud-p")
+
+# c001-checkout-p is a private-access-only frontend (access_profile-gated, no
+# instances or network_segment declared) — it has no compute footprint, so it
+# is out of scope for test_61's switch-port-to-application chain and is not
+# listed in ALL_DEMO_EXPECTED_APPLICATIONS.
+ALL_DEMO_NO_COMPUTE_APPLICATIONS = ("c001-checkout-p",)
 
 # Each component is deployed as an HA pair.
 ALL_DEMO_COMPONENT_INSTANCE_COUNT = 2

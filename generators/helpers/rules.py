@@ -171,6 +171,12 @@ class RulesPlanner(RulePlanningHelper):
         return app_name or None
 
     @staticmethod
+    def app_environment_from_component(component: dict[str, Any]) -> str | None:
+        app = component.get("parent") or {}
+        environment = str(app.get("environment") or "").strip().lower()
+        return environment or None
+
+    @staticmethod
     def dependency_access_status(dep: dict[str, Any]) -> str:
         raw = str(dep.get("access_status") or "auto").strip().lower()
         if raw in {"auto", "pending", "approved", "denied"}:
@@ -204,6 +210,13 @@ class RulesPlanner(RulePlanningHelper):
                     False,
                     f"cross-application flow {src_app_name}->{dst_app_name} requires access_status=approved",
                 )
+            return True, None
+
+        src_env = cls.app_environment_from_component(src_comp)
+        dst_env = cls.app_environment_from_component(dst_comp)
+        if src_env and dst_env and src_env != dst_env:
+            if status != "approved":
+                return False, f"cross-environment flow {src_env}->{dst_env} requires access_status=approved"
             return True, None
 
         return True, None

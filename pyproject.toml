@@ -52,7 +52,18 @@ exclude = [".venv/", ".dev/"]
 
 [tool.rumdl]
 line-length = 120
-disable = ["MD013", "MD024"]
+# MD013 (line-length) stays disabled: 74 hits, all in narrative prose
+# (README.md's essay, IMPLEMENTATION.md, demo READMEs) — markdown reflows
+# paragraphs regardless of source line breaks, so wrapping them is pure
+# cosmetics with real risk of breaking hand-written prose, for no rendering
+# benefit. code-blocks/tables are already excluded from the count by rumdl's
+# own MD013 defaults, so this isn't masking a code/table formatting issue.
+# MD024 (no-duplicate-heading) was disabled for markdownlint-cli, whose
+# implementation flagged CHANGELOG.md's repeated "### Fix"/"### Feat" across
+# version sections. rumdl (a from-scratch rewrite) does not have that false
+# positive — verified empirically, zero findings with MD024 enabled even
+# including CHANGELOG.md — so re-enabled here.
+disable = ["MD013"]
 
 
 [tool.pytest.ini_options]

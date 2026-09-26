@@ -423,8 +423,3 @@ spec:
       label: Applications
       kind: AppApplication
       icon: "mdi:application"
-    - namespace: App
-      name: ApplicationRequestsMenu
-      label: Application Requests
-      kind: AppDeploymentRequest
-      icon: "mdi:clipboard-text-outline"

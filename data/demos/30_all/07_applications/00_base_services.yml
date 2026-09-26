@@ -1,5 +1,5 @@
 ---
-# Customer-owned service assignments consumed by the request materializer.
+# Customer-owned service assignments referenced by 01_customer_services.yml.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

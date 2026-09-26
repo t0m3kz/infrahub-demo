@@ -1,0 +1,53 @@
+---
+# C001 "checkout" application: a private-access frontend that also calls the
+# external payment gateway. Companion to storefront (00_applications.yml).
+# Authored directly — no separate request/approval object graph; a branch +
+# proposed-change review is the approval step for anything declared here.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppApplication
+  data:
+    - label: checkout
+      environment: p
+      criticality: high
+      security_profile: internet_exposed
+      fqdn: checkout.c001.demo.local
+      ingress_mode: dns
+      owner: C001
+      member_of_groups:
+        - app_applications
+      children:
+        kind: AppComponent
+        data:
+          - name: frontend
+            component_type: frontend
+            children:
+              kind: AppEndpoint
+              data:
+                - name: checkout-web
+                  endpoint_type: private_access
+                  fqdn: checkout.internal.c001.demo.local
+                  service_ports:
+                    data:
+                      - port: 443
+                        protocol: tcp
+                - name: payment-gateway
+                  endpoint_type: external_service
+                  fqdn: api.paymentgw.example.com
+            member_of_groups:
+              - app_components
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppDependency
+  data:
+    - name: c001-checkout-to-payment-gateway
+      source: c001-checkout-p-frontend
+      target: ["c001-checkout-p-frontend", "payment-gateway"]
+      protocol: tcp
+      port_start: 443
+      access_status: approved
+      decision_reason: "Payment authorization is required by checkout"

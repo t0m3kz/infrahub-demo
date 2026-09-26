@@ -108,6 +108,22 @@ fragment AppComponentSecurityFields on AppComponent {
                         ...SegmentSecurityFields
                       }
                     }
+                    parent {
+                      node {
+                        ... on AppApplication {
+                          id
+                          name { value }
+                          environment { value }
+                          owner {
+                            node {
+                              id
+                              org_id { value }
+                              name { value }
+                            }
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -122,6 +138,7 @@ fragment AppComponentSecurityFields on AppComponent {
       id
       ... on AppApplication {
         name { value }
+        environment { value }
         owner {
           node {
             id

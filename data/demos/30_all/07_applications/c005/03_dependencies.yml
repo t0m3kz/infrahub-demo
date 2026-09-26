@@ -9,7 +9,7 @@ spec:
   data:
     - name: c005-payment-web-to-backend
       source: c005-payment-core-p-web-frontend
-      target: app-backend-api
+      target: ["c005-payment-core-p-app-backend", "app-backend-api"]
       protocol: tcp
       port_start: 8443
       access_status: auto

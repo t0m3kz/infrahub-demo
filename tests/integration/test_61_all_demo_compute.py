@@ -34,6 +34,7 @@ from .test_constants import (
     ALL_DEMO_DC_UNDERLAY_ROLES,
     ALL_DEMO_EXPECTED_APPLICATIONS,
     ALL_DEMO_HOST_LINK_COUNT,
+    ALL_DEMO_NO_COMPUTE_APPLICATIONS,
 )
 from .test_helpers import (
     compute_role_counts,
@@ -275,7 +276,7 @@ class TestAllDemoCompute(TestInfrahubDockerWithClient):
         logging.info("=== %s - Step 4: Application Graph ===", SCENARIO_NAME)
 
         applications = await fetch_application_graph(client=async_client_main, branch=scenario_branch)
-        by_name = {app["name"]: app for app in applications}
+        by_name = {app["name"]: app for app in applications if app["name"] not in ALL_DEMO_NO_COMPUTE_APPLICATIONS}
 
         errors: list[str] = []
 

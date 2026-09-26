@@ -31,6 +31,12 @@ spec:
             environment: "p"
             stretch_scope: dc_pair
             arp_suppression: true
+            # Microsegmented so the existing web-frontend -> app-backend
+            # AppDependency (07_applications/c005/03_dependencies.yml)
+            # exercises AppApplicationGenerator's return-rule reconciliation
+            # (apply_on_switch has no connection tracking, so the forward
+            # permit alone would otherwise leave the response leg dropped).
+            isolation_mode: microsegmented
             customer_deployments:
               - "C005-P-DC10"
               - "C005-D-DC12"

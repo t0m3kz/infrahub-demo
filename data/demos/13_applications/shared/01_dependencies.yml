@@ -13,7 +13,7 @@ spec:
   data:
     - name: c001-storefront-p-web-frontend-to-stripe-api
       source: c001-storefront-p-web-frontend
-      target: stripe-api-external
+      target: ["c001-external-services-p-stripe-api", "stripe-api-external"]
       protocol: tcp
       port_start: 443
       access_status: auto
@@ -21,7 +21,7 @@ spec:
 
     - name: c001-storefront-p-app-backend-to-github-api
       source: c001-storefront-p-app-backend
-      target: github-api-external
+      target: ["c001-external-services-p-github-api", "github-api-external"]
       protocol: tcp
       port_start: 443
       access_status: auto
