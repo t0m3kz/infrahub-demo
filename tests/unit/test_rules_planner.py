@@ -211,6 +211,20 @@ class TestPickProfileName:
 
 
 # ===========================================================================
+# TestPickIsolationMode
+# ===========================================================================
+
+
+class TestPickIsolationMode:
+    def test_fintech_strict_gets_microsegmented(self):
+        assert RulesPlanner.pick_isolation_mode("fintech_strict") == "microsegmented"
+
+    def test_every_other_profile_gets_normal(self):
+        for profile in ("internal_standard", "internet_exposed", "unknown"):
+            assert RulesPlanner.pick_isolation_mode(profile) == "normal"
+
+
+# ===========================================================================
 # TestPickAccessPolicy
 # ===========================================================================
 

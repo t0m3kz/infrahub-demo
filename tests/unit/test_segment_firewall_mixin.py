@@ -106,6 +106,77 @@ class TestReconcileTagRuleFromSegments:
 
 
 # ===========================================================================
+# TestEnsureSegmentIsolationMode
+# ===========================================================================
+
+
+class TestEnsureSegmentIsolationMode:
+    """isolation_mode used to be hand-authored per segment (only one demo
+    example, data/demos/30_all/07_applications/c005/00_segments.yml); this
+    derives it from the segment's owning application's security_profile,
+    same shape as VxlanSegmentGenerator's security_zone derivation."""
+
+    def test_derives_microsegmented_for_fintech_strict(self):
+        gen = _make_gen()
+        seg_obj = MagicMock()
+        seg_obj.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=seg_obj)
+        segment = {"id": "seg-1", "name": "seg-1", "typename": "ManagedVxlanSegment"}
+
+        asyncio.run(gen._ensure_segment_isolation_mode(segment, "fintech_strict"))
+
+        gen.client.create.assert_awaited_once_with(
+            kind="ManagedVxlanSegment",
+            data={"id": "seg-1", "isolation_mode": "microsegmented"},
+        )
+        seg_obj.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
+
+    def test_no_op_for_internal_standard_with_default_normal(self):
+        gen = _make_gen()
+        gen.client.create = AsyncMock()
+        segment = {"id": "seg-1", "name": "seg-1", "isolation_mode": "normal"}
+
+        asyncio.run(gen._ensure_segment_isolation_mode(segment, "internal_standard"))
+
+        gen.client.create.assert_not_awaited()
+
+    def test_does_not_override_an_explicit_isolated_mode(self):
+        gen = _make_gen()
+        gen.client.create = AsyncMock()
+        segment = {"id": "seg-1", "name": "seg-1", "isolation_mode": "isolated"}
+
+        asyncio.run(gen._ensure_segment_isolation_mode(segment, "fintech_strict"))
+
+        gen.client.create.assert_not_awaited()
+
+    def test_skips_cloud_segments(self):
+        gen = _make_gen()
+        gen.client.create = AsyncMock()
+        segment = {"id": "seg-1", "name": "seg-1", "typename": "CloudNetworkSegment"}
+
+        asyncio.run(gen._ensure_segment_isolation_mode(segment, "fintech_strict"))
+
+        gen.client.create.assert_not_awaited()
+
+    def test_skips_segment_without_id(self):
+        gen = _make_gen()
+        gen.client.create = AsyncMock()
+
+        asyncio.run(gen._ensure_segment_isolation_mode({}, "fintech_strict"))
+
+        gen.client.create.assert_not_awaited()
+
+    def test_save_failure_is_logged_not_raised(self):
+        gen = _make_gen()
+        gen.client.create = AsyncMock(side_effect=Exception("boom"))
+        segment = {"id": "seg-1", "name": "seg-1"}
+
+        asyncio.run(gen._ensure_segment_isolation_mode(segment, "fintech_strict"))
+
+        gen.logger.warning.assert_called_once()
+
+
+# ===========================================================================
 # TestSegmentPolicyName
 # ===========================================================================
 

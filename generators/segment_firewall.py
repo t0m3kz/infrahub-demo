@@ -305,6 +305,32 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin, RuleLifecycleMixin):
                 exc,
             )
 
+    async def _ensure_segment_isolation_mode(self, segment: dict[str, Any], app_security_profile: str) -> None:
+        """Derive and set a segment's isolation_mode from its application's
+        security_profile, unless the author already set something other than
+        the schema default ("normal") — isolated/microsegmented are never a
+        silent default, so either one signals a deliberate explicit choice to
+        respect. Cloud segments have no isolation_mode (Managed*Segment only).
+        """
+        seg_id = segment.get("id")
+        seg_typename = segment.get("typename", "ManagedVxlanSegment")
+        if not seg_id or seg_typename == "CloudNetworkSegment":
+            return
+
+        current = segment.get("isolation_mode")
+        derived = RulesPlanner.pick_isolation_mode(app_security_profile)
+        if current and current != "normal":
+            return
+        if current == derived:
+            return
+
+        try:
+            seg_obj = await self.client.create(kind=seg_typename, data={"id": seg_id, "isolation_mode": derived})
+            await seg_obj.save(allow_upsert=True, update_group_context=False)
+            self.logger.info("  Derived isolation_mode '%s' for segment %s", derived, segment.get("name", seg_id))
+        except Exception as exc:
+            self.logger.warning("  Could not set isolation_mode on segment %s: %s", segment.get("name", seg_id), exc)
+
     async def _reconcile_tag_rule_from_segments(
         self,
         src_seg: dict[str, Any],

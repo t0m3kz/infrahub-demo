@@ -12,6 +12,8 @@ This file covers only:
   - _seg_cidr()/_resolve_port()        — module-level pure functions
   - generate()'s trigger-shape dispatch (AppDependency/AppComponent)
   - _reconcile_application_rules()'s per-edge dispatch (cloud vs on-prem path)
+  - _reconcile_application_rules()'s unconditional per-component
+    isolation-mode derivation (SegmentFirewallMixin._ensure_segment_isolation_mode)
 """
 
 from __future__ import annotations
@@ -228,6 +230,57 @@ class TestComponentRuleGenerator:
 
 
 # ===========================================================================
+# TestReconcileApplicationRulesSegmentIsolationMode
+# ===========================================================================
+
+
+class TestReconcileApplicationRulesSegmentIsolationMode:
+    """isolation_mode derivation runs once per component, unconditionally —
+    not gated on the app having any depends_on edges — so every segment an
+    app uses gets classified even for apps with zero dependencies today."""
+
+    def _make_gen_ready(self, *, components: list[dict]) -> Any:
+        gen = _make_gen()
+        gen._ensure_segment_isolation_mode = AsyncMock()
+        gen._reconcile_component_service_ports = AsyncMock()
+        gen._reconcile_private_access_endpoints = AsyncMock(return_value=(0, 0))
+        gen._dependency_edges_from_components = MagicMock(return_value=[])
+        app = {"name": "fraud-detection", "security_profile": "fintech_strict", "children": components}
+        return gen, app
+
+    def test_called_once_per_component_with_its_apps_security_profile(self):
+        components = [
+            {"id": "comp-1", "network_segment": {"id": "seg-1", "name": "seg-1"}},
+            {"id": "comp-2", "network_segment": {"id": "seg-2", "name": "seg-2"}},
+        ]
+        gen, app = self._make_gen_ready(components=components)
+
+        asyncio.run(gen._reconcile_application_rules(app))
+
+        assert gen._ensure_segment_isolation_mode.await_count == 2
+        seg_args = [call.args[0] for call in gen._ensure_segment_isolation_mode.await_args_list]
+        assert {seg["id"] for seg in seg_args} == {"seg-1", "seg-2"}
+        for call in gen._ensure_segment_isolation_mode.await_args_list:
+            assert call.args[1] == "fintech_strict"
+
+    def test_runs_even_when_the_application_has_no_dependency_edges(self):
+        components = [{"id": "comp-1", "network_segment": {"id": "seg-1", "name": "seg-1"}}]
+        gen, app = self._make_gen_ready(components=components)
+
+        asyncio.run(gen._reconcile_application_rules(app))
+
+        gen._ensure_segment_isolation_mode.assert_awaited_once()
+
+    def test_component_without_a_network_segment_gets_an_empty_dict(self):
+        components = [{"id": "comp-1"}]
+        gen, app = self._make_gen_ready(components=components)
+
+        asyncio.run(gen._reconcile_application_rules(app))
+
+        gen._ensure_segment_isolation_mode.assert_awaited_once_with({}, "fintech_strict")
+
+
+# ===========================================================================
 # TestReconcileApplicationRulesCloudDispatch
 # ===========================================================================
 
@@ -245,6 +298,7 @@ class TestReconcileApplicationRulesCloudDispatch:
         gen._create_cloud_rule = AsyncMock(return_value=True)
         gen._get_or_create_policy = AsyncMock()
         gen._attach_policy_to_source_segment = AsyncMock()
+        gen._ensure_segment_isolation_mode = AsyncMock()
         return gen
 
     @staticmethod

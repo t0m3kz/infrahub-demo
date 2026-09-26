@@ -301,6 +301,15 @@ class RulesPlanner(RulePlanningHelper):
         }
         return mapping.get(app_security_profile, mapping["internal_standard"])
 
+    @staticmethod
+    def pick_isolation_mode(app_security_profile: str) -> str:
+        """Intra-segment enforcement for a segment, derived from the
+        security_profile of the application using it. fintech_strict is a
+        data-sensitivity/compliance requirement (per-flow ACL enforcement
+        even between hosts in the same segment) independent of network
+        topology; every other profile stays at the schema default."""
+        return "microsegmented" if app_security_profile == "fintech_strict" else "normal"
+
     @classmethod
     def build_rule_payload(
         cls,
