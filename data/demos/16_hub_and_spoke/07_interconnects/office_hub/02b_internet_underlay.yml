@@ -36,7 +36,6 @@ spec:
             environment: "p"
             customer_name: "sdwan-hub"
             parent: "eu-central-1"
-            namespace: "INTERNET"
 
     - circuit_id: "INET-C002-WAW-HUB"
       name: "INET-C002-WAW-HUB"
@@ -65,4 +64,3 @@ spec:
             environment: "p"
             customer_name: "sdwan-hub"
             parent: "eu-central-1"
-            namespace: "INTERNET"

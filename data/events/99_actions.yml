@@ -332,10 +332,15 @@ spec:
       mutation_action: "created"
       action: run-app-application-generator
 
-    # ── Customer Deployment Exchange (FirewallContext/dedicated LB/routing) ───
-    # Same generator/query shape for all four deployment kinds — each generator
-    # class is kind-specific (see generators/topology/customer_dc.py and its
-    # colocation/cloud/office siblings). Regressed in c1b686e7 (removed
+    # ── Customer Deployment (FirewallContext/dedicated LB) ────────────────────
+    # Same generator/query shape for both deployment kinds that still have
+    # on-site fabric to provision a FirewallContext on (see
+    # generators/topology/customer_dc.py and customer_colocation.py).
+    # TopologyCustomerCloud/Office had no fabric of their own — their only job
+    # was hub-and-spoke exchange auto-provisioning, now replaced by the 4 fixed
+    # bootstrap TopologyRoutedExchange objects (data/bootstrap/23_exchanges.yml,
+    # docs/exchange_gateway.md), so those two generators/triggers were removed
+    # rather than left as no-ops. Regressed in c1b686e7 (removed
     # trigger-exchange-gateway-on-customer-*-created without a replacement,
     # leaving these generators — targets: customer_deployments, a
     # CoreStandardGroup, never a CoreGeneratorGroup — permanently
@@ -352,18 +357,6 @@ spec:
       node_kind: TopologyCustomerColocation
       mutation_action: "created"
       action: run-customer-deployment-colocation-generator
-
-    - name: trigger-customer-deployment-cloud-on-created
-      branch_scope: "other_branches"
-      node_kind: TopologyCustomerCloud
-      mutation_action: "created"
-      action: run-customer-deployment-cloud-generator
-
-    - name: trigger-customer-deployment-office-on-created
-      branch_scope: "other_branches"
-      node_kind: TopologyCustomerOffice
-      mutation_action: "created"
-      action: run-customer-deployment-office-generator
 
     # ── Colocation Metro Bootstrap ────────────────────────────────────────────
     # `created` covers a metro loaded with fabric_templates already populated
@@ -400,3 +393,26 @@ spec:
         data:
           - relationship_name: fabric_templates
             modification_type: updated
+
+    # ── Interconnect Requests ──────────────────────────────────────────────────
+    # A request declared with redundancy_count/endpoint_*_interfaces already
+    # populated inline is a `created` mutation on the request itself, same gap
+    # documented on the segment/metro triggers above.
+    - name: trigger-interconnect-on-created
+      branch_scope: "other_branches"
+      node_kind: TopologyInterconnectRequest
+      mutation_action: "created"
+      action: run-interconnect-generator
+
+    # Re-run when redundancy_count changes (fan out more legs, or — for
+    # physical_stub — flag the shortfall/excess) after creation.
+    - name: trigger-interconnect-update-redundancy-count
+      branch_scope: "other_branches"
+      node_kind: TopologyInterconnectRequest
+      mutation_action: "updated"
+      action: run-interconnect-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: redundancy_count
+            value_match: any

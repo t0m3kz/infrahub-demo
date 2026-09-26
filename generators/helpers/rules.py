@@ -270,6 +270,14 @@ class RulesPlanner(RulePlanningHelper):
         return "PROD-ZONE" if environment == "p" else "NONPROD-ZONE"
 
     @staticmethod
+    def pick_namespace_name(environment: str) -> str:
+        """Data-plane VRF (IpamNamespace) for a segment, derived from its own
+        `environment` — the routing-level counterpart to pick_zone_name's
+        firewall-zone split. One of the 4 fixed global namespaces bootstrapped
+        in data/bootstrap/22_namespaces.yml (never per-customer/per-deployment)."""
+        return "PROD" if environment == "p" else "NON-PROD"
+
+    @staticmethod
     def zone_seed(zone_name: str) -> dict[str, Any]:
         """Fixed classification for a generator-owned SecurityZone, keyed by name."""
         seeds = {

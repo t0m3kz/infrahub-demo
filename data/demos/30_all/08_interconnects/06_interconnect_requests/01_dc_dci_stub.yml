@@ -1,0 +1,25 @@
+---
+# Opt-in InterconnectRequestGenerator example (generators/topology/interconnect.py):
+# a redundant DC-to-DC dark fibre pair between DC11 and DC12 that nobody has
+# hand-authored yet. connection_kind=physical_stub because real dark fibre
+# needs a provider order and demarc/panel assignment this generator can't
+# invent — it only creates a status=provisioning TopologyPhysicalCircuit
+# shell per leg and hands off to ops. Every other circuit in
+# ../01_colo_onramp/ etc. is still hand-authored directly; this is an
+# additive, alternate path for pairs you want the generator to scaffold.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyInterconnectRequest
+  data:
+    - name: "DC11-DC12-DCI"
+      description: "Redundant DC11<->DC12 DCI dark fibre, auto-scaffolded"
+      connection_kind: physical_stub
+      circuit_type: dark_fiber
+      redundancy_count: 2
+      bandwidth: 100000
+      location_a: "DC11"
+      location_b: "DC12"
+      provider: "P016"
+      member_of_groups:
+        - interconnect_requests

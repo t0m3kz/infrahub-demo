@@ -1,29 +1,39 @@
 ---
-# All customer deployments (DC/Colocation/Cloud/Office) share Infrahub's
-# built-in "default" namespace — there is no VRF-per-customer or
-# VRF-per-environment. Every customer already has non-overlapping addressing,
-# so there's no address-space reason to keep tenants in separate VRFs;
-# tenant isolation on shared L2 segments is enforced by ACL/firewall, not by
-# a routing boundary. Shared services (DNS/NTP/monitoring) live in that same
-# "default" namespace too, so no exchange gateway is needed to reach them.
+# Exactly 4 fixed, global VRF namespaces — never per-customer/per-deployment
+# (every customer already has non-overlapping addressing, so there's no
+# address-space reason to keep tenants in separate VRFs). This is a real
+# routing-level split, not just a firewall-zone one: PROD/NON-PROD isolation
+# here is on top of, not a replacement for, the existing PROD-ZONE/NONPROD-ZONE
+# SecurityZone split (see generators/helpers/rules.py's RulesPlanner).
 #
-# TRANSIT and INTERNET remain distinct namespaces: they're real VRF
-# boundaries the operator's hub-and-spoke topology routes across via
-# TopologyRoutedExchange (see generators/topology/customer_colocation.py,
-# customer_cloud.py, customer_office.py's _exchange_via_circuit and
-# docs/exchange_gateway.md) — unrelated to per-customer/per-environment VRF
-# assignment, so they're kept as-is.
+# PROD and NON-PROD never exchange directly — see 23_exchanges.yml for the
+# 4 fixed TopologyRoutedExchange objects that connect each of them to
+# INTERNET (egress) and MANAGEMENT (core services: DNS/DHCP/NTP/syslog/
+# monitoring), both through an inspected device hop, never a bare
+# RouteLeakExchange.
+#
+# `default` (Infrahub's built-in namespace, not defined here) remains the
+# permanent underlay/global-table namespace for EVPN-VXLAN VTEP loopbacks and
+# underlay BGP — never a VRF, unaffected by this model.
 
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: IpamNamespace
   data:
-    - name: "TRANSIT"
-      description: "Transit VRF for inter-site connectivity"
-      l3_vni: 20000
-      namespace_type: transit
+    - name: "PROD"
+      description: "Production data-plane VRF — every segment/customer/app with environment=p"
+      l3_vni: 40000
+      namespace_type: prod
+    - name: "NON-PROD"
+      description: "Non-production data-plane VRF — every other environment value (n/s/d/t)"
+      l3_vni: 40001
+      namespace_type: non_prod
     - name: "INTERNET"
-      description: "Internet egress VRF — hub-and-spoke via per-site TopologyRoutedExchange"
+      description: "Internet egress VRF — reached from PROD/NON-PROD via a fixed, inspected RoutedExchange"
       l3_vni: 30000
       namespace_type: internet
+    - name: "MANAGEMENT"
+      description: "True OOB plus core infrastructure services (DNS/DHCP/NTP/syslog/monitoring)"
+      l3_vni: 30001
+      namespace_type: management

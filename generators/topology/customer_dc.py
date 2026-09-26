@@ -1,13 +1,15 @@
 """Customer boarding generator for TopologyCustomerDC.
 
 Triggered on TopologyCustomerDC creation (see data/events/99_actions.yml's
-trigger-exchange-gateway-on-*-created rules).
+trigger-customer-deployment-dc-on-created rule).
 
-DC customers reach everything over the fabric's own L2 domain — no circuit,
-no VRF boundary, nothing to leak or route to (see docs/exchange_gateway.md's
-"Customer Boarding — When an Exchange Gets Auto-Provisioned" section), so
-this generator's only job is FirewallContext (VDOM/vsys) provisioning on the
-parent DC's ManagedFirewallHA cluster: dedicated (tenant = this deployment)
+DC customers reach everything over the fabric's own L2 domain, and inter-VRF
+routing (PROD/NON-PROD <-> INTERNET/MANAGEMENT) is 4 fixed bootstrap
+TopologyRoutedExchange objects shared by every deployment (see
+data/bootstrap/23_exchanges.yml, docs/exchange_gateway.md) — nothing
+per-deployment to provision here. So this generator's only job is
+FirewallContext (VDOM/vsys) provisioning on the parent DC's ManagedFirewallHA
+cluster: dedicated (tenant = this deployment)
 if design.dedicated_firewall is true, else ONE shared context per cluster
 (tenant unset) reused by every other customer. Same for an optional
 dedicated load-balancer HA pair (design.dedicated_loadbalancer).

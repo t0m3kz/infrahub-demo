@@ -1,28 +1,24 @@
 """Customer boarding generator for TopologyCustomerColocation.
 
 Triggered on TopologyCustomerColocation creation (see data/events/99_actions.yml's
-trigger-exchange-gateway-on-*-created rules).
+trigger-customer-deployment-colocation-on-created rule).
 
-Colocation shares the same flat "default" IP namespace as every other
-customer deployment kind — no VRF-per-customer, no VRF-per-environment (see
-docs/exchange_gateway.md's "Customer Boarding — When an Exchange Gets
-Auto-Provisioned" section). Two things this generator provisions:
+Colocation shares the same PROD/NON-PROD data-plane VRFs as every other
+customer deployment kind (see data/bootstrap/22_namespaces.yml) — there is
+still no VRF-per-customer. This generator provisions only FirewallContext
+(VDOM/vsys) on the parent ColocationMetro's ManagedFirewallHA cluster — in
+practice always a no-op today, since ColocationMetro doesn't inherit
+TopologyDeviceHosting (only its child ColocationZone does), so
+customer.parent.firewall_devices/loadbalancer_devices always arrive empty
+for this kind. Kept for forward-compatibility if that ever changes, and to
+mirror customer_dc.py's structure exactly.
 
-1. FirewallContext (VDOM/vsys) on the parent ColocationMetro's
-   ManagedFirewallHA cluster — in practice always a no-op today, since
-   ColocationMetro doesn't inherit TopologyDeviceHosting (only its child
-   ColocationZone does), so customer.parent.firewall_devices/
-   loadbalancer_devices always arrive empty for this kind. Kept for
-   forward-compatibility if that ever changes, and to mirror
-   customer_dc.py's structure exactly.
-2. Hub-and-spoke exchange: when this footprint's circuit terminates on the
-   operator's own hub (e.g. an SD-WAN PoP with `namespace: INTERNET` set —
-   see data/demos/16_hub_and_spoke/02_cloud/aws/01_cloud_pop.yml), a real
-   VRF boundary exists between "default" and the hub's namespace, so a
-   TopologyRoutedExchange is auto-provisioned on the circuit's own
-   interfaces (the transport hop doubles as the inter-VRF hop). If the
-   other endpoint has no namespace set (the common case), there is nothing
-   to do.
+Inter-VRF routing (PROD/NON-PROD <-> INTERNET/MANAGEMENT) is no longer
+per-deployment/per-circuit hub detection — with only 4 fixed global
+namespaces, it's 4 fixed TopologyRoutedExchange objects bootstrapped once
+(see data/bootstrap/23_exchanges.yml and docs/exchange_gateway.md), so every
+customer deployment already has a path to INTERNET/MANAGEMENT without this
+generator needing to detect or provision anything per-footprint.
 
 Registered as add_customer_deployment_colocation in .infrahub.yml, targeting
 the customer_deployments group and querying customer_colocation.gql.
@@ -44,15 +40,12 @@ from ..protocols import (
     DcimPhysicalDevice,
     DcimVirtualDevice,
     IpamIPAddress,
-    IpamNamespace,
     IpamPrefix,
     ManagedFirewallContext,
     ManagedFirewallHA,
-    TopologyRoutedExchange,
 )
 from .dc import _VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE
 
-DEFAULT_NAMESPACE = "default"
 _SHARED_CONTEXT_NAME_SUFFIX = "shared"
 
 
@@ -113,7 +106,6 @@ class CustomerDeploymentColocationExchangeGenerator(DeviceMixin, CablingMixin, C
 
         await self._ensure_firewall_context(customer, customer_id)
         await self._ensure_dedicated_loadbalancer(customer, customer_id)
-        await self._exchange_via_circuit(customer, customer_id)
 
     # ------------------------------------------------------------------
     # FirewallContext (VDOM/vsys) provisioning — mirrors customer_dc.py
@@ -505,97 +497,3 @@ class CustomerDeploymentColocationExchangeGenerator(DeviceMixin, CablingMixin, C
             await ip_obj.save(allow_upsert=True)
             ip_ids.append(ip_obj.id)
         return ip_ids[0], ip_ids[1]
-
-    # ------------------------------------------------------------------
-    # Hub-and-spoke: only provision an exchange when the circuit's OTHER
-    # endpoint is a footprint with its own `namespace` set (e.g. the
-    # operator's hub SD-WAN PoP) — a real VRF boundary. Colocation inherits
-    # TopologyConnectableLocation directly (see topology_customer.yml), so
-    # customer.circuits is already scoped to this footprint alone — no
-    # cross-tenant filtering needed.
-    # ------------------------------------------------------------------
-
-    async def _exchange_via_circuit(self, customer: dict[str, Any], customer_id: str) -> None:
-        circuits = customer.get("circuits") or []
-        usable_circuits = [
-            c for c in circuits if c.get("typename") in ("TopologyVirtualCircuit", "TopologyPhysicalCircuit")
-        ]
-        if not usable_circuits:
-            return
-
-        circuit = usable_circuits[0]
-
-        hub_namespace = None
-        for location in circuit.get("locations") or []:
-            if location.get("id") == customer_id:
-                continue
-            candidate = location.get("namespace")
-            if candidate and candidate.get("id"):
-                hub_namespace = candidate
-                break
-
-        if hub_namespace is None:
-            return
-
-        circuit_interfaces = circuit.get("interface_capabilities") or circuit.get("customer_interfaces") or []
-        if len(circuit_interfaces) != 2:
-            self.logger.error(
-                f"Deployment {customer.get('name', customer_id)}: circuit '{circuit.get('name', circuit.get('id'))}' "
-                f"has {len(circuit_interfaces)} interface(s), expected 2 — skipping hub exchange"
-            )
-            return
-
-        try:
-            default_namespace = await self.client.filters(kind=IpamNamespace, name__value=DEFAULT_NAMESPACE)
-        except Exception as exc:
-            self.logger.error(f"Error looking up namespace '{DEFAULT_NAMESPACE}': {exc}")
-            return
-        if not default_namespace:
-            self.logger.error(f"Namespace '{DEFAULT_NAMESPACE}' not found — skipping hub exchange")
-            return
-
-        z_namespace_id = hub_namespace["id"]
-        z_namespace_name = hub_namespace.get("name", z_namespace_id)
-        exchange_name = f"{DEFAULT_NAMESPACE}-{z_namespace_name}-hub"
-
-        try:
-            existing = await self.client.filters(kind=TopologyRoutedExchange, name__value=exchange_name)
-        except Exception as exc:
-            self.logger.error(f"Error looking up exchange '{exchange_name}': {exc}")
-            return
-        if existing:
-            self.logger.info(f"Routed exchange '{exchange_name}' already exists")
-            await self._link_customer_deployment(existing[0], customer_id)
-            return
-
-        try:
-            exchange_obj = await self.client.create(
-                kind=TopologyRoutedExchange,
-                data={
-                    "name": exchange_name,
-                    "description": (
-                        f"Auto-provisioned on customer boarding — {DEFAULT_NAMESPACE} access to hub "
-                        f"{z_namespace_name} via circuit {circuit.get('name', circuit.get('id'))}"
-                    ),
-                    "namespace_a": {"id": default_namespace[0].id},
-                    "namespace_z": {"id": z_namespace_id},
-                    "interface_capabilities": [{"id": iface["id"]} for iface in circuit_interfaces],
-                    "customer_deployments": [{"id": customer_id}],
-                },
-            )
-            await exchange_obj.save(allow_upsert=True)
-            self.logger.info(f"Created routed exchange '{exchange_name}' on circuit interfaces")
-        except Exception as exc:
-            self.logger.error(f"Failed to create routed exchange '{exchange_name}': {exc}")
-
-    async def _link_customer_deployment(self, exchange_obj: Any, customer_id: str) -> None:
-        try:
-            rel = getattr(exchange_obj, "customer_deployments")
-            await rel.fetch()
-            if any(peer.id == customer_id for peer in rel.peers):
-                return
-            await self._safe_rel_add(rel, {"id": customer_id})
-            await exchange_obj.save(allow_upsert=True)
-            self.logger.info(f"Linked customer deployment {customer_id} to exchange '{exchange_obj.name.value}'")
-        except Exception as exc:
-            self.logger.error(f"Failed to link customer deployment {customer_id} to exchange: {exc}")

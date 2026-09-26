@@ -1,0 +1,45 @@
+---
+# Fixed inter-VRF routing between the 4 global namespaces (22_namespaces.yml).
+# All 4 are TopologyRoutedExchange — an inspected device hop (border-leaf/
+# firewall router-on-a-stick), never TopologyRouteLeakExchange (a bare fabric
+# BGP EVPN route-target leak with no inspection point) — internet egress and
+# core-services access both need a real inspection/NAT boundary, matching
+# this app's existing posture that cross-environment flows require approval
+# (see RulesPlanner.dependency_is_authorized's cross-environment check).
+#
+# PROD and NON-PROD never exchange with each other directly — each reaches
+# the internet via INTERNET and core services (DNS/DHCP/NTP/syslog/
+# monitoring) via MANAGEMENT.
+#
+# Interfaces (the actual SVIs/sub-interfaces on the routing device, one leg
+# per namespace) are deliberately left unset here — they're wired once a
+# real border-leaf/firewall device exists to host them, same scope the
+# generator logic this replaces (_exchange_via_circuit) already had: it only
+# ever created the bare namespace_a/namespace_z skeleton, never the
+# interface legs. status stays "provisioning" until that wiring lands.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyRoutedExchange
+  data:
+    - name: "PROD-INTERNET"
+      description: "Production internet egress — inspected hop, no bare route leak"
+      status: provisioning
+      namespace_a: "PROD"
+      namespace_z: "INTERNET"
+    - name: "NON-PROD-INTERNET"
+      description: "Non-production internet egress — inspected hop, no bare route leak"
+      status: provisioning
+      namespace_a: "NON-PROD"
+      namespace_z: "INTERNET"
+    - name: "PROD-MANAGEMENT"
+      description: "Production access to core infrastructure services (DNS/DHCP/NTP/syslog/monitoring)"
+      status: provisioning
+      namespace_a: "PROD"
+      namespace_z: "MANAGEMENT"
+    - name: "NON-PROD-MANAGEMENT"
+      description: "Non-production access to core infrastructure services (DNS/DHCP/NTP/syslog/monitoring)"
+      status: provisioning
+      namespace_a: "NON-PROD"
+      namespace_z: "MANAGEMENT"
