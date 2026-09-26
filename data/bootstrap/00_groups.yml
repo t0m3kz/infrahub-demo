@@ -70,6 +70,8 @@ spec:
       description: Physical topology circuits (cross-connects, dark fiber, etc.)
     - name: virtual_circuits
       description: Virtual topology circuits (Equinix Fabric, cloud interconnects, etc.)
+    - name: interconnect_requests
+      description: Opt-in requests to auto-create inter-topology circuits (InterconnectRequestGenerator)
     - name: cloud_accounts
       description: Cloud accounts (AWS/Azure/GCP) — one Terraform/Pulumi artifact per account
     - name: saas_proxies

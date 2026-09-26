@@ -1,0 +1,246 @@
+---
+version: "1.0"
+
+# ============================================================================
+# TopologyInterconnectRequest — explicit, opt-in declaration of an intended
+# point-to-point connection between two TopologyConnectableLocation
+# endpoints. generators/topology/interconnect.py's InterconnectRequestGenerator
+# reads this node and creates the resulting circuit(s):
+#   - connection_kind: virtual        -> a fully-formed TopologyVirtualCircuit
+#     per redundancy leg, reconciled (updated in place) on every run.
+#   - connection_kind: physical_stub  -> a status=provisioning TopologyPhysicalCircuit
+#     shell per redundancy leg (locations + circuit_type only). Created once,
+#     never re-touched — real cross-connects/dark fiber need a provider order
+#     and demarc/panel assignment a generator can't invent.
+#
+# This node does NOT replace hand-authoring TopologyPhysicalCircuit/
+# TopologyVirtualCircuit directly (see data/demos/30_all/08_interconnects/) —
+# both paths coexist. Use this node only when you want the pairing +
+# interface wiring done for you; keep hand-authoring for anything bespoke.
+#
+# Deliberately NOT geography-inferred (no "same metro" auto-pairing): DC has
+# no direct location/metro relationship in this schema (only transitively via
+# Pod->Suite->Facility->Metro), so a geography-driven matcher would cover
+# CloudRegion/ColocationZone/SaasRegion pairs but silently miss/mishandle
+# DCs. Every pair is named explicitly instead.
+#
+# Opt-in, per-pair only: one request describes exactly one location pair.
+# redundancy_count fans out parallel legs between that SAME pair, never a
+# mesh across other locations — avoids an unwanted-object explosion if a
+# broader policy were mis-scoped.
+# ============================================================================
+
+nodes:
+  - name: InterconnectRequest
+    namespace: Topology
+    description: >-
+      Opt-in request to auto-create one or more circuits between two
+      TopologyConnectableLocation endpoints.
+    label: "Interconnect Request"
+    icon: "mdi:vector-polyline-plus"
+    include_in_menu: true
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }} ({{ connection_kind__value }})"
+    uniqueness_constraints:
+      - [name__value]
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 150
+
+      - name: connection_kind
+        label: "Connection Kind"
+        kind: Dropdown
+        optional: false
+        order_weight: 200
+        choices:
+          - name: virtual
+            label: "Virtual (fully automated)"
+            description: "Generator creates and reconciles a full TopologyVirtualCircuit per leg"
+            color: "#7FBF7F"
+          - name: physical_stub
+            label: "Physical (planned stub only)"
+            description: >-
+              Generator creates a status=provisioning TopologyPhysicalCircuit shell per
+              leg (locations + circuit_type only); circuit_id/provider details/interfaces
+              are completed by ops and never touched again by this generator
+            color: "#FFD27F"
+
+      - name: link_type
+        label: "Link Type"
+        kind: Dropdown
+        optional: true
+        order_weight: 300
+        description: "Required when connection_kind=virtual — same choices as TopologyVirtualCircuit.link_type"
+        choices:
+          - name: vpn_ipsec
+            label: "IPsec VPN"
+            color: "#E74C3C"
+          - name: vpn_ssl
+            label: "SSL VPN"
+            color: "#C0392B"
+          - name: gre
+            label: "GRE Tunnel"
+            color: "#95A5A6"
+          - name: vxlan
+            label: "VXLAN"
+            color: "#3498DB"
+          - name: geneve
+            label: "GENEVE"
+            color: "#2980B9"
+          - name: mpls_l3vpn
+            label: "MPLS L3VPN"
+            color: "#E67E22"
+          - name: direct_connect_aws
+            label: "AWS Direct Connect"
+            color: "#FF9900"
+          - name: express_route_azure
+            label: "Azure ExpressRoute"
+            color: "#0078D4"
+          - name: interconnect_gcp
+            label: "GCP Cloud Interconnect"
+            color: "#4285F4"
+          - name: fast_connect_oracle
+            label: "Oracle FastConnect"
+            color: "#F80000"
+          - name: sd_wan
+            label: "SD-WAN"
+            color: "#9B59B6"
+          - name: equinix_fabric
+            label: "Equinix Fabric"
+            color: "#E30613"
+          - name: megaport
+            label: "Megaport"
+            color: "#0066CC"
+          - name: packetfabric
+            label: "PacketFabric"
+            color: "#00A0DF"
+          - name: console_connect
+            label: "Console Connect"
+            color: "#FF6600"
+
+      - name: circuit_type
+        label: "Circuit Type"
+        kind: Dropdown
+        optional: true
+        order_weight: 310
+        description: >-
+          Required when connection_kind=physical_stub — same choices as
+          TopologyPhysicalCircuit.circuit_type
+        choices:
+          - name: internet
+            label: "Internet Underlay"
+            color: "#F39C12"
+          - name: dark_fiber
+            label: "Dark Fiber"
+            color: "#2C3E50"
+          - name: cross_connect
+            label: "Cross Connect"
+            color: "#3498DB"
+          - name: metro_ethernet
+            label: "Metro Ethernet"
+            color: "#9B59B6"
+          - name: mpls
+            label: "MPLS"
+            color: "#E74C3C"
+          - name: dia
+            label: "DIA"
+            color: "#F39C12"
+          - name: wavelength
+            label: "Wavelength"
+            color: "#1ABC9C"
+
+      - name: redundancy_count
+        label: "Redundancy Count"
+        kind: Number
+        optional: true
+        default_value: 1
+        order_weight: 400
+        description: >-
+          Number of parallel legs to create between the same pair (fan-out),
+          not a mesh across other locations
+        parameters:
+          min_value: 1
+          max_value: 4
+
+      - name: bandwidth
+        kind: Number
+        label: "Bandwidth (Mbps)"
+        optional: true
+        order_weight: 410
+        description: "Passed through to every created leg's bandwidth attribute"
+
+    relationships:
+      - name: location_a
+        label: "Endpoint A"
+        peer: TopologyConnectableLocation
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: "interconnect_request__location_a"
+        order_weight: 1000
+
+      - name: location_b
+        label: "Endpoint B"
+        peer: TopologyConnectableLocation
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: "interconnect_request__location_b"
+        order_weight: 1010
+
+      - name: provider
+        peer: OrganizationProvider
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: "interconnect_request__provider"
+        order_weight: 1100
+        description: >-
+          Copied onto every leg's provider. One provider per request —
+          author a second request for a different provider on the same pair.
+
+      - name: owner
+        label: "Customer"
+        peer: OrganizationCustomer
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "interconnect_request__owner"
+        order_weight: 1110
+        description: "Copied onto every leg's owner; unset for shared/backbone circuits"
+
+      - name: endpoint_a_interfaces
+        label: "Endpoint A Interfaces"
+        peer: DcimInterface
+        cardinality: many
+        optional: true
+        identifier: "interconnect_request__endpoint_a_interfaces"
+        order_weight: 1200
+        description: "Virtual-only. Index-paired with endpoint_b_interfaces to fill redundancy_count legs."
+
+      - name: endpoint_b_interfaces
+        label: "Endpoint B Interfaces"
+        peer: DcimInterface
+        cardinality: many
+        optional: true
+        identifier: "interconnect_request__endpoint_b_interfaces"
+        order_weight: 1210
+
+      - name: resulting_circuits
+        label: "Resulting Circuits"
+        peer: TopologyCircuit
+        cardinality: many
+        kind: Attribute
+        optional: true
+        identifier: "interconnect_request__resulting_circuits"
+        order_weight: 2000
+        description: "Generator-populated. Idempotency anchor for physical_stub legs — do not hand-edit."

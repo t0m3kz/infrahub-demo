@@ -591,6 +591,8 @@ queries:
     file_path: queries/topology/add/circuit.gql
   - name: virtual_circuit_data
     file_path: queries/topology/add/virtual_circuit.gql
+  - name: interconnect_request_data
+    file_path: queries/topology/add/interconnect_request.gql
   - name: capability_guard
     file_path: queries/validation/capability_guard.gql
   - name: segment_placement
@@ -766,6 +768,19 @@ generator_definitions:
     targets: virtual_circuits
     query: virtual_circuit_data
     class_name: VirtualCircuitGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
+  - name: add_interconnect
+    file_path: generators/topology/interconnect.py
+    targets: interconnect_requests
+    query: interconnect_request_data
+    class_name: InterconnectRequestGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:
