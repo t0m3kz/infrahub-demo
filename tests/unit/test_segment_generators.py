@@ -692,6 +692,7 @@ class TestEnsureSecurityZone:
     def test_reuses_existing_zone(self):
         gen = self._make_gen()
         existing_zone = MagicMock(id="zone-prod-1")
+        existing_zone.save = AsyncMock()
         gen.client.filters = AsyncMock(return_value=[existing_zone])
         segment_obj = MagicMock()
         segment_obj.save = AsyncMock()
@@ -726,7 +727,7 @@ class TestEnsureSecurityZone:
     def test_non_production_codes_all_map_to_nonprod_zone(self):
         for environment in ("n", "s", "d", "t"):
             gen = self._make_gen()
-            gen.client.filters = AsyncMock(return_value=[MagicMock(id="zone-1")])
+            gen.client.filters = AsyncMock(return_value=[MagicMock(id="zone-1", save=AsyncMock())])
             gen.client.create = AsyncMock(return_value=MagicMock(save=AsyncMock()))
 
             asyncio.run(
@@ -737,7 +738,7 @@ class TestEnsureSecurityZone:
 
     def test_segment_update_failure_is_logged_not_raised(self):
         gen = self._make_gen()
-        gen.client.filters = AsyncMock(return_value=[MagicMock(id="zone-1")])
+        gen.client.filters = AsyncMock(return_value=[MagicMock(id="zone-1", save=AsyncMock())])
         gen.client.create = AsyncMock(side_effect=Exception("boom"))
 
         asyncio.run(gen._ensure_security_zone(segment_id="seg-1", segment_name="vxlan-1000", environment="p"))

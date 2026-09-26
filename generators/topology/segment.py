@@ -33,6 +33,7 @@ from utils.data_cleaning import clean_data
 from ..common import CommonGenerator
 from ..connections import CablingMixin
 from ..helpers.rules import RulesPlanner
+from ..named_objects import GetOrCreateByNameMixin
 from ..pools import PoolMixin
 from ..protocols import (
     DcimPhysicalDevice,
@@ -45,7 +46,7 @@ from ..protocols import (
 )
 
 
-class VxlanSegmentGenerator(PoolMixin, CablingMixin, CommonGenerator):
+class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, CommonGenerator):
     """VXLAN segment generator — allocates a VNI from the DC's pool, assigns
     the segment to leaf/tor customer-facing interfaces and physical host uplinks
     (allocating a LOCAL VLAN ID per VLAN domain — MLAG pair or standalone
@@ -182,17 +183,16 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, CommonGenerator):
         is otherwise permanently inert — no segment ever carried security_zone.
         """
         zone_name = RulesPlanner.pick_zone_name(environment)
-        existing_zone = await self.client.filters(kind=SecurityZone, name__value=zone_name)
-        if existing_zone:
-            zone_id = existing_zone[0].id
-        else:
-            zone_obj = await self.client.create(
-                kind=SecurityZone,
-                data={"name": zone_name, **RulesPlanner.zone_seed(zone_name)},
-            )
-            await zone_obj.save(allow_upsert=True)
-            zone_id = zone_obj.id
-            self.logger.info(f"Created security zone: {zone_name}")
+        zone_obj = await self._get_or_create_by_name(
+            kind=SecurityZone,
+            name=zone_name,
+            create_data={"name": zone_name, **RulesPlanner.zone_seed(zone_name)},
+            created_log="Created security zone: %s",
+        )
+        if zone_obj is None:
+            self.logger.warning(f"Segment {segment_name}: could not get-or-create security zone {zone_name}")
+            return
+        zone_id = zone_obj.id
 
         try:
             segment_obj = await self.client.create(
