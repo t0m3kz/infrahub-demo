@@ -1,35 +1,4 @@
 ---
-# DC12's controllers — DCNM (dcnm, fabric-wide), Check Point SMS
-# (security_manager, matches the checkpoint_gaia firewall pair's platform
-# below), F5 BIG-IQ (lb_manager, matches the f5_tmos load-balancer pair's
-# platform) — created first so they can be referenced inline by name in
-# the DC block below, same as fabric_templates' own template references.
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: ManagedControllerPhysical
-  data:
-    - name: "DC12-DCNM1"
-      object_template: MDS-NDFC_DCNM
-      status: active
-      member_of_groups: [managed_controllers]
-
----
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: ManagedControllerVirtual
-  data:
-    - name: "DC12-CPSMS1"
-      object_template: CP-SMS_MANAGER
-      status: active
-      member_of_groups: [managed_controllers]
-    - name: "DC12-BIGIQ1"
-      object_template: BIG-IQ_MANAGER
-      status: active
-      member_of_groups: [managed_controllers]
-
----
 # DC12 — controller-managed fabric AND firewall AND load-balancer, all at
 # once ("all of them" — compare DC11's firewall/LB-only split): DCNM
 # governs the cisco_nxos switching fabric (controller_type: dcnm, fabric

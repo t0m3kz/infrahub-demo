@@ -5,7 +5,7 @@
 # delivery" choice; there is no literal cable here, and deliberately no
 # `provider_interfaces`: the ISP hands off at the office, so the only port this
 # circuit terminates on is the branch edge's WAN uplink. The far end of the tunnel
-# is reached through the overlay in 03_overlays.yml, not through this circuit.
+# is reached through the overlay in 05_overlays.yml, not through this circuit.
 #
 # Each office buys its own access from its own ISP, which is what keeps the three
 # spokes independent: losing Orange in Warsaw is one tenant, losing the FR2 cage is

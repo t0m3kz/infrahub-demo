@@ -1,0 +1,40 @@
+---
+# C012's cage kit in CoreSite VA1 — same shape as
+# ../../../../c011/colo/coresite/ny/, see there for the why.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: "CS-VA1-SW1"
+      object_template: PowerSwitch-S5224F-ON_ACCESS
+      owner: "C012"
+      status: active
+      rack: va1-s1-r-1
+      position: 40
+      deployment: "VA1"
+      description: "C012 CoreSite VA1 cage access switch"
+
+    - name: "cs-va1-server-1"
+      object_template: PowerEdge-R640_SERVER
+      owner: "C012"
+      status: active
+      rack: va1-s1-r-1
+      position: 10
+      platform: linux
+      deployment: "VA1"
+      description: "C012 CoreSite VA1 application host"
+      member_of_groups:
+        - endpoints
+
+    - name: "cs-va1-server-2"
+      object_template: PowerEdge-R640_SERVER
+      owner: "C012"
+      status: active
+      rack: va1-s1-r-1
+      position: 12
+      platform: linux
+      deployment: "VA1"
+      description: "C012 CoreSite VA1 application host"
+      member_of_groups:
+        - endpoints

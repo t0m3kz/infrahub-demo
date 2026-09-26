@@ -1,0 +1,44 @@
+---
+# C013's cage kit in Megaport MCR-AMS1 — same shape as
+# ../../../../c011/colo/coresite/ny/, see there for the why.
+#
+# Unlike C011/C012 this reuses the rack that already exists for the zone
+# (../../../../../02_colo/megaport/ams/03_racks.yml), so no new location data
+# is needed here.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: "MCR-AMS1-SW1"
+      object_template: PowerSwitch-S5224F-ON_ACCESS
+      owner: "C013"
+      status: active
+      rack: mcr-ams1-s1-r-1
+      position: 40
+      deployment: "MCR-AMS1"
+      description: "C013 Megaport AMS1 cage access switch"
+
+    - name: "mcr-ams1-server-1"
+      object_template: PowerEdge-R640_SERVER
+      owner: "C013"
+      status: active
+      rack: mcr-ams1-s1-r-1
+      position: 10
+      platform: linux
+      deployment: "MCR-AMS1"
+      description: "C013 Megaport AMS1 application host"
+      member_of_groups:
+        - endpoints
+
+    - name: "mcr-ams1-server-2"
+      object_template: PowerEdge-R640_SERVER
+      owner: "C013"
+      status: active
+      rack: mcr-ams1-s1-r-1
+      position: 12
+      platform: linux
+      deployment: "MCR-AMS1"
+      description: "C013 Megaport AMS1 application host"
+      member_of_groups:
+        - endpoints

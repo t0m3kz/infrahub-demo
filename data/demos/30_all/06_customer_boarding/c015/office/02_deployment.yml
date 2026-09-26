@@ -1,0 +1,16 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyOfficeCustomer
+  data:
+    - owner: "C015"
+      parent: "Campus and Office"
+      children:
+        - kind: TopologyCustomerOffice
+          data:
+            environment: "p"
+            locations:
+              - "par-office"
+            member_of_groups:
+              - customer_deployments_office

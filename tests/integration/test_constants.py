@@ -29,7 +29,7 @@ ALL_DEMO_BRANCH = "all-demo-scenario"
 #     add_endpoint finding the access-leaf pair in the network rack sharing
 #     the host's row. Those access-leafs are created by add_rack, which is
 #     dispatched asynchronously by the *same* load that declared the rack.
-#   - 08_interconnects/01_colo_onramp/02_addressing.yml hard-references border
+#   - 08_interconnects/01_colo_onramp/02_interfaces.yml hard-references border
 #     leaves by name ("bl-dc101101"), which add_dc creates.
 #   - 07_applications references the VMs and customer deployments declared in
 #     06_customer_boarding.
@@ -71,8 +71,11 @@ ALL_DEMO_LOAD_STAGES: tuple[tuple[str, tuple[str, ...]], ...] = (
         "dc_fabric",
         (
             "03_dc/dc10/01_topology.yml",
-            "03_dc/dc11/01_topology.yml",
-            "03_dc/dc12/01_topology.yml",
+            "03_dc/dc11/01_controllers_virtual.yml",
+            "03_dc/dc11/02_topology.yml",
+            "03_dc/dc12/01_controllers_physical.yml",
+            "03_dc/dc12/02_controllers_virtual.yml",
+            "03_dc/dc12/03_topology.yml",
         ),
     ),
     (
@@ -156,7 +159,7 @@ ALL_DEMO_EXPECTED_OBJECTS: dict[str, int] = {
     "ManagedVxlanSegment": 4,
     "ManagedVlanSegment": 7,
     "AppApplication": 7,
-    # 18 AppComponent blocks are declared, but c005/03_dependencies.yml
+    # 18 AppComponent blocks are declared, but c005/04_component_updates.yml
     # re-declares web-frontend to attach its depends_on — an upsert, not a
     # 18th component.
     "AppComponent": 17,
@@ -239,7 +242,7 @@ ALL_DEMO_COLO_HOST_SWITCHES: dict[str, str] = {
 # Every host is dual-homed, DC or cage.
 ALL_DEMO_HOST_LINK_COUNT = 2
 
-# name -> (criticality, component count). c005/03_dependencies.yml re-declares
+# name -> (criticality, component count). c005/04_component_updates.yml re-declares
 # web-frontend to attach its depends_on, so c005 has 4 components, not 5.
 ALL_DEMO_EXPECTED_APPLICATIONS: dict[str, tuple[str, int]] = {
     "c003-custody-api-p": ("high", 2),

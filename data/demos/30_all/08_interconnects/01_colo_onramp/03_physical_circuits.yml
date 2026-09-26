@@ -19,7 +19,7 @@ kind: Object
 spec:
   kind: TopologyPhysicalCircuit
   data:
-    # --- DC <-> cage dark fibre (addressing in 02_addressing.yml) -------------
+    # --- DC <-> cage dark fibre (addressing in 01_prefixes.yml/02_interfaces.yml) -------------
     - circuit_id: "DF-DC10-EQXFR2"
       name: "DF-DC10-EQXFR2"
       circuit_type: dark_fiber

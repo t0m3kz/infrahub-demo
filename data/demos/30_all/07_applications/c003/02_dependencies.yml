@@ -1,0 +1,19 @@
+---
+# api-frontend and api-backend share one CloudNetworkSegment
+# (c003-vaultex-subnet-prod-p) — exercises the cloud-security-group rule
+# path (RulesPlanner.is_cloud_dependency / AppApplicationGenerator.
+# _create_cloud_rule), which no other demo data reaches: c016 has no
+# dependency at all, and every on-prem app dependency uses a
+# ManagedNetworkSegment on both sides.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppDependency
+  data:
+    - name: c003-custody-api-frontend-to-backend
+      source: c003-custody-api-p-api-frontend
+      target: ["c003-custody-api-p-api-backend", "api-backend-internal"]
+      protocol: tcp
+      port_start: 8443
+      access_status: auto
+      description: "Custody API frontend calls the internal backend API"

@@ -1,0 +1,18 @@
+---
+# DC12's Check Point SMS (security_manager, matches the checkpoint_gaia
+# firewall pair's platform) and F5 BIG-IQ (lb_manager, matches the f5_tmos
+# load-balancer pair's platform) — created before 03_topology.yml so the DC
+# block can reference them inline by name.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedControllerVirtual
+  data:
+    - name: "DC12-CPSMS1"
+      object_template: CP-SMS_MANAGER
+      status: active
+      member_of_groups: [managed_controllers]
+    - name: "DC12-BIGIQ1"
+      object_template: BIG-IQ_MANAGER
+      status: active
+      member_of_groups: [managed_controllers]
