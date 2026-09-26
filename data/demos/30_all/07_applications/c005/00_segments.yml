@@ -31,12 +31,14 @@ spec:
             environment: "p"
             stretch_scope: dc_pair
             arp_suppression: true
-            # Microsegmented so the existing web-frontend -> app-backend
-            # AppDependency (07_applications/c005/03_dependencies.yml)
-            # exercises AppApplicationGenerator's return-rule reconciliation
-            # (apply_on_switch has no connection tracking, so the forward
-            # permit alone would otherwise leave the response leg dropped).
-            isolation_mode: microsegmented
+            # No explicit isolation_mode: AppApplicationGenerator derives
+            # microsegmented for it (see _ensure_segment_isolation_mode) since
+            # 01_application.yml's security_profile is fintech_strict. That in
+            # turn is what makes the web-frontend -> app-backend AppDependency
+            # (07_applications/c005/03_dependencies.yml) exercise the
+            # return-rule reconciliation path — apply_on_switch has no
+            # connection tracking, so the forward permit alone would otherwise
+            # leave the response leg dropped.
             customer_deployments:
               - "C005-P-DC10"
               - "C005-D-DC12"

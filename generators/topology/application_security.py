@@ -196,6 +196,13 @@ class AppApplicationGenerator(
             self.logger.warning("Application %s has no components - nothing to do", app_name)
             return
 
+        # Runs unconditionally per component (not gated on having a
+        # dependency edge below) so every segment this app uses gets
+        # classified, the same unconditional guarantee VxlanSegmentGenerator
+        # gives security_zone.
+        for component in components:
+            await self._ensure_segment_isolation_mode(component.get("network_segment") or {}, app_security_profile)
+
         edges: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]] = []
         warnings: list[str] = []
         if forced_edges:
