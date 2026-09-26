@@ -1,6 +1,9 @@
 ---
-# Addressing for the shared-services virtual servers (see 01_devices.yml),
-# in the "default" namespace alongside every customer deployment.
+# Addressing for the shared-services virtual servers (see 01_devices.yml) —
+# DNS/NTP/monitoring-style core infrastructure services every workload needs
+# regardless of environment, so they live in the MANAGEMENT VRF (see
+# data/bootstrap/22_namespaces.yml), reachable from PROD/NON-PROD via the
+# fixed exchanges in data/bootstrap/23_exchanges.yml.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -9,7 +12,7 @@ spec:
     - prefix: "10.90.0.0/24"
       description: "Shared services server addressing"
       status: active
-      ip_namespace: "default"
+      ip_namespace: "MANAGEMENT"
 
 ---
 apiVersion: infrahub.app/v1
@@ -23,18 +26,18 @@ spec:
       ip_address:
         data:
           address: "10.90.0.1/24"
-          ip_namespace: "default"
+          ip_namespace: "MANAGEMENT"
     - name: "eth0"
       device: "DC8-SVC1"
       status: active
       ip_address:
         data:
           address: "10.90.0.2/24"
-          ip_namespace: "default"
+          ip_namespace: "MANAGEMENT"
     - name: "eth0"
       device: "WAW1-SVC1"
       status: active
       ip_address:
         data:
           address: "10.90.0.3/24"
-          ip_namespace: "default"
+          ip_namespace: "MANAGEMENT"

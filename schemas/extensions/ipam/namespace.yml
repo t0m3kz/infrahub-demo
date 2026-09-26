@@ -9,6 +9,28 @@ version: "1.0"
 # a new VRF node — avoids redundancy and aligns with how NX-OS templates already
 # generate `vrf member` from `ip_namespace.name`.
 #
+# Namespace model (4 fixed, global VRFs, bootstrap-defined — see
+# data/bootstrap/22_namespaces.yml — never per-customer/per-deployment):
+#   - PROD:       data-plane VRF for every segment/customer/app with environment=p
+#   - NON-PROD:   data-plane VRF for every other environment value (n/s/d/t all
+#                 collapse here — same collapsing rule RulesPlanner.pick_zone_name
+#                 already uses for the PROD-ZONE/NONPROD-ZONE SecurityZone split;
+#                 see RulesPlanner.pick_namespace_name)
+#   - INTERNET:   internet-edge VRF
+#   - MANAGEMENT: true OOB (mgmt0/console/ZTP) *and* core infrastructure services
+#                 every workload needs regardless of environment (DNS, DHCP, NTP,
+#                 syslog, monitoring) — an explicit, accepted tradeoff: this is not
+#                 a fully air-gapped OOB VRF, since PROD and NON-PROD both need an
+#                 inspected route to it (see data/bootstrap/23_exchanges.yml)
+#
+# `default` (Infrahub's built-in namespace) remains the permanent
+# underlay/global-table namespace — it does NOT become vestigial. EVPN-VXLAN
+# VTEP loopbacks and underlay BGP peering stay here, never in a VRF: NVE
+# source-interface reachability and underlay convergence cannot depend on a
+# VRF being correctly provisioned. Only true OOB/core-services traffic uses
+# MANAGEMENT; fabric P2P/loopback/technical addressing is unaffected by this
+# namespace model entirely.
+#
 # Convention:
 #   - default namespace: no l3_vni → underlay/infrastructure, never a VRF
 #   - any namespace with l3_vni set → active EVPN VRF, generates VRF config on all
@@ -16,10 +38,12 @@ version: "1.0"
 #
 # Relationship to ManagedNetworkSegment:
 #   segment.prefix.ip_namespace → this node
-#   → VRF name:   ip_namespace.name
+#   → VRF name:   ip_namespace.name (PROD or NON-PROD, derived from
+#                  segment.environment via RulesPlanner.pick_namespace_name)
 #   → L3VNI:      ip_namespace.l3_vni (allocated from GLOBAL-L3VNI pool)
-#   → Customer:   derived from segment.owner + segment.environment (not stored
-#                  on the namespace — a namespace has no owner/status of its own)
+#   → Customer:   derived from segment.owner (not stored on the namespace — a
+#                  namespace has no owner/status of its own; PROD/NON-PROD are
+#                  shared across every customer, not per-tenant)
 #   → Scope:      determined by segment.deployments (not on namespace)
 
 extensions:
@@ -41,19 +65,19 @@ extensions:
           optional: true
           order_weight: 1100
           choices:
+            - name: prod
+              label: Production
+              description: "Production data-plane VRF — every segment/customer/app with environment=p"
+              color: "#7FBF7F"
+            - name: non_prod
+              label: Non-Production
+              description: "Non-production data-plane VRF — every other environment value"
+              color: "#FFD27F"
             - name: internet
               label: Internet
               description: "Public internet edge VRF"
               color: "#7FA7FF"
-            - name: shared
-              label: Shared
-              description: "Shared services VRF (e.g. SHARED-SERVICES)"
-              color: "#7FBF7F"
-            - name: transit
-              label: Transit
-              description: "DCI/transit VRF carrying route leaks between namespaces"
-              color: "#FFD27F"
-            - name: customer
-              label: Customer
-              description: "Per-customer/tenant VRF"
+            - name: management
+              label: Management
+              description: "True OOB and core infrastructure services (DNS/DHCP/NTP/syslog/monitoring)"
               color: "#BF7F7F"

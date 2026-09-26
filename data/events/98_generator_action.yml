@@ -42,17 +42,14 @@ spec:
       description: Run Endpoint Connectivity Generator
       generator: add_endpoint
     - name: run-customer-deployment-dc-generator
-      description: Provision FirewallContext/dedicated LB and exchange routing for a DC customer deployment
+      description: Provision FirewallContext/dedicated LB for a DC customer deployment
       generator: add_customer_deployment_dc
     - name: run-customer-deployment-colocation-generator
-      description: Provision FirewallContext/dedicated LB and exchange routing for a colocation customer deployment
+      description: Provision FirewallContext/dedicated LB for a colocation customer deployment
       generator: add_customer_deployment_colocation
-    - name: run-customer-deployment-cloud-generator
-      description: Provision exchange routing for a cloud customer deployment
-      generator: add_customer_deployment_cloud
     - name: run-colocation-metro-generator
       description: Create a colocation metro's resource pools and its own on-ramp devices
       generator: add_colocation_metro
-    - name: run-customer-deployment-office-generator
-      description: Provision exchange routing for an office customer deployment
-      generator: add_customer_deployment_office
+    - name: run-interconnect-generator
+      description: Reconcile a TopologyInterconnectRequest into virtual/physical circuit(s)
+      generator: add_interconnect

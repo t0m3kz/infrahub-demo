@@ -180,6 +180,18 @@ class TestZoneSeed:
         assert RulesPlanner.zone_seed("NONPROD-ZONE")["trust_level"] == 50
 
 
+class TestPickNamespaceName:
+    """Routing-level counterpart to TestPickZoneName's firewall-zone split —
+    same collapsing rule, different fixed namespace pair."""
+
+    def test_pick_namespace_name_maps_production_environment(self):
+        assert RulesPlanner.pick_namespace_name("p") == "PROD"
+
+    def test_pick_namespace_name_maps_every_non_production_environment_to_non_prod(self):
+        for environment in ("n", "s", "d", "t"):
+            assert RulesPlanner.pick_namespace_name(environment) == "NON-PROD"
+
+
 # ===========================================================================
 # TestPickProfileName
 # ===========================================================================

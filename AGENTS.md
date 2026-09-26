@@ -222,12 +222,14 @@ This project follows a **layered architecture** with clear separation between pl
 │  Platform.NetworkSegment    # Base for all segments        │
 │  Platform.LoadBalancer      # Base for all LBs             │
 ├─────────────────────────────────────────────────────────────┤
-│              CUSTOMER ABSTRACTIONS                          │
-│  Customer-facing logical views (schemas/extensions/)        │
+│              CUSTOMER FOOTPRINTS                            │
+│  Tenant footprints, namespaced Topology (schemas/extensions)│
 ├─────────────────────────────────────────────────────────────┤
-│  Customer.*                 # Customer logical abstractions │
-│    Customer.VirtualCloud    # Multi-region cloud deployment│
-│    Customer.VirtualFabric   # Virtual data center slice    │
+│  Topology.Customer*         # Per-facility tenant footprint │
+│    CustomerDC/Colocation/Cloud/Office/Saas                  │
+│    (inherit TopologyConnectableLocation to share circuit    │
+│     endpoints with the facility they sit in — not a         │
+│     separate connectivity model)                            │
 ├─────────────────────────────────────────────────────────────┤
 │              IMPLEMENTATION LAYERS                          │
 │  Technology-specific implementations (schemas/extensions/)  │
@@ -251,7 +253,7 @@ This project follows a **layered architecture** with clear separation between pl
 **Namespace Guidelines**:
 
 - **Platform**: Technology-agnostic base generics that provide common classification (segment_type, lb_type)
-- **Customer**: Customer-facing logical abstractions that span multiple technologies (VirtualCloud, VirtualFabric)
+- **Topology.Customer**: Per-facility tenant footprints (CustomerDC, CustomerColocation, CustomerCloud, CustomerOffice, CustomerSaas) — not a separate `Customer.*` namespace; these inherit `TopologyConnectableLocation` alongside the facility nodes so a circuit endpoint is one shared relationship, not a duplicated model
 - **Managed**: On-premises/self-hosted infrastructure (physical data centers, private cloud)
 - **Cloud**: Public cloud providers (AWS, Azure, GCP, Oracle Cloud)
 - **Dcim**: Physical infrastructure and devices
@@ -496,13 +498,13 @@ Valid attribute kinds (case-sensitive):
 
 - Managed resources: Use generic business names (`NetworkSegment`, `LoadBalancer`, `Firewall`)
 - Cloud resources: Use provider-agnostic names (`Subnet`, `LoadBalancer`, `VPC`)
-- Customer abstractions: Use logical names (`VirtualCloud`, `VirtualFabric`)
+- Customer footprints: Use `Customer<FacilityType>` names (`CustomerDC`, `CustomerColocation`, `CustomerCloud`)
 - Avoid technology-specific prefixes in node names (`NetworkSegment` not `VLANSegment`)
 
 **Implementation Status**:
 
 - ✅ `Platform.*` - Base generics for classification
-- ✅ `Customer.*` - Customer-facing logical abstractions (VirtualCloud, VirtualFabric)
+- ✅ `Topology.Customer*` - Per-facility tenant footprints (CustomerDC, CustomerColocation, CustomerCloud, CustomerOffice, CustomerSaas); the earlier `Customer.VirtualCloud`/`Customer.VirtualFabric` design was superseded and removed (see `chore: remove dead CustomerVirtualCloud schema`)
 - ✅ `Managed.*` - On-premises infrastructure (NetworkSegment, LoadBalancer)
 - ✅ `Cloud.*` - Public cloud resources (Subnet, LoadBalancer, VPC)
 - ✅ `Service.*` - Running service instances (OSPF, BGP, PIM)

@@ -1,0 +1,72 @@
+query interconnect_request_data($name: String!) {
+  TopologyInterconnectRequest(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        description { value }
+        connection_kind { value }
+        link_type { value }
+        circuit_type { value }
+        redundancy_count { value }
+        bandwidth { value }
+        location_a {
+          node {
+            id
+            name { value }
+            __typename
+          }
+        }
+        location_b {
+          node {
+            id
+            name { value }
+            __typename
+          }
+        }
+        provider {
+          node {
+            id
+            name { value }
+          }
+        }
+        owner {
+          node {
+            id
+            name { value }
+          }
+        }
+        endpoint_a_interfaces {
+          edges {
+            node {
+              id
+              name { value }
+              device { node { id name { value } } }
+            }
+          }
+        }
+        endpoint_b_interfaces {
+          edges {
+            node {
+              id
+              name { value }
+              device { node { id name { value } } }
+            }
+          }
+        }
+        resulting_circuits {
+          edges {
+            node {
+              id
+              __typename
+              name { value }
+              ... on TopologyPhysicalCircuit {
+                circuit_id { value }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -228,6 +228,14 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: interconnect_request_data
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/interconnect_request.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: proposed_change_artifacts
     tests:
       - name: syntax_check
