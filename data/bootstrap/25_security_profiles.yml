@@ -1,0 +1,26 @@
+---
+# Threat-inspection profile catalog. Only the two names
+# generators/helpers/rules.py::RulesPlanner.pick_profile_name actually
+# returns ("standard"/"strict") — referenced by name from
+# generators/topology/application_security.py when a cross-zone AppDependency
+# flow needs one attached to its generated SecurityPolicyRule.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecuritySecurityProfile
+  data:
+    - name: "strict"
+      description: "Full inspection — production database and critical workloads"
+      antivirus_enabled: true
+      ips_enabled: true
+      url_filtering_enabled: true
+      ssl_inspection_enabled: true
+      data_loss_prevention_enabled: true
+
+    - name: "standard"
+      description: "Standard inspection — general production traffic"
+      antivirus_enabled: true
+      ips_enabled: true
+      url_filtering_enabled: true
+      ssl_inspection_enabled: false
+      data_loss_prevention_enabled: false

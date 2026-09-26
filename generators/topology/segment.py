@@ -32,6 +32,7 @@ from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
 from ..connections import CablingMixin
+from ..helpers.rules import RulesPlanner
 from ..pools import PoolMixin
 from ..protocols import (
     DcimPhysicalDevice,
@@ -40,6 +41,7 @@ from ..protocols import (
     ManagedStandaloneVlanDomain,
     ManagedVlanDomainSegment,
     ManagedVxlanSegment,
+    SecurityZone,
 )
 
 
@@ -79,6 +81,12 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, CommonGenerator):
             return
 
         self.logger.info(f"Processing segment: {segment_name}")
+
+        await self._ensure_security_zone(
+            segment_id=segment_id,
+            segment_name=segment_name,
+            environment=segment.get("environment") or "p",
+        )
 
         target_deployments = self._resolve_target_deployments(segment, segment_name)
         if not target_deployments:
@@ -165,6 +173,35 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, CommonGenerator):
 
         await self._assign_to_deployment_interfaces(segment, target_deployments)
         await self._create_inline_sub_interfaces(segment, target_deployments)
+
+    async def _ensure_security_zone(self, segment_id: str, segment_name: str, environment: str) -> None:
+        """Assign this segment's macro trust classification, derived from its
+        own `environment`. Unlocks the cross-zone branch in
+        RulesPlanner.zone_context/pick_profile_name (generators/helpers/rules.py),
+        which application_security.py already calls unconditionally but which
+        is otherwise permanently inert — no segment ever carried security_zone.
+        """
+        zone_name = RulesPlanner.pick_zone_name(environment)
+        existing_zone = await self.client.filters(kind=SecurityZone, name__value=zone_name)
+        if existing_zone:
+            zone_id = existing_zone[0].id
+        else:
+            zone_obj = await self.client.create(
+                kind=SecurityZone,
+                data={"name": zone_name, **RulesPlanner.zone_seed(zone_name)},
+            )
+            await zone_obj.save(allow_upsert=True)
+            zone_id = zone_obj.id
+            self.logger.info(f"Created security zone: {zone_name}")
+
+        try:
+            segment_obj = await self.client.create(
+                kind=ManagedVxlanSegment,
+                data={"id": segment_id, "security_zone": {"id": zone_id}},
+            )
+            await segment_obj.save(allow_upsert=True)
+        except Exception as exc:
+            self.logger.warning(f"Segment {segment_name}: failed to assign security_zone {zone_name}: {exc}")
 
     def _resolve_target_deployments(self, segment: dict[str, Any], segment_name: str) -> list[dict[str, Any]]:
         """Resolve segment.customer_deployments to their hosting parents.

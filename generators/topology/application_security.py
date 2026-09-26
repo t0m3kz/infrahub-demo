@@ -221,7 +221,9 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
         segment_policies: dict[str, Any] = {}
         proxy_policies: dict[str, Any] = {}
 
-        pa_created, pa_skipped = await self._reconcile_private_access_endpoints(app_name, components)
+        pa_created, pa_skipped = await self._reconcile_private_access_endpoints(
+            app_name, components, app_security_profile
+        )
         rules_created += pa_created
         rules_skipped += pa_skipped
 
@@ -754,9 +756,12 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
         self,
         app_name: str,
         components: list[dict[str, Any]],
+        app_security_profile: str = "internal_standard",
     ) -> tuple[int, int]:
         """Publish every private_access endpoint via its owning customer's
-        private_access_service (ZTNA broker: e.g. Zscaler ZPA).
+        private_access_service (ZTNA broker: e.g. Zscaler ZPA), and derive its
+        SecurityAccessProfile/SecurityIdentityGroup when the author hasn't set
+        one explicitly.
 
         Not dependency-edge-driven like external_service/internal_service:
         who may reach a private_access endpoint is gated by its own
@@ -779,6 +784,15 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
 
                 endpoint_name = str(endpoint.get("name") or endpoint.get("id") or "?")
                 comp_label = component.get("slug") or component.get("name") or "?"
+
+                owner_org_id_raw = str(owner.get("org_id") or owner.get("id") or "")
+                if owner_org_id_raw and not endpoint.get("access_profile"):
+                    await self._ensure_endpoint_access_profile(
+                        endpoint_id=str(endpoint.get("id") or ""),
+                        endpoint_name=endpoint_name,
+                        owner_org_id=owner_org_id_raw,
+                        app_security_profile=app_security_profile,
+                    )
 
                 broker = owner.get("private_access_service") or {}
                 broker_id = broker.get("id")
@@ -849,6 +863,67 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
                     skipped += 1
 
         return created, skipped
+
+    async def _ensure_endpoint_access_profile(
+        self,
+        *,
+        endpoint_id: str,
+        endpoint_name: str,
+        owner_org_id: str,
+        app_security_profile: str,
+    ) -> None:
+        """Derive and attach a SecurityAccessProfile/SecurityIdentityGroup for
+        a private_access endpoint that has none, so ZTNA access policy
+        doesn't have to be hand-authored per customer. Skipped entirely when
+        the endpoint already has an explicit access_profile — never clobbers
+        an author's override.
+        """
+        if not endpoint_id:
+            return
+
+        org_slug = owner_org_id.lower()
+        group_name = f"{org_slug}-engineering"
+        profile_name = f"{org_slug}-private-access-standard"
+
+        group = await self._get_or_create_by_name(
+            kind="SecurityIdentityGroup",
+            name=group_name,
+            create_data={
+                "name": group_name,
+                "description": f"{owner_org_id} engineering users",
+                "source": "manual",
+            },
+            found_log="Using existing identity group: %s",
+            created_log="Created identity group: %s",
+        )
+        if group is None:
+            return
+
+        policy = RulesPlanner.pick_access_policy(app_security_profile)
+        profile = await self._get_or_create_by_name(
+            kind="SecurityAccessProfile",
+            name=profile_name,
+            create_data={
+                "name": profile_name,
+                "description": f"{owner_org_id} standard private-access controls",
+                "allowed_groups": [group.id],
+                **policy,
+            },
+            found_log="Using existing access profile: %s",
+            created_log="Created access profile: %s",
+        )
+        if profile is None:
+            return
+
+        try:
+            endpoint = await self.client.create(
+                kind="AppEndpoint",
+                data={"id": endpoint_id, "access_profile": {"id": profile.id}},
+            )
+            await endpoint.save(allow_upsert=True)
+            self.logger.info("  Derived access_profile '%s' for endpoint '%s'", profile_name, endpoint_name)
+        except Exception as exc:
+            self.logger.warning("  Failed to set access_profile on endpoint '%s': %s", endpoint_name, exc)
 
     @staticmethod
     def _segment_policy_name(segment: dict[str, Any]) -> str:
