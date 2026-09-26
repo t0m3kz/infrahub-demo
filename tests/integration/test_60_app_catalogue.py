@@ -4,17 +4,17 @@ Runs against the branch test_59 builds; it never loads data of its own. Where
 test_61-test_63 assert on what the load *produced*, this module drives the two
 enforcement paths the catalogue is for:
 
-  1. Materialize the approved C001 checkout request and enforce its external
+  1. Enforce the directly-authored C001 checkout application's external
      payment-gateway dependency through the customer egress proxy.
   2. Enforce the predeclared C005 payment-core web-to-backend dependency
      through a firewall policy between its provisioned VXLAN segments.
 
-The two generator runs here are the only ones in the 30_all suite the tests
-invoke by hand. Everything else is trigger-dispatched, and test_59 counts those
-dispatches. ``add_application_deployment_request`` has no trigger rule on
-purpose — a deployment request is materialized on approval, not on creation —
-and the application it materializes needs ``add_app_application`` run over it
-afterwards, since it was born from a generator rather than from the loader.
+Both applications are loaded straight from data files (no request/approval
+object graph — a branch + proposed-change review is the approval step for
+anything declared here). The two generator runs here are invoked by hand to
+pin down task success/failure for these specific enforcement paths and assert
+on their output deterministically, rather than relying on the trigger
+dispatch that test_59 already counts for every other application.
 """
 
 import logging
@@ -30,7 +30,7 @@ from .workflow_helpers import run_generator, wait_for_tasks_completion
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 SCENARIO_NAME = "Scenario 30_all: App Catalogue Enforcement"
-CHECKOUT_REQUEST_NAME = "c001-checkout-request"
+CHECKOUT_APPLICATION_NAME = "c001-checkout-p"
 CHECKOUT_DEPENDENCY_NAME = "c001-checkout-to-payment-gateway"
 C005_APPLICATION_NAME = "c005-payment-core-p"
 BROKER_NAME = "c001-private-access"
@@ -39,7 +39,7 @@ SEGMENT_POLICY_NAME = "seg-c005-web-frontend-local-dc10-p-egress"
 
 
 class TestAppCatalogue(TestInfrahubDockerWithClient):
-    """Test request materialization and application enforcement against 30_all."""
+    """Test application enforcement against 30_all."""
 
     @pytest.fixture(scope="class")
     def scenario_branch(self) -> str:
@@ -54,39 +54,23 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
         scenario_branch: str,
         workflow_state: dict[str, Any],
     ) -> None:
-        """Materialize C001 checkout, then enforce C001 and C005 applications."""
+        """Run add_app_application over the C001 checkout and C005 applications."""
         logging.info("=== %s - Step 1: Run Generator ===", SCENARIO_NAME)
 
         client = async_client_main
         client.default_branch = scenario_branch
 
-        request = await client.get(kind="AppDeploymentRequest", name__value=CHECKOUT_REQUEST_NAME)
-        assert request, f"AppDeploymentRequest '{CHECKOUT_REQUEST_NAME}' not found"
-
-        request_result = await run_generator(
-            client=client,
-            generator_name="add_application_deployment_request",
-            node_ids=[request.id],
-            branch=scenario_branch,
-        )
-        workflow_state["app_catalogue_request_generator_task"] = request_result
-        await wait_for_tasks_completion(async_client_main, scenario_branch)
-
-        checkout_apps = await client.filters(kind="AppApplication", label__value=CHECKOUT_REQUEST_NAME)
-        assert len(checkout_apps) == 1, (
-            f"Expected request '{CHECKOUT_REQUEST_NAME}' to materialize one AppApplication, found {len(checkout_apps)}"
-        )
+        checkout_app = await client.get(kind="AppApplication", name__value=CHECKOUT_APPLICATION_NAME)
+        assert checkout_app, f"AppApplication '{CHECKOUT_APPLICATION_NAME}' not found"
         checkout_dependency = await client.get(kind="AppDependency", name__value=CHECKOUT_DEPENDENCY_NAME)
-        assert checkout_dependency, (
-            f"Expected request '{CHECKOUT_REQUEST_NAME}' to materialize dependency '{CHECKOUT_DEPENDENCY_NAME}'"
-        )
+        assert checkout_dependency, f"AppDependency '{CHECKOUT_DEPENDENCY_NAME}' not found"
         c005_app = await client.get(kind="AppApplication", name__value=C005_APPLICATION_NAME)
         assert c005_app, f"AppApplication '{C005_APPLICATION_NAME}' not found"
 
         checkout_result = await run_generator(
             client=client,
             generator_name="add_app_application",
-            node_ids=[checkout_apps[0].id],
+            node_ids=[checkout_app.id],
             branch=scenario_branch,
         )
         c005_result = await run_generator(
@@ -110,17 +94,15 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
         self,
         workflow_state: dict[str, Any],
     ) -> None:
-        """Verify the request and application generator tasks completed."""
+        """Verify the application generator tasks completed."""
         logging.info("=== %s - Step 2: Verify No Failed Tasks ===", SCENARIO_NAME)
 
-        request_result = workflow_state["app_catalogue_request_generator_task"]
         application_results = workflow_state["app_catalogue_generator_tasks"]
-        assert request_result["success"], f"Request generator failed: {request_result}"
         assert all(result["success"] for result in application_results), (
             f"Application generator failed: {application_results}"
         )
 
-        logging.info("Request and application generator tasks completed successfully")
+        logging.info("Application generator tasks completed successfully")
 
     @pytest.mark.order(403)
     @pytest.mark.dependency(scope="session", name="app_catalogue_verify_ztna", depends=["app_catalogue_no_failures"])
