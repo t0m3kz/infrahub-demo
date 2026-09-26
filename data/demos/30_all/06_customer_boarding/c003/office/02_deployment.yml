@@ -1,0 +1,17 @@
+---
+# name is computed ({parent_owner_org_id}-{environment}) — read-only.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyOfficeCustomer
+  data:
+    - owner: "C003"
+      parent: "Campus and Office"
+      children:
+        - kind: TopologyCustomerOffice
+          data:
+            environment: "p"
+            locations:
+              - "muc-hq"
+            member_of_groups:
+              - customer_deployments_office

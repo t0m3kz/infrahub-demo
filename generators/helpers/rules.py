@@ -255,6 +255,43 @@ class RulesPlanner(RulePlanningHelper):
         }
         return mapping.get(app_security_profile, "standard")
 
+    @staticmethod
+    def pick_zone_name(environment: str) -> str:
+        """Macro trust zone for a segment, derived from its own `environment`."""
+        return "PROD-ZONE" if environment == "p" else "NONPROD-ZONE"
+
+    @staticmethod
+    def zone_seed(zone_name: str) -> dict[str, Any]:
+        """Fixed classification for a generator-owned SecurityZone, keyed by name."""
+        seeds = {
+            "PROD-ZONE": {
+                "description": "Production workload zone — web, app, and database tiers",
+                "trust_level": 70,
+                "zone_type": "internal",
+            },
+            "NONPROD-ZONE": {
+                "description": "Non-production zone — dev, staging, QA environments",
+                "trust_level": 50,
+                "zone_type": "internal",
+            },
+        }
+        return seeds[zone_name]
+
+    @staticmethod
+    def pick_access_policy(app_security_profile: str) -> dict[str, Any]:
+        """Default ZTNA access-profile policy for a private_access endpoint,
+        derived from its application's security_profile."""
+        mapping = {
+            "internet_exposed": {"mfa_required": True, "device_posture_required": True, "session_timeout_minutes": 480},
+            "fintech_strict": {"mfa_required": True, "device_posture_required": True, "session_timeout_minutes": 480},
+            "internal_standard": {
+                "mfa_required": True,
+                "device_posture_required": False,
+                "session_timeout_minutes": 720,
+            },
+        }
+        return mapping.get(app_security_profile, mapping["internal_standard"])
+
     @classmethod
     def build_rule_payload(
         cls,

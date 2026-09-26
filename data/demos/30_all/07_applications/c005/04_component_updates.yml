@@ -1,0 +1,14 @@
+---
+# Re-declares web-frontend (defined in 01_application.yml) to attach
+# depends_on now that 03_dependencies.yml's AppDependency exists — an
+# upsert, not a new component.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppComponent
+  data:
+    - name: web-frontend
+      parent: c005-payment-core-p
+      component_type: frontend
+      depends_on:
+        - c005-payment-web-to-backend

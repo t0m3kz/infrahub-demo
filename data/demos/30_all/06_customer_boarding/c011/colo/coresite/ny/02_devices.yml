@@ -1,0 +1,54 @@
+---
+# C011's cage kit in CoreSite NY1: one access switch and two application
+# hosts, all customer-owned (this is the customer's own cage, unlike the
+# shared Equinix on-ramp routers in ../../../../../08_interconnects/
+# 01_colo_onramp/, which are Internal-owned).
+#
+# The switch is NOT in the access-leafs group and NOT in a DC pod, so no
+# fabric generator or device check touches it — colocation kit is hand-modelled
+# end to end, which is also why 03_cabling.yml declares the cables explicitly
+# instead of leaving it to add_endpoint (that generator needs
+# rack.pod.deployment_type, and a TopologyColocationZone has none).
+#
+# The hosts are in the endpoints group all the same. They carry role=endpoint
+# from their template, so trigger-endpoint-generator-on-created fires add_endpoint
+# for them whatever the site, and Infrahub fails a generator run whose target is
+# outside the definition's group. In the group the run reaches the generator, which
+# recognizes the colocation rack and does nothing (generators/topology/endpoint.py).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: "CS-NY1-SW1"
+      object_template: PowerSwitch-S5224F-ON_ACCESS
+      owner: "C011"
+      status: active
+      rack: ny1-s1-r-1
+      position: 40
+      deployment: "NY1"
+      description: "C011 CoreSite NY1 cage access switch"
+
+    - name: "cs-ny1-server-1"
+      object_template: PowerEdge-R640_SERVER
+      owner: "C011"
+      status: active
+      rack: ny1-s1-r-1
+      position: 10
+      platform: linux
+      deployment: "NY1"
+      description: "C011 CoreSite NY1 application host"
+      member_of_groups:
+        - endpoints
+
+    - name: "cs-ny1-server-2"
+      object_template: PowerEdge-R640_SERVER
+      owner: "C011"
+      status: active
+      rack: ny1-s1-r-1
+      position: 12
+      platform: linux
+      deployment: "NY1"
+      description: "C011 CoreSite NY1 application host"
+      member_of_groups:
+        - endpoints

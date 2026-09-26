@@ -651,6 +651,29 @@ class TestSourceSegmentPolicyHelpers:
         assert dst_zone is None
         assert cross_zone is True
 
+    def test_pick_zone_name_maps_production_environment(self):
+        assert RulesPlanner.pick_zone_name("p") == "PROD-ZONE"
+
+    def test_pick_zone_name_maps_every_non_production_environment_to_nonprod(self):
+        for environment in ("n", "s", "d", "t"):
+            assert RulesPlanner.pick_zone_name(environment) == "NONPROD-ZONE"
+
+    def test_zone_seed_matches_prod_and_nonprod_trust_levels(self):
+        assert RulesPlanner.zone_seed("PROD-ZONE")["trust_level"] == 70
+        assert RulesPlanner.zone_seed("NONPROD-ZONE")["trust_level"] == 50
+
+    def test_pick_access_policy_internet_exposed_requires_mfa_and_posture(self):
+        policy = RulesPlanner.pick_access_policy("internet_exposed")
+
+        assert policy == {
+            "mfa_required": True,
+            "device_posture_required": True,
+            "session_timeout_minutes": 480,
+        }
+
+    def test_pick_access_policy_unknown_profile_falls_back_to_internal_standard(self):
+        assert RulesPlanner.pick_access_policy("unknown") == RulesPlanner.pick_access_policy("internal_standard")
+
 
 # ===========================================================================
 # TestDependencyRuleGenerator
@@ -1063,6 +1086,10 @@ class TestReconcilePrivateAccessEndpoints:
         created_rule = MagicMock()
         created_rule.save = AsyncMock()
         gen.client.create = AsyncMock(return_value=created_rule)
+        # Access-profile derivation is a separate concern with its own test
+        # class below — stub it out here so these tests stay focused on the
+        # ZTNA broker publish path.
+        gen._ensure_endpoint_access_profile = AsyncMock()
         return gen
 
     def test_publishes_a_private_access_endpoint(self):
@@ -1124,6 +1151,134 @@ class TestReconcilePrivateAccessEndpoints:
         assert (created, skipped) == (2, 0)
         gen._get_or_create_proxy_policy.assert_awaited_once()
         assert gen.client.create.call_count == 2
+
+    def test_derives_access_profile_when_endpoint_has_none(self):
+        gen = self._make_gen_ready()
+        endpoint = self._endpoint()
+        assert "access_profile" not in endpoint
+        component = self._component([endpoint])
+
+        asyncio.run(gen._reconcile_private_access_endpoints("checkout", [component], "internet_exposed"))
+
+        gen._ensure_endpoint_access_profile.assert_awaited_once_with(
+            endpoint_id="endpoint-checkout-web",
+            endpoint_name="checkout-web",
+            owner_org_id="C001",
+            app_security_profile="internet_exposed",
+        )
+
+    def test_does_not_override_an_explicit_access_profile(self):
+        gen = self._make_gen_ready()
+        endpoint = self._endpoint()
+        endpoint["access_profile"] = {"id": "profile-custom", "allowed_groups": []}
+        component = self._component([endpoint])
+
+        asyncio.run(gen._reconcile_private_access_endpoints("checkout", [component]))
+
+        gen._ensure_endpoint_access_profile.assert_not_awaited()
+
+
+class TestEnsureEndpointAccessProfile:
+    """SecurityAccessProfile/SecurityIdentityGroup used to be hand-authored
+    per customer (data/demos/30_all/07_applications/00_base_security_*.yml);
+    this derives the same shape from the endpoint's owner + the app's
+    security_profile so it scales past one hand-written example."""
+
+    def _make_gen_ready(self, *, group: Any = None, profile: Any = None) -> Any:
+        gen = _make_gen()
+        group = group or MagicMock(id="group-1")
+        profile = profile or MagicMock(id="profile-1")
+        gen._get_or_create_by_name = AsyncMock(side_effect=[group, profile])
+        endpoint = MagicMock()
+        endpoint.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=endpoint)
+        return gen
+
+    def test_creates_group_and_profile_with_deterministic_names(self):
+        gen = self._make_gen_ready()
+
+        asyncio.run(
+            gen._ensure_endpoint_access_profile(
+                endpoint_id="endpoint-1",
+                endpoint_name="checkout-web",
+                owner_org_id="C001",
+                app_security_profile="internet_exposed",
+            )
+        )
+
+        group_call, profile_call = gen._get_or_create_by_name.call_args_list
+        assert group_call.kwargs["kind"] == "SecurityIdentityGroup"
+        assert group_call.kwargs["name"] == "c001-engineering"
+        assert profile_call.kwargs["kind"] == "SecurityAccessProfile"
+        assert profile_call.kwargs["name"] == "c001-private-access-standard"
+
+    def test_profile_policy_matches_internet_exposed_defaults(self):
+        gen = self._make_gen_ready()
+
+        asyncio.run(
+            gen._ensure_endpoint_access_profile(
+                endpoint_id="endpoint-1",
+                endpoint_name="checkout-web",
+                owner_org_id="C001",
+                app_security_profile="internet_exposed",
+            )
+        )
+
+        _, profile_call = gen._get_or_create_by_name.call_args_list
+        create_data = profile_call.kwargs["create_data"]
+        assert create_data["mfa_required"] is True
+        assert create_data["device_posture_required"] is True
+        assert create_data["session_timeout_minutes"] == 480
+        assert create_data["allowed_groups"] == ["group-1"]
+
+    def test_sets_access_profile_on_endpoint(self):
+        gen = self._make_gen_ready()
+
+        asyncio.run(
+            gen._ensure_endpoint_access_profile(
+                endpoint_id="endpoint-1",
+                endpoint_name="checkout-web",
+                owner_org_id="C001",
+                app_security_profile="internet_exposed",
+            )
+        )
+
+        gen.client.create.assert_awaited_once_with(
+            kind="AppEndpoint",
+            data={"id": "endpoint-1", "access_profile": {"id": "profile-1"}},
+        )
+
+    def test_skips_without_endpoint_id(self):
+        gen = self._make_gen_ready()
+
+        asyncio.run(
+            gen._ensure_endpoint_access_profile(
+                endpoint_id="",
+                endpoint_name="checkout-web",
+                owner_org_id="C001",
+                app_security_profile="internet_exposed",
+            )
+        )
+
+        gen._get_or_create_by_name.assert_not_awaited()
+        gen.client.create.assert_not_awaited()
+
+    def test_skips_endpoint_update_when_group_lookup_fails(self):
+        gen = _make_gen()
+        gen._get_or_create_by_name = AsyncMock(return_value=None)
+        gen.client.create = AsyncMock()
+
+        asyncio.run(
+            gen._ensure_endpoint_access_profile(
+                endpoint_id="endpoint-1",
+                endpoint_name="checkout-web",
+                owner_org_id="C001",
+                app_security_profile="internet_exposed",
+            )
+        )
+
+        gen._get_or_create_by_name.assert_awaited_once()
+        gen.client.create.assert_not_awaited()
 
 
 # ===========================================================================

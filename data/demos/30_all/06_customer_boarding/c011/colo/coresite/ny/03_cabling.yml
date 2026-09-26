@@ -1,0 +1,58 @@
+---
+# Both NICs of each host land on the single cage switch: NIC-level redundancy
+# without switch-level redundancy. That is deliberate — a one-switch cage is
+# the honest small-colocation shape, and it gives the change-risk check a
+# genuine shared-fate example to contrast with the DC pods, where the two
+# rows' access-leaf pairs are independent.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - name: "CBL-CS-NY1-SRV1-1"
+      type: copper
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "cs-ny1-server-1"
+            name: "eno1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "CS-NY1-SW1"
+            name: "Ethernet1/1/1"
+
+    - name: "CBL-CS-NY1-SRV1-2"
+      type: copper
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "cs-ny1-server-1"
+            name: "eno2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "CS-NY1-SW1"
+            name: "Ethernet1/1/2"
+
+    - name: "CBL-CS-NY1-SRV2-1"
+      type: copper
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "cs-ny1-server-2"
+            name: "eno1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "CS-NY1-SW1"
+            name: "Ethernet1/1/3"
+
+    - name: "CBL-CS-NY1-SRV2-2"
+      type: copper
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "cs-ny1-server-2"
+            name: "eno2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "CS-NY1-SW1"
+            name: "Ethernet1/1/4"

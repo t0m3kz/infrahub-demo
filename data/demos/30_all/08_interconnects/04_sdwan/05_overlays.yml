@@ -8,7 +8,7 @@
 # the gateway's onward path is a virtual circuit, not a cable.
 #
 # The tenant tunnels are `internet_backed` (they ride the DIA circuits of
-# 02_internet_underlay.yml and are encrypted); the backhaul is `physical_backed`
+# 04_internet_underlay.yml and are encrypted); the backhaul is `physical_backed`
 # because it rides the real cross-connect out of the cage.
 apiVersion: infrahub.app/v1
 kind: Object

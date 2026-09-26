@@ -1,0 +1,30 @@
+---
+# Per-tenant tunnel terminations on the gateway's single uplink. VCG-VA_GATEWAY
+# templates exactly one port (eth0), which is the point: one shared trunk carries
+# every tenant's tunnel, so the sub-interface is the only thing that keeps them
+# apart. A change to eth0 itself takes down all three tenants; a change to
+# eth0.1003 takes down one. The traversal can only make that distinction because
+# the tunnels are modelled as separate interfaces.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: "eth0.1001"
+      device: "EQX-FR2-SDWAN-GW1"
+      role: uplink
+      status: active
+      description: "C001 SD-WAN tunnel termination"
+      parent_interface: ["EQX-FR2-SDWAN-GW1", "eth0"]
+    - name: "eth0.1003"
+      device: "EQX-FR2-SDWAN-GW1"
+      role: uplink
+      status: active
+      description: "C003 SD-WAN tunnel termination"
+      parent_interface: ["EQX-FR2-SDWAN-GW1", "eth0"]
+    - name: "eth0.1015"
+      device: "EQX-FR2-SDWAN-GW1"
+      role: uplink
+      status: active
+      description: "C015 SD-WAN tunnel termination"
+      parent_interface: ["EQX-FR2-SDWAN-GW1", "eth0"]

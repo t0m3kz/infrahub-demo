@@ -1,0 +1,13 @@
+---
+# DC12's DCNM (fabric-wide controller) — created first so 03_topology.yml can
+# reference it inline by name in the DC block's `controllers`, same as
+# fabric_templates' own template references.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedControllerPhysical
+  data:
+    - name: "DC12-DCNM1"
+      object_template: MDS-NDFC_DCNM
+      status: active
+      member_of_groups: [managed_controllers]

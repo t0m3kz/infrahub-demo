@@ -1,6 +1,4 @@
 ---
-# Point-to-point addressing for the DC <-> cage dark fibre.
-#
 # Ethernet1/35 is the first free `uplink` port on each border leaf (Ethernet1/33
 # and 1/34 already face the spines), and Ethernet1/[9-12] are the cage router's
 # `dci` ports. The DC end is always .2, the cage end .1.
@@ -11,22 +9,6 @@
 # load guarantees that: `interconnects` is the last stage and waits for a quiet
 # task queue after each earlier one (tests/integration/test_constants.py's
 # ALL_DEMO_LOAD_STAGES).
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: IpamPrefix
-  data:
-    - prefix: "10.255.0.0/30"
-      description: "eg-fr01 <-> bl-dc101101 (DC10) point-to-point"
-      status: active
-    - prefix: "10.255.0.4/30"
-      description: "eg-fr01 <-> bl-dc1111101 (DC11) point-to-point"
-      status: active
-    - prefix: "10.255.0.8/30"
-      description: "eg-pa01 <-> bl-dc1212101 (DC12) point-to-point"
-      status: active
-
----
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

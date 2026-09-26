@@ -4,6 +4,12 @@
 # storefront (01_application.yml). Authored directly — no separate
 # request/approval object graph; a branch + proposed-change review is the
 # approval step for anything declared here.
+#
+# checkout-web has no explicit access_profile: AppApplicationGenerator
+# derives one (SecurityAccessProfile + SecurityIdentityGroup, named
+# c001-private-access-standard / c001-engineering) from this app's
+# security_profile, see generators/topology/application_security.py's
+# _ensure_endpoint_access_profile.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -33,23 +39,8 @@ spec:
                     data:
                       - port: 443
                         protocol: tcp
-                  access_profile: c001-private-access-standard
                 - name: payment-gateway
                   endpoint_type: external_service
                   fqdn: api.paymentgw.example.com
             member_of_groups:
               - app_components
-
----
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: AppDependency
-  data:
-    - name: c001-checkout-to-payment-gateway
-      source: c001-checkout-p-frontend
-      target: ["c001-checkout-p-frontend", "payment-gateway"]
-      protocol: tcp
-      port_start: 443
-      access_status: approved
-      decision_reason: "Payment authorization is required by checkout"

@@ -1,0 +1,18 @@
+---
+# Office footprint for C003 (Vaultex), mirroring c001/office/.
+#
+# C003 already has an AWS eu-central-1 footprint (../cloud/aws/eu-central-1/)
+# and a TGW attachment on the shared route table
+# (../../../08_interconnects/02_cloud_hub/05_attachments.yml). Giving it a branch
+# office is what makes the end-to-end path exist: office -> SD-WAN overlay ->
+# Equinix FR2 gateway -> cross-connect -> transit VIF -> TGW -> its own VPC.
+# Without an on-prem spoke the cloud hub has nothing upstream of it and the
+# blast radius of an FR2 change stops at the cage.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationFacility
+  data:
+    - name: "Munich HQ"
+      shortname: "muc-hq"
+      parent: "muc"

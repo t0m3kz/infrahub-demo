@@ -23,7 +23,8 @@ spec:
       attachment_type: hybrid
       transit_gateway: "tgw-30all-euc1"
       owner_account: "net-hub-aws-prod"
-      # hybrid_endpoint is set from the VIF side in 05_hybrid_endpoint.yml: its
+      # hybrid_endpoint is set from the VIF side in
+      # ../05_cloud_endpoints/01_transit_vif.yml: its
       # peer is the CloudHybridAttachment generic, which is an attribute-less
       # marker and so declares no human_friendly_id for a bare reference to
       # resolve against.

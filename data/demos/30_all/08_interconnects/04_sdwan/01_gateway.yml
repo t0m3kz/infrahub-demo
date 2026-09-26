@@ -1,0 +1,30 @@
+---
+# SD-WAN leg: three branch offices onto one shared gateway in the Equinix FR2 cage.
+#
+# The gateway is a ManagedControllerPhysical on VCG-VA_GATEWAY, not the virtual
+# VCG-VA_CLOUD — per data/bootstrap/10_physical_devices_templates_controllers.yaml
+# a colocation-hosted SD-WAN gateway is a controller on real hardware, and this one
+# sits in the same cage as eg-fr01, the Frankfurt on-ramp router generated from
+# the metro's fabric_templates (../../02_colo/equinix/fr/02_topology.yml). Putting
+# it there rather than in a cloud PoP is deliberate: the cage is where the
+# cross-connect into AWS already lands, so office traffic and DC traffic converge on
+# one facility and a cage-level change has a blast radius spanning both.
+#
+# Shared facility, so owned by Internal (P028) rather than any tenant — only the
+# per-tenant overlays in 05_overlays.yml carry a customer owner. This one is still
+# hand-written because an SD-WAN gateway is a ManagedControllerPhysical, not one of
+# the metro's own edge/firewall/load-balancer slots that fabric_templates covers.
+#
+# Created before 02_gateway_interfaces.yml, whose sub-interfaces reference it by
+# device name.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedControllerPhysical
+  data:
+    - name: "EQX-FR2-SDWAN-GW1"
+      object_template: VCG-VA_GATEWAY
+      status: active
+      owner: "P028"
+      description: "Shared SD-WAN gateway in the Equinix FR2 cage (offices <-> hub)"
+      deployment: "FR2"

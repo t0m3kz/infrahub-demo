@@ -29,7 +29,7 @@ import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from generators.protocols import ManagedSegmentDeployment
+from generators.protocols import ManagedSegmentDeployment, ManagedVxlanSegment, SecurityZone
 from generators.topology.segment import VxlanSegmentGenerator
 
 # ---------------------------------------------------------------------------
@@ -53,6 +53,11 @@ def _make_gen() -> Any:
     # PoolMixin.upsert_number_pool — used by the standalone-VLAN-domain path
     # in _assign_segment_to_dc_interfaces, not under test in this file.
     gen.upsert_number_pool = AsyncMock(return_value=MagicMock(id="vlan-pool-1"))
+    # security_zone assignment is a separate concern with its own test class
+    # below (TestEnsureSecurityZone) — stub it out here so generate()-level
+    # tests stay focused on SegmentDeployment/interface/inline-sub-interface
+    # behavior.
+    gen._ensure_security_zone = AsyncMock()
     return gen
 
 
@@ -291,6 +296,40 @@ class TestVxlanSegmentGeneratorGenerate:
             "id": "pool-vni-1",
             "name": "DC1-VNI-Pool",
         }
+
+    def test_ensure_security_zone_called_with_segment_environment(self):
+        gen = _make_gen()
+        gen._activate_segment_in_deployment = AsyncMock()
+        gen._assign_to_deployment_interfaces = AsyncMock()
+        gen._create_inline_sub_interfaces = AsyncMock()
+
+        data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1])
+        data["ManagedVxlanSegment"]["edges"][0]["node"]["environment"] = {"value": "d"}
+        asyncio.run(gen.generate(data))
+
+        gen._ensure_security_zone.assert_awaited_once_with(
+            segment_id="seg-1", segment_name="vxlan-1000", environment="d"
+        )
+
+    def test_ensure_security_zone_defaults_to_production_environment(self):
+        gen = _make_gen()
+        gen._activate_segment_in_deployment = AsyncMock()
+        gen._assign_to_deployment_interfaces = AsyncMock()
+        gen._create_inline_sub_interfaces = AsyncMock()
+
+        data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1])
+        asyncio.run(gen.generate(data))
+
+        assert gen._ensure_security_zone.call_args.kwargs["environment"] == "p"
+
+    def test_ensure_security_zone_runs_even_when_no_deployments_resolved(self):
+        """Zone classification is a property of the segment itself, not of
+        whether its hosting parent could be resolved."""
+        gen = _make_gen()
+        data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[])
+        asyncio.run(gen.generate(data))
+
+        gen._ensure_security_zone.assert_awaited_once()
 
 
 # ===========================================================================
@@ -625,3 +664,82 @@ class TestEnsureVlanDomainSegment:
         assert call_kwargs["data"]["vlan_domain"] == {"id": "mlag-1"}
         assert call_kwargs["data"]["vlan_id"]["from_pool"]["id"] == "pool-vlan-1"
         activation.save.assert_called_once()
+
+
+# ===========================================================================
+# TestEnsureSecurityZone
+# ===========================================================================
+
+
+class TestEnsureSecurityZone:
+    """security_zone used to be hand-authored (data/security/01_security_zones.yml,
+    never loaded by anything, never set on a real segment). This derives the
+    same PROD-ZONE/NONPROD-ZONE classification from the segment's own
+    `environment`, unlocking the cross-zone branch in
+    generators/helpers/rules.py's RulesPlanner.zone_context/pick_profile_name.
+
+    Builds its own generator rather than using the shared _make_gen(), which
+    stubs _ensure_security_zone out for every other test class in this file.
+    """
+
+    @staticmethod
+    def _make_gen() -> Any:
+        gen = VxlanSegmentGenerator.__new__(VxlanSegmentGenerator)
+        gen.client = AsyncMock()
+        gen.logger = MagicMock()
+        return gen
+
+    def test_reuses_existing_zone(self):
+        gen = self._make_gen()
+        existing_zone = MagicMock(id="zone-prod-1")
+        gen.client.filters = AsyncMock(return_value=[existing_zone])
+        segment_obj = MagicMock()
+        segment_obj.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=segment_obj)
+
+        asyncio.run(gen._ensure_security_zone(segment_id="seg-1", segment_name="vxlan-1000", environment="p"))
+
+        gen.client.filters.assert_awaited_once_with(kind=SecurityZone, name__value="PROD-ZONE")
+        gen.client.create.assert_awaited_once_with(
+            kind=ManagedVxlanSegment,
+            data={"id": "seg-1", "security_zone": {"id": "zone-prod-1"}},
+        )
+        segment_obj.save.assert_awaited_once_with(allow_upsert=True)
+
+    def test_creates_zone_when_missing(self):
+        gen = self._make_gen()
+        zone_obj = MagicMock(id="zone-nonprod-1")
+        zone_obj.save = AsyncMock()
+        segment_obj = MagicMock()
+        segment_obj.save = AsyncMock()
+        gen.client.filters = AsyncMock(return_value=[])
+        gen.client.create = AsyncMock(side_effect=[zone_obj, segment_obj])
+
+        asyncio.run(gen._ensure_security_zone(segment_id="seg-1", segment_name="vxlan-1000", environment="d"))
+
+        zone_call, segment_call = gen.client.create.call_args_list
+        assert zone_call.kwargs["kind"] == SecurityZone
+        assert zone_call.kwargs["data"]["name"] == "NONPROD-ZONE"
+        assert zone_call.kwargs["data"]["trust_level"] == 50
+        assert segment_call.kwargs["data"]["security_zone"] == {"id": "zone-nonprod-1"}
+
+    def test_non_production_codes_all_map_to_nonprod_zone(self):
+        for environment in ("n", "s", "d", "t"):
+            gen = self._make_gen()
+            gen.client.filters = AsyncMock(return_value=[MagicMock(id="zone-1")])
+            gen.client.create = AsyncMock(return_value=MagicMock(save=AsyncMock()))
+
+            asyncio.run(
+                gen._ensure_security_zone(segment_id="seg-1", segment_name="vxlan-1000", environment=environment)
+            )
+
+            gen.client.filters.assert_awaited_once_with(kind=SecurityZone, name__value="NONPROD-ZONE")
+
+    def test_segment_update_failure_is_logged_not_raised(self):
+        gen = self._make_gen()
+        gen.client.filters = AsyncMock(return_value=[MagicMock(id="zone-1")])
+        gen.client.create = AsyncMock(side_effect=Exception("boom"))
+
+        asyncio.run(gen._ensure_security_zone(segment_id="seg-1", segment_name="vxlan-1000", environment="p"))
+
+        gen.logger.warning.assert_called_once()
