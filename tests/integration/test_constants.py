@@ -138,10 +138,12 @@ ALL_DEMO_EXPECTED_GENERATORS: dict[str, int] = {
     "add_app_application": 7,  # one per declared AppApplication
     # 7 distinct footprints: 03_dc/new_customers declares all of them and
     # 06_customer_boarding re-declares three as supersets, which upsert.
+    # add_customer_deployment_cloud/office were removed: their only job was
+    # hub-and-spoke exchange auto-provisioning, now replaced by the 4 fixed
+    # bootstrap TopologyRoutedExchange objects (data/bootstrap/23_exchanges.yml)
+    # — see docs/exchange_gateway.md.
     "add_customer_deployment_dc": 7,
     "add_customer_deployment_colocation": 6,
-    "add_customer_deployment_cloud": 4,
-    "add_customer_deployment_office": 3,
 }
 
 # Declared-object inventory of data/demos/30_all, measured from the YAML.

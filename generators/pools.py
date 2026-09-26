@@ -325,6 +325,12 @@ class PoolMixin:
                 },
             )
 
+            # "management" here is true OOB (mgmt0/console/ZTP) — it gets the
+            # MANAGEMENT VRF. "technical" (fabric P2P) and "loopback" stay in
+            # `default` (the global table): EVPN-VXLAN VTEP loopbacks and
+            # underlay BGP peering can't depend on a VRF being provisioned.
+            pool_namespace = "MANAGEMENT" if pool_name == "management" else "default"
+
             if is_prefix_pool:
                 new_pool = await self.client.create(
                     kind=CoreIPPrefixPool,
@@ -332,7 +338,7 @@ class PoolMixin:
                         "name": pool_full_name,
                         "default_prefix_type": "IpamPrefix",
                         "default_prefix_length": pool_size,
-                        "ip_namespace": {"hfid": ["default"]},
+                        "ip_namespace": {"hfid": [pool_namespace]},
                         "identifier": pool_full_name,
                         "resources": [allocated_prefix],
                     },
@@ -344,7 +350,7 @@ class PoolMixin:
                         "name": pool_full_name,
                         "default_address_type": "IpamIPAddress",
                         "default_prefix_length": pool_size,
-                        "ip_namespace": {"hfid": ["default"]},
+                        "ip_namespace": {"hfid": [pool_namespace]},
                         "identifier": pool_full_name,
                         "resources": [allocated_prefix],
                     },

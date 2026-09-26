@@ -4,14 +4,17 @@
 # data/demos/15_customer_deployments/c003/cloud/aws/eu-central-1. A hub
 # region terminating SD-WAN for multiple customer offices/branches instead
 # of hairpinning through the DC. The hub itself is modeled as a
-# TopologyCustomerCloud footprint owned by the OPERATOR organization (below)
-# with `namespace: INTERNET` set — TopologyConnectableLocation now lives on
-# TopologyCustomer (see schemas/extensions/topology/topology_customer.yml),
-# not on the bare TopologyCloudRegion container, since connecting two
-# customer deployments always means an explicit circuit between their own
-# footprints. The region also owns a CloudInternetGateway, giving
-# offices/branches direct-to-internet egress from the hub instead of
-# backhauling to a DC breakout.
+# TopologyCustomerCloud footprint owned by the OPERATOR organization (below).
+# TopologyConnectableLocation lives on TopologyCustomer (see
+# schemas/extensions/topology/topology_customer.yml), not on the bare
+# TopologyCloudRegion container, since connecting two customer deployments
+# always means an explicit circuit between their own footprints. Reaching
+# the internet from this hub is provided by the fixed PROD/NON-PROD <->
+# INTERNET TopologyRoutedExchange objects (data/bootstrap/23_exchanges.yml,
+# docs/exchange_gateway.md) — no per-footprint namespace tagging needed. The
+# region also owns a CloudInternetGateway, giving offices/branches
+# direct-to-internet egress from the hub instead of backhauling to a DC
+# breakout.
 #
 # eu-west-1 (Dublin) is a second, plain (non-hub) region — no operator
 # footprint, no CloudInternetGateway — giving this demo two real AWS regions
@@ -77,12 +80,10 @@ spec:
       org_id: "OPERATOR"
 
 ---
-# Hub footprint: the operator's own SD-WAN PoP, not a customer's. Its
-# `namespace: INTERNET` is what the customer_cloud/customer_colocation/
-# customer_office generators' hub-detection looks for on the OTHER end of an
-# office/cloud/colocation footprint's circuit (see
-# generators/topology/customer_cloud.py's _exchange_via_circuit) —
-# traffic stops here instead of reaching straight into "default".
+# Hub footprint: the operator's own SD-WAN PoP, not a customer's. Reaches
+# INTERNET via the fixed PROD <-> INTERNET TopologyRoutedExchange
+# (data/bootstrap/23_exchanges.yml) like every other environment=p
+# deployment — no per-footprint namespace tagging needed.
 #
 # `owner` is set via `kind:`+`data:` (upserting the OrganizationProvider
 # created above), not a bare HFID string — OrganizationEntity (the generic
@@ -102,7 +103,6 @@ spec:
       environment: "p"
       status: active
       parent: "eu-central-1"
-      namespace: "INTERNET"
       member_of_groups:
         - customer_deployments_cloud
 

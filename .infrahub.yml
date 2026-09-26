@@ -612,10 +612,6 @@ queries:
     file_path: queries/topology/add/customer_dc.gql
   - name: customer_colocation
     file_path: queries/topology/add/customer_colocation.gql
-  - name: customer_cloud
-    file_path: queries/topology/add/customer_cloud.gql
-  - name: customer_office
-    file_path: queries/topology/add/customer_office.gql
   - name: application_orchestrator_routing
     file_path: queries/topology/add/application_orchestrator_routing.gql
   - name: customer_deployment_orchestrator_routing
@@ -848,32 +844,6 @@ generator_definitions:
     targets: colocation_metros
     query: colocation_metro_data
     class_name: ColocationMetroGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
-  - name: add_customer_deployment_cloud
-    file_path: generators/topology/customer_cloud.py
-    targets: customer_deployments_cloud
-    query: customer_cloud
-    class_name: CustomerDeploymentCloudExchangeGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
-  - name: add_customer_deployment_office
-    file_path: generators/topology/customer_office.py
-    targets: customer_deployments_office
-    query: customer_office
-    class_name: CustomerDeploymentOfficeExchangeGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:

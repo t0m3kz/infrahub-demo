@@ -1,6 +1,7 @@
 ---
 # Common Exchange stretch segment across DC7 and DC8 for a single customer.
 # This models a typical stretched VXLAN deployment for C003 across two DCs.
+# environment=p -> PROD namespace (RulesPlanner.pick_namespace_name).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -8,7 +9,7 @@ spec:
   data:
     - address: "10.90.0.254/24"
       description: "Anycast gateway for common exchange segment"
-      ip_namespace: "default"
+      ip_namespace: "PROD"
 
 ---
 apiVersion: infrahub.app/v1
@@ -26,7 +27,7 @@ spec:
       arp_suppression: true
       gateway:
         - "10.90.0.254/24"
-        - "default"
+        - "PROD"
       customer_deployments:
         - kind: TopologyCustomerDC
           data:
