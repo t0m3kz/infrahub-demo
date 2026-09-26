@@ -246,10 +246,19 @@ class RulesPlanner(RulePlanningHelper):
 
     @staticmethod
     def pick_profile_name(app_security_profile: str, cross_zone: bool) -> str | None:
+        """Threat-inspection profile for a generated SecurityPolicyRule.
+
+        `fintech_strict` always gets full inspection (antivirus/DLP) — that's
+        a data-sensitivity/compliance requirement independent of where the
+        traffic goes, unlike `internet_exposed`, whose "strict" handling is
+        specifically about the perimeter/exposure boundary and so only
+        applies when the flow actually crosses zones.
+        """
+        if app_security_profile == "fintech_strict":
+            return "strict"
         if not cross_zone:
             return None
         mapping = {
-            "fintech_strict": "strict",
             "internal_standard": "standard",
             "internet_exposed": "strict",
         }

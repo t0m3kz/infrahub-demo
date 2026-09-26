@@ -181,6 +181,36 @@ class TestZoneSeed:
 
 
 # ===========================================================================
+# TestPickProfileName
+# ===========================================================================
+
+
+class TestPickProfileName:
+    """fintech_strict is a data-sensitivity/compliance requirement (always
+    scan for malware/DLP) independent of network topology, unlike
+    internet_exposed's "strict" handling, which is specifically about the
+    perimeter/exposure boundary and so stays gated on cross_zone."""
+
+    def test_fintech_strict_is_always_strict_even_same_zone(self):
+        assert RulesPlanner.pick_profile_name("fintech_strict", cross_zone=False) == "strict"
+
+    def test_fintech_strict_is_strict_across_zones_too(self):
+        assert RulesPlanner.pick_profile_name("fintech_strict", cross_zone=True) == "strict"
+
+    def test_internet_exposed_is_strict_only_when_crossing_zones(self):
+        assert RulesPlanner.pick_profile_name("internet_exposed", cross_zone=True) == "strict"
+        assert RulesPlanner.pick_profile_name("internet_exposed", cross_zone=False) is None
+
+    def test_internal_standard_is_standard_only_when_crossing_zones(self):
+        assert RulesPlanner.pick_profile_name("internal_standard", cross_zone=True) == "standard"
+        assert RulesPlanner.pick_profile_name("internal_standard", cross_zone=False) is None
+
+    def test_unknown_profile_falls_back_to_standard_when_crossing_zones(self):
+        assert RulesPlanner.pick_profile_name("unknown", cross_zone=True) == "standard"
+        assert RulesPlanner.pick_profile_name("unknown", cross_zone=False) is None
+
+
+# ===========================================================================
 # TestPickAccessPolicy
 # ===========================================================================
 
