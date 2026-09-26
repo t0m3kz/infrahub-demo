@@ -1,0 +1,31 @@
+---
+# Branch edges, one per office footprint. Unlike the cage gateway these are
+# dedicated per-tenant hardware, so each carries its customer as `owner` and sits
+# on that customer's own TopologyCustomerOffice deployment.
+#
+# `deployment` resolves through the TopologyDeployment generic, whose hfid is a
+# single name__value — so "C001-P" is the computed name of the office footprint,
+# exactly as "FR2" is the name of the cage zone in 01_gateway.yml.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: "C001-EDGE1"
+      object_template: VCE-610_EDGE
+      status: active
+      owner: "C001"
+      description: "Nordix Warsaw HQ SD-WAN edge"
+      deployment: "C001-P"
+    - name: "C003-EDGE1"
+      object_template: VCE-610_EDGE
+      status: active
+      owner: "C003"
+      description: "Vaultex Munich HQ SD-WAN edge"
+      deployment: "C003-P"
+    - name: "C015-EDGE1"
+      object_template: VCE-610_EDGE
+      status: active
+      owner: "C015"
+      description: "Novantis Paris Office SD-WAN edge"
+      deployment: "C015-P"

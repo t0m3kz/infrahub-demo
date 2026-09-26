@@ -1,0 +1,53 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - name: "CBL-MCR-AMS1-SRV1-1"
+      type: copper
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "mcr-ams1-server-1"
+            name: "eno1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "MCR-AMS1-SW1"
+            name: "Ethernet1/1/1"
+
+    - name: "CBL-MCR-AMS1-SRV1-2"
+      type: copper
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "mcr-ams1-server-1"
+            name: "eno2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "MCR-AMS1-SW1"
+            name: "Ethernet1/1/2"
+
+    - name: "CBL-MCR-AMS1-SRV2-1"
+      type: copper
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "mcr-ams1-server-2"
+            name: "eno1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "MCR-AMS1-SW1"
+            name: "Ethernet1/1/3"
+
+    - name: "CBL-MCR-AMS1-SRV2-2"
+      type: copper
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "mcr-ams1-server-2"
+            name: "eno2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "MCR-AMS1-SW1"
+            name: "Ethernet1/1/4"

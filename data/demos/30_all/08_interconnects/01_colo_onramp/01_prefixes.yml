@@ -1,0 +1,17 @@
+---
+# Point-to-point addressing for the DC <-> cage dark fibre, consumed by
+# 02_interfaces.yml.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "10.255.0.0/30"
+      description: "eg-fr01 <-> bl-dc101101 (DC10) point-to-point"
+      status: active
+    - prefix: "10.255.0.4/30"
+      description: "eg-fr01 <-> bl-dc1111101 (DC11) point-to-point"
+      status: active
+    - prefix: "10.255.0.8/30"
+      description: "eg-pa01 <-> bl-dc1212101 (DC12) point-to-point"
+      status: active

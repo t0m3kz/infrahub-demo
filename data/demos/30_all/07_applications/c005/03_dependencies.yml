@@ -14,15 +14,3 @@ spec:
       port_start: 8443
       access_status: auto
       description: "Payment web frontend calls the internal backend API"
-
----
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: AppComponent
-  data:
-    - name: web-frontend
-      parent: c005-payment-core-p
-      component_type: frontend
-      depends_on:
-        - c005-payment-web-to-backend

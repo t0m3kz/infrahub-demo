@@ -1,0 +1,23 @@
+---
+# DC11's controllers — Panorama (security_manager, matches the panos
+# firewall pair's platform below) and NetScaler-ADM (lb_manager, matches
+# the netscaler load-balancer pair's platform) — created before
+# 02_topology.yml so the DC block can reference them inline by name, same
+# as fabric_templates' own template references. create_devices()
+# (generators/devices.py) routes DC11's firewall/load-balancer devices
+# into these controllers' own managed_devices instead of the usual
+# firewalls/loadbalancers CoreStandardGroups, once matched by
+# controller_type + platform.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedControllerVirtual
+  data:
+    - name: "DC11-PANORAMA1"
+      object_template: Panorama_MANAGER
+      status: active
+      member_of_groups: [managed_controllers]
+    - name: "DC11-NSADM1"
+      object_template: NetScaler-ADM_MANAGER
+      status: active
+      member_of_groups: [managed_controllers]

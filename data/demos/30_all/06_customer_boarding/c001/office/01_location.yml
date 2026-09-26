@@ -1,0 +1,15 @@
+---
+# locations peers LocationFacility specifically (not the LocationCampus*
+# hierarchy used by ../../../05_office/waw-1/01_locations.yml for capacity
+# planning) — waw-hq is its own LocationFacility under the same "waw" Metro,
+# referenced by hfid in 02_deployment.yml so it doesn't duplicate the Metro
+# row. Requires 05_office/ to load before 06_customer_boarding/ (alphabetical
+# folder order) so the "waw" LocationMetro already exists.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationFacility
+  data:
+    - name: "Warsaw HQ"
+      shortname: "waw-hq"
+      parent: "waw"
