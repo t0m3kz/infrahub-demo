@@ -144,6 +144,9 @@ ALL_DEMO_EXPECTED_GENERATORS: dict[str, int] = {
     # — see docs/exchange_gateway.md.
     "add_customer_deployment_dc": 7,
     "add_customer_deployment_colocation": 6,
+    # 08_interconnects/06_interconnect_requests declares one opt-in
+    # TopologyInterconnectRequest (DC11<->DC12 DCI dark fibre stub).
+    "add_interconnect": 1,
 }
 
 # Declared-object inventory of data/demos/30_all, measured from the YAML.
@@ -276,7 +279,11 @@ ALL_DEMO_COMPONENT_INSTANCE_COUNT = 2
 # ---------------------------------------------------------------------------
 
 ALL_DEMO_PHYSICAL_CIRCUIT_TYPES: dict[str, int] = {
-    "dark_fiber": 3,  # DC10/DC11 -> EQX FR2, DC12 -> EQX PA4
+    # +2 generator-created: 08_interconnects/06_interconnect_requests declares
+    # one TopologyInterconnectRequest (DC11<->DC12, redundancy_count=2,
+    # connection_kind=physical_stub) that InterconnectRequestGenerator
+    # scaffolds into 2 status=provisioning stub circuits.
+    "dark_fiber": 5,  # DC10/DC11 -> EQX FR2, DC12 -> EQX PA4, + 2 DC11<->DC12 stubs
     "cross_connect": 2,  # EQX FR2 -> AWS eu-central-1, EQX PA4 -> Azure westeurope
     "internet": 3,  # the SD-WAN branches' logical internet underlay
 }

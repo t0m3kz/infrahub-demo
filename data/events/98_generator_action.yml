@@ -50,3 +50,6 @@ spec:
     - name: run-colocation-metro-generator
       description: Create a colocation metro's resource pools and its own on-ramp devices
       generator: add_colocation_metro
+    - name: run-interconnect-generator
+      description: Reconcile a TopologyInterconnectRequest into virtual/physical circuit(s)
+      generator: add_interconnect

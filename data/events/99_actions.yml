@@ -393,3 +393,26 @@ spec:
         data:
           - relationship_name: fabric_templates
             modification_type: updated
+
+    # ── Interconnect Requests ──────────────────────────────────────────────────
+    # A request declared with redundancy_count/endpoint_*_interfaces already
+    # populated inline is a `created` mutation on the request itself, same gap
+    # documented on the segment/metro triggers above.
+    - name: trigger-interconnect-on-created
+      branch_scope: "other_branches"
+      node_kind: TopologyInterconnectRequest
+      mutation_action: "created"
+      action: run-interconnect-generator
+
+    # Re-run when redundancy_count changes (fan out more legs, or — for
+    # physical_stub — flag the shortfall/excess) after creation.
+    - name: trigger-interconnect-update-redundancy-count
+      branch_scope: "other_branches"
+      node_kind: TopologyInterconnectRequest
+      mutation_action: "updated"
+      action: run-interconnect-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: redundancy_count
+            value_match: any
