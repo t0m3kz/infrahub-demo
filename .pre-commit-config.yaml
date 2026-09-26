@@ -127,7 +127,7 @@ repos:
         entry: uv run python
         language: system
         types: [python]
-        exclude: ^(tests/|scripts/|tasks\.py|\.dev/|\.ai/)
+        exclude: ^(tests/|tasks\.py|\.dev/|\.ai/)
         args:
           - -c
           - |

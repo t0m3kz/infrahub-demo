@@ -56,7 +56,6 @@ uv run invoke start
 ├── menu/            # InfraHub menu definitions
 ├── queries/         # GraphQL queries for data retrieval
 ├── schemas/         # Base schemas and extensions
-├── scripts/         # Automation scripts
 ├── templates/       # Jinja2 templates for device configs
 ├── tests/           # Unit and integration tests
 └── transforms/      # Data transformation logic
