@@ -498,10 +498,16 @@ class TestDCDeployment(TestInfrahubDockerWithClient):
 
         logging.info("=== %s — Step 8: Merge to Main ===", dc_name)
         merge_result = merge_proposed_change(client=client_main, pc_id=pc_id)
+        failed_checks = merge_result.get("failed_checks") or []
         assert merge_result["success"], (
             f"Merge failed for {dc_name}.\n"
             f"  PC state: {merge_result['pc_state_before']} -> {merge_result['pc_state_after']}\n"
-            f"  Task state: {merge_result['task_state']}"
+            f"  Task state: {merge_result['task_state']}\n"
+            + (
+                "  Failing checks:\n    - " + "\n    - ".join(failed_checks)
+                if failed_checks
+                else "  No failing checks found — merge task failed for a different reason."
+            )
         )
         logging.info("%s merged", dc_name)
 

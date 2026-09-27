@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+import uuid
 from typing import TYPE_CHECKING, Any, Callable, Literal
 
 from infrahub_sdk.protocols import CoreIPPrefixPool
@@ -205,31 +206,36 @@ class CablingMixin:
                 addrs = list(network)
                 ip_namespace = p2p_prefix.ip_namespace
 
-                for iface, addr in [(updated_src, addrs[0]), (updated_dst, addrs[1])]:
+                for iface, addr, side in [
+                    (updated_src, addrs[0], "src"),
+                    (updated_dst, addrs[1], "dst"),
+                ]:
                     address_value = f"{addr}/{p2p_prefix_length}"
-                    # Query before creating. allocate_next_ip_prefix() above IS
-                    # idempotent per identifier — a second, overlapping call for
-                    # this same link (e.g. two generator runs both triggered off
-                    # the same bulk load) gets the SAME prefix back. But
-                    # IpamIPAddress's (address, ip_namespace) uniqueness_constraint
-                    # is only enforced by an async validator, not a synchronous DB
-                    # constraint (observed: two DC4 hyper-spine-mesh links both
-                    # blind-created the same address, and the collision only
-                    # surfaced later as a "Process schema integrity" failure at
-                    # merge time). A blind client.create() would race; reuse
-                    # whatever's already there instead of trying to create it again.
-                    ip = await self.client.get(
-                        kind=IpamIPAddress,
-                        address__value=address_value,
-                        ip_namespace__ids=[ip_namespace.id],
-                        raise_when_missing=False,
+                    # A query-then-create here is NOT enough: two overlapping
+                    # calls for this same link can both run the query, both see
+                    # nothing yet, and both create — the (address, ip_namespace)
+                    # uniqueness_constraint is only enforced by an async
+                    # validator, not synchronously, so both creates succeed and
+                    # the collision only surfaces later as a "Process schema
+                    # integrity" failure at merge time (reproduced twice on
+                    # DC4's hyper-spine mesh, the one DC-level — as opposed to
+                    # pod-scoped — P2P link set, even with the query added).
+                    #
+                    # Pin the id instead of asking Infrahub to find-or-create
+                    # by attribute match: derive it deterministically from the
+                    # link + side, so two overlapping calls compute the SAME
+                    # id and their Upserts target the SAME node no matter which
+                    # one commits first — the identical pattern already used
+                    # for Number pool consumers (see
+                    # number_pool_per_consumer_idempotency in project memory).
+                    address_id = str(
+                        uuid.uuid5(uuid.NAMESPACE_URL, f"urn:infrahub-demo:p2p-address:{link_identifier}:{side}")
                     )
-                    if not ip:
-                        ip = await self.client.create(
-                            kind=IpamIPAddress,
-                            data={"address": address_value, "ip_namespace": ip_namespace},
-                        )
-                        await ip.save(allow_upsert=True)
+                    ip = await self.client.create(
+                        kind=IpamIPAddress,
+                        data={"id": address_id, "address": address_value, "ip_namespace": ip_namespace},
+                    )
+                    await ip.save(allow_upsert=True)
                     iface.ip_address = ip.id
 
             # update_group_context=False: physical interfaces come from the device's

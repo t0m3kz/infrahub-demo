@@ -10,6 +10,7 @@ its cable/IP-allocation tail via the shared _execute_cabling_plan() helper.
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -285,22 +286,25 @@ def _p2p_prefix(*, prefix: str, namespace_id: str = "ns-default") -> MagicMock:
     return p
 
 
-class TestP2PAddressIsQueriedBeforeCreate:
-    """IpamIPAddress's (address, ip_namespace) uniqueness_constraint is only
-    enforced by an async validator, not a synchronous DB constraint (see
-    hfid_index_lag_same_run.md) — a blind client.create() for each P2P host
-    address races a second, overlapping call for the same link and can leave
-    two nodes with the same address. Query first and reuse whatever's there."""
+class TestP2PAddressIdIsPinnedNotQueried:
+    """A query-then-create is not enough: two overlapping calls for the same
+    link (e.g. two generator runs both triggered off the same bulk load) can
+    both run the query, both see nothing yet, and both create — IpamIPAddress's
+    (address, ip_namespace) uniqueness_constraint is only enforced by an async
+    validator, not a synchronous DB constraint (see
+    hfid_index_lag_same_run.md; reproduced twice on DC4's hyper-spine mesh even
+    with the query-first version of this fix in place). Pin the id instead,
+    derived deterministically from the link + side, so two overlapping calls
+    target the SAME node via Upsert no matter which commits first."""
 
     @pytest.mark.asyncio
-    async def test_creates_when_address_does_not_exist_yet(self) -> None:
+    async def test_create_receives_a_pinned_id_per_side(self) -> None:
         gen = _make_generator()
         bl_iface = _iface("Eth1/25", device="bl-01")
         fw_iface = _iface("eth1", device="fw-01")
         gen.client.filters = AsyncMock(side_effect=[[bl_iface], [fw_iface]])
         gen._resolve_pool = AsyncMock(return_value=MagicMock(id="pool-1"))
         gen.client.allocate_next_ip_prefix = AsyncMock(return_value=_p2p_prefix(prefix="100.65.0.0/31"))
-        gen.client.get = AsyncMock(return_value=None)
         created_ips = [AsyncMock(id="src-ip"), AsyncMock(id="dst-ip")]
         gen.client.create = AsyncMock(side_effect=[*created_ips, _cable_obj()])
 
@@ -311,40 +315,47 @@ class TestP2PAddressIsQueriedBeforeCreate:
             ]
         )
 
-        get_calls = [c for c in gen.client.get.call_args_list]
-        assert len(get_calls) == 2
-        for call in get_calls:
-            assert call.kwargs["ip_namespace__ids"] == ["ns-default"]
-        create_addresses = [
-            c.kwargs["data"]["address"] for c in gen.client.create.call_args_list if "address" in c.kwargs["data"]
-        ]
-        assert create_addresses == ["100.65.0.0/31", "100.65.0.1/31"]
+        # No existence check at all — id-pinning replaces it, not supplements it.
+        gen.client.get.assert_not_called()
+
+        address_creates = [c for c in gen.client.create.call_args_list if "address" in c.kwargs["data"]]
+        assert len(address_creates) == 2
+        ids = [c.kwargs["data"]["id"] for c in address_creates]
+        addresses = [c.kwargs["data"]["address"] for c in address_creates]
+        assert addresses == ["100.65.0.0/31", "100.65.0.1/31"]
+        # Two distinct, non-empty, valid-UUID ids — one per side of the link.
+        assert len(set(ids)) == 2
+        for value in ids:
+            uuid.UUID(value)  # raises ValueError if not a valid UUID string
 
     @pytest.mark.asyncio
-    async def test_reuses_existing_address_instead_of_creating_a_duplicate(self) -> None:
-        gen = _make_generator()
-        bl_iface = _iface("Eth1/25", device="bl-01")
-        fw_iface = _iface("eth1", device="fw-01")
-        gen.client.filters = AsyncMock(side_effect=[[bl_iface], [fw_iface]])
-        gen._resolve_pool = AsyncMock(return_value=MagicMock(id="pool-1"))
-        gen.client.allocate_next_ip_prefix = AsyncMock(return_value=_p2p_prefix(prefix="100.65.0.0/31"))
-        # Both addresses already exist — as if an earlier, overlapping call
-        # for this same link already created them.
-        existing_ips = [AsyncMock(id="existing-src-ip"), AsyncMock(id="existing-dst-ip")]
-        gen.client.get = AsyncMock(side_effect=existing_ips)
-        gen.client.create = AsyncMock(return_value=_cable_obj())
+    async def test_id_is_stable_across_two_overlapping_calls_for_the_same_link(self) -> None:
+        """The property that actually matters: two independent invocations
+        building the SAME link must compute the SAME ids, so their Upserts
+        converge on the same two nodes instead of racing to create separate
+        ones."""
 
-        await gen.create_chain_cabling(
-            [
-                {"devices": ["bl-01"], "down_role": "firewall"},
-                {"devices": ["fw-01"], "up_role": "uplink"},
-            ]
-        )
+        async def _run_once() -> list[str]:
+            gen = _make_generator()
+            bl_iface = _iface("Eth1/25", device="bl-01")
+            fw_iface = _iface("eth1", device="fw-01")
+            gen.client.filters = AsyncMock(side_effect=[[bl_iface], [fw_iface]])
+            gen._resolve_pool = AsyncMock(return_value=MagicMock(id="pool-1"))
+            gen.client.allocate_next_ip_prefix = AsyncMock(return_value=_p2p_prefix(prefix="100.65.0.0/31"))
+            gen.client.create = AsyncMock(side_effect=[AsyncMock(id="a"), AsyncMock(id="b"), _cable_obj()])
 
-        # Only the cable gets created — neither address does.
-        create_data_calls = [c for c in gen.client.create.call_args_list if "address" in c.kwargs.get("data", {})]
-        assert create_data_calls == []
-        assert {bl_iface.ip_address, fw_iface.ip_address} == {"existing-src-ip", "existing-dst-ip"}
+            await gen.create_chain_cabling(
+                [
+                    {"devices": ["bl-01"], "down_role": "firewall"},
+                    {"devices": ["fw-01"], "up_role": "uplink"},
+                ]
+            )
+            return [c.kwargs["data"]["id"] for c in gen.client.create.call_args_list if "address" in c.kwargs["data"]]
+
+        first_run_ids = await _run_once()
+        second_run_ids = await _run_once()
+
+        assert first_run_ids == second_run_ids
 
 
 class TestCableIsNeverReferencedBeforeItIsVisible:
