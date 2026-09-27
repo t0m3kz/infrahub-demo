@@ -273,6 +273,39 @@ class PoolMixin:
         """
         self.logger.info("Implementing resource pools")
 
+        # Two overlapping generator runs for the SAME dc_id/pod_id (this
+        # module's own docstring: "two generator runs racing to allocate from
+        # the same parent pool need to serialize, not to create two divergent
+        # pools") can otherwise both check "does a pool named X exist?", both
+        # see nothing yet, and both client.create()+save(allow_upsert=True) a
+        # NEW CoreIPPrefixPool/CoreIPAddressPool with the identical name —
+        # Upsert only converges on an existing match, it does not prevent two
+        # concurrent creates from succeeding as two separate nodes. Both
+        # duplicates then draw from the SAME parent prefix (allocate_next_ip_
+        # prefix against it IS idempotent per identifier) but each tracks its
+        # OWN "next free" state independently, so both hand out the identical
+        # first few addresses to whichever caller happens to reference it —
+        # reproduced on DC4's hyper-spine mesh technical pool. Serialize on
+        # (strategy, id) so only one caller ever creates this fabric's/pod's
+        # pools; the other waits and then finds them already there.
+        lock_id = await self.acquire_resource_lock(f"pool-alloc-{strategy}-{id}")
+        try:
+            return await self._allocate_resource_pools_locked(
+                strategy=strategy, pools=pools, id=id, ipv6=ipv6, dual_stack=dual_stack
+            )
+        finally:
+            await self.release_resource_lock(lock_id)
+
+    async def _allocate_resource_pools_locked(
+        self,
+        strategy: Literal["fabric", "pod"],
+        pools: dict[str, Any],
+        id: str,
+        ipv6: bool = False,
+        dual_stack: bool = False,
+    ) -> dict[str, Any]:
+        """The actual pool-creation body of allocate_resource_pools(), run
+        under that method's per-(strategy, id) lock."""
         fabric_name = self.fabric_name
         pod_name = self.pod_name
         pool_prefix = pod_name if pod_name else fabric_name

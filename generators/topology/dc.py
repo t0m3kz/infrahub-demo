@@ -787,7 +787,24 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
         re-running this always converges on the same pool with the same resource,
         instead of a manual existence check that (as seen live) can permanently
         skip healing a pool left broken by a prior code version.
+
+        That "unique + upsert" idempotency only holds for sequential re-runs,
+        though — it does not stop two truly concurrent, overlapping calls for
+        this same DC from both checking "does a pool named X exist?", both
+        finding nothing yet, and both creating a NEW CoreIPPrefixPool with
+        the same name (a real race reproduced on PoolMixin.
+        allocate_resource_pools()'s technical pool — see that method's own
+        lock for the full explanation). Serialize the same way.
         """
+        lock_id = await self.acquire_resource_lock(f"fw-context-pools-{dc_name}")
+        try:
+            await self._ensure_firewall_context_pools_locked(dc_name=dc_name)
+        finally:
+            await self.release_resource_lock(lock_id)
+
+    async def _ensure_firewall_context_pools_locked(self, *, dc_name: str) -> None:
+        """The actual pool-creation body of _ensure_firewall_context_pools(),
+        run under that method's per-dc_name lock."""
         await self.upsert_number_pool(
             pool_name=f"{dc_name}-fw-context-vlan-pool",
             description=f"FirewallContext sub-interface VLAN pool for {dc_name.upper()}",
