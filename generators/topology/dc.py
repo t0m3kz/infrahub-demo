@@ -573,9 +573,18 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
                 all_names.extend(names)
 
             if remaining > 0:
+                # Deliberately a warning, not a failure: a DC may legitimately
+                # declare border-leafs before all its pods exist, and the
+                # remainder gets placed when dc_pod_cascade runs for the new pod.
+                # It is still a data error when the pods are all present, so name
+                # the numbers — the symptom otherwise surfaces much later as a
+                # border-leaf count that is short of what the DC declared.
+                capacity = sum(self._pod_border_leaf_capacity(pod) for pod in sorted_pods)
                 self.logger.warning(
-                    f"DC {self.fabric_name}: border-leaf entry has {remaining} device(s) left unplaced — "
-                    "no pod had remaining max_border_leafs_per_pod capacity."
+                    f"DC {self.fabric_name}: border-leaf entry requested {entry['quantity']} device(s) but "
+                    f"{remaining} are left unplaced — the DC's {len(sorted_pods)} pod(s) offer "
+                    f"max_border_leafs_per_pod capacity for {capacity} in total. Add pods, or lower the "
+                    "entry's quantity to match."
                 )
 
         return all_names

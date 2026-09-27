@@ -98,8 +98,11 @@ DC_CONFIGS: dict[str, dict[str, Any]] = {
         "naming_convention": "hierarchical",
         "branch": "deploy-dc4",
         # 3 pods: middle_rack(2sp)+mixed(4sp)+tor(4sp) + 4 super-spines + 2
-        # hyper-spines + 4 leafs + 4 l2-leafs + 2 tors + 4 border-leafs (design XL)
-        "expected_devices": 30,
+        # hyper-spines + 4 leafs + 4 l2-leafs + 2 tors + 2 border-leafs (design XL).
+        # Border-leafs match the firewall/load-balancer pair rather than the pod
+        # count: the service chain is index-paired and firewalls are HA pairs, so
+        # a third border-leaf would have no firewall port budget left.
+        "expected_devices": 28,
         "expected_roles": {
             "super-spine": 4,
             "hyper-spine": 2,
@@ -107,7 +110,7 @@ DC_CONFIGS: dict[str, dict[str, Any]] = {
             "leaf": 4,
             "l2-leaf": 4,
             "tor": 2,
-            "border-leaf": 4,
+            "border-leaf": 2,
         },
         "expected_min_cables": 30,
     },

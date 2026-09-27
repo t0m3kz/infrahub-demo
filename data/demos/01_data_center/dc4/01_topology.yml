@@ -14,7 +14,12 @@ spec:
       fabric_templates:
         - ["4", "super-spine", "DCS-7050CX3-32C-R_SUPER_SPINE"]
         - ["2", "hyper-spine", "DCS-7050CX3-32C-R_HYPER_SPINE"]
-        - ["4", "border-leaf", "DCS-7050CX3-32C-R_BORDER_LEAF"]
+        # Two, matching the firewall/load-balancer pair below: the border-leaf
+        # service chain is index-paired, and firewalls are deployed as HA pairs,
+        # so an odd border-leaf has no firewall left to cable to. All three pod
+        # layouts here cap max_border_leafs_per_pod at 1, so these land one each
+        # in pods 1 and 2.
+        - ["2", "border-leaf", "DCS-7050CX3-32C-R_BORDER_LEAF"]
         - ["2", "firewall", "CP-26000_FIREWALL"]
         - ["2", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
       fabric_interface_sorting_method: top_down
