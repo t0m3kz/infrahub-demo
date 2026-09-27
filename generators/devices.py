@@ -93,6 +93,16 @@ class DeviceMixin(MLAGWiringMixin):
     # doesn't call create_devices() for a controller-eligible role) simply
     # means "no controllers", not an error.
     _all_controllers: list[dict[str, Any]]
+    # Attribute declaration only, no default — set once per generator run by
+    # dc.py/pod.py/rack.py/colocation.py/endpoint.py's generate() to the
+    # enclosing physical facility's id (TopologyDataCenter/
+    # TopologyColocationMetro — never a Pod or Rack). _ensure_ha_cable below
+    # reads this for the HA-sync cable's own `deployment`, deliberately NOT
+    # the HA member device's own `deployment` relationship: pod.py's
+    # border-spine pods scope their firewall/load-balancer *devices* to the
+    # pod on purpose (see test_pod_border_services.py), but DcimCable.
+    # deployment's peer type has no TopologyPod — confirmed live on DC7.
+    deployment_id: str | None
 
     async def create_devices(
         self,
@@ -714,10 +724,14 @@ class DeviceMixin(MLAGWiringMixin):
             # rather than creating a second, conflicting cable.
             return
 
-        deployment_rel = getattr(dev_a, "deployment", None)
-        deployment_id: str | None = None
-        if deployment_rel is not None and deployment_rel.initialized:
-            deployment_id = deployment_rel.peer.id
+        # self.deployment_id, not dev_a's own `deployment` relationship — see
+        # the attribute declaration above for why. This happened to give the
+        # right answer for every DC-scoped HA pair (dc.py's firewall/
+        # load-balancer devices are DC-scoped, so the two ids coincide) but
+        # broke on DC7's border-spine pods, whose devices are deliberately
+        # pod-scoped: "TopologyPod ... cannot be added to relationship, must
+        # be of type: [...TopologyDataCenter]".
+        deployment_id = getattr(self, "deployment_id", None)
 
         self.logger.info(
             f"  [{ha_name}] Creating HA sync cable {cable_name}: "
