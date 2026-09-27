@@ -12,12 +12,7 @@ import logging
 import pytest
 from infrahub_sdk import InfrahubClientSync
 
-from utils.bootstrap_order import bootstrap_load_tiers, tier_concurrency
-
-from .conftest import PROJECT_DIRECTORY, TestInfrahubDockerWithClient
-
-# Matches execute_command's default; overridden per tier by tier_concurrency().
-DEFAULT_LOAD_CONCURRENCY = 10
+from .conftest import TestInfrahubDockerWithClient
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -70,23 +65,12 @@ class TestSetup(TestInfrahubDockerWithClient):
     @pytest.mark.order(3)
     @pytest.mark.dependency(scope="session", name="menu_load", depends=["schema_extensions"])
     def test_03_load_menu(self, client_main: InfrahubClientSync) -> None:
-        """Load menu definitions, serialised.
-
-        menu.yml is one file of 61 items nested parent -> children, so a child's
-        reference to its parent resolves against a node created moments earlier
-        in the same run. At the default concurrency that races and fails with
-        "['CoreMenuItemUpsert'] Unable to find the node <id> / CoreMenu in the
-        database." Unlike the bootstrap data there is nothing to reorder — the
-        dependency is within a single file — so the only lever is to stop
-        dispatching siblings in parallel. 61 items serialised costs a few
-        seconds.
-        """
+        """Load menu definitions."""
         logging.info("Starting test: test_03_load_menu")
 
         load_menu = self.execute_command(
             "infrahubctl menu load menu/menu.yml",
             address=client_main.config.address,
-            concurrent_execution=1,
         )
 
         logging.info("Menu load output: %s", load_menu.stdout)
@@ -100,59 +84,51 @@ class TestSetup(TestInfrahubDockerWithClient):
     @pytest.mark.order(4)
     @pytest.mark.dependency(scope="session", name="bootstrap_data", depends=["schema_extensions"])
     def test_04_load_bootstrap_data(self, client_main: InfrahubClientSync) -> None:
-        """Load bootstrap data one dependency tier at a time.
+        """Load bootstrap data.
 
-        The bootstrap directory is layered by filename prefix, and a higher
-        prefix may reference a lower one by HFID: device templates in 09_*/10_*
-        reference an owner (02_), platform (05_), software_image (05b_) and
-        device_type (06_); software images reference a platform; device types
-        reference a manufacturer (04_). An HFID lookup only succeeds once the
-        referenced node is visible to a query, which is not guaranteed the
-        moment its own upsert returns, so loading the whole directory as one
-        concurrent run races referencing objects against their dependencies and
-        fails partway with "Unable to find the node arista_eos / DcimPlatform in
-        the database" — intermittently, which is worse than slowly.
+        Providers are loaded first, sequentially: hundreds of device/template
+        objects in data/bootstrap/09_*/10_* reference a provider (e.g. owner:
+        "P027") by HFID. Loading the whole directory at high concurrency races
+        those lookups against the provider's own creation in the same run —
+        some referencing objects get dispatched before the provider node they
+        depend on is visible yet, failing with "Unable to find the node <id> /
+        OrganizationEntity in the database." Loading providers alone first (no
+        concurrency) guarantees they're committed before anything concurrently
+        references them.
 
-        utils.bootstrap_order turns the prefix convention into a barrier: one
-        invocation per tier, each finishing before the next starts. This
-        generalises what used to be a hand-rolled pre-load of 02_providers.yml
-        alone, which fixed the owner references and left every other
-        cross-file reference racing.
-
-        Concurrency stays at the default WITHIN a tier. Tiers fix cross-file
-        ordering; they do not touch the nested-object race one level deeper,
-        where each 09_*/10_* template's interfaces reference a parent created
-        moments earlier in the same file. Raising concurrency to 30 put 30 such
-        groups in flight at once and was observed to fail with "Unable to find
-        the node <id> / TemplateDcimDevice in the database" partway through the
-        Edgecore SONiC spine templates.
+        The rest of the directory then loads at the default concurrency, not a
+        raised one. The same visibility race exists one level deeper and
+        ordering cannot fix it: every 09_*/10_* template device carries its
+        interfaces as nested objects, so each group's children reference a
+        parent created moments earlier in the same run. Raising concurrency to
+        30 put 30 such groups in flight at once and was observed to fail with
+        "Unable to find the node <id> / TemplateDcimDevice in the database"
+        partway through the Edgecore SONiC spine templates — intermittently,
+        which is worse than slowly.
         """
         logging.info("Starting test: test_04_load_bootstrap_data")
 
-        tiers = bootstrap_load_tiers(PROJECT_DIRECTORY / "data" / "bootstrap")
-        assert tiers, "no bootstrap object files found — the load would silently do nothing"
+        load_providers = self.execute_command(
+            "infrahubctl object load data/bootstrap/02_providers.yml",
+            address=client_main.config.address,
+        )
+        assert load_providers.returncode == 0, (
+            f"Provider bootstrap load failed.\n"
+            f"  Return code: {load_providers.returncode}\n"
+            f"  stdout: {load_providers.stdout}\n"
+            f"  stderr: {load_providers.stderr}"
+        )
 
-        for index, tier in enumerate(tiers, start=1):
-            paths = " ".join(str(path.relative_to(PROJECT_DIRECTORY)) for path in tier)
-            concurrency = tier_concurrency(tier, DEFAULT_LOAD_CONCURRENCY)
-            logging.info(
-                "Loading bootstrap tier %d/%d (concurrency %d): %s",
-                index,
-                len(tiers),
-                concurrency,
-                ", ".join(p.name for p in tier),
-            )
+        load_data = self.execute_command(
+            "infrahubctl object load data/bootstrap/",
+            address=client_main.config.address,
+            pagination_size=200,
+        )
 
-            load_tier = self.execute_command(
-                f"infrahubctl object load {paths}",
-                address=client_main.config.address,
-                concurrent_execution=concurrency,
-                pagination_size=200,
-            )
-
-            assert load_tier.returncode == 0, (
-                f"Bootstrap load failed at tier {index}/{len(tiers)} ({paths}).\n"
-                f"  Return code: {load_tier.returncode}\n"
-                f"  stdout: {load_tier.stdout}\n"
-                f"  stderr: {load_tier.stderr}"
-            )
+        logging.info("Bootstrap data load output: %s", load_data.stdout)
+        assert load_data.returncode == 0, (
+            f"Bootstrap data load failed.\n"
+            f"  Return code: {load_data.returncode}\n"
+            f"  stdout: {load_data.stdout}\n"
+            f"  stderr: {load_data.stderr}"
+        )

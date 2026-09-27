@@ -18,11 +18,6 @@ from typing import cast
 from invoke import Collection, Context, Task
 from invoke import task as _task
 
-from utils.bootstrap_order import bootstrap_load_tiers, tier_concurrency
-
-# Matches the SDK default; overridden per tier by tier_concurrency().
-DEFAULT_LOAD_CONCURRENCY = 10
-
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)-8s  %(message)s")
 log = logging.getLogger("tasks")
 
@@ -138,7 +133,7 @@ def setup(context: Context) -> None:
     time.sleep(5)
 
     log.info("Loading bootstrap data...")
-    _load_objects_in_tiers(context, Path("data/bootstrap"), "main")
+    context.run("uv run infrahubctl object load data/bootstrap/ --branch main", pty=True)
 
     log.info("Setup complete! Infrahub is ready.")
 
@@ -374,43 +369,11 @@ def load_menu(context: Context, menu: str = "menu", branch: str = "main") -> Non
 def load_objects(context: Context, path: str = "data/bootstrap/", branch: str = "main") -> None:
     """Load object YAML files from a path.
 
-    A directory is loaded one prefix tier at a time so that cross-file HFID
-    references resolve — see utils/bootstrap_order. A single file is passed
-    straight through.
-
     Example:
         uv run invoke data.load-objects
         uv run invoke data.load-objects --path data/demos/100_full/01_dc/dc1
     """
-    _load_objects_in_tiers(context, Path(path), branch)
-
-
-def _load_objects_in_tiers(context: Context, path: Path, branch: str) -> None:
-    """Load ``path`` tier by tier, each invocation completing before the next.
-
-    Tiers order cross-file references; concurrency and retries absorb the
-    write-visibility lag that ordering cannot reach. See utils/bootstrap_order.
-    """
-    if not path.is_dir():
-        context.run(f"uv run infrahubctl object load {path} --branch {branch}", pty=True)
-        return
-
-    tiers = bootstrap_load_tiers(path)
-    for index, tier in enumerate(tiers, start=1):
-        names = " ".join(str(file) for file in tier)
-        concurrency = tier_concurrency(tier, DEFAULT_LOAD_CONCURRENCY)
-        log.info(
-            "Loading objects, tier %d/%d (concurrency %d): %s",
-            index,
-            len(tiers),
-            concurrency,
-            ", ".join(f.name for f in tier),
-        )
-
-        context.run(
-            f"INFRAHUB_MAX_CONCURRENT_EXECUTION={concurrency} uv run infrahubctl object load {names} --branch {branch}",
-            pty=True,
-        )
+    context.run(f"uv run infrahubctl object load {path} --branch {branch}", pty=True)
 
 
 @_task(optional=["branch"])
