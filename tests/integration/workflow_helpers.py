@@ -559,6 +559,23 @@ def merge_proposed_change(
                 "success": True,
             }
 
+        # Only an OPEN proposed change can be merged. A crashed merge task leaves
+        # it in "merging", so every remaining attempt raises a 422 "Only proposed
+        # change in OPEN state can be merged" out of execute_graphql — which
+        # propagates as *the* error and buries the one that actually matters
+        # (observed hiding a Neo4j DeadlockDetected during the merge). Stop and
+        # report the real state instead of retrying into a guaranteed failure.
+        if pc_state_after != "open":
+            logger.error(
+                "Merge task %s ended in %s and left the proposed change in state %r — not retryable, "
+                "only an OPEN proposed change can be merged. Task message: %s",
+                task_id,
+                task.state,
+                pc_state_after,
+                getattr(task, "state_message", None) or "<none>",
+            )
+            break
+
         if attempt < max_retries:
             logger.warning(
                 "Merge attempt %d/%d failed (PC state: %s, task state: %s). Retrying in %ds...",
