@@ -41,30 +41,6 @@ router bgp 65000
   template peer-session EVPN-PEERS-SESSION
     update-source loopback0
   !
-  address-family ipv4 unicast
-    redistribute direct route-map RM-CONN-2-BGP
-    maximum-paths 8
-  !
-  address-family l2vpn evpn
-  !
-  neighbor 10.0.0.100
-    remote-as 65000
-    description spine-01
-    inherit peer-session EVPN-PEERS-SESSION
-    address-family l2vpn evpn
-      inherit peer-policy EVPN-PEERS-POLICY
-    !
-  neighbor 10.0.0.101
-    remote-as 65000
-    description spine-02
-    inherit peer-session EVPN-PEERS-SESSION
-    address-family l2vpn evpn
-      inherit peer-policy EVPN-PEERS-POLICY
-    !
-!
-router bgp 65001
-  router-id 10.0.0.1
-  graceful-restart
   !
   template peer-policy UNDERLAY-PEERS-POLICY
     send-community
@@ -80,6 +56,7 @@ router bgp 65001
   !
   neighbor 10.1.0.0
     remote-as 65100
+    local-as 65001 no-prepend replace-as
     description spine-01
     inherit peer-session UNDERLAY-PEERS-SESSION
     address-family ipv4 unicast
@@ -87,10 +64,25 @@ router bgp 65001
     !
   neighbor 10.1.0.2
     remote-as 65101
+    local-as 65001 no-prepend replace-as
     description spine-02
     inherit peer-session UNDERLAY-PEERS-SESSION
     address-family ipv4 unicast
       inherit peer-policy UNDERLAY-PEERS-POLICY
+    !
+  neighbor 10.0.0.100
+    remote-as 65000
+    description spine-01
+    inherit peer-session EVPN-PEERS-SESSION
+    address-family l2vpn evpn
+      inherit peer-policy EVPN-PEERS-POLICY
+    !
+  neighbor 10.0.0.101
+    remote-as 65000
+    description spine-02
+    inherit peer-session EVPN-PEERS-SESSION
+    address-family l2vpn evpn
+      inherit peer-policy EVPN-PEERS-POLICY
     !
 !
 

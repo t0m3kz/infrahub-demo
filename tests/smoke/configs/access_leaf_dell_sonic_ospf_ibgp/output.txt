@@ -8,6 +8,14 @@ feature bgp
 feature interface-vlan
 feature vn-segment-vlan-based
 feature nv overlay
+vlan 100
+  name Customer-A
+  vn-segment 100
+
+vlan 200
+  name Customer-A
+  vn-segment 200
+
 interface Ethernet1
   description to spine-01
   ip address 10.1.0.1/31
@@ -19,6 +27,14 @@ interface Ethernet2
   description to spine-02
   ip address 10.1.0.3/31
   ip router ospf 1 area 0.0.0.0
+  no shutdown
+!
+
+interface Ethernet10
+  description to server-01
+  switchport
+  switchport mode access
+  switchport access vlan 100
   no shutdown
 !
 
@@ -67,10 +83,64 @@ router bgp 65000
 !
 
 
+!
+! VXLAN Configuration with Microsegmentation (VRF-aware VNIs)
+!
+! Microsegmentation enabled: 1 VRF(s) for tenant isolation
+!
+interface vtep
+  source Loopback0
+  !
+  ! L2 VNI Mappings (VLAN segments)
+  map vni 10100 vlan 100
+  !
+  ! L3 VNI Mappings (VRF segments for microsegmentation)
+  map vni 50001 vrf VRF_A
+  no shutdown
+!
+!
+! VRF Definitions (Microsegmentation)
+!
+vrf VRF_A
+  description Tenant VRF for microsegmentation
+!
+!
+! EVPN Configuration (FRR)
+!
+router bgp 65000
+  address-family l2vpn evpn
+    advertise-all-vni
+    !
+    ! L2 VNI EVPN Configuration
+    vni 10100
+      rd 10.0.0.1:10100
+      route-target import 65000:10100
+      route-target export 65000:10100
+    !
+    ! L3 VNI EVPN Configuration (VRF-aware)
+    vni 50001
+      rd 10.0.0.1:50001
+      route-target import 65000:50001
+      route-target export 65000:50001
+  exit-address-family
+!
 
 ! Configure route-maps
 route-map RM-CONN-2-BGP permit 10
   match interface Loopback0
+!
+! VLAN SVI Configuration
+!
+interface Vlan100
+  description Customer-A
+  vrf forwarding VRF_A
+  ip address 10.100.0.1/24
+  no shutdown
+!
+interface Vlan200
+  description Customer-A
+  ip address 10.200.0.1/24
+  no shutdown
 !
 
 ! End of configuration

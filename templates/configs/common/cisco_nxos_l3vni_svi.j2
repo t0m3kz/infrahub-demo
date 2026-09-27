@@ -1,0 +1,34 @@
+{#-
+  L3 VNI transit SVI for NX-OS symmetric IRB.
+
+  Every L3 VNI needs a local VLAN and an SVI in the tenant VRF. The SVI carries
+  no host addressing — `ip forward` is the whole point of it: it gives the VRF a
+  forwarding interface onto the transit VNI so routed inter-subnet traffic can be
+  encapsulated. Without it NX-OS accepts the `member vni X associate-vrf` line
+  but silently drops routed traffic.
+
+  `svi_vlan_id` comes from the reserved 3900-3967 band allocated in
+  transforms/helpers/vxlan.py. It is None when that band is exhausted (a warning
+  is logged there); skip those rather than emitting `interface VlanNone`.
+
+  Included by the leaf/border-leaf NX-OS templates from inside their
+  `{% if vxlan and vxlan.enabled %}` guard, so `vxlan` is known non-empty here.
+-#}
+{%- if vxlan.l3_vni_mappings %}
+!
+! L3 VNI Transit SVIs (symmetric IRB — no host addressing, forwarding only)
+!
+{%- for mapping in vxlan.l3_vni_mappings if mapping.svi_vlan_id %}
+vlan {{ mapping.svi_vlan_id }}
+  name L3VNI_{{ mapping.vrf_name }}
+  vn-segment {{ mapping.l3_vni }}
+!
+interface Vlan{{ mapping.svi_vlan_id }}
+  description L3VNI transit SVI for VRF {{ mapping.vrf_name }}
+  vrf member {{ mapping.vrf_name }}
+  ip forward
+  mtu 9216
+  no shutdown
+!
+{%- endfor %}
+{%- endif -%}

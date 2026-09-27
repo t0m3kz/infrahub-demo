@@ -9,7 +9,7 @@
             "value": "DC1-POD1-L1"
           },
           "role": {
-            "value": "border_leaf"
+            "value": "border-leaf"
           },
           "platform": {
             "node": {

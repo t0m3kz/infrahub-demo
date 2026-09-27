@@ -12,6 +12,7 @@ from ..dc_config import host_bits_to_prefix_length, resolve_dc_size_layout
 from ..devices import DeviceMixin
 from ..helpers import name_to_asn_range
 from ..helpers.pairing import pair_device_names
+from ..helpers.pools import CUSTOMER_VLAN_ID_MAX
 from ..helpers.routing import RoutingStrategy, p2p_is_ipv6
 from ..helpers.template_interfaces import template_interface_names_by_role
 from ..pod_config import POD_LAYOUTS
@@ -268,11 +269,28 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
 
         # L2 VNI pool for the VXLAN overlay (VRF-lite: no VRF stretches over
         # EVPN, so there's no L3 VNI pool — border-leaf VRFs are local-only).
+        #
+        # Capped at 49999 even though a VNI is a 24-bit field. Two independent
+        # constraints, both of which the device enforces by rejecting the line:
+        #
+        #   1. 16-bit RD/RT ceiling (65535). The EVPN route-distinguisher and
+        #      route-target are derived from the VNI (transforms/helpers/vxlan.py),
+        #      and every ASN here is a 4-byte private ASN — so both a type-1 RD
+        #      (IPv4:assigned) and a type-2 RT (4-byte-ASN:assigned) leave only
+        #      16 bits for the VNI.
+        #   2. Must stay disjoint from the L3 VNI range (50001-59999, supplied
+        #      by data — see data/demos/.../01_pools.yml `*-l3vni-pool`). The VNI
+        #      space is a single flat namespace per device, NOT one namespace per
+        #      VNI type, so an L2 segment allocated on top of a VRF's L3 VNI
+        #      collides and the `member vni ... associate` line fails.
+        #
+        # 49999 satisfies both. 40k segments per fabric is far beyond any real
+        # fabric, so this costs nothing.
         await self.upsert_number_pool(
             pool_name=f"{self.fabric_name}-vni-pool",
             description=f"L2 VNI pool for {self.fabric_name.upper()}",
             start_range=10001,
-            end_range=16777215,
+            end_range=49999,
             node="ManagedSegmentDeployment",
             node_attribute="vni",
             parent_kind="TopologyDataCenter",
@@ -349,7 +367,11 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
         # fabric-wide, .dev/bgp.txt) at the DC level so pod/rack generators
         # always find them and never create duplicates.
         # overlay_asn is asn_end + 1 to avoid collision with the per-device pool range [asn_start, asn_end]
-        await self._create_shared_routing_objects(overlay_asn=asn_end + 1, asn_pool_id=fabric_asn_pool_id)
+        await self._create_shared_routing_objects(
+            overlay_asn=asn_end + 1,
+            asn_pool_id=fabric_asn_pool_id,
+            deployment_id=dc_id,
+        )
 
         # Create super-spine routing objects here so they exist before any pod generator runs.
         # For eBGP strategies: underlay + overlay BGP processes.
@@ -761,7 +783,7 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
             pool_name=f"{dc_name}-fw-context-vlan-pool",
             description=f"FirewallContext sub-interface VLAN pool for {dc_name.upper()}",
             start_range=3000,
-            end_range=3999,
+            end_range=CUSTOMER_VLAN_ID_MAX,
             node="ManagedFirewallContext",
             node_attribute="vlan_id",
         )

@@ -987,6 +987,48 @@ class TestBuildPeerGroups:
         assert len(pgs) == 1
         assert pgs[0]["name"] == "EVPN-OVERLAY"
 
+    @pytest.mark.parametrize("role", ["spine", "super-spine", "super_spine", "hyper-spine", "border-spine"])
+    def test_ebgp_overlay_relay_sets_next_hop_unchanged(self, role: str) -> None:
+        """A relaying tier must not rewrite the EVPN next-hop.
+
+        Under ebgp-ebgp the spine re-advertises EVPN routes, and normal eBGP
+        behaviour is to replace the next-hop with its own address. A spine has
+        no `interface nve1`, so remote VTEPs would build a VXLAN tunnel to a
+        device that cannot terminate it — sessions up, routes present, traffic
+        silently blackholed (RFC 8365 §5.1.2.1).
+        """
+        sessions = [
+            _session(session_type="EBGP", ttl=255, name="eo1"),
+            _session(session_type="EBGP", ttl=255, name="eo2"),
+        ]
+        pgs = _build_peer_groups(sessions, device_role=role)
+        assert pgs[0]["next_hop_unchanged"] is True
+
+    @pytest.mark.parametrize("role", ["spine", "super-spine", "hyper-spine", "border-spine"])
+    def test_ebgp_overlay_relay_retains_all_route_targets(self, role: str) -> None:
+        """A spine holds no VRF and no L2VNI, so it has no import route-target
+        and would otherwise discard the EVPN NLRI it exists to relay."""
+        sessions = [_session(session_type="EBGP", ttl=255, name="eo1")]
+        pgs = _build_peer_groups(sessions, device_role=role)
+        assert pgs[0]["retain_route_target_all"] is True
+
+    @pytest.mark.parametrize("role", ["leaf", "border-leaf", "tor", "access-leaf"])
+    def test_ebgp_overlay_vtep_does_not_set_relay_knobs(self, role: str) -> None:
+        """A VTEP originates its own routes with itself as the next-hop, so
+        preserving an inherited next-hop there would be wrong."""
+        sessions = [_session(session_type="EBGP", ttl=255, name="eo1")]
+        pgs = _build_peer_groups(sessions, device_role=role)
+        assert pgs[0]["next_hop_unchanged"] is False
+        assert pgs[0]["retain_route_target_all"] is False
+
+    def test_ebgp_overlay_relay_knobs_default_off_without_a_role(self) -> None:
+        """No role given (the _build_peer_groups default) must not silently
+        enable relay behaviour on a device that may be a VTEP."""
+        sessions = [_session(session_type="EBGP", ttl=255, name="eo1")]
+        pgs = _build_peer_groups(sessions)
+        assert pgs[0]["next_hop_unchanged"] is False
+        assert pgs[0]["retain_route_target_all"] is False
+
     def test_rr_client_on_spine(self):
         """Spine with RR-flagged iBGP sessions gets route_reflector_client on peer group."""
         sessions = [

@@ -166,14 +166,14 @@
                             }
                           },
                           "gateway": {
-                            "node": null
-                          },
-                          "prefix": {
-                            "edges": [
-                              {
+                            "node": {
+                              "address": {
+                                "value": "10.0.1.1/30"
+                              },
+                              "ip_prefix": {
                                 "node": {
                                   "prefix": {
-                                    "value": null
+                                    "value": "10.0.1.0/30"
                                   },
                                   "ip_namespace": {
                                     "node": {
@@ -182,15 +182,12 @@
                                       },
                                       "l3_vni": {
                                         "value": null
-                                      },
-                                      "owner": {
-                                        "node": null
                                       }
                                     }
                                   }
                                 }
                               }
-                            ]
+                            }
                           },
                           "security_policies": {
                             "edges": []
@@ -283,14 +280,14 @@
                             }
                           },
                           "gateway": {
-                            "node": null
-                          },
-                          "prefix": {
-                            "edges": [
-                              {
+                            "node": {
+                              "address": {
+                                "value": "10.0.2.1/30"
+                              },
+                              "ip_prefix": {
                                 "node": {
                                   "prefix": {
-                                    "value": null
+                                    "value": "10.0.2.0/30"
                                   },
                                   "ip_namespace": {
                                     "node": {
@@ -299,15 +296,12 @@
                                       },
                                       "l3_vni": {
                                         "value": null
-                                      },
-                                      "owner": {
-                                        "node": null
                                       }
                                     }
                                   }
                                 }
                               }
-                            ]
+                            }
                           },
                           "security_policies": {
                             "edges": []
@@ -400,14 +394,14 @@
                             }
                           },
                           "gateway": {
-                            "node": null
-                          },
-                          "prefix": {
-                            "edges": [
-                              {
+                            "node": {
+                              "address": {
+                                "value": "10.0.3.1/30"
+                              },
+                              "ip_prefix": {
                                 "node": {
                                   "prefix": {
-                                    "value": null
+                                    "value": "10.0.3.0/30"
                                   },
                                   "ip_namespace": {
                                     "node": {
@@ -416,15 +410,12 @@
                                       },
                                       "l3_vni": {
                                         "value": null
-                                      },
-                                      "owner": {
-                                        "node": null
                                       }
                                     }
                                   }
                                 }
                               }
-                            ]
+                            }
                           },
                           "security_policies": {
                             "edges": []

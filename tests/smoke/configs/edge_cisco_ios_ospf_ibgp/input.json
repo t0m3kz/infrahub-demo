@@ -793,6 +793,13 @@
               "name": {
                 "value": "DC-1"
               },
+              "evpn_rt_as": {
+                "node": {
+                  "asn": {
+                    "value": 65000
+                  }
+                }
+              },
               "segment_deployments": {
                 "edges": []
               }

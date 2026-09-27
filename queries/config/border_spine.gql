@@ -29,6 +29,17 @@ query border_spine_config(
         # Device Services (BGP, OSPF) with nested peerings
         ...DeviceCapabilitiesOnDeviceFields
 
+        # border-spine is a VTEP (collapsed spine + border-leaf for micro-fabrics
+        # and colocation metros), so it needs the fabric-wide EVPN route-target
+        # ASN like any other leaf — see transforms/helpers/vxlan.py's rt_asn.
+        ... on DcimPhysicalDevice {
+          deployment {
+            node {
+              ...EvpnRtAsOnDeploymentFields
+            }
+          }
+        }
+
         # Interface Information
         interfaces {
           edges {

@@ -35,6 +35,7 @@ query border_leaf_config(
               ...FirewallContextsOnDeploymentFields
               ...LoadbalancerVipsOnDeploymentFields
               ...SegmentDeploymentsOnDeploymentFields
+              ...EvpnRtAsOnDeploymentFields
             }
           }
         }

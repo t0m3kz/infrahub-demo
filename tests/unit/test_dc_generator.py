@@ -538,16 +538,30 @@ class TestCreateSharedRoutingObjects:
         return gen
 
     @pytest.mark.asyncio
-    async def test_ebgp_ebgp_creates_passwords_only(self) -> None:
+    async def test_ebgp_ebgp_creates_fabric_as_for_route_targets(self) -> None:
+        """ebgp-ebgp gets the fabric AS too — it is the EVPN route-target identity.
+
+        Under ebgp-ebgp every VTEP runs its own ASN, so there is no other
+        fabric-constant ASN to stamp into route-targets. Creating this AS only
+        for the iBGP strategies left 9 of 10 demo topologies with no valid RT
+        source at all, which is why it is now unconditional.
+        """
         gen = self._make_generator_for_shared_routing()
         gen.data = MagicMock(routing_strategy="ebgp-ebgp")
         gen.client.filters = AsyncMock(return_value=[])
-        gen.client.create = AsyncMock()
+        fabric_as = MagicMock(id="fabric-as-1")
+        fabric_as.asn.value = 65100
+        fabric_as.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=fabric_as)
 
         await gen._create_shared_routing_objects(overlay_asn=65100)
 
         assert gen._ensure_routing_password.await_count == 2
-        gen.client.create.assert_not_called()
+        # No asn_pool_id, so the super-spine AS is skipped — the only create()
+        # is the fabric AS.
+        gen.client.create.assert_awaited_once()
+        assert gen.client.create.call_args.kwargs["data"]["asn"] == 65100
+        assert "fabric-as-1" in gen.client.group_context.related_node_ids
 
     @pytest.mark.asyncio
     async def test_ebgp_ibgp_creates_new_overlay_as(self) -> None:
@@ -636,20 +650,31 @@ class TestCreateSharedRoutingObjects:
         gen.logger.warning.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_ebgp_ebgp_creates_neither_overlay_as_nor_ospf_area(self) -> None:
-        """No overlay AS or OSPF area — but the shared super-spine underlay AS
-        (also eBGP) is still looked up; with no asn_pool_id, nothing is created."""
+    async def test_ebgp_ebgp_creates_fabric_as_but_no_ospf_area(self) -> None:
+        """ebgp-ebgp gets no OSPF area, but does get the fabric AS.
+
+        Both eBGP AS lookups run: the shared super-spine underlay AS and the
+        fabric route-target AS. The OSPF area stays strategy-gated.
+        """
         gen = self._make_generator_for_shared_routing()
         gen.data = MagicMock(routing_strategy=RoutingStrategy.EBGP_EBGP.value)
         gen.client.filters = AsyncMock(return_value=[])
-        gen.client.create = AsyncMock()
+        fabric_as = MagicMock(id="fabric-as-1")
+        fabric_as.asn.value = 65100
+        fabric_as.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=fabric_as)
 
         await gen._create_shared_routing_objects(overlay_asn=65100)
 
-        gen.client.filters.assert_called_once_with(
-            kind=RoutingAutonomousSystem, description__value="dc1 super-spine underlay ASN"
-        )
-        gen.client.create.assert_not_called()
+        lookup_descriptions = [c.kwargs["description__value"] for c in gen.client.filters.call_args_list]
+        assert lookup_descriptions == [
+            "dc1 super-spine underlay ASN",
+            "dc1 overlay ASN for iBGP EVPN",
+        ]
+        # Exactly one create: the fabric AS. No OSPF area (that stays gated on
+        # ospf-ibgp) and no super-spine AS (no asn_pool_id was passed).
+        gen.client.create.assert_awaited_once()
+        assert gen.client.create.call_args.kwargs["data"]["description"] == "dc1 overlay ASN for iBGP EVPN"
 
     @pytest.mark.asyncio
     async def test_ebgp_ebgp_creates_new_super_spine_as_when_pool_given(self) -> None:
@@ -663,11 +688,13 @@ class TestCreateSharedRoutingObjects:
 
         await gen._create_shared_routing_objects(overlay_asn=65100, asn_pool_id="pool-1")
 
-        gen.client.create.assert_awaited_once_with(
-            kind=RoutingAutonomousSystem,
-            data={"asn": {"from_pool": {"id": "pool-1"}}, "description": "dc1 super-spine underlay ASN"},
-        )
-        as_obj.save.assert_awaited_once_with(allow_upsert=True)
+        # Two creates now: the super-spine underlay AS (from the pool) and the
+        # fabric route-target AS (explicit ASN). Assert on the super-spine one.
+        assert gen.client.create.await_args_list[0].kwargs == {
+            "kind": RoutingAutonomousSystem,
+            "data": {"asn": {"from_pool": {"id": "pool-1"}}, "description": "dc1 super-spine underlay ASN"},
+        }
+        as_obj.save.assert_awaited_with(allow_upsert=True)
         assert "ss-as-1" in gen.client.group_context.related_node_ids
 
     @pytest.mark.asyncio

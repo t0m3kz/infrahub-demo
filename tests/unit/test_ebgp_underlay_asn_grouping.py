@@ -235,3 +235,125 @@ class TestTopDevicesExcludedFromGrouping:
         assert for_devices == {"spine-01"}
         assert len(plan.bgp_processes) == 1
         assert plan.bgp_processes[0]["name"] == "spine-01-bgp-underlay"
+
+
+def _device_map_with_roles(names: list[str], role: str = "leaf") -> dict[str, dict]:
+    """Like _device_map, plus the ``role`` that overlay planning gates on."""
+    return {name: {"id": f"dev-{name}", "router_id": {"id": f"ip-{name}"}, "role": role} for name in names}
+
+
+class TestOverlayProcessesShareTheUnderlayGroupKey:
+    """The eBGP overlay sources its local_as from ``plan.autonomous_systems``,
+    which the underlay keys by GROUP — the MLAG domain name for a paired device,
+    its own name otherwise. Looking those up by raw device name misses every
+    MLAG-paired leaf, and the miss path is a bare ``continue``: the device ends up
+    with underlay BGP, no overlay BGP, and therefore no EVPN session at all,
+    while every rendered config and every other object looks healthy. So both
+    planners must be given the SAME mlag_pairs mapping.
+    """
+
+    @staticmethod
+    def _plan_both(device_map: dict[str, dict], mlag_pairs: dict[str, str] | None) -> RoutingPlan:
+        planner = _planner()
+        plan = RoutingPlan()
+        planner._plan_ebgp_underlay(
+            plan,
+            device_map,
+            interfaces=[],
+            existing_as_by_device={},
+            asn_pool="pool-1",
+            mlag_pairs=mlag_pairs,
+        )
+        planner._plan_overlay_processes(plan, device_map, None, mlag_pairs=mlag_pairs)
+        return plan
+
+    def test_mlag_paired_leaves_get_overlay_bgp(self) -> None:
+        """The regression: with pairs keyed by MLAG domain, a device-name lookup
+        finds nothing and both leaves silently lose their EVPN session."""
+        device_map = _device_map_with_roles(["leaf-01", "leaf-02"])
+        mlag_pairs = {"leaf-01": "leaf-01-leaf-02-mlag", "leaf-02": "leaf-01-leaf-02-mlag"}
+
+        plan = self._plan_both(device_map, mlag_pairs)
+
+        overlay = [b for b in plan.bgp_processes if b.get("process_role") == "overlay"]
+        assert sorted(b["name"] for b in overlay) == ["leaf-01-bgp-overlay", "leaf-02-bgp-overlay"]
+
+    def test_paired_leaves_overlay_as_points_at_the_mlag_group(self) -> None:
+        """Both halves of the pair must reference the one ASN the underlay
+        allocated for the domain, not two separate per-device refs."""
+        device_map = _device_map_with_roles(["leaf-01", "leaf-02"])
+        mlag_pairs = {"leaf-01": "leaf-01-leaf-02-mlag", "leaf-02": "leaf-01-leaf-02-mlag"}
+
+        plan = self._plan_both(device_map, mlag_pairs)
+
+        overlay = [b for b in plan.bgp_processes if b.get("process_role") == "overlay"]
+        for bgp in overlay:
+            assert isinstance(bgp["local_as"], PendingASRef)
+            assert bgp["local_as"].device == "leaf-01-leaf-02-mlag"
+
+    def test_a_device_runs_one_asn_across_underlay_and_overlay(self) -> None:
+        """ebgp-ebgp collapses to a single BGP instance, so a device's underlay
+        and overlay processes must resolve to the same ASN."""
+        device_map = _device_map_with_roles(["leaf-01", "leaf-02"])
+        mlag_pairs = {"leaf-01": "leaf-01-leaf-02-mlag", "leaf-02": "leaf-01-leaf-02-mlag"}
+
+        plan = self._plan_both(device_map, mlag_pairs)
+
+        by_name = {b["name"]: b for b in plan.bgp_processes}
+        assert by_name["leaf-01-bgp-underlay"]["local_as"] == by_name["leaf-01-bgp-overlay"]["local_as"]
+
+    def test_standalone_devices_still_resolve_by_their_own_name(self) -> None:
+        """The group key for an unpaired device IS its name, so the group-aware
+        lookup must not regress the non-MLAG case."""
+        device_map = _device_map_with_roles(["leaf-01", "leaf-02", "leaf-03"])
+        mlag_pairs = {"leaf-01": "leaf-01-leaf-02-mlag", "leaf-02": "leaf-01-leaf-02-mlag"}
+
+        plan = self._plan_both(device_map, mlag_pairs)
+
+        overlay = {b["name"]: b for b in plan.bgp_processes if b.get("process_role") == "overlay"}
+        assert set(overlay) == {"leaf-01-bgp-overlay", "leaf-02-bgp-overlay", "leaf-03-bgp-overlay"}
+        assert overlay["leaf-03-bgp-overlay"]["local_as"].device == "leaf-03"
+
+    def test_no_mlag_pairs_at_all_still_plans_every_overlay_process(self) -> None:
+        device_map = _device_map_with_roles(["leaf-01", "leaf-02"])
+
+        plan = self._plan_both(device_map, None)
+
+        overlay = [b for b in plan.bgp_processes if b.get("process_role") == "overlay"]
+        assert sorted(b["name"] for b in overlay) == ["leaf-01-bgp-overlay", "leaf-02-bgp-overlay"]
+        assert {b["local_as"].device for b in overlay} == {"leaf-01", "leaf-02"}
+
+    def test_existing_pair_asn_id_is_reused_by_the_overlay(self) -> None:
+        """On a fabric that ran before, the group's AS is an ``_existing_id``
+        rather than a pending pool draw — the overlay has to pick that up too."""
+        device_map = _device_map_with_roles(["leaf-01", "leaf-02"])
+        mlag_pairs = {"leaf-01": "leaf-01-leaf-02-mlag", "leaf-02": "leaf-01-leaf-02-mlag"}
+        planner = _planner()
+        plan = RoutingPlan()
+        planner._plan_ebgp_underlay(
+            plan,
+            device_map,
+            interfaces=[],
+            existing_as_by_device={"leaf-01": "as-id-shared", "leaf-02": "as-id-shared"},
+            asn_pool="pool-1",
+            mlag_pairs=mlag_pairs,
+        )
+        planner._plan_overlay_processes(plan, device_map, None, mlag_pairs=mlag_pairs)
+
+        overlay = [b for b in plan.bgp_processes if b.get("process_role") == "overlay"]
+        assert len(overlay) == 2
+        for bgp in overlay:
+            assert bgp["local_as"] == {"id": "as-id-shared"}
+
+    def test_ibgp_overlay_ignores_mlag_pairs(self) -> None:
+        """Under an iBGP overlay every device shares the one fabric ASN, so the
+        group lookup is bypassed entirely."""
+        device_map = _device_map_with_roles(["leaf-01", "leaf-02"])
+        mlag_pairs = {"leaf-01": "leaf-01-leaf-02-mlag", "leaf-02": "leaf-01-leaf-02-mlag"}
+        planner = _planner()
+        plan = RoutingPlan()
+        planner._plan_overlay_processes(plan, device_map, "as-overlay-1", mlag_pairs=mlag_pairs)
+
+        assert len(plan.bgp_processes) == 2
+        for bgp in plan.bgp_processes:
+            assert bgp["local_as"] == {"id": "as-overlay-1"}

@@ -216,11 +216,16 @@ class TestDC1Segments(TestInfrahubDockerWithClient):
 
         deployments = result["deployments"]
 
-        # Each VXLAN segment should have a VNI from pool range 10001-16777215
+        # Each VXLAN segment should have an L2 VNI from pool range 10001-49999.
+        # The upper bound is not the 24-bit VNI maximum for two reasons: the EVPN
+        # RD/RT are derived from the VNI and only have a 16-bit assigned-number
+        # field to put it in, and the range must stay disjoint from the L3 VNI
+        # pool at 50001-59999 because the VNI space is flat (see
+        # generators/topology/dc.py's vni-pool comment).
         vnis = [d["vni"] for d in deployments if d["vni"] is not None]
         assert len(vnis) >= 2, f"Expected VNI for VXLAN segments, got {len(vnis)}"
         for vni in vnis:
-            assert 10001 <= vni <= 16777215, f"VNI {vni} outside pool range"
+            assert 10001 <= vni <= 49999, f"VNI {vni} outside L2 pool range"
 
         # All should be in provisioning status
         for d in deployments:

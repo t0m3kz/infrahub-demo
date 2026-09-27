@@ -53,6 +53,8 @@
       "holdtime": "180",
       "keepalive": "60",
       "local_addr": "10.1.0.1",
+      "local_asn": "65001",
+      "local_asn_no_prepend_replace_as": "UNSUPPORTED_IN_CONFIGDB \u2014 set via FRR vtysh",
       "name": "UNDERLAY-PEERS"
     },
     "10.1.0.2": {
@@ -62,6 +64,8 @@
       "holdtime": "180",
       "keepalive": "60",
       "local_addr": "10.1.0.3",
+      "local_asn": "65001",
+      "local_asn_no_prepend_replace_as": "UNSUPPORTED_IN_CONFIGDB \u2014 set via FRR vtysh",
       "name": "UNDERLAY-PEERS"
     }
   },

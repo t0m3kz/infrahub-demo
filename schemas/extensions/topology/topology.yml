@@ -126,6 +126,20 @@ generics:
       - name: name
         kind: Text
         order_weight: 100
+
+      # Symmetric IRB needs the SAME gateway MAC on every VTEP: a host ARPs for
+      # its gateway once and keeps that MAC as it moves or as its flows land on
+      # a different leaf. If two leaves answer with different MACs, traffic
+      # blackholes on the leaf that did not answer. So this is a fabric-wide
+      # constant, exactly like evpn_rt_as below, and belongs in the same place.
+      # Optional: unset means transforms/helpers/vxlan.py's documented default.
+      - name: evpn_anycast_gateway_mac
+        label: EVPN Anycast Gateway MAC
+        kind: Text
+        optional: true
+        order_weight: 7650
+        regex: "^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$"
+        description: "Shared anycast-gateway MAC for every VTEP in this fabric (colon-separated). Must be identical fabric-wide."  # yamllint disable-line rule:line-length
     relationships:
       - name: vlan_pool
         peer: CoreNumberPool
@@ -149,6 +163,24 @@ generics:
         order_weight: 7500
         on_delete: cascade
         description: "L3 VNI pool for VRF allocation. Used when namespace.l3_vni is null."
+
+      # EVPN route-targets must be identical on every VTEP in the fabric or the
+      # VTEPs never import each other's routes. Under ebgp-ibgp/ospf-ibgp the
+      # shared overlay ASN already provides that constant, but under ebgp-ebgp
+      # every VTEP runs its own ASN, so deriving the RT from a device's local
+      # ASN silently breaks forwarding. This holds the ONE administrative ASN
+      # the whole fabric stamps into the RT admin field, independent of routing
+      # strategy. Lives beside the VNI pools because it is part of the same
+      # fabric-wide EVPN numbering decision.
+      - name: evpn_rt_as
+        label: EVPN Route-Target ASN
+        peer: RoutingAutonomousSystem
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "segment_hosting__evpn_rt_as"
+        order_weight: 7600
+        description: "Fabric-wide administrative ASN stamped into EVPN route-targets. Must be identical for every VTEP in the fabric."  # yamllint disable-line rule:line-length
 
 nodes:
   - name: Label

@@ -91,18 +91,28 @@ interface {{ interface.name }}
 feature {{ feature }}
 {%- endfor %}
 !
+{%- include 'common/cisco_nxos_vxlan_vrf.j2' %}
 interface {{ vxlan.nve_interface }}
 {%- if vxlan.vtep.ipv4 %}
   source-interface {{ vxlan.vtep.source_interface }}
 {%- endif %}
+{%- if vxlan.evpn and vxlan.evpn.enabled %}
+  host-reachability protocol bgp
+{%- endif %}
 {%- for mapping in vxlan.l2_vni_mappings %}
   member vni {{ mapping.vni }}
+    {%- if mapping.arp_suppression %}
+    suppress-arp
+    {%- endif %}
     {%- if vxlan.evpn and vxlan.evpn.enabled %}
     ingress-replication protocol bgp
     {%- elif vxlan.flooding == "static" and vxlan.remote_vteps %}
     ingress-replication protocol static
       peer-list {{ vxlan.remote_vteps | join(' ') }}
     {%- endif %}
+{%- endfor %}
+{%- for mapping in vxlan.l3_vni_mappings %}
+  member vni {{ mapping.l3_vni }} associate-vrf
 {%- endfor %}
   no shutdown
 !
@@ -113,9 +123,13 @@ interface {{ vxlan.nve_interface }}
 evpn
 {%- for mapping in vxlan.l2_vni_mappings %}
   vni {{ mapping.vni }} l2
-    rd {{ vxlan.evpn.rd_format }}
-    route-target import {{ bgp[0].local_as.asn }}:{{ mapping.vni }}
-    route-target export {{ bgp[0].local_as.asn }}:{{ mapping.vni }}
+    {%- if vxlan.evpn.rd_format %}
+    rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.vni | string) }}
+    {%- endif %}
+    {%- if vxlan.evpn.rt_format %}
+    route-target import {{ vxlan.evpn.rt_format | replace('{vni}', mapping.vni | string) }}
+    route-target export {{ vxlan.evpn.rt_format | replace('{vni}', mapping.vni | string) }}
+    {%- endif %}
 {%- endfor %}
 !
 {%- endif %}
@@ -126,12 +140,20 @@ evpn
 vlan {{ mapping.vlan_id }}
   vn-segment {{ mapping.vni }}
 {%- endfor %}
+{%- include 'common/cisco_nxos_l3vni_svi.j2' %}
 {%- endif %}
 !
 ! Route-maps
 route-map RM-CONN-2-BGP permit 10
   match interface {{ _lb.name }}
 !
+{%- if vxlan and vxlan.l3_vni_mappings %}
+{#- Permit-all, deliberately unqualified: inside a tenant VRF everything that is
+    directly connected (the anycast-gateway SVIs) is exactly what should become an
+    EVPN type-5 route. Referenced from cisco_nxos_bgp.j2's per-VRF block. #}
+route-map RM-VRF-DIRECT-2-EVPN permit 10
+!
+{%- endif %}
 {%- if vxlan and vxlan.anycast_gateway and vxlan.anycast_gateway.enabled %}
 ! Anycast Gateway — identical MAC on every leaf/border-leaf in the fabric
 fabric forwarding anycast-gateway-mac {{ vxlan.anycast_gateway.mac | replace(':', '') | replace('.', '') }}

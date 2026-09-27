@@ -2,6 +2,7 @@ fragment ManagedBGPServiceFields on ManagedBGP {
   multipath { value }
   graceful_restart { value }
   confederation_identifier { value }
+  process_role { value }
   local_as { node { asn { value } } }
   router_id { node { address { value } } }
   peerings {
@@ -9,6 +10,7 @@ fragment ManagedBGPServiceFields on ManagedBGP {
       node {
         id
         name { value }
+        peering_role { value }
         session_type { value }
         bfd_enabled { value }
         send_community { value }

@@ -140,9 +140,13 @@ router bgp {{ bgp[0].local_as.asn }}
     ! L2 VNI EVPN Configuration
 {%- for mapping in vxlan.l2_vni_mappings %}
     vni {{ mapping.vni }}
+      {%- if vxlan.evpn.rd_format %}
       rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.vni | string) }}
-      route-target import {{ bgp[0].local_as.asn }}:{{ mapping.vni }}
-      route-target export {{ bgp[0].local_as.asn }}:{{ mapping.vni }}
+      {%- endif %}
+      {%- if vxlan.evpn.rt_format %}
+      route-target import {{ vxlan.evpn.rt_format | replace('{vni}', mapping.vni | string) }}
+      route-target export {{ vxlan.evpn.rt_format | replace('{vni}', mapping.vni | string) }}
+      {%- endif %}
 {%- endfor %}
 {%- endif %}
 {%- if vxlan.l3_vni_mappings %}
@@ -150,9 +154,13 @@ router bgp {{ bgp[0].local_as.asn }}
     ! L3 VNI EVPN Configuration (VRF-aware)
 {%- for mapping in vxlan.l3_vni_mappings %}
     vni {{ mapping.l3_vni }}
+      {%- if vxlan.evpn.rd_format %}
       rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.l3_vni | string) }}
-      route-target import {{ bgp[0].local_as.asn }}:{{ mapping.l3_vni }}
-      route-target export {{ bgp[0].local_as.asn }}:{{ mapping.l3_vni }}
+      {%- endif %}
+      {%- if vxlan.evpn.rt_format %}
+      route-target import {{ vxlan.evpn.rt_format | replace('{vni}', mapping.l3_vni | string) }}
+      route-target export {{ vxlan.evpn.rt_format | replace('{vni}', mapping.l3_vni | string) }}
+      {%- endif %}
 {%- endfor %}
 {%- endif %}
   exit-address-family

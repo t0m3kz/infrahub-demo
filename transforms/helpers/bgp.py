@@ -6,6 +6,16 @@ from typing import Any, cast
 
 _log = logging.getLogger(__name__)
 
+# Roles that relay EVPN routes between VTEPs rather than only originating their
+# own. Spellings are the hyphenated ones from the role dropdown in
+# schemas/base/dcim.yml; `super_spine` is tolerated because older data uses it.
+#
+# `border-spine` is included even though it is itself a VTEP (a collapsed
+# spine + border-leaf for micro-fabrics): it relays other VTEPs' routes too,
+# and both knobs gated on this set only affect re-advertised routes, never the
+# device's own originated ones.
+_EVPN_RELAY_ROLES = frozenset({"spine", "super-spine", "super_spine", "hyper-spine", "border-spine"})
+
 
 def _sort_key_ip(ip_obj: Any) -> tuple:
     """Return a sort key for an IP address object (dict or string).
@@ -313,6 +323,19 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
 
     if overlay_ebgp:
         pg_name = "EVPN-OVERLAY"
+        # Under ebgp-ebgp the spine tier does not reflect EVPN routes, it
+        # *re-advertises* them — and normal eBGP behaviour is to rewrite the BGP
+        # next-hop to the advertising router's own address. A spine is not a
+        # VTEP and has no `interface nve1`, so without next-hop-unchanged every
+        # remote VTEP learns the spine's loopback as the tunnel endpoint and
+        # builds a VXLAN tunnel to a device that cannot terminate it: the
+        # sessions come up, the routes are present, and traffic is silently
+        # blackholed. RFC 8365 §5.1.2.1.
+        #
+        # Only the relaying tier needs it. A leaf/border-leaf originates its own
+        # routes with itself as the next-hop, so setting it there would be
+        # wrong (it would preserve a next-hop the leaf must own).
+        is_evpn_relay = device_role in _EVPN_RELAY_ROLES
         peer_groups.append(
             {
                 "name": pg_name,
@@ -321,6 +344,11 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
                 "send_community": any(bool(s.get("send_community")) for s in overlay_ebgp),
                 "send_extended_community": any(bool(s.get("send_extended_community")) for s in overlay_ebgp),
                 "remove_private_as": any(bool(s.get("remove_private_as")) for s in overlay_ebgp),
+                "next_hop_unchanged": is_evpn_relay,
+                # A spine carries no VRF and no L2VNI, so it has no import
+                # route-target and would discard the very EVPN NLRI it exists to
+                # relay. `retain route-target all` keeps them.
+                "retain_route_target_all": is_evpn_relay,
                 "ebgp_multihop": 255,
                 "address_families": ["evpn"],
             }
@@ -330,6 +358,82 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
 
     peer_groups.sort(key=lambda pg: pg.get("name", ""))
     return peer_groups
+
+
+def _collapse_to_single_instance(configs: list[dict[str, Any]], device_name: str = "") -> list[dict[str, Any]]:
+    """Reduce a device's BGP configs to the one instance a router can actually run.
+
+    Every platform this project targets allows exactly ONE BGP ASN per routing
+    instance. Under ebgp-ebgp the merge by ASN above already leaves one config,
+    because the underlay and overlay processes share the device's ASN. Under
+    ebgp-ibgp they do not: the underlay is eBGP on a per-device ASN (65001) and
+    the overlay is iBGP on the fabric-wide ASN (65000), so two configs survive
+    and the templates would emit two `router bgp` stanzas. The second one is
+    rejected by the device, which means the whole push fails — or worse, on a
+    platform that accepts the first and ignores the rest, half the routing
+    silently disappears.
+
+    The instance ASN has to be the OVERLAY one. It is the shared ASN, so overlay
+    sessions stay natively iBGP and the route-reflector semantics the EVPN design
+    depends on keep working. The underlay's per-device ASN then moves onto its own
+    sessions as ``local_as_override``, which templates render as
+    ``local-as <asn> no-prepend replace-as``: the eBGP neighbour still sees 65001
+    exactly as its own ``remote-as 65001`` expects, and 65000 never leaks into the
+    underlay AS-path. Doing it the other way round — instance on the underlay ASN,
+    override on the overlay sessions — would turn the EVPN sessions into eBGP and
+    break route reflection.
+
+    Returns a single-element list, or the input unchanged when there is nothing to
+    collapse.
+    """
+    if len(configs) <= 1:
+        return configs
+
+    def carries_evpn(cfg: dict[str, Any]) -> bool:
+        return any("evpn" in (s.get("address_families") or []) for s in cfg.get("sessions", []))
+
+    evpn_configs = [c for c in configs if carries_evpn(c)]
+    if len(evpn_configs) == 1:
+        anchor = evpn_configs[0]
+    else:
+        # No process carries EVPN, or several do (neither should happen for the
+        # strategies this project generates). Anchoring on the lowest ASN is
+        # arbitrary but still produces ONE valid instance instead of N invalid
+        # ones — say so, because the choice may not be the intended one.
+        anchor = configs[0]
+        _log.error(
+            "%s: %d BGP processes with different ASNs and %s carries the EVPN address-family, "
+            "so the BGP instance ASN cannot be determined from the overlay. Anchoring on the "
+            "lowest ASN %s and rendering the others as local-as overrides; verify the result.",
+            device_name or "device",
+            len(configs),
+            "none" if not evpn_configs else f"{len(evpn_configs)} of them",
+            cast(dict[str, Any], anchor["local_as"])["asn"],
+        )
+
+    anchor_asn = cast(dict[str, Any], anchor["local_as"])["asn"]
+    for cfg in configs:
+        if cfg is anchor:
+            continue
+        override = cast(dict[str, Any], cfg["local_as"])
+        for session in cfg.get("sessions", []):
+            # The neighbour's `remote-as` was built from this process's ASN, so
+            # the session has to keep presenting it even though the instance now
+            # runs under anchor_asn.
+            session["local_as_override"] = override
+            anchor["sessions"].append(session)
+        _log.info(
+            "%s: folded BGP process %s (AS %s) into the AS %s instance; its %d session(s) "
+            "render with local-as %s no-prepend replace-as.",
+            device_name or "device",
+            cfg.get("name") or "?",
+            override.get("asn"),
+            anchor_asn,
+            len(cfg.get("sessions", [])),
+            override.get("asn"),
+        )
+
+    return [anchor]
 
 
 def get_bgp_profile(
@@ -409,6 +513,9 @@ def get_bgp_profile(
 
     # Sort BGP configs by local ASN for deterministic output
     merged.sort(key=lambda c: cast(dict[str, Any], c["local_as"])["asn"])
+
+    # Collapse distinct ASNs onto one BGP instance (ebgp-ibgp).
+    merged = _collapse_to_single_instance(merged, device_name=device_name)
 
     # Assign peer groups to sessions with common attributes
     for bgp_config in merged:

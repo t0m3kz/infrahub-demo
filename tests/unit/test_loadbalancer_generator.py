@@ -38,7 +38,12 @@ def _vip(
         "hostname": hostname,
         "snat_enabled": snat_enabled,
         "backend_segment": backend_segment if backend_segment is not None else _vlan_segment(),
-        "load_balancer": {"id": "lbha-1", "capabilities": devices or [{"id": "lb-01", "name": "lb-01"}]},
+        # `devices is None` (the default) means "give me one device"; an explicitly
+        # passed [] must stay empty, or the no-devices branch is never exercised.
+        "load_balancer": {
+            "id": "lbha-1",
+            "capabilities": [{"id": "lb-01", "name": "lb-01"}] if devices is None else devices,
+        },
     }
 
 
@@ -89,6 +94,10 @@ class TestGenerateNoOps:
         data = {"LoadbalancerVIP": [_vip(devices=[])]}
         asyncio.run(gen.generate(data))
         gen.logger.error.assert_called()
+        # Bail out at the devices check, before any write: an HA domain with no
+        # members has nothing to wire, and creating the backend pool anyway would
+        # leave an orphan pool behind on every run.
+        gen.client.create.assert_not_called()
 
     def test_no_vlan_id_logs_error(self) -> None:
         gen = _gen()
@@ -212,3 +221,27 @@ class TestEnsureBackendPool:
 
         assert result is None
         gen.logger.error.assert_called()
+
+
+class TestHostClassComposition:
+    """CablingMixin documents ``deployment_id``, ``_resolve_pool`` and
+    ``_retry_delay`` as host-class requirements that CommonGenerator supplies.
+    This generator only calls ``find_role_interface`` and
+    ``ensure_vlan_subinterface``, so inheriting InfrahubGenerator directly
+    happened to work — but any later call into ``create_cabling`` would have
+    raised AttributeError at runtime, in a generator, against live data.
+    """
+
+    def test_composes_common_generator(self) -> None:
+        from generators.common import CommonGenerator
+
+        assert issubclass(LoadbalancerBackendNexthopGenerator, CommonGenerator)
+
+    def test_composes_the_cabling_mixin(self) -> None:
+        from generators.connections import CablingMixin
+
+        assert issubclass(LoadbalancerBackendNexthopGenerator, CablingMixin)
+
+    def test_cabling_mixin_host_requirements_are_satisfied(self) -> None:
+        for attribute in ("_resolve_pool", "_retry_delay"):
+            assert hasattr(LoadbalancerBackendNexthopGenerator, attribute), attribute

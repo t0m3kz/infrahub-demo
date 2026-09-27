@@ -56,6 +56,49 @@ from transforms.helpers.vxlan import (
 from utils.data_cleaning import clean_data, get_data
 
 
+def _segment_hosting_candidates(deployment: Any) -> list[dict]:
+    """Deployments that may carry TopologySegmentHosting, nearest first.
+
+    Only TopologyDataCenter and TopologyColocationMetro inherit
+    TopologySegmentHosting: a border-leaf's deployment IS the DC, but a leaf's
+    deployment is the pod, one hop below it. Shaped by
+    queries/fragments/evpn_fabric.gql's EvpnRtAsOnDeploymentFields.
+    """
+    parent = deployment.get("parent") if isinstance(deployment, dict) else None
+    return [c for c in (deployment, parent) if isinstance(c, dict)]
+
+
+def _fabric_rt_asn(deployment: Any) -> int | None:
+    """Return the fabric-wide EVPN route-target admin ASN, if the fabric has one.
+
+    Reads ``TopologySegmentHosting.evpn_rt_as`` off the device's own deployment.
+    Every VTEP in a fabric resolves the same value here, which is the whole
+    point: route-targets must match fabric-wide or VTEPs never import each
+    other's routes. Returns None when unset, and get_vxlan_config falls back to
+    the overlay process ASN.
+    """
+    for candidate in _segment_hosting_candidates(deployment):
+        asn = (candidate.get("evpn_rt_as") or {}).get("asn")
+        if isinstance(asn, int):
+            return asn
+    return None
+
+
+def _fabric_anycast_mac(deployment: Any) -> str | None:
+    """Return the fabric-wide anycast-gateway MAC, if the fabric sets one.
+
+    Reads ``TopologySegmentHosting.evpn_anycast_gateway_mac``. Same fabric-wide
+    resolution as _fabric_rt_asn and for the same reason: a host caches its
+    gateway MAC, so two VTEPs answering with different MACs blackhole traffic on
+    whichever one did not answer. None means get_vxlan_config uses its default.
+    """
+    for candidate in _segment_hosting_candidates(deployment):
+        mac = candidate.get("evpn_anycast_gateway_mac")
+        if isinstance(mac, str) and mac.strip():
+            return mac.strip()
+    return None
+
+
 def _get_sgt_rules(activations: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
     """Derive SecurityTagRule list from segment activations.
 
@@ -258,7 +301,14 @@ class BaseDeviceTransform(InfrahubTransform):
 
         return {
             "vlans": vlans,
-            "vxlan": get_vxlan_config(data, platform_name, device_role=self.device_role, activations=activations),
+            "vxlan": get_vxlan_config(
+                data,
+                platform_name,
+                device_role=self.device_role,
+                activations=activations,
+                fabric_rt_asn=_fabric_rt_asn(data.get("deployment")),
+                fabric_anycast_mac=_fabric_anycast_mac(data.get("deployment")),
+            ),
             "acls": get_acls(activations=activations),
             "vrf_gateways": vrf_gateways,
             "sgt_rules": sgt_rules,

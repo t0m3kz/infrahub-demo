@@ -139,6 +139,16 @@
 {%- if session.get('remote_device') -%}
 {%- set _ = neighbor_entry.update({'description': session.remote_device}) -%}
 {%- endif -%}
+{#- local-as override (ebgp-ibgp) — see _bgp_local_as_eos.j2. SONiC's config-DB
+    BGP_NEIGHBOR table carries the ASN only; the no-prepend/replace-as behaviour
+    has no key here, so record the value and say plainly that it is incomplete
+    rather than emit something that looks right and is not. -#}
+{%- if session.get('local_as_override') -%}
+{%- set _ = neighbor_entry.update({
+  'local_asn': session.local_as_override.asn|string,
+  'local_asn_no_prepend_replace_as': 'UNSUPPORTED_IN_CONFIGDB — set via FRR vtysh'
+}) -%}
+{%- endif -%}
 {%- if session.peer_group is not defined -%}
 {%- if session.get('send_extended_community') -%}
 {%- set _ = neighbor_entry.update({'send_community': 'extended'}) -%}

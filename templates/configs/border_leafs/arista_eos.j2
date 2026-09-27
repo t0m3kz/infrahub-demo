@@ -11,6 +11,13 @@
 !
 
 hostname {{ hostname }}
+{%- if vxlan and vxlan.enabled and vxlan.evpn and vxlan.evpn.enabled %}
+
+! EVPN on EOS requires the multi-agent routing model (the legacy ribd model has
+! no EVPN address-family at all). Changing it reloads the routing agents, so it
+! must be present from the first push, not added later.
+service routing protocols model multi-agent
+{%- endif %}
 
 ! Configure spanning tree mode
 spanning-tree mode mstp
@@ -99,6 +106,26 @@ interface {{ vxlan.interface }}
 {%- endfor %}
 {%- endif %}
 !
+{%- if vxlan.l3_vni_mappings %}
+!
+! VRF Definitions (Microsegmentation)
+!
+{#- Must come before `router bgp / vrf <name>` below: on EOS that stanza is
+    rejected if the VRF has not been instantiated. The border-leaf previously
+    emitted the BGP VRF block and the `vxlan vrf ... vni` line without ever
+    creating the VRF. -#}
+{%- for mapping in vxlan.l3_vni_mappings %}
+vrf instance {{ mapping.vrf_name }}
+   description {{ mapping.description | default('Tenant VRF for microsegmentation') }}
+   {%- if vxlan.evpn.rd_format %}
+   rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.l3_vni | string) }}
+   {%- endif %}
+!
+{#- A `vrf instance` on EOS starts with routing DISABLED — see the leaf template. -#}
+ip routing vrf {{ mapping.vrf_name }}
+!
+{%- endfor %}
+{%- endif %}
 {%- if vxlan.evpn and vxlan.evpn.enabled and bgp %}
 !
 ! EVPN Configuration (L2 + L3 VNI)
@@ -110,8 +137,12 @@ router bgp {{ bgp_config.local_as.asn }}
    ! L2 EVPN (VLAN-based)
 {%- for mapping in vxlan.l2_vni_mappings %}
    vlan {{ mapping.vlan_id }}
+      {%- if vxlan.evpn.rd_format %}
       rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.vni | string) }}
+      {%- endif %}
+      {%- if vxlan.evpn.rt_format %}
       route-target both {{ vxlan.evpn.rt_format | replace('{vni}', mapping.vni | string) }}
+      {%- endif %}
       redistribute learned
 {%- endfor %}
 {%- endif %}
@@ -120,9 +151,13 @@ router bgp {{ bgp_config.local_as.asn }}
    ! L3 EVPN (VRF-based for microsegmentation)
 {%- for mapping in vxlan.l3_vni_mappings %}
    vrf {{ mapping.vrf_name }}
+      {%- if vxlan.evpn.rd_format %}
       rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.l3_vni | string) }}
+      {%- endif %}
+      {%- if vxlan.evpn.rt_format %}
       route-target import evpn {{ vxlan.evpn.rt_format | replace('{vni}', mapping.l3_vni | string) }}
       route-target export evpn {{ vxlan.evpn.rt_format | replace('{vni}', mapping.l3_vni | string) }}
+      {%- endif %}
       redistribute connected
 {%- endfor %}
 {%- endif %}

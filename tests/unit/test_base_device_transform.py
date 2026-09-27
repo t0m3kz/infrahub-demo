@@ -405,6 +405,94 @@ class TestTransformDataRouting:
 
 
 # ---------------------------------------------------------------------------
+# _resolve_own_vlan_domain_id / _collect_activations_from_interfaces
+# ---------------------------------------------------------------------------
+
+
+class TestResolveOwnVlanDomainId:
+    """A local VLAN ID is allocated per VLAN DOMAIN, not DC-wide. An MLAG pair is
+    one domain — both members must resolve to the ManagedMLAG id, or each half
+    picks a different local VLAN for the same stretched segment and the
+    port-channel between them carries mismatched tags.
+    """
+
+    def test_mlag_capability_wins_over_the_device_id(self) -> None:
+        resolved = BaseDeviceTransform._resolve_own_vlan_domain_id(
+            "dev-leaf-01", [{"typename": "ManagedMLAG", "id": "mlag-domain-1"}]
+        )
+        assert resolved == "mlag-domain-1"
+
+    def test_both_members_of_a_pair_resolve_to_the_same_domain(self) -> None:
+        caps = [{"typename": "ManagedMLAG", "id": "mlag-domain-1"}]
+        assert BaseDeviceTransform._resolve_own_vlan_domain_id(
+            "dev-leaf-01", caps
+        ) == BaseDeviceTransform._resolve_own_vlan_domain_id("dev-leaf-02", caps)
+
+    def test_standalone_device_is_its_own_domain(self) -> None:
+        resolved = BaseDeviceTransform._resolve_own_vlan_domain_id(
+            "dev-leaf-01", [{"typename": "ManagedBGP", "id": "bgp-1"}]
+        )
+        assert resolved == "dev-leaf-01"
+
+    def test_no_capabilities_falls_back_to_the_device_id(self) -> None:
+        assert BaseDeviceTransform._resolve_own_vlan_domain_id("dev-leaf-01", []) == "dev-leaf-01"
+
+    def test_mlag_capability_without_an_id_is_ignored(self) -> None:
+        """An MLAG capability the query did not select an id for would otherwise
+        resolve the domain to None and silently drop every VXLAN segment."""
+        resolved = BaseDeviceTransform._resolve_own_vlan_domain_id("dev-leaf-01", [{"typename": "ManagedMLAG"}])
+        assert resolved == "dev-leaf-01"
+
+
+class TestCollectActivationsVlanDomainMatching:
+    """A VXLAN segment's local vlan_id comes from the vlan_domain_segments entry
+    matching THIS device's own domain."""
+
+    @staticmethod
+    def _vxlan_iface(vlan_domain_id: str, vlan_id: int = 100) -> dict:
+        return {
+            "interface_capabilities": [
+                {
+                    "typename": "ManagedVxlanSegment",
+                    "id": "seg-1",
+                    "name": "tenant-a-web",
+                    "segment_deployments": [{"vni": 10100}],
+                    "vlan_domain_segments": [{"vlan_domain": {"id": vlan_domain_id}, "vlan_id": vlan_id}],
+                }
+            ]
+        }
+
+    def test_mlag_pair_reads_the_domain_entry_not_a_device_entry(self) -> None:
+        t = _make_transform("leaf")
+        activations = t._collect_activations_from_interfaces(
+            [self._vxlan_iface("mlag-domain-1", vlan_id=250)],
+            device_id="dev-leaf-01",
+            device_capabilities=[{"typename": "ManagedMLAG", "id": "mlag-domain-1"}],
+        )
+        assert [a["vlan_id"] for a in activations] == [250]
+
+    def test_standalone_device_reads_its_own_entry(self) -> None:
+        t = _make_transform("leaf")
+        activations = t._collect_activations_from_interfaces(
+            [self._vxlan_iface("dev-leaf-01", vlan_id=110)],
+            device_id="dev-leaf-01",
+            device_capabilities=[],
+        )
+        assert [a["vlan_id"] for a in activations] == [110]
+
+    def test_segment_with_no_entry_for_this_domain_is_skipped(self) -> None:
+        """Allocation has not converged for this domain yet. Skipping beats
+        rendering an SVI on a VLAN this device never allocated."""
+        t = _make_transform("leaf")
+        activations = t._collect_activations_from_interfaces(
+            [self._vxlan_iface("some-other-domain")],
+            device_id="dev-leaf-01",
+            device_capabilities=[],
+        )
+        assert activations == []
+
+
+# ---------------------------------------------------------------------------
 # ToR class attributes
 # ---------------------------------------------------------------------------
 

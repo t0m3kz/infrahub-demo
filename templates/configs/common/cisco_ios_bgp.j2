@@ -54,8 +54,16 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- if not session.get('remote_as_from_peer_group') %}
   neighbor {{ remote_ip }} remote-as {{ session.remote_as.asn }}
 {%- endif %}
+{#- See _bgp_local_as_eos.j2 for why this exists and why both keywords are
+    required; classic IOS spells it the same way. #}
+{%- if session.get('local_as_override') %}
+  neighbor {{ remote_ip }} local-as {{ session.local_as_override.asn }} no-prepend replace-as
+{%- endif %}
 {%- else %}
   neighbor {{ remote_ip }} remote-as {{ session.remote_as.asn }}
+{%- if session.get('local_as_override') %}
+  neighbor {{ remote_ip }} local-as {{ session.local_as_override.asn }} no-prepend replace-as
+{%- endif %}
 {%- if session.get('ttl') != 1 %}
   neighbor {{ remote_ip }} update-source Loopback0
 {%- endif %}

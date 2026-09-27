@@ -32,6 +32,7 @@ from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
 from ..connections import CablingMixin
+from ..helpers.pools import CUSTOMER_VLAN_ID_MAX, CUSTOMER_VLAN_ID_MIN
 from ..helpers.rules import RulesPlanner
 from ..named_objects import GetOrCreateByNameMixin
 from ..pools import PoolMixin
@@ -415,8 +416,8 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
         await self.upsert_number_pool(
             pool_name=f"{domain_name}-vlan-pool",
             description=f"Local VLAN ID pool for standalone VLAN domain {domain_name}",
-            start_range=100,
-            end_range=3999,
+            start_range=CUSTOMER_VLAN_ID_MIN,
+            end_range=CUSTOMER_VLAN_ID_MAX,
             node="ManagedVlanDomainSegment",
             node_attribute="vlan_id",
             parent_kind="ManagedStandaloneVlanDomain",
@@ -571,8 +572,8 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
             pool_obj = await self.upsert_number_pool(
                 pool_name=f"{ha_id}-inline-vlan-pool",
                 description=f"Local VLAN ID pool for inline-terminated segments on HA {ha_id}",
-                start_range=100,
-                end_range=3999,
+                start_range=CUSTOMER_VLAN_ID_MIN,
+                end_range=CUSTOMER_VLAN_ID_MAX,
                 node="ManagedHA",
                 node_attribute="inline_vlan_id",
                 parent_kind="ManagedHA",

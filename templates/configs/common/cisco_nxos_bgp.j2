@@ -76,12 +76,27 @@ router bgp {{ bgp_config.local_as.asn }}
   !
 {%- endif %}
   address-family l2vpn evpn
+{#- A relaying tier (spine/super-spine) has no VRF and no L2VNI, so it holds no
+    import route-target and NX-OS would discard the EVPN NLRI it exists to pass
+    on. Set by transforms/helpers/bgp.py on the overlay peer group. -#}
+{%- set rt_ns = namespace(retain=false) %}
+{%- for pg in bgp_config.peer_groups | default([]) %}
+{%- if pg.get('retain_route_target_all') %}{% set rt_ns.retain = true %}{% endif %}
+{%- endfor %}
+{%- if rt_ns.retain %}
+    retain route-target all
+{%- endif %}
   !
 {%- for session in bgp_config.sessions %}
 {%- set is_unnumbered = session.get('interface_name') and not session.get('remote_ip') %}
 {%- set neighbor_id = session.interface_name if is_unnumbered else session.remote_ip.address.split('/')[0] %}
   neighbor {{ neighbor_id }}
     remote-as {{ session.remote_as.asn }}
+{#- See _bgp_local_as_eos.j2 for why this exists and why both keywords are
+    required; NX-OS spells it the same way. #}
+{%- if session.get('local_as_override') %}
+    local-as {{ session.local_as_override.asn }} no-prepend replace-as
+{%- endif %}
 {%- if session.get('remote_device') %}
     description {{ session.remote_device }}
 {%- endif %}
@@ -175,6 +190,36 @@ router bgp {{ bgp_config.local_as.asn }}
     !
 {%- endif %}
 {%- endfor %}
+{#- Per-tenant VRF address-family: the other half of symmetric IRB.
+
+    `vrf context` (cisco_nxos_vxlan_vrf.j2) gives the VRF its L3 VNI and route-
+    targets; this block is what actually puts the VRF's prefixes into EVPN as
+    type-5 routes. `advertise l2vpn evpn` alone is not enough — the prefixes have
+    to be in the VRF's BGP table first, which is what `redistribute direct` does.
+    RM-CONN-2-BGP cannot be reused here: it matches loopback0, which lives in the
+    default VRF, so it would select nothing and the tenant subnets would never
+    leave this leaf.
+
+    Gated on this process actually carrying the EVPN address-family. Under
+    ebgp-ibgp a device has two `router bgp` stanzas (underlay ASN + overlay ASN)
+    and only the overlay one may own the tenant VRFs; emitting under both would
+    make NX-OS reject the second. `vxlan` is undefined on spine templates that
+    include this partial — non-strict Undefined makes that falsy, not an error. -#}
+{%- if vxlan and vxlan.l3_vni_mappings %}
+{%- set evpn_ns = namespace(carries_evpn=false) %}
+{%- for session in bgp_config.sessions %}
+{%- if 'evpn' in (session.address_families | default([])) %}{% set evpn_ns.carries_evpn = true %}{% endif %}
+{%- endfor %}
+{%- if evpn_ns.carries_evpn %}
+{%- for mapping in vxlan.l3_vni_mappings %}
+  vrf {{ mapping.vrf_name }}
+    address-family ipv4 unicast
+      advertise l2vpn evpn
+      redistribute direct route-map RM-VRF-DIRECT-2-EVPN
+  !
+{%- endfor %}
+{%- endif %}
+{%- endif %}
 !
 {%- endfor %}
 {%- else %}

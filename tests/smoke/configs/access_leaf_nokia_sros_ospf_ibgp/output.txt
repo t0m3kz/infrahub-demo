@@ -14,6 +14,10 @@ A admin configure router "Base" interface "system" ipv4 primary address "10.0.0.
 A admin configure service vprn 1000 route-distinguisher auto
 A admin configure service vprn 1000 vrf-import policy "TENANT_IMPORT"
 A admin configure service vprn 1000 vrf-export policy "TENANT_EXPORT"
+A admin configure service vpls  customer 1 admin-state enable
+A admin configure service vpls  description "Customer-A"
+A admin configure service vpls  customer 1 admin-state enable
+A admin configure service vpls  description "Customer-A"
 A admin configure port "Ethernet1" admin-state enable
 A admin configure port "Ethernet1" mtu 9212
 A admin configure router "Base" interface "Ethernet1" admin-state enable
@@ -29,6 +33,12 @@ A admin configure router "Base" interface "Ethernet2" mtu 9000
 A admin configure router "Base" interface "Ethernet2" description "to spine-02"
 A admin configure router "Base" interface "Ethernet2" ipv4 admin-state enable
 A admin configure router "Base" interface "Ethernet2" ipv4 primary address "10.1.0.3/31"
+
+A admin configure port "Ethernet10" admin-state enable
+A admin configure port "Ethernet10" mtu 9212
+A admin configure router "Base" interface "Ethernet10" admin-state enable
+A admin configure router "Base" interface "Ethernet10" mtu 9000
+A admin configure router "Base" interface "Ethernet10" description "to server-01"
 
 A admin configure port "Loopback0" admin-state enable
 A admin configure port "Loopback0" mtu 9212
@@ -48,6 +58,7 @@ A admin configure router "Base" ospf 1 interface "Ethernet1" passive disable
 A admin configure router "Base" ospf 1 interface "Ethernet2" admin-state enable
 A admin configure router "Base" ospf 1 interface "Ethernet2" area "0.0.0.0"
 A admin configure router "Base" ospf 1 interface "Ethernet2" passive disable
+A admin configure router "Base" ospf 1 interface "Ethernet10" passive enable
 A admin configure router "Base" ospf 1 interface "Loopback0" passive enable
 
 

@@ -283,3 +283,19 @@ infrahub_tests:
         spec:
           path: queries/validation/proxy.gql
           kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: segment_placement
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/segment_placement.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: evpn_fabric
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/evpn_fabric.gql
+          kind: graphql-query-smoke
