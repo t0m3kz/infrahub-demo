@@ -33,6 +33,7 @@ steps in sequence for that DC. DC-level ordering/dependencies are expressed via
 """
 
 import logging
+import os
 from typing import Any, Literal
 
 import pytest
@@ -170,8 +171,30 @@ for _cfg in DC_CONFIGS.values():
         role: count for role, count in _cfg["expected_roles"].items() if role != "l2-leaf"
     }
 
+
+def _resolve_dc_order() -> list[str]:
+    """Full dc1..dc7 chain by default. Set DC_DEPLOYMENT_TEST_DCS to a
+    comma-separated subset (e.g. "dc6" or "dc6,dc7") to isolate just those
+    DCs for a fast re-check without editing this file — the first selected
+    DC depends on "triggers_active" (runs standalone), and any further ones
+    still chain off each other in the given order.
+
+    Example:
+        DC_DEPLOYMENT_TEST_DCS=dc6 uv run invoke dev.test-integration-routing
+        DC_DEPLOYMENT_TEST_DCS=dc6,dc7 uv run invoke dev.test-integration-routing
+    """
+    selected = os.environ.get("DC_DEPLOYMENT_TEST_DCS")
+    if not selected:
+        return ["dc1", "dc2", "dc3", "dc4", "dc5", "dc6", "dc7"]
+    dc_keys = [key.strip() for key in selected.split(",") if key.strip()]
+    unknown = [key for key in dc_keys if key not in DC_CONFIGS]
+    if unknown:
+        raise ValueError(f"DC_DEPLOYMENT_TEST_DCS names unknown DC(s) {unknown} — valid keys are {sorted(DC_CONFIGS)}")
+    return dc_keys
+
+
 # Sequential deployment order — determines dependency chain and order numbers
-DC_ORDER = ["dc1", "dc2", "dc3", "dc4", "dc5", "dc6", "dc7"]
+DC_ORDER = _resolve_dc_order()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
