@@ -18,7 +18,12 @@ from pathlib import Path
 
 import pytest
 
-from utils.bootstrap_order import bootstrap_load_tiers
+from utils.bootstrap_order import (
+    NESTED_TIER_CONCURRENCY,
+    bootstrap_load_tiers,
+    object_file_nests_children,
+    tier_concurrency,
+)
 
 # Referencing file -> the file whose objects it looks up by HFID. Derived from
 # the `platform:` / `manufacturer:` / `device_type:` / `software_image:` /
@@ -140,3 +145,84 @@ class TestSorting:
 
     def test_empty_directory_yields_no_tiers(self, tmp_path: Path) -> None:
         assert bootstrap_load_tiers(tmp_path) == []
+
+
+def _write_object_file(path: Path, data: str) -> Path:
+    path.write_text(f"---\napiVersion: infrahub.app/v1\nkind: Object\nspec:\n  kind: DcimDevice\n  data:\n{data}")
+    return path
+
+
+class TestNestedDetection:
+    """Which tiers must serialise. Detected from structure, so a new nested file
+    picks up the safer concurrency without anyone maintaining a list."""
+
+    def test_dict_form_nesting_is_detected(self, tmp_path: Path) -> None:
+        """``interfaces: {kind:, data: [...]}`` — how device templates declare
+        the interfaces whose parent lookup was failing."""
+        path = _write_object_file(
+            tmp_path / "01_x.yml",
+            "    - name: leaf-01\n      interfaces:\n        kind: DcimInterface\n        data:\n          - name: et1\n",
+        )
+        assert object_file_nests_children(path) is True
+
+    def test_list_form_nesting_is_detected(self, tmp_path: Path) -> None:
+        """``devices: [{kind:, data: {...}}]`` — the other nested shape the
+        object file format allows."""
+        path = _write_object_file(
+            tmp_path / "01_x.yml",
+            "    - name: dc1\n      devices:\n        - kind: DcimDevice\n          data:\n            name: spine-1\n",
+        )
+        assert object_file_nests_children(path) is True
+
+    def test_flat_file_is_not_nested(self, tmp_path: Path) -> None:
+        """HFID string references are not nesting — the peer already exists in
+        an earlier tier, so there is no parent-visibility window to protect."""
+        path = _write_object_file(
+            tmp_path / "01_x.yml",
+            '    - name: leaf-01\n      platform: arista_eos\n      tags:\n        - "blue"\n        - "prod"\n',
+        )
+        assert object_file_nests_children(path) is False
+
+    def test_unparseable_file_is_assumed_nested(self, tmp_path: Path) -> None:
+        """Guessing 'flat' on a file we cannot read would hand it the fast path
+        on no evidence; the safe answer costs only speed."""
+        path = tmp_path / "01_broken.yml"
+        path.write_text("spec: {data: [unclosed\n")
+        assert object_file_nests_children(path) is True
+
+    def test_real_template_files_are_detected_as_nested(self, bootstrap_dir: Path) -> None:
+        """The regression: these are the files whose nested interfaces failed
+        with 'Unable to find the node <uuid> / TemplateDcimDevice'."""
+        for name in (
+            "09_virtual_device_templates_netscaler.yaml",
+            "10_physical_devices_templates_arista_eos.yaml",
+        ):
+            assert object_file_nests_children(bootstrap_dir / name) is True, name
+
+    def test_real_flat_files_are_not_serialised(self, bootstrap_dir: Path) -> None:
+        for name in ("05_platforms.yml", "05b_software_images.yml", "04_manufacturers.yml"):
+            assert object_file_nests_children(bootstrap_dir / name) is False, name
+
+
+class TestTierConcurrency:
+    def test_a_nested_file_serialises_its_whole_tier(self, tmp_path: Path) -> None:
+        """A tier loads as one invocation, so one nested file sets the pace for
+        the files sharing its prefix."""
+        flat = _write_object_file(tmp_path / "10_flat.yml", "    - name: a\n")
+        nested = _write_object_file(
+            tmp_path / "10_nested.yml",
+            "    - name: b\n      interfaces:\n        kind: DcimInterface\n        data:\n          - name: et1\n",
+        )
+        assert tier_concurrency([flat, nested], 10) == NESTED_TIER_CONCURRENCY
+
+    def test_a_flat_tier_keeps_the_default(self, tmp_path: Path) -> None:
+        flat = _write_object_file(tmp_path / "05_flat.yml", "    - name: a\n")
+        assert tier_concurrency([flat], 10) == 10
+
+    def test_the_real_template_tiers_are_serialised(self, bootstrap_tiers: list[list[Path]]) -> None:
+        for filename in (
+            "09_virtual_device_templates_netscaler.yaml",
+            "10_physical_devices_templates_arista_eos.yaml",
+        ):
+            tier = bootstrap_tiers[_tier_index(bootstrap_tiers, filename)]
+            assert tier_concurrency(tier, 10) == NESTED_TIER_CONCURRENCY, filename

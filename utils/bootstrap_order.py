@@ -35,11 +35,79 @@ total. That buys determinism on the layer every later object depends on.
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
+
+import yaml
 
 # Object files only. A directory may also hold READMEs or other non-data files,
 # which infrahubctl would not load either.
 OBJECT_FILE_SUFFIXES = (".yml", ".yaml")
+
+# Concurrency for a tier whose files nest child objects inline.
+#
+# Splitting one directory load into per-tier loads concentrates concurrency.
+# Before tiers, a budget of 10 was shared across all 52 files; after, tier 11's
+# 19 template files get that budget to themselves, so more parent-then-children
+# groups run at once than before. Those files declare interfaces inside their
+# template device, so every parent is followed immediately by children that
+# reference it, and the load fails with "Unable to find the node <uuid> /
+# TemplateDcimDevice in the database" — a UUID, not an HFID, so the loader holds
+# a valid id and the write simply has not landed yet.
+#
+# Serialising these tiers puts the write pressure below the pre-tier baseline
+# rather than above it, which is the pressure the split introduced. It is not a
+# proof against the lag: a device's own children still follow it directly. But
+# the race is load-sensitive — concurrency 30 was observed to fail on the
+# Edgecore SONiC templates and 10 on the NetScaler ones — and load is the part
+# this code controls. Flat tiers keep the default; 5 of 24 tiers serialise.
+NESTED_TIER_CONCURRENCY = 1
+
+
+def _relationship_nests_objects(value: Any) -> bool:
+    """True if a relationship value carries inline child objects.
+
+    Two shapes count, both from the object file format: a dict holding ``data``
+    (``interfaces: {kind:, data: [...]}``) and a list of dicts holding ``data``
+    (``devices: [{kind:, data: {...}}]``).
+    """
+    if isinstance(value, dict):
+        return "data" in value
+    if isinstance(value, list):
+        return any(isinstance(item, dict) and "data" in item for item in value)
+    return False
+
+
+def object_file_nests_children(path: Path) -> bool:
+    """True if any object in ``path`` declares child objects inline.
+
+    Detected structurally rather than by filename: a new nested file picks up the
+    slower, safer concurrency without anyone remembering to add it to a list.
+    """
+    try:
+        documents = list(yaml.safe_load_all(path.read_text()))
+    except (OSError, yaml.YAMLError):
+        # Unreadable or malformed YAML is infrahubctl's error to report, with a
+        # far better message than anything available here. Assume the safer
+        # (serialised) answer and let the load fail on its own terms.
+        return True
+
+    for document in documents:
+        if not isinstance(document, dict):
+            continue
+        for entry in (document.get("spec") or {}).get("data") or []:
+            if isinstance(entry, dict) and any(_relationship_nests_objects(value) for value in entry.values()):
+                return True
+    return False
+
+
+def tier_concurrency(tier: Sequence[Path], default: int) -> int:
+    """Concurrency to load ``tier`` with — serialised if any file nests children."""
+    if any(object_file_nests_children(path) for path in tier):
+        return NESTED_TIER_CONCURRENCY
+    return default
+
 
 # Leading digits, optionally followed by letters used to insert a file between
 # two existing tiers (05 -> 05b -> 06).

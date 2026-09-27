@@ -12,9 +12,12 @@ import logging
 import pytest
 from infrahub_sdk import InfrahubClientSync
 
-from utils.bootstrap_order import bootstrap_load_tiers
+from utils.bootstrap_order import bootstrap_load_tiers, tier_concurrency
 
 from .conftest import PROJECT_DIRECTORY, TestInfrahubDockerWithClient
+
+# Matches execute_command's default; overridden per tier by tier_concurrency().
+DEFAULT_LOAD_CONCURRENCY = 10
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -131,11 +134,19 @@ class TestSetup(TestInfrahubDockerWithClient):
 
         for index, tier in enumerate(tiers, start=1):
             paths = " ".join(str(path.relative_to(PROJECT_DIRECTORY)) for path in tier)
-            logging.info("Loading bootstrap tier %d/%d: %s", index, len(tiers), ", ".join(p.name for p in tier))
+            concurrency = tier_concurrency(tier, DEFAULT_LOAD_CONCURRENCY)
+            logging.info(
+                "Loading bootstrap tier %d/%d (concurrency %d): %s",
+                index,
+                len(tiers),
+                concurrency,
+                ", ".join(p.name for p in tier),
+            )
 
             load_tier = self.execute_command(
                 f"infrahubctl object load {paths}",
                 address=client_main.config.address,
+                concurrent_execution=concurrency,
                 pagination_size=200,
             )
 
