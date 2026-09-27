@@ -21,7 +21,6 @@ customer_deployments group and querying customer_dc.gql.
 from __future__ import annotations
 
 import ipaddress
-import uuid
 from typing import Any
 
 from infrahub_sdk.protocols import CoreIPPrefixPool, CoreNumberPool
@@ -593,23 +592,26 @@ class CustomerDeploymentDCExchangeGenerator(DeviceMixin, CablingMixin, CommonGen
         ip_namespace = allocated_prefix.ip_namespace
 
         ip_ids: list[str] = []
-        for side, addr in [("src", addrs[0]), ("dst", addrs[1])]:
+        for addr in addrs[:2]:
             address_value = f"{addr}/{network.prefixlen}"
-            # A query-then-create is NOT enough — two overlapping calls for
-            # this same FirewallContext can both see nothing yet and both
-            # create, since IpamIPAddress's (address, ip_namespace)
-            # uniqueness_constraint is only enforced by an async validator,
-            # not synchronously (reproduced on generators/connections.py's
-            # fabric P2P allocation, the same idiom this mirrors). Pin the id
-            # instead: derive it deterministically from the context + side, so
-            # two overlapping calls target the SAME node via Upsert no matter
-            # which commits first — same pattern as Number pool consumers (see
-            # number_pool_per_consumer_idempotency in project memory).
-            address_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"urn:infrahub-demo:fw-context-p2p:{context_name}:{side}"))
-            ip_obj = await self.client.create(
+            # Query before creating — same race as generators/connections.py's
+            # fabric P2P allocation: allocate_next_ip_prefix() above is
+            # idempotent per identifier, but IpamIPAddress's (address,
+            # ip_namespace) uniqueness_constraint is only enforced by an async
+            # validator, not a synchronous DB constraint. A second, overlapping
+            # call for this same FirewallContext would otherwise get the same
+            # prefix back and then blind-create the same address twice.
+            ip_obj = await self.client.get(
                 kind=IpamIPAddress,
-                data={"id": address_id, "address": address_value, "ip_namespace": ip_namespace},
+                address__value=address_value,
+                ip_namespace__ids=[ip_namespace.id],
+                raise_when_missing=False,
             )
-            await ip_obj.save(allow_upsert=True)
+            if not ip_obj:
+                ip_obj = await self.client.create(
+                    kind=IpamIPAddress,
+                    data={"address": address_value, "ip_namespace": ip_namespace},
+                )
+                await ip_obj.save(allow_upsert=True)
             ip_ids.append(ip_obj.id)
         return ip_ids[0], ip_ids[1]

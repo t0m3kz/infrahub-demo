@@ -11,7 +11,6 @@ test_customer_office.py for that.
 
 from __future__ import annotations
 
-import uuid
 from typing import Any, TypeVar
 from unittest.mock import AsyncMock, MagicMock
 
@@ -656,7 +655,9 @@ class TestAllocateContextP2p:
         allocated = MagicMock()
         allocated.prefix.value = "fd00:2300::/127"
         allocated.ip_namespace = MagicMock(id="ns-default")
-        gen.client.get = AsyncMock(return_value=pool)
+        # First get() resolves the pool; the next two are the pre-create
+        # existence check (once per address) — None means "not found yet".
+        gen.client.get = AsyncMock(side_effect=[pool, None, None])
         gen.client.allocate_next_ip_prefix = AsyncMock(return_value=allocated)
         created_ips = [AsyncMock(id="fw-ip"), AsyncMock(id="bl-ip")]
         gen.client.create = AsyncMock(side_effect=created_ips)
@@ -666,17 +667,8 @@ class TestAllocateContextP2p:
         assert result == ("fw-ip", "bl-ip")
         alloc_kwargs = gen.client.allocate_next_ip_prefix.call_args.kwargs
         assert "prefix_length" not in alloc_kwargs
-        create_calls = gen.client.create.call_args_list
-        addresses = [c.kwargs["data"]["address"] for c in create_calls]
+        addresses = [c.kwargs["data"]["address"] for c in gen.client.create.call_args_list]
         assert addresses == ["fd00:2300::/127", "fd00:2300::1/127"]
-        # Deterministic per (context, side) — same id on every call for this
-        # link, so an overlapping call would Upsert the same node.
-        ids = [c.kwargs["data"]["id"] for c in create_calls]
-        assert len(set(ids)) == 2
-        assert ids == [
-            str(uuid.uuid5(uuid.NAMESPACE_URL, "urn:infrahub-demo:fw-context-p2p:shared-ctx:src")),
-            str(uuid.uuid5(uuid.NAMESPACE_URL, "urn:infrahub-demo:fw-context-p2p:shared-ctx:dst")),
-        ]
 
     @pytest.mark.asyncio
     async def test_ipv4_p2p_link_uses_31_suffix(self) -> None:
@@ -685,7 +677,7 @@ class TestAllocateContextP2p:
         allocated = MagicMock()
         allocated.prefix.value = "100.65.0.0/31"
         allocated.ip_namespace = MagicMock(id="ns-default")
-        gen.client.get = AsyncMock(return_value=pool)
+        gen.client.get = AsyncMock(side_effect=[pool, None, None])
         gen.client.allocate_next_ip_prefix = AsyncMock(return_value=allocated)
         created_ips = [AsyncMock(id="fw-ip"), AsyncMock(id="bl-ip")]
         gen.client.create = AsyncMock(side_effect=created_ips)
