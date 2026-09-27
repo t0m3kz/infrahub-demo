@@ -275,3 +275,64 @@ class TestCreateChainCabling:
         )
 
         gen.client.allocate_next_ip_prefix.assert_not_awaited()
+
+
+class TestCableIsNeverReferencedBeforeItIsVisible:
+    """The cable is created last, and its id is never written back onto an
+    interface — writing a freshly created node's id into the next mutation
+    intermittently fails with NODE_NOT_FOUND under concurrent generator runs
+    (observed as "Unable to find the node <uuid> / DcimCable in the database").
+    The reverse `endpoints` relationship on the cable establishes the same link
+    while only referencing interfaces that already existed.
+    """
+
+    @pytest.mark.asyncio
+    async def test_interface_cable_is_left_untouched(self) -> None:
+        """Neither interface gets the new cable assigned to its `cable` field."""
+        gen = _make_generator()
+        bl_iface = _iface("Eth1/25", device="bl-01")
+        fw_iface = _iface("eth1", device="fw-01")
+        gen.client.filters = AsyncMock(side_effect=[[bl_iface], [fw_iface]])
+        cable = _cable_obj()
+        gen.client.create = AsyncMock(return_value=cable)
+
+        await gen.create_chain_cabling(
+            [
+                {"devices": ["bl-01"], "down_role": "firewall"},
+                {"devices": ["fw-01"], "up_role": "uplink"},
+            ]
+        )
+
+        assert bl_iface.cable is None
+        assert fw_iface.cable is None
+
+    @pytest.mark.asyncio
+    async def test_cable_is_created_after_both_interfaces_are_saved(self) -> None:
+        """Ordering guard: no interface upsert can be in flight after the cable
+        create, so none can carry a not-yet-visible cable id."""
+        gen = _make_generator()
+        bl_iface = _iface("Eth1/25", device="bl-01")
+        fw_iface = _iface("eth1", device="fw-01")
+        gen.client.filters = AsyncMock(side_effect=[[bl_iface], [fw_iface]])
+
+        calls: list[str] = []
+        bl_iface.save = AsyncMock(side_effect=lambda **_: calls.append("save-bl"))
+        fw_iface.save = AsyncMock(side_effect=lambda **_: calls.append("save-fw"))
+        cable = _cable_obj()
+        cable.save = AsyncMock(side_effect=lambda **_: calls.append("save-cable"))
+
+        async def _create(**_: Any) -> MagicMock:
+            calls.append("create-cable")
+            return cable
+
+        gen.client.create = AsyncMock(side_effect=_create)
+
+        await gen.create_chain_cabling(
+            [
+                {"devices": ["bl-01"], "down_role": "firewall"},
+                {"devices": ["fw-01"], "up_role": "uplink"},
+            ]
+        )
+
+        # The plan pairs bottom (fw) as src with top (bl) as dst.
+        assert calls == ["save-fw", "save-bl", "create-cable", "save-cable"]

@@ -180,22 +180,11 @@ class CablingMixin:
                 src_interface.interface_type.value, dst_interface.interface_type.value
             )
 
-            cable = await self.client.create(
-                kind=DcimCable,
-                data={
-                    "name": cable_name,
-                    "type": cable_type,
-                    "endpoints": [src_interface.id, dst_interface.id],
-                    "deployment": {"id": self.deployment_id} if self.deployment_id else None,
-                },
-            )
-            await cable.save(allow_upsert=True)
-
-            # Use already-fetched interface objects; set cable to prevent upsert sending null
+            # Use the already-fetched interface objects. Their `cable` relationship
+            # was loaded with include=["cable"], so re-saving them below preserves
+            # whatever cable they already point at instead of sending null.
             updated_src = iface_map[src_interface.id]
             updated_dst = iface_map[dst_interface.id]
-            updated_src.cable = cable
-            updated_dst.cable = cable
 
             # Allocate P2P addresses if pool provided
             # prefix_length: 127 for IPv6 (RFC 6164, default), 31 for IPv4 (RFC 3021, exception)
@@ -237,6 +226,28 @@ class CablingMixin:
             updated_dst.description.value = cable_name
             updated_dst.status.value = "active"
             await updated_dst.save(allow_upsert=True, update_group_context=False)
+
+            # Create the cable LAST, and let it establish the link from its own
+            # side via `endpoints` — the reverse of the interface's `cable`.
+            #
+            # Never the other way round: writing the freshly created cable's id
+            # back onto an interface reads a node the server may not have made
+            # visible yet, which fails as
+            #   "Unable to find the node <uuid> / DcimCable in the database"
+            #   (NODE_NOT_FOUND, 404)
+            # intermittently under concurrent generator runs. The cable's
+            # endpoints reference interfaces that came from the device's
+            # object_template, so they are always already visible.
+            cable = await self.client.create(
+                kind=DcimCable,
+                data={
+                    "name": cable_name,
+                    "type": cable_type,
+                    "endpoints": [updated_src.id, updated_dst.id],
+                    "deployment": {"id": self.deployment_id} if self.deployment_id else None,
+                },
+            )
+            await cable.save(allow_upsert=True)
 
             cabled_pairs.append((updated_src, updated_dst))
             self.logger.info(f"  - Created connection {cable_name}")
