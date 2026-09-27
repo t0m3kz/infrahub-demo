@@ -456,8 +456,7 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
                 # Serialize on dc_id: only one overlapping caller ever cables
                 # this DC's hyper-spine mesh; the other finds every interface
                 # already cabled and does nothing.
-                lock_id = await self.acquire_resource_lock(f"hyperspine-cabling-{dc_id}")
-                try:
+                async with self.resource_lock(f"hyperspine-cabling-{dc_id}"):
                     p2p_pairs = await self.create_cabling(
                         bottom_devices=super_spine_names,
                         bottom_interfaces=super_spine_uplink_interfaces,
@@ -469,8 +468,6 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
                             p2p_prefix_length=p2p_prefix_length,
                         ),
                     )
-                finally:
-                    await self.release_resource_lock(lock_id)
                 await self.create_routing(
                     bottom_devices=super_spine_names,
                     top_devices=hyper_spine_names,
@@ -815,11 +812,8 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
         allocate_resource_pools()'s technical pool — see that method's own
         lock for the full explanation). Serialize the same way.
         """
-        lock_id = await self.acquire_resource_lock(f"fw-context-pools-{dc_name}")
-        try:
+        async with self.resource_lock(f"fw-context-pools-{dc_name}"):
             await self._ensure_firewall_context_pools_locked(dc_name=dc_name)
-        finally:
-            await self.release_resource_lock(lock_id)
 
     async def _ensure_firewall_context_pools_locked(self, *, dc_name: str) -> None:
         """The actual pool-creation body of _ensure_firewall_context_pools(),

@@ -159,3 +159,34 @@ class TestReleaseResourceLock:
         gen.client.delete = AsyncMock(side_effect=_other_error())
 
         await gen.release_resource_lock("lock-1")  # must not raise
+
+
+class TestResourceLockContextManager:
+    """``async with self.resource_lock(key):`` is acquire_resource_lock/
+    release_resource_lock as one call — same two methods, no new locking
+    behavior, just removing the chance of a call site's manual try/finally
+    forgetting the release or misplacing the lock's actual scope."""
+
+    @pytest.mark.asyncio
+    async def test_acquires_before_and_releases_after_the_body(self) -> None:
+        gen = _build_gen()
+        calls: list[str] = []
+        gen.acquire_resource_lock = AsyncMock(side_effect=lambda key: calls.append(f"acquire:{key}") or "lock-id")
+        gen.release_resource_lock = AsyncMock(side_effect=lambda lock_id: calls.append(f"release:{lock_id}"))
+
+        async with gen.resource_lock("res-1"):
+            calls.append("body")
+
+        assert calls == ["acquire:res-1", "body", "release:lock-id"]
+
+    @pytest.mark.asyncio
+    async def test_releases_even_if_the_body_raises(self) -> None:
+        gen = _build_gen()
+        gen.acquire_resource_lock = AsyncMock(return_value="lock-id")
+        gen.release_resource_lock = AsyncMock()
+
+        with pytest.raises(RuntimeError):
+            async with gen.resource_lock("res-1"):
+                raise RuntimeError("boom")
+
+        gen.release_resource_lock.assert_awaited_once_with("lock-id")
