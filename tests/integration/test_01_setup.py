@@ -67,12 +67,23 @@ class TestSetup(TestInfrahubDockerWithClient):
     @pytest.mark.order(3)
     @pytest.mark.dependency(scope="session", name="menu_load", depends=["schema_extensions"])
     def test_03_load_menu(self, client_main: InfrahubClientSync) -> None:
-        """Load menu definitions."""
+        """Load menu definitions, serialised.
+
+        menu.yml is one file of 61 items nested parent -> children, so a child's
+        reference to its parent resolves against a node created moments earlier
+        in the same run. At the default concurrency that races and fails with
+        "['CoreMenuItemUpsert'] Unable to find the node <id> / CoreMenu in the
+        database." Unlike the bootstrap data there is nothing to reorder — the
+        dependency is within a single file — so the only lever is to stop
+        dispatching siblings in parallel. 61 items serialised costs a few
+        seconds.
+        """
         logging.info("Starting test: test_03_load_menu")
 
         load_menu = self.execute_command(
             "infrahubctl menu load menu/menu.yml",
             address=client_main.config.address,
+            concurrent_execution=1,
         )
 
         logging.info("Menu load output: %s", load_menu.stdout)
