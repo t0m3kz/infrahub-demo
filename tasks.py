@@ -263,11 +263,11 @@ def test_integration_routing(
     basetemp: str = "~/.pytest-tmp/infrahub-demo",
     server_port: int = 8100,
 ) -> None:
-    """Run setup, repository, and automatic DC/POD routing regression tests."""
+    """Run setup, repository, and the DC deployment routing regression tests."""
     _run_integration_suite(
         context,
         tests="tests/integration/test_01_setup.py tests/integration/test_02_repository.py "
-        "tests/integration/test_09_bulk_dc_trigger_routing.py",
+        "tests/integration/test_10_dc_deployment.py",
         basetemp=basetemp,
         server_port=server_port,
     )

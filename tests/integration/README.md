@@ -29,7 +29,6 @@ Each scenario creates infrastructure incrementally and merges to main:
 
 **Scenario Tests:**
 
-- `test_09_bulk_dc_trigger_routing.py` - **Scenario 0:** Bulk DC load, trigger-dispatched routing
 - `test_10_dc_deployment.py` - **Scenario 1:** Initial datacenter deployment
 - `test_12_dc1_add_switch.py` - **Scenario 2:** Add a switch to an existing DC
 - `test_14_dc1_add_rack.py` - **Scenario 3:** Add a rack to an existing pod
