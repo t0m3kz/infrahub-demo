@@ -249,6 +249,14 @@ class CablingMixin:
             )
             await cable.save(allow_upsert=True)
 
+            # In-memory only, after the last save of either interface: create_routing()
+            # builds the underlay peerings from the cables of the interface objects
+            # returned here (cable_map in generators/helpers/routing.py), so they have
+            # to carry it. Nothing saves these interfaces again, so the cable id this
+            # assignment holds is never sent back to a server that cannot yet see it.
+            updated_src.cable = cable
+            updated_dst.cable = cable
+
             cabled_pairs.append((updated_src, updated_dst))
             self.logger.info(f"  - Created connection {cable_name}")
 

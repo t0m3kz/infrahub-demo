@@ -278,17 +278,22 @@ class TestCreateChainCabling:
 
 
 class TestCableIsNeverReferencedBeforeItIsVisible:
-    """The cable is created last, and its id is never written back onto an
-    interface — writing a freshly created node's id into the next mutation
+    """The cable is created last and its id is never *sent* back to the server on
+    an interface — writing a freshly created node's id into the next mutation
     intermittently fails with NODE_NOT_FOUND under concurrent generator runs
     (observed as "Unable to find the node <uuid> / DcimCable in the database").
-    The reverse `endpoints` relationship on the cable establishes the same link
-    while only referencing interfaces that already existed.
+    The reverse `endpoints` relationship on the cable establishes the link in the
+    graph while only referencing interfaces that already existed.
+
+    The returned interface objects still get the cable assigned in memory, after
+    their last save: create_routing() derives the underlay peerings from it.
     """
 
     @pytest.mark.asyncio
-    async def test_interface_cable_is_left_untouched(self) -> None:
-        """Neither interface gets the new cable assigned to its `cable` field."""
+    async def test_returned_interfaces_carry_the_cable_in_memory(self) -> None:
+        """create_routing() pairs interfaces by `iface.cable.id`, so the objects
+        handed back have to carry the cable even though it was never saved onto
+        them."""
         gen = _make_generator()
         bl_iface = _iface("Eth1/25", device="bl-01")
         fw_iface = _iface("eth1", device="fw-01")
@@ -296,29 +301,40 @@ class TestCableIsNeverReferencedBeforeItIsVisible:
         cable = _cable_obj()
         gen.client.create = AsyncMock(return_value=cable)
 
-        await gen.create_chain_cabling(
+        result = await gen.create_chain_cabling(
             [
                 {"devices": ["bl-01"], "down_role": "firewall"},
                 {"devices": ["fw-01"], "up_role": "uplink"},
             ]
         )
 
-        assert bl_iface.cable is None
-        assert fw_iface.cable is None
+        assert bl_iface.cable is cable
+        assert fw_iface.cable is cable
+        assert {iface.cable for pair in result[0] for iface in pair} == {cable}
 
     @pytest.mark.asyncio
-    async def test_cable_is_created_after_both_interfaces_are_saved(self) -> None:
-        """Ordering guard: no interface upsert can be in flight after the cable
-        create, so none can carry a not-yet-visible cable id."""
+    async def test_cable_is_assigned_only_after_both_interfaces_are_saved(self) -> None:
+        """Ordering guard: no interface upsert may be in flight after the cable
+        exists, so none can carry a not-yet-visible cable id to the server."""
         gen = _make_generator()
         bl_iface = _iface("Eth1/25", device="bl-01")
         fw_iface = _iface("eth1", device="fw-01")
         gen.client.filters = AsyncMock(side_effect=[[bl_iface], [fw_iface]])
 
         calls: list[str] = []
-        bl_iface.save = AsyncMock(side_effect=lambda **_: calls.append("save-bl"))
-        fw_iface.save = AsyncMock(side_effect=lambda **_: calls.append("save-fw"))
         cable = _cable_obj()
+
+        def _save_iface(iface: MagicMock, label: str) -> AsyncMock:
+            def _record(**_: Any) -> None:
+                # The cable must not be attached yet — otherwise this upsert
+                # would send its id.
+                assert iface.cable is None
+                calls.append(label)
+
+            return AsyncMock(side_effect=_record)
+
+        bl_iface.save = _save_iface(bl_iface, "save-bl")
+        fw_iface.save = _save_iface(fw_iface, "save-fw")
         cable.save = AsyncMock(side_effect=lambda **_: calls.append("save-cable"))
 
         async def _create(**_: Any) -> MagicMock:
@@ -336,3 +352,4 @@ class TestCableIsNeverReferencedBeforeItIsVisible:
 
         # The plan pairs bottom (fw) as src with top (bl) as dst.
         assert calls == ["save-fw", "save-bl", "create-cable", "save-cable"]
+        assert bl_iface.cable is cable
