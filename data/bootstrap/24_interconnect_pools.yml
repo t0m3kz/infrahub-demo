@@ -2,7 +2,7 @@
 # Pools consumed by generators/topology/interconnect.py's
 # InterconnectRequestGenerator for connection_kind=virtual legs. Disjoint
 # from GLOBAL-L3VNI (50001-59999, data/bootstrap/18_vni_pools.yml) and from
-# the PROD/NON-PROD/INTERNET/MANAGEMENT l3_vni values (30000-40001,
+# the PROD/NON-PROD/INTERNET/MANAGEMENT l3_vni values (60000-60003,
 # data/bootstrap/22_namespaces.yml) — this is WAN/interconnect-scoped, never
 # widened into either of those.
 #

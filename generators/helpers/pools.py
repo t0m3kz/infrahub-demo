@@ -12,6 +12,24 @@ from __future__ import annotations
 
 DEFAULT_ASN_BASE_START = 4200000000
 
+# Customer-facing VLAN ID range for every local VLAN domain (MLAG pair or
+# standalone device). 802.1Q allows 1-4094, but the top of that space is not
+# usable here:
+#
+#   * 3968-4094 is Cisco NX-OS's default internally-reserved VLAN band
+#     (`system vlan reserve`), and 4094 is the conventional vPC peer-keepalive
+#     VLAN — a segment allocated there is rejected by the device.
+#   * 3900-3967 is reserved by this project for the per-VRF L3 VNI SVI that
+#     NX-OS requires to route between VNIs (symmetric IRB). That SVI carries
+#     no hosts and exists only to hang `ip forward` off, but it still consumes
+#     a local VLAN ID, so it must not collide with a customer segment. See
+#     _L3VNI_SVI_VLAN_BASE in transforms/helpers/vxlan.py.
+#
+# 3800 usable customer VLANs per domain is far beyond any real VLAN domain
+# (an MLAG leaf pair), so the narrower ceiling costs nothing.
+CUSTOMER_VLAN_ID_MIN = 100
+CUSTOMER_VLAN_ID_MAX = 3899
+
 
 def calculate_fabric_asn_block_size(
     max_pods: int,

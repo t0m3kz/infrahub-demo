@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 from .helpers import DeviceNameContext, DeviceNamingConfig, get_loopback_name
 from .helpers.pairing import pair_device_names
+from .helpers.pools import CUSTOMER_VLAN_ID_MAX, CUSTOMER_VLAN_ID_MIN
 from .mlag import MLAGWiringMixin
 from .protocols import (
     DcimCable,
@@ -831,15 +832,15 @@ class DeviceMixin(MLAGWiringMixin):
 
         IEEE 802.1Q VLAN ID has only local significance (within one L2
         domain — an MLAG pair, or a standalone device). Each VLAN domain
-        gets its own independent 100-3999 pool so unrelated domains can
+        gets its own independent 100-3899 pool so unrelated domains can
         reuse the same numeric VLAN ID for different segments; the real
         DC-wide/fabric-wide segment identifier is ManagedSegmentDeployment.vni.
         """
         await self.upsert_number_pool(
             pool_name=f"{pool_owner_name}-vlan-pool",
             description=f"Local VLAN ID pool for VLAN domain {pool_owner_name}",
-            start_range=100,
-            end_range=3999,
+            start_range=CUSTOMER_VLAN_ID_MIN,
+            end_range=CUSTOMER_VLAN_ID_MAX,
             node="ManagedVlanDomainSegment",
             node_attribute="vlan_id",
             parent_kind=parent_kind,

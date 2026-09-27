@@ -15,6 +15,21 @@
 # `default` (Infrahub's built-in namespace, not defined here) remains the
 # permanent underlay/global-table namespace for EVPN-VXLAN VTEP loopbacks and
 # underlay BGP — never a VRF, unaffected by this model.
+#
+# L3 VNI band: 60000-60003, the FIXED-namespace band. A VNI is one flat 24-bit
+# field on the wire with no L2/L3 discriminator, so these four have to stay
+# disjoint from every dynamic pool, not just from each other:
+#
+#   10001-49999  L2 VNI     dcN-vni-pool    (per-DC, ManagedSegmentDeployment.vni)
+#   50001-59999  L3 VNI     GLOBAL-L3VNI + dcN-l3vni-pool
+#   60000-60003  L3 VNI     these four, allocated by hand — pool-free on purpose
+#
+# These were 30000/30001/40000/40001, which sits INSIDE the L2 pool: the first
+# customer segment to draw VNI 30000 out of a dcN-vni-pool would have shared a
+# VNI with the INTERNET VRF on the same device, bridging tenant traffic into a
+# routed VRF. Nothing in the rendered config looks wrong when that happens —
+# checks/evpn_fabric.py is what catches it. Staying under 65535 also keeps each
+# VNI encodable in a type-1 RD / type-2 RT (see _MAX_ENCODABLE_VNI).
 
 apiVersion: infrahub.app/v1
 kind: Object
@@ -23,17 +38,17 @@ spec:
   data:
     - name: "PROD"
       description: "Production data-plane VRF — every segment/customer/app with environment=p"
-      l3_vni: 40000
+      l3_vni: 60000
       namespace_type: prod
     - name: "NON-PROD"
       description: "Non-production data-plane VRF — every other environment value (n/s/d/t)"
-      l3_vni: 40001
+      l3_vni: 60001
       namespace_type: non_prod
     - name: "INTERNET"
       description: "Internet egress VRF — reached from PROD/NON-PROD via a fixed, inspected RoutedExchange"
-      l3_vni: 30000
+      l3_vni: 60002
       namespace_type: internet
     - name: "MANAGEMENT"
       description: "True OOB plus core infrastructure services (DNS/DHCP/NTP/syslog/monitoring)"
-      l3_vni: 30001
+      l3_vni: 60003
       namespace_type: management
