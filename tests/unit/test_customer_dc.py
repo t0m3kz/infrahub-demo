@@ -652,10 +652,12 @@ class TestAllocateContextP2p:
     async def test_ipv6_p2p_link_uses_127_suffix(self) -> None:
         gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
         pool = MagicMock(id="pool-1")
-        gen.client.get = AsyncMock(return_value=pool)
         allocated = MagicMock()
         allocated.prefix.value = "fd00:2300::/127"
-        allocated.ip_namespace = {"id": "ns-default"}
+        allocated.ip_namespace = MagicMock(id="ns-default")
+        # First get() resolves the pool; the next two are the pre-create
+        # existence check (once per address) — None means "not found yet".
+        gen.client.get = AsyncMock(side_effect=[pool, None, None])
         gen.client.allocate_next_ip_prefix = AsyncMock(return_value=allocated)
         created_ips = [AsyncMock(id="fw-ip"), AsyncMock(id="bl-ip")]
         gen.client.create = AsyncMock(side_effect=created_ips)
@@ -672,10 +674,10 @@ class TestAllocateContextP2p:
     async def test_ipv4_p2p_link_uses_31_suffix(self) -> None:
         gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
         pool = MagicMock(id="pool-1")
-        gen.client.get = AsyncMock(return_value=pool)
         allocated = MagicMock()
         allocated.prefix.value = "100.65.0.0/31"
-        allocated.ip_namespace = {"id": "ns-default"}
+        allocated.ip_namespace = MagicMock(id="ns-default")
+        gen.client.get = AsyncMock(side_effect=[pool, None, None])
         gen.client.allocate_next_ip_prefix = AsyncMock(return_value=allocated)
         created_ips = [AsyncMock(id="fw-ip"), AsyncMock(id="bl-ip")]
         gen.client.create = AsyncMock(side_effect=created_ips)

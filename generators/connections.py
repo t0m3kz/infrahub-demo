@@ -206,11 +206,30 @@ class CablingMixin:
                 ip_namespace = p2p_prefix.ip_namespace
 
                 for iface, addr in [(updated_src, addrs[0]), (updated_dst, addrs[1])]:
-                    ip = await self.client.create(
+                    address_value = f"{addr}/{p2p_prefix_length}"
+                    # Query before creating. allocate_next_ip_prefix() above IS
+                    # idempotent per identifier — a second, overlapping call for
+                    # this same link (e.g. two generator runs both triggered off
+                    # the same bulk load) gets the SAME prefix back. But
+                    # IpamIPAddress's (address, ip_namespace) uniqueness_constraint
+                    # is only enforced by an async validator, not a synchronous DB
+                    # constraint (observed: two DC4 hyper-spine-mesh links both
+                    # blind-created the same address, and the collision only
+                    # surfaced later as a "Process schema integrity" failure at
+                    # merge time). A blind client.create() would race; reuse
+                    # whatever's already there instead of trying to create it again.
+                    ip = await self.client.get(
                         kind=IpamIPAddress,
-                        data={"address": f"{addr}/{p2p_prefix_length}", "ip_namespace": ip_namespace},
+                        address__value=address_value,
+                        ip_namespace__ids=[ip_namespace.id],
+                        raise_when_missing=False,
                     )
-                    await ip.save(allow_upsert=True)
+                    if not ip:
+                        ip = await self.client.create(
+                            kind=IpamIPAddress,
+                            data={"address": address_value, "ip_namespace": ip_namespace},
+                        )
+                        await ip.save(allow_upsert=True)
                     iface.ip_address = ip.id
 
             # update_group_context=False: physical interfaces come from the device's

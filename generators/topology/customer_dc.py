@@ -593,10 +593,25 @@ class CustomerDeploymentDCExchangeGenerator(DeviceMixin, CablingMixin, CommonGen
 
         ip_ids: list[str] = []
         for addr in addrs[:2]:
-            ip_obj = await self.client.create(
+            address_value = f"{addr}/{network.prefixlen}"
+            # Query before creating — same race as generators/connections.py's
+            # fabric P2P allocation: allocate_next_ip_prefix() above is
+            # idempotent per identifier, but IpamIPAddress's (address,
+            # ip_namespace) uniqueness_constraint is only enforced by an async
+            # validator, not a synchronous DB constraint. A second, overlapping
+            # call for this same FirewallContext would otherwise get the same
+            # prefix back and then blind-create the same address twice.
+            ip_obj = await self.client.get(
                 kind=IpamIPAddress,
-                data={"address": f"{addr}/{network.prefixlen}", "ip_namespace": ip_namespace},
+                address__value=address_value,
+                ip_namespace__ids=[ip_namespace.id],
+                raise_when_missing=False,
             )
-            await ip_obj.save(allow_upsert=True)
+            if not ip_obj:
+                ip_obj = await self.client.create(
+                    kind=IpamIPAddress,
+                    data={"address": address_value, "ip_namespace": ip_namespace},
+                )
+                await ip_obj.save(allow_upsert=True)
             ip_ids.append(ip_obj.id)
         return ip_ids[0], ip_ids[1]

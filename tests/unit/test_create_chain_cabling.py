@@ -277,6 +277,76 @@ class TestCreateChainCabling:
         gen.client.allocate_next_ip_prefix.assert_not_awaited()
 
 
+def _p2p_prefix(*, prefix: str, namespace_id: str = "ns-default") -> MagicMock:
+    p = MagicMock()
+    p.display_label = prefix
+    p.prefix.value = prefix
+    p.ip_namespace = MagicMock(id=namespace_id)
+    return p
+
+
+class TestP2PAddressIsQueriedBeforeCreate:
+    """IpamIPAddress's (address, ip_namespace) uniqueness_constraint is only
+    enforced by an async validator, not a synchronous DB constraint (see
+    hfid_index_lag_same_run.md) — a blind client.create() for each P2P host
+    address races a second, overlapping call for the same link and can leave
+    two nodes with the same address. Query first and reuse whatever's there."""
+
+    @pytest.mark.asyncio
+    async def test_creates_when_address_does_not_exist_yet(self) -> None:
+        gen = _make_generator()
+        bl_iface = _iface("Eth1/25", device="bl-01")
+        fw_iface = _iface("eth1", device="fw-01")
+        gen.client.filters = AsyncMock(side_effect=[[bl_iface], [fw_iface]])
+        gen._resolve_pool = AsyncMock(return_value=MagicMock(id="pool-1"))
+        gen.client.allocate_next_ip_prefix = AsyncMock(return_value=_p2p_prefix(prefix="100.65.0.0/31"))
+        gen.client.get = AsyncMock(return_value=None)
+        created_ips = [AsyncMock(id="src-ip"), AsyncMock(id="dst-ip")]
+        gen.client.create = AsyncMock(side_effect=[*created_ips, _cable_obj()])
+
+        await gen.create_chain_cabling(
+            [
+                {"devices": ["bl-01"], "down_role": "firewall"},
+                {"devices": ["fw-01"], "up_role": "uplink"},
+            ]
+        )
+
+        get_calls = [c for c in gen.client.get.call_args_list]
+        assert len(get_calls) == 2
+        for call in get_calls:
+            assert call.kwargs["ip_namespace__ids"] == ["ns-default"]
+        create_addresses = [
+            c.kwargs["data"]["address"] for c in gen.client.create.call_args_list if "address" in c.kwargs["data"]
+        ]
+        assert create_addresses == ["100.65.0.0/31", "100.65.0.1/31"]
+
+    @pytest.mark.asyncio
+    async def test_reuses_existing_address_instead_of_creating_a_duplicate(self) -> None:
+        gen = _make_generator()
+        bl_iface = _iface("Eth1/25", device="bl-01")
+        fw_iface = _iface("eth1", device="fw-01")
+        gen.client.filters = AsyncMock(side_effect=[[bl_iface], [fw_iface]])
+        gen._resolve_pool = AsyncMock(return_value=MagicMock(id="pool-1"))
+        gen.client.allocate_next_ip_prefix = AsyncMock(return_value=_p2p_prefix(prefix="100.65.0.0/31"))
+        # Both addresses already exist — as if an earlier, overlapping call
+        # for this same link already created them.
+        existing_ips = [AsyncMock(id="existing-src-ip"), AsyncMock(id="existing-dst-ip")]
+        gen.client.get = AsyncMock(side_effect=existing_ips)
+        gen.client.create = AsyncMock(return_value=_cable_obj())
+
+        await gen.create_chain_cabling(
+            [
+                {"devices": ["bl-01"], "down_role": "firewall"},
+                {"devices": ["fw-01"], "up_role": "uplink"},
+            ]
+        )
+
+        # Only the cable gets created — neither address does.
+        create_data_calls = [c for c in gen.client.create.call_args_list if "address" in c.kwargs.get("data", {})]
+        assert create_data_calls == []
+        assert {bl_iface.ip_address, fw_iface.ip_address} == {"existing-src-ip", "existing-dst-ip"}
+
+
 class TestCableIsNeverReferencedBeforeItIsVisible:
     """The cable is created last and its id is never *sent* back to the server on
     an interface — writing a freshly created node's id into the next mutation
