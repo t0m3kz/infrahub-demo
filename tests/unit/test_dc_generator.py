@@ -131,6 +131,12 @@ def _make_generator() -> Any:
 
     # Stub out every CommonGenerator/RoutingMixin collaborator generate() calls —
     # these are exercised by their own dedicated test modules, not here.
+    # acquire_resource_lock/release_resource_lock serialize the super-spine<->
+    # hyper-spine cabling call against a concurrent, overlapping generator run
+    # for the same DC — not under test here, and the lock's own client.create()
+    # call has no CoreStandardGroup-shaped mock on this plain MagicMock client.
+    gen.acquire_resource_lock = AsyncMock(return_value="lock-id")
+    gen.release_resource_lock = AsyncMock()
     gen.allocate_resource_pools = AsyncMock(return_value={})
     gen.upsert_asn_pool = AsyncMock(return_value=MagicMock(id="asn-pool-1"))
     gen.upsert_number_pool = AsyncMock(return_value=MagicMock(id="num-pool-1"))
@@ -426,6 +432,43 @@ class TestGenerateHyperSpineTier:
         assert cross_tier_call["top_devices"] == ["dc1-hs-01", "dc1-hs-02"]
         assert cross_tier_call["bottom_role"] == "super-spine"
         assert cross_tier_call["top_role"] == "hyper-spine"
+
+        # Serialized against a concurrent, overlapping generate() for the
+        # same DC — see generate()'s own comment for the reproduced DC4
+        # collision this guards against.
+        gen.acquire_resource_lock.assert_awaited_once_with("hyperspine-cabling-dc-1")
+        gen.release_resource_lock.assert_awaited_once_with("lock-id")
+
+    @pytest.mark.asyncio
+    async def test_lock_is_held_only_around_the_cabling_call(self) -> None:
+        """Acquired right before create_cabling, released right after — not
+        held across create_routing, which does not share the race."""
+        gen = _make_generator()
+        gen.create_devices = AsyncMock(
+            side_effect=[
+                ["dc1-ss-01"],
+                ["dc1-hs-01"],
+            ]
+        )
+        calls: list[str] = []
+        gen.acquire_resource_lock = AsyncMock(side_effect=lambda key: calls.append(f"acquire:{key}") or "lock-id")
+        gen.release_resource_lock = AsyncMock(side_effect=lambda lock_id: calls.append(f"release:{lock_id}"))
+        gen.create_cabling = AsyncMock(side_effect=lambda **_: calls.append("cabling") or [])
+        gen.create_routing = AsyncMock(side_effect=lambda **_: calls.append("routing"))
+        data = _deployment(
+            design=_design(max_super_spines_per_fabric=1, max_hyper_spines_per_fabric=1),
+            amount_of_super_spines=1,
+            super_spine_template={"id": "tmpl-ss", "interfaces": [{"name": "Ethernet1", "role": "uplink"}]},
+            amount_of_hyper_spines=1,
+            hyper_spine_template={"id": "tmpl-hs", "interfaces": [{"name": "Ethernet1", "role": "downlink"}]},
+        )
+
+        await gen.generate(data)
+
+        acquire_idx = calls.index("acquire:hyperspine-cabling-dc-1")
+        cabling_idx = calls.index("cabling")
+        release_idx = calls.index("release:lock-id")
+        assert acquire_idx < cabling_idx < release_idx
 
     @pytest.mark.asyncio
     async def test_missing_interfaces_logs_error_and_skips_cabling(self) -> None:

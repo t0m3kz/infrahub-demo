@@ -441,17 +441,36 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
             ]
             if super_spine_names and super_spine_uplink_interfaces and hyper_spine_downlink_interfaces:
                 p2p_prefix_length = 127 if is_ipv6 else 31
-                p2p_pairs = await self.create_cabling(
-                    bottom_devices=super_spine_names,
-                    bottom_interfaces=super_spine_uplink_interfaces,
-                    top_devices=hyper_spine_names,
-                    top_interfaces=hyper_spine_downlink_interfaces,
-                    strategy="pod",
-                    options=CablingOptions(
-                        pool=dc_pools.get("technical"),
-                        p2p_prefix_length=p2p_prefix_length,
-                    ),
-                )
+                # Confirmed live on DC4: the DC-level technical pool itself is
+                # NOT duplicated (allocate_resource_pools()'s own lock already
+                # rules that out) — the race is here, in create_cabling()'s
+                # P2P address creation. Two overlapping invocations of this
+                # generator for the same DC (whatever fires them — this
+                # section's only caller-visible clue is that it, not device
+                # or border-leaf creation just above, is where the collision
+                # lands) can both find the SAME two hyper-spine<->super-spine
+                # interfaces still uncabled and both create the same
+                # addresses for them; IpamIPAddress's uniqueness_constraint
+                # is only enforced asynchronously, so both writes succeed and
+                # only the later "Process schema integrity" check catches it.
+                # Serialize on dc_id: only one overlapping caller ever cables
+                # this DC's hyper-spine mesh; the other finds every interface
+                # already cabled and does nothing.
+                lock_id = await self.acquire_resource_lock(f"hyperspine-cabling-{dc_id}")
+                try:
+                    p2p_pairs = await self.create_cabling(
+                        bottom_devices=super_spine_names,
+                        bottom_interfaces=super_spine_uplink_interfaces,
+                        top_devices=hyper_spine_names,
+                        top_interfaces=hyper_spine_downlink_interfaces,
+                        strategy="pod",
+                        options=CablingOptions(
+                            pool=dc_pools.get("technical"),
+                            p2p_prefix_length=p2p_prefix_length,
+                        ),
+                    )
+                finally:
+                    await self.release_resource_lock(lock_id)
                 await self.create_routing(
                     bottom_devices=super_spine_names,
                     top_devices=hyper_spine_names,
