@@ -98,3 +98,6 @@ configure router "Base" bgp 1 neighbor "10.0.0.101" admin-state enable
 configure router "Base" bgp 1 neighbor "10.0.0.101" peer-as 65000
 configure router "Base" bgp 1 neighbor "10.0.0.101" description "spine-02"
 configure router "Base" bgp 1 neighbor "10.0.0.101" group "EVPN-PEERS"configure router "Base" bgp 1 export policy "RM-CONN-2-BGP"
+
+
+

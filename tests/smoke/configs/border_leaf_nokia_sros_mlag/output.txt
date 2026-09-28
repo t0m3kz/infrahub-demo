@@ -45,3 +45,12 @@ configure router "Base" interface "Loopback0" mtu 9000
 configure router "Base" interface "Loopback0" description "Router ID"
 configure router "Base" interface "Loopback0" ipv4 admin-state enable
 configure router "Base" interface "Loopback0" ipv4 primary address "10.0.2.1/32"
+
+
+
+
+
+
+
+
+
