@@ -44,7 +44,13 @@ set static-route {{ route.destination }} nexthop gateway address {{ route.nextho
 ! --- Security Policy Rules ---
 {%- for policy in zone_policies %}
 {%- for rule in policy.rules %}
-add access-rule layer "Network" position {{ rule.seq }} name "{{ rule.name }}" action {{ 'accept' if rule.action == 'permit' else 'drop' }} source {{ rule.src or 'Any' }} destination {{ rule.dst or 'Any' }} service {{ rule.dst_port or 'Any' }} track {{ 'Log' if rule.log else 'None' }}
+{%- if rule.raw_protocol in ('tcp', 'udp') and rule.port_start %}
+{%- set svc_name = 'svc-' + rule.raw_protocol + '-' + rule.port_start | string + ('-' + rule.port_end | string if rule.port_end and rule.port_end != rule.port_start else '') %}
+add service-{{ rule.raw_protocol }} name {{ svc_name }} port {{ rule.port_start }}{{ '-' + rule.port_end | string if rule.port_end and rule.port_end != rule.port_start else '' }}
+{%- else %}
+{%- set svc_name = 'Any' %}
+{%- endif %}
+add access-rule layer "Network" position {{ rule.seq }} name "{{ rule.name }}" action {{ 'accept' if rule.action == 'permit' else 'drop' }} source {{ rule.src or 'Any' }} destination {{ rule.dst or 'Any' }} service {{ svc_name }} track {{ 'Log' if rule.log else 'None' }}
 {%- if rule.src_zone %}
 set access-rule layer "Network" name "{{ rule.name }}" source {{ rule.src_zone }}
 {%- endif %}

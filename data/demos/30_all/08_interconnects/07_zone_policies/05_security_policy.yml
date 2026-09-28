@@ -1,0 +1,60 @@
+---
+# Firewall-level enforcement for colo-hosted cloud/partner/SaaS interconnects
+# (see 02_security_tags.yml's SecurityTag layer for the additive coarse GPO
+# contract). Rules match by source_segment (C001's existing "nordix-prod"
+# segment, data/demos/30_all/07_applications/c001/00_segment.yml) and
+# destination_prefixes (04_destination_prefixes.yml) — no source/destination
+# zone is set, since no SecurityZone data exists in this repo yet for
+# INTERNET/MANAGEMENT either; destination_prefixes alone is a complete,
+# schema-legal selector (checks/firewall.py counts zone, segment, IP, and
+# prefix selectors together, any one is sufficient).
+#
+# default_action: deny means nothing beyond these three explicit permits
+# reaches AWS/Acme/Zscaler from this segment — and getting there at all still
+# requires the traffic to have been PBR-redirected to the FR metro firewall
+# first (transforms/helpers/firewall.py::get_border_leaf_pbr_rules), since
+# that redirect doesn't look at destination — this policy is the SECOND gate,
+# not a way to skip the first.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityPolicy
+  data:
+    - name: colo-fr-external-egress
+      description: "C001 FR cage: permitted flows from internal tiers to colo-hosted cloud/partner/SaaS interconnects"
+      default_action: deny
+      enabled: true
+      rules:
+        data:
+          - index: 10
+            name: nordix-prod-to-aws
+            action: permit
+            protocol: tcp
+            port_start: 443
+            source_segment: "c001-nordix-prod-p"
+            destination_prefixes:
+              - ["10.40.0.0/16", "default"]
+            log: false
+            description: "Nordix web/app tier to AWS transit hub over VC-C001-EQXFR-AWS-EUC1"
+
+          - index: 20
+            name: nordix-prod-to-partner-acme
+            action: permit
+            protocol: tcp
+            port_start: 8080
+            source_segment: "c001-nordix-prod-p"
+            destination_prefixes:
+              - ["198.18.0.0/24", "default"]
+            log: true
+            description: "Nordix to Acme Logistics B2B extranet over C001-PARTNER-ACME-FR2"
+
+          - index: 30
+            name: nordix-prod-to-saas-zscaler
+            action: permit
+            protocol: tcp
+            port_start: 443
+            source_segment: "c001-nordix-prod-p"
+            destination_prefixes:
+              - ["198.51.100.0/24", "default"]
+            log: false
+            description: "Nordix web tier to Zscaler cloud security PoP"

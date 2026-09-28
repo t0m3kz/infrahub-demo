@@ -9,7 +9,7 @@ set system host-name {{ name }}
 {%- set iface_ref = iface.parent_interface.name + '.' + iface.vlan_id | string %}
 set interfaces {{ iface.parent_interface.name }} unit {{ iface.vlan_id }} vlan-id {{ iface.vlan_id }}
 {%- if iface.ip_address %}
-set interfaces {{ iface.parent_interface.name }} unit {{ iface.vlan_id }} family inet address {{ iface.ip_address.address }}
+set interfaces {{ iface.parent_interface.name }} unit {{ iface.vlan_id }} family {{ 'inet6' if ':' in iface.ip_address.address else 'inet' }} address {{ iface.ip_address.address }}
 {%- endif %}
 {%- if iface.description %}
 set interfaces {{ iface.parent_interface.name }} unit {{ iface.vlan_id }} description "{{ iface.description }}"
@@ -20,7 +20,7 @@ set security zones security-zone {{ iface.security_zone.name }} interfaces {{ if
 {%- else %}
 set interfaces {{ iface.name }} unit 0 description "{{ iface.description }}"
 {%- if iface.ip_address %}
-set interfaces {{ iface.name }} unit 0 family inet address {{ iface.ip_address.address }}
+set interfaces {{ iface.name }} unit 0 family {{ 'inet6' if ':' in iface.ip_address.address else 'inet' }} address {{ iface.ip_address.address }}
 {%- endif %}
 {%- if iface.security_zone %}
 set security zones security-zone {{ iface.security_zone.name }} interfaces {{ iface.name }}.0
@@ -55,7 +55,13 @@ set routing-instances {{ route.vrf | replace(' ', '-') }} routing-options static
 {%- for rule in policy.rules %}
 set security policies from-zone {{ rule.src_zone or 'any' }} to-zone {{ rule.dst_zone or 'any' }} policy {{ rule.name | replace(' ', '-') }} match source-address {{ rule.src or 'any' }}
 set security policies from-zone {{ rule.src_zone or 'any' }} to-zone {{ rule.dst_zone or 'any' }} policy {{ rule.name | replace(' ', '-') }} match destination-address {{ rule.dst or 'any' }}
+{%- if rule.raw_protocol in ('tcp', 'udp') and rule.port_start %}
+{%- set app_name = 'app-' + rule.raw_protocol + '-' + rule.port_start | string + ('-' + rule.port_end | string if rule.port_end and rule.port_end != rule.port_start else '') %}
+set applications application {{ app_name }} protocol {{ rule.raw_protocol }} destination-port {{ rule.port_start }}{{ '-' + rule.port_end | string if rule.port_end and rule.port_end != rule.port_start else '' }}
+set security policies from-zone {{ rule.src_zone or 'any' }} to-zone {{ rule.dst_zone or 'any' }} policy {{ rule.name | replace(' ', '-') }} match application {{ app_name }}
+{%- else %}
 set security policies from-zone {{ rule.src_zone or 'any' }} to-zone {{ rule.dst_zone or 'any' }} policy {{ rule.name | replace(' ', '-') }} match application any
+{%- endif %}
 set security policies from-zone {{ rule.src_zone or 'any' }} to-zone {{ rule.dst_zone or 'any' }} policy {{ rule.name | replace(' ', '-') }} then {{ 'permit' if rule.action == 'permit' else 'deny' }}
 {%- if rule.log %}
 set security policies from-zone {{ rule.src_zone or 'any' }} to-zone {{ rule.dst_zone or 'any' }} policy {{ rule.name | replace(' ', '-') }} then log session-close

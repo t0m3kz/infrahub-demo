@@ -374,6 +374,18 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
         "interfaces": 2,
         "cloud_endpoints": (),
     },
+    # Second tunnel riding the same internet underlay as C001-SDWAN-FR2, on a
+    # different gateway sub-interface — see 08_interconnects/07_zone_policies/
+    # 01_partner_virtual_circuit.yml for why this is an overlay, not a new
+    # dedicated physical cross-connect.
+    "C001-PARTNER-ACME-FR2": {
+        "link_type": "vpn_ipsec",
+        "transport_mode": "internet_backed",
+        "owner": "Nordix Ltd.",
+        "physical_circuits": ("INET-C001-WAW-FR2",),
+        "interfaces": 2,
+        "cloud_endpoints": (),
+    },
 }
 
 # One shared (tenant-less) firewall context per DC cluster ...

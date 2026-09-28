@@ -385,15 +385,20 @@ class CustomerDeploymentColocationExchangeGenerator(DeviceMixin, CablingMixin, C
 
         border_leaves: list[Any] = []
         if connectivity_mode == "pbr":
+            # ColocationMetro's fabric-tier devices carry role=edge, never
+            # border-leaf (see _COLO_VALID_FABRIC_ROLES in
+            # generators/topology/colocation.py) — border-leaf is a DC-only
+            # role. Without this, the lookup always returns empty and this
+            # whole PBR pairing silently no-ops.
             try:
                 border_leaves = await self.client.filters(
-                    kind=DcimPhysicalDevice, deployment__ids=[parent_id], role__value="border-leaf"
+                    kind=DcimPhysicalDevice, deployment__ids=[parent_id], role__value="edge"
                 )
             except Exception as exc:
-                self.logger.error(f"Error looking up border-leaf devices on {parent_name}: {exc}")
+                self.logger.error(f"Error looking up edge devices on {parent_name}: {exc}")
                 return
             if not border_leaves:
-                self.logger.error(f"{parent_name}: no border-leaf device found for context '{context_name}' p2p link")
+                self.logger.error(f"{parent_name}: no edge device found for context '{context_name}' p2p link")
                 return
 
         for i, fw_device in enumerate(fw_devices):
