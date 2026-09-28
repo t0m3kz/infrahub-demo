@@ -66,6 +66,7 @@ class TopologyConnector(CoreNode):
 
 
 class ManagedController(CoreNode):
+    name: String
     controller_type: Dropdown
     managed_devices: RelationshipManager[DcimDevice]
 

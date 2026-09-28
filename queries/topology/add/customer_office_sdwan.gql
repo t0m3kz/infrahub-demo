@@ -1,0 +1,50 @@
+query customer_office_sdwan($name: String!) {
+  TopologyCustomerOffice(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        environment { value }
+        branch_to_branch { value }
+        parent {
+          node {
+            id
+            ... on TopologyOfficeCustomer {
+              owner {
+                node {
+                  id
+                  ... on OrganizationCustomer {
+                    name { value }
+                  }
+                }
+              }
+            }
+          }
+        }
+        sdwan_gateway {
+          node {
+            id
+            name { value }
+            ... on DcimPhysicalDevice {
+              deployment {
+                node {
+                  id
+                  name { value }
+                }
+              }
+            }
+            interfaces {
+              edges {
+                node {
+                  id
+                  name { value }
+                  role { value }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -147,6 +147,13 @@ ALL_DEMO_EXPECTED_GENERATORS: dict[str, int] = {
     # 08_interconnects/06_interconnect_requests declares one opt-in
     # TopologyInterconnectRequest (DC11<->DC12 DCI dark fibre stub).
     "add_interconnect": 1,
+    # trigger-customer-office-sdwan-on-created fires unconditionally for
+    # every TopologyCustomerOffice (4: C001/C003/C015/C002) — the generator
+    # itself no-ops on the three without sdwan_gateway set. C002 additionally
+    # dispatches a 5th run via the updated-relationship trigger when
+    # 08_interconnects/04_sdwan/01_gateway.yml sets its sdwan_gateway; 4 is
+    # the safe floor.
+    "add_sdwan_edge": 4,
 }
 
 # Declared-object inventory of data/demos/30_all, measured from the YAML.
@@ -160,7 +167,7 @@ ALL_DEMO_EXPECTED_OBJECTS: dict[str, int] = {
     "TopologyCustomerDC": 7,
     "TopologyCustomerColocation": 6,
     "TopologyCustomerCloud": 4,
-    "TopologyCustomerOffice": 3,
+    "TopologyCustomerOffice": 4,
     "ManagedVxlanSegment": 4,
     "ManagedVlanSegment": 7,
     "AppApplication": 7,
@@ -285,7 +292,7 @@ ALL_DEMO_PHYSICAL_CIRCUIT_TYPES: dict[str, int] = {
     # scaffolds into 2 status=provisioning stub circuits.
     "dark_fiber": 5,  # DC10/DC11 -> EQX FR2, DC12 -> EQX PA4, + 2 DC11<->DC12 stubs
     "cross_connect": 2,  # EQX FR2 -> AWS eu-central-1, EQX PA4 -> Azure westeurope
-    "internet": 3,  # the SD-WAN branches' logical internet underlay
+    "internet": 4,  # C001/C003/C015 hand-authored + C002 generator-produced (add_sdwan_edge)
 }
 
 
@@ -371,6 +378,16 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
         "transport_mode": "internet_backed",
         "owner": "Novantis GmbH",
         "physical_circuits": ("INET-C015-PAR-FR2",),
+        "interfaces": 2,
+        "cloud_endpoints": (),
+    },
+    # Entirely generator-produced (add_sdwan_edge), unlike its hand-authored
+    # siblings above — proves the automated per-office SD-WAN path end-to-end.
+    "C002-P-SDWAN-FR2": {
+        "link_type": "sd_wan",
+        "transport_mode": "internet_backed",
+        "owner": "SwiftGo GmbH",
+        "physical_circuits": ("INET-C002-P",),
         "interfaces": 2,
         "cloud_endpoints": (),
     },

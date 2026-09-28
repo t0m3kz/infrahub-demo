@@ -19,7 +19,13 @@ def _make_transform() -> ControllerPayload:
     return ControllerPayload.__new__(ControllerPayload)
 
 
-def _raw_device(name: str, role: str = "leaf", status: str = "active", address: str | None = "10.0.0.1/32") -> dict:
+def _raw_device(
+    name: str,
+    role: str = "leaf",
+    status: str = "active",
+    address: str | None = "10.0.0.1/32",
+    branch_to_branch: str | None = None,
+) -> dict:
     return {
         "node": {
             "__typename": "DcimPhysicalDevice",
@@ -28,6 +34,11 @@ def _raw_device(name: str, role: str = "leaf", status: str = "active", address: 
             "role": {"value": role},
             "status": {"value": status},
             "primary_address": {"node": {"address": {"value": address}}} if address else {"node": None},
+            "deployment": (
+                {"node": {"branch_to_branch": {"value": branch_to_branch}}}
+                if branch_to_branch is not None
+                else {"node": None}
+            ),
         }
     }
 
@@ -147,6 +158,50 @@ class TestLbManagerVendorDispatch:
 
         assert "profile" in payload
         assert payload["instances"][0]["name"] == "lb-dc1101"
+
+
+class TestVelocloudVcoPayload:
+    def test_builds_enterprise_payload_from_managed_devices(self) -> None:
+        data = _raw_controller(
+            "EQX-FR2-SDWAN-VCO1",
+            "sdwan_orchestrator",
+            platform_name="velocloud",
+            devices=[
+                _raw_device("EQX-FR2-SDWAN-GW1", role="edge", address=None),
+                _raw_device("C002-P-EDGE1", role="edge", address=None, branch_to_branch="full_mesh"),
+            ],
+        )
+        payload = json.loads(asyncio.run(_make_transform().transform(data)))
+
+        assert payload["enterprise"] == "EQX-FR2-SDWAN-VCO1"
+        assert [e["hostname"] for e in payload["edges"]] == ["EQX-FR2-SDWAN-GW1", "C002-P-EDGE1"]
+
+    def test_branch_to_branch_read_per_edge_from_its_own_office(self) -> None:
+        """Different offices under the same VCO can carry different
+        branch_to_branch policies — it's read per managed device's own
+        deployment, not once for the whole controller."""
+        data = _raw_controller(
+            "VCO1",
+            "sdwan_orchestrator",
+            platform_name="velocloud",
+            devices=[
+                _raw_device("EDGE-HUB-ONLY", branch_to_branch="hub_only"),
+                _raw_device("EDGE-FULL-MESH", branch_to_branch="full_mesh"),
+            ],
+        )
+        payload = json.loads(asyncio.run(_make_transform().transform(data)))
+
+        by_host = {e["hostname"]: e["branch-to-branch"] for e in payload["edges"]}
+        assert by_host == {"EDGE-HUB-ONLY": "hub_only", "EDGE-FULL-MESH": "full_mesh"}
+
+    def test_gateway_with_no_deployment_has_no_branch_to_branch(self) -> None:
+        """The Gateway itself has no office/deployment carrying the field."""
+        data = _raw_controller(
+            "VCO1", "sdwan_orchestrator", platform_name="velocloud", devices=[_raw_device("GATEWAY1")]
+        )
+        payload = json.loads(asyncio.run(_make_transform().transform(data)))
+
+        assert payload["edges"][0]["branch-to-branch"] is None
 
 
 class TestNoMatch:

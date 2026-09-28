@@ -27,6 +27,15 @@ query controller_payload($controller: String!) {
                   address { value }
                 }
               }
+              ... on DcimPhysicalDevice {
+                deployment {
+                  node {
+                    ... on TopologyCustomerOffice {
+                      branch_to_branch { value }
+                    }
+                  }
+                }
+              }
             }
           }
         }

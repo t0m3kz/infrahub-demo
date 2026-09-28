@@ -97,6 +97,32 @@ def _build_netscaler_adm(controller: dict[str, Any]) -> dict[str, Any]:
     return {"profile": controller.get("name"), "instances": instances}
 
 
+def _build_velocloud_vco(controller: dict[str, Any]) -> dict[str, Any]:
+    """VCO payload — the Gateway plus every office Edge it manages
+    (generators/topology/sdwan_edge.py's SdwanEdgeGenerator appends Edges to
+    managed_devices; the Gateway itself is added by hand, see
+    data/demos/30_all/08_interconnects/04_sdwan/01_gateway.yml).
+
+    branch_to_branch is read per-edge from its own office
+    (TopologyCustomerOffice.branch_to_branch, schemas/extensions/topology/
+    topology_customer.yml) rather than once for the whole VCO — real
+    VeloCloud business-policy profiles are assigned per edge, and different
+    offices under the same VCO can want different mesh policies. Missing for
+    the Gateway itself (it has no office/deployment carrying that field).
+    """
+    edges = [
+        {
+            "hostname": device.get("name"),
+            "ip-address": _device_ip(device),
+            "role": device.get("role"),
+            "status": device.get("status"),
+            "branch-to-branch": ((device.get("deployment") or {}).get("branch_to_branch")),
+        }
+        for device in controller.get("managed_devices") or []
+    ]
+    return {"enterprise": controller.get("name"), "edges": edges}
+
+
 def _build_dna_center(controller: dict[str, Any]) -> dict[str, Any]:
     devices = [
         {
@@ -121,6 +147,7 @@ _BUILDERS: dict[tuple[str, str | None], Any] = {
     ("security_manager", "checkpoint_gaia"): _build_checkpoint_sms,
     ("lb_manager", "f5_tmos"): _build_big_iq,
     ("lb_manager", "netscaler"): _build_netscaler_adm,
+    ("sdwan_orchestrator", "velocloud"): _build_velocloud_vco,
 }
 
 

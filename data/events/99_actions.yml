@@ -394,6 +394,31 @@ spec:
           - relationship_name: fabric_templates
             modification_type: updated
 
+    # ── SD-WAN Edge Provisioning ────────────────────────────────────────────────
+    # `created` covers an office loaded with sdwan_gateway already populated
+    # inline (the normal bulk-load shape) — SdwanEdgeGenerator itself no-ops
+    # when sdwan_gateway is unset, so this is safe to fire unconditionally for
+    # every office, not just ones that opted in. The `updated` rule covers an
+    # existing office that opts in later by having sdwan_gateway set on it —
+    # the generator never writes back to TopologyCustomerOffice itself, so
+    # this can't self-trigger the way colocation metro's fabric_templates can.
+    - name: trigger-customer-office-sdwan-on-created
+      branch_scope: "other_branches"
+      node_kind: TopologyCustomerOffice
+      mutation_action: "created"
+      action: run-sdwan-edge-generator
+
+    - name: trigger-customer-office-sdwan-update-gateway
+      branch_scope: "other_branches"
+      node_kind: TopologyCustomerOffice
+      mutation_action: "updated"
+      action: run-sdwan-edge-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: sdwan_gateway
+            modification_type: updated
+
     # ── Interconnect Requests ──────────────────────────────────────────────────
     # A request declared with redundancy_count/endpoint_*_interfaces already
     # populated inline is a `created` mutation on the request itself, same gap

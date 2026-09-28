@@ -436,6 +436,35 @@ nodes:
           - name: campus
             label: Campus
             color: "#F39C12"
+      # SD-WAN branch-to-branch mesh capability. Deliberately NOT a per-tunnel
+      # object — dynamic mesh tunnels are negotiated on demand by the data
+      # plane once enabled; modeling one object per potential edge pair would
+      # be an O(N^2) blow-up for something that isn't a design decision at
+      # all, the same reason SecurityTagRule expresses intent as tier-to-tier
+      # rules rather than per-host-pair firewall rules (see
+      # schemas/extensions/security/security_tags.yml). One Dropdown per
+      # office is the whole knob — only meaningful once sdwan_gateway below
+      # is also set.
+      - name: branch_to_branch
+        kind: Dropdown
+        label: "Branch-to-Branch"
+        description: "Dynamic mesh tunnel capability for this office's SD-WAN edge"
+        optional: true
+        default_value: hub_only
+        order_weight: 450
+        choices:
+          - name: full_mesh
+            label: "Full Mesh"
+            description: "May build a dynamic tunnel directly to any other edge"
+            color: "#2ECC71"
+          - name: hub_only
+            label: "Hub Only"
+            description: "All traffic transits the gateway — no direct edge-to-edge tunnels"
+            color: "#95A5A6"
+          - name: on_demand
+            label: "On Demand"
+            description: "Direct edge-to-edge tunnels build dynamically once demand crosses a threshold"  # yamllint disable-line rule:line-length
+            color: "#3498DB"
     relationships:
       - name: locations
         peer: LocationFacility
@@ -454,6 +483,15 @@ nodes:
         identifier: "topology_customer_office__namespace"
         order_weight: 1100
         description: "IPAM namespace (= VRF) for this environment's footprint"
+      - name: sdwan_gateway
+        peer: DcimDevice
+        label: "SD-WAN Gateway"
+        description: "Gateway device to attach to — presence opts this office into automated SD-WAN edge provisioning"  # yamllint disable-line rule:line-length
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "customer_office__sdwan_gateway"
+        order_weight: 1200
 
 
   - name: CustomerCloud

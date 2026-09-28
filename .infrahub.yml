@@ -277,6 +277,12 @@ check_definitions:
     targets: firewalls
     parameters:
       device: name__value
+  - name: validate_sdwan_orchestrator
+    class_name: CheckSdwanOrchestrator
+    file_path: checks/sdwan.py
+    targets: sdwan_orchestrators
+    parameters:
+      controller: name__value
   - name: validate_capability_guard
     class_name: CheckCapabilityGuard
     file_path: checks/capability_guard.py
@@ -622,6 +628,8 @@ queries:
     file_path: queries/topology/add/customer_dc.gql
   - name: customer_colocation
     file_path: queries/topology/add/customer_colocation.gql
+  - name: customer_office_sdwan
+    file_path: queries/topology/add/customer_office_sdwan.gql
   - name: application_orchestrator_routing
     file_path: queries/topology/add/application_orchestrator_routing.gql
   - name: customer_deployment_orchestrator_routing
@@ -867,6 +875,19 @@ generator_definitions:
     targets: colocation_metros
     query: colocation_metro_data
     class_name: ColocationMetroGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
+  - name: add_sdwan_edge
+    file_path: generators/topology/sdwan_edge.py
+    targets: customer_deployments_office
+    query: customer_office_sdwan
+    class_name: SdwanEdgeGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:
