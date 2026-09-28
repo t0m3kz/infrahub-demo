@@ -65,4 +65,3 @@ sudo config portchannel add Port-Channel100
 sudo config portchannel member add Port-Channel100 Ethernet33
 sudo config portchannel member add Port-Channel100 Ethernet34
 sudo config mclag peer-link add Port-Channel100
-

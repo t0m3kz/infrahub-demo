@@ -109,4 +109,3 @@
   "VLAN": {},
   "VLAN_INTERFACE": {}
 }
-

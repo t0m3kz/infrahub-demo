@@ -85,4 +85,3 @@
   "VLAN": {},
   "VLAN_INTERFACE": {}
 }
-

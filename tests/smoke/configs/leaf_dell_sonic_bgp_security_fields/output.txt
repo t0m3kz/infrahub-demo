@@ -121,4 +121,3 @@
   "VXLAN_TUNNEL": {},
   "VXLAN_TUNNEL_MAP": {}
 }
-

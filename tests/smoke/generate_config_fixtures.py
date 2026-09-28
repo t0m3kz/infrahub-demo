@@ -1507,7 +1507,9 @@ def _write_fixture(
     try:
         output = run_transform(transform_cls, data)
         with open(test_dir / "output.txt", "w") as f:
-            f.write(output)
+            # Match end-of-file-fixer's normalization (exactly one trailing
+            # newline) so the pre-commit hook never re-touches this file.
+            f.write(output.rstrip("\n") + "\n")
         print(f"  ✓ {dir_name}")
         return 1, 0
     except Exception as e:
