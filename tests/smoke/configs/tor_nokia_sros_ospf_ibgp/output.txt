@@ -1,6 +1,5 @@
 configure system hostname "dc1-tor-01"
 configure system dns resolver admin-state enable
-
 configure router "Base" admin-state enable
 configure router "Base" router-id "10.0.0.1"
 
@@ -32,18 +31,6 @@ configure router "Base" ospf 1 interface "Ethernet2" admin-state enable
 configure port "Ethernet10" admin-state enable
 configure port "Ethernet10" mtu 9212
 configure port "Ethernet10" ethernet encap-type dot1q
-configure port "Loopback0" admin-state enable
-configure port "Loopback0" mtu 9212
-configure router "Base" interface "Loopback0" admin-state enable
-configure router "Base" interface "Loopback0" mtu 9000
-configure router "Base" interface "Loopback0" description "Router ID"
-configure router "Base" interface "Loopback0" ipv4 admin-state enable
-configure router "Base" interface "Loopback0" ipv4 primary address "10.0.0.1/32"
-
-
-
-
-
 configure router "Base" ospf 1 admin-state enable
 configure router "Base" ospf 1 router-id "10.0.0.1"
 configure router "Base" ospf 1 reference-bandwidth 10000
@@ -56,11 +43,6 @@ configure router "Base" ospf 1 interface "Ethernet2" area "0.0.0.0"
 configure router "Base" ospf 1 interface "Ethernet2" passive disable
 configure router "Base" ospf 1 interface "Ethernet10" passive enable
 configure router "Base" ospf 1 interface "Loopback0" passive enable
-
-
-
-
-
 configure router "Base" bgp 1 admin-state enable
 configure router "Base" bgp 1 router-id "10.0.0.1"
 configure router "Base" bgp 1 local-as 65000
@@ -80,9 +62,8 @@ configure router "Base" bgp 1 neighbor "10.0.0.100" group "EVPN-PEERS"
 configure router "Base" bgp 1 neighbor "10.0.0.101" admin-state enable
 configure router "Base" bgp 1 neighbor "10.0.0.101" peer-as 65000
 configure router "Base" bgp 1 neighbor "10.0.0.101" description "spine-02"
-configure router "Base" bgp 1 neighbor "10.0.0.101" group "EVPN-PEERS"configure router "Base" bgp 1 export policy "RM-CONN-2-BGP"
-
-
+configure router "Base" bgp 1 neighbor "10.0.0.101" group "EVPN-PEERS"
+configure router "Base" bgp 1 export policy "RM-CONN-2-BGP"
 !
 ! VXLAN / EVPN — one "vpls" service per L2 VNI, bridged over the loopback VTEP
 !
@@ -125,4 +106,3 @@ configure service vprn 200 interface "int-vpls-200" vpls "vpls-200"
 configure service vprn 200 interface "int-vpls-200" mac "00:1c:73:00:dc:01"
 configure service vprn 200 interface "int-vpls-200" ipv4 primary-address "10.200.0.1/24"
 !
-

@@ -14,7 +14,7 @@ configure router "Base" ospf 1 interface "{{ interface.name }}" admin-state enab
 configure router "Base" ospf 1 interface "{{ interface.name }}" area "{{ interface.ospf.area }}"
 configure router "Base" ospf 1 interface "{{ interface.name }}" passive disable
 {%- if interface.ospf.get('password') %}
-{#- NOTE: authentication leaf path unverified for SR OS MD-CLI — best-effort guess -#}
+{#- NOTE: authentication leaf path unverified for SR OS MD-CLI — best-effort guess #}
 configure router "Base" ospf 1 interface "{{ interface.name }}" authentication-type password
 configure router "Base" ospf 1 interface "{{ interface.name }}" authentication-key "{{ interface.ospf.password }}"
 {%- endif %}
@@ -22,5 +22,5 @@ configure router "Base" ospf 1 interface "{{ interface.name }}" authentication-k
 configure router "Base" ospf 1 interface "{{ interface.name }}" passive enable
 {%- endif %}
 {%- endfor %}
-{% endfor %}
-{%- endif %}
+{%- endfor %}
+{%- endif -%}

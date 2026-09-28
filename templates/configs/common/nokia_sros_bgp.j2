@@ -15,7 +15,7 @@ configure router "Base" bgp 1 graceful-restart admin-state enable
 {%- if bgp_config.multipath %}
 configure router "Base" bgp 1 multipath max-paths 64
 {%- endif %}
-{#- Peer groups -#}
+{#- Peer groups #}
 {%- for pg in bgp_config.peer_groups | default([]) %}
 configure router "Base" bgp 1 group "{{ pg.name }}" admin-state enable
 {%- if pg.get('remote_as') %}
@@ -64,7 +64,7 @@ configure router "Base" policy-options policy-statement "{{ session.name }}-MED-
 configure router "Base" policy-options policy-statement "{{ session.name }}-MED-OUT" entry 10 action action-type accept
 {%- endif %}
 {%- endfor %}
-{#- BGP Neighbors -#}
+{#- BGP Neighbors #}
 {%- for session in bgp_config.sessions %}
 {%- set is_unnumbered = session.get('interface_name') and not session.get('remote_ip') %}
 {%- set remote_ip = session.interface_name if is_unnumbered else session.remote_ip.address.split('/')[0] %}
@@ -127,7 +127,7 @@ configure router "Base" bgp 1 neighbor "{{ remote_ip }}" import policy "{{ sessi
 configure router "Base" bgp 1 neighbor "{{ remote_ip }}" export policy "{{ session.name }}-MED-OUT"
 {%- endif %}
 {%- endfor %}
-{#- Export policy for connected routes -#}
+{#- Export policy for connected routes #}
 configure router "Base" bgp 1 export policy "RM-CONN-2-BGP"
-{% endfor %}
-{%- endif %}
+{%- endfor %}
+{%- endif -%}

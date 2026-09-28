@@ -17,4 +17,4 @@ configure redundancy mc-lag peer-link lag {{ mlag.peer_link_lag_id }}
 {%- elif mlag.peer_link %}
 configure redundancy mc-lag peer-link port {{ mlag.peer_link }}
 {%- endif %}
-{%- endif %}
+{%- endif -%}

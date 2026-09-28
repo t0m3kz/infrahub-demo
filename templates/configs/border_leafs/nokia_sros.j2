@@ -19,7 +19,7 @@ configure router "Base" interface "system" ipv4 admin-state enable
 configure router "Base" interface "system" ipv4 primary address "{{ bgp[0].router_id.address if bgp else '0.0.0.1/32' }}"
 
 {# Physical Interfaces #}
-{%- for interface in interfaces if interface.role != 'mlag-peer' %}
+{%- for interface in interfaces if interface.role != 'mlag-peer' and 'loopback' not in interface.name|lower %}
 configure port "{{ interface.name }}" admin-state enable
 configure port "{{ interface.name }}" mtu 9212
 {%- if interface.vlans %}
@@ -40,12 +40,8 @@ configure router "Base" ospf 1 interface "{{ interface.name }}" admin-state enab
 {%- endif %}
 {%- endfor %}
 
-{# OSPF Configuration #}
-{% include 'common/nokia_sros_ospf.j2' %}
-
-{# BGP Configuration (underlay + overlay sessions) #}
-{% include 'common/nokia_sros_bgp.j2' %}
-
+{%- include 'common/nokia_sros_ospf.j2' -%}
+{%- include 'common/nokia_sros_bgp.j2' -%}
 {%- if vxlan and vxlan.enabled %}
 !
 ! VXLAN / EVPN — one "vpls" service per L2 VNI, bridged over the loopback VTEP

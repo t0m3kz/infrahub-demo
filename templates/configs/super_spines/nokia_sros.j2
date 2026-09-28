@@ -15,7 +15,7 @@ configure router "Base" interface "system" ipv4 admin-state enable
 configure router "Base" interface "system" ipv4 primary address "{{ bgp[0].router_id.address if bgp else '0.0.0.1/32' }}"
 
 {#- Physical Interfaces -#}
-{%- for interface in interfaces %}
+{%- for interface in interfaces if 'loopback' not in interface.name|lower %}
 configure port "{{ interface.name }}" admin-state enable
 configure port "{{ interface.name }}" mtu 9212
 configure router "Base" interface "{{ interface.name }}" admin-state enable
