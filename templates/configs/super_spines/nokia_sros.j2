@@ -1,33 +1,30 @@
-#!/usr/bin/env python3
-# Nokia SROS Super Spine Configuration Template
-# Device: {{ hostname }}
-# Generated configuration
-
-{#- Nokia SROS Configuration -#}
-A admin configure system hostname "{{ hostname }}"
-A admin configure system dns resolver admin-state enable
-A admin configure router "Base" admin-state enable
-A admin configure router "Base" router-id "{{ bgp[0].router_id.address.split('/')[0] if bgp else '0.0.0.0' }}"
+{#- Nokia SR OS Super-Spine Configuration — flat MD-CLI form (every command
+    is a full path from "configure", no nested block/exit). Underlay only:
+    no VTEP/VXLAN/EVPN at this tier, matching arista_eos.j2/cisco_nxos.j2. -#}
+configure system hostname "{{ hostname }}"
+configure system dns resolver admin-state enable
+configure router "Base" admin-state enable
+configure router "Base" router-id "{{ bgp[0].router_id.address.split('/')[0] if bgp else '0.0.0.0' }}"
 
 {#- Loopback Interface -#}
-A admin configure port "system" admin-state enable
-A admin configure port "system" mtu 9212
-A admin configure router "Base" interface "system" admin-state enable
-A admin configure router "Base" interface "system" ip-mtu 9000
-A admin configure router "Base" interface "system" ipv4 admin-state enable
-A admin configure router "Base" interface "system" ipv4 primary address "{{ bgp[0].router_id.address if bgp else '0.0.0.1/32' }}"
+configure port "system" admin-state enable
+configure port "system" mtu 9212
+configure router "Base" interface "system" admin-state enable
+configure router "Base" interface "system" ip-mtu 9000
+configure router "Base" interface "system" ipv4 admin-state enable
+configure router "Base" interface "system" ipv4 primary address "{{ bgp[0].router_id.address if bgp else '0.0.0.1/32' }}"
 
 {#- Physical Interfaces -#}
 {%- for interface in interfaces %}
-A admin configure port "{{ interface.name }}" admin-state enable
-A admin configure port "{{ interface.name }}" mtu 9212
-A admin configure router "Base" interface "{{ interface.name }}" admin-state enable
-A admin configure router "Base" interface "{{ interface.name }}" mtu 9000
-A admin configure router "Base" interface "{{ interface.name }}" description "{{ interface.description or interface.role|title }}"
+configure port "{{ interface.name }}" admin-state enable
+configure port "{{ interface.name }}" mtu 9212
+configure router "Base" interface "{{ interface.name }}" admin-state enable
+configure router "Base" interface "{{ interface.name }}" mtu 9000
+configure router "Base" interface "{{ interface.name }}" description "{{ interface.description or interface.role|title }}"
 {%- if interface.ip_addresses %}
-A admin configure router "Base" interface "{{ interface.name }}" ipv4 admin-state enable
+configure router "Base" interface "{{ interface.name }}" ipv4 admin-state enable
 {%- for ip in interface.ip_addresses %}
-A admin configure router "Base" interface "{{ interface.name }}" ipv4 primary address "{{ ip.address }}"
+configure router "Base" interface "{{ interface.name }}" ipv4 primary address "{{ ip.address }}"
 {%- endfor %}
 {%- endif %}
 {% endfor %}

@@ -1,57 +1,8 @@
-{#- Dell SONiC Super Spine Configuration -#}
-! Hostname configuration
-hostname {{ hostname }}
-
-! Enable required features
-feature ospf
-feature bgp
-feature interface-vlan
-
-{#- All Interfaces (Physical and Virtual) -#}
-{% for interface in interfaces %}
-interface {{ interface.name }}
-{%- if interface.description %}
-  description {{ interface.description }}
-{%- elif interface.circuits %}
-  description {{ interface.circuits[0].circuit_type|upper }} - {{ interface.circuits[0].circuit_id }} - {{ interface.circuits[0].provider }}
-{%- elif interface.virtual_links %}
-  description {{ interface.virtual_links[0].link_type|upper }} - {{ interface.virtual_links[0].link_name }} - {{ interface.virtual_links[0].provider }}
-{%- endif %}
-{%- if interface.ip_addresses %}
-{%- set ns_name = interface.ip_addresses[0].get('ip_namespace', {}).get('name', 'default') %}
-{%- if ns_name != 'default' %}
-  vrf forwarding {{ ns_name }}
-{%- endif %}
-{%- for ip in interface.ip_addresses %}
-  ip address {{ ip.address }}
-{%- endfor %}
-{%- endif %}
-{%- if interface.vlans %}
-  switchport
-  switchport mode access
-  switchport access vlan {{ interface.vlans[0] }}
-{%- endif %}
-{%- if ospf and interface.get('ospf') %}
-  ip router ospf {{ ospf[0].process_id or 1 }} area {{ interface.ospf.area }}
-{%- endif %}
-  no shutdown
-!
-{% endfor %}
-
-{%- if ospf %}
-{#- OSPF Configuration -#}
-{% include 'common/dell_sonic_ospf.j2' %}
-{%- endif %}
-
-{%- if bgp %}
-{#- BGP Configuration -#}
-{% include 'common/dell_sonic_bgp.j2' %}
-{%- endif %}
-
-! Configure route-maps
-route-map RM-CONN-2-BGP permit 10
-  match interface Loopback0
-
-{%- include 'common/sonic_management.j2' %}
-
-! End of configuration
+{#- Dell PowerSwitch super-spine runs the same SONiC OS, same ConfigDB
+   schema, as every other SONiC platform in this project — hardware
+   differences live in platform.json/hwsku on the real device, not in the
+   rendered config. Delegate entirely to the shared, correct SONiC template
+   rather than maintaining a second copy: this file previously hardcoded
+   Cisco NX-OS CLI under a SONiC filename, which no real SONiC device
+   accepts. -#}
+{% include "super_spines/sonic.j2" %}

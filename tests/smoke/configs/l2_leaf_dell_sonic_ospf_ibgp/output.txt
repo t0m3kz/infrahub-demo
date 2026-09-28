@@ -1,39 +1,43 @@
-! Hostname configuration
-hostname dc1-l2-leaf-01
-
-! Enable required features
-feature interface-vlan
-vlan 100
-  name Customer-A
-
-vlan 200
-  name Customer-A
-
-interface Ethernet1
-  description to spine-01
-  ip address 10.1.0.1/31
-  no shutdown
-!
-
-interface Ethernet2
-  description to spine-02
-  ip address 10.1.0.3/31
-  no shutdown
-!
-
-interface Ethernet10
-  description to server-01
-  switchport
-  switchport mode access
-  switchport access vlan 100
-  no shutdown
-!
-
-interface Loopback0
-  description Router ID
-  ip address 10.0.0.1/32
-  no shutdown
-!
 
 
-! End of configuration
+{
+  "DEVICE_METADATA": {
+    "localhost": {
+      "hostname": "dc1-l2-leaf-01",
+      "type": "L2Leaf"
+    }
+  },
+  "INTERFACE": {
+    "Ethernet1": {
+      "admin_status": "up",
+      "description": "to spine-01",
+      "mtu": "9000"
+    },
+    "Ethernet10": {
+      "admin_status": "up",
+      "description": "to server-01",
+      "mtu": "9000"
+    },
+    "Ethernet2": {
+      "admin_status": "up",
+      "description": "to spine-02",
+      "mtu": "9000"
+    }
+  },
+  "INTERFACE_IP": {
+    "Ethernet1|10.1.0.1/31": {},
+    "Ethernet2|10.1.0.3/31": {}
+  },
+  "VLAN": {
+    "Vlan100": {
+      "vlanid": "100"
+    },
+    "Vlan200": {
+      "vlanid": "200"
+    }
+  },
+  "VLAN_INTERFACE": {
+    "Vlan100": {},
+    "Vlan200": {}
+  }
+}

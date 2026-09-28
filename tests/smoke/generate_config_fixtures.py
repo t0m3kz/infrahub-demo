@@ -1459,7 +1459,7 @@ FIREWALL_PLATFORMS = ["paloalto_panos", "cisco_asa", "fortinet_fortios", "checkp
 # underscore so existing fixture directory names are unaffected.
 DEVICE_CONFIGS: list[tuple[type, str, str, list[str]]] = [
     (Leaf, "leaf", "leaf", FABRIC_PLATFORMS),
-    (Spine, "spine", "spine", FABRIC_PLATFORMS + ["edgecore_sonic"]),
+    (Spine, "spine", "spine", FABRIC_PLATFORMS),
     (SuperSpine, "super-spine", "super_spine", FABRIC_PLATFORMS),
     (BorderLeaf, "border-leaf", "border_leaf", FABRIC_PLATFORMS),
     # border-spine collapses spine + border-leaf: a relaying tier that is also a
