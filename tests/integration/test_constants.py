@@ -144,9 +144,6 @@ ALL_DEMO_EXPECTED_GENERATORS: dict[str, int] = {
     # — see docs/exchange_gateway.md.
     "add_customer_deployment_dc": 7,
     "add_customer_deployment_colocation": 6,
-    # 08_interconnects/06_interconnect_requests declares one opt-in
-    # TopologyInterconnectRequest (DC11<->DC12 DCI dark fibre stub).
-    "add_interconnect": 1,
     # trigger-customer-office-sdwan-on-created fires unconditionally for
     # every TopologyCustomerOffice (4: C001/C003/C015/C002) — the generator
     # itself no-ops on the three without sdwan_gateway set. C002 additionally
@@ -286,11 +283,10 @@ ALL_DEMO_COMPONENT_INSTANCE_COUNT = 2
 # ---------------------------------------------------------------------------
 
 ALL_DEMO_PHYSICAL_CIRCUIT_TYPES: dict[str, int] = {
-    # +2 generator-created: 08_interconnects/06_interconnect_requests declares
-    # one TopologyInterconnectRequest (DC11<->DC12, redundancy_count=2,
-    # connection_kind=physical_stub) that InterconnectRequestGenerator
-    # scaffolds into 2 status=provisioning stub circuits.
-    "dark_fiber": 5,  # DC10/DC11 -> EQX FR2, DC12 -> EQX PA4, + 2 DC11<->DC12 stubs
+    # All hand-authored in 08_interconnects/ — the opt-in
+    # TopologyInterconnectRequest that used to scaffold 2 extra DC11<->DC12
+    # stub circuits was removed along with its generator.
+    "dark_fiber": 3,  # DC10/DC11 -> EQX FR2, DC12 -> EQX PA4
     "cross_connect": 2,  # EQX FR2 -> AWS eu-central-1, EQX PA4 -> Azure westeurope
     "internet": 4,  # C001/C003/C015 hand-authored + C002 generator-produced (add_sdwan_edge)
 }

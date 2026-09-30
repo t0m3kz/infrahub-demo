@@ -33,9 +33,8 @@ create+upsert is less code and less risk than bending those assumptions.
 
 Ordering note: the Gateway's tunnel sub-interface is named "<trunk>.<tunnel_id>"
 (matching the hand-authored convention), so the overlay circuit is created
-FIRST (allocating tunnel_id from GLOBAL-SDWAN-TUNNEL-ID via the same
-from_pool dict shape generators/topology/interconnect.py uses for its own
-VNI/GRE-key pools) and its resolved value read back, THEN the sub-interface
+FIRST (allocating tunnel_id from GLOBAL-SDWAN-TUNNEL-ID via a from_pool dict
+on the attribute) and its resolved value read back, THEN the sub-interface
 is created, THEN the circuit's interface_capabilities is updated to include
 it — there is no standalone "allocate a number" call for a CoreNumberPool,
 only from_pool applied to a real node's attribute.

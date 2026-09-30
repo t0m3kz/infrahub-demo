@@ -1,13 +1,11 @@
 ---
 # Tunnel ID pool for generators/topology/sdwan_edge.py's SdwanEdgeGenerator —
-# one per office Edge <-> Gateway overlay tunnel_id, allocated the same
-# from_pool way InterconnectRequestGenerator allocates GRE keys
-# (generators/topology/interconnect.py). Deliberately its own pool, disjoint
-# from GLOBAL-INTERCONNECT-GRE-KEY (24_interconnect_pools.yml, 1-65535,
-# scoped to link_type=gre cross-connect tunnels) even though both ultimately
-# write TopologyVirtualCircuit.tunnel_id — mixing SD-WAN office overlays and
-# WAN cross-connect GRE tunnels into one shared ID space would make "which
-# kind of tunnel is number 4021" unanswerable without also checking link_type.
+# one per office Edge <-> Gateway overlay tunnel_id, allocated via from_pool.
+# Scoped to link_type=sd_wan only: if a future generator ever allocates
+# tunnel_id for another link_type (e.g. gre cross-connects), give it its own
+# disjoint pool rather than widening this one — sharing one ID space across
+# tunnel kinds would make "which kind of tunnel is number 4021" unanswerable
+# without also checking link_type.
 #
 # Range starts above the three offices' hand-picked values (1001/1003/1015,
 # data/demos/30_all/08_interconnects/04_sdwan/05_overlays.yml) so a

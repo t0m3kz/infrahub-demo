@@ -52,7 +52,6 @@ def number_pools(root_dir: Path) -> list[dict[str, Any]]:
     per-DC L2 ``vni`` pools that could collide with the fixed namespaces live."""
     paths = [
         root_dir / "data" / "bootstrap" / "18_vni_pools.yml",
-        root_dir / "data" / "bootstrap" / "24_interconnect_pools.yml",
         root_dir / "data" / "demos" / "15_customer_deployments" / "00_dc_fabric" / "01_pools.yml",
     ]
     pools: list[dict[str, Any]] = []
@@ -132,12 +131,14 @@ class TestPoolBandsAreDisjoint:
                 )
 
     def test_every_evpn_vni_pool_stays_encodable(self, number_pools: list[dict[str, Any]]) -> None:
-        """Only the EVPN-carried attributes are RD/RT-encoded. TopologyVirtualCircuit
-        VNIs are WAN-scoped and never appear in a route-target, so they are exempt.
+        """Every shipped vni/l3_vni pool is EVPN-carried and so RD/RT-encoded.
+
+        This previously exempted TopologyVirtualCircuit pools as WAN-scoped and
+        never route-targeted; GLOBAL-INTERCONNECT-VNI was the only such pool and
+        it is gone. Re-add the exemption deliberately if a WAN VNI pool returns,
+        rather than widening a band to make this pass.
         """
         for pool in _pools_for_attribute(number_pools, "vni") + _pools_for_attribute(number_pools, "l3_vni"):
-            if pool.get("node") == "TopologyVirtualCircuit":
-                continue
             assert pool["end_range"] <= MAX_ENCODABLE_VNI, (
                 f"pool '{pool['name']}' can hand out {pool['end_range']}, which cannot be "
                 f"encoded in a type-1 RD / type-2 RT (max {MAX_ENCODABLE_VNI})"

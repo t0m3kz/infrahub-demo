@@ -603,8 +603,6 @@ queries:
     file_path: queries/topology/add/circuit.gql
   - name: virtual_circuit_data
     file_path: queries/topology/add/virtual_circuit.gql
-  - name: interconnect_request_data
-    file_path: queries/topology/add/interconnect_request.gql
   - name: capability_guard
     file_path: queries/validation/capability_guard.gql
   - name: segment_placement
@@ -638,10 +636,6 @@ queries:
     file_path: queries/topology/add/topology_orchestrator_routing_data.gql
   - name: application_orchestrator_routing_data
     file_path: queries/topology/add/application_orchestrator_routing_data.gql
-  - name: quotation_data
-    file_path: queries/quotation/add_quotation.gql
-  - name: quotation_office_data
-    file_path: queries/quotation/add_quotation_office.gql
 
   # Change-risk exposure (docs/change_risk.md). The traversal itself is
   # Infrahub's own (InfrahubReachableNodes to shortlist, InfrahubPathTraversal to
@@ -792,18 +786,6 @@ generator_definitions:
       files:
         - generators/
         - utils/
-  - name: add_interconnect
-    file_path: generators/topology/interconnect.py
-    targets: interconnect_requests
-    query: interconnect_request_data
-    class_name: InterconnectRequestGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      name: name__value
-    watch:
-      files:
-        - generators/
         - utils/
   - name: add_mlag
     file_path: generators/topology/mlag.py
@@ -914,32 +896,6 @@ generator_definitions:
     targets: customer_deployments
     query: customer_deployment_orchestrator_routing
     class_name: TopologyOrchestratorRoutingGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
-  - name: add_quotation_dc
-    file_path: generators/quotations/dc.py
-    targets: customer_quotations
-    query: quotation_data
-    class_name: QuotationDCGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
-  - name: add_quotation_office
-    file_path: generators/quotations/office.py
-    targets: customer_quotations
-    query: quotation_office_data
-    class_name: OfficeQuotationGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:
