@@ -103,11 +103,13 @@ class TestGetMlagDomainExtraction:
             {
                 "name": "leaf-1",
                 "role": "leaf",
+                "primary_address": {"address": "192.0.2.1/32"},
                 "interfaces": [{"name": "Loopback0", "ip_address": {"address": "10.0.0.1/32"}}],
             },
             {
                 "name": "leaf-2",
                 "role": "leaf",
+                "primary_address": {"address": "192.0.2.2/32"},
                 "interfaces": [{"name": "Loopback0", "ip_address": {"address": "10.0.0.2/32"}}],
             },
         ]
@@ -115,6 +117,8 @@ class TestGetMlagDomainExtraction:
         assert result is not None
         assert result["local_ip"] == "10.0.0.2"
         assert result["peer_ip"] == "10.0.0.1"
+        assert result["local_management_ip"] == "192.0.2.2"
+        assert result["peer_management_ip"] == "192.0.2.1"
 
     def test_l2_peer_addresses_use_management(self) -> None:
         cap = _mlag_cap()
@@ -177,8 +181,10 @@ class TestSonicMlagConfig:
         config = get_sonic_mlag_config(
             {
                 "domain_id": 1,
-                "local_ip": "10.0.0.1",
-                "peer_ip": "10.0.0.2",
+                "local_ip": "fd00:2000::1",
+                "peer_ip": "fd00:2000::2",
+                "local_management_ip": "192.0.2.1",
+                "peer_management_ip": "192.0.2.2",
                 "peer_link": "PortChannel100",
                 "peer_link_lag_id": 100,
                 "peer_link_members": ["Ethernet33", "Ethernet34"],
@@ -186,7 +192,7 @@ class TestSonicMlagConfig:
             }
         )
         assert config["MCLAG_DOMAIN"] == {
-            "1": {"source_ip": "10.0.0.1", "peer_ip": "10.0.0.2", "peer_link": "PortChannel100"}
+            "1": {"source_ip": "192.0.2.1", "peer_ip": "192.0.2.2", "peer_link": "PortChannel100"}
         }
         assert config["MCLAG_INTERFACE"] == {"1|PortChannel101": {"if_type": "PortChannel"}}
         assert config["PORTCHANNEL"] == {
@@ -210,8 +216,8 @@ class TestSonicMlagConfig:
 
         config = {
             "domain_id": 1,
-            "local_ip": "10.0.0.1",
-            "peer_ip": "10.0.0.1",
+            "local_management_ip": "192.0.2.1",
+            "peer_management_ip": "192.0.2.1",
             "peer_link": "PortChannel100",
             "peer_link_lag_id": 100,
         }

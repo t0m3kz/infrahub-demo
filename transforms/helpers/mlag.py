@@ -19,6 +19,11 @@ def _control_ip(member: dict[str, Any]) -> str | None:
     return str(ip_interface(address).ip) if address else None
 
 
+def _management_ip(member: dict[str, Any]) -> str | None:
+    address = (member.get("primary_address") or {}).get("address")
+    return str(ip_interface(address).ip) if address else None
+
+
 def get_mlag(
     device_capabilities: list[dict[str, Any]] | None,
     interfaces: list[dict[str, Any]] | None = None,
@@ -80,6 +85,8 @@ def get_mlag(
             "devices": [member.get("name") for member in members],
             "local_ip": _control_ip(own) if own else None,
             "peer_ip": _control_ip(peer) if peer else None,
+            "local_management_ip": _management_ip(own) if own else None,
+            "peer_management_ip": _management_ip(peer) if peer else None,
             "peer_link": peer_link,
             "peer_link_lag_id": peer_link_lag_id,
             "peer_link_lacp_mode": peer_link_lacp_mode,
@@ -92,13 +99,17 @@ def get_mlag(
 def get_sonic_mlag_config(mlag: dict[str, Any] | None) -> dict[str, Any]:
     if not mlag:
         return {}
-    if not all(mlag.get(field) for field in ("domain_id", "local_ip", "peer_ip", "peer_link_lag_id")):
-        raise ValueError("SONiC MC-LAG requires a domain, two reachable IPv4 control IPs, and a physical peer-link LAG")
+    if not all(
+        mlag.get(field) for field in ("domain_id", "local_management_ip", "peer_management_ip", "peer_link_lag_id")
+    ):
+        raise ValueError(
+            "SONiC MC-LAG requires a domain, two reachable IPv4 management IPs, and a physical peer-link LAG"
+        )
     if not 1 <= mlag["domain_id"] <= 4095:
         raise ValueError("SONiC MC-LAG domain ID must be between 1 and 4095")
-    for endpoint in ("local_ip", "peer_ip"):
+    for endpoint in ("local_management_ip", "peer_management_ip"):
         IPv4Address(mlag[endpoint])
-    if mlag["local_ip"] == mlag["peer_ip"]:
+    if mlag["local_management_ip"] == mlag["peer_management_ip"]:
         raise ValueError("SONiC MC-LAG peers must use distinct control IPs")
     peer_link = mlag["peer_link"]
     domain_id = str(mlag["domain_id"])
@@ -110,8 +121,8 @@ def get_sonic_mlag_config(mlag: dict[str, Any] | None) -> dict[str, Any]:
     return {
         "MCLAG_DOMAIN": {
             domain_id: {
-                "source_ip": mlag["local_ip"],
-                "peer_ip": mlag["peer_ip"],
+                "source_ip": mlag["local_management_ip"],
+                "peer_ip": mlag["peer_management_ip"],
                 "peer_link": peer_link,
             }
         },
