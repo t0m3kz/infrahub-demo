@@ -152,14 +152,16 @@ fragment DeviceCapabilitiesFields on DcimCapabilities {
             edges {
               node {
                 name { value }
-                role { value }
-                primary_address { node { address { value } } }
-                interfaces(name__value: "Loopback0") {
-                  edges {
-                    node {
-                      name { value }
-                      ... on DcimVirtualInterface {
-                        ip_address { node { address { value } } }
+                ... on DcimDevice {
+                  role { value }
+                  primary_address { node { address { value } } }
+                  interfaces(name__value: "Loopback0") {
+                    edges {
+                      node {
+                        name { value }
+                        ... on DcimVirtualInterface {
+                          ip_address { node { address { value } } }
+                        }
                       }
                     }
                   }
