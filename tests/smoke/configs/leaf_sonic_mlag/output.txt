@@ -22,6 +22,11 @@
       "description": "to spine-01",
       "mtu": "9000"
     },
+    "Ethernet10": {
+      "admin_status": "up",
+      "description": "MLAG host member",
+      "mtu": "9000"
+    },
     "Ethernet2": {
       "admin_status": "up",
       "description": "to spine-02",
@@ -36,11 +41,6 @@
       "admin_status": "up",
       "description": "MLAG peer-link member 2",
       "mtu": "9000"
-    },
-    "Port-Channel100": {
-      "admin_status": "up",
-      "description": "MLAG Peer-Link",
-      "mtu": "9000"
     }
   },
   "INTERFACE_IP": {
@@ -50,18 +50,38 @@
   "LOOPBACK_INTERFACE": {
     "Loopback0|10.0.2.1/32": {}
   },
+  "MCLAG_DOMAIN": {
+    "1": {
+      "peer_ip": "10.0.2.2",
+      "peer_link": "PortChannel100",
+      "source_ip": "10.0.2.1"
+    }
+  },
+  "MCLAG_INTERFACE": {
+    "1|PortChannel101": {
+      "if_type": "PortChannel"
+    }
+  },
+  "NTP_SERVER": {},
   "OSPF_ROUTER": {},
+  "PORTCHANNEL": {
+    "PortChannel100": {
+      "admin_status": "up"
+    },
+    "PortChannel101": {
+      "admin_status": "up"
+    }
+  },
+  "PORTCHANNEL_MEMBER": {
+    "PortChannel100|Ethernet33": {},
+    "PortChannel100|Ethernet34": {},
+    "PortChannel101|Ethernet10": {}
+  },
   "STATIC_ROUTE": {},
+  "SYSLOG_SERVER": {},
   "VLAN": {},
   "VLAN_INTERFACE": {},
   "VRF": {},
   "VXLAN_TUNNEL": {},
   "VXLAN_TUNNEL_MAP": {}
 }
-
-# MC-LAG Configuration
-sudo config mclag add 1
-sudo config portchannel add Port-Channel100
-sudo config portchannel member add Port-Channel100 Ethernet33
-sudo config portchannel member add Port-Channel100 Ethernet34
-sudo config mclag peer-link add Port-Channel100

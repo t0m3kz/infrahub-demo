@@ -13,18 +13,18 @@
           },
           "platform": {
             "node": {
-              "id": "plat-dell_sonic",
+              "id": "plat-sonic",
               "name": {
-                "value": "dell_sonic"
+                "value": "sonic"
               },
               "netmiko_device_type": {
-                "value": "dell_sonic"
+                "value": "sonic"
               },
               "napalm_driver": {
-                "value": "dell_sonic"
+                "value": "sonic"
               },
               "ansible_network_os": {
-                "value": "dell_sonic"
+                "value": "sonic"
               }
             }
           },
@@ -50,6 +50,7 @@
               {
                 "node": {
                   "__typename": "ManagedMLAG",
+                  "id": "mlag-dom-1",
                   "name": {
                     "value": "DC1-POD1-L1-L2-MLAG"
                   },
@@ -68,6 +69,35 @@
                         "node": {
                           "name": {
                             "value": "DC1-POD1-L1"
+                          },
+                          "role": {
+                            "value": "border-leaf"
+                          },
+                          "primary_address": {
+                            "node": {
+                              "address": {
+                                "value": "10.0.2.1/32"
+                              }
+                            }
+                          },
+                          "interfaces": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "__typename": "DcimVirtualInterface",
+                                  "name": {
+                                    "value": "Loopback0"
+                                  },
+                                  "ip_address": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.0.2.1/32"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
                           }
                         }
                       },
@@ -75,6 +105,35 @@
                         "node": {
                           "name": {
                             "value": "DC1-POD1-L2"
+                          },
+                          "role": {
+                            "value": "border-leaf"
+                          },
+                          "primary_address": {
+                            "node": {
+                              "address": {
+                                "value": "10.0.2.2/32"
+                              }
+                            }
+                          },
+                          "interfaces": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "__typename": "DcimVirtualInterface",
+                                  "name": {
+                                    "value": "Loopback0"
+                                  },
+                                  "ip_address": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.0.2.2/32"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
                           }
                         }
                       }
@@ -210,7 +269,7 @@
                 "node": {
                   "__typename": "DcimLAGInterface",
                   "name": {
-                    "value": "Port-Channel100"
+                    "value": "PortChannel100"
                   },
                   "description": {
                     "value": "MLAG Peer-Link"
@@ -313,6 +372,92 @@
                   },
                   "role": {
                     "value": "mlag-peer"
+                  },
+                  "interface_type": {
+                    "value": "10gbase-x-sfpp"
+                  },
+                  "mtu": {
+                    "value": 9000
+                  },
+                  "ip_address": {
+                    "node": null
+                  },
+                  "cable": {
+                    "node": null
+                  },
+                  "interface_capabilities": {
+                    "edges": []
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimLAGInterface",
+                  "name": {
+                    "value": "PortChannel101"
+                  },
+                  "description": {
+                    "value": "MLAG Peer-Link"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "lag"
+                  },
+                  "lag_id": {
+                    "value": 101
+                  },
+                  "lacp_mode": {
+                    "value": "active"
+                  },
+                  "mtu": {
+                    "value": 9000
+                  },
+                  "minimum_links": {
+                    "value": 1
+                  },
+                  "ip_address": {
+                    "node": null
+                  },
+                  "mlag_domain": {
+                    "node": {
+                      "id": "mlag-dom-1",
+                      "name": {
+                        "value": "DC1-POD1-L1-L2-MLAG"
+                      }
+                    }
+                  },
+                  "member_interfaces": {
+                    "edges": [
+                      {
+                        "node": {
+                          "name": {
+                            "value": "Ethernet10"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "interface_capabilities": {
+                    "edges": []
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimPhysicalInterface",
+                  "name": {
+                    "value": "Ethernet10"
+                  },
+                  "description": {
+                    "value": "MLAG host member"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "customer"
                   },
                   "interface_type": {
                     "value": "10gbase-x-sfpp"

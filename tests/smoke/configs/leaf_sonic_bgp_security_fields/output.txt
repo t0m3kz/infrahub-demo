@@ -113,8 +113,10 @@
   "LOOPBACK_INTERFACE": {
     "Loopback0|10.0.0.1/32": {}
   },
+  "NTP_SERVER": {},
   "OSPF_ROUTER": {},
   "STATIC_ROUTE": {},
+  "SYSLOG_SERVER": {},
   "VLAN": {},
   "VLAN_INTERFACE": {},
   "VRF": {},

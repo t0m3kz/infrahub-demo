@@ -148,7 +148,25 @@ fragment DeviceCapabilitiesFields on DcimCapabilities {
           domain_id { value }
           reload_delay { value }
           reload_delay_non_mlag { value }
-          capabilities { edges { node { name { value } } } }
+          capabilities {
+            edges {
+              node {
+                name { value }
+                role { value }
+                primary_address { node { address { value } } }
+                interfaces(name__value: "Loopback0") {
+                  edges {
+                    node {
+                      name { value }
+                      ... on DcimVirtualInterface {
+                        ip_address { node { address { value } } }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     }

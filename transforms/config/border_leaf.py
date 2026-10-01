@@ -32,4 +32,6 @@ class BorderLeaf(BaseDeviceTransform):
         dc_activations = _flatten_deployment_segment_activations(data.get("deployment"))
         firewall_contexts = _flatten_deployment_firewall_contexts(data.get("deployment"))
         config["border_leaf_pbr_rules"] = get_border_leaf_pbr_rules(dc_activations, firewall_contexts, platform_name)
+        if platform_name in {"sonic", "dell_sonic", "nokia_sros"} and config["border_leaf_pbr_rules"]:
+            raise ValueError(f"{platform_name} border-leaf cannot render deployable PBR policy")
         return config

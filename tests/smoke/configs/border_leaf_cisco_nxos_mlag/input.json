@@ -50,6 +50,7 @@
               {
                 "node": {
                   "__typename": "ManagedMLAG",
+                  "id": "mlag-dom-1",
                   "name": {
                     "value": "DC1-POD1-L1-L2-MLAG"
                   },
@@ -68,6 +69,35 @@
                         "node": {
                           "name": {
                             "value": "DC1-POD1-L1"
+                          },
+                          "role": {
+                            "value": "border-leaf"
+                          },
+                          "primary_address": {
+                            "node": {
+                              "address": {
+                                "value": "10.0.2.1/32"
+                              }
+                            }
+                          },
+                          "interfaces": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "__typename": "DcimVirtualInterface",
+                                  "name": {
+                                    "value": "Loopback0"
+                                  },
+                                  "ip_address": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.0.2.1/32"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
                           }
                         }
                       },
@@ -75,6 +105,35 @@
                         "node": {
                           "name": {
                             "value": "DC1-POD1-L2"
+                          },
+                          "role": {
+                            "value": "border-leaf"
+                          },
+                          "primary_address": {
+                            "node": {
+                              "address": {
+                                "value": "10.0.2.2/32"
+                              }
+                            }
+                          },
+                          "interfaces": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "__typename": "DcimVirtualInterface",
+                                  "name": {
+                                    "value": "Loopback0"
+                                  },
+                                  "ip_address": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.0.2.2/32"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
                           }
                         }
                       }

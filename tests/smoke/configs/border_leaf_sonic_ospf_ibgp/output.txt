@@ -85,6 +85,7 @@
   "LOOPBACK_INTERFACE": {
     "Loopback0|10.0.0.1/32": {}
   },
+  "NTP_SERVER": {},
   "OSPF_ROUTER": {
     "default": {
       "reference_bandwidth": 10000,
@@ -92,6 +93,7 @@
     }
   },
   "STATIC_ROUTE": {},
+  "SYSLOG_SERVER": {},
   "VLAN": {
     "Vlan100": {
       "vlanid": "100"

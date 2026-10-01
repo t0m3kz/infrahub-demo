@@ -28,6 +28,8 @@
     "Ethernet1|10.1.0.1/31": {},
     "Ethernet2|10.1.0.3/31": {}
   },
+  "NTP_SERVER": {},
+  "SYSLOG_SERVER": {},
   "VLAN": {
     "Vlan100": {
       "vlanid": "100"

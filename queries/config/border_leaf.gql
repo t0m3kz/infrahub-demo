@@ -101,6 +101,7 @@ query border_leaf_config(
                 lacp_mode { value }
                 mtu { value }
                 minimum_links { value }
+                mlag_domain { node { id name { value } } }
                 ip_address {
                   node {
                     address { value }

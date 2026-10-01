@@ -38,8 +38,11 @@
 {%- set _ = static_route_table.update({vrf + '|0.0.0.0/0': {'nexthop': nexthop, 'ifname': '', 'nexthop-vrf': ''}}) -%}
 {%- endfor %}
 {%- endif %}
+{%- set ntp_servers = {} -%}
+{%- set syslog_servers = {} -%}
+{%- include 'common/sonic_management.j2' %}
 
-{{ {
+{%- set configdb = {
   'DEVICE_METADATA': device_metadata,
   'VLAN': vlan_config,
   'LOOPBACK_INTERFACE': loopback_interfaces,
@@ -57,7 +60,10 @@
   'EVPN_NVO': evpn_nvo,
   'ACL_TABLE': acl_table,
   'ACL_RULE': acl_rule,
-  'STATIC_ROUTE': static_route_table
-} | tojson(indent=2) }}
-{%- include 'common/sonic_mclag.j2' -%}
-{%- include 'common/sonic_management.j2' %}
+  'STATIC_ROUTE': static_route_table,
+  'NTP_SERVER': ntp_servers,
+  'SYSLOG_SERVER': syslog_servers
+} -%}
+{%- set _ = configdb.update(sonic_mlag | default({})) %}
+
+{{ configdb | tojson(indent=2) }}

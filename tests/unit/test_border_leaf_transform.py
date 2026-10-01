@@ -14,10 +14,13 @@ Covers:
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 import jinja2
+import pytest
 
 from transforms.config.border_leaf import BorderLeaf
 from transforms.helpers.segments import _flatten_deployment_segment_activations
@@ -148,6 +151,16 @@ class TestBorderLeafExtraConfig:
         transform = BorderLeaf.__new__(BorderLeaf)
         config = transform._extra_config(_minimal_device_data(deployment=None), "cisco_nxos")
         assert config["border_leaf_pbr_rules"] == []
+
+    @pytest.mark.parametrize("platform", ["sonic", "dell_sonic", "nokia_sros"])
+    def test_unsupported_border_leaf_refuses_pbr(self, platform: str) -> None:
+        """Don't return a policy that cannot be applied as a vendor artifact."""
+        transform = BorderLeaf.__new__(BorderLeaf)
+        with patch(
+            "transforms.config.border_leaf.get_border_leaf_pbr_rules", return_value=[{"fw_nexthop": "10.0.0.2"}]
+        ):
+            with pytest.raises(ValueError, match="cannot render deployable PBR policy"):
+                transform._extra_config(_minimal_device_data(), platform)
 
     def test_dc_wide_segment_activation_produces_pbr_rule(self) -> None:
         """Segment activated in this DC (via deployment.segment_deployments),
@@ -357,9 +370,7 @@ class TestAristaEosBorderLeafPbrTemplate:
 
 
 class TestDellSonicBorderLeafPbrTemplate:
-    """Dell SONiC has no hardware SGT/security-group primitive — every rule
-    matches by source prefix, same as .dev/scenariusze.txt's own
-    SONiC-BORDER-LEAF section (which uses IP-ACL matching exclusively)."""
+    """SONiC artifacts stay ConfigDB JSON; unsupported PBR fails in the transform."""
 
     def _env(self) -> jinja2.Environment:
         return jinja2.Environment(
@@ -371,41 +382,14 @@ class TestDellSonicBorderLeafPbrTemplate:
         rendered = self._env().get_template("border_leafs/dell_sonic.j2").render(**ctx)
         assert "route-map RM-BORDER-LEAF-PBR" not in rendered
 
-    def test_prefix_matched_rule_renders_acl_and_route_map(self) -> None:
-        ctx = _minimal_ctx(
-            border_leaf_pbr_rules=[
-                _pbr_rule(
-                    match_by_tag=False,
-                    sgt=None,
-                    sgt_name=None,
-                    acl_name="PBR-REDIRECT-web",
-                    source_prefixes=["10.10.1.0/24"],
-                )
-            ],
-            interfaces=[{"name": "Ethernet1", "role": "uplink", "status": "active", "description": None}],
-        )
-        rendered = self._env().get_template("border_leafs/dell_sonic.j2").render(**ctx)
-        assert "ip access-list PBR-REDIRECT-web" in rendered
-        assert "seq 10 permit ip 10.10.1.0/24 any" in rendered
-        assert "match ip address PBR-REDIRECT-web" in rendered
-        assert "set ip next-hop 10.65.0.0" in rendered
+    @pytest.mark.parametrize("platform", ["sonic", "dell_sonic"])
+    def test_management_is_pure_configdb(self, platform: str) -> None:
+        """SONiC config artifacts must remain parseable JSON with management data."""
+        ctx = _minimal_ctx(ntp={"servers": [{"address": "192.0.2.1"}]})
+        rendered = self._env().get_template(f"border_leafs/{platform}.j2").render(**ctx)
+        assert json.loads(rendered)["NTP_SERVER"] == {"192.0.2.1": {}}
 
-    def test_route_map_applied_only_on_uplink_interfaces(self) -> None:
-        ctx = _minimal_ctx(
-            border_leaf_pbr_rules=[
-                _pbr_rule(
-                    match_by_tag=False,
-                    sgt=None,
-                    sgt_name=None,
-                    acl_name="PBR-REDIRECT-web",
-                    source_prefixes=["10.10.1.0/24"],
-                )
-            ],
-            interfaces=[
-                {"name": "Ethernet1", "role": "uplink", "status": "active", "description": None},
-                {"name": "Ethernet25", "role": "firewall", "status": "active", "description": None},
-            ],
-        )
+    def test_no_cli_appended_for_management(self) -> None:
+        ctx = _minimal_ctx(syslog={"servers": [{"address": "192.0.2.2"}]})
         rendered = self._env().get_template("border_leafs/dell_sonic.j2").render(**ctx)
-        pbr_iface_block = rendered.split("ip policy route-map RM-BORDER-LEAF-PBR")[0].rsplit("interface ", 1)[1]
-        assert pbr_iface_block.startswith("Ethernet1")
+        assert json.loads(rendered)["SYSLOG_SERVER"] == {"192.0.2.2": {}}

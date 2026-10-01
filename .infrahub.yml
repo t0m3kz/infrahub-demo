@@ -72,6 +72,13 @@ artifact_definitions:
     transformation: super_spine
     parameters:
       device: name__value
+  - name: hyper_spine_config
+    artifact_name: hyper-spine
+    content_type: text/plain
+    targets: hyper-spines
+    transformation: super_spine
+    parameters:
+      device: name__value
   - name: loadbalancer_config
     artifact_name: loadbalancer
     content_type: text/plain

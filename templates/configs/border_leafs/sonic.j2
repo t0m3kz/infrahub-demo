@@ -34,8 +34,11 @@
 {%- set _ = static_route_table.update({vrf + '|0.0.0.0/0': {'nexthop': nexthop, 'ifname': '', 'nexthop-vrf': ''}}) -%}
 {%- endfor %}
 {%- endif %}
+{%- set ntp_servers = {} -%}
+{%- set syslog_servers = {} -%}
+{%- include 'common/sonic_management.j2' %}
 
-{{ {
+{%- set configdb = {
   'DEVICE_METADATA': device_metadata,
   'VLAN': vlan_config,
   'LOOPBACK_INTERFACE': loopback_interfaces,
@@ -51,37 +54,10 @@
   'VXLAN_TUNNEL_MAP': vxlan_tunnel_map,
   'VRF': vrf_config,
   'EVPN_NVO': evpn_nvo,
-  'STATIC_ROUTE': static_route_table
-} | tojson(indent=2) }}
-{%- include 'common/sonic_mclag.j2' -%}
-{%- include 'common/sonic_management.j2' %}
-{%- if border_leaf_pbr_rules %}
-!
-! Border-leaf PBR (.dev/scenariusze.txt "SONiC-BORDER-LEAF") — default-
-! redirect every segment's traffic to its firewall context's nexthop.
-! SONiC has no hardware SGT/security-group primitive, so every rule here
-! matches by source prefix (same as scenariusze.txt's own SONiC section).
-! FRR CLI text, same convention as common/dell_sonic_bgp.j2/dell_sonic_ospf.j2
-! — SONiC's control plane is FRR underneath, and route-map-based PBR is
-! applied the same way ConfigDB doesn't model policy-routing directly.
-!
-{%- for rule in border_leaf_pbr_rules %}
-! Customer: {{ rule.customer_name or 'any' }}/{{ rule.environment or 'any' }}
-ip access-list {{ rule.acl_name }}
-{%- for prefix in rule.source_prefixes %}
-  seq {{ loop.index * 10 }} permit ip {{ prefix }} any
-{%- endfor %}
-!
-route-map RM-BORDER-LEAF-PBR permit {{ loop.index * 10 }}
-  match ip address {{ rule.acl_name }}
-  set ip next-hop {{ rule.fw_nexthop }}
-!
-{%- endfor %}
-! Applied on every uplink (fabric-facing) interface — that's where traffic
-! from any leaf in this DC arrives at the border-leaf.
-{%- for interface in interfaces if interface.role == 'uplink' %}
-interface {{ interface.name }}
-  ip policy route-map RM-BORDER-LEAF-PBR
-!
-{%- endfor %}
-{%- endif %}
+  'STATIC_ROUTE': static_route_table,
+  'NTP_SERVER': ntp_servers,
+  'SYSLOG_SERVER': syslog_servers
+} -%}
+{%- set _ = configdb.update(sonic_mlag | default({})) %}
+
+{{ configdb | tojson(indent=2) }}

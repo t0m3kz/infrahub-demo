@@ -21,7 +21,7 @@
 {%- endif -%}
 {%- endfor -%}
 {%- for interface in interfaces -%}
-{%- if 'loopback' not in interface.name|lower -%}
+{%- if 'loopback' not in interface.name|lower and 'portchannel' not in interface.name|lower -%}
 {%- set iface_entry = {'admin_status': 'up' if interface.status == 'active' else 'down'} -%}
 {%- if interface.description -%}
 {%- set _ = iface_entry.update({'description': interface.description}) -%}

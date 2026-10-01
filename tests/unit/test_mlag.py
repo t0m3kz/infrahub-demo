@@ -8,7 +8,11 @@ Covers:
 
 from __future__ import annotations
 
-from transforms.helpers.mlag import get_mlag
+from pathlib import Path
+
+import jinja2
+
+from transforms.helpers.mlag import get_mlag, get_sonic_mlag_config
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -93,6 +97,37 @@ class TestGetMlagDomainExtraction:
         assert result is not None
         assert result["devices"] == []
 
+    def test_routed_peer_addresses_come_from_loopback0(self) -> None:
+        cap = _mlag_cap()
+        cap["devices"] = [
+            {
+                "name": "leaf-1",
+                "role": "leaf",
+                "interfaces": [{"name": "Loopback0", "ip_address": {"address": "10.0.0.1/32"}}],
+            },
+            {
+                "name": "leaf-2",
+                "role": "leaf",
+                "interfaces": [{"name": "Loopback0", "ip_address": {"address": "10.0.0.2/32"}}],
+            },
+        ]
+        result = get_mlag([cap], device_name="leaf-2")
+        assert result is not None
+        assert result["local_ip"] == "10.0.0.2"
+        assert result["peer_ip"] == "10.0.0.1"
+
+    def test_l2_peer_addresses_use_management(self) -> None:
+        cap = _mlag_cap()
+        cap["capabilities"] = [
+            {"name": "l2-1", "role": "l2-leaf", "primary_address": {"address": "192.0.2.1/32"}},
+            {"name": "l2-2", "role": "l2-leaf", "primary_address": {"address": "192.0.2.2/32"}},
+        ]
+        del cap["devices"]
+        result = get_mlag([cap], device_name="l2-1")
+        assert result is not None
+        assert result["local_ip"] == "192.0.2.1"
+        assert result["peer_ip"] == "192.0.2.2"
+
 
 class TestGetMlagPeerLink:
     def test_peer_link_found_by_role(self) -> None:
@@ -135,6 +170,75 @@ class TestGetMlagPeerLink:
         result = get_mlag([_mlag_cap()], ifaces)
         assert result is not None
         assert result["peer_link"] == "Ethernet1/33"
+
+
+class TestSonicMlagConfig:
+    def test_domain_and_portchannel_members(self) -> None:
+        config = get_sonic_mlag_config(
+            {
+                "domain_id": 1,
+                "local_ip": "10.0.0.1",
+                "peer_ip": "10.0.0.2",
+                "peer_link": "PortChannel100",
+                "peer_link_lag_id": 100,
+                "peer_link_members": ["Ethernet33", "Ethernet34"],
+                "mclag_interfaces": [{"name": "PortChannel101", "members": ["Ethernet10"]}],
+            }
+        )
+        assert config["MCLAG_DOMAIN"] == {
+            "1": {"source_ip": "10.0.0.1", "peer_ip": "10.0.0.2", "peer_link": "PortChannel100"}
+        }
+        assert config["MCLAG_INTERFACE"] == {"1|PortChannel101": {"if_type": "PortChannel"}}
+        assert config["PORTCHANNEL"] == {
+            "PortChannel100": {"admin_status": "up"},
+            "PortChannel101": {"admin_status": "up"},
+        }
+        assert config["PORTCHANNEL_MEMBER"] == {
+            "PortChannel100|Ethernet33": {},
+            "PortChannel100|Ethernet34": {},
+            "PortChannel101|Ethernet10": {},
+        }
+
+    def test_missing_control_addresses_or_physical_peer_link_fails(self) -> None:
+        import pytest
+
+        with pytest.raises(ValueError, match="requires a domain"):
+            get_sonic_mlag_config({"domain_id": 1, "peer_link": "Loopback100"})
+
+    def test_duplicate_addresses_and_out_of_range_domain_fail(self) -> None:
+        import pytest
+
+        config = {
+            "domain_id": 1,
+            "local_ip": "10.0.0.1",
+            "peer_ip": "10.0.0.1",
+            "peer_link": "PortChannel100",
+            "peer_link_lag_id": 100,
+        }
+        with pytest.raises(ValueError, match="distinct control IPs"):
+            get_sonic_mlag_config(config)
+        with pytest.raises(ValueError, match="between 1 and 4095"):
+            get_sonic_mlag_config({**config, "domain_id": 4096})
+
+
+def test_cisco_vpc_uses_routed_control_addresses() -> None:
+    """A routed control path stays separate from the vPC data peer-link."""
+    template_dir = Path(__file__).parents[2] / "templates" / "configs"
+    template = jinja2.Environment(loader=jinja2.FileSystemLoader(str(template_dir))).get_template(
+        "common/cisco_nxos_vpc.j2"
+    )
+    rendered = template.render(
+        mlag={
+            "domain_id": 1,
+            "peer_link": "port-channel100",
+            "local_ip": "10.0.0.1",
+            "peer_ip": "10.0.0.2",
+            "reload_delay": 300,
+            "reload_delay_non_mlag": 330,
+        }
+    )
+    assert "vpc peer-link" in rendered
+    assert "peer-keepalive destination 10.0.0.2 source 10.0.0.1 vrf default" in rendered
 
 
 class TestGetMlagFirstCapabilityWins:
@@ -182,7 +286,7 @@ class TestDC1Pod1MLAGScenario:
             {"name": "Ethernet1/2", "role": "uplink"},
             {"name": "Ethernet1/33", "role": "mlag-peer"},
             {"name": "Ethernet1/34", "role": "mlag-peer"},
-            {"name": "Port-Channel100", "role": "mlag-peer"},
+            {"name": "Port-Channel100", "role": "mlag-peer", "lag_id": 100},
         ]
 
     def test_mlag_domain_extracted(self) -> None:
@@ -194,7 +298,7 @@ class TestDC1Pod1MLAGScenario:
     def test_peer_link_is_port_channel100(self) -> None:
         result = get_mlag(self._l1_caps(), self._l1_interfaces())
         assert result is not None
-        assert result["peer_link"] == "Ethernet1/33"
+        assert result["peer_link"] == "Port-Channel100"
 
     def test_peer_devices_include_both_leaves(self) -> None:
         result = get_mlag(self._l1_caps(), self._l1_interfaces())

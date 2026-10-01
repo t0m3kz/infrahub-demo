@@ -10,16 +10,130 @@ Covers:
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import jinja2
 import pytest
+import yaml
 
-from transforms.common import BaseDeviceTransform, get_capabilities
+from transforms.common import BaseDeviceTransform, _combine_leaf_pbr_rules, get_capabilities
 from transforms.config.tor import ToR
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+class TestCombineLeafPbrRules:
+    def test_overlapping_vlan_keeps_lb_and_firewall_actions(self) -> None:
+        customer = {"vlan_id": 100, "bypass_prefixes": ["10.0.2.0/24"], "fw_nexthop": "10.0.0.2"}
+        backend = {"vlan_id": 100, "backend_ips": ["10.0.1.10"], "lb_nexthop": "10.0.0.3"}
+
+        assert _combine_leaf_pbr_rules([customer], [backend]) == [{**customer, **backend}]
+
+    def test_firewall_only_vlan_needs_no_load_balancer(self) -> None:
+        customer = {"vlan_id": 200, "bypass_prefixes": [], "fw_nexthop": "10.0.0.2"}
+
+        assert _combine_leaf_pbr_rules([customer], []) == [{**customer, "backend_ips": [], "lb_nexthop": None}]
+
+    def test_nonoverlapping_vlans_preserve_only_their_actions(self) -> None:
+        customer = {"vlan_id": 200, "bypass_prefixes": [], "fw_nexthop": "10.0.0.2"}
+        backend = {"vlan_id": 100, "backend_ips": ["10.0.1.10"], "lb_nexthop": "10.0.0.3"}
+
+        assert _combine_leaf_pbr_rules([customer], [backend]) == [
+            {**backend, "bypass_prefixes": [], "fw_nexthop": None},
+            {**customer, "backend_ips": [], "lb_nexthop": None},
+        ]
+
+    @pytest.mark.parametrize("platform", ["arista_eos", "cisco_nxos"])
+    def test_template_attaches_one_ordered_policy_per_vlan(self, platform: str) -> None:
+        customer = {"vlan_id": 100, "bypass_prefixes": ["10.0.2.0/24"], "fw_nexthop": "10.0.0.2"}
+        backend = {"vlan_id": 100, "backend_ips": ["10.0.1.10"], "lb_nexthop": "10.0.0.3"}
+        template_dir = Path(__file__).parents[2] / "templates" / "configs"
+        template = jinja2.Environment(loader=jinja2.FileSystemLoader(str(template_dir))).get_template(
+            f"leafs/{platform}.j2"
+        )
+
+        rendered = template.render(
+            hostname="test-leaf",
+            name="test-leaf",
+            vlans=[],
+            interfaces=[],
+            acls=[],
+            vxlan=None,
+            vrf_gateways={},
+            bgp=[],
+            ospf=[],
+            mlag=None,
+            sgt_rules=[],
+            leaf_pbr_rules=_combine_leaf_pbr_rules([customer], [backend]),
+        )
+
+        assert rendered.count("ip policy route-map RM-LEAF-PBR-VLAN100") == 1
+        assert rendered.index("RM-LEAF-PBR-VLAN100 permit 10") < rendered.index("RM-LEAF-PBR-VLAN100 permit 20")
+        assert rendered.index("RM-LEAF-PBR-VLAN100 permit 20") < rendered.index("RM-LEAF-PBR-VLAN100 permit 30")
+        assert "set ip next-hop 10.0.0.3" in rendered
+        assert "set ip next-hop 10.0.0.2" in rendered
+
+    @pytest.mark.parametrize("platform", ["sonic", "dell_sonic", "nokia_sros"])
+    def test_unsupported_leaf_refuses_firewall_only_pbr(self, platform: str) -> None:
+        """A leaf must not silently omit a firewall redirect when no LB exists."""
+        customer = {"vlan_id": 100, "bypass_prefixes": ["10.0.2.0/24"], "fw_nexthop": "10.0.0.2"}
+        transform = _make_transform("leaf")
+
+        with patch("transforms.common.get_customer_pbr_rules", return_value=[customer]):
+            with pytest.raises(ValueError, match="cannot render GPO or PBR policy"):
+                transform._extra_config(_device_data(), platform)
+
+    @pytest.mark.parametrize("platform", ["sonic", "dell_sonic", "nokia_sros"])
+    def test_unsupported_leaf_refuses_tag_without_contracts(self, platform: str) -> None:
+        """A tag alone still requests GPO classification on the segment."""
+        transform = _make_transform("leaf")
+
+        with patch("transforms.common.get_vlans", return_value=[{"sgt": 20}]):
+            with pytest.raises(ValueError, match="cannot render GPO or PBR policy"):
+                transform._extra_config(_device_data(), platform)
+
+
+@pytest.mark.parametrize("role", ["leafs", "border_leafs", "l2_leafs", "spines", "super_spines"])
+@pytest.mark.parametrize("platform", ["sonic", "dell_sonic"])
+def test_sonic_templates_render_pure_configdb(role: str, platform: str) -> None:
+    """Management services stay in a single JSON artifact for every switch role."""
+    template_dir = Path(__file__).parents[2] / "templates" / "configs"
+    template = jinja2.Environment(loader=jinja2.FileSystemLoader(str(template_dir))).get_template(
+        f"{role}/{platform}.j2"
+    )
+    rendered = template.render(
+        hostname="test-switch",
+        vlans=[],
+        interfaces=[],
+        acls=[],
+        vxlan=None,
+        vrf_gateways={},
+        bgp=[],
+        ospf=[],
+        mlag=None,
+        ntp={"servers": [{"address": "192.0.2.1"}]},
+        syslog={"servers": [{"address": "192.0.2.2"}]},
+        border_leaf_pbr_rules=[],
+    )
+    config = json.loads(rendered)
+    assert config["NTP_SERVER"] == {"192.0.2.1": {}}
+    assert config["SYSLOG_SERVER"] == {"192.0.2.2": {}}
+
+
+def test_hyper_spine_artifact_uses_super_spine_transform(root_dir: Path) -> None:
+    """Hyper-spines share the super-spine rendering path but need their own target group."""
+    registry = yaml.safe_load((root_dir / ".infrahub.yml").read_text())
+    artifacts = registry["artifact_definitions"]
+    assert any(
+        artifact["targets"] == "hyper-spines"
+        and artifact["transformation"] == "super_spine"
+        and artifact["parameters"] == {"device": "name__value"}
+        for artifact in artifacts
+    )
 
 
 def _make_transform(device_role: str = "") -> BaseDeviceTransform:
@@ -377,6 +491,23 @@ class TestTransformDataRouting:
         assert "name" in call_kwargs
         assert "bgp" in call_kwargs
         assert "ospf" in call_kwargs
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("setting", ["snmp", "aaa"])
+    @pytest.mark.parametrize("platform", ["sonic", "dell_sonic"])
+    async def test_sonic_unsupported_settings_fail_before_render(self, platform: str, setting: str) -> None:
+        """Unsupported settings cannot disappear while converting CLI artifacts to JSON."""
+        transform = _make_transform(device_role="leaf")
+        device = _device_data(platform=platform)
+        with (
+            patch("transforms.common.clean_data", return_value={"DcimPhysicalDevice": [device]}),
+            patch.object(transform, "_build_config", return_value={setting: {"enabled": True}}),
+            patch.object(transform, "_extra_config", return_value={}),
+            patch.object(transform, "_load_template") as load_template,
+            pytest.raises(ValueError, match=setting),
+        ):
+            await transform.transform({"raw": "data"})
+        load_template.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_extra_roots_passed_through(self) -> None:

@@ -1209,16 +1209,33 @@ def build_mlag_device_data(
     if domain_name is None:
         domain_name = f"POD1-{device_name.split('-')[-1].upper()}-{peer_name.split('-')[-1].upper()}-MLAG"
 
+    def member(name: str, address: str) -> dict:
+        return {
+            "name": _v(name),
+            "role": _v(role),
+            "primary_address": _node({"address": _v(address)}),
+            "interfaces": _edges(
+                [
+                    {
+                        "__typename": "DcimVirtualInterface",
+                        "name": _v("Loopback0"),
+                        "ip_address": _node({"address": _v(address)}),
+                    }
+                ]
+            ),
+        }
+
     mlag_cap = {
         "__typename": "ManagedMLAG",
+        "id": "mlag-dom-1",
         "name": _v(domain_name),
         "domain_id": _v(domain_id),
         "reload_delay": _v(300),
         "reload_delay_non_mlag": _v(330),
         "capabilities": _edges(
             [
-                {"name": _v(device_name)},
-                {"name": _v(peer_name)},
+                member(device_name, "10.0.2.1/32"),
+                member(peer_name, "10.0.2.2/32"),
             ]
         ),
     }
@@ -1231,6 +1248,9 @@ def build_mlag_device_data(
     elif platform == "nokia_sros":
         uplink1, uplink2, member1, member2 = "Ethernet1", "Ethernet2", "Ethernet33", "Ethernet34"
         lag_name, lag_id_val = "lag-100", 100
+    elif platform in {"sonic", "dell_sonic"}:
+        uplink1, uplink2, member1, member2 = "Ethernet1", "Ethernet2", "Ethernet33", "Ethernet34"
+        lag_name, lag_id_val = "PortChannel100", 100
     else:
         uplink1, uplink2, member1, member2 = "Ethernet1", "Ethernet2", "Ethernet33", "Ethernet34"
         lag_name, lag_id_val = "Port-Channel100", 100
@@ -1293,6 +1313,24 @@ def build_mlag_device_data(
         role="mlag-peer",
     )
 
+    device_interfaces = [loopback, up1, up2, lag_iface, mem1, mem2]
+    if platform in {"sonic", "dell_sonic"}:
+        device_interfaces.extend(
+            [
+                {
+                    **lag_iface,
+                    "name": _v("PortChannel101"),
+                    "role": _v("lag"),
+                    "lag_id": _v(101),
+                    "mlag_domain": _node({"id": "mlag-dom-1", "name": _v(domain_name)}),
+                    "member_interfaces": _edges([{"name": _v("Ethernet10")}]),
+                },
+                _make_interface(
+                    name="Ethernet10", device_name=device_name, description="MLAG host member", role="customer"
+                ),
+            ]
+        )
+
     device_node: dict = {
         "__typename": "DcimPhysicalDevice",
         "id": f"dev-{device_name}",
@@ -1315,7 +1353,7 @@ def build_mlag_device_data(
         ),
         "tags": _edges([]),
         "capabilities": _edges([mlag_cap]),
-        "interfaces": _edges([loopback, up1, up2, lag_iface, mem1, mem2]),
+        "interfaces": _edges(device_interfaces),
         "deployment": _node(
             {
                 "id": "dc-1",

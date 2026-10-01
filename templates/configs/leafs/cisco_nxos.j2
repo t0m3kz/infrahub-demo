@@ -207,7 +207,7 @@ ip route 0.0.0.0/0 {{ nexthop }} vrf {{ vrf }}
 {%- endfor %}
 !
 {%- endif %}
-{%- if sgt_rules %}
+{%- if vlans|selectattr('sgt')|list or sgt_rules %}
 !
 ! CTS Security Group Tags — VXLAN GPO tier enforcement (VLAN-to-SGT mapping —
 ! scales to trunk ports carrying multiple segments, unlike per-port
@@ -229,48 +229,40 @@ cts role-based permissions from {{ rule.src_sgt }} to {{ rule.dst_sgt }} {{ rule
 {%- endfor %}
 !
 {%- endif %}
-{%- if customer_pbr_rules %}
+{%- if leaf_pbr_rules %}
 !
-! Customer PBR — default-redirect to firewall (TopologyCustomerDeployment's
-! FirewallContext); a SecurityPolicyRule permit is the only bypass.
+! Leaf PBR — LB return path first, then permitted firewall bypass,
+! otherwise redirect to the firewall when a context is present.
 !
-{%- for rule in customer_pbr_rules %}
+{%- for rule in leaf_pbr_rules %}
 ! Customer: {{ rule.customer_name or 'any' }}/{{ rule.environment or 'any' }}
+{%- if rule.lb_nexthop %}
+ip access-list LB-BACKEND-VLAN{{ rule.vlan_id }}
+{%- for ip in rule.backend_ips %}
+  permit ip host {{ ip }} any
+{%- endfor %}
+!
+route-map RM-LEAF-PBR-VLAN{{ rule.vlan_id }} permit 10
+  match ip address LB-BACKEND-VLAN{{ rule.vlan_id }}
+  set ip next-hop {{ rule.lb_nexthop }}
+!
+{%- endif %}
+{%- if rule.fw_nexthop %}
 ip access-list PBR-BYPASS-VLAN{{ rule.vlan_id }}
 {%- for prefix in rule.bypass_prefixes %}
   permit ip any {{ prefix }}
 {%- endfor %}
   deny ip any any
 !
-route-map RM-CUSTOMER-PBR-VLAN{{ rule.vlan_id }} permit 10
+route-map RM-LEAF-PBR-VLAN{{ rule.vlan_id }} permit 20
   match ip address PBR-BYPASS-VLAN{{ rule.vlan_id }}
 !
-route-map RM-CUSTOMER-PBR-VLAN{{ rule.vlan_id }} permit 20
+route-map RM-LEAF-PBR-VLAN{{ rule.vlan_id }} permit 30
   set ip next-hop {{ rule.fw_nexthop }}
 !
-interface Vlan{{ rule.vlan_id }}
-  ip policy route-map RM-CUSTOMER-PBR-VLAN{{ rule.vlan_id }}
-!
-{%- endfor %}
 {%- endif %}
-{%- if lb_backend_pbr_rules %}
-!
-! LB Backend No-SNAT Return-Path — redirect backend pool member response
-! traffic to the load balancer instead of the anycast gateway.
-!
-{%- for rule in lb_backend_pbr_rules %}
-! Customer: {{ rule.customer_name or 'any' }}/{{ rule.environment or 'any' }}
-ip access-list LB-BACKEND-VLAN{{ rule.vlan_id }}
-{%- for ip in rule.backend_ips %}
-  permit ip host {{ ip }} any
-{%- endfor %}
-!
-route-map RM-LB-BACKEND-VLAN{{ rule.vlan_id }} permit 10
-  match ip address LB-BACKEND-VLAN{{ rule.vlan_id }}
-  set ip next-hop {{ rule.lb_nexthop }}
-!
 interface Vlan{{ rule.vlan_id }}
-  ip policy route-map RM-LB-BACKEND-VLAN{{ rule.vlan_id }}
+  ip policy route-map RM-LEAF-PBR-VLAN{{ rule.vlan_id }}
 !
 {%- endfor %}
 {%- endif %}
