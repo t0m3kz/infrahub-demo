@@ -58,7 +58,7 @@ spec:
       napalm_driver: sonic
       netmiko_device_type: sonic
       ansible_network_os: sonic
-      containerlab_os: sonic
+      containerlab_os: sonic-vm
 
     - name: nokia_sros
       nornir_platform: sros
