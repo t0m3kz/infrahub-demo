@@ -28,7 +28,7 @@ spec:
             suites: [ktw-1-s-1]
             fabric_templates:
               - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
-            mlag_create: virtual
+            mlag_create: back-to-back
             member_of_groups:
               - topologies_pod
             racks:
