@@ -813,7 +813,149 @@
                     "node": null
                   },
                   "interface_capabilities": {
-                    "edges": []
+                    "edges": [
+                      {
+                        "node": {
+                          "id": "seg-seg-100",
+                          "inline_service": {
+                            "node": null
+                          },
+                          "__typename": "ManagedVxlanSegment",
+                          "name": {
+                            "value": "seg-100"
+                          },
+                          "status": {
+                            "value": "active"
+                          },
+                          "customer_name": {
+                            "value": "Customer-A"
+                          },
+                          "arp_suppression": {
+                            "value": true
+                          },
+                          "security_zone": {
+                            "node": null
+                          },
+                          "gateway": {
+                            "node": {
+                              "address": {
+                                "value": "10.100.0.1/24"
+                              },
+                              "ip_prefix": {
+                                "node": {
+                                  "prefix": {
+                                    "value": "10.100.0.0/24"
+                                  },
+                                  "ip_namespace": {
+                                    "node": {
+                                      "name": {
+                                        "value": "VRF_A"
+                                      },
+                                      "l3_vni": {
+                                        "value": 50001
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "segment_deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "vni": {
+                                    "value": 10100
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "vlan_domain_segments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "vlan_id": {
+                                    "value": 100
+                                  },
+                                  "vlan_domain": {
+                                    "node": {
+                                      "id": "dev-dc1-leaf-01"
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "id": "fake-dc-0"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "id": "seg-seg-200",
+                          "inline_service": {
+                            "node": null
+                          },
+                          "__typename": "ManagedVlanSegment",
+                          "name": {
+                            "value": "seg-200"
+                          },
+                          "status": {
+                            "value": "active"
+                          },
+                          "customer_name": {
+                            "value": "Customer-A"
+                          },
+                          "vlan_id": {
+                            "value": 200
+                          },
+                          "security_zone": {
+                            "node": null
+                          },
+                          "gateway": {
+                            "node": {
+                              "address": {
+                                "value": "10.200.0.1/24"
+                              },
+                              "ip_prefix": {
+                                "node": {
+                                  "prefix": {
+                                    "value": "10.200.0.0/24"
+                                  },
+                                  "ip_namespace": {
+                                    "node": {
+                                      "name": {
+                                        "value": "default"
+                                      },
+                                      "l3_vni": {
+                                        "value": null
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "id": "fake-dc-0"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
                   }
                 }
               }
@@ -824,6 +966,13 @@
               "id": "dc-1",
               "name": {
                 "value": "DC-1"
+              },
+              "evpn_rt_as": {
+                "node": {
+                  "asn": {
+                    "value": 65000
+                  }
+                }
               },
               "segment_deployments": {
                 "edges": [
@@ -848,6 +997,9 @@
                           "name": {
                             "value": "seg-100"
                           },
+                          "status": {
+                            "value": "active"
+                          },
                           "customer_name": {
                             "value": "Customer-A"
                           },
@@ -861,29 +1013,52 @@
                             "node": {
                               "address": {
                                 "value": "10.100.0.1/24"
-                              }
-                            }
-                          },
-                          "prefix": {
-                            "node": {
-                              "ip_namespace": {
+                              },
+                              "ip_prefix": {
                                 "node": {
-                                  "name": {
-                                    "value": "VRF_A"
+                                  "prefix": {
+                                    "value": "10.100.0.0/24"
                                   },
-                                  "l3_vni": {
-                                    "value": 50001
-                                  },
-                                  "owner": {
+                                  "ip_namespace": {
                                     "node": {
                                       "name": {
-                                        "value": "CustomerA"
+                                        "value": "VRF_A"
+                                      },
+                                      "l3_vni": {
+                                        "value": 50001
                                       }
                                     }
                                   }
                                 }
                               }
                             }
+                          },
+                          "segment_deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "vni": {
+                                    "value": 10100
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "vlan_domain_segments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "vlan_id": {
+                                    "value": 100
+                                  },
+                                  "vlan_domain": {
+                                    "node": {
+                                      "id": "dev-dc1-leaf-01"
+                                    }
+                                  }
+                                }
+                              }
+                            ]
                           },
                           "deployments": {
                             "edges": [
@@ -919,8 +1094,14 @@
                           "name": {
                             "value": "seg-200"
                           },
+                          "status": {
+                            "value": "active"
+                          },
                           "customer_name": {
                             "value": "Customer-A"
+                          },
+                          "vlan_id": {
+                            "value": 200
                           },
                           "security_zone": {
                             "node": null
@@ -929,21 +1110,21 @@
                             "node": {
                               "address": {
                                 "value": "10.200.0.1/24"
-                              }
-                            }
-                          },
-                          "prefix": {
-                            "node": {
-                              "ip_namespace": {
+                              },
+                              "ip_prefix": {
                                 "node": {
-                                  "name": {
-                                    "value": "default"
+                                  "prefix": {
+                                    "value": "10.200.0.0/24"
                                   },
-                                  "l3_vni": {
-                                    "value": null
-                                  },
-                                  "owner": {
-                                    "node": null
+                                  "ip_namespace": {
+                                    "node": {
+                                      "name": {
+                                        "value": "default"
+                                      },
+                                      "l3_vni": {
+                                        "value": null
+                                      }
+                                    }
                                   }
                                 }
                               }

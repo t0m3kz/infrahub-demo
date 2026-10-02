@@ -26,7 +26,7 @@ is big enough that nobody's going to audit every pod's deployment type anyway.
 
 - **Hyper-Spines:** 2 (Arista DCS-7050CX3-32C-R) — full mesh to every super-spine, nothing above them
 - **Super-Spines:** 4 (Arista DCS-7050CX3-32C-R)
-- **Border-Leaf:** 4 (Arista DCS-7050CX3-32C-R), own firewall + load-balancer pair
+- **Border-Leaf:** 2 (Arista DCS-7050CX3-32C-R) — one each in pods 1 and 2, own firewall + load-balancer pair
 - **Pods:** 3, deliberately mixed deployment types
 
 | Pod | Spines | Design   | Deployment  | Personality                         |

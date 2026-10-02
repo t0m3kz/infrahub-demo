@@ -1,0 +1,46 @@
+---
+# C010 dev application on the shared DC12 hosts (P027). The instances are the
+# VMs from ../../06_customer_boarding/c010/dc/dc12/02_instances.yml.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppApplication
+  data:
+    - label: reporting-portal
+      environment: d
+      criticality: low
+      security_profile: internal_standard
+      fqdn: reporting-portal.c010.demo.local
+      ingress_mode: frontend
+      application_orchestrator: github_actions
+      owner: C010
+      member_of_groups:
+        - app_applications
+      children:
+        kind: AppComponent
+        data:
+          - name: portal-ui
+            component_type: frontend
+            network_segment: c010-zindra-dev-d
+            instances:
+              - c010-portal-ui-dc12-1
+              - c010-portal-ui-dc12-2
+            service_ports:
+              data:
+                - port: 443
+                  protocol: tcp
+            member_of_groups:
+              - app_components
+
+          - name: report-worker
+            component_type: worker
+            network_segment: c010-zindra-dev-d
+            instances:
+              - c010-report-worker-dc12-1
+              - c010-report-worker-dc12-2
+            service_ports:
+              data:
+                - port: 8080
+                  protocol: tcp
+            member_of_groups:
+              - app_components

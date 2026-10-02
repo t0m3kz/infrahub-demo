@@ -15,6 +15,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from infrahub_sdk.protocols import CoreIPPrefixPool
 
 from generators.mlag import MLAGWiringMixin
 from generators.protocols import (
@@ -421,3 +422,130 @@ class TestDisconnectStalePeerLinkCables:
         await gen._disconnect_stale_peer_link_cables("leaf-01-leaf-02-mlag", dev_a, dev_b)
 
         assert gen.client.delete.await_count == 2
+
+
+def _control_client(gen: Any, *, prefix: str, devices: list[Any], existing_svi: Any = None) -> MagicMock:
+    """Wire gen.client for _allocate_control_ips: one pool, one allocated prefix, no existing IPs."""
+    pool = MagicMock(id="pool-1")
+    allocated = MagicMock(display_label=prefix)
+    allocated.prefix = MagicMock(value=prefix)
+    allocated.ip_namespace = MagicMock(id="ns-default")
+
+    async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
+        if kind is CoreIPPrefixPool:
+            return [pool]
+        if kind is DcimVirtualInterface and kwargs.get("role__value") == "mlag-control":
+            return [existing_svi] if existing_svi is not None else []
+        return []
+
+    created: list[MagicMock] = []
+
+    async def _create(*, kind: Any, data: dict[str, Any]) -> MagicMock:
+        obj = MagicMock(id=f"ip-{len(created)}", save=AsyncMock())
+        obj.kind, obj.data = kind, data
+        created.append(obj)
+        return obj
+
+    gen.client.filters = AsyncMock(side_effect=_filters)
+    gen.client.get = AsyncMock(return_value=None)
+    gen.client.create = AsyncMock(side_effect=_create)
+    gen.client.delete = AsyncMock()
+    gen.client.allocate_next_ip_prefix = AsyncMock(return_value=allocated)
+    gen._created = created
+    return pool
+
+
+class TestAllocateControlIps:
+    @pytest.mark.asyncio
+    async def test_sonic_gets_ipv4_slash31_lower_address_to_first_device(self) -> None:
+        """SONiC pairs draw a /31 from MLAG-Control-IPv4; addrs[0] → device sorting first by name."""
+        gen = _gen()
+        dev_b, dev_a = _mock_mlag_device("leaf-02"), _mock_mlag_device("leaf-01")
+        _control_client(gen, prefix="10.254.0.4/31", devices=[dev_a, dev_b])
+
+        ip_ids = await gen._allocate_control_ips(_mock_mlag_obj(), "m", [dev_b, dev_a], {"sonic"}, False)
+
+        assert gen.client.filters.await_args_list[0].kwargs["name__value"] == "MLAG-Control-IPv4"
+        alloc = gen.client.allocate_next_ip_prefix.await_args.kwargs
+        assert alloc["prefix_length"] == 31
+        assert alloc["identifier"] == "mlag-control__mlag-1"
+        addresses = [obj.data["address"] for obj in gen._created]
+        assert addresses == ["10.254.0.4/31", "10.254.0.5/31"]
+        assert ip_ids == {"id-leaf-01": "ip-0", "id-leaf-02": "ip-1"}
+
+    @pytest.mark.asyncio
+    async def test_other_platforms_get_ipv6_slash127(self) -> None:
+        """Non-SONiC platforms draw a /127 from MLAG-Control-IPv6."""
+        gen = _gen()
+        devs = [_mock_mlag_device("leaf-01"), _mock_mlag_device("leaf-02")]
+        _control_client(gen, prefix="fd00:2400::/127", devices=devs)
+
+        await gen._allocate_control_ips(_mock_mlag_obj(), "m", devs, {"arista_eos"}, False)
+
+        assert gen.client.filters.await_args_list[0].kwargs["name__value"] == "MLAG-Control-IPv6"
+        assert gen.client.allocate_next_ip_prefix.await_args.kwargs["prefix_length"] == 127
+        assert [obj.data["address"] for obj in gen._created] == ["fd00:2400::/127", "fd00:2400::1/127"]
+
+    @pytest.mark.asyncio
+    async def test_virtual_peer_link_uses_host_routes_and_drops_stale_svi(self) -> None:
+        """A virtual peer-link gets /128 loopback addresses and removes any leftover control SVI."""
+        gen = _gen()
+        devs = [_mock_mlag_device("leaf-01"), _mock_mlag_device("leaf-02")]
+        stale = _mock_iface("svi-old", "Vlan4094")
+        _control_client(gen, prefix="fd00:2400::2/127", devices=devs, existing_svi=stale)
+
+        await gen._allocate_control_ips(_mock_mlag_obj(virtual_peer_link=True), "m", devs, {"arista_eos"}, True)
+
+        assert [obj.data["address"] for obj in gen._created] == ["fd00:2400::2/128", "fd00:2400::3/128"]
+        assert gen.client.delete.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_vpc_skips_allocation(self) -> None:
+        """Cisco vPC has no control session — nothing is allocated."""
+        gen = _gen()
+        devs = [_mock_mlag_device("nx-01"), _mock_mlag_device("nx-02")]
+        _control_client(gen, prefix="fd00:2400::/127", devices=devs)
+
+        assert await gen._allocate_control_ips(_mock_mlag_obj(), "m", devs, {"cisco_nxos"}, False) == {}
+        gen.client.allocate_next_ip_prefix.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_missing_pool_warns_and_skips(self) -> None:
+        """Without the pool loaded, allocation is skipped with a warning (not an error)."""
+        gen = _gen()
+        gen.client.filters = AsyncMock(return_value=[])
+        gen.client.allocate_next_ip_prefix = AsyncMock()
+        devs = [_mock_mlag_device("leaf-01"), _mock_mlag_device("leaf-02")]
+
+        assert await gen._allocate_control_ips(_mock_mlag_obj(), "m", devs, {"sonic"}, False) == {}
+        gen.logger.warning.assert_called_once()
+        gen.client.allocate_next_ip_prefix.assert_not_awaited()
+
+
+class TestEnsureControlSvi:
+    @pytest.mark.asyncio
+    async def test_creates_vlan4094_with_control_ip(self) -> None:
+        """A new Vlan4094 SVI is created with role=mlag-control and the control IP."""
+        gen = _gen()
+        dev = _mock_mlag_device("leaf-01")
+        _control_client(gen, prefix="10.254.0.0/31", devices=[dev])
+
+        await gen._ensure_control_svi(dev, _mock_mlag_obj(), "m", "ip-7")
+
+        (svi,) = gen._created
+        assert svi.kind is DcimVirtualInterface
+        assert svi.data["name"] == "Vlan4094"
+        assert svi.data["role"] == "mlag-control"
+        assert svi.data["ip_address"] == {"id": "ip-7"}
+        assert "id" not in svi.data
+
+    @pytest.mark.asyncio
+    async def test_existing_svi_upserted_by_id(self) -> None:
+        """An existing control SVI is upserted by its id."""
+        gen = _gen()
+        dev = _mock_mlag_device("leaf-01")
+        _control_client(gen, prefix="10.254.0.0/31", devices=[dev], existing_svi=_mock_iface("svi-1", "Vlan4094"))
+
+        await gen._ensure_control_svi(dev, _mock_mlag_obj(), "m", "ip-7")
+
+        assert gen._created[0].data["id"] == "svi-1"

@@ -1,0 +1,14 @@
+---
+# Office footprint for C005, mirroring c002/office/. Like C002 it opts into
+# generators/topology/sdwan_edge.py's automated SD-WAN edge provisioning, but
+# only once the Gateway exists — see 02_deployment.yml. Its PROD traffic
+# reaches colo-services-stretch through the gateway's L3 handoff into eg-fr01
+# (../../../08_interconnects/04_sdwan/06_vrf_handoff.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationFacility
+  data:
+    - name: "Amsterdam Branch"
+      shortname: "ams-branch"
+      parent: "ams"

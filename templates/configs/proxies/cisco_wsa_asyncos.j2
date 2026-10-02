@@ -1,4 +1,9 @@
-{#- Cisco Web Security Appliance — AsyncOS configuration -#}
+{#- Cisco Web Security Appliance — AsyncOS configuration
+
+    Netmasks use netutils' cidr_to_netmask, not Ansible's `ipaddr('netmask')`:
+    this project registers jinja2_convenience_function() and nothing else, and an
+    undefined FILTER is a compile-time error, so a trailing `| default(...)` can
+    never rescue it — the template raised instead of rendering. -#}
 !
 ! Device:     {{ name }}
 ! Proxy type: {{ proxy_type | default('explicit') }}
@@ -11,7 +16,7 @@
 {%- if iface.ip_address %}
 interfaceconfig
   interface {{ iface.name }}
-    ipv4 {{ iface.ip_address.address.split('/')[0] }} {{ iface.ip_address.address | ipaddr('netmask') | default('255.255.255.0') }}
+    ipv4 {{ iface.ip_address.address.split('/')[0] }} {{ iface.ip_address.address.split('/')[1] | int | cidr_to_netmask }}
     enabled
   !
 {%- endif %}

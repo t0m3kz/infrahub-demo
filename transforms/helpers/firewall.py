@@ -547,6 +547,27 @@ def get_border_leaf_pbr_rules(
     return rules
 
 
+def _first_selector_cidr(
+    prefixes: list[dict[str, Any]] | None, ip_addresses: list[dict[str, Any]] | None
+) -> str | None:
+    """First explicit source_prefixes/destination_prefixes or *_ip_addresses
+    selector, as a CIDR/address string. Every rendering template's src/dst is
+    a single scalar (templates/configs/firewalls/*.j2), so a multi-value
+    selector list can only ever render its first entry — a documented
+    limitation, not a full address-group/fanout implementation. Prefixes are
+    checked before IP addresses since a prefix-based rule is the common case
+    for the cloud/partner/SaaS CIDR this selector shape was added for."""
+    for prefix in prefixes or []:
+        cidr = prefix.get("prefix")
+        if cidr:
+            return cidr
+    for ip in ip_addresses or []:
+        address = ip.get("address")
+        if address:
+            return address
+    return None
+
+
 def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     """Build a zone policy list from SecurityPolicy nodes (global query).
 
@@ -565,7 +586,8 @@ def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list
             "rules": [
               {
                 "seq": 10, "name": "allow-https",
-                "action": "permit", "protocol": "tcp",
+                "action": "permit", "protocol": "tcp", "raw_protocol": "tcp",
+                "port_start": 443, "port_end": None,
                 "src_zone": "dmz", "dst_zone": "internal",
                 "src": None, "dst": None,
                 "dst_port": "eq 443", "log": True,
@@ -598,8 +620,12 @@ def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list
 
             src_seg = rule.get("source_segment") or {}
             src = _get_segment_prefix_str(src_seg) if src_seg else None
+            if src is None:
+                src = _first_selector_cidr(rule.get("source_prefixes"), rule.get("source_ip_addresses"))
             dst_seg = rule.get("destination_segment") or {}
             dst = _get_segment_prefix_str(dst_seg) if dst_seg else None
+            if dst is None:
+                dst = _first_selector_cidr(rule.get("destination_prefixes"), rule.get("destination_ip_addresses"))
 
             port_start = rule.get("port_start")
             port_end = rule.get("port_end")
@@ -618,6 +644,14 @@ def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list
                     "name": rule.get("name") or "",
                     "action": rule.get("action", "deny"),
                     "protocol": acl_proto,
+                    # Unmapped protocol ("tcp"/"udp"/"icmp"/"any") plus raw
+                    # numeric ports, for templates that build their own
+                    # service/application object (PAN-OS, Junos) instead of
+                    # consuming the pre-formatted Cisco-ACL-style dst_port
+                    # string above ("eq 443" / "range 8080 8090").
+                    "raw_protocol": protocol,
+                    "port_start": port_start,
+                    "port_end": port_end,
                     "src_zone": src_zone,
                     "dst_zone": dst_zone,
                     "src": src,
@@ -638,6 +672,9 @@ def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list
                 "name": "implicit-deny-all",
                 "action": "deny",
                 "protocol": "ip",
+                "raw_protocol": "any",
+                "port_start": None,
+                "port_end": None,
                 "src_zone": None,
                 "dst_zone": None,
                 "src": None,

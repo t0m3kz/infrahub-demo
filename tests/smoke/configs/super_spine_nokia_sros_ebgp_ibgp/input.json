@@ -9,7 +9,7 @@
             "value": "dc1-super-spine-01"
           },
           "role": {
-            "value": "super_spine"
+            "value": "super-spine"
           },
           "platform": {
             "node": {
@@ -966,6 +966,13 @@
               "id": "dc-1",
               "name": {
                 "value": "DC-1"
+              },
+              "evpn_rt_as": {
+                "node": {
+                  "asn": {
+                    "value": 65000
+                  }
+                }
               },
               "segment_deployments": {
                 "edges": []

@@ -34,6 +34,11 @@ def _make_generator(cls: type[_T]) -> Any:
     # before reading firewall_devices/loadbalancer_devices (see pod.py's
     # identical wait) — no in-flight parent in these unit tests, so no-op.
     gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
+    # The shared FirewallContext is provisioned under a resource lock (a
+    # CoreStandardGroup mutex in Infrahub) — stub it out like test_dc_generator.
+    # setattr: not every generator built here mixes in PoolMixin.
+    setattr(gen, "acquire_resource_lock", AsyncMock(return_value="lock-id"))  # noqa: B010
+    setattr(gen, "release_resource_lock", AsyncMock())  # noqa: B010
     return gen
 
 
@@ -322,6 +327,36 @@ class TestFirewallContextProvisioning:
         await gen.generate(_dc_payload_with_parent())
 
         gen._create_context_subinterface.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_context_provisioned_under_per_context_lock(self) -> None:
+        """Concurrent boardings onto one cluster serialize on the shared context.
+
+        Both the context lookup and its sub-interface/P2P step run while the
+        lock is held, so two overlapping runs cannot both create the same
+        P2P addresses.
+        """
+        gen, fw_device, cluster = self._make_gen_with_cluster()
+        context_obj = MagicMock(id="ctx-1")
+        gen._get_or_create_firewall_context = AsyncMock(return_value=context_obj)
+        events: list[str] = []
+        gen.acquire_resource_lock.side_effect = lambda key: events.append(f"acquire:{key}") or "lock-id"
+        gen.release_resource_lock.side_effect = lambda lock_id: events.append("release")
+        gen._ensure_context_subinterface.side_effect = lambda **_: events.append("subinterface")
+
+        await gen.generate(_dc_payload_with_parent(fw_devices=[fw_device]))
+
+        assert events == [f"acquire:fw-context-{cluster.name.value}-shared", "subinterface", "release"]
+
+    @pytest.mark.asyncio
+    async def test_lock_released_when_context_creation_fails(self) -> None:
+        """An early return inside the locked block still releases the lock."""
+        gen, _, _ = self._make_gen_with_cluster()
+        gen._get_or_create_firewall_context = AsyncMock(return_value=None)
+
+        await gen.generate(_dc_payload_with_parent())
+
+        gen.release_resource_lock.assert_awaited_once_with("lock-id")
 
 
 class TestEnsureDedicatedDevicePair:
@@ -652,10 +687,12 @@ class TestAllocateContextP2p:
     async def test_ipv6_p2p_link_uses_127_suffix(self) -> None:
         gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
         pool = MagicMock(id="pool-1")
-        gen.client.get = AsyncMock(return_value=pool)
         allocated = MagicMock()
         allocated.prefix.value = "fd00:2300::/127"
-        allocated.ip_namespace = {"id": "ns-default"}
+        allocated.ip_namespace = MagicMock(id="ns-default")
+        # First get() resolves the pool; the next two are the pre-create
+        # existence check (once per address) — None means "not found yet".
+        gen.client.get = AsyncMock(side_effect=[pool, None, None])
         gen.client.allocate_next_ip_prefix = AsyncMock(return_value=allocated)
         created_ips = [AsyncMock(id="fw-ip"), AsyncMock(id="bl-ip")]
         gen.client.create = AsyncMock(side_effect=created_ips)
@@ -672,10 +709,10 @@ class TestAllocateContextP2p:
     async def test_ipv4_p2p_link_uses_31_suffix(self) -> None:
         gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
         pool = MagicMock(id="pool-1")
-        gen.client.get = AsyncMock(return_value=pool)
         allocated = MagicMock()
         allocated.prefix.value = "100.65.0.0/31"
-        allocated.ip_namespace = {"id": "ns-default"}
+        allocated.ip_namespace = MagicMock(id="ns-default")
+        gen.client.get = AsyncMock(side_effect=[pool, None, None])
         gen.client.allocate_next_ip_prefix = AsyncMock(return_value=allocated)
         created_ips = [AsyncMock(id="fw-ip"), AsyncMock(id="bl-ip")]
         gen.client.create = AsyncMock(side_effect=created_ips)

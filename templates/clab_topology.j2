@@ -1,46 +1,51 @@
-{% for topology in data.TopologyDeployment %}
+{% macro containerlab_endpoint(endpoint) -%}
+{% set interface_name = endpoint.name.value %}
+{% set containerlab_os = endpoint.device.node.platform.node.containerlab_os.value %}
+{{ endpoint.device.node.name.value }}:{% if containerlab_os in ["sonic-vs", "sonic-vm"] %}eth{{ (interface_name | replace("Ethernet", "") | int) // 4 + 1 }}{% elif interface_name[:8] == "Ethernet" %}eth{{ interface_name | replace("Ethernet", "") }}{% else %}{{ interface_name }}{% endif %}
+{%- endmacro %}
+{% for topology_edge in data["TopologyDeployment"]["edges"] %}
+{% set topology = topology_edge.node %}
 ---
-name: {{ topology.name }}
+name: {{ topology.name.value | tojson }}
 prefix: ""
 
 mgmt:
-  network: {{ topology.name | lower() }}
+  network: {{ topology.name.value | lower() | tojson }}
   ipv4-subnet: "172.20.{{ loop.index0 }}.0/24"
 
-{% if topology.devices %}
+{% if topology.devices.edges %}
 topology:
   nodes:
-    {% for device in topology.devices %}
-    {{ device.name }}:
-      kind: {{ device.platform.containerlab_os }}
-      type: {{ device.device_type.name }}
-      image: {{ device.os_version }}
-      {% if device.primary_address.address is defined %}
-      management:
-        ipv4: {{ device.primary_address.address }}
-      {% endif %}
-    {% endfor %}
+{% for device_edge in topology.devices.edges %}
+{% set device = device_edge.node %}
+    {{ device.name.value | tojson }}:
+      kind: {{ device.platform.node.containerlab_os.value | tojson }}
+      image: {{ device.software_image.node.containerlab_image.value | tojson }}
+{% endfor %}
 
   links:
-    {% set processed_endpoints = [] %}
-    {% for device in topology.devices %}
-      {% for interface in device.interfaces %}
-        {% if interface.cable and interface.cable.display_label %}
-          {% set cable_endpoints = interface.cable.display_label.split("__") %}
-          {% if cable_endpoints | length == 2 %}
-            {% set endpoint1_raw = cable_endpoints[0] %}
-            {% set endpoint2_raw = cable_endpoints[1] %}
-            {% set endpoint_tuple = [endpoint1_raw, endpoint2_raw] | sort %}
-            {% set endpoint_key = endpoint_tuple | join("|") %}
-            {% if endpoint_key not in processed_endpoints %}
-              {% set _ = processed_endpoints.append(endpoint_key) %}
-              {% set endpoint1 = endpoint1_raw.replace("Ethernet", "eth") %}
-              {% set endpoint2 = endpoint2_raw.replace("Ethernet", "eth") %}
-    - endpoints: ["{{ endpoint1 }}", "{{ endpoint2 }}"]
-            {% endif %}
-          {% endif %}
-        {% endif %}
-      {% endfor %}
-    {% endfor %}
+{% for device_edge in topology.devices.edges %}
+{% set device = device_edge.node %}
+{% for interface_edge in device.interfaces.edges %}
+{% set interface = interface_edge.node %}
+{% if interface.cable and interface.cable.node.endpoints.edges | length == 2 %}
+{% for endpoint_edge in interface.cable.node.endpoints.edges %}
+{% set endpoint = endpoint_edge.node %}
+{% if endpoint.device.node.name.value == device.name.value and endpoint.name.value == interface.name.value %}
+{% for peer_edge in interface.cable.node.endpoints.edges %}
+{% set peer = peer_edge.node %}
+{% if peer.device.node.name.value != device.name.value %}
+{% set local_key = endpoint.device.node.name.value ~ ":" ~ endpoint.name.value %}
+{% set peer_key = peer.device.node.name.value ~ ":" ~ peer.name.value %}
+{% if local_key < peer_key %}
+    - endpoints: [{{ containerlab_endpoint(endpoint) | trim | tojson }}, {{ containerlab_endpoint(peer) | trim | tojson }}]
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endfor %}
 {% endif %}
 {% endfor %}

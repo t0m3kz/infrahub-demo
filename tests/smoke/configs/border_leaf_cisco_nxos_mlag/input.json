@@ -9,7 +9,7 @@
             "value": "DC1-POD1-L1"
           },
           "role": {
-            "value": "border_leaf"
+            "value": "border-leaf"
           },
           "platform": {
             "node": {
@@ -31,7 +31,7 @@
           "primary_address": {
             "node": {
               "address": {
-                "value": "10.0.2.1/32"
+                "value": "172.16.0.1/32"
               },
               "ip_namespace": {
                 "node": {
@@ -50,6 +50,7 @@
               {
                 "node": {
                   "__typename": "ManagedMLAG",
+                  "id": "mlag-dom-1",
                   "name": {
                     "value": "DC1-POD1-L1-L2-MLAG"
                   },
@@ -68,6 +69,19 @@
                         "node": {
                           "name": {
                             "value": "DC1-POD1-L1"
+                          },
+                          "role": {
+                            "value": "border-leaf"
+                          },
+                          "primary_address": {
+                            "node": {
+                              "address": {
+                                "value": "172.16.0.1/32"
+                              }
+                            }
+                          },
+                          "interfaces": {
+                            "edges": []
                           }
                         }
                       },
@@ -75,6 +89,19 @@
                         "node": {
                           "name": {
                             "value": "DC1-POD1-L2"
+                          },
+                          "role": {
+                            "value": "border-leaf"
+                          },
+                          "primary_address": {
+                            "node": {
+                              "address": {
+                                "value": "172.16.0.2/32"
+                              }
+                            }
+                          },
+                          "interfaces": {
+                            "edges": []
                           }
                         }
                       }

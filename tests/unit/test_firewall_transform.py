@@ -413,6 +413,83 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
     }
 
 
+def _make_destination_prefix_policy_data(platform: str) -> dict[str, Any]:
+    """Smoke data for a rule with NO destination_segment/zone — only a
+    destination_prefixes selector, the shape a colocation-hosted cloud/
+    partner/SaaS interconnect rule uses (see data/demos/30_all/
+    08_interconnects/07_zone_policies/05_security_policy.yml)."""
+    base = _make_smoke_data(platform)
+
+    prefix_rule_node: dict[str, Any] = {
+        "index": {"value": 10},
+        "name": {"value": "nordix-prod-to-aws"},
+        "action": {"value": "permit"},
+        "protocol": {"value": "tcp"},
+        "port_start": {"value": 443},
+        "port_end": {"value": None},
+        "log": {"value": False},
+        "disabled": {"value": False},
+        "apply_on_switch": {"value": False},
+        "description": {"value": "Nordix web/app tier to AWS transit hub"},
+        "source_zone": {"node": None},
+        "destination_zone": {"node": None},
+        "source_segment": {"node": None},
+        "destination_segment": {"node": None},
+        "source_prefixes": {"edges": []},
+        "destination_prefixes": {"edges": [{"node": {"id": "px-1", "prefix": {"value": "10.40.0.0/16"}}}]},
+        "source_ip_addresses": {"edges": []},
+        "destination_ip_addresses": {"edges": []},
+        "security_profile": {"node": None},
+    }
+    prefix_policy_node: dict[str, Any] = {
+        "name": {"value": "colo-fr-external-egress"},
+        "default_action": {"value": "deny"},
+        "enabled": {"value": True},
+        "rules": {"edges": [{"node": prefix_rule_node}]},
+    }
+    base["SecurityPolicy"]["edges"].append({"node": prefix_policy_node})
+    return base
+
+
+def _make_protocol_port_policy_data(
+    platform: str, *, protocol: str, port_start: int | None, port_end: int | None
+) -> dict[str, Any]:
+    """Smoke data for one rule with an arbitrary protocol/port combination —
+    used to check PAN-OS/Junos service/application object rendering across
+    single-port, port-range, and no-port (icmp/any) cases."""
+    base = _make_smoke_data(platform)
+
+    rule_node: dict[str, Any] = {
+        "index": {"value": 10},
+        "name": {"value": "proto-port-rule"},
+        "action": {"value": "permit"},
+        "protocol": {"value": protocol},
+        "port_start": {"value": port_start},
+        "port_end": {"value": port_end},
+        "log": {"value": False},
+        "disabled": {"value": False},
+        "apply_on_switch": {"value": False},
+        "description": {"value": ""},
+        "source_zone": {"node": None},
+        "destination_zone": {"node": None},
+        "source_segment": {"node": None},
+        "destination_segment": {"node": None},
+        "source_prefixes": {"edges": []},
+        "destination_prefixes": {"edges": [{"node": {"id": "px-1", "prefix": {"value": "10.40.0.0/16"}}}]},
+        "source_ip_addresses": {"edges": []},
+        "destination_ip_addresses": {"edges": []},
+        "security_profile": {"node": None},
+    }
+    policy_node: dict[str, Any] = {
+        "name": {"value": "proto-port-policy"},
+        "default_action": {"value": "deny"},
+        "enabled": {"value": True},
+        "rules": {"edges": [{"node": rule_node}]},
+    }
+    base["SecurityPolicy"]["edges"].append({"node": policy_node})
+    return base
+
+
 def _make_merged_policies_data(platform: str) -> dict[str, Any]:
     """Build smoke data that includes BOTH a global and a segment policy with distinct names."""
     base = _make_smoke_data(platform)
@@ -467,6 +544,14 @@ class TestFirewallTransformSmoke:
         assert len(result) > 0
 
     @pytest.mark.asyncio
+    async def test_smoke_render_juniper(self) -> None:
+        fw = _make_fw()
+        data = _make_smoke_data("juniper_junos")
+        result = await fw.transform(data)
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    @pytest.mark.asyncio
     async def test_segment_policy_appears_in_rendered_config(self) -> None:
         """The rule name from the segment policy must appear in the PAN-OS output."""
         fw = _make_fw()
@@ -492,6 +577,23 @@ class TestFirewallTransformSmoke:
         # Also verify the render didn't short-circuit (non-empty output)
         assert len(result) > 50
 
+    @pytest.mark.asyncio
+    async def test_destination_prefix_rule_renders_cidr_on_paloalto(self) -> None:
+        """A rule with only destination_prefixes (no zone/segment) — the shape
+        used for colocation-hosted cloud/partner/SaaS interconnects — must
+        still render a real destination match, not 'any'."""
+        fw = _make_fw()
+        data = _make_destination_prefix_policy_data("paloalto_panos")
+        result = await fw.transform(data)
+        assert "nordix-prod-to-aws" in result
+        assert "10.40.0.0/16" in result
+        for line in result.splitlines():
+            if "rules nordix-prod-to-aws destination" in line:
+                assert "any" not in line
+                break
+        else:
+            pytest.fail("no 'destination' line found for rule 'nordix-prod-to-aws'")
+
     @pytest.mark.parametrize(
         "platform",
         [
@@ -499,6 +601,189 @@ class TestFirewallTransformSmoke:
             "fortinet_fortios",
             "cisco_asa",
             "checkpoint_gaia",
+            "juniper_junos",
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_destination_prefix_rule_renders_cidr_all_platforms(self, platform: str) -> None:
+        """Same coverage as the PAN-OS-specific test above, across every
+        vendor template — each renders the CIDR as a literal destination
+        match rather than silently falling back to 'any'/'Any'."""
+        fw = _make_fw()
+        data = _make_destination_prefix_policy_data(platform)
+        result = await fw.transform(data)
+        assert "10.40.0.0/16" in result
+
+    @pytest.mark.asyncio
+    async def test_single_port_renders_service_object_on_paloalto(self) -> None:
+        """PAN-OS has no vendor-neutral dst_port string to fall back on — it
+        builds its own named service object from raw_protocol/port_start."""
+        fw = _make_fw()
+        data = _make_protocol_port_policy_data("paloalto_panos", protocol="tcp", port_start=443, port_end=None)
+        result = await fw.transform(data)
+        assert "set service svc-tcp-443 protocol tcp port 443" in result
+        assert "set rulebase security rules proto-port-rule service svc-tcp-443" in result
+
+    @pytest.mark.asyncio
+    async def test_port_range_renders_service_object_on_paloalto(self) -> None:
+        fw = _make_fw()
+        data = _make_protocol_port_policy_data("paloalto_panos", protocol="tcp", port_start=8080, port_end=8090)
+        result = await fw.transform(data)
+        assert "set service svc-tcp-8080-8090 protocol tcp port 8080-8090" in result
+        assert "set rulebase security rules proto-port-rule service svc-tcp-8080-8090" in result
+
+    @pytest.mark.asyncio
+    async def test_icmp_falls_back_to_service_any_on_paloalto(self) -> None:
+        """No port-based service makes sense for ICMP/any — must not emit a
+        malformed service object with a missing port. The base smoke fixture
+        carries its own unrelated tcp/443 segment rule, so this checks the
+        proto-port-rule's own service line specifically, not the whole
+        output — a global 'svc-' absence check would false-fail on that
+        other rule's legitimate service object."""
+        fw = _make_fw()
+        data = _make_protocol_port_policy_data("paloalto_panos", protocol="icmp", port_start=None, port_end=None)
+        result = await fw.transform(data)
+        assert "set rulebase security rules proto-port-rule service any" in result
+        for line in result.splitlines():
+            if "rules proto-port-rule service" in line:
+                assert "svc-" not in line
+
+    @pytest.mark.asyncio
+    async def test_single_port_renders_application_object_on_juniper(self) -> None:
+        fw = _make_fw()
+        data = _make_protocol_port_policy_data("juniper_junos", protocol="tcp", port_start=443, port_end=None)
+        result = await fw.transform(data)
+        assert "set applications application app-tcp-443 protocol tcp destination-port 443" in result
+        assert "match application app-tcp-443" in result
+
+    @pytest.mark.asyncio
+    async def test_port_range_renders_application_object_on_juniper(self) -> None:
+        fw = _make_fw()
+        data = _make_protocol_port_policy_data("juniper_junos", protocol="udp", port_start=8080, port_end=8090)
+        result = await fw.transform(data)
+        assert "set applications application app-udp-8080-8090 protocol udp destination-port 8080-8090" in result
+        assert "match application app-udp-8080-8090" in result
+
+    @pytest.mark.asyncio
+    async def test_icmp_falls_back_to_application_any_on_juniper(self) -> None:
+        """See test_icmp_falls_back_to_service_any_on_paloalto's docstring —
+        same base-fixture caveat applies here."""
+        fw = _make_fw()
+        data = _make_protocol_port_policy_data("juniper_junos", protocol="icmp", port_start=None, port_end=None)
+        result = await fw.transform(data)
+        matched = [line for line in result.splitlines() if "policy proto-port-rule match application" in line]
+        assert matched == [
+            "set security policies from-zone any to-zone any policy proto-port-rule match application any"
+        ]
+
+    @pytest.mark.asyncio
+    async def test_single_port_renders_service_object_on_checkpoint(self) -> None:
+        """Check Point's `service` parameter takes a service OBJECT NAME, not
+        the Cisco-ACL-style dst_port string ('eq 443') — it needs its own
+        named service, defined via `add service-tcp`, same shape as PAN-OS's
+        `set service`."""
+        fw = _make_fw()
+        data = _make_protocol_port_policy_data("checkpoint_gaia", protocol="tcp", port_start=443, port_end=None)
+        result = await fw.transform(data)
+        assert "add service-tcp name svc-tcp-443 port 443" in result
+        assert "service svc-tcp-443 track" in result
+
+    @pytest.mark.asyncio
+    async def test_port_range_renders_service_object_on_checkpoint(self) -> None:
+        fw = _make_fw()
+        data = _make_protocol_port_policy_data("checkpoint_gaia", protocol="udp", port_start=8080, port_end=8090)
+        result = await fw.transform(data)
+        assert "add service-udp name svc-udp-8080-8090 port 8080-8090" in result
+        assert "service svc-udp-8080-8090 track" in result
+
+    @pytest.mark.asyncio
+    async def test_icmp_falls_back_to_service_any_on_checkpoint(self) -> None:
+        fw = _make_fw()
+        data = _make_protocol_port_policy_data("checkpoint_gaia", protocol="icmp", port_start=None, port_end=None)
+        result = await fw.transform(data)
+        matched = [line for line in result.splitlines() if 'name "proto-port-rule"' in line]
+        assert len(matched) == 1
+        assert "service Any" in matched[0]
+
+    @pytest.mark.asyncio
+    async def test_single_port_renders_service_object_on_fortinet(self) -> None:
+        """FortiOS's `set service "ALL"` was previously hardcoded regardless
+        of protocol/port — a named service object (config firewall service
+        custom) is required, defined in its own top-level block ahead of
+        config firewall policy since FortiOS config sections can't nest."""
+        fw = _make_fw()
+        data = _make_protocol_port_policy_data("fortinet_fortios", protocol="tcp", port_start=443, port_end=None)
+        result = await fw.transform(data)
+        assert 'edit "svc-tcp-443"' in result
+        assert "set tcp-portrange 443" in result
+        assert 'set service "svc-tcp-443"' in result
+
+    @pytest.mark.asyncio
+    async def test_port_range_renders_service_object_on_fortinet(self) -> None:
+        fw = _make_fw()
+        data = _make_protocol_port_policy_data("fortinet_fortios", protocol="udp", port_start=8080, port_end=8090)
+        result = await fw.transform(data)
+        assert 'edit "svc-udp-8080-8090"' in result
+        assert "set udp-portrange 8080-8090" in result
+        assert 'set service "svc-udp-8080-8090"' in result
+
+    @pytest.mark.asyncio
+    async def test_icmp_falls_back_to_service_all_on_fortinet(self) -> None:
+        fw = _make_fw()
+        data = _make_protocol_port_policy_data("fortinet_fortios", protocol="icmp", port_start=None, port_end=None)
+        result = await fw.transform(data)
+        lines = result.splitlines()
+        name_idx = next(i for i, line in enumerate(lines) if 'set name "proto-port-rule"' in line)
+        next_idx = next(i for i in range(name_idx, len(lines)) if lines[i].strip() == "next")
+        assert any('set service "ALL"' in line for line in lines[name_idx:next_idx])
+
+    @pytest.mark.asyncio
+    async def test_shared_protocol_port_deduplicated_on_fortinet(self) -> None:
+        """Two rules using the same protocol/port must produce exactly one
+        service object, not one per rule."""
+        base = _make_smoke_data("fortinet_fortios")
+        rule_a = {
+            "index": {"value": 10},
+            "name": {"value": "rule-a"},
+            "action": {"value": "permit"},
+            "protocol": {"value": "tcp"},
+            "port_start": {"value": 443},
+            "port_end": {"value": None},
+            "log": {"value": False},
+            "disabled": {"value": False},
+            "apply_on_switch": {"value": False},
+            "description": {"value": ""},
+            "source_zone": {"node": None},
+            "destination_zone": {"node": None},
+            "source_segment": {"node": None},
+            "destination_segment": {"node": None},
+            "source_prefixes": {"edges": []},
+            "destination_prefixes": {"edges": [{"node": {"id": "px-1", "prefix": {"value": "10.1.0.0/16"}}}]},
+            "source_ip_addresses": {"edges": []},
+            "destination_ip_addresses": {"edges": []},
+            "security_profile": {"node": None},
+        }
+        rule_b = {**rule_a, "index": {"value": 20}, "name": {"value": "rule-b"}}
+        policy_node = {
+            "name": {"value": "dual-rule-policy"},
+            "default_action": {"value": "deny"},
+            "enabled": {"value": True},
+            "rules": {"edges": [{"node": rule_a}, {"node": rule_b}]},
+        }
+        base["SecurityPolicy"]["edges"].append({"node": policy_node})
+
+        fw = _make_fw()
+        result = await fw.transform(base)
+        assert result.count('edit "svc-tcp-443"') == 1
+
+    @pytest.mark.parametrize(
+        "platform",
+        [
+            "paloalto_panos",
+            "fortinet_fortios",
+            "cisco_asa",
+            "checkpoint_gaia",
+            "juniper_junos",
         ],
     )
     @pytest.mark.asyncio
@@ -516,6 +801,7 @@ class TestFirewallTransformSmoke:
             "fortinet_fortios",
             "cisco_asa",
             "checkpoint_gaia",
+            "juniper_junos",
         ],
     )
     @pytest.mark.asyncio
@@ -592,6 +878,7 @@ class TestAddressFamilyAwareRendering:
             ("paloalto_panos", "ipv6 addr", "ipv4 addr"),
             ("fortinet_fortios", "set ip6-address", "set ip "),
             ("cisco_asa", "ipv6 address", "ip address"),
+            ("juniper_junos", "family inet6 address", "family inet address"),
         ],
     )
     def test_fw_interface_v6_uses_v6_command(self, platform: str, v6_marker: str, v4_marker: str) -> None:
@@ -606,6 +893,7 @@ class TestAddressFamilyAwareRendering:
             ("paloalto_panos", "ipv6 addr", "ipv4 addr"),
             ("fortinet_fortios", "set ip6-address", "set ip "),
             ("cisco_asa", "ipv6 address", "ip address"),
+            ("juniper_junos", "family inet6 address", "family inet address"),
         ],
     )
     def test_fw_interface_v4_uses_v4_command(self, platform: str, v6_marker: str, v4_marker: str) -> None:

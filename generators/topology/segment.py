@@ -19,19 +19,28 @@ VxlanSegmentGenerator handles:
      real DC-wide/fabric-wide segment identifier).
   5. Create inline sub-interfaces when terminate_inline is set.
 
-VNIs are allocated from the parent's CoreNumberPool via from_pool. The
-idempotency check (existing SegmentDeployment lookup) ensures from_pool is
-only called for genuinely new deployments, avoiding double allocation.
+VNIs are allocated via from_pool. A local segment draws from its parent's
+own vni_pool, independently in every parent. A stretched segment draws ONE VNI
+from the global GLOBAL-L2VNI pool and every other parent reuses it. The per-site
+pools all hand out the same band, so a stretched VNI taken from one site's pool
+and written into another site would collide with whatever that site's own pool
+had already given a different segment. The two bands are disjoint, so a
+stretched VNI can never meet a local one. The idempotency check (existing
+SegmentDeployment lookup) ensures from_pool is only called for genuinely new
+deployments, avoiding double allocation.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
+from infrahub_sdk.protocols import CoreNumberPool
+
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
 from ..connections import CablingMixin
+from ..helpers.pools import CUSTOMER_VLAN_ID_MAX, CUSTOMER_VLAN_ID_MIN
 from ..helpers.rules import RulesPlanner
 from ..named_objects import GetOrCreateByNameMixin
 from ..pools import PoolMixin
@@ -45,6 +54,18 @@ from ..protocols import (
     SecurityZone,
 )
 
+# Devices whose customer-facing ports a segment is offered on. `edge` is the
+# colocation metro's on-ramp router (generators/topology/colocation.py) — the
+# only VTEP a metro has, so its customer ports are where a stretched segment
+# lands in the colocation.
+_ACCESS_VTEP_ROLES = frozenset({"leaf", "tor", "l2-leaf", "access-leaf", "edge"})
+# Devices that act as a deployment's EVPN Multi-Site border gateway for a
+# stretched segment: the DC's border leaves and the metro's edges.
+_BORDER_GATEWAY_ROLES = frozenset({"border-leaf", "edge"})
+# Bootstrap pool (data/bootstrap/18_vni_pools.yml) every stretched segment's
+# single VNI comes from — disjoint from the per-site {fabric}-vni-pool band.
+STRETCHED_VNI_POOL_NAME = "GLOBAL-L2VNI"
+
 
 class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, CommonGenerator):
     """VXLAN segment generator — allocates a VNI from the DC's pool, assigns
@@ -55,6 +76,19 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
     """
 
     graphql_root_key = "ManagedVxlanSegment"
+
+    async def _get_stretched_vni_pool(self) -> dict[str, Any] | None:
+        """Return the global stretched-segment VNI pool as {"id", "name"}, or None."""
+        try:
+            pool = await self.client.get(
+                kind=CoreNumberPool, name__value=STRETCHED_VNI_POOL_NAME, raise_when_missing=False
+            )
+        except Exception as exc:
+            self.logger.warning(f"Error looking up VNI pool {STRETCHED_VNI_POOL_NAME}: {exc}")
+            return None
+        if pool is None:
+            return None
+        return {"id": pool.id, "name": STRETCHED_VNI_POOL_NAME}
 
     @staticmethod
     def _extract_existing_vni(existing_deployments: list[Any]) -> int | None:
@@ -104,7 +138,7 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
         ]
         if missing_pool_ids:
             for dep_id in missing_pool_ids:
-                for parent_generator in ("add_dc", "dc_pod_cascade"):
+                for parent_generator in ("add_dc", "dc_pod_cascade", "add_colocation_metro"):
                     refreshed = await self.wait_for_parent_generator_and_refetch(parent_generator, dep_id)
                     if refreshed is not None:
                         cleaned = clean_data(refreshed)
@@ -114,7 +148,20 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
             target_deployments = self._resolve_target_deployments(segment, segment_name)
 
         stretch_scope = segment.get("stretch_scope") or "local"
+        stretched = stretch_scope != "local"
         self.logger.info(f"Segment {segment_name}: stretch_scope={stretch_scope}")
+
+        stretched_vni_pool: dict[str, Any] | None = None
+        if stretched:
+            stretched_vni_pool = await self._get_stretched_vni_pool()
+            if stretched_vni_pool is None:
+                # Falling back to a site pool would reintroduce the collision
+                # this pool exists to prevent — fail instead.
+                self.logger.error(
+                    f"Segment {segment_name}: stretched VNI pool '{STRETCHED_VNI_POOL_NAME}' not found — "
+                    "load data/bootstrap/18_vni_pools.yml"
+                )
+                return
 
         self.logger.info(
             f"Segment {segment_name} will be activated in "
@@ -138,7 +185,8 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
                 deployment_id = getattr(deployment_obj, "id", None)
                 if deployment_id and deployment_id not in existing_by_deployment_id:
                     existing_by_deployment_id[deployment_id] = existing
-            reusable_vni = self._extract_existing_vni(existing_deployments)
+            if stretched:
+                reusable_vni = self._extract_existing_vni(existing_deployments)
         except Exception as exc:
             self.logger.warning(f"Segment {segment_name}: failed to prefetch existing deployments: {exc}")
 
@@ -158,7 +206,7 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
                 segment_name=segment_name,
                 deployment_id=dep_id,
                 deployment_name=dep_name,
-                vni_pool=dep.get("vni_pool"),
+                vni_pool=stretched_vni_pool if stretched else dep.get("vni_pool"),
                 existing_deployment=existing_by_deployment_id.get(dep_id),
                 reusable_vni=reusable_vni,
                 stretch_scope=stretch_scope,
@@ -172,7 +220,7 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
                 "State may be partially applied."
             )
 
-        await self._assign_to_deployment_interfaces(segment, target_deployments)
+        await self._assign_to_deployment_interfaces(segment, target_deployments, stretched=stretch_scope != "local")
         await self._create_inline_sub_interfaces(segment, target_deployments)
 
     async def _ensure_security_zone(self, segment_id: str, segment_name: str, environment: str) -> None:
@@ -263,11 +311,12 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
         local VLAN ID realization is per VLAN domain, see
         _assign_segment_to_dc_interfaces/ManagedVlanDomainSegment).
 
-        VNI is always allocated from the deployment's vni_pool. vni_pool is a
-        {"id": ..., "name": ...} dict read straight from the vxlan_segment
-        query's TopologySegmentHosting parent fragment (see
-        queries/topology/add/vxlan_segment.gql) — no separate client.get()
-        round-trip per deployment needed to discover it.
+        VNI is allocated from vni_pool, a {"id": ..., "name": ...} dict: for a
+        local segment the deployment's own pool, read straight from the
+        vxlan_segment query's TopologySegmentHosting parent fragment (see
+        queries/topology/add/vxlan_segment.gql); for a stretched one the
+        global GLOBAL-L2VNI pool, used only by the first deployment — the
+        rest reuse its VNI. A local segment never reuses another site's VNI.
         Idempotency: checks for existing SegmentDeployment first — from_pool
         is only called for genuinely new deployments.
         """
@@ -287,7 +336,10 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
                     f"Error checking existing activations for {segment_name} in {deployment_name}: {exc}"
                 )
 
-        if reusable_vni is None:
+        stretched = stretch_scope != "local"
+        if not stretched:
+            reusable_vni = None
+        elif reusable_vni is None:
             try:
                 existing_for_segment = await self.client.filters(
                     kind=ManagedSegmentDeployment,
@@ -307,17 +359,16 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
             return True
 
         # --- VNI ---
-        # VNI must be globally consistent — the same segment must carry the same VNI
-        # in every DC so that EVPN type-2/3 routes stitch correctly across DCI.
-        # Strategy: reuse the VNI already allocated for another DC's SegmentDeployment
-        # of the same segment. Only fall back to pool allocation when this is the
-        # first DC to activate the segment (no prior SegmentDeployment exists yet).
+        # A stretched segment must carry the same VNI in every site so that
+        # EVPN type-2/3 routes stitch correctly across DCI: reuse the VNI the
+        # first site drew from the global pool. A local segment has no such
+        # constraint and always draws from its own site's pool.
         vni_from_pool: dict[str, Any] | None = None
         vni_literal: int | None = reusable_vni
         if vni_literal is not None:
             self.logger.info(f"  [{deployment_name}] Reusing VNI {vni_literal} for {segment_name}")
         else:
-            # First DC to activate this segment — allocate from pool
+            # Local segment, or the first site to activate a stretched one
             vni_pool_id = (vni_pool or {}).get("id")
             if vni_pool_id:
                 # Local segments use per-deployment identifiers; stretched fallback
@@ -359,9 +410,13 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
             return False
 
     async def _assign_to_deployment_interfaces(
-        self, segment: dict[str, Any], target_deployments: list[dict[str, Any]]
+        self, segment: dict[str, Any], target_deployments: list[dict[str, Any]], stretched: bool = False
     ) -> None:
-        """Assign this segment to all leaf/tor customer-facing interfaces in each deployment."""
+        """Assign this segment to all leaf/tor customer-facing interfaces in each deployment.
+
+        ``stretched``: the segment spans more than one deployment, so its EVPN
+        routes cross sites through each site's border gateways — see
+        _BORDER_GATEWAY_ROLES."""
         segment_id: str = segment.get("id", "")
         segment_name: str = segment.get("name", "")
         if not segment_id or not target_deployments:
@@ -383,6 +438,7 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
                 segment_name=segment_name,
                 deployment_id=dep_id,
                 deployment_name=dep_name,
+                stretched=stretched,
             )
 
     async def _resolve_vlan_domain(self, device: Any) -> tuple[str, str]:
@@ -415,8 +471,8 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
         await self.upsert_number_pool(
             pool_name=f"{domain_name}-vlan-pool",
             description=f"Local VLAN ID pool for standalone VLAN domain {domain_name}",
-            start_range=100,
-            end_range=3999,
+            start_range=CUSTOMER_VLAN_ID_MIN,
+            end_range=CUSTOMER_VLAN_ID_MAX,
             node="ManagedVlanDomainSegment",
             node_attribute="vlan_id",
             parent_kind="ManagedStandaloneVlanDomain",
@@ -466,23 +522,31 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
         segment_name: str,
         deployment_id: str,
         deployment_name: str,
+        stretched: bool = False,
     ) -> None:
-        """Find all leaf/tor customer-facing interfaces in a DC, add the segment
-        to their interface_capabilities relationship (queried by the leaf
-        transform), and — per distinct VLAN domain (MLAG pair or standalone
-        device) touched — upsert a ManagedVlanDomainSegment realizing this
-        segment's LOCAL VLAN ID in that domain."""
+        """Find all leaf/tor/edge customer-facing interfaces in a deployment, add
+        the segment to their interface_capabilities relationship (queried by the
+        leaf/edge transforms), and — per distinct VLAN domain (MLAG pair or
+        standalone device) touched — upsert a ManagedVlanDomainSegment realizing
+        this segment's LOCAL VLAN ID in that domain.
+
+        A stretched segment additionally gets a VLAN on every border gateway of
+        the deployment even though those have no customer port for it: an EVPN
+        Multi-Site BGW only re-originates a VNI it has configured (NX-OS needs
+        the `vlan`/`vn-segment` pair plus the NVE member), and the VLAN domain
+        segment is what the transform renders that from."""
         devices = await self.client.filters(
             kind=DcimPhysicalDevice,
             deployment__ids=[deployment_id],
-            role__values=["leaf", "tor", "l2-leaf", "access-leaf"],
+            role__values=sorted(_ACCESS_VTEP_ROLES | (_BORDER_GATEWAY_ROLES if stretched else frozenset())),
             include=["capabilities"],
         )
         if not devices:
             self.logger.debug(
-                f"  [{deployment_name}] No leaf/tor/l2-leaf/access-leaf devices — skipping interface assignment"
+                f"  [{deployment_name}] No access or border-gateway devices — skipping interface assignment"
             )
             return
+        border_gateways = [d for d in devices if stretched and d.role.value in _BORDER_GATEWAY_ROLES]
 
         device_ids = [d.id for d in devices]
         interfaces = await self.client.filters(
@@ -491,7 +555,7 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
             role__value="customer",
             include=["device"],
         )
-        if not interfaces:
+        if not interfaces and not border_gateways:
             self.logger.debug(f"  [{deployment_name}] No customer/downlink interfaces — skipping")
             return
 
@@ -505,7 +569,7 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
             changed = False
 
             if segment_id not in existing_ids:
-                await iface_services.add(segment_obj)
+                iface_services.add(segment_obj)
                 assigned += 1
                 changed = True
 
@@ -526,6 +590,7 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
 
         # Resolve each touched device's VLAN domain (MLAG-or-standalone) and
         # upsert one ManagedVlanDomainSegment per distinct domain.
+        touched_device_ids.update(d.id for d in border_gateways)
         touched_devices = [d for d in devices if d.id in touched_device_ids]
         domain_ids: set[str] = set()
         for device in touched_devices:
@@ -571,8 +636,8 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
             pool_obj = await self.upsert_number_pool(
                 pool_name=f"{ha_id}-inline-vlan-pool",
                 description=f"Local VLAN ID pool for inline-terminated segments on HA {ha_id}",
-                start_range=100,
-                end_range=3999,
+                start_range=CUSTOMER_VLAN_ID_MIN,
+                end_range=CUSTOMER_VLAN_ID_MAX,
                 node="ManagedHA",
                 node_attribute="inline_vlan_id",
                 parent_kind="ManagedHA",

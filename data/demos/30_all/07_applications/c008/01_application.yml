@@ -1,0 +1,46 @@
+---
+# C008 dev application on the shared DC12 hosts (P027). The instances are the
+# VMs from ../../06_customer_boarding/c008/dc/dc12/02_instances.yml.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppApplication
+  data:
+    - label: inventory-sync
+      environment: d
+      criticality: medium
+      security_profile: internal_standard
+      fqdn: inventory-sync.c008.demo.local
+      ingress_mode: dns
+      application_orchestrator: github_actions
+      owner: C008
+      member_of_groups:
+        - app_applications
+      children:
+        kind: AppComponent
+        data:
+          - name: sync-api
+            component_type: backend
+            network_segment: c008-krafven-dev-d
+            instances:
+              - c008-sync-api-dc12-1
+              - c008-sync-api-dc12-2
+            service_ports:
+              data:
+                - port: 8443
+                  protocol: tcp
+            member_of_groups:
+              - app_components
+
+          - name: sync-db
+            component_type: database
+            network_segment: c008-krafven-dev-d
+            instances:
+              - c008-sync-db-dc12-1
+              - c008-sync-db-dc12-2
+            service_ports:
+              data:
+                - port: 5432
+                  protocol: tcp
+            member_of_groups:
+              - app_components

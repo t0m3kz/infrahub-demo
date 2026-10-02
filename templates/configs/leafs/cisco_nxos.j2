@@ -90,19 +90,32 @@ interface {{ interface.name }}
 {%- for feature in vxlan.features %}
 feature {{ feature }}
 {%- endfor %}
+{%- if vxlan.evpn and vxlan.evpn.enabled %}
+nv overlay evpn
+{%- endif %}
 !
+{%- include 'common/cisco_nxos_vxlan_vrf.j2' %}
 interface {{ vxlan.nve_interface }}
 {%- if vxlan.vtep.ipv4 %}
   source-interface {{ vxlan.vtep.source_interface }}
 {%- endif %}
+{%- if vxlan.evpn and vxlan.evpn.enabled %}
+  host-reachability protocol bgp
+{%- endif %}
 {%- for mapping in vxlan.l2_vni_mappings %}
   member vni {{ mapping.vni }}
+    {%- if mapping.arp_suppression %}
+    suppress-arp
+    {%- endif %}
     {%- if vxlan.evpn and vxlan.evpn.enabled %}
     ingress-replication protocol bgp
     {%- elif vxlan.flooding == "static" and vxlan.remote_vteps %}
     ingress-replication protocol static
       peer-list {{ vxlan.remote_vteps | join(' ') }}
     {%- endif %}
+{%- endfor %}
+{%- for mapping in vxlan.l3_vni_mappings %}
+  member vni {{ mapping.l3_vni }} associate-vrf
 {%- endfor %}
   no shutdown
 !
@@ -113,9 +126,13 @@ interface {{ vxlan.nve_interface }}
 evpn
 {%- for mapping in vxlan.l2_vni_mappings %}
   vni {{ mapping.vni }} l2
-    rd {{ vxlan.evpn.rd_format }}
-    route-target import {{ bgp[0].local_as.asn }}:{{ mapping.vni }}
-    route-target export {{ bgp[0].local_as.asn }}:{{ mapping.vni }}
+    {%- if vxlan.evpn.rd_format %}
+    rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.vni | string) }}
+    {%- endif %}
+    {%- if mapping.route_target %}
+    route-target import {{ mapping.route_target }}
+    route-target export {{ mapping.route_target }}
+    {%- endif %}
 {%- endfor %}
 !
 {%- endif %}
@@ -126,12 +143,20 @@ evpn
 vlan {{ mapping.vlan_id }}
   vn-segment {{ mapping.vni }}
 {%- endfor %}
+{%- include 'common/cisco_nxos_l3vni_svi.j2' %}
 {%- endif %}
 !
 ! Route-maps
 route-map RM-CONN-2-BGP permit 10
   match interface {{ _lb.name }}
 !
+{%- if vxlan and vxlan.l3_vni_mappings %}
+{#- Permit-all, deliberately unqualified: inside a tenant VRF everything that is
+    directly connected (the anycast-gateway SVIs) is exactly what should become an
+    EVPN type-5 route. Referenced from cisco_nxos_bgp.j2's per-VRF block. #}
+route-map RM-VRF-DIRECT-2-EVPN permit 10
+!
+{%- endif %}
 {%- if vxlan and vxlan.anycast_gateway and vxlan.anycast_gateway.enabled %}
 ! Anycast Gateway — identical MAC on every leaf/border-leaf in the fabric
 fabric forwarding anycast-gateway-mac {{ vxlan.anycast_gateway.mac | replace(':', '') | replace('.', '') }}
@@ -185,7 +210,7 @@ ip route 0.0.0.0/0 {{ nexthop }} vrf {{ vrf }}
 {%- endfor %}
 !
 {%- endif %}
-{%- if sgt_rules %}
+{%- if vlans|selectattr('sgt')|list or sgt_rules %}
 !
 ! CTS Security Group Tags — VXLAN GPO tier enforcement (VLAN-to-SGT mapping —
 ! scales to trunk ports carrying multiple segments, unlike per-port
@@ -207,48 +232,40 @@ cts role-based permissions from {{ rule.src_sgt }} to {{ rule.dst_sgt }} {{ rule
 {%- endfor %}
 !
 {%- endif %}
-{%- if customer_pbr_rules %}
+{%- if leaf_pbr_rules %}
 !
-! Customer PBR — default-redirect to firewall (TopologyCustomerDeployment's
-! FirewallContext); a SecurityPolicyRule permit is the only bypass.
+! Leaf PBR — LB return path first, then permitted firewall bypass,
+! otherwise redirect to the firewall when a context is present.
 !
-{%- for rule in customer_pbr_rules %}
+{%- for rule in leaf_pbr_rules %}
 ! Customer: {{ rule.customer_name or 'any' }}/{{ rule.environment or 'any' }}
+{%- if rule.lb_nexthop %}
+ip access-list LB-BACKEND-VLAN{{ rule.vlan_id }}
+{%- for ip in rule.backend_ips %}
+  permit ip host {{ ip }} any
+{%- endfor %}
+!
+route-map RM-LEAF-PBR-VLAN{{ rule.vlan_id }} permit 10
+  match ip address LB-BACKEND-VLAN{{ rule.vlan_id }}
+  set ip next-hop {{ rule.lb_nexthop }}
+!
+{%- endif %}
+{%- if rule.fw_nexthop %}
 ip access-list PBR-BYPASS-VLAN{{ rule.vlan_id }}
 {%- for prefix in rule.bypass_prefixes %}
   permit ip any {{ prefix }}
 {%- endfor %}
   deny ip any any
 !
-route-map RM-CUSTOMER-PBR-VLAN{{ rule.vlan_id }} permit 10
+route-map RM-LEAF-PBR-VLAN{{ rule.vlan_id }} permit 20
   match ip address PBR-BYPASS-VLAN{{ rule.vlan_id }}
 !
-route-map RM-CUSTOMER-PBR-VLAN{{ rule.vlan_id }} permit 20
+route-map RM-LEAF-PBR-VLAN{{ rule.vlan_id }} permit 30
   set ip next-hop {{ rule.fw_nexthop }}
 !
-interface Vlan{{ rule.vlan_id }}
-  ip policy route-map RM-CUSTOMER-PBR-VLAN{{ rule.vlan_id }}
-!
-{%- endfor %}
 {%- endif %}
-{%- if lb_backend_pbr_rules %}
-!
-! LB Backend No-SNAT Return-Path — redirect backend pool member response
-! traffic to the load balancer instead of the anycast gateway.
-!
-{%- for rule in lb_backend_pbr_rules %}
-! Customer: {{ rule.customer_name or 'any' }}/{{ rule.environment or 'any' }}
-ip access-list LB-BACKEND-VLAN{{ rule.vlan_id }}
-{%- for ip in rule.backend_ips %}
-  permit ip host {{ ip }} any
-{%- endfor %}
-!
-route-map RM-LB-BACKEND-VLAN{{ rule.vlan_id }} permit 10
-  match ip address LB-BACKEND-VLAN{{ rule.vlan_id }}
-  set ip next-hop {{ rule.lb_nexthop }}
-!
 interface Vlan{{ rule.vlan_id }}
-  ip policy route-map RM-LB-BACKEND-VLAN{{ rule.vlan_id }}
+  ip policy route-map RM-LEAF-PBR-VLAN{{ rule.vlan_id }}
 !
 {%- endfor %}
 {%- endif %}

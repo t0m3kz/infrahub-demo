@@ -15,7 +15,7 @@ from unittest.mock import Mock
 import pytest
 from conftest import create_mock_interfaces
 
-from generators.helpers import CablingPlanner
+from generators.helpers import CablingPlanError, CablingPlanner
 
 # ============================================================================
 # Helper Classes and Functions
@@ -148,6 +148,44 @@ class TestCablingScenarios:
             src, dst = connection
             assert hasattr(src, "name") and hasattr(src, "device")
             assert hasattr(dst, "name") and hasattr(dst, "device")
+
+    def test_rack_gives_every_spine_its_own_bottom_port(self) -> None:
+        """One leaf, four spines: four DISTINCT leaf uplinks, never a reused one.
+
+        The bottom port index used to wrap modulo the port count, so spine-03
+        landed back on the port already cabled to spine-01. Infrahub only caught
+        that at save time, as a relationship-cardinality error on a node id.
+        """
+        bottom = create_mock_interfaces("leaf-01", [f"Ethernet{n}/1" for n in (27, 28, 29, 30)])
+        top = [iface for n in range(1, 5) for iface in create_mock_interfaces(f"spine-0{n}", ["Ethernet1/1"])]
+
+        planner = CablingPlanner(bottom, top)
+        plan = planner.build_cabling_plan(scenario="rack", cabling_offset=0)
+
+        assert len(plan) == 4
+        bottom_ports = [src.name.value for src, _dst in plan]
+        assert sorted(bottom_ports) == ["Ethernet27/1", "Ethernet28/1", "Ethernet29/1", "Ethernet30/1"]
+
+    def test_rack_rejects_a_bottom_device_with_too_few_ports(self) -> None:
+        """Two uplinks cannot reach four spines — fail before planning anything."""
+        bottom = create_mock_interfaces("leaf-01", ["Ethernet29/1", "Ethernet30/1"])
+        top = [iface for n in range(1, 5) for iface in create_mock_interfaces(f"spine-0{n}", ["Ethernet1/1"])]
+
+        planner = CablingPlanner(bottom, top)
+        with pytest.raises(CablingPlanError, match=r"leaf-01: 2 port\(s\) available but 4 top device\(s\)"):
+            planner.build_cabling_plan(scenario="rack", cabling_offset=0)
+
+    def test_rack_allows_more_bottom_ports_than_top_devices(self) -> None:
+        """Spare uplinks are normal (a 6-uplink leaf in a 2-spine pod) and the
+        surplus must simply go uncabled, not trip the shortfall check."""
+        bottom = create_mock_interfaces("leaf-01", [f"Ethernet{n}/1" for n in (25, 26, 27, 28, 29, 30)])
+        top = [iface for n in (1, 2) for iface in create_mock_interfaces(f"spine-0{n}", ["Ethernet1/1"])]
+
+        planner = CablingPlanner(bottom, top)
+        plan = planner.build_cabling_plan(scenario="rack", cabling_offset=0)
+
+        assert len(plan) == 2
+        assert len({src.name.value for src, _dst in plan}) == 2
 
     def test_intra_rack_tor_to_leaf_basic(self) -> None:
         """Test INTRA_RACK scenario with basic ToR-Leaf setup."""

@@ -224,10 +224,9 @@ nodes:
             color: "#A9DFBF"
         order_weight: 1400
       # What the account is FOR, in a hub-and-spoke landing zone. This is not
-      # cosmetic: the change-risk check (docs/change_risk.md) treats any change
-      # inside a `network` account as shared-fate by construction — that
-      # account owns the Transit Gateway every other account transits — and
-      # escalates it even when the local blast radius looks small. Without the
+      # cosmetic: any change inside a `network` account is shared-fate by
+      # construction — that account owns the Transit Gateway every other
+      # account transits — even when the local blast radius looks small. Without the
       # role there is no way to tell a hub account from a workload account
       # except by noticing it happens to own a TGW.
       - name: account_role
@@ -973,7 +972,7 @@ nodes:
   #
   # Without (2) every spoke looks like it reaches every other spoke, so a
   # blast-radius answer computed off the flat list is "everything" — which is
-  # the same as no answer. See docs/change_risk.md.
+  # the same as no answer.
 
   - name: TransitGatewayRouteTable
     namespace: Cloud
@@ -1393,9 +1392,9 @@ extensions:
           description: "Node pool / ASG that manages this instance."
           order_weight: 2600
 
-    # Reverse lookups for the hub attachment/route-table pair above. Every one
-    # of these is a direction the change-risk traversal walks; a relationship
-    # declared on only one side is a direction GraphQL cannot express.
+    # Reverse lookups for the hub attachment/route-table pair above, so the
+    # graph can be walked both ways; a relationship declared on only one side
+    # is a direction GraphQL cannot express.
     - kind: CloudTransitGateway
       relationships:
         - name: attachments

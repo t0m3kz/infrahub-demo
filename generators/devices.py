@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 from .helpers import DeviceNameContext, DeviceNamingConfig, get_loopback_name
 from .helpers.pairing import pair_device_names
+from .helpers.pools import CUSTOMER_VLAN_ID_MAX, CUSTOMER_VLAN_ID_MIN
 from .mlag import MLAGWiringMixin
 from .protocols import (
     DcimCable,
@@ -92,6 +93,16 @@ class DeviceMixin(MLAGWiringMixin):
     # doesn't call create_devices() for a controller-eligible role) simply
     # means "no controllers", not an error.
     _all_controllers: list[dict[str, Any]]
+    # Attribute declaration only, no default — set once per generator run by
+    # dc.py/pod.py/rack.py/colocation.py/endpoint.py's generate() to the
+    # enclosing physical facility's id (TopologyDataCenter/
+    # TopologyColocationMetro — never a Pod or Rack). _ensure_ha_cable below
+    # reads this for the HA-sync cable's own `deployment`, deliberately NOT
+    # the HA member device's own `deployment` relationship: pod.py's
+    # border-spine pods scope their firewall/load-balancer *devices* to the
+    # pod on purpose (see test_pod_border_services.py), but DcimCable.
+    # deployment's peer type has no TopologyPod — confirmed live on DC7.
+    deployment_id: str | None
 
     async def create_devices(
         self,
@@ -713,10 +724,14 @@ class DeviceMixin(MLAGWiringMixin):
             # rather than creating a second, conflicting cable.
             return
 
-        deployment_rel = getattr(dev_a, "deployment", None)
-        deployment_id: str | None = None
-        if deployment_rel is not None and deployment_rel.initialized:
-            deployment_id = deployment_rel.peer.id
+        # self.deployment_id, not dev_a's own `deployment` relationship — see
+        # the attribute declaration above for why. This happened to give the
+        # right answer for every DC-scoped HA pair (dc.py's firewall/
+        # load-balancer devices are DC-scoped, so the two ids coincide) but
+        # broke on DC7's border-spine pods, whose devices are deliberately
+        # pod-scoped: "TopologyPod ... cannot be added to relationship, must
+        # be of type: [...TopologyDataCenter]".
+        deployment_id = getattr(self, "deployment_id", None)
 
         self.logger.info(
             f"  [{ha_name}] Creating HA sync cable {cable_name}: "
@@ -831,15 +846,15 @@ class DeviceMixin(MLAGWiringMixin):
 
         IEEE 802.1Q VLAN ID has only local significance (within one L2
         domain — an MLAG pair, or a standalone device). Each VLAN domain
-        gets its own independent 100-3999 pool so unrelated domains can
+        gets its own independent 100-3899 pool so unrelated domains can
         reuse the same numeric VLAN ID for different segments; the real
         DC-wide/fabric-wide segment identifier is ManagedSegmentDeployment.vni.
         """
         await self.upsert_number_pool(
             pool_name=f"{pool_owner_name}-vlan-pool",
             description=f"Local VLAN ID pool for VLAN domain {pool_owner_name}",
-            start_range=100,
-            end_range=3999,
+            start_range=CUSTOMER_VLAN_ID_MIN,
+            end_range=CUSTOMER_VLAN_ID_MAX,
             node="ManagedVlanDomainSegment",
             node_attribute="vlan_id",
             parent_kind=parent_kind,

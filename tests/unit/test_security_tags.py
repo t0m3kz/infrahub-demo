@@ -292,7 +292,7 @@ class TestAristaEosSgtTemplate:
             mlag=None,
         )
 
-    def test_no_sgt_rules_no_sgt_block(self) -> None:
+    def test_tag_without_rules_still_renders_profile(self) -> None:
         vlans = [
             {
                 "vlan_id": 10,
@@ -307,7 +307,7 @@ class TestAristaEosSgtTemplate:
             }
         ]
         output = self._render(vlans, [])
-        assert "mac security" not in output
+        assert "mac security profile SGT-20" in output
         assert "sgt-policy" not in output
 
     def test_sgt_block_rendered_when_rules_present(self) -> None:
@@ -370,11 +370,12 @@ class TestCiscoNxosSgtTemplate:
             mlag=None,
         )
 
-    def test_no_sgt_rules_no_cts_block(self) -> None:
+    def test_tag_without_rules_still_renders_vlan_mapping(self) -> None:
         vlans = [{"vlan_id": 10, "name": "web", "sgt": 20, "sgt_name": "web-tier", "isolation_mode": "normal"}]
         output = self._render(vlans, [])
-        assert "feature cts" not in output
-        assert "cts role-based" not in output
+        assert "feature cts" in output
+        assert "cts role-based sgt-map vlan 10 sgt 20" in output
+        assert "cts role-based permissions" not in output
 
     def test_cts_block_rendered_when_rules_present(self) -> None:
         vlans = [{"vlan_id": 10, "name": "web-frontend", "sgt": 20, "sgt_name": "web-tier", "isolation_mode": "normal"}]

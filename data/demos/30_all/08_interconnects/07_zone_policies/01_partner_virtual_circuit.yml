@@ -1,0 +1,44 @@
+---
+# Partner-acme B2B extranet, modelled as a second IPsec tunnel riding C001's
+# existing internet underlay (../04_sdwan/04_internet_underlay.yml's
+# INET-C001-WAW-FR2) rather than a new dedicated physical cross-connect.
+#
+# A dedicated 1:1 cross-connect was tried first and rejected:
+# TopologyPhysicalCircuit's cross_connect/dark_fiber types are a hard,
+# tested invariant of shared *unowned* underlay with exactly two
+# TopologyConnectableLocation endpoints (tests/integration/
+# test_62_all_demo_interconnects.py::test_01_verify_physical_circuits) — a
+# partner has no TopologyConnectableLocation of its own, and a
+# customer-owned single-ended cross_connect violates both rules. Riding the
+# existing internet-type underlay as a second overlay (same pattern as
+# ../04_sdwan/05_overlays.yml's SD-WAN tunnels) needs no new physical circuit
+# at all, and is realistic: most B2B partner integrations really are IPsec
+# over internet, not a private cross-connect.
+#
+# Terminates on the same shared SD-WAN gateway as C001-SDWAN-FR2, on a
+# different sub-interface (eth0.1002 vs eth0.1001) — one gateway trunk can
+# carry several tunnels, the same way ../04_sdwan/05_overlays.yml's gateway
+# already carries three tenant tunnels off one eth0 trunk.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyVirtualCircuit
+  data:
+    - name: "C001-PARTNER-ACME-FR2"
+      link_type: vpn_ipsec
+      transport_mode: internet_backed
+      status: active
+      bandwidth: 200
+      encryption: true
+      tunnel_id: 1002
+      provider: "P019"
+      owner: "C001"
+      description: "Nordix to B2B extranet partner Acme Logistics, IPsec over the Warsaw HQ internet underlay"
+      locations:
+        - "C001-P"
+        - "FR2"
+      physical_circuits:
+        - "INET-C001-WAW-FR2"
+      interface_capabilities:
+        - ["C001-EDGE1", "GE1"]
+        - ["EQX-FR2-SDWAN-GW1", "eth0.1002"]

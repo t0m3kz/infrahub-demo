@@ -5,6 +5,57 @@ query topology_info($name: String!) {
         name {
           value
         }
+        ... on TopologyDeviceHosting {
+          devices {
+            edges {
+              node {
+                name { value }
+                platform {
+                  node {
+                    containerlab_os { value }
+                  }
+                }
+                software_image {
+                  node {
+                    containerlab_image { value }
+                  }
+                }
+                interfaces {
+                  edges {
+                    node {
+                      name { value }
+                      ... on DcimPhysicalInterface {
+                        cable {
+                          node {
+                            endpoints {
+                              edges {
+                                node {
+                                  ... on DcimPhysicalInterface {
+                                    name { value }
+                                    device {
+                                      node {
+                                        name { value }
+                                        platform {
+                                          node {
+                                            containerlab_os { value }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+        }
+        }
       }
     }
   }

@@ -1,0 +1,34 @@
+---
+# The ISPs' provider edges we hand off to, one per carrier per metro. They are
+# the ISPs' kit, not ours: owned by the carrier, in no device group, so no
+# config artifact or device check targets them. They exist to give each transit
+# circuit a far-end port and each eBGP session a remote AS.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: "EXT-LUMEN-FRA1"
+      object_template: MX204_ISP_PE
+      status: active
+      owner: "P014"
+      description: "Lumen provider edge, Frankfurt (transit for Equinix FR)"
+      deployment: "ISP-LUMEN"
+    - name: "EXT-LUMEN-PAR1"
+      object_template: MX204_ISP_PE
+      status: active
+      owner: "P014"
+      description: "Lumen provider edge, Paris (transit for Equinix PA)"
+      deployment: "ISP-LUMEN"
+    - name: "EXT-COGENT-FRA1"
+      object_template: MX204_ISP_PE
+      status: active
+      owner: "P023"
+      description: "Cogent provider edge, Frankfurt (transit for Equinix FR)"
+      deployment: "ISP-COGENT"
+    - name: "EXT-COGENT-PAR1"
+      object_template: MX204_ISP_PE
+      status: active
+      owner: "P023"
+      description: "Cogent provider edge, Paris (transit for Equinix PA)"
+      deployment: "ISP-COGENT"

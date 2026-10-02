@@ -325,6 +325,7 @@ class RoutingPlanner:
                 device_map,
                 overlay_as_id if overlay_type == "ibgp" else None,
                 set(inp.top_devices),
+                mlag_pairs=inp.mlag_pairs,
             )
 
         # ---- Overlay peerings ----
@@ -637,6 +638,7 @@ class RoutingPlanner:
         device_map: dict[str, dict],
         overlay_as_id: str | None,
         top_device_names: set[str] | None = None,
+        mlag_pairs: dict[str, str] | None = None,
     ) -> None:
         """Build overlay BGP processes. If overlay_as_id is set → iBGP (shared ASN); otherwise → eBGP (per-device ASN).
 
@@ -644,20 +646,32 @@ class RoutingPlanner:
         an upper generator layer. They will be picked up via existing_overlay_names fallback
         in build_routing_plan so peerings are still generated correctly.
 
+        ``mlag_pairs`` must be the SAME mapping given to ``_plan_ebgp_underlay``.
+        Under an eBGP overlay the local_as is sourced from the underlay's
+        ``plan.autonomous_systems``, whose entries are keyed by GROUP — the MLAG
+        domain name for a paired device, its own name otherwise. Looking those up
+        by raw device name misses every MLAG-paired leaf, and the miss is silent:
+        the device gets underlay BGP, no overlay BGP, and therefore no EVPN
+        session at all while the fabric looks healthy.
+
         Every process is emitted for upsert; existing ones re-save cleanly.
         """
         is_ibgp = bool(overlay_as_id)
         desc_prefix = "iBGP process for" if is_ibgp else "eBGP process for"
         _top = top_device_names or set()
+        _mlag_pairs = mlag_pairs or {}
 
-        device_as_refs: dict[str, dict | PendingASRef] = {}
+        group_as_refs: dict[str, dict | PendingASRef] = {}
         if not is_ibgp:
             for as_dict in plan.autonomous_systems:
-                dev_name = as_dict["_for_device"]
+                group = as_dict["_for_device"]
                 if "_existing_id" in as_dict:
-                    device_as_refs[dev_name] = {"id": as_dict["_existing_id"]}
+                    group_as_refs[group] = {"id": as_dict["_existing_id"]}
                 else:
-                    device_as_refs[dev_name] = PendingASRef(device=dev_name)
+                    # PendingASRef is resolved by the generator against the same
+                    # group key the underlay allocated under, so keep the group
+                    # name here rather than substituting the device name.
+                    group_as_refs[group] = PendingASRef(device=group)
 
         _OVERLAY_ROLES = frozenset(
             ("leaf", "border-leaf", "tor", "access-leaf", "spine", "border-spine", "super-spine", "hyper-spine")
@@ -675,7 +689,7 @@ class RoutingPlanner:
             if is_ibgp:
                 as_ref = {"id": overlay_as_id}
             else:
-                maybe_as_ref = device_as_refs.get(name)
+                maybe_as_ref = group_as_refs.get(_mlag_pairs.get(name, name))
                 if not maybe_as_ref:
                     continue
                 as_ref = maybe_as_ref

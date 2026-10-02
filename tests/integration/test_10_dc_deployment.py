@@ -15,13 +15,25 @@ Subsequent scenarios (add-switch, add-rack …) depend on ``dc6_verify_after_mer
 so they only start once DC1 – DC6 are verified in main; DC7 runs after them as
 an additional end-to-end scenario (micro-fabric / border-spine pattern).
 
+Steps 1-8 (deploy_and_merge) and step 9 (verify_after_merge) are two separate
+test functions per DC, not one. The NEXT DC's dependency is on THIS DC's merge
+alone (``{dc_key}_merged``) — not on its post-merge verification. A DC's own
+merge landing in main is a real prerequisite for the next DC (it creates its
+branch off that same main), but whether THIS DC's post-merge topology/routing
+assertions happen to pass is not: a flaky re-verification (or a transient
+server-side failure during the merge task itself, e.g. a Neo4j deadlock)
+would otherwise skip every remaining DC via the dependency chain, for a
+reason that has nothing to do with them. ``dc6_verify_after_merge`` is kept
+as the name test_12 depends on, produced by the verify_after_merge test.
+
 Per-DC configuration and expected results are defined in ``DC_CONFIGS`` below.
-Per-DC execution is modeled as one end-to-end test function that performs all
+Per-DC execution is modeled as two end-to-end test functions that perform all
 steps in sequence for that DC. DC-level ordering/dependencies are expressed via
 ``pytest.param`` marks.
 """
 
 import logging
+import os
 from typing import Any, Literal
 
 import pytest
@@ -98,8 +110,11 @@ DC_CONFIGS: dict[str, dict[str, Any]] = {
         "naming_convention": "hierarchical",
         "branch": "deploy-dc4",
         # 3 pods: middle_rack(2sp)+mixed(4sp)+tor(4sp) + 4 super-spines + 2
-        # hyper-spines + 4 leafs + 4 l2-leafs + 2 tors + 4 border-leafs (design XL)
-        "expected_devices": 30,
+        # hyper-spines + 4 leafs + 4 l2-leafs + 2 tors + 2 border-leafs (design XL).
+        # Border-leafs match the firewall/load-balancer pair rather than the pod
+        # count: the service chain is index-paired and firewalls are HA pairs, so
+        # a third border-leaf would have no firewall port budget left.
+        "expected_devices": 28,
         "expected_roles": {
             "super-spine": 4,
             "hyper-spine": 2,
@@ -107,7 +122,7 @@ DC_CONFIGS: dict[str, dict[str, Any]] = {
             "leaf": 4,
             "l2-leaf": 4,
             "tor": 2,
-            "border-leaf": 4,
+            "border-leaf": 2,
         },
         "expected_min_cables": 30,
     },
@@ -156,28 +171,71 @@ for _cfg in DC_CONFIGS.values():
         role: count for role, count in _cfg["expected_roles"].items() if role != "l2-leaf"
     }
 
+
+def _resolve_dc_order() -> list[str]:
+    """Full dc1..dc7 chain by default. Set DC_DEPLOYMENT_TEST_DCS to a
+    comma-separated subset (e.g. "dc6" or "dc6,dc7") to isolate just those
+    DCs for a fast re-check without editing this file — the first selected
+    DC depends on "triggers_active" (runs standalone), and any further ones
+    still chain off each other in the given order.
+
+    Example:
+        DC_DEPLOYMENT_TEST_DCS=dc6 uv run invoke dev.test-integration-routing
+        DC_DEPLOYMENT_TEST_DCS=dc6,dc7 uv run invoke dev.test-integration-routing
+    """
+    selected = os.environ.get("DC_DEPLOYMENT_TEST_DCS")
+    if not selected:
+        return ["dc1", "dc2", "dc3", "dc4", "dc5", "dc6", "dc7"]
+    dc_keys = [key.strip() for key in selected.split(",") if key.strip()]
+    unknown = [key for key in dc_keys if key not in DC_CONFIGS]
+    if unknown:
+        raise ValueError(f"DC_DEPLOYMENT_TEST_DCS names unknown DC(s) {unknown} — valid keys are {sorted(DC_CONFIGS)}")
+    return dc_keys
+
+
 # Sequential deployment order — determines dependency chain and order numbers
-DC_ORDER = ["dc1", "dc2", "dc3", "dc4", "dc5", "dc6", "dc7"]
+DC_ORDER = _resolve_dc_order()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # ---------------------------------------------------------------------------
-# Build one pytest.param per DC.
+# Build two pytest.param sequences per DC: one for deploy_and_merge (steps
+# 1-8), one for verify_after_merge (step 9).
 #
-# Execution order is linear by DC (dc1 -> dc7). Each DC test is an end-to-end
-# flow containing all deployment steps.
+# Execution order is linear and interleaved: dc1_deploy, dc1_verify, dc2_deploy,
+# dc2_verify, … (even order numbers deploy, odd order numbers verify) — pytest
+# runs strictly in order-number order regardless of skips, so dc(N+1)_deploy
+# always executes right after dc(N)_verify whether or not dc(N)_verify ran or
+# was skipped.
+#
+# The dependency chain only ever threads through "_merged": dc(N+1)_deploy
+# depends on dc(N)_merged, never on dc(N)_verify_after_merge — see the module
+# docstring for why. verify_after_merge depends on its OWN DC's merge, and
+# produces "_verify_after_merge" only for test_12's sake; nothing in this
+# file's own chain consumes it.
 # ---------------------------------------------------------------------------
 
-_PARAMS_DC_SEQUENCE = []
+_PARAMS_DEPLOY_SEQUENCE = []
+_PARAMS_VERIFY_SEQUENCE = []
 for i, dc_key in enumerate(DC_ORDER):
-    dependency_name = f"{dc_key}_verify_after_merge"
-    dependency_prev = "triggers_active" if i == 0 else f"{DC_ORDER[i - 1]}_verify_after_merge"
-    _PARAMS_DC_SEQUENCE.append(
+    merged_name = f"{dc_key}_merged"
+    prev_merged = "triggers_active" if i == 0 else f"{DC_ORDER[i - 1]}_merged"
+    _PARAMS_DEPLOY_SEQUENCE.append(
         pytest.param(
             dc_key,
             marks=[
-                pytest.mark.order(100 + i),
-                pytest.mark.dependency(scope="session", name=dependency_name, depends=[dependency_prev]),
+                pytest.mark.order(100 + i * 2),
+                pytest.mark.dependency(scope="session", name=merged_name, depends=[prev_merged]),
+            ],
+            id=dc_key,
+        )
+    )
+    _PARAMS_VERIFY_SEQUENCE.append(
+        pytest.param(
+            dc_key,
+            marks=[
+                pytest.mark.order(100 + i * 2 + 1),
+                pytest.mark.dependency(scope="session", name=f"{dc_key}_verify_after_merge", depends=[merged_name]),
             ],
             id=dc_key,
         )
@@ -380,15 +438,22 @@ def _check_routing(
 class TestDCDeployment(TestInfrahubDockerWithClient):
     """Deploy DC1 – DC7 sequentially, each on its own branch."""
 
-    @pytest.mark.parametrize("dc_key", _PARAMS_DC_SEQUENCE)
+    @pytest.mark.parametrize("dc_key", _PARAMS_DEPLOY_SEQUENCE)
     @pytest.mark.asyncio
-    async def test_01_deploy_dc_end_to_end(
+    async def test_01_deploy_and_merge(
         self,
         dc_key: str,
         async_client_main: InfrahubClient,
         client_main: InfrahubClientSync,
     ) -> None:
-        """Run all DC deployment steps in-order for a single DC."""
+        """Load, generate, verify, and merge a single DC — steps 1-8.
+
+        Deliberately stops at the merge. The next DC's dependency is on
+        this test alone (see the module docstring), so nothing this DC still
+        needs to check about its own post-merge state belongs here — that is
+        test_02_verify_after_merge's job, and it is not on the critical path
+        for any other DC.
+        """
         cfg = DC_CONFIGS[dc_key]
         branch = cfg["branch"]
         dc_name = cfg["dc_name"]
@@ -456,12 +521,34 @@ class TestDCDeployment(TestInfrahubDockerWithClient):
 
         logging.info("=== %s — Step 8: Merge to Main ===", dc_name)
         merge_result = merge_proposed_change(client=client_main, pc_id=pc_id)
+        failed_checks = merge_result.get("failed_checks") or []
         assert merge_result["success"], (
             f"Merge failed for {dc_name}.\n"
             f"  PC state: {merge_result['pc_state_before']} -> {merge_result['pc_state_after']}\n"
-            f"  Task state: {merge_result['task_state']}"
+            f"  Task state: {merge_result['task_state']}\n"
+            + (
+                "  Failing checks:\n    - " + "\n    - ".join(failed_checks)
+                if failed_checks
+                else "  No failing checks found — merge task failed for a different reason."
+            )
         )
         logging.info("%s merged", dc_name)
+
+    @pytest.mark.parametrize("dc_key", _PARAMS_VERIFY_SEQUENCE)
+    @pytest.mark.asyncio
+    async def test_02_verify_after_merge(
+        self,
+        dc_key: str,
+        async_client_main: InfrahubClient,
+    ) -> None:
+        """Verify devices and routing on main after the merge — step 9.
+
+        Runs only once this DC's own merge succeeded (dependency: its
+        "_merged" marker), but a failure here does not skip the next DC —
+        see the module docstring.
+        """
+        cfg = DC_CONFIGS[dc_key]
+        dc_name = cfg["dc_name"]
 
         logging.info("=== %s — Step 9: Verify After Merge (main) ===", dc_name)
 

@@ -180,22 +180,11 @@ class CablingMixin:
                 src_interface.interface_type.value, dst_interface.interface_type.value
             )
 
-            cable = await self.client.create(
-                kind=DcimCable,
-                data={
-                    "name": cable_name,
-                    "type": cable_type,
-                    "endpoints": [src_interface.id, dst_interface.id],
-                    "deployment": {"id": self.deployment_id} if self.deployment_id else None,
-                },
-            )
-            await cable.save(allow_upsert=True)
-
-            # Use already-fetched interface objects; set cable to prevent upsert sending null
+            # Use the already-fetched interface objects. Their `cable` relationship
+            # was loaded with include=["cable"], so re-saving them below preserves
+            # whatever cable they already point at instead of sending null.
             updated_src = iface_map[src_interface.id]
             updated_dst = iface_map[dst_interface.id]
-            updated_src.cable = cable
-            updated_dst.cable = cable
 
             # Allocate P2P addresses if pool provided
             # prefix_length: 127 for IPv6 (RFC 6164, default), 31 for IPv4 (RFC 3021, exception)
@@ -217,11 +206,30 @@ class CablingMixin:
                 ip_namespace = p2p_prefix.ip_namespace
 
                 for iface, addr in [(updated_src, addrs[0]), (updated_dst, addrs[1])]:
-                    ip = await self.client.create(
+                    address_value = f"{addr}/{p2p_prefix_length}"
+                    # Query before creating. allocate_next_ip_prefix() above IS
+                    # idempotent per identifier — a second, overlapping call for
+                    # this same link (e.g. two generator runs both triggered off
+                    # the same bulk load) gets the SAME prefix back. But
+                    # IpamIPAddress's (address, ip_namespace) uniqueness_constraint
+                    # is only enforced by an async validator, not a synchronous DB
+                    # constraint (observed: two DC4 hyper-spine-mesh links both
+                    # blind-created the same address, and the collision only
+                    # surfaced later as a "Process schema integrity" failure at
+                    # merge time). A blind client.create() would race; reuse
+                    # whatever's already there instead of trying to create it again.
+                    ip = await self.client.get(
                         kind=IpamIPAddress,
-                        data={"address": f"{addr}/{p2p_prefix_length}", "ip_namespace": ip_namespace},
+                        address__value=address_value,
+                        ip_namespace__ids=[ip_namespace.id],
+                        raise_when_missing=False,
                     )
-                    await ip.save(allow_upsert=True)
+                    if not ip:
+                        ip = await self.client.create(
+                            kind=IpamIPAddress,
+                            data={"address": address_value, "ip_namespace": ip_namespace},
+                        )
+                        await ip.save(allow_upsert=True)
                     iface.ip_address = ip.id
 
             # update_group_context=False: physical interfaces come from the device's
@@ -237,6 +245,36 @@ class CablingMixin:
             updated_dst.description.value = cable_name
             updated_dst.status.value = "active"
             await updated_dst.save(allow_upsert=True, update_group_context=False)
+
+            # Create the cable LAST, and let it establish the link from its own
+            # side via `endpoints` — the reverse of the interface's `cable`.
+            #
+            # Never the other way round: writing the freshly created cable's id
+            # back onto an interface reads a node the server may not have made
+            # visible yet, which fails as
+            #   "Unable to find the node <uuid> / DcimCable in the database"
+            #   (NODE_NOT_FOUND, 404)
+            # intermittently under concurrent generator runs. The cable's
+            # endpoints reference interfaces that came from the device's
+            # object_template, so they are always already visible.
+            cable = await self.client.create(
+                kind=DcimCable,
+                data={
+                    "name": cable_name,
+                    "type": cable_type,
+                    "endpoints": [updated_src.id, updated_dst.id],
+                    "deployment": {"id": self.deployment_id} if self.deployment_id else None,
+                },
+            )
+            await cable.save(allow_upsert=True)
+
+            # In-memory only, after the last save of either interface: create_routing()
+            # builds the underlay peerings from the cables of the interface objects
+            # returned here (cable_map in generators/helpers/routing.py), so they have
+            # to carry it. Nothing saves these interfaces again, so the cable id this
+            # assignment holds is never sent back to a server that cannot yet see it.
+            updated_src.cable = cable
+            updated_dst.cable = cable
 
             cabled_pairs.append((updated_src, updated_dst))
             self.logger.info(f"  - Created connection {cable_name}")

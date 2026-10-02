@@ -14,6 +14,12 @@ feature lldp
 !
 
 ! VLANs
+vlan 100
+  name Customer-A
+!
+vlan 200
+  name Customer-A
+!
 !
 !
 ! Interfaces
@@ -32,6 +38,9 @@ interface Ethernet2
 interface Ethernet10
   no shutdown
 
+  switchport
+  switchport mode access
+  switchport access vlan 100
 !
 interface Loopback0
   no shutdown
@@ -86,13 +95,94 @@ router bgp 65000
     address-family l2vpn evpn
       inherit peer-policy EVPN-PEERS-POLICY
     !
+  vrf VRF_A
+    address-family ipv4 unicast
+      advertise l2vpn evpn
+      redistribute direct route-map RM-VRF-DIRECT-2-EVPN
+  !
 !
 
+!
+!
+! VXLAN Configuration (netlab-style multivendor)
+!
+feature nv overlay
+feature vn-segment-vlan-based
+feature nve
+feature fabric forwarding
+nv overlay evpn
+!
+!
+! VRF Contexts (symmetric IRB — one L3 VNI per tenant)
+!
+vrf context VRF_A
+  vni 50001
+  rd 10.0.0.1:50001
+  address-family ipv4 unicast
+    route-target both 65000:50001
+    route-target both 65000:50001 evpn
+!
+interface nve1
+  source-interface Loopback0
+  host-reachability protocol bgp
+  member vni 10100
+    suppress-arp
+    ingress-replication protocol bgp
+  member vni 50001 associate-vrf
+  no shutdown
+!
+!
+! EVPN Configuration
+!
+evpn
+  vni 10100 l2
+    rd 10.0.0.1:10100
+    route-target import 65000:10100
+    route-target export 65000:10100
+!
+!
+! VLAN to VNI mapping
+!
+vlan 100
+  vn-segment 10100
+!
+! L3 VNI Transit SVIs (symmetric IRB — no host addressing, forwarding only)
+!
+vlan 3900
+  name L3VNI_VRF_A
+  vn-segment 50001
+!
+interface Vlan3900
+  description L3VNI transit SVI for VRF VRF_A
+  vrf member VRF_A
+  ip forward
+  mtu 9216
+  no shutdown
 !
 !
 ! Route-maps
 route-map RM-CONN-2-BGP permit 10
   match interface loopback0
+!
+route-map RM-VRF-DIRECT-2-EVPN permit 10
+!
+! Anycast Gateway — identical MAC on every leaf/border-leaf in the fabric
+fabric forwarding anycast-gateway-mac 001c7300dc01
+!
+! VLAN SVI Configuration
+!
+interface Vlan100
+  description Customer-A
+  vrf member VRF_A
+  ip address 10.100.0.1/24
+  fabric forwarding mode anycast-gateway
+  no shutdown
+!
+interface Vlan200
+  description Customer-A
+  ip address 10.200.0.1/24
+  fabric forwarding mode anycast-gateway
+  no shutdown
 !
 !
 

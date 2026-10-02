@@ -12,6 +12,7 @@ from ..dc_config import host_bits_to_prefix_length, resolve_dc_size_layout
 from ..devices import DeviceMixin
 from ..helpers import name_to_asn_range
 from ..helpers.pairing import pair_device_names
+from ..helpers.pools import CUSTOMER_VLAN_ID_MAX
 from ..helpers.routing import RoutingStrategy, p2p_is_ipv6
 from ..helpers.template_interfaces import template_interface_names_by_role
 from ..pod_config import POD_LAYOUTS
@@ -268,11 +269,34 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
 
         # L2 VNI pool for the VXLAN overlay (VRF-lite: no VRF stretches over
         # EVPN, so there's no L3 VNI pool — border-leaf VRFs are local-only).
+        #
+        # Capped at 39999 even though a VNI is a 24-bit field. Three independent
+        # constraints, the first two of which the device enforces by rejecting
+        # the line:
+        #
+        #   1. 16-bit RD/RT ceiling (65535). The EVPN route-distinguisher and
+        #      route-target are derived from the VNI (transforms/helpers/vxlan.py),
+        #      and every ASN here is a 4-byte private ASN — so both a type-1 RD
+        #      (IPv4:assigned) and a type-2 RT (4-byte-ASN:assigned) leave only
+        #      16 bits for the VNI.
+        #   2. Must stay disjoint from the L3 VNI range (50001-59999, supplied
+        #      by data — see data/demos/.../01_pools.yml `*-l3vni-pool`). The VNI
+        #      space is a single flat namespace per device, NOT one namespace per
+        #      VNI type, so an L2 segment allocated on top of a VRF's L3 VNI
+        #      collides and the `member vni ... associate` line fails.
+        #   3. Must stay disjoint from GLOBAL-L2VNI (40000-49999, data/bootstrap/
+        #      18_vni_pools.yml), where stretched segments draw their one shared
+        #      VNI. Every site pool hands out this same band, so a stretched VNI
+        #      drawn from one site and reused in another would collide with that
+        #      site's own local allocations (see generators/topology/segment.py).
+        #
+        # 39999 satisfies all three. 30k local segments per fabric is far beyond
+        # any real fabric, so this costs nothing.
         await self.upsert_number_pool(
             pool_name=f"{self.fabric_name}-vni-pool",
             description=f"L2 VNI pool for {self.fabric_name.upper()}",
             start_range=10001,
-            end_range=16777215,
+            end_range=39999,
             node="ManagedSegmentDeployment",
             node_attribute="vni",
             parent_kind="TopologyDataCenter",
@@ -349,7 +373,11 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
         # fabric-wide, .dev/bgp.txt) at the DC level so pod/rack generators
         # always find them and never create duplicates.
         # overlay_asn is asn_end + 1 to avoid collision with the per-device pool range [asn_start, asn_end]
-        await self._create_shared_routing_objects(overlay_asn=asn_end + 1, asn_pool_id=fabric_asn_pool_id)
+        await self._create_shared_routing_objects(
+            overlay_asn=asn_end + 1,
+            asn_pool_id=fabric_asn_pool_id,
+            deployment_id=dc_id,
+        )
 
         # Create super-spine routing objects here so they exist before any pod generator runs.
         # For eBGP strategies: underlay + overlay BGP processes.
@@ -419,17 +447,33 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
             ]
             if super_spine_names and super_spine_uplink_interfaces and hyper_spine_downlink_interfaces:
                 p2p_prefix_length = 127 if is_ipv6 else 31
-                p2p_pairs = await self.create_cabling(
-                    bottom_devices=super_spine_names,
-                    bottom_interfaces=super_spine_uplink_interfaces,
-                    top_devices=hyper_spine_names,
-                    top_interfaces=hyper_spine_downlink_interfaces,
-                    strategy="pod",
-                    options=CablingOptions(
-                        pool=dc_pools.get("technical"),
-                        p2p_prefix_length=p2p_prefix_length,
-                    ),
-                )
+                # Confirmed live on DC4: the DC-level technical pool itself is
+                # NOT duplicated (allocate_resource_pools()'s own lock already
+                # rules that out) — the race is here, in create_cabling()'s
+                # P2P address creation. Two overlapping invocations of this
+                # generator for the same DC (whatever fires them — this
+                # section's only caller-visible clue is that it, not device
+                # or border-leaf creation just above, is where the collision
+                # lands) can both find the SAME two hyper-spine<->super-spine
+                # interfaces still uncabled and both create the same
+                # addresses for them; IpamIPAddress's uniqueness_constraint
+                # is only enforced asynchronously, so both writes succeed and
+                # only the later "Process schema integrity" check catches it.
+                # Serialize on dc_id: only one overlapping caller ever cables
+                # this DC's hyper-spine mesh; the other finds every interface
+                # already cabled and does nothing.
+                async with self.resource_lock(f"hyperspine-cabling-{dc_id}"):
+                    p2p_pairs = await self.create_cabling(
+                        bottom_devices=super_spine_names,
+                        bottom_interfaces=super_spine_uplink_interfaces,
+                        top_devices=hyper_spine_names,
+                        top_interfaces=hyper_spine_downlink_interfaces,
+                        strategy="pod",
+                        options=CablingOptions(
+                            pool=dc_pools.get("technical"),
+                            p2p_prefix_length=p2p_prefix_length,
+                        ),
+                    )
                 await self.create_routing(
                     bottom_devices=super_spine_names,
                     top_devices=hyper_spine_names,
@@ -551,9 +595,18 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
                 all_names.extend(names)
 
             if remaining > 0:
+                # Deliberately a warning, not a failure: a DC may legitimately
+                # declare border-leafs before all its pods exist, and the
+                # remainder gets placed when dc_pod_cascade runs for the new pod.
+                # It is still a data error when the pods are all present, so name
+                # the numbers — the symptom otherwise surfaces much later as a
+                # border-leaf count that is short of what the DC declared.
+                capacity = sum(self._pod_border_leaf_capacity(pod) for pod in sorted_pods)
                 self.logger.warning(
-                    f"DC {self.fabric_name}: border-leaf entry has {remaining} device(s) left unplaced — "
-                    "no pod had remaining max_border_leafs_per_pod capacity."
+                    f"DC {self.fabric_name}: border-leaf entry requested {entry['quantity']} device(s) but "
+                    f"{remaining} are left unplaced — the DC's {len(sorted_pods)} pod(s) offer "
+                    f"max_border_leafs_per_pod capacity for {capacity} in total. Add pods, or lower the "
+                    "entry's quantity to match."
                 )
 
         return all_names
@@ -756,12 +809,26 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
         re-running this always converges on the same pool with the same resource,
         instead of a manual existence check that (as seen live) can permanently
         skip healing a pool left broken by a prior code version.
+
+        That "unique + upsert" idempotency only holds for sequential re-runs,
+        though — it does not stop two truly concurrent, overlapping calls for
+        this same DC from both checking "does a pool named X exist?", both
+        finding nothing yet, and both creating a NEW CoreIPPrefixPool with
+        the same name (a real race reproduced on PoolMixin.
+        allocate_resource_pools()'s technical pool — see that method's own
+        lock for the full explanation). Serialize the same way.
         """
+        async with self.resource_lock(f"fw-context-pools-{dc_name}"):
+            await self._ensure_firewall_context_pools_locked(dc_name=dc_name)
+
+    async def _ensure_firewall_context_pools_locked(self, *, dc_name: str) -> None:
+        """The actual pool-creation body of _ensure_firewall_context_pools(),
+        run under that method's per-dc_name lock."""
         await self.upsert_number_pool(
             pool_name=f"{dc_name}-fw-context-vlan-pool",
             description=f"FirewallContext sub-interface VLAN pool for {dc_name.upper()}",
             start_range=3000,
-            end_range=3999,
+            end_range=CUSTOMER_VLAN_ID_MAX,
             node="ManagedFirewallContext",
             node_attribute="vlan_id",
         )

@@ -322,6 +322,10 @@ generics:
             label: Loopback VTEP
             description: "Loopback used as VTEP for VXLAN/overlay tunneling"
             color: "#E9D5FF"
+          - name: multisite-vip
+            label: Multi-Site VIP
+            description: "EVPN Multi-Site border-gateway virtual IP loopback, shared by every BGW of one site"
+            color: "#DDD6FE"
           - name: lag
             label: LAG Member
             description: "Link Aggregation Group member interface"
@@ -330,6 +334,10 @@ generics:
             label: MLAG Peer-Link
             description: "Interface used as the MLAG/vPC peer-link between two paired devices"
             color: "#FDE68A"
+          - name: mlag-control
+            label: MLAG Control
+            description: "Peer-link SVI carrying the MLAG control session address"
+            color: "#FCD34D"
           - name: firewall
             label: Firewall
             description: "Dedicated port for firewall attachment on a border-leaf"

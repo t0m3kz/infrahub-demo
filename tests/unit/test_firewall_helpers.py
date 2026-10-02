@@ -140,6 +140,10 @@ def _make_rule(
     dst_zone: str | None = None,
     src_segment: dict | None = None,
     dst_segment: dict | None = None,
+    src_prefixes: list[dict] | None = None,
+    dst_prefixes: list[dict] | None = None,
+    src_ip_addresses: list[dict] | None = None,
+    dst_ip_addresses: list[dict] | None = None,
     log: bool = False,
     disabled: bool = False,
     security_profile: dict | None = None,
@@ -154,6 +158,10 @@ def _make_rule(
         "port_end": port_end,
         "source_segment": src_segment,
         "destination_segment": dst_segment,
+        "source_prefixes": src_prefixes,
+        "destination_prefixes": dst_prefixes,
+        "source_ip_addresses": src_ip_addresses,
+        "destination_ip_addresses": dst_ip_addresses,
         "log": log,
         "disabled": disabled,
         "description": description or "",
@@ -550,6 +558,32 @@ class TestGetZonePolicies:
         assert r["protocol"] == "tcp"
         assert r["dst_port"] == "eq 443"
 
+    def test_rule_exposes_raw_protocol_and_raw_ports(self) -> None:
+        """raw_protocol/port_start/port_end are the unmapped values, for
+        templates (PAN-OS, Junos) that build their own service/application
+        object instead of consuming the Cisco-ACL-style dst_port string."""
+        rule = _make_rule(protocol="tcp", port_start=8080, port_end=8090)
+        result = get_zone_policies([_make_policy(rules=[rule])])
+        r = result[0]["rules"][0]
+        assert r["raw_protocol"] == "tcp"
+        assert r["port_start"] == 8080
+        assert r["port_end"] == 8090
+
+    def test_rule_raw_protocol_any_stays_any_unlike_mapped_protocol(self) -> None:
+        rule = _make_rule(protocol="any", port_start=None)
+        result = get_zone_policies([_make_policy(rules=[rule])])
+        r = result[0]["rules"][0]
+        assert r["protocol"] == "ip"
+        assert r["raw_protocol"] == "any"
+
+    def test_implicit_deny_rule_has_no_raw_protocol_or_ports(self) -> None:
+        policy = _make_policy(rules=[])
+        result = get_zone_policies([policy])
+        last = result[0]["rules"][-1]
+        assert last["raw_protocol"] == "any"
+        assert last["port_start"] is None
+        assert last["port_end"] is None
+
     def test_rule_tcp_with_port_range(self) -> None:
         rule = _make_rule(protocol="tcp", port_start=8080, port_end=8090)
         result = get_zone_policies([_make_policy(rules=[rule])])
@@ -600,6 +634,43 @@ class TestGetZonePolicies:
         r = result[0]["rules"][0]
         assert r["src"] is None
         assert r["dst"] is None
+
+    def test_rule_dst_falls_back_to_destination_prefix(self) -> None:
+        """No destination_segment (e.g. a cloud/partner/SaaS CIDR reached over
+        an interconnect, not a customer segment) — destination_prefixes is
+        the selector instead."""
+        rule = _make_rule(dst_segment=None, dst_prefixes=[{"id": "p1", "prefix": "172.31.0.0/16"}])
+        result = get_zone_policies([_make_policy(rules=[rule])])
+        assert result[0]["rules"][0]["dst"] == "172.31.0.0/16"
+
+    def test_rule_src_falls_back_to_source_prefix(self) -> None:
+        rule = _make_rule(src_segment=None, src_prefixes=[{"id": "p1", "prefix": "10.50.0.0/16"}])
+        result = get_zone_policies([_make_policy(rules=[rule])])
+        assert result[0]["rules"][0]["src"] == "10.50.0.0/16"
+
+    def test_rule_dst_falls_back_to_destination_ip_address_when_no_prefix(self) -> None:
+        rule = _make_rule(
+            dst_segment=None,
+            dst_prefixes=[],
+            dst_ip_addresses=[{"id": "ip1", "address": "203.0.113.5/32"}],
+        )
+        result = get_zone_policies([_make_policy(rules=[rule])])
+        assert result[0]["rules"][0]["dst"] == "203.0.113.5/32"
+
+    def test_rule_dst_prefix_takes_priority_over_ip_address(self) -> None:
+        rule = _make_rule(
+            dst_segment=None,
+            dst_prefixes=[{"id": "p1", "prefix": "172.31.0.0/16"}],
+            dst_ip_addresses=[{"id": "ip1", "address": "203.0.113.5/32"}],
+        )
+        result = get_zone_policies([_make_policy(rules=[rule])])
+        assert result[0]["rules"][0]["dst"] == "172.31.0.0/16"
+
+    def test_rule_dst_segment_takes_priority_over_destination_prefix(self) -> None:
+        dst_seg = _make_segment_with_prefix("10.2.0.0/24")
+        rule = _make_rule(dst_segment=dst_seg, dst_prefixes=[{"id": "p1", "prefix": "172.31.0.0/16"}])
+        result = get_zone_policies([_make_policy(rules=[rule])])
+        assert result[0]["rules"][0]["dst"] == "10.2.0.0/24"
 
     def test_rule_log_field(self) -> None:
         rule = _make_rule(log=True)

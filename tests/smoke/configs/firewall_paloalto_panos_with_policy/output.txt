@@ -48,7 +48,8 @@ set rulebase security rules allow-https to internal
 set rulebase security rules allow-https source ag-dmz
 set rulebase security rules allow-https destination ag-internal
 set rulebase security rules allow-https application any
-set rulebase security rules allow-https service any
+set service svc-tcp-443 protocol tcp port 443
+set rulebase security rules allow-https service svc-tcp-443
 set rulebase security rules allow-https action allow
 set rulebase security rules allow-https profile-setting profiles virus strict-av
 set rulebase security rules allow-https log-end yes
@@ -58,7 +59,8 @@ set rulebase security rules allow-ssh to internal
 set rulebase security rules allow-ssh source ag-dmz
 set rulebase security rules allow-ssh destination ag-internal
 set rulebase security rules allow-ssh application any
-set rulebase security rules allow-ssh service any
+set service svc-tcp-22 protocol tcp port 22
+set rulebase security rules allow-ssh service svc-tcp-22
 set rulebase security rules allow-ssh action allow
 set rulebase security rules allow-ssh log-end yes
 set rulebase security rules allow-ssh description "Allow SSH from DMZ to Internal"

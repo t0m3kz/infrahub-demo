@@ -72,6 +72,13 @@ artifact_definitions:
     transformation: super_spine
     parameters:
       device: name__value
+  - name: hyper_spine_config
+    artifact_name: hyper-spine
+    content_type: text/plain
+    targets: hyper-spines
+    transformation: super_spine
+    parameters:
+      device: name__value
   - name: loadbalancer_config
     artifact_name: loadbalancer
     content_type: text/plain
@@ -277,17 +284,24 @@ check_definitions:
     targets: firewalls
     parameters:
       device: name__value
+  - name: validate_sdwan_orchestrator
+    class_name: CheckSdwanOrchestrator
+    file_path: checks/sdwan.py
+    targets: sdwan_orchestrators
+    parameters:
+      controller: name__value
   - name: validate_capability_guard
     class_name: CheckCapabilityGuard
     file_path: checks/capability_guard.py
   - name: validate_segment_placement
     class_name: CheckSegmentPlacement
     file_path: checks/segment_placement.py
-  # Targetless: runs once per Proposed Change, seeded from the branch diff
-  # rather than from a group of devices. See docs/change_risk.md.
-  - name: change_risk
-    class_name: CheckChangeRisk
-    file_path: checks/change_risk.py
+  # Targetless like the two above: the invariants are properties of a whole
+  # fabric (route-target agreement, VNI uniqueness), so there is no single
+  # device to target — every device in the fabric looks correct in isolation.
+  - name: validate_evpn_fabric
+    class_name: CheckEvpnFabric
+    file_path: checks/evpn_fabric.py
 
 python_transforms:
   - name: topology_cabling
@@ -591,12 +605,12 @@ queries:
     file_path: queries/topology/add/circuit.gql
   - name: virtual_circuit_data
     file_path: queries/topology/add/virtual_circuit.gql
-  - name: interconnect_request_data
-    file_path: queries/topology/add/interconnect_request.gql
   - name: capability_guard
     file_path: queries/validation/capability_guard.gql
   - name: segment_placement
     file_path: queries/validation/segment_placement.gql
+  - name: evpn_fabric
+    file_path: queries/validation/evpn_fabric.gql
   - name: loadbalancer_validation
     file_path: queries/validation/lb.gql
   - name: proxy_validation
@@ -614,6 +628,8 @@ queries:
     file_path: queries/topology/add/customer_dc.gql
   - name: customer_colocation
     file_path: queries/topology/add/customer_colocation.gql
+  - name: customer_office_sdwan
+    file_path: queries/topology/add/customer_office_sdwan.gql
   - name: application_orchestrator_routing
     file_path: queries/topology/add/application_orchestrator_routing.gql
   - name: customer_deployment_orchestrator_routing
@@ -622,19 +638,6 @@ queries:
     file_path: queries/topology/add/topology_orchestrator_routing_data.gql
   - name: application_orchestrator_routing_data
     file_path: queries/topology/add/application_orchestrator_routing_data.gql
-  - name: quotation_data
-    file_path: queries/quotation/add_quotation.gql
-  - name: quotation_office_data
-    file_path: queries/quotation/add_quotation_office.gql
-
-  # Change-risk exposure (docs/change_risk.md). The traversal itself is
-  # Infrahub's own (InfrahubReachableNodes to shortlist, InfrahubPathTraversal to
-  # confirm), and both return node identity only; this query supplies the
-  # attributes the risk score is weighted by. Registered as a named query rather
-  # than embedded in the check so franc-mcp's interactive what-if tool reads
-  # exposure the same way.
-  - name: impact_exposure
-    file_path: queries/risk/impact_exposure.gql
 
 generator_definitions:
   - name: add_dc
@@ -776,18 +779,6 @@ generator_definitions:
       files:
         - generators/
         - utils/
-  - name: add_interconnect
-    file_path: generators/topology/interconnect.py
-    targets: interconnect_requests
-    query: interconnect_request_data
-    class_name: InterconnectRequestGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      name: name__value
-    watch:
-      files:
-        - generators/
         - utils/
   - name: add_mlag
     file_path: generators/topology/mlag.py
@@ -867,6 +858,19 @@ generator_definitions:
       files:
         - generators/
         - utils/
+  - name: add_sdwan_edge
+    file_path: generators/topology/sdwan_edge.py
+    targets: customer_deployments_office
+    query: customer_office_sdwan
+    class_name: SdwanEdgeGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
   - name: add_application_orchestrator_routing
     file_path: generators/topology/orchestrator_routing.py
     targets: app_applications
@@ -885,32 +889,6 @@ generator_definitions:
     targets: customer_deployments
     query: customer_deployment_orchestrator_routing
     class_name: TopologyOrchestratorRoutingGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
-  - name: add_quotation_dc
-    file_path: generators/quotations/dc.py
-    targets: customer_quotations
-    query: quotation_data
-    class_name: QuotationDCGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      name: name__value
-    watch:
-      files:
-        - generators/
-        - utils/
-  - name: add_quotation_office
-    file_path: generators/quotations/office.py
-    targets: customer_quotations
-    query: quotation_office_data
-    class_name: OfficeQuotationGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:

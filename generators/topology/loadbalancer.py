@@ -23,13 +23,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from infrahub_sdk.generator import InfrahubGenerator
 from infrahub_sdk.protocols import CoreIPAddressPool
 
 from utils.data_cleaning import clean_data
 
+from ..common import CommonGenerator
 from ..connections import CablingMixin
-from ..logger import FailOnErrorLoggerMixin
 from ..protocols import IpamIPAddress, LoadbalancerVIP
 
 
@@ -41,9 +40,16 @@ def _dev_name(device: Any) -> str:
     return device["name"] if isinstance(device, dict) else device.name.value
 
 
-class LoadbalancerBackendNexthopGenerator(FailOnErrorLoggerMixin, CablingMixin, InfrahubGenerator):
+class LoadbalancerBackendNexthopGenerator(CablingMixin, CommonGenerator):
     """add_lb_backend_nexthop — VLAN sub-interface + IP for a no-SNAT VIP's
-    return path, on every device of the VIP's own load-balancer HA domain."""
+    return path, on every device of the VIP's own load-balancer HA domain.
+
+    Composes CommonGenerator like every other CablingMixin consumer. The mixin
+    documents ``deployment_id``/``_resolve_pool``/``_retry_delay`` as host-class
+    requirements; only ``find_role_interface`` and ``ensure_vlan_subinterface``
+    are used here, so inheriting InfrahubGenerator directly happened to work, but
+    any future call into ``create_cabling`` would have raised AttributeError.
+    """
 
     async def generate(self, data: dict[str, Any]) -> None:
         cleaned = clean_data(data)

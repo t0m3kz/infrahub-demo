@@ -327,7 +327,7 @@ nodes:
       - name: peering_role
         kind: Dropdown
         label: Peering Role
-        description: "Underlay, overlay, or regular (external partner) peering — set explicitly at creation."  # yamllint disable-line rule:line-length
+        description: "Underlay, overlay, DCI, or regular (external partner) peering — set explicitly at creation."  # yamllint disable-line rule:line-length
         optional: true
         order_weight: 2450
         choices:
@@ -343,6 +343,10 @@ nodes:
             label: Regular
             description: "Regular BGP peering to an external partner/provider"
             color: "#FDCB6E"
+          - name: dci
+            label: DCI
+            description: "EVPN Multi-Site DCI peering between border gateways of two sites (directly connected, IPv4 + L2VPN EVPN)"  # yamllint disable-line rule:line-length
+            color: "#A29BFE"
     relationships:
       - name: bgp_processes
         peer: ManagedBGP

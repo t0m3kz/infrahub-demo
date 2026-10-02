@@ -67,3 +67,37 @@ spec:
               - "C005-D-DC12"
             member_of_groups:
               - vxlan_segments
+
+        # Stretched DC10 <-> Equinix FR through the colocation's EVPN
+        # Multi-Site border gateways (bl-dc101101 <-> eg-fr01 over
+        # DF-DC10-EQXFR2). `global` because it crosses from a DC into a
+        # different metro, not between two DCs of one pair.
+        #
+        # The PROD gateway makes it routable as well: every VTEP carrying it
+        # (DC10 leafs/BLs and eg-fr01) gets an anycast SVI in VRF PROD, and
+        # the C005 office reaches it over the SD-WAN gateway's PROD handoff
+        # into eg-fr01 (../../08_interconnects/04_sdwan/06_vrf_handoff.yml).
+        - kind: ManagedVxlanSegment
+          data:
+            customer_name: "colo-services-stretch"
+            environment: "p"
+            stretch_scope: global
+            arp_suppression: true
+            gateway:
+              data:
+                address: "10.5.50.1/24"
+                description: "colo-services-stretch anycast gateway"
+                ip_namespace: "PROD"
+                ip_prefix:
+                  kind: IpamPrefix
+                  data:
+                    prefix: "10.5.50.0/24"
+                    description: "colo-services-stretch (C005, DC10 <-> Equinix FR)"
+                    status: active
+                    role: customer
+                    ip_namespace: "PROD"
+            customer_deployments:
+              - "C005-P-DC10"
+              - "C005-P-FR"
+            member_of_groups:
+              - vxlan_segments

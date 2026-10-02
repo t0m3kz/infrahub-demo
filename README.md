@@ -165,6 +165,12 @@ Explore LLM upgrades and organic growth patterns—all in one place, please make
 | **[pod](data/demos/04_pod_dc6/)** | Munich 🇩🇪 | Pod Expansion | Pod 4: because 3 wasn't enough. |
 | **[llm time](data/demos/05_llm_time/)** | Munich 🇩🇪 | Spine Expansion | Extra spines for LLMs—plausible deniability included. |
 
+#### Everything at Once
+
+**[30_all](data/demos/30_all/)** loads every fabric, colocation, cloud, office, customer and application into
+one branch. It has to be loaded stage by stage, so use `uv run invoke load-all-demo`, which loads the stages in
+order and waits for the generators in between. The demo README explains why and how to do it by hand.
+
 Brace yourself: even more questionable use cases, wild topologies, and vendor drama are coming soon. If you want to see even more chaos, star this repo—so the author can unlock extra GitHub tools and automate his caffeine intake. Your star may be the difference between a new feature and another debugging session at midnight!
 
 ## CI/CD
@@ -217,7 +223,7 @@ Use the focused profiles when you want useful feedback before the full topology 
 uv run invoke test-integration-fast
 
 # The 30_all demo end to end: staged load, app catalogue, compute,
-# interconnects, change risk
+# interconnects, zone policies
 uv run invoke test-integration-all-demo
 
 # Automatic DC/POD/rack trigger and routing regression
@@ -227,7 +233,7 @@ uv run invoke test-integration-routing
 uv run invoke test-integration
 ```
 
-All profiles load the shared setup and repository prerequisites first. `all-demo` then builds one branch holding the whole `30_all` data set and asserts against it: that the staged load converged, that Infrahub dispatched every generator the trigger rules promise, that each fabric, its host cabling and the application graph came out as declared, that the circuit layer reaches both clouds, and that the change-risk check resolves a blast radius over the result. The full profile is deliberately heavier still: it exercises the long-running DC lifecycle and all dependent workflows. It is excellent at finding trouble and less excellent at respecting your afternoon.
+All profiles load the shared setup and repository prerequisites first. `all-demo` then builds one branch holding the whole `30_all` data set and asserts against it: that the staged load converged, that Infrahub dispatched every generator the trigger rules promise, that each fabric, its host cabling and the application graph came out as declared, that the circuit layer reaches both clouds, and that the colocation zone policies pass the firewall check and render. The full profile is deliberately heavier still: it exercises the long-running DC lifecycle and all dependent workflows. It is excellent at finding trouble and less excellent at respecting your afternoon.
 
 Integration task waits now fail with the active branch task titles and states when the queue does not settle within the timeout. That is intentional: a later assertion against half-generated infrastructure is rarely the thrilling plot twist anyone requested.
 

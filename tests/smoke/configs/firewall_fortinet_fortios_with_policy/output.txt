@@ -74,6 +74,16 @@ config router static
     next
 end
 #
+# --- Service Objects (unique protocol/port combinations referenced below) ---
+config firewall service custom
+    edit "svc-tcp-443"
+        set tcp-portrange 443
+    next
+    edit "svc-tcp-22"
+        set tcp-portrange 22
+    next
+end
+#
 # --- Security Policies ---
 config firewall policy
     edit 10
@@ -84,7 +94,7 @@ config firewall policy
         set dstaddr "all"
         set action accept
         set schedule "always"
-        set service "ALL"
+        set service "svc-tcp-443"
         set logtraffic all
         set utm-status enable
         set av-profile "strict-av"
@@ -98,7 +108,7 @@ config firewall policy
         set dstaddr "all"
         set action accept
         set schedule "always"
-        set service "ALL"
+        set service "svc-tcp-22"
         set logtraffic all
         set comments "Allow SSH from DMZ to Internal"
     next

@@ -481,12 +481,22 @@ class RoutingMixin:
             self.logger.error(f"Could not create RoutingPassword {name}: {exc}")
             return None
 
-    async def _create_shared_routing_objects(self, overlay_asn: int, asn_pool_id: str | None = None) -> None:
+    async def _create_shared_routing_objects(
+        self,
+        overlay_asn: int,
+        asn_pool_id: str | None = None,
+        deployment_id: str | None = None,
+    ) -> None:
         """Create shared DC-level routing state used by pod and rack generators.
 
         ``asn_pool_id``: the DC's own fabric_asn_pool, used ONLY to allocate
         the single shared super-spine underlay AS (see below) — every other
         shared object here (overlay AS, OSPF area, passwords) needs no pool.
+
+        ``deployment_id``: the fabric this state belongs to. Used to attach the
+        fabric AS as ``evpn_rt_as`` so transforms can reach it — without that
+        relationship the AS is only findable by description, which the config
+        transforms cannot query.
         """
 
         await self._ensure_routing_password(
@@ -533,28 +543,40 @@ class RoutingMixin:
             except Exception as exc:
                 self.logger.warning(f"Failed to create shared super-spine AS: {exc}")
 
-        if strategy in (RoutingStrategy.EBGP_IBGP.value, RoutingStrategy.OSPF_IBGP.value):
-            overlay_desc = f"{self.fabric_name} overlay ASN for iBGP EVPN"
-            try:
-                existing = await self.client.filters(
+        # The fabric AS is created for EVERY strategy, not just the iBGP ones.
+        # Under ebgp-ibgp/ospf-ibgp it is the actual overlay BGP local-as. Under
+        # ebgp-ebgp no device uses it as a local-as — but the fabric still needs
+        # exactly one administrative ASN to stamp into EVPN route-targets, or
+        # each VTEP derives the RT from its own per-device ASN and two leaves
+        # never import each other's routes for the same segment. Gating this on
+        # strategy is what left ebgp-ebgp (9 of 10 demo topologies) with no
+        # fabric-constant RT source at all.
+        #
+        # The description string is the idempotency key and deliberately
+        # unchanged, so existing fabrics keep their AS object rather than
+        # silently getting a second one.
+        overlay_desc = f"{self.fabric_name} overlay ASN for iBGP EVPN"
+        try:
+            existing = await self.client.filters(
+                kind=RoutingAutonomousSystem,
+                description__value=overlay_desc,
+            )
+            if existing:
+                as_obj = existing[0]
+                as_obj.asn.value = overlay_asn
+                await as_obj.save(allow_upsert=True)
+                self.logger.info(f"Updated shared overlay AS: AS{as_obj.asn.value} ({as_obj.id})")
+            else:
+                as_obj = await self.client.create(
                     kind=RoutingAutonomousSystem,
-                    description__value=overlay_desc,
+                    data={"asn": overlay_asn, "description": overlay_desc},
                 )
-                if existing:
-                    as_obj = existing[0]
-                    as_obj.asn.value = overlay_asn
-                    await as_obj.save(allow_upsert=True)
-                    self.logger.info(f"Updated shared overlay AS: AS{as_obj.asn.value} ({as_obj.id})")
-                else:
-                    as_obj = await self.client.create(
-                        kind=RoutingAutonomousSystem,
-                        data={"asn": overlay_asn, "description": overlay_desc},
-                    )
-                    await as_obj.save(allow_upsert=True)
-                    self.logger.info(f"Created shared overlay AS: AS{as_obj.asn.value} ({as_obj.id})")
-                self.client.group_context.related_node_ids.append(as_obj.id)
-            except Exception as exc:
-                self.logger.warning(f"Failed to create shared overlay AS: {exc}")
+                await as_obj.save(allow_upsert=True)
+                self.logger.info(f"Created shared overlay AS: AS{as_obj.asn.value} ({as_obj.id})")
+            self.client.group_context.related_node_ids.append(as_obj.id)
+            await self._attach_evpn_rt_as(deployment_id=deployment_id, as_id=as_obj.id)
+        except Exception as exc:
+            self.logger.warning(f"Failed to create shared overlay AS: {exc}")
 
         if strategy == RoutingStrategy.OSPF_IBGP.value:
             area_name = f"{self.fabric_name}-ospf-area-0"
@@ -577,6 +599,36 @@ class RoutingMixin:
                     self.logger.info(f"Created shared OSPF area: {area_name}")
             except Exception as exc:
                 self.logger.warning(f"Failed to create shared OSPF area: {exc}")
+
+    async def _attach_evpn_rt_as(self, deployment_id: str | None, as_id: str | None) -> None:
+        """Link the fabric AS to the deployment as ``evpn_rt_as``.
+
+        Without this the AS is only discoverable by its description string, which
+        generators can filter on but config transforms cannot — they only ever
+        traverse out from the device. The relationship is what makes the
+        fabric-wide route-target ASN reachable from
+        queries/fragments/evpn_fabric.gql.
+
+        Idempotent: re-running sets the same id, so the plain save() is a no-op
+        update. Non-fatal on failure — a missing RT ASN degrades to the overlay
+        process ASN in transforms/helpers/vxlan.py rather than aborting the
+        fabric build.
+        """
+        if not deployment_id or not as_id:
+            return
+        try:
+            deployment = await self.client.get(kind="TopologySegmentHosting", id=deployment_id)
+            if not deployment:
+                return
+            # Plain save(), not allow_upsert=True — same reasoning as
+            # upsert_number_pool's parent attach in generators/pools.py: the node
+            # was just fetched, so update() sends only this field instead of
+            # re-firing triggers on every unmodified attribute.
+            deployment.evpn_rt_as = {"id": as_id}  # type: ignore[attr-defined]
+            await deployment.save()
+            self.logger.info(f"- Linked fabric EVPN route-target AS to deployment ({as_id})")
+        except Exception as exc:
+            self.logger.warning(f"Failed to attach evpn_rt_as to deployment {deployment_id}: {exc}")
 
     async def _ensure_evpn_af_node(self) -> str:
         """Upsert the L2VPN/EVPN RoutingBGPAddressFamily node and return its ID.

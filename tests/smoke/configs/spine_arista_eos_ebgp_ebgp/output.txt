@@ -1,0 +1,81 @@
+!
+! Arista EOS Spine Configuration
+! Device: dc1-spine-01
+! Generated for Arista EOS
+!
+
+hostname dc1-spine-01
+
+! Configure spanning tree mode
+spanning-tree mode mstp
+
+! Configure VLAN 1
+no spanning-tree vlan-id 4094
+interface Ethernet1
+   description to spine-01
+   ip address 10.1.0.1/31
+
+   no shutdown
+
+interface Ethernet2
+   description to spine-02
+   ip address 10.1.0.3/31
+
+   no shutdown
+
+interface Loopback0
+   description Router ID
+   ip address 10.0.0.1/32
+
+   no shutdown
+
+! Configure BGP
+
+router bgp 65001
+   router-id 10.0.0.1
+   no bgp default ipv4-unicast
+   distance bgp 20 200 200
+   graceful-restart
+   maximum-paths 4 ecmp 64
+   !
+   neighbor EVPN-OVERLAY peer-group
+   neighbor EVPN-OVERLAY update-source Loopback0
+   neighbor EVPN-OVERLAY send-community
+   neighbor EVPN-OVERLAY send-community extended
+   neighbor EVPN-OVERLAY ebgp-multihop 255
+   !
+   neighbor UNDERLAY-PEERS peer-group
+   neighbor UNDERLAY-PEERS send-community
+   neighbor UNDERLAY-PEERS bfd
+   neighbor 10.1.0.0 peer-group UNDERLAY-PEERS
+   neighbor 10.1.0.0 remote-as 65100
+
+   neighbor 10.1.0.0 description spine-01
+   neighbor 10.1.0.2 peer-group UNDERLAY-PEERS
+   neighbor 10.1.0.2 remote-as 65101
+
+   neighbor 10.1.0.2 description spine-02
+   neighbor 10.0.0.100 peer-group EVPN-OVERLAY
+   neighbor 10.0.0.100 remote-as 65100
+
+   neighbor 10.0.0.100 description spine-01
+   neighbor 10.0.0.101 peer-group EVPN-OVERLAY
+   neighbor 10.0.0.101 remote-as 65101
+
+   neighbor 10.0.0.101 description spine-02
+   !
+   address-family ipv4
+      redistribute connected route-map RM-CONN-2-BGP
+      neighbor UNDERLAY-PEERS activate
+   !
+   address-family evpn
+      neighbor EVPN-OVERLAY activate
+      neighbor EVPN-OVERLAY next-hop-unchanged
+
+
+! Configure route-maps
+route-map RM-CONN-2-BGP permit 10
+   match interface Loopback0
+
+
+! End of configuration

@@ -1,0 +1,22 @@
+---
+# name is computed ({parent_owner_org_id}-{environment}) — read-only.
+#
+# sdwan_gateway/branch_to_branch are set later, in
+# ../../../08_interconnects/04_sdwan/01_gateway.yml, for the same reason as
+# C002's (../../c002/office/02_deployment.yml): the Gateway doesn't exist yet
+# at this point in the staged load.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyOfficeCustomer
+  data:
+    - owner: "C005"
+      parent: "Campus and Office"
+      children:
+        - kind: TopologyCustomerOffice
+          data:
+            environment: "p"
+            locations:
+              - "ams-branch"
+            member_of_groups:
+              - customer_deployments_office

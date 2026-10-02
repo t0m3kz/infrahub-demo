@@ -10,3 +10,14 @@ spec:
       node_attribute: l3_vni
       start_range: 50001
       end_range: 59999
+    # One VNI per stretched segment, shared by every site it reaches. Site
+    # pools ({fabric}-vni-pool, {metro}-vni-pool: 10001-39999) all hand out
+    # the same band, so a stretched VNI drawn from one of them and reused in
+    # another site collides with that site's own local segments. This band
+    # sits between them and the L3 VNIs above, so it can meet neither.
+    - name: GLOBAL-L2VNI
+      description: Global L2 VNI pool for stretched segments (one VNI per segment, every site)
+      node: ManagedSegmentDeployment
+      node_attribute: vni
+      start_range: 40000
+      end_range: 49999

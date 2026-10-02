@@ -15,7 +15,9 @@ import time
 from pathlib import Path
 from typing import cast
 
-from invoke import Collection, Context, Task
+from infrahub_sdk import Config, InfrahubClientSync
+from infrahub_sdk.task.models import TaskFilter, TaskState
+from invoke import Collection, Context, Exit, Task
 from invoke import task as _task
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)-8s  %(message)s")
@@ -263,11 +265,11 @@ def test_integration_routing(
     basetemp: str = "~/.pytest-tmp/infrahub-demo",
     server_port: int = 8100,
 ) -> None:
-    """Run setup, repository, and automatic DC/POD routing regression tests."""
+    """Run setup, repository, and the DC deployment routing regression tests."""
     _run_integration_suite(
         context,
         tests="tests/integration/test_01_setup.py tests/integration/test_02_repository.py "
-        "tests/integration/test_09_bulk_dc_trigger_routing.py",
+        "tests/integration/test_10_dc_deployment.py",
         basetemp=basetemp,
         server_port=server_port,
     )
@@ -282,14 +284,15 @@ def test_integration_all_demo(
     test_59 builds the branch the rest assert against, so the modules have to
     run together and in order: load and generator dispatch (59), the app
     catalogue enforcement workflow (60), compute and the application graph
-    (61), interconnects and tenant services (62), change risk (63).
+    (61), interconnects and tenant services (62), colo cloud/partner/SaaS zone
+    policy check + render (64).
     """
     _run_integration_suite(
         context,
         tests="tests/integration/test_01_setup.py tests/integration/test_02_repository.py "
         "tests/integration/test_59_all_demo_load.py tests/integration/test_60_app_catalogue.py "
         "tests/integration/test_61_all_demo_compute.py tests/integration/test_62_all_demo_interconnects.py "
-        "tests/integration/test_63_all_demo_change_risk.py",
+        "tests/integration/test_64_all_demo_firewall_config.py",
         basetemp=basetemp,
         server_port=server_port,
     )
@@ -387,6 +390,238 @@ def load_data(context: Context, name: str = "bootstrap.py", branch: str = "main"
 
 
 # ---------------------------------------------------------------------------
+# 30_all — staged load of the everything demo (data/demos/30_all)
+#
+# The stage list is shared with the integration suite
+# (tests/integration/test_59_all_demo_load.py imports it via test_constants),
+# so `invoke load-all-demo` and the tests load the same files in the same order.
+# ---------------------------------------------------------------------------
+
+ALL_DEMO_DATA = "data/demos/30_all"
+ALL_DEMO_BRANCH = "all-demo-scenario"
+
+# Loading 30_all is a *staged* operation, and it has to be: the later stages
+# reference objects that only exist once an earlier stage's generators have
+# finished running.
+#
+#   - 03_dc/*/05_servers.yml puts hosts in compute racks and relies on
+#     add_endpoint finding the access-leaf pair in the network rack sharing
+#     the host's row. Those access-leafs are created by add_rack, which is
+#     dispatched asynchronously by the *same* load that declared the rack.
+#   - 08_interconnects/01_colo_onramp/02_interfaces.yml hard-references border
+#     leaves by name ("bl-dc101101"), which add_dc creates.
+#   - 07_applications references the VMs and customer deployments declared in
+#     06_customer_boarding.
+#
+# `infrahubctl object load data/demos/30_all` in one shot therefore only works
+# against an instance whose main branch *already* holds the fabric — which is
+# exactly why it appears to work on a long-lived dev instance and fails on a
+# fresh one. Each entry is (stage_name, load_paths); the loader is given the
+# paths verbatim and the suite waits for every dispatched generator to settle
+# before moving to the next stage.
+ALL_DEMO_LOAD_STAGES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        # Everything that depends only on bootstrap data: customers, cloud
+        # regions/zones, colocation metros/cages and racks, SaaS, office
+        # buildings, and the three DC sites with their fabrics and controllers.
+        # One load, so add_colocation_metro (one run per metro) and
+        # add_dc -> add_pod -> add_rack (per DC) generate in parallel. The
+        # loader sorts files by path, so each DC's 00_location.yml lands before
+        # its topology. By far the longest stage: 20 fabric devices per DC plus
+        # all cabling, addressing and routing.
+        "foundation",
+        (
+            "00_customer",
+            "01_cloud",
+            "02_colo",
+            "03_dc/dc10/00_location.yml",
+            "03_dc/dc10/01_topology.yml",
+            "03_dc/dc11/00_location.yml",
+            "03_dc/dc11/01_controllers_virtual.yml",
+            "03_dc/dc11/02_topology.yml",
+            "03_dc/dc12/00_location.yml",
+            "03_dc/dc12/01_controllers_physical.yml",
+            "03_dc/dc12/02_controllers_virtual.yml",
+            "03_dc/dc12/03_topology.yml",
+            "04_saas",
+            "05_office",
+        ),
+    ),
+    (
+        # Application hosts, DC-only customer footprints and the full boarding
+        # set (DC/colocation/cloud/office footprints, the cage kit, the VMs the
+        # applications are built from). None of it references anything this
+        # stage's own generators create, only declared data and the foundation
+        # stage's output, so add_endpoint (needs the access-leafs add_rack
+        # created), add_customer_deployment_* and add_sdwan_edge run in
+        # parallel. VMs pin to hosts by name; 03_dc/ sorts before
+        # 06_customer_boarding/, so the hosts exist by then. c005/c006 boarding
+        # re-declares the new_customers footprints (same HFID), which updates
+        # them in place.
+        "compute_and_customers",
+        (
+            "03_dc/dc10/05_servers.yml",
+            "03_dc/dc11/05_servers.yml",
+            "03_dc/dc12/05_servers.yml",
+            "03_dc/new_customers",
+            "06_customer_boarding",
+        ),
+    ),
+    (
+        # Segments, applications and the deployment-request catalogue.
+        # Dispatches add_vxlan_segment and add_app_application.
+        "applications",
+        ("07_applications",),
+    ),
+    (
+        # Colo on-ramp, cloud hub, virtual circuits, SD-WAN, cloud endpoints.
+        # Pure data — every generator it needs has already run.
+        "interconnects",
+        ("08_interconnects",),
+    ),
+)
+
+# The 30_all load is an order of magnitude heavier than a single-DC scenario:
+# three fabrics generate in parallel, then four more generator families fan
+# out over boarding and application data. Polling budgets scale accordingly.
+ALL_DEMO_STAGE_MAX_ATTEMPTS = 240  # x ALL_DEMO_STAGE_POLL_INTERVAL = 40 min
+ALL_DEMO_STAGE_POLL_INTERVAL = 10  # seconds
+# A DC's pods and racks are declared in one load, so their created events are
+# dispatched independently and the queue can go briefly quiet between waves.
+# Ten consecutive quiet polls (100s) has to comfortably exceed that spread.
+ALL_DEMO_STAGE_STABLE_ZERO = 10
+
+# Seconds to let a load's event rules schedule their generators before polling.
+ALL_DEMO_STAGE_INITIAL_DELAY = 10
+
+ALL_DEMO_IN_FLIGHT_STATES = [TaskState.PENDING, TaskState.RUNNING, TaskState.SCHEDULED]
+ALL_DEMO_FAILURE_STATES = [TaskState.FAILED, TaskState.CRASHED, TaskState.CANCELLED]
+
+
+def _select_stages(from_stage: str = "") -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """Return the stages to load, starting at `from_stage` (all of them when empty).
+
+    Raises:
+        ValueError: `from_stage` is not a stage name.
+    """
+    if not from_stage:
+        return ALL_DEMO_LOAD_STAGES
+    names = [name for name, _ in ALL_DEMO_LOAD_STAGES]
+    if from_stage not in names:
+        raise ValueError(f"Unknown stage '{from_stage}'. Stages: {', '.join(names)}")
+    return ALL_DEMO_LOAD_STAGES[names.index(from_stage) :]
+
+
+def _stage_paths(paths: tuple[str, ...], data_dir: str = ALL_DEMO_DATA) -> list[str]:
+    """Return the stage's load paths prefixed with the demo directory."""
+    return [f"{data_dir}/{path}" for path in paths]
+
+
+def _failed_task_ids(client: InfrahubClientSync, branch: str) -> set[str]:
+    """Return the ids of every failed, crashed or cancelled task on the branch."""
+    return {task.id for task in client.task.filter(filter=TaskFilter(state=ALL_DEMO_FAILURE_STATES, branch=branch))}
+
+
+def _wait_for_branch_idle(
+    client: InfrahubClientSync,
+    branch: str,
+    initial_delay: int = ALL_DEMO_STAGE_INITIAL_DELAY,
+    poll_interval: int = ALL_DEMO_STAGE_POLL_INTERVAL,
+    stable_zero: int = ALL_DEMO_STAGE_STABLE_ZERO,
+    max_attempts: int = ALL_DEMO_STAGE_MAX_ATTEMPTS,
+) -> None:
+    """Block until the branch has had no in-flight task for `stable_zero` polls in a row.
+
+    Generators fan out in waves (add_dc -> add_pod -> add_rack), so one empty
+    poll is not enough: the queue goes briefly quiet between waves.
+
+    Raises:
+        TimeoutError: tasks are still in flight after `max_attempts` polls.
+    """
+    time.sleep(initial_delay)
+    quiet = 0
+    for attempt in range(1, max_attempts + 1):
+        in_flight = client.task.filter(filter=TaskFilter(state=ALL_DEMO_IN_FLIGHT_STATES, branch=branch))
+        if in_flight:
+            quiet = 0
+            log.info(
+                "%d task(s) in flight on '%s' (poll %d/%d): %s",
+                len(in_flight),
+                branch,
+                attempt,
+                max_attempts,
+                [task.title for task in in_flight[:5]],
+            )
+        else:
+            quiet += 1
+            if quiet >= stable_zero:
+                return
+        time.sleep(poll_interval)
+    raise TimeoutError(f"Tasks on branch '{branch}' did not settle after {max_attempts} polls")
+
+
+def _infrahub_client() -> InfrahubClientSync:
+    """Return a sync SDK client for the instance in INFRAHUB_ADDRESS."""
+    return InfrahubClientSync(address=INFRAHUB_ADDRESS, config=Config(api_token=INFRAHUB_API_TOKEN))
+
+
+@_task(optional=["branch", "from_stage"])
+def load_all_demo(context: Context, branch: str = "", from_stage: str = "") -> None:
+    """Load the 30_all demo stage by stage, waiting for generators in between.
+
+    Later stages reference objects that generators create from earlier ones,
+    so each stage is loaded with one `object load`, then the branch has to go
+    quiet before the next one starts. Stops at the first stage whose load or
+    generators fail; fix the cause and resume with --from-stage.
+
+    Example:
+        uv run invoke data.load-all-demo
+        uv run invoke data.load-all-demo --from-stage applications
+    """
+    branch = branch or ALL_DEMO_BRANCH
+    try:
+        stages = _select_stages(from_stage)
+    except ValueError as exc:
+        raise Exit(str(exc), code=1) from exc
+
+    os.environ["INFRAHUB_ADDRESS"] = INFRAHUB_ADDRESS
+    os.environ["INFRAHUB_API_TOKEN"] = INFRAHUB_API_TOKEN
+    client = _infrahub_client()
+
+    if branch not in client.branch.all():
+        context.run(f"uv run infrahubctl branch create {branch}", pty=True)
+
+    for index, (name, paths) in enumerate(stages):
+        resume = f"Fix it, then resume with: uv run invoke load-all-demo --branch {branch} --from-stage {name}"
+        known_failures = _failed_task_ids(client, branch)
+
+        log.info("Stage %s: loading %d path(s) into '%s'", name, len(paths), branch)
+        result = context.run(
+            f"uv run infrahubctl object load {' '.join(_stage_paths(paths))} --branch {branch}",
+            pty=True,
+            warn=True,
+        )
+        if result is None or result.failed:
+            raise Exit(f"Stage {name}: object load failed. {resume}", code=1)
+
+        log.info("Stage %s: waiting for generators to finish", name)
+        try:
+            _wait_for_branch_idle(client, branch)
+        except TimeoutError as exc:
+            raise Exit(f"Stage {name}: {exc}. {resume}", code=1) from exc
+
+        new_failures = _failed_task_ids(client, branch) - known_failures
+        if new_failures:
+            raise Exit(
+                f"Stage {name}: {len(new_failures)} task(s) failed (see the Tasks page in the UI). {resume}",
+                code=1,
+            )
+        log.info("Stage %d/%d (%s) done", index + 1, len(stages), name)
+
+    log.info("30_all loaded into '%s'", branch)
+
+
+# ---------------------------------------------------------------------------
 # Collections — each task is registered under its namespace AND at the root
 # ---------------------------------------------------------------------------
 
@@ -415,6 +650,7 @@ data_ns.add_task(cast(Task, load_schema), name="load-schema")
 data_ns.add_task(cast(Task, load_menu), name="load-menu")
 data_ns.add_task(cast(Task, load_objects), name="load-objects")
 data_ns.add_task(cast(Task, load_data), name="load-data")
+data_ns.add_task(cast(Task, load_all_demo), name="load-all-demo")
 
 ns = Collection()
 ns.add_task(cast(Task, start))
@@ -437,6 +673,7 @@ ns.add_task(cast(Task, load_schema), name="load-schema")
 ns.add_task(cast(Task, load_menu), name="load-menu")
 ns.add_task(cast(Task, load_objects), name="load-objects")
 ns.add_task(cast(Task, load_data), name="load-data")
+ns.add_task(cast(Task, load_all_demo), name="load-all-demo")
 ns.add_collection(infra_ns)
 ns.add_collection(dev_ns)
 ns.add_collection(data_ns)

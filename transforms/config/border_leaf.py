@@ -13,7 +13,12 @@ class BorderLeaf(BaseDeviceTransform):
 
     query = "border_leaf_config"
     template_subdir = "border_leafs"
-    device_role = "border_leaf"
+    # Hyphenated, matching the schema's own role dropdown. It used to be
+    # "border_leaf", which no consumer of device_role actually accepted:
+    # get_vxlan_config only tolerated it via a defensive underscore alias, and
+    # transforms/helpers/bgp.py's leaf-RR check (`device_role in ("leaf",
+    # "border-leaf")`) could never match it at all.
+    device_role = "border-leaf"
 
     def _extra_config(self, data: dict, platform_name: str, extra_roots: dict | None = None) -> dict:
         """Same base config as every other device role, plus border-leaf's
@@ -27,4 +32,6 @@ class BorderLeaf(BaseDeviceTransform):
         dc_activations = _flatten_deployment_segment_activations(data.get("deployment"))
         firewall_contexts = _flatten_deployment_firewall_contexts(data.get("deployment"))
         config["border_leaf_pbr_rules"] = get_border_leaf_pbr_rules(dc_activations, firewall_contexts, platform_name)
+        if platform_name in {"sonic", "dell_sonic", "nokia_sros"} and config["border_leaf_pbr_rules"]:
+            raise ValueError(f"{platform_name} border-leaf cannot render deployable PBR policy")
         return config

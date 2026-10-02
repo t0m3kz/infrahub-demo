@@ -24,11 +24,20 @@ interface {{ member }}
 {%- endif %}
 interface Vlan4094
    description MLAG Peer-Link SVI
+{%- if mlag.control_interface == 'Vlan4094' and mlag.local_address %}
+   ipv6 address {{ mlag.local_address }}
+{%- endif %}
    no shutdown
 !
 mlag configuration
    domain-id {{ mlag.domain_id }}
    local-interface Vlan4094
+{%- if mlag.peer_ip %}
+   peer-address {{ mlag.peer_ip }}
+{%- endif %}
+{%- if mlag.peer_management_ip %}
+   peer-address heartbeat {{ mlag.peer_management_ip }}
+{%- endif %}
 {%- if mlag.peer_link %}
    peer-link {{ mlag.peer_link }}
 {%- endif %}

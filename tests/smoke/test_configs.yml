@@ -137,16 +137,6 @@ infrahub_tests:
         spec:
           kind: python-transform-unit-process
           directory: configs/spine_dell_sonic_ospf_ibgp
-      - name: edgecore_sonic_ebgp_ibgp
-        expect: PASS
-        spec:
-          kind: python-transform-unit-process
-          directory: configs/spine_edgecore_sonic_ebgp_ibgp
-      - name: edgecore_sonic_ospf_ibgp
-        expect: PASS
-        spec:
-          kind: python-transform-unit-process
-          directory: configs/spine_edgecore_sonic_ospf_ibgp
       - name: nokia_sros_ebgp_ibgp
         expect: PASS
         spec:

@@ -184,11 +184,14 @@ class RackCablingStrategy(CablingStrategy):
     ) -> list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]]:
         """Builds a cabling plan for any-to-any connectivity (e.g., ToRs/Leafs to Spines).
 
-        Raises CablingPlanError when the computed top interface index exceeds available
-        interfaces. This fail-fast behavior prevents partial cabling where some devices
-        silently remain disconnected.
+        Every bottom device dual-homes to EVERY top device, so it needs one port per
+        top device. Both sides fail fast rather than degrade: a shortfall on the top
+        side would leave devices silently disconnected, and one on the bottom side
+        would hand the same physical port to two different top devices.
         """
         cabling_plan: list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]] = []
+
+        self._validate_bottom_port_count()
 
         for bottom_index, bottom_device in enumerate(self.planner._sorted_bottom_devices):
             top_interface_index = bottom_index + cabling_offset
@@ -211,11 +214,35 @@ class RackCablingStrategy(CablingStrategy):
 
             for top_index, top_device in enumerate(self.planner._sorted_top_devices):
                 top_intf = self.planner.top_by_device[top_device][top_interface_index]
-                bottom_interface_index = top_index % len(self.planner.bottom_by_device[bottom_device])
-                bottom_intf = self.planner.bottom_by_device[bottom_device][bottom_interface_index]
+                # Indexed directly by top_index, NOT modulo the port count: this used
+                # to wrap, which silently gave spine N and spine N+len(ports) the same
+                # bottom port. _validate_bottom_port_count() guarantees the range.
+                bottom_intf = self.planner.bottom_by_device[bottom_device][top_index]
                 cabling_plan.append((bottom_intf, top_intf))
 
         return cabling_plan
+
+    def _validate_bottom_port_count(self) -> None:
+        """Reject a plan where a bottom device has fewer ports than top devices.
+
+        A physical interface holds exactly one cable, so wrapping the port index
+        double-books it. Infrahub does reject the second cable, but only at save
+        time and with a message about relationship cardinality on an opaque node
+        id — which says nothing about the device template being two ports short.
+        Raising here names the device, the shortfall and the fix instead.
+        """
+        num_top_devices = len(self.planner._sorted_top_devices)
+        for bottom_device in self.planner._sorted_bottom_devices:
+            available = len(self.planner.bottom_by_device[bottom_device])
+            if available < num_top_devices:
+                msg = (
+                    f"INSUFFICIENT INTERFACES - bottom device {bottom_device}: {available} port(s) "
+                    f"available but {num_top_devices} top device(s) to reach, so at least one port "
+                    f"would carry two cables. Add uplink ports to this device's template or reduce "
+                    f"the number of top devices in the pod."
+                )
+                self.logger.error(msg)
+                raise CablingPlanError(msg)
 
 
 class ChainCablingStrategy(CablingStrategy):

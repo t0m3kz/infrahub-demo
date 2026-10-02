@@ -71,7 +71,13 @@ set rulebase security rules {{ rule_name }} to {{ rule.dst_zone or 'any' }}
 set rulebase security rules {{ rule_name }} source {{ ('ag-' + rule.src_zone) if (rule.src_zone and not rule.src) else (rule.src or 'any') }}
 set rulebase security rules {{ rule_name }} destination {{ ('ag-' + rule.dst_zone) if (rule.dst_zone and not rule.dst) else (rule.dst or 'any') }}
 set rulebase security rules {{ rule_name }} application any
+{%- if rule.raw_protocol in ('tcp', 'udp') and rule.port_start %}
+{%- set svc_name = 'svc-' + rule.raw_protocol + '-' + rule.port_start | string + ('-' + rule.port_end | string if rule.port_end and rule.port_end != rule.port_start else '') %}
+set service {{ svc_name }} protocol {{ rule.raw_protocol }} port {{ rule.port_start }}{{ '-' + rule.port_end | string if rule.port_end and rule.port_end != rule.port_start else '' }}
+set rulebase security rules {{ rule_name }} service {{ svc_name }}
+{%- else %}
 set rulebase security rules {{ rule_name }} service any
+{%- endif %}
 set rulebase security rules {{ rule_name }} action {{ 'allow' if rule.action == 'permit' else 'deny' }}
 {%- if rule.security_profile %}
 set rulebase security rules {{ rule_name }} profile-setting profiles virus {{ rule.security_profile }}

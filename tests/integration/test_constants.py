@@ -18,100 +18,13 @@ DEMO_SERVERS_DATA = "data/demos/06_servers"
 # test_59-test_63 module through the single branch below.
 # ---------------------------------------------------------------------------
 
-ALL_DEMO_DATA = "data/demos/30_all"
-ALL_DEMO_BRANCH = "all-demo-scenario"
-
-# Loading 30_all is a *staged* operation, and it has to be: the later stages
-# reference objects that only exist once an earlier stage's generators have
-# finished running.
-#
-#   - 03_dc/*/05_servers.yml puts hosts in compute racks and relies on
-#     add_endpoint finding the access-leaf pair in the network rack sharing
-#     the host's row. Those access-leafs are created by add_rack, which is
-#     dispatched asynchronously by the *same* load that declared the rack.
-#   - 08_interconnects/01_colo_onramp/02_interfaces.yml hard-references border
-#     leaves by name ("bl-dc101101"), which add_dc creates.
-#   - 07_applications references the VMs and customer deployments declared in
-#     06_customer_boarding.
-#
-# `infrahubctl object load data/demos/30_all` in one shot therefore only works
-# against an instance whose main branch *already* holds the fabric — which is
-# exactly why it appears to work on a long-lived dev instance and fails on a
-# fresh one. Each entry is (stage_name, load_paths); the loader is given the
-# paths verbatim and the suite waits for every dispatched generator to settle
-# before moving to the next stage.
-ALL_DEMO_LOAD_STAGES: tuple[tuple[str, tuple[str, ...]], ...] = (
-    (
-        # Customers, cloud regions/zones, colocation metros/cages and racks,
-        # SaaS, office buildings. Dispatches add_colocation_metro (one run per
-        # metro), which is why this stage has to settle before the interconnects
-        # stage references the on-ramp routers it generates.
-        "foundation",
-        (
-            "00_customer",
-            "01_cloud",
-            "02_colo",
-            "04_saas",
-            "05_office",
-        ),
-    ),
-    (
-        # DC sites (campus/suite tree) — the parents the topologies attach to.
-        "dc_locations",
-        (
-            "03_dc/dc10/00_location.yml",
-            "03_dc/dc11/00_location.yml",
-            "03_dc/dc12/00_location.yml",
-        ),
-    ),
-    (
-        # The three fabrics. Dispatches add_dc -> add_pod -> add_rack per DC
-        # and is by far the longest stage: 20 fabric devices per DC plus all
-        # cabling, addressing and routing.
-        "dc_fabric",
-        (
-            "03_dc/dc10/01_topology.yml",
-            "03_dc/dc11/01_controllers_virtual.yml",
-            "03_dc/dc11/02_topology.yml",
-            "03_dc/dc12/01_controllers_physical.yml",
-            "03_dc/dc12/02_controllers_virtual.yml",
-            "03_dc/dc12/03_topology.yml",
-        ),
-    ),
-    (
-        # Application hosts in the compute racks. Dispatches add_endpoint,
-        # which needs the access-leafs from the dc_fabric stage.
-        "dc_compute",
-        (
-            "03_dc/dc10/05_servers.yml",
-            "03_dc/dc11/05_servers.yml",
-            "03_dc/dc12/05_servers.yml",
-        ),
-    ),
-    (
-        # DC footprints for the customers that only have a DC presence.
-        # Dispatches add_customer_deployment_dc.
-        "dc_customers",
-        ("03_dc/new_customers",),
-    ),
-    (
-        # The full boarding set: DC/colocation/cloud/office footprints, the
-        # cage kit, and the VMs the applications are built from.
-        "customer_boarding",
-        ("06_customer_boarding",),
-    ),
-    (
-        # Segments, applications and the deployment-request catalogue.
-        # Dispatches add_vxlan_segment and add_app_application.
-        "applications",
-        ("07_applications",),
-    ),
-    (
-        # Colo on-ramp, cloud hub, virtual circuits, SD-WAN, cloud endpoints.
-        # Pure data — every generator it needs has already run.
-        "interconnects",
-        ("08_interconnects",),
-    ),
+from tasks import (  # noqa: E402,F401 - re-exported for the test modules
+    ALL_DEMO_BRANCH,
+    ALL_DEMO_DATA,
+    ALL_DEMO_LOAD_STAGES,
+    ALL_DEMO_STAGE_MAX_ATTEMPTS,
+    ALL_DEMO_STAGE_POLL_INTERVAL,
+    ALL_DEMO_STAGE_STABLE_ZERO,
 )
 
 # Generators the 30_all load must dispatch by itself, mapped to the minimum
@@ -134,19 +47,24 @@ ALL_DEMO_EXPECTED_GENERATORS: dict[str, int] = {
     # racks.
     "add_colocation_metro": 9,
     "add_endpoint": 12,  # 6 DC hosts + 6 colocation cage hosts
-    "add_vxlan_segment": 4,  # C005's four application segments
-    "add_app_application": 7,  # one per declared AppApplication
-    # 7 distinct footprints: 03_dc/new_customers declares all of them and
-    # 06_customer_boarding re-declares three as supersets, which upsert.
+    "add_vxlan_segment": 5,  # C005's five application segments
+    "add_app_application": 9,  # one per declared AppApplication
+    # 9 distinct footprints: 03_dc/new_customers declares seven and
+    # 06_customer_boarding re-declares three of them as supersets, which
+    # upsert, and adds the C008/C010 dev footprints on DC12's shared hosts.
     # add_customer_deployment_cloud/office were removed: their only job was
     # hub-and-spoke exchange auto-provisioning, now replaced by the 4 fixed
     # bootstrap TopologyRoutedExchange objects (data/bootstrap/23_exchanges.yml)
     # — see docs/exchange_gateway.md.
-    "add_customer_deployment_dc": 7,
-    "add_customer_deployment_colocation": 6,
-    # 08_interconnects/06_interconnect_requests declares one opt-in
-    # TopologyInterconnectRequest (DC11<->DC12 DCI dark fibre stub).
-    "add_interconnect": 1,
+    "add_customer_deployment_dc": 9,
+    "add_customer_deployment_colocation": 7,
+    # trigger-customer-office-sdwan-on-created fires unconditionally for
+    # every TopologyCustomerOffice (5: C001/C003/C015/C002/C005) — the
+    # generator itself no-ops on those without sdwan_gateway set. C002 and
+    # C005 additionally dispatch a run each via the updated-relationship
+    # trigger when 08_interconnects/04_sdwan/01_gateway.yml sets their
+    # sdwan_gateway; 5 is the safe floor.
+    "add_sdwan_edge": 5,
 }
 
 # Declared-object inventory of data/demos/30_all, measured from the YAML.
@@ -157,33 +75,24 @@ ALL_DEMO_EXPECTED_OBJECTS: dict[str, int] = {
     "TopologyDataCenter": 3,
     "TopologyPod": 6,
     "LocationRack": 25,
-    "TopologyCustomerDC": 7,
-    "TopologyCustomerColocation": 6,
+    "TopologyCustomerDC": 9,
+    "TopologyCustomerColocation": 7,
     "TopologyCustomerCloud": 4,
-    "TopologyCustomerOffice": 3,
-    "ManagedVxlanSegment": 4,
-    "ManagedVlanSegment": 7,
-    "AppApplication": 7,
-    # 18 AppComponent blocks are declared, but c005/04_component_updates.yml
+    "TopologyCustomerOffice": 5,
+    "ManagedVxlanSegment": 5,
+    "ManagedVlanSegment": 9,
+    "AppApplication": 9,
+    # 22 AppComponent blocks are declared, but c005/04_component_updates.yml
     # re-declares web-frontend to attach its depends_on — an upsert, not a
-    # 18th component.
-    "AppComponent": 17,
-    "DcimVirtualDevice": 26,
+    # 22nd component.
+    "AppComponent": 21,
+    "DcimVirtualDevice": 34,
     "TopologyPhysicalCircuit": 8,
     "TopologyVirtualCircuit": 8,
     "CloudInstance": 8,
     "ManagedCloudProxy": 2,
 }
 
-# The 30_all load is an order of magnitude heavier than a single-DC scenario:
-# three fabrics generate in parallel, then four more generator families fan
-# out over boarding and application data. Polling budgets scale accordingly.
-ALL_DEMO_STAGE_MAX_ATTEMPTS = 240  # x ALL_DEMO_STAGE_POLL_INTERVAL = 40 min
-ALL_DEMO_STAGE_POLL_INTERVAL = 10  # seconds
-# A DC's pods and racks are declared in one load, so their created events are
-# dispatched independently and the queue can go briefly quiet between waves.
-# Ten consecutive quiet polls (100s) has to comfortably exceed that spread.
-ALL_DEMO_STAGE_STABLE_ZERO = 10
 
 # ---------------------------------------------------------------------------
 # 30_all — compute layer expectations (test_61)
@@ -221,7 +130,7 @@ ALL_DEMO_DC_OVERLAY_ROLES = ("super-spine", "spine", "border-leaf")
 # cables a host to the access-leaf pair of the network rack sharing its row,
 # so row-1 and row-2 hosts must land on *disjoint* access-leaf pairs. That
 # disjointness is the whole point of putting them in different rows, and it is
-# what makes the change-risk blast radius of one access-leaf pair bounded.
+# what keeps the blast radius of one access-leaf pair bounded.
 ALL_DEMO_DC_HOST_ROWS: dict[str, int] = {
     "dc10-pod1-server-1": 1,
     "dc10-pod1-server-2": 2,
@@ -234,7 +143,7 @@ ALL_DEMO_DC_HOST_ROWS: dict[str, int] = {
 # The colocation cages are the deliberate counter-example: both NICs of each
 # host land on the *single* cage switch. NIC redundancy without switch
 # redundancy — the honest small-colocation shape, and a genuine shared-fate
-# case for the change-risk check to contrast with the DC pods.
+# case to contrast with the DC pods.
 ALL_DEMO_COLO_HOST_SWITCHES: dict[str, str] = {
     "cs-ny1-server-1": "CS-NY1-SW1",
     "cs-ny1-server-2": "CS-NY1-SW1",
@@ -257,12 +166,14 @@ ALL_DEMO_EXPECTED_APPLICATIONS: dict[str, tuple[str, int]] = {
     "c012-payment-edge-p": ("high", 2),
     "c013-fraud-detection-p": ("critical", 2),
     "c016-billing-cloud-p": ("medium", 2),
+    "c008-inventory-sync-d": ("medium", 2),
+    "c010-reporting-portal-d": ("low", 2),
 }
 
 # Cloud-native applications: their instances are CloudInstance nodes with no
 # hosting_device. Every other application's instances are DcimVirtualDevice
-# nodes that MUST name the physical host they run on — that edge is what lets
-# the change-risk traversal walk from a switch port to a customer application.
+# nodes that MUST name the physical host they run on — that edge is what ties
+# a switch port to a customer application.
 ALL_DEMO_CLOUD_APPLICATIONS = ("c003-custody-api-p", "c016-billing-cloud-p")
 
 # c001-checkout-p is a private-access-only frontend (access_profile-gated, no
@@ -279,14 +190,21 @@ ALL_DEMO_COMPONENT_INSTANCE_COUNT = 2
 # ---------------------------------------------------------------------------
 
 ALL_DEMO_PHYSICAL_CIRCUIT_TYPES: dict[str, int] = {
-    # +2 generator-created: 08_interconnects/06_interconnect_requests declares
-    # one TopologyInterconnectRequest (DC11<->DC12, redundancy_count=2,
-    # connection_kind=physical_stub) that InterconnectRequestGenerator
-    # scaffolds into 2 status=provisioning stub circuits.
-    "dark_fiber": 5,  # DC10/DC11 -> EQX FR2, DC12 -> EQX PA4, + 2 DC11<->DC12 stubs
+    # All hand-authored in 08_interconnects/ — the opt-in
+    # TopologyInterconnectRequest that used to scaffold 2 extra DC11<->DC12
+    # stub circuits was removed along with its generator.
+    "dark_fiber": 3,  # DC10/DC11 -> EQX FR2, DC12 -> EQX PA4
     "cross_connect": 2,  # EQX FR2 -> AWS eu-central-1, EQX PA4 -> Azure westeurope
-    "internet": 3,  # the SD-WAN branches' logical internet underlay
+    # 5 office underlays (C001/C003/C015 hand-authored + C002/C005 from
+    # add_sdwan_edge) + 4 shared transit circuits from 06_internet.
+    "internet": 9,
 }
+
+# Shared ISP transit (08_interconnects/06_internet): colo edges -> ISP PEs.
+# Unowned, unlike a customer's own internet underlay.
+ALL_DEMO_INTERNET_TRANSIT_CIRCUITS: frozenset[str] = frozenset(
+    {"INET-LUMEN-EQXFR2", "INET-COGENT-EQXFR2", "INET-LUMEN-EQXPA4", "INET-COGENT-EQXPA4"}
+)
 
 
 class VirtualCircuitExpectation(TypedDict):
@@ -304,7 +222,7 @@ class VirtualCircuitExpectation(TypedDict):
 # The full virtual-circuit fabric. `physical_circuits` is the underlay mapping
 # and `interfaces` the minimum number of terminating DcimInterfaces reached
 # through interface_capabilities — the one uniform "what is this port doing"
-# edge in the schema, and the edge the change-risk traversal walks.
+# edge in the schema.
 ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
     "VC-C005-DC10-AWS-EUC1": {
         "link_type": "direct_connect_aws",
@@ -374,6 +292,38 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
         "interfaces": 2,
         "cloud_endpoints": (),
     },
+    # Entirely generator-produced (add_sdwan_edge), unlike its hand-authored
+    # siblings above — proves the automated per-office SD-WAN path end-to-end.
+    "C002-P-SDWAN-FR2": {
+        "link_type": "sd_wan",
+        "transport_mode": "internet_backed",
+        "owner": "SwiftGo GmbH",
+        "physical_circuits": ("INET-C002-P",),
+        "interfaces": 2,
+        "cloud_endpoints": (),
+    },
+    # Same generator path as C002; C005's office additionally routes into
+    # colo-services-stretch over 08_interconnects/04_sdwan/06_vrf_handoff.yml.
+    "C005-P-SDWAN-FR2": {
+        "link_type": "sd_wan",
+        "transport_mode": "internet_backed",
+        "owner": "Drentec BV",
+        "physical_circuits": ("INET-C005-P",),
+        "interfaces": 2,
+        "cloud_endpoints": (),
+    },
+    # Second tunnel riding the same internet underlay as C001-SDWAN-FR2, on a
+    # different gateway sub-interface — see 08_interconnects/07_zone_policies/
+    # 01_partner_virtual_circuit.yml for why this is an overlay, not a new
+    # dedicated physical cross-connect.
+    "C001-PARTNER-ACME-FR2": {
+        "link_type": "vpn_ipsec",
+        "transport_mode": "internet_backed",
+        "owner": "Nordix Ltd.",
+        "physical_circuits": ("INET-C001-WAW-FR2",),
+        "interfaces": 2,
+        "cloud_endpoints": (),
+    },
 }
 
 # One shared (tenant-less) firewall context per DC cluster ...
@@ -387,14 +337,17 @@ ALL_DEMO_DEDICATED_FIREWALL_TENANTS: dict[str, str] = {
     "C005-D-DC12": "L_DC",
 }
 
-# C005's four application segments and the DCs each is deployed into. The two
-# "stretch" segments are dc_pair-scoped and therefore carry two legs each —
-# six ManagedSegmentDeployment records in total.
+# C005's five application segments and the deployments each is activated in.
+# The two dc_pair "stretch" segments carry two DC legs each, and
+# colo-services-stretch one DC leg plus one colocation-metro leg (FR, reached
+# over DF-DC10-EQXFR2 through the EVPN Multi-Site border gateways) — eight
+# ManagedSegmentDeployment records in total.
 ALL_DEMO_SEGMENT_LEGS: dict[str, tuple[str, ...]] = {
     "c005-web-frontend-local-dc10-p": ("DC10",),
     "c005-app-backend-stretch-p": ("DC10", "DC12"),
     "c005-database-local-dc12-d": ("DC12",),
     "c005-message-queue-stretch-p": ("DC10", "DC12"),
+    "c005-colo-services-stretch-p": ("DC10", "FR"),
 }
 
 # Timeout and polling constants
