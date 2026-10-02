@@ -1,7 +1,7 @@
 # 30_all: The Everything Demo
 
 Every other demo shows one piece. This one loads all of them into one branch: three DC fabrics, colocation
-cages from three operators, three clouds, a SaaS edge, four offices, sixteen customers' footprints, seven
+cages from three operators, three clouds, a SaaS edge, four offices, sixteen customers' footprints, nine
 applications, and the interconnect layer that ties them together.
 
 It is also the only demo that **must be loaded in order**. The steps below are that order.
@@ -64,7 +64,7 @@ Fix the cause, then pick up where it stopped:
 uv run invoke load-all-demo --from-stage applications
 ```
 
-`--branch` loads into another branch instead. Stage 3 alone takes a while, so expect the whole run to take
+`--branch` loads into another branch instead. Stage 1 alone takes a while, so expect the whole run to take
 some time.
 
 ### Loading by Hand
@@ -81,45 +81,30 @@ Load the stages **in this order**. After each one, wait until no generator task 
 
 | # | Stage | What it loads | Generators it fires |
 | --- | --- | --- | --- |
-| 1 | foundation | Customers, cloud regions/zones, colocation metros/cages/racks, SaaS, office buildings | `add_colocation_metro` (×9) |
-| 2 | dc_locations | DC10/DC11/DC12 campus and suite tree | — |
-| 3 | dc_fabric | The three fabrics and their controllers | `add_dc` → `add_pod` → `add_rack` (longest stage) |
-| 4 | dc_compute | Application hosts in the compute racks | `add_endpoint` |
-| 5 | dc_customers | DC footprints of DC-only customers | `add_customer_deployment_dc` |
-| 6 | customer_boarding | DC/colocation/cloud/office footprints, cage kit, VMs | `add_customer_deployment_*`, `add_sdwan_edge` |
-| 7 | applications | Segments, applications, deployment-request catalogue | `add_vxlan_segment`, `add_app_application` |
-| 8 | interconnects | Colo on-ramp, cloud hub, virtual circuits, SD-WAN, cloud endpoints | — (data only) |
+| 1 | foundation | Customers, cloud, colocation, SaaS, offices, and the three DC sites with their fabrics and controllers | `add_colocation_metro` (×9), `add_dc` → `add_pod` → `add_rack` (longest stage) |
+| 2 | compute_and_customers | Application hosts, DC-only customers' footprints, and the boarding set: DC/colocation/cloud/office footprints, cage kit, VMs | `add_endpoint`, `add_customer_deployment_*`, `add_sdwan_edge` |
+| 3 | applications | Segments, applications, deployment-request catalogue | `add_vxlan_segment`, `add_app_application` |
+| 4 | interconnects | Colo on-ramp, cloud hub, virtual circuits, SD-WAN, cloud endpoints | — (data only) |
 
 ```bash
 D=data/demos/30_all
 
 # 1. foundation
-uv run infrahubctl object load $D/00_customer $D/01_cloud $D/02_colo $D/04_saas $D/05_office --branch $BRANCH
+uv run infrahubctl object load $D/00_customer $D/01_cloud $D/02_colo \
+  $D/03_dc/dc10/00_location.yml $D/03_dc/dc10/01_topology.yml \
+  $D/03_dc/dc11/00_location.yml $D/03_dc/dc11/01_controllers_virtual.yml $D/03_dc/dc11/02_topology.yml \
+  $D/03_dc/dc12/00_location.yml $D/03_dc/dc12/01_controllers_physical.yml \
+  $D/03_dc/dc12/02_controllers_virtual.yml $D/03_dc/dc12/03_topology.yml \
+  $D/04_saas $D/05_office --branch $BRANCH
 
-# 2. dc_locations
-uv run infrahubctl object load $D/03_dc/dc10/00_location.yml $D/03_dc/dc11/00_location.yml \
-  $D/03_dc/dc12/00_location.yml --branch $BRANCH
-
-# 3. dc_fabric
-uv run infrahubctl object load $D/03_dc/dc10/01_topology.yml \
-  $D/03_dc/dc11/01_controllers_virtual.yml $D/03_dc/dc11/02_topology.yml \
-  $D/03_dc/dc12/01_controllers_physical.yml $D/03_dc/dc12/02_controllers_virtual.yml \
-  $D/03_dc/dc12/03_topology.yml --branch $BRANCH
-
-# 4. dc_compute
+# 2. compute_and_customers
 uv run infrahubctl object load $D/03_dc/dc10/05_servers.yml $D/03_dc/dc11/05_servers.yml \
-  $D/03_dc/dc12/05_servers.yml --branch $BRANCH
+  $D/03_dc/dc12/05_servers.yml $D/03_dc/new_customers $D/06_customer_boarding --branch $BRANCH
 
-# 5. dc_customers
-uv run infrahubctl object load $D/03_dc/new_customers --branch $BRANCH
-
-# 6. customer_boarding
-uv run infrahubctl object load $D/06_customer_boarding --branch $BRANCH
-
-# 7. applications
+# 3. applications
 uv run infrahubctl object load $D/07_applications --branch $BRANCH
 
-# 8. interconnects
+# 4. interconnects
 uv run infrahubctl object load $D/08_interconnects --branch $BRANCH
 ```
 
@@ -142,26 +127,26 @@ uv run infrahubctl task list --state FAILED --state CRASHED
 ```
 
 You can also watch the **Tasks** page in the UI. Fix any failed task before you load the next stage: a
-failure in an early stage turns into dozens of misleading reference errors later on. Stage 3 takes by far
+failure in an early stage turns into dozens of misleading reference errors later on. Stage 1 takes by far
 the longest, because it generates around 20 devices per DC plus all their cabling, addressing and routing.
 
 ---
 
 ## Checking the Result
 
-Once stage 8 has settled, the branch should contain at least:
+Once stage 4 has settled, the branch should contain at least:
 
 | Kind | Count |
 | --- | --- |
 | `TopologyDataCenter` | 3 |
 | `TopologyPod` | 6 |
 | `LocationRack` | 25 |
-| `TopologyCustomerDC` | 7 |
+| `TopologyCustomerDC` | 9 |
 | `TopologyCustomerColocation` | 7 |
 | `TopologyCustomerCloud` | 4 |
 | `TopologyCustomerOffice` | 5 |
 | `ManagedVxlanSegment` | 5 |
-| `AppApplication` | 7 |
+| `AppApplication` | 9 |
 
 Generators add more devices, prefixes and segments on top of what the files declare, so read these as
 minimums. To review the whole thing as a change, open a Proposed Change from `all-demo-scenario` into `main`.

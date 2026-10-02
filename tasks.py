@@ -421,63 +421,51 @@ ALL_DEMO_BRANCH = "all-demo-scenario"
 # before moving to the next stage.
 ALL_DEMO_LOAD_STAGES: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
-        # Customers, cloud regions/zones, colocation metros/cages and racks,
-        # SaaS, office buildings. Dispatches add_colocation_metro (one run per
-        # metro), which is why this stage has to settle before the interconnects
-        # stage references the on-ramp routers it generates.
+        # Everything that depends only on bootstrap data: customers, cloud
+        # regions/zones, colocation metros/cages and racks, SaaS, office
+        # buildings, and the three DC sites with their fabrics and controllers.
+        # One load, so add_colocation_metro (one run per metro) and
+        # add_dc -> add_pod -> add_rack (per DC) generate in parallel. The
+        # loader sorts files by path, so each DC's 00_location.yml lands before
+        # its topology. By far the longest stage: 20 fabric devices per DC plus
+        # all cabling, addressing and routing.
         "foundation",
         (
             "00_customer",
             "01_cloud",
             "02_colo",
+            "03_dc/dc10/00_location.yml",
+            "03_dc/dc10/01_topology.yml",
+            "03_dc/dc11/00_location.yml",
+            "03_dc/dc11/01_controllers_virtual.yml",
+            "03_dc/dc11/02_topology.yml",
+            "03_dc/dc12/00_location.yml",
+            "03_dc/dc12/01_controllers_physical.yml",
+            "03_dc/dc12/02_controllers_virtual.yml",
+            "03_dc/dc12/03_topology.yml",
             "04_saas",
             "05_office",
         ),
     ),
     (
-        # DC sites (campus/suite tree) — the parents the topologies attach to.
-        "dc_locations",
-        (
-            "03_dc/dc10/00_location.yml",
-            "03_dc/dc11/00_location.yml",
-            "03_dc/dc12/00_location.yml",
-        ),
-    ),
-    (
-        # The three fabrics. Dispatches add_dc -> add_pod -> add_rack per DC
-        # and is by far the longest stage: 20 fabric devices per DC plus all
-        # cabling, addressing and routing.
-        "dc_fabric",
-        (
-            "03_dc/dc10/01_topology.yml",
-            "03_dc/dc11/01_controllers_virtual.yml",
-            "03_dc/dc11/02_topology.yml",
-            "03_dc/dc12/01_controllers_physical.yml",
-            "03_dc/dc12/02_controllers_virtual.yml",
-            "03_dc/dc12/03_topology.yml",
-        ),
-    ),
-    (
-        # Application hosts in the compute racks. Dispatches add_endpoint,
-        # which needs the access-leafs from the dc_fabric stage.
-        "dc_compute",
+        # Application hosts, DC-only customer footprints and the full boarding
+        # set (DC/colocation/cloud/office footprints, the cage kit, the VMs the
+        # applications are built from). None of it references anything this
+        # stage's own generators create, only declared data and the foundation
+        # stage's output, so add_endpoint (needs the access-leafs add_rack
+        # created), add_customer_deployment_* and add_sdwan_edge run in
+        # parallel. VMs pin to hosts by name; 03_dc/ sorts before
+        # 06_customer_boarding/, so the hosts exist by then. c005/c006 boarding
+        # re-declares the new_customers footprints (same HFID), which updates
+        # them in place.
+        "compute_and_customers",
         (
             "03_dc/dc10/05_servers.yml",
             "03_dc/dc11/05_servers.yml",
             "03_dc/dc12/05_servers.yml",
+            "03_dc/new_customers",
+            "06_customer_boarding",
         ),
-    ),
-    (
-        # DC footprints for the customers that only have a DC presence.
-        # Dispatches add_customer_deployment_dc.
-        "dc_customers",
-        ("03_dc/new_customers",),
-    ),
-    (
-        # The full boarding set: DC/colocation/cloud/office footprints, the
-        # cage kit, and the VMs the applications are built from.
-        "customer_boarding",
-        ("06_customer_boarding",),
     ),
     (
         # Segments, applications and the deployment-request catalogue.

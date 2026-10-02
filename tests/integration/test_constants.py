@@ -48,14 +48,15 @@ ALL_DEMO_EXPECTED_GENERATORS: dict[str, int] = {
     "add_colocation_metro": 9,
     "add_endpoint": 12,  # 6 DC hosts + 6 colocation cage hosts
     "add_vxlan_segment": 5,  # C005's five application segments
-    "add_app_application": 7,  # one per declared AppApplication
-    # 7 distinct footprints: 03_dc/new_customers declares all of them and
-    # 06_customer_boarding re-declares three as supersets, which upsert.
+    "add_app_application": 9,  # one per declared AppApplication
+    # 9 distinct footprints: 03_dc/new_customers declares seven and
+    # 06_customer_boarding re-declares three of them as supersets, which
+    # upsert, and adds the C008/C010 dev footprints on DC12's shared hosts.
     # add_customer_deployment_cloud/office were removed: their only job was
     # hub-and-spoke exchange auto-provisioning, now replaced by the 4 fixed
     # bootstrap TopologyRoutedExchange objects (data/bootstrap/23_exchanges.yml)
     # — see docs/exchange_gateway.md.
-    "add_customer_deployment_dc": 7,
+    "add_customer_deployment_dc": 9,
     "add_customer_deployment_colocation": 7,
     # trigger-customer-office-sdwan-on-created fires unconditionally for
     # every TopologyCustomerOffice (5: C001/C003/C015/C002/C005) — the
@@ -74,18 +75,18 @@ ALL_DEMO_EXPECTED_OBJECTS: dict[str, int] = {
     "TopologyDataCenter": 3,
     "TopologyPod": 6,
     "LocationRack": 25,
-    "TopologyCustomerDC": 7,
+    "TopologyCustomerDC": 9,
     "TopologyCustomerColocation": 7,
     "TopologyCustomerCloud": 4,
     "TopologyCustomerOffice": 5,
     "ManagedVxlanSegment": 5,
-    "ManagedVlanSegment": 7,
-    "AppApplication": 7,
-    # 18 AppComponent blocks are declared, but c005/04_component_updates.yml
+    "ManagedVlanSegment": 9,
+    "AppApplication": 9,
+    # 22 AppComponent blocks are declared, but c005/04_component_updates.yml
     # re-declares web-frontend to attach its depends_on — an upsert, not a
-    # 18th component.
-    "AppComponent": 17,
-    "DcimVirtualDevice": 26,
+    # 22nd component.
+    "AppComponent": 21,
+    "DcimVirtualDevice": 34,
     "TopologyPhysicalCircuit": 8,
     "TopologyVirtualCircuit": 8,
     "CloudInstance": 8,
@@ -165,6 +166,8 @@ ALL_DEMO_EXPECTED_APPLICATIONS: dict[str, tuple[str, int]] = {
     "c012-payment-edge-p": ("high", 2),
     "c013-fraud-detection-p": ("critical", 2),
     "c016-billing-cloud-p": ("medium", 2),
+    "c008-inventory-sync-d": ("medium", 2),
+    "c010-reporting-portal-d": ("low", 2),
 }
 
 # Cloud-native applications: their instances are CloudInstance nodes with no
