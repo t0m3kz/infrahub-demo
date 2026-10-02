@@ -195,8 +195,16 @@ ALL_DEMO_PHYSICAL_CIRCUIT_TYPES: dict[str, int] = {
     # stub circuits was removed along with its generator.
     "dark_fiber": 3,  # DC10/DC11 -> EQX FR2, DC12 -> EQX PA4
     "cross_connect": 2,  # EQX FR2 -> AWS eu-central-1, EQX PA4 -> Azure westeurope
-    "internet": 5,  # C001/C003/C015 hand-authored + C002/C005 generator-produced (add_sdwan_edge)
+    # 5 office underlays (C001/C003/C015 hand-authored + C002/C005 from
+    # add_sdwan_edge) + 4 shared transit circuits from 06_internet.
+    "internet": 9,
 }
+
+# Shared ISP transit (08_interconnects/06_internet): colo edges -> ISP PEs.
+# Unowned, unlike a customer's own internet underlay.
+ALL_DEMO_INTERNET_TRANSIT_CIRCUITS: frozenset[str] = frozenset(
+    {"INET-LUMEN-EQXFR2", "INET-COGENT-EQXFR2", "INET-LUMEN-EQXPA4", "INET-COGENT-EQXPA4"}
+)
 
 
 class VirtualCircuitExpectation(TypedDict):

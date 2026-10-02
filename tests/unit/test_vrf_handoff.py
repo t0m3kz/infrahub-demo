@@ -477,3 +477,39 @@ class TestEdgeTemplate:
         rendered = self._render(env, vlans=vlans)
         assert "anycast-gateway" not in rendered
         assert "interface Vlan100" not in rendered
+
+    def test_vrf_context_declared_for_bgp_only_vrf(self, env: jinja2.Environment) -> None:
+        """A VRF used only by BGP sessions (no L3 VNI) gets a vrf context before the interfaces."""
+        rendered = self._render(env, bgp=_bgp_with_vrf_session())
+        assert "vrf context PROD\n  address-family ipv4 unicast\n" in rendered
+        assert rendered.index("vrf context PROD") < rendered.index("! Interfaces")
+
+    def test_vrf_context_declared_once_per_vrf(self, env: jinja2.Environment) -> None:
+        """Two sessions in the same VRF declare its context only once."""
+        bgp = _bgp_with_vrf_session()
+        bgp[0]["sessions"].append({**bgp[0]["sessions"][1], "remote_ip": {"address": "10.255.5.3/31"}})
+        rendered = self._render(env, bgp=bgp)
+        assert rendered.count("vrf context PROD") == 1
+
+    def test_no_plain_vrf_context_for_evpn_vrf(self, env: jinja2.Environment) -> None:
+        """A VRF with an L3 VNI is declared by the vxlan block, not the BGP-only one."""
+        vxlan = {
+            "enabled": False,
+            "features": ["nv overlay"],
+            "nve_interface": "nve1",
+            "vtep": {"ipv4": "10.0.0.1", "source_interface": "loopback1"},
+            "evpn": {"enabled": True},
+            "l2_vni_mappings": [],
+            "l3_vni_mappings": [{"vrf_name": "PROD", "l3_vni": 50001}],
+        }
+        enabled = self._render(env, bgp=_bgp_with_vrf_session(), vxlan={**vxlan, "enabled": True})
+        assert "BGP handoffs without an L3 VNI" not in enabled
+        assert enabled.count("vrf context PROD") == 1
+        disabled = self._render(env, bgp=_bgp_with_vrf_session(), vxlan=vxlan)
+        assert "vrf context PROD" in disabled
+
+    def test_no_vrf_context_without_vrf_sessions(self, env: jinja2.Environment) -> None:
+        """Default-VRF sessions only: no VRF context block."""
+        bgp = _bgp_with_vrf_session()
+        bgp[0]["sessions"] = bgp[0]["sessions"][:1]
+        assert "vrf context" not in self._render(env, bgp=bgp)

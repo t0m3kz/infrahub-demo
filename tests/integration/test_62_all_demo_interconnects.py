@@ -32,6 +32,7 @@ from .conftest import TestInfrahubDockerWithClient
 from .test_constants import (
     ALL_DEMO_BRANCH,
     ALL_DEMO_DEDICATED_FIREWALL_TENANTS,
+    ALL_DEMO_INTERNET_TRANSIT_CIRCUITS,
     ALL_DEMO_PHYSICAL_CIRCUIT_TYPES,
     ALL_DEMO_SEGMENT_LEGS,
     ALL_DEMO_SHARED_FIREWALL_CONTEXTS,
@@ -94,11 +95,14 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 errors.append(f"{circuit_id}: no provider")
             if len(circuit["locations"]) != 2:
                 errors.append(f"{circuit_id}: terminates at {circuit['locations']}, expected exactly 2 locations")
-            # The shared backbone circuits (dark fibre, cross-connects) are
+            # The shared circuits (dark fibre, cross-connects, ISP transit) are
             # deliberately unowned; only a customer's own internet underlay
             # names an owner.
-            if circuit["circuit_type"] == "internet" and not circuit["owner"]:
+            transit = circuit_id in ALL_DEMO_INTERNET_TRANSIT_CIRCUITS
+            if circuit["circuit_type"] == "internet" and not transit and not circuit["owner"]:
                 errors.append(f"{circuit_id}: internet underlay with no owning customer")
+            if transit and circuit["owner"]:
+                errors.append(f"{circuit_id}: shared transit circuit owned by '{circuit['owner']}'")
             if circuit["circuit_type"] in ("dark_fiber", "cross_connect") and circuit["owner"]:
                 errors.append(f"{circuit_id}: shared {circuit['circuit_type']} circuit owned by '{circuit['owner']}'")
 

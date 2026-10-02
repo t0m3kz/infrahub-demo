@@ -24,6 +24,25 @@ vlan {{ vlan.vlan_id }}
 !
 {%- endfor %}
 {%- endif %}
+{#- A VRF that only carries eBGP neighbours (e.g. INTERNET towards the transit
+    ISPs) has no L3 VNI, so cisco_nxos_vxlan_vrf.j2 never declares it. NX-OS
+    needs the `vrf context` before `vrf member` can reference it. -#}
+{%- set _evpn_vrfs = (vxlan.l3_vni_mappings | map(attribute='vrf_name') | list) if (vxlan and vxlan.enabled and vxlan.l3_vni_mappings) else [] %}
+{%- set _plain_vrfs = namespace(names=[]) %}
+{%- for bgp_config in bgp or [] %}
+{%- for session in bgp_config.sessions or [] if session.get('vrf') and session.vrf not in _evpn_vrfs and session.vrf not in _plain_vrfs.names %}
+{%- set _plain_vrfs.names = _plain_vrfs.names + [session.vrf] %}
+{%- endfor %}
+{%- endfor %}
+{%- if _plain_vrfs.names %}
+!
+! VRF Contexts (BGP handoffs without an L3 VNI)
+{%- for vrf_name in _plain_vrfs.names %}
+vrf context {{ vrf_name }}
+  address-family ipv4 unicast
+!
+{%- endfor %}
+{%- endif %}
 !
 ! Interfaces
 {%- for interface in interfaces %}

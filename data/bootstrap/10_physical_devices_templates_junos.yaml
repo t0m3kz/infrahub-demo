@@ -53,3 +53,33 @@ spec:
             name: ge-0/0/3
             role: downlink
             interface_type: 1000base-t
+
+    # A transit ISP's provider edge, as seen from our side of the handoff. We
+    # don't configure it (no device group, so no artifact or check): it exists
+    # so a transit circuit has a far-end port and an eBGP session has a remote
+    # AS, which is where a trace towards the internet stops. et-0/0/[0-3] face
+    # customers like us, xe-0/1/[0-7] face the ISP's own core.
+    - template_name: MX204_ISP_PE
+      owner: "P027"
+      device_type: MX204
+      platform: junos
+      software_image: junos-23.4R2
+      role: edge
+      status: active
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: MX204_ISP_PE_fxp0
+            name: fxp0
+            role: management
+            interface_type: 1000base-t
+          - template_name: MX204_ISP_PE_et-0/0/[0-3]
+            name: et-0/0/[0-3]
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: MX204_ISP_PE_xe-0/1/[0-7]
+            name: xe-0/1/[0-7]
+            role: uplink
+            interface_type: 10gbase-x-sfpp

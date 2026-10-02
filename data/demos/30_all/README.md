@@ -84,7 +84,7 @@ Load the stages **in this order**. After each one, wait until no generator task 
 | 1 | foundation | Customers, cloud, colocation, SaaS, offices, and the three DC sites with their fabrics and controllers | `add_colocation_metro` (×9), `add_dc` → `add_pod` → `add_rack` (longest stage) |
 | 2 | compute_and_customers | Application hosts, DC-only customers' footprints, and the boarding set: DC/colocation/cloud/office footprints, cage kit, VMs | `add_endpoint`, `add_customer_deployment_*`, `add_sdwan_edge` |
 | 3 | applications | Segments, applications, deployment-request catalogue | `add_vxlan_segment`, `add_app_application` |
-| 4 | interconnects | Colo on-ramp, cloud hub, virtual circuits, SD-WAN, cloud endpoints | — (data only) |
+| 4 | interconnects | Colo on-ramp, cloud hub, virtual circuits, SD-WAN, cloud endpoints, internet transit | — (data only) |
 
 ```bash
 D=data/demos/30_all
@@ -147,6 +147,20 @@ Once stage 4 has settled, the branch should contain at least:
 | `TopologyCustomerOffice` | 5 |
 | `ManagedVxlanSegment` | 5 |
 | `AppApplication` | 9 |
+| `TopologyExternalProviders` | 2 |
+| `TopologyPhysicalCircuit` (`internet`) | 9 |
+
+### Internet Transit
+
+`08_interconnects/06_internet` connects the colocation cages to the internet. It adds an `INTERNET` topology
+(`TopologyExternal`) with two ISPs, Lumen and Cogent, each a `TopologyExternalProviders` holding its provider
+edges (`EXT-LUMEN-FRA1`, `EXT-COGENT-PAR1`, ...). Each cage edge (`eg-fr01/02`, `eg-pa01/02`) gets one 10G
+transit circuit on `Ethernet1/14` and an eBGP session in VRF `INTERNET`. The ISPs send a default route only. A
+DC reaches the internet through these edges, so a flow trace towards the internet ends on an ISP device.
+
+The ISP devices are in no group, so no artifact or check targets them. Their configuration is the carrier's
+business. The `PROD-INTERNET` and `NON-PROD-INTERNET` routed exchanges are not wired to these edges yet and
+stay in `provisioning`: an exchange expects both of its legs on one firewall.
 
 Generators add more devices, prefixes and segments on top of what the files declare, so read these as
 minimums. To review the whole thing as a change, open a Proposed Change from `all-demo-scenario` into `main`.
