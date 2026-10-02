@@ -204,6 +204,109 @@ class TestVelocloudVcoPayload:
         assert payload["edges"][0]["branch-to-branch"] is None
 
 
+def _raw_iface(device: str, name: str, address: str, namespace: str) -> dict:
+    return {
+        "node": {
+            "name": {"value": name},
+            "ip_address": {
+                "node": {"address": {"value": address}, "ip_namespace": {"node": {"name": {"value": namespace}}}}
+            },
+            "device": {"node": {"name": {"value": device}}},
+        }
+    }
+
+
+def _raw_bgp_proc(device: str, asn: int) -> dict:
+    return {
+        "node": {
+            "router_id": {"node": {"address": {"value": "10.255.5.1/31"}}},
+            "local_as": {"node": {"asn": {"value": asn}}},
+            "capabilities": {"edges": [{"node": {"name": {"value": device}}}]},
+        }
+    }
+
+
+def _gateway_with_handoff(namespace: str = "PROD", local_iface: str = "eth0.1900") -> dict:
+    """GW1 as data/demos/30_all/08_interconnects/04_sdwan/06_vrf_handoff.yml loads it."""
+    device = _raw_device("EQX-FR2-SDWAN-GW1", role="edge", address=None)
+    peering = {
+        "node": {
+            "id": "peering-1",
+            "name": {"value": "VRF-PROD-EQXFR2-SDWAN"},
+            "peering_role": {"value": "regular"},
+            "session_type": {"value": "EBGP"},
+            "ttl": {"value": 1},
+            "address_families": {"edges": [{"node": {"afi": {"value": "ipv4"}, "safi": {"value": "unicast"}}}]},
+            "interface_capabilities": {
+                "edges": [
+                    _raw_iface("eg-fr01", "Ethernet1/13.1900", "10.255.5.0/31", namespace),
+                    _raw_iface("EQX-FR2-SDWAN-GW1", local_iface, "10.255.5.1/31", namespace),
+                ]
+            },
+            "bgp_processes": {
+                "edges": [_raw_bgp_proc("eg-fr01", 4200000101), _raw_bgp_proc("EQX-FR2-SDWAN-GW1", 65028)]
+            },
+        }
+    }
+    device["node"]["capabilities"] = {
+        "edges": [
+            {
+                "node": {
+                    "__typename": "ManagedBGP",
+                    "name": {"value": "EQX-FR2-SDWAN-GW1-bgp"},
+                    "status": {"value": "active"},
+                    "local_as": {"node": {"asn": {"value": 65028}}},
+                    "router_id": {"node": {"address": {"value": "10.255.5.1/31"}}},
+                    "peerings": {"edges": [peering]},
+                }
+            }
+        ]
+    }
+    return device
+
+
+class TestVelocloudVrfHandoffs:
+    """The Orchestrator pushes GW1's side of the PROD handoff to eg-fr01, so
+    the VCO payload — not a device-config transform — has to carry it."""
+
+    def _payload(self, device: dict) -> dict[str, Any]:
+        data = _raw_controller("VCO1", "sdwan_orchestrator", platform_name="velocloud", devices=[device])
+        return json.loads(asyncio.run(_make_transform().transform(data)))
+
+    def test_gateway_vrf_session_becomes_segment_handoff(self) -> None:
+        """Both ends come from the same BGP helper as eg-fr01's config."""
+        handoffs = self._payload(_gateway_with_handoff())["edges"][0]["handoffs"]
+
+        assert handoffs == [
+            {
+                "segment": "PROD",
+                "interface": "eth0.1900",
+                "vlan": 1900,
+                "local-address": "10.255.5.1/31",
+                "bgp": {
+                    "local-asn": 65028,
+                    "neighbor-ip": "10.255.5.0",
+                    "neighbor-asn": 4200000101,
+                    "neighbor": "eg-fr01",
+                },
+            }
+        ]
+
+    def test_default_namespace_session_is_not_a_handoff(self) -> None:
+        """Only sessions in a tenant namespace are VRF handoffs."""
+        assert self._payload(_gateway_with_handoff(namespace="default"))["edges"][0]["handoffs"] == []
+
+    def test_untagged_interface_has_no_vlan(self) -> None:
+        """No dot1q suffix on the interface name means no VLAN to hand off."""
+        handoff = self._payload(_gateway_with_handoff(local_iface="eth1"))["edges"][0]["handoffs"][0]
+
+        assert handoff["vlan"] is None
+
+    def test_device_without_capabilities_has_no_handoffs(self) -> None:
+        """An office Edge with no BGP capability gets an empty list."""
+        assert self._payload(_raw_device("C005-P-EDGE1"))["edges"][0]["handoffs"] == []
+
+
 class TestNoMatch:
     def test_unknown_platform_for_security_manager_returns_empty(self) -> None:
         data = _raw_controller("SMS-X", "security_manager", platform_name="unknown_os")

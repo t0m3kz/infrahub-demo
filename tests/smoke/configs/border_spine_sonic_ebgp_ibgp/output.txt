@@ -26,6 +26,7 @@
       "route_reflector_client": "true"
     }
   },
+  "BGP_GLOBALS_EVPN_RT": {},
   "BGP_NEIGHBOR": {
     "10.0.0.100": {
       "admin_status": "true",
@@ -115,8 +116,10 @@
   "LOOPBACK_INTERFACE": {
     "Loopback0|10.0.0.1/32": {}
   },
+  "NTP_SERVER": {},
   "OSPF_ROUTER": {},
   "STATIC_ROUTE": {},
+  "SYSLOG_SERVER": {},
   "VLAN": {
     "Vlan100": {
       "vlanid": "100"

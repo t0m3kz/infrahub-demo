@@ -120,6 +120,11 @@
 {%- for session in bgp_config.sessions -%}
 {%- set _sonic_unnumbered = session.get('interface_name') and not session.get('remote_ip') -%}
 {%- set neighbor_ip = session.interface_name if _sonic_unnumbered else session.remote_ip.address.split('/')[0] -%}
+{#- A VRF session (transforms/helpers/bgp.py sets session.vrf — a handoff whose
+    local address sits in a tenant namespace) is keyed `<vrf>|<ip>` and needs
+    the VRF's own BGP instance in BGP_GLOBALS. -#}
+{%- set _sess_vrf = session.get('vrf') -%}
+{%- set neighbor_key = (_sess_vrf ~ '|' ~ neighbor_ip) if _sess_vrf else neighbor_ip -%}
 {%- set neighbor_entry = {
   'asn': session.remote_as.asn|string,
   'holdtime': '180',
@@ -166,7 +171,18 @@
 {%- endif -%}
 {#- 'password'/'local_pref'/'med' intentionally not rendered here: BGP auth and route-map/policy
     based attributes don't have a clean config-DB JSON representation in this file's model -#}
-{%- set _ = bgp_neighbors.update({neighbor_ip: neighbor_entry}) -%}
+{%- set _ = bgp_neighbors.update({neighbor_key: neighbor_entry}) -%}
+{%- if _sess_vrf -%}
+{%- if _sess_vrf not in bgp_globals -%}
+{%- set _ = bgp_globals.update({_sess_vrf: {
+  'router_id': bgp_config.router_id.address.split('/')[0],
+  'local_asn': bgp_config.local_as.asn
+}}) -%}
+{%- endif -%}
+{%- for _af in session.address_families | default([]) if _af in ['ipv4', 'ipv6'] -%}
+{%- set _ = bgp_globals_af.update({(_sess_vrf ~ '|' ~ _af ~ '_unicast|' ~ neighbor_ip): {'admin_status': 'true'}}) -%}
+{%- endfor -%}
+{%- endif -%}
 {%- if session.peer_group is not defined and 'evpn' in (session.address_families | default([])) -%}
 {%- set _sess_evpn_af = {'admin_status': 'true'} -%}
 {%- if session.get('route_reflector_client') -%}

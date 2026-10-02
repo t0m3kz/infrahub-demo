@@ -24,6 +24,7 @@
 {%- set vxlan_tunnel = {} -%}
 {%- set vxlan_tunnel_map = {} -%}
 {%- set vrf_config = {} -%}
+{%- set bgp_evpn_rt = {} -%}
 {%- set vrf_loopback_interfaces = {} -%}
 {%- set evpn_nvo = {} -%}
 {%- include 'common/sonic_vxlan.j2' %}
@@ -57,6 +58,7 @@
   'VXLAN_TUNNEL': vxlan_tunnel,
   'VXLAN_TUNNEL_MAP': vxlan_tunnel_map,
   'VRF': vrf_config,
+  'BGP_GLOBALS_EVPN_RT': bgp_evpn_rt,
   'EVPN_NVO': evpn_nvo,
   'ACL_TABLE': acl_table,
   'ACL_RULE': acl_rule,

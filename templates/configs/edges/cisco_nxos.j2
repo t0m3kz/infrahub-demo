@@ -64,6 +64,9 @@ interface {{ interface.name }}
     segment reaches, and the SVI's VRF is the handoff VRF towards the office. #}
 {%- if vxlan and vxlan.anycast_gateway and vxlan.anycast_gateway.enabled %}
 !
+{%- if not (vxlan.enabled and 'fabric forwarding' in (vxlan.features or [])) %}
+feature fabric forwarding
+{%- endif %}
 fabric forwarding anycast-gateway-mac {{ vxlan.anycast_gateway.mac | replace(':', '') | replace('.', '') }}
 {%- for vlan in vlans if vlan.gateway_ip or vlan.gateway_ipv6 %}
 !

@@ -25,6 +25,7 @@
       "admin_status": "true"
     }
   },
+  "BGP_GLOBALS_EVPN_RT": {},
   "BGP_NEIGHBOR": {
     "10.0.0.100": {
       "admin_status": "true",

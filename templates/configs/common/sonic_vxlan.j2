@@ -1,6 +1,7 @@
 {#- SONiC config-DB VXLAN variable building.
     Populates pre-initialized dicts from parent scope via in-place .update():
-    vxlan_tunnel, vxlan_tunnel_map, vrf_config, vrf_loopback_interfaces, evpn_nvo
+    vxlan_tunnel, vxlan_tunnel_map, vrf_config, vrf_loopback_interfaces, evpn_nvo,
+    bgp_evpn_rt
     Also mutates loopback_interfaces (must be populated by sonic_common.j2 first). -#}
 {%- if vxlan and vxlan.enabled -%}
 {%- set _ = vxlan_tunnel.update({
@@ -40,6 +41,30 @@
     'vni': mapping.l3_vni|string
   }
 }) -%}
+{%- endfor -%}
+{%- endif -%}
+{#- Remote-site route-target imports (EVPN Multi-Site stretched segments, see
+    transforms/helpers/vxlan.py _multisite_vrf_site_asns). FRR drops its auto
+    import RT once an explicit one is configured, so this site's own RT is
+    listed too (as `both`) — otherwise the VRF stops importing its own fabric.
+    NOTE: BGP_GLOBALS_EVPN_RT key/field names unverified against real SONiC
+    config-DB schema — best-effort guess. -#}
+{%- if vxlan and vxlan.enabled and vxlan.l3_vni_mappings -%}
+{%- for mapping in vxlan.l3_vni_mappings if mapping.import_route_targets -%}
+{%- if vxlan.evpn and vxlan.evpn.rt_format and vxlan.evpn.rt_format != 'auto' -%}
+{%- set _ = bgp_evpn_rt.update({
+  (mapping.vrf_name ~ '|L2VPN_EVPN|' ~ vxlan.evpn.rt_format | replace('{vni}', mapping.l3_vni | string)): {
+    'route-target-type': 'both'
+  }
+}) -%}
+{%- endif -%}
+{%- for rt in mapping.import_route_targets -%}
+{%- set _ = bgp_evpn_rt.update({
+  (mapping.vrf_name ~ '|L2VPN_EVPN|' ~ rt): {
+    'route-target-type': 'import'
+  }
+}) -%}
+{%- endfor -%}
 {%- endfor -%}
 {%- endif -%}
 {%- if vxlan and vxlan.enabled and vxlan.vrf_loopbacks -%}

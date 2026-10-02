@@ -7,12 +7,16 @@ Covers:
   - get_vxlan_config()             — import_route_targets on L3 VNI mappings
   - get_interfaces()               — dot1q tag from a plain sub-interface's name
   - cisco_nxos_bgp.j2              — VRF neighbours under `vrf X`, not globally
+  - arista_eos / cisco_ios / nokia_sros / sonic BGP — same split on every platform
   - cisco_nxos_vxlan_vrf.j2 / arista_eos.j2 — remote-site RT imports
+  - nokia_sros_vprn_import.j2 / sonic_vxlan.j2 — remote-site RT imports plus own RT
+  - _transform_vxlan_nxos()        — `feature fabric forwarding` with an anycast gateway
   - edges/cisco_nxos.j2            — anycast SVIs and sub-interface encapsulation
 """
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -21,7 +25,12 @@ import pytest
 
 from transforms.common import _build_peer_groups
 from transforms.helpers.bgp import _build_session_from_peering
-from transforms.helpers.vxlan import _multisite_vrf_site_asns, get_interfaces, get_vxlan_config
+from transforms.helpers.vxlan import (
+    _multisite_vrf_site_asns,
+    _transform_vxlan_nxos,
+    get_interfaces,
+    get_vxlan_config,
+)
 
 _TEMPLATES_CONFIGS_DIR = Path(__file__).parents[2] / "templates" / "configs"
 
@@ -268,6 +277,84 @@ class TestNxosVrfBgpRendering:
         assert "advertise l2vpn evpn" not in rendered.split("  vrf PROD")[1]
 
 
+class TestEosVrfBgpRendering:
+    def _render(self, env: jinja2.Environment) -> str:
+        macro = getattr(env.get_template("common/arista_eos_bgp.j2").module, "render_bgp")
+        return str(macro(_bgp_with_vrf_session(), []))
+
+    def test_vrf_neighbor_rendered_under_vrf(self, env: jinja2.Environment) -> None:
+        vrf_block = self._render(env).split("   vrf PROD")[1]
+        assert "      neighbor 10.255.5.1 remote-as 65028" in vrf_block
+        assert "      address-family ipv4\n         neighbor 10.255.5.1 activate" in vrf_block
+
+    def test_vrf_neighbor_not_rendered_globally(self, env: jinja2.Environment) -> None:
+        global_part = self._render(env).split("   vrf PROD")[0]
+        assert "10.255.5.1" not in global_part
+        assert "neighbor fd00:2500::1 remote-as 65010" in global_part
+
+
+class TestIosVrfBgpRendering:
+    def _render(self, env: jinja2.Environment) -> str:
+        return env.get_template("common/cisco_ios_bgp.j2").render(bgp=_bgp_with_vrf_session())
+
+    def test_vrf_neighbor_rendered_in_vrf_address_family(self, env: jinja2.Environment) -> None:
+        vrf_block = self._render(env).split("  address-family ipv4 vrf PROD")[1].split("exit-address-family")[0]
+        assert "    neighbor 10.255.5.1 remote-as 65028" in vrf_block
+        assert "    neighbor 10.255.5.1 activate" in vrf_block
+
+    def test_vrf_neighbor_not_rendered_globally(self, env: jinja2.Environment) -> None:
+        global_part = self._render(env).split("  address-family ipv4 vrf PROD")[0]
+        assert "10.255.5.1" not in global_part
+
+
+class TestNokiaVrfBgpRendering:
+    def _render(self, env: jinja2.Environment, vxlan: dict[str, Any] | None) -> str:
+        return env.get_template("common/nokia_sros_bgp.j2").render(bgp=_bgp_with_vrf_session(), vxlan=vxlan)
+
+    def test_vrf_neighbor_rendered_in_vprn(self, env: jinja2.Environment) -> None:
+        """The vprn id is the VRF's L3 VNI."""
+        rendered = self._render(env, {"l3_vni_mappings": [_l3_mapping()]})
+        assert 'configure service vprn 60000 bgp neighbor "10.255.5.1" peer-as 65028' in rendered
+        assert 'configure service vprn 60000 bgp group "PROD-PEERS" family ipv4' in rendered
+        assert 'configure router "Base" bgp 1 neighbor "10.255.5.1"' not in rendered
+
+    def test_vrf_without_l3_vni_is_reported_not_rendered(self, env: jinja2.Environment) -> None:
+        rendered = self._render(env, None)
+        assert "VRF PROD has no L3 VNI (vprn) on this device" in rendered
+        assert '10.255.5.1" peer-as' not in rendered
+
+
+def _render_sonic(env: jinja2.Environment, **ctx: Any) -> dict[str, Any]:
+    """Run a SONiC partial against the pre-initialised dicts the device templates own."""
+    wrapper = env.from_string(
+        "{%- set interfaces_config = {} -%}{%- set interface_ips = {} -%}{%- set vlan_interfaces = {} -%}"
+        "{%- set bgp_neighbors = {} -%}{%- set bgp_globals = {'default': {}} -%}{%- set ospf_router = {} -%}"
+        "{%- set bgp_peer_groups = {} -%}{%- set bgp_globals_af = {} -%}{%- set loopback_interfaces = {} -%}"
+        "{%- set vxlan_tunnel = {} -%}{%- set vxlan_tunnel_map = {} -%}{%- set vrf_config = {} -%}"
+        "{%- set vrf_loopback_interfaces = {} -%}{%- set evpn_nvo = {} -%}{%- set bgp_evpn_rt = {} -%}"
+        "{%- include part -%}"
+        "{{ {'BGP_NEIGHBOR': bgp_neighbors, 'BGP_GLOBALS': bgp_globals, 'BGP_GLOBALS_AF': bgp_globals_af,"
+        " 'BGP_GLOBALS_EVPN_RT': bgp_evpn_rt} | tojson }}"
+    )
+    return json.loads(wrapper.render(**ctx))
+
+
+class TestSonicVrfBgpRendering:
+    def _render(self, env: jinja2.Environment) -> dict[str, Any]:
+        base: dict[str, Any] = {"interfaces": [], "bgp": _bgp_with_vrf_session(), "ospf": []}
+        return _render_sonic(env, part="common/sonic_common.j2", **base)
+
+    def test_vrf_neighbor_keyed_by_vrf(self, env: jinja2.Environment) -> None:
+        db = self._render(env)
+        assert db["BGP_NEIGHBOR"]["PROD|10.255.5.1"]["asn"] == "65028"
+        assert "10.255.5.1" not in db["BGP_NEIGHBOR"]
+
+    def test_vrf_gets_its_own_bgp_instance_and_af(self, env: jinja2.Environment) -> None:
+        db = self._render(env)
+        assert db["BGP_GLOBALS"]["PROD"] == {"router_id": "10.0.0.1", "local_asn": 4200000100}
+        assert "PROD|ipv4_unicast|10.255.5.1" in db["BGP_GLOBALS_AF"]
+
+
 def _l3_mapping() -> dict[str, Any]:
     return {
         "vrf_name": "PROD",
@@ -295,6 +382,65 @@ class TestImportRouteTargetRendering:
         assert "route-target import" not in rendered
 
 
+class TestNokiaVprnImport:
+    def _render(self, env: jinja2.Environment, mapping: dict[str, Any], rt_format: str | None) -> str:
+        return env.get_template("common/nokia_sros_vprn_import.j2").render(
+            l3_mapping=mapping, vxlan={"evpn": {"rt_format": rt_format}}
+        )
+
+    def test_policy_matches_own_and_remote_rts(self, env: jinja2.Environment) -> None:
+        """The vrf-import policy replaces route-target import, so it keeps the own RT."""
+        rendered = self._render(env, _l3_mapping(), "65100:{vni}")
+        assert 'community "VRF-PROD-IMPORT" member "target:65100:60000"' in rendered
+        assert 'community "VRF-PROD-IMPORT" member "target:65010:60000"' in rendered
+        assert 'configure service vprn 60000 bgp instance 1 vrf-import "VRF-PROD-IMPORT"' in rendered
+
+    def test_auto_rt_format_is_not_a_community_member(self, env: jinja2.Environment) -> None:
+        rendered = self._render(env, _l3_mapping(), "auto")
+        assert "target:auto" not in rendered
+        assert 'member "target:65010:60000"' in rendered
+
+    def test_no_imports_no_policy(self, env: jinja2.Environment) -> None:
+        mapping = _l3_mapping()
+        del mapping["import_route_targets"]
+        assert "VRF-PROD-IMPORT" not in self._render(env, mapping, "65100:{vni}")
+
+
+class TestSonicImportRouteTargets:
+    def _render(self, env: jinja2.Environment, mapping: dict[str, Any]) -> dict[str, Any]:
+        vxlan = {
+            "enabled": True,
+            "interface": "vtep",
+            "vtep": {"ipv4": "10.0.0.1"},
+            "evpn": {"enabled": True, "rt_format": "65100:{vni}"},
+            "l3_vni_mappings": [mapping],
+        }
+        return _render_sonic(env, part="common/sonic_vxlan.j2", vxlan=vxlan)
+
+    def test_remote_rt_imported_and_own_rt_kept(self, env: jinja2.Environment) -> None:
+        rts = self._render(env, _l3_mapping())["BGP_GLOBALS_EVPN_RT"]
+        assert rts == {
+            "PROD|L2VPN_EVPN|65100:60000": {"route-target-type": "both"},
+            "PROD|L2VPN_EVPN|65010:60000": {"route-target-type": "import"},
+        }
+
+    def test_no_imports_no_rt_entries(self, env: jinja2.Environment) -> None:
+        mapping = _l3_mapping()
+        del mapping["import_route_targets"]
+        assert self._render(env, mapping)["BGP_GLOBALS_EVPN_RT"] == {}
+
+
+class TestNxosFabricForwardingFeature:
+    @pytest.mark.parametrize(
+        ("anycast_gateway", "expected"),
+        [({"enabled": True, "mac": "00:00:22:22:33:33"}, True), ({"enabled": False}, False), (None, False)],
+    )
+    def test_feature_only_with_anycast_gateway(self, anycast_gateway: dict[str, Any] | None, expected: bool) -> None:
+        """The anycast-gateway-mac / SVI commands need the feature enabled first."""
+        config = _transform_vxlan_nxos({"enabled": True, "anycast_gateway": anycast_gateway}, None)
+        assert ("fabric forwarding" in config["features"]) is expected
+
+
 class TestEdgeTemplate:
     def _render(self, env: jinja2.Environment, **ctx: Any) -> str:
         base: dict[str, Any] = {"name": "eg-fr01", "interfaces": [], "vlans": [], "bgp": [], "ospf": []}
@@ -319,7 +465,7 @@ class TestEdgeTemplate:
         ]
         vxlan = {"enabled": False, "anycast_gateway": {"enabled": True, "mac": "00:00:22:22:33:33"}}
         rendered = self._render(env, vlans=vlans, vxlan=vxlan)
-        assert "fabric forwarding anycast-gateway-mac 000022223333" in rendered
+        assert "feature fabric forwarding\nfabric forwarding anycast-gateway-mac 000022223333" in rendered
         assert (
             "interface Vlan100\n  description colo-services-stretch\n  vrf member PROD\n"
             "  ip address 10.5.50.1/24\n  fabric forwarding mode anycast-gateway"

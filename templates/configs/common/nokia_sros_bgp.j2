@@ -65,7 +65,7 @@ configure router "Base" policy-options policy-statement "{{ session.name }}-MED-
 {%- endif %}
 {%- endfor %}
 {#- BGP Neighbors #}
-{%- for session in bgp_config.sessions %}
+{%- for session in bgp_config.sessions if not session.get('vrf') %}
 {%- set is_unnumbered = session.get('interface_name') and not session.get('remote_ip') %}
 {%- set remote_ip = session.interface_name if is_unnumbered else session.remote_ip.address.split('/')[0] %}
 configure router "Base" bgp 1 neighbor "{{ remote_ip }}" admin-state enable
@@ -125,6 +125,47 @@ configure router "Base" bgp 1 neighbor "{{ remote_ip }}" import policy "{{ sessi
 {%- endif %}
 {%- if session.get('med') %}
 configure router "Base" bgp 1 neighbor "{{ remote_ip }}" export policy "{{ session.name }}-MED-OUT"
+{%- endif %}
+{%- endfor %}
+{#- VRF neighbours: eBGP handoffs whose local address sits in a tenant
+    namespace (transforms/helpers/bgp.py sets session.vrf). SR OS peers them
+    from the VRF's vprn — one per L3 VNI, created by the leaf/border-leaf
+    templates — so a VRF without an L3 VNI on this device has nowhere to go.
+    `vxlan` is undefined on spine templates; non-strict Undefined is falsy. -#}
+{%- for session in bgp_config.sessions if session.get('vrf') %}
+{%- set _vprn = namespace(id=none) %}
+{%- for mapping in (vxlan.l3_vni_mappings if vxlan and vxlan.l3_vni_mappings else []) if mapping.vrf_name == session.vrf %}
+{%- set _vprn.id = mapping.l3_vni %}
+{%- endfor %}
+{%- set _nb = session.remote_ip.address.split('/')[0] %}
+{%- if _vprn.id is none %}
+# VRF session {{ session.name }} to {{ _nb }} not rendered: VRF {{ session.vrf }} has no L3 VNI (vprn) on this device
+{%- else %}
+{%- set _group = session.vrf ~ '-PEERS' %}
+configure service vprn {{ _vprn.id }} bgp admin-state enable
+configure service vprn {{ _vprn.id }} bgp group "{{ _group }}" admin-state enable
+{%- for _af in session.address_families | default([]) if _af in ['ipv4', 'ipv6'] %}
+configure service vprn {{ _vprn.id }} bgp group "{{ _group }}" family {{ _af }}
+{%- endfor %}
+configure service vprn {{ _vprn.id }} bgp neighbor "{{ _nb }}" group "{{ _group }}"
+configure service vprn {{ _vprn.id }} bgp neighbor "{{ _nb }}" peer-as {{ session.remote_as.asn }}
+{%- if session.get('remote_device') %}
+configure service vprn {{ _vprn.id }} bgp neighbor "{{ _nb }}" description "{{ session.remote_device }}"
+{%- endif %}
+{%- if session.get('send_extended_community') %}
+configure service vprn {{ _vprn.id }} bgp neighbor "{{ _nb }}" send-community extended
+{%- elif session.get('send_community') %}
+configure service vprn {{ _vprn.id }} bgp neighbor "{{ _nb }}" send-community standard
+{%- endif %}
+{%- if session.get('bfd_enabled') %}
+configure service vprn {{ _vprn.id }} bgp neighbor "{{ _nb }}" bfd-liveness true
+{%- endif %}
+{%- if session.get('local_pref') %}
+configure service vprn {{ _vprn.id }} bgp neighbor "{{ _nb }}" import policy "{{ session.name }}-LOCAL-PREF-IN"
+{%- endif %}
+{%- if session.get('med') %}
+configure service vprn {{ _vprn.id }} bgp neighbor "{{ _nb }}" export policy "{{ session.name }}-MED-OUT"
+{%- endif %}
 {%- endif %}
 {%- endfor %}
 {#- Export policy for connected routes #}

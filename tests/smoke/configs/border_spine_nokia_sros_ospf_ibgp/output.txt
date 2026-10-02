@@ -91,6 +91,7 @@ configure service vprn 50001 customer 1
 configure service vprn 50001 bgp instance 1 route-distinguisher "10.0.0.1:50001"
 configure service vprn 50001 bgp instance 1 route-target export "target:65000:50001"
 configure service vprn 50001 bgp instance 1 route-target import "target:65000:50001"
+
 configure service vprn 50001 bgp-evpn evi 50001
 configure service vprn 50001 bgp-evpn vxlan bgp-instance 1 vxlan-instance 1
 configure service vprn 50001 bgp-evpn vxlan bgp-instance 1 admin-state enable

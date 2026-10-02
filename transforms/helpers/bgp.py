@@ -147,6 +147,9 @@ def _build_session_from_peering(
     if vrf and vrf != "default":
         session["vrf"] = vrf
         session["local_ip"] = local_ip_obj
+        # The handoff sub-interface — the VCO payload (transforms/config/
+        # controller.py) reads the dot1q tag off its name.
+        session["local_interface"] = local_iface.get("name")
         if remote_iface.get("ip_address"):
             session["remote_ip"] = remote_iface["ip_address"]
         else:

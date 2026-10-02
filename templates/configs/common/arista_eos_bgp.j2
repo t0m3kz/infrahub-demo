@@ -59,7 +59,7 @@ router bgp {{ bgp_config.local_as.asn }}
    !
 {%- endif %}
 {%- endfor %}
-{%- for session in bgp_config.sessions %}
+{%- for session in bgp_config.sessions if not session.get('vrf') %}
 {%- set is_unnumbered = session.get('interface_name') and not session.get('remote_ip') %}
 {%- set neighbor_id = session.interface_name if is_unnumbered else session.remote_ip.address.split('/')[0] %}
 {%- if session.peer_group is defined %}
@@ -114,7 +114,7 @@ router bgp {{ bgp_config.local_as.asn }}
       neighbor {{ pg.name }} activate
 {%- endif %}
 {%- endfor %}
-{%- for session in bgp_config.sessions %}
+{%- for session in bgp_config.sessions if not session.get('vrf') %}
 {%- set is_unnumbered = session.get('interface_name') and not session.get('remote_ip') %}
 {%- if session.peer_group is not defined and 'ipv4' in (session.address_families | default([])) %}
       neighbor {{ session.interface_name if is_unnumbered else session.remote_ip.address.split('/')[0] }} activate
@@ -125,7 +125,7 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- for pg in bgp_config.peer_groups | default([]) %}
 {%- if 'ipv6' in (pg.address_families | default([])) %}{% set ns.has_ipv6 = true %}{% endif %}
 {%- endfor %}
-{%- for session in bgp_config.sessions %}
+{%- for session in bgp_config.sessions if not session.get('vrf') %}
 {%- if 'ipv6' in (session.address_families | default([])) %}{% set ns.has_ipv6 = true %}{% endif %}
 {%- endfor %}
 {%- if ns.has_ipv6 %}
@@ -136,7 +136,7 @@ router bgp {{ bgp_config.local_as.asn }}
       neighbor {{ pg.name }} activate
 {%- endif %}
 {%- endfor %}
-{%- for session in bgp_config.sessions %}
+{%- for session in bgp_config.sessions if not session.get('vrf') %}
 {%- set is_unnumbered = session.get('interface_name') and not session.get('remote_ip') %}
 {%- if session.peer_group is not defined and 'ipv6' in (session.address_families | default([])) %}
       neighbor {{ session.interface_name if is_unnumbered else session.remote_ip.address.split('/')[0] }} activate
@@ -156,7 +156,7 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- endif %}
 {%- endif %}
 {%- endfor %}
-{%- for session in bgp_config.sessions %}
+{%- for session in bgp_config.sessions if not session.get('vrf') %}
 {%- if session.peer_group is not defined and 'evpn' in (session.address_families | default([])) %}
 {%- set is_unnumbered = session.get('interface_name') and not session.get('remote_ip') %}
 {%- set neighbor_evpn = session.interface_name if is_unnumbered else session.remote_ip.address.split('/')[0] %}
@@ -168,6 +168,56 @@ router bgp {{ bgp_config.local_as.asn }}
       neighbor {{ neighbor_evpn }} next-hop-unchanged
 {%- endif %}
 {%- endif %}
+{%- endfor %}
+{#- VRF neighbours: eBGP handoffs whose local address sits in a tenant
+    namespace (transforms/helpers/bgp.py sets session.vrf). They stay out of
+    the global neighbour list above and peer from inside their VRF. EOS
+    rejects `vrf <name>` here unless the VRF is instantiated; the leaf and
+    border-leaf templates create a `vrf instance` for every L3 VNI VRF. -#}
+{%- set _vrf_sessions = bgp_config.sessions | selectattr('vrf', 'defined') | selectattr('vrf') | list %}
+{%- for vrf_name in _vrf_sessions | map(attribute='vrf') | unique %}
+   !
+   vrf {{ vrf_name }}
+{%- for session in _vrf_sessions if session.vrf == vrf_name %}
+{%- set _nb = session.remote_ip.address.split('/')[0] %}
+      neighbor {{ _nb }} remote-as {{ session.remote_as.asn }}
+{%- if session.get('remote_device') %}
+      neighbor {{ _nb }} description {{ session.remote_device }}
+{%- endif %}
+{%- if session.get('send_community') %}
+      neighbor {{ _nb }} send-community
+{%- endif %}
+{%- if session.get('send_extended_community') %}
+      neighbor {{ _nb }} send-community extended
+{%- endif %}
+{%- if session.get('bfd_enabled') %}
+      neighbor {{ _nb }} bfd
+{%- endif %}
+{%- if session.get('maximum_routes') %}
+      neighbor {{ _nb }} maximum-routes {{ session.maximum_routes }}
+{%- endif %}
+{%- if session.get('password') %}
+      neighbor {{ _nb }} password {{ session.password }}
+{%- endif %}
+{%- if session.get('local_pref') %}
+      neighbor {{ _nb }} route-map {{ session.name }}-LOCAL-PREF-IN in
+{%- endif %}
+{%- if session.get('med') %}
+      neighbor {{ _nb }} route-map {{ session.name }}-MED-OUT out
+{%- endif %}
+{%- endfor %}
+{%- for _af in ['ipv4', 'ipv6'] %}
+{%- set _af_ns = namespace(sessions=[]) %}
+{%- for session in _vrf_sessions if session.vrf == vrf_name and _af in (session.address_families | default([])) %}
+{%- set _af_ns.sessions = _af_ns.sessions + [session] %}
+{%- endfor %}
+{%- if _af_ns.sessions %}
+      address-family {{ _af }}
+{%- for session in _af_ns.sessions %}
+         neighbor {{ session.remote_ip.address.split('/')[0] }} activate
+{%- endfor %}
+{%- endif %}
+{%- endfor %}
 {%- endfor %}
 {% endfor %}
 {%- endif %}

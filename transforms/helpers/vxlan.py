@@ -788,6 +788,10 @@ def _transform_vxlan_nxos(vxlan_base: dict, local_as: str | None) -> dict:
         "vn-segment-vlan-based",
         "nve",
     ]
+    # `fabric forwarding anycast-gateway-mac` and the SVIs' `fabric forwarding
+    # mode anycast-gateway` are rejected until the feature is enabled.
+    if (config.get("anycast_gateway") or {}).get("enabled"):
+        config["features"].append("fabric forwarding")
 
     return config
 

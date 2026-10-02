@@ -119,6 +119,7 @@ configure service vprn {{ l3_mapping.l3_vni }} bgp instance 1 route-distinguishe
 configure service vprn {{ l3_mapping.l3_vni }} bgp instance 1 route-target export "target:{{ vxlan.evpn.rt_format | replace('{vni}', l3_mapping.l3_vni | string) }}"
 configure service vprn {{ l3_mapping.l3_vni }} bgp instance 1 route-target import "target:{{ vxlan.evpn.rt_format | replace('{vni}', l3_mapping.l3_vni | string) }}"
 {%- endif %}
+{%- include 'common/nokia_sros_vprn_import.j2' %}
 configure service vprn {{ l3_mapping.l3_vni }} bgp-evpn evi {{ l3_mapping.l3_vni }}
 configure service vprn {{ l3_mapping.l3_vni }} bgp-evpn vxlan bgp-instance 1 vxlan-instance 1
 configure service vprn {{ l3_mapping.l3_vni }} bgp-evpn vxlan bgp-instance 1 admin-state enable

@@ -119,6 +119,7 @@ router bgp 65000
 feature nv overlay
 feature vn-segment-vlan-based
 feature nve
+feature fabric forwarding
 nv overlay evpn
 !
 !

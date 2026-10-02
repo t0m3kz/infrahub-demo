@@ -5,6 +5,7 @@
     "default": {}
   },
   "BGP_GLOBALS_AF": {},
+  "BGP_GLOBALS_EVPN_RT": {},
   "BGP_NEIGHBOR": {},
   "BGP_PEER_GROUP": {},
   "DEVICE_METADATA": {
