@@ -2,13 +2,12 @@
 policy rules (data/demos/30_all/08_interconnects/07_zone_policies/) against a
 real loaded branch.
 
-Mirrors test_63_all_demo_change_risk.py's approach: run the check and the
-transform in-process against the branch test_59 built, rather than creating a
-Proposed Change. `.infrahub.yml` declares a firewall_config artifact
-definition targeting every firewall in the "firewalls" group, so a PC over
-the full 30_all branch would fan out artifact generation across a hundred-odd
-devices to prove something one device's worth of query+check+render already
-proves — see test_63's docstring for the same reasoning.
+Runs the check and the transform in-process against the branch test_59
+built, rather than creating a Proposed Change. `.infrahub.yml` declares a
+firewall_config artifact definition targeting every firewall in the
+"firewalls" group, so a PC over the full 30_all branch would fan out artifact
+generation across a hundred-odd devices to prove something one device's worth
+of query+check+render already proves.
 
 CheckFirewall (checks/firewall.py) validates the whole SecurityZone/
 SecurityPolicy/SecurityTagRule graph, not a specific device — its own query
@@ -74,7 +73,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         return devices[0].name.value
 
     @pytest.mark.order(399)
-    @pytest.mark.dependency(scope="session", name="all_demo_firewall_check", depends=["all_demo_change_risk"])
+    @pytest.mark.dependency(scope="session", name="all_demo_firewall_check", depends=["all_demo_inventory"])
     @pytest.mark.asyncio
     async def test_01_check_firewall_passes(
         self,

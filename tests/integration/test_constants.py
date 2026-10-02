@@ -130,7 +130,7 @@ ALL_DEMO_DC_OVERLAY_ROLES = ("super-spine", "spine", "border-leaf")
 # cables a host to the access-leaf pair of the network rack sharing its row,
 # so row-1 and row-2 hosts must land on *disjoint* access-leaf pairs. That
 # disjointness is the whole point of putting them in different rows, and it is
-# what makes the change-risk blast radius of one access-leaf pair bounded.
+# what keeps the blast radius of one access-leaf pair bounded.
 ALL_DEMO_DC_HOST_ROWS: dict[str, int] = {
     "dc10-pod1-server-1": 1,
     "dc10-pod1-server-2": 2,
@@ -143,7 +143,7 @@ ALL_DEMO_DC_HOST_ROWS: dict[str, int] = {
 # The colocation cages are the deliberate counter-example: both NICs of each
 # host land on the *single* cage switch. NIC redundancy without switch
 # redundancy — the honest small-colocation shape, and a genuine shared-fate
-# case for the change-risk check to contrast with the DC pods.
+# case to contrast with the DC pods.
 ALL_DEMO_COLO_HOST_SWITCHES: dict[str, str] = {
     "cs-ny1-server-1": "CS-NY1-SW1",
     "cs-ny1-server-2": "CS-NY1-SW1",
@@ -172,8 +172,8 @@ ALL_DEMO_EXPECTED_APPLICATIONS: dict[str, tuple[str, int]] = {
 
 # Cloud-native applications: their instances are CloudInstance nodes with no
 # hosting_device. Every other application's instances are DcimVirtualDevice
-# nodes that MUST name the physical host they run on — that edge is what lets
-# the change-risk traversal walk from a switch port to a customer application.
+# nodes that MUST name the physical host they run on — that edge is what ties
+# a switch port to a customer application.
 ALL_DEMO_CLOUD_APPLICATIONS = ("c003-custody-api-p", "c016-billing-cloud-p")
 
 # c001-checkout-p is a private-access-only frontend (access_profile-gated, no
@@ -214,7 +214,7 @@ class VirtualCircuitExpectation(TypedDict):
 # The full virtual-circuit fabric. `physical_circuits` is the underlay mapping
 # and `interfaces` the minimum number of terminating DcimInterfaces reached
 # through interface_capabilities — the one uniform "what is this port doing"
-# edge in the schema, and the edge the change-risk traversal walks.
+# edge in the schema.
 ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
     "VC-C005-DC10-AWS-EUC1": {
         "link_type": "direct_connect_aws",

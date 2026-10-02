@@ -302,11 +302,6 @@ check_definitions:
   - name: validate_evpn_fabric
     class_name: CheckEvpnFabric
     file_path: checks/evpn_fabric.py
-  # Targetless: runs once per Proposed Change, seeded from the branch diff
-  # rather than from a group of devices. See docs/change_risk.md.
-  - name: change_risk
-    class_name: CheckChangeRisk
-    file_path: checks/change_risk.py
 
 python_transforms:
   - name: topology_cabling
@@ -643,15 +638,6 @@ queries:
     file_path: queries/topology/add/topology_orchestrator_routing_data.gql
   - name: application_orchestrator_routing_data
     file_path: queries/topology/add/application_orchestrator_routing_data.gql
-
-  # Change-risk exposure (docs/change_risk.md). The traversal itself is
-  # Infrahub's own (InfrahubReachableNodes to shortlist, InfrahubPathTraversal to
-  # confirm), and both return node identity only; this query supplies the
-  # attributes the risk score is weighted by. Registered as a named query rather
-  # than embedded in the check so franc-mcp's interactive what-if tool reads
-  # exposure the same way.
-  - name: impact_exposure
-    file_path: queries/risk/impact_exposure.gql
 
 generator_definitions:
   - name: add_dc

@@ -6,8 +6,8 @@ port to a customer application:
 
     access-leaf port -> cable -> host NIC -> host -> VM -> component -> app
 
-That chain is what the change-risk check walks (docs/change_risk.md), so each
-link in it gets its own assertion here. In particular the *shape* of the
+That chain is how a switch-port change reaches an application, so each link
+in it gets its own assertion here. In particular the *shape* of the
 cabling matters, not just its existence: a DC host is dual-homed to two
 distinct access-leafs, and the two hosts in a DC sit in different rack rows so
 their access-leaf pairs are disjoint. A colocation cage host is dual-homed to

@@ -284,15 +284,15 @@ def test_integration_all_demo(
     test_59 builds the branch the rest assert against, so the modules have to
     run together and in order: load and generator dispatch (59), the app
     catalogue enforcement workflow (60), compute and the application graph
-    (61), interconnects and tenant services (62), change risk (63), colo
-    cloud/partner/SaaS zone policy check + render (64).
+    (61), interconnects and tenant services (62), colo cloud/partner/SaaS zone
+    policy check + render (64).
     """
     _run_integration_suite(
         context,
         tests="tests/integration/test_01_setup.py tests/integration/test_02_repository.py "
         "tests/integration/test_59_all_demo_load.py tests/integration/test_60_app_catalogue.py "
         "tests/integration/test_61_all_demo_compute.py tests/integration/test_62_all_demo_interconnects.py "
-        "tests/integration/test_63_all_demo_change_risk.py tests/integration/test_64_all_demo_firewall_config.py",
+        "tests/integration/test_64_all_demo_firewall_config.py",
         basetemp=basetemp,
         server_port=server_port,
     )

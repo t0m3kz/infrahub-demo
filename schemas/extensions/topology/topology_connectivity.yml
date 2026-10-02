@@ -184,9 +184,8 @@ nodes:
     # ManagedGenericInterfaces is what puts this circuit into a terminating
     # interface's `interface_capabilities` list, alongside RoutingOSPFInterface,
     # ManagedVxlanSegment and TopologyExchangeGateway. That is the one uniform
-    # way in this schema to ask "what is this port doing", and it is the edge
-    # the change-risk traversal (docs/change_risk.md) walks outward from a
-    # changed interface. It replaces the bespoke `interfaces` relationship this
+    # way in this schema to ask "what is this port doing", and the edge a walk
+    # outward from a changed interface follows. It replaces the bespoke `interfaces` relationship this
     # node used to declare — two edges for the same fact could disagree.
     inherit_from:
       - TopologyCircuit

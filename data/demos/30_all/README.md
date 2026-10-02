@@ -158,7 +158,7 @@ Infrahub then runs the checks and generates the device configuration artifacts.
 
 The integration suite loads the same stages on a throwaway Infrahub (testcontainers). It then also
 checks that every expected generator ran, and verifies the application graph, the compute layer, the
-interconnects and the change-risk check:
+interconnects and the colocation zone policies:
 
 ```bash
 uv run invoke test-integration-all-demo
