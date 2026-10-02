@@ -11,6 +11,11 @@
   both X evpn` to L2VPN EVPN. NX-OS keeps them separate and EVPN imports only
   honour the `evpn`-qualified one.
 
+  import_route_targets are the other sites' VRF route-targets, set when a
+  segment in this VRF is stretched across EVPN Multi-Site
+  (transforms/helpers/vxlan.py): each fabric exports its VRF under its own
+  evpn_rt_as, so without them the type-5 routes of the remote site never land.
+
   Included by the leaf/border-leaf NX-OS templates from inside their
   `{% if vxlan and vxlan.enabled %}` guard, so `vxlan` is known non-empty here.
 -#}
@@ -29,6 +34,10 @@ vrf context {{ mapping.vrf_name }}
     route-target both {{ vxlan.evpn.rt_format | replace('{vni}', mapping.l3_vni | string) }}
     route-target both {{ vxlan.evpn.rt_format | replace('{vni}', mapping.l3_vni | string) }} evpn
 {%- endif %}
+{%- for rt in mapping.import_route_targets | default([]) %}
+    route-target import {{ rt }}
+    route-target import {{ rt }} evpn
+{%- endfor %}
 !
 {%- endfor %}
 {%- endif -%}

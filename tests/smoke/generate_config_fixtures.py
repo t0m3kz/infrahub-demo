@@ -1209,20 +1209,31 @@ def build_mlag_device_data(
     if domain_name is None:
         domain_name = f"POD1-{device_name.split('-')[-1].upper()}-{peer_name.split('-')[-1].upper()}-MLAG"
 
-    def member(name: str, address: str) -> dict:
+    # MLAG control session addressing mirrors generators/mlag.py: SONiC gets an
+    # IPv4 /31 (ICCP), vPC has none (keepalive over mgmt0), others an IPv6 /127.
+    if platform in {"sonic", "dell_sonic"}:
+        control_addresses: tuple[str, str] | None = ("10.254.0.0/31", "10.254.0.1/31")
+    elif platform == "cisco_nxos":
+        control_addresses = None
+    else:
+        control_addresses = ("fd00:2400::/127", "fd00:2400::1/127")
+
+    def member(name: str, management_address: str, control_address: str | None) -> dict:
+        interfaces = []
+        if control_address:
+            interfaces.append(
+                {
+                    "__typename": "DcimVirtualInterface",
+                    "name": _v("Vlan4094"),
+                    "role": _v("mlag-control"),
+                    "ip_address": _node({"address": _v(control_address)}),
+                }
+            )
         return {
             "name": _v(name),
             "role": _v(role),
-            "primary_address": _node({"address": _v(address)}),
-            "interfaces": _edges(
-                [
-                    {
-                        "__typename": "DcimVirtualInterface",
-                        "name": _v("Loopback0"),
-                        "ip_address": _node({"address": _v(address)}),
-                    }
-                ]
-            ),
+            "primary_address": _node({"address": _v(management_address)}),
+            "interfaces": _edges(interfaces),
         }
 
     mlag_cap = {
@@ -1234,8 +1245,8 @@ def build_mlag_device_data(
         "reload_delay_non_mlag": _v(330),
         "capabilities": _edges(
             [
-                member(device_name, "10.0.2.1/32"),
-                member(peer_name, "10.0.2.2/32"),
+                member(device_name, "172.16.0.1/32", control_addresses[0] if control_addresses else None),
+                member(peer_name, "172.16.0.2/32", control_addresses[1] if control_addresses else None),
             ]
         ),
     }
@@ -1314,6 +1325,19 @@ def build_mlag_device_data(
     )
 
     device_interfaces = [loopback, up1, up2, lag_iface, mem1, mem2]
+    if control_addresses:
+        # Rendered by the MLAG include only — the transform must keep it out of
+        # the generic interface list.
+        device_interfaces.append(
+            _make_interface(
+                name="Vlan4094",
+                device_name=device_name,
+                description="MLAG control — DC1-POD1-L1-L2-MLAG",
+                role="mlag-control",
+                ip_address=control_addresses[0],
+                typename="DcimVirtualInterface",
+            )
+        )
     if platform in {"sonic", "dell_sonic"}:
         device_interfaces.extend(
             [
@@ -1347,7 +1371,7 @@ def build_mlag_device_data(
         ),
         "primary_address": _node(
             {
-                "address": _v("10.0.2.1/32"),
+                "address": _v("172.16.0.1/32"),
                 "ip_namespace": _node({"name": _v("default")}),
             }
         ),

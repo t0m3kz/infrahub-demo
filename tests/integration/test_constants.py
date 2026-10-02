@@ -134,7 +134,7 @@ ALL_DEMO_EXPECTED_GENERATORS: dict[str, int] = {
     # racks.
     "add_colocation_metro": 9,
     "add_endpoint": 12,  # 6 DC hosts + 6 colocation cage hosts
-    "add_vxlan_segment": 4,  # C005's four application segments
+    "add_vxlan_segment": 5,  # C005's five application segments
     "add_app_application": 7,  # one per declared AppApplication
     # 7 distinct footprints: 03_dc/new_customers declares all of them and
     # 06_customer_boarding re-declares three as supersets, which upsert.
@@ -143,14 +143,14 @@ ALL_DEMO_EXPECTED_GENERATORS: dict[str, int] = {
     # bootstrap TopologyRoutedExchange objects (data/bootstrap/23_exchanges.yml)
     # — see docs/exchange_gateway.md.
     "add_customer_deployment_dc": 7,
-    "add_customer_deployment_colocation": 6,
+    "add_customer_deployment_colocation": 7,
     # trigger-customer-office-sdwan-on-created fires unconditionally for
-    # every TopologyCustomerOffice (4: C001/C003/C015/C002) — the generator
-    # itself no-ops on the three without sdwan_gateway set. C002 additionally
-    # dispatches a 5th run via the updated-relationship trigger when
-    # 08_interconnects/04_sdwan/01_gateway.yml sets its sdwan_gateway; 4 is
-    # the safe floor.
-    "add_sdwan_edge": 4,
+    # every TopologyCustomerOffice (5: C001/C003/C015/C002/C005) — the
+    # generator itself no-ops on those without sdwan_gateway set. C002 and
+    # C005 additionally dispatch a run each via the updated-relationship
+    # trigger when 08_interconnects/04_sdwan/01_gateway.yml sets their
+    # sdwan_gateway; 5 is the safe floor.
+    "add_sdwan_edge": 5,
 }
 
 # Declared-object inventory of data/demos/30_all, measured from the YAML.
@@ -162,10 +162,10 @@ ALL_DEMO_EXPECTED_OBJECTS: dict[str, int] = {
     "TopologyPod": 6,
     "LocationRack": 25,
     "TopologyCustomerDC": 7,
-    "TopologyCustomerColocation": 6,
+    "TopologyCustomerColocation": 7,
     "TopologyCustomerCloud": 4,
-    "TopologyCustomerOffice": 4,
-    "ManagedVxlanSegment": 4,
+    "TopologyCustomerOffice": 5,
+    "ManagedVxlanSegment": 5,
     "ManagedVlanSegment": 7,
     "AppApplication": 7,
     # 18 AppComponent blocks are declared, but c005/04_component_updates.yml
@@ -288,7 +288,7 @@ ALL_DEMO_PHYSICAL_CIRCUIT_TYPES: dict[str, int] = {
     # stub circuits was removed along with its generator.
     "dark_fiber": 3,  # DC10/DC11 -> EQX FR2, DC12 -> EQX PA4
     "cross_connect": 2,  # EQX FR2 -> AWS eu-central-1, EQX PA4 -> Azure westeurope
-    "internet": 4,  # C001/C003/C015 hand-authored + C002 generator-produced (add_sdwan_edge)
+    "internet": 5,  # C001/C003/C015 hand-authored + C002/C005 generator-produced (add_sdwan_edge)
 }
 
 
@@ -387,6 +387,16 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
         "interfaces": 2,
         "cloud_endpoints": (),
     },
+    # Same generator path as C002; C005's office additionally routes into
+    # colo-services-stretch over 08_interconnects/04_sdwan/06_vrf_handoff.yml.
+    "C005-P-SDWAN-FR2": {
+        "link_type": "sd_wan",
+        "transport_mode": "internet_backed",
+        "owner": "Drentec BV",
+        "physical_circuits": ("INET-C005-P",),
+        "interfaces": 2,
+        "cloud_endpoints": (),
+    },
     # Second tunnel riding the same internet underlay as C001-SDWAN-FR2, on a
     # different gateway sub-interface — see 08_interconnects/07_zone_policies/
     # 01_partner_virtual_circuit.yml for why this is an overlay, not a new
@@ -412,14 +422,17 @@ ALL_DEMO_DEDICATED_FIREWALL_TENANTS: dict[str, str] = {
     "C005-D-DC12": "L_DC",
 }
 
-# C005's four application segments and the DCs each is deployed into. The two
-# "stretch" segments are dc_pair-scoped and therefore carry two legs each —
-# six ManagedSegmentDeployment records in total.
+# C005's five application segments and the deployments each is activated in.
+# The two dc_pair "stretch" segments carry two DC legs each, and
+# colo-services-stretch one DC leg plus one colocation-metro leg (FR, reached
+# over DF-DC10-EQXFR2 through the EVPN Multi-Site border gateways) — eight
+# ManagedSegmentDeployment records in total.
 ALL_DEMO_SEGMENT_LEGS: dict[str, tuple[str, ...]] = {
     "c005-web-frontend-local-dc10-p": ("DC10",),
     "c005-app-backend-stretch-p": ("DC10", "DC12"),
     "c005-database-local-dc12-d": ("DC12",),
     "c005-message-queue-stretch-p": ("DC10", "DC12"),
+    "c005-colo-services-stretch-p": ("DC10", "FR"),
 }
 
 # Timeout and polling constants

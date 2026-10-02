@@ -58,6 +58,10 @@
   'NTP_SERVER': ntp_servers,
   'SYSLOG_SERVER': syslog_servers
 } -%}
-{%- set _ = configdb.update(sonic_mlag | default({})) %}
+{#- Per-table merge: MC-LAG contributes VLAN/VLAN_MEMBER/VLAN_INTERFACE
+    entries that must not replace the tables built above. #}
+{%- for table, entries in (sonic_mlag | default({})).items() %}
+{%- set _ = configdb.update({table: dict(configdb.get(table) or {}, **entries)}) %}
+{%- endfor %}
 
 {{ configdb | tojson(indent=2) }}

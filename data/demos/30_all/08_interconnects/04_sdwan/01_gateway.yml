@@ -86,3 +86,14 @@ spec:
         - customer_deployments_office
       sdwan_gateway: "EQX-FR2-SDWAN-GW1"
       branch_to_branch: full_mesh
+    # C005 opts in the same way. Its office reaches the stretched
+    # colo-services-stretch segment over the gateway's PROD handoff into
+    # eg-fr01 (06_vrf_handoff.yml), so L3 VRF rather than an L2 extension.
+    - parent: "C005"
+      environment: "p"
+      locations:
+        - "ams-branch"
+      member_of_groups:
+        - customer_deployments_office
+      sdwan_gateway: "EQX-FR2-SDWAN-GW1"
+      branch_to_branch: full_mesh

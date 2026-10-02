@@ -115,12 +115,12 @@ router bgp 65000
 
 !
 !
-! VXLAN Configuration (netlab-style multivendor) — border-leaf is a VTEP too,
-! terminating customer/shared VNIs the same as a regular leaf.
+! VXLAN Configuration (netlab-style multivendor)
 !
 feature nv overlay
 feature vn-segment-vlan-based
 feature nve
+nv overlay evpn
 !
 !
 ! VRF Contexts (symmetric IRB — one L3 VNI per tenant)

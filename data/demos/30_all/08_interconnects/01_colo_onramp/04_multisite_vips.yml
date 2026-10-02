@@ -1,0 +1,55 @@
+---
+# EVPN Multi-Site border-gateway VIPs — one /128 per site, shared by every
+# border gateway of that site (NX-OS `multisite border-gateway interface`).
+# Remote sites address the site, not an individual gateway, through it.
+#
+# Only the devices that terminate a dark fibre are border gateways: one per
+# DC (the border leaf the fibre lands on) and one per metro (the edge the DC
+# fibres land on). The metro's site-id and IPv6 VTEP loopback come from
+# add_colocation_metro (generators/topology/colocation.py _ensure_metro_evpn);
+# a DC's from its evpn_rt_as and Loopback0.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: "loopback100"
+      device: "bl-dc101101"
+      role: multisite-vip
+      status: active
+      description: "EVPN Multi-Site VIP for DC10"
+      ip_address:
+        data:
+          address: "fd00:2500:ff::10/128"
+    - name: "loopback100"
+      device: "bl-dc1111101"
+      role: multisite-vip
+      status: active
+      description: "EVPN Multi-Site VIP for DC11"
+      ip_address:
+        data:
+          address: "fd00:2500:ff::11/128"
+    - name: "loopback100"
+      device: "bl-dc1212101"
+      role: multisite-vip
+      status: active
+      description: "EVPN Multi-Site VIP for DC12"
+      ip_address:
+        data:
+          address: "fd00:2500:ff::12/128"
+    - name: "loopback100"
+      device: "eg-fr01"
+      role: multisite-vip
+      status: active
+      description: "EVPN Multi-Site VIP for metro FR"
+      ip_address:
+        data:
+          address: "fd00:2500:ff::f1/128"
+    - name: "loopback100"
+      device: "eg-pa01"
+      role: multisite-vip
+      status: active
+      description: "EVPN Multi-Site VIP for metro PA"
+      ip_address:
+        data:
+          address: "fd00:2500:ff::f2/128"

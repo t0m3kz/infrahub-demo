@@ -214,8 +214,8 @@ router bgp {{ bgp_config.local_as.asn }}
       {%- if vxlan.evpn.rd_format %}
       rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.vni | string) }}
       {%- endif %}
-      {%- if vxlan.evpn.rt_format %}
-      route-target both {{ vxlan.evpn.rt_format | replace('{vni}', mapping.vni | string) }}
+      {%- if mapping.route_target %}
+      route-target both {{ mapping.route_target }}
       {%- endif %}
       redistribute learned
 {%- if mapping.get('arp_suppression') %}
@@ -235,6 +235,9 @@ router bgp {{ bgp_config.local_as.asn }}
       route-target import evpn {{ vxlan.evpn.rt_format | replace('{vni}', mapping.l3_vni | string) }}
       route-target export evpn {{ vxlan.evpn.rt_format | replace('{vni}', mapping.l3_vni | string) }}
       {%- endif %}
+      {%- for rt in mapping.import_route_targets | default([]) %}
+      route-target import evpn {{ rt }}
+      {%- endfor %}
       redistribute connected
 {%- endfor %}
 {%- endif %}

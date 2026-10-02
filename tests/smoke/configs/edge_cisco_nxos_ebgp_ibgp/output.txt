@@ -89,6 +89,12 @@ router bgp 65000
 !
 
 !
+! Route-maps
+route-map RM-CONN-2-BGP permit 10
+  match interface loopback0
+!
+
+!
 ! Management
 line console
 line vty

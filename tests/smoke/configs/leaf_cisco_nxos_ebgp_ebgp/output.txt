@@ -119,6 +119,7 @@ router bgp 65001
 feature nv overlay
 feature vn-segment-vlan-based
 feature nve
+nv overlay evpn
 !
 !
 ! VRF Contexts (symmetric IRB — one L3 VNI per tenant)

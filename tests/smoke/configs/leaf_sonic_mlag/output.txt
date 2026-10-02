@@ -52,9 +52,9 @@
   },
   "MCLAG_DOMAIN": {
     "1": {
-      "peer_ip": "10.0.2.2",
+      "peer_ip": "10.254.0.1",
       "peer_link": "PortChannel100",
-      "source_ip": "10.0.2.1"
+      "source_ip": "10.254.0.0"
     }
   },
   "MCLAG_INTERFACE": {
@@ -79,8 +79,21 @@
   },
   "STATIC_ROUTE": {},
   "SYSLOG_SERVER": {},
-  "VLAN": {},
-  "VLAN_INTERFACE": {},
+  "VLAN": {
+    "Vlan4094": {
+      "admin_status": "up",
+      "vlanid": "4094"
+    }
+  },
+  "VLAN_INTERFACE": {
+    "Vlan4094": {},
+    "Vlan4094|10.254.0.0/31": {}
+  },
+  "VLAN_MEMBER": {
+    "Vlan4094|PortChannel100": {
+      "tagging_mode": "tagged"
+    }
+  },
   "VRF": {},
   "VXLAN_TUNNEL": {},
   "VXLAN_TUNNEL_MAP": {}

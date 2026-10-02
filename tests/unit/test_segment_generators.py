@@ -258,9 +258,9 @@ class TestVxlanSegmentGeneratorGenerate:
         gen._create_inline_sub_interfaces.assert_awaited_once()
 
     def test_missing_vni_pool_waits_on_parent_dc_generators(self):
-        """A target deployment with no vni_pool (its own add_dc/dc_pod_cascade
-        hasn't run yet) triggers a wait on both parent generators before
-        _resolve_target_deployments is retried."""
+        """A target deployment with no vni_pool (its own add_dc/dc_pod_cascade,
+        or add_colocation_metro for a metro, hasn't run yet) triggers a wait on
+        every parent generator before _resolve_target_deployments is retried."""
         gen = _make_gen()
         gen._activate_segment_in_deployment = AsyncMock()
         gen._assign_to_deployment_interfaces = AsyncMock()
@@ -273,6 +273,7 @@ class TestVxlanSegmentGeneratorGenerate:
         assert gen.wait_for_parent_generator_and_refetch.await_args_list == [
             (("add_dc", "dc-1"), {}),
             (("dc_pod_cascade", "dc-1"), {}),
+            (("add_colocation_metro", "dc-1"), {}),
         ]
 
     def test_refetched_data_is_reparsed_when_parent_was_in_flight(self):
@@ -285,7 +286,7 @@ class TestVxlanSegmentGeneratorGenerate:
         gen._create_inline_sub_interfaces = AsyncMock()
 
         refreshed_payload = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1])
-        gen.wait_for_parent_generator_and_refetch = AsyncMock(side_effect=[refreshed_payload, None])
+        gen.wait_for_parent_generator_and_refetch = AsyncMock(side_effect=[refreshed_payload, None, None])
 
         dep_no_pool = {"id": "cust-1", "name": "C001-P-DC1", "parent": {"id": "dc-1", "name": "DC-1"}}
         data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[dep_no_pool])
@@ -744,3 +745,102 @@ class TestEnsureSecurityZone:
         asyncio.run(gen._ensure_security_zone(segment_id="seg-1", segment_name="vxlan-1000", environment="p"))
 
         gen.logger.warning.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Border-gateway VLAN-domain assignment for stretched segments
+# ---------------------------------------------------------------------------
+
+
+def _device(dev_id: str, role: str) -> MagicMock:
+    device = MagicMock()
+    device.id = dev_id
+    device.role.value = role
+    return device
+
+
+class TestBorderGatewayVlanDomain:
+    """A stretched segment gets a VLAN domain segment on every border gateway."""
+
+    async def _assign(self, devices: list[MagicMock], *, stretched: bool) -> Any:
+        gen = _make_gen()
+        gen.client.filters = AsyncMock(side_effect=[devices, []])
+        gen._resolve_vlan_domain = AsyncMock(side_effect=lambda d: ("ManagedMLAG", f"domain-{d.id}"))
+        gen._ensure_vlan_domain_segment = AsyncMock()
+        await gen._assign_segment_to_dc_interfaces(
+            segment_id="seg-1",
+            segment_obj=MagicMock(),
+            segment_name="colo-services-stretch",
+            deployment_id="dep-1",
+            deployment_name="DC10",
+            stretched=stretched,
+        )
+        return gen
+
+    def test_stretched_segment_queries_border_gateways(self) -> None:
+        """border-leaf joins the device query only when the segment is stretched."""
+        gen = asyncio.run(self._assign([], stretched=True))
+        roles = gen.client.filters.await_args_list[0].kwargs["role__values"]
+        assert "border-leaf" in roles and "edge" in roles
+
+        gen = asyncio.run(self._assign([], stretched=False))
+        roles = gen.client.filters.await_args_list[0].kwargs["role__values"]
+        assert "border-leaf" not in roles
+        assert "edge" in roles  # a metro edge is also the metro's access VTEP
+
+    def test_border_gateway_without_customer_ports_gets_domain_segment(self) -> None:
+        devices = [_device("bl-1", "border-leaf"), _device("leaf-1", "leaf")]
+        gen = asyncio.run(self._assign(devices, stretched=True))
+        gen._ensure_vlan_domain_segment.assert_awaited_once_with("seg-1", "colo-services-stretch", "domain-bl-1")
+
+    def test_local_segment_without_customer_ports_skips(self) -> None:
+        gen = asyncio.run(self._assign([_device("leaf-1", "leaf")], stretched=False))
+        gen._ensure_vlan_domain_segment.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# _assign_segment_to_dc_interfaces — customer-port assignment
+# ---------------------------------------------------------------------------
+
+
+class TestAssignSegmentToDcInterfaces:
+    def _customer_iface(self, existing_ids: list[str]) -> MagicMock:
+        """A customer port whose interface_capabilities mirror the SDK's RelationshipManager.
+
+        add() is synchronous in the SDK (only fetch() awaits), so it's a plain
+        MagicMock — awaiting it would raise the TypeError this guards against.
+        """
+        iface = MagicMock()
+        iface.interface_capabilities.fetch = AsyncMock()
+        iface.interface_capabilities.peers = [MagicMock(id=i) for i in existing_ids]
+        iface.interface_capabilities.add = MagicMock(return_value=None)
+        iface.status.value = "active"
+        iface.save = AsyncMock()
+        iface.device.peer.id = "dev-1"
+        return iface
+
+    def _run(self, iface: MagicMock) -> Any:
+        gen = _make_gen()
+        device = MagicMock(id="dev-1")
+        device.role.value = "leaf"
+        gen.client.filters = AsyncMock(side_effect=[[device], [iface]])
+        gen._resolve_vlan_domain = AsyncMock(return_value=("ManagedMLAG", "mlag-1"))
+        gen._ensure_vlan_domain_segment = AsyncMock()
+        segment_obj = MagicMock(id="seg-1")
+        asyncio.run(gen._assign_segment_to_dc_interfaces("seg-1", segment_obj, "seg", "dep-1", "FR"))
+        return gen, segment_obj
+
+    def test_new_segment_added_to_customer_port_and_saved(self) -> None:
+        """A port without the segment gets it added (synchronously) and is saved once."""
+        iface = self._customer_iface([])
+        gen, segment_obj = self._run(iface)
+        iface.interface_capabilities.add.assert_called_once_with(segment_obj)
+        iface.save.assert_awaited_once()
+        gen._ensure_vlan_domain_segment.assert_awaited_once_with("seg-1", "seg", "mlag-1")
+
+    def test_already_assigned_port_is_left_alone(self) -> None:
+        """Re-running is idempotent: an assigned, active port is neither re-added nor saved."""
+        iface = self._customer_iface(["seg-1"])
+        self._run(iface)
+        iface.interface_capabilities.add.assert_not_called()
+        iface.save.assert_not_awaited()

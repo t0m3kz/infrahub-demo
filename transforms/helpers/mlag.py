@@ -4,24 +4,27 @@ from ipaddress import IPv4Address, ip_interface
 from typing import Any
 
 
-def _control_ip(member: dict[str, Any]) -> str | None:
-    if member.get("role") == "l2-leaf":
-        address = (member.get("primary_address") or {}).get("address")
-    else:
-        address = next(
-            (
-                (interface.get("ip_address") or {}).get("address")
-                for interface in member.get("interfaces") or []
-                if interface.get("name") == "Loopback0"
-            ),
-            None,
-        )
+def _control_address(member: dict[str, Any]) -> tuple[str | None, str | None]:
+    """Return (interface name, address with prefix length) of the member's
+    MLAG control session: the role=mlag-control peer-link SVI, or the
+    virtual peer-link loopback (role=mlag-peer) when the domain has no
+    physical peer-link. (None, None) for vPC, which has no control session."""
+    candidates = [
+        interface
+        for interface in member.get("interfaces") or []
+        if interface.get("role") in {"mlag-control", "mlag-peer"} and (interface.get("ip_address") or {}).get("address")
+    ]
+    for interface in sorted(candidates, key=lambda interface: interface.get("role") != "mlag-control"):
+        return interface.get("name"), interface["ip_address"]["address"]
+    return None, None
+
+
+def _ip(address: str | None) -> str | None:
     return str(ip_interface(address).ip) if address else None
 
 
 def _management_ip(member: dict[str, Any]) -> str | None:
-    address = (member.get("primary_address") or {}).get("address")
-    return str(ip_interface(address).ip) if address else None
+    return _ip((member.get("primary_address") or {}).get("address"))
 
 
 def get_mlag(
@@ -64,6 +67,8 @@ def get_mlag(
         members = cap.get("devices") or cap.get("capabilities") or []
         own = next((member for member in members if member.get("name") == device_name), None)
         peer = next((member for member in members if member.get("name") != device_name), None) if own else None
+        control_interface, local_address = _control_address(own) if own else (None, None)
+        _, peer_address = _control_address(peer) if peer else (None, None)
         mclag_interfaces = sorted(
             (
                 {
@@ -83,8 +88,10 @@ def get_mlag(
             "reload_delay": cap.get("reload_delay", 300),
             "reload_delay_non_mlag": cap.get("reload_delay_non_mlag", 330),
             "devices": [member.get("name") for member in members],
-            "local_ip": _control_ip(own) if own else None,
-            "peer_ip": _control_ip(peer) if peer else None,
+            "control_interface": control_interface,
+            "local_address": local_address,
+            "local_ip": _ip(local_address),
+            "peer_ip": _ip(peer_address),
             "local_management_ip": _management_ip(own) if own else None,
             "peer_management_ip": _management_ip(peer) if peer else None,
             "peer_link": peer_link,
@@ -97,21 +104,26 @@ def get_mlag(
 
 
 def get_sonic_mlag_config(mlag: dict[str, Any] | None) -> dict[str, Any]:
+    """Build the SONiC ConfigDB tables for an MC-LAG domain. The ICCP session
+    runs between the peer-link SVI's IPv4 /31 addresses (MLAG-Control-IPv4
+    pool), so the SVI's VLAN, tagged peer-link membership and address are
+    emitted alongside MCLAG_DOMAIN. Templates must merge these per table —
+    a shallow update would drop VLANs defined elsewhere in the device config."""
     if not mlag:
         return {}
-    if not all(
-        mlag.get(field) for field in ("domain_id", "local_management_ip", "peer_management_ip", "peer_link_lag_id")
-    ):
+    if not all(mlag.get(field) for field in ("domain_id", "local_address", "peer_ip", "peer_link_lag_id")):
         raise ValueError(
-            "SONiC MC-LAG requires a domain, two reachable IPv4 management IPs, and a physical peer-link LAG"
+            "SONiC MC-LAG requires a domain, an IPv4 MLAG control address on both peers, and a physical peer-link LAG"
         )
     if not 1 <= mlag["domain_id"] <= 4095:
         raise ValueError("SONiC MC-LAG domain ID must be between 1 and 4095")
-    for endpoint in ("local_management_ip", "peer_management_ip"):
+    for endpoint in ("local_ip", "peer_ip"):
         IPv4Address(mlag[endpoint])
-    if mlag["local_management_ip"] == mlag["peer_management_ip"]:
+    if mlag["local_ip"] == mlag["peer_ip"]:
         raise ValueError("SONiC MC-LAG peers must use distinct control IPs")
     peer_link = mlag["peer_link"]
+    control_interface = mlag.get("control_interface") or "Vlan4094"
+    control_vlan_id = control_interface.removeprefix("Vlan")
     domain_id = str(mlag["domain_id"])
     portchannels = {peer_link: {"admin_status": "up"}}
     portchannel_members = {f"{peer_link}|{member}": {} for member in mlag["peer_link_members"]}
@@ -121,8 +133,8 @@ def get_sonic_mlag_config(mlag: dict[str, Any] | None) -> dict[str, Any]:
     return {
         "MCLAG_DOMAIN": {
             domain_id: {
-                "source_ip": mlag["local_management_ip"],
-                "peer_ip": mlag["peer_management_ip"],
+                "source_ip": mlag["local_ip"],
+                "peer_ip": mlag["peer_ip"],
                 "peer_link": peer_link,
             }
         },
@@ -131,4 +143,7 @@ def get_sonic_mlag_config(mlag: dict[str, Any] | None) -> dict[str, Any]:
         },
         "PORTCHANNEL": portchannels,
         "PORTCHANNEL_MEMBER": portchannel_members,
+        "VLAN": {control_interface: {"vlanid": control_vlan_id, "admin_status": "up"}},
+        "VLAN_MEMBER": {f"{control_interface}|{peer_link}": {"tagging_mode": "tagged"}},
+        "VLAN_INTERFACE": {control_interface: {}, f"{control_interface}|{mlag['local_address']}": {}},
     }

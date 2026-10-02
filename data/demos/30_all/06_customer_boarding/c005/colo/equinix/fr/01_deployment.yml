@@ -1,0 +1,23 @@
+---
+# Customer C005's colocation footprint in Equinix Frankfurt — the middle hop of
+# its DC10 -> colocation -> office path. DC10's border leaf reaches the FR
+# on-ramp over DF-DC10-EQXFR2 (08_interconnects/01_colo_onramp/), where the
+# edge acts as the metro's EVPN Multi-Site border gateway, so a segment listing
+# both C005-P-DC10 and this footprint is stretched DC10 <-> FR over that fibre.
+#
+# Requires the corresponding metro to already exist:
+#   - FR (Equinix Frankfurt)  <- data/demos/30_all/02_colo/equinix/fr/
+#
+# name is a computed attribute ({owner_org_id}-{environment}-{parent}) —
+# read-only, do not set it explicitly.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerColocation
+  data:
+    - owner: "C005"
+      environment: "p"
+      status: active
+      parent: "FR"
+      member_of_groups:
+        - customer_deployments_colocation

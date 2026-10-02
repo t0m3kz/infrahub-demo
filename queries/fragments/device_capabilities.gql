@@ -34,11 +34,13 @@ fragment ManagedBGPServiceFields on ManagedBGP {
           edges {
             node {
               name { value }
+              # ip_namespace: a peering whose local address sits in a tenant
+              # namespace is a VRF session (transforms/helpers/bgp.py).
               ... on DcimPhysicalInterface {
-                ip_address { node { address { value } } }
+                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
               }
               ... on DcimVirtualInterface {
-                ip_address { node { address { value } } }
+                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
               }
               device { node { name { value } } }
             }
@@ -155,10 +157,11 @@ fragment DeviceCapabilitiesFields on DcimCapabilities {
                 ... on DcimDevice {
                   role { value }
                   primary_address { node { address { value } } }
-                  interfaces(name__value: "Loopback0") {
+                  interfaces(role__values: ["mlag-control", "mlag-peer"]) {
                     edges {
                       node {
                         name { value }
+                        role { value }
                         ... on DcimVirtualInterface {
                           ip_address { node { address { value } } }
                         }

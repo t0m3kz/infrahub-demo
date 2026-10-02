@@ -32,8 +32,11 @@ generics:
     order_by:
       - name__value
     display_label: "{{ name__value }}"
-    uniqueness_constraints:
-      - ["owner", "environment__value"]
+    # No [owner, environment] constraint here: Infrahub enforces a generic's
+    # constraint across every implementing kind, which would allow a customer
+    # only one footprint per environment in total (e.g. block C005-P-FR next to
+    # C005-P-DC10). Each concrete node is unique on [name, parent, environment]
+    # instead — one footprint per facility and environment.
     attributes:
       - name: name
         kind: Text
@@ -269,7 +272,7 @@ nodes:
       - name__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
-      - ["name__value", "parent"]
+      - ["name__value", "parent", "environment__value"]
     attributes:
       - name: name
         kind: Text
@@ -309,7 +312,7 @@ nodes:
       - name__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
-      - ["name__value", "parent"]
+      - ["name__value", "parent", "environment__value"]
     attributes:
       - name: name
         kind: Text
@@ -348,7 +351,7 @@ nodes:
       - name__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
-      - ["name__value", "parent"]
+      - ["name__value", "parent", "environment__value"]
     attributes:
       - name: name
         kind: Text
@@ -514,7 +517,7 @@ nodes:
       - name__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
-      - ["name__value", "parent"]
+      - ["name__value", "parent", "environment__value"]
     attributes:
       - name: name
         kind: Text
@@ -572,7 +575,7 @@ nodes:
       - name__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
-      - ["name__value"]
+      - ["name__value", "parent", "environment__value"]
     attributes:
       - name: name
         kind: Text

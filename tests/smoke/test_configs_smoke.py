@@ -106,9 +106,15 @@ def test_config_transform_matches_fixture(transform_cls: type, fixture_dir: Path
         assert not any(name.startswith("PortChannel") for name in configdb["INTERFACE"])
         if fixture_dir.name.endswith("_mlag"):
             domain = configdb["MCLAG_DOMAIN"]["1"]
-            assert domain["source_ip"] == "10.0.2.1"
-            assert domain["peer_ip"] == "10.0.2.2"
+            assert domain["source_ip"] == "10.254.0.0"
+            assert domain["peer_ip"] == "10.254.0.1"
             assert domain["peer_link"] == "PortChannel100"
+            # The control SVI is merged into the shared VLAN tables, not
+            # rendered as a routed INTERFACE.
+            assert configdb["VLAN"]["Vlan4094"]["vlanid"] == "4094"
+            assert "Vlan4094|10.254.0.0/31" in configdb["VLAN_INTERFACE"]
+            assert "Vlan4094|PortChannel100" in configdb["VLAN_MEMBER"]
+            assert "Vlan4094" not in configdb["INTERFACE"]
             assert "1|PortChannel101" in configdb["MCLAG_INTERFACE"]
             assert "PortChannel100|Ethernet33" in configdb["PORTCHANNEL_MEMBER"]
             assert "PortChannel101|Ethernet10" in configdb["PORTCHANNEL_MEMBER"]

@@ -128,6 +128,7 @@ def _build_session_from_peering(
         "remove_private_as": peering_node.get("remove_private_as"),
         "password": password_rel.get("password"),
         "ttl": peering_node.get("ttl"),
+        "peering_role": peering_node.get("peering_role"),
         "route_reflector_client": peering_node.get("route_reflector_client", False),
         "enabled": True,
     }
@@ -135,7 +136,26 @@ def _build_session_from_peering(
     ttl = peering_node.get("ttl", 255)
     remote_device_name = remote_iface.get("device", {}).get("name", "")
 
-    if ttl == 1 and interfaces:
+    # A local address in a tenant namespace (IpamNamespace is this project's
+    # VRF) makes this a VRF session — e.g. the colocation edge's PROD handoff to
+    # the SD-WAN gateway. Its addresses are always the inline ones on the
+    # peering's own handoff sub-interfaces: a cable or circuit on the parent
+    # port would resolve the parent's default-namespace address instead.
+    local_ip_obj = local_iface.get("ip_address") or {}
+    vrf = (local_ip_obj.get("ip_namespace") or {}).get("name")
+
+    if vrf and vrf != "default":
+        session["vrf"] = vrf
+        session["local_ip"] = local_ip_obj
+        if remote_iface.get("ip_address"):
+            session["remote_ip"] = remote_iface["ip_address"]
+        else:
+            if warnings is not None:
+                warnings.append(
+                    f"VRF peering '{peering_node.get('name')}' has no address on {remote_device_name}'s side — skipped"
+                )
+            return None
+    elif ttl == 1 and interfaces:
         # Underlay (TTL=1): prefer IPs from cable endpoints for exact interface match
         local_interface_ip = None
         remote_interface_ip = None
@@ -233,7 +253,7 @@ def _build_session_from_peering(
     schema_afs = peering_node.get("address_families") or []
     if schema_afs:
         session["address_families"] = _normalize_afs(schema_afs)
-    elif ttl != 1:
+    elif ttl != 1 and "vrf" not in session:
         session["address_families"] = ["evpn"]
     else:
         remote_ip = session.get("remote_ip") or {}
@@ -250,10 +270,20 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
     - UNDERLAY-PEERS: eBGP sessions with TTL=1 (P2P underlay), per-neighbor remote-as
     - EVPN-PEERS: iBGP sessions with TTL!=1 (EVPN overlay), shared remote-as from peer group
     - EVPN-OVERLAY: eBGP sessions with TTL!=1 (eBGP EVPN overlay), per-neighbor remote-as
+    - DCI-PEERS: peering_role=dci sessions between EVPN Multi-Site border gateways
+
+    VRF sessions (``session["vrf"]``) join no group: they are rendered inside
+    their VRF, where the global templates' policy does not apply.
 
     Mutates sessions in-place by adding 'peer_group' (and 'remote_as_from_peer_group' for iBGP)
     keys. Returns list of peer group definitions.
     """
+    # A DCI session is directly connected (ttl 1) like the underlay, but it
+    # carries EVPN between sites and the neighbour is in another fabric — it
+    # must not inherit UNDERLAY-PEERS' unicast-only policy.
+    sessions = [s for s in sessions if not s.get("vrf")]
+    dci = [s for s in sessions if s.get("peering_role") == "dci"]
+    sessions = [s for s in sessions if s.get("peering_role") != "dci"]
     underlay = [s for s in sessions if s.get("ttl") == 1]
     overlay_ibgp = [s for s in sessions if s.get("ttl") != 1 and str(s.get("session_type", "")).upper() == "IBGP"]
     overlay_ebgp = [
@@ -355,6 +385,27 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
         )
         for session in overlay_ebgp:
             session["peer_group"] = pg_name
+
+    if dci:
+        pg_name = "DCI-PEERS"
+        dci_afs = [af for af in ("ipv4", "ipv6", "evpn") if any(af in (s.get("address_families") or []) for s in dci)]
+        peer_groups.append(
+            {
+                "name": pg_name,
+                "type": "dci",
+                "session_type": "EBGP",
+                "bfd_enabled": any(bool(s.get("bfd_enabled")) for s in dci),
+                "send_community": any(bool(s.get("send_community")) for s in dci),
+                "send_extended_community": any(bool(s.get("send_extended_community")) for s in dci),
+                "remove_private_as": any(bool(s.get("remove_private_as")) for s in dci),
+                "address_families": dci_afs or ["evpn"],
+            }
+        )
+        for session in dci:
+            session["peer_group"] = pg_name
+            # NX-OS Multi-Site: the BGW re-originates EVPN routes towards a
+            # fabric-external peer with itself (the site VIP) as next-hop.
+            session["peer_type"] = "fabric-external"
 
     peer_groups.sort(key=lambda pg: pg.get("name", ""))
     return peer_groups

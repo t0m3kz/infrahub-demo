@@ -92,9 +92,9 @@ configure service vpls "vpls-{{ mapping.vni }}" bgp-evpn vxlan bgp-instance 1 ad
 {%- if vxlan.evpn.rd_format %}
 configure service vpls "vpls-{{ mapping.vni }}" bgp instance 1 route-distinguisher "{{ vxlan.evpn.rd_format | replace('{vni}', mapping.vni | string) }}"
 {%- endif %}
-{%- if vxlan.evpn.rt_format %}
-configure service vpls "vpls-{{ mapping.vni }}" bgp instance 1 route-target export "target:{{ vxlan.evpn.rt_format | replace('{vni}', mapping.vni | string) }}"
-configure service vpls "vpls-{{ mapping.vni }}" bgp instance 1 route-target import "target:{{ vxlan.evpn.rt_format | replace('{vni}', mapping.vni | string) }}"
+{%- if mapping.route_target %}
+configure service vpls "vpls-{{ mapping.vni }}" bgp instance 1 route-target export "target:{{ mapping.route_target }}"
+configure service vpls "vpls-{{ mapping.vni }}" bgp instance 1 route-target import "target:{{ mapping.route_target }}"
 {%- endif %}
 {%- for interface in interfaces if interface.vlans and interface.vlans[0] == mapping.vlan_id %}
 configure service vpls "vpls-{{ mapping.vni }}" sap {{ interface.name }}:{{ mapping.vlan_id }} admin-state enable

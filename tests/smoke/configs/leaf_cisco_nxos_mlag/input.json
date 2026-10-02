@@ -31,7 +31,7 @@
           "primary_address": {
             "node": {
               "address": {
-                "value": "10.0.2.1/32"
+                "value": "172.16.0.1/32"
               },
               "ip_namespace": {
                 "node": {
@@ -76,28 +76,12 @@
                           "primary_address": {
                             "node": {
                               "address": {
-                                "value": "10.0.2.1/32"
+                                "value": "172.16.0.1/32"
                               }
                             }
                           },
                           "interfaces": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "__typename": "DcimVirtualInterface",
-                                  "name": {
-                                    "value": "Loopback0"
-                                  },
-                                  "ip_address": {
-                                    "node": {
-                                      "address": {
-                                        "value": "10.0.2.1/32"
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            ]
+                            "edges": []
                           }
                         }
                       },
@@ -112,28 +96,12 @@
                           "primary_address": {
                             "node": {
                               "address": {
-                                "value": "10.0.2.2/32"
+                                "value": "172.16.0.2/32"
                               }
                             }
                           },
                           "interfaces": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "__typename": "DcimVirtualInterface",
-                                  "name": {
-                                    "value": "Loopback0"
-                                  },
-                                  "ip_address": {
-                                    "node": {
-                                      "address": {
-                                        "value": "10.0.2.2/32"
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            ]
+                            "edges": []
                           }
                         }
                       }

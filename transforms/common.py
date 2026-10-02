@@ -239,6 +239,15 @@ class BaseDeviceTransform(InfrahubTransform):
             device_id=device_data.get("id"),
             device_capabilities=device_data.get("capabilities") or [],
         )
+        if any(iface.get("role") == "multisite-vip" for iface in device_data.get("interfaces") or []):
+            activations.extend(
+                self._collect_border_gateway_activations(
+                    device_data.get("deployment"),
+                    device_id=device_data.get("id"),
+                    device_capabilities=device_data.get("capabilities") or [],
+                    seen={(act.get("segment") or {}).get("id") for act in activations},
+                )
+            )
         if activations:
             device_data["segment_deployments"] = self._filter_segment_deployments(activations)
 
@@ -264,7 +273,14 @@ class BaseDeviceTransform(InfrahubTransform):
             "name": device_name,
             "hostname": device_name,
             "device_role": data.get("role", ""),
-            "interfaces": get_interfaces(interfaces, activations=activations, device_name=device_name),
+            # The MLAG control SVI is rendered by the platform's MLAG include
+            # (it needs the peer-link VLAN/trunk group around it), not as a
+            # generic interface.
+            "interfaces": get_interfaces(
+                [iface for iface in interfaces if iface.get("role") != "mlag-control"],
+                activations=activations,
+                device_name=device_name,
+            ),
             "bgp": get_bgp_profile(
                 device_capabilities,
                 interfaces,
@@ -416,6 +432,47 @@ class BaseDeviceTransform(InfrahubTransform):
                         "segment": cap,
                     }
                 )
+        return activations
+
+    def _collect_border_gateway_activations(
+        self,
+        deployment: dict[str, Any] | None,
+        *,
+        device_id: str | None,
+        device_capabilities: list[dict[str, Any]],
+        seen: set[str | None],
+    ) -> list[dict[str, Any]]:
+        """Activations for every stretched VXLAN segment of an EVPN Multi-Site BGW's site.
+
+        A border gateway stitches each stretched segment between its fabric and
+        the DCI without any customer-facing port carrying it, so
+        interface_capabilities never surface those segments. They come from the
+        site's own TopologySegmentHosting.segment_deployments instead (queries/
+        fragments/network_segment.gql SegmentDeploymentsOnDeploymentFields),
+        keeping only stretch_scope != local. The local VLAN still has to be the
+        BGW's own vlan_domain entry (generators/topology/segment.py assigns one
+        to border-leaf/edge devices for stretched segments); a segment without
+        one has not converged yet and is skipped, same as on a leaf.
+        """
+        own_domain_id = self._resolve_own_vlan_domain_id(device_id, device_capabilities)
+        activations: list[dict[str, Any]] = []
+        for dep in (deployment or {}).get("segment_deployments") or []:
+            seg = dep.get("segment") or {}
+            seg_id = seg.get("id")
+            if not seg_id or seg_id in seen or (seg.get("stretch_scope") or "local") == "local" or not dep.get("vni"):
+                continue
+            own_domain_seg = next(
+                (
+                    v
+                    for v in seg.get("vlan_domain_segments") or []
+                    if (v.get("vlan_domain") or {}).get("id") == own_domain_id
+                ),
+                None,
+            )
+            if own_domain_seg is None or not own_domain_seg.get("vlan_id"):
+                continue
+            seen.add(seg_id)
+            activations.append({"vlan_id": own_domain_seg["vlan_id"], "vni": dep["vni"], "segment": seg})
         return activations
 
     def _filter_segment_deployments(self, activations: list[dict[str, Any]]) -> list[dict[str, Any]]:

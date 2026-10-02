@@ -13,25 +13,25 @@
           },
           "platform": {
             "node": {
-              "id": "plat-sonic",
+              "id": "plat-dell_sonic",
               "name": {
-                "value": "sonic"
+                "value": "dell_sonic"
               },
               "netmiko_device_type": {
-                "value": "sonic"
+                "value": "dell_sonic"
               },
               "napalm_driver": {
-                "value": "sonic"
+                "value": "dell_sonic"
               },
               "ansible_network_os": {
-                "value": "sonic"
+                "value": "dell_sonic"
               }
             }
           },
           "primary_address": {
             "node": {
               "address": {
-                "value": "10.0.2.1/32"
+                "value": "172.16.0.1/32"
               },
               "ip_namespace": {
                 "node": {
@@ -76,7 +76,7 @@
                           "primary_address": {
                             "node": {
                               "address": {
-                                "value": "10.0.2.1/32"
+                                "value": "172.16.0.1/32"
                               }
                             }
                           },
@@ -86,12 +86,15 @@
                                 "node": {
                                   "__typename": "DcimVirtualInterface",
                                   "name": {
-                                    "value": "Loopback0"
+                                    "value": "Vlan4094"
+                                  },
+                                  "role": {
+                                    "value": "mlag-control"
                                   },
                                   "ip_address": {
                                     "node": {
                                       "address": {
-                                        "value": "10.0.2.1/32"
+                                        "value": "10.254.0.0/31"
                                       }
                                     }
                                   }
@@ -112,7 +115,7 @@
                           "primary_address": {
                             "node": {
                               "address": {
-                                "value": "10.0.2.2/32"
+                                "value": "172.16.0.2/32"
                               }
                             }
                           },
@@ -122,12 +125,15 @@
                                 "node": {
                                   "__typename": "DcimVirtualInterface",
                                   "name": {
-                                    "value": "Loopback0"
+                                    "value": "Vlan4094"
+                                  },
+                                  "role": {
+                                    "value": "mlag-control"
                                   },
                                   "ip_address": {
                                     "node": {
                                       "address": {
-                                        "value": "10.0.2.2/32"
+                                        "value": "10.254.0.1/31"
                                       }
                                     }
                                   }
@@ -384,6 +390,40 @@
                   },
                   "cable": {
                     "node": null
+                  },
+                  "interface_capabilities": {
+                    "edges": []
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimVirtualInterface",
+                  "name": {
+                    "value": "Vlan4094"
+                  },
+                  "description": {
+                    "value": "MLAG control \u2014 DC1-POD1-L1-L2-MLAG"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "mlag-control"
+                  },
+                  "ip_address": {
+                    "node": {
+                      "address": {
+                        "value": "10.254.0.0/31"
+                      },
+                      "ip_namespace": {
+                        "node": {
+                          "name": {
+                            "value": "default"
+                          }
+                        }
+                      }
+                    }
                   },
                   "interface_capabilities": {
                     "edges": []

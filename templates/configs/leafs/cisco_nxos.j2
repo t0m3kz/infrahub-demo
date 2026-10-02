@@ -90,6 +90,9 @@ interface {{ interface.name }}
 {%- for feature in vxlan.features %}
 feature {{ feature }}
 {%- endfor %}
+{%- if vxlan.evpn and vxlan.evpn.enabled %}
+nv overlay evpn
+{%- endif %}
 !
 {%- include 'common/cisco_nxos_vxlan_vrf.j2' %}
 interface {{ vxlan.nve_interface }}
@@ -126,9 +129,9 @@ evpn
     {%- if vxlan.evpn.rd_format %}
     rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.vni | string) }}
     {%- endif %}
-    {%- if vxlan.evpn.rt_format %}
-    route-target import {{ vxlan.evpn.rt_format | replace('{vni}', mapping.vni | string) }}
-    route-target export {{ vxlan.evpn.rt_format | replace('{vni}', mapping.vni | string) }}
+    {%- if mapping.route_target %}
+    route-target import {{ mapping.route_target }}
+    route-target export {{ mapping.route_target }}
     {%- endif %}
 {%- endfor %}
 !
