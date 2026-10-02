@@ -18,100 +18,13 @@ DEMO_SERVERS_DATA = "data/demos/06_servers"
 # test_59-test_63 module through the single branch below.
 # ---------------------------------------------------------------------------
 
-ALL_DEMO_DATA = "data/demos/30_all"
-ALL_DEMO_BRANCH = "all-demo-scenario"
-
-# Loading 30_all is a *staged* operation, and it has to be: the later stages
-# reference objects that only exist once an earlier stage's generators have
-# finished running.
-#
-#   - 03_dc/*/05_servers.yml puts hosts in compute racks and relies on
-#     add_endpoint finding the access-leaf pair in the network rack sharing
-#     the host's row. Those access-leafs are created by add_rack, which is
-#     dispatched asynchronously by the *same* load that declared the rack.
-#   - 08_interconnects/01_colo_onramp/02_interfaces.yml hard-references border
-#     leaves by name ("bl-dc101101"), which add_dc creates.
-#   - 07_applications references the VMs and customer deployments declared in
-#     06_customer_boarding.
-#
-# `infrahubctl object load data/demos/30_all` in one shot therefore only works
-# against an instance whose main branch *already* holds the fabric — which is
-# exactly why it appears to work on a long-lived dev instance and fails on a
-# fresh one. Each entry is (stage_name, load_paths); the loader is given the
-# paths verbatim and the suite waits for every dispatched generator to settle
-# before moving to the next stage.
-ALL_DEMO_LOAD_STAGES: tuple[tuple[str, tuple[str, ...]], ...] = (
-    (
-        # Customers, cloud regions/zones, colocation metros/cages and racks,
-        # SaaS, office buildings. Dispatches add_colocation_metro (one run per
-        # metro), which is why this stage has to settle before the interconnects
-        # stage references the on-ramp routers it generates.
-        "foundation",
-        (
-            "00_customer",
-            "01_cloud",
-            "02_colo",
-            "04_saas",
-            "05_office",
-        ),
-    ),
-    (
-        # DC sites (campus/suite tree) — the parents the topologies attach to.
-        "dc_locations",
-        (
-            "03_dc/dc10/00_location.yml",
-            "03_dc/dc11/00_location.yml",
-            "03_dc/dc12/00_location.yml",
-        ),
-    ),
-    (
-        # The three fabrics. Dispatches add_dc -> add_pod -> add_rack per DC
-        # and is by far the longest stage: 20 fabric devices per DC plus all
-        # cabling, addressing and routing.
-        "dc_fabric",
-        (
-            "03_dc/dc10/01_topology.yml",
-            "03_dc/dc11/01_controllers_virtual.yml",
-            "03_dc/dc11/02_topology.yml",
-            "03_dc/dc12/01_controllers_physical.yml",
-            "03_dc/dc12/02_controllers_virtual.yml",
-            "03_dc/dc12/03_topology.yml",
-        ),
-    ),
-    (
-        # Application hosts in the compute racks. Dispatches add_endpoint,
-        # which needs the access-leafs from the dc_fabric stage.
-        "dc_compute",
-        (
-            "03_dc/dc10/05_servers.yml",
-            "03_dc/dc11/05_servers.yml",
-            "03_dc/dc12/05_servers.yml",
-        ),
-    ),
-    (
-        # DC footprints for the customers that only have a DC presence.
-        # Dispatches add_customer_deployment_dc.
-        "dc_customers",
-        ("03_dc/new_customers",),
-    ),
-    (
-        # The full boarding set: DC/colocation/cloud/office footprints, the
-        # cage kit, and the VMs the applications are built from.
-        "customer_boarding",
-        ("06_customer_boarding",),
-    ),
-    (
-        # Segments, applications and the deployment-request catalogue.
-        # Dispatches add_vxlan_segment and add_app_application.
-        "applications",
-        ("07_applications",),
-    ),
-    (
-        # Colo on-ramp, cloud hub, virtual circuits, SD-WAN, cloud endpoints.
-        # Pure data — every generator it needs has already run.
-        "interconnects",
-        ("08_interconnects",),
-    ),
+from tasks import (  # noqa: E402,F401 - re-exported for the test modules
+    ALL_DEMO_BRANCH,
+    ALL_DEMO_DATA,
+    ALL_DEMO_LOAD_STAGES,
+    ALL_DEMO_STAGE_MAX_ATTEMPTS,
+    ALL_DEMO_STAGE_POLL_INTERVAL,
+    ALL_DEMO_STAGE_STABLE_ZERO,
 )
 
 # Generators the 30_all load must dispatch by itself, mapped to the minimum
@@ -179,15 +92,6 @@ ALL_DEMO_EXPECTED_OBJECTS: dict[str, int] = {
     "ManagedCloudProxy": 2,
 }
 
-# The 30_all load is an order of magnitude heavier than a single-DC scenario:
-# three fabrics generate in parallel, then four more generator families fan
-# out over boarding and application data. Polling budgets scale accordingly.
-ALL_DEMO_STAGE_MAX_ATTEMPTS = 240  # x ALL_DEMO_STAGE_POLL_INTERVAL = 40 min
-ALL_DEMO_STAGE_POLL_INTERVAL = 10  # seconds
-# A DC's pods and racks are declared in one load, so their created events are
-# dispatched independently and the queue can go briefly quiet between waves.
-# Ten consecutive quiet polls (100s) has to comfortably exceed that spread.
-ALL_DEMO_STAGE_STABLE_ZERO = 10
 
 # ---------------------------------------------------------------------------
 # 30_all — compute layer expectations (test_61)

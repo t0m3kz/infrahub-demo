@@ -165,6 +165,12 @@ Explore LLM upgrades and organic growth patterns—all in one place, please make
 | **[pod](data/demos/04_pod_dc6/)** | Munich 🇩🇪 | Pod Expansion | Pod 4: because 3 wasn't enough. |
 | **[llm time](data/demos/05_llm_time/)** | Munich 🇩🇪 | Spine Expansion | Extra spines for LLMs—plausible deniability included. |
 
+#### Everything at Once
+
+**[30_all](data/demos/30_all/)** loads every fabric, colocation, cloud, office, customer and application into
+one branch. It has to be loaded stage by stage, so use `uv run invoke load-all-demo`, which loads the stages in
+order and waits for the generators in between. The demo README explains why and how to do it by hand.
+
 Brace yourself: even more questionable use cases, wild topologies, and vendor drama are coming soon. If you want to see even more chaos, star this repo—so the author can unlock extra GitHub tools and automate his caffeine intake. Your star may be the difference between a new feature and another debugging session at midnight!
 
 ## CI/CD

@@ -140,7 +140,7 @@ The fast profile intentionally stops after setup and repository synchronization.
 | `test_62_all_demo_interconnects.py` | Physical and virtual circuits, cloud terminations, firewall contexts, segment legs |
 | `test_63_all_demo_change_risk.py` | `CheckChangeRisk` over the branch diff: traversal resolves and reaches a verdict |
 
-Only `test_59` loads data, and the load is deliberately staged — later stages reference objects that only exist once an earlier stage's generators have finished. `ALL_DEMO_LOAD_STAGES` in `test_constants.py` documents which stage needs what. Running `test_60`-`test_63` on their own will skip: their session-scoped dependencies are unmet without `test_59`.
+Only `test_59` loads data, and the load is deliberately staged — later stages reference objects that only exist once an earlier stage's generators have finished. `ALL_DEMO_LOAD_STAGES` in `tasks.py` (shared with `invoke load-all-demo`, re-exported by `test_constants.py`) documents which stage needs what. Running `test_60`-`test_63` on their own will skip: their session-scoped dependencies are unmet without `test_59`.
 
 ### Run Setup Only
 
