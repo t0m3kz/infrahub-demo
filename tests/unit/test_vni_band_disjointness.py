@@ -130,6 +130,27 @@ class TestPoolBandsAreDisjoint:
                     f"L3 pool '{l3['name']}' ({l3['start_range']}-{l3['end_range']})"
                 )
 
+    def test_site_l2_pools_never_overlap_the_stretched_pool(self, number_pools: list[dict[str, Any]]) -> None:
+        """Stretched segments share one VNI from GLOBAL-L2VNI across every site.
+
+        Every site pool hands out the same band, so if the stretched band
+        overlapped it, a stretched VNI reused in a site could equal what that
+        site's own pool gave a local segment — two segments bridged together.
+        """
+        l2_pools = _pools_for_attribute(number_pools, "vni")
+        stretched = [p for p in l2_pools if p["name"] == "GLOBAL-L2VNI"]
+        assert len(stretched) == 1, "GLOBAL-L2VNI is missing from data/bootstrap/18_vni_pools.yml"
+        band = stretched[0]
+
+        for pool in l2_pools:
+            if pool is band:
+                continue
+            overlaps = pool["start_range"] <= band["end_range"] and band["start_range"] <= pool["end_range"]
+            assert not overlaps, (
+                f"site L2 pool '{pool['name']}' ({pool['start_range']}-{pool['end_range']}) overlaps "
+                f"GLOBAL-L2VNI ({band['start_range']}-{band['end_range']})"
+            )
+
     def test_every_evpn_vni_pool_stays_encodable(self, number_pools: list[dict[str, Any]]) -> None:
         """Every shipped vni/l3_vni pool is EVPN-carried and so RD/RT-encoded.
 

@@ -14,11 +14,13 @@ moved to a separate per-VLAN-domain mechanism, see
 _assign_segment_to_dc_interfaces/ManagedVlanDomainSegment), followed by
 interface assignment and inline sub-interface creation.
 
-vni_pool is read straight from the vxlan_segment query's
+For a local segment vni_pool is read straight from the vxlan_segment query's
 TopologySegmentHosting parent fragment (queries/topology/add/vxlan_segment.gql)
-— no separate client.get() round-trip per deployment. _activate_segment_in_deployment()
-does an idempotency check via client.filters(), allocates VNI from that
-pool dict, then calls client.create() / save().
+— no separate client.get() round-trip per deployment. A stretched segment
+instead gets the global GLOBAL-L2VNI pool, looked up once per run.
+_activate_segment_in_deployment() does an idempotency check via
+client.filters(), allocates VNI from that pool dict (or reuses a stretched
+segment's VNI), then calls client.create() / save().
 
 Tests use asyncio.run() directly — same pattern as test_circuit_generators.py.
 """
@@ -30,7 +32,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 from generators.protocols import ManagedSegmentDeployment, ManagedVxlanSegment, SecurityZone
-from generators.topology.segment import VxlanSegmentGenerator
+from generators.topology.segment import STRETCHED_VNI_POOL_NAME, VxlanSegmentGenerator
 
 # ---------------------------------------------------------------------------
 # Harness helpers
@@ -70,6 +72,7 @@ def _seg_response(
     seg_id: str,
     seg_name: str,
     deployments: list[dict],
+    stretch_scope: str | None = None,
 ) -> dict:
     """Build a raw (un-cleaned) GraphQL response for a vxlan_segment_data query.
 
@@ -108,6 +111,7 @@ def _seg_response(
                         "id": seg_id,
                         "name": {"value": seg_name},
                         "customer_deployments": {"edges": dep_edges},
+                        **({"stretch_scope": {"value": stretch_scope}} if stretch_scope else {}),
                     }
                 }
             ]
@@ -205,6 +209,58 @@ class TestVxlanSegmentGeneratorGenerate:
 
         call = gen._activate_segment_in_deployment.call_args
         assert call.kwargs["vni_pool"] == {"id": "pool-vni-1", "name": "DC1-VNI-Pool"}
+
+    def test_stretched_segment_uses_global_pool_for_every_deployment(self):
+        """A stretched segment never draws from a site pool: every deployment gets
+        GLOBAL-L2VNI, so its one VNI cannot collide with a site's local segments."""
+        gen = _make_gen()
+        gen.client.get = AsyncMock(return_value=MagicMock(id="pool-global"))
+        gen.client.filters = AsyncMock(return_value=[])
+        gen._activate_segment_in_deployment = AsyncMock()
+        gen._assign_to_deployment_interfaces = AsyncMock()
+        gen._create_inline_sub_interfaces = AsyncMock()
+
+        data = _seg_response(
+            seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1, _DEP_2], stretch_scope="global"
+        )
+        asyncio.run(gen.generate(data))
+
+        assert gen.client.get.call_args.kwargs["name__value"] == STRETCHED_VNI_POOL_NAME
+        pools = [c.kwargs["vni_pool"] for c in gen._activate_segment_in_deployment.call_args_list]
+        assert pools == [{"id": "pool-global", "name": STRETCHED_VNI_POOL_NAME}] * 2
+
+    def test_stretched_segment_without_global_pool_is_a_hard_error(self):
+        """Missing GLOBAL-L2VNI fails the run instead of falling back to a site pool."""
+        gen = _make_gen()
+        gen.client.get = AsyncMock(return_value=None)
+        gen._activate_segment_in_deployment = AsyncMock()
+        gen._assign_to_deployment_interfaces = AsyncMock()
+        gen._create_inline_sub_interfaces = AsyncMock()
+
+        data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1], stretch_scope="global")
+        asyncio.run(gen.generate(data))
+
+        gen._activate_segment_in_deployment.assert_not_called()
+        assert STRETCHED_VNI_POOL_NAME in gen.logger.error.call_args[0][0]
+
+    def test_local_segment_does_not_reuse_prefetched_vni(self):
+        """A local segment active in two sites gets each site's own pool and no
+        reusable VNI, even when another site's deployment already has one."""
+        gen = _make_gen()
+        existing_dep = MagicMock()
+        existing_dep.vni.value = 10100
+        existing_dep.deployment = None
+        gen.client.filters = AsyncMock(return_value=[existing_dep])
+        gen._activate_segment_in_deployment = AsyncMock()
+        gen._assign_to_deployment_interfaces = AsyncMock()
+        gen._create_inline_sub_interfaces = AsyncMock()
+
+        data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1, _DEP_2])
+        asyncio.run(gen.generate(data))
+
+        calls = gen._activate_segment_in_deployment.call_args_list
+        assert [c.kwargs["vni_pool"]["id"] for c in calls] == ["pool-vni-1", "pool-vni-2"]
+        assert all(c.kwargs["reusable_vni"] is None for c in calls)
 
     def test_deployment_missing_id_is_skipped(self):
         """A customer deployment entry with id='' is skipped; only the valid one triggers activation."""
@@ -475,9 +531,10 @@ class TestVxlanVniAllocation:
     def _run(self, gen, **overrides) -> None:
         asyncio.run(gen._activate_segment_in_deployment(**{**self._CALL, **overrides}))
 
-    def test_reuses_existing_vni_from_other_deployment(self):
-        """When another DC already has a SegmentDeployment with a VNI, that value
-        is reused as a literal integer — no pool allocation for VNI."""
+    def test_local_segment_never_reuses_other_site_vni(self):
+        """A local segment allocates from its own site's pool even when another
+        site already has a VNI for it — reusing that literal is how one site's
+        pool value collided with another site's own allocation."""
         gen = _make_gen()
 
         existing_dep = MagicMock()
@@ -485,18 +542,20 @@ class TestVxlanVniAllocation:
         existing_dep.vni = MagicMock()
         existing_dep.vni.value = 10100
 
-        # First call: idempotency check → no existing for this dc
-        # Second call: VNI reuse check → one existing SegmentDeployment with VNI
+        # Idempotency check → no existing for this dc. The reuse lookup must
+        # not happen for a local segment, so the second answer stays unused.
         gen.client.filters = AsyncMock(side_effect=[[], [existing_dep]])
 
         activation = MagicMock()
         activation.save = AsyncMock()
         gen.client.create = AsyncMock(return_value=activation)
 
-        self._run(gen)
+        self._run(gen, vni_pool={"id": "pool-vni", "name": "DC1-VNI-Pool"}, reusable_vni=10100)
 
         call_data = gen.client.create.call_args.kwargs["data"]
-        assert call_data["vni"] == 10100
+        assert call_data["vni"]["from_pool"]["id"] == "pool-vni"
+        assert call_data["vni"]["identifier"] == "seg-2-dc-1-vni"
+        assert gen.client.filters.await_count == 1
 
     def test_allocates_vni_from_pool_when_first_dc(self):
         """When no prior SegmentDeployment exists, VNI is allocated from vni_pool
@@ -563,8 +622,9 @@ class TestVxlanVniAllocation:
         call_data = gen.client.create.call_args.kwargs["data"]
         assert call_data["vni"] == 10100
 
-    def test_stretched_allocates_from_local_pool_with_shared_identifier(self):
-        """First stretched deployment allocates from local vni_pool using shared segment identifier."""
+    def test_stretched_allocates_from_given_pool_with_shared_identifier(self):
+        """First stretched deployment allocates from the pool it is given (generate()
+        passes GLOBAL-L2VNI) using the shared segment identifier."""
         gen = _make_gen()
 
         # idempotency check -> no existing for this deployment

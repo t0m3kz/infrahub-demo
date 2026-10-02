@@ -232,7 +232,7 @@ class TestVniUniqueness:
         assert "50001" in message
 
     def test_disjoint_l2_and_l3_ranges_are_clean(self) -> None:
-        """The shipped pools (L2 10001-49999, L3 50001-59999) must not trip anything."""
+        """The shipped pools (L2 10001-39999 + 40000-49999, L3 50001-59999) must not trip anything."""
         check = _check()
 
         check.validate(

@@ -20,7 +20,8 @@
 # field on the wire with no L2/L3 discriminator, so these four have to stay
 # disjoint from every dynamic pool, not just from each other:
 #
-#   10001-49999  L2 VNI     dcN-vni-pool    (per-DC, ManagedSegmentDeployment.vni)
+#   10001-39999  L2 VNI     dcN-vni-pool    (per-site, local segments)
+#   40000-49999  L2 VNI     GLOBAL-L2VNI    (stretched segments, all sites)
 #   50001-59999  L3 VNI     GLOBAL-L3VNI + dcN-l3vni-pool
 #   60000-60003  L3 VNI     these four, allocated by hand — pool-free on purpose
 #

@@ -270,8 +270,9 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
         # L2 VNI pool for the VXLAN overlay (VRF-lite: no VRF stretches over
         # EVPN, so there's no L3 VNI pool — border-leaf VRFs are local-only).
         #
-        # Capped at 49999 even though a VNI is a 24-bit field. Two independent
-        # constraints, both of which the device enforces by rejecting the line:
+        # Capped at 39999 even though a VNI is a 24-bit field. Three independent
+        # constraints, the first two of which the device enforces by rejecting
+        # the line:
         #
         #   1. 16-bit RD/RT ceiling (65535). The EVPN route-distinguisher and
         #      route-target are derived from the VNI (transforms/helpers/vxlan.py),
@@ -283,14 +284,19 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
         #      space is a single flat namespace per device, NOT one namespace per
         #      VNI type, so an L2 segment allocated on top of a VRF's L3 VNI
         #      collides and the `member vni ... associate` line fails.
+        #   3. Must stay disjoint from GLOBAL-L2VNI (40000-49999, data/bootstrap/
+        #      18_vni_pools.yml), where stretched segments draw their one shared
+        #      VNI. Every site pool hands out this same band, so a stretched VNI
+        #      drawn from one site and reused in another would collide with that
+        #      site's own local allocations (see generators/topology/segment.py).
         #
-        # 49999 satisfies both. 40k segments per fabric is far beyond any real
-        # fabric, so this costs nothing.
+        # 39999 satisfies all three. 30k local segments per fabric is far beyond
+        # any real fabric, so this costs nothing.
         await self.upsert_number_pool(
             pool_name=f"{self.fabric_name}-vni-pool",
             description=f"L2 VNI pool for {self.fabric_name.upper()}",
             start_range=10001,
-            end_range=49999,
+            end_range=39999,
             node="ManagedSegmentDeployment",
             node_attribute="vni",
             parent_kind="TopologyDataCenter",

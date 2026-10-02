@@ -30,6 +30,7 @@ from utils.data_cleaning import clean_data
 from ..common import CommonGenerator, DeviceOptions
 from ..connections import CablingMixin
 from ..devices import DeviceMixin
+from ..pools import PoolMixin
 from ..protocols import (
     DcimPhysicalDevice,
     DcimVirtualDevice,
@@ -70,7 +71,7 @@ def _customer_short_id(customer: dict[str, Any], customer_id: str) -> str:
     return f"{org_id}-{environment}" if environment else org_id
 
 
-class CustomerDeploymentDCExchangeGenerator(DeviceMixin, CablingMixin, CommonGenerator):
+class CustomerDeploymentDCExchangeGenerator(PoolMixin, DeviceMixin, CablingMixin, CommonGenerator):
     """add_customer_deployment_dc — FirewallContext (+ optional dedicated
     load-balancer) provisioning for TopologyCustomerDC. No circuit, no
     exchange gateway — DC customers are fabric-local.
@@ -222,18 +223,25 @@ class CustomerDeploymentDCExchangeGenerator(DeviceMixin, CablingMixin, CommonGen
             context_name = f"{cluster.name.value}-{_SHARED_CONTEXT_NAME_SUFFIX}"
             tenant_id = None
 
-        context_obj = await self._get_or_create_firewall_context(context_name, cluster.id, tenant_id)
-        if context_obj is None:
-            return
+        # Every customer boarding onto this cluster provisions the same shared
+        # context, and those runs execute concurrently. The query-then-create
+        # guards below (context, P2P addresses, sub-interfaces) only hold for
+        # sequential runs: two overlapping ones both find nothing and both
+        # create, which left duplicate P2P addresses failing Schema Integrity.
+        # Serialize per context, same idiom as dc.py's fw-context-pools lock.
+        async with self.resource_lock(f"fw-context-{context_name}"):
+            context_obj = await self._get_or_create_firewall_context(context_name, cluster.id, tenant_id)
+            if context_obj is None:
+                return
 
-        connectivity_mode = parent.get("connectivity_mode") or "pbr"
-        await self._ensure_context_subinterface(
-            context_obj=context_obj,
-            fw_devices=fw_devices,
-            parent_id=parent_id,
-            parent_name=parent_name,
-            connectivity_mode=connectivity_mode,
-        )
+            connectivity_mode = parent.get("connectivity_mode") or "pbr"
+            await self._ensure_context_subinterface(
+                context_obj=context_obj,
+                fw_devices=fw_devices,
+                parent_id=parent_id,
+                parent_name=parent_name,
+                connectivity_mode=connectivity_mode,
+            )
 
     async def _ensure_dedicated_device_pair(
         self,

@@ -80,6 +80,18 @@ spec:
       safi: unicast
       description: "IPv4 unicast"
 ---
+# Shared key for the PROD handoff below. Neither side is a DC fabric, so there
+# is no generated {fabric}-overlay-key to reuse. Demo-only secret, like the API
+# token in the README.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingPassword
+  data:
+    - name: "eqx-fr2-sdwan-handoff-key"
+      description: "BGP auth key for the eg-fr01 <-> EQX-FR2-SDWAN-GW1 PROD handoff"
+      password: "demo-eqx-fr2-sdwan-handoff"
+---
 # The local interface's address being in PROD (not `default`) is what makes
 # transforms/helpers/bgp.py render this under `vrf PROD` on eg-fr01, outside
 # every peer group.
@@ -101,6 +113,7 @@ spec:
       bgp_processes:
         - "eg-fr01-bgp-overlay"
         - "EQX-FR2-SDWAN-GW1-bgp"
+      password: "eqx-fr2-sdwan-handoff-key"
       interface_capabilities:
         - ["eg-fr01", "Ethernet1/13.1900"]
         - ["EQX-FR2-SDWAN-GW1", "eth0.1900"]

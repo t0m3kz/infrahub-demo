@@ -145,8 +145,9 @@ _COLO_ASN_MAX_PODS = 1
 _COLO_LOOPBACK_IPV6_PREFIX_LENGTH = 120
 _COLO_VTEP_LOOPBACK_INDEX = 1
 # Same range and reasoning as dc.py's "{fabric}-vni-pool": 16-bit RD/RT
-# ceiling and disjoint from the 50001-59999 L3 VNI range.
-_COLO_VNI_RANGE = (10001, 49999)
+# ceiling, and disjoint from both GLOBAL-L2VNI (40000-49999, stretched
+# segments) and the 50001-59999 L3 VNI range.
+_COLO_VNI_RANGE = (10001, 39999)
 
 
 class TopologyColocationMetroData(TypedDict, total=False):
@@ -386,10 +387,11 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, CommonGener
             parent_attr="asn_pool",
         )
 
-        # L2 VNI pool: a metro whose edges act as EVPN Multi-Site border
-        # gateways hosts stretched segments, so it needs its own VNI source
-        # exactly like a DC (generators/topology/segment.py reads vni_pool off
-        # TopologySegmentHosting). upsert_number_pool attaches it itself.
+        # L2 VNI pool for segments local to this metro, exactly like a DC's
+        # (generators/topology/segment.py reads vni_pool off
+        # TopologySegmentHosting). Stretched segments reaching the metro take
+        # their VNI from GLOBAL-L2VNI instead. upsert_number_pool attaches it
+        # itself.
         await self.upsert_number_pool(
             pool_name=f"{metro}-vni-pool",
             description=f"L2 VNI pool for colocation metro {metro.upper()}",

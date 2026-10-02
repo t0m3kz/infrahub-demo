@@ -26,6 +26,10 @@ spec:
 # Data-driven rather than generated: the add_circuit generator's target group
 # (physical_circuits) has no members, and no generator sees both ends of a
 # dark fibre — same reason the interfaces in 02_interfaces.yml are hand-written.
+#
+# Each session is keyed with its DC's overlay key ({fabric}-overlay-key, which
+# add_dc creates with a random secret): it runs on the DC's overlay BGP process,
+# and the metro edge has no fabric key of its own.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -45,6 +49,7 @@ spec:
       bgp_processes:
         - "bl-dc101101-bgp-overlay"
         - "eg-fr01-bgp-overlay"
+      password: "dc10-overlay-key"
       interface_capabilities:
         - ["bl-dc101101", "Ethernet1/35"]
         - ["eg-fr01", "Ethernet1/10"]
@@ -62,6 +67,7 @@ spec:
       bgp_processes:
         - "bl-dc1111101-bgp-overlay"
         - "eg-fr01-bgp-overlay"
+      password: "dc11-overlay-key"
       interface_capabilities:
         - ["bl-dc1111101", "Ethernet1/35"]
         - ["eg-fr01", "Ethernet1/11"]
@@ -79,6 +85,7 @@ spec:
       bgp_processes:
         - "bl-dc1212101-bgp-overlay"
         - "eg-pa01-bgp-overlay"
+      password: "dc12-overlay-key"
       interface_capabilities:
         - ["bl-dc1212101", "Ethernet1/35"]
         - ["eg-pa01", "Ethernet1/10"]
