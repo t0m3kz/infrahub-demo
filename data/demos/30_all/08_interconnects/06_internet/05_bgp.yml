@@ -66,6 +66,10 @@ spec:
 # 03_addressing.yml). It rides each edge's existing overlay process: a colocation
 # edge has no other one, and the session never joins its global peer groups.
 #
+# Named TRANSIT-*, not after the circuit: ManagedBGPPeering and
+# TopologyPhysicalCircuit both inherit ManagedGeneric, whose name HFID is shared,
+# so INET-* here would upsert onto the circuit.
+#
 # maximum_routes 100: the ISPs send a default route only. A full table (~1M
 # IPv4 routes) would not fit an N9K-C9316D-GX, which holds 512k.
 apiVersion: infrahub.app/v1
@@ -73,7 +77,7 @@ kind: Object
 spec:
   kind: ManagedBGPPeering
   data:
-    - name: "INET-LUMEN-EQXFR2"
+    - name: "TRANSIT-LUMEN-EQXFR2"
       description: "Internet transit eg-fr01 <-> EXT-LUMEN-FRA1 (AS3356) over INET-LUMEN-EQXFR2"
       session_type: EBGP
       peering_role: regular
@@ -91,7 +95,7 @@ spec:
       interface_capabilities:
         - ["eg-fr01", "Ethernet1/14"]
         - ["EXT-LUMEN-FRA1", "et-0/0/0"]
-    - name: "INET-COGENT-EQXFR2"
+    - name: "TRANSIT-COGENT-EQXFR2"
       description: "Internet transit eg-fr02 <-> EXT-COGENT-FRA1 (AS174) over INET-COGENT-EQXFR2"
       session_type: EBGP
       peering_role: regular
@@ -109,7 +113,7 @@ spec:
       interface_capabilities:
         - ["eg-fr02", "Ethernet1/14"]
         - ["EXT-COGENT-FRA1", "et-0/0/0"]
-    - name: "INET-LUMEN-EQXPA4"
+    - name: "TRANSIT-LUMEN-EQXPA4"
       description: "Internet transit eg-pa01 <-> EXT-LUMEN-PAR1 (AS3356) over INET-LUMEN-EQXPA4"
       session_type: EBGP
       peering_role: regular
@@ -127,7 +131,7 @@ spec:
       interface_capabilities:
         - ["eg-pa01", "Ethernet1/14"]
         - ["EXT-LUMEN-PAR1", "et-0/0/0"]
-    - name: "INET-COGENT-EQXPA4"
+    - name: "TRANSIT-COGENT-EQXPA4"
       description: "Internet transit eg-pa02 <-> EXT-COGENT-PAR1 (AS174) over INET-COGENT-EQXPA4"
       session_type: EBGP
       peering_role: regular

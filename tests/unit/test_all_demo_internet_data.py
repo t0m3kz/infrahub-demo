@@ -39,7 +39,8 @@ def _interface_ips() -> dict[tuple[str, str], ipaddress.IPv4Interface]:
 
 
 def _peerings() -> dict[str, dict[str, Any]]:
-    return {p["name"]: p for p in _objects("ManagedBGPPeering")}
+    """Map circuit id to its peering: TRANSIT-<isp>-<site> rides INET-<isp>-<site>."""
+    return {p["name"].replace("TRANSIT-", "INET-", 1): p for p in _objects("ManagedBGPPeering")}
 
 
 def _circuits() -> dict[str, dict[str, Any]]:
@@ -49,6 +50,13 @@ def _circuits() -> dict[str, dict[str, Any]]:
 def test_every_circuit_has_a_peering_and_vice_versa() -> None:
     """One transit eBGP session per transit circuit, named after it."""
     assert set(_peerings()) == set(_circuits())
+    assert all(p["name"].startswith("TRANSIT-") for p in _objects("ManagedBGPPeering"))
+
+
+def test_peering_names_do_not_collide_with_circuits() -> None:
+    """Peerings and circuits share the ManagedGeneric name HFID, so their names must differ."""
+    names = {p["name"] for p in _objects("ManagedBGPPeering")}
+    assert not names & {c["name"] for c in _objects("TopologyPhysicalCircuit")}
     assert len(_circuits()) == 4
 
 
