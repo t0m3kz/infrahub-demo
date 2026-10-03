@@ -151,6 +151,9 @@ class LoadbalancerBackendNexthopGenerator(CablingMixin, CommonGenerator):
         pool_name = f"lb-backend-{segment_prefix_id}-pool"
         existing = await self.client.filters(kind=CoreIPAddressPool, name__value=pool_name)
         if existing:
+            # Saved again so this run keeps tracking the pool: an unsaved one
+            # is deleted with the run's leftovers.
+            await existing[0].save(allow_upsert=True)
             return existing[0]
 
         try:

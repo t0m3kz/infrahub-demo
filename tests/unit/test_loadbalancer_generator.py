@@ -189,14 +189,17 @@ class TestGenerateHappyPath:
 
 class TestEnsureBackendPool:
     def test_existing_pool_reused(self) -> None:
+        """An existing pool is reused and saved again, so a rerun keeps tracking it."""
         gen = _gen()
         existing_pool = MagicMock()
+        existing_pool.save = AsyncMock()
         gen.client.filters = AsyncMock(return_value=[existing_pool])
 
         result = asyncio.run(gen._ensure_backend_pool(vip_id="vip-1", vip_hostname="x", segment_prefix_id="prefix-1"))
 
         assert result is existing_pool
         gen.client.create.assert_not_called()
+        existing_pool.save.assert_awaited_once_with(allow_upsert=True)
 
     def test_new_pool_created_wrapping_existing_prefix(self) -> None:
         gen = _gen()

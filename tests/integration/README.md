@@ -36,7 +36,7 @@ Each scenario creates infrastructure incrementally and merges to main:
 - `test_18_dc1_add_spine.py` - **Scenario 5:** Add a spine to an existing fabric
 - `test_19_dc1_segments.py` - **Scenario 6:** Segments and their legs
 - `test_20_dc1_add_endpoints.py` - **Scenario 7:** Endpoint servers across deployment types
-- `test_59` - `test_64` - **Scenario 8:** The `30_all` demo, end to end (see [The 30_all Suite](#the-30_all-suite)). This one deviates from the pattern above: it loads in stages, shares one branch across five modules, and does not merge to main.
+- `test_59` - `test_65` - **Scenario 8:** The `30_all` demo, end to end (see [The 30_all Suite](#the-30_all-suite)). This one deviates from the pattern above: it loads in stages, shares one branch across six modules, and does not merge to main.
 
 ### Shared Utilities
 
@@ -74,7 +74,7 @@ data/
 └── 60_app_catalogue/          # Application catalogue and deployment requests
 ```
 
-The `30_all` suite (`test_59`-`test_64`) is the exception: it loads from `data/demos/30_all/` at the repository
+The `30_all` suite (`test_59`-`test_65`) is the exception: it loads from `data/demos/30_all/` at the repository
 root, not from here, because it exercises the shipped demo rather than test-only fixtures.
 
 ## Running Tests
@@ -130,7 +130,7 @@ The fast profile intentionally stops after setup and repository synchronization.
 
 ### The 30_all Suite
 
-`test_59` through `test_64` are one scenario split across five modules. They share a single branch (`ALL_DEMO_BRANCH`) and run in dependency order:
+`test_59` through `test_65` are one scenario split across six modules. They share a single branch (`ALL_DEMO_BRANCH`) and run in dependency order:
 
 | Module | Covers |
 | --- | --- |
@@ -139,8 +139,9 @@ The fast profile intentionally stops after setup and repository synchronization.
 | `test_61_all_demo_compute.py` | The three fabrics, their routing, host cabling, and the application graph down to hosting devices |
 | `test_62_all_demo_interconnects.py` | Physical and virtual circuits, cloud terminations, firewall contexts, segment legs |
 | `test_64_all_demo_firewall_config.py` | Colo cloud/partner/SaaS zone policies: `CheckFirewall` passes and the firewall config renders them |
+| `test_65_all_demo_idempotency.py` | Two more runs of the security generators leave rules, indexes and segment links unchanged |
 
-Only `test_59` loads data, and the load is deliberately staged — later stages reference objects that only exist once an earlier stage's generators have finished. `ALL_DEMO_LOAD_STAGES` in `tasks.py` (shared with `invoke load-all-demo`, re-exported by `test_constants.py`) documents which stage needs what. Running `test_60`-`test_64` on their own will skip: their session-scoped dependencies are unmet without `test_59`.
+Only `test_59` loads data, and the load is deliberately staged — later stages reference objects that only exist once an earlier stage's generators have finished. `ALL_DEMO_LOAD_STAGES` in `tasks.py` (shared with `invoke load-all-demo`, re-exported by `test_constants.py`) documents which stage needs what. Running `test_60`-`test_65` on their own will skip: their session-scoped dependencies are unmet without `test_59`.
 
 ### Run Setup Only
 

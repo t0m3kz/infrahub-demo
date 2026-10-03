@@ -330,8 +330,11 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
     },
 }
 
-# One shared (tenant-less) firewall context per DC cluster ...
-ALL_DEMO_SHARED_FIREWALL_CONTEXTS = 3
+# One shared (tenant-less) firewall context per firewall cluster: the three
+# DC clusters and the FR colocation metro's pair, which every colocation
+# deployment in the metro shares (a colocation has no design, so never a
+# dedicated context) ...
+ALL_DEMO_SHARED_FIREWALL_CONTEXTS = 4
 # ... plus one dedicated context per customer whose design blueprint sets
 # dedicated_firewall (data/bootstrap/21_customer_templates.yml: L_DC and
 # XL_DC do, S_DC and M_DC do not). Maps tenant deployment -> design.

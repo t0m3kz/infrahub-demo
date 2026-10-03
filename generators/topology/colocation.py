@@ -67,7 +67,7 @@ from ..common import CommonGenerator, DeviceOptions
 from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
 from ..devices import DeviceMixin
 from ..helpers import get_loopback_name
-from ..helpers.pools import name_to_asn_range
+from ..helpers.pools import CUSTOMER_VLAN_ID_MAX, name_to_asn_range
 from ..pools import PoolMixin
 from ..protocols import DcimVirtualInterface, ManagedBGP, RoutingAutonomousSystem, TopologyColocationMetro
 
@@ -148,6 +148,11 @@ _COLO_VTEP_LOOPBACK_INDEX = 1
 # ceiling, and disjoint from both GLOBAL-L2VNI (40000-49999, stretched
 # segments) and the 50001-59999 L3 VNI range.
 _COLO_VNI_RANGE = (10001, 39999)
+# FirewallContext sub-interfaces (see _ensure_firewall_context_pools): the
+# same VLAN range as a DC's, and a /24 slice of FW-Context-P2P-IPv4 cut into
+# /31 links, one per firewall member per context.
+_COLO_FW_CONTEXT_VLAN_START = 3000
+_COLO_FW_CONTEXT_P2P_SLICE_LENGTH = 24
 
 
 class TopologyColocationMetroData(TypedDict, total=False):
@@ -206,6 +211,8 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, CommonGener
 
         await self._ensure_colocation_pools(metro_id=metro_id)
         physical_names_by_role = await self._create_metro_devices(templates=templates, metro_id=metro_id)
+        if physical_names_by_role.get("firewall"):
+            await self._ensure_firewall_context_pools()
         await self._cable_metro_services(physical_names_by_role=physical_names_by_role)
         await self._ensure_metro_evpn(metro_id=metro_id)
 
@@ -435,8 +442,15 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, CommonGener
         prefix_length: int,
         role: str,
         kind: Literal["address", "prefix"],
+        default_prefix_length: int | None = None,
     ) -> Any:
-        """Allocate one prefix out of a global bootstrap pool and wrap it in a pool."""
+        """Allocate one prefix out of a global bootstrap pool and wrap it in a pool.
+
+        default_prefix_length is what the pool hands out when a caller names no
+        length; it defaults to the slice's own length.
+        """
+        if default_prefix_length is None:
+            default_prefix_length = prefix_length
         parent_pool = await self._get_parent_pool_with_retry(parent_pool_name)
         allocated_prefix = await self.client.allocate_next_ip_prefix(
             resource_pool=parent_pool,
@@ -450,7 +464,7 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, CommonGener
                 data={
                     "name": pool_name,
                     "default_address_type": "IpamIPAddress",
-                    "default_prefix_length": prefix_length,
+                    "default_prefix_length": default_prefix_length,
                     "ip_namespace": {"hfid": ["default"]},
                     "identifier": pool_name,
                     "resources": [allocated_prefix],
@@ -462,7 +476,7 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, CommonGener
                 data={
                     "name": pool_name,
                     "default_prefix_type": "IpamPrefix",
-                    "default_prefix_length": prefix_length,
+                    "default_prefix_length": default_prefix_length,
                     "ip_namespace": {"hfid": ["default"]},
                     "identifier": pool_name,
                     "resources": [allocated_prefix],
@@ -471,6 +485,37 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, CommonGener
         await pool.save(allow_upsert=True)
         self.logger.info(f"- Created [{'CoreIPAddressPool' if kind == 'address' else 'CoreIPPrefixPool'}] {pool_name}")
         return pool
+
+    async def _ensure_firewall_context_pools(self) -> None:
+        """Create the metro's FirewallContext VLAN and P2P pools.
+
+        generators/topology/customer_colocation.py gives every deployment in
+        this metro a context on the metro's firewall pair, with a sub-interface
+        on the firewall uplink and on the edge, and takes its VLAN and P2P link
+        from these two pools by name. Same pools as dc.py's
+        _ensure_firewall_context_pools; the P2P slice is IPv4 because the
+        metro's edge legs are (Technical-IPv4).
+
+        Only a metro with physical firewalls gets them: without a firewall no
+        context is ever created here.
+        """
+        metro = self.fabric_name
+        await self.upsert_number_pool(
+            pool_name=f"{metro}-fw-context-vlan-pool",
+            description=f"FirewallContext sub-interface VLAN pool for {metro.upper()}",
+            start_range=_COLO_FW_CONTEXT_VLAN_START,
+            end_range=CUSTOMER_VLAN_ID_MAX,
+            node="ManagedFirewallContext",
+            node_attribute="vlan_id",
+        )
+        await self._ensure_sliced_pool(
+            pool_name=f"{metro}-fw-context-p2p-pool",
+            parent_pool_name="FW-Context-P2P-IPv4",
+            prefix_length=_COLO_FW_CONTEXT_P2P_SLICE_LENGTH,
+            role="technical",
+            kind="prefix",
+            default_prefix_length=31,
+        )
 
     async def _create_metro_devices(self, *, templates: list[dict[str, Any]], metro_id: str) -> dict[str, list[str]]:
         """Instantiate every fabric_templates entry as this metro's devices.

@@ -22,7 +22,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.helpers.naming import DeviceNameContext, DeviceNamingConfig
+from generators.helpers.pools import CUSTOMER_VLAN_ID_MAX
 from generators.topology.colocation import (
+    _COLO_FW_CONTEXT_P2P_SLICE_LENGTH,
+    _COLO_FW_CONTEXT_VLAN_START,
     _COLO_LOOPBACK_PREFIX_LENGTH,
     _COLO_MANAGEMENT_PREFIX_LENGTH,
     _COLO_SERVICE_ROLES,
@@ -367,6 +370,38 @@ class TestGenerateEntry:
 
         assert calls == ["devices", "cabling"]
 
+    @pytest.mark.asyncio
+    async def test_metro_with_firewalls_gets_context_pools(self) -> None:
+        """customer_colocation.py looks the context pools up by name for
+        every deployment in the metro, so a metro with firewalls must have
+        them before the first boarding."""
+        gen = _make_generator()
+        gen._ensure_colocation_pools = AsyncMock()
+        gen._create_metro_devices = AsyncMock(
+            return_value={"edge": ["eg-fr01", "eg-fr02"], "firewall": ["fw-fr01", "fw-fr02"]}
+        )
+        gen._ensure_firewall_context_pools = AsyncMock()
+        gen._cable_metro_services = AsyncMock()
+        gen._ensure_metro_evpn = AsyncMock()
+
+        await gen.generate({"TopologyColocationMetro": [_metro()]})
+
+        gen._ensure_firewall_context_pools.assert_awaited_once_with()
+
+    @pytest.mark.asyncio
+    async def test_metro_without_firewalls_gets_no_context_pools(self) -> None:
+        """No firewall means no context is ever created in the metro."""
+        gen = _make_generator()
+        gen._ensure_colocation_pools = AsyncMock()
+        gen._create_metro_devices = AsyncMock(return_value={"edge": ["eg-fr01", "eg-fr02"]})
+        gen._ensure_firewall_context_pools = AsyncMock()
+        gen._cable_metro_services = AsyncMock()
+        gen._ensure_metro_evpn = AsyncMock()
+
+        await gen.generate({"TopologyColocationMetro": [_metro()]})
+
+        gen._ensure_firewall_context_pools.assert_not_awaited()
+
 
 class TestPools:
     @pytest.mark.asyncio
@@ -489,6 +524,61 @@ class TestPools:
         create = gen.client.create.await_args_list[-1].kwargs
         assert create["kind"].__name__ == "CoreIPPrefixPool"
         assert create["data"]["default_prefix_type"] == "IpamPrefix"
+
+    @pytest.mark.asyncio
+    async def test_default_prefix_length_overrides_the_slice_length(self) -> None:
+        gen = _make_generator()
+        gen._get_parent_pool_with_retry = AsyncMock(return_value=MagicMock(id="parent-1"))
+        gen.client.create = AsyncMock(return_value=AsyncMock())
+
+        await gen._ensure_sliced_pool(
+            pool_name="fr-fw-context-p2p-pool",
+            parent_pool_name="FW-Context-P2P-IPv4",
+            prefix_length=24,
+            role="technical",
+            kind="prefix",
+            default_prefix_length=31,
+        )
+
+        assert gen.client.allocate_next_ip_prefix.await_args_list[-1].kwargs["prefix_length"] == 24
+        assert gen.client.create.await_args_list[-1].kwargs["data"]["default_prefix_length"] == 31
+
+
+class TestFirewallContextPools:
+    @pytest.mark.asyncio
+    async def test_vlan_pool_matches_the_dc_range(self) -> None:
+        """The pool customer_colocation.py reads by name, numbering
+        ManagedFirewallContext.vlan_id in the DC context range."""
+        gen = _make_generator()
+        gen.upsert_number_pool = AsyncMock()
+        gen._ensure_sliced_pool = AsyncMock()
+
+        await gen._ensure_firewall_context_pools()
+
+        kwargs = gen.upsert_number_pool.await_args_list[-1].kwargs
+        assert kwargs["pool_name"] == "fr-fw-context-vlan-pool"
+        assert kwargs["node"] == "ManagedFirewallContext"
+        assert kwargs["node_attribute"] == "vlan_id"
+        assert (kwargs["start_range"], kwargs["end_range"]) == (_COLO_FW_CONTEXT_VLAN_START, CUSTOMER_VLAN_ID_MAX)
+
+    @pytest.mark.asyncio
+    async def test_p2p_pool_is_a_slice_handing_out_31s(self) -> None:
+        """_allocate_context_p2p names no length, so the pool's default must
+        be a /31 point-to-point link, cut from a slice of the global pool."""
+        gen = _make_generator()
+        gen.upsert_number_pool = AsyncMock()
+        gen._ensure_sliced_pool = AsyncMock()
+
+        await gen._ensure_firewall_context_pools()
+
+        gen._ensure_sliced_pool.assert_awaited_once_with(
+            pool_name="fr-fw-context-p2p-pool",
+            parent_pool_name="FW-Context-P2P-IPv4",
+            prefix_length=_COLO_FW_CONTEXT_P2P_SLICE_LENGTH,
+            role="technical",
+            kind="prefix",
+            default_prefix_length=31,
+        )
 
 
 class TestMetroDevices:

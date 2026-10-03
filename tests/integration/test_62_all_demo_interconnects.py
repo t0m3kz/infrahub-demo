@@ -190,9 +190,9 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
     ) -> None:
         """Verify the firewall contexts match the customers' design blueprints.
 
-        A context with no tenant is the DC's shared low-risk context; a context
-        with a tenant exists only because that customer's design sets
-        dedicated_firewall. Getting this wrong is how a customer silently ends
+        A context with no tenant is a cluster's shared low-risk context (each
+        DC's, and the colocation metro's); a context with a tenant exists only
+        because that customer's design sets dedicated_firewall. Getting this wrong is how a customer silently ends
         up sharing a security context with everyone else.
         """
         logging.info("=== %s - Step 3: Firewall Contexts ===", SCENARIO_NAME)
@@ -206,7 +206,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         if len(shared) != ALL_DEMO_SHARED_FIREWALL_CONTEXTS:
             errors.append(
                 f"{len(shared)} shared (tenant-less) firewall context(s), "
-                f"expected {ALL_DEMO_SHARED_FIREWALL_CONTEXTS} — one per DC cluster"
+                f"expected {ALL_DEMO_SHARED_FIREWALL_CONTEXTS} — one per firewall cluster"
             )
 
         dedicated = {str(context["tenant"]): context for context in contexts if context["tenant"]}

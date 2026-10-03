@@ -459,26 +459,18 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
         segment, avoiding speculative pool creation for idle leafs/tors.
         Returns (domain id, pool id).
 
-        Segments are generated in parallel, so another run may have created
-        the domain and not attached its pool yet. The pool upsert is keyed by
-        name, so both runs converge on the same pool instead of one failing.
+        Both are upserted on every run, existing or not: the generator deletes
+        what a run does not save, so a rerun that only read them back would
+        delete them. Segments are generated in parallel; both upserts are keyed
+        by name, so concurrent runs converge on the same domain and pool.
         """
         domain_name = f"{device.name.value}-vlan-domain"
-        existing = await self.client.filters(
-            kind=ManagedStandaloneVlanDomain, name__value=domain_name, include=["vlan_pool"]
+        domain_obj = await self.client.create(
+            kind=ManagedStandaloneVlanDomain,
+            data={"name": domain_name, "status": "active", "capabilities": [{"id": device.id}]},
         )
-        if existing:
-            domain_id = existing[0].id
-            pool_id = getattr(getattr(existing[0], "vlan_pool", None), "id", None)
-            if pool_id:
-                return domain_id, pool_id
-        else:
-            domain_obj = await self.client.create(
-                kind=ManagedStandaloneVlanDomain,
-                data={"name": domain_name, "status": "active", "capabilities": [{"id": device.id}]},
-            )
-            await domain_obj.save(allow_upsert=True)
-            domain_id = domain_obj.id
+        await domain_obj.save(allow_upsert=True)
+        domain_id = domain_obj.id
         pool = await self.upsert_number_pool(
             pool_name=f"{domain_name}-vlan-pool",
             description=f"Local VLAN ID pool for standalone VLAN domain {domain_name}",
@@ -497,9 +489,10 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
     ) -> None:
         """Upsert one ManagedVlanDomainSegment (segment, VLAN domain) pair,
         allocating vlan_id from that domain's own pool via from_pool.
-        Idempotent: skips allocation if a record for this pair already exists.
-        A known pool_id (a standalone domain this run just ensured) skips
-        reading it back from the domain.
+        Idempotent: an existing record for this pair keeps its vlan_id and is
+        only saved again, so this run's tracking group keeps it (an unsaved
+        one is deleted). A known pool_id (a standalone domain this run just
+        ensured) skips reading it back from the domain.
         """
         existing = await self.client.filters(
             kind=ManagedVlanDomainSegment,
@@ -507,6 +500,7 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
             vlan_domain__ids=[domain_id],
         )
         if existing:
+            await existing[0].save(allow_upsert=True)  # register with tracker
             return
 
         if not pool_id:
@@ -644,34 +638,33 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
             self.logger.warning(f"Segment '{segment_name}' inline_service missing id — cannot allocate VLAN ID")
             return None
 
+        # The pool is this segment's and is upserted on every run (by name) so
+        # the run keeps it; an unsaved pool is deleted with the run's leftovers.
+        pool_obj = await self.upsert_number_pool(
+            pool_name=f"{ha_id}-inline-vlan-pool",
+            description=f"Local VLAN ID pool for inline-terminated segments on HA {ha_id}",
+            start_range=CUSTOMER_VLAN_ID_MIN,
+            end_range=CUSTOMER_VLAN_ID_MAX,
+            node="ManagedHA",
+            node_attribute="inline_vlan_id",
+        )
         existing_vlan_id = (ha_node.get("inline_vlan_id") or {}).get("value")
         if existing_vlan_id:
             return existing_vlan_id
-
-        pool_id = (ha_node.get("inline_vlan_pool") or {}).get("id")
-        if not pool_id:
-            pool_obj = await self.upsert_number_pool(
-                pool_name=f"{ha_id}-inline-vlan-pool",
-                description=f"Local VLAN ID pool for inline-terminated segments on HA {ha_id}",
-                start_range=CUSTOMER_VLAN_ID_MIN,
-                end_range=CUSTOMER_VLAN_ID_MAX,
-                node="ManagedHA",
-                node_attribute="inline_vlan_id",
-                parent_kind="ManagedHA",
-                parent_id=ha_id,
-                parent_attr="inline_vlan_pool",
-            )
-            pool_id = pool_obj.id
 
         try:
             node = await self.client.create(
                 kind="ManagedHA",
                 data={
                     "id": ha_id,
-                    "inline_vlan_id": {"from_pool": {"id": pool_id}, "identifier": f"{ha_id}-inline-vlan"},
+                    "inline_vlan_pool": {"id": pool_obj.id},
+                    "inline_vlan_id": {"from_pool": {"id": pool_obj.id}, "identifier": f"{ha_id}-inline-vlan"},
                 },
             )
-            await node.save(allow_upsert=True)
+            # update_group_context=False: the HA pair belongs to the deployment
+            # generator; tracking it here would delete it on the next run that
+            # reuses the allocated VLAN ID.
+            await node.save(allow_upsert=True, update_group_context=False)
         except Exception as exc:
             self.logger.error(f"Failed to allocate inline VLAN ID for HA '{ha_id}': {exc}")
             return None

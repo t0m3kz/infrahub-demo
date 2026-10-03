@@ -6,12 +6,13 @@ trigger-customer-deployment-colocation-on-created rule).
 Colocation shares the same PROD/NON-PROD data-plane VRFs as every other
 customer deployment kind (see data/bootstrap/22_namespaces.yml) — there is
 still no VRF-per-customer. This generator provisions only FirewallContext
-(VDOM/vsys) on the parent ColocationMetro's ManagedFirewallHA cluster — in
-practice always a no-op today, since ColocationMetro doesn't inherit
-TopologyDeviceHosting (only its child ColocationZone does), so
-customer.parent.firewall_devices/loadbalancer_devices always arrive empty
-for this kind. Kept for forward-compatibility if that ever changes, and to
-mirror customer_dc.py's structure exactly.
+(VDOM/vsys) on the parent ColocationMetro's ManagedFirewallHA cluster, the
+pair every cage in the metro shares (customer_colocation.gql reads it as
+parent.firewall_devices), and links the deployment to it as its
+serving_firewall_context so the firewall transform places the deployment's
+policies there. A metro without firewalls gets no context. Mirrors
+customer_dc.py's structure; the VLAN and P2P pools come from
+generators/topology/colocation.py's _ensure_firewall_context_pools.
 
 Inter-VRF routing (PROD/NON-PROD <-> INTERNET/MANAGEMENT) is no longer
 per-deployment/per-circuit hub detection — with only 4 fixed global
@@ -78,8 +79,8 @@ def _customer_short_id(customer: dict[str, Any], customer_id: str) -> str:
 
 
 class CustomerDeploymentColocationExchangeGenerator(DeviceMixin, CablingMixin, CommonGenerator):
-    """add_customer_deployment_colocation — FirewallContext (always a no-op
-    in practice) plus hub-and-spoke exchange for TopologyCustomerColocation.
+    """add_customer_deployment_colocation — FirewallContext on the parent
+    metro's firewall pair for TopologyCustomerColocation.
     """
 
     async def generate(self, data: dict[str, Any]) -> None:
@@ -99,21 +100,20 @@ class CustomerDeploymentColocationExchangeGenerator(DeviceMixin, CablingMixin, C
         self.logger.info(f"Processing Colocation deployment {customer.get('name', customer_id)}")
 
         # _all_controllers is read by create_devices() via generators/devices.py's
-        # _resolve_role_controller — always empty here since ColocationMetro
-        # doesn't inherit TopologyDeviceHosting, so customer_colocation.gql
-        # has no controllers to fetch in the first place (unlike customer_dc.gql's
-        # security_manager_controllers/lb_manager_controllers aliases).
+        # _resolve_role_controller — always empty here: a metro declares no
+        # controllers, so customer_colocation.gql fetches none (unlike
+        # customer_dc.gql's security_manager_controllers/lb_manager_controllers
+        # aliases).
         self._all_controllers = []
 
         await self._ensure_firewall_context(customer, customer_id)
         await self._ensure_dedicated_loadbalancer(customer, customer_id)
 
     # ------------------------------------------------------------------
-    # FirewallContext (VDOM/vsys) provisioning — mirrors customer_dc.py
-    # exactly. customer.parent.firewall_devices/loadbalancer_devices always
-    # arrive empty for Colocation (ColocationMetro doesn't host devices
-    # directly, only its child ColocationZone does), so this is a no-op in
-    # practice today.
+    # FirewallContext (VDOM/vsys) provisioning — mirrors customer_dc.py.
+    # customer.parent.firewall_devices is the metro's own firewall pair
+    # (generators/topology/colocation.py creates it from the metro's
+    # fabric_templates).
     # ------------------------------------------------------------------
 
     async def _ensure_firewall_context(self, customer: dict[str, Any], customer_id: str) -> None:

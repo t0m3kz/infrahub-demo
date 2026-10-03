@@ -687,13 +687,18 @@ class TestResolveVlanDomain:
 class TestEnsureVlanDomainSegment:
     """Tests for _ensure_vlan_domain_segment — per-(segment, domain) allocation."""
 
-    def test_existing_record_skips_allocation(self):
+    def test_existing_record_skips_allocation(self) -> None:
+        """An existing pair keeps its vlan_id but is saved again, so the rerun
+        tracks it instead of deleting it."""
         gen = _make_gen()
-        gen.client.filters = AsyncMock(return_value=[MagicMock()])
+        existing = MagicMock()
+        existing.save = AsyncMock()
+        gen.client.filters = AsyncMock(return_value=[existing])
 
         asyncio.run(gen._ensure_vlan_domain_segment("seg-1", "vxlan-1000", "mlag-1"))
 
         gen.client.create.assert_not_called()
+        existing.save.assert_awaited_once_with(allow_upsert=True)
 
     def test_domain_without_pool_logs_error(self):
         gen = _make_gen()
@@ -742,8 +747,8 @@ class TestEnsureVlanDomainSegment:
 
 
 class TestEnsureStandaloneVlanDomain:
-    """Segments are generated in parallel, so a standalone domain may exist
-    before the run that created it has attached its pool."""
+    """The domain and its pool are upserted on every run, so a rerun keeps
+    them in its tracking group instead of deleting them."""
 
     @staticmethod
     def _device() -> MagicMock:
@@ -752,44 +757,88 @@ class TestEnsureStandaloneVlanDomain:
         return device
 
     @staticmethod
-    def _gen(existing: list[Any]) -> Any:
+    def _gen() -> Any:
         gen = _make_gen()
-        gen.client.filters = AsyncMock(return_value=existing)
+        domain_obj = MagicMock(id="domain-1")
+        domain_obj.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=domain_obj)
         gen.upsert_number_pool = AsyncMock(return_value=MagicMock(id="pool-1"))
         return gen
 
-    def test_existing_domain_with_pool_is_reused(self) -> None:
-        gen = self._gen([MagicMock(id="domain-1", vlan_pool=MagicMock(id="pool-1"))])
+    def test_domain_is_upserted_by_name(self) -> None:
+        """Existing or not, the domain goes through the same upsert."""
+        gen = self._gen()
 
         result = asyncio.run(gen._ensure_standalone_vlan_domain(self._device()))
 
         assert result == ("domain-1", "pool-1")
+        data = gen.client.create.call_args.kwargs["data"]
+        assert data["name"] == "bl-dc101101-vlan-domain"
+        assert data["capabilities"] == [{"id": "dev-1"}]
+        gen.client.create.return_value.save.assert_awaited_once_with(allow_upsert=True)
+        gen.client.filters.assert_not_called()
+
+    def test_pool_is_upserted_and_attached_on_every_run(self) -> None:
+        """Running twice upserts the same pool by name both times."""
+        gen = self._gen()
+
+        asyncio.run(gen._ensure_standalone_vlan_domain(self._device()))
+        asyncio.run(gen._ensure_standalone_vlan_domain(self._device()))
+
+        assert gen.upsert_number_pool.await_count == 2
+        for call in gen.upsert_number_pool.await_args_list:
+            assert call.kwargs["pool_name"] == "bl-dc101101-vlan-domain-vlan-pool"
+            assert call.kwargs["parent_id"] == "domain-1"
+            assert call.kwargs["parent_attr"] == "vlan_pool"
+
+
+class TestEnsureInlineVlanId:
+    """The inline pool is the segment's and is upserted on every run; the HA
+    pair is the deployment generator's and is never tracked here."""
+
+    @staticmethod
+    def _gen() -> Any:
+        gen = _make_gen()
+        gen.upsert_number_pool = AsyncMock(return_value=MagicMock(id="inline-pool-1"))
+        ha_obj = MagicMock()
+        ha_obj.inline_vlan_id.value = 3001
+        ha_obj.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=ha_obj)
+        return gen
+
+    def test_first_run_allocates_without_tracking_the_ha(self) -> None:
+        """The allocation saves the HA with update_group_context=False."""
+        gen = self._gen()
+
+        result = asyncio.run(gen._ensure_inline_vlan_id({"id": "ha-1"}, "seg"))
+
+        assert result == 3001
+        pool_kwargs = gen.upsert_number_pool.await_args.kwargs
+        assert pool_kwargs["pool_name"] == "ha-1-inline-vlan-pool"
+        assert "parent_id" not in pool_kwargs
+        data = gen.client.create.call_args.kwargs["data"]
+        assert data["id"] == "ha-1"
+        assert data["inline_vlan_pool"] == {"id": "inline-pool-1"}
+        assert data["inline_vlan_id"]["from_pool"] == {"id": "inline-pool-1"}
+        gen.client.create.return_value.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
+
+    def test_rerun_reuses_the_vlan_id_and_keeps_the_pool(self) -> None:
+        """An allocated VLAN ID is returned as is; the pool is still upserted."""
+        gen = self._gen()
+        ha_node = {"id": "ha-1", "inline_vlan_id": {"value": 3001}, "inline_vlan_pool": {"id": "inline-pool-1"}}
+
+        result = asyncio.run(gen._ensure_inline_vlan_id(ha_node, "seg"))
+
+        assert result == 3001
+        gen.upsert_number_pool.assert_awaited_once()
+        gen.client.create.assert_not_called()
+
+    def test_missing_ha_id_allocates_nothing(self) -> None:
+        """Without an HA id there is nothing to allocate on."""
+        gen = self._gen()
+
+        assert asyncio.run(gen._ensure_inline_vlan_id({}, "seg")) is None
         gen.upsert_number_pool.assert_not_awaited()
-        gen.client.create.assert_not_called()
-
-    def test_existing_domain_without_pool_gets_it_upserted(self) -> None:
-        """The race: another run created the domain but has not attached the pool yet."""
-        gen = self._gen([MagicMock(id="domain-1", vlan_pool=None)])
-
-        result = asyncio.run(gen._ensure_standalone_vlan_domain(self._device()))
-
-        assert result == ("domain-1", "pool-1")
-        gen.client.create.assert_not_called()
-        kwargs = gen.upsert_number_pool.await_args.kwargs
-        assert kwargs["pool_name"] == "bl-dc101101-vlan-domain-vlan-pool"
-        assert kwargs["parent_id"] == "domain-1"
-
-    def test_missing_domain_is_created_with_its_pool(self) -> None:
-        gen = self._gen([])
-        domain_obj = MagicMock(id="domain-new")
-        domain_obj.save = AsyncMock()
-        gen.client.create = AsyncMock(return_value=domain_obj)
-
-        result = asyncio.run(gen._ensure_standalone_vlan_domain(self._device()))
-
-        assert result == ("domain-new", "pool-1")
-        assert gen.client.create.call_args.kwargs["data"]["name"] == "bl-dc101101-vlan-domain"
-        assert gen.upsert_number_pool.await_args.kwargs["parent_id"] == "domain-new"
 
 
 # ===========================================================================
