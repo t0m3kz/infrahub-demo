@@ -28,6 +28,7 @@ from transforms.helpers.firewall import (
     get_firewall_zones,
     get_vrf_default_gateways,
     get_zone_policies,
+    place_policies_in_contexts,
 )
 from transforms.helpers.ha import _HA_TYPENAMES, get_ha
 from transforms.helpers.loadbalancer_pbr import _flatten_deployment_lb_vips, get_lb_backend_pbr_rules
@@ -516,6 +517,7 @@ __all__ = [
     "get_vrf_default_gateways",
     "get_vxlan_config",
     "get_zone_policies",
+    "place_policies_in_contexts",
     # private helpers (imported by unit tests)
     "_build_acl_rule",
     "_build_peer_groups",

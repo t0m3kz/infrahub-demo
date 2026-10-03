@@ -48,22 +48,16 @@ fragment AppComponentSecurityFields on AppComponent {
           name { value }
           endpoint_type { value }
           fqdn { value }
-          service_ports {
+          dependents {
             edges {
               node {
                 id
                 name { value }
-                port { value }
-                port_end { value }
                 protocol { value }
-              }
-            }
-          }
-          access_profile {
-            node {
-              id
-              allowed_groups {
-                edges {
+                port_start { value }
+                port_end { value }
+                access_status { value }
+                source_profile {
                   node {
                     id
                     name { value }

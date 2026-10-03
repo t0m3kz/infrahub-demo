@@ -324,13 +324,45 @@ spec:
             modification_type: updated
 
     # ── App Security Rules ────────────────────────────────────────────────────
-    # Single trigger path: AppApplication events invoke the canonical app generator.
+    # Three entry points into the same generator. An application is created
+    # before its dependencies (they reference its components), so the
+    # application trigger alone sees none of them, and a dependency added or
+    # changed later touches no AppApplication. A dependency trigger re-runs its
+    # application's full reconciliation; the generator targets the
+    # app_dependencies group, so every AppDependency must be a member.
+    # A component moved to another segment re-runs its own application and
+    # every application calling one of its endpoints, whose rules name that
+    # segment too; it targets app_components, so every AppComponent must be a
+    # member.
 
     - name: trigger-app-security-rules-on-application-created
       branch_scope: "other_branches"
       node_kind: AppApplication
       mutation_action: "created"
       action: run-app-application-generator
+
+    - name: trigger-app-security-rules-on-dependency-created
+      branch_scope: "other_branches"
+      node_kind: AppDependency
+      mutation_action: "created"
+      action: run-app-dependency-generator
+
+    - name: trigger-app-security-rules-on-dependency-updated
+      branch_scope: "other_branches"
+      node_kind: AppDependency
+      mutation_action: "updated"
+      action: run-app-dependency-generator
+
+    - name: trigger-app-security-rules-on-component-segment-updated
+      branch_scope: "other_branches"
+      node_kind: AppComponent
+      mutation_action: "updated"
+      action: run-app-component-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: network_segment
+            modification_type: updated
 
     # ── Customer Deployment (FirewallContext/dedicated LB) ────────────────────
     # Same generator/query shape for both deployment kinds that still have

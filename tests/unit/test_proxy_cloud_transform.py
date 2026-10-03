@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -65,6 +66,17 @@ def _shared_policy(rule: dict) -> list[dict]:
     return [{"name": "base-egress", "default_action": "block", "enabled": True, "rules": [rule]}]
 
 
+def _grant(status: str = "approved", groups: tuple[str, ...] = ("engineering",)) -> dict[str, Any]:
+    """An AppDependency from an access profile, as seen in endpoint.dependents."""
+    return {
+        "protocol": "tcp",
+        "port_start": 443,
+        "port_end": None,
+        "access_status": status,
+        "source_profile": {"name": "private-access-standard", "allowed_groups": [{"name": g} for g in groups]},
+    }
+
+
 class TestProxyCloudTransform:
     @pytest.mark.asyncio
     async def test_raises_when_no_proxy_found(self) -> None:
@@ -98,8 +110,7 @@ class TestProxyCloudTransform:
                                         "name": "checkout-api",
                                         "endpoint_type": "private_access",
                                         "fqdn": "checkout-api.internal.example.com",
-                                        "service_ports": [{"port": 443, "port_end": None, "protocol": "tcp"}],
-                                        "access_profile": {"allowed_groups": [{"name": "engineering"}]},
+                                        "dependents": [_grant()],
                                     }
                                 ]
                             }
@@ -135,7 +146,7 @@ class TestProxyCloudTransform:
                                         "name": "checkout-api",
                                         "endpoint_type": "private_access",
                                         "fqdn": "checkout-api.internal.example.com",
-                                        "service_ports": [{"port": 443, "port_end": None, "protocol": "tcp"}],
+                                        "dependents": [_grant()],
                                     }
                                 ]
                             }
@@ -168,6 +179,7 @@ class TestProxyCloudTransform:
                                         "name": "api",
                                         "endpoint_type": "private_access",
                                         "fqdn": "api.internal.example.com",
+                                        "dependents": [_grant()],
                                     }
                                 ]
                             }

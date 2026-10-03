@@ -2,11 +2,14 @@
 version: "1.0"
 
 # ============================================================================
-# AppDependency — directional edge from an AppComponent to an AppEndpoint
+# AppDependency — directional edge into an AppEndpoint
 #
-# Replaces the bare depends_on relationship (AppComponent → AppComponent) with
-# a proper intermediary node so that port, port range, and protocol can be
-# stored on the edge itself.
+# The only place an application's ports live. Each dependency has exactly one
+# source:
+#   - source:         an AppComponent calling the endpoint (firewall, cloud
+#                     security group or egress proxy rule, by endpoint_type)
+#   - source_profile: a SecurityAccessProfile whose users reach a
+#                     private_access endpoint through the ZTNA broker
 #
 # Security-rule generation expects explicit protocol/port information on each
 # dependency edge. Dependencies without protocol and port_start are skipped.
@@ -26,13 +29,12 @@ nodes:
     display_label: "{{ name__value }}"
     uniqueness_constraints:
       - ["name__value"]
-      - [source, target, protocol__value, port_start__value, port_end__value]
     attributes:
       - name: name
         kind: Text
         optional: false
         order_weight: 100
-        description: "Short human-picked identifier (e.g. 'checkout-to-payment-gateway'); also how depends_on references it"  # yamllint disable-line rule:line-length
+        description: "Short human-picked identifier (e.g. 'checkout-to-payment-gateway')"
       - name: access_status
         kind: Dropdown
         optional: true
@@ -103,13 +105,24 @@ nodes:
       - name: source
         peer: AppComponent
         label: "Source Component"
-        description: "Component that initiates the connection"
+        description: "Component that initiates the connection; leave empty when source_profile is set"
         cardinality: one
         kind: Attribute
-        optional: false
+        optional: true
         direction: outbound
         identifier: "app_dependency__source"
         order_weight: 200
+      - name: source_profile
+        peer: SecurityAccessProfile
+        label: "Source Access Profile"
+        description: "Users admitted by this profile reach a private_access target; leave empty when source is set"
+        cardinality: one
+        kind: Attribute
+        optional: true
+        on_delete: no-action
+        direction: outbound
+        identifier: "app_dependency__source_profile"
+        order_weight: 205
       - name: target
         peer: AppEndpoint
         label: "Target Endpoint"
@@ -133,4 +146,27 @@ extensions:
           order_weight: 900
           label: "Depends On"
           description: "Outbound dependency edges originating from this component"
+          direction: inbound
+    - kind: AppEndpoint
+      relationships:
+        - name: dependents
+          peer: AppDependency
+          cardinality: many
+          kind: Attribute
+          optional: true
+          identifier: "app_dependency__target"
+          order_weight: 1000
+          label: "Dependents"
+          description: "Dependencies reaching this endpoint, with their ports"
+    - kind: SecurityAccessProfile
+      relationships:
+        - name: dependencies
+          peer: AppDependency
+          cardinality: many
+          kind: Attribute
+          optional: true
+          identifier: "app_dependency__source_profile"
+          order_weight: 1100
+          label: "Grants"
+          description: "Private-access dependencies this profile grants"
           direction: inbound

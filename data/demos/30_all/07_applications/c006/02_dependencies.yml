@@ -1,0 +1,27 @@
+---
+# Who calls whom inside erp-core, and on which port. The ports live only
+# here; the target endpoints are declared on the components in
+# 01_application.yml.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppDependency
+  data:
+    - name: c006-erp-core-web-ui-to-erp-backend
+      source: c006-erp-core-p-web-ui
+      target: ["c006-erp-core-p-erp-backend", "erp-backend-api"]
+      protocol: tcp
+      port_start: 8443
+      access_status: auto
+      description: "ERP web UI calls the backend API"
+      member_of_groups:
+        - app_dependencies
+    - name: c006-erp-core-erp-backend-to-erp-db
+      source: c006-erp-core-p-erp-backend
+      target: ["c006-erp-core-p-erp-db", "erp-db-postgres"]
+      protocol: tcp
+      port_start: 5432
+      access_status: auto
+      description: "ERP backend reads and writes the ERP database"
+      member_of_groups:
+        - app_dependencies

@@ -1,4 +1,23 @@
 ---
+# Engineering is granted the private frontend through an access profile; the
+# grant is a dependency whose source is the profile.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityIdentityGroup
+  data:
+    - name: engineering
+      source: manual
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityAccessProfile
+  data:
+    - name: it001-engineering
+      allowed_groups:
+        - engineering
+---
 # Frontend calls the payment-gateway external service — the generator should
 # turn this into a ProxyPolicy/ProxyPolicyRule through IT001's egress service,
 # not a firewall rule (target is an external endpoint).
@@ -14,6 +33,8 @@ spec:
       port_start: 443
       access_status: auto
       description: "Checkout frontend calls the payment gateway"
+      member_of_groups:
+        - app_dependencies
 
     - name: it001-checkout-p-frontend-to-backend
       source: it001-checkout-p-frontend
@@ -22,3 +43,15 @@ spec:
       port_start: 8443
       access_status: auto
       description: "Checkout frontend calls the internal backend API"
+      member_of_groups:
+        - app_dependencies
+
+    - name: it001-engineering-to-checkout-frontend-private
+      source_profile: it001-engineering
+      target: ["it001-checkout-p-frontend", "it001-checkout-frontend-private"]
+      protocol: tcp
+      port_start: 443
+      access_status: approved
+      description: "Engineering opens the checkout frontend through the ZTNA broker"
+      member_of_groups:
+        - app_dependencies

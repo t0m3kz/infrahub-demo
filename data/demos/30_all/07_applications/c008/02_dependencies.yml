@@ -1,0 +1,18 @@
+---
+# Who calls whom inside inventory-sync, and on which port. The ports live only
+# here; the target endpoints are declared on the components in
+# 01_application.yml.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppDependency
+  data:
+    - name: c008-inventory-sync-sync-api-to-sync-db
+      source: c008-inventory-sync-d-sync-api
+      target: ["c008-inventory-sync-d-sync-db", "sync-db-postgres"]
+      protocol: tcp
+      port_start: 5432
+      access_status: auto
+      description: "Sync API stores inventory state in its database"
+      member_of_groups:
+        - app_dependencies

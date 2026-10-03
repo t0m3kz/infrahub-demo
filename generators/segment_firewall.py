@@ -24,8 +24,10 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin, RuleLifecycleMixin):
     SecurityPolicyRule path dispatched from _reconcile_application_rules for
     every AppDependency edge that isn't cloud-side (CloudSecurityRuleMixin),
     external (ZtnaMixin's egress path) or private_access (ZtnaMixin's publish
-    path). Also owns macro-zone/threat-profile lookups, the SecurityTagRule
-    micro-segmentation mirror, and the microsegmented return-rule leg.
+    path). Also owns macro-zone/threat-profile lookups and the SecurityTagRule
+    micro-segmentation mirror. The return leg of a rule is not a rule of its
+    own: the destination segment's leaf ACL builds it from inbound_rules
+    (transforms/helpers/acl.py).
 
     Expects the host class to provide: ``client``, ``logger``, ``_safe_rel_add``.
     """
@@ -74,7 +76,7 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin, RuleLifecycleMixin):
             segment_policies[src_seg_id] = policy
 
         policy_id = policy.id
-        rule_name = planner.rule_name(app_name, src_comp, dst_comp)
+        rule_name = planner.rule_name(app_name, src_comp, dst_comp, dep)
 
         port_info = RulesPlanner.resolve_port(dep)
         if port_info is None:
@@ -162,21 +164,6 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin, RuleLifecycleMixin):
                 dep_name=dep.get("name", dep.get("id", "?")),
                 log=cross_zone,
             )
-            if rule_data.get("apply_on_switch"):
-                await self._reconcile_return_rule_for_microsegmented(
-                    app_name=app_name,
-                    src_comp=src_comp,
-                    dst_comp=dst_comp,
-                    dep=dep,
-                    src_seg=src_seg,
-                    dst_seg=dst_seg,
-                    dst_seg_id=dst_seg_id,
-                    protocol=protocol,
-                    port_start=port_start,
-                    port_end=port_end,
-                    cross_zone=cross_zone,
-                    segment_policies=segment_policies,
-                )
             return True, False
         except Exception as exc:
             self.logger.error("  Failed to create rule '%s': %s", rule_name, exc)
@@ -383,73 +370,6 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin, RuleLifecycleMixin):
                 dst_tag.get("name", dst_tag_id),
                 exc,
             )
-
-    async def _reconcile_return_rule_for_microsegmented(
-        self,
-        *,
-        app_name: str,
-        src_comp: dict[str, Any],
-        dst_comp: dict[str, Any],
-        dep: dict[str, Any],
-        src_seg: dict[str, Any],
-        dst_seg: dict[str, Any],
-        dst_seg_id: str,
-        protocol: str,
-        port_start: int | None,
-        port_end: int | None,
-        cross_zone: bool,
-        segment_policies: dict[str, Any],
-    ) -> bool:
-        """Mirror a microsegmented (apply_on_switch) permit with a return rule.
-
-        A microsegmented rule is enforced at a stateless switch ACL, which has
-        no connection tracking to auto-permit response traffic the way a
-        stateful firewall would — so the forward permit alone silently drops
-        the return leg. Scoped to the destination segment's own policy
-        (reusing the same segment_policies cache the forward pass built), so
-        it composes with the existing per-source-segment policy attachment.
-        """
-        planner = RulesPlanner()
-        dst_seg_name = str(dst_seg.get("name") or dst_seg_id or "")
-
-        policy = segment_policies.get(dst_seg_id)
-        if policy is None:
-            policy_name = planner.segment_policy_name(dst_seg)
-            policy = await self._get_or_create_policy(policy_name, dst_seg_name)
-            if policy is None:
-                return False
-            segment_policies[dst_seg_id] = policy
-
-        return_rule_name = f"{planner.rule_name(app_name, dst_comp, src_comp)}-return"
-        existing_rule = await self._find_existing_policy_rule(policy_id=policy.id, rule_name=return_rule_name)
-        if existing_rule is not None:
-            await existing_rule.save(allow_upsert=True)
-            return True
-
-        return_rule_data = planner.build_rule_payload(
-            policy_id=policy.id,
-            rule_name=return_rule_name,
-            dep=dep,
-            src_comp=dst_comp,
-            dst_comp=src_comp,
-            src_seg=dst_seg,
-            dst_seg=src_seg,
-            protocol=protocol,
-            port_start=port_start,
-            port_end=port_end,
-            cross_zone=cross_zone,
-        )
-        try:
-            await self._create_or_update_policy_rule(
-                policy_id=policy.id,
-                rule_name=return_rule_name,
-                rule_data=return_rule_data,
-            )
-            self.logger.info("  Created microsegmented return rule '%s'", return_rule_name)
-            return True
-        except Exception as exc:
-            self.logger.error("  Failed to create return rule '%s': %s", return_rule_name, exc)
-            return False
 
     @staticmethod
     def _pick_profile(app_security_profile: str, cross_zone: bool) -> str | None:

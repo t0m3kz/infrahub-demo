@@ -5,7 +5,6 @@ Domain logic has its own test files mirroring the mixins it's split across:
   - test_cloud_security_mixin.py   — CloudSecurityRuleMixin
   - test_ztna_mixin.py              — ZtnaMixin
   - test_segment_firewall_mixin.py  — SegmentFirewallMixin
-  - test_service_ports_mixin.py     — ServicePortMixin
   - test_rules_planner.py           — RulesPlanner (generators/helpers/rules.py)
 
 This file covers only:
@@ -143,7 +142,9 @@ class TestResolvePort:
 
 
 class TestDependencyRuleGenerator:
-    def test_dependency_generator_triggers_full_parent_application_reconcile(self):
+    def test_dependency_generator_triggers_full_parent_application_reconcile(self) -> None:
+        """The trigger payload only names the application; its rules come from
+        the full application query, which already reads the new dependency."""
         gen = AppApplicationGenerator.__new__(AppApplicationGenerator)
         gen.client = AsyncMock()
         gen.logger = MagicMock()
@@ -169,16 +170,7 @@ class TestDependencyRuleGenerator:
 
         asyncio.run(gen.generate(dep_data))
 
-        gen._run_for_application_name.assert_awaited_once()
-        await_call = gen._run_for_application_name.await_args
-        assert await_call is not None
-        args, kwargs = await_call
-        assert args == ("myapp",)
-        assert len(kwargs["forced_edges"]) == 1
-        src_comp, dep, dst_comp = kwargs["forced_edges"][0]
-        assert src_comp["id"] == "comp-fe"
-        assert dep["id"] == "dep-1"
-        assert dst_comp["id"] == "comp-api"
+        gen._run_for_application_name.assert_awaited_once_with("myapp")
 
     def test_dependency_generator_skips_when_source_missing(self):
         gen = AppApplicationGenerator.__new__(AppApplicationGenerator)
@@ -199,34 +191,103 @@ class TestDependencyRuleGenerator:
 
         gen._run_for_application_name.assert_not_called()
 
-
-class TestComponentRuleGenerator:
-    def test_component_generator_triggers_full_parent_application_reconcile(self):
+    def test_access_profile_grant_reconciles_the_target_application(self) -> None:
+        """A dependency from an access profile has no source component, so the
+        target endpoint's application is the one reconciled (no forced edge)."""
         gen = AppApplicationGenerator.__new__(AppApplicationGenerator)
         gen.client = AsyncMock()
         gen.logger = MagicMock()
-        gen._reconcile_application_rules = AsyncMock()
+        gen._run_for_application_name = AsyncMock()
 
-        component_data = {
-            "AppComponent": [
+        dep_data = {
+            "AppDependency": [
                 {
-                    "id": "comp-1",
-                    "slug": "frontend",
-                    "parent": {
-                        "name": "myapp",
+                    "id": "dep-1",
+                    "name": "c001-checkout-web-private-access",
+                    "source_profile": {"id": "profile-1", "name": "c001-private-access-standard"},
+                    "target": {
+                        "id": "endpoint-1",
+                        "name": "checkout-web",
+                        "parent": {"id": "comp-fe", "parent": {"name": "c001-checkout-p"}},
                     },
                 }
             ]
         }
 
-        asyncio.run(gen.generate(component_data))
+        asyncio.run(gen.generate(dep_data))
 
-        gen._reconcile_application_rules.assert_awaited_once()
-        await_call = gen._reconcile_application_rules.await_args
-        assert await_call is not None
-        args, kwargs = await_call
-        assert args == ({"name": "myapp"},)
-        assert kwargs["forced_edges"] == []
+        gen._run_for_application_name.assert_awaited_once_with("c001-checkout-p")
+
+    def test_dependency_without_any_source_is_skipped(self) -> None:
+        """Neither source nor source_profile: nothing to reconcile."""
+        gen = AppApplicationGenerator.__new__(AppApplicationGenerator)
+        gen.client = AsyncMock()
+        gen.logger = MagicMock()
+        gen._run_for_application_name = AsyncMock()
+
+        dep_data = {"AppDependency": [{"id": "dep-1", "name": "orphan", "target": {"id": "endpoint-1"}}]}
+
+        asyncio.run(gen.generate(dep_data))
+
+        gen._run_for_application_name.assert_not_called()
+
+
+def _component_payload(*dependents: dict[str, Any]) -> dict[str, Any]:
+    """app_component payload: component of app-b whose one endpoint has the given dependents."""
+    return {
+        "AppComponent": [
+            {
+                "id": "comp-db",
+                "slug": "c001-b-p-db",
+                "parent": {"id": "app-b", "name": "c001-b-p"},
+                "children": [{"id": "ep-1", "name": "db-postgres", "dependents": list(dependents)}],
+            }
+        ]
+    }
+
+
+def _caller(dep_id: str, app_id: str) -> dict[str, Any]:
+    return {"id": dep_id, "source": {"id": f"comp-{app_id}", "parent": {"id": app_id, "name": f"name-{app_id}"}}}
+
+
+class TestComponentRuleGenerator:
+    """A component moved to another segment: its rules and its callers' rules name that segment."""
+
+    def _gen(self) -> Any:
+        gen = AppApplicationGenerator.__new__(AppApplicationGenerator)
+        gen.client = AsyncMock()
+        gen.logger = MagicMock()
+        gen._run_for_application_name = AsyncMock()
+        gen.run_generator = AsyncMock()
+        return gen
+
+    def test_component_generator_triggers_full_parent_application_reconcile(self) -> None:
+        """The component's own application is reconciled in full."""
+        gen = self._gen()
+
+        asyncio.run(gen.generate(_component_payload()))
+
+        gen._run_for_application_name.assert_awaited_once_with("c001-b-p")
+        gen.run_generator.assert_not_called()
+
+    def test_calling_applications_are_re_reconciled_once_each(self) -> None:
+        """Every other application calling an endpoint gets one add_app_application run."""
+        gen = self._gen()
+        payload = _component_payload(_caller("dep-1", "app-c"), _caller("dep-2", "app-a"), _caller("dep-3", "app-a"))
+
+        asyncio.run(gen.generate(payload))
+
+        gen.run_generator.assert_awaited_once_with("add_app_application", ["app-a", "app-c"], wait=False)
+
+    def test_own_application_and_access_grants_are_not_fanned_out(self) -> None:
+        """A call from inside the application and an access-profile grant start no extra run."""
+        gen = self._gen()
+        grant = {"id": "dep-grant", "source": None, "source_profile": {"id": "profile-1"}}
+        payload = _component_payload(_caller("dep-1", "app-b"), grant)
+
+        asyncio.run(gen.generate(payload))
+
+        gen.run_generator.assert_not_called()
 
 
 # ===========================================================================
@@ -242,7 +303,6 @@ class TestReconcileApplicationRulesSegmentIsolationMode:
     def _make_gen_ready(self, *, components: list[dict]) -> Any:
         gen = _make_gen()
         gen._ensure_segment_isolation_mode = AsyncMock()
-        gen._reconcile_component_service_ports = AsyncMock()
         gen._reconcile_private_access_endpoints = AsyncMock(return_value=(0, 0))
         gen._dependency_edges_from_components = MagicMock(return_value=[])
         app = {"name": "fraud-detection", "security_profile": "fintech_strict", "children": components}
@@ -271,6 +331,15 @@ class TestReconcileApplicationRulesSegmentIsolationMode:
 
         gen._ensure_segment_isolation_mode.assert_awaited_once()
 
+    def test_private_access_grants_are_published_without_dependency_edges(self) -> None:
+        """An app whose only inbound access is an access-profile grant still gets published."""
+        components = [{"id": "comp-1", "network_segment": {"id": "seg-1", "name": "seg-1"}}]
+        gen, app = self._make_gen_ready(components=components)
+
+        asyncio.run(gen._reconcile_application_rules(app))
+
+        gen._reconcile_private_access_endpoints.assert_awaited_once_with("fraud-detection", components)
+
     def test_component_without_a_network_segment_gets_an_empty_dict(self):
         components = [{"id": "comp-1"}]
         gen, app = self._make_gen_ready(components=components)
@@ -293,7 +362,6 @@ class TestReconcileApplicationRulesCloudDispatch:
 
     def _make_gen_ready(self) -> Any:
         gen = _make_gen()
-        gen._reconcile_component_service_ports = AsyncMock()
         gen._reconcile_private_access_endpoints = AsyncMock(return_value=(0, 0))
         gen._create_cloud_rule = AsyncMock(return_value=True)
         gen._get_or_create_policy = AsyncMock()

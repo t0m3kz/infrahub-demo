@@ -76,18 +76,20 @@ query proxy_cloud_config($instance: String!) {
                                   name { value }
                                   endpoint_type { value }
                                   fqdn { value }
-                                  service_ports {
+                                  dependents {
                                     edges {
                                       node {
-                                        port { value }
-                                        port_end { value }
                                         protocol { value }
+                                        port_start { value }
+                                        port_end { value }
+                                        access_status { value }
+                                        source_profile {
+                                          node {
+                                            name { value }
+                                            allowed_groups { edges { node { name { value } } } }
+                                          }
+                                        }
                                       }
-                                    }
-                                  }
-                                  access_profile {
-                                    node {
-                                      allowed_groups { edges { node { name { value } } } }
                                     }
                                   }
                                 }

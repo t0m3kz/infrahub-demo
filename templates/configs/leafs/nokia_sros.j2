@@ -62,6 +62,12 @@ configure filter ip-filter {{ acl.vlan_id }} entry {{ rule.seq }} match dst-ip p
 {%- if rule.dst_port %}
 configure filter ip-filter {{ acl.vlan_id }} entry {{ rule.seq }} match dst-port port {{ rule.dst_port | replace('eq ', '') | replace('range ', '') }}
 {%- endif %}
+{%- if rule.src_port %}
+configure filter ip-filter {{ acl.vlan_id }} entry {{ rule.seq }} match src-port port {{ rule.src_port | replace('eq ', '') | replace('range ', '') }}
+{%- endif %}
+{%- if rule.established %}
+configure filter ip-filter {{ acl.vlan_id }} entry {{ rule.seq }} match tcp-flags ack true
+{%- endif %}
 {%- if rule.log %}
 configure filter ip-filter {{ acl.vlan_id }} entry {{ rule.seq }} action log
 {%- endif %}

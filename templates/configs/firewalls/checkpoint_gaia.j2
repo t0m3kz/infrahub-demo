@@ -1,4 +1,25 @@
 {#- Check Point Gaia — zone-based firewall configuration -#}
+{%- macro security_policies(policies) %}
+! --- Security Policy Rules ---
+{%- for policy in policies %}
+{%- for rule in policy.rules %}
+{%- if rule.raw_protocol in ('tcp', 'udp') and rule.port_start %}
+{%- set svc_name = 'svc-' + rule.raw_protocol + '-' + rule.port_start | string + ('-' + rule.port_end | string if rule.port_end and rule.port_end != rule.port_start else '') %}
+add service-{{ rule.raw_protocol }} name {{ svc_name }} port {{ rule.port_start }}{{ '-' + rule.port_end | string if rule.port_end and rule.port_end != rule.port_start else '' }}
+{%- else %}
+{%- set svc_name = 'Any' %}
+{%- endif %}
+add access-rule layer "Network" position {{ rule.seq }} name "{{ rule.name }}" action {{ 'accept' if rule.action == 'permit' else 'drop' }} source {{ rule.src or 'Any' }} destination {{ rule.dst or 'Any' }} service {{ svc_name }} track {{ 'Log' if rule.log else 'None' }}
+{%- if rule.src_zone %}
+set access-rule layer "Network" name "{{ rule.name }}" source {{ rule.src_zone }}
+{%- endif %}
+{%- if rule.dst_zone %}
+set access-rule layer "Network" name "{{ rule.name }}" destination {{ rule.dst_zone }}
+{%- endif %}
+{%- endfor %}
+{%- endfor %}
+!
+{%- endmacro -%}
 !
 set hostname {{ name }}
 !
@@ -40,26 +61,7 @@ set static-route {{ route.destination }} nexthop gateway address {{ route.nextho
 {%- endfor %}
 !
 {%- endif %}
-{%- if zone_policies %}
-! --- Security Policy Rules ---
-{%- for policy in zone_policies %}
-{%- for rule in policy.rules %}
-{%- if rule.raw_protocol in ('tcp', 'udp') and rule.port_start %}
-{%- set svc_name = 'svc-' + rule.raw_protocol + '-' + rule.port_start | string + ('-' + rule.port_end | string if rule.port_end and rule.port_end != rule.port_start else '') %}
-add service-{{ rule.raw_protocol }} name {{ svc_name }} port {{ rule.port_start }}{{ '-' + rule.port_end | string if rule.port_end and rule.port_end != rule.port_start else '' }}
-{%- else %}
-{%- set svc_name = 'Any' %}
-{%- endif %}
-add access-rule layer "Network" position {{ rule.seq }} name "{{ rule.name }}" action {{ 'accept' if rule.action == 'permit' else 'drop' }} source {{ rule.src or 'Any' }} destination {{ rule.dst or 'Any' }} service {{ svc_name }} track {{ 'Log' if rule.log else 'None' }}
-{%- if rule.src_zone %}
-set access-rule layer "Network" name "{{ rule.name }}" source {{ rule.src_zone }}
-{%- endif %}
-{%- if rule.dst_zone %}
-set access-rule layer "Network" name "{{ rule.name }}" destination {{ rule.dst_zone }}
-{%- endif %}
-{%- endfor %}
-{%- endfor %}
-!
+{%- if zone_policies %}{{ security_policies(zone_policies) }}
 {%- endif %}
 {%- if contexts %}
 !
@@ -81,6 +83,11 @@ set virtual-system {{ context.name }} interface {{ ctx_iface_name }}
 {%- endif %}
 {%- endfor %}
 !
+{%- for context in contexts if context.policies %}
+! --- Security Policies in virtual system {{ context.name }} ---
+set virtual-system {{ context.name }}
+{{- security_policies(context.policies) }}
+{%- endfor %}
 {%- endif %}
 {%- if ha %}
 !

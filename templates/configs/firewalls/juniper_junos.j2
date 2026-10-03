@@ -1,4 +1,26 @@
 {#- Juniper JunOS SRX — zone-based firewall configuration -#}
+{%- macro security_policies(policies, scope='', title='Security Policies') %}
+#
+# --- {{ title }} ---
+{%- for policy in policies %}
+{%- for rule in policy.rules %}
+set {{ scope }}security policies from-zone {{ rule.src_zone or 'any' }} to-zone {{ rule.dst_zone or 'any' }} policy {{ rule.name | replace(' ', '-') }} match source-address {{ rule.src or 'any' }}
+set {{ scope }}security policies from-zone {{ rule.src_zone or 'any' }} to-zone {{ rule.dst_zone or 'any' }} policy {{ rule.name | replace(' ', '-') }} match destination-address {{ rule.dst or 'any' }}
+{%- if rule.raw_protocol in ('tcp', 'udp') and rule.port_start %}
+{%- set app_name = 'app-' + rule.raw_protocol + '-' + rule.port_start | string + ('-' + rule.port_end | string if rule.port_end and rule.port_end != rule.port_start else '') %}
+set applications application {{ app_name }} protocol {{ rule.raw_protocol }} destination-port {{ rule.port_start }}{{ '-' + rule.port_end | string if rule.port_end and rule.port_end != rule.port_start else '' }}
+set {{ scope }}security policies from-zone {{ rule.src_zone or 'any' }} to-zone {{ rule.dst_zone or 'any' }} policy {{ rule.name | replace(' ', '-') }} match application {{ app_name }}
+{%- else %}
+set {{ scope }}security policies from-zone {{ rule.src_zone or 'any' }} to-zone {{ rule.dst_zone or 'any' }} policy {{ rule.name | replace(' ', '-') }} match application any
+{%- endif %}
+set {{ scope }}security policies from-zone {{ rule.src_zone or 'any' }} to-zone {{ rule.dst_zone or 'any' }} policy {{ rule.name | replace(' ', '-') }} then {{ 'permit' if rule.action == 'permit' else 'deny' }}
+{%- if rule.log %}
+set {{ scope }}security policies from-zone {{ rule.src_zone or 'any' }} to-zone {{ rule.dst_zone or 'any' }} policy {{ rule.name | replace(' ', '-') }} then log session-close
+{%- endif %}
+{%- endfor %}
+{%- endfor %}
+#
+{%- endmacro -%}
 set system host-name {{ name }}
 #
 {%- if fw_interfaces %}
@@ -48,28 +70,11 @@ set routing-instances {{ route.vrf | replace(' ', '-') }} routing-options static
 {%- endfor %}
 #
 {%- endif %}
-{%- if zone_policies %}
-#
-# --- Security Policies ---
-{%- for policy in zone_policies %}
-{%- for rule in policy.rules %}
-set security policies from-zone {{ rule.src_zone or 'any' }} to-zone {{ rule.dst_zone or 'any' }} policy {{ rule.name | replace(' ', '-') }} match source-address {{ rule.src or 'any' }}
-set security policies from-zone {{ rule.src_zone or 'any' }} to-zone {{ rule.dst_zone or 'any' }} policy {{ rule.name | replace(' ', '-') }} match destination-address {{ rule.dst or 'any' }}
-{%- if rule.raw_protocol in ('tcp', 'udp') and rule.port_start %}
-{%- set app_name = 'app-' + rule.raw_protocol + '-' + rule.port_start | string + ('-' + rule.port_end | string if rule.port_end and rule.port_end != rule.port_start else '') %}
-set applications application {{ app_name }} protocol {{ rule.raw_protocol }} destination-port {{ rule.port_start }}{{ '-' + rule.port_end | string if rule.port_end and rule.port_end != rule.port_start else '' }}
-set security policies from-zone {{ rule.src_zone or 'any' }} to-zone {{ rule.dst_zone or 'any' }} policy {{ rule.name | replace(' ', '-') }} match application {{ app_name }}
-{%- else %}
-set security policies from-zone {{ rule.src_zone or 'any' }} to-zone {{ rule.dst_zone or 'any' }} policy {{ rule.name | replace(' ', '-') }} match application any
+{%- if zone_policies %}{{ security_policies(zone_policies) }}
 {%- endif %}
-set security policies from-zone {{ rule.src_zone or 'any' }} to-zone {{ rule.dst_zone or 'any' }} policy {{ rule.name | replace(' ', '-') }} then {{ 'permit' if rule.action == 'permit' else 'deny' }}
-{%- if rule.log %}
-set security policies from-zone {{ rule.src_zone or 'any' }} to-zone {{ rule.dst_zone or 'any' }} policy {{ rule.name | replace(' ', '-') }} then log session-close
-{%- endif %}
+{%- for context in contexts if context.policies %}
+{{- security_policies(context.policies, 'tenants ' + context.name + ' ', 'Security Policies in tenant system ' + context.name) }}
 {%- endfor %}
-{%- endfor %}
-#
-{%- endif %}
 {%- if ha %}
 #
 # --- Chassis Cluster ---

@@ -241,6 +241,7 @@ class ManagedNetworkSegment(CoreNode):
     segment_type: DropdownOptional
     status: Dropdown
     gateway: RelationshipAttribute[IpamIPAddress]
+    inbound_rules: RelationshipManager[SecurityPolicyRule]
     owner: RelationshipAttribute[OrganizationCustomer]
 
 
@@ -282,6 +283,7 @@ class CloudHybridAttachment(CoreNode):
 class ManagedTenantScoped(CoreNode):
     firewall_context: RelationshipAttribute[ManagedFirewallContext]
     loadbalancer_ha: RelationshipAttribute[ManagedLoadbalancerHA]
+    serving_firewall_context: RelationshipAttribute[ManagedFirewallContext]
 
 
 class ManagedRouting(CoreNode):
@@ -657,6 +659,7 @@ class AppDependency(CoreNode):
     port_start: IntegerOptional
     protocol: DropdownOptional
     source: RelationshipAttribute[AppComponent]
+    source_profile: RelationshipAttribute[CoreNode]
     target: RelationshipAttribute[AppComponent]
 
 
@@ -718,6 +721,7 @@ class ManagedFirewallContext(ManagedGeneric, ManagedGenericInterfaces, ManagedIn
     vlan_id: IntegerOptional
     cluster: RelationshipAttribute[ManagedFirewallHA]
     tenant: RelationshipAttribute[ManagedTenantScoped]
+    served_deployments: RelationshipManager[ManagedTenantScoped]
 
 
 class ManagedFirewallHA(ManagedHA, ManagedGeneric, ManagedGenericDevice, ManagedInlineService):
@@ -1212,14 +1216,6 @@ class ManagedVlanDomainSegment(CoreNode):
     vlan_id: Integer
     segment: RelationshipAttribute[ManagedVxlanSegment]
     vlan_domain: RelationshipAttribute[ManagedGenericVlanDomain]
-
-
-class AppServicePort(CoreNode):
-    description: StringOptional
-    name: StringOptional
-    port: Integer
-    port_end: IntegerOptional
-    protocol: Dropdown
 
 
 class DcimSoftwareImage(CoreNode):

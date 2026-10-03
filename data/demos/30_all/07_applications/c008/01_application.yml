@@ -25,10 +25,6 @@ spec:
             instances:
               - c008-sync-api-dc12-1
               - c008-sync-api-dc12-2
-            service_ports:
-              data:
-                - port: 8443
-                  protocol: tcp
             member_of_groups:
               - app_components
 
@@ -38,9 +34,11 @@ spec:
             instances:
               - c008-sync-db-dc12-1
               - c008-sync-db-dc12-2
-            service_ports:
+            children:
+              kind: AppEndpoint
               data:
-                - port: 5432
-                  protocol: tcp
+                - name: sync-db-postgres
+                  endpoint_type: internal_service
+                  fqdn: db.inventory-sync.c008.demo.local
             member_of_groups:
               - app_components

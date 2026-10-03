@@ -6,6 +6,7 @@ from transforms.common import (
     get_firewall_static_routes,
     get_firewall_zones,
     get_zone_policies,
+    place_policies_in_contexts,
 )
 from transforms.helpers.ha import get_ha
 from utils.data_cleaning import clean_data
@@ -183,6 +184,15 @@ class Firewall(BaseDeviceTransform):
         segment_policies_data = _collect_segment_policies(activations)
         all_policies_data = _merge_policies(global_policies_data, segment_policies_data)
 
+        # Each rule lands in the context (VDOM/vsys) its segments' traffic is
+        # redirected to; only rules no context serves stay in the root list.
+        contexts = get_firewall_contexts(device.get("interfaces"))
+        root_policies_data, context_policies_data = place_policies_in_contexts(
+            all_policies_data, contexts, segments=[act.get("segment") or {} for act in activations]
+        )
+        for context in contexts:
+            context["policies"] = get_zone_policies(context_policies_data.get(context["id"]))
+
         zones = get_firewall_zones(zones_data)
         config = self._build_config(device, platform_name)
         ha_config = get_ha(device.get("capabilities"), device.get("interfaces"))
@@ -190,10 +200,10 @@ class Firewall(BaseDeviceTransform):
             {
                 "fw_interfaces": fw_interfaces,
                 "zones": zones,
-                "zone_policies": get_zone_policies(all_policies_data),
+                "zone_policies": get_zone_policies(root_policies_data),
                 "static_routes": get_firewall_static_routes(fw_interfaces, zones),
                 "ha": ha_config,
-                "contexts": get_firewall_contexts(device.get("interfaces")),
+                "contexts": contexts,
             }
         )
 

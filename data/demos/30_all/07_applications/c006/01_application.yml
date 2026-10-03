@@ -28,10 +28,6 @@ spec:
             instances:
               - c006-web-ui-dc11-1
               - c006-web-ui-dc11-2
-            service_ports:
-              data:
-                - port: 443
-                  protocol: tcp
             member_of_groups:
               - app_components
 
@@ -41,10 +37,12 @@ spec:
             instances:
               - c006-erp-backend-dc11-1
               - c006-erp-backend-dc11-2
-            service_ports:
+            children:
+              kind: AppEndpoint
               data:
-                - port: 8443
-                  protocol: tcp
+                - name: erp-backend-api
+                  endpoint_type: internal_service
+                  fqdn: backend.erp-core.c006.demo.local
             member_of_groups:
               - app_components
 
@@ -54,9 +52,11 @@ spec:
             instances:
               - c006-erp-db-dc11-1
               - c006-erp-db-dc11-2
-            service_ports:
+            children:
+              kind: AppEndpoint
               data:
-                - port: 5432
-                  protocol: tcp
+                - name: erp-db-postgres
+                  endpoint_type: internal_service
+                  fqdn: db.erp-core.c006.demo.local
             member_of_groups:
               - app_components

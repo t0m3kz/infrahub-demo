@@ -24,10 +24,6 @@ spec:
             instances:
               - c003-api-frontend-euc1-1
               - c003-api-frontend-euc1-2
-            service_ports:
-              data:
-                - port: 443
-                  protocol: tcp
             member_of_groups:
               - app_components
 
@@ -37,10 +33,6 @@ spec:
             instances:
               - c003-api-backend-euc1-1
               - c003-api-backend-euc1-2
-            service_ports:
-              data:
-                - port: 8443
-                  protocol: tcp
             children:
               kind: AppEndpoint
               data:

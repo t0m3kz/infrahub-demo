@@ -726,6 +726,71 @@ class TestEnsureVlanDomainSegment:
         assert call_kwargs["data"]["vlan_id"]["from_pool"]["id"] == "pool-vlan-1"
         activation.save.assert_called_once()
 
+    def test_known_pool_skips_reading_the_domain(self) -> None:
+        """A pool id handed over by the caller is used as is, without a domain read."""
+        gen = _make_gen()
+        gen.client.filters = AsyncMock(return_value=[])
+        activation = MagicMock()
+        activation.save = AsyncMock()
+        gen.client.get = AsyncMock()
+        gen.client.create = AsyncMock(return_value=activation)
+
+        asyncio.run(gen._ensure_vlan_domain_segment("seg-1", "vxlan-1000", "domain-1", "pool-1"))
+
+        gen.client.get.assert_not_called()
+        assert gen.client.create.call_args.kwargs["data"]["vlan_id"]["from_pool"]["id"] == "pool-1"
+
+
+class TestEnsureStandaloneVlanDomain:
+    """Segments are generated in parallel, so a standalone domain may exist
+    before the run that created it has attached its pool."""
+
+    @staticmethod
+    def _device() -> MagicMock:
+        device = MagicMock(id="dev-1")
+        device.name.value = "bl-dc101101"
+        return device
+
+    @staticmethod
+    def _gen(existing: list[Any]) -> Any:
+        gen = _make_gen()
+        gen.client.filters = AsyncMock(return_value=existing)
+        gen.upsert_number_pool = AsyncMock(return_value=MagicMock(id="pool-1"))
+        return gen
+
+    def test_existing_domain_with_pool_is_reused(self) -> None:
+        gen = self._gen([MagicMock(id="domain-1", vlan_pool=MagicMock(id="pool-1"))])
+
+        result = asyncio.run(gen._ensure_standalone_vlan_domain(self._device()))
+
+        assert result == ("domain-1", "pool-1")
+        gen.upsert_number_pool.assert_not_awaited()
+        gen.client.create.assert_not_called()
+
+    def test_existing_domain_without_pool_gets_it_upserted(self) -> None:
+        """The race: another run created the domain but has not attached the pool yet."""
+        gen = self._gen([MagicMock(id="domain-1", vlan_pool=None)])
+
+        result = asyncio.run(gen._ensure_standalone_vlan_domain(self._device()))
+
+        assert result == ("domain-1", "pool-1")
+        gen.client.create.assert_not_called()
+        kwargs = gen.upsert_number_pool.await_args.kwargs
+        assert kwargs["pool_name"] == "bl-dc101101-vlan-domain-vlan-pool"
+        assert kwargs["parent_id"] == "domain-1"
+
+    def test_missing_domain_is_created_with_its_pool(self) -> None:
+        gen = self._gen([])
+        domain_obj = MagicMock(id="domain-new")
+        domain_obj.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=domain_obj)
+
+        result = asyncio.run(gen._ensure_standalone_vlan_domain(self._device()))
+
+        assert result == ("domain-new", "pool-1")
+        assert gen.client.create.call_args.kwargs["data"]["name"] == "bl-dc101101-vlan-domain"
+        assert gen.upsert_number_pool.await_args.kwargs["parent_id"] == "domain-new"
+
 
 # ===========================================================================
 # TestEnsureSecurityZone
@@ -851,7 +916,7 @@ class TestBorderGatewayVlanDomain:
     def test_border_gateway_without_customer_ports_gets_domain_segment(self) -> None:
         devices = [_device("bl-1", "border-leaf"), _device("leaf-1", "leaf")]
         gen = asyncio.run(self._assign(devices, stretched=True))
-        gen._ensure_vlan_domain_segment.assert_awaited_once_with("seg-1", "colo-services-stretch", "domain-bl-1")
+        gen._ensure_vlan_domain_segment.assert_awaited_once_with("seg-1", "colo-services-stretch", "domain-bl-1", None)
 
     def test_local_segment_without_customer_ports_skips(self) -> None:
         gen = asyncio.run(self._assign([_device("leaf-1", "leaf")], stretched=False))
@@ -896,7 +961,7 @@ class TestAssignSegmentToDcInterfaces:
         gen, segment_obj = self._run(iface)
         iface.interface_capabilities.add.assert_called_once_with(segment_obj)
         iface.save.assert_awaited_once()
-        gen._ensure_vlan_domain_segment.assert_awaited_once_with("seg-1", "seg", "mlag-1")
+        gen._ensure_vlan_domain_segment.assert_awaited_once_with("seg-1", "seg", "mlag-1", None)
 
     def test_already_assigned_port_is_left_alone(self) -> None:
         """Re-running is idempotent: an assigned, active port is neither re-added nor saved."""

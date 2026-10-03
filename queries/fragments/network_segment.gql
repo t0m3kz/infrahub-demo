@@ -130,6 +130,7 @@ fragment SegmentSecurityPolicyFields on ManagedNetworkSegment {
               port_end { value }
               log { value }
               disabled { value }
+              security_profile { node { name { value } } }
               source_zone { node { name { value } } }
               destination_zone { node { name { value } } }
               source_segment {
@@ -157,15 +158,54 @@ fragment SegmentSecurityPolicyFields on ManagedNetworkSegment {
                     customer_name { value }
                     environment { value }
                     gateway { node { ip_prefix { node { prefix { value } } } } }
+                    customer_deployment { node { id } }
                   }
                   ... on ManagedVxlanSegment {
                     name { value }
                     customer_name { value }
                     environment { value }
                     gateway { node { ip_prefix { node { prefix { value } } } } }
+                    customer_deployments { edges { node { id } } }
                   }
                 }
               }
+            }
+          }
+        }
+      }
+    }
+  }
+  # Rules whose destination is this segment, from any segment's policy: a leaf
+  # carrying only this segment answers those flows from them (return ACL and
+  # PBR bypass, transforms/helpers/acl.py and firewall.py).
+  inbound_rules {
+    edges {
+      node {
+        index { value }
+        name { value }
+        action { value }
+        protocol { value }
+        port_start { value }
+        port_end { value }
+        disabled { value }
+        security_profile { node { name { value } } }
+        policy { node { enabled { value } } }
+        source_segment {
+          node {
+            id
+            ... on ManagedVlanSegment {
+              name { value }
+              customer_name { value }
+              environment { value }
+              gateway { node { ip_prefix { node { prefix { value } } } } }
+              customer_deployment { node { id } }
+            }
+            ... on ManagedVxlanSegment {
+              name { value }
+              customer_name { value }
+              environment { value }
+              gateway { node { ip_prefix { node { prefix { value } } } } }
+              customer_deployments { edges { node { id } } }
             }
           }
         }

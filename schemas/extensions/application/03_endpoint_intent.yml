@@ -2,8 +2,9 @@
 version: "1.0"
 
 # Application connectivity intent is modeled as endpoints and reusable access
-# profiles. Device/proxy selections are resolved from the owning customer or
-# deployment rather than authored on every AppComponent.
+# profiles. Who reaches an endpoint, and on which ports, is an AppDependency
+# (02_app_dependency.yml). Device/proxy selections are resolved from the owning
+# customer or deployment rather than authored on every AppComponent.
 nodes:
   - name: AccessProfile
     namespace: Security
@@ -97,20 +98,10 @@ nodes:
     relationships:
       - name: service_ports
         peer: AppServicePort
-        cardinality: many
-        kind: Attribute
-        optional: true
-        on_delete: no-action
-        identifier: "app_endpoint__service_ports"
-        order_weight: 1000
+        state: absent
       - name: access_profile
         peer: SecurityAccessProfile
-        cardinality: one
-        kind: Attribute
-        optional: true
-        on_delete: no-action
-        identifier: "app_endpoint__access_profile"
-        order_weight: 1100
+        state: absent
 
 extensions:
   nodes:

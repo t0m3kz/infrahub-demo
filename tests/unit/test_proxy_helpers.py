@@ -9,6 +9,8 @@ Covers:
 
 from __future__ import annotations
 
+from typing import Any
+
 from transforms.helpers.proxy import (
     flatten_proxy_rules,
     get_private_access_segments,
@@ -40,6 +42,17 @@ def _category_rule(name: str, priority: int, categories: list[dict], action: str
         "log": False,
         "description": "",
         "disabled": False,
+    }
+
+
+def _grant(status: str = "approved", groups: tuple[str, ...] = ("engineering",)) -> dict[str, Any]:
+    """An AppDependency from an access profile, as seen in endpoint.dependents."""
+    return {
+        "protocol": "tcp",
+        "port_start": 443,
+        "port_end": None,
+        "access_status": status,
+        "source_profile": {"name": "private-access-standard", "allowed_groups": [{"name": g} for g in groups]},
     }
 
 
@@ -193,8 +206,7 @@ class TestGetPrivateAccessSegments:
                                         "name": "checkout-api",
                                         "endpoint_type": "private_access",
                                         "fqdn": "checkout-api.internal.example.com",
-                                        "service_ports": [{"port": 443, "port_end": None, "protocol": "tcp"}],
-                                        "access_profile": {"allowed_groups": [{"name": "engineering"}]},
+                                        "dependents": [_grant()],
                                     }
                                 ]
                             }
@@ -209,6 +221,40 @@ class TestGetPrivateAccessSegments:
         assert result[0]["fqdn"] == "checkout-api.internal.example.com"
         assert result[0]["ports"] == [{"port": 443, "port_end": None, "protocol": "tcp"}]
         assert result[0]["allowed_groups"] == ["engineering"]
+
+    @staticmethod
+    def _customers(dependents: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        endpoint = {
+            "name": "checkout-api",
+            "endpoint_type": "private_access",
+            "fqdn": "checkout-api.internal.example.com",
+            "dependents": dependents,
+        }
+        return [{"applications": [{"children": [{"children": [endpoint]}]}]}]
+
+    def test_endpoint_without_a_grant_is_not_published(self) -> None:
+        """Only an access-profile dependency makes a private_access endpoint a segment."""
+        component_caller = {**_grant(), "source_profile": None}
+        assert get_private_access_segments(self._customers([])) == []
+        assert get_private_access_segments(self._customers([component_caller])) == []
+
+    def test_denied_grant_admits_nobody(self) -> None:
+        """A denied grant contributes neither ports nor groups."""
+        assert get_private_access_segments(self._customers([_grant(status="denied")])) == []
+        (segment,) = get_private_access_segments(
+            self._customers([_grant(), _grant(status="denied", groups=("contractors",))])
+        )
+        assert segment["allowed_groups"] == ["engineering"]
+
+    def test_grants_merge_ports_and_groups_without_duplicates(self) -> None:
+        """Two profiles on one endpoint give one segment with the union of ports and groups."""
+        ssh = {**_grant(groups=("engineering", "ops")), "port_start": 22}
+        (segment,) = get_private_access_segments(self._customers([_grant(), ssh, _grant()]))
+        assert segment["ports"] == [
+            {"port": 443, "port_end": None, "protocol": "tcp"},
+            {"port": 22, "port_end": None, "protocol": "tcp"},
+        ]
+        assert segment["allowed_groups"] == ["engineering", "ops"]
 
     def test_non_private_endpoint_and_empty_input_are_skipped(self) -> None:
         customers = [{"applications": [{"children": [{"children": [{"endpoint_type": "internal_service"}]}]}]}]

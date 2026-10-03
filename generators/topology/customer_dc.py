@@ -38,6 +38,7 @@ from ..protocols import (
     IpamPrefix,
     ManagedFirewallContext,
     ManagedFirewallHA,
+    TopologyCustomerDC,
 )
 from .dc import _VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE
 
@@ -233,6 +234,7 @@ class CustomerDeploymentDCExchangeGenerator(PoolMixin, DeviceMixin, CablingMixin
             context_obj = await self._get_or_create_firewall_context(context_name, cluster.id, tenant_id)
             if context_obj is None:
                 return
+            await self._link_serving_firewall_context(customer_id, context_obj.id)
 
             connectivity_mode = parent.get("connectivity_mode") or "pbr"
             await self._ensure_context_subinterface(
@@ -424,6 +426,25 @@ class CustomerDeploymentDCExchangeGenerator(PoolMixin, DeviceMixin, CablingMixin
         except Exception as exc:
             self.logger.error(f"Failed to create FirewallContext '{context_name}': {exc}")
             return None
+
+    async def _link_serving_firewall_context(self, customer_id: str, context_id: str) -> None:
+        """Point this deployment at the context its segments terminate on.
+
+        The firewall transform reads the link to place each rule in the
+        contexts of its two segments. Only this deployment's own run writes
+        it, so boardings onto one shared context never race. Not tracked:
+        the deployment is the generator's target, not its output, and
+        tracking it would let delete_unused_nodes remove it.
+        """
+        try:
+            deployment = await self.client.get(kind=TopologyCustomerDC, id=customer_id)
+            if deployment.serving_firewall_context.id == context_id:
+                return
+            deployment.serving_firewall_context = context_id
+            await deployment.save(update_group_context=False)
+            self.logger.info(f"Deployment {customer_id} served by FirewallContext {context_id}")
+        except Exception as exc:
+            self.logger.error(f"Failed to link deployment {customer_id} to FirewallContext {context_id}: {exc}")
 
     async def _ensure_context_subinterface(
         self,

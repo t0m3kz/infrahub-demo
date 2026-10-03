@@ -18,6 +18,8 @@ spec:
       port_start: 443
       access_status: auto
       description: "Checkout frontend calls the Stripe payment API"
+      member_of_groups:
+        - app_dependencies
 
     - name: c001-storefront-p-app-backend-to-github-api
       source: c001-storefront-p-app-backend
@@ -26,3 +28,5 @@ spec:
       port_start: 443
       access_status: auto
       description: "Checkout backend calls the GitHub API for deployment status"
+      member_of_groups:
+        - app_dependencies

@@ -1,0 +1,26 @@
+---
+# Who calls whom inside dispatch-hub, and on which ports. The ports live only
+# on these dependencies; 00_applications.yml declares the endpoints.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppDependency
+  data:
+    - name: c002-dispatch-hub-p-app-backend-to-order-db
+      source: c002-dispatch-hub-p-app-backend
+      target: ["c002-dispatch-hub-p-order-db", "c002-dispatch-data"]
+      protocol: tcp
+      port_start: 5432
+      access_status: auto
+      description: "Backend reads and writes dispatch orders"
+      member_of_groups:
+        - app_dependencies
+    - name: c002-dispatch-hub-p-app-backend-to-order-db-tcp-6379
+      source: c002-dispatch-hub-p-app-backend
+      target: ["c002-dispatch-hub-p-order-db", "c002-dispatch-data"]
+      protocol: tcp
+      port_start: 6379
+      access_status: auto
+      description: "Backend caches dispatch state next to the database"
+      member_of_groups:
+        - app_dependencies

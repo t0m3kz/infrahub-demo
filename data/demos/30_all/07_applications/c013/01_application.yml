@@ -23,10 +23,6 @@ spec:
             instances:
               - c013-scoring-api-ams-1
               - c013-scoring-api-ams-2
-            service_ports:
-              data:
-                - port: 8443
-                  protocol: tcp
             member_of_groups:
               - app_components
 
@@ -36,9 +32,11 @@ spec:
             instances:
               - c013-feature-cache-ams-1
               - c013-feature-cache-ams-2
-            service_ports:
+            children:
+              kind: AppEndpoint
               data:
-                - port: 6379
-                  protocol: tcp
+                - name: feature-cache-redis
+                  endpoint_type: internal_service
+                  fqdn: cache.fraud-detection.c013.demo.local
             member_of_groups:
               - app_components

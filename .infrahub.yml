@@ -593,6 +593,10 @@ queries:
     file_path: queries/topology/add/virt_cluster_capacity.gql
   - name: application
     file_path: queries/topology/add/application.gql
+  - name: app_dependency
+    file_path: queries/topology/add/app_dependency.gql
+  - name: app_component
+    file_path: queries/topology/add/app_component.gql
   - name: vxlan_segment_data
     file_path: queries/topology/add/vxlan_segment.gql
   - name: loadbalancer_vip_data
@@ -815,6 +819,38 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
+  # Same generator, entered from a dependency: the application trigger fires
+  # before the dependencies of a freshly loaded application exist, and a
+  # dependency added later changes no AppApplication at all.
+  - name: add_app_dependency
+    file_path: generators/topology/application_security.py
+    targets: app_dependencies
+    query: app_dependency
+    class_name: AppApplicationGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
+  # Same generator, entered from a component that moved to another segment:
+  # it reconciles its own application and fans out add_app_application to
+  # every application calling one of its endpoints.
+  - name: add_app_component
+    file_path: generators/topology/application_security.py
+    targets: app_components
+    query: app_component
+    class_name: AppApplicationGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      slug: slug__value
     watch:
       files:
         - generators/

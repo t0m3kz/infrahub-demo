@@ -31,18 +31,6 @@ spec:
                 - name: it001-checkout-frontend-private
                   endpoint_type: private_access
                   fqdn: frontend.internal.it001.demo.local
-                  service_ports:
-                    data:
-                      - port: 443
-                        protocol: tcp
-                  access_profile:
-                    kind: SecurityAccessProfile
-                    data:
-                      name: it001-engineering
-                      allowed_groups:
-                        - kind: SecurityIdentityGroup
-                          data:
-                            name: engineering
                 - name: it001-payment-gateway-external
                   endpoint_type: external_service
                   fqdn: api.paymentgw.example.com
@@ -58,9 +46,5 @@ spec:
                 - name: it001-checkout-backend-internal
                   endpoint_type: internal_service
                   fqdn: backend.internal.it001.demo.local
-                  service_ports:
-                    data:
-                      - port: 8443
-                        protocol: tcp
             member_of_groups:
               - app_components

@@ -453,22 +453,33 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
                     return "ManagedMLAG", peer.id
         return "DcimPhysicalDevice", device.id
 
-    async def _ensure_standalone_vlan_domain(self, device: Any) -> str:
+    async def _ensure_standalone_vlan_domain(self, device: Any) -> tuple[str, str]:
         """Create/upsert the ManagedStandaloneVlanDomain (and its vlan_pool)
         for a non-MLAG device, lazily — only when it's actually assigned a
         segment, avoiding speculative pool creation for idle leafs/tors.
-        Returns the domain object's id."""
-        domain_name = f"{device.name.value}-vlan-domain"
-        existing = await self.client.filters(kind=ManagedStandaloneVlanDomain, name__value=domain_name)
-        if existing:
-            return existing[0].id
+        Returns (domain id, pool id).
 
-        domain_obj = await self.client.create(
-            kind=ManagedStandaloneVlanDomain,
-            data={"name": domain_name, "status": "active", "capabilities": [{"id": device.id}]},
+        Segments are generated in parallel, so another run may have created
+        the domain and not attached its pool yet. The pool upsert is keyed by
+        name, so both runs converge on the same pool instead of one failing.
+        """
+        domain_name = f"{device.name.value}-vlan-domain"
+        existing = await self.client.filters(
+            kind=ManagedStandaloneVlanDomain, name__value=domain_name, include=["vlan_pool"]
         )
-        await domain_obj.save(allow_upsert=True)
-        await self.upsert_number_pool(
+        if existing:
+            domain_id = existing[0].id
+            pool_id = getattr(getattr(existing[0], "vlan_pool", None), "id", None)
+            if pool_id:
+                return domain_id, pool_id
+        else:
+            domain_obj = await self.client.create(
+                kind=ManagedStandaloneVlanDomain,
+                data={"name": domain_name, "status": "active", "capabilities": [{"id": device.id}]},
+            )
+            await domain_obj.save(allow_upsert=True)
+            domain_id = domain_obj.id
+        pool = await self.upsert_number_pool(
             pool_name=f"{domain_name}-vlan-pool",
             description=f"Local VLAN ID pool for standalone VLAN domain {domain_name}",
             start_range=CUSTOMER_VLAN_ID_MIN,
@@ -476,15 +487,19 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
             node="ManagedVlanDomainSegment",
             node_attribute="vlan_id",
             parent_kind="ManagedStandaloneVlanDomain",
-            parent_id=domain_obj.id,
+            parent_id=domain_id,
             parent_attr="vlan_pool",
         )
-        return domain_obj.id
+        return domain_id, pool.id
 
-    async def _ensure_vlan_domain_segment(self, segment_id: str, segment_name: str, domain_id: str) -> None:
+    async def _ensure_vlan_domain_segment(
+        self, segment_id: str, segment_name: str, domain_id: str, pool_id: str | None = None
+    ) -> None:
         """Upsert one ManagedVlanDomainSegment (segment, VLAN domain) pair,
         allocating vlan_id from that domain's own pool via from_pool.
         Idempotent: skips allocation if a record for this pair already exists.
+        A known pool_id (a standalone domain this run just ensured) skips
+        reading it back from the domain.
         """
         existing = await self.client.filters(
             kind=ManagedVlanDomainSegment,
@@ -494,9 +509,10 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
         if existing:
             return
 
-        domain = await self.client.get(kind="ManagedGenericVlanDomain", id=domain_id, include=["vlan_pool"])
-        vlan_pool_rel = getattr(domain, "vlan_pool", None)
-        pool_id = getattr(vlan_pool_rel, "id", None) if vlan_pool_rel else None
+        if not pool_id:
+            domain = await self.client.get(kind="ManagedGenericVlanDomain", id=domain_id, include=["vlan_pool"])
+            vlan_pool_rel = getattr(domain, "vlan_pool", None)
+            pool_id = getattr(vlan_pool_rel, "id", None) if vlan_pool_rel else None
         if not pool_id:
             self.logger.error(
                 f"VLAN domain {domain_id} has no vlan_pool — cannot allocate VLAN ID for segment {segment_name}"
@@ -592,20 +608,21 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
         # upsert one ManagedVlanDomainSegment per distinct domain.
         touched_device_ids.update(d.id for d in border_gateways)
         touched_devices = [d for d in devices if d.id in touched_device_ids]
-        domain_ids: set[str] = set()
+        domain_pools: dict[str, str | None] = {}
         for device in touched_devices:
             domain_kind, domain_id = await self._resolve_vlan_domain(device)
+            pool_id = None
             if domain_kind == "DcimPhysicalDevice":
-                domain_id = await self._ensure_standalone_vlan_domain(device)
-            domain_ids.add(domain_id)
+                domain_id, pool_id = await self._ensure_standalone_vlan_domain(device)
+            domain_pools[domain_id] = domain_pools.get(domain_id) or pool_id
 
-        for domain_id in domain_ids:
-            await self._ensure_vlan_domain_segment(segment_id, segment_name, domain_id)
+        for domain_id, pool_id in domain_pools.items():
+            await self._ensure_vlan_domain_segment(segment_id, segment_name, domain_id, pool_id)
 
         self.logger.info(
             f"  [{deployment_name}] Assigned segment '{segment_name}' to {assigned} interface(s) "
             f"({len(interfaces) - assigned} already assigned, {updated} interface(s) updated) "
-            f"across {len(domain_ids)} VLAN domain(s)"
+            f"across {len(domain_pools)} VLAN domain(s)"
         )
 
     async def _ensure_inline_vlan_id(self, ha_node: dict[str, Any], segment_name: str) -> int | None:

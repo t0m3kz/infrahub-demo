@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from generators.helpers.ports import PortProfileHelper, PortsPlanner
+from generators.helpers.ports import PortProfileHelper
 from generators.helpers.rules import RulePlanningHelper
 
 
@@ -65,50 +65,3 @@ class TestPortProfileHelper:
 
     def test_resolve_dependency_rule_port_returns_none_when_empty(self) -> None:
         assert PortProfileHelper.resolve_dependency_rule_port({}) is None
-
-    def test_derive_service_port_tuple_skips_icmp(self) -> None:
-        assert (
-            PortProfileHelper.derive_service_port_tuple(
-                port_start=80,
-                port_end=None,
-                protocol_raw="icmp",
-            )
-            is None
-        )
-
-    def test_derive_service_port_tuple_normalizes_tls_to_tcp(self) -> None:
-        assert PortProfileHelper.derive_service_port_tuple(
-            port_start=443,
-            port_end=None,
-            protocol_raw="tls",
-        ) == (443, None, "tcp")
-
-    def test_vip_protocol_for_service_port_preserves_existing_behavior(self) -> None:
-        assert PortProfileHelper.vip_protocol_for_service_port("tcp", 80) == "http"
-        assert PortProfileHelper.vip_protocol_for_service_port("tcp", 443) == "https"
-        assert PortProfileHelper.vip_protocol_for_service_port("tcp", 8443) == "tcp"
-        assert PortProfileHelper.vip_protocol_for_service_port("tcp_udp", 53) == "tcp"
-
-    def test_health_check_type_for_vip(self) -> None:
-        assert PortProfileHelper.health_check_type_for_vip("http") == "http"
-        assert PortProfileHelper.health_check_type_for_vip("https") == "ssl"
-        assert PortProfileHelper.health_check_type_for_vip("udp") == "tcp"
-
-
-class TestPortsPlanner:
-    def test_derive_ports_from_vips(self) -> None:
-        ports, warnings = PortsPlanner.derive_ports_from_vips(
-            [
-                {"port": 443, "protocol": "https"},
-                {"port": 80, "protocol": "http"},
-                {"port": 1234, "protocol": "unknown"},
-            ]
-        )
-
-        assert (443, None, "tcp") in ports
-        assert (80, None, "tcp") in ports
-        assert len(warnings) == 1
-
-    def test_planner_maps_vip_protocol_and_health_check(self) -> None:
-        assert PortsPlanner.to_vip_protocol("tcp", 443) == "https"
-        assert PortsPlanner.health_check_type_for_vip("https") == "ssl"

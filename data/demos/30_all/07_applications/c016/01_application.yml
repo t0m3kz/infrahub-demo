@@ -24,10 +24,6 @@ spec:
             instances:
               - c016-billing-frontend-weu-1
               - c016-billing-frontend-weu-2
-            service_ports:
-              data:
-                - port: 443
-                  protocol: tcp
             member_of_groups:
               - app_components
 
@@ -37,9 +33,11 @@ spec:
             instances:
               - c016-billing-worker-weu-1
               - c016-billing-worker-weu-2
-            service_ports:
+            children:
+              kind: AppEndpoint
               data:
-                - port: 9000
-                  protocol: tcp
+                - name: billing-worker-api
+                  endpoint_type: internal_service
+                  fqdn: worker.billing-cloud.c016.demo.local
             member_of_groups:
               - app_components

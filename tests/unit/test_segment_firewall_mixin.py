@@ -3,7 +3,8 @@
 Covers on-prem segment-to-segment SecurityPolicy/SecurityPolicyRule
 handling: segment policy naming, dependency-authorization delegation,
 indexed rule create/update (retry-on-collision), the SecurityTagRule
-micro-segmentation mirror, and the microsegmented return-rule leg.
+micro-segmentation mirror, and that a microsegmented rule gets no generated
+return rule.
 """
 
 from __future__ import annotations
@@ -11,9 +12,10 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from generators.common import CommonGenerator
+from generators.helpers.rules import RulesPlanner
 from generators.protocols import SecurityTagRule
 from generators.segment_firewall import SegmentFirewallMixin
 
@@ -350,74 +352,68 @@ class TestCreateOrUpdatePolicyRule:
 
 
 # ===========================================================================
-# TestReconcileReturnRuleForMicrosegmented
+# TestMicrosegmentedRuleHasNoReturnRule
 # ===========================================================================
 
 
-class TestReconcileReturnRuleForMicrosegmented:
-    """A microsegmented (apply_on_switch) rule is enforced at a stateless
-    switch ACL with no connection tracking — the forward permit alone used to
-    leave the return leg with no explicit rule at all, silently dropping it."""
+class TestMicrosegmentedRuleHasNoReturnRule:
+    """A generated B->A rule on the destination port let B initiate to A
+    instead of answering it. The stateless return leg now comes from the
+    destination segment's inbound_rules in the leaf ACL transform, so a
+    microsegmented (apply_on_switch) dependency creates exactly one rule."""
 
-    def _make_gen_ready(self, existing_rule: Any = None) -> Any:
+    @staticmethod
+    def _seg(seg_id: str) -> dict[str, Any]:
+        return {"id": seg_id, "name": f"{seg_id}-name", "isolation_mode": "microsegmented"}
+
+    def _run(self, existing_rule: Any = None) -> tuple[Any, tuple[bool, bool]]:
         gen = _make_gen()
         policy = MagicMock()
-        policy.id = "policy-dst"
-        policy.save = AsyncMock()
+        policy.id = "policy-src"
         gen._get_or_create_policy = AsyncMock(return_value=policy)
         gen._find_existing_policy_rule = AsyncMock(return_value=existing_rule)
         gen._create_or_update_policy_rule = AsyncMock(return_value=(MagicMock(), 100))
-        return gen
-
-    @staticmethod
-    def _call(gen: Any, segment_policies: dict[str, Any] | None = None) -> bool:
-        return asyncio.run(
-            gen._reconcile_return_rule_for_microsegmented(
+        gen._reconcile_tag_rule_from_segments = AsyncMock()
+        gen._get_zone = AsyncMock(return_value=None)
+        gen._get_profile = AsyncMock(return_value=None)
+        planner = MagicMock(wraps=RulesPlanner())
+        planner.zone_context = MagicMock(return_value=("PROD-ZONE", "PROD-ZONE", False))
+        result = asyncio.run(
+            gen._reconcile_segment_rule(
                 app_name="checkout",
+                app_security_profile="fintech_strict",
                 src_comp={"name": "frontend"},
                 dst_comp={"name": "backend"},
-                dep={"description": None},
-                src_seg={"id": "seg-src", "name": "seg-src-name"},
-                dst_seg={"id": "seg-dst", "name": "seg-dst-name"},
-                dst_seg_id="seg-dst",
-                protocol="tcp",
-                port_start=8443,
-                port_end=None,
-                cross_zone=False,
-                segment_policies=segment_policies if segment_policies is not None else {},
+                dep={"name": "frontend-to-backend", "protocol": "tcp", "port": 8443},
+                src_seg=self._seg("seg-src"),
+                dst_seg=self._seg("seg-dst"),
+                planner=planner,
+                segment_policies={},
             )
         )
+        return gen, result
 
-    def test_creates_a_reverse_rule_in_the_destination_segments_policy(self):
-        gen = self._make_gen_ready()
+    def test_creates_only_the_forward_rule(self) -> None:
+        """One permit, source -> destination, flagged for the switch."""
+        with patch.object(RulesPlanner, "resolve_port", return_value=("tcp", 8443, None)):
+            gen, result = self._run()
 
-        result = self._call(gen)
-
-        assert result is True
-        gen._get_or_create_policy.assert_awaited_once()
+        assert result == (True, False)
         gen._create_or_update_policy_rule.assert_awaited_once()
-        rule_data = gen._create_or_update_policy_rule.call_args.kwargs["rule_data"]
-        assert rule_data["source_segment"] == {"id": "seg-dst"}
-        assert rule_data["destination_segment"] == {"id": "seg-src"}
+        kwargs = gen._create_or_update_policy_rule.call_args.kwargs
+        assert not kwargs["rule_name"].endswith("-return")
+        assert kwargs["rule_data"]["apply_on_switch"] is True
+        assert kwargs["rule_data"]["source_segment"] == {"id": "seg-src"}
+        assert kwargs["rule_data"]["destination_segment"] == {"id": "seg-dst"}
+        gen._get_or_create_policy.assert_awaited_once()
 
-    def test_reuses_a_cached_policy_for_the_destination_segment(self):
-        gen = self._make_gen_ready()
-        cached_policy = MagicMock()
-        cached_policy.id = "policy-cached"
-
-        self._call(gen, segment_policies={"seg-dst": cached_policy})
-
-        gen._get_or_create_policy.assert_not_awaited()
-        rule_data = gen._create_or_update_policy_rule.call_args.kwargs["rule_data"]
-        assert rule_data["policy"] == {"id": "policy-cached"}
-
-    def test_existing_return_rule_is_reused_without_recreating(self):
+    def test_existing_rule_does_not_create_a_return_rule(self) -> None:
+        """Re-running over an existing rule only re-registers it."""
         existing = MagicMock()
         existing.save = AsyncMock()
-        gen = self._make_gen_ready(existing_rule=existing)
+        with patch.object(RulesPlanner, "resolve_port", return_value=("tcp", 8443, None)):
+            gen, result = self._run(existing_rule=existing)
 
-        result = self._call(gen)
-
-        assert result is True
+        assert result == (False, True)
         existing.save.assert_awaited_once_with(allow_upsert=True)
         gen._create_or_update_policy_rule.assert_not_awaited()

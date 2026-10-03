@@ -112,19 +112,7 @@ config firewall policy
         set logtraffic all
         set comments "Allow SSH from DMZ to Internal"
     next
-    edit 9990
-        set name "implicit-deny-all"
-        set srcintf "any"
-        set dstintf "any"
-        set srcaddr "all"
-        set dstaddr "all"
-        set action deny
-        set schedule "always"
-        set service "ALL"
-        set logtraffic all
-        set comments "Implicit deny all"
-    next
-    edit 10
+    edit 30
         set name "allow-any"
         set srcintf "internal"
         set dstintf "dmz"

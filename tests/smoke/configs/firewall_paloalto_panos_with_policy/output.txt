@@ -64,15 +64,6 @@ set rulebase security rules allow-ssh service svc-tcp-22
 set rulebase security rules allow-ssh action allow
 set rulebase security rules allow-ssh log-end yes
 set rulebase security rules allow-ssh description "Allow SSH from DMZ to Internal"
-set rulebase security rules implicit-deny-all from any
-set rulebase security rules implicit-deny-all to any
-set rulebase security rules implicit-deny-all source any
-set rulebase security rules implicit-deny-all destination any
-set rulebase security rules implicit-deny-all application any
-set rulebase security rules implicit-deny-all service any
-set rulebase security rules implicit-deny-all action deny
-set rulebase security rules implicit-deny-all log-end yes
-set rulebase security rules implicit-deny-all description "Implicit deny all"
 set rulebase security rules allow-any from internal
 set rulebase security rules allow-any to dmz
 set rulebase security rules allow-any source ag-internal

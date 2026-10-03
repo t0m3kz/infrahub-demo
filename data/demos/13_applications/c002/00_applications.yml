@@ -34,10 +34,6 @@ spec:
                 - name: c002-dispatch-web-https
                   endpoint_type: internal_service
                   fqdn: web.dispatch-hub.c002.demo.local
-                  service_ports:
-                    data:
-                      - port: 443
-                        protocol: tcp
             member_of_groups:
               - app_components
 
@@ -52,10 +48,6 @@ spec:
                 - name: c002-dispatch-backend-https
                   endpoint_type: internal_service
                   fqdn: backend.dispatch-hub.c002.demo.local
-                  service_ports:
-                    data:
-                      - port: 8443
-                        protocol: tcp
             member_of_groups:
               - app_components
 
@@ -70,11 +62,5 @@ spec:
                 - name: c002-dispatch-data
                   endpoint_type: internal_service
                   fqdn: data.dispatch-hub.c002.demo.local
-                  service_ports:
-                    data:
-                      - port: 5432
-                        protocol: tcp
-                      - port: 6379
-                        protocol: tcp
             member_of_groups:
               - app_components

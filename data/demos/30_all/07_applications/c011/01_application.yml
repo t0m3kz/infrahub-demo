@@ -24,10 +24,6 @@ spec:
             instances:
               - c011-edge-ingress-ny1-1
               - c011-edge-ingress-ny1-2
-            service_ports:
-              data:
-                - port: 443
-                  protocol: tcp
             member_of_groups:
               - app_components
 
@@ -37,9 +33,11 @@ spec:
             instances:
               - c011-stream-worker-ny1-1
               - c011-stream-worker-ny1-2
-            service_ports:
+            children:
+              kind: AppEndpoint
               data:
-                - port: 9092
-                  protocol: tcp
+                - name: stream-worker-kafka
+                  endpoint_type: internal_service
+                  fqdn: stream.edge-analytics.c011.demo.local
             member_of_groups:
               - app_components

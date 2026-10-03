@@ -49,6 +49,9 @@ ALL_DEMO_EXPECTED_GENERATORS: dict[str, int] = {
     "add_endpoint": 12,  # 6 DC hosts + 6 colocation cage hosts
     "add_vxlan_segment": 5,  # C005's five application segments
     "add_app_application": 9,  # one per declared AppApplication
+    # One per declared AppDependency: it loads after its application in the
+    # same stage, so its own trigger is what puts its rule in place.
+    "add_app_dependency": 14,
     # 9 distinct footprints: 03_dc/new_customers declares seven and
     # 06_customer_boarding re-declares three of them as supersets, which
     # upsert, and adds the C008/C010 dev footprints on DC12's shared hosts.
@@ -81,11 +84,13 @@ ALL_DEMO_EXPECTED_OBJECTS: dict[str, int] = {
     "TopologyCustomerOffice": 5,
     "ManagedVxlanSegment": 5,
     "ManagedVlanSegment": 9,
-    "AppApplication": 9,
-    # 22 AppComponent blocks are declared, but c005/04_component_updates.yml
-    # re-declares web-frontend to attach its depends_on — an upsert, not a
-    # 22nd component.
-    "AppComponent": 21,
+    "AppApplication": 10,
+    "AppComponent": 22,
+    # Ports live only on AppDependency: one per tier-to-tier call, plus the
+    # access-profile grant that publishes c001's checkout-web.
+    "AppEndpoint": 15,
+    "AppDependency": 14,
+    "SecurityAccessProfile": 1,
     "DcimVirtualDevice": 34,
     "TopologyPhysicalCircuit": 8,
     "TopologyVirtualCircuit": 8,
@@ -156,8 +161,7 @@ ALL_DEMO_COLO_HOST_SWITCHES: dict[str, str] = {
 # Every host is dual-homed, DC or cage.
 ALL_DEMO_HOST_LINK_COUNT = 2
 
-# name -> (criticality, component count). c005/04_component_updates.yml re-declares
-# web-frontend to attach its depends_on, so c005 has 4 components, not 5.
+# name -> (criticality, component count).
 ALL_DEMO_EXPECTED_APPLICATIONS: dict[str, tuple[str, int]] = {
     "c003-custody-api-p": ("high", 2),
     "c005-payment-core-p": ("critical", 4),
@@ -176,9 +180,9 @@ ALL_DEMO_EXPECTED_APPLICATIONS: dict[str, tuple[str, int]] = {
 # a switch port to a customer application.
 ALL_DEMO_CLOUD_APPLICATIONS = ("c003-custody-api-p", "c016-billing-cloud-p")
 
-# c001-checkout-p is a private-access-only frontend (access_profile-gated, no
-# instances or network_segment declared) — it has no compute footprint, so it
-# is out of scope for test_61's switch-port-to-application chain and is not
+# c001-checkout-p is a private-access-only frontend (published through an
+# access-profile dependency, no instances or network_segment declared) — it
+# has no compute footprint, so it is out of scope for test_61's switch-port-to-application chain and is not
 # listed in ALL_DEMO_EXPECTED_APPLICATIONS.
 ALL_DEMO_NO_COMPUTE_APPLICATIONS = ("c001-checkout-p",)
 
@@ -334,7 +338,7 @@ ALL_DEMO_SHARED_FIREWALL_CONTEXTS = 3
 ALL_DEMO_DEDICATED_FIREWALL_TENANTS: dict[str, str] = {
     "C007-P-DC10": "L_DC",
     "C009-P-DC11": "XL_DC",
-    "C005-D-DC12": "L_DC",
+    "C005-P-DC12": "L_DC",
 }
 
 # C005's five application segments and the deployments each is activated in.
@@ -345,7 +349,7 @@ ALL_DEMO_DEDICATED_FIREWALL_TENANTS: dict[str, str] = {
 ALL_DEMO_SEGMENT_LEGS: dict[str, tuple[str, ...]] = {
     "c005-web-frontend-local-dc10-p": ("DC10",),
     "c005-app-backend-stretch-p": ("DC10", "DC12"),
-    "c005-database-local-dc12-d": ("DC12",),
+    "c005-database-local-dc12-p": ("DC12",),
     "c005-message-queue-stretch-p": ("DC10", "DC12"),
     "c005-colo-services-stretch-p": ("DC10", "FR"),
 }

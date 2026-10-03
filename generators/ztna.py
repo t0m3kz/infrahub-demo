@@ -15,10 +15,8 @@ if TYPE_CHECKING:
 class ZtnaMixin(GetOrCreateByNameMixin):
     """Owner-scoped ProxyPolicy/ProxyPolicyRule handling: external_service
     dependencies (egress through the owner's egress_service) and
-    private_access endpoints (published through the owner's
-    private_access_service, e.g. Zscaler ZPA — plus deriving a
-    SecurityAccessProfile/SecurityIdentityGroup for them when the author
-    hasn't set one explicitly).
+    private_access endpoints granted to an access profile (published through
+    the owner's private_access_service, e.g. Zscaler ZPA).
 
     Expects the host class to provide: ``client``, ``logger``, ``_safe_rel_add``.
     """
@@ -78,7 +76,7 @@ class ZtnaMixin(GetOrCreateByNameMixin):
         await self._attach_proxy_policy_to_owner(owner_id=owner_node_id, policy_id=policy.id)
 
         dst_comp = dst_endpoint.get("parent") or {}
-        rule_name = planner.rule_name(app_name, src_comp, dst_comp)
+        rule_name = planner.rule_name(app_name, src_comp, dst_comp, dep)
         rule_data: dict[str, Any] = {
             "policy": {"id": policy.id},
             "name": rule_name,
@@ -133,25 +131,32 @@ class ZtnaMixin(GetOrCreateByNameMixin):
         except Exception as exc:
             self.logger.warning("  Could not attach proxy policy to owner %s: %s", owner_id, exc)
 
+    @staticmethod
+    def private_access_grants(endpoint: dict[str, Any]) -> list[dict[str, Any]]:
+        """Dependencies that admit an access profile's users to this endpoint.
+
+        A denied grant admits nobody. A component-sourced dependency on a
+        private_access endpoint is an ordinary call, not a ZTNA grant.
+        """
+        return [
+            dep
+            for dep in endpoint.get("dependents") or []
+            if dep.get("source_profile") and RulesPlanner.dependency_access_status(dep) != "denied"
+        ]
+
     async def _reconcile_private_access_endpoints(
         self,
         app_name: str,
         components: list[dict[str, Any]],
-        app_security_profile: str = "internal_standard",
     ) -> tuple[int, int]:
-        """Publish every private_access endpoint via its owning customer's
-        private_access_service (ZTNA broker: e.g. Zscaler ZPA), and derive its
-        SecurityAccessProfile/SecurityIdentityGroup when the author hasn't set
-        one explicitly.
+        """Publish every private_access endpoint that an access profile is
+        granted to, via its owning customer's private_access_service (ZTNA
+        broker: e.g. Zscaler ZPA).
 
-        Not dependency-edge-driven like external_service/internal_service:
-        who may reach a private_access endpoint is gated by its own
-        access_profile (MFA/device posture/allowed_groups), not by which
-        component "depends on" it, so every such endpoint gets published
-        here regardless of whether any AppDependency targets it — matching
-        this module's own docstring ("Device/proxy selections are resolved
-        from the owning customer... rather than authored on every
-        AppComponent").
+        The grant is an AppDependency whose source_profile is a
+        SecurityAccessProfile: it says which users (allowed_groups,
+        MFA/device posture) reach the endpoint, and on which ports. An
+        endpoint nobody is granted to stays unpublished.
         """
         created = 0
         skipped = 0
@@ -166,14 +171,16 @@ class ZtnaMixin(GetOrCreateByNameMixin):
                 endpoint_name = str(endpoint.get("name") or endpoint.get("id") or "?")
                 comp_label = component.get("slug") or component.get("name") or "?"
 
-                owner_org_id_raw = str(owner.get("org_id") or owner.get("id") or "")
-                if owner_org_id_raw and not endpoint.get("access_profile"):
-                    await self._ensure_endpoint_access_profile(
-                        endpoint_id=str(endpoint.get("id") or ""),
-                        endpoint_name=endpoint_name,
-                        owner_org_id=owner_org_id_raw,
-                        app_security_profile=app_security_profile,
+                grants = self.private_access_grants(endpoint)
+                if not grants:
+                    self.logger.warning(
+                        "  Endpoint '%s' on '%s' is private_access but no access profile depends on it"
+                        " - skipping publish",
+                        endpoint_name,
+                        comp_label,
                     )
+                    skipped += 1
+                    continue
 
                 broker = owner.get("private_access_service") or {}
                 broker_id = broker.get("id")
@@ -221,6 +228,7 @@ class ZtnaMixin(GetOrCreateByNameMixin):
 
                 await self._attach_proxy_policy_to_owner(owner_id=owner_node_id, policy_id=policy.id)
 
+                profiles = sorted({str((dep.get("source_profile") or {}).get("name") or "?") for dep in grants})
                 rule_name = f"publish-{comp_label}-{endpoint_name}"
                 rule_data: dict[str, Any] = {
                     "policy": {"id": policy.id},
@@ -228,7 +236,9 @@ class ZtnaMixin(GetOrCreateByNameMixin):
                     "action": "allow",
                     "destination_type": "fqdn",
                     "destination": endpoint_fqdn,
-                    "description": f"Publish {comp_label}/{endpoint_name} via private access broker",
+                    "description": (
+                        f"Publish {comp_label}/{endpoint_name} via private access broker for {', '.join(profiles)}"
+                    ),
                 }
 
                 existing_rule = await self._find_existing_proxy_policy_rule(policy_id=policy.id, rule_name=rule_name)
@@ -244,64 +254,3 @@ class ZtnaMixin(GetOrCreateByNameMixin):
                     skipped += 1
 
         return created, skipped
-
-    async def _ensure_endpoint_access_profile(
-        self,
-        *,
-        endpoint_id: str,
-        endpoint_name: str,
-        owner_org_id: str,
-        app_security_profile: str,
-    ) -> None:
-        """Derive and attach a SecurityAccessProfile/SecurityIdentityGroup for
-        a private_access endpoint that has none, so ZTNA access policy
-        doesn't have to be hand-authored per customer. Skipped entirely when
-        the endpoint already has an explicit access_profile — never clobbers
-        an author's override.
-        """
-        if not endpoint_id:
-            return
-
-        org_slug = owner_org_id.lower()
-        group_name = f"{org_slug}-engineering"
-        profile_name = f"{org_slug}-private-access-standard"
-
-        group = await self._get_or_create_by_name(
-            kind="SecurityIdentityGroup",
-            name=group_name,
-            create_data={
-                "name": group_name,
-                "description": f"{owner_org_id} engineering users",
-                "source": "manual",
-            },
-            found_log="Using existing identity group: %s",
-            created_log="Created identity group: %s",
-        )
-        if group is None:
-            return
-
-        policy = RulesPlanner.pick_access_policy(app_security_profile)
-        profile = await self._get_or_create_by_name(
-            kind="SecurityAccessProfile",
-            name=profile_name,
-            create_data={
-                "name": profile_name,
-                "description": f"{owner_org_id} standard private-access controls",
-                "allowed_groups": [group.id],
-                **policy,
-            },
-            found_log="Using existing access profile: %s",
-            created_log="Created access profile: %s",
-        )
-        if profile is None:
-            return
-
-        try:
-            endpoint = await self.client.create(
-                kind="AppEndpoint",
-                data={"id": endpoint_id, "access_profile": {"id": profile.id}},
-            )
-            await endpoint.save(allow_upsert=True)
-            self.logger.info("  Derived access_profile '%s' for endpoint '%s'", profile_name, endpoint_name)
-        except Exception as exc:
-            self.logger.warning("  Failed to set access_profile on endpoint '%s': %s", endpoint_name, exc)

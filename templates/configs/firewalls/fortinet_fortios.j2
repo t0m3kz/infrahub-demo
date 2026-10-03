@@ -1,4 +1,57 @@
 {#- Fortinet FortiOS — zone-based firewall configuration -#}
+{%- macro security_policies(policies) %}
+#
+# --- Service Objects (unique protocol/port combinations referenced below) ---
+config firewall service custom
+{%- set seen_svcs = [] %}
+{%- for policy in policies %}
+{%- for rule in policy.rules %}
+{%- if rule.raw_protocol in ('tcp', 'udp') and rule.port_start %}
+{%- set svc_name = 'svc-' + rule.raw_protocol + '-' + rule.port_start | string + ('-' + rule.port_end | string if rule.port_end and rule.port_end != rule.port_start else '') %}
+{%- if svc_name not in seen_svcs %}
+{%- set _ = seen_svcs.append(svc_name) %}
+    edit "{{ svc_name }}"
+        set {{ rule.raw_protocol }}-portrange {{ rule.port_start }}{{ '-' + rule.port_end | string if rule.port_end and rule.port_end != rule.port_start else '' }}
+    next
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+{%- endfor %}
+end
+#
+# --- Security Policies ---
+config firewall policy
+{%- for policy in policies %}
+{%- for rule in policy.rules %}
+{%- if rule.raw_protocol in ('tcp', 'udp') and rule.port_start %}
+{%- set svc_name = 'svc-' + rule.raw_protocol + '-' + rule.port_start | string + ('-' + rule.port_end | string if rule.port_end and rule.port_end != rule.port_start else '') %}
+{%- else %}
+{%- set svc_name = 'ALL' %}
+{%- endif %}
+    edit {{ rule.seq }}
+        set name "{{ rule.name }}"
+        set srcintf "{{ rule.src_zone or 'any' }}"
+        set dstintf "{{ rule.dst_zone or 'any' }}"
+        set srcaddr "{{ rule.src or 'all' }}"
+        set dstaddr "{{ rule.dst or 'all' }}"
+        set action {{ 'accept' if rule.action == 'permit' else 'deny' }}
+        set schedule "always"
+        set service "{{ svc_name }}"
+{%- if rule.log %}
+        set logtraffic all
+{%- endif %}
+{%- if rule.security_profile %}
+        set utm-status enable
+        set av-profile "{{ rule.security_profile }}"
+{%- endif %}
+{%- if rule.description %}
+        set comments "{{ rule.description }}"
+{%- endif %}
+    next
+{%- endfor %}
+{%- endfor %}
+end
+{%- endmacro -%}
 config system global
     set hostname "{{ name }}"
 end
@@ -62,58 +115,7 @@ config router static
 {%- endfor %}
 end
 {%- endif %}
-{%- if zone_policies %}
-#
-# --- Service Objects (unique protocol/port combinations referenced below) ---
-config firewall service custom
-{%- set seen_svcs = [] %}
-{%- for policy in zone_policies %}
-{%- for rule in policy.rules %}
-{%- if rule.raw_protocol in ('tcp', 'udp') and rule.port_start %}
-{%- set svc_name = 'svc-' + rule.raw_protocol + '-' + rule.port_start | string + ('-' + rule.port_end | string if rule.port_end and rule.port_end != rule.port_start else '') %}
-{%- if svc_name not in seen_svcs %}
-{%- set _ = seen_svcs.append(svc_name) %}
-    edit "{{ svc_name }}"
-        set {{ rule.raw_protocol }}-portrange {{ rule.port_start }}{{ '-' + rule.port_end | string if rule.port_end and rule.port_end != rule.port_start else '' }}
-    next
-{%- endif %}
-{%- endif %}
-{%- endfor %}
-{%- endfor %}
-end
-#
-# --- Security Policies ---
-config firewall policy
-{%- for policy in zone_policies %}
-{%- for rule in policy.rules %}
-{%- if rule.raw_protocol in ('tcp', 'udp') and rule.port_start %}
-{%- set svc_name = 'svc-' + rule.raw_protocol + '-' + rule.port_start | string + ('-' + rule.port_end | string if rule.port_end and rule.port_end != rule.port_start else '') %}
-{%- else %}
-{%- set svc_name = 'ALL' %}
-{%- endif %}
-    edit {{ rule.seq }}
-        set name "{{ rule.name }}"
-        set srcintf "{{ rule.src_zone or 'any' }}"
-        set dstintf "{{ rule.dst_zone or 'any' }}"
-        set srcaddr "{{ rule.src or 'all' }}"
-        set dstaddr "{{ rule.dst or 'all' }}"
-        set action {{ 'accept' if rule.action == 'permit' else 'deny' }}
-        set schedule "always"
-        set service "{{ svc_name }}"
-{%- if rule.log %}
-        set logtraffic all
-{%- endif %}
-{%- if rule.security_profile %}
-        set utm-status enable
-        set av-profile "{{ rule.security_profile }}"
-{%- endif %}
-{%- if rule.description %}
-        set comments "{{ rule.description }}"
-{%- endif %}
-    next
-{%- endfor %}
-{%- endfor %}
-end
+{%- if zone_policies %}{{ security_policies(zone_policies) }}
 {%- endif %}
 {%- if contexts %}
 #
@@ -149,6 +151,15 @@ config global
     end
 end
 {%- endif %}
+{%- endfor %}
+{%- for context in contexts if context.policies %}
+#
+# --- Security Policies in VDOM {{ context.name }} ---
+config vdom
+    edit "{{ context.name }}"
+{{- security_policies(context.policies) }}
+    next
+end
 {%- endfor %}
 {%- endif %}
 {%- if ha %}

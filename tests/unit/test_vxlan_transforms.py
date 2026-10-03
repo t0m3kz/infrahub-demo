@@ -383,18 +383,25 @@ def _make_acl_activation(
     customer_name: str = "seg-100",
     security_policies: list | None = None,
     seg_id: str | None = None,
+    prefix: str | None = None,
+    inbound_rules: list | None = None,
 ) -> dict:
     """Build a cleaned SegmentDeployment dict with optional security_policies."""
+    ip_prefix: dict = {"ip_namespace": {"name": "tenant-a", "l3_vni": 50001}}
+    if prefix is not None:
+        ip_prefix["prefix"] = prefix
     seg: dict = {
         "name": f"Owner - production - {customer_name}",
         "customer_name": customer_name,
         "arp_suppression": True,
-        "gateway": {"ip_prefix": {"ip_namespace": {"name": "tenant-a", "l3_vni": 50001}}},
+        "gateway": {"ip_prefix": ip_prefix},
     }
     if seg_id is not None:
         seg["id"] = seg_id
     if security_policies is not None:
         seg["security_policies"] = security_policies
+    if inbound_rules is not None:
+        seg["inbound_rules"] = inbound_rules
     return {"vlan_id": vlan_id, "vni": 10000 + vlan_id, "status": "active", "segment": seg}
 
 
@@ -570,138 +577,150 @@ class TestGetAclsMultipleActivations:
 
 
 # ===========================================================================
-# Symmetric East-West ACL mirroring
+# East-West return legs (inbound_rules)
 # ===========================================================================
 
 
-def _seg_id_ref(seg_id: str, prefix: str) -> dict:
-    """Build a destination_segment dict as clean_data() would produce (with id)."""
-    return {"id": seg_id, "name": "some-segment", "gateway": {"ip_prefix": {"prefix": prefix}}}
+def _inbound(
+    *,
+    src_id: str = "seg-a-id",
+    src_prefix: str | None = "10.0.1.0/24",
+    src_name: str = "seg-a",
+    index: int = 10,
+    protocol: str = "tcp",
+    port_start: int | None = 443,
+    port_end: int | None = None,
+    action: str = "permit",
+    disabled: bool = False,
+    policy_enabled: bool = True,
+) -> dict:
+    """An inbound_rules entry as clean_data() produces it: a rule whose
+    destination is the segment carrying it."""
+    src: dict = {"id": src_id, "name": src_name, "customer_name": src_name, "environment": "p"}
+    if src_prefix is not None:
+        src["gateway"] = {"ip_prefix": {"prefix": src_prefix}}
+    return {
+        "index": index,
+        "name": f"rule-{index}",
+        "action": action,
+        "protocol": protocol,
+        "port_start": port_start,
+        "port_end": port_end,
+        "disabled": disabled,
+        "policy": {"enabled": policy_enabled},
+        "source_segment": src,
+    }
 
 
-class TestGetAclsEastWestMirroring:
-    """Rules that target another local segment are mirrored onto the destination's ACL."""
+def _segment_b(inbound_rules: list, security_policies: list | None = None) -> dict:
+    return _make_acl_activation(
+        vlan_id=200,
+        customer_name="seg-b",
+        seg_id="seg-b-id",
+        prefix="10.0.2.0/24",
+        security_policies=security_policies or [],
+        inbound_rules=inbound_rules,
+    )
 
-    def test_no_mirroring_when_no_segment_ids(self) -> None:
-        """Segments without 'id' in their dict produce no mirroring (no id index)."""
-        dst_ref = _seg_ref("10.0.2.0/24")  # _seg_ref uses id="x" — does not match either activation
-        rule_a = _rule(index=10, dst=dst_ref)
-        acts = [
-            _make_acl_activation(vlan_id=100, security_policies=[_policy(rules=[rule_a])]),
-            _make_acl_activation(vlan_id=200, security_policies=[]),
+
+def _returns(acl: dict) -> list[dict]:
+    return [r for r in acl["rules"] if r["name"].startswith("return-to-")]
+
+
+class TestGetAclsReturnRules:
+    """A permit A -> B:port adds B's reply leg (B:port -> A) to B's own
+    ingress ACL, read from B's inbound_rules, so A need not be on this leaf."""
+
+    def test_tcp_permit_adds_established_return_leg(self) -> None:
+        """src=own prefix, src_port=the rule's port, dst=the rule's source, established."""
+        acl = get_acls(activations=[_segment_b([_inbound()])])[0]
+        (ret,) = _returns(acl)
+        assert ret["action"] == "permit"
+        assert ret["protocol"] == "tcp"
+        assert ret["src"] == "10.0.2.0/24"
+        assert ret["src_port"] == "eq 443"
+        assert ret["dst"] == "10.0.1.0/24"
+        assert ret["dst_port"] is None
+        assert ret["established"] is True
+        assert ret["name"] == "return-to-seg-a-rule-10"
+
+    def test_return_leg_does_not_need_the_source_on_this_leaf(self) -> None:
+        """B alone on the leaf still gets the return leg (the old mirror needed A here too)."""
+        acls = get_acls(activations=[_segment_b([_inbound()])])
+        assert len(acls) == 1
+        assert _returns(acls[0])
+
+    def test_udp_port_range_returns_from_the_range_without_established(self) -> None:
+        acl = get_acls(activations=[_segment_b([_inbound(protocol="udp", port_start=30000, port_end=30010)])])[0]
+        (ret,) = _returns(acl)
+        assert ret["protocol"] == "udp"
+        assert ret["src_port"] == "range 30000 30010"
+        assert ret["established"] is False
+
+    def test_any_protocol_returns_as_plain_reverse_match(self) -> None:
+        acl = get_acls(activations=[_segment_b([_inbound(protocol="any", port_start=None)])])[0]
+        (ret,) = _returns(acl)
+        assert ret["protocol"] == "ip"
+        assert ret["src_port"] is None
+        assert ret["established"] is False
+
+    def test_deny_disabled_and_disabled_policy_rules_add_nothing(self) -> None:
+        inbound = [
+            _inbound(index=10, action="deny"),
+            _inbound(index=20, disabled=True),
+            _inbound(index=30, policy_enabled=False),
         ]
-        # VLAN 200 has no seg_id so the dst id "x" won't resolve → no mirror
-        result = get_acls(activations=acts)
-        vlan200_rules = next(a["rules"] for a in result if a["vlan_id"] == 200)
-        # Only the implicit deny, no mirrored rule
-        assert len(vlan200_rules) == 1
-        assert vlan200_rules[0]["name"] == "implicit-deny-all"
+        acl = get_acls(activations=[_segment_b(inbound)])[0]
+        assert _returns(acl) == []
 
-    def test_cross_segment_rule_mirrored_onto_destination(self) -> None:
-        """When A has a rule to B, B's ACL gains a mirrored rule from A."""
-        acts = [
-            _make_acl_activation(
-                vlan_id=100,
-                customer_name="seg-a",
-                seg_id="seg-a-id",
-                security_policies=[_policy(rules=[_rule(index=10, dst=_seg_id_ref("seg-b-id", "10.0.2.0/24"))])],
-            ),
-            _make_acl_activation(
-                vlan_id=200,
-                customer_name="seg-b",
-                seg_id="seg-b-id",
-                security_policies=[],
-            ),
-        ]
-        result = get_acls(activations=acts)
-        vlan200 = next(a for a in result if a["vlan_id"] == 200)
-        non_deny = [r for r in vlan200["rules"] if r["name"] != "implicit-deny-all"]
-        assert len(non_deny) == 1
-        mirrored = non_deny[0]
-        # Mirrored rule should mirror dst → "any" (traffic already arriving on B's SVI)
-        assert mirrored["dst"] == "any"
-        assert mirrored["action"] == "permit"
-        assert mirrored["protocol"] == "tcp"
-        assert mirrored["dst_port"] == "eq 443"
-        assert "mirror-from-seg-a" in mirrored["name"]
+    def test_intra_segment_rule_adds_nothing(self) -> None:
+        acl = get_acls(activations=[_segment_b([_inbound(src_id="seg-b-id", src_prefix="10.0.2.0/24")])])[0]
+        assert _returns(acl) == []
 
-    def test_mirror_preserves_source_cidr(self) -> None:
-        """Source segment CIDR from original rule is preserved in the mirror."""
-        acts = [
-            _make_acl_activation(
-                vlan_id=100,
-                customer_name="seg-a",
-                seg_id="seg-a-id",
-                security_policies=[
-                    _policy(
-                        rules=[
-                            _rule(
-                                index=10,
-                                src=_seg_id_ref("seg-c-id", "10.0.1.0/24"),
-                                dst=_seg_id_ref("seg-b-id", "10.0.2.0/24"),
-                            )
-                        ]
-                    )
-                ],
-            ),
-            _make_acl_activation(vlan_id=200, customer_name="seg-b", seg_id="seg-b-id", security_policies=[]),
-        ]
-        result = get_acls(activations=acts)
-        vlan200 = next(a for a in result if a["vlan_id"] == 200)
-        mirrored = [r for r in vlan200["rules"] if r["name"] != "implicit-deny-all"][0]
-        assert mirrored["src"] == "10.0.1.0/24"
-        assert mirrored["dst"] == "any"
+    def test_identical_reply_legs_are_rendered_once(self) -> None:
+        """Two rules from the same source on the same port share one return line."""
+        acl = get_acls(activations=[_segment_b([_inbound(index=10), _inbound(index=20)])])[0]
+        assert len(_returns(acl)) == 1
 
-    def test_mirrored_rule_seq_above_own_rules(self) -> None:
-        """Mirrored rules get sequence numbers above the segment's own rules (≥5000)."""
-        acts = [
-            _make_acl_activation(
-                vlan_id=100,
-                seg_id="seg-a-id",
-                security_policies=[_policy(rules=[_rule(index=10, dst=_seg_id_ref("seg-b-id", "10.0.2.0/24"))])],
-            ),
-            _make_acl_activation(
-                vlan_id=200,
-                seg_id="seg-b-id",
-                security_policies=[_policy(rules=[_rule(index=20)])],
-            ),
-        ]
-        result = get_acls(activations=acts)
-        vlan200 = next(a for a in result if a["vlan_id"] == 200)
-        own_seqs = [
-            r["seq"] for r in vlan200["rules"] if r["name"] not in ("implicit-deny-all",) and "mirror" not in r["name"]
-        ]
-        mirror_seqs = [r["seq"] for r in vlan200["rules"] if "mirror" in r["name"]]
-        assert mirror_seqs
-        assert all(ms >= 5000 for ms in mirror_seqs)
-        assert all(ms > max(own_seqs) for ms in mirror_seqs)
+    def test_return_legs_follow_own_rules_and_precede_implicit_deny(self) -> None:
+        own = [_policy(rules=[_rule(index=20, dst=_seg_ref("10.0.9.0/24"))])]
+        acl = get_acls(
+            activations=[
+                _segment_b(
+                    [_inbound(index=10), _inbound(index=20, src_id="c", src_name="seg-c", src_prefix="10.0.3.0/24")],
+                    own,
+                )
+            ]
+        )[0]
+        seqs = [r["seq"] for r in _returns(acl)]
+        assert seqs == [5000, 5010]
+        assert acl["rules"][0]["seq"] == 20
+        assert acl["rules"][-1]["name"] == "implicit-deny-all"
+        assert acl["rules"][-1]["seq"] == 9990
 
-    def test_no_self_mirroring(self) -> None:
-        """Rules where destination is the same segment do not create mirrored duplicates."""
-        acts = [
-            _make_acl_activation(
-                vlan_id=100,
-                seg_id="seg-a-id",
-                security_policies=[_policy(rules=[_rule(index=10, dst=_seg_id_ref("seg-a-id", "10.0.1.0/24"))])],
-            ),
-        ]
-        result = get_acls(activations=acts)
-        # Only own rule + implicit deny; no mirrored rule
-        assert len(result[0]["rules"]) == 2
+    def test_source_without_prefix_returns_to_any(self) -> None:
+        acl = get_acls(activations=[_segment_b([_inbound(src_prefix=None)])])[0]
+        (ret,) = _returns(acl)
+        assert ret["dst"] == "any"
 
-    def test_mirror_implicit_deny_always_last(self) -> None:
-        """Implicit deny is still the very last rule even when mirrored rules are added."""
-        acts = [
-            _make_acl_activation(
-                vlan_id=100,
-                seg_id="seg-a-id",
-                security_policies=[_policy(rules=[_rule(index=10, dst=_seg_id_ref("seg-b-id", "10.0.2.0/24"))])],
-            ),
-            _make_acl_activation(vlan_id=200, seg_id="seg-b-id", security_policies=[]),
-        ]
-        result = get_acls(activations=acts)
-        vlan200 = next(a for a in result if a["vlan_id"] == 200)
-        assert vlan200["rules"][-1]["name"] == "implicit-deny-all"
+    def test_return_leg_attribution_is_own_segment_to_rule_source(self) -> None:
+        acl = get_acls(activations=[_segment_b([_inbound()])])[0]
+        (ret,) = _returns(acl)
+        assert ret["src_customer"] == "seg-b"
+        assert ret["dst_customer"] == "seg-a"
+        assert ret["dst_environment"] == "p"
+
+    def test_own_rules_are_not_mirrored_onto_a_local_destination(self) -> None:
+        """A's rule to B no longer adds src=A,dst=any to B's ACL: that line
+        matched none of B's own packets."""
+        a = _make_acl_activation(
+            vlan_id=100,
+            seg_id="seg-a-id",
+            security_policies=[_policy(rules=[_rule(index=10, dst={"id": "seg-b-id", "name": "b"})])],
+        )
+        b = _make_acl_activation(vlan_id=200, seg_id="seg-b-id", security_policies=[])
+        acl_b = next(acl for acl in get_acls(activations=[a, b]) if acl["vlan_id"] == 200)
+        assert [r["name"] for r in acl_b["rules"]] == ["implicit-deny-all"]
 
 
 # ===========================================================================
@@ -770,25 +789,6 @@ class TestGetAclsCustomerAttribution:
         deny = get_acls(activations=acts)[0]["rules"][-1]
         assert deny["src_customer"] is None
         assert deny["dst_customer"] is None
-
-    def test_mirrored_rule_dst_customer_is_this_segments_own_identity(self) -> None:
-        """A mirrored rule fires on the DESTINATION segment's own VLAN — its
-        dst_customer/dst_environment must be the segment it's rendering for,
-        not whatever the original rule's destination_segment happened to be."""
-        rule = _rule(index=10, dst=_seg_ref("10.0.2.0/24", customer_name="other-customer", environment="d"))
-        acts = [
-            _make_acl_activation(
-                vlan_id=100, customer_name="src-seg", seg_id="seg-a", security_policies=[_policy(rules=[rule])]
-            ),
-            _make_acl_activation(vlan_id=200, customer_name="this-customer", seg_id="seg-b", security_policies=[]),
-        ]
-        # Point the rule's destination_segment id at seg-b so it mirrors onto it.
-        rule["destination_segment"]["id"] = "seg-b"
-        result = get_acls(activations=acts)
-        acl_200 = next(a for a in result if a["vlan_id"] == 200)
-        mirrored = acl_200["rules"][0]
-        assert mirrored["dst_customer"] == "this-customer"
-        assert mirrored["dst_environment"] is None
 
 
 # ===========================================================================
@@ -1059,6 +1059,54 @@ class TestAristaLeafTemplateIsolationMode:
 # ---------------------------------------------------------------------------
 # get_interfaces() — OSPF interface authentication (password relationship)
 # ---------------------------------------------------------------------------
+
+
+def _return_leg_acl() -> dict:
+    """One ACL holding a tcp return leg, as get_acls() emits it."""
+    ret = {
+        "seq": 5000,
+        "action": "permit",
+        "protocol": "tcp",
+        "src": "10.0.2.0/24",
+        "src_port": "range 8000 8080",
+        "dst": "10.0.1.0/24",
+        "dst_port": None,
+        "established": True,
+        "log": False,
+        "name": "return-to-seg-a-rule-10",
+    }
+    return {"name": "ACL-VLAN200-IN", "vlan_id": 200, "segment_name": "seg-b", "rules": [ret]}
+
+
+class TestLeafTemplatesRenderReturnLegs:
+    """src_port and established reach the rendered ACL line."""
+
+    def test_arista_line_has_source_port_and_established(self, arista_env: jinja2.Environment) -> None:
+        rendered = arista_env.get_template(_LEAF_TEMPLATE_NAME).render(**_minimal_ctx(acls=[_return_leg_acl()]))
+        assert "5000 permit tcp 10.0.2.0/24 range 8000 8080 10.0.1.0/24 established" in rendered
+
+    def test_nxos_line_has_source_port_and_established(self, arista_env: jinja2.Environment) -> None:
+        rendered = arista_env.get_template("leafs/cisco_nxos.j2").render(
+            **_minimal_ctx(acls=[_return_leg_acl()], ospf=[], bgp=[])
+        )
+        assert "5000 permit tcp 10.0.2.0/24 range 8000 8080 10.0.1.0/24 established" in rendered
+
+    def test_forward_rule_line_is_unchanged(self, arista_env: jinja2.Environment) -> None:
+        acl = _return_leg_acl()
+        acl["rules"][0].update(src_port=None, established=False, dst_port="eq 443")
+        rendered = arista_env.get_template(_LEAF_TEMPLATE_NAME).render(**_minimal_ctx(acls=[acl]))
+        assert "5000 permit tcp 10.0.2.0/24 10.0.1.0/24 eq 443 ! return-to-seg-a-rule-10" in rendered
+
+    def test_sonic_rule_gets_source_port_range_and_ack_flag(self, arista_env: jinja2.Environment) -> None:
+        acl_table: dict = {}
+        acl_rule: dict = {}
+        arista_env.get_template("common/sonic_acl.j2").render(
+            acls=[_return_leg_acl()], acl_table=acl_table, acl_rule=acl_rule
+        )
+        entry = acl_rule["ACL-VLAN200-IN|SEQ_5000"]
+        assert entry["L4_SRC_PORT_RANGE"] == "8000-8080"
+        assert entry["TCP_FLAGS"] == "0x10/0x10"
+        assert "L4_DST_PORT" not in entry
 
 
 def _make_ospf_interface(

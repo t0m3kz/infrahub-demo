@@ -23,10 +23,6 @@ spec:
             instances:
               - c012-payment-ui-va1-1
               - c012-payment-ui-va1-2
-            service_ports:
-              data:
-                - port: 443
-                  protocol: tcp
             member_of_groups:
               - app_components
 
@@ -36,9 +32,11 @@ spec:
             instances:
               - c012-payment-engine-va1-1
               - c012-payment-engine-va1-2
-            service_ports:
+            children:
+              kind: AppEndpoint
               data:
-                - port: 8443
-                  protocol: tcp
+                - name: payment-engine-api
+                  endpoint_type: internal_service
+                  fqdn: engine.payment-edge.c012.demo.local
             member_of_groups:
               - app_components

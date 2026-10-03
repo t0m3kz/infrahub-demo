@@ -41,8 +41,10 @@ ip access-list {{ acl.name }}
 {%- if rule.src_customer or rule.dst_customer %}
   remark Customer: {{ rule.src_customer or 'any' }}/{{ rule.src_environment or 'any' }} -> {{ rule.dst_customer or 'any' }}/{{ rule.dst_environment or 'any' }}
 {%- endif %}
-  {{ rule.seq }} {{ rule.action }} {{ rule.protocol }} {{ rule.src }} {{ rule.dst -}}
+  {{ rule.seq }} {{ rule.action }} {{ rule.protocol }} {{ rule.src -}}
+{%- if rule.src_port %} {{ rule.src_port }}{% endif %} {{ rule.dst -}}
 {%- if rule.dst_port %} {{ rule.dst_port }}{% endif -%}
+{%- if rule.established %} established{% endif -%}
 {%- if rule.log %} log{% endif -%}
 {%- if rule.name %} ! {{ rule.name }}{% endif %}
 {%- endfor %}

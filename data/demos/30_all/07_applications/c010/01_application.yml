@@ -25,10 +25,6 @@ spec:
             instances:
               - c010-portal-ui-dc12-1
               - c010-portal-ui-dc12-2
-            service_ports:
-              data:
-                - port: 443
-                  protocol: tcp
             member_of_groups:
               - app_components
 
@@ -38,9 +34,11 @@ spec:
             instances:
               - c010-report-worker-dc12-1
               - c010-report-worker-dc12-2
-            service_ports:
+            children:
+              kind: AppEndpoint
               data:
-                - port: 8080
-                  protocol: tcp
+                - name: report-worker-api
+                  endpoint_type: internal_service
+                  fqdn: worker.reporting-portal.c010.demo.local
             member_of_groups:
               - app_components

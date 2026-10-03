@@ -5,11 +5,9 @@
 # request/approval object graph; a branch + proposed-change review is the
 # approval step for anything declared here.
 #
-# checkout-web has no explicit access_profile: AppApplicationGenerator
-# derives one (SecurityAccessProfile + SecurityIdentityGroup, named
-# c001-private-access-standard / c001-engineering) from this app's
-# security_profile, see generators/topology/application_security.py's
-# _ensure_endpoint_access_profile.
+# Who may open checkout-web, and on which port, is the access-profile
+# dependency in 03_checkout_dependencies.yml. Without it the ZTNA broker
+# does not publish the endpoint.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -35,10 +33,6 @@ spec:
                 - name: checkout-web
                   endpoint_type: private_access
                   fqdn: checkout.internal.c001.demo.local
-                  service_ports:
-                    data:
-                      - port: 443
-                        protocol: tcp
                 - name: payment-gateway
                   endpoint_type: external_service
                   fqdn: api.paymentgw.example.com

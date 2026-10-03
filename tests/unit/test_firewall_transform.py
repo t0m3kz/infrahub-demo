@@ -928,3 +928,161 @@ class TestAddressFamilyAwareRendering:
         out = _render_template(platform, name="fw1", contexts=[self._CONTEXT_V4])
         assert v4_marker in out
         assert v6_marker not in out
+
+
+# ===========================================================================
+# Per-context security policies
+# ===========================================================================
+
+_CTX_RULE = {
+    "seq": 100,
+    "name": "c005-web-to-api",
+    "action": "permit",
+    "protocol": "tcp",
+    "raw_protocol": "tcp",
+    "port_start": 8443,
+    "port_end": None,
+    "src_zone": "PROD-ZONE",
+    "dst_zone": "PROD-ZONE",
+    "src": "10.5.1.0/24",
+    "dst": "10.5.2.0/24",
+    "dst_port": "eq 8443",
+    "log": False,
+    "description": "",
+    "security_profile": None,
+}
+
+
+def _policy_context(**extra: Any) -> dict[str, Any]:
+    return {
+        "id": "ctx-c005",
+        "tenant_id": "dep-c005",
+        "name": "c005-dedicated",
+        "tenant_name": "C005-P-DC12",
+        "vlan_id": 3005,
+        "parent_interface": {"name": "eth1"},
+        "ip_address": "100.65.0.4/31",
+        "context_id": None,
+        "policies": [{"name": "seg-c005-web-egress", "default_action": "deny", "rules": [_CTX_RULE]}],
+        **extra,
+    }
+
+
+class TestPerContextPolicyRendering:
+    """Rules placed in a context render inside that VDOM/vsys/tenant/context, not at root."""
+
+    @pytest.mark.parametrize(
+        "platform,scope_marker,rule_marker",
+        [
+            ("fortinet_fortios", 'config vdom\n    edit "c005-dedicated"', 'set name "c005-web-to-api"'),
+            (
+                "paloalto_panos",
+                "vsys c005-dedicated",
+                "set vsys c005-dedicated rulebase security rules c005-web-to-api",
+            ),
+            ("juniper_junos", "tenant system c005-dedicated", "set tenants c005-dedicated security policies"),
+            ("checkpoint_gaia", "set virtual-system c005-dedicated", 'name "c005-web-to-api"'),
+            ("cisco_asa", "changeto context c005-dedicated", "access-list customer-pbr-in extended permit"),
+        ],
+    )
+    def test_context_policies_render_in_the_context_scope(
+        self, platform: str, scope_marker: str, rule_marker: str
+    ) -> None:
+        out = _render_template(platform, name="fw1", contexts=[_policy_context()], zone_policies=[])
+        assert rule_marker in out.split(scope_marker, 1)[1]
+
+    @pytest.mark.parametrize(
+        "platform,root_marker",
+        [
+            ("fortinet_fortios", "config firewall policy"),
+            ("paloalto_panos", "set rulebase security rules"),
+            ("juniper_junos", "set security policies"),
+            ("checkpoint_gaia", "add access-rule"),
+            ("cisco_asa", "access-list PROD-ZONE-in"),
+        ],
+    )
+    def test_context_policies_do_not_leak_into_root(self, platform: str, root_marker: str) -> None:
+        out = _render_template(platform, name="fw1", contexts=[_policy_context()], zone_policies=[])
+        before_context = out.split("c005-dedicated", 1)[0]
+        assert root_marker not in before_context
+        if platform in ("paloalto_panos", "juniper_junos"):
+            assert root_marker not in out
+
+    def test_asa_binds_the_context_acl_to_its_customer_pbr_interface(self) -> None:
+        out = _render_template("cisco_asa", name="fw1", contexts=[_policy_context()])
+        assert "access-list customer-pbr-in extended permit tcp 10.5.1.0/24 10.5.2.0/24 eq 8443" in out
+        assert "access-group customer-pbr-in in interface customer-pbr" in out
+
+    def test_asa_skips_the_access_group_without_a_context_interface(self) -> None:
+        """No nameif customer-pbr exists to bind to when the sub-interface is not configured."""
+        out = _render_template("cisco_asa", name="fw1", contexts=[_policy_context(ip_address=None)])
+        assert "access-list customer-pbr-in" in out
+        assert "access-group customer-pbr-in" not in out
+
+    @pytest.mark.parametrize(
+        "platform", ["fortinet_fortios", "paloalto_panos", "juniper_junos", "checkpoint_gaia", "cisco_asa"]
+    )
+    def test_context_without_policies_renders_no_policy_section(self, platform: str) -> None:
+        out = _render_template(platform, name="fw1", contexts=[_policy_context(policies=[])])
+        assert "c005-web-to-api" not in out
+
+
+def _make_context_smoke_data(platform: str, *, tenant_matches: bool) -> dict[str, Any]:
+    """Smoke data whose segment rule names the segment and whose firewall has a
+    dedicated context; the context serves the segment only when its tenant is
+    one of the segment's customer deployments."""
+    data = _make_smoke_data(platform)
+    device = data["DcimPhysicalDevice"]["edges"][0]["node"]
+    fw_iface = device["interfaces"]["edges"][0]["node"]
+    seg_node = fw_iface["interface_capabilities"]["edges"][0]["node"]
+    seg_node["id"] = "seg-smoke"
+    seg_node["customer_deployments"] = {"edges": [{"node": {"id": "dep-c005"}}]}
+    rule = seg_node["security_policies"]["edges"][0]["node"]["rules"]["edges"][0]["node"]
+    rule["source_segment"] = {"node": {"id": "seg-smoke", "name": {"value": "seg-smoke"}}}
+    context_iface: dict[str, Any] = {
+        "__typename": {"value": "DcimVirtualInterface"},
+        "name": {"value": "eth1.3005"},
+        "description": {"value": None},
+        "status": {"value": "active"},
+        "role": {"value": None},
+        "parent_interface": {"node": {"name": {"value": "eth1"}}},
+        "ip_address": {"node": {"address": {"value": "100.65.0.4/31"}, "ip_namespace": {"node": None}}},
+        "ha_domain": {"node": None},
+        "interface_capabilities": {
+            "edges": [
+                {
+                    "node": {
+                        "__typename": "ManagedFirewallContext",
+                        "id": "ctx-c005",
+                        "name": {"value": "c005-dedicated"},
+                        "vlan_id": {"value": 3005},
+                        "context_id": {"value": None},
+                        "tenant": {
+                            "node": {
+                                "id": "dep-c005" if tenant_matches else "dep-other",
+                                "name": {"value": "C005-P-DC12"},
+                            }
+                        },
+                    }
+                }
+            ]
+        },
+    }
+    device["interfaces"]["edges"].append({"node": context_iface})
+    return data
+
+
+class TestFirewallTransformContextPlacement:
+    @pytest.mark.asyncio
+    async def test_segment_rule_moves_into_its_tenants_context(self) -> None:
+        """The rule renders under the vsys and no longer in the root rulebase."""
+        out = await _make_fw().transform(_make_context_smoke_data("paloalto_panos", tenant_matches=True))
+        assert "set vsys c005-dedicated rulebase security rules smoke-permit-rule" in out
+        assert "set rulebase security rules smoke-permit-rule" not in out
+
+    @pytest.mark.asyncio
+    async def test_rule_of_an_unserved_segment_stays_in_root(self) -> None:
+        """A dedicated context of another tenant does not take the rule."""
+        out = await _make_fw().transform(_make_context_smoke_data("paloalto_panos", tenant_matches=False))
+        assert "set rulebase security rules smoke-permit-rule" in out
+        assert "set vsys c005-dedicated rulebase" not in out

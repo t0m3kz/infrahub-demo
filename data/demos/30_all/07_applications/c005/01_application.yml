@@ -31,10 +31,6 @@ spec:
             instances:
               - c005-web-frontend-dc10-1
               - c005-web-frontend-dc10-2
-            service_ports:
-              data:
-                - port: 443
-                  protocol: tcp
             member_of_groups:
               - app_components
 
@@ -44,23 +40,15 @@ spec:
             instances:
               - c005-app-backend-dc10-1
               - c005-app-backend-dc12-1
-            service_ports:
-              data:
-                - port: 8443
-                  protocol: tcp
             member_of_groups:
               - app_components
 
           - name: order-db
             component_type: database
-            network_segment: c005-database-local-dc12-d
+            network_segment: c005-database-local-dc12-p
             instances:
               - c005-order-db-dc12-1
               - c005-order-db-dc12-2
-            service_ports:
-              data:
-                - port: 5432
-                  protocol: tcp
             member_of_groups:
               - app_components
 
@@ -70,9 +58,5 @@ spec:
             instances:
               - c005-event-bus-dc10-1
               - c005-event-bus-dc12-1
-            service_ports:
-              data:
-                - port: 5672
-                  protocol: tcp
             member_of_groups:
               - app_components

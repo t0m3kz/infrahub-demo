@@ -1,0 +1,45 @@
+---
+# Who calls whom inside storefront, and on which ports. The ports live only
+# on these dependencies; 00_applications.yml declares the endpoints.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppDependency
+  data:
+    - name: c001-storefront-p-web-frontend-to-app-backend
+      source: c001-storefront-p-web-frontend
+      target: ["c001-storefront-p-app-backend", "c001-storefront-backend-https"]
+      protocol: tcp
+      port_start: 8443
+      access_status: auto
+      description: "Storefront web calls the backend API"
+      member_of_groups:
+        - app_dependencies
+    - name: c001-storefront-p-app-backend-to-order-db
+      source: c001-storefront-p-app-backend
+      target: ["c001-storefront-p-order-db", "c001-storefront-db-postgres"]
+      protocol: tcp
+      port_start: 5432
+      access_status: auto
+      description: "Backend reads and writes orders"
+      member_of_groups:
+        - app_dependencies
+    - name: c001-storefront-p-app-backend-to-session-cache
+      source: c001-storefront-p-app-backend
+      target: ["c001-storefront-p-session-cache", "c001-storefront-cache"]
+      protocol: tcp
+      port_start: 6379
+      access_status: auto
+      description: "Backend keeps sessions in the cache"
+      member_of_groups:
+        - app_dependencies
+    - name: c001-storefront-p-app-backend-to-session-cache-udp-30000
+      source: c001-storefront-p-app-backend
+      target: ["c001-storefront-p-session-cache", "c001-storefront-cache"]
+      protocol: udp
+      port_start: 30000
+      port_end: 30010
+      access_status: auto
+      description: "Backend joins the cache cluster bus"
+      member_of_groups:
+        - app_dependencies

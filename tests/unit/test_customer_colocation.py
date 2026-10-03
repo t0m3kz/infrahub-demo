@@ -20,6 +20,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.common import CommonGenerator
+from generators.protocols import TopologyCustomerColocation
 from generators.topology.customer_colocation import CustomerDeploymentColocationExchangeGenerator
 
 _T = TypeVar("_T", bound=CommonGenerator)
@@ -226,6 +227,71 @@ class TestFirewallContextProvisioning:
         await gen.generate(_colo_payload_with_parent())
 
         gen._create_context_subinterface.assert_not_called()
+
+
+class TestLinkServingFirewallContext:
+    """The deployment records the context its segments terminate on."""
+
+    @pytest.mark.asyncio
+    async def test_provisioned_context_is_linked_to_the_deployment(self) -> None:
+        """Shared or dedicated, the context just ensured is the one linked."""
+        gen, _, _ = TestFirewallContextProvisioning()._make_gen_with_cluster()
+        gen._get_or_create_firewall_context = AsyncMock(return_value=MagicMock(id="ctx-1"))
+        gen._link_serving_firewall_context = AsyncMock()
+
+        await gen.generate(_colo_payload_with_parent(customer_id="cust-1"))
+
+        gen._link_serving_firewall_context.assert_awaited_once_with("cust-1", "ctx-1")
+
+    @pytest.mark.asyncio
+    async def test_context_creation_failure_links_nothing(self) -> None:
+        """No context, no link: the deployment keeps whatever it had."""
+        gen, _, _ = TestFirewallContextProvisioning()._make_gen_with_cluster()
+        gen._get_or_create_firewall_context = AsyncMock(return_value=None)
+        gen._link_serving_firewall_context = AsyncMock()
+
+        await gen.generate(_colo_payload_with_parent())
+
+        gen._link_serving_firewall_context.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_link_is_saved_untracked(self) -> None:
+        """The deployment is the generator's target; tracking it would let
+        delete_unused_nodes remove it on a later run."""
+        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        deployment = MagicMock()
+        deployment.serving_firewall_context.id = None
+        deployment.save = AsyncMock()
+        gen.client.get = AsyncMock(return_value=deployment)
+
+        await gen._link_serving_firewall_context("cust-1", "ctx-1")
+
+        assert gen.client.get.call_args.kwargs == {"kind": TopologyCustomerColocation, "id": "cust-1"}
+        assert deployment.serving_firewall_context == "ctx-1"
+        deployment.save.assert_awaited_once_with(update_group_context=False)
+
+    @pytest.mark.asyncio
+    async def test_unchanged_link_is_not_rewritten(self) -> None:
+        """Re-running against the same context writes nothing."""
+        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        deployment = MagicMock()
+        deployment.serving_firewall_context.id = "ctx-1"
+        deployment.save = AsyncMock()
+        gen.client.get = AsyncMock(return_value=deployment)
+
+        await gen._link_serving_firewall_context("cust-1", "ctx-1")
+
+        deployment.save.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_save_failure_is_logged_not_raised(self) -> None:
+        """A failed link does not abort the rest of the provisioning."""
+        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        gen.client.get = AsyncMock(side_effect=RuntimeError("boom"))
+
+        await gen._link_serving_firewall_context("cust-1", "ctx-1")
+
+        gen.logger.error.assert_called_once()
 
 
 class TestEnsureDedicatedLoadbalancer:

@@ -130,7 +130,17 @@ class RulesPlanner(RulePlanningHelper):
         )
 
     @staticmethod
-    def rule_name(app_name: str, src: dict[str, Any], dst: dict[str, Any]) -> str:
+    def rule_name(app_name: str, src: dict[str, Any], dst: dict[str, Any], dep: dict[str, Any] | None = None) -> str:
+        """One rule per dependency, named after it.
+
+        Naming the rule after its two components collapsed two dependencies
+        between the same pair (e.g. tcp/6379 and udp/30000-30010) into one
+        rule, and the second was skipped as already existing. The component
+        pair is the fallback for a dependency without a name.
+        """
+        dep_name = str((dep or {}).get("name") or "").strip()
+        if dep_name:
+            return RulePlanningHelper.normalize_name_part(dep_name, "dependency")
         src_label = src.get("label") or src.get("slug") or src.get("name", "src")
         dst_label = dst.get("label") or dst.get("slug") or dst.get("name", "dst")
         return RulePlanningHelper.flow_rule_name(app_name, src_label, dst_label)
@@ -165,12 +175,6 @@ class RulesPlanner(RulePlanningHelper):
         return owner_name or None
 
     @staticmethod
-    def app_name_from_component(component: dict[str, Any]) -> str | None:
-        app = component.get("parent") or {}
-        app_name = str(app.get("name") or "").strip()
-        return app_name or None
-
-    @staticmethod
     def app_environment_from_component(component: dict[str, Any]) -> str | None:
         app = component.get("parent") or {}
         environment = str(app.get("environment") or "").strip().lower()
@@ -194,30 +198,21 @@ class RulesPlanner(RulePlanningHelper):
         if status == "denied":
             return False, "explicitly denied"
 
-        src_owner_org_id = cls.owner_org_id_from_component(src_comp)
-        dst_owner_org_id = cls.owner_org_id_from_component(dst_comp)
-
-        if src_owner_org_id and dst_owner_org_id and src_owner_org_id != dst_owner_org_id:
-            if status != "approved":
-                return False, f"cross-owner flow {src_owner_org_id}->{dst_owner_org_id} requires access_status=approved"
-            return True, None
-
-        src_app_name = cls.app_name_from_component(src_comp)
-        dst_app_name = cls.app_name_from_component(dst_comp)
-        if src_app_name and dst_app_name and src_app_name != dst_app_name:
-            if status != "approved":
-                return (
-                    False,
-                    f"cross-application flow {src_app_name}->{dst_app_name} requires access_status=approved",
-                )
-            return True, None
-
+        # Prod and non-prod are never connected, so no approval opens that
+        # flow.
         src_env = cls.app_environment_from_component(src_comp)
         dst_env = cls.app_environment_from_component(dst_comp)
-        if src_env and dst_env and src_env != dst_env:
-            if status != "approved":
-                return False, f"cross-environment flow {src_env}->{dst_env} requires access_status=approved"
-            return True, None
+        if src_env and dst_env and src_env != dst_env and "p" in (src_env, dst_env):
+            return False, f"cross-environment flow {src_env}->{dst_env} joins prod and non-prod and is never allowed"
+
+        # Inside one owner every flow is auto-approved, across applications
+        # and non-prod environments too. Another owner's endpoint opens only
+        # once its owner approves; the dependency-updated trigger then
+        # reconciles the calling application, which creates the rule.
+        src_owner_org_id = cls.owner_org_id_from_component(src_comp)
+        dst_owner_org_id = cls.owner_org_id_from_component(dst_comp)
+        if src_owner_org_id and dst_owner_org_id and src_owner_org_id != dst_owner_org_id and status != "approved":
+            return False, f"cross-owner flow {src_owner_org_id}->{dst_owner_org_id} requires access_status=approved"
 
         return True, None
 
@@ -293,21 +288,6 @@ class RulesPlanner(RulePlanningHelper):
             },
         }
         return seeds[zone_name]
-
-    @staticmethod
-    def pick_access_policy(app_security_profile: str) -> dict[str, Any]:
-        """Default ZTNA access-profile policy for a private_access endpoint,
-        derived from its application's security_profile."""
-        mapping = {
-            "internet_exposed": {"mfa_required": True, "device_posture_required": True, "session_timeout_minutes": 480},
-            "fintech_strict": {"mfa_required": True, "device_posture_required": True, "session_timeout_minutes": 480},
-            "internal_standard": {
-                "mfa_required": True,
-                "device_posture_required": False,
-                "session_timeout_minutes": 720,
-            },
-        }
-        return mapping.get(app_security_profile, mapping["internal_standard"])
 
     @staticmethod
     def pick_isolation_mode(app_security_profile: str) -> str:

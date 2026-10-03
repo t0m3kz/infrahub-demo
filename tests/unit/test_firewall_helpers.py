@@ -8,6 +8,7 @@ Covers:
   - get_customer_pbr_rules()      — default-redirect-to-firewall PBR rules per VLAN
   - get_border_leaf_pbr_rules()   — same, but SGT/prefix-matched, DC-wide (border-leaf)
   - get_firewall_contexts()       — per-tenant FirewallContext list from this device's interfaces
+  - place_policies_in_contexts()  — split of policy rules between those contexts
 """
 
 from transforms.helpers.firewall import (
@@ -19,6 +20,7 @@ from transforms.helpers.firewall import (
     get_firewall_zones,
     get_vrf_default_gateways,
     get_zone_policies,
+    place_policies_in_contexts,
 )
 
 # ---------------------------------------------------------------------------
@@ -551,6 +553,34 @@ class TestGetZonePolicies:
         seqs = [r["seq"] for r in result[0]["rules"] if r["name"] != "implicit-deny-all"]
         assert seqs == [10, 20, 30]
 
+    def test_rules_numbered_across_the_whole_table(self) -> None:
+        """Two policies whose rules share indexes get distinct, ordered seqs."""
+        first = _make_policy(name="a", rules=[_make_rule(index=100, name="a1"), _make_rule(index=200, name="a2")])
+        second = _make_policy(name="b", rules=[_make_rule(index=100, name="b1")])
+        result = get_zone_policies([first, second])
+        seqs = [(r["name"], r["seq"]) for p in result for r in p["rules"] if r["name"] != "implicit-deny-all"]
+        assert seqs == [("a1", 10), ("a2", 20), ("b1", 30)]
+
+    def test_one_implicit_deny_closes_the_table(self) -> None:
+        """A deny-all per policy would shadow every later policy's rules."""
+        first = _make_policy(name="a", rules=[_make_rule(name="a1")])
+        second = _make_policy(name="b", rules=[_make_rule(name="b1")])
+        result = get_zone_policies([first, second])
+        names = [r["name"] for p in result for r in p["rules"]]
+        assert names == ["a1", "b1", "implicit-deny-all"]
+
+    def test_disabled_last_policy_does_not_drop_the_implicit_deny(self) -> None:
+        first = _make_policy(name="a", rules=[_make_rule(name="a1")])
+        disabled = _make_policy(name="b", enabled=False, rules=[_make_rule(name="b1")])
+        result = get_zone_policies([first, disabled])
+        assert [p["name"] for p in result] == ["a"]
+        assert result[0]["rules"][-1]["name"] == "implicit-deny-all"
+
+    def test_implicit_deny_seq_stays_above_a_long_table(self) -> None:
+        rules = [_make_rule(index=i, name=f"r{i}") for i in range(1, 1001)]
+        result = get_zone_policies([_make_policy(rules=rules)])
+        assert result[0]["rules"][-1]["seq"] == 10010
+
     def test_rule_tcp_with_single_port(self) -> None:
         rule = _make_rule(protocol="tcp", port_start=443, port_end=None)
         result = get_zone_policies([_make_policy(rules=[rule])])
@@ -770,7 +800,9 @@ def _make_pbr_rule(*, action: str = "permit", dst_prefix: str | None = "10.0.2.0
     return rule
 
 
-def _make_context_leg(*, fw_ip: str = "10.65.0.0/30", tenant_id: str | None = None) -> dict:
+def _make_context_leg(
+    *, fw_ip: str = "10.65.0.0/30", tenant_id: str | None = None, served: list[str] | None = None
+) -> dict:
     """A ManagedFirewallContext dict as returned by
     _flatten_deployment_firewall_contexts() — device-scoped (this device's
     own deployment's firewall-role devices), not the rendered device's own
@@ -782,6 +814,8 @@ def _make_context_leg(*, fw_ip: str = "10.65.0.0/30", tenant_id: str | None = No
     }
     if tenant_id:
         ctx["tenant"] = {"id": tenant_id}
+    if served is not None:
+        ctx["served_deployments"] = [{"id": d} for d in served]
     return ctx
 
 
@@ -970,6 +1004,42 @@ class TestGetCustomerPbrRules:
         result = get_customer_pbr_rules(activations, contexts)
         assert "10.9.0.0/24" in result[0]["bypass_prefixes"]
 
+    @staticmethod
+    def _with_inbound(*inbound: dict) -> list[dict]:
+        activation = _make_pbr_activation(security_policies=[])
+        activation["segment"]["inbound_rules"] = list(inbound)
+        return [activation]
+
+    @staticmethod
+    def _inbound(
+        src_prefix: str | None = "10.0.1.0/24", action: str = "permit", disabled: bool = False, enabled: bool = True
+    ) -> dict:
+        src = {"id": "seg-a", "gateway": {"ip_prefix": {"prefix": src_prefix}}} if src_prefix else None
+        return {"action": action, "disabled": disabled, "policy": {"enabled": enabled}, "source_segment": src}
+
+    def test_inbound_permit_source_is_bypassed_for_the_reply(self) -> None:
+        """A -> B bypassed the firewall on A's leaf, so B's reply to A bypasses it too."""
+        result = get_customer_pbr_rules(self._with_inbound(self._inbound()), [_make_context_leg()])
+        assert result[0]["bypass_prefixes"] == ["10.0.1.0/24"]
+
+    def test_inactive_inbound_rules_are_not_bypassed(self) -> None:
+        inbound = (
+            self._inbound(src_prefix="10.0.1.0/24", action="deny"),
+            self._inbound(src_prefix="10.0.3.0/24", disabled=True),
+            self._inbound(src_prefix="10.0.4.0/24", enabled=False),
+            self._inbound(src_prefix=None),
+        )
+        result = get_customer_pbr_rules(self._with_inbound(*inbound), [_make_context_leg()])
+        assert result[0]["bypass_prefixes"] == []
+
+    def test_own_and_inbound_bypasses_merge_without_duplicates(self) -> None:
+        activations = self._with_inbound(self._inbound(src_prefix="10.0.2.0/24"))
+        activations[0]["segment"]["security_policies"] = [
+            {"enabled": True, "rules": [_make_pbr_rule(dst_prefix="10.0.2.0/24")]}
+        ]
+        result = get_customer_pbr_rules(activations, [_make_context_leg()])
+        assert result[0]["bypass_prefixes"] == ["10.0.2.0/24"]
+
     def test_duplicate_vlan_deduplicated(self) -> None:
         activations = [
             _make_pbr_activation(vlan_id=100, security_policies=[]),
@@ -1016,15 +1086,24 @@ def _make_fw_context_interface(
     context_name: str = "dc10-shared",
     vlan_id: int = 3000,
     tenant_name: str | None = None,
+    tenant_id: str | None = None,
+    served: list[dict] | None = None,
 ) -> dict:
+    tenant: dict = {}
+    if tenant_name:
+        tenant["name"] = tenant_name
+    if tenant_id:
+        tenant["id"] = tenant_id
     cap = {
         "typename": "ManagedFirewallContext",
         "id": context_id,
         "name": context_name,
         "vlan_id": vlan_id,
         "context_id": None,
-        "tenant": {"name": tenant_name} if tenant_name else {},
+        "tenant": tenant,
     }
+    if served is not None:
+        cap["served_deployments"] = served
     iface: dict = {
         "name": iface_name,
         "parent_interface": {"name": parent_name},
@@ -1060,6 +1139,15 @@ class TestGetFirewallContexts:
         result = get_firewall_contexts([_make_fw_context_interface(tenant_name="C005-P-DC10")])
         assert result[0]["tenant_name"] == "C005-P-DC10"
 
+    def test_context_carries_its_id_and_tenant_id(self) -> None:
+        """place_policies_in_contexts keys contexts by id and matches tenants by id."""
+        result = get_firewall_contexts([_make_fw_context_interface(context_id="ctx-9", tenant_id="dep-c005")])
+        assert result[0]["id"] == "ctx-9"
+        assert result[0]["tenant_id"] == "dep-c005"
+
+    def test_shared_context_has_no_tenant_id(self) -> None:
+        assert get_firewall_contexts([_make_fw_context_interface()])[0]["tenant_id"] is None
+
     def test_context_without_ip_still_extracted(self) -> None:
         """inline connectivity_mode contexts have no dedicated p2p IP."""
         result = get_firewall_contexts([_make_fw_context_interface(ip_addr=None)])
@@ -1073,6 +1161,14 @@ class TestGetFirewallContexts:
         ]
         assert len(get_firewall_contexts(ifaces)) == 1
 
+    def test_served_deployment_ids_collected(self) -> None:
+        """Entries without an id (a partial query response) are skipped."""
+        iface = _make_fw_context_interface(served=[{"id": "dep-a"}, {}, {"id": "dep-b"}])
+        assert get_firewall_contexts([iface])[0]["served_deployment_ids"] == ["dep-a", "dep-b"]
+
+    def test_no_served_deployments_yields_empty_list(self) -> None:
+        assert get_firewall_contexts([_make_fw_context_interface()])[0]["served_deployment_ids"] == []
+
     def test_multiple_contexts_sorted_by_name(self) -> None:
         ifaces = [
             _make_fw_context_interface(context_id="ctx-b", context_name="dc10-b-dedicated"),
@@ -1080,6 +1176,163 @@ class TestGetFirewallContexts:
         ]
         result = get_firewall_contexts(ifaces)
         assert [c["name"] for c in result] == ["dc10-a-dedicated", "dc10-b-dedicated"]
+
+
+# ===========================================================================
+# place_policies_in_contexts()
+# ===========================================================================
+
+_SHARED_CTX = {"id": "ctx-shared", "tenant_id": None}
+_C005_CTX = {"id": "ctx-c005", "tenant_id": "dep-c005"}
+_C006_CTX = {"id": "ctx-c006", "tenant_id": "dep-c006"}
+
+
+def _vxlan_seg(seg_id: str, *deployment_ids: str) -> dict:
+    """Segment as a rule references it; deployment links only when given."""
+    seg: dict = {"id": seg_id, "name": seg_id}
+    if deployment_ids:
+        seg["customer_deployments"] = [{"id": d} for d in deployment_ids]
+    return seg
+
+
+def _ctx_rule(name: str, src: dict | None, dst: dict | None) -> dict:
+    return {"name": name, "action": "permit", "source_segment": src, "destination_segment": dst}
+
+
+def _ctx_policy(name: str, *rules: dict) -> dict:
+    return {"name": name, "enabled": True, "rules": list(rules)}
+
+
+def _rule_names(policies: list[dict]) -> list[str]:
+    return [rule["name"] for policy in policies for rule in policy["rules"]]
+
+
+class TestPlacePoliciesInContexts:
+    """A rule sits in the context its segments' traffic is redirected to."""
+
+    def test_no_policies_returns_empty(self) -> None:
+        assert place_policies_in_contexts(None, [_SHARED_CTX]) == ([], {})
+
+    def test_without_contexts_everything_stays_in_root(self) -> None:
+        policies = [_ctx_policy("p1", _ctx_rule("r1", _vxlan_seg("s1", "dep-c005"), None))]
+        root, by_ctx = place_policies_in_contexts(policies, [])
+        assert root == policies
+        assert by_ctx == {}
+
+    def test_rule_goes_to_the_dedicated_context_of_its_segment(self) -> None:
+        policies = [_ctx_policy("p1", _ctx_rule("r1", _vxlan_seg("s1", "dep-c005"), _vxlan_seg("s2", "dep-c005")))]
+        root, by_ctx = place_policies_in_contexts(policies, [_SHARED_CTX, _C005_CTX])
+        assert root == []
+        assert list(by_ctx) == ["ctx-c005"]
+        assert _rule_names(by_ctx["ctx-c005"]) == ["r1"]
+
+    def test_segment_without_dedicated_context_falls_back_to_shared(self) -> None:
+        policies = [_ctx_policy("p1", _ctx_rule("r1", _vxlan_seg("s1", "dep-other"), _vxlan_seg("s2")))]
+        root, by_ctx = place_policies_in_contexts(policies, [_SHARED_CTX, _C005_CTX])
+        assert root == []
+        assert _rule_names(by_ctx["ctx-shared"]) == ["r1"]
+
+    def test_cross_context_rule_is_repeated_as_the_ingress_leg(self) -> None:
+        """Between two tenants the flow crosses both contexts, each denying by default."""
+        rule = _ctx_rule("c005-to-c006", _vxlan_seg("s1", "dep-c005"), _vxlan_seg("s2", "dep-c006"))
+        root, by_ctx = place_policies_in_contexts([_ctx_policy("p1", rule)], [_C005_CTX, _C006_CTX])
+        assert root == []
+        assert _rule_names(by_ctx["ctx-c005"]) == ["c005-to-c006"]
+        assert _rule_names(by_ctx["ctx-c006"]) == ["c005-to-c006"]
+
+    def test_rule_without_segments_stays_in_root(self) -> None:
+        """A prefix-only rule (interconnect) has no segment a context could serve."""
+        policies = [_ctx_policy("p1", _ctx_rule("prefix-only", None, None))]
+        root, by_ctx = place_policies_in_contexts(policies, [_SHARED_CTX, _C005_CTX])
+        assert _rule_names(root) == ["prefix-only"]
+        assert by_ctx == {}
+
+    def test_segment_unserved_without_shared_context_stays_in_root(self) -> None:
+        policies = [_ctx_policy("p1", _ctx_rule("r1", _vxlan_seg("s1", "dep-other"), None))]
+        root, by_ctx = place_policies_in_contexts(policies, [_C005_CTX])
+        assert _rule_names(root) == ["r1"]
+        assert by_ctx == {}
+
+    def test_policy_is_split_between_root_and_context(self) -> None:
+        policies = [
+            _ctx_policy(
+                "p1",
+                _ctx_rule("in-ctx", _vxlan_seg("s1", "dep-c005"), None),
+                _ctx_rule("prefix-only", None, None),
+            )
+        ]
+        root, by_ctx = place_policies_in_contexts(policies, [_C005_CTX])
+        assert _rule_names(root) == ["prefix-only"]
+        assert _rule_names(by_ctx["ctx-c005"]) == ["in-ctx"]
+        assert root[0]["name"] == by_ctx["ctx-c005"][0]["name"] == "p1"
+
+    def test_ruleless_policy_stays_in_root(self) -> None:
+        root, by_ctx = place_policies_in_contexts([_ctx_policy("empty")], [_SHARED_CTX])
+        assert [p["name"] for p in root] == ["empty"]
+        assert by_ctx == {}
+
+    def test_segments_argument_supplies_missing_deployment_links(self) -> None:
+        """The rule's copy of a segment lacks its deployments; the activation's copy has them."""
+        policies = [_ctx_policy("p1", _ctx_rule("r1", _vxlan_seg("s1"), None))]
+        activation_seg = {"id": "s1", "customer_deployment": {"id": "dep-c005"}}
+        root, by_ctx = place_policies_in_contexts(policies, [_SHARED_CTX, _C005_CTX], segments=[activation_seg])
+        assert root == []
+        assert list(by_ctx) == ["ctx-c005"]
+
+    def test_served_deployment_places_rule_in_the_shared_context(self) -> None:
+        """A shared-context customer has no tenant link; served_deployments names it."""
+        shared = {**_SHARED_CTX, "served_deployment_ids": ["dep-c007"]}
+        policies = [_ctx_policy("p1", _ctx_rule("r1", _vxlan_seg("s1", "dep-c007"), None))]
+        root, by_ctx = place_policies_in_contexts(policies, [shared, _C005_CTX])
+        assert root == []
+        assert _rule_names(by_ctx["ctx-shared"]) == ["r1"]
+
+    def test_rule_of_another_firewalls_deployments_is_left_out(self) -> None:
+        """Once linked, an unserved deployment no longer falls back to the shared context."""
+        shared = {**_SHARED_CTX, "served_deployment_ids": ["dep-c007"]}
+        rule = _ctx_rule("other-dc", _vxlan_seg("s1", "dep-dc12"), _vxlan_seg("s2", "dep-dc12"))
+        root, by_ctx = place_policies_in_contexts([_ctx_policy("p1", rule)], [shared])
+        assert root == []
+        assert by_ctx == {}
+
+    def test_rule_toward_another_firewall_keeps_only_the_local_leg(self) -> None:
+        """Source here, destination served elsewhere: only the egress copy is local."""
+        shared = {**_SHARED_CTX, "served_deployment_ids": ["dep-c007"]}
+        rule = _ctx_rule("to-dc12", _vxlan_seg("s1", "dep-c007"), _vxlan_seg("s2", "dep-dc12"))
+        root, by_ctx = place_policies_in_contexts([_ctx_policy("p1", rule)], [shared])
+        assert root == []
+        assert list(by_ctx) == ["ctx-shared"]
+
+    def test_segment_without_deployment_still_uses_the_shared_context_once_linked(self) -> None:
+        shared = {**_SHARED_CTX, "served_deployment_ids": ["dep-c007"]}
+        policies = [_ctx_policy("p1", _ctx_rule("infra", _vxlan_seg("s1"), None))]
+        root, by_ctx = place_policies_in_contexts(policies, [shared])
+        assert root == []
+        assert _rule_names(by_ctx["ctx-shared"]) == ["infra"]
+
+    def test_tenant_link_still_counts_when_another_context_is_linked(self) -> None:
+        """A dedicated context whose deployment has not re-run yet keeps its rules."""
+        shared = {**_SHARED_CTX, "served_deployment_ids": ["dep-c007"]}
+        policies = [_ctx_policy("p1", _ctx_rule("r1", _vxlan_seg("s1", "dep-c005"), None))]
+        root, by_ctx = place_policies_in_contexts(policies, [shared, _C005_CTX])
+        assert root == []
+        assert list(by_ctx) == ["ctx-c005"]
+
+    def test_policy_whose_rules_all_terminate_elsewhere_is_dropped(self) -> None:
+        shared = {**_SHARED_CTX, "served_deployment_ids": ["dep-c007"]}
+        policies = [
+            _ctx_policy("local", _ctx_rule("r1", _vxlan_seg("s1", "dep-c007"), None)),
+            _ctx_policy("remote", _ctx_rule("r2", _vxlan_seg("s2", "dep-dc12"), None)),
+        ]
+        root, by_ctx = place_policies_in_contexts(policies, [shared])
+        assert root == []
+        assert [p["name"] for p in by_ctx["ctx-shared"]] == ["local"]
+
+    def test_input_policies_are_not_mutated(self) -> None:
+        rule = _ctx_rule("r1", _vxlan_seg("s1", "dep-c005"), None)
+        policies = [_ctx_policy("p1", rule, _ctx_rule("prefix-only", None, None))]
+        place_policies_in_contexts(policies, [_C005_CTX])
+        assert _rule_names(policies) == ["r1", "prefix-only"]
 
 
 # ===========================================================================
@@ -1114,6 +1367,100 @@ def _make_dc_activation(
     if environment is not None:
         seg["environment"] = environment
     return {"vni": vni, "segment": seg}
+
+
+def _peer(prefix: str, deployment_id: str | None) -> dict:
+    peer: dict = {"id": f"seg-{prefix}", "gateway": {"ip_prefix": {"prefix": prefix}}}
+    if deployment_id:
+        peer["customer_deployments"] = [{"id": deployment_id}]
+    return peer
+
+
+def _profiled_permit(peer: dict, profile: str | None = "strict") -> dict:
+    rule: dict = {"action": "permit", "disabled": False, "destination_segment": peer}
+    if profile:
+        rule["security_profile"] = {"name": profile}
+    return rule
+
+
+class TestCustomerPbrInspectedFlows:
+    """Option 1: a profiled permit inside one context crosses the firewall
+    both ways; every other permit stays on the fabric."""
+
+    SHARED = "10.65.0.0/30"
+    DEDICATED = "10.66.0.0/30"
+
+    def _contexts(self) -> list[dict]:
+        return [
+            _make_context_leg(fw_ip=self.SHARED, served=["dep-a", "dep-b"]),
+            _make_context_leg(fw_ip=self.DEDICATED, tenant_id="dep-c", served=["dep-c"]),
+        ]
+
+    @staticmethod
+    def _segment(rules: list[dict], inbound: list[dict] | None = None, deployment_id: str = "dep-a") -> list[dict]:
+        activation = _make_pbr_activation(
+            deployment_id=deployment_id, security_policies=[{"enabled": True, "rules": rules}]
+        )
+        activation["segment"]["inbound_rules"] = inbound or []
+        return [activation]
+
+    def test_profiled_permit_within_one_context_is_not_bypassed(self) -> None:
+        segment = self._segment([_profiled_permit(_peer("10.0.2.0/24", "dep-b"))])
+        result = get_customer_pbr_rules(segment, self._contexts())
+        assert result[0]["bypass_prefixes"] == []
+        assert result[0]["fw_nexthop"] == "10.65.0.0"
+
+    def test_reply_of_an_inspected_inbound_flow_goes_back_through_the_firewall(self) -> None:
+        """The destination's leaf keeps the source off its bypass, so the reply meets the session."""
+        inbound = {
+            "action": "permit",
+            "disabled": False,
+            "policy": {"enabled": True},
+            "security_profile": {"name": "strict"},
+            "source_segment": _peer("10.0.1.0/24", "dep-b"),
+        }
+        result = get_customer_pbr_rules(self._segment([], [inbound]), self._contexts())
+        assert result[0]["bypass_prefixes"] == []
+
+    def test_profiled_permit_across_contexts_stays_on_the_fabric(self) -> None:
+        segment = self._segment([_profiled_permit(_peer("10.0.3.0/24", "dep-c"))])
+        result = get_customer_pbr_rules(segment, self._contexts())
+        assert result[0]["bypass_prefixes"] == ["10.0.3.0/24"]
+
+    def test_profiled_permit_to_a_segment_served_elsewhere_stays_on_the_fabric(self) -> None:
+        """Another DC's deployment is not this DC's shared context, even without a dedicated one."""
+        segment = self._segment([_profiled_permit(_peer("10.9.0.0/24", "dep-other-dc"))])
+        result = get_customer_pbr_rules(segment, self._contexts())
+        assert result[0]["bypass_prefixes"] == ["10.9.0.0/24"]
+
+    def test_peer_without_deployment_stays_on_the_fabric(self) -> None:
+        segment = self._segment([_profiled_permit(_peer("10.0.4.0/24", None))])
+        result = get_customer_pbr_rules(segment, self._contexts())
+        assert result[0]["bypass_prefixes"] == ["10.0.4.0/24"]
+
+    def test_permit_without_profile_is_bypassed_within_one_context(self) -> None:
+        segment = self._segment([_profiled_permit(_peer("10.0.2.0/24", "dep-b"), profile=None)])
+        result = get_customer_pbr_rules(segment, self._contexts())
+        assert result[0]["bypass_prefixes"] == ["10.0.2.0/24"]
+
+    def test_inspected_flow_wins_over_a_plain_one_to_the_same_peer(self) -> None:
+        """The bypass is per prefix, so one inspected flow keeps the peer off it."""
+        peer = _peer("10.0.2.0/24", "dep-b")
+        segment = self._segment([_profiled_permit(peer, profile=None), _profiled_permit(peer)])
+        result = get_customer_pbr_rules(segment, self._contexts())
+        assert result[0]["bypass_prefixes"] == []
+
+    def test_contexts_without_served_links_never_inspect_through_the_shared_one(self) -> None:
+        """Legacy data: without served_deployments nothing proves both ends share the shared context."""
+        segment = self._segment([_profiled_permit(_peer("10.0.2.0/24", "dep-b"))])
+        result = get_customer_pbr_rules(segment, [_make_context_leg(fw_ip=self.SHARED)])
+        assert result[0]["bypass_prefixes"] == ["10.0.2.0/24"]
+
+    def test_dedicated_context_inspects_its_own_tenant_flows(self) -> None:
+        segment = self._segment([_profiled_permit(_peer("10.0.5.0/24", "dep-c"))], deployment_id="dep-c")
+        result = get_customer_pbr_rules(segment, self._contexts())
+        assert result[0]["fw_nexthop"] == "10.66.0.0"
+        assert result[0]["bypass_prefixes"] == []
 
 
 class TestGetBorderLeafPbrRules:

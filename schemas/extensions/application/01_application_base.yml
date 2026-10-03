@@ -252,6 +252,9 @@ nodes:
         order_weight: 846
         label: "Health Checks"
         description: "Health checks associated with this application component"
+      - name: service_ports
+        peer: AppServicePort
+        state: absent
 extensions:
   nodes:
     - kind: LoadbalancerVIP

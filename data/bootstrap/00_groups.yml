@@ -93,7 +93,7 @@ spec:
     - name: app_components
       description: Application component instances
     - name: app_dependencies
-      description: Application dependency edges
+      description: Application dependency edges — generator target for AppApplicationGenerator (add_app_dependency)
     - name: topology_ansible
       description: Customer deployment footprints routed to Ansible-based infrastructure orchestration
     - name: topology_github_actions

@@ -5,7 +5,8 @@
 # relationship — owner is set automatically from the parent, no need to
 # repeat it on each segment. customer_deployments references the existing
 # TopologyCustomerDC footprints from 06_customer_boarding/c005/dc/ by their
-# computed name (DC10 is "p" -> C005-P-DC10, DC12 is "d" -> C005-D-DC12).
+# computed name (C005-P-DC10 and C005-P-DC12; every segment here is prod, like
+# payment-core, so each sits only on prod footprints).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -35,24 +36,24 @@ spec:
             # microsegmented for it (see _ensure_segment_isolation_mode) since
             # 01_application.yml's security_profile is fintech_strict. That in
             # turn is what makes the web-frontend -> app-backend AppDependency
-            # (07_applications/c005/03_dependencies.yml) exercise the
-            # return-rule reconciliation path — apply_on_switch has no
-            # connection tracking, so the forward permit alone would otherwise
-            # leave the response leg dropped.
+            # (07_applications/c005/03_dependencies.yml) an apply_on_switch
+            # rule. The leaf ACL is stateless, so the destination segment's
+            # leaf answers it with a return leg built from inbound_rules
+            # (transforms/helpers/acl.py).
             customer_deployments:
               - "C005-P-DC10"
-              - "C005-D-DC12"
+              - "C005-P-DC12"
             member_of_groups:
               - vxlan_segments
 
         - kind: ManagedVxlanSegment
           data:
             customer_name: "database-local-dc12"
-            environment: "d"
+            environment: "p"
             stretch_scope: local
             arp_suppression: true
             customer_deployments:
-              - "C005-D-DC12"
+              - "C005-P-DC12"
             member_of_groups:
               - vxlan_segments
 
@@ -64,7 +65,7 @@ spec:
             arp_suppression: true
             customer_deployments:
               - "C005-P-DC10"
-              - "C005-D-DC12"
+              - "C005-P-DC12"
             member_of_groups:
               - vxlan_segments
 

@@ -1,4 +1,36 @@
 {#- Palo Alto PAN-OS — zone-based firewall configuration -#}
+{%- macro security_policies(policies, scope='', title='Security Policies') %}
+#
+# --- {{ title }} ---
+{%- for policy in policies %}
+{%- for rule in policy.rules %}
+{%- set rule_name = rule.name | replace(' ', '-') %}
+set {{ scope }}rulebase security rules {{ rule_name }} from {{ rule.src_zone or 'any' }}
+set {{ scope }}rulebase security rules {{ rule_name }} to {{ rule.dst_zone or 'any' }}
+set {{ scope }}rulebase security rules {{ rule_name }} source {{ ('ag-' + rule.src_zone) if (rule.src_zone and not rule.src) else (rule.src or 'any') }}
+set {{ scope }}rulebase security rules {{ rule_name }} destination {{ ('ag-' + rule.dst_zone) if (rule.dst_zone and not rule.dst) else (rule.dst or 'any') }}
+set {{ scope }}rulebase security rules {{ rule_name }} application any
+{%- if rule.raw_protocol in ('tcp', 'udp') and rule.port_start %}
+{%- set svc_name = 'svc-' + rule.raw_protocol + '-' + rule.port_start | string + ('-' + rule.port_end | string if rule.port_end and rule.port_end != rule.port_start else '') %}
+set {{ scope }}service {{ svc_name }} protocol {{ rule.raw_protocol }} port {{ rule.port_start }}{{ '-' + rule.port_end | string if rule.port_end and rule.port_end != rule.port_start else '' }}
+set {{ scope }}rulebase security rules {{ rule_name }} service {{ svc_name }}
+{%- else %}
+set {{ scope }}rulebase security rules {{ rule_name }} service any
+{%- endif %}
+set {{ scope }}rulebase security rules {{ rule_name }} action {{ 'allow' if rule.action == 'permit' else 'deny' }}
+{%- if rule.security_profile %}
+set {{ scope }}rulebase security rules {{ rule_name }} profile-setting profiles virus {{ rule.security_profile }}
+{%- endif %}
+{%- if rule.log %}
+set {{ scope }}rulebase security rules {{ rule_name }} log-end yes
+{%- endif %}
+{%- if rule.description %}
+set {{ scope }}rulebase security rules {{ rule_name }} description "{{ rule.description }}"
+{%- endif %}
+{%- endfor %}
+{%- endfor %}
+#
+{%- endmacro -%}
 set deviceconfig system hostname {{ name }}
 #
 {%- if fw_interfaces %}
@@ -60,37 +92,7 @@ set network virtual-router default routing-table ip static-route {{ route.vrf | 
 {%- endfor %}
 #
 {%- endif %}
-{%- if zone_policies %}
-#
-# --- Security Policies ---
-{%- for policy in zone_policies %}
-{%- for rule in policy.rules %}
-{%- set rule_name = rule.name | replace(' ', '-') %}
-set rulebase security rules {{ rule_name }} from {{ rule.src_zone or 'any' }}
-set rulebase security rules {{ rule_name }} to {{ rule.dst_zone or 'any' }}
-set rulebase security rules {{ rule_name }} source {{ ('ag-' + rule.src_zone) if (rule.src_zone and not rule.src) else (rule.src or 'any') }}
-set rulebase security rules {{ rule_name }} destination {{ ('ag-' + rule.dst_zone) if (rule.dst_zone and not rule.dst) else (rule.dst or 'any') }}
-set rulebase security rules {{ rule_name }} application any
-{%- if rule.raw_protocol in ('tcp', 'udp') and rule.port_start %}
-{%- set svc_name = 'svc-' + rule.raw_protocol + '-' + rule.port_start | string + ('-' + rule.port_end | string if rule.port_end and rule.port_end != rule.port_start else '') %}
-set service {{ svc_name }} protocol {{ rule.raw_protocol }} port {{ rule.port_start }}{{ '-' + rule.port_end | string if rule.port_end and rule.port_end != rule.port_start else '' }}
-set rulebase security rules {{ rule_name }} service {{ svc_name }}
-{%- else %}
-set rulebase security rules {{ rule_name }} service any
-{%- endif %}
-set rulebase security rules {{ rule_name }} action {{ 'allow' if rule.action == 'permit' else 'deny' }}
-{%- if rule.security_profile %}
-set rulebase security rules {{ rule_name }} profile-setting profiles virus {{ rule.security_profile }}
-{%- endif %}
-{%- if rule.log %}
-set rulebase security rules {{ rule_name }} log-end yes
-{%- endif %}
-{%- if rule.description %}
-set rulebase security rules {{ rule_name }} description "{{ rule.description }}"
-{%- endif %}
-{%- endfor %}
-{%- endfor %}
-#
+{%- if zone_policies %}{{ security_policies(zone_policies) }}
 {%- endif %}
 {%- if contexts %}
 #
@@ -109,6 +111,9 @@ set network interface ethernet {{ context.parent_interface.name }} layer3 units 
 {%- endif %}
 set vsys {{ context.name }} import network interface {{ ctx_iface_ref }}
 {%- endif %}
+{%- endfor %}
+{%- for context in contexts if context.policies %}
+{{- security_policies(context.policies, 'vsys ' + context.name + ' ', 'Security Policies in vsys ' + context.name) }}
 {%- endfor %}
 #
 {%- endif %}

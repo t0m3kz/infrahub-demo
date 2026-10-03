@@ -111,6 +111,11 @@ def flatten_proxy_rules(policies: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def get_private_access_segments(customers: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
     """Build ZTNA segments from customers assigned to this private-access service.
 
+    A segment is a private_access endpoint that at least one access profile is
+    granted to (an AppDependency with a source_profile). The grants carry the
+    ports, and their profiles' allowed_groups who may use them. A denied grant
+    admits nobody; an endpoint with no grant is not published.
+
     Returns:
         [{"name": "checkout-api", "fqdn": "checkout-api.internal.example.com",
           "ports": [{"port": 443, "port_end": None, "protocol": "tcp"}],
@@ -127,23 +132,29 @@ def get_private_access_segments(customers: list[dict[str, Any]] | None) -> list[
                     if not fqdn:
                         continue
 
-                    ports: list[dict[str, Any]] = []
-                    for service_port in endpoint.get("service_ports") or []:
-                        port = service_port.get("port")
-                        if port is None:
-                            continue
-                        ports.append(
-                            {
-                                "port": port,
-                                "port_end": service_port.get("port_end"),
-                                "protocol": service_port.get("protocol") or "tcp",
-                            }
-                        )
-
-                    access_profile = endpoint.get("access_profile") or {}
-                    allowed_groups = [
-                        group.get("name") for group in access_profile.get("allowed_groups") or [] if group.get("name")
+                    grants = [
+                        dep
+                        for dep in endpoint.get("dependents") or []
+                        if dep.get("source_profile") and dep.get("access_status") != "denied"
                     ]
+                    if not grants:
+                        continue
+
+                    ports: list[dict[str, Any]] = []
+                    allowed_groups: list[str] = []
+                    for dep in grants:
+                        port = {
+                            "port": dep.get("port_start"),
+                            "port_end": dep.get("port_end"),
+                            "protocol": dep.get("protocol") or "tcp",
+                        }
+                        if port["port"] is not None and port not in ports:
+                            ports.append(port)
+                        for group in dep["source_profile"].get("allowed_groups") or []:
+                            name = group.get("name")
+                            if name and name not in allowed_groups:
+                                allowed_groups.append(name)
+
                     segments.append(
                         {
                             "name": endpoint.get("name") or fqdn,

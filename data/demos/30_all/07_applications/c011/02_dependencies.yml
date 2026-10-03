@@ -1,0 +1,18 @@
+---
+# Who calls whom inside edge-analytics, and on which port. The ports live only
+# here; the target endpoints are declared on the components in
+# 01_application.yml.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppDependency
+  data:
+    - name: c011-edge-analytics-edge-ingress-to-stream-worker
+      source: c011-edge-analytics-p-edge-ingress
+      target: ["c011-edge-analytics-p-stream-worker", "stream-worker-kafka"]
+      protocol: tcp
+      port_start: 9092
+      access_status: auto
+      description: "Edge ingress feeds events to the stream worker"
+      member_of_groups:
+        - app_dependencies
