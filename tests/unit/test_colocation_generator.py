@@ -940,6 +940,16 @@ class TestMetroEvpn:
         gen._metro_node.save.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_existing_site_as_tracked_on_rerun(self) -> None:
+        """The reused AS is not saved, so it is added to the run's group by
+        hand — else delete_unused_nodes deletes it and the next run draws a
+        new ASN, repointing every edge's overlay BGP."""
+        gen = _evpn_generator()
+        gen.client.group_context.related_node_ids = []
+        await gen._ensure_metro_evpn(metro_id="metro-1")
+        assert "as-site" in gen.client.group_context.related_node_ids
+
+    @pytest.mark.asyncio
     async def test_new_site_as_drawn_from_metro_pool(self) -> None:
         gen = _evpn_generator(existing_as=False)
         await gen._ensure_metro_evpn(metro_id="metro-1")

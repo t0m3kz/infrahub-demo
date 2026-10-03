@@ -632,6 +632,9 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, CommonGener
         existing = await self.client.filters(kind=RoutingAutonomousSystem, description__value=site_desc)
         if existing:
             site_as = existing[0]
+            # Not saved on this path, so track it by hand: delete_unused_nodes
+            # would otherwise delete the AS and the next run draw a new ASN.
+            self.client.group_context.related_node_ids.append(site_as.id)
         elif asn_pool:
             site_as = await self.client.create(
                 kind=RoutingAutonomousSystem,

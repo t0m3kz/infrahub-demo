@@ -371,6 +371,32 @@ class TestGenerateUplinkFlow:
         gen.acquire_resource_lock.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_existing_cables_resaved_on_rerun(self) -> None:
+        """A rerun that finds every uplink cabled still saves each cable once:
+        the run tracks only what it saves, and delete_unused_nodes would
+        otherwise delete the cables the first run made."""
+        gen = _make_generator()
+        endpoint_device = MagicMock()
+        endpoint_device.deployment = MagicMock(id="pod-1")
+        endpoint_device.save = AsyncMock()
+        first = _iface("eth0", device="server-1", cabled=True)
+        second = _iface("eth1", device="server-1", cabled=True)
+        second.cable.id = "cable-2"
+        cables = {"cable-1": MagicMock(save=AsyncMock()), "cable-2": MagicMock(save=AsyncMock())}
+
+        async def _get(kind: Any, id: str, **_: Any) -> MagicMock:
+            return cables[id] if id in cables else endpoint_device
+
+        gen.client.get = AsyncMock(side_effect=_get)
+        gen.client.filters = AsyncMock(side_effect=[[], [first, second]])
+
+        await gen.generate(_endpoint_data())
+
+        for cable in cables.values():
+            cable.save.assert_awaited_once_with(allow_upsert=True)
+        gen.acquire_resource_lock.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_free_interfaces_trigger_resolve_and_process(self) -> None:
         gen = _make_generator()
         endpoint_device = MagicMock()

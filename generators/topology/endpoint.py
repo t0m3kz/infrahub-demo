@@ -290,6 +290,12 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, PoolMixin, CablingMixin
         # instead of a freshly re-derived one — see _process_endpoint_connections.
         self._existing_switch_names = self._extract_cabled_switch_names(already_cabled_interfaces)
 
+        # Re-save the cables a prior run made: the run tracks only what it saves,
+        # so a cable a rerun finds and skips is one delete_unused_nodes removes.
+        for cable_id in sorted({str(intf.cable.id) for intf in already_cabled_interfaces}):
+            cable = await self.client.get(kind=DcimCable, id=cable_id)
+            await cable.save(allow_upsert=True)
+
         if not endpoint_interfaces:
             if existing_connections > 0:
                 self.logger.info(

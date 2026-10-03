@@ -31,6 +31,7 @@ from infrahub_sdk import InfrahubClient
 from .conftest import TestInfrahubDockerWithClient
 from .test_constants import (
     ALL_DEMO_BRANCH,
+    ALL_DEMO_COLOCATION_SERVED,
     ALL_DEMO_DEDICATED_FIREWALL_TENANTS,
     ALL_DEMO_INTERNET_TRANSIT_CIRCUITS,
     ALL_DEMO_PHYSICAL_CIRCUIT_TYPES,
@@ -43,6 +44,42 @@ from .test_helpers import fetch_interconnect_inventory, fetch_tenant_services
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 SCENARIO_NAME = "Scenario 30_all: Interconnects"
+
+COLOCATION_CONTEXTS_QUERY = """
+query {
+  TopologyCustomerColocation {
+    edges {
+      node {
+        name { value }
+        parent {
+          node {
+            ... on TopologyColocationMetro {
+              devices(role__value: "firewall") { edges { node { id } } }
+            }
+          }
+        }
+        serving_firewall_context {
+          node {
+            name { value }
+            vlan_id { value }
+            tenant { node { id } }
+            cluster { node { ... on ManagedFirewallHA { capabilities { edges { node { id } } } } } }
+            interface_capabilities {
+              edges {
+                node {
+                  name { value }
+                  device { node { id } }
+                  ... on DcimVirtualInterface { ip_address { node { address { value } } } }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+"""
 
 
 class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
@@ -278,5 +315,87 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
 
         logging.info(
             "Segment legs verified: %d across %d segment(s)", len(services["segment_deployments"]), len(legs_by_segment)
+        )
+
+    @pytest.mark.order(408)
+    @pytest.mark.dependency(scope="session", depends=["all_demo_tenant_services"])
+    @pytest.mark.asyncio
+    async def test_05_verify_colocation_serving_contexts(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """Verify each colocation deployment is served by its own metro's firewalls.
+
+        A deployment in a metro with a firewall pair is served by that pair's
+        shared context, which carries one tagged sub-interface per firewall
+        member and one on the edge it is cabled to, each with a P2P address. A
+        deployment in an edge-only metro has no context: pointing it at another
+        metro's firewalls would hairpin its traffic across the WAN.
+        """
+        logging.info("=== %s - Step 5: Colocation Serving Contexts ===", SCENARIO_NAME)
+
+        result = await async_client_main.execute_graphql(query=COLOCATION_CONTEXTS_QUERY, branch_name=scenario_branch)
+        deployments = {
+            edge["node"]["name"]["value"]: edge["node"] for edge in result["TopologyCustomerColocation"]["edges"]
+        }
+
+        errors: list[str] = []
+        if sorted(deployments) != sorted(ALL_DEMO_COLOCATION_SERVED):
+            errors.append(
+                f"colocation deployments {sorted(deployments)}, expected {sorted(ALL_DEMO_COLOCATION_SERVED)}"
+            )
+
+        for name, served in sorted(ALL_DEMO_COLOCATION_SERVED.items()):
+            deployment = deployments.get(name)
+            if deployment is None:
+                continue
+            metro = (deployment.get("parent") or {}).get("node") or {}
+            metro_firewalls = {edge["node"]["id"] for edge in (metro.get("devices") or {}).get("edges", [])}
+            context = (deployment.get("serving_firewall_context") or {}).get("node")
+
+            if not served:
+                if metro_firewalls:
+                    errors.append(f"{name}: metro has firewalls, expected an edge-only metro")
+                if context:
+                    errors.append(f"{name}: edge-only metro, but served by '{context['name']['value']}'")
+                continue
+
+            if not context:
+                errors.append(f"{name}: metro has firewalls but the deployment has no serving_firewall_context")
+                continue
+            context_name = context["name"]["value"]
+            if (context.get("tenant") or {}).get("node"):
+                errors.append(f"{name}: served by tenant-dedicated '{context_name}', expected the metro's shared one")
+            cluster = (context.get("cluster") or {}).get("node") or {}
+            members = {edge["node"]["id"] for edge in (cluster.get("capabilities") or {}).get("edges", [])}
+            if not metro_firewalls or members != metro_firewalls:
+                errors.append(f"{name}: '{context_name}' is on cluster {sorted(members)}, not the metro's firewalls")
+
+            vlan_id = (context.get("vlan_id") or {}).get("value")
+            interfaces = [edge["node"] for edge in (context.get("interface_capabilities") or {}).get("edges", [])]
+            on_firewalls = [i for i in interfaces if ((i.get("device") or {}).get("node") or {}).get("id") in members]
+            if not vlan_id:
+                errors.append(f"{name}: '{context_name}' has no VLAN allocated")
+            if len(interfaces) != 2 * len(members) or len(on_firewalls) != len(members):
+                errors.append(
+                    f"{name}: '{context_name}' has {len(on_firewalls)} firewall and "
+                    f"{len(interfaces) - len(on_firewalls)} edge sub-interface(s), expected {len(members)} of each"
+                )
+            for interface in interfaces:
+                iface = interface["name"]["value"]
+                if not iface.endswith(f".{vlan_id}"):
+                    errors.append(f"{name}: '{context_name}' sub-interface '{iface}' is not tagged {vlan_id}")
+                if not ((interface.get("ip_address") or {}).get("node") or {}).get("address", {}).get("value"):
+                    errors.append(f"{name}: '{context_name}' sub-interface '{iface}' has no P2P address")
+
+        assert not errors, f"30_all colocation serving contexts are wrong on branch '{scenario_branch}':\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
+
+        logging.info(
+            "Colocation serving contexts verified: %d served, %d edge-only",
+            sum(ALL_DEMO_COLOCATION_SERVED.values()),
+            len(ALL_DEMO_COLOCATION_SERVED) - sum(ALL_DEMO_COLOCATION_SERVED.values()),
         )
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)

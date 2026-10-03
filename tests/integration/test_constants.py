@@ -335,6 +335,18 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
 # deployment in the metro shares (a colocation has no design, so never a
 # dedicated context) ...
 ALL_DEMO_SHARED_FIREWALL_CONTEXTS = 4
+# Every 30_all colocation deployment -> whether its metro has firewalls, and so
+# a serving context. Only FR declares a firewall pair (02_colo/equinix/fr); the
+# rest are edge-only metros whose deployments must stay unserved.
+ALL_DEMO_COLOCATION_SERVED = {
+    "C001-P-FR": True,
+    "C005-P-FR": True,
+    "C002-P-PA": False,
+    "C011-P-NY": False,
+    "C012-P-VA": False,
+    "C013-P-AMS": False,
+    "C014-P-PAR": False,
+}
 # ... plus one dedicated context per customer whose design blueprint sets
 # dedicated_firewall (data/bootstrap/21_customer_templates.yml: L_DC and
 # XL_DC do, S_DC and M_DC do not). Maps tenant deployment -> design.

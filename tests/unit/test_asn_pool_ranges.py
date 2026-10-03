@@ -10,6 +10,8 @@ this project, still one ASN per device) affect the estimate now.
 
 from __future__ import annotations
 
+import pytest
+
 from generators.helpers.pools import (
     DEFAULT_ASN_BASE_START,
     calculate_fabric_asn_block_size,
@@ -83,6 +85,23 @@ def test_name_to_asn_range_block_size_matches_fabric() -> None:
     start, end = name_to_asn_range("MED", max_pods=3)
     assert end - start + 1 == 500
 
-    # Large fabric → 2000 block
+    # Large fabric → 2000 block, less the slot's last ASN (the overlay AS)
     start, end = name_to_asn_range("BIG", max_pods=8)
-    assert end - start + 1 == 2000
+    assert end - start + 1 == 1999
+
+
+@pytest.mark.parametrize("max_pods", [1, 3, 8])
+def test_overlay_asn_stays_inside_own_slot(max_pods: int) -> None:
+    """dc.py's overlay AS (end + 1) never lands in an adjacent DC's pool.
+
+    DC10/DC11/DC12 hash to consecutive grid slots; with a full 2000 block
+    DC10's overlay ASN was DC11's first pool ASN, so the two shared one AS
+    object and every rerun drew new ASNs for one of them.
+    """
+    ranges = {name: name_to_asn_range(name, max_pods=max_pods) for name in ("DC10", "DC11", "DC12")}
+    starts = sorted(start for start, _ in ranges.values())
+    assert starts[1] - starts[0] == starts[2] - starts[1] == 2000
+    for start, end in ranges.values():
+        overlay = end + 1
+        assert overlay - start < 2000
+        assert not any(s <= overlay <= e for s, e in ranges.values())

@@ -229,7 +229,10 @@ class CablingMixin:
                             kind=IpamIPAddress,
                             data={"address": address_value, "ip_namespace": ip_namespace},
                         )
-                        await ip.save(allow_upsert=True)
+                    # Saved even when found: the run tracks only what it saves,
+                    # so an address a rerun reuses but skips is one
+                    # delete_unused_nodes removes from under the interface.
+                    await ip.save(allow_upsert=True)
                     iface.ip_address = ip.id
 
             # update_group_context=False: physical interfaces come from the device's

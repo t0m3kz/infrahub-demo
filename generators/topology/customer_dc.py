@@ -641,6 +641,9 @@ class CustomerDeploymentDCExchangeGenerator(PoolMixin, DeviceMixin, CablingMixin
                     kind=IpamIPAddress,
                     data={"address": address_value, "ip_namespace": ip_namespace},
                 )
-                await ip_obj.save(allow_upsert=True)
+            # Saved even when found: the run tracks only what it saves, so an
+            # address a rerun finds but skips is one delete_unused_nodes
+            # removes, stripping the context sub-interfaces of their P2P IPs.
+            await ip_obj.save(allow_upsert=True)
             ip_ids.append(ip_obj.id)
         return ip_ids[0], ip_ids[1]

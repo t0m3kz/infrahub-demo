@@ -1,11 +1,16 @@
-"""Integration test — re-running the 30_all security generators changes nothing.
+"""Integration test — re-running the 30_all generators changes nothing.
 
 Every generator here tracks what it writes and deletes what a run no longer
 produces (delete_unused_nodes=True), so a run that misses an object it owns
-deletes it. This module snapshots what the security path produced on the
-branch test_59 built, runs those generators twice more by hand over every
-target, and asserts the snapshot is unchanged: no object lost, none added,
-no rule renumbered, no relationship dropped.
+deletes it. This module snapshots what the generators produced on the branch
+test_59 built, runs them twice more by hand over every target, and asserts
+the snapshot is unchanged: no object lost, none added, no rule renumbered,
+no relationship dropped, no number or address reallocated.
+
+Two passes: the security path (rules, policies, segment attachments, firewall
+contexts with their sub-interfaces and P2P addresses), then the topology path
+(devices, interfaces, cables, addressing and pools of DCs, pods, racks,
+colocation metros, endpoints and SD-WAN edges).
 
 It runs last because the reruns rewrite the branch the other modules read.
 """
@@ -32,6 +37,7 @@ RERUNS = 2
 # attachments (segments), serving firewall contexts (deployments).
 RERUN_GENERATORS = {
     "add_app_application": "app_applications",
+    "add_app_dependency": "app_dependencies",
     "add_vxlan_segment": "vxlan_segments",
     "add_customer_deployment_dc": "customer_deployments_dc",
     "add_customer_deployment_colocation": "customer_deployments_colocation",
@@ -73,9 +79,62 @@ query {
       }
     }
   }
-  ManagedFirewallContext { edges { node { id served_deployments { edges { node { id } } } } } }
+  ManagedFirewallContext {
+    edges {
+      node {
+        id
+        name { value }
+        vlan_id { value }
+        cluster { node { id } }
+        served_deployments { edges { node { id } } }
+        interface_capabilities {
+          edges {
+            node {
+              id
+              name { value }
+              ... on DcimVirtualInterface { ip_address { node { id address { value } } } }
+            }
+          }
+        }
+      }
+    }
+  }
 }
 """
+
+# Generator definition -> target group for the topology pass, in build order:
+# a rack rerun reads the pod's pools, an endpoint the rack's leafs.
+TOPOLOGY_RERUN_GENERATORS = {
+    "add_dc": "topologies_dc",
+    "add_pod": "topologies_pod",
+    "add_rack": "topologies_rack",
+    "add_colocation_metro": "colocation_metros",
+    "add_endpoint": "endpoints",
+    "add_sdwan_edge": "customer_deployments_office",
+}
+
+# Kind -> the selection that must not change on a rerun. Generic kinds, so
+# every concrete device, interface and pool kind is covered; a reallocated
+# address or number shows up as a changed value or a deleted-and-added id.
+TOPOLOGY_SNAPSHOT_KINDS = {
+    "DcimDevice": "name { value }",
+    "DcimInterface": "name { value }",
+    "DcimCable": "endpoints { edges { node { id } } }",
+    "IpamIPAddress": "address { value }",
+    "IpamPrefix": "prefix { value }",
+    "CoreNumberPool": "name { value }",
+    "CoreIPPrefixPool": "name { value }",
+    "CoreIPAddressPool": "name { value }",
+    "RoutingAutonomousSystem": "asn { value }",
+    "ManagedBGP": "local_as { node { id } }",
+    "ManagedHA": "group_id { value }",
+    "ManagedSegmentDeployment": "vni { value } local_vni_override { value }",
+    "ManagedVlanDomainSegment": "vlan_id { value }",
+}
+
+# Explicit GraphQL paging: the branch holds thousands of interfaces and
+# addresses, more than one unpaged query is guaranteed to return.
+PAGE_SIZE = 1000
 
 
 def _value(node: dict[str, Any], attribute: str) -> Any:
@@ -122,9 +181,57 @@ def _snapshot(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
             for n in _nodes(result, "ManagedNetworkSegment")
         },
         "ManagedFirewallContext": {
-            n["id"]: _peer_ids(n, "served_deployments") for n in _nodes(result, "ManagedFirewallContext")
+            n["id"]: (
+                _value(n, "name"),
+                _value(n, "vlan_id"),
+                _peer_id(n, "cluster"),
+                _peer_ids(n, "served_deployments"),
+                tuple(
+                    sorted(
+                        (
+                            edge["node"]["id"],
+                            _value(edge["node"], "name"),
+                            _peer_id(edge["node"], "ip_address"),
+                            ((edge["node"].get("ip_address") or {}).get("node") or {}).get("address", {}).get("value"),
+                        )
+                        for edge in (n.get("interface_capabilities") or {}).get("edges", [])
+                    )
+                ),
+            )
+            for n in _nodes(result, "ManagedFirewallContext")
         },
     }
+
+
+def _canonical(value: Any) -> Any:
+    """Hashable form of a GraphQL node: edges become a sorted tuple."""
+    if isinstance(value, dict):
+        if "edges" in value:
+            return tuple(sorted((_canonical(edge["node"]) for edge in value["edges"]), key=repr))
+        return tuple(sorted((key, _canonical(item)) for key, item in value.items()))
+    return value
+
+
+async def _topology_snapshot(client: InfrahubClient, branch: str) -> dict[str, dict[str, Any]]:
+    """Kind -> {id: comparable state} for TOPOLOGY_SNAPSHOT_KINDS, paged."""
+    snapshot: dict[str, dict[str, Any]] = {}
+    for kind, selection in TOPOLOGY_SNAPSHOT_KINDS.items():
+        objects: dict[str, Any] = {}
+        offset = 0
+        while True:
+            query = (
+                f"query {{ {kind}(limit: {PAGE_SIZE}, offset: {offset}) "
+                f"{{ count edges {{ node {{ id {selection} }} }} }} }}"
+            )
+            result = (await client.execute_graphql(query=query, branch_name=branch))[kind]
+            for edge in result["edges"]:
+                node = dict(edge["node"])
+                objects[node.pop("id")] = _canonical(node)
+            offset += PAGE_SIZE
+            if offset >= result["count"]:
+                break
+        snapshot[kind] = objects
+    return snapshot
 
 
 def _diff(before: dict[str, dict[str, Any]], after: dict[str, dict[str, Any]]) -> list[str]:
@@ -142,7 +249,7 @@ def _diff(before: dict[str, dict[str, Any]], after: dict[str, dict[str, Any]]) -
 
 
 class TestAllDemoIdempotency(TestInfrahubDockerWithClient):
-    """Re-running the security generators leaves the 30_all branch unchanged."""
+    """Re-running the generators leaves the 30_all branch unchanged."""
 
     @pytest.fixture(scope="class")
     def scenario_branch(self) -> str:
@@ -151,6 +258,12 @@ class TestAllDemoIdempotency(TestInfrahubDockerWithClient):
     async def _take_snapshot(self, client: InfrahubClient, branch: str) -> dict[str, dict[str, Any]]:
         result = await client.execute_graphql(query=SNAPSHOT_QUERY, branch_name=branch)
         return _snapshot(result)
+
+    async def _group_members(self, client: InfrahubClient, group: str, branch: str) -> list[str]:
+        result = await client.execute_graphql(query=GROUP_MEMBERS_QUERY, variables={"name": group}, branch_name=branch)
+        groups = result["CoreGroup"]["edges"]
+        assert groups, f"Group '{group}' not found"
+        return list(_peer_ids(groups[0]["node"], "members"))
 
     @pytest.mark.order(410)
     @pytest.mark.dependency(
@@ -176,12 +289,7 @@ class TestAllDemoIdempotency(TestInfrahubDockerWithClient):
 
         targets: dict[str, list[str]] = {}
         for generator, group in RERUN_GENERATORS.items():
-            result = await client.execute_graphql(
-                query=GROUP_MEMBERS_QUERY, variables={"name": group}, branch_name=scenario_branch
-            )
-            groups = result["CoreGroup"]["edges"]
-            assert groups, f"Group '{group}' not found"
-            targets[generator] = list(_peer_ids(groups[0]["node"], "members"))
+            targets[generator] = await self._group_members(client, group, scenario_branch)
             assert targets[generator], f"Group '{group}' has no members to rerun {generator} over"
 
         failed: list[str] = []
@@ -237,3 +345,57 @@ class TestAllDemoIdempotency(TestInfrahubDockerWithClient):
         ]
         assert expected, "No SecurityPolicyRule has a destination_segment"
         assert not mismatched, "inbound_rules out of step with destination_segment:\n  " + "\n  ".join(mismatched)
+
+    @pytest.mark.order(413)
+    @pytest.mark.dependency(
+        scope="session", name="all_demo_idempotent_topology_reruns", depends=["all_demo_idempotent_reruns"]
+    )
+    @pytest.mark.asyncio
+    async def test_04_topology_reruns_change_nothing(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """Two more runs of every topology generator, in build order, keep each
+        device, port, cable, address, prefix, pool and allocated number — and
+        leave the security path test_01 checked untouched."""
+        logging.info("=== %s - Step 4: Rerun Topology Generators ===", SCENARIO_NAME)
+
+        client = async_client_main
+        await wait_for_tasks_completion(client, scenario_branch)
+        before = await _topology_snapshot(client, scenario_branch)
+        security_before = await self._take_snapshot(client, scenario_branch)
+        logging.info("Topology snapshot: %s", {kind: len(objects) for kind, objects in before.items()})
+        for kind in ("DcimDevice", "DcimInterface", "DcimCable", "IpamIPAddress"):
+            assert before[kind], f"No {kind} on the branch to compare"
+
+        targets: dict[str, list[str]] = {}
+        for generator, group in TOPOLOGY_RERUN_GENERATORS.items():
+            members = await self._group_members(client, group, scenario_branch)
+            if members:
+                targets[generator] = members
+            else:
+                logging.info("Skipping %s: group '%s' is empty", generator, group)
+        assert targets, "No topology generator has a target to rerun over"
+
+        failed: list[str] = []
+        for attempt in range(1, RERUNS + 1):
+            for generator, node_ids in targets.items():
+                logging.info("Rerun %d/%d: %s over %d target(s)", attempt, RERUNS, generator, len(node_ids))
+                outcome = await run_generator(
+                    client=client, generator_name=generator, node_ids=node_ids, branch=scenario_branch
+                )
+                if not outcome["success"]:
+                    failed.append(f"rerun {attempt} {generator}: {outcome}")
+                await wait_for_tasks_completion(client, scenario_branch)
+
+            changes = _diff(before, await _topology_snapshot(client, scenario_branch))
+            changes += _diff(security_before, await self._take_snapshot(client, scenario_branch))
+            assert not changes, f"Topology rerun {attempt} changed {len(changes)} object(s):\n  " + "\n  ".join(
+                changes[:50]
+            )
+
+        assert not failed, "Topology generator reruns failed:\n  " + "\n  ".join(failed)
+        await verify_no_failed_tasks(client=client, branch=scenario_branch)
+        logging.info("%d topology reruns left the branch unchanged", RERUNS)
+        logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)

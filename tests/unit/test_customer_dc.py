@@ -790,6 +790,29 @@ class TestAllocateContextP2p:
         assert addresses == ["100.65.0.0/31", "100.65.0.1/31"]
 
     @pytest.mark.asyncio
+    async def test_existing_addresses_are_resaved_on_rerun(self) -> None:
+        """A rerun finds both addresses already there; it must still save
+        them, or they fall out of the run's tracking group and
+        delete_unused_nodes deletes them, leaving the context sub-interfaces
+        without a P2P address."""
+        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        pool = MagicMock(id="pool-1")
+        allocated = MagicMock()
+        allocated.prefix.value = "fd00:2300::/127"
+        allocated.ip_namespace = MagicMock(id="ns-default")
+        existing_ips = [AsyncMock(id="fw-ip"), AsyncMock(id="bl-ip")]
+        gen.client.get = AsyncMock(side_effect=[pool, *existing_ips])
+        gen.client.allocate_next_ip_prefix = AsyncMock(return_value=allocated)
+        gen.client.create = AsyncMock()
+
+        result = await gen._allocate_context_p2p("shared-ctx", "DC10")
+
+        assert result == ("fw-ip", "bl-ip")
+        gen.client.create.assert_not_called()
+        for ip_obj in existing_ips:
+            ip_obj.save.assert_awaited_once_with(allow_upsert=True)
+
+    @pytest.mark.asyncio
     async def test_pool_not_found_returns_none(self) -> None:
         gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
         gen.client.get = AsyncMock(side_effect=Exception("not found"))

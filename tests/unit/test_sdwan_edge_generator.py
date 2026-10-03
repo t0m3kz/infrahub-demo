@@ -319,7 +319,10 @@ class TestGenerateHappyPath:
         await gen.generate(_office_payload())
 
         self._orchestrator.managed_devices.add.assert_called_once_with({"id": "edge-1"})
-        self._orchestrator.save.assert_awaited_once_with(allow_upsert=True)
+        # Never tracked: the orchestrator is hand-authored, and a rerun that
+        # finds the edge attached skips the save, so tracking it would get it
+        # deleted by delete_unused_nodes.
+        self._orchestrator.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
 
     @pytest.mark.asyncio
     async def test_already_linked_gateway_subinterface_is_not_re_added(self) -> None:

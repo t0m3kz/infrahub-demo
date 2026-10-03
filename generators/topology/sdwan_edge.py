@@ -409,5 +409,10 @@ class SdwanEdgeGenerator(CommonGenerator):
         if any(peer.id == edge_id for peer in managed_devices.peers):
             return
         await self._safe_rel_add(managed_devices, {"id": edge_id})
-        await orchestrator.save(allow_upsert=True)
+        # update_group_context=False: the orchestrator is hand-authored shared
+        # infrastructure, not this generator's. Tracked, it would join the
+        # run's group on the run that attaches the edge and be deleted by
+        # delete_unused_nodes on the next, which finds the edge attached and
+        # skips the save.
+        await orchestrator.save(allow_upsert=True, update_group_context=False)
         self.logger.info(f"Attached edge to orchestrator '{orchestrator.name.value}'")

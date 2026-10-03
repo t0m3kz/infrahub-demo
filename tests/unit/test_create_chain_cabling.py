@@ -345,6 +345,10 @@ class TestP2PAddressIsQueriedBeforeCreate:
         create_data_calls = [c for c in gen.client.create.call_args_list if "address" in c.kwargs.get("data", {})]
         assert create_data_calls == []
         assert {bl_iface.ip_address, fw_iface.ip_address} == {"existing-src-ip", "existing-dst-ip"}
+        # Still saved: an address the run reuses but does not save drops out of
+        # its tracking group, and delete_unused_nodes deletes it on a rerun.
+        for ip_obj in existing_ips:
+            ip_obj.save.assert_awaited_once_with(allow_upsert=True)
 
 
 class TestCableIsNeverReferencedBeforeItIsVisible:

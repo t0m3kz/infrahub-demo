@@ -372,7 +372,8 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
         # underlay strategies — the single super-spine underlay AS shared
         # fabric-wide, .dev/bgp.txt) at the DC level so pod/rack generators
         # always find them and never create duplicates.
-        # overlay_asn is asn_end + 1 to avoid collision with the per-device pool range [asn_start, asn_end]
+        # overlay_asn is asn_end + 1: outside the per-device pool range [asn_start, asn_end]
+        # but still inside this DC's grid slot (see name_to_asn_range)
         await self._create_shared_routing_objects(
             overlay_asn=asn_end + 1,
             asn_pool_id=fabric_asn_pool_id,

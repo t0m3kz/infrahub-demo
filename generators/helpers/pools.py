@@ -86,7 +86,12 @@ def name_to_asn_range(
     Block size scales with fabric size to avoid waste.
 
     The offset grid always uses the maximum block size (2000) to guarantee
-    non-overlapping ranges regardless of individual fabric sizes.
+    non-overlapping ranges regardless of individual fabric sizes. The last
+    ASN of every grid slot is kept out of the pool: dc.py gives it to the
+    fabric overlay AS (end + 1). A full 2000 block would put end + 1 on the
+    next slot's first ASN, so two DCs hashing to adjacent slots would share
+    one AS object (RoutingAutonomousSystem is unique by name, "AS<asn>"),
+    and each run would overwrite the other's description.
 
     Args:
         dc_name: Unique data center name (e.g. "DC1", "NYC-PROD")
@@ -116,5 +121,5 @@ def name_to_asn_range(
     max_blocks = (max_asn - base_start) // _MAX_ASN_BLOCK
     offset = name_hash % max_blocks
     start = base_start + offset * _MAX_ASN_BLOCK
-    end = start + block - 1
+    end = start + min(block, _MAX_ASN_BLOCK - 1) - 1
     return start, end
