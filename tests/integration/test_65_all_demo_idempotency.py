@@ -248,6 +248,17 @@ def _diff(before: dict[str, dict[str, Any]], after: dict[str, dict[str, Any]]) -
     return changes
 
 
+def _rerun_report(label: str, failed: list[str], changes: list[str]) -> str:
+    """Generator failures first: a delete the server refuses fails the run yet
+    leaves the object in place, so the diff alone would hide it."""
+    parts = []
+    if failed:
+        parts.append(f"{len(failed)} generator run(s) failed:\n  " + "\n  ".join(failed))
+    if changes:
+        parts.append(f"{len(changes)} object(s) changed:\n  " + "\n  ".join(changes[:50]))
+    return f"{label}: " + "\n".join(parts)
+
+
 class TestAllDemoIdempotency(TestInfrahubDockerWithClient):
     """Re-running the generators leaves the 30_all branch unchanged."""
 
@@ -305,9 +316,8 @@ class TestAllDemoIdempotency(TestInfrahubDockerWithClient):
 
             after = await self._take_snapshot(client, scenario_branch)
             changes = _diff(before, after)
-            assert not changes, f"Rerun {attempt} changed {len(changes)} object(s):\n  " + "\n  ".join(changes[:50])
+            assert not failed and not changes, _rerun_report(f"Rerun {attempt}", failed, changes)
 
-        assert not failed, "Generator reruns failed:\n  " + "\n  ".join(failed)
         await verify_no_failed_tasks(client=client, branch=scenario_branch)
         logging.info("%d reruns left the branch unchanged", RERUNS)
 
@@ -391,11 +401,8 @@ class TestAllDemoIdempotency(TestInfrahubDockerWithClient):
 
             changes = _diff(before, await _topology_snapshot(client, scenario_branch))
             changes += _diff(security_before, await self._take_snapshot(client, scenario_branch))
-            assert not changes, f"Topology rerun {attempt} changed {len(changes)} object(s):\n  " + "\n  ".join(
-                changes[:50]
-            )
+            assert not failed and not changes, _rerun_report(f"Topology rerun {attempt}", failed, changes)
 
-        assert not failed, "Topology generator reruns failed:\n  " + "\n  ".join(failed)
         await verify_no_failed_tasks(client=client, branch=scenario_branch)
         logging.info("%d topology reruns left the branch unchanged", RERUNS)
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)
