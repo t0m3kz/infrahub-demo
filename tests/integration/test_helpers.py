@@ -12,7 +12,7 @@ import asyncio
 import logging
 import re
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from pathlib import Path
 from typing import Any, TypeVar
 
@@ -103,84 +103,59 @@ def wait_for_condition_sync(
 
 
 # ======================================================================
-# Device counts
+# Growth and ASN-stability comparisons
 # ======================================================================
 
 
-async def fetch_device_counts(
-    client: InfrahubClient,
-    branch: str,
-    device_types: list[str] | None = None,
-) -> dict[str, Any]:
-    """Fetch total device count and an optional per-role breakdown.
+def find_min_growth_shortfalls(
+    current: dict[str, int],
+    baseline: dict[str, int],
+    min_growth: dict[str, int],
+) -> list[str]:
+    """List every role whose growth (current - baseline) is below its minimum.
 
-    Args:
-        client: Infrahub async client
-        branch: Branch to check
-        device_types: Optional list of device roles to break down (e.g., ["spine", "leaf"])
-
-    Returns:
-        Dictionary with device count and breakdown by role
-    """
-    client.default_branch = branch
-    await asyncio.sleep(DATA_PROPAGATION_DELAY)
-
-    # Build a single GraphQL query — optionally with per-role counts
-    role_aliases = {}
-    role_fragments = ""
-    if device_types:
-        for role in device_types:
-            alias = role.replace("-", "_")
-            role_aliases[role] = alias
-            role_fragments += f'    {alias}: DcimDevice(role__value: "{role}") {{ count }}\n'
-
-    query = f"""
-    query {{
-        all: DcimDevice {{ count }}
-{role_fragments}    }}
-    """
-
-    result = await client.execute_graphql(query=query)
-    device_count = result.get("all", {}).get("count", 0)
-
-    logger.info("Found %d devices on branch '%s'", device_count, branch)
-
-    breakdown = {}
-    if device_types:
-        for role in device_types:
-            alias = role_aliases[role]
-            count = result.get(alias, {}).get("count", 0)
-            breakdown[role] = count
-            logger.info("  - %s: %d", role, count)
-
-    return {
-        "device_count": device_count,
-        "breakdown": breakdown,
-    }
-
-
-async def snapshot_device_counts_by_role(
-    client: InfrahubClient,
-    branch: str,
-    roles: list[str],
-) -> dict[str, int]:
-    """Snapshot current device counts by role for a branch.
-
-    Args:
-        client: Infrahub async client
-        branch: Branch to query
-        roles: Device roles to count (e.g., ["spine", "leaf", "tor"])
+    Roles missing from ``min_growth`` must not shrink (minimum 0). Roles
+    missing from ``current`` count as 0 devices, so a role that disappeared
+    entirely is reported rather than raising a KeyError.
 
     Returns:
-        Mapping role -> count
+        One human-readable line per shortfall, empty when every role grew enough.
     """
-    result = await fetch_device_counts(client=client, branch=branch, device_types=roles)
-    return {role: int(result["breakdown"].get(role, 0)) for role in roles}
+    shortfalls: list[str] = []
+    for role in sorted(baseline):
+        delta = current.get(role, 0) - baseline[role]
+        expected = min_growth.get(role, 0)
+        if delta < expected:
+            shortfalls.append(
+                f"{role}: expected +{expected}, got {delta:+d} ({baseline[role]} -> {current.get(role, 0)})"
+            )
+    return shortfalls
 
 
-def compute_device_count_deltas(current: dict[str, int], baseline: dict[str, int]) -> dict[str, int]:
-    """Compute per-role device count deltas (current - baseline)."""
-    return {role: current[role] - baseline[role] for role in baseline}
+def find_underlay_asn_drift(role: str, current: dict[str, int], baseline: dict[str, int]) -> list[str]:
+    """List baseline devices of ``role`` that lost or changed their underlay ASN.
+
+    Args:
+        role: Device role the snapshots were taken for (only used in messages)
+        current: device name -> underlay ASN now
+        baseline: device name -> underlay ASN before the scenario
+
+    Returns:
+        Human-readable error lines, empty when every baseline device kept its ASN.
+    """
+    missing = sorted(name for name in baseline if name not in current)
+    changed = sorted(
+        (name, baseline[name], current[name])
+        for name in baseline
+        if name in current and current[name] != baseline[name]
+    )
+    errors: list[str] = []
+    if missing:
+        errors.append(f"Missing {role} device(s): {missing}")
+    if changed:
+        changed_str = ", ".join(f"{name}: AS{old} -> AS{new}" for name, old, new in changed)
+        errors.append(f"ASN changed for {role} device(s): {changed_str}")
+    return errors
 
 
 # ======================================================================
@@ -265,6 +240,28 @@ def compute_role_counts(devices: list[dict[str, Any]]) -> dict[str, int]:
         role = str(dev.get("role") or "")
         counts[role] = counts.get(role, 0) + 1
     return counts
+
+
+async def snapshot_dc_device_counts_by_role(
+    client: InfrahubClient,
+    branch: str,
+    dc_name: str,
+    roles: list[str],
+) -> dict[str, int]:
+    """Snapshot device counts by role, scoped to one DC's topology.
+
+    Only devices reachable from the DC itself, its pods, and their racks are
+    counted (see fetch_dc_topology()), so another DC's deployment cannot mask
+    or fake the growth a scenario expects.
+
+    Returns:
+        Mapping role -> count (0 for roles with no device in the DC)
+    """
+    topo = await fetch_dc_topology(client=client, branch=branch, dc_name=dc_name)
+    counts = compute_role_counts(topo["devices"])
+    snapshot = {role: counts.get(role, 0) for role in roles}
+    logger.info("DC '%s' role counts on branch '%s': %s", dc_name, branch, snapshot)
+    return snapshot
 
 
 def compute_routing_summary(devices: list[dict[str, Any]]) -> dict[str, Any]:
@@ -415,24 +412,48 @@ def compute_underlay_asn_by_role(devices: list[dict[str, Any]], role: str) -> di
     return result
 
 
-async def snapshot_underlay_asn_by_role(
+async def snapshot_underlay_asn_by_roles(
     client: InfrahubClient,
     branch: str,
     dc_name: str,
-    role: str,
-) -> dict[str, int]:
-    """Fetch DC topology and compute per-device underlay ASN for a role."""
-    topo = await fetch_dc_topology(client=client, branch=branch, dc_name=dc_name)
-    snapshot = compute_underlay_asn_by_role(topo["devices"], role)
+    roles: list[str],
+) -> dict[str, dict[str, int]]:
+    """Per-role underlay ASN snapshots for one DC from a single topology fetch.
 
+    Returns:
+        Mapping role -> {device name: underlay ASN}
+    """
+    topo = await fetch_dc_topology(client=client, branch=branch, dc_name=dc_name)
+    snapshots = {role: compute_underlay_asn_by_role(topo["devices"], role) for role in roles}
     logger.info(
-        "Captured %d underlay ASN entries on branch '%s' for role '%s' in DC '%s'",
-        len(snapshot),
+        "Captured underlay ASN entries on branch '%s' in DC '%s': %s",
         branch,
-        role,
         dc_name,
+        {role: len(entries) for role, entries in snapshots.items()},
     )
-    return snapshot
+    return snapshots
+
+
+async def fetch_underlay_asn_drift(
+    client: InfrahubClient,
+    branch: str,
+    dc_name: str,
+    baseline: dict[str, dict[str, int]],
+) -> list[str]:
+    """Re-snapshot the baseline's roles and list every device that lost or changed its underlay ASN.
+
+    Args:
+        baseline: Output of snapshot_underlay_asn_by_roles() taken before the scenario
+
+    Returns:
+        find_underlay_asn_drift() lines for every role, empty when all ASNs are stable
+    """
+    current = await snapshot_underlay_asn_by_roles(client=client, branch=branch, dc_name=dc_name, roles=list(baseline))
+    return [
+        error
+        for role, role_baseline in baseline.items()
+        for error in find_underlay_asn_drift(role, current[role], role_baseline)
+    ]
 
 
 # ======================================================================
@@ -471,14 +492,17 @@ async def fetch_segment_deployments(
     client.default_branch = branch
 
     # Build filter clause — push deployment filter to the server
+    # Declared only with its filter: GraphQL rejects an unused variable.
+    var_decl = ""
     dep_filter = ""
     variables: dict[str, Any] = {}
     if deployment_name:
+        var_decl = "($deployment_name: String)"
         dep_filter = "(deployment__name__value: $deployment_name)"
         variables["deployment_name"] = deployment_name
 
     query = f"""
-    query GetSegmentDeployments($deployment_name: String) {{
+    query GetSegmentDeployments{var_decl} {{
         ManagedSegmentDeployment{dep_filter} {{
             edges {{
                 node {{
@@ -583,14 +607,18 @@ async def fetch_vlan_domain_segments(
     """
     client.default_branch = branch
 
+    # GraphQL rejects a declared-but-unused variable, so $segment_id is only
+    # declared alongside the filter that uses it.
+    var_decl = ""
     seg_filter = ""
     variables: dict[str, Any] = {}
     if segment_id:
+        var_decl = "($segment_id: [ID])"
         seg_filter = "(segment__ids: $segment_id)"
         variables["segment_id"] = [segment_id]
 
     query = f"""
-    query GetVlanDomainSegments($segment_id: [String]) {{
+    query GetVlanDomainSegments{var_decl} {{
         ManagedVlanDomainSegment{seg_filter} {{
             edges {{
                 node {{
@@ -1107,14 +1135,56 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
     return {"physical": physical, "virtual": virtual}
 
 
+def _deployed_dc_names(devices: list[dict[str, Any]] | None) -> list[str]:
+    """Return the sorted TopologyDataCenter names a list of devices is deployed in."""
+    names = set()
+    for device in devices or []:
+        deployment = device.get("deployment") or {}
+        if deployment.get("typename") == "TopologyDataCenter" and deployment.get("name"):
+            names.add(str(deployment["name"]))
+    return sorted(names)
+
+
+def scope_tenant_services_to_dcs(
+    services: dict[str, list[dict[str, Any]]], dc_names: Iterable[str]
+) -> dict[str, list[dict[str, Any]]]:
+    """Drop firewall contexts and segment legs that live in a DC outside ``dc_names``.
+
+    Other suites in the same session merge their own customers into main (the
+    DC6 scenario chain's test_19 boards C001 onto DC6), and a branch made from
+    main inherits that state. Scoping by DC keeps a suite's exact counts about
+    its own DCs. Anything not in a TopologyDataCenter, such as a colocation
+    metro's cluster or leg, is kept: only DCs are shared between suites.
+    """
+    allowed = set(dc_names)
+    return {
+        **services,
+        "firewall_contexts": [
+            context
+            for context in services["firewall_contexts"]
+            if not context["cluster_dcs"] or set(context["cluster_dcs"]) & allowed
+        ],
+        "segment_deployments": [
+            leg
+            for leg in services["segment_deployments"]
+            if not leg["deployment_is_dc"] or leg["deployment"] in allowed
+        ],
+    }
+
+
 async def fetch_tenant_services(client: InfrahubClient, branch: str) -> dict[str, list[dict[str, Any]]]:
     """Fetch the tenant-scoped inline services and segment deployment legs.
 
     Returns:
-        {"firewall_contexts": [{"name", "cluster", "tenant", "tenant_design"}],
+        {"firewall_contexts": [{"name", "cluster", "cluster_dcs", "tenant",
+                                "tenant_design"}],
          "loadbalancer_ha": [{"name", "tenant"}],
          "segment_deployments": [{"segment", "segment_kind", "vni", "status",
-                                  "deployment"}]}
+                                  "deployment", "deployment_is_dc"}]}
+
+        ``cluster_dcs`` is the sorted set of TopologyDataCenter names the
+        cluster's member firewalls are deployed in (empty for a colocation
+        metro's cluster); see scope_tenant_services_to_dcs.
     """
     client.default_branch = branch
     await asyncio.sleep(DATA_PROPAGATION_DELAY)
@@ -1126,6 +1196,7 @@ async def fetch_tenant_services(client: InfrahubClient, branch: str) -> dict[str
         {
             "name": str(context.get("name") or ""),
             "cluster": (context.get("cluster") or {}).get("name"),
+            "cluster_dcs": _deployed_dc_names((context.get("cluster") or {}).get("capabilities")),
             "tenant": (context.get("tenant") or {}).get("name"),
             "tenant_design": ((context.get("tenant") or {}).get("design") or {}).get("name"),
         }
@@ -1144,6 +1215,7 @@ async def fetch_tenant_services(client: InfrahubClient, branch: str) -> dict[str
             "vni": deployment.get("vni"),
             "status": str(deployment.get("status") or ""),
             "deployment": (deployment.get("deployment") or {}).get("name"),
+            "deployment_is_dc": (deployment.get("deployment") or {}).get("typename") == "TopologyDataCenter",
         }
         for deployment in result.get("ManagedSegmentDeployment", []) or []
     ]

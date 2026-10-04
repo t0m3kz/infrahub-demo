@@ -32,6 +32,7 @@ from .conftest import TestInfrahubDockerWithClient
 from .test_constants import (
     ALL_DEMO_BRANCH,
     ALL_DEMO_COLOCATION_SERVED,
+    ALL_DEMO_DC_NAMES,
     ALL_DEMO_DEDICATED_FIREWALL_TENANTS,
     ALL_DEMO_INTERNET_TRANSIT_CIRCUITS,
     ALL_DEMO_PHYSICAL_CIRCUIT_TYPES,
@@ -39,7 +40,7 @@ from .test_constants import (
     ALL_DEMO_SHARED_FIREWALL_CONTEXTS,
     ALL_DEMO_VIRTUAL_CIRCUITS,
 )
-from .test_helpers import fetch_interconnect_inventory, fetch_tenant_services
+from .test_helpers import fetch_interconnect_inventory, fetch_tenant_services, scope_tenant_services_to_dcs
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -231,10 +232,15 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         DC's, and the colocation metro's); a context with a tenant exists only
         because that customer's design sets dedicated_firewall. Getting this wrong is how a customer silently ends
         up sharing a security context with everyone else.
+
+        Scoped to the 30_all DCs (and every colocation): the DC6 scenario
+        chain merges its own customer footprint into main in the same session.
         """
         logging.info("=== %s - Step 3: Firewall Contexts ===", SCENARIO_NAME)
 
-        services = await fetch_tenant_services(client=async_client_main, branch=scenario_branch)
+        services = scope_tenant_services_to_dcs(
+            await fetch_tenant_services(client=async_client_main, branch=scenario_branch), ALL_DEMO_DC_NAMES
+        )
         contexts = services["firewall_contexts"]
 
         errors: list[str] = []
@@ -284,10 +290,14 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         A ``dc_pair``-scoped segment that only materialises one leg looks fine
         in isolation — the segment exists, the VNI is allocated — but half the
         stretch is missing.
+
+        Scoped like test_03: legs in another suite's DC are not 30_all's.
         """
         logging.info("=== %s - Step 4: Segment Deployment Legs ===", SCENARIO_NAME)
 
-        services = await fetch_tenant_services(client=async_client_main, branch=scenario_branch)
+        services = scope_tenant_services_to_dcs(
+            await fetch_tenant_services(client=async_client_main, branch=scenario_branch), ALL_DEMO_DC_NAMES
+        )
 
         legs_by_segment: dict[str, list[str]] = {}
         for leg in services["segment_deployments"]:

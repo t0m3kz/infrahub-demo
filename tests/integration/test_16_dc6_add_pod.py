@@ -1,21 +1,26 @@
-"""Integration test - Scenario 4: Add Pod to DC1.
+"""Integration test - Scenario 4: Add Pod to DC6.
 
-Coverage: Verifies that loading a new pod (POD-4) with racks into DC1 and
-running the DC generator triggers the full cascade (add_dc → add_pod → add_rack)
-and creates spines, tors, cabling, and routing.
+Coverage: Verifies that loading a new pod (data/demos/04_pod_dc6) with its
+suite and racks into DC6 and running the DC generator drives the full cascade
+(add_dc -> add_pod -> add_rack) and creates spines, leafs, access-leafs,
+cabling and routing, while every pre-existing underlay switch keeps its ASN.
 
-Prerequisites: DC1 merged (Scenario 1), rack added (Scenario 3).
+Data: pod DC6-1-POD-4 (M_MIDDLE, 2 spines) in suite ktw-1-s-4 with two
+network racks, each 2 leaf + 2 access-leaf, so DC6 must gain at least
+2 spines, 4 leafs and 4 access-leafs.
+
+Prerequisites: DC6 merged (Scenario 1), rack added (Scenario 3).
 
 Steps:
+0.  Snapshot DC6 role counts and underlay ASNs on main
 1.  Create branch and load new pod + suite + rack data
 2.  Run add_dc generator (cascades to pod and rack generators)
-3.  Wait for tasks to complete
-4.  Verify no failed tasks
-5.  Verify devices created
-6.  Create proposed change
-7.  Wait for validations
-8.  Merge to main
-9.  Verify in main
+3.  Wait for tasks to complete and verify no failures
+4.  Verify devices created
+5.  Create proposed change
+6.  Wait for validations, verify diff and artifacts
+7.  Merge to main
+8.  Verify in main
 """
 
 import logging
@@ -25,14 +30,14 @@ import pytest
 from infrahub_sdk import InfrahubClient, InfrahubClientSync
 
 from .conftest import TestInfrahubDockerWithClient
-from .test_constants import DEMO_POD_DATA
+from .test_constants import DEMO_POD_DATA, SCENARIO_DC_NAME, SCENARIO_FABRIC_ROLES, SCENARIO_UNDERLAY_ROLES
 from .test_helpers import (
-    compute_device_count_deltas,
     fetch_artifacts,
-    fetch_device_counts,
     fetch_proposed_change_diff,
-    snapshot_device_counts_by_role,
-    snapshot_underlay_asn_by_role,
+    fetch_underlay_asn_drift,
+    find_min_growth_shortfalls,
+    snapshot_dc_device_counts_by_role,
+    snapshot_underlay_asn_by_roles,
 )
 from .workflow_helpers import (
     create_and_validate_proposed_change,
@@ -45,89 +50,81 @@ from .workflow_helpers import (
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 SCENARIO_NAME = "Scenario 4: Add Pod to DC"
-BRANCH_NAME = "dc1-add-pod"
+BRANCH_NAME = "dc6-add-pod"
 
-MIN_GROWTH_BY_ROLE = {"spine": 1, "leaf": 0, "tor": 1, "super-spine": 0}
+# Pod name computed from the DC6 parent and index 4 in data/demos/04_pod_dc6.
+NEW_POD_NAME = "DC6-1-POD-4"
+
+# 04_pod_dc6: pod ["2", "spine"]; 2 racks x (["2", "leaf"] + ["2", "access-leaf"]).
+MIN_GROWTH_BY_ROLE = {"spine": 2, "leaf": 4, "access-leaf": 4}
 
 
 def _assert_growth(branch: str, current: dict[str, int], baseline: dict[str, int]) -> None:
-    deltas = compute_device_count_deltas(current, baseline)
-    failures = [
-        f"{role}: expected +{MIN_GROWTH_BY_ROLE.get(role, 0)}, got {deltas[role]}"
-        for role in deltas
-        if deltas[role] < MIN_GROWTH_BY_ROLE.get(role, 0)
-    ]
-    assert not failures, f"Device count growth check failed on branch '{branch}':\n" + "\n".join(
-        f"  - {line}" for line in failures
+    shortfalls = find_min_growth_shortfalls(current, baseline, MIN_GROWTH_BY_ROLE)
+    assert not shortfalls, f"DC6 device count growth check failed on branch '{branch}':\n" + "\n".join(
+        f"  - {line}" for line in shortfalls
     )
-    logging.info("Per-role device growth verified on branch '%s': deltas=%s", branch, deltas)
+    logging.info("Per-role DC6 device growth verified on branch '%s': %s -> %s", branch, baseline, current)
 
 
-def _assert_asn_unchanged(branch: str, role: str, current: dict[str, int], baseline: dict[str, int]) -> None:
-    missing = sorted([name for name in baseline if name not in current])
-    changed = sorted(
-        [
-            (name, baseline[name], current[name])
-            for name in baseline
-            if name in current and current[name] != baseline[name]
-        ]
+async def _assert_asn_stable(client: InfrahubClient, branch: str, asn_baseline: dict[str, dict[str, int]]) -> None:
+    errors = await fetch_underlay_asn_drift(
+        client=client, branch=branch, dc_name=SCENARIO_DC_NAME, baseline=asn_baseline
     )
-    errors = []
-    if missing:
-        errors.append(f"Missing {role} device(s): {missing}")
-    if changed:
-        changed_str = ", ".join(f"{name}: AS{old} -> AS{new}" for name, old, new in changed)
-        errors.append(f"ASN changed for {role} device(s): {changed_str}")
-    assert not errors, f"Underlay ASN stability check failed on branch '{branch}' for role '{role}':\n" + "\n".join(
+    assert not errors, f"Underlay ASN stability check failed on branch '{branch}' in {SCENARIO_DC_NAME}:\n" + "\n".join(
         f"  - {e}" for e in errors
     )
+    logging.info(
+        "Underlay ASN stability verified on branch '%s': %s",
+        branch,
+        {role: len(entries) for role, entries in asn_baseline.items()},
+    )
 
 
-class TestDC1AddPod(TestInfrahubDockerWithClient):
-    """Test adding a new pod to DC1."""
+class TestDC6AddPod(TestInfrahubDockerWithClient):
+    """Test adding a new pod to DC6."""
 
     @pytest.fixture(scope="class")
     def scenario_branch(self) -> str:
         return BRANCH_NAME
 
     @pytest.mark.order(220)
-    @pytest.mark.dependency(scope="session", name="dc1_add_pod_snapshot", depends=["dc1_add_rack_merge"])
+    @pytest.mark.dependency(scope="session", name="dc6_add_pod_snapshot", depends=["dc6_add_rack_merge"])
     @pytest.mark.asyncio
     async def test_00_snapshot_baseline(
         self,
         async_client_main: InfrahubClient,
         workflow_state: dict[str, Any],
     ) -> None:
-        """Snapshot baseline device counts and ASN values before scenario changes."""
+        """Snapshot DC6 role counts and underlay ASNs before scenario changes."""
         logging.info("=== %s - Step 0: Snapshot Baseline ===", SCENARIO_NAME)
 
-        role_counts = await snapshot_device_counts_by_role(
+        role_counts = await snapshot_dc_device_counts_by_role(
             client=async_client_main,
             branch="main",
-            roles=["spine", "leaf", "tor", "super-spine"],
+            dc_name=SCENARIO_DC_NAME,
+            roles=SCENARIO_FABRIC_ROLES,
+        )
+        asn_baseline = await snapshot_underlay_asn_by_roles(
+            client=async_client_main,
+            branch="main",
+            dc_name=SCENARIO_DC_NAME,
+            roles=SCENARIO_UNDERLAY_ROLES,
         )
 
-        workflow_state["dc1_add_pod_role_counts_baseline"] = role_counts
+        assert asn_baseline["spine"], f"No baseline spine underlay ASN values found for {SCENARIO_DC_NAME} in main"
+        workflow_state["dc6_add_pod_role_counts_baseline"] = role_counts
+        workflow_state["dc6_add_pod_asn_baseline"] = asn_baseline
         logging.info("Captured baseline role counts: %s", role_counts)
 
-        for role in ["spine", "leaf", "tor"]:
-            role_baseline = await snapshot_underlay_asn_by_role(
-                client=async_client_main,
-                branch="main",
-                dc_name="DC1",
-                role=role,
-            )
-            workflow_state[f"dc1_add_pod_{role}_asn_baseline"] = role_baseline
-            logging.info("Captured baseline underlay ASN entries for role '%s': %d", role, len(role_baseline))
-
     @pytest.mark.order(221)
-    @pytest.mark.dependency(scope="session", name="dc1_add_pod_load", depends=["dc1_add_pod_snapshot"])
+    @pytest.mark.dependency(scope="session", name="dc6_add_pod_load", depends=["dc6_add_pod_snapshot"])
     def test_01_load_pod_data(
         self,
         client_main: InfrahubClientSync,
         scenario_branch: str,
     ) -> None:
-        """Create branch and load POD-4 suite, pod, and rack data."""
+        """Create branch and load the POD-4 suite, pod, and rack data."""
         logging.info("=== %s - Step 1: Load Data ===", SCENARIO_NAME)
 
         # Create branch
@@ -153,34 +150,40 @@ class TestDC1AddPod(TestInfrahubDockerWithClient):
             f"  stderr: {load_result.stderr}"
         )
 
-        logging.info("POD-4 data loaded successfully")
+        logging.info("%s data loaded successfully", NEW_POD_NAME)
 
     @pytest.mark.order(222)
-    @pytest.mark.dependency(scope="session", name="dc1_add_pod_run_gen", depends=["dc1_add_pod_load"])
+    @pytest.mark.dependency(scope="session", name="dc6_add_pod_run_gen", depends=["dc6_add_pod_load"])
     @pytest.mark.asyncio
     async def test_02_run_dc_generator(
         self,
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Run add_dc generator which cascades to pod and rack generators."""
+        """Run add_dc generator which cascades to pod and rack generators.
+
+        The load itself already fires the pod- and rack-created triggers, so
+        those runs are drained first: add_dc then re-runs on settled data
+        instead of racing the event-driven generators for the same objects.
+        """
         logging.info("=== %s - Step 2: Run DC Generator ===", SCENARIO_NAME)
+
+        await wait_for_tasks_completion(async_client_main, scenario_branch)
 
         result = await run_full_dc_pipeline(
             client=async_client_main,
             branch=scenario_branch,
-            dc_name="DC1",
+            dc_name=SCENARIO_DC_NAME,
         )
 
         logging.info("DC pipeline completed: %s", result["task_state"])
 
     @pytest.mark.order(223)
-    @pytest.mark.dependency(scope="session", name="dc1_add_pod_wait_tasks", depends=["dc1_add_pod_run_gen"])
+    @pytest.mark.dependency(scope="session", name="dc6_add_pod_wait_tasks", depends=["dc6_add_pod_run_gen"])
     @pytest.mark.asyncio
     async def test_03_wait_for_tasks(
         self,
         async_client_main: InfrahubClient,
-        workflow_state: dict[str, Any],
         scenario_branch: str,
     ) -> None:
         """Wait for cascading generators to complete."""
@@ -188,28 +191,10 @@ class TestDC1AddPod(TestInfrahubDockerWithClient):
 
         await wait_for_tasks_completion(async_client_main, scenario_branch)
 
-        baseline_counts = workflow_state["dc1_add_pod_role_counts_baseline"]
-        current_counts = await snapshot_device_counts_by_role(
-            client=async_client_main,
-            branch=scenario_branch,
-            roles=list(baseline_counts.keys()),
-        )
-        _assert_growth(scenario_branch, current_counts, baseline_counts)
-
-        for role in ["spine", "leaf", "tor"]:
-            baseline_asn = workflow_state.get(f"dc1_add_pod_{role}_asn_baseline", {})
-            current_asn = await snapshot_underlay_asn_by_role(
-                client=async_client_main,
-                branch=scenario_branch,
-                dc_name="DC1",
-                role=role,
-            )
-            _assert_asn_unchanged(scenario_branch, role, current_asn, baseline_asn)
-
         logging.info("All tasks completed")
 
     @pytest.mark.order(224)
-    @pytest.mark.dependency(scope="session", name="dc1_add_pod_no_failures", depends=["dc1_add_pod_wait_tasks"])
+    @pytest.mark.dependency(scope="session", name="dc6_add_pod_no_failures", depends=["dc6_add_pod_wait_tasks"])
     @pytest.mark.asyncio
     async def test_03b_verify_no_failed_tasks(
         self,
@@ -227,7 +212,7 @@ class TestDC1AddPod(TestInfrahubDockerWithClient):
         logging.info("No failed tasks found")
 
     @pytest.mark.order(225)
-    @pytest.mark.dependency(scope="session", name="dc1_add_pod_verify_devices", depends=["dc1_add_pod_no_failures"])
+    @pytest.mark.dependency(scope="session", name="dc6_add_pod_verify_devices", depends=["dc6_add_pod_no_failures"])
     @pytest.mark.asyncio
     async def test_04_verify_devices_created(
         self,
@@ -235,38 +220,24 @@ class TestDC1AddPod(TestInfrahubDockerWithClient):
         workflow_state: dict[str, Any],
         scenario_branch: str,
     ) -> None:
-        """Verify devices exist on the branch after generator ran."""
+        """Verify DC6 gained POD-4's switches and kept every existing ASN on the branch."""
         logging.info("=== %s - Step 4: Verify Devices ===", SCENARIO_NAME)
 
-        result = await fetch_device_counts(
+        baseline_counts = workflow_state["dc6_add_pod_role_counts_baseline"]
+        current_counts = await snapshot_dc_device_counts_by_role(
             client=async_client_main,
             branch=scenario_branch,
-            device_types=["spine", "tor"],
-        )
-        assert result["device_count"] >= 1, (
-            f"Expected at least 1 device, found {result['device_count']}\n  Branch: {scenario_branch}"
-        )
-
-        baseline_counts = workflow_state["dc1_add_pod_role_counts_baseline"]
-        current_counts = await snapshot_device_counts_by_role(
-            client=async_client_main,
-            branch=scenario_branch,
+            dc_name=SCENARIO_DC_NAME,
             roles=list(baseline_counts.keys()),
         )
         _assert_growth(scenario_branch, current_counts, baseline_counts)
-
-        logging.info(
-            "Devices verified: %d total (spine: %d, tor: %d)",
-            result["device_count"],
-            result["breakdown"].get("spine", 0),
-            result["breakdown"].get("tor", 0),
-        )
+        await _assert_asn_stable(async_client_main, scenario_branch, workflow_state["dc6_add_pod_asn_baseline"])
 
     @pytest.mark.order(226)
     @pytest.mark.dependency(
         scope="session",
-        name="dc1_add_pod_create_pc",
-        depends=["dc1_add_pod_verify_devices", "dc1_add_pod_no_failures"],
+        name="dc6_add_pod_create_pc",
+        depends=["dc6_add_pod_verify_devices", "dc6_add_pod_no_failures"],
     )
     def test_05_create_proposed_change(
         self,
@@ -283,34 +254,34 @@ class TestDC1AddPod(TestInfrahubDockerWithClient):
             source_branch=scenario_branch,
         )
         pc_id = pc_result["pc_id"]
-        workflow_state["dc1_add_pod_pc_id"] = pc_id
-        workflow_state["dc1_add_pod_validations"] = pc_result["validations"]
+        workflow_state["dc6_add_pod_pc_id"] = pc_id
+        workflow_state["dc6_add_pod_validations"] = pc_result["validations"]
         logging.info("Proposed change created: %s", pc_id)
 
     @pytest.mark.order(227)
-    @pytest.mark.dependency(scope="session", name="dc1_add_pod_validate", depends=["dc1_add_pod_create_pc"])
+    @pytest.mark.dependency(scope="session", name="dc6_add_pod_validate", depends=["dc6_add_pod_create_pc"])
     def test_06_wait_for_validations(self, workflow_state: dict[str, Any]) -> None:
         """Wait for validations."""
         logging.info("=== %s - Step 6: Wait for Validations ===", SCENARIO_NAME)
 
-        validations = workflow_state["dc1_add_pod_validations"]
+        validations = workflow_state["dc6_add_pod_validations"]
         logging.info("Validations completed: %d checks", len(validations))
 
     @pytest.mark.order(227)
-    @pytest.mark.dependency(scope="session", name="dc1_add_pod_verify_diff", depends=["dc1_add_pod_validate"])
+    @pytest.mark.dependency(scope="session", name="dc6_add_pod_verify_diff", depends=["dc6_add_pod_validate"])
     @pytest.mark.asyncio
     async def test_06b_verify_proposed_change_diff(
         self,
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify the proposed change diff contains expected changed objects."""
+        """Verify the proposed change diff contains the new pod, its switches and cables."""
         logging.info("=== %s - Step 6b: Verify PC Diff ===", SCENARIO_NAME)
 
         result = await fetch_proposed_change_diff(client=async_client_main, branch=scenario_branch)
 
         expected_counts = {
-            "DcimPhysicalDevice": {"added": 2},
+            "DcimPhysicalDevice": {"added": sum(MIN_GROWTH_BY_ROLE.values())},
             "DcimCable": {"added": 1},
             "TopologyPod": {"added": 1},
         }
@@ -327,7 +298,7 @@ class TestDC1AddPod(TestInfrahubDockerWithClient):
         logging.info("Diff verified: %d nodes changed", result["node_count"])
 
     @pytest.mark.order(227)
-    @pytest.mark.dependency(scope="session", name="dc1_add_pod_verify_artifacts", depends=["dc1_add_pod_validate"])
+    @pytest.mark.dependency(scope="session", name="dc6_add_pod_verify_artifacts", depends=["dc6_add_pod_validate"])
     @pytest.mark.asyncio
     async def test_06c_verify_artifacts(
         self,
@@ -338,13 +309,13 @@ class TestDC1AddPod(TestInfrahubDockerWithClient):
         logging.info("=== %s - Step 6c: Verify Artifacts ===", SCENARIO_NAME)
 
         result = await fetch_artifacts(client=async_client_main, branch=scenario_branch)
-        for art in result["failed"]:
-            raise AssertionError(f"Artifact '{art['name']}' for {art['object']} has status '{art['status']}'")
+        failed = [f"'{art['name']}' for {art['object']}: {art['status']}" for art in result["failed"]]
+        assert not failed, "Artifacts not ready:\n" + "\n".join(f"  - {line}" for line in failed)
 
         logging.info("Artifacts verified: %d total", result["total"])
 
     @pytest.mark.order(228)
-    @pytest.mark.dependency(scope="session", name="dc1_add_pod_merge", depends=["dc1_add_pod_verify_diff"])
+    @pytest.mark.dependency(scope="session", name="dc6_add_pod_merge", depends=["dc6_add_pod_verify_diff"])
     def test_07_merge(
         self,
         client_main: InfrahubClientSync,
@@ -355,7 +326,7 @@ class TestDC1AddPod(TestInfrahubDockerWithClient):
 
         result = merge_proposed_change(
             client=client_main,
-            pc_id=workflow_state["dc1_add_pod_pc_id"],
+            pc_id=workflow_state["dc6_add_pod_pc_id"],
         )
 
         assert result["success"], (
@@ -367,42 +338,24 @@ class TestDC1AddPod(TestInfrahubDockerWithClient):
         logging.info("Merge completed successfully")
 
     @pytest.mark.order(229)
-    @pytest.mark.dependency(scope="session", name="dc1_add_pod_verify_main", depends=["dc1_add_pod_merge"])
+    @pytest.mark.dependency(scope="session", name="dc6_add_pod_verify_main", depends=["dc6_add_pod_merge"])
     @pytest.mark.asyncio
     async def test_08_verify_in_main(
         self,
         async_client_main: InfrahubClient,
         workflow_state: dict[str, Any],
     ) -> None:
-        """Verify devices still present on main after merge."""
+        """Verify DC6 growth and underlay ASN stability in main after merge."""
         logging.info("=== %s - Step 8: Verify in Main ===", SCENARIO_NAME)
 
-        result = await fetch_device_counts(
+        baseline_counts = workflow_state["dc6_add_pod_role_counts_baseline"]
+        current_counts = await snapshot_dc_device_counts_by_role(
             client=async_client_main,
             branch="main",
-            device_types=["spine", "tor"],
-        )
-        assert result["device_count"] >= 1, (
-            f"Expected at least 1 device, found {result['device_count']}\n  Branch: main"
-        )
-
-        baseline_counts = workflow_state["dc1_add_pod_role_counts_baseline"]
-        current_counts = await snapshot_device_counts_by_role(
-            client=async_client_main,
-            branch="main",
+            dc_name=SCENARIO_DC_NAME,
             roles=list(baseline_counts.keys()),
         )
         _assert_growth("main", current_counts, baseline_counts)
+        await _assert_asn_stable(async_client_main, "main", workflow_state["dc6_add_pod_asn_baseline"])
 
-        for role in ["spine", "leaf", "tor"]:
-            baseline_asn = workflow_state.get(f"dc1_add_pod_{role}_asn_baseline", {})
-            current_asn = await snapshot_underlay_asn_by_role(
-                client=async_client_main,
-                branch="main",
-                dc_name="DC1",
-                role=role,
-            )
-            _assert_asn_unchanged("main", role, current_asn, baseline_asn)
-
-        logging.info("Devices in main: %d total", result["device_count"])
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)

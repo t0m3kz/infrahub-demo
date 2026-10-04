@@ -221,21 +221,23 @@ class TestInfrahubDockerWithClient:
         self,
         client: InfrahubClient,
         branch: str,
-    ) -> dict[str, Any]:
-        """Snapshot spine device counts per pod for DC1.
+        dc_name: str,
+    ) -> dict[str, list[str]]:
+        """Snapshot the spine devices of every pod in one DC.
 
-        Queries TopologyPod objects and their direct devices (from
+        Queries the DC's TopologyPod objects and their direct devices (from
         TopologyDeviceHosting), filtering by role=spine. Spines are
         deployed to the pod directly, not inside racks.
 
         Returns:
-            Dictionary with pod1_count, pod1 (names), pod2_count, pod2 (names).
+            Mapping pod name (e.g. "DC6-1-POD-1") -> sorted spine device names.
+            Pods without spines map to an empty list.
         """
         client.default_branch = branch
 
         query = """
-        query {
-            TopologyPod(parent__name__value: "DC1") {
+        query GetDCPodSpines($dc_name: String!) {
+            TopologyPod(parent__name__value: $dc_name) {
                 edges {
                     node {
                         name { value }
@@ -252,7 +254,7 @@ class TestInfrahubDockerWithClient:
             }
         }
         """
-        result = await client.execute_graphql(query=query)
+        result = await client.execute_graphql(query=query, variables={"dc_name": dc_name})
 
         spines_by_pod: dict[str, list[str]] = {}
         for pod_edge in result.get("TopologyPod", {}).get("edges", []):
@@ -265,15 +267,7 @@ class TestInfrahubDockerWithClient:
                     pod_spines.append(dev["name"]["value"])
             spines_by_pod[pod_name] = sorted(pod_spines)
 
-        # Map pod names to pod1/pod2 keys by sorting
-        sorted_pods = sorted(spines_by_pod.keys())
-        snapshot: dict[str, Any] = {}
-        for i, pod_name in enumerate(sorted_pods, start=1):
-            spines = spines_by_pod[pod_name]
-            snapshot[f"pod{i}"] = spines
-            snapshot[f"pod{i}_count"] = len(spines)
-
-        return snapshot
+        return spines_by_pod
 
     @staticmethod
     def execute_command(

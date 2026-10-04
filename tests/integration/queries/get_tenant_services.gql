@@ -10,6 +10,24 @@ query GetTenantServices {
             name {
               value
             }
+            # Member firewalls' deployment: the DC (or colocation metro) the
+            # cluster sits in, so a check can scope contexts to its own DCs.
+            capabilities {
+              edges {
+                node {
+                  ... on DcimPhysicalDevice {
+                    deployment {
+                      node {
+                        __typename
+                        name {
+                          value
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
         tenant {
@@ -72,6 +90,7 @@ query GetTenantServices {
         }
         deployment {
           node {
+            __typename
             name {
               value
             }

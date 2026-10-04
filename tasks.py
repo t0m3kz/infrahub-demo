@@ -241,7 +241,7 @@ def test_integration(
     Example:
         uv run invoke dev.test-integration
         uv run invoke dev.test-integration --server-port 8200
-        uv run invoke dev.test-integration --tests "tests/integration/test_01_setup.py tests/integration/test_02_repository.py tests/integration/test_80_dc1_dc6_flow.py"
+        DC_DEPLOYMENT_TEST_DCS=dc6 uv run invoke dev.test-integration --tests "tests/integration/test_01_setup.py tests/integration/test_02_repository.py tests/integration/test_10_dc_deployment.py tests/integration/test_12_dc6_add_switch.py"
     """
     _run_integration_suite(context, tests=tests, basetemp=basetemp, server_port=server_port)
 

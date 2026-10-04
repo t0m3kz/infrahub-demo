@@ -30,13 +30,19 @@ Each scenario creates infrastructure incrementally and merges to main:
 **Scenario Tests:**
 
 - `test_10_dc_deployment.py` - **Scenario 1:** Initial datacenter deployment
-- `test_12_dc1_add_switch.py` - **Scenario 2:** Add a switch to an existing DC
-- `test_14_dc1_add_rack.py` - **Scenario 3:** Add a rack to an existing pod
-- `test_16_dc1_add_pod.py` - **Scenario 4:** Add a pod to an existing DC
-- `test_18_dc1_add_spine.py` - **Scenario 5:** Add a spine to an existing fabric
-- `test_19_dc1_segments.py` - **Scenario 6:** Segments and their legs
-- `test_20_dc1_add_endpoints.py` - **Scenario 7:** Endpoint servers across deployment types
+- `test_12_dc6_add_switch.py` - **Scenario 2:** Add switches to an existing DC6 rack (`data/demos/02_switch_dc6`)
+- `test_14_dc6_add_rack.py` - **Scenario 3:** Add a rack to an existing DC6 pod (`data/demos/03_rack_dc6`)
+- `test_16_dc6_add_pod.py` - **Scenario 4:** Add a pod to DC6 (`data/demos/04_pod_dc6`)
+- `test_18_dc6_add_spine.py` - **Scenario 5:** Add a spine to DC6-1-POD-1 by swapping its spine element
+- `test_19_dc6_segments.py` - **Scenario 6:** Board C001 into DC6 and deploy two VXLAN segments (`data/20_segments`)
+- `test_20_dc6_add_endpoints.py` - **Scenario 7:** Endpoint servers across DC6's pods (`data/demos/06_servers`)
 - `test_59` - `test_65` - **Scenario 8:** The `30_all` demo, end to end (see [The 30_all Suite](#the-30_all-suite)). This one deviates from the pattern above: it loads in stages, shares one branch across six modules, and does not merge to main.
+
+Scenarios 2-7 form one chain on DC6: `test_12` depends on `dc6_verify_after_merge` from `test_10`, and each
+later module depends on the previous one's merge. Every growth check is scoped to DC6 (devices reachable from
+the DC, its pods and their racks), and every pre-existing underlay switch must keep its ASN. Only DC6 has to be
+deployed for the chain, so `DC_DEPLOYMENT_TEST_DCS=dc6` cuts `test_10` down to that one DC (see
+[Run Specific Scenario](#run-specific-scenario)).
 
 ### Shared Utilities
 
@@ -65,13 +71,14 @@ Test data is organized by scenario in `tests/integration/data/`:
 
 ```text
 data/
-├── 02_switch/                 # Switch additions
-├── 03_racks/                  # Rack additions
-├── 05_endpoint_connectivity/  # Endpoint servers in various deployments
-├── 12_dc1_add_rack/           # Rack added to an existing DC1 pod
-├── 20_segments/               # Segments and their legs
+├── 20_segments/               # C001's DC6 footprint and two VXLAN segments (test_19)
 └── 60_app_catalogue/          # Application catalogue and deployment requests
 ```
+
+The DC6 chain (`test_12`-`test_20`) loads its switch, rack, pod and server data straight from `data/demos/`
+(paths in `test_constants.py`), so the demos and the tests cannot drift apart. `20_segments` is the one
+test-local exception: `data/demos/07_customers` and `08_segments` depend on the `30_all` customer organizations
+and still use the old `[org_id, environment]` footprint HFID, so they cannot be loaded on their own.
 
 The `30_all` suite (`test_59`-`test_65`) is the exception: it loads from `data/demos/30_all/` at the repository
 root, not from here, because it exercises the shipped demo rather than test-only fixtures.
@@ -158,11 +165,17 @@ without its prerequisites skips rather than fails:
 uv run invoke test-integration --tests "tests/integration/test_01_setup.py \
   tests/integration/test_02_repository.py tests/integration/test_10_dc_deployment.py"
 
-# DC + switches
-uv run invoke test-integration --tests "tests/integration/test_01_setup.py \
+# DC6 + the whole DC6 scenario chain (switch, rack, pod, spine, segments, endpoints)
+DC_DEPLOYMENT_TEST_DCS=dc6 uv run invoke test-integration --tests "tests/integration/test_01_setup.py \
   tests/integration/test_02_repository.py tests/integration/test_10_dc_deployment.py \
-  tests/integration/test_12_dc1_add_switch.py"
+  tests/integration/test_12_dc6_add_switch.py tests/integration/test_14_dc6_add_rack.py \
+  tests/integration/test_16_dc6_add_pod.py tests/integration/test_18_dc6_add_spine.py \
+  tests/integration/test_19_dc6_segments.py tests/integration/test_20_dc6_add_endpoints.py"
 ```
+
+The DC6 chain and the `30_all` suite can share a session. `test_19` merges C001's DC6 footprint and its
+segments into main, so `test_62` scopes its exact firewall-context and segment-leg counts to the `30_all` DCs
+(`scope_tenant_services_to_dcs`) rather than counting them across the whole instance.
 
 `--server-port` moves the stack off the default 8100 if you need two runs side by side.
 

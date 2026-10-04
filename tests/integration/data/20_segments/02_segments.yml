@@ -1,29 +1,31 @@
 ---
+# Two local (single-deployment) C001 prod VXLAN segments activated in DC6
+# through the C001-P-DC6 footprint. add_vxlan_segment resolves the
+# footprint's parent (DC6) and creates one ManagedSegmentDeployment per
+# segment there, with a VNI from DC6's own vni pool. No gateway: the scenario
+# covers the L2 activation path only (same as the local segments in
+# data/demos/30_all/07_applications/c005/00_segments.yml).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: ManagedVxlanSegment
   data:
-    - customer_name: web-app
-      environment: production
-      owner: "Customer 1"
+    - owner: "C001"
+      customer_name: "web-app"
+      environment: "p"
+      stretch_scope: local
       arp_suppression: true
-      prefix:
-        - "10.100.0.0/24"
-        - "tenant-a-vrf"
-      deployments:
-        - DC1
+      customer_deployments:
+        - "C001-P-DC6"
       member_of_groups:
         - vxlan_segments
 
-    - customer_name: db-backend
-      environment: production
-      owner: "Customer 1"
+    - owner: "C001"
+      customer_name: "db-backend"
+      environment: "p"
+      stretch_scope: local
       arp_suppression: true
-      prefix:
-        - "10.100.0.0/24"
-        - "tenant-a-vrf"
-      deployments:
-        - DC1
+      customer_deployments:
+        - "C001-P-DC6"
       member_of_groups:
         - vxlan_segments

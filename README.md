@@ -156,13 +156,14 @@ uv run invoke register-repo
 
 #### Expansion & Incremental Deployment Scenarios
 
-Explore LLM upgrades and organic growth patterns—all in one place, please make sure DC1 is alredy deployed:
+Explore LLM upgrades and organic growth patterns—all in one place. The switch, rack and pod demos grow DC6, so
+make sure DC6 is already deployed; llm time works on DC1:
 
 | Scenario | Location | Type/Architecture | Description |
 | ---------- | ---------- | ------------------- | ------------- |
-| **[switch](data/demos/02_switch_dc6/)** | Munich 🇩🇪 | Rack Expansion | "Just TWO more switches"—organic chaos. |
-| **[rack](data/demos/03_rack_dc6/)** | Munich 🇩🇪 | Minimal ToR | Minimalist rack: started as a test, now it's critical. |
-| **[pod](data/demos/04_pod_dc6/)** | Munich 🇩🇪 | Pod Expansion | Pod 4: because 3 wasn't enough. |
+| **[switch](data/demos/02_switch_dc6/)** | Katowice 🇵🇱 | Rack Expansion | "Just TWO more switches"—organic chaos. |
+| **[rack](data/demos/03_rack_dc6/)** | Katowice 🇵🇱 | Leaf + Access-Leaf Rack | Minimalist rack: started as a test, now it's critical. |
+| **[pod](data/demos/04_pod_dc6/)** | Katowice 🇵🇱 | Pod Expansion | Pod 4: because 3 wasn't enough. |
 | **[llm time](data/demos/05_llm_time/)** | Munich 🇩🇪 | Spine Expansion | Extra spines for LLMs—plausible deniability included. |
 
 #### Everything at Once

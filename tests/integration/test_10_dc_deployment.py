@@ -11,9 +11,10 @@ Each DC runs sequentially on its own branch (deploy-dc1 … deploy-dc7):
   8. Merge to main
   9. Verify devices and routing on main (post-merge)
 
-Subsequent scenarios (add-switch, add-rack …) depend on ``dc6_verify_after_merge``
-so they only start once DC1 – DC6 are verified in main; DC7 runs after them as
-an additional end-to-end scenario (micro-fabric / border-spine pattern).
+The DC6 expansion chain (test_12 - test_20: add-switch, add-rack …) depends on
+``dc6_verify_after_merge`` so it only starts once DC6 is verified in main. DC7
+(micro-fabric / border-spine pattern) still deploys here, before that chain by
+order number, but nothing in the chain depends on it.
 
 Steps 1-8 (deploy_and_merge) and step 9 (verify_after_merge) are two separate
 test functions per DC, not one. The NEXT DC's dependency is on THIS DC's merge
