@@ -168,15 +168,6 @@ def _device_data(
     }
 
 
-def _raw_gql(device: dict) -> dict:
-    """Wrap a cleaned device dict in a fake raw GQL shape that clean_data expects."""
-    return {
-        "DcimPhysicalDevice": {
-            "edges": [{"node": {k: {"value": v} if not isinstance(v, (dict, list)) else v for k, v in device.items()}}]
-        }
-    }
-
-
 # ---------------------------------------------------------------------------
 # get_capabilities (already covered in test_get_capabilities.py, complementary)
 # ---------------------------------------------------------------------------

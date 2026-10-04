@@ -16,12 +16,6 @@ from transforms.common import _get_sgt_rules
 from transforms.helpers.segments import _vlans_from_activations
 from transforms.helpers.vxlan import _l2_from_activations
 
-
-# Convenience: build a sgt_rules list directly from activations for template tests
-def _rules_from_acts(acts: list) -> list:
-    return _get_sgt_rules(acts)
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

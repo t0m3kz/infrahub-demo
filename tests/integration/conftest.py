@@ -137,11 +137,6 @@ def infrahub_port(infrahub_app: dict[str, int]) -> int:
 
 
 @pytest.fixture(scope="session")
-def task_manager_port(infrahub_app: dict[str, int]) -> int:
-    return infrahub_app["task-manager"]
-
-
-@pytest.fixture(scope="session")
 def async_client_main(infrahub_port: int) -> Generator[InfrahubClient, None, None]:
     """Async Infrahub client on main branch."""
     client = InfrahubClient(

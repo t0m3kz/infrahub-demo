@@ -97,31 +97,10 @@ def _vips_two() -> list:
     return vips
 
 
-def _vips_no_members() -> list:
-    vips = _vips()
-    vips[0]["members"] = []
-    return vips
-
-
 def _vips_no_health_checks() -> list:
     vips = _vips()
     vips[0]["health_checks"] = []
     return vips
-
-
-# ---------------------------------------------------------------------------
-# GraphQL-shaped raw data for LoadBalancerCloud.transform() tests
-# ---------------------------------------------------------------------------
-
-
-def _raw_graphql(provider: str = "aws") -> dict:
-    """Minimal GraphQL-shaped response (before clean_data)."""
-    lb = _lb()
-    lb["virtual_network"]["account"]["provider"]["name"] = provider
-    return {
-        "CloudLoadBalancer": {"edges": [{"node": lb}]},
-        "ServiceLoadBalancerVIP": {"edges": [{"node": v} for v in _vips()]},
-    }
 
 
 # ===========================================================================

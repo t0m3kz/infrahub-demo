@@ -21,7 +21,6 @@ from .test_constants import (
     DATA_PROPAGATION_DELAY,
     DIFF_TASK_TIMEOUT,
     GENERATOR_TASK_TIMEOUT,
-    MERGE_PROPAGATION_DELAY,
     MERGE_TASK_TIMEOUT,
     VALIDATION_MAX_ATTEMPTS,
     VALIDATION_POLL_INTERVAL,
@@ -103,44 +102,6 @@ async def verify_no_failed_tasks(
         "failed_count": 0,
         "failed_details": [],
     }
-
-
-async def verify_merged_to_main(
-    client: InfrahubClient,
-    expected_object_kind: str,
-    expected_object_name: str,
-) -> bool:
-    """Verify that an object exists in main branch after merge."""
-    client.default_branch = "main"
-    await asyncio.sleep(MERGE_PROPAGATION_DELAY)
-
-    logger.info("Verifying '%s' named '%s' exists in main", expected_object_kind, expected_object_name)
-
-    async def _check() -> tuple[bool, bool]:
-        try:
-            obj = await client.get(
-                kind=expected_object_kind,
-                name__value=expected_object_name,
-                raise_when_missing=False,
-            )
-            return bool(obj), bool(obj)
-        except Exception as e:
-            logger.warning("Retrying lookup for '%s' in main due to error: %s", expected_object_name, e)
-            return False, False
-
-    found = await wait_for_condition(
-        check_fn=_check,
-        max_attempts=12,
-        poll_interval=5,
-        description=f"{expected_object_kind} '{expected_object_name}' in main",
-    )
-
-    if found:
-        logger.info("Found '%s' in main branch", expected_object_name)
-        return True
-
-    logger.error("'%s' not found in main branch", expected_object_name)
-    return False
 
 
 # ------------------------------------------------------------------

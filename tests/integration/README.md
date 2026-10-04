@@ -48,7 +48,6 @@ Each scenario creates infrastructure incrementally and merges to main:
 - `create_proposed_change()` - Create PC with diff
 - `wait_for_validations()` - Wait for validation checks
 - `merge_proposed_change()` - Merge PC to main
-- `verify_merged_to_main()` - Verify object exists in main branch
 
 #### `test_helpers.py` - Generic Async Utilities
 
@@ -248,19 +247,6 @@ class TestScenarioName(TestInfrahubDockerWithClient):
         result = merge_proposed_change(client=client_main, pc_id=pc_id)
         assert result["success"], f"Merge failed: {result}"
         pass
-
-    @pytest.mark.order(106)
-    @pytest.mark.dependency(name="scenarioXX_complete", depends=["scenarioXX_merge"])
-    @pytest.mark.asyncio
-    async def test_07_verify_in_main(self, async_client_main):
-        """Verify object exists in main branch after merge."""
-        success = await verify_merged_to_main(
-            client=async_client_main,
-            expected_object_kind="TopologyDataCenter",
-            expected_object_name="DC1",
-        )
-        assert success
-        pass
 ```
 
 ## Fixtures
@@ -380,7 +366,4 @@ wait_for_validations(client, "PC Name")
 
 # Merge PC
 result = merge_proposed_change(client, pc_id)
-
-# Verify in main
-success = await verify_merged_to_main(client, "TopologyDataCenter", "DC1")
 ```
