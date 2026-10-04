@@ -962,7 +962,7 @@ async def fetch_application_graph(client: InfrahubClient, branch: str) -> list[d
 
     Returns:
         [{"name": str, "criticality": str,
-          "components": [{"slug": str, "component_type": str,
+          "components": [{"fqdn": str, "component_type": str,
                           "segment": str | None, "segment_kind": str | None,
                           "instances": [{"name": str, "kind": str,
                                          "host": str | None,
@@ -992,7 +992,7 @@ async def fetch_application_graph(client: InfrahubClient, branch: str) -> list[d
                 )
             components.append(
                 {
-                    "slug": str(component.get("slug") or ""),
+                    "fqdn": str(component.get("fqdn") or ""),
                     "component_type": str(component.get("component_type") or ""),
                     "segment": segment.get("name"),
                     "segment_kind": segment.get("typename"),
@@ -1020,7 +1020,7 @@ async def fetch_application_graph(client: InfrahubClient, branch: str) -> list[d
             hosts = ", ".join(f"{i['name']}@{i['host'] or i['kind']}" for i in component["instances"])
             logger.info(
                 "    %s [%s] segment=%s -> %s",
-                component["slug"],
+                component["fqdn"],
                 component["component_type"],
                 component["segment"],
                 hosts,

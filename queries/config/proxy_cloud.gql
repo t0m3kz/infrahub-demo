@@ -20,6 +20,7 @@ query proxy_cloud_config($instance: String!) {
                     action { value }
                     destination_type { value }
                     destination { value }
+                    ports { value }
                     log { value }
                     description { value }
                     disabled { value }
@@ -47,6 +48,7 @@ query proxy_cloud_config($instance: String!) {
                           action { value }
                           destination_type { value }
                           destination { value }
+                          ports { value }
                           log { value }
                           description { value }
                           disabled { value }
@@ -66,30 +68,23 @@ query proxy_cloud_config($instance: String!) {
               applications {
                 edges {
                   node {
+                    name { value }
                     children {
                       edges {
                         node {
-                          children {
-                            edges {
-                              node {
-                                ... on AppEndpoint {
-                                  name { value }
-                                  endpoint_type { value }
-                                  fqdn { value }
-                                  dependents {
-                                    edges {
-                                      node {
-                                        protocol { value }
-                                        port_start { value }
-                                        port_end { value }
-                                        access_status { value }
-                                        source_profile {
-                                          node {
-                                            name { value }
-                                            allowed_groups { edges { node { name { value } } } }
-                                          }
-                                        }
-                                      }
+                          ... on AppComponent {
+                            name { value }
+                            fqdn { value }
+                            ports { value }
+                            dependents {
+                              edges {
+                                node {
+                                  ports { value }
+                                  access_status { value }
+                                  source_profile {
+                                    node {
+                                      name { value }
+                                      allowed_groups { edges { node { name { value } } } }
                                     }
                                   }
                                 }

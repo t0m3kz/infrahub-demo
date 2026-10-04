@@ -43,6 +43,7 @@ query proxy_config($device: String!) {
                             action { value }
                             destination_type { value }
                             destination { value }
+                            ports { value }
                             log { value }
                             description { value }
                             disabled { value }
@@ -70,6 +71,7 @@ query proxy_config($device: String!) {
                                   action { value }
                                   destination_type { value }
                                   destination { value }
+                                  ports { value }
                                   log { value }
                                   description { value }
                                   disabled { value }

@@ -60,7 +60,7 @@ _VMS: dict[str, str] = {
     if kind == "DcimVirtualDevice" and "deployment" in entry
 }
 _COMPONENTS = [
-    (app["environment"], f"{app['owner'].lower()}-{app['label']}-{app['environment']}-{component['name']}", component)
+    (app["environment"], component["fqdn"], component)
     for kind, app in _OBJECTS
     if kind == "AppApplication"
     for component in app["children"]["data"]
@@ -86,10 +86,10 @@ def test_vm_deployment_is_declared(vm: str) -> None:
     assert _VMS[vm] in _FOOTPRINTS
 
 
-@pytest.mark.parametrize(("environment", "slug", "component"), _COMPONENTS, ids=[slug for _, slug, _ in _COMPONENTS])
-def test_component_runs_on_its_application_environment(environment: str, slug: str, component: dict[str, Any]) -> None:
+@pytest.mark.parametrize(("environment", "fqdn", "component"), _COMPONENTS, ids=[fqdn for _, fqdn, _ in _COMPONENTS])
+def test_component_runs_on_its_application_environment(environment: str, fqdn: str, component: dict[str, Any]) -> None:
     """A prod component's VMs sit on prod footprints, a dev one's on dev."""
     for instance in component.get("instances") or []:
         if instance not in _VMS:
             continue  # cloud instances carry no customer footprint
-        assert _FOOTPRINTS[_VMS[instance]] == environment, f"{slug}: {instance} on {_VMS[instance]}"
+        assert _FOOTPRINTS[_VMS[instance]] == environment, f"{fqdn}: {instance} on {_VMS[instance]}"

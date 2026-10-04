@@ -19,6 +19,7 @@ spec:
         kind: AppComponent
         data:
           - name: billing-frontend
+            fqdn: frontend.billing-cloud.c016.demo.local
             component_type: frontend
             network_segment: c016-prolexar-subnet-prod-p
             instances:
@@ -28,16 +29,13 @@ spec:
               - app_components
 
           - name: billing-worker
+            fqdn: worker.billing-cloud.c016.demo.local
             component_type: worker
+            ports:
+              - tcp/9000
             network_segment: c016-prolexar-subnet-prod-p
             instances:
               - c016-billing-worker-weu-1
               - c016-billing-worker-weu-2
-            children:
-              kind: AppEndpoint
-              data:
-                - name: billing-worker-api
-                  endpoint_type: internal_service
-                  fqdn: worker.billing-cloud.c016.demo.local
             member_of_groups:
               - app_components

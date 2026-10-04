@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from utils.ports import PortSpec
+
 from .helpers.rules import RulesPlanner
 from .named_objects import GetOrCreateByNameMixin
 from .protocols import CloudSecurityGroup, CloudSecurityGroupRule
@@ -53,9 +55,10 @@ class CloudSecurityRuleMixin(GetOrCreateByNameMixin):
         dst_comp: dict,
         dep: dict,
         rule_name: str,
+        port: PortSpec,
     ) -> bool:
-        """Create a CloudSecurityGroupRule for a dependency where either side
-        is a CloudNetworkSegment."""
+        """Create a CloudSecurityGroupRule for one port of a dependency where
+        either side is a CloudNetworkSegment."""
         planner = RulesPlanner()
         src_seg = src_comp.get("network_segment") or {}
         dst_seg = dst_comp.get("network_segment") or {}
@@ -86,16 +89,7 @@ class CloudSecurityRuleMixin(GetOrCreateByNameMixin):
         if sg is None:
             return False
 
-        port_info = RulesPlanner.resolve_port(dep)
-        if port_info is None:
-            self.logger.warning(
-                "  Cloud dependency '%s' (%s -> %s) has no protocol/port - skipping rule creation",
-                dep.get("name", dep.get("id", "?")),
-                src_comp.get("name", "?"),
-                dst_comp.get("name", "?"),
-            )
-            return False
-        protocol, port_start, port_end = port_info
+        protocol, port_start, port_end = port
         direction = "ingress" if cloud_seg_is_dst else "egress"
 
         try:

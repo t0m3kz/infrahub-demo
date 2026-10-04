@@ -10,10 +10,8 @@ spec:
   kind: AppDependency
   data:
     - name: c003-custody-api-frontend-to-backend
-      source: c003-custody-api-p-api-frontend
-      target: ["c003-custody-api-p-api-backend", "api-backend-internal"]
-      protocol: tcp
-      port_start: 8443
+      source: frontend.custody-api.c003.demo.local
+      target: backend.custody-api.c003.demo.local
       access_status: auto
       description: "Custody API frontend calls the internal backend API"
       member_of_groups:

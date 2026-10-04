@@ -1,13 +1,12 @@
 ---
 # C001 "checkout" application: a private-access frontend (gated by an access
-# profile) that also calls the external payment gateway. Companion to
-# storefront (01_application.yml). Authored directly — no separate
-# request/approval object graph; a branch + proposed-change review is the
-# approval step for anything declared here.
+# profile) that also calls the external payment gateway. Authored directly —
+# no separate request/approval object graph; a branch + proposed-change review
+# is the approval step for anything declared here.
 #
-# Who may open checkout-web, and on which port, is the access-profile
-# dependency in 03_checkout_dependencies.yml. Without it the ZTNA broker
-# does not publish the endpoint.
+# The frontend's fqdn is the name the ZTNA broker publishes it under. Who may
+# open it is the access-profile dependency in 03_checkout_dependencies.yml;
+# without it the broker does not publish the frontend.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -26,15 +25,9 @@ spec:
         kind: AppComponent
         data:
           - name: frontend
+            fqdn: checkout.internal.c001.demo.local
             component_type: frontend
-            children:
-              kind: AppEndpoint
-              data:
-                - name: checkout-web
-                  endpoint_type: private_access
-                  fqdn: checkout.internal.c001.demo.local
-                - name: payment-gateway
-                  endpoint_type: external_service
-                  fqdn: api.paymentgw.example.com
+            ports:
+              - tcp/443
             member_of_groups:
               - app_components

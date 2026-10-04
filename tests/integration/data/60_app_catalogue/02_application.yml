@@ -1,10 +1,9 @@
 ---
-# Minimal self-contained app: one real component (frontend) that both depends on
-# an external service (egress proxy generation) and is published via a ZTNA
-# endpoint, plus one external endpoint.
-# (payment-gateway). No network_segment on either component — deliberately
-# skips firewall-rule generation (needs DC/segment infra) to keep this scenario
-# independent of the DC deployment test chain.
+# Minimal self-contained app: a frontend published through the ZTNA broker
+# under its fqdn, which also calls an external payment gateway (egress proxy
+# generation, see 03_dependencies.yml) and a backend on the other IT001
+# segment (internal firewall rule path). Each component lists the ports it
+# listens on; the dependencies open them.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -23,28 +22,19 @@ spec:
         kind: AppComponent
         data:
           - name: frontend
+            fqdn: frontend.internal.it001.demo.local
             component_type: frontend
+            ports:
+              - tcp/443
             network_segment: it001-checkout-frontend-p
-            children:
-              kind: AppEndpoint
-              data:
-                - name: it001-checkout-frontend-private
-                  endpoint_type: private_access
-                  fqdn: frontend.internal.it001.demo.local
-                - name: it001-payment-gateway-external
-                  endpoint_type: external_service
-                  fqdn: api.paymentgw.example.com
             member_of_groups:
               - app_components
 
           - name: backend
+            fqdn: backend.internal.it001.demo.local
             component_type: backend
+            ports:
+              - tcp/8443
             network_segment: it001-checkout-backend-p
-            children:
-              kind: AppEndpoint
-              data:
-                - name: it001-checkout-backend-internal
-                  endpoint_type: internal_service
-                  fqdn: backend.internal.it001.demo.local
             member_of_groups:
               - app_components

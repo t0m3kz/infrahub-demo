@@ -1,6 +1,6 @@
 ---
-# Who calls whom inside fraud-detection, and on which port. The ports live only
-# here; the target endpoints are declared on the components in
+# Who calls whom inside fraud-detection. Source and target are component fqdns;
+# without ports a dependency opens every port its target component lists in
 # 01_application.yml.
 apiVersion: infrahub.app/v1
 kind: Object
@@ -8,10 +8,8 @@ spec:
   kind: AppDependency
   data:
     - name: c013-fraud-detection-scoring-api-to-feature-cache
-      source: c013-fraud-detection-p-scoring-api
-      target: ["c013-fraud-detection-p-feature-cache", "feature-cache-redis"]
-      protocol: tcp
-      port_start: 6379
+      source: scoring.fraud-detection.c013.demo.local
+      target: cache.fraud-detection.c013.demo.local
       access_status: auto
       description: "Scoring API reads features from the cache"
       member_of_groups:

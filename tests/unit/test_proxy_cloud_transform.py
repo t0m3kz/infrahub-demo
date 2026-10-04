@@ -66,15 +66,33 @@ def _shared_policy(rule: dict) -> list[dict]:
     return [{"name": "base-egress", "default_action": "block", "enabled": True, "rules": [rule]}]
 
 
-def _grant(status: str = "approved", groups: tuple[str, ...] = ("engineering",)) -> dict[str, Any]:
-    """An AppDependency from an access profile, as seen in endpoint.dependents."""
+def _grant(
+    status: str = "approved",
+    groups: tuple[str, ...] = ("engineering",),
+    ports: list[str] | None = None,
+) -> dict[str, Any]:
+    """An AppDependency from an access profile, as seen in component.dependents."""
     return {
-        "protocol": "tcp",
-        "port_start": 443,
-        "port_end": None,
+        "ports": ["tcp/443"] if ports is None else ports,
         "access_status": status,
         "source_profile": {"name": "private-access-standard", "allowed_groups": [{"name": g} for g in groups]},
     }
+
+
+def _private_access_customers(
+    fqdn: str = "checkout-api.internal.example.com",
+    app_name: str = "checkout",
+    comp_name: str = "api",
+    grants: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """A customer whose application has one component granted to an access profile."""
+    component = {
+        "name": comp_name,
+        "fqdn": fqdn,
+        "ports": ["tcp/443"],
+        "dependents": [_grant()] if grants is None else grants,
+    }
+    return [{"applications": [{"name": app_name, "children": [component]}]}]
 
 
 class TestProxyCloudTransform:
@@ -93,32 +111,13 @@ class TestProxyCloudTransform:
             _CLEAN_DATA_PATH,
             return_value=_cleaned_proxy(provider=provider, service_type="private_access"),
         ):
-            with pytest.raises(ValueError, match="no private-access endpoints"):
+            with pytest.raises(ValueError, match="no private-access components"):
                 await transform.transform({})
 
     @pytest.mark.asyncio
     async def test_zscaler_zpa_renders_application_segments(self) -> None:
         transform = _make_transform()
-        private_access_customers = [
-            {
-                "applications": [
-                    {
-                        "children": [
-                            {
-                                "children": [
-                                    {
-                                        "name": "checkout-api",
-                                        "endpoint_type": "private_access",
-                                        "fqdn": "checkout-api.internal.example.com",
-                                        "dependents": [_grant()],
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-                ]
-            }
-        ]
+        private_access_customers = _private_access_customers()
         with patch(
             _CLEAN_DATA_PATH,
             return_value=_cleaned_proxy(
@@ -130,31 +129,78 @@ class TestProxyCloudTransform:
         segment = payload["zpa_application_segments"][0]
         assert segment["name"] == "checkout-api"
         assert segment["domain_names"] == ["checkout-api.internal.example.com"]
+        assert segment["tcp_port_ranges"] == ["443", "443"]
         assert segment["allowed_groups"] == ["engineering"]
+
+    @pytest.mark.asyncio
+    async def test_zscaler_zpa_renders_port_range_bounds(self) -> None:
+        """A port range on a grant renders as its start/end pair in tcp_port_ranges."""
+        transform = _make_transform()
+        private_access_customers = _private_access_customers(grants=[_grant(ports=["tcp/8000-8010"])])
+        with patch(
+            _CLEAN_DATA_PATH,
+            return_value=_cleaned_proxy(
+                provider="zscaler_zpa", service_type="private_access", private_access_customers=private_access_customers
+            ),
+        ):
+            result = await transform.transform({})
+        payload = json.loads(result)
+        assert payload["zpa_application_segments"][0]["tcp_port_ranges"] == ["8000", "8010"]
+
+    @pytest.mark.asyncio
+    async def test_zscaler_zpa_splits_tcp_and_udp_port_ranges(self) -> None:
+        """UDP ports land in udp_port_ranges, never in tcp_port_ranges."""
+        transform = _make_transform()
+        private_access_customers = _private_access_customers(grants=[_grant(ports=["tcp/443", "udp/30000-30010"])])
+        with patch(
+            _CLEAN_DATA_PATH,
+            return_value=_cleaned_proxy(
+                provider="zscaler_zpa", service_type="private_access", private_access_customers=private_access_customers
+            ),
+        ):
+            result = await transform.transform({})
+        segment = json.loads(result)["zpa_application_segments"][0]
+        assert segment["tcp_port_ranges"] == ["443", "443"]
+        assert segment["udp_port_ranges"] == ["30000", "30010"]
+
+    @pytest.mark.asyncio
+    async def test_generic_ztna_shape_keeps_the_end_of_a_port_range(self) -> None:
+        """A range renders with its port_end; a single port renders without one."""
+        transform = _make_transform()
+        private_access_customers = _private_access_customers(grants=[_grant(ports=["tcp/443", "udp/30000-30010"])])
+        with patch(
+            _CLEAN_DATA_PATH,
+            return_value=_cleaned_proxy(
+                provider="cloudflare_gateway",
+                service_type="private_access",
+                private_access_customers=private_access_customers,
+            ),
+        ):
+            result = await transform.transform({})
+        segment = json.loads(result)["application_segments"][0]
+        assert segment["ports"] == [
+            {"port": 443, "protocol": "tcp"},
+            {"port": 30000, "port_end": 30010, "protocol": "udp"},
+        ]
+
+    @pytest.mark.asyncio
+    async def test_private_access_with_only_denied_grants_raises(self) -> None:
+        """A component whose every grant is denied is not a segment, so there is nothing to render."""
+        transform = _make_transform()
+        private_access_customers = _private_access_customers(grants=[_grant(status="denied")])
+        with patch(
+            _CLEAN_DATA_PATH,
+            return_value=_cleaned_proxy(
+                provider="zscaler_zpa", service_type="private_access", private_access_customers=private_access_customers
+            ),
+        ):
+            with pytest.raises(ValueError, match="no private-access components"):
+                await transform.transform({})
 
     @pytest.mark.asyncio
     async def test_netskope_private_access_renders_npa_shape(self) -> None:
         transform = _make_transform()
-        private_access_customers = [
-            {
-                "applications": [
-                    {
-                        "children": [
-                            {
-                                "children": [
-                                    {
-                                        "name": "checkout-api",
-                                        "endpoint_type": "private_access",
-                                        "fqdn": "checkout-api.internal.example.com",
-                                        "dependents": [_grant()],
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-                ]
-            }
-        ]
+        private_access_customers = _private_access_customers()
         with patch(
             _CLEAN_DATA_PATH,
             return_value=_cleaned_proxy(
@@ -168,26 +214,7 @@ class TestProxyCloudTransform:
     @pytest.mark.asyncio
     async def test_unmapped_ztna_provider_falls_back_to_generic_shape(self) -> None:
         transform = _make_transform()
-        private_access_customers = [
-            {
-                "applications": [
-                    {
-                        "children": [
-                            {
-                                "children": [
-                                    {
-                                        "name": "api",
-                                        "endpoint_type": "private_access",
-                                        "fqdn": "api.internal.example.com",
-                                        "dependents": [_grant()],
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-                ]
-            }
-        ]
+        private_access_customers = _private_access_customers(fqdn="api.internal.example.com")
         with patch(
             _CLEAN_DATA_PATH,
             return_value=_cleaned_proxy(
@@ -198,7 +225,10 @@ class TestProxyCloudTransform:
         ):
             result = await transform.transform({})
         payload = json.loads(result)
-        assert payload["application_segments"][0]["fqdn"] == "api.internal.example.com"
+        segment = payload["application_segments"][0]
+        assert segment["name"] == "checkout-api"
+        assert segment["fqdn"] == "api.internal.example.com"
+        assert segment["ports"] == [{"port": 443, "protocol": "tcp"}]
 
     @pytest.mark.asyncio
     async def test_zia_uses_zia_specific_shape(self) -> None:
@@ -252,6 +282,35 @@ class TestProxyCloudTransform:
             result = await transform.transform({})
         payload = json.loads(result)
         assert payload["url_filtering_rules"][0]["destinations"] == ["api.stripe.com"]
+
+    @pytest.mark.asyncio
+    async def test_generic_shape_renders_destination_ports(self) -> None:
+        """Rule ports render as destination_ports, single ports and ranges alike."""
+        transform = _make_transform()
+        rule = {**_STRIPE_RULE, "ports": ["tcp/443", "udp/30000-30010"]}
+        with patch(
+            _CLEAN_DATA_PATH,
+            return_value=_cleaned_proxy(provider="other", shared_policies=_shared_policy(rule)),
+        ):
+            result = await transform.transform({})
+        payload = json.loads(result)
+        assert payload["url_filtering_rules"][0]["destination_ports"] == [
+            {"port": 443, "port_end": None, "protocol": "tcp"},
+            {"port": 30000, "port_end": 30010, "protocol": "udp"},
+        ]
+
+    @pytest.mark.asyncio
+    async def test_generic_shape_omits_destination_ports_for_rule_without_ports(self) -> None:
+        """A rule without ports renders exactly as before: no destination_ports key."""
+        transform = _make_transform()
+        with patch(
+            _CLEAN_DATA_PATH,
+            return_value=_cleaned_proxy(provider="other", shared_policies=_shared_policy(_STRIPE_RULE)),
+        ):
+            result = await transform.transform({})
+        rule = json.loads(result)["url_filtering_rules"][0]
+        assert "destination_ports" not in rule
+        assert set(rule) == {"name", "order", "action", "url_categories", "destinations", "description"}
 
     @pytest.mark.asyncio
     async def test_customer_scoped_rule_included(self) -> None:

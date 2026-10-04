@@ -35,18 +35,11 @@ def _mock_sg(sg_id: str = "sg-id-1", name: str = "sg-myapp") -> MagicMock:
     return sg
 
 
-def _dep(
-    protocol: str | None = None,
-    port_start: int | None = None,
-    port_end: int | None = None,
-    name: str = "dep-1",
-) -> dict:
+def _dep(ports: list[str] | None = None, name: str = "dep-1") -> dict:
     return {
         "id": f"dep-{name}",
         "name": name,
-        "protocol": protocol,
-        "port_start": port_start,
-        "port_end": port_end,
+        "ports": ports or [],
         "description": None,
     }
 
@@ -179,9 +172,10 @@ class TestCreateCloudRule:
         gen = self._make_gen_with_sg()
         src_comp = self._comp(self._onprem_seg(), "frontend", "frontend")
         dst_comp = self._comp(self._cloud_seg(), "api", "backend")
-        dep = _dep(protocol="tcp", port_start=443)
+        dep = _dep()
+        port = ("tcp", 443, None)
 
-        asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-frontend-to-api"))
+        asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-frontend-to-api", port))
 
         rule_data = gen.client.create.call_args.kwargs["data"]
         assert rule_data["direction"] == "ingress"
@@ -190,9 +184,10 @@ class TestCreateCloudRule:
         gen = self._make_gen_with_sg()
         src_comp = self._comp(self._cloud_seg(), "api", "backend")
         dst_comp = self._comp(self._onprem_seg(), "db", "database")
-        dep = _dep(protocol="tcp", port_start=5432)
+        dep = _dep()
+        port = ("tcp", 5432, None)
 
-        asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-api-to-db"))
+        asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-api-to-db", port))
 
         rule_data = gen.client.create.call_args.kwargs["data"]
         assert rule_data["direction"] == "egress"
@@ -205,9 +200,10 @@ class TestCreateCloudRule:
         gen = self._make_gen_with_sg()
         src_comp = self._comp(self._onprem_seg(), "fe", "frontend")
         dst_comp = self._comp(self._cloud_seg(), "api", "backend")
-        dep = _dep(protocol="tcp", port_start=8200)
+        dep = _dep()
+        port = ("tcp", 8200, None)
 
-        asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api"))
+        asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api", port))
 
         rule_data = gen.client.create.call_args.kwargs["data"]
         assert rule_data["protocol"] == "tcp"
@@ -217,26 +213,57 @@ class TestCreateCloudRule:
         gen = self._make_gen_with_sg()
         src_comp = self._comp(self._onprem_seg(), "fe", "frontend")
         dst_comp = self._comp(self._cloud_seg(), "api", "backend")
-        dep = _dep(protocol="tcp", port_start=8000, port_end=8080)
+        dep = _dep()
+        port = ("tcp", 8000, 8080)
 
-        asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api"))
+        asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api", port))
 
         rule_data = gen.client.create.call_args.kwargs["data"]
         assert rule_data["port_start"] == 8000
         assert rule_data["port_end"] == 8080
 
-    def test_no_port_on_dep_returns_false(self):
-        """A dependency without port info must be rejected — no fallback."""
+    def test_single_port_omits_port_end(self) -> None:
+        """A single port (port_end None) writes no port_end at all."""
         gen = self._make_gen_with_sg()
         src_comp = self._comp(self._onprem_seg(), "fe", "frontend")
         dst_comp = self._comp(self._cloud_seg(), "api", "backend")
-        dep = _dep()  # no protocol, no port_start
 
-        result = asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api"))
+        asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, _dep(), "myapp-fe-to-api", ("udp", 53, None)))
 
-        assert result is False
-        gen.client.create.assert_not_called()
-        gen.logger.warning.assert_called()
+        rule_data = gen.client.create.call_args.kwargs["data"]
+        assert rule_data["protocol"] == "udp"
+        assert rule_data["port_start"] == 53
+        assert "port_end" not in rule_data
+
+    def test_given_port_wins_over_dependency_ports(self) -> None:
+        """The caller resolves ports; the mixin writes exactly the one it is handed."""
+        gen = self._make_gen_with_sg()
+        src_comp = self._comp(self._onprem_seg(), "fe", "frontend")
+        dst_comp = self._comp(self._cloud_seg(), "api", "backend")
+        dep = _dep(ports=["tcp/443", "udp/30000-30010"])
+
+        asyncio.run(
+            gen._create_cloud_rule(
+                "myapp", src_comp, dst_comp, dep, "myapp-fe-to-api-udp-30000-30010", ("udp", 30000, 30010)
+            )
+        )
+
+        gen.client.create.assert_called_once()
+        rule_data = gen.client.create.call_args.kwargs["data"]
+        assert rule_data["name"] == "myapp-fe-to-api-udp-30000-30010"
+        assert (rule_data["protocol"], rule_data["port_start"], rule_data["port_end"]) == ("udp", 30000, 30010)
+
+    def test_existing_rule_is_looked_up_by_the_given_rule_name(self) -> None:
+        """Idempotency keys on the per-port name the caller passes in."""
+        gen = self._make_gen_with_sg()
+        src_comp = self._comp(self._onprem_seg(), "fe", "frontend")
+        dst_comp = self._comp(self._cloud_seg(), "api", "backend")
+
+        asyncio.run(
+            gen._create_cloud_rule("myapp", src_comp, dst_comp, _dep(), "fe-to-api-tcp-8443", ("tcp", 8443, None))
+        )
+
+        gen.client.filters.assert_awaited_once_with(kind=CloudSecurityGroupRule, name__value="fe-to-api-tcp-8443")
 
     # ------------------------------------------------------------------
     # Early-exit paths
@@ -252,9 +279,10 @@ class TestCreateCloudRule:
         }
         src_comp = self._comp(self._onprem_seg(), "fe", "frontend")
         dst_comp = self._comp(cloud_seg_no_vnet, "api", "backend")
-        dep = _dep(protocol="tcp", port_start=443)
+        dep = _dep()
+        port = ("tcp", 443, None)
 
-        result = asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api"))
+        result = asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api", port))
 
         assert result is False
         gen._get_or_create_sg.assert_not_called()
@@ -270,9 +298,10 @@ class TestCreateCloudRule:
 
         src_comp = self._comp(self._onprem_seg(), "fe", "frontend")
         dst_comp = self._comp(self._cloud_seg(), "api", "backend")
-        dep = _dep(protocol="tcp", port_start=443)
+        dep = _dep()
+        port = ("tcp", 443, None)
 
-        result = asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api"))
+        result = asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api", port))
 
         assert result is True
         gen.client.create.assert_not_called()
@@ -286,9 +315,10 @@ class TestCreateCloudRule:
         gen = self._make_gen_with_sg()
         src_comp = self._comp(self._onprem_seg(), "fe", "frontend")
         dst_comp = self._comp(self._cloud_seg(), "api", "backend")
-        dep = _dep(protocol="tcp", port_start=443)
+        dep = _dep()
+        port = ("tcp", 443, None)
 
-        result = asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api"))
+        result = asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api", port))
 
         assert result is True
         gen.client.create.assert_called_once()
@@ -310,9 +340,10 @@ class TestCreateCloudRule:
             "frontend",
         )
         dst_comp = self._comp(self._cloud_seg(), "api", "backend")
-        dep = _dep(protocol="tcp", port_start=443)
+        dep = _dep()
+        port = ("tcp", 443, None)
 
-        asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api"))
+        asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api", port))
 
         rule_data = gen.client.create.call_args.kwargs["data"]
         assert rule_data["source_cidr"] == "10.1.0.0/24"
@@ -325,9 +356,10 @@ class TestCreateCloudRule:
 
         src_comp = self._comp(self._onprem_seg(), "fe", "frontend")
         dst_comp = self._comp(self._cloud_seg(), "api", "backend")
-        dep = _dep(protocol="tcp", port_start=443)
+        dep = _dep()
+        port = ("tcp", 443, None)
 
-        result = asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api"))
+        result = asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api", port))
 
         assert result is False
         gen.logger.error.assert_called_once()

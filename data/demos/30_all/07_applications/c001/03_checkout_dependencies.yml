@@ -1,6 +1,9 @@
 ---
 # The engineering group and the access profile it is granted through. The
-# profile is the source of the dependency into checkout-web below.
+# profile is the source of the dependency into the checkout frontend below,
+# which opens every port the frontend lists. The payment gateway is not a
+# component: its dependency names it by target_fqdn, lists its ports, and goes
+# out through C001's egress_service (01_customer_services.yml).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -29,19 +32,17 @@ spec:
   kind: AppDependency
   data:
     - name: c001-checkout-to-payment-gateway
-      source: c001-checkout-p-frontend
-      target: ["c001-checkout-p-frontend", "payment-gateway"]
-      protocol: tcp
-      port_start: 443
+      source: checkout.internal.c001.demo.local
+      target_fqdn: api.paymentgw.example.com
+      ports:
+        - tcp/443
       access_status: approved
       decision_reason: "Payment authorization is required by checkout"
       member_of_groups:
         - app_dependencies
     - name: c001-checkout-web-private-access
       source_profile: c001-private-access-standard
-      target: ["c001-checkout-p-frontend", "checkout-web"]
-      protocol: tcp
-      port_start: 443
+      target: checkout.internal.c001.demo.local
       access_status: approved
       decision_reason: "Engineering opens the checkout console through the ZTNA broker"
       member_of_groups:

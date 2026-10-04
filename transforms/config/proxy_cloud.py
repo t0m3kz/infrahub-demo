@@ -12,7 +12,7 @@ Netskope, Palo Alto Prisma Access) sell both a web-gateway product and an unrela
 private-access/ZTNA product under the same brand:
   - web_gateway: ProxyPolicy/ProxyPolicyRule (egress URL filtering) -> templates/configs/
     proxies_cloud/{zscaler_zia,cloudflare_gateway,netskope,generic}.j2
-    - private_access: customer private_access_service and AppEndpoint access profiles
+    - private_access: customer private_access_service and components granted to access profiles
     (published application segments) -> templates/configs/proxies_cloud/
     {zscaler_zpa,netskope_npa,generic_ztna}.j2
 See schemas/extensions/capabilities/ha.yml's CloudProxy.service_type for the full rationale.
@@ -56,7 +56,7 @@ _DEFAULT_ZTNA_TEMPLATE = "generic_ztna"
 
 
 class ProxyCloud(InfrahubTransform):
-    """Transform ManagedCloudProxy policy and private-access endpoint data into JSON."""
+    """Transform ManagedCloudProxy policy and private-access component data into JSON."""
 
     query = "proxy_cloud_config"
 
@@ -98,7 +98,7 @@ class ProxyCloud(InfrahubTransform):
         if not segments:
             raise ValueError(
                 f"ManagedCloudProxy '{proxy.get('name')}' has service_type=private_access but "
-                "has no private-access endpoints for its assigned customers."
+                "has no private-access components for its assigned customers."
             )
 
         template = self._load_template(_ZTNA_PROVIDER_TEMPLATES.get(provider, _DEFAULT_ZTNA_TEMPLATE))

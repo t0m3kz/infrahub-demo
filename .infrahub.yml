@@ -302,6 +302,11 @@ check_definitions:
   - name: validate_evpn_fabric
     class_name: CheckEvpnFabric
     file_path: checks/evpn_fabric.py
+  # Targetless: a dependency spans two applications, and an external target
+  # is no object at all.
+  - name: validate_app_dependency
+    class_name: CheckAppDependency
+    file_path: checks/app_dependency.py
 
 python_transforms:
   - name: topology_cabling
@@ -615,6 +620,8 @@ queries:
     file_path: queries/validation/segment_placement.gql
   - name: evpn_fabric
     file_path: queries/validation/evpn_fabric.gql
+  - name: app_dependency_validation
+    file_path: queries/validation/app_dependency.gql
   - name: loadbalancer_validation
     file_path: queries/validation/lb.gql
   - name: proxy_validation
@@ -839,9 +846,9 @@ generator_definitions:
       files:
         - generators/
         - utils/
-  # Same generator, entered from a component that moved to another segment:
-  # it reconciles its own application and fans out add_app_application to
-  # every application calling one of its endpoints.
+  # Same generator, entered from a component that moved to another segment
+  # or changed its ports: it reconciles its own application and fans out
+  # add_app_application to every application calling the component.
   - name: add_app_component
     file_path: generators/topology/application_security.py
     targets: app_components
@@ -850,7 +857,7 @@ generator_definitions:
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:
-      slug: slug__value
+      fqdn: fqdn__value
     watch:
       files:
         - generators/

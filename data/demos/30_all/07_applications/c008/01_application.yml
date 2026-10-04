@@ -20,6 +20,7 @@ spec:
         kind: AppComponent
         data:
           - name: sync-api
+            fqdn: api.inventory-sync.c008.demo.local
             component_type: backend
             network_segment: c008-krafven-dev-d
             instances:
@@ -29,16 +30,13 @@ spec:
               - app_components
 
           - name: sync-db
+            fqdn: db.inventory-sync.c008.demo.local
             component_type: database
+            ports:
+              - tcp/5432
             network_segment: c008-krafven-dev-d
             instances:
               - c008-sync-db-dc12-1
               - c008-sync-db-dc12-2
-            children:
-              kind: AppEndpoint
-              data:
-                - name: sync-db-postgres
-                  endpoint_type: internal_service
-                  fqdn: db.inventory-sync.c008.demo.local
             member_of_groups:
               - app_components

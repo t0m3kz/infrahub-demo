@@ -1,14 +1,14 @@
-# add_app_component: a component moved to another segment. Its own
-# application is reconciled from the application query (application.gql);
-# this payload only has to find that application and the other applications
-# whose components call this component's endpoints, since their rules name
-# its segment too.
-query app_component($slug: String!) {
-  AppComponent(slug__value: $slug) {
+# add_app_component: a component moved to another segment or changed its
+# ports. Its own application is reconciled from the application query
+# (application.gql); this payload only has to find that application and the
+# other applications whose components call this one, since their rules name
+# its segment and ports too.
+query app_component($fqdn: String!) {
+  AppComponent(fqdn__value: $fqdn) {
     edges {
       node {
         id
-        slug { value }
+        fqdn { value }
         parent {
           node {
             id
@@ -17,29 +17,19 @@ query app_component($slug: String!) {
             }
           }
         }
-        children {
+        dependents {
           edges {
             node {
               id
-              ... on AppEndpoint {
-                name { value }
-                dependents {
-                  edges {
-                    node {
-                      id
-                      source {
-                        node {
-                          id
-                          ... on AppComponent {
-                            parent {
-                              node {
-                                id
-                                ... on AppApplication {
-                                  name { value }
-                                }
-                              }
-                            }
-                          }
+              source {
+                node {
+                  id
+                  ... on AppComponent {
+                    parent {
+                      node {
+                        id
+                        ... on AppApplication {
+                          name { value }
                         }
                       }
                     }

@@ -1,6 +1,6 @@
 ---
-# Who calls whom inside payment-edge, and on which port. The ports live only
-# here; the target endpoints are declared on the components in
+# Who calls whom inside payment-edge. Source and target are component fqdns;
+# without ports a dependency opens every port its target component lists in
 # 01_application.yml.
 apiVersion: infrahub.app/v1
 kind: Object
@@ -8,10 +8,8 @@ spec:
   kind: AppDependency
   data:
     - name: c012-payment-edge-payment-ui-to-payment-engine
-      source: c012-payment-edge-p-payment-ui
-      target: ["c012-payment-edge-p-payment-engine", "payment-engine-api"]
-      protocol: tcp
-      port_start: 8443
+      source: ui.payment-edge.c012.demo.local
+      target: engine.payment-edge.c012.demo.local
       access_status: auto
       description: "Payment UI calls the payment engine API"
       member_of_groups:

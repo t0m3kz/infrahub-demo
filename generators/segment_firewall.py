@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Callable
 
+from utils.ports import PortSpec
+
 from .helpers.rules import RulesPlanner
 from .named_objects import GetOrCreateByNameMixin
 from .protocols import SecurityPolicy, SecurityPolicyRule, SecuritySecurityProfile, SecurityTagRule, SecurityZone
@@ -22,9 +24,8 @@ RULE_DEFAULT_VALIDITY_DAYS = 180
 class SegmentFirewallMixin(GetOrCreateByNameMixin, RuleLifecycleMixin):
     """On-prem segment-to-segment dependency rules — the SecurityPolicy/
     SecurityPolicyRule path dispatched from _reconcile_application_rules for
-    every AppDependency edge that isn't cloud-side (CloudSecurityRuleMixin),
-    external (ZtnaMixin's egress path) or private_access (ZtnaMixin's publish
-    path). Also owns macro-zone/threat-profile lookups and the SecurityTagRule
+    every AppDependency edge that isn't cloud-side (CloudSecurityRuleMixin)
+    or external (target_fqdn, ZtnaMixin's egress path). Also owns macro-zone/threat-profile lookups and the SecurityTagRule
     micro-segmentation mirror. The return leg of a rule is not a rule of its
     own: the destination segment's leaf ACL builds it from inbound_rules
     (transforms/helpers/acl.py).
@@ -48,8 +49,9 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin, RuleLifecycleMixin):
         dst_seg: dict[str, Any],
         planner: RulesPlanner,
         segment_policies: dict[str, Any],
+        port: PortSpec,
     ) -> tuple[bool, bool]:
-        """On-prem segment-to-segment dependency rule for one edge.
+        """On-prem segment-to-segment dependency rule for one edge and port.
 
         Returns (created, skipped) for the caller to fold into its running
         counters — a missing network_segment contributes to neither (matches
@@ -76,18 +78,8 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin, RuleLifecycleMixin):
             segment_policies[src_seg_id] = policy
 
         policy_id = policy.id
-        rule_name = planner.rule_name(app_name, src_comp, dst_comp, dep)
-
-        port_info = RulesPlanner.resolve_port(dep)
-        if port_info is None:
-            self.logger.warning(
-                "  Dependency '%s' (%s -> %s) has no protocol/port - skipping rule creation",
-                dep.get("name", dep.get("id", "?")),
-                src_comp.get("name", "?"),
-                dst_comp.get("name", "?"),
-            )
-            return False, True
-        protocol, port_start, port_end = port_info
+        rule_name = planner.rule_name(app_name, src_comp, dst_comp, dep, port)
+        protocol, port_start, port_end = port
 
         src_zone, dst_zone, cross_zone = planner.zone_context(src_seg=src_seg, dst_seg=dst_seg, dep=dep)
         if src_zone is None or dst_zone is None:

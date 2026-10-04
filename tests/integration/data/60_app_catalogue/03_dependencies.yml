@@ -1,6 +1,7 @@
 ---
 # Engineering is granted the private frontend through an access profile; the
-# grant is a dependency whose source is the profile.
+# grant is a dependency whose source is the profile and whose target is the
+# frontend component.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -20,27 +21,27 @@ spec:
 ---
 # Frontend calls the payment-gateway external service — the generator should
 # turn this into a ProxyPolicy/ProxyPolicyRule through IT001's egress service,
-# not a firewall rule (target is an external endpoint).
+# not a firewall rule (target_fqdn is not a component, so its ports are listed
+# here). Without ports, a component-targeted dependency opens every port of
+# its target. Source and target are component fqdns.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: AppDependency
   data:
     - name: it001-checkout-p-frontend-to-payment-gateway
-      source: it001-checkout-p-frontend
-      target: ["it001-checkout-p-frontend", "it001-payment-gateway-external"]
-      protocol: tcp
-      port_start: 443
+      source: frontend.internal.it001.demo.local
+      target_fqdn: api.paymentgw.example.com
+      ports:
+        - tcp/443
       access_status: auto
       description: "Checkout frontend calls the payment gateway"
       member_of_groups:
         - app_dependencies
 
     - name: it001-checkout-p-frontend-to-backend
-      source: it001-checkout-p-frontend
-      target: ["it001-checkout-p-backend", "it001-checkout-backend-internal"]
-      protocol: tcp
-      port_start: 8443
+      source: frontend.internal.it001.demo.local
+      target: backend.internal.it001.demo.local
       access_status: auto
       description: "Checkout frontend calls the internal backend API"
       member_of_groups:
@@ -48,9 +49,7 @@ spec:
 
     - name: it001-engineering-to-checkout-frontend-private
       source_profile: it001-engineering
-      target: ["it001-checkout-p-frontend", "it001-checkout-frontend-private"]
-      protocol: tcp
-      port_start: 443
+      target: frontend.internal.it001.demo.local
       access_status: approved
       description: "Engineering opens the checkout frontend through the ZTNA broker"
       member_of_groups:

@@ -85,9 +85,8 @@ ALL_DEMO_EXPECTED_OBJECTS: dict[str, int] = {
     "ManagedVlanSegment": 9,
     "AppApplication": 10,
     "AppComponent": 22,
-    # Ports live only on AppDependency: one per tier-to-tier call, plus the
-    # access-profile grant that publishes c001's checkout-web.
-    "AppEndpoint": 15,
+    # One per tier-to-tier call, plus the access-profile grant that
+    # publishes c001's checkout frontend; ports live on the components.
     "AppDependency": 14,
     "SecurityAccessProfile": 1,
     "DcimVirtualDevice": 34,

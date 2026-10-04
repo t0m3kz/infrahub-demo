@@ -23,11 +23,6 @@ def _seg_cidr(seg: dict) -> str | None:
     return RulesPlanner.seg_cidr(seg)
 
 
-def _resolve_port(dep: dict) -> tuple[str, int | None, int | None] | None:
-    """Return (protocol, port_start, port_end) from an AppDependency node."""
-    return RulesPlanner.resolve_port(dep)
-
-
 class AppApplicationGenerator(
     CloudSecurityRuleMixin,
     ZtnaMixin,
@@ -40,8 +35,8 @@ class AppApplicationGenerator(
 
     Orchestration only — domain logic lives in the mixins above, one per
     dependency-edge shape: CloudSecurityRuleMixin (either side is a
-    CloudNetworkSegment), ZtnaMixin (external_service egress and
-    private_access publishing for access-profile grants),
+    CloudNetworkSegment), ZtnaMixin (target_fqdn egress and private-access
+    publishing for access-profile grants),
     SegmentFirewallMixin (on-prem segment-to-segment SecurityPolicyRule, plus
     zone/tag handling).
     """
@@ -75,17 +70,17 @@ class AppApplicationGenerator(
         if deps:
             dep = deps[0]
             src_comp = dep.get("source") or {}
-            dst_endpoint = dep.get("target") or {}
-            if not dst_endpoint:
-                self.logger.warning("Dependency missing target endpoint - skipping")
+            dst_comp = dep.get("target") or {}
+            if not dst_comp and not dep.get("target_fqdn"):
+                self.logger.warning("Dependency has neither a target component nor a target_fqdn - skipping")
                 return
             if not src_comp:
                 if not dep.get("source_profile"):
                     self.logger.warning("Dependency has neither a source component nor a source_profile - skipping")
                     return
                 # An access-profile grant: the application is the target's,
-                # and publishing reads the grant from the endpoint itself.
-                target_app = ((dst_endpoint.get("parent") or {}).get("parent") or {}).get("name", "")
+                # and publishing reads the grant from the component itself.
+                target_app = (dst_comp.get("parent") or {}).get("name", "")
                 if not target_app:
                     self.logger.warning("Dependency target has no parent application name - skipping")
                     return
@@ -118,13 +113,13 @@ class AppApplicationGenerator(
             if not app_name:
                 self.logger.warning(
                     "Component %s has no parent application name - skipping",
-                    component.get("slug", component.get("id", "?")),
+                    component.get("fqdn", component.get("id", "?")),
                 )
                 return
 
             self.logger.info(
                 "Component trigger '%s' -> full application rule reconciliation for %s",
-                component.get("slug", component.get("id", "?")),
+                component.get("fqdn", component.get("id", "?")),
                 app_name,
             )
             await self._run_for_application_name(str(app_name))
@@ -227,9 +222,9 @@ class AppApplicationGenerator(
         for warning in warnings:
             self.logger.warning(warning)
 
-        # Access-profile grants hang off the target endpoint, not a source
+        # Access-profile grants hang off the target component, not a source
         # component, so they are published whether or not the app has edges.
-        rules_created, rules_skipped = await self._reconcile_private_access_endpoints(app_name, components)
+        rules_created, rules_skipped = await self._reconcile_private_access_components(app_name, components)
 
         if not edges:
             self.logger.info("Application %s has no depends_on edges - no rules to generate", app_name)
@@ -240,33 +235,29 @@ class AppApplicationGenerator(
         segment_policies: dict[str, Any] = {}
         proxy_policies: dict[str, Any] = {}
 
-        for src_comp, dep, dst_endpoint in edges:
-            dst_comp = dst_endpoint.get("parent") or {}
-            if not dst_comp:
-                self.logger.warning(
-                    "Dependency '%s' target endpoint has no parent component - skipping",
-                    dep.get("name", dep.get("id", "?")),
-                )
+        for src_comp, dep, dst_comp in edges:
+            dep_ref = dep.get("name", dep.get("id", "?"))
+            if not dst_comp and not dep.get("target_fqdn"):
+                self.logger.warning("Dependency '%s' has no target - skipping", dep_ref)
                 rules_skipped += 1
                 continue
             authorized, auth_reason = planner.dependency_is_authorized(src_comp=src_comp, dst_comp=dst_comp, dep=dep)
             if not authorized:
                 self.logger.warning(
                     "  Dependency '%s' (%s -> %s) is not authorized: %s",
-                    dep.get("name", dep.get("id", "?")),
+                    dep_ref,
                     src_comp.get("name", "?"),
-                    dst_comp.get("name", "?"),
+                    dst_comp.get("name") or dep.get("target_fqdn") or "?",
                     auth_reason or "missing approval",
                 )
                 rules_skipped += 1
                 continue
 
-            if dst_endpoint.get("endpoint_type") == "external_service":
+            if dep.get("target_fqdn"):
                 if await self._reconcile_proxy_rule(
                     app_name=app_name,
                     src_comp=src_comp,
                     dep=dep,
-                    dst_endpoint=dst_endpoint,
                     proxy_policies=proxy_policies,
                 ):
                     rules_created += 1
@@ -274,11 +265,20 @@ class AppApplicationGenerator(
                     rules_skipped += 1
                 continue
 
-            if dst_endpoint.get("endpoint_type") == "private_access":
-                # Published above via _reconcile_private_access_endpoints from
-                # the access-profile grants on the endpoint. A component that
-                # calls a private_access endpoint directly gets no separate
-                # firewall/proxy rule of its own here.
+            try:
+                ports = planner.resolve_ports(dep, dst_comp)
+            except ValueError as exc:
+                self.logger.warning("  Dependency '%s': %s - skipping rule creation", dep_ref, exc)
+                rules_skipped += 1
+                continue
+            if not ports:
+                self.logger.warning(
+                    "  Dependency '%s' (%s -> %s) has no ports and its target lists none - skipping rule creation",
+                    dep_ref,
+                    src_comp.get("name", "?"),
+                    dst_comp.get("name", "?"),
+                )
+                rules_skipped += 1
                 continue
 
             src_seg = src_comp.get("network_segment") or {}
@@ -291,36 +291,39 @@ class AppApplicationGenerator(
                 # nothing dispatched here at all, so an on-prem<->cloud
                 # dependency silently got an on-prem-shaped rule referencing
                 # a segment id that rule couldn't actually enforce against.
-                rule_name = planner.rule_name(app_name, src_comp, dst_comp, dep)
-                if await self._create_cloud_rule(
+                for port in ports:
+                    if await self._create_cloud_rule(
+                        app_name=app_name,
+                        src_comp=src_comp,
+                        dst_comp=dst_comp,
+                        dep=dep,
+                        rule_name=planner.rule_name(app_name, src_comp, dst_comp, dep, port),
+                        port=port,
+                    ):
+                        rules_created += 1
+                    else:
+                        rules_skipped += 1
+                continue
+
+            for port in ports:
+                created, skipped = await self._reconcile_segment_rule(
                     app_name=app_name,
+                    app_security_profile=app_security_profile,
                     src_comp=src_comp,
                     dst_comp=dst_comp,
                     dep=dep,
-                    rule_name=rule_name,
-                ):
-                    rules_created += 1
-                else:
-                    rules_skipped += 1
-                continue
-
-            created, skipped = await self._reconcile_segment_rule(
-                app_name=app_name,
-                app_security_profile=app_security_profile,
-                src_comp=src_comp,
-                dst_comp=dst_comp,
-                dep=dep,
-                src_seg=src_seg,
-                dst_seg=dst_seg,
-                planner=planner,
-                segment_policies=segment_policies,
-            )
-            rules_created += int(created)
-            rules_skipped += int(skipped)
+                    src_seg=src_seg,
+                    dst_seg=dst_seg,
+                    planner=planner,
+                    segment_policies=segment_policies,
+                    port=port,
+                )
+                rules_created += int(created)
+                rules_skipped += int(skipped)
 
         attached_seg_ids: set[str] = set()
-        for src_comp, _dep, dst_endpoint in edges:
-            for comp in (src_comp, dst_endpoint.get("parent") or {}):
+        for src_comp, _dep, dst_comp in edges:
+            for comp in (src_comp, dst_comp):
                 seg = comp.get("network_segment") or {}
                 seg_id = seg.get("id")
                 if not seg_id or seg_id not in segment_policies or seg_id in attached_seg_ids:
@@ -337,16 +340,15 @@ class AppApplicationGenerator(
 
     @staticmethod
     def _calling_application_ids(component: dict[str, Any]) -> list[str]:
-        """Ids of the other applications with a component calling one of this
-        component's endpoints. Access-profile grants have no calling
-        application; the component's own application is reconciled already."""
+        """Ids of the other applications with a component calling this one.
+        Access-profile grants have no calling application; the component's
+        own application is reconciled already."""
         own_app_id = (component.get("parent") or {}).get("id")
         callers: set[str] = set()
-        for endpoint in component.get("children") or []:
-            for dep in endpoint.get("dependents") or []:
-                caller_app_id = (((dep.get("source") or {}).get("parent")) or {}).get("id")
-                if caller_app_id and caller_app_id != own_app_id:
-                    callers.add(str(caller_app_id))
+        for dep in component.get("dependents") or []:
+            caller_app_id = (((dep.get("source") or {}).get("parent")) or {}).get("id")
+            if caller_app_id and caller_app_id != own_app_id:
+                callers.add(str(caller_app_id))
         return sorted(callers)
 
     @staticmethod
@@ -357,13 +359,13 @@ class AppApplicationGenerator(
         edges: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]] = []
         for dep in deps:
             src_comp = dep.get("source") or {}
-            dst_endpoint = dep.get("target") or {}
-            if not src_comp or not dst_endpoint:
+            dst_comp = dep.get("target") or {}
+            if not src_comp or not (dst_comp or dep.get("target_fqdn")):
                 continue
             src_app_name = str((src_comp.get("parent") or {}).get("name") or "")
             if src_app_name != app_name:
                 continue
-            edges.append((src_comp, dep, dst_endpoint))
+            edges.append((src_comp, dep, dst_comp))
         return edges
 
     @staticmethod
@@ -375,6 +377,6 @@ class AppApplicationGenerator(
         for component in components:
             for dependency in component.get("depends_on") or []:
                 target = dependency.get("target") or {}
-                if target:
+                if target or dependency.get("target_fqdn"):
                     edges.append((component, dependency, target))
         return edges

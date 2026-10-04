@@ -3,7 +3,7 @@
 # be found here; the rules are built from the application query
 # (application.gql), which reads every dependency through depends_on.
 #   - a component source reconciles the source component's application
-#   - an access-profile source reconciles the target endpoint's application
+#   - an access-profile source reconciles the target component's application
 query app_dependency($name: String!) {
   AppDependency(name__value: $name) {
     edges {
@@ -31,21 +31,15 @@ query app_dependency($name: String!) {
             name { value }
           }
         }
+        target_fqdn { value }
         target {
           node {
             id
-            ... on AppEndpoint {
-              name { value }
+            ... on AppComponent {
               parent {
                 node {
-                  ... on AppComponent {
-                    parent {
-                      node {
-                        ... on AppApplication {
-                          name { value }
-                        }
-                      }
-                    }
+                  ... on AppApplication {
+                    name { value }
                   }
                 }
               }

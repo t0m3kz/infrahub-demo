@@ -32,6 +32,7 @@ if TYPE_CHECKING:
         IntegerOptional,
         IPHost,
         IPHostOptional,
+        ListAttributeOptional,
         String,
         StringOptional,
         URLOptional,
@@ -522,11 +523,14 @@ class TopologyCommonExchange(CoreNode):
 
 class AppComponent(AppGeneric):
     component_type: Dropdown
+    fqdn: String
+    load_balanced: BooleanOptional
     name: String
-    slug: StringOptional
+    ports: ListAttributeOptional
+    depends_on: RelationshipManager[AppDependency]
+    dependents: RelationshipManager[AppDependency]
     health_checks: RelationshipManager[LoadbalancerHealthCheck]
     instances: RelationshipManager[AppInstance]
-    load_balancer: RelationshipAttribute[ManagedLoadbalancerHA]
     network_segment: RelationshipAttribute[ManagedNetworkSegment]
 
 
@@ -655,9 +659,8 @@ class AppDependency(CoreNode):
     decision_reason: StringOptional
     description: StringOptional
     name: String
-    port_end: IntegerOptional
-    port_start: IntegerOptional
-    protocol: DropdownOptional
+    ports: ListAttributeOptional
+    target_fqdn: StringOptional
     source: RelationshipAttribute[AppComponent]
     source_profile: RelationshipAttribute[CoreNode]
     target: RelationshipAttribute[AppComponent]
@@ -1030,6 +1033,7 @@ class ProxyPolicyRule(CoreNode):
     disabled: Boolean
     log: Boolean
     name: String
+    ports: ListAttributeOptional
     priority: Integer
     categories: RelationshipManager[ProxyURLCategory]
     policy: RelationshipAttribute[ProxyPolicy]

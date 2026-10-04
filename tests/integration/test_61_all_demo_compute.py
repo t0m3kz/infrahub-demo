@@ -299,7 +299,7 @@ class TestAllDemoCompute(TestInfrahubDockerWithClient):
             cloud_native = app_name in ALL_DEMO_CLOUD_APPLICATIONS
 
             for component in app["components"]:
-                label = f"{app_name}/{component['slug'] or '<unnamed>'}"
+                label = f"{app_name}/{component['fqdn'] or '<unnamed>'}"
                 if not component["component_type"]:
                     errors.append(f"{label}: no component_type")
                 if not component["segment"]:

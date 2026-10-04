@@ -252,6 +252,12 @@ nodes:
         description: "FQDN, CIDR, or regex value — leave empty when destination_type is 'category'"
         optional: true
         order_weight: 500
+      - name: ports
+        kind: List
+        label: Ports
+        description: "Destination ports as protocol/port or protocol/start-end (tcp/443); empty matches any port"
+        optional: true
+        order_weight: 550
       - name: log
         kind: Boolean
         label: Log

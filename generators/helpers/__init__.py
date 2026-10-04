@@ -10,6 +10,8 @@ This module provides reusable utilities for generator implementations:
 """
 
 # Re-export all public APIs for backward compatibility
+from utils.ports import PortProfileHelper
+
 from .cabling import (
     CableTypeDetector,
     CablingPlanError,
@@ -33,7 +35,6 @@ from .pools import (
     calculate_fabric_asn_block_size,
     name_to_asn_range,
 )
-from .ports import PortProfileHelper
 from .routing import PendingASRef, RoutingPlan, RoutingPlanInput, RoutingPlanner, RoutingStrategy
 from .rules import RulePlanningHelper, RulesPlanner
 from .template_interfaces import template_interface_names_by_role

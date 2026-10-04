@@ -26,6 +26,7 @@ spec:
         kind: AppComponent
         data:
           - name: web-frontend
+            fqdn: api.payment-core.c005.demo.local
             component_type: frontend
             network_segment: c005-web-frontend-local-dc10-p
             instances:
@@ -35,7 +36,10 @@ spec:
               - app_components
 
           - name: app-backend
+            fqdn: backend.payment-core.c005.demo.local
             component_type: backend
+            ports:
+              - tcp/8443
             network_segment: c005-app-backend-stretch-p
             instances:
               - c005-app-backend-dc10-1
@@ -44,7 +48,10 @@ spec:
               - app_components
 
           - name: order-db
+            fqdn: orders-db.payment-core.c005.demo.local
             component_type: database
+            ports:
+              - tcp/5432
             network_segment: c005-database-local-dc12-p
             instances:
               - c005-order-db-dc12-1
@@ -53,7 +60,10 @@ spec:
               - app_components
 
           - name: event-bus
+            fqdn: events.payment-core.c005.demo.local
             component_type: message_queue
+            ports:
+              - tcp/5672
             network_segment: c005-message-queue-stretch-p
             instances:
               - c005-event-bus-dc10-1

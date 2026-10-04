@@ -6,6 +6,9 @@
 # ktw-pod1-server-2/bond0 = web, ktw-pod2-server-2/bond0 = app,
 # ktw-pod3-server-5 = db, ktw-pod3-server-6 = cache,
 # ktw-pod1-server-2/bond1 = message-queue).
+#
+# Each component is addressed by its fqdn (also its HFID) and lists the ports
+# it listens on; the dependencies in 02_dependencies.yml open them.
 
 apiVersion: infrahub.app/v1
 kind: Object
@@ -25,71 +28,54 @@ spec:
         kind: AppComponent
         data:
           - name: web-frontend
+            fqdn: web.custody-ledger.c003.demo.local
             component_type: frontend
             network_segment: c003-web-frontend-p
             instances:
               - ktw-pod1-server-2
-            children:
-              kind: AppEndpoint
-              data:
-                - name: c003-ledger-web-https
-                  endpoint_type: internal_service
-                  fqdn: web.custody-ledger.c003.demo.local
             member_of_groups:
               - app_components
 
           - name: app-backend
+            fqdn: backend.custody-ledger.c003.demo.local
             component_type: backend
+            ports:
+              - tcp/8443
             network_segment: c003-app-backend-p
             instances:
               - ktw-pod2-server-2
-            children:
-              kind: AppEndpoint
-              data:
-                - name: c003-ledger-backend-https
-                  endpoint_type: internal_service
-                  fqdn: backend.custody-ledger.c003.demo.local
             member_of_groups:
               - app_components
 
           - name: order-db
+            fqdn: db.custody-ledger.c003.demo.local
             component_type: database
+            ports:
+              - tcp/5432
             network_segment: c003-database-p
             instances:
               - ktw-pod3-server-5
-            children:
-              kind: AppEndpoint
-              data:
-                - name: c003-ledger-db-postgres
-                  endpoint_type: internal_service
-                  fqdn: db.custody-ledger.c003.demo.local
             member_of_groups:
               - app_components
 
           - name: session-cache
+            fqdn: cache.custody-ledger.c003.demo.local
             component_type: cache
+            ports:
+              - tcp/6379
             network_segment: c003-cache-p
             instances:
               - ktw-pod3-server-6
-            children:
-              kind: AppEndpoint
-              data:
-                - name: c003-ledger-cache
-                  endpoint_type: internal_service
-                  fqdn: cache.custody-ledger.c003.demo.local
             member_of_groups:
               - app_components
 
           - name: ledger-queue
+            fqdn: queue.custody-ledger.c003.demo.local
             component_type: message_queue
+            ports:
+              - tcp/5672
             network_segment: c003-message-queue-p
             instances:
               - ktw-pod1-server-2
-            children:
-              kind: AppEndpoint
-              data:
-                - name: c003-ledger-queue
-                  endpoint_type: internal_service
-                  fqdn: queue.custody-ledger.c003.demo.local
             member_of_groups:
               - app_components

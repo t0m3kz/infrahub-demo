@@ -1,26 +1,16 @@
 ---
-# Who calls whom inside dispatch-hub, and on which ports. The ports live only
-# on these dependencies; 00_applications.yml declares the endpoints.
+# Who calls whom inside dispatch-hub. Source and target are component fqdns;
+# without ports a dependency opens every port its target component lists in
+# 00_applications.yml.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: AppDependency
   data:
     - name: c002-dispatch-hub-p-app-backend-to-order-db
-      source: c002-dispatch-hub-p-app-backend
-      target: ["c002-dispatch-hub-p-order-db", "c002-dispatch-data"]
-      protocol: tcp
-      port_start: 5432
+      source: backend.dispatch-hub.c002.demo.local
+      target: data.dispatch-hub.c002.demo.local
       access_status: auto
-      description: "Backend reads and writes dispatch orders"
-      member_of_groups:
-        - app_dependencies
-    - name: c002-dispatch-hub-p-app-backend-to-order-db-tcp-6379
-      source: c002-dispatch-hub-p-app-backend
-      target: ["c002-dispatch-hub-p-order-db", "c002-dispatch-data"]
-      protocol: tcp
-      port_start: 6379
-      access_status: auto
-      description: "Backend caches dispatch state next to the database"
+      description: "Backend reads and writes dispatch orders and caches dispatch state next to the database"
       member_of_groups:
         - app_dependencies

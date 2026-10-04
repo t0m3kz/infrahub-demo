@@ -35,6 +35,14 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: proxy_cloud_config
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/config/proxy_cloud.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: loadbalancer_cloud
     tests:
       - name: syntax_check
@@ -196,6 +204,22 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: app_dependency
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/app_dependency.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: app_component
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/app_component.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: vxlan_segment_data
     tests:
       - name: syntax_check
@@ -258,6 +282,14 @@ infrahub_tests:
       - name: syntax_check
         spec:
           path: queries/validation/capability_guard.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: app_dependency_validation
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/app_dependency.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery

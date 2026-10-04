@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from utils.ports import PortProfileHelper, PortSpec
+
 
 class RulePlanningHelper:
     """Generic helpers for deterministic rule naming and descriptions."""
@@ -100,27 +102,9 @@ class RulesPlanner(RulePlanningHelper):
         return (gateway.get("ip_prefix") or {}).get("prefix")
 
     @staticmethod
-    def resolve_port(dep: dict[str, Any]) -> tuple[str, int | None, int | None] | None:
-        """Return (protocol, port_start, port_end) for one AppDependency dict."""
-        from .ports import PortProfileHelper
-
-        return PortProfileHelper.resolve_dependency_rule_port(dep)
-
-    @staticmethod
-    def collect_dependency_edges(components: list[dict[str, Any]]) -> tuple[list[tuple[dict, dict, dict]], list[str]]:
-        """Collect dependency edges and validation warnings."""
-        edges: list[tuple[dict, dict, dict]] = []
-        warnings: list[str] = []
-
-        for comp in components:
-            for dep in comp.get("depends_on", []):
-                target = dep.get("target") or {}
-                if not target:
-                    warnings.append(f"AppDependency '{dep.get('name', dep.get('id', '?'))}' has no target - skipping")
-                    continue
-                edges.append((comp, dep, target))
-
-        return edges, warnings
+    def resolve_ports(dep: dict[str, Any], target: dict[str, Any] | None = None) -> list[PortSpec]:
+        """Ports one AppDependency opens; raises ValueError on a malformed port."""
+        return PortProfileHelper.resolve_dependency_ports(dep, target)
 
     @staticmethod
     def is_cloud_dependency(src_seg: dict[str, Any], dst_seg: dict[str, Any]) -> bool:
@@ -130,20 +114,30 @@ class RulesPlanner(RulePlanningHelper):
         )
 
     @staticmethod
-    def rule_name(app_name: str, src: dict[str, Any], dst: dict[str, Any], dep: dict[str, Any] | None = None) -> str:
-        """One rule per dependency, named after it.
+    def rule_name(
+        app_name: str,
+        src: dict[str, Any],
+        dst: dict[str, Any],
+        dep: dict[str, Any] | None = None,
+        port: PortSpec | None = None,
+    ) -> str:
+        """One rule per dependency and port, named after the dependency.
 
-        Naming the rule after its two components collapsed two dependencies
-        between the same pair (e.g. tcp/6379 and udp/30000-30010) into one
-        rule, and the second was skipped as already existing. The component
-        pair is the fallback for a dependency without a name.
+        A firewall rule holds one protocol and port range, so a dependency
+        on tcp/6379 and udp/30000-30010 becomes two rules; the port suffix
+        keeps the second from being skipped as already existing. The
+        component pair is the fallback for a dependency without a name.
         """
         dep_name = str((dep or {}).get("name") or "").strip()
         if dep_name:
-            return RulePlanningHelper.normalize_name_part(dep_name, "dependency")
-        src_label = src.get("label") or src.get("slug") or src.get("name", "src")
-        dst_label = dst.get("label") or dst.get("slug") or dst.get("name", "dst")
-        return RulePlanningHelper.flow_rule_name(app_name, src_label, dst_label)
+            base = RulePlanningHelper.normalize_name_part(dep_name, "dependency")
+        else:
+            src_label = src.get("label") or src.get("fqdn") or src.get("name", "src")
+            dst_label = dst.get("label") or dst.get("fqdn") or dst.get("name", "dst")
+            base = RulePlanningHelper.flow_rule_name(app_name, src_label, dst_label)
+        if port is None:
+            return base
+        return f"{base}-{PortProfileHelper.format_port_spec(port).replace('/', '-')}"
 
     @staticmethod
     def rule_description(dep: dict[str, Any], src_comp: dict[str, Any], dst_comp: dict[str, Any]) -> str:
@@ -151,8 +145,8 @@ class RulesPlanner(RulePlanningHelper):
             explicit_description=dep.get("description"),
             src_name=src_comp.get("name"),
             src_type=src_comp.get("component_type", "backend"),
-            dst_name=dst_comp.get("name"),
-            dst_type=dst_comp.get("component_type", "backend"),
+            dst_name=dst_comp.get("name") or dep.get("target_fqdn"),
+            dst_type=dst_comp.get("component_type") or ("external" if dep.get("target_fqdn") else "backend"),
         )
 
     @staticmethod

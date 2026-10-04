@@ -18,6 +18,7 @@ spec:
         kind: AppComponent
         data:
           - name: scoring-api
+            fqdn: scoring.fraud-detection.c013.demo.local
             component_type: backend
             network_segment: c013-nordix-prod-p
             instances:
@@ -27,16 +28,13 @@ spec:
               - app_components
 
           - name: feature-cache
+            fqdn: cache.fraud-detection.c013.demo.local
             component_type: cache
+            ports:
+              - tcp/6379
             network_segment: c013-nordix-prod-p
             instances:
               - c013-feature-cache-ams-1
               - c013-feature-cache-ams-2
-            children:
-              kind: AppEndpoint
-              data:
-                - name: feature-cache-redis
-                  endpoint_type: internal_service
-                  fqdn: cache.fraud-detection.c013.demo.local
             member_of_groups:
               - app_components

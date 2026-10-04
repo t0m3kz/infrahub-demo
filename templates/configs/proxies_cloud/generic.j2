@@ -14,6 +14,9 @@
       "action": {{ ('allow' if rule.action in ('allow', 'bypass') else 'block') | tojson }},
       "url_categories": {{ (rule.destinations if rule.destination_type == 'category' else []) | tojson }},
       "destinations": {{ (rule.destinations if rule.destination_type != 'category' else []) | tojson }},
+{%- if rule.ports %}
+      "destination_ports": {{ rule.ports | tojson }},
+{%- endif %}
       "description": {{ (rule.description or '') | tojson }}
     }{{ "," if not loop.last }}
 {%- endfor %}

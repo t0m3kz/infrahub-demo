@@ -1,43 +1,36 @@
 ---
-# Who calls whom inside custody-ledger, and on which ports. The ports live only
-# on these dependencies; 00_applications.yml declares the endpoints.
+# Who calls whom inside custody-ledger. Source and target are component fqdns;
+# without ports a dependency opens every port its target component lists in
+# 00_applications.yml.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: AppDependency
   data:
     - name: c003-custody-ledger-p-web-frontend-to-app-backend
-      source: c003-custody-ledger-p-web-frontend
-      target: ["c003-custody-ledger-p-app-backend", "c003-ledger-backend-https"]
-      protocol: tcp
-      port_start: 8443
+      source: web.custody-ledger.c003.demo.local
+      target: backend.custody-ledger.c003.demo.local
       access_status: auto
       description: "Ledger web calls the backend API"
       member_of_groups:
         - app_dependencies
     - name: c003-custody-ledger-p-app-backend-to-order-db
-      source: c003-custody-ledger-p-app-backend
-      target: ["c003-custody-ledger-p-order-db", "c003-ledger-db-postgres"]
-      protocol: tcp
-      port_start: 5432
+      source: backend.custody-ledger.c003.demo.local
+      target: db.custody-ledger.c003.demo.local
       access_status: auto
       description: "Backend writes ledger entries"
       member_of_groups:
         - app_dependencies
     - name: c003-custody-ledger-p-app-backend-to-session-cache
-      source: c003-custody-ledger-p-app-backend
-      target: ["c003-custody-ledger-p-session-cache", "c003-ledger-cache"]
-      protocol: tcp
-      port_start: 6379
+      source: backend.custody-ledger.c003.demo.local
+      target: cache.custody-ledger.c003.demo.local
       access_status: auto
       description: "Backend keeps sessions in the cache"
       member_of_groups:
         - app_dependencies
     - name: c003-custody-ledger-p-app-backend-to-ledger-queue
-      source: c003-custody-ledger-p-app-backend
-      target: ["c003-custody-ledger-p-ledger-queue", "c003-ledger-queue"]
-      protocol: tcp
-      port_start: 5672
+      source: backend.custody-ledger.c003.demo.local
+      target: queue.custody-ledger.c003.demo.local
       access_status: auto
       description: "Backend publishes ledger events on AMQP"
       member_of_groups:

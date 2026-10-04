@@ -468,7 +468,7 @@ nodes:
             color: "#2ECC71"
           - name: private_access
             label: "Private Access (ZTNA)"
-            description: "Inbound app publishing via AppComponent.published_via_ztna"
+            description: "Inbound app publishing for AppComponents granted to an access profile"
             color: "#E74C3C"
       - name: region
         kind: Text

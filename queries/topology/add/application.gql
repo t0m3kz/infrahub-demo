@@ -9,16 +9,10 @@ fragment SegmentSecurityFields on ManagedNetworkSegment {
 fragment AppComponentSecurityFields on AppComponent {
   id
   name { value }
-  slug { value }
+  fqdn { value }
+  ports { value }
+  load_balanced { value }
   component_type { value }
-  load_balancer {
-    node {
-      id
-      ... on ManagedLoadbalancerHA {
-        name { value }
-      }
-    }
-  }
   instances {
     edges {
       node {
@@ -40,31 +34,17 @@ fragment AppComponentSecurityFields on AppComponent {
       }
     }
   }
-  children {
+  dependents {
     edges {
       node {
         id
-        ... on AppEndpoint {
-          name { value }
-          endpoint_type { value }
-          fqdn { value }
-          dependents {
-            edges {
-              node {
-                id
-                name { value }
-                protocol { value }
-                port_start { value }
-                port_end { value }
-                access_status { value }
-                source_profile {
-                  node {
-                    id
-                    name { value }
-                  }
-                }
-              }
-            }
+        name { value }
+        ports { value }
+        access_status { value }
+        source_profile {
+          node {
+            id
+            name { value }
           }
         }
       }
@@ -75,9 +55,8 @@ fragment AppComponentSecurityFields on AppComponent {
       node {
         id
         name { value }
-        protocol { value }
-        port_start { value }
-        port_end { value }
+        ports { value }
+        target_fqdn { value }
         description { value }
         access_status { value }
         decision_reason { value }
@@ -85,37 +64,29 @@ fragment AppComponentSecurityFields on AppComponent {
         target {
           node {
             id
-            ... on AppEndpoint {
+            ... on AppComponent {
               name { value }
-              endpoint_type { value }
               fqdn { value }
+              ports { value }
+              component_type { value }
+              network_segment {
+                node {
+                  id
+                  name { value }
+                  ...SegmentSecurityFields
+                }
+              }
               parent {
                 node {
-                  ... on AppComponent {
+                  ... on AppApplication {
                     id
                     name { value }
-                    component_type { value }
-                    network_segment {
+                    environment { value }
+                    owner {
                       node {
                         id
+                        org_id { value }
                         name { value }
-                        ...SegmentSecurityFields
-                      }
-                    }
-                    parent {
-                      node {
-                        ... on AppApplication {
-                          id
-                          name { value }
-                          environment { value }
-                          owner {
-                            node {
-                              id
-                              org_id { value }
-                              name { value }
-                            }
-                          }
-                        }
                       }
                     }
                   }

@@ -42,7 +42,7 @@ spec:
       description: Re-derive an application's security policy rules when one of its dependencies changes
       generator: add_app_dependency
     - name: run-app-component-generator
-      description: Re-derive the security policy rules into a component that moved to another segment
+      description: Re-derive the security policy rules into a component that moved segment or changed ports
       generator: add_app_component
     - name: run-endpoint-generator
       description: Run Endpoint Connectivity Generator

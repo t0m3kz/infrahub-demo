@@ -8,8 +8,8 @@ enforcement paths the catalogue is for:
      payment-gateway dependency through the customer egress proxy.
   2. Enforce the predeclared C005 payment-core web-to-backend dependency
      through a firewall policy between its provisioned VXLAN segments.
-  3. Publish C001's checkout-web through the ZTNA broker, because an access
-     profile is the source of a dependency into it.
+  3. Publish C001's checkout frontend through the ZTNA broker, because an
+     access profile is the source of a dependency into it.
   4. Find, for every other AppDependency on the branch, the rule the
      triggers generated for it.
 
@@ -27,6 +27,8 @@ from typing import Any
 import pytest
 from infrahub_sdk import InfrahubClient
 
+from utils.ports import PortProfileHelper
+
 from .conftest import TestInfrahubDockerWithClient
 from .test_constants import ALL_DEMO_BRANCH
 from .workflow_helpers import run_generator, wait_for_tasks_completion
@@ -41,32 +43,25 @@ BROKER_NAME = "c001-private-access"
 PROXY_POLICY_NAME = "proxy-C001-c001-web-gateway-egress"
 SEGMENT_POLICY_NAME = "seg-c005-web-frontend-local-dc10-p-egress"
 PRIVATE_ACCESS_POLICY_NAME = "proxy-C001-c001-private-access-private-access"
-PRIVATE_ACCESS_RULE_NAME = "publish-c001-checkout-p-frontend-checkout-web"
+PRIVATE_ACCESS_RULE_NAME = "publish-checkout.internal.c001.demo.local"
 DEPENDENCY_RULES_QUERY = """
 query {
   AppDependency {
     edges {
       node {
         name { value }
-        protocol { value }
-        port_start { value }
+        ports { value }
+        target_fqdn { value }
         source_profile { node { id } }
-        target {
-          node {
-            ... on AppEndpoint {
-              name { value }
-              endpoint_type { value }
-              fqdn { value }
-              parent { node { ... on AppComponent { slug { value } } } }
-            }
-          }
-        }
+        target { node { ... on AppComponent { fqdn { value } ports { value } } } }
       }
     }
   }
-  SecurityPolicyRule { edges { node { name { value } protocol { value } port_start { value } } } }
-  CloudSecurityGroupRule { edges { node { name { value } protocol { value } port_start { value } } } }
-  ProxyPolicyRule { edges { node { name { value } destination { value } } } }
+  SecurityPolicyRule { edges { node { name { value } protocol { value } port_start { value } port_end { value } } } }
+  CloudSecurityGroupRule {
+    edges { node { name { value } protocol { value } port_start { value } port_end { value } } }
+  }
+  ProxyPolicyRule { edges { node { name { value } destination { value } ports { value } } } }
 }
 """
 
@@ -177,7 +172,7 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify the external endpoint dependency produced a ProxyPolicy/ProxyPolicyRule."""
+        """Verify the target_fqdn dependency produced a ProxyPolicy/ProxyPolicyRule with its ports."""
         logging.info("=== %s - Step 4: Verify Proxy Policy Rule ===", SCENARIO_NAME)
 
         client = async_client_main
@@ -197,8 +192,10 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
 
         action_value = getattr(getattr(matching_rule, "action", None), "value", None)
         assert action_value == "allow", f"Expected action 'allow' for the payment-gateway rule, got '{action_value}'"
+        ports_value = getattr(getattr(matching_rule, "ports", None), "value", None)
+        assert ports_value == ["tcp/443"], f"Expected ports ['tcp/443'] on the payment-gateway rule, got {ports_value}"
 
-        logging.info("ProxyPolicyRule correctly generated for the external endpoint dependency")
+        logging.info("ProxyPolicyRule correctly generated for the target_fqdn dependency")
 
     @pytest.mark.order(405)
     @pytest.mark.dependency(
@@ -210,7 +207,7 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify the internal endpoint dependency produced a firewall rule."""
+        """Verify the component-to-component dependency produced a firewall rule."""
         logging.info("=== %s - Step 5: Verify Firewall Policy Rule ===", SCENARIO_NAME)
 
         client = async_client_main
@@ -230,7 +227,7 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
                 matching_rules.append(rule)
 
         assert matching_rules, "Expected a TCP/8443 firewall rule for frontend-to-backend dependency"
-        logging.info("SecurityPolicyRule correctly generated for the internal_service dependency")
+        logging.info("SecurityPolicyRule correctly generated for the component dependency")
 
     @pytest.mark.order(406)
     @pytest.mark.dependency(
@@ -242,14 +239,14 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify the access-profile dependency published checkout-web through the broker."""
+        """Verify the access-profile dependency published the checkout frontend through the broker."""
         logging.info("=== %s - Step 6: Verify Private Access Publish Rule ===", SCENARIO_NAME)
 
         client = async_client_main
         client.default_branch = scenario_branch
 
         policy = await client.get(kind="ProxyPolicy", name__value=PRIVATE_ACCESS_POLICY_NAME)
-        assert policy, f"ProxyPolicy '{PRIVATE_ACCESS_POLICY_NAME}' not found — checkout-web was not published"
+        assert policy, f"ProxyPolicy '{PRIVATE_ACCESS_POLICY_NAME}' not found — checkout frontend was not published"
 
         rules = await client.filters(kind="ProxyPolicyRule", policy__ids=[policy.id])
         by_name = {getattr(getattr(r, "name", None), "value", None): r for r in rules}
@@ -260,7 +257,7 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
         description = getattr(getattr(rule, "description", None), "value", None) or ""
         assert "c001-private-access-standard" in description, f"Grant profile missing from '{description}'"
 
-        logging.info("checkout-web published via '%s'", PRIVATE_ACCESS_POLICY_NAME)
+        logging.info("checkout frontend published via '%s'", PRIVATE_ACCESS_POLICY_NAME)
 
     @pytest.mark.order(407)
     @pytest.mark.dependency(
@@ -272,13 +269,15 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Every AppDependency on the branch produced the rule named after it.
+        """Every AppDependency on the branch produced the rules named after it.
 
         Steps 4-6 pin three hand-run paths. This one covers the rest, which only
         the AppApplication and AppDependency triggers reconcile, so a dependency
         loaded after its application still ends up enforced. A grant publishes
-        its endpoint (publish-{component}-{endpoint}); every other dependency
-        gets one firewall, security-group or proxy rule named after itself.
+        its target component (publish-{fqdn}); a target_fqdn dependency gets one
+        proxy rule named after itself carrying its ports; every other dependency
+        gets one firewall or security-group rule per port it opens, named
+        {dependency}-{protocol}-{port}.
         """
         logging.info("=== %s - Step 7: Every Dependency Has Its Rule ===", SCENARIO_NAME)
 
@@ -291,31 +290,36 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
             return (node.get(attribute) or {}).get("value")
 
         port_rules = {
-            value(rule, "name"): (value(rule, "protocol"), value(rule, "port_start"))
+            value(rule, "name"): (value(rule, "protocol"), value(rule, "port_start"), value(rule, "port_end"))
             for kind in ("SecurityPolicyRule", "CloudSecurityGroupRule")
             for rule in edges(kind)
         }
-        proxy_rules = {value(rule, "name"): value(rule, "destination") for rule in edges("ProxyPolicyRule")}
+        proxy_rules = {
+            value(rule, "name"): (value(rule, "destination"), value(rule, "ports") or [])
+            for rule in edges("ProxyPolicyRule")
+        }
 
         dependencies = edges("AppDependency")
         assert dependencies, "No AppDependency on the branch"
         missing: list[str] = []
         for dep in dependencies:
             name = value(dep, "name")
-            endpoint = dep["target"]["node"]
-            endpoint_type = value(endpoint, "endpoint_type")
+            target = (dep.get("target") or {}).get("node") or {}
+            dep_ports = {"ports": value(dep, "ports")}
             if (dep.get("source_profile") or {}).get("node"):
-                component = value(endpoint["parent"]["node"], "slug")
-                rule_name = f"publish-{component}-{value(endpoint, 'name')}"
-                if proxy_rules.get(rule_name) != value(endpoint, "fqdn"):
+                fqdn = value(target, "fqdn")
+                rule_name = f"publish-{fqdn}"
+                if (proxy_rules.get(rule_name) or (None,))[0] != fqdn:
                     missing.append(f"{name}: publish rule {rule_name}")
-            elif endpoint_type == "external_service":
-                if proxy_rules.get(name) != value(endpoint, "fqdn"):
-                    missing.append(f"{name}: proxy rule to {value(endpoint, 'fqdn')}")
-            elif port_rules.get(name) != (value(dep, "protocol"), value(dep, "port_start")):
-                missing.append(
-                    f"{name}: {value(dep, 'protocol')}/{value(dep, 'port_start')} rule, got {port_rules.get(name)}"
-                )
+            elif value(dep, "target_fqdn"):
+                expected = (value(dep, "target_fqdn"), value(dep, "ports"))
+                if proxy_rules.get(name) != expected:
+                    missing.append(f"{name}: proxy rule {expected}, got {proxy_rules.get(name)}")
+            else:
+                for port in PortProfileHelper.resolve_dependency_ports(dep_ports, {"ports": value(target, "ports")}):
+                    rule_name = f"{name}-{PortProfileHelper.format_port_spec(port).replace('/', '-')}"
+                    if port_rules.get(rule_name) != port:
+                        missing.append(f"{rule_name}: {port} rule, got {port_rules.get(rule_name)}")
 
         assert not missing, "Dependencies without their rule:\n  " + "\n  ".join(missing)
         logging.info("All %d dependencies have their rule", len(dependencies))

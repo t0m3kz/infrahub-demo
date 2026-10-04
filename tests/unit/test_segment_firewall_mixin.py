@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from generators.common import CommonGenerator
 from generators.helpers.rules import RulesPlanner
@@ -366,7 +366,9 @@ class TestMicrosegmentedRuleHasNoReturnRule:
     def _seg(seg_id: str) -> dict[str, Any]:
         return {"id": seg_id, "name": f"{seg_id}-name", "isolation_mode": "microsegmented"}
 
-    def _run(self, existing_rule: Any = None) -> tuple[Any, tuple[bool, bool]]:
+    def _run(
+        self, existing_rule: Any = None, port: tuple[str, int, int | None] = ("tcp", 8443, None)
+    ) -> tuple[Any, tuple[bool, bool]]:
         gen = _make_gen()
         policy = MagicMock()
         policy.id = "policy-src"
@@ -384,24 +386,24 @@ class TestMicrosegmentedRuleHasNoReturnRule:
                 app_security_profile="fintech_strict",
                 src_comp={"name": "frontend"},
                 dst_comp={"name": "backend"},
-                dep={"name": "frontend-to-backend", "protocol": "tcp", "port": 8443},
+                dep={"name": "frontend-to-backend", "ports": []},
                 src_seg=self._seg("seg-src"),
                 dst_seg=self._seg("seg-dst"),
                 planner=planner,
                 segment_policies={},
+                port=port,
             )
         )
         return gen, result
 
     def test_creates_only_the_forward_rule(self) -> None:
         """One permit, source -> destination, flagged for the switch."""
-        with patch.object(RulesPlanner, "resolve_port", return_value=("tcp", 8443, None)):
-            gen, result = self._run()
+        gen, result = self._run()
 
         assert result == (True, False)
         gen._create_or_update_policy_rule.assert_awaited_once()
         kwargs = gen._create_or_update_policy_rule.call_args.kwargs
-        assert not kwargs["rule_name"].endswith("-return")
+        assert kwargs["rule_name"] == "frontend-to-backend-tcp-8443"
         assert kwargs["rule_data"]["apply_on_switch"] is True
         assert kwargs["rule_data"]["source_segment"] == {"id": "seg-src"}
         assert kwargs["rule_data"]["destination_segment"] == {"id": "seg-dst"}
@@ -411,9 +413,83 @@ class TestMicrosegmentedRuleHasNoReturnRule:
         """Re-running over an existing rule only re-registers it."""
         existing = MagicMock()
         existing.save = AsyncMock()
-        with patch.object(RulesPlanner, "resolve_port", return_value=("tcp", 8443, None)):
-            gen, result = self._run(existing_rule=existing)
+        gen, result = self._run(existing_rule=existing)
 
         assert result == (False, True)
         existing.save.assert_awaited_once_with(allow_upsert=True)
         gen._create_or_update_policy_rule.assert_not_awaited()
+        gen._find_existing_policy_rule.assert_awaited_once_with(
+            policy_id="policy-src", rule_name="frontend-to-backend-tcp-8443"
+        )
+
+    def test_port_range_is_written_to_the_rule_and_its_name(self) -> None:
+        """The rule takes protocol and range from the port it is handed, suffixed onto its name."""
+        gen, result = self._run(port=("udp", 30000, 30010))
+
+        assert result == (True, False)
+        kwargs = gen._create_or_update_policy_rule.call_args.kwargs
+        assert kwargs["rule_name"] == "frontend-to-backend-udp-30000-30010"
+        rule_data = kwargs["rule_data"]
+        assert (rule_data["protocol"], rule_data["port_start"], rule_data["port_end"]) == ("udp", 30000, 30010)
+
+    def test_single_port_writes_no_port_end(self) -> None:
+        """A single port leaves port_end unset rather than writing None."""
+        gen, _ = self._run(port=("tcp", 6379, None))
+
+        rule_data = gen._create_or_update_policy_rule.call_args.kwargs["rule_data"]
+        assert rule_data["port_start"] == 6379
+        assert "port_end" not in rule_data
+
+
+class TestReconcileSegmentRuleEarlyExits:
+    """Paths that write no rule regardless of the port."""
+
+    def test_missing_segment_contributes_to_neither_counter(self) -> None:
+        """No network_segment on one side: warn, neither created nor skipped."""
+        gen = _make_gen()
+        gen._get_or_create_policy = AsyncMock()
+
+        result = asyncio.run(
+            gen._reconcile_segment_rule(
+                app_name="checkout",
+                app_security_profile="internal_standard",
+                src_comp={"name": "frontend"},
+                dst_comp={"name": "backend"},
+                dep={"name": "frontend-to-backend"},
+                src_seg={"id": "seg-src", "name": "seg-src"},
+                dst_seg={},
+                planner=RulesPlanner(),
+                segment_policies={},
+                port=("tcp", 8443, None),
+            )
+        )
+
+        assert result == (False, False)
+        gen._get_or_create_policy.assert_not_awaited()
+        gen.logger.warning.assert_called_once()
+
+    def test_policy_creation_failure_counts_as_skipped(self) -> None:
+        """The source segment's policy could not be found or made: skip the rule."""
+        gen = _make_gen()
+        gen._get_or_create_policy = AsyncMock(return_value=None)
+        gen._find_existing_policy_rule = AsyncMock()
+        segment_policies: dict[str, Any] = {}
+
+        result = asyncio.run(
+            gen._reconcile_segment_rule(
+                app_name="checkout",
+                app_security_profile="internal_standard",
+                src_comp={"name": "frontend"},
+                dst_comp={"name": "backend"},
+                dep={"name": "frontend-to-backend"},
+                src_seg={"id": "seg-src", "name": "seg-src"},
+                dst_seg={"id": "seg-dst", "name": "seg-dst"},
+                planner=RulesPlanner(),
+                segment_policies=segment_policies,
+                port=("tcp", 8443, None),
+            )
+        )
+
+        assert result == (False, True)
+        assert segment_policies == {}
+        gen._find_existing_policy_rule.assert_not_awaited()

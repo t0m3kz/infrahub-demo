@@ -18,6 +18,7 @@ spec:
         kind: AppComponent
         data:
           - name: payment-ui
+            fqdn: ui.payment-edge.c012.demo.local
             component_type: frontend
             network_segment: c012-nordix-prod-p
             instances:
@@ -27,16 +28,13 @@ spec:
               - app_components
 
           - name: payment-engine
+            fqdn: engine.payment-edge.c012.demo.local
             component_type: backend
+            ports:
+              - tcp/8443
             network_segment: c012-nordix-prod-p
             instances:
               - c012-payment-engine-va1-1
               - c012-payment-engine-va1-2
-            children:
-              kind: AppEndpoint
-              data:
-                - name: payment-engine-api
-                  endpoint_type: internal_service
-                  fqdn: engine.payment-edge.c012.demo.local
             member_of_groups:
               - app_components

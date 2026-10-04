@@ -1,7 +1,9 @@
 """Unit tests for RulesPlanner (generators/helpers/rules.py) — pure logic,
 no generator instance needed.
 
-Covers dependency authorization (owner approval, prod/non-prod separation),
+Covers rule naming (one rule per dependency and port), rule descriptions
+(including target_fqdn external targets), dependency authorization (owner
+approval, prod/non-prod separation),
 rule-payload building, zone context, and the security_profile-driven mappings
 (pick_zone_name, zone_seed).
 """
@@ -42,6 +44,80 @@ class TestRuleName:
         """Without a dependency name the rule keeps the app-src-to-dst name."""
         assert RulesPlanner.rule_name("app", self.SRC, self.DST, {}) == "app-backend-to-cache"
         assert RulesPlanner.rule_name("app", self.SRC, self.DST) == "app-backend-to-cache"
+
+    def test_unnamed_dependency_falls_back_to_component_fqdn(self) -> None:
+        """Without a label the component fqdn names the pair (fqdn replaced slug)."""
+        src = {"fqdn": "web.checkout.example", "name": "web"}
+        dst = {"fqdn": "api.checkout.example", "name": "api"}
+        assert RulesPlanner.rule_name("app", src, dst) == "app-web.checkout.example-to-api.checkout.example"
+
+    def test_unnamed_dependency_falls_back_to_component_name(self) -> None:
+        """Without label or fqdn the component name is used."""
+        assert RulesPlanner.rule_name("app", {"name": "web"}, {"name": "api"}) == "app-web-to-api"
+
+    @pytest.mark.parametrize(
+        ("port", "expected"),
+        [
+            (("tcp", 8443, None), "backend-to-cache-tcp-8443"),
+            (("udp", 30000, 30010), "backend-to-cache-udp-30000-30010"),
+        ],
+        ids=["single-port", "port-range"],
+    )
+    def test_port_is_suffixed_onto_the_dependency_name(self, port: tuple[str, int, int | None], expected: str) -> None:
+        """One rule per port: the port, slash and dash both as dashes, follows the dependency name."""
+        dep = {"name": "backend-to-cache"}
+        assert RulesPlanner.rule_name("app", self.SRC, self.DST, dep, port) == expected
+
+    def test_port_is_suffixed_onto_the_component_pair_fallback(self) -> None:
+        """An unnamed dependency still gets a per-port name."""
+        assert RulesPlanner.rule_name("app", self.SRC, self.DST, None, ("tcp", 6379, None)) == (
+            "app-backend-to-cache-tcp-6379"
+        )
+
+    def test_each_port_of_one_dependency_gets_its_own_rule_name(self) -> None:
+        """tcp/6379 and udp/30000-30010 of one dependency do not collide."""
+        dep = {"name": "backend-to-cache"}
+        names = {
+            RulesPlanner.rule_name("app", self.SRC, self.DST, dep, port)
+            for port in (("tcp", 6379, None), ("udp", 30000, 30010), ("udp", 6379, None))
+        }
+        assert len(names) == 3
+
+    def test_no_port_keeps_the_bare_dependency_name(self) -> None:
+        """The proxy path (one rule per dependency) passes no port and gets no suffix."""
+        assert RulesPlanner.rule_name("app", self.SRC, {}, {"name": "backend-to-stripe"}) == "backend-to-stripe"
+
+
+# ===========================================================================
+# TestRuleDescription
+# ===========================================================================
+
+
+class TestRuleDescription:
+    """The generated description names both ends; an external target is its fqdn."""
+
+    SRC = {"name": "backend", "component_type": "backend"}
+
+    def test_component_target_description(self) -> None:
+        """Both component names and types appear."""
+        dst = {"name": "db", "component_type": "database"}
+        assert RulesPlanner.rule_description({}, self.SRC, dst) == "Auto-generated: backend (backend) -> db (database)"
+
+    def test_target_fqdn_description_names_the_external_host(self) -> None:
+        """No target component: the fqdn is the destination and its type is external."""
+        dep = {"target_fqdn": "api.stripe.com"}
+        assert RulesPlanner.rule_description(dep, self.SRC, {}) == (
+            "Auto-generated: backend (backend) -> api.stripe.com (external)"
+        )
+
+    def test_explicit_description_wins_over_target_fqdn(self) -> None:
+        """A hand-written description is used as-is."""
+        dep = {"target_fqdn": "api.stripe.com", "description": "Card payments"}
+        assert RulesPlanner.rule_description(dep, self.SRC, {}) == "Card payments"
+
+    def test_missing_target_and_fqdn_defaults_to_unknown_backend(self) -> None:
+        """Nothing about the destination known: placeholder name, backend type."""
+        assert RulesPlanner.rule_description({}, self.SRC, {}) == "Auto-generated: backend (backend) -> ? (backend)"
 
 
 # ===========================================================================
