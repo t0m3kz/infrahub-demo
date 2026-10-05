@@ -20,6 +20,8 @@ spec:
           - name: scoring-api
             fqdn: scoring.fraud-detection.c013.demo.local
             component_type: backend
+            ports:
+              - tcp/8443
             network_segment: c013-nordix-prod-p
             instances:
               - c013-scoring-api-ams-1

@@ -22,6 +22,8 @@ spec:
           - name: portal-ui
             fqdn: ui.reporting-portal.c010.demo.local
             component_type: frontend
+            ports:
+              - tcp/443
             network_segment: c010-zindra-dev-d
             instances:
               - c010-portal-ui-dc12-1

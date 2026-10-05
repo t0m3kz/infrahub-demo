@@ -22,6 +22,8 @@ spec:
           - name: sync-api
             fqdn: api.inventory-sync.c008.demo.local
             component_type: backend
+            ports:
+              - tcp/8443
             network_segment: c008-krafven-dev-d
             instances:
               - c008-sync-api-dc12-1

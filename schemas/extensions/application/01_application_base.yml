@@ -211,7 +211,7 @@ nodes:
             color: "#777777"
       - name: ports
         kind: List
-        optional: true
+        optional: false
         order_weight: 500
         description: "Ports this tier listens on, as protocol/port or protocol/start-end (tcp/443, udp/30000-30010)"  # yamllint disable-line rule:line-length
       - name: load_balanced

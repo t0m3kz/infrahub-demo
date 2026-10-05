@@ -180,6 +180,15 @@ def test_shared_fqdn_across_data_sets_is_the_same_component() -> None:
 
 
 @pytest.mark.parametrize("component", _COMPONENTS, ids=_COMPONENT_IDS)
+def test_component_declares_ports(component: _Component) -> None:
+    """ports is mandatory (schemas/extensions/application/01_application_base.yml):
+    a component with none gets no firewall/ZTNA rule (generators/topology/
+    application_security.py, generators/ztna.py) and no customer-port VLAN
+    tagging from any dependent (generators/topology/app_instance_segment.py)."""
+    assert component.raw.get("ports"), component.identity
+
+
+@pytest.mark.parametrize("component", _COMPONENTS, ids=_COMPONENT_IDS)
 def test_component_ports_parse(component: _Component) -> None:
     """Every component port is protocol/port or protocol/start-end."""
     assert isinstance(component.raw.get("ports", []), list), component.fqdn
