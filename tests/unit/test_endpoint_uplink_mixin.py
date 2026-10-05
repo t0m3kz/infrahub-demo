@@ -63,7 +63,7 @@ def _make_host(*, speed_aware: bool = True, validate_speeds: bool = True, strict
         return getattr(intf, "_device_name_for_grouping", None)
 
     host._extract_device_name = _extract_device_name
-    host.create_cabling = AsyncMock(return_value=[])
+    host.create_cabling = AsyncMock(return_value=[("server-port", "switch-port")])
     return host
 
 
@@ -371,6 +371,19 @@ class TestExecuteCabling:
         assert call_kwargs["top_interfaces"] == ["Eth2"]
         assert call_kwargs["top_devices"] == ["leaf-1", "leaf-2"]
         assert call_kwargs["strategy"] == "intra_rack"
+        host.logger.error.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_no_cable_created_is_an_error(self) -> None:
+        """create_cabling planning nothing (e.g. a speed mismatch) fails the run instead of passing silently."""
+        host = _make_host()
+        host.create_cabling = AsyncMock(return_value=[])
+        plan = [ConnectionFingerprint("server-1", "eth0", "leaf-1", "Eth1")]
+
+        await host._execute_cabling(plan, ["leaf-1", "leaf-2"])
+
+        host.logger.error.assert_called_once()
+        assert "no cable created" in host.logger.error.call_args.args[0]
 
 
 class TestBuildConnectionPlan:

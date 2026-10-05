@@ -299,7 +299,7 @@ class EndpointUplinkMixin:
         endpoint_intf_names = sort_interface_list([conn.server_interface for conn in connection_plan])
         target_intf_names = sort_interface_list(list({conn.switch_interface for conn in connection_plan}))
 
-        await self.create_cabling(
+        cabled = await self.create_cabling(
             bottom_devices=[self.data["name"]],
             bottom_interfaces=endpoint_intf_names,
             top_devices=target_device_names,
@@ -310,6 +310,13 @@ class EndpointUplinkMixin:
                 pool=None,  # No IP allocation for endpoint connections
             ),
         )
+        # create_cabling only warns when it plans nothing (e.g. every pair is a
+        # speed mismatch); a planned connection that produced no cable is a failure.
+        if not cabled:
+            self.logger.error(
+                f"Endpoint {self.data['name']}: no cable created for {endpoint_intf_names} → "
+                f"{target_device_names} {target_intf_names}"
+            )
 
     def _build_connection_plan(
         self,
