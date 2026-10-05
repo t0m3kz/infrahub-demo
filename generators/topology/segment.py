@@ -439,7 +439,17 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
                 deployment_id=dep_id,
                 deployment_name=dep_name,
                 stretched=stretched,
+                device_deployment_ids=self._device_deployment_ids(dep),
             )
+
+    @staticmethod
+    def _device_deployment_ids(hosting_parent: dict[str, Any]) -> list[str]:
+        """Deployment ids whose devices a segment can land on: the hosting
+        parent itself (border leaves, a metro's edges) plus, for a DC, each of
+        its pods — leafs and ToRs are deployed into the pod, not the DC. The
+        query selects ids only on TopologyPod children (vxlan_segment.gql)."""
+        pod_ids = [child["id"] for child in hosting_parent.get("children") or [] if child.get("id")]
+        return [hosting_parent["id"], *pod_ids]
 
     async def _resolve_vlan_domain(self, device: Any) -> tuple[str, str]:
         """Return (domain_kind, domain_id) for a leaf/tor device: its
@@ -533,6 +543,7 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
         deployment_id: str,
         deployment_name: str,
         stretched: bool = False,
+        device_deployment_ids: list[str] | None = None,
     ) -> None:
         """Find all leaf/tor/edge customer-facing interfaces in a deployment, add
         the segment to their interface_capabilities relationship (queried by the
@@ -544,10 +555,14 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
         the deployment even though those have no customer port for it: an EVPN
         Multi-Site BGW only re-originates a VNI it has configured (NX-OS needs
         the `vlan`/`vn-segment` pair plus the NVE member), and the VLAN domain
-        segment is what the transform renders that from."""
+        segment is what the transform renders that from.
+
+        ``device_deployment_ids`` widens the device search beyond the
+        deployment itself (a DC's pods, see _device_deployment_ids); it
+        defaults to just ``deployment_id``."""
         devices = await self.client.filters(
             kind=DcimPhysicalDevice,
-            deployment__ids=[deployment_id],
+            deployment__ids=device_deployment_ids or [deployment_id],
             role__values=sorted(_ACCESS_VTEP_ROLES | (_BORDER_GATEWAY_ROLES if stretched else frozenset())),
             include=["capabilities"],
         )
@@ -563,7 +578,9 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
             kind=DcimPhysicalInterface,
             device__ids=device_ids,
             role__value="customer",
-            include=["device"],
+            # Prefetched: only peer ids are compared below, so a per-interface
+            # fetch() (re-query + full peer resolution) would be pure N+1.
+            include=["device", "interface_capabilities"],
         )
         if not interfaces and not border_gateways:
             self.logger.debug(f"  [{deployment_name}] No customer/downlink interfaces — skipping")
@@ -574,20 +591,15 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
         touched_device_ids: set[str] = set()
         for iface in interfaces:
             iface_services = getattr(iface, "interface_capabilities")
-            await iface_services.fetch()
             existing_ids = {peer.id for peer in iface_services.peers}
-            changed = False
 
+            # Status is left alone: it belongs to the cabling (connections.py
+            # marks both cable ends active). Flipping every customer port to
+            # active here would admin-up uncabled ports and hide them from
+            # add_endpoint, which only claims status=free ports.
             if segment_id not in existing_ids:
                 iface_services.add(segment_obj)
                 assigned += 1
-                changed = True
-
-            if iface.status.value != "active":
-                iface.status.value = "active"
-                changed = True
-
-            if changed:
                 # update_group_context=False: a physical interface belongs to the
                 # device's object_template, not to this generator run — never a
                 # delete_unused_nodes candidate.

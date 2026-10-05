@@ -28,6 +28,7 @@ Tests use asyncio.run() directly — same pattern as test_circuit_generators.py.
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -978,7 +979,7 @@ class TestBorderGatewayVlanDomain:
 
 
 class TestAssignSegmentToDcInterfaces:
-    def _customer_iface(self, existing_ids: list[str]) -> MagicMock:
+    def _customer_iface(self, existing_ids: list[str], status: str = "active") -> MagicMock:
         """A customer port whose interface_capabilities mirror the SDK's RelationshipManager.
 
         add() is synchronous in the SDK (only fetch() awaits), so it's a plain
@@ -988,7 +989,7 @@ class TestAssignSegmentToDcInterfaces:
         iface.interface_capabilities.fetch = AsyncMock()
         iface.interface_capabilities.peers = [MagicMock(id=i) for i in existing_ids]
         iface.interface_capabilities.add = MagicMock(return_value=None)
-        iface.status.value = "active"
+        iface.status.value = status
         iface.save = AsyncMock()
         iface.device.peer.id = "dev-1"
         return iface
@@ -1012,9 +1013,83 @@ class TestAssignSegmentToDcInterfaces:
         iface.save.assert_awaited_once()
         gen._ensure_vlan_domain_segment.assert_awaited_once_with("seg-1", "seg", "mlag-1", None)
 
+    def test_free_port_keeps_its_status(self) -> None:
+        """An uncabled port stays free: add_endpoint only claims status=free ports,
+        and cabling (not the segment) is what makes a port active."""
+        iface = self._customer_iface([], status="free")
+        self._run(iface)
+        iface.interface_capabilities.add.assert_called_once()
+        assert iface.status.value == "free"
+        iface.save.assert_awaited_once()
+
+    def test_already_assigned_free_port_is_not_saved(self) -> None:
+        """Re-running on an assigned but uncabled port changes nothing."""
+        iface = self._customer_iface(["seg-1"], status="free")
+        self._run(iface)
+        assert iface.status.value == "free"
+        iface.save.assert_not_awaited()
+
     def test_already_assigned_port_is_left_alone(self) -> None:
         """Re-running is idempotent: an assigned, active port is neither re-added nor saved."""
         iface = self._customer_iface(["seg-1"])
         self._run(iface)
         iface.interface_capabilities.add.assert_not_called()
         iface.save.assert_not_awaited()
+
+    def test_interface_capabilities_are_prefetched_not_fetched_per_port(self) -> None:
+        """Peer ids come from the batch include; fetch() would re-query every port."""
+        iface = self._customer_iface(["seg-1"])
+        gen, _ = self._run(iface)
+        iface_filter = gen.client.filters.await_args_list[1].kwargs
+        assert iface_filter["include"] == ["device", "interface_capabilities"]
+        iface.interface_capabilities.fetch.assert_not_awaited()
+
+    def test_device_search_defaults_to_the_deployment_itself(self) -> None:
+        """Without device_deployment_ids only the deployment's own devices are searched."""
+        gen, _ = self._run(self._customer_iface([]))
+        assert gen.client.filters.await_args_list[0].kwargs["deployment__ids"] == ["dep-1"]
+
+    def test_device_search_covers_the_given_deployment_ids(self) -> None:
+        """A DC's pods are searched too: its leafs and ToRs are deployed into them."""
+        gen = _make_gen()
+        gen.client.filters = AsyncMock(side_effect=[[], []])
+        asyncio.run(
+            gen._assign_segment_to_dc_interfaces(
+                "seg-1", MagicMock(), "seg", "dc-1", "DC6", device_deployment_ids=["dc-1", "pod-1", "pod-2"]
+            )
+        )
+        assert gen.client.filters.await_args_list[0].kwargs["deployment__ids"] == ["dc-1", "pod-1", "pod-2"]
+
+
+class TestDeviceDeploymentIds:
+    """_device_deployment_ids — which deployments' devices a segment lands on."""
+
+    def test_dc_includes_its_pods_but_not_customer_footprints(self) -> None:
+        """A DC's children mix pods and CustomerDC footprints; the query selects
+        ids only on pods, so a footprint arrives as an empty node and is skipped."""
+        dc = {"id": "dc-1", "children": [{}, {"id": "pod-1"}, {"id": "pod-2"}]}
+        assert VxlanSegmentGenerator._device_deployment_ids(dc) == ["dc-1", "pod-1", "pod-2"]
+
+    def test_query_selects_child_ids_only_on_pods(self, root_dir: Path) -> None:
+        """The pod-only filter lives in vxlan_segment.gql, not in Python."""
+        query = (root_dir / "queries" / "topology" / "add" / "vxlan_segment.gql").read_text()
+        compact = " ".join(query.split())
+        assert "... on TopologyDataCenter { children { edges { node { ... on TopologyPod { id } } } } }" in compact
+
+    def test_metro_without_children_is_only_itself(self) -> None:
+        """A colocation metro's edges are deployed into the metro directly."""
+        assert VxlanSegmentGenerator._device_deployment_ids({"id": "metro-1"}) == ["metro-1"]
+        assert VxlanSegmentGenerator._device_deployment_ids({"id": "metro-1", "children": None}) == ["metro-1"]
+
+    def test_assign_to_deployment_interfaces_passes_pod_ids(self) -> None:
+        """The resolved hosting parent's pods reach the device search."""
+        gen = _make_gen()
+        gen.client.get = AsyncMock(return_value=MagicMock())
+        gen._assign_segment_to_dc_interfaces = AsyncMock()
+        dc = {"id": "dc-1", "name": "DC6", "children": [{"id": "pod-1"}]}
+
+        asyncio.run(gen._assign_to_deployment_interfaces({"id": "seg-1", "name": "seg"}, [dc]))
+
+        kwargs = gen._assign_segment_to_dc_interfaces.await_args_list[0].kwargs
+        assert kwargs["deployment_id"] == "dc-1"
+        assert kwargs["device_deployment_ids"] == ["dc-1", "pod-1"]
