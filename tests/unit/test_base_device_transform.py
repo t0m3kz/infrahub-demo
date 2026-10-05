@@ -77,24 +77,129 @@ class TestCombineLeafPbrRules:
         assert "set ip next-hop 10.0.0.3" in rendered
         assert "set ip next-hop 10.0.0.2" in rendered
 
-    @pytest.mark.parametrize("platform", ["sonic", "dell_sonic", "nokia_sros"])
-    def test_unsupported_leaf_refuses_firewall_only_pbr(self, platform: str) -> None:
-        """A leaf must not silently omit a firewall redirect when no LB exists."""
+    def test_unsupported_leaf_refuses_firewall_only_pbr(self) -> None:
+        """An SR OS leaf must not silently omit a firewall redirect when no LB exists."""
         customer = {"vlan_id": 100, "bypass_prefixes": ["10.0.2.0/24"], "fw_nexthop": "10.0.0.2"}
         transform = _make_transform("leaf")
 
         with patch("transforms.common.get_customer_pbr_rules", return_value=[customer]):
             with pytest.raises(ValueError, match="cannot render GPO or PBR policy"):
-                transform._extra_config(_device_data(), platform)
+                transform._extra_config(_device_data(), "nokia_sros")
 
-    @pytest.mark.parametrize("platform", ["sonic", "dell_sonic", "nokia_sros"])
-    def test_unsupported_leaf_refuses_tag_without_contracts(self, platform: str) -> None:
+    @pytest.mark.parametrize("role", ["leaf", "tor", "access-leaf"])
+    @pytest.mark.parametrize("platform", ["sonic", "dell_sonic"])
+    def test_sonic_leaf_accepts_pbr(self, platform: str, role: str) -> None:
+        """SONiC renders leaf PBR, so the rules reach the template instead of raising."""
+        customer = {"vlan_id": 100, "bypass_prefixes": ["10.0.2.0/24"], "fw_nexthop": "10.0.0.2"}
+        transform = _make_transform(role)
+
+        with patch("transforms.common.get_customer_pbr_rules", return_value=[customer]):
+            config = transform._extra_config(_device_data(), platform)
+
+        assert config["leaf_pbr_rules"] == [{**customer, "backend_ips": [], "lb_nexthop": None}]
+
+    @pytest.mark.parametrize(
+        ("platform", "message"),
+        [
+            ("sonic", "cannot render GPO policy"),
+            ("dell_sonic", "cannot render GPO policy"),
+            ("nokia_sros", "cannot render GPO or PBR policy"),
+        ],
+    )
+    def test_unsupported_leaf_refuses_tag_without_contracts(self, platform: str, message: str) -> None:
         """A tag alone still requests GPO classification on the segment."""
         transform = _make_transform("leaf")
 
         with patch("transforms.common.get_vlans", return_value=[{"sgt": 20}]):
-            with pytest.raises(ValueError, match="cannot render GPO or PBR policy"):
+            with pytest.raises(ValueError, match=message):
                 transform._extra_config(_device_data(), platform)
+
+    @pytest.mark.parametrize("platform", ["sonic", "dell_sonic"])
+    def test_sonic_template_renders_ordered_pbr_table_per_vlan(self, platform: str) -> None:
+        """ConfigDB PBR mirrors the route-map order: LB return > bypass > firewall redirect."""
+        customer = {
+            "vlan_id": 100,
+            "customer_name": "c001",
+            "environment": "prod",
+            "bypass_prefixes": ["10.0.2.0/24", "10.0.3.0/24"],
+            "fw_nexthop": "10.0.0.2",
+        }
+        backend = {"vlan_id": 100, "backend_ips": ["10.0.1.10", "10.0.1.11/32"], "lb_nexthop": "10.0.0.3"}
+
+        config = json.loads(_render_leaf(platform, leaf_pbr_rules=_combine_leaf_pbr_rules([customer], [backend])))
+
+        assert config["ACL_TABLE"]["PBR-VLAN100"] == {
+            "type": "PBR",
+            "policy_desc": "Leaf PBR for c001/prod",
+            "ports": ["Vlan100"],
+            "stage": "ingress",
+        }
+        rules = {k: v for k, v in config["ACL_RULE"].items() if k.startswith("PBR-VLAN100|")}
+        assert rules == {
+            "PBR-VLAN100|LB_1": {
+                "PRIORITY": "8999",
+                "IP_TYPE": "IPV4ANY",
+                "SRC_IP": "10.0.1.10/32",
+                "PACKET_ACTION": "REDIRECT:10.0.0.3",
+            },
+            "PBR-VLAN100|LB_2": {
+                "PRIORITY": "8998",
+                "IP_TYPE": "IPV4ANY",
+                "SRC_IP": "10.0.1.11/32",
+                "PACKET_ACTION": "REDIRECT:10.0.0.3",
+            },
+            "PBR-VLAN100|BYPASS_1": {
+                "PRIORITY": "7999",
+                "IP_TYPE": "IPV4ANY",
+                "DST_IP": "10.0.2.0/24",
+                "PACKET_ACTION": "FORWARD",
+            },
+            "PBR-VLAN100|BYPASS_2": {
+                "PRIORITY": "7998",
+                "IP_TYPE": "IPV4ANY",
+                "DST_IP": "10.0.3.0/24",
+                "PACKET_ACTION": "FORWARD",
+            },
+            "PBR-VLAN100|FW_REDIRECT": {"PRIORITY": "1000", "IP_TYPE": "IPV4ANY", "PACKET_ACTION": "REDIRECT:10.0.0.2"},
+        }
+
+    def test_sonic_template_lb_only_vlan_has_no_firewall_redirect(self) -> None:
+        """Without a firewall next-hop there is nothing to bypass and no catch-all redirect."""
+        backend = {"vlan_id": 200, "backend_ips": ["10.0.1.10"], "lb_nexthop": "10.0.0.3"}
+
+        config = json.loads(_render_leaf("sonic", leaf_pbr_rules=_combine_leaf_pbr_rules([], [backend])))
+
+        assert config["ACL_TABLE"]["PBR-VLAN200"]["policy_desc"] == "Leaf PBR for any/any"
+        assert sorted(k for k in config["ACL_RULE"] if k.startswith("PBR-VLAN200|")) == ["PBR-VLAN200|LB_1"]
+
+    def test_sonic_template_without_pbr_rules_has_no_pbr_table(self) -> None:
+        """No rules (or a role that never passes them) adds no PBR table."""
+        config = json.loads(_render_leaf("sonic"))
+
+        assert not [k for k in config.get("ACL_TABLE", {}) if k.startswith("PBR-")]
+
+
+def _render_leaf(platform: str, **overrides: object) -> str:
+    """Render leafs/<platform>.j2 with an empty leaf context plus overrides."""
+    template_dir = Path(__file__).parents[2] / "templates" / "configs"
+    template = jinja2.Environment(loader=jinja2.FileSystemLoader(str(template_dir))).get_template(
+        f"leafs/{platform}.j2"
+    )
+    context: dict[str, object] = {
+        "hostname": "test-leaf",
+        "vlans": [],
+        "interfaces": [],
+        "acls": [],
+        "vxlan": None,
+        "vrf_gateways": {},
+        "bgp": [],
+        "ospf": [],
+        "mlag": None,
+        "ntp": {"servers": []},
+        "syslog": {"servers": []},
+        **overrides,
+    }
+    return template.render(**context)
 
 
 @pytest.mark.parametrize("role", ["leafs", "border_leafs", "l2_leafs", "spines", "super_spines"])

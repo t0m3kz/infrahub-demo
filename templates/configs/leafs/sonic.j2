@@ -32,6 +32,7 @@
 {%- set acl_table = {} -%}
 {%- set acl_rule = {} -%}
 {%- include 'common/sonic_acl.j2' %}
+{%- include 'common/sonic_pbr.j2' %}
 
 {%- set static_route_table = {} -%}
 {%- if vrf_gateways %}

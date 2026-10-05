@@ -337,12 +337,14 @@ class BaseDeviceTransform(InfrahubTransform):
         lb_vips = _flatten_deployment_lb_vips(data.get("deployment"))
         lb_backend_pbr_rules = get_lb_backend_pbr_rules(activations, lb_vips)
         leaf_pbr_rules = _combine_leaf_pbr_rules(customer_pbr_rules, lb_backend_pbr_rules)
-        if self.device_role in {"leaf", "tor", "access-leaf"} and platform_name in {
-            "sonic",
-            "dell_sonic",
-            "nokia_sros",
-        }:
-            if leaf_pbr_rules or sgt_rules or any(vlan.get("sgt") for vlan in vlans):
+        if self.device_role in {"leaf", "tor", "access-leaf"}:
+            # SONiC renders PBR (ConfigDB PBR ACL table) but has no GPO;
+            # SR OS leafs render neither. Refuse rather than ship a VLAN
+            # whose firewall steering or segmentation silently vanished.
+            wants_gpo = bool(sgt_rules) or any(vlan.get("sgt") for vlan in vlans)
+            if platform_name in {"sonic", "dell_sonic"} and wants_gpo:
+                raise ValueError(f"{platform_name} leaf cannot render GPO policy; refusing unprotected config")
+            if platform_name == "nokia_sros" and (wants_gpo or leaf_pbr_rules):
                 raise ValueError(f"{platform_name} leaf cannot render GPO or PBR policy; refusing unprotected config")
 
         return {
