@@ -12,11 +12,15 @@ VxlanSegmentGenerator handles:
      live on the parent (TopologySegmentHosting), not on the customer footprint.
   3. For each resolved parent, create (or upsert) a ManagedSegmentDeployment
      with a locally-allocated VNI from its pool range.
-  4. Assign the segment to leaf/tor customer-facing interfaces, allocating a
-     LOCAL VLAN ID per VLAN domain (MLAG pair or standalone device) —
-     independent domains may reuse the same numeric VLAN ID, since IEEE
-     802.1Q VLAN ID has only local significance (unlike VNI, which is the
-     real DC-wide/fabric-wide segment identifier).
+  4. For a STRETCHED segment, realize a LOCAL VLAN ID on every border gateway
+     of each deployment (EVPN Multi-Site BGW plumbing — see
+     _realize_border_gateways). Customer-facing interface assignment is NOT
+     done here: it is driven by AppComponent.instances, one physical device
+     at a time, in generators/topology/app_instance_segment.py — a segment
+     with no AppComponent referencing it gets no customer-port assignment at
+     all. Independent VLAN domains may reuse the same numeric VLAN ID, since
+     IEEE 802.1Q VLAN ID has only local significance (unlike VNI, which is
+     the real DC-wide/fabric-wide segment identifier).
   5. Create inline sub-interfaces when terminate_inline is set.
 
 VNIs are allocated via from_pool. A local segment draws from its parent's
@@ -46,33 +50,29 @@ from ..named_objects import GetOrCreateByNameMixin
 from ..pools import PoolMixin
 from ..protocols import (
     DcimPhysicalDevice,
-    DcimPhysicalInterface,
     ManagedSegmentDeployment,
-    ManagedStandaloneVlanDomain,
-    ManagedVlanDomainSegment,
     ManagedVxlanSegment,
     SecurityZone,
 )
+from ..vlan_domain import VlanDomainMixin
 
-# Devices whose customer-facing ports a segment is offered on. `edge` is the
-# colocation metro's on-ramp router (generators/topology/colocation.py) — the
-# only VTEP a metro has, so its customer ports are where a stretched segment
-# lands in the colocation.
-_ACCESS_VTEP_ROLES = frozenset({"leaf", "tor", "l2-leaf", "access-leaf", "edge"})
 # Devices that act as a deployment's EVPN Multi-Site border gateway for a
-# stretched segment: the DC's border leaves and the metro's edges.
+# stretched segment: the DC's border leaves and the metro's edges. `edge` is
+# also the colocation metro's on-ramp router — its only VTEP, so it is both
+# the metro's border gateway and (via AppInstance resolution, not here) where
+# a stretched segment's customer ports land.
 _BORDER_GATEWAY_ROLES = frozenset({"border-leaf", "edge"})
 # Bootstrap pool (data/bootstrap/18_vni_pools.yml) every stretched segment's
 # single VNI comes from — disjoint from the per-site {fabric}-vni-pool band.
 STRETCHED_VNI_POOL_NAME = "GLOBAL-L2VNI"
 
 
-class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, CommonGenerator):
-    """VXLAN segment generator — allocates a VNI from the DC's pool, assigns
-    the segment to leaf/tor customer-facing interfaces and physical host uplinks
-    (allocating a LOCAL VLAN ID per VLAN domain — MLAG pair or standalone
-    device — as it goes), and creates inline sub-interfaces when
-    terminate_inline is set.
+class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, VlanDomainMixin, CommonGenerator):
+    """VXLAN segment generator — allocates a VNI from the DC's pool, realizes
+    a LOCAL VLAN ID on every border gateway of a stretched segment's
+    deployments, and creates inline sub-interfaces when terminate_inline is
+    set. Customer-facing interface assignment is not done here — see
+    generators/topology/app_instance_segment.py.
     """
 
     graphql_root_key = "ManagedVxlanSegment"
@@ -412,19 +412,17 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
     async def _assign_to_deployment_interfaces(
         self, segment: dict[str, Any], target_deployments: list[dict[str, Any]], stretched: bool = False
     ) -> None:
-        """Assign this segment to all leaf/tor customer-facing interfaces in each deployment.
-
-        ``stretched``: the segment spans more than one deployment, so its EVPN
-        routes cross sites through each site's border gateways — see
-        _BORDER_GATEWAY_ROLES."""
+        """For a stretched segment, realize its LOCAL VLAN ID on every border
+        gateway of each deployment — see _realize_border_gateways. A local
+        segment has no border-gateway concern and does nothing here;
+        customer-port assignment for either kind comes from
+        AppComponent.instances, not from here (see
+        generators/topology/app_instance_segment.py)."""
+        if not stretched:
+            return
         segment_id: str = segment.get("id", "")
         segment_name: str = segment.get("name", "")
         if not segment_id or not target_deployments:
-            return
-
-        segment_obj = await self.client.get(kind=ManagedVxlanSegment, id=segment_id)
-        if not segment_obj:
-            self.logger.warning(f"Could not fetch segment SDK object for {segment_name}")
             return
 
         for dep in target_deployments:
@@ -432,13 +430,10 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
             dep_name: str = dep.get("name", dep_id)
             if not dep_id:
                 continue
-            await self._assign_segment_to_dc_interfaces(
+            await self._realize_border_gateways(
                 segment_id=segment_id,
-                segment_obj=segment_obj,
                 segment_name=segment_name,
-                deployment_id=dep_id,
                 deployment_name=dep_name,
-                stretched=stretched,
                 device_deployment_ids=self._device_deployment_ids(dep),
             )
 
@@ -451,183 +446,38 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Com
         pod_ids = [child["id"] for child in hosting_parent.get("children") or [] if child.get("id")]
         return [hosting_parent["id"], *pod_ids]
 
-    async def _resolve_vlan_domain(self, device: Any) -> tuple[str, str]:
-        """Return (domain_kind, domain_id) for a leaf/tor device: its
-        ManagedMLAG if paired, else the device itself is its own standalone
-        VLAN domain. Requires device.capabilities to already be fetched
-        (batch-included by the caller to avoid an N+1 query pattern)."""
-        caps = getattr(device, "capabilities", None)
-        if caps is not None:
-            for peer in caps.peers:
-                if peer.typename == "ManagedMLAG":
-                    return "ManagedMLAG", peer.id
-        return "DcimPhysicalDevice", device.id
-
-    async def _ensure_standalone_vlan_domain(self, device: Any) -> tuple[str, str]:
-        """Create/upsert the ManagedStandaloneVlanDomain (and its vlan_pool)
-        for a non-MLAG device, lazily — only when it's actually assigned a
-        segment, avoiding speculative pool creation for idle leafs/tors.
-        Returns (domain id, pool id).
-
-        Both are upserted on every run, existing or not: the generator deletes
-        what a run does not save, so a rerun that only read them back would
-        delete them. Segments are generated in parallel; both upserts are keyed
-        by name, so concurrent runs converge on the same domain and pool.
-        """
-        domain_name = f"{device.name.value}-vlan-domain"
-        domain_obj = await self.client.create(
-            kind=ManagedStandaloneVlanDomain,
-            data={"name": domain_name, "status": "active", "capabilities": [{"id": device.id}]},
-        )
-        await domain_obj.save(allow_upsert=True)
-        domain_id = domain_obj.id
-        pool = await self.upsert_number_pool(
-            pool_name=f"{domain_name}-vlan-pool",
-            description=f"Local VLAN ID pool for standalone VLAN domain {domain_name}",
-            start_range=CUSTOMER_VLAN_ID_MIN,
-            end_range=CUSTOMER_VLAN_ID_MAX,
-            node="ManagedVlanDomainSegment",
-            node_attribute="vlan_id",
-            parent_kind="ManagedStandaloneVlanDomain",
-            parent_id=domain_id,
-            parent_attr="vlan_pool",
-        )
-        return domain_id, pool.id
-
-    async def _ensure_vlan_domain_segment(
-        self, segment_id: str, segment_name: str, domain_id: str, pool_id: str | None = None
-    ) -> None:
-        """Upsert one ManagedVlanDomainSegment (segment, VLAN domain) pair,
-        allocating vlan_id from that domain's own pool via from_pool.
-        Idempotent: an existing record for this pair keeps its vlan_id and is
-        only saved again, so this run's tracking group keeps it (an unsaved
-        one is deleted). A known pool_id (a standalone domain this run just
-        ensured) skips reading it back from the domain.
-        """
-        existing = await self.client.filters(
-            kind=ManagedVlanDomainSegment,
-            segment__ids=[segment_id],
-            vlan_domain__ids=[domain_id],
-        )
-        if existing:
-            await existing[0].save(allow_upsert=True)  # register with tracker
-            return
-
-        if not pool_id:
-            domain = await self.client.get(kind="ManagedGenericVlanDomain", id=domain_id, include=["vlan_pool"])
-            vlan_pool_rel = getattr(domain, "vlan_pool", None)
-            pool_id = getattr(vlan_pool_rel, "id", None) if vlan_pool_rel else None
-        if not pool_id:
-            self.logger.error(
-                f"VLAN domain {domain_id} has no vlan_pool — cannot allocate VLAN ID for segment {segment_name}"
-            )
-            return
-
-        vlan_identifier = f"{segment_id}-{domain_id}-vlan"
-        activation = await self.client.create(
-            kind=ManagedVlanDomainSegment,
-            data={
-                "segment": {"id": segment_id},
-                "vlan_domain": {"id": domain_id},
-                "vlan_id": {"from_pool": {"id": pool_id}, "identifier": vlan_identifier},
-            },
-        )
-        await activation.save(allow_upsert=True)
-        self.logger.info(f"  Allocated VLAN ID from domain {domain_id}'s pool for segment {segment_name}")
-
-    async def _assign_segment_to_dc_interfaces(
+    async def _realize_border_gateways(
         self,
         segment_id: str,
-        segment_obj: Any,
         segment_name: str,
-        deployment_id: str,
         deployment_name: str,
-        stretched: bool = False,
-        device_deployment_ids: list[str] | None = None,
+        device_deployment_ids: list[str],
     ) -> None:
-        """Find all leaf/tor/edge customer-facing interfaces in a deployment, add
-        the segment to their interface_capabilities relationship (queried by the
-        leaf/edge transforms), and — per distinct VLAN domain (MLAG pair or
-        standalone device) touched — upsert a ManagedVlanDomainSegment realizing
-        this segment's LOCAL VLAN ID in that domain.
-
-        A stretched segment additionally gets a VLAN on every border gateway of
-        the deployment even though those have no customer port for it: an EVPN
+        """A stretched segment's EVPN Multi-Site border gateways must carry its
+        LOCAL VLAN ID even though they have no customer port for it: an EVPN
         Multi-Site BGW only re-originates a VNI it has configured (NX-OS needs
         the `vlan`/`vn-segment` pair plus the NVE member), and the VLAN domain
-        segment is what the transform renders that from.
-
-        ``device_deployment_ids`` widens the device search beyond the
-        deployment itself (a DC's pods, see _device_deployment_ids); it
-        defaults to just ``deployment_id``."""
+        segment is what the transform renders that from. Realizes one
+        ManagedVlanDomainSegment per distinct VLAN domain touched; never
+        touches interface_capabilities — border gateways have no
+        customer-facing role to tag.
+        """
         devices = await self.client.filters(
             kind=DcimPhysicalDevice,
-            deployment__ids=device_deployment_ids or [deployment_id],
-            role__values=sorted(_ACCESS_VTEP_ROLES | (_BORDER_GATEWAY_ROLES if stretched else frozenset())),
+            deployment__ids=device_deployment_ids,
+            role__values=sorted(_BORDER_GATEWAY_ROLES),
             include=["capabilities"],
         )
         if not devices:
-            self.logger.debug(
-                f"  [{deployment_name}] No access or border-gateway devices — skipping interface assignment"
-            )
-            return
-        border_gateways = [d for d in devices if stretched and d.role.value in _BORDER_GATEWAY_ROLES]
-
-        device_ids = [d.id for d in devices]
-        interfaces = await self.client.filters(
-            kind=DcimPhysicalInterface,
-            device__ids=device_ids,
-            role__value="customer",
-            # Prefetched: only peer ids are compared below, so a per-interface
-            # fetch() (re-query + full peer resolution) would be pure N+1.
-            include=["device", "interface_capabilities"],
-        )
-        if not interfaces and not border_gateways:
-            self.logger.debug(f"  [{deployment_name}] No customer/downlink interfaces — skipping")
+            self.logger.debug(f"  [{deployment_name}] No border-gateway devices — skipping")
             return
 
-        assigned = 0
-        updated = 0
-        touched_device_ids: set[str] = set()
-        for iface in interfaces:
-            iface_services = getattr(iface, "interface_capabilities")
-            existing_ids = {peer.id for peer in iface_services.peers}
-
-            # Status is left alone: it belongs to the cabling (connections.py
-            # marks both cable ends active). Flipping every customer port to
-            # active here would admin-up uncabled ports and hide them from
-            # add_endpoint, which only claims status=free ports.
-            if segment_id not in existing_ids:
-                iface_services.add(segment_obj)
-                assigned += 1
-                # update_group_context=False: a physical interface belongs to the
-                # device's object_template, not to this generator run — never a
-                # delete_unused_nodes candidate.
-                await iface.save(allow_upsert=True, update_group_context=False)
-                updated += 1
-
-            # device is a mandatory Parent relationship (schemas/base/dcim.yml),
-            # always resolvable given include=["device"] above.
-            touched_device_ids.add(iface.device.peer.id)
-
-        # Resolve each touched device's VLAN domain (MLAG-or-standalone) and
-        # upsert one ManagedVlanDomainSegment per distinct domain.
-        touched_device_ids.update(d.id for d in border_gateways)
-        touched_devices = [d for d in devices if d.id in touched_device_ids]
-        domain_pools: dict[str, str | None] = {}
-        for device in touched_devices:
-            domain_kind, domain_id = await self._resolve_vlan_domain(device)
-            pool_id = None
-            if domain_kind == "DcimPhysicalDevice":
-                domain_id, pool_id = await self._ensure_standalone_vlan_domain(device)
-            domain_pools[domain_id] = domain_pools.get(domain_id) or pool_id
-
+        domain_pools = await self._ensure_vlan_domains_for_devices(devices)
         for domain_id, pool_id in domain_pools.items():
             await self._ensure_vlan_domain_segment(segment_id, segment_name, domain_id, pool_id)
 
         self.logger.info(
-            f"  [{deployment_name}] Assigned segment '{segment_name}' to {assigned} interface(s) "
-            f"({len(interfaces) - assigned} already assigned, {updated} interface(s) updated) "
+            f"  [{deployment_name}] Realized segment '{segment_name}' on {len(devices)} border gateway(s) "
             f"across {len(domain_pools)} VLAN domain(s)"
         )
 

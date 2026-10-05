@@ -602,6 +602,8 @@ queries:
     file_path: queries/topology/add/app_dependency.gql
   - name: app_component
     file_path: queries/topology/add/app_component.gql
+  - name: app_component_segment
+    file_path: queries/topology/add/app_component_segment.gql
   - name: vxlan_segment_data
     file_path: queries/topology/add/vxlan_segment.gql
   - name: loadbalancer_vip_data
@@ -854,6 +856,22 @@ generator_definitions:
     targets: app_components
     query: app_component
     class_name: AppApplicationGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      fqdn: fqdn__value
+    watch:
+      files:
+        - generators/
+        - utils/
+  # Same target group as add_app_component, different concern: tags the
+  # switch interface(s) this component's instances are cabled to with its
+  # network_segment — see generators/topology/app_instance_segment.py.
+  - name: add_app_component_segment
+    file_path: generators/topology/app_instance_segment.py
+    targets: app_components
+    query: app_component_segment
+    class_name: AppInstanceSegmentGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:
