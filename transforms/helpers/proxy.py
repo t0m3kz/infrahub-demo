@@ -10,18 +10,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from transforms.helpers.policy import active_rules, enabled_policies
+from utils.dependency_access import dependency_access_status
 from utils.ports import PortProfileHelper
-
-
-def merge_policies(*policy_lists: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
-    """Merge policy lists, deduplicating by name."""
-    merged: dict[str, dict[str, Any]] = {}
-    for policies in policy_lists:
-        for policy in policies or []:
-            name = policy.get("name") or policy.get("id")
-            if name:
-                merged[name] = policy
-    return list(merged.values())
 
 
 def get_proxy_policies(policies_data: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
@@ -47,15 +38,9 @@ def get_proxy_policies(policies_data: list[dict[str, Any]] | None = None) -> lis
         return []
 
     policies: list[dict[str, Any]] = []
-    for policy in policies_data:
-        if not policy.get("enabled", True):
-            continue
-
+    for policy in enabled_policies(policies_data):
         rules: list[dict[str, Any]] = []
-        for rule in sorted(policy.get("rules") or [], key=lambda r: r.get("priority") or 0):
-            if rule.get("disabled"):
-                continue
-
+        for rule in active_rules(policy, order_by="priority"):
             destination_type = rule.get("destination_type") or "category"
             destinations: list[str] = []
             if destination_type == "category":
@@ -149,7 +134,7 @@ def get_private_access_segments(customers: list[dict[str, Any]] | None) -> list[
                 grants = [
                     dep
                     for dep in component.get("dependents") or []
-                    if dep.get("source_profile") and str(dep.get("access_status") or "").strip().lower() != "denied"
+                    if dep.get("source_profile") and dependency_access_status(dep) != "denied"
                 ]
                 if not grants:
                     continue

@@ -3,7 +3,10 @@
 from ipaddress import ip_interface, ip_network
 from typing import Any
 
-from transforms.helpers.segments import _get_segment_prefix_str
+from transforms.helpers.acl import _PROTO_MAP, _port_match
+from transforms.helpers.addressing import host_ip
+from transforms.helpers.policy import active_rules, enabled_policies, inbound_permits
+from transforms.helpers.segments import _get_segment_prefix_str, segment_hosting_candidates
 
 # Border-leaf platforms with a native hardware SGT/security-group matching
 # primitive — Cisco CTS ("match cts sgt") is proprietary VXLAN-GBP encoding,
@@ -116,9 +119,9 @@ def get_firewall_static_routes(
         # More precisely: the OTHER host in the /30 (the leaf SVI).
         try:
             net = ip_network(ip_addr, strict=False)
-            hosts = list(net.hosts())
             fw_ip = ip_interface(ip_addr).ip
-            leaf_ip = next((h for h in hosts if h != fw_ip), None)
+            # Lazy: an IPv6 /64 has 2^64 hosts — never materialize the list.
+            leaf_ip = next((h for h in net.hosts() if h != fw_ip), None)
             if leaf_ip is None:
                 continue
             nexthop = str(leaf_ip)
@@ -141,11 +144,9 @@ def get_firewall_static_routes(
 def _iface_ip_and_namespace(iface: dict[str, Any]) -> tuple[str | None, str | None]:
     """Return (ip_without_prefixlen, namespace_name) for one interface_capabilities leg."""
     ip_obj = iface.get("ip_address") or {}
-    address = ip_obj.get("address")
-    if not address:
+    if not ip_obj.get("address"):
         return None, None
-    ns_name = (ip_obj.get("ip_namespace") or {}).get("name")
-    return address.split("/")[0], ns_name
+    return host_ip(ip_obj["address"]), (ip_obj.get("ip_namespace") or {}).get("name")
 
 
 def get_vrf_default_gateways(
@@ -365,10 +366,9 @@ def _flatten_deployment_firewall_contexts(deployment: dict[str, Any] | None) -> 
                 found.extend(cap.get("contexts") or [])
         return found
 
-    contexts = _contexts_from_device_hosting(deployment)
-    parent = deployment.get("parent")
-    if parent:
-        contexts.extend(_contexts_from_device_hosting(parent))
+    contexts = [
+        ctx for hosting in segment_hosting_candidates(deployment) for ctx in _contexts_from_device_hosting(hosting)
+    ]
 
     deduped: dict[str, dict[str, Any]] = {}
     for ctx in contexts:
@@ -428,6 +428,13 @@ def _resolve_context_nexthops(
         else:
             shared_nexthop = fw_ip
     return context_nexthop_by_deployment, shared_nexthop
+
+
+def _redirect_nexthop(
+    deployment_ids: list[str], nexthop_by_deployment: dict[str, str], shared_nexthop: str | None
+) -> str | None:
+    """Nexthop of the deployment's dedicated context, else the shared one."""
+    return next((nexthop_by_deployment[d] for d in deployment_ids if d in nexthop_by_deployment), shared_nexthop)
 
 
 def _serving_context_nexthops(firewall_contexts: list[dict[str, Any]] | None) -> dict[str, str]:
@@ -532,12 +539,7 @@ def get_customer_pbr_rules(
 
         deployment_ids = _segment_deployment_ids(seg)
 
-        fw_nexthop = next(
-            (context_nexthop_by_deployment[d] for d in deployment_ids if d in context_nexthop_by_deployment),
-            None,
-        )
-        if fw_nexthop is None:
-            fw_nexthop = shared_nexthop
+        fw_nexthop = _redirect_nexthop(deployment_ids, context_nexthop_by_deployment, shared_nexthop)
         if fw_nexthop is None:
             continue
 
@@ -558,22 +560,15 @@ def get_customer_pbr_rules(
             else:
                 bypass.add(prefix)
 
-        for policy in seg.get("security_policies") or []:
-            if not policy.get("enabled", True):
-                continue
-            for rule in policy.get("rules") or []:
-                if rule.get("disabled") or rule.get("action") != "permit":
-                    continue
-                _classify(rule, rule.get("destination_segment"))
+        for policy in enabled_policies(seg.get("security_policies")):
+            for rule in active_rules(policy):
+                if rule.get("action") == "permit":
+                    _classify(rule, rule.get("destination_segment"))
         # Reply leg of every permit INTO this segment: a forward packet that
         # bypassed the firewall on the source's leaf must be answered past it
         # too, or the firewall drops the reply with no session. The return
         # ACL (get_acls) still restricts it to the rule's port.
-        for rule in seg.get("inbound_rules") or []:
-            if rule.get("disabled") or rule.get("action") != "permit":
-                continue
-            if not (rule.get("policy") or {}).get("enabled", True):
-                continue
+        for rule in inbound_permits(seg):
             _classify(rule, rule.get("source_segment"))
 
         # The bypass is per prefix: one inspected flow to a peer sends all
@@ -645,12 +640,7 @@ def get_border_leaf_pbr_rules(
 
         deployment_ids = _segment_deployment_ids(seg)
 
-        fw_nexthop = next(
-            (context_nexthop_by_deployment[d] for d in deployment_ids if d in context_nexthop_by_deployment),
-            None,
-        )
-        if fw_nexthop is None:
-            fw_nexthop = shared_nexthop
+        fw_nexthop = _redirect_nexthop(deployment_ids, context_nexthop_by_deployment, shared_nexthop)
         if fw_nexthop is None:
             continue
 
@@ -777,22 +767,15 @@ def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list
     if not policies_data:
         return []
 
-    proto_map = {"any": "ip", "tcp": "tcp", "udp": "udp", "icmp": "icmp"}
-
     policies: list[dict[str, Any]] = []
     seq = 0
-    for policy in policies_data:
-        if not policy.get("enabled", True):
-            continue
-
+    for policy in enabled_policies(policies_data):
         rules: list[dict[str, Any]] = []
-        for rule in sorted(policy.get("rules") or [], key=lambda r: r.get("index") or 0):
-            if rule.get("disabled"):
-                continue
+        for rule in active_rules(policy):
             seq += 10
 
             protocol = rule.get("protocol") or "any"
-            acl_proto = proto_map.get(protocol, "ip")
+            acl_proto = _PROTO_MAP.get(protocol, "ip")
 
             src_zone = (rule.get("source_zone") or {}).get("name")
             dst_zone = (rule.get("destination_zone") or {}).get("name")
@@ -808,12 +791,7 @@ def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list
 
             port_start = rule.get("port_start")
             port_end = rule.get("port_end")
-            dst_port: str | None = None
-            if port_start and acl_proto in ("tcp", "udp"):
-                if port_end and port_end != port_start:
-                    dst_port = f"range {port_start} {port_end}"
-                else:
-                    dst_port = f"eq {port_start}"
+            dst_port = _port_match(rule, acl_proto)
 
             profile = (rule.get("security_profile") or {}).get("name")
 

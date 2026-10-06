@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from infrahub_sdk.exceptions import NodeNotFoundError, ValidationError
@@ -25,7 +26,7 @@ from .protocols import (
     ManagedHAInterface,
     ManagedMLAG,
 )
-from .types import DeviceOptions
+from .types import DeviceOptions, NamingConvention
 
 # device_role values that pair into an HA domain via DeviceOptions.ha_kind
 # rather than MLAG — see create_devices()'s pairing dispatch below.
@@ -52,18 +53,33 @@ _FABRIC_ROLES = frozenset(
     }
 )
 
+# A generator query's role-bucketed controller aliases (see queries/topology/
+# add/dc.gql), merged into one list by set_controllers_from.
+_CONTROLLER_ALIASES = ("fabric_controllers", "security_manager_controllers", "lb_manager_controllers")
+
 # firewall/load-balancer route to a controller by controller_type AND a
 # platform match against the device's own template — a checkpoint_gaia
 # firewall must never route to a Panorama (panos) controller just because
 # both happen to be controller_type=security_manager.
 _ROLE_CONTROLLER_TYPE: dict[str, str] = {"firewall": "security_manager", "load-balancer": "lb_manager"}
 
-# device_role -> HA node kind for create_ha_role_devices below. Pairing
-# itself happens inside create_devices() (DeviceOptions.ha_kind) — this only
-# picks the right kind per role.
-_HA_ROLE_KIND: dict[str, str] = {
+# device_role -> HA node kind. Pairing itself happens inside create_devices()
+# (DeviceOptions.ha_kind) — this only picks the right kind per role.
+HA_KIND_BY_ROLE: dict[str, str] = {
     "firewall": "ManagedFirewallHA",
     "load-balancer": "ManagedLoadbalancerHA",
+}
+
+# (physical template's platform name, device_role) -> matching virtual
+# template's name prefix — see data/bootstrap's 09_virtual_device_templates_
+# *.yaml, where every platform/role combination provides an _S/_M/_L/_XL
+# variant per DC size (e.g. "CloudGuard_EDGE_L") and a _CUSTOMER_<size> one.
+_VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE: dict[tuple[str, str], str] = {
+    ("checkpoint_gaia", "firewall"): "CloudGuard_EDGE",
+    ("panos", "firewall"): "PA-VM_EDGE",
+    ("junos", "firewall"): "vSRX_EDGE",
+    ("f5_tmos", "load-balancer"): "BIG-IP-VE_LOAD_BALANCER",
+    ("netscaler", "load-balancer"): "NetScaler-ADC-VPX_LOAD_BALANCER",
 }
 
 
@@ -85,9 +101,7 @@ class DeviceMixin(MLAGWiringMixin):
     # (RackGenerator, DCTopologyGenerator) already mixes in PoolMixin
     # alongside DeviceMixin; annotation only, no method body here.
     upsert_number_pool: Any
-    # Set once per generator run (dc.py/pod.py/rack.py's generate()) by
-    # merging their own query's fabric_controllers/security_manager_
-    # controllers/lb_manager_controllers aliased fields — see
+    # Set once per generator run via set_controllers_from() — see
     # _resolve_role_controller, which reads this via getattr(...,
     # default=[]) since a generator that never sets it (e.g. one that
     # doesn't call create_devices() for a controller-eligible role) simply
@@ -110,7 +124,7 @@ class DeviceMixin(MLAGWiringMixin):
         quantity: int,
         deployment_id: str,
         template: dict[str, Any],
-        naming_convention: Literal["standard", "hierarchical", "flat", "computed"] = "flat",
+        naming_convention: NamingConvention = "flat",
         options: DeviceOptions | None = None,
         *,
         owner: Any | None = None,
@@ -413,7 +427,7 @@ class DeviceMixin(MLAGWiringMixin):
         role: Literal["firewall", "load-balancer"],
         entries: list[dict[str, Any]],
         deployment_id: str,
-        naming_convention: Literal["standard", "hierarchical", "flat", "computed"],
+        naming_convention: NamingConvention,
         indexes: list[int],
         virtual_template_kind: str | None = None,
     ) -> list[tuple[dict[str, Any], list[str]]]:
@@ -434,7 +448,7 @@ class DeviceMixin(MLAGWiringMixin):
         (colocation.py's on-ramp appliances can themselves be provider-hosted,
         unlike dc.py's/pod.py's, which are always physical).
         """
-        options = DeviceOptions(indexes=indexes, ha_kind=_HA_ROLE_KIND[role])
+        options = DeviceOptions(indexes=indexes, ha_kind=HA_KIND_BY_ROLE[role])
         if role == "load-balancer":
             # create_devices()'s default group_name is f"{device_role}s" =
             # "load-balancers", but the bootstrap group is named
@@ -459,6 +473,41 @@ class DeviceMixin(MLAGWiringMixin):
             )
             results.append((entry, names))
         return results
+
+    async def resolve_virtual_template(
+        self, *, platform: str | None, role: str, size_suffix: str, fallback: str
+    ) -> dict[str, Any] | None:
+        """The {id, device_type, platform} reference of the virtual template
+        "{prefix}_{size_suffix}" matching a physical platform/role, or None
+        (warned, ending with ``fallback``) when there is no mapping or no
+        such template."""
+        prefix = _VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE.get((platform or "", role))
+        if not prefix:
+            self.logger.warning(f"No virtual template mapping for platform={platform} role={role} — {fallback}.")
+            return None
+        template_name = f"{prefix}_{size_suffix}"
+        templates = await self.client.filters(
+            kind="TemplateDcimVirtualDevice",
+            template_name__value=template_name,
+            include=["device_type", "platform"],
+        )
+        if not templates:
+            self.logger.warning(
+                f"No virtual template '{template_name}' found for platform={platform} role={role} — {fallback}."
+            )
+            return None
+        template = templates[0]
+        return {
+            "id": template.id,
+            "device_type": {"id": template.device_type.peer.id},
+            "platform": {"id": template.platform.peer.id},
+        }
+
+    def set_controllers_from(self, source: Mapping[str, Any]) -> None:
+        """Set ``self._all_controllers`` from a query's fabric_controllers/
+        security_manager_controllers/lb_manager_controllers aliases — an
+        absent or null alias contributes nothing."""
+        self._all_controllers = [controller for alias in _CONTROLLER_ALIASES for controller in source.get(alias) or []]
 
     def _resolve_role_controller(self, *, device_role: str, template: dict[str, Any]) -> dict[str, Any] | None:
         """Find the pre-fetched controller (if any) governing this
@@ -589,16 +638,12 @@ class DeviceMixin(MLAGWiringMixin):
         trigger, unconditionally create()-ing on every run).
 
         member_ids lets a caller that already knows the two device ids (the
-        freshly-created-domain path in _ensure_ha_pairs) skip capabilities.fetch()
-        entirely — a just-created ha_obj's capabilities peers only carry the id
-        each was created with, no __typename, and RelatedNode.fetch() requires
-        both. The "existing domain" path doesn't hit this: its ha_obj came from
-        client.filters(..., include=["capabilities"]), which returns real
-        typenames from the server."""
+        freshly-created-domain path in _ensure_ha_pairs) skip reading
+        capabilities. The "existing domain" path's ha_obj came from
+        client.filters(..., include=["capabilities"]), so its peer ids are
+        already loaded — no fetch() needed just to read them."""
         if member_ids is None:
-            caps = getattr(ha_obj, "capabilities")
-            await caps.fetch()
-            member_ids = [peer.id for peer in caps.peers]
+            member_ids = [peer.id for peer in getattr(ha_obj, "capabilities").peers]
         if not member_ids:
             return
 
@@ -619,9 +664,7 @@ class DeviceMixin(MLAGWiringMixin):
             # first idempotent re-run and come back on the next one — a
             # flip-flop, since the run that re-creates them registers them again.
             self.client.group_context.related_node_ids.append(node.id)
-            node_caps = getattr(node, "interface_capabilities")
-            await node_caps.fetch()
-            existing_sync_iface_ids.update(peer.id for peer in node_caps.peers)
+            existing_sync_iface_ids.update(peer.id for peer in getattr(node, "interface_capabilities").peers)
 
         sync_ifaces: list[Any] = []
         for device_obj in member_devices:
@@ -861,3 +904,27 @@ class DeviceMixin(MLAGWiringMixin):
             parent_id=parent_id,
             parent_attr="vlan_pool",
         )
+
+    async def link_serving_firewall_context(self, *, kind: str, customer_id: str, context_id: str) -> None:
+        """Point this deployment at the context its segments terminate on.
+
+        Shared by generators/topology/customer_dc.py (kind=TopologyCustomerDC)
+        and generators/topology/customer_colocation.py
+        (kind=TopologyCustomerColocation) — same deployment-to-context link,
+        same race-free update, same facility-agnostic rationale.
+
+        The firewall transform reads the link to place each rule in the
+        contexts of its two segments. Only this deployment's own run writes
+        it, so boardings onto one shared context never race. Not tracked:
+        the deployment is the generator's target, not its output, and
+        tracking it would let delete_unused_nodes remove it.
+        """
+        try:
+            deployment = await self.client.get(kind=kind, id=customer_id)
+            if deployment.serving_firewall_context.id == context_id:
+                return
+            deployment.serving_firewall_context = context_id
+            await deployment.save(update_group_context=False)
+            self.logger.info(f"Deployment {customer_id} served by FirewallContext {context_id}")
+        except Exception as exc:
+            self.logger.error(f"Failed to link deployment {customer_id} to FirewallContext {context_id}: {exc}")

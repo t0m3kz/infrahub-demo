@@ -2,7 +2,7 @@
 {%- set device_metadata = {
   'localhost': {
     'hostname': hostname,
-    'type': 'SpineRouter'
+    'type': sonic_device_type | default('SpineRouter')
   }
 } -%}
 {%- if bgp %}

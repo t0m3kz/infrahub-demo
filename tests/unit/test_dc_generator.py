@@ -560,6 +560,23 @@ class TestGenerateDCPoolAttachment:
         dc_obj.save.assert_awaited_once_with()
 
     @pytest.mark.asyncio
+    async def test_asn_and_vni_pools_ride_the_same_single_save(self) -> None:
+        """The ASN and VNI pools are attached on the DC's one save, not by the
+        pool helpers fetching and saving the DC again."""
+        gen = _make_generator()
+        dc_obj = MagicMock()
+        dc_obj.save = AsyncMock()
+        gen.client.get = AsyncMock(return_value=dc_obj)
+
+        await gen.generate(_deployment(design=_design()))
+
+        assert dc_obj.fabric_asn_pool == {"id": "asn-pool-1"}
+        assert dc_obj.vni_pool == {"id": "num-pool-1"}
+        dc_obj.save.assert_awaited_once_with()
+        for call in gen.upsert_asn_pool.await_args_list + gen.upsert_number_pool.await_args_list:
+            assert "parent_id" not in call.kwargs
+
+    @pytest.mark.asyncio
     async def test_dc_not_found_skips_pool_attachment_without_error(self) -> None:
         gen = _make_generator()
         gen.client.get = AsyncMock(return_value=None)

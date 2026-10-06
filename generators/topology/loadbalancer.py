@@ -32,14 +32,6 @@ from ..connections import CablingMixin
 from ..protocols import IpamIPAddress, LoadbalancerVIP
 
 
-def _dev_id(device: Any) -> str:
-    return device["id"] if isinstance(device, dict) else device.id
-
-
-def _dev_name(device: Any) -> str:
-    return device["name"] if isinstance(device, dict) else device.name.value
-
-
 class LoadbalancerBackendNexthopGenerator(CablingMixin, CommonGenerator):
     """add_lb_backend_nexthop — VLAN sub-interface + IP for a no-SNAT VIP's
     return path, on every device of the VIP's own load-balancer HA domain.
@@ -108,8 +100,8 @@ class LoadbalancerBackendNexthopGenerator(CablingMixin, CommonGenerator):
         vip_obj = await self.client.get(kind=LoadbalancerVIP, id=vip_id)
 
         for device in devices:
-            device_id = _dev_id(device)
-            device_name = _dev_name(device)
+            device_id = device["id"]
+            device_name = device["name"]
             ip_id: str | None = None
             if pool is not None:
                 ip_id = await self._allocate_backend_ip(pool=pool, vip_id=vip_id, device_name=device_name)

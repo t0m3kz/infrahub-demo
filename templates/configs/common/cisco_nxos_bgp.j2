@@ -1,13 +1,7 @@
-{%- set _lb = namespace(name='loopback0') %}
-{%- for iface in interfaces %}
-{%- if iface.name | lower | truncate(8, true, '') == 'loopback' and _lb.name == 'loopback0' %}
-{%- set _lb.name = iface.name %}
-{%- endif %}
-{%- endfor %}
 {%- if capabilities is not defined or capabilities.bgp_enabled is not defined or capabilities.bgp_enabled %}
 {%- for bgp_config in bgp %}
 router bgp {{ bgp_config.local_as.asn }}
-  router-id {{ bgp_config.router_id.address.split('/')[0] }}
+  router-id {{ bgp_config.router_ip }}
 {%- if bgp_config.get('cluster_id') %}
   bgp cluster-id {{ bgp_config.cluster_id }}
 {%- endif %}
@@ -35,7 +29,7 @@ router bgp {{ bgp_config.local_as.asn }}
   !
   template peer-session {{ pg.name }}-SESSION
 {%- if pg.type == 'overlay' %}
-    update-source {{ _lb.name }}
+    update-source {{ loopback_name }}
 {%- endif %}
 {%- if pg.get('ebgp_multihop') %}
     ebgp-multihop {{ pg.ebgp_multihop }}
@@ -63,11 +57,7 @@ router bgp {{ bgp_config.local_as.asn }}
     maximum-paths 8
 {%- endif %}
   !
-{%- set ns = namespace(has_ipv6=false) %}
-{%- for session in bgp_config.sessions if not session.get('vrf') %}
-{%- if 'ipv6' in (session.address_families | default([])) %}{% set ns.has_ipv6 = true %}{% endif %}
-{%- endfor %}
-{%- if ns.has_ipv6 %}
+{%- if bgp_config.has_ipv6 %}
   address-family ipv6 unicast
     redistribute direct route-map RM-CONN-2-BGP
 {%- if bgp_config.multipath %}
@@ -88,9 +78,7 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- endif %}
   !
 {%- for session in bgp_config.sessions if not session.get('vrf') %}
-{%- set is_unnumbered = session.get('interface_name') and not session.get('remote_ip') %}
-{%- set neighbor_id = session.interface_name if is_unnumbered else session.remote_ip.address.split('/')[0] %}
-  neighbor {{ neighbor_id }}
+  neighbor {{ session.neighbor }}
     remote-as {{ session.remote_as.asn }}
 {#- See _bgp_local_as_eos.j2 for why this exists and why both keywords are
     required; NX-OS spells it the same way. #}
@@ -111,7 +99,7 @@ router bgp {{ bgp_config.local_as.asn }}
     inherit peer-session {{ session.peer_group }}-SESSION
 {%- else %}
 {%- if session.get('ttl') != 1 %}
-    update-source {{ _lb.name }}
+    update-source {{ loopback_name }}
 {%- endif %}
 {%- if session.get('bfd_enabled') %}
     bfd
@@ -218,17 +206,16 @@ router bgp {{ bgp_config.local_as.asn }}
     namespace (transforms/helpers/bgp.py sets session.vrf), e.g. the
     colocation edge's PROD handoff to the SD-WAN gateway. They are kept out of
     the global peer groups and rendered here, inside their VRF. -#}
-{%- set _vrf_sessions = bgp_config.sessions | selectattr('vrf', 'defined') | selectattr('vrf') | list %}
-{%- for vrf_name in (_evpn_vrfs + (_vrf_sessions | map(attribute='vrf') | list)) | unique %}
+{%- for vrf_name in (_evpn_vrfs + (bgp_config.vrf_sessions | list)) | unique %}
   vrf {{ vrf_name }}
     address-family ipv4 unicast
 {%- if vrf_name in _evpn_vrfs %}
       advertise l2vpn evpn
       redistribute direct route-map RM-VRF-DIRECT-2-EVPN
 {%- endif %}
-{%- for session in _vrf_sessions if session.vrf == vrf_name %}
+{%- for session in bgp_config.vrf_sessions.get(vrf_name, []) %}
 {%- set _af = 'ipv6' if 'ipv6' in (session.address_families | default([])) else 'ipv4' %}
-    neighbor {{ session.remote_ip.address.split('/')[0] }}
+    neighbor {{ session.neighbor }}
       remote-as {{ session.remote_as.asn }}
 {%- if session.get('remote_device') %}
       description {{ session.remote_device }}

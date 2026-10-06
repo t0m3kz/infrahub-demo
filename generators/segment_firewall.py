@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, Callable
 
 from utils.ports import PortSpec
@@ -9,7 +10,6 @@ from utils.ports import PortSpec
 from .helpers.rules import RulesPlanner
 from .named_objects import GetOrCreateByNameMixin
 from .protocols import SecurityPolicy, SecurityPolicyRule, SecuritySecurityProfile, SecurityTagRule, SecurityZone
-from .rules import RuleLifecycleMixin
 
 if TYPE_CHECKING:
     import logging
@@ -21,7 +21,37 @@ RULE_SAVE_ATTEMPTS = 5
 RULE_DEFAULT_VALIDITY_DAYS = 180
 
 
-class SegmentFirewallMixin(GetOrCreateByNameMixin, RuleLifecycleMixin):
+def _default_expiry_iso() -> str:
+    """UTC ISO timestamp RULE_DEFAULT_VALIDITY_DAYS from now."""
+    expires_at = datetime.now(timezone.utc) + timedelta(days=RULE_DEFAULT_VALIDITY_DAYS)
+    return expires_at.replace(microsecond=0).isoformat()
+
+
+def _is_expired(value: Any) -> bool:
+    """Whether a datetime or ISO string (``Z`` suffix allowed) is at or before now (UTC)."""
+    if isinstance(value, datetime):
+        expires_at = value
+    else:
+        raw = str(value or "").strip()
+        if raw.endswith("Z"):
+            raw = raw[:-1] + "+00:00"
+        try:
+            expires_at = datetime.fromisoformat(raw)
+        except ValueError:
+            return False
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    return expires_at <= datetime.now(timezone.utc)
+
+
+def _next_free_rule_index(used: set[int]) -> int:
+    rule_index = RULE_INDEX_START
+    while rule_index in used:
+        rule_index += RULE_INDEX_STEP
+    return rule_index
+
+
+class SegmentFirewallMixin(GetOrCreateByNameMixin):
     """On-prem segment-to-segment dependency rules — the SecurityPolicy/
     SecurityPolicyRule path dispatched from _reconcile_application_rules for
     every AppDependency edge that isn't cloud-side (CloudSecurityRuleMixin)
@@ -49,10 +79,13 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin, RuleLifecycleMixin):
         dst_seg: dict[str, Any],
         planner: RulesPlanner,
         segment_policies: dict[str, Any],
+        rule_indexes: dict[str, set[int]],
         port: PortSpec,
     ) -> tuple[bool, bool]:
         """On-prem segment-to-segment dependency rule for one edge and port.
 
+        ``segment_policies`` (source segment id -> policy) and ``rule_indexes``
+        (policy id -> used rule indexes) are the caller's per-run caches.
         Returns (created, skipped) for the caller to fold into its running
         counters — a missing network_segment contributes to neither (matches
         the pre-extraction behaviour of silently `continue`-ing).
@@ -91,7 +124,7 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin, RuleLifecycleMixin):
                 dst_zone or "<missing>",
             )
 
-        existing_rule = await self._find_existing_policy_rule(policy_id=policy_id, rule_name=rule_name)
+        existing_rule = await self._find_rule_by_name(SecurityPolicyRule, policy_id, rule_name)
         if existing_rule is not None:
             self.logger.info("  Rule '%s' already exists - registering with tracker", rule_name)
             await existing_rule.save(allow_upsert=True)
@@ -139,6 +172,7 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin, RuleLifecycleMixin):
                 policy_id=policy_id,
                 rule_name=rule_name,
                 rule_data=rule_data,
+                rule_indexes=rule_indexes,
             )
             self.logger.info(
                 "  Created rule [%d] '%s' (%s -> %s, %s/%s)",
@@ -161,33 +195,6 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin, RuleLifecycleMixin):
             self.logger.error("  Failed to create rule '%s': %s", rule_name, exc)
             return False, False
 
-    @staticmethod
-    def _segment_policy_name(segment: dict[str, Any]) -> str:
-        return RulesPlanner.segment_policy_name(segment)
-
-    @staticmethod
-    def _owner_org_id_from_component(component: dict[str, Any]) -> str | None:
-        return RulesPlanner.owner_org_id_from_component(component)
-
-    @staticmethod
-    def _owner_name_from_component(component: dict[str, Any]) -> str | None:
-        return RulesPlanner.owner_name_from_component(component)
-
-    @staticmethod
-    def _dependency_access_status(dep: dict[str, Any]) -> str:
-        return RulesPlanner.dependency_access_status(dep)
-
-    def _dependency_is_authorized(
-        self,
-        src_comp: dict[str, Any],
-        dst_comp: dict[str, Any],
-        dep: dict[str, Any],
-    ) -> tuple[bool, str | None]:
-        return RulesPlanner.dependency_is_authorized(src_comp, dst_comp, dep)
-
-    def _governance_suffix(self, src_comp: dict[str, Any], dst_comp: dict[str, Any], dep: dict[str, Any]) -> str:
-        return RulesPlanner.governance_suffix(src_comp, dst_comp, dep)
-
     async def _get_or_create_policy(self, policy_name: str, app_name: str) -> Any | None:
         return await self._get_or_create_by_name(
             kind=SecurityPolicy,
@@ -202,42 +209,65 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin, RuleLifecycleMixin):
             created_log="Created policy: %s",
         )
 
-    async def _find_existing_policy_rule(self, policy_id: str, rule_name: str) -> Any | None:
-        existing_rules = await self.client.filters(kind=SecurityPolicyRule, policy__ids=[policy_id])
-        for rule in existing_rules:
-            if getattr(rule, "name", None) and rule.name.value == rule_name:
-                return rule
-        return None
-
-    async def _allocate_policy_rule_index(self, policy_id: str) -> int:
-        existing_rules = await self.client.filters(kind=SecurityPolicyRule, policy__ids=[policy_id])
-        used_indexes: set[int] = set()
-        for rule in existing_rules:
-            if getattr(rule, "index", None) and rule.index.value is not None:
-                used_indexes.add(int(rule.index.value))
-
-        rule_index = RULE_INDEX_START
-        while rule_index in used_indexes:
-            rule_index += RULE_INDEX_STEP
-        return rule_index
+    async def _read_policy_rules(self, policy_id: str, rule_indexes: dict[str, set[int]]) -> list[Any]:
+        """List the policy's rules from the server and record their indexes in ``rule_indexes``."""
+        rules = await self.client.filters(kind=SecurityPolicyRule, policy__ids=[policy_id])
+        rule_indexes[policy_id] = {int(rule.index.value) for rule in rules if rule.index.value is not None}
+        return rules
 
     async def _create_or_update_policy_rule(
         self,
         policy_id: str,
         rule_name: str,
         rule_data: dict[str, Any],
+        rule_indexes: dict[str, set[int]],
     ) -> tuple[Any, int]:
-        return await self._create_or_update_indexed_rule(
-            rule_kind=SecurityPolicyRule,
-            parent_id=policy_id,
-            rule_name=rule_name,
-            rule_data=rule_data,
-            find_existing=self._find_existing_policy_rule,
-            allocate_index=self._allocate_policy_rule_index,
-            collision_hint="policy-index",
-            max_attempts=RULE_SAVE_ATTEMPTS,
-            default_validity_days=RULE_DEFAULT_VALIDITY_DAYS,
-        )
+        """Save a rule at the policy's lowest free index, retrying on an index collision.
+
+        ``rule_indexes`` holds each policy's used indexes for the run, read
+        from the server on first use. A collision means another run took the
+        index: the policy is re-read, and a rule of this name that run made
+        meanwhile is updated in place, keeping its index, expiry and disabled flag.
+        """
+        if policy_id not in rule_indexes:
+            await self._read_policy_rules(policy_id, rule_indexes)
+        payload = dict(rule_data)
+        payload.setdefault("expires_at", _default_expiry_iso())
+        index = _next_free_rule_index(rule_indexes[policy_id])
+        existing_disabled = False
+
+        attempt = 1
+        while True:
+            payload["index"] = index
+            payload["disabled"] = bool(
+                existing_disabled or rule_data.get("disabled", False) or _is_expired(payload["expires_at"])
+            )
+            try:
+                rule = await self.client.create(kind=SecurityPolicyRule, data=payload)
+                await rule.save(allow_upsert=True)
+            except Exception as exc:
+                if "policy-index" not in str(exc) or attempt == RULE_SAVE_ATTEMPTS:
+                    raise
+                attempt += 1
+                self.logger.warning(
+                    "Index collision for '%s', retrying with refreshed index (attempt %d/%d)",
+                    rule_name,
+                    attempt,
+                    RULE_SAVE_ATTEMPTS,
+                )
+                rules = await self._read_policy_rules(policy_id, rule_indexes)
+                existing = next((rule for rule in rules if rule.name.value == rule_name), None)
+                if existing is not None and "id" not in payload and existing.index.value is not None:
+                    payload["id"] = existing.id
+                    index = int(existing.index.value)
+                    if "expires_at" not in rule_data and existing.expires_at.value:
+                        payload["expires_at"] = existing.expires_at.value
+                    existing_disabled = bool(existing.disabled.value)
+                else:
+                    index = _next_free_rule_index(rule_indexes[policy_id])
+                continue
+            rule_indexes[policy_id].add(index)
+            return rule, index
 
     async def _cached_lookup_by_name(self, *, cache_attr: str, kind: Any, name: str) -> Any | None:
         """Shared cache-or-fetch-by-name-value shape (read-only — never
@@ -362,7 +392,3 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin, RuleLifecycleMixin):
                 dst_tag.get("name", dst_tag_id),
                 exc,
             )
-
-    @staticmethod
-    def _pick_profile(app_security_profile: str, cross_zone: bool) -> str | None:
-        return RulesPlanner.pick_profile_name(app_security_profile, cross_zone)

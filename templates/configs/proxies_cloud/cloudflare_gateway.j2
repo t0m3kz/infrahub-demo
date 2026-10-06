@@ -10,7 +10,7 @@
     {
       "name": {{ (rule.name or rule.acl_name) | tojson }},
       "precedence": {{ loop.index * 100 }},
-      "action": {{ ('allow' if rule.action in ('allow', 'bypass') else 'block') | tojson }},
+      "action": {{ rule.verdict | tojson }},
       "enabled": true,
       "traffic": {{ ("any(http.request.domains[*] in {" ~ (rule.destinations | map('tojson') | join(' ')) ~ "})") | tojson }},
       "description": {{ (rule.description or '') | tojson }}

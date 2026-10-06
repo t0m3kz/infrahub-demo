@@ -71,18 +71,17 @@ class TestEnsurePodSpineAs:
         gen.logger.warning.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_lookup_exception_falls_through_to_pool_allocation(self) -> None:
+    async def test_lookup_exception_logs_error_without_allocating(self) -> None:
+        """A failed lookup never draws a fresh ASN that could duplicate the pod's AS."""
         gen = _make_generator()
         gen.client.filters = AsyncMock(side_effect=Exception("db down"))
-        new_as = MagicMock(id="pod-as-new")
-        new_as.asn.value = 65001
-        new_as.save = AsyncMock()
-        gen.client.create = AsyncMock(return_value=new_as)
+        gen.client.create = AsyncMock()
 
         result = await gen._ensure_pod_spine_as("pool-1")
 
-        assert result == "pod-as-new"
-        gen.logger.warning.assert_called_once()
+        assert result is None
+        gen.client.create.assert_not_called()
+        gen.logger.error.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_create_exception_logs_error_and_returns_none(self) -> None:
@@ -137,7 +136,7 @@ class TestSuperSpineOverlayReadiness:
         second.capabilities.peers = [MagicMock(display_label="ss-dc1102")]
         gen.client.filters = AsyncMock(return_value=[first, second])
 
-        assert await gen._super_spine_overlay_ready(["ss-dc1101", "ss-dc1102"])
+        assert await gen.bgp_processes_ready(["ss-dc1101", "ss-dc1102"], "overlay")
 
     @pytest.mark.asyncio
     async def test_rejects_missing_super_spine_overlay_process(self) -> None:
@@ -147,4 +146,4 @@ class TestSuperSpineOverlayReadiness:
         process.capabilities.peers = [MagicMock(display_label="ss-dc1101")]
         gen.client.filters = AsyncMock(return_value=[process])
 
-        assert not await gen._super_spine_overlay_ready(["ss-dc1101", "ss-dc1102"])
+        assert not await gen.bgp_processes_ready(["ss-dc1101", "ss-dc1102"], "overlay")

@@ -48,6 +48,29 @@ def _get_segment_namespace(seg: dict) -> dict:
     return ((seg.get("gateway") or {}).get("ip_prefix") or {}).get("ip_namespace") or {}
 
 
+def segment_hosting_candidates(deployment: Any) -> list[dict]:
+    """The device's deployment and its parent, nearest first.
+
+    Only TopologyDataCenter and TopologyColocationMetro inherit
+    TopologySegmentHosting: a border-leaf's deployment IS the DC, but a leaf's
+    deployment is the pod, one hop below it. The device-scoped fragments
+    (evpn_fabric.gql, firewall_contexts.gql, loadbalancer_vips.gql) nest one
+    `parent` hop for that case.
+    """
+    parent = deployment.get("parent") if isinstance(deployment, dict) else None
+    return [c for c in (deployment, parent) if isinstance(c, dict)]
+
+
+def segment_vlan_ids(activations: list[dict[str, Any]] | None) -> dict[str, int]:
+    """Segment name -> local vlan_id, for the activations that have both."""
+    vlan_ids: dict[str, int] = {}
+    for act in activations or []:
+        seg_name = (act.get("segment") or {}).get("name")
+        if seg_name and act.get("vlan_id"):
+            vlan_ids[seg_name] = act["vlan_id"]
+    return vlan_ids
+
+
 def _flatten_deployment_segment_activations(deployment: dict[str, Any] | None) -> list[dict[str, Any]]:
     """Flatten a TopologyDeployment's own `segment_deployments` (queried via
     queries/fragments/network_segment.gql's SegmentDeploymentsOnDeploymentFields)

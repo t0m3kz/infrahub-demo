@@ -13,13 +13,13 @@ from typing import Any
 
 from infrahub_sdk.transforms import InfrahubTransform
 
+from transforms.helpers.addressing import host_ip
 from transforms.helpers.bgp import get_bgp_profile
 from utils.data_cleaning import clean_data
 
 
 def _device_ip(device: dict[str, Any]) -> str | None:
-    address = (device.get("primary_address") or {}).get("address")
-    return address.split("/")[0] if address else None
+    return host_ip((device.get("primary_address") or {}).get("address"))
 
 
 def _build_apic(controller: dict[str, Any]) -> dict[str, Any]:
@@ -123,7 +123,7 @@ def _vrf_handoffs(device: dict[str, Any]) -> list[dict[str, Any]]:
                     "local-address": (session.get("local_ip") or {}).get("address"),
                     "bgp": {
                         "local-asn": (session.get("local_as_override") or session.get("local_as") or {}).get("asn"),
-                        "neighbor-ip": (session.get("remote_ip") or {}).get("address", "").split("/")[0] or None,
+                        "neighbor-ip": host_ip((session.get("remote_ip") or {}).get("address")),
                         "neighbor-asn": (session.get("remote_as") or {}).get("asn"),
                         "neighbor": session.get("remote_device"),
                     },

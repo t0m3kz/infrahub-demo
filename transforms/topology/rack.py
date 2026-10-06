@@ -1,5 +1,6 @@
 from infrahub_sdk.transforms import InfrahubTransform
-from jinja2 import Environment, FileSystemLoader
+
+from transforms.helpers.templates import load_template
 
 # Mapping for fields
 RACK_KIND: str = "LocationRack"
@@ -88,12 +89,7 @@ class RackElevation(InfrahubTransform):
             device["connector_y_position"] = y_position + (y_size - connector_y_size) / 2
 
         # Render SVG using Jinja2 template
-        env = Environment(
-            loader=FileSystemLoader(f"{self.root_directory}/{TEMPLATE_DIR}"),
-            autoescape=False,
-        )
-
-        template = env.get_template("rack.j2")
+        template = load_template(f"{self.root_directory}/{TEMPLATE_DIR}", "rack.j2", keep_trailing_newline=False)
 
         return template.render(
             rack_name=rack_name,

@@ -18,7 +18,7 @@ import jinja2
 import pytest
 import yaml
 
-from transforms.common import BaseDeviceTransform, _combine_leaf_pbr_rules, get_capabilities
+from transforms.common import BaseDeviceTransform, _combine_leaf_pbr_rules, _loopback_name, get_capabilities
 from transforms.config.tor import ToR
 
 # ---------------------------------------------------------------------------
@@ -61,6 +61,7 @@ class TestCombineLeafPbrRules:
             name="test-leaf",
             vlans=[],
             interfaces=[],
+            loopback_name=_loopback_name([], platform),
             acls=[],
             vxlan=None,
             vrf_gateways={},
@@ -189,6 +190,7 @@ def _render_leaf(platform: str, **overrides: object) -> str:
         "hostname": "test-leaf",
         "vlans": [],
         "interfaces": [],
+        "loopback_name": _loopback_name([], platform),
         "acls": [],
         "vxlan": None,
         "vrf_gateways": {},

@@ -5,7 +5,7 @@ configure system hostname "{{ hostname }}"
 configure system dns resolver admin-state enable
 {%- include 'common/nokia_sros_mclag.j2' %}
 configure router "Base" admin-state enable
-configure router "Base" router-id "{{ bgp[0].router_id.address.split('/')[0] if bgp else '0.0.0.0' }}"
+configure router "Base" router-id "{{ bgp[0].router_ip if bgp else '0.0.0.0' }}"
 
 {# Loopback Interface #}
 configure port "system" admin-state enable

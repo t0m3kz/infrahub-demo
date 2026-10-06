@@ -20,7 +20,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.common import CommonGenerator
-from generators.protocols import TopologyCustomerColocation
 from generators.topology.customer_colocation import CustomerDeploymentColocationExchangeGenerator
 
 _T = TypeVar("_T", bound=CommonGenerator)
@@ -34,6 +33,10 @@ def _make_generator(cls: type[_T]) -> Any:
     gen.client.get = AsyncMock()
     gen.client.create = AsyncMock()
     gen.client.execute_graphql = AsyncMock()
+    # The shared FirewallContext is provisioned under a resource lock; the
+    # lock itself is PoolMixin's, tested in test_dc_firewall_lb.py.
+    setattr(gen, "acquire_resource_lock", AsyncMock(return_value="lock-id"))  # noqa: B010
+    setattr(gen, "release_resource_lock", AsyncMock())  # noqa: B010
     return gen
 
 
@@ -228,6 +231,43 @@ class TestFirewallContextProvisioning:
 
         gen._create_context_subinterface.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_context_provisioned_under_per_context_lock(self) -> None:
+        """Every cage in the metro boards onto the same shared context, so
+        concurrent boardings serialize on it — the same lock customer_dc.py
+        takes (this path used to run unlocked)."""
+        gen, fw_device, cluster = self._make_gen_with_cluster()
+        gen._get_or_create_firewall_context = AsyncMock(return_value=MagicMock(id="ctx-1"))
+        events: list[str] = []
+        gen.acquire_resource_lock.side_effect = lambda key: events.append(f"acquire:{key}") or "lock-id"
+        gen.release_resource_lock.side_effect = lambda lock_id: events.append("release")
+        gen._ensure_context_subinterface.side_effect = lambda **_: events.append("subinterface")
+
+        await gen.generate(_colo_payload_with_parent(fw_devices=[fw_device]))
+
+        assert events == [f"acquire:fw-context-{cluster.name.value}-shared", "subinterface", "release"]
+
+
+class TestAllocateContextP2p:
+    @pytest.mark.asyncio
+    async def test_existing_addresses_are_reused_not_recreated(self) -> None:
+        """An address already in the namespace is reused and re-saved, never
+        created a second time (this path used to blind-create both ends)."""
+        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        allocated = MagicMock()
+        allocated.prefix.value = "100.65.0.0/31"
+        allocated.ip_namespace = MagicMock(id="ns-default")
+        existing_ips = [AsyncMock(id="fw-ip"), AsyncMock(id="edge-ip")]
+        gen.client.get = AsyncMock(side_effect=[MagicMock(id="pool-1"), *existing_ips])
+        gen.client.allocate_next_ip_prefix = AsyncMock(return_value=allocated)
+
+        result = await gen._allocate_context_p2p("shared-ctx", "FR")
+
+        assert result == ("fw-ip", "edge-ip")
+        gen.client.create.assert_not_called()
+        for ip_obj in existing_ips:
+            ip_obj.save.assert_awaited_once_with(allow_upsert=True)
+
 
 class TestLinkServingFirewallContext:
     """The deployment records the context its segments terminate on."""
@@ -237,22 +277,24 @@ class TestLinkServingFirewallContext:
         """Shared or dedicated, the context just ensured is the one linked."""
         gen, _, _ = TestFirewallContextProvisioning()._make_gen_with_cluster()
         gen._get_or_create_firewall_context = AsyncMock(return_value=MagicMock(id="ctx-1"))
-        gen._link_serving_firewall_context = AsyncMock()
+        gen.link_serving_firewall_context = AsyncMock()
 
         await gen.generate(_colo_payload_with_parent(customer_id="cust-1"))
 
-        gen._link_serving_firewall_context.assert_awaited_once_with("cust-1", "ctx-1")
+        gen.link_serving_firewall_context.assert_awaited_once_with(
+            kind="TopologyCustomerColocation", customer_id="cust-1", context_id="ctx-1"
+        )
 
     @pytest.mark.asyncio
     async def test_context_creation_failure_links_nothing(self) -> None:
         """No context, no link: the deployment keeps whatever it had."""
         gen, _, _ = TestFirewallContextProvisioning()._make_gen_with_cluster()
         gen._get_or_create_firewall_context = AsyncMock(return_value=None)
-        gen._link_serving_firewall_context = AsyncMock()
+        gen.link_serving_firewall_context = AsyncMock()
 
         await gen.generate(_colo_payload_with_parent())
 
-        gen._link_serving_firewall_context.assert_not_awaited()
+        gen.link_serving_firewall_context.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_link_is_saved_untracked(self) -> None:
@@ -264,9 +306,11 @@ class TestLinkServingFirewallContext:
         deployment.save = AsyncMock()
         gen.client.get = AsyncMock(return_value=deployment)
 
-        await gen._link_serving_firewall_context("cust-1", "ctx-1")
+        await gen.link_serving_firewall_context(
+            kind="TopologyCustomerColocation", customer_id="cust-1", context_id="ctx-1"
+        )
 
-        assert gen.client.get.call_args.kwargs == {"kind": TopologyCustomerColocation, "id": "cust-1"}
+        assert gen.client.get.call_args.kwargs == {"kind": "TopologyCustomerColocation", "id": "cust-1"}
         assert deployment.serving_firewall_context == "ctx-1"
         deployment.save.assert_awaited_once_with(update_group_context=False)
 
@@ -279,7 +323,9 @@ class TestLinkServingFirewallContext:
         deployment.save = AsyncMock()
         gen.client.get = AsyncMock(return_value=deployment)
 
-        await gen._link_serving_firewall_context("cust-1", "ctx-1")
+        await gen.link_serving_firewall_context(
+            kind="TopologyCustomerColocation", customer_id="cust-1", context_id="ctx-1"
+        )
 
         deployment.save.assert_not_awaited()
 
@@ -289,7 +335,9 @@ class TestLinkServingFirewallContext:
         gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
         gen.client.get = AsyncMock(side_effect=RuntimeError("boom"))
 
-        await gen._link_serving_firewall_context("cust-1", "ctx-1")
+        await gen.link_serving_firewall_context(
+            kind="TopologyCustomerColocation", customer_id="cust-1", context_id="ctx-1"
+        )
 
         gen.logger.error.assert_called_once()
 

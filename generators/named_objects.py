@@ -1,4 +1,4 @@
-"""Generic mixin for get-or-create-by-name lookups."""
+"""Generic mixin for get-or-create-by-name and rule-by-name lookups."""
 
 from __future__ import annotations
 
@@ -49,3 +49,8 @@ class GetOrCreateByNameMixin:
         except Exception as exc:
             self.logger.error("Failed to create %s: %s", name, exc)
             return None
+
+    async def _find_rule_by_name(self, kind: Any, policy_id: str, rule_name: str) -> Any | None:
+        """The ``kind`` rule named ``rule_name`` in policy ``policy_id``, or None."""
+        rules = await self.client.filters(kind=kind, policy__ids=[policy_id], name__value=rule_name)
+        return rules[0] if rules else None

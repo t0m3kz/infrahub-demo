@@ -21,7 +21,8 @@ from typing import Any
 import jinja2
 import pytest
 
-from transforms.common import BaseDeviceTransform, _build_peer_groups
+from transforms.common import BaseDeviceTransform
+from transforms.helpers.bgp import _build_peer_groups, add_template_fields
 from transforms.helpers.vxlan import (
     _get_multisite_config,
     _is_multisite_segment,
@@ -390,5 +391,6 @@ class TestNxosMultisiteRendering:
                 ],
             }
         ]
-        rendered = nxos_env.get_template("common/cisco_nxos_bgp.j2").render(bgp=bgp, interfaces=[])
+        add_template_fields(bgp[0])
+        rendered = nxos_env.get_template("common/cisco_nxos_bgp.j2").render(bgp=bgp, loopback_name="loopback0")
         assert "description dc10-bl01\n    peer-type fabric-external" in rendered

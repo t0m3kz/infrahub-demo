@@ -146,43 +146,93 @@ class TestFindExistingOspfArea:
 
 
 # ---------------------------------------------------------------------------
-# _resolve_shared_super_spine_as — fabric-wide shared underlay AS lookup
+# ensure_shared_as — find-or-allocate an AS by deterministic description
 # ---------------------------------------------------------------------------
 
 
-class TestResolveSharedSuperSpineAs:
+class TestEnsureSharedAs:
     @pytest.mark.asyncio
-    async def test_returns_id_when_found(self) -> None:
-        m = _make_mixin(fabric_name="dc1")
-        as_obj = _mock_as_obj(asn=65001, obj_id="ss-as-1")
-        m.client.filters = AsyncMock(return_value=[as_obj])
+    async def test_existing_as_reused_and_tracked(self) -> None:
+        """An AS found by description is returned and tracked, never re-drawn."""
+        m = _make_mixin()
+        m.client.filters = AsyncMock(return_value=[_mock_as_obj(obj_id="ss-as-1")])
+        m.client.create = AsyncMock()
 
-        result = await m._resolve_shared_super_spine_as()
+        result = await m.ensure_shared_as(description="dc1 super-spine underlay ASN", asn_pool_id="pool-1")
 
         assert result == "ss-as-1"
-        m.client.filters.assert_awaited_once_with(
-            kind=m.client.filters.call_args.kwargs["kind"], description__value="dc1 super-spine underlay ASN"
-        )
+        assert m.client.filters.call_args.kwargs["description__value"] == "dc1 super-spine underlay ASN"
+        m.client.create.assert_not_called()
+        assert "ss-as-1" in m.client.group_context.related_node_ids
 
     @pytest.mark.asyncio
-    async def test_returns_none_when_not_found(self) -> None:
+    async def test_new_as_drawn_from_pool(self) -> None:
+        """No AS with the description yet: one is allocated from the pool."""
         m = _make_mixin()
         m.client.filters = AsyncMock(return_value=[])
-        assert await m._resolve_shared_super_spine_as() is None
+        new_as = _mock_as_obj(obj_id="ss-as-new")
+        m.client.create = AsyncMock(return_value=new_as)
+
+        result = await m.ensure_shared_as(description="desc", asn_pool_id="pool-1")
+
+        assert result == "ss-as-new"
+        assert m.client.create.call_args.kwargs["data"] == {
+            "asn": {"from_pool": {"id": "pool-1"}},
+            "description": "desc",
+        }
+        new_as.save.assert_awaited_once_with(allow_upsert=True)
+        assert "ss-as-new" in m.client.group_context.related_node_ids
 
     @pytest.mark.asyncio
-    async def test_returns_none_on_exception(self) -> None:
+    async def test_no_pool_and_no_existing_returns_none(self) -> None:
+        """Nothing to reuse and no pool to draw from returns None."""
+        m = _make_mixin()
+        m.client.filters = AsyncMock(return_value=[])
+        m.client.create = AsyncMock()
+
+        assert await m.ensure_shared_as(description="desc", asn_pool_id=None) is None
+        m.client.create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_lookup_exception_propagates(self) -> None:
+        """Error handling is the caller's: a failed lookup never allocates."""
         m = _make_mixin()
         m.client.filters = AsyncMock(side_effect=Exception("timeout"))
-        assert await m._resolve_shared_super_spine_as() is None
+        m.client.create = AsyncMock()
+
+        with pytest.raises(Exception, match="timeout"):
+            await m.ensure_shared_as(description="desc", asn_pool_id="pool-1")
+        m.client.create.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# bgp_processes_ready — per-device ManagedBGP readiness by process role
+# ---------------------------------------------------------------------------
+
+
+def _mock_bgp(device: str, role: str) -> MagicMock:
+    process = MagicMock()
+    process.process_role.value = role
+    process.capabilities.peers = [MagicMock(display_label=device)]
+    return process
+
+
+class TestBgpProcessesReady:
+    @pytest.mark.asyncio
+    async def test_ready_when_every_device_has_the_role(self) -> None:
+        """Every named device carries a process of the requested role."""
+        m = _make_mixin()
+        m.client.filters = AsyncMock(return_value=[_mock_bgp("sp1", "underlay"), _mock_bgp("sp2", "underlay")])
+
+        assert await m.bgp_processes_ready(["sp1", "sp2"], "underlay")
 
     @pytest.mark.asyncio
-    async def test_description_uses_fabric_name(self) -> None:
-        m = _make_mixin(fabric_name="katowice")
-        m.client.filters = AsyncMock(return_value=[])
-        await m._resolve_shared_super_spine_as()
-        call_kwargs = m.client.filters.call_args.kwargs
-        assert call_kwargs["description__value"] == "katowice super-spine underlay ASN"
+    async def test_other_role_does_not_count(self) -> None:
+        """An overlay process does not satisfy an underlay readiness check."""
+        m = _make_mixin()
+        m.client.filters = AsyncMock(return_value=[_mock_bgp("sp1", "underlay"), _mock_bgp("sp2", "overlay")])
+
+        assert not await m.bgp_processes_ready(["sp1", "sp2"], "underlay")
 
 
 # ---------------------------------------------------------------------------

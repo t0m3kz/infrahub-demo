@@ -5,7 +5,7 @@ Covers:
   - _vlans_from_activations()    — VLAN list from SegmentDeployment records
   - _l2_from_activations()       — L2 VNI mappings from activations
   - _l3_from_activations()       — L3 VNI (VRF) mappings from activations
-  - _transform_vxlan_arista()    — anycast_gateway enabled from gateway_ip presence
+  - _platform_vxlan_config()     — Arista keys; anycast_gateway inherited from the base config
   - get_acls()                   — zero-trust ACL list from security_policies on segments
   - isolation_mode propagation   — _vlans_from_activations and arista_eos.j2 rendering
 """
@@ -16,27 +16,22 @@ from pathlib import Path
 import jinja2
 import pytest
 
-from transforms.common import (
-    _build_acl_rule,
-    _fabric_anycast_mac,
-    _fabric_rt_asn,
-    _l2_from_activations,
-    _l3_from_activations,
-    _transform_vxlan_arista,
-    _vlans_from_activations,
-    get_acls,
-    get_interfaces,
-    get_vlans,
-    get_vxlan_config,
-)
+from transforms.common import _fabric_anycast_mac, _fabric_rt_asn
+from transforms.helpers.acl import _build_acl_rule, get_acls
+from transforms.helpers.segments import _vlans_from_activations, get_vlans
 from transforms.helpers.vxlan import (
     _DEFAULT_ANYCAST_GATEWAY_MAC,
     _L3VNI_SVI_VLAN_BASE,
     _L3VNI_SVI_VLAN_MAX,
     _collect_l3_vni_from_namespaces,
+    _l2_from_activations,
+    _l3_from_activations,
     _overlay_is_ebgp,
+    _platform_vxlan_config,
     _select_evpn_bgp_process,
     _warn_unencodable_vnis,
+    get_interfaces,
+    get_vxlan_config,
 )
 
 # ---------------------------------------------------------------------------
@@ -246,7 +241,7 @@ class TestL3FromActivations:
 
 
 # ===========================================================================
-# _transform_vxlan_arista()
+# _platform_vxlan_config() for arista_eos
 # ===========================================================================
 
 
@@ -265,24 +260,24 @@ class TestTransformVxlanArista:
         }
 
     def test_interface_set_to_vxlan1(self) -> None:
-        result = _transform_vxlan_arista(self._base_config(), local_as=None)
+        result = _platform_vxlan_config(self._base_config(), "arista_eos")
         assert result["interface"] == "Vxlan1"
 
     def test_original_config_not_mutated(self) -> None:
-        """_transform_vxlan_arista uses .copy() — original dict is untouched."""
+        """_platform_vxlan_config copies — original dict is untouched."""
         mappings = [{"vlan_id": 10, "vni": 10010, "gateway_ip": "10.0.10.1/24"}]
         base = self._base_config(mappings)
-        _transform_vxlan_arista(base, local_as=None)
+        _platform_vxlan_config(base, "arista_eos")
         assert "interface" not in base
 
     def test_anycast_gateway_inherited_from_base_not_recomputed(self) -> None:
         """anycast_gateway is computed once, platform-agnostically, in
-        get_vxlan_config's base_config — _transform_vxlan_arista must inherit
-        it via .copy(), not recompute it (that logic moved out; see
+        get_vxlan_config's base_config — _platform_vxlan_config must inherit
+        it, not recompute it (that logic moved out; see
         TestGetVxlanConfigAnycastGateway for the real coverage)."""
         base = self._base_config()
         base["anycast_gateway"] = {"enabled": True, "mac": "00:1c:73:00:dc:01"}
-        result = _transform_vxlan_arista(base, local_as=None)
+        result = _platform_vxlan_config(base, "arista_eos")
         assert result["anycast_gateway"] == {"enabled": True, "mac": "00:1c:73:00:dc:01"}
 
 
@@ -293,7 +288,7 @@ class TestTransformVxlanArista:
 
 class TestGetVxlanConfigAnycastGateway:
     """anycast_gateway is computed once in get_vxlan_config's base_config and
-    inherited unchanged by every _transform_vxlan_* — same standard anycast
+    inherited unchanged by _platform_vxlan_config — same standard anycast
     MAC on every leaf/border-leaf in the fabric, matching
     .dev/scenariusze.txt's "fabric forwarding anycast-gateway-mac" /
     "ip virtual-router mac-address" / "ip anycast-mac-address" (identical
@@ -975,6 +970,7 @@ def _minimal_ctx(**overrides) -> dict:
         "vlans": [],
         "acls": [],
         "interfaces": [],
+        "loopback_name": "Loopback0",
         "ospf": None,
         "bgp": None,
         "vxlan": {"enabled": False},
@@ -1087,7 +1083,7 @@ class TestLeafTemplatesRenderReturnLegs:
 
     def test_nxos_line_has_source_port_and_established(self, arista_env: jinja2.Environment) -> None:
         rendered = arista_env.get_template("leafs/cisco_nxos.j2").render(
-            **_minimal_ctx(acls=[_return_leg_acl()], ospf=[], bgp=[])
+            **_minimal_ctx(acls=[_return_leg_acl()], ospf=[], bgp=[], loopback_name="loopback0")
         )
         assert "5000 permit tcp 10.0.2.0/24 range 8000 8080 10.0.1.0/24 established" in rendered
 
@@ -1192,7 +1188,7 @@ class TestBorderLeafTemplateFirewallContextDot1q:
         ctx["name"] = "test-border-leaf"
         ctx["ospf"] = []
         ctx["bgp"] = []
-        rendered = env.get_template("border_leafs/cisco_nxos.j2").render(**ctx)
+        rendered = env.get_template("border_leafs/cisco_nxos.j2").render(**{**ctx, "loopback_name": "loopback0"})
         assert "interface Ethernet1/49.150" in rendered
         assert "encapsulation dot1q 150" in rendered
 

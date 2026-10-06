@@ -511,7 +511,8 @@ class TestLoadBalancerCloudProviderDetection:
     async def test_aws_provider_calls_prepare_aws_data(self) -> None:
         transform = _make_cloud_transform()
         with patch(_CLEAN_DATA_PATH, return_value=_cleaned_cloud("aws")):
-            with patch("transforms.config.loadbalancer_cloud.prepare_aws_data", return_value={}) as mock_aws:
+            mock_aws = MagicMock(return_value={})
+            with patch.dict("transforms.config.loadbalancer_cloud._PREPARERS", {"aws": mock_aws}):
                 await transform.transform({})
         mock_aws.assert_called_once()
 
@@ -519,7 +520,8 @@ class TestLoadBalancerCloudProviderDetection:
     async def test_azure_provider_calls_prepare_azure_data(self) -> None:
         transform = _make_cloud_transform()
         with patch(_CLEAN_DATA_PATH, return_value=_cleaned_cloud("azure")):
-            with patch("transforms.config.loadbalancer_cloud.prepare_azure_data", return_value={}) as mock_azure:
+            mock_azure = MagicMock(return_value={})
+            with patch.dict("transforms.config.loadbalancer_cloud._PREPARERS", {"azure": mock_azure}):
                 await transform.transform({})
         mock_azure.assert_called_once()
 
@@ -527,7 +529,8 @@ class TestLoadBalancerCloudProviderDetection:
     async def test_gcp_provider_calls_prepare_gcp_data(self) -> None:
         transform = _make_cloud_transform()
         with patch(_CLEAN_DATA_PATH, return_value=_cleaned_cloud("gcp")):
-            with patch("transforms.config.loadbalancer_cloud.prepare_gcp_data", return_value={}) as mock_gcp:
+            mock_gcp = MagicMock(return_value={})
+            with patch.dict("transforms.config.loadbalancer_cloud._PREPARERS", {"gcp": mock_gcp}):
                 await transform.transform({})
         mock_gcp.assert_called_once()
 
@@ -605,7 +608,7 @@ def _make_onprem_transform() -> LoadBalancer:
     return obj
 
 
-_LB_CLEAN_DATA_PATH = "transforms.config.loadbalancer.clean_data"
+_LB_CLEAN_DATA_PATH = "transforms.common.clean_data"
 
 
 def _cleaned_device(
@@ -679,7 +682,7 @@ class TestLoadBalancerOnpremVipProcessing:
     async def test_vip_included_in_render_context(self) -> None:
         transform = _make_onprem_transform()
         with patch(_LB_CLEAN_DATA_PATH, return_value=_cleaned_device()):
-            with patch("transforms.common.Environment") as mock_env:
+            with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()
                 mock_template.render.return_value = ""
                 mock_env.return_value.get_template.return_value = mock_template
@@ -692,7 +695,7 @@ class TestLoadBalancerOnpremVipProcessing:
     async def test_vip_ip_address_extracted(self) -> None:
         transform = _make_onprem_transform()
         with patch(_LB_CLEAN_DATA_PATH, return_value=_cleaned_device()):
-            with patch("transforms.common.Environment") as mock_env:
+            with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()
                 mock_template.render.return_value = ""
                 mock_env.return_value.get_template.return_value = mock_template
@@ -704,7 +707,7 @@ class TestLoadBalancerOnpremVipProcessing:
     async def test_lb_name_from_load_balancer_relation(self) -> None:
         transform = _make_onprem_transform()
         with patch(_LB_CLEAN_DATA_PATH, return_value=_cleaned_device()):
-            with patch("transforms.common.Environment") as mock_env:
+            with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()
                 mock_template.render.return_value = ""
                 mock_env.return_value.get_template.return_value = mock_template
@@ -718,7 +721,7 @@ class TestLoadBalancerOnpremVipProcessing:
         cleaned = _cleaned_device()
         cleaned["DcimPhysicalDevice"][0]["interfaces"][0]["interface_capabilities"] = []
         with patch(_LB_CLEAN_DATA_PATH, return_value=cleaned):
-            with patch("transforms.common.Environment") as mock_env:
+            with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()
                 mock_template.render.return_value = ""
                 mock_env.return_value.get_template.return_value = mock_template
@@ -731,7 +734,7 @@ class TestLoadBalancerOnpremMembers:
     async def test_members_included_in_vip(self) -> None:
         transform = _make_onprem_transform()
         with patch(_LB_CLEAN_DATA_PATH, return_value=_cleaned_device()):
-            with patch("transforms.common.Environment") as mock_env:
+            with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()
                 mock_template.render.return_value = ""
                 mock_env.return_value.get_template.return_value = mock_template
@@ -744,7 +747,7 @@ class TestLoadBalancerOnpremMembers:
     async def test_member_ip_extracted(self) -> None:
         transform = _make_onprem_transform()
         with patch(_LB_CLEAN_DATA_PATH, return_value=_cleaned_device()):
-            with patch("transforms.common.Environment") as mock_env:
+            with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()
                 mock_template.render.return_value = ""
                 mock_env.return_value.get_template.return_value = mock_template
@@ -770,7 +773,7 @@ class TestLoadBalancerOnpremMembers:
         ]
         transform = _make_onprem_transform()
         with patch(_LB_CLEAN_DATA_PATH, return_value=_cleaned_device(vip_services=vip_services)):
-            with patch("transforms.common.Environment") as mock_env:
+            with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()
                 mock_template.render.return_value = ""
                 mock_env.return_value.get_template.return_value = mock_template
@@ -797,7 +800,7 @@ class TestLoadBalancerOnpremHealthChecks:
         ]
         transform = _make_onprem_transform()
         with patch(_LB_CLEAN_DATA_PATH, return_value=_cleaned_device(vip_services=vip_services)):
-            with patch("transforms.common.Environment") as mock_env:
+            with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()
                 mock_template.render.return_value = ""
                 mock_env.return_value.get_template.return_value = mock_template
@@ -811,7 +814,7 @@ class TestLoadBalancerOnpremHealthChecks:
     async def test_no_health_checks_means_empty_list(self) -> None:
         transform = _make_onprem_transform()
         with patch(_LB_CLEAN_DATA_PATH, return_value=_cleaned_device()):
-            with patch("transforms.common.Environment") as mock_env:
+            with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()
                 mock_template.render.return_value = ""
                 mock_env.return_value.get_template.return_value = mock_template
@@ -842,7 +845,7 @@ class TestLoadBalancerOnpremVipLbParams:
         ]
         transform = _make_onprem_transform()
         with patch(_LB_CLEAN_DATA_PATH, return_value=_cleaned_device(vip_services=vip_services)):
-            with patch("transforms.common.Environment") as mock_env:
+            with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()
                 mock_template.render.return_value = ""
                 mock_env.return_value.get_template.return_value = mock_template
@@ -855,7 +858,7 @@ class TestLoadBalancerOnpremVipLbParams:
     async def test_lb_params_none_when_absent(self) -> None:
         transform = _make_onprem_transform()
         with patch(_LB_CLEAN_DATA_PATH, return_value=_cleaned_device()):
-            with patch("transforms.common.Environment") as mock_env:
+            with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()
                 mock_template.render.return_value = ""
                 mock_env.return_value.get_template.return_value = mock_template

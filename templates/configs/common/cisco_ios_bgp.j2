@@ -1,7 +1,7 @@
 {%- if capabilities is not defined or capabilities.bgp_enabled is not defined or capabilities.bgp_enabled %}
 {%- for bgp_config in bgp %}
 router bgp {{ bgp_config.local_as.asn }}
-  bgp router-id {{ bgp_config.router_id.address.split('/')[0] }}
+  bgp router-id {{ bgp_config.router_ip }}
 {%- if bgp_config.graceful_restart %}
   bgp graceful-restart
 {%- endif %}
@@ -47,54 +47,52 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- endif %}
 {%- endfor %}
 {%- for session in bgp_config.sessions if not session.get('vrf') %}
-{%- set is_unnumbered = session.get('interface_name') and not session.get('remote_ip') %}
-{%- set remote_ip = session.interface_name if is_unnumbered else session.remote_ip.address.split('/')[0] %}
 {%- if session.peer_group is defined %}
-  neighbor {{ remote_ip }} peer-group {{ session.peer_group }}
+  neighbor {{ session.neighbor }} peer-group {{ session.peer_group }}
 {%- if not session.get('remote_as_from_peer_group') %}
-  neighbor {{ remote_ip }} remote-as {{ session.remote_as.asn }}
+  neighbor {{ session.neighbor }} remote-as {{ session.remote_as.asn }}
 {%- endif %}
 {#- See _bgp_local_as_eos.j2 for why this exists and why both keywords are
     required; classic IOS spells it the same way. #}
 {%- if session.get('local_as_override') %}
-  neighbor {{ remote_ip }} local-as {{ session.local_as_override.asn }} no-prepend replace-as
+  neighbor {{ session.neighbor }} local-as {{ session.local_as_override.asn }} no-prepend replace-as
 {%- endif %}
 {%- else %}
-  neighbor {{ remote_ip }} remote-as {{ session.remote_as.asn }}
+  neighbor {{ session.neighbor }} remote-as {{ session.remote_as.asn }}
 {%- if session.get('local_as_override') %}
-  neighbor {{ remote_ip }} local-as {{ session.local_as_override.asn }} no-prepend replace-as
+  neighbor {{ session.neighbor }} local-as {{ session.local_as_override.asn }} no-prepend replace-as
 {%- endif %}
 {%- if session.get('ttl') != 1 %}
-  neighbor {{ remote_ip }} update-source Loopback0
+  neighbor {{ session.neighbor }} update-source Loopback0
 {%- endif %}
 {%- if session.get('send_community') and session.get('send_extended_community') %}
-  neighbor {{ remote_ip }} send-community both
+  neighbor {{ session.neighbor }} send-community both
 {%- elif session.get('send_extended_community') %}
-  neighbor {{ remote_ip }} send-community extended
+  neighbor {{ session.neighbor }} send-community extended
 {%- elif session.get('send_community') %}
-  neighbor {{ remote_ip }} send-community standard
+  neighbor {{ session.neighbor }} send-community standard
 {%- endif %}
 {%- if session.get('remove_private_as') %}
-  neighbor {{ remote_ip }} remove-private-as
+  neighbor {{ session.neighbor }} remove-private-as
 {%- endif %}
 {%- if session.get('bfd_enabled') %}
-  neighbor {{ remote_ip }} fall-over bfd
+  neighbor {{ session.neighbor }} fall-over bfd
 {%- endif %}
 {%- endif %}
 {%- if session.get('remote_device') %}
-  neighbor {{ remote_ip }} description {{ session.remote_device }}
+  neighbor {{ session.neighbor }} description {{ session.remote_device }}
 {%- endif %}
 {%- if session.get('maximum_routes') %}
-  neighbor {{ remote_ip }} maximum-prefix {{ session.maximum_routes }}
+  neighbor {{ session.neighbor }} maximum-prefix {{ session.maximum_routes }}
 {%- endif %}
 {%- if session.get('password') %}
-  neighbor {{ remote_ip }} password {{ session.password }}
+  neighbor {{ session.neighbor }} password {{ session.password }}
 {%- endif %}
 {%- if session.get('local_pref') %}
-  neighbor {{ remote_ip }} route-map {{ session.name }}-LOCAL-PREF-IN in
+  neighbor {{ session.neighbor }} route-map {{ session.name }}-LOCAL-PREF-IN in
 {%- endif %}
 {%- if session.get('med') %}
-  neighbor {{ remote_ip }} route-map {{ session.name }}-MED-OUT out
+  neighbor {{ session.neighbor }} route-map {{ session.name }}-MED-OUT out
 {%- endif %}
 {%- endfor %}
   !
@@ -106,20 +104,12 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- endif %}
 {%- endfor %}
 {%- for session in bgp_config.sessions if not session.get('vrf') %}
-{%- set _is_u = session.get('interface_name') and not session.get('remote_ip') %}
 {%- if session.peer_group is not defined and 'ipv4' in (session.address_families | default([])) %}
-    neighbor {{ session.interface_name if _is_u else session.remote_ip.address.split('/')[0] }} activate
+    neighbor {{ session.neighbor }} activate
 {%- endif %}
 {%- endfor %}
   exit-address-family
-{%- set ns = namespace(has_evpn=false) %}
-{%- for pg in bgp_config.peer_groups | default([]) %}
-{%- if 'evpn' in (pg.address_families | default([])) %}{% set ns.has_evpn = true %}{% endif %}
-{%- endfor %}
-{%- for session in bgp_config.sessions if not session.get('vrf') %}
-{%- if 'evpn' in (session.address_families | default([])) %}{% set ns.has_evpn = true %}{% endif %}
-{%- endfor %}
-{%- if ns.has_evpn %}
+{%- if bgp_config.has_evpn %}
   !
   address-family l2vpn evpn
 {%- for pg in bgp_config.peer_groups | default([]) %}
@@ -131,12 +121,10 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- endif %}
 {%- endfor %}
 {%- for session in bgp_config.sessions if not session.get('vrf') %}
-{%- set _is_u = session.get('interface_name') and not session.get('remote_ip') %}
 {%- if session.peer_group is not defined and 'evpn' in (session.address_families | default([])) %}
-{%- set _evpn_nb = session.interface_name if _is_u else session.remote_ip.address.split('/')[0] %}
-    neighbor {{ _evpn_nb }} activate
+    neighbor {{ session.neighbor }} activate
 {%- if session.get('route_reflector_client') %}
-    neighbor {{ _evpn_nb }} route-reflector-client
+    neighbor {{ session.neighbor }} route-reflector-client
 {%- endif %}
 {%- endif %}
 {%- endfor %}
@@ -145,48 +133,40 @@ router bgp {{ bgp_config.local_as.asn }}
 {#- VRF neighbours: eBGP handoffs whose local address sits in a tenant
     namespace (transforms/helpers/bgp.py sets session.vrf). Classic IOS
     configures them entirely inside the VRF's address-family. -#}
-{%- set _vrf_sessions = bgp_config.sessions | selectattr('vrf', 'defined') | selectattr('vrf') | list %}
-{%- for vrf_name in _vrf_sessions | map(attribute='vrf') | unique %}
-{%- for _af in ['ipv4', 'ipv6'] %}
-{%- set _af_ns = namespace(sessions=[]) %}
-{%- for session in _vrf_sessions if session.vrf == vrf_name and _af in (session.address_families | default([])) %}
-{%- set _af_ns.sessions = _af_ns.sessions + [session] %}
-{%- endfor %}
-{%- if _af_ns.sessions %}
+{%- for vrf_name, _by_af in bgp_config.vrf_af_sessions.items() %}
+{%- for _af, _af_sessions in _by_af.items() %}
   !
   address-family {{ _af }} vrf {{ vrf_name }}
-{%- for session in _af_ns.sessions %}
-{%- set _nb = session.remote_ip.address.split('/')[0] %}
-    neighbor {{ _nb }} remote-as {{ session.remote_as.asn }}
+{%- for session in _af_sessions %}
+    neighbor {{ session.neighbor }} remote-as {{ session.remote_as.asn }}
 {%- if session.get('remote_device') %}
-    neighbor {{ _nb }} description {{ session.remote_device }}
+    neighbor {{ session.neighbor }} description {{ session.remote_device }}
 {%- endif %}
 {%- if session.get('send_community') and session.get('send_extended_community') %}
-    neighbor {{ _nb }} send-community both
+    neighbor {{ session.neighbor }} send-community both
 {%- elif session.get('send_extended_community') %}
-    neighbor {{ _nb }} send-community extended
+    neighbor {{ session.neighbor }} send-community extended
 {%- elif session.get('send_community') %}
-    neighbor {{ _nb }} send-community standard
+    neighbor {{ session.neighbor }} send-community standard
 {%- endif %}
 {%- if session.get('bfd_enabled') %}
-    neighbor {{ _nb }} fall-over bfd
+    neighbor {{ session.neighbor }} fall-over bfd
 {%- endif %}
 {%- if session.get('maximum_routes') %}
-    neighbor {{ _nb }} maximum-prefix {{ session.maximum_routes }}
+    neighbor {{ session.neighbor }} maximum-prefix {{ session.maximum_routes }}
 {%- endif %}
 {%- if session.get('password') %}
-    neighbor {{ _nb }} password {{ session.password }}
+    neighbor {{ session.neighbor }} password {{ session.password }}
 {%- endif %}
 {%- if session.get('local_pref') %}
-    neighbor {{ _nb }} route-map {{ session.name }}-LOCAL-PREF-IN in
+    neighbor {{ session.neighbor }} route-map {{ session.name }}-LOCAL-PREF-IN in
 {%- endif %}
 {%- if session.get('med') %}
-    neighbor {{ _nb }} route-map {{ session.name }}-MED-OUT out
+    neighbor {{ session.neighbor }} route-map {{ session.name }}-MED-OUT out
 {%- endif %}
-    neighbor {{ _nb }} activate
+    neighbor {{ session.neighbor }} activate
 {%- endfor %}
   exit-address-family
-{%- endif %}
 {%- endfor %}
 {%- endfor %}
 !

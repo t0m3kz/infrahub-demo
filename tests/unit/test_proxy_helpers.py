@@ -15,12 +15,12 @@ from typing import Any
 
 import pytest
 
+from transforms.helpers.policy import merge_policies
 from transforms.helpers.proxy import (
     _render_ports,
     flatten_proxy_rules,
     get_private_access_segments,
     get_proxy_policies,
-    merge_policies,
 )
 
 

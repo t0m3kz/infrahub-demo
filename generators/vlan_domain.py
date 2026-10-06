@@ -14,6 +14,7 @@ DC-wide/fabric-wide segment identifier allocated in segment.py).
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -121,16 +122,37 @@ class VlanDomainMixin:
         await activation.save(allow_upsert=True)
         self.logger.info(f"  Allocated VLAN ID from domain {domain_id}'s pool for segment {segment_name}")
 
+    async def _realize_segment_on_devices(
+        self, segment_id: str, segment_name: str, devices: list[Any]
+    ) -> dict[str, str | None]:
+        """Realize the segment's local VLAN ID once per distinct VLAN domain of
+        ``devices`` (capabilities included). Returns {domain_id: pool_id}."""
+        domain_pools = await self._ensure_vlan_domains_for_devices(devices)
+        for domain_id, pool_id in domain_pools.items():
+            await self._ensure_vlan_domain_segment(segment_id, segment_name, domain_id, pool_id)
+        return domain_pools
+
     async def _ensure_vlan_domains_for_devices(self, devices: list[Any]) -> dict[str, str | None]:
         """Resolve each device's VLAN domain and return {domain_id: pool_id}
         for every distinct domain touched — shared by callers that then upsert
         one ManagedVlanDomainSegment per domain via _ensure_vlan_domain_segment.
+
+        Each device's own resolution is independent — a standalone domain is
+        keyed by that device's own name, and an MLAG-paired device only reads
+        its shared peer id — so these run concurrently; the gather's results
+        are merged into one dict afterwards, single-threaded.
         """
+        resolved = await asyncio.gather(*(self._resolve_device_vlan_domain(device) for device in devices))
         domain_pools: dict[str, str | None] = {}
-        for device in devices:
-            domain_kind, domain_id = await self._resolve_vlan_domain(device)
-            pool_id = None
-            if domain_kind == "DcimPhysicalDevice":
-                domain_id, pool_id = await self._ensure_standalone_vlan_domain(device)
+        for domain_id, pool_id in resolved:
             domain_pools[domain_id] = domain_pools.get(domain_id) or pool_id
         return domain_pools
+
+    async def _resolve_device_vlan_domain(self, device: Any) -> tuple[str, str | None]:
+        """One device's (domain_id, pool_id) — the per-device body gathered by
+        _ensure_vlan_domains_for_devices."""
+        domain_kind, domain_id = await self._resolve_vlan_domain(device)
+        pool_id = None
+        if domain_kind == "DcimPhysicalDevice":
+            domain_id, pool_id = await self._ensure_standalone_vlan_domain(device)
+        return domain_id, pool_id

@@ -58,7 +58,6 @@ from __future__ import annotations
 
 from typing import Any, Literal, cast
 
-from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool
 from typing_extensions import TypedDict
 
 from utils.data_cleaning import clean_data
@@ -67,9 +66,10 @@ from ..common import CommonGenerator, DeviceOptions
 from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
 from ..devices import DeviceMixin
 from ..helpers import get_loopback_name
-from ..helpers.pools import CUSTOMER_VLAN_ID_MAX, name_to_asn_range
+from ..helpers.pools import name_to_asn_range
 from ..pools import PoolMixin
-from ..protocols import DcimVirtualInterface, ManagedBGP, RoutingAutonomousSystem, TopologyColocationMetro
+from ..protocols import DcimVirtualInterface, ManagedBGP, TopologyColocationMetro
+from ..routing import RoutingMixin
 
 # Roles a colocation metro can host. Deliberately NOT dc.py's
 # _DC_VALID_FABRIC_ROLES: `edge` is valid here and invalid at DC level (a DC
@@ -170,7 +170,7 @@ class TopologyColocationMetroData(TypedDict, total=False):
     fabric_templates: list[dict[str, Any]]
 
 
-class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, CommonGenerator):
+class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, CommonGenerator):
     """Create a colocation metro's resource pools and its own on-ramp devices."""
 
     data: TopologyColocationMetroData
@@ -361,21 +361,21 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, CommonGener
         """
         metro = self.fabric_name
 
-        loopback_pool = await self._ensure_sliced_pool(
+        loopback_pool = await self.ensure_sliced_pool(
             pool_name=f"{metro}-loopback-pool",
             parent_pool_name="Loopback-IPv4",
             prefix_length=_COLO_LOOPBACK_PREFIX_LENGTH,
             role="loopback",
             kind="address",
         )
-        management_pool = await self._ensure_sliced_pool(
+        management_pool = await self.ensure_sliced_pool(
             pool_name=f"{metro}-management-pool",
             parent_pool_name="Management-IPv4",
             prefix_length=_COLO_MANAGEMENT_PREFIX_LENGTH,
             role="management",
             kind="address",
         )
-        technical_pool = await self._ensure_sliced_pool(
+        technical_pool = await self.ensure_sliced_pool(
             pool_name=f"{metro}-technical-pool",
             parent_pool_name="Technical-IPv4",
             prefix_length=_COLO_TECHNICAL_PREFIX_LENGTH,
@@ -384,33 +384,26 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, CommonGener
         )
 
         asn_start, asn_end = name_to_asn_range(dc_name=metro, max_pods=_COLO_ASN_MAX_PODS)
-        await self.upsert_asn_pool(
+        asn_pool = await self.upsert_asn_pool(
             pool_name=f"{metro}-asn-pool",
             description=f"ASN pool for colocation metro {metro.upper()}",
             start_range=asn_start,
             end_range=asn_end,
-            parent_kind="TopologyColocationMetro",
-            parent_id=metro_id,
-            parent_attr="asn_pool",
         )
 
         # L2 VNI pool for segments local to this metro, exactly like a DC's
         # (generators/topology/segment.py reads vni_pool off
         # TopologySegmentHosting). Stretched segments reaching the metro take
-        # their VNI from GLOBAL-L2VNI instead. upsert_number_pool attaches it
-        # itself.
-        await self.upsert_number_pool(
+        # their VNI from GLOBAL-L2VNI instead.
+        vni_pool = await self.upsert_number_pool(
             pool_name=f"{metro}-vni-pool",
             description=f"L2 VNI pool for colocation metro {metro.upper()}",
             start_range=_COLO_VNI_RANGE[0],
             end_range=_COLO_VNI_RANGE[1],
             node="ManagedSegmentDeployment",
             node_attribute="vni",
-            parent_kind="TopologyColocationMetro",
-            parent_id=metro_id,
-            parent_attr="vni_pool",
         )
-        self._vtep_pool = await self._ensure_sliced_pool(
+        self._vtep_pool = await self.ensure_sliced_pool(
             pool_name=f"{metro}-loopback-ipv6-pool",
             parent_pool_name="Loopback-IPv6",
             prefix_length=_COLO_LOOPBACK_IPV6_PREFIX_LENGTH,
@@ -418,12 +411,12 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, CommonGener
             kind="address",
         )
 
-        # One fetch + one save for the three IP pools (upsert_asn_pool already
-        # attached its own). Plain save(), not allow_upsert=True: `node` is a
-        # known-existing node, so update() sends only the modified fields —
-        # allow_upsert=True routes through the Upsert mutation, which resends
-        # every attribute and relationship and so re-fires any `updated`
-        # trigger watching fabric_templates on every pool attach.
+        # One fetch + one save for every pool reference. Plain save(), not
+        # allow_upsert=True: `node` is a known-existing node, so update() sends
+        # only the modified fields — allow_upsert=True routes through the Upsert
+        # mutation, which resends every attribute and relationship and so
+        # re-fires any `updated` trigger watching fabric_templates on every
+        # pool attach.
         node = await self.client.get(kind=TopologyColocationMetro, id=metro_id)
         if not node:
             self.logger.error(f"Metro {metro}: could not re-fetch metro {metro_id} to attach pool references")
@@ -431,60 +424,10 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, CommonGener
         node.loopback_pool = {"id": loopback_pool.id}
         node.management_pool = {"id": management_pool.id}
         node.technical_pool = {"id": technical_pool.id}
+        node.asn_pool = {"id": asn_pool.id}
+        node.vni_pool = {"id": vni_pool.id}
         await node.save()
-        self.logger.info(f"Metro {metro}: attached loopback/management/technical pool references")
-
-    async def _ensure_sliced_pool(
-        self,
-        *,
-        pool_name: str,
-        parent_pool_name: str,
-        prefix_length: int,
-        role: str,
-        kind: Literal["address", "prefix"],
-        default_prefix_length: int | None = None,
-    ) -> Any:
-        """Allocate one prefix out of a global bootstrap pool and wrap it in a pool.
-
-        default_prefix_length is what the pool hands out when a caller names no
-        length; it defaults to the slice's own length.
-        """
-        if default_prefix_length is None:
-            default_prefix_length = prefix_length
-        parent_pool = await self._get_parent_pool_with_retry(parent_pool_name)
-        allocated_prefix = await self.client.allocate_next_ip_prefix(
-            resource_pool=parent_pool,
-            identifier=pool_name,
-            prefix_length=prefix_length,
-            data={"role": role},
-        )
-        if kind == "address":
-            pool = await self.client.create(
-                kind=CoreIPAddressPool,
-                data={
-                    "name": pool_name,
-                    "default_address_type": "IpamIPAddress",
-                    "default_prefix_length": default_prefix_length,
-                    "ip_namespace": {"hfid": ["default"]},
-                    "identifier": pool_name,
-                    "resources": [allocated_prefix],
-                },
-            )
-        else:
-            pool = await self.client.create(
-                kind=CoreIPPrefixPool,
-                data={
-                    "name": pool_name,
-                    "default_prefix_type": "IpamPrefix",
-                    "default_prefix_length": default_prefix_length,
-                    "ip_namespace": {"hfid": ["default"]},
-                    "identifier": pool_name,
-                    "resources": [allocated_prefix],
-                },
-            )
-        await pool.save(allow_upsert=True)
-        self.logger.info(f"- Created [{'CoreIPAddressPool' if kind == 'address' else 'CoreIPPrefixPool'}] {pool_name}")
-        return pool
+        self.logger.info(f"Metro {metro}: attached loopback/management/technical/ASN/VNI pool references")
 
     async def _ensure_firewall_context_pools(self) -> None:
         """Create the metro's FirewallContext VLAN and P2P pools.
@@ -492,28 +435,21 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, CommonGener
         generators/topology/customer_colocation.py gives every deployment in
         this metro a context on the metro's firewall pair, with a sub-interface
         on the firewall uplink and on the edge, and takes its VLAN and P2P link
-        from these two pools by name. Same pools as dc.py's
-        _ensure_firewall_context_pools; the P2P slice is IPv4 because the
+        from these two pools by name. The P2P slice is IPv4 because the
         metro's edge legs are (Technical-IPv4).
 
         Only a metro with physical firewalls gets them: without a firewall no
         context is ever created here.
+
+        See PoolMixin.ensure_firewall_context_pools for the shared
+        pool-creation mechanism (also used by generators/topology/dc.py for
+        the per-DC equivalent) and its locking rationale.
         """
-        metro = self.fabric_name
-        await self.upsert_number_pool(
-            pool_name=f"{metro}-fw-context-vlan-pool",
-            description=f"FirewallContext sub-interface VLAN pool for {metro.upper()}",
-            start_range=_COLO_FW_CONTEXT_VLAN_START,
-            end_range=CUSTOMER_VLAN_ID_MAX,
-            node="ManagedFirewallContext",
-            node_attribute="vlan_id",
-        )
-        await self._ensure_sliced_pool(
-            pool_name=f"{metro}-fw-context-p2p-pool",
+        await self.ensure_firewall_context_pools(
+            name=self.fabric_name,
+            vlan_start=_COLO_FW_CONTEXT_VLAN_START,
             parent_pool_name="FW-Context-P2P-IPv4",
-            prefix_length=_COLO_FW_CONTEXT_P2P_SLICE_LENGTH,
-            role="technical",
-            kind="prefix",
+            slice_prefix_length=_COLO_FW_CONTEXT_P2P_SLICE_LENGTH,
             default_prefix_length=31,
         )
 
@@ -628,27 +564,13 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, CommonGener
         asn_pool = await self.client.get(
             kind="CoreNumberPool", name__value=f"{metro}-asn-pool", raise_when_missing=False
         )
-        site_desc = f"{metro} EVPN site ASN"
-        existing = await self.client.filters(kind=RoutingAutonomousSystem, description__value=site_desc)
-        if existing:
-            site_as = existing[0]
-            # Not saved on this path, so track it by hand: delete_unused_nodes
-            # would otherwise delete the AS and the next run draw a new ASN.
-            self.client.group_context.related_node_ids.append(site_as.id)
-        elif asn_pool:
-            site_as = await self.client.create(
-                kind=RoutingAutonomousSystem,
-                data={"asn": {"from_pool": {"id": asn_pool.id}}, "description": site_desc},
-            )
-            await site_as.save(allow_upsert=True)
-            self.logger.info(f"Metro {metro}: created EVPN site AS{site_as.asn.value}")
-        else:
+        site_as_id = await self.ensure_shared_as(
+            description=f"{metro} EVPN site ASN", asn_pool_id=asn_pool.id if asn_pool else None
+        )
+        if site_as_id is None:
             self.logger.error(f"Metro {metro}: no {metro}-asn-pool — cannot create the EVPN site ASN")
             return
-
-        node = await self.client.get(kind=TopologyColocationMetro, id=metro_id)
-        node.evpn_rt_as = {"id": site_as.id}
-        await node.save()
+        await self._attach_evpn_rt_as(deployment_id=metro_id, as_id=site_as_id)
 
         loopbacks = await self.client.filters(
             kind=DcimVirtualInterface,
@@ -695,7 +617,7 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, CommonGener
                     "name": f"{name}-bgp-overlay",
                     "description": f"EVPN Multi-Site border-gateway process for {name}",
                     "status": "active",
-                    "local_as": {"id": site_as.id},
+                    "local_as": {"id": site_as_id},
                     "router_id": {"id": router_loopback.ip_address.id},
                     "capabilities": [{"id": device.id}],
                     "process_role": "overlay",

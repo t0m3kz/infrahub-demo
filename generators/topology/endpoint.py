@@ -13,6 +13,7 @@ Features:
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Literal, cast
 
 from netutils.interface import sort_interface_list
@@ -23,7 +24,8 @@ from utils.data_cleaning import clean_data
 from ..common import CablingOptions, CommonGenerator
 from ..connections import CablingMixin
 from ..endpoint import EndpointUplinkMixin
-from ..helpers.cabling import pick_matched_switch_port_name
+from ..far_end import far_end_interface
+from ..helpers.cabling import cable_endpoint_device_names, pick_matched_switch_port_name
 from ..helpers.interface_naming import get_lag_name
 from ..pools import PoolMixin
 from ..protocols import DcimCable, DcimLAGInterface, DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
@@ -31,11 +33,8 @@ from ..types import ConnectionFingerprint
 
 
 def _interface_type(intf: Any) -> str | None:
-    """An interface's interface_type, whether an SDK attribute or a plain string."""
-    raw = getattr(intf, "interface_type", None)
-    if not raw:
-        return None
-    return str(raw.value if hasattr(raw, "value") else raw) or None
+    """An interface's interface_type value, or None when unset."""
+    return intf.interface_type.value or None
 
 
 class EndpointInterfaceData(TypedDict, total=False):
@@ -90,57 +89,25 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, PoolMixin, CablingMixin
 
     Features:
     - Suite-level device distribution
-    - Flexible speed handling (speed-aware or validation-only modes)
     - Connection fingerprinting for idempotency
     - Pre-execution validation
     - Interface type and role matching (customer ↔ access)
     - Dual-homing across consecutive device pairs
     - Uses CablingPlanner and CommonGenerator.create_cabling()
-
-    Speed Configuration (matching CablingPlanner pattern):
-    - speed_aware=True (default): Group by speed first, only connect matching speeds
-    - speed_aware=False: Connect all interfaces, validate speeds afterward
-    - validate_speeds=True (default): Check speed compatibility, log warnings
-    - strict_speed_validation=False (default): Log warnings only (True=skip mismatches)
+    - Speed-aware: groups by speed first and only connects matching speeds
     """
 
     data: EndpointDeviceData
 
     @staticmethod
     def _extract_device_name(intf: Any) -> str | None:
-        """Extract the device name from a RelatedNode interface object."""
-        if hasattr(intf, "_device_name_for_grouping"):
-            return str(intf._device_name_for_grouping)
-        if hasattr(intf.device, "peer"):
-            device_obj = intf.device.peer
-            if device_obj and hasattr(device_obj, "name"):
-                return str(device_obj.name.value if hasattr(device_obj.name, "value") else device_obj.name)
-        if hasattr(intf.device, "name"):
-            return str(intf.device.name.value if hasattr(intf.device.name, "value") else intf.device.name)
-        return None
+        """The interface's device name (queried with ``include=["device"]``), or None without a device peer."""
+        device = intf.device.peer
+        return str(device.name.value) if device else None
 
     def _extract_cabled_switch_names(self, interfaces: list[DcimPhysicalInterface]) -> set[str]:
-        """Extract the far-end switch device names from this endpoint's already-cabled
-        interfaces, using the cable name convention ("device-interface__device-interface",
-        set by create_cabling) — same pattern as CablingPlanner._extract_connected_peer_devices.
-        """
-        switch_names: set[str] = set()
-        for intf in interfaces:
-            cable = getattr(intf, "cable", None)
-            if cable is None:
-                continue
-            cable_peer = getattr(cable, "_peer", None) or cable
-            raw_name = getattr(cable_peer, "name", None)
-            cable_name = getattr(raw_name, "value", None) or raw_name
-            if not isinstance(cable_name, str) or "__" not in cable_name:
-                continue
-            for endpoint_label in cable_name.split("__"):
-                if "-" not in endpoint_label:
-                    continue
-                device_name, _ = endpoint_label.rsplit("-", 1)
-                if device_name != self.data["name"]:
-                    switch_names.add(device_name)
-        return switch_names
+        """Far-end switch names of this endpoint's already-cabled interfaces."""
+        return cable_endpoint_device_names(interfaces) - {self.data["name"]}
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -151,13 +118,6 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, PoolMixin, CablingMixin
         # run) — biases device-pair selection so additional free ports land on
         # the SAME pair rather than a re-derived (possibly different) one.
         self._existing_switch_names: set[str] = set()
-
-        # Speed validation configuration (matching CablingPlanner pattern)
-        self.speed_aware: bool = kwargs.get("speed_aware", True)  # Group by speed first (default: True)
-        self.validate_speeds: bool = kwargs.get("validate_speeds", True)  # Check speed compatibility
-        self.strict_speed_validation: bool = kwargs.get(
-            "strict_speed_validation", False
-        )  # Skip mismatches (False=warnings only)
 
     async def generate(self, data: dict[str, Any]) -> None:
         """Generate endpoint device connectivity based on deployment type."""
@@ -230,6 +190,16 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, PoolMixin, CablingMixin
             self.logger.info(f"Updated {self.data['name']} deployment to pod {self.pod_name}")
         await endpoint_device.save(allow_upsert=True)
 
+        # Rack-to-spine cabling avoids port collisions via a deterministic per-device
+        # offset (calculate_cabling_offsets); endpoint cabling has no such offset — it
+        # picks the first free port it sees. Concurrent siblings (the backend fans
+        # multiple endpoint generator instances out via asyncio.gather — see
+        # acquire_resource_lock's docstring) targeting the same rack/row could both
+        # pick the same "free" port before either saves its cable. Lock on
+        # (pod, row) rather than just the rack: the tor/mixed fallback path also
+        # reaches into every rack in the same row, not just this endpoint's own.
+        cabling_lock_key = f"endpoint-cabling-pod-{pod_id}-row-{rack['row_index']}"
+
         # LAG-based endpoints (server declares role=lag physical NICs bundled into
         # DcimLAGInterface bond(s) in its own object-load data) get switch-side
         # port-channels wired into the target pair's ManagedMLAG domain instead of
@@ -264,11 +234,8 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, PoolMixin, CablingMixin
             # types narrow the switch-port search to ports of the same speed.
             self._free_interfaces = lag_nics
 
-            lock_id = await self.acquire_resource_lock(f"endpoint-cabling-pod-{pod['id']}-row-{rack['row_index']}")
-            try:
+            async with self.resource_lock(cabling_lock_key):
                 await self._process_lag_endpoint_connections(members_by_bond, deployment_type)
-            finally:
-                await self.release_resource_lock(lock_id)
             return
 
         # Get all uplink interfaces from endpoint device (idempotency)
@@ -296,9 +263,12 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, PoolMixin, CablingMixin
 
         # Re-save the cables a prior run made: the run tracks only what it saves,
         # so a cable a rerun finds and skips is one delete_unused_nodes removes.
-        for cable_id in sorted({str(intf.cable.id) for intf in already_cabled_interfaces}):
-            cable = await self.client.get(kind=DcimCable, id=cable_id)
-            await cable.save(allow_upsert=True)
+        # One batch fetch instead of one get() per cable; the saves themselves
+        # are independent (distinct cables), so they run concurrently too.
+        cable_ids = sorted({str(intf.cable.id) for intf in already_cabled_interfaces})
+        if cable_ids:
+            cables = await self.client.filters(kind=DcimCable, ids=cable_ids)
+            await asyncio.gather(*(cable.save(allow_upsert=True) for cable in cables))
 
         if not endpoint_interfaces:
             if existing_connections > 0:
@@ -320,21 +290,10 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, PoolMixin, CablingMixin
         self._free_interfaces = endpoint_interfaces
         self._already_connected = existing_connections > 0
 
-        # Rack-to-spine cabling avoids port collisions via a deterministic per-device
-        # offset (calculate_cabling_offsets); endpoint cabling has no such offset — it
-        # picks the first free port it sees. Concurrent siblings (the backend fans
-        # multiple endpoint generator instances out via asyncio.gather — see
-        # acquire_resource_lock's docstring) targeting the same rack/row could both
-        # pick the same "free" port before either saves its cable. Lock on
-        # (pod, row) rather than just the rack: the tor/mixed fallback path also
-        # reaches into every rack in the same row, not just this endpoint's own.
-        lock_id = await self.acquire_resource_lock(f"endpoint-cabling-pod-{pod['id']}-row-{rack['row_index']}")
-        try:
+        async with self.resource_lock(cabling_lock_key):
             all_target_interfaces = await self._resolve_target_interfaces(deployment_type)
             if all_target_interfaces:
                 await self._process_endpoint_connections(all_target_interfaces)
-        finally:
-            await self.release_resource_lock(lock_id)
 
     async def _resolve_target_interfaces(self, deployment_type: str) -> list[DcimPhysicalInterface]:
         """Resolve the target switch interfaces for this endpoint's deployment type.
@@ -609,11 +568,9 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, PoolMixin, CablingMixin
             self.logger.debug(f"Filtered out {filtered_count} interfaces with cables")
             # Show sample of filtered interfaces
             for intf in all_interfaces[:3]:
-                has_cable = (
-                    f"cable={intf.cable.id if (intf.cable and hasattr(intf.cable, 'id') and intf.cable.id) else 'None'}"
-                )
                 self.logger.debug(
-                    f"  Interface {intf.name}: {has_cable}, status={intf.status.value if hasattr(intf.status, 'value') else intf.status}"
+                    f"  Interface {intf.name.value}: cable={intf.cable.id if intf.cable else None}, "
+                    f"status={intf.status.value}"
                 )
 
         self.logger.info(
@@ -645,25 +602,15 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, PoolMixin, CablingMixin
         if not all_target_interfaces:
             return
 
-        device_groups: dict[str, list[DcimPhysicalInterface]] = {}
-        for intf in all_target_interfaces:
-            device_name = self._extract_device_name(intf)
-            if device_name:
-                device_groups.setdefault(device_name, []).append(intf)
-
-        device_names = list(device_groups.keys())
-        if len(device_names) < 2:
+        device_groups = self._group_by_device(all_target_interfaces)
+        if len(device_groups) < 2:
             self.logger.error(
-                f"Endpoint {self.data['name']}: Need 2 switches for MLAG-attached bonds, found {len(device_names)}."
+                f"Endpoint {self.data['name']}: Need 2 switches for MLAG-attached bonds, found {len(device_groups)}."
             )
             return
 
-        # Prefer the pair this endpoint's earlier bonds already attached to
-        # (see _extract_cabled_switch_names) over an arbitrary "first two" —
-        # a later bond must land on the SAME pair as earlier ones.
-        sticky_devices = sorted(name for name in device_names if name in self._existing_switch_names)
-        remaining_devices = [name for name in device_names if name not in self._existing_switch_names]
-        switch_a_name, switch_b_name = (sticky_devices + remaining_devices)[:2]
+        # A later bond lands on the same pair as the earlier ones.
+        switch_a_name, switch_b_name = self._select_switch_pair(list(device_groups))
 
         switches = await self.client.filters(
             kind=DcimPhysicalDevice, name__values=[switch_a_name, switch_b_name], include=["capabilities", "platform"]
@@ -684,10 +631,10 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, PoolMixin, CablingMixin
             return
         mlag_domain_id = next(iter(shared_domains))
 
-        existing_lag_ids: set[int] = set()
-        for name in (switch_a_name, switch_b_name):
-            lags = await self.client.filters(kind=DcimLAGInterface, device__ids=[switch_by_name[name].id])
-            existing_lag_ids.update(lag.lag_id.value for lag in lags)
+        lags = await self.client.filters(
+            kind=DcimLAGInterface, device__ids=[switch_by_name[name].id for name in (switch_a_name, switch_b_name)]
+        )
+        existing_lag_ids: set[int] = {lag.lag_id.value for lag in lags}
 
         for bond_name, members in members_by_bond.items():
             if len(members) < 2:
@@ -723,14 +670,10 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, PoolMixin, CablingMixin
             members_needing_fresh_port: dict[str, str] = {}
             for switch_name, server_interface_name in zip((switch_a_name, switch_b_name), member_names):
                 member = member_by_name[server_interface_name]
-                existing_cable = getattr(member, "cable", None)
-                if existing_cable and existing_cable.id:
-                    cable_obj = await self.client.get(kind=DcimCable, id=existing_cable.id, include=["endpoints"])
-                    far_ends = [p for p in cable_obj.endpoints.peers if p.id != member.id]
-                    if far_ends:
-                        switch_port_by_name[switch_name] = await self.client.get(
-                            kind=DcimPhysicalInterface, id=far_ends[0].id, include=["lag"]
-                        )
+                if member.cable and member.cable.id:
+                    far_end = await far_end_interface(self.client, member, include=["lag"])
+                    if far_end is not None:
+                        switch_port_by_name[switch_name] = far_end
                         continue
                 members_needing_fresh_port[switch_name] = server_interface_name
 

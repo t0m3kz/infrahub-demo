@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Callable
 
+from utils.dependency_access import dependency_access_status
 from utils.ports import PortProfileHelper
 
 from .helpers.rules import RulesPlanner
@@ -43,8 +44,7 @@ class ZtnaMixin(GetOrCreateByNameMixin):
         # generator only refuses to write a rule it cannot place.
         owner = (src_comp.get("parent") or {}).get("owner") or {}
         proxy_service = owner.get("egress_service") or {}
-        proxy_id = proxy_service.get("id")
-        if not proxy_id:
+        if not proxy_service.get("id"):
             self.logger.warning(
                 "  Dependency '%s' targets an external fqdn but source owner for '%s' has no egress_service - skipping",
                 dep_ref,
@@ -65,49 +65,71 @@ class ZtnaMixin(GetOrCreateByNameMixin):
             self.logger.warning("  Dependency '%s' targets %s without ports - skipping", dep_ref, external_fqdn)
             return False
 
+        # A proxy rule matches a host on a list of ports, so one dependency
+        # stays one rule however many ports it opens.
+        return await self._upsert_owner_proxy_rule(
+            owner=owner,
+            service=proxy_service,
+            purpose="egress",
+            policies=proxy_policies,
+            subject=f"Dependency '{dep_ref}' source '{src_label}'",
+            rule_data={
+                "name": planner.rule_name(app_name, src_comp, {}, dep),
+                "action": "allow",
+                "destination_type": "fqdn",
+                "destination": external_fqdn,
+                "ports": [PortProfileHelper.format_port_spec(port) for port in ports],
+                "description": planner.rule_description(dep, src_comp, {}),
+            },
+        )
+
+    async def _upsert_owner_proxy_rule(
+        self,
+        *,
+        owner: dict[str, Any],
+        service: dict[str, Any],
+        purpose: str,
+        policies: dict[str, Any],
+        subject: str,
+        rule_data: dict[str, Any],
+    ) -> bool:
+        """Upsert ``rule_data`` into the owner's ``purpose`` ProxyPolicy on ``service``.
+
+        The policy is fetched or created (and attached to the owner) once per
+        owner/service, then cached in ``policies``. An existing rule of the
+        same name is updated in place. False when the owner has no id, the
+        policy cannot be made, or the save fails.
+        """
         owner_org_id = str(owner.get("org_id") or owner.get("id") or "")
         owner_node_id = str(owner.get("id") or "")
         if not owner_org_id or not owner_node_id:
-            self.logger.warning("  Dependency '%s' source '%s' has no owner identifier - skipping", dep_ref, src_label)
+            self.logger.warning("  %s has no resolvable owner - skipping", subject)
             return False
-        policy_key = f"{owner_org_id}:{proxy_id}"
-        policy = proxy_policies.get(policy_key)
+
+        service_id = service["id"]
+        policy_key = f"{owner_org_id}:{service_id}"
+        policy = policies.get(policy_key)
         if policy is None:
-            proxy_name = str(proxy_service.get("name") or proxy_id)
-            policy_name = f"proxy-{owner_org_id}-{proxy_name}-egress"
-            policy = await self._get_or_create_proxy_policy(policy_name)
+            service_name = str(service.get("name") or service_id)
+            policy = await self._get_or_create_proxy_policy(f"proxy-{owner_org_id}-{service_name}-{purpose}")
             if policy is None:
                 return False
-            proxy_policies[policy_key] = policy
+            policies[policy_key] = policy
+            await self._attach_proxy_policy_to_owner(owner_id=owner_node_id, policy_id=policy.id)
 
-        await self._attach_proxy_policy_to_owner(owner_id=owner_node_id, policy_id=policy.id)
-
-        # A proxy rule matches a host on a list of ports, so one dependency
-        # stays one rule however many ports it opens.
-        rule_name = planner.rule_name(app_name, src_comp, {}, dep)
-        rule_data: dict[str, Any] = {
-            "policy": {"id": policy.id},
-            "name": rule_name,
-            "action": "allow",
-            "destination_type": "fqdn",
-            "destination": external_fqdn,
-            "ports": [PortProfileHelper.format_port_spec(port) for port in ports],
-            "description": planner.rule_description(dep, src_comp, {}),
-        }
-
-        existing_rule = await self._find_existing_proxy_policy_rule(policy_id=policy.id, rule_name=rule_name)
+        rule_name = rule_data["name"]
+        data: dict[str, Any] = {"policy": {"id": policy.id}, **rule_data}
+        existing_rule = await self._find_rule_by_name(ProxyPolicyRule, policy.id, rule_name)
+        if existing_rule is not None:
+            data["id"] = existing_rule.id
         try:
-            if existing_rule is not None:
-                rule_data["id"] = existing_rule.id
-            rule = await self.client.create(kind=ProxyPolicyRule, data=rule_data)
+            rule = await self.client.create(kind=ProxyPolicyRule, data=data)
             await rule.save(allow_upsert=True)
-            self.logger.info(
-                "  Reconciled ProxyPolicyRule '%s' (-> %s %s)", rule_name, external_fqdn, rule_data["ports"]
-            )
-            return True
         except Exception as exc:
             self.logger.error("  Failed to reconcile ProxyPolicyRule '%s': %s", rule_name, exc)
             return False
+        self.logger.info("  Reconciled ProxyPolicyRule '%s' (-> %s %s)", rule_name, data["destination"], data["ports"])
+        return True
 
     async def _get_or_create_proxy_policy(self, policy_name: str) -> Any | None:
         description_subject = policy_name.removesuffix("-egress").removesuffix("-private-access")
@@ -124,18 +146,10 @@ class ZtnaMixin(GetOrCreateByNameMixin):
             created_log="Created proxy policy: %s",
         )
 
-    async def _find_existing_proxy_policy_rule(self, policy_id: str, rule_name: str) -> Any | None:
-        existing_rules = await self.client.filters(kind=ProxyPolicyRule, policy__ids=[policy_id])
-        for rule in existing_rules:
-            if getattr(rule, "name", None) and rule.name.value == rule_name:
-                return rule
-        return None
-
     async def _attach_proxy_policy_to_owner(self, owner_id: str, policy_id: str) -> None:
         try:
-            owner_obj = await self.client.get(kind="OrganizationCustomer", id=owner_id)
+            owner_obj = await self.client.get(kind="OrganizationCustomer", id=owner_id, include=["proxy_policies"])
             policies_rel = getattr(owner_obj, "proxy_policies")
-            await policies_rel.fetch()
             if policy_id not in {peer.id for peer in policies_rel.peers}:
                 await self._safe_rel_add(policies_rel, {"id": policy_id})
                 await owner_obj.save(allow_upsert=True, update_group_context=False)
@@ -152,7 +166,7 @@ class ZtnaMixin(GetOrCreateByNameMixin):
         return [
             dep
             for dep in component.get("dependents") or []
-            if dep.get("source_profile") and RulesPlanner.dependency_access_status(dep) != "denied"
+            if dep.get("source_profile") and dependency_access_status(dep) != "denied"
         ]
 
     async def _reconcile_private_access_components(
@@ -181,8 +195,7 @@ class ZtnaMixin(GetOrCreateByNameMixin):
             comp_label = str(component.get("fqdn") or component.get("name") or component.get("id") or "?")
 
             broker = owner.get("private_access_service") or {}
-            broker_id = broker.get("id")
-            if not broker_id:
+            if not broker.get("id"):
                 self.logger.warning(
                     "  Component '%s' is granted to an access profile but its owner has no"
                     " private_access_service - skipping publish",
@@ -214,49 +227,26 @@ class ZtnaMixin(GetOrCreateByNameMixin):
                 skipped += 1
                 continue
 
-            owner_org_id = str(owner.get("org_id") or owner.get("id") or "")
-            owner_node_id = str(owner.get("id") or "")
-            if not owner_org_id or not owner_node_id:
-                self.logger.warning("  Component '%s' has no resolvable owner - skipping publish", comp_label)
-                skipped += 1
-                continue
-
-            policy_key = f"{owner_org_id}:{broker_id}"
-            policy = policies.get(policy_key)
-            if policy is None:
-                broker_name = str(broker.get("name") or broker_id)
-                policy_name = f"proxy-{owner_org_id}-{broker_name}-private-access"
-                policy = await self._get_or_create_proxy_policy(policy_name)
-                if policy is None:
-                    skipped += 1
-                    continue
-                policies[policy_key] = policy
-
-            await self._attach_proxy_policy_to_owner(owner_id=owner_node_id, policy_id=policy.id)
-
             profiles = sorted({str((dep.get("source_profile") or {}).get("name") or "?") for dep in grants})
-            rule_name = f"publish-{component_fqdn}"
-            rule_data: dict[str, Any] = {
-                "policy": {"id": policy.id},
-                "name": rule_name,
-                "action": "allow",
-                "destination_type": "fqdn",
-                "destination": component_fqdn,
-                "ports": ports,
-                "description": f"Publish {app_name}/{component.get('name') or comp_label} via private access broker"
-                f" for {', '.join(profiles)}",
-            }
-
-            existing_rule = await self._find_existing_proxy_policy_rule(policy_id=policy.id, rule_name=rule_name)
-            try:
-                if existing_rule is not None:
-                    rule_data["id"] = existing_rule.id
-                rule = await self.client.create(kind=ProxyPolicyRule, data=rule_data)
-                await rule.save(allow_upsert=True)
-                self.logger.info("  Published private-access component '%s' (-> %s)", rule_name, component_fqdn)
+            published = await self._upsert_owner_proxy_rule(
+                owner=owner,
+                service=broker,
+                purpose="private-access",
+                policies=policies,
+                subject=f"Component '{comp_label}'",
+                rule_data={
+                    "name": f"publish-{component_fqdn}",
+                    "action": "allow",
+                    "destination_type": "fqdn",
+                    "destination": component_fqdn,
+                    "ports": ports,
+                    "description": f"Publish {app_name}/{component.get('name') or comp_label} via private access"
+                    f" broker for {', '.join(profiles)}",
+                },
+            )
+            if published:
                 created += 1
-            except Exception as exc:
-                self.logger.error("  Failed to publish private-access component '%s': %s", rule_name, exc)
+            else:
                 skipped += 1
 
         return created, skipped

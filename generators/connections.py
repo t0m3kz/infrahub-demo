@@ -77,7 +77,7 @@ class CablingMixin:
         cabling_offset: int = int(options.get("cabling_offset", 0))
         self.logger.info(
             f"Creating cabling: {len(bottom_devices)} bottom → {len(top_devices)} top "
-            f"[strategy={strategy}, offset={cabling_offset}, strict_speed_validation=True]"
+            f"[strategy={strategy}, offset={cabling_offset}, speed-matched]"
         )
 
         # Retry querying interfaces until template instantiation completes.
@@ -129,18 +129,7 @@ class CablingMixin:
             bottom_sorting=bottom_sorting,
             top_sorting=top_sorting,
         )
-        strict_plan_profile = {
-            # Always enforce speed-aware strict matching for physical cabling plans.
-            # Creating mismatched links is not useful operationally.
-            "speed_aware": True,
-            "validate_speeds": True,
-            "strict_speed_validation": True,
-        }
-        cabling_plan = planner.build_cabling_plan(
-            scenario=strategy,
-            cabling_offset=cabling_offset,
-            **strict_plan_profile,
-        )
+        cabling_plan = planner.build_cabling_plan(scenario=strategy, cabling_offset=cabling_offset)
 
         if not cabling_plan:
             self.logger.warning("No cabling connections planned")
@@ -199,41 +188,9 @@ class CablingMixin:
                 )
                 self.logger.info(f"- Allocated prefix {p2p_prefix.display_label} for {cable_name}")
 
-                # Iterate the network directly — works for both /31 (RFC 3021) and
-                # /127 (RFC 6164) where .hosts() returns only one address in Python.
-                network = ipaddress.ip_network(p2p_prefix.prefix.value, strict=False)
-                addrs = list(network)
-                ip_namespace = p2p_prefix.ip_namespace
-
-                for iface, addr in [(updated_src, addrs[0]), (updated_dst, addrs[1])]:
-                    address_value = f"{addr}/{p2p_prefix_length}"
-                    # Query before creating. allocate_next_ip_prefix() above IS
-                    # idempotent per identifier — a second, overlapping call for
-                    # this same link (e.g. two generator runs both triggered off
-                    # the same bulk load) gets the SAME prefix back. But
-                    # IpamIPAddress's (address, ip_namespace) uniqueness_constraint
-                    # is only enforced by an async validator, not a synchronous DB
-                    # constraint (observed: two DC4 hyper-spine-mesh links both
-                    # blind-created the same address, and the collision only
-                    # surfaced later as a "Process schema integrity" failure at
-                    # merge time). A blind client.create() would race; reuse
-                    # whatever's already there instead of trying to create it again.
-                    ip = await self.client.get(
-                        kind=IpamIPAddress,
-                        address__value=address_value,
-                        ip_namespace__ids=[ip_namespace.id],
-                        raise_when_missing=False,
-                    )
-                    if not ip:
-                        ip = await self.client.create(
-                            kind=IpamIPAddress,
-                            data={"address": address_value, "ip_namespace": ip_namespace},
-                        )
-                    # Saved even when found: the run tracks only what it saves,
-                    # so an address a rerun reuses but skips is one
-                    # delete_unused_nodes removes from under the interface.
-                    await ip.save(allow_upsert=True)
-                    iface.ip_address = ip.id
+                src_ip, dst_ip = await self.upsert_p2p_addresses(p2p_prefix)
+                updated_src.ip_address = src_ip.id
+                updated_dst.ip_address = dst_ip.id
 
             # update_group_context=False: physical interfaces come from the device's
             # object_template, not from this generator run — they must never be
@@ -283,6 +240,49 @@ class CablingMixin:
             self.logger.info(f"  - Created connection {cable_name}")
 
         return cabled_pairs
+
+    async def upsert_p2p_addresses(
+        self, prefix: Any, *, address_length: int | None = None, description: str | None = None
+    ) -> list[Any]:
+        """Upsert both addresses of a /31 (RFC 3021) or /127 (RFC 6164) P2P prefix.
+
+        Queried before created: allocate_next_ip_prefix() is idempotent per
+        identifier, but IpamIPAddress's (address, ip_namespace) uniqueness is
+        only enforced by an async validator, so two overlapping runs for the
+        same link would otherwise both blind-create the same address (seen on
+        DC4's hyper-spine mesh as a "Process schema integrity" merge failure).
+        Saved even when found: the run tracks only what it saves, so a reused
+        but unsaved address is one delete_unused_nodes removes.
+
+        address_length defaults to the prefix's own length. description, when
+        given, is (re)written on every run.
+        """
+        network = ipaddress.ip_network(prefix.prefix.value, strict=False)
+        length = network.prefixlen if address_length is None else address_length
+        ip_namespace = prefix.ip_namespace
+        addresses: list[Any] = []
+        # list(network), not .hosts(): .hosts() yields one address for /31 and /127.
+        for addr in list(network)[:2]:
+            address_value = f"{addr}/{length}"
+            ip = await self.client.get(
+                kind=IpamIPAddress,
+                address__value=address_value,
+                ip_namespace__ids=[ip_namespace.id],
+                raise_when_missing=False,
+            )
+            if not ip or description is not None:
+                ip = await self.client.create(
+                    kind=IpamIPAddress,
+                    data={
+                        **({"id": ip.id} if ip else {}),
+                        "address": address_value,
+                        "ip_namespace": ip_namespace,
+                        **({"description": description} if description is not None else {}),
+                    },
+                )
+            await ip.save(allow_upsert=True)
+            addresses.append(ip)
+        return addresses
 
     async def create_chain_cabling(
         self, hops: list[ChainHop], options: CablingOptions | None = None
@@ -340,13 +340,7 @@ class CablingMixin:
 
             iface_map: dict[str, Any] = {iface.id: iface for iface in list(bottom_interfaces) + list(top_interfaces)}
             planner = CablingPlanner(bottom_interfaces=bottom_interfaces, top_interfaces=top_interfaces)
-            leg_plan = planner.build_cabling_plan(
-                scenario="chain",
-                cabling_offset=cabling_offset,
-                speed_aware=True,
-                validate_speeds=True,
-                strict_speed_validation=True,
-            )
+            leg_plan = planner.build_cabling_plan(scenario="chain", cabling_offset=cabling_offset)
             if not leg_plan:
                 self.logger.error(
                     f"create_chain_cabling: {sorted(top_devices)}<->{sorted(bottom_devices)} cabling produced "

@@ -6,8 +6,12 @@ and route reflector client detection from peering_interfaces data.
 
 import pytest
 
-from transforms.common import _build_peer_groups, _build_session_from_peering, get_bgp_profile
-from transforms.helpers.bgp import _extract_remote_asn_from_peering
+from transforms.helpers.bgp import (
+    _build_peer_groups,
+    _build_session_from_peering,
+    _extract_remote_asn_from_peering,
+    get_bgp_profile,
+)
 
 # ============================================================================
 # Helpers to build test data matching GraphQL response structure

@@ -2,8 +2,8 @@
 
 Covers generate() guard clauses, _resolve_physical_device_id (physical vs
 virtual vs unresolvable AppInstance kinds), _tag_instance_interfaces
-(uplink vs bonded/lag far ends, dedup, idempotency, VLAN domain
-realization), and _resolve_customer_facing_target (the far-end/port-channel
+(uplink vs bonded/lag far ends, dedup, idempotency), the once-per-run VLAN
+domain realization, and _resolve_customer_facing_target (the far-end/port-channel
 resolution itself).
 
 The (segment, VLAN domain) -> local VLAN ID allocation this generator shares
@@ -115,10 +115,14 @@ class TestGenerate:
         gen._tag_instance_interfaces.assert_not_awaited()
 
     def test_happy_path_tags_every_resolvable_instance(self) -> None:
+        """Each instance's device is tagged, then the touched switches' VLAN domains are realized once."""
         gen = _make_gen()
         segment_obj = MagicMock(id="seg-1")
         gen.client.get = AsyncMock(return_value=segment_obj)
-        gen._tag_instance_interfaces = AsyncMock(return_value=(1, {"sw-1"}))
+        switches = [MagicMock(id="sw-1"), MagicMock(id="sw-2")]
+        gen.client.filters = AsyncMock(return_value=switches)
+        gen._tag_instance_interfaces = AsyncMock(side_effect=[(1, {"sw-1"}), (1, {"sw-1", "sw-2"})])
+        gen._realize_segment_on_devices = AsyncMock()
         data = _component_response(
             segment={"id": "seg-1", "name": "c001-web-p"},
             instances=[
@@ -129,11 +133,48 @@ class TestGenerate:
 
         asyncio.run(gen.generate(data))
 
-        assert gen._tag_instance_interfaces.await_count == 2
+        assert [call.kwargs["device_id"] for call in gen._tag_instance_interfaces.await_args_list] == ["dev-1", "dev-2"]
         for call in gen._tag_instance_interfaces.await_args_list:
             assert call.kwargs["segment_id"] == "seg-1"
             assert call.kwargs["segment_obj"] is segment_obj
-            assert call.kwargs["segment_name"] == "c001-web-p"
+        assert gen.client.filters.call_args.kwargs["ids"] == ["sw-1", "sw-2"]
+        gen._realize_segment_on_devices.assert_awaited_once_with("seg-1", "c001-web-p", switches)
+
+    def test_instances_sharing_a_host_tag_it_once(self) -> None:
+        """Two VMs on one hypervisor and the hypervisor itself resolve to one device, handled once."""
+        gen = _make_gen()
+        gen.client.get = AsyncMock(return_value=MagicMock(id="seg-1"))
+        gen._tag_instance_interfaces = AsyncMock(return_value=(1, {"sw-1"}))
+        gen._realize_segment_on_devices = AsyncMock()
+        data = _component_response(
+            segment={"id": "seg-1", "name": "seg"},
+            instances=[
+                {"id": "vm-1", "typename": "DcimVirtualDevice", "hosting_device": {"node": {"id": "host-1"}}},
+                {"id": "vm-2", "typename": "DcimVirtualDevice", "hosting_device": {"node": {"id": "host-1"}}},
+                {"id": "host-1", "typename": "DcimPhysicalDevice"},
+            ],
+        )
+
+        asyncio.run(gen.generate(data))
+
+        gen._tag_instance_interfaces.assert_awaited_once()
+        assert gen._tag_instance_interfaces.call_args.kwargs["device_id"] == "host-1"
+        gen._realize_segment_on_devices.assert_awaited_once()
+
+    def test_no_touched_switch_realizes_no_vlan_domain(self) -> None:
+        """An instance with nothing cabled yet leaves every VLAN domain alone."""
+        gen = _make_gen()
+        gen.client.get = AsyncMock(return_value=MagicMock(id="seg-1"))
+        gen._tag_instance_interfaces = AsyncMock(return_value=(0, set()))
+        gen._realize_segment_on_devices = AsyncMock()
+        data = _component_response(
+            segment={"id": "seg-1", "name": "seg"}, instances=[{"id": "dev-1", "typename": "DcimPhysicalDevice"}]
+        )
+
+        asyncio.run(gen.generate(data))
+
+        gen.client.filters.assert_not_awaited()
+        gen._realize_segment_on_devices.assert_not_awaited()
 
     def test_unresolvable_instance_is_skipped_without_error(self) -> None:
         """A cloud instance (no on-prem device) is skipped, not an error."""
@@ -191,43 +232,33 @@ class TestResolvePhysicalDeviceId:
 
 class TestTagInstanceInterfaces:
     def _gen(self) -> Any:
-        gen = _make_gen()
-        gen._ensure_vlan_domains_for_devices = AsyncMock(return_value={"domain-1": "pool-1"})
-        gen._ensure_vlan_domain_segment = AsyncMock()
-        return gen
+        return _make_gen()
 
     def test_no_cabled_nics_returns_zero_and_empty(self) -> None:
         gen = self._gen()
         gen.client.filters = AsyncMock(return_value=[_iface("eth0", cabled=False)])
 
         assigned, devices = asyncio.run(
-            gen._tag_instance_interfaces(
-                device_id="dev-1", segment_id="seg-1", segment_obj=MagicMock(), segment_name="seg"
-            )
+            gen._tag_instance_interfaces(device_id="dev-1", segment_id="seg-1", segment_obj=MagicMock())
         )
 
         assert (assigned, devices) == (0, set())
-        gen._ensure_vlan_domains_for_devices.assert_not_awaited()
 
     def test_uplink_far_end_tagged_directly(self) -> None:
         gen = self._gen()
         gen.client.filters = AsyncMock(return_value=[_iface("eth0")])
         target = _capabilities_iface(existing_ids=[])
         gen._resolve_customer_facing_target = AsyncMock(return_value=target)
-        gen.client.get = AsyncMock(return_value=MagicMock(id="sw-1", capabilities=MagicMock(peers=[])))
         segment_obj = MagicMock(id="seg-1")
 
         assigned, devices = asyncio.run(
-            gen._tag_instance_interfaces(
-                device_id="dev-1", segment_id="seg-1", segment_obj=segment_obj, segment_name="seg"
-            )
+            gen._tag_instance_interfaces(device_id="dev-1", segment_id="seg-1", segment_obj=segment_obj)
         )
 
         assert assigned == 1
         assert devices == {"sw-1"}
         target.interface_capabilities.add.assert_called_once_with(segment_obj)
         target.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
-        gen._ensure_vlan_domain_segment.assert_awaited_once_with("seg-1", "seg", "domain-1", "pool-1")
 
     def test_bonded_members_dedup_to_one_port_channel(self) -> None:
         """Two bond members resolving to the SAME port-channel are tagged once, not twice."""
@@ -235,12 +266,9 @@ class TestTagInstanceInterfaces:
         gen.client.filters = AsyncMock(return_value=[_iface("eth0"), _iface("eth1")])
         shared_target = _capabilities_iface(existing_ids=[], iface_id="po-1")
         gen._resolve_customer_facing_target = AsyncMock(return_value=shared_target)
-        gen.client.get = AsyncMock(return_value=MagicMock(id="sw-1"))
 
         assigned, devices = asyncio.run(
-            gen._tag_instance_interfaces(
-                device_id="dev-1", segment_id="seg-1", segment_obj=MagicMock(id="seg-1"), segment_name="seg"
-            )
+            gen._tag_instance_interfaces(device_id="dev-1", segment_id="seg-1", segment_obj=MagicMock(id="seg-1"))
         )
 
         assert assigned == 1
@@ -252,19 +280,14 @@ class TestTagInstanceInterfaces:
         gen.client.filters = AsyncMock(return_value=[_iface("eth0")])
         target = _capabilities_iface(existing_ids=["seg-1"])
         gen._resolve_customer_facing_target = AsyncMock(return_value=target)
-        gen.client.get = AsyncMock(return_value=MagicMock(id="sw-1"))
 
         assigned, _ = asyncio.run(
-            gen._tag_instance_interfaces(
-                device_id="dev-1", segment_id="seg-1", segment_obj=MagicMock(id="seg-1"), segment_name="seg"
-            )
+            gen._tag_instance_interfaces(device_id="dev-1", segment_id="seg-1", segment_obj=MagicMock(id="seg-1"))
         )
 
         assert assigned == 0
         target.interface_capabilities.add.assert_not_called()
         target.save.assert_not_awaited()
-        # VLAN domain is still realized — idempotent re-touch keeps it tracked.
-        gen._ensure_vlan_domain_segment.assert_awaited_once()
 
     def test_unresolvable_far_end_yields_nothing(self) -> None:
         gen = self._gen()
@@ -272,13 +295,10 @@ class TestTagInstanceInterfaces:
         gen._resolve_customer_facing_target = AsyncMock(return_value=None)
 
         assigned, devices = asyncio.run(
-            gen._tag_instance_interfaces(
-                device_id="dev-1", segment_id="seg-1", segment_obj=MagicMock(), segment_name="seg"
-            )
+            gen._tag_instance_interfaces(device_id="dev-1", segment_id="seg-1", segment_obj=MagicMock())
         )
 
         assert (assigned, devices) == (0, set())
-        gen._ensure_vlan_domains_for_devices.assert_not_awaited()
 
 
 # ===========================================================================

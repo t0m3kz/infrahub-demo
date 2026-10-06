@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from infrahub_sdk.protocols import CoreIPPrefixPool
 
+from generators.connections import CablingMixin
 from generators.mlag import MLAGWiringMixin
 from generators.protocols import (
     DcimCable,
@@ -27,8 +28,12 @@ from generators.protocols import (
 )
 
 
+class _WiringHost(MLAGWiringMixin, CablingMixin):
+    """MLAGWiringMixin with the CablingMixin P2P helper it expects from its host."""
+
+
 def _gen() -> Any:
-    gen = MLAGWiringMixin.__new__(MLAGWiringMixin)
+    gen = _WiringHost.__new__(_WiringHost)
     gen.client = MagicMock()
     gen.logger = MagicMock()
     return gen

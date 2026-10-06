@@ -16,12 +16,13 @@ from infrahub_sdk.generator import InfrahubGenerator
 
 from utils.data_cleaning import clean_data
 
+from ..connections import CablingMixin
 from ..logger import FailOnErrorLoggerMixin
 from ..mlag import MLAGWiringMixin
 from ..protocols import ManagedMLAG
 
 
-class MLAGGenerator(MLAGWiringMixin, FailOnErrorLoggerMixin, InfrahubGenerator):
+class MLAGGenerator(MLAGWiringMixin, CablingMixin, FailOnErrorLoggerMixin, InfrahubGenerator):
     """Wire capabilities and peer-link interfaces for both devices in an MLAG domain."""
 
     async def generate(self, data: dict[str, Any]) -> None:

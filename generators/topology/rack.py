@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 from typing import Any, Literal, cast
 
 from typing_extensions import TypedDict
@@ -9,10 +8,11 @@ from typing_extensions import TypedDict
 from ..common import CablingOptions, CommonGenerator
 from ..connections import CablingMixin
 from ..devices import DeviceMixin
-from ..helpers.rack import RackPlanner, RackRolesHelper, parse_rack_data
+from ..helpers.rack import RackRolesHelper, base_offset, parse_rack_data, rack_sort_key
+from ..helpers.template_interfaces import template_interface_names_by_role
 from ..pod_config import pod_profile
 from ..pools import PoolMixin
-from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack, ManagedBGP
+from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
 from ..rack import (
     MUTUALLY_EXCLUSIVE_ROLE_GROUPS,
     ROLES_BY_DEPLOYMENT_TYPE,
@@ -99,23 +99,10 @@ class TopologyRackData(TypedDict, total=False):
     pod: TopologyRackPodData
 
 
-def _base_offset(numbering_start: int) -> int:
-    return max(0, numbering_start - 1)
-
-
 class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, CommonGenerator):
     """Generator for creating rack infrastructure based on fabric templates."""
 
     data: TopologyRackData
-
-    @property
-    def _plan(self) -> RackPlanner:
-        """Lazily initialized helper for deterministic rack planning primitives."""
-        helper = getattr(self, "_planning_helper", None)
-        if helper is None:
-            helper = RackPlanner()
-            self._planning_helper = helper
-        return helper
 
     @property
     def _spine_role(self) -> Literal["spine", "border-spine"]:
@@ -190,66 +177,6 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
 
         return errors
 
-    @staticmethod
-    def _rack_sort_key(rack: LocationRack) -> tuple[int, int, str]:
-        """Compatibility wrapper retained for existing tests/callers."""
-        return RackPlanner.rack_sort_key(rack)
-
-    @staticmethod
-    def _parse_rack_data(data: dict) -> dict[str, Any]:
-        """Compatibility wrapper retained for existing tests/callers."""
-        return RackPlanner.parse_rack_data(data)
-
-    async def fetch_rack_devices_with_interfaces(
-        self,
-        rack: LocationRack | None = None,
-        role_filter: str | None = None,
-        interface_role: str = "downlink",
-    ) -> list[dict]:
-        """Fetch devices and their interfaces from a rack using the registered GQL query.
-
-        Uses self.data context (pod + row) when ``rack`` is not given.
-        """
-        if rack:
-            rack_obj = await self.client.get(kind=LocationRack, id=rack.id)
-            pod_id = rack_obj.pod.id
-            row_index = rack_obj.row_index.value
-        else:
-            pod_id = self.data["pod"]["id"]
-            row_index = self.data["row_index"]
-
-        _gql_path = Path(__file__).parent.parent.parent / "queries/topology/add/rack_devices_with_interfaces.gql"
-        result = await self.client.execute_graphql(
-            query=_gql_path.read_text(),
-            variables={
-                "pod_id": pod_id,
-                "row_index": row_index,
-                "role_filter": role_filter,
-                "interface_role": interface_role,
-            },
-        )
-
-        devices_with_interfaces = []
-        for rack_edge in result.get("LocationRack", {}).get("edges", []):
-            rack_node = rack_edge.get("node", {})
-            for device_edge in rack_node.get("devices", {}).get("edges", []):
-                device_node = device_edge.get("node", {})
-                interfaces = [
-                    iface_edge.get("node", {}).get("name", {}).get("value")
-                    for iface_edge in device_node.get("interfaces", {}).get("edges", [])
-                ]
-                devices_with_interfaces.append(
-                    {
-                        "device_id": device_node.get("id"),
-                        "device_name": device_node.get("name", {}).get("value"),
-                        "role": device_node.get("role", {}).get("value"),
-                        "interfaces": interfaces,
-                        "interface_count": len(interfaces),
-                    }
-                )
-
-        return devices_with_interfaces
-
     async def _fan_out_to_row_dependent_racks(self) -> None:
         """Fan out to the row-dependent (tor/compute) racks' own add_rack runs (mixed mode only).
 
@@ -280,7 +207,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         )
         row_dependent_racks = sorted(
             (r for r in row_racks if r.rack_type.value in ROW_DEPENDENT_RACK_TYPES),
-            key=self._rack_sort_key,
+            key=rack_sort_key,
         )
 
         await self.run_generator("add_rack", [rack.id for rack in row_dependent_racks], wait=False)
@@ -388,8 +315,8 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
 
         # Compute rack (mixed deployment): cable to middle-rack leafs in same row
         pod = self.data["pod"]
-        rack_base = _base_offset(pod.get("rack_numbering_start_index", 1))
-        leaf_base = _base_offset(pod.get("leaf_link_numbering_start", 1))
+        rack_base = base_offset(pod.get("rack_numbering_start_index", 1))
+        leaf_base = base_offset(pod.get("leaf_link_numbering_start", 1))
         effective_rack_index = max(0, self.data["index"] - 1 - rack_base)
         cabling_offset = leaf_base + (effective_rack_index * devices_per_rack)
 
@@ -412,14 +339,61 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         device_type: str = "leaf",
         racks_in_previous_rows: int | None = None,
     ) -> int:
-        """Thin wrapper around helper function for readability and compatibility."""
-        return self._plan.calculate_cabling_offsets(
-            data=self.data,
-            logger=self.logger,
-            device_count=device_count,
-            device_type=device_type,
-            racks_in_previous_rows=racks_in_previous_rows,
-        )
+        """Calculate cabling offset using simple formula based on rack position.
+
+        Entirely derived from live rack position (row_index/index) and the
+        caller-supplied count of sibling racks already deployed in previous
+        rows of this pod — never from a design's declared capacity. A design
+        cap describes what's ALLOWED, not what's actually built, and sizing
+        offsets off it either wastes spine ports (cap larger than reality)
+        or overflows them (cap smaller, e.g. a partially-built pod using
+        fewer racks per row than its design allows)."""
+        data = self.data
+        current_index = data["index"]
+        pod = data["pod"]
+        deployment_type = pod["deployment_type"]
+        effective_rack_index = max(0, current_index - 1 - base_offset(pod.get("rack_numbering_start_index", 1)))
+
+        # For middle_rack deployment ToRs: always offset=0 (ToRs connect to leafs in same rack)
+        if deployment_type == "middle_rack" and device_type == "tor":
+            offset = 0
+            self.logger.info(
+                f"Calculated {device_type} offset={offset} for rack {data['name']} (mode=middle_rack) - intra-rack cabling"
+            )
+
+        # For mixed/middle_rack deployment leafs: calculate offset based on row position
+        # Middle rack leafs serve all ToRs in their row
+        elif deployment_type in ("mixed", "middle_rack") and device_type == "leaf":
+            offset = base_offset(pod.get("leaf_link_numbering_start", 1)) + (data["row_index"] - 1) * device_count
+
+            self.logger.info(
+                f"Calculated {device_type} offset={offset} for rack {data['name']} "
+                f"(row_index={data['row_index']}, leafs_per_rack={device_count}, mode={deployment_type})"
+            )
+
+        # For mixed/tor deployment ToRs: cumulative offset across the pod, using
+        # the actual count of sibling racks already in previous rows (passed
+        # in by the caller via a live LocationRack query) rather than any
+        # design capacity — avoids exceeding real spine port capacity.
+        elif deployment_type in ("mixed", "tor") and device_type == "tor":
+            tors_in_previous_rows = (racks_in_previous_rows or 0) * device_count
+            offset_in_current_row = device_count * effective_rack_index
+            offset = (
+                base_offset(pod.get("spine_link_numbering_start", 1)) + tors_in_previous_rows + offset_in_current_row
+            )
+
+            self.logger.info(
+                f"Calculated {device_type} offset={offset} for rack {data['name']} "
+                f"(row={data['row_index']}, index={current_index}, tors_in_rack={device_count}, "
+                f"tors_in_previous_rows={tors_in_previous_rows}, mode={deployment_type})"
+            )
+
+        else:
+            # Other cases: no offset needed
+            offset = 0
+            self.logger.info(f"No offset needed for {device_type} in rack {data['name']} (mode={deployment_type})")
+
+        return offset
 
     def _pod_profile(self) -> dict[str, Any]:
         """Build this rack's pod's profile dict (was pod.profile)."""
@@ -524,29 +498,12 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
                 top_role=top_role,
             )
 
-    async def _spine_underlay_ready(self, spine_names: list[str]) -> bool:
-        """Return whether every parent POD spine has its underlay BGP process."""
-        processes = await self.client.filters(
-            kind=ManagedBGP,
-            capabilities__name__values=spine_names,
-            include=["capabilities"],
-            prefetch_relationships=True,
-        )
-        underlay_devices = {
-            process.capabilities.peers[0].display_label
-            for process in processes
-            if process.process_role.value == "underlay" and len(process.capabilities.peers) == 1
-        }
-        return set(spine_names).issubset(underlay_devices)
-
     async def generate(self, data: dict) -> None:
         """Generate rack topology with special handling for OOB and console devices."""
         if not data:
             self.logger.error("Generator received empty data")
             return
         try:
-            # Keep module-level wrapper usage for compatibility with existing tests
-            # that patch generators.topology.rack.parse_rack_data.
             self.data = cast(TopologyRackData, parse_rack_data(data))
         except (ValueError, KeyError, IndexError) as exc:
             self.logger.error(f"Generation failed due to {exc}")
@@ -574,19 +531,17 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
 
         # Wait for an in-flight add_pod/pod_rack_cascade on our pod before reading
         # pod-level data (spine devices, ASN/loopback pools) — avoid partial data.
-        for parent_generator in ("add_pod", "pod_rack_cascade"):
-            refreshed = await self.wait_for_parent_generator_and_refetch(parent_generator, pod["id"])
-            if refreshed is not None:
-                data = refreshed
-                try:
-                    self.data = cast(TopologyRackData, parse_rack_data(data))
-                except (ValueError, KeyError, IndexError) as exc:
-                    self.logger.error(f"Generation failed due to {exc}")
-                    return
+        refreshed = await self.wait_for_parent_generator_and_refetch(("add_pod", "pod_rack_cascade"), pod["id"])
+        if refreshed is not None:
+            try:
+                self.data = cast(TopologyRackData, parse_rack_data(refreshed))
+            except (ValueError, KeyError, IndexError) as exc:
+                self.logger.error(f"Generation failed due to {exc}")
+                return
 
         pod = self.data["pod"]
         spine_names = [device["name"] for device in pod.get("devices", [])]
-        if spine_names and not await self._spine_underlay_ready(spine_names):
+        if spine_names and not await self.bgp_processes_ready(spine_names, "underlay"):
             self.logger.info(
                 "Rack %s: deferring bootstrap until parent POD spine underlay BGP is ready",
                 self.data["name"],
@@ -594,16 +549,9 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
             return
         deployment_type = pod["deployment_type"]
 
-        # Merge the grandparent DC's own pre-fetched, role-bucketed controller
-        # lists (see queries/topology/add/rack.gql's PodFields fragment) into
-        # one flat list create_devices() reads synchronously — see
-        # generators/devices.py's _resolve_role_controller.
-        dc = pod.get("parent", {})
-        self._all_controllers = [
-            *dc.get("fabric_controllers", []),
-            *dc.get("security_manager_controllers", []),
-            *dc.get("lb_manager_controllers", []),
-        ]
+        # The grandparent DC's controllers (queries/topology/add/rack.gql's
+        # PodFields fragment), read by create_devices().
+        self.set_controllers_from(pod.get("parent", {}))
 
         # A row-dependent (tor/compute) rack cables to its row's network rack's
         # leafs. If triggered independently while that rack's add_rack is still
@@ -618,9 +566,8 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
             for network_rack in network_racks:
                 refreshed = await self.wait_for_parent_generator_and_refetch("add_rack", network_rack.id)
                 if refreshed is not None:
-                    data = refreshed
                     try:
-                        self.data = cast(TopologyRackData, parse_rack_data(data))
+                        self.data = cast(TopologyRackData, parse_rack_data(refreshed))
                     except (ValueError, KeyError, IndexError) as exc:
                         self.logger.error(f"Generation failed due to {exc}")
                         return
@@ -765,7 +712,9 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
                 leaf_role,
                 device_role="leaf",
                 deployment_id=self.data["pod"]["id"],
-                bottom_interfaces=self._roles.template_interfaces(leaf_role["template"], role="uplink"),
+                bottom_interfaces=template_interface_names_by_role(
+                    interfaces=leaf_role["template"].get("interfaces", []), role="uplink"
+                ),
                 offset=self.calculate_cabling_offsets(device_count=leaf_role["quantity"], device_type="leaf"),
                 mlag=True,
             )
@@ -801,7 +750,9 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
                 tor_role,
                 device_role="tor",
                 deployment_id=pod["id"],
-                bottom_interfaces=self._roles.template_interfaces(tor_role["template"], role="uplink"),
+                bottom_interfaces=template_interface_names_by_role(
+                    interfaces=tor_role["template"].get("interfaces", []), role="uplink"
+                ),
                 offset=self.calculate_cabling_offsets(
                     device_count=tors_per_rack, device_type="tor", racks_in_previous_rows=prev_row_racks
                 ),
@@ -837,7 +788,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
             mlag=True,
             mlag_supports_virtual=allocate_loopback,
         )
-        interfaces = self._roles.template_interfaces(role["template"], role="uplink")
+        interfaces = template_interface_names_by_role(interfaces=role["template"].get("interfaces", []), role="uplink")
 
         target = await self._resolve_local_leaf_cabling_target(
             created_leaf_devices=created_leaf_devices,

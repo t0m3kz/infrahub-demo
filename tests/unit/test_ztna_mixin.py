@@ -15,6 +15,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 from generators.common import CommonGenerator
+from generators.protocols import ProxyPolicyRule
 from generators.ztna import ZtnaMixin
 
 
@@ -34,7 +35,7 @@ def _make_gen_ready() -> Any:
     policy.save = AsyncMock()
     gen._get_or_create_proxy_policy = AsyncMock(return_value=policy)
     gen._attach_proxy_policy_to_owner = AsyncMock()
-    gen._find_existing_proxy_policy_rule = AsyncMock(return_value=None)
+    gen._find_rule_by_name = AsyncMock(return_value=None)
     created_rule = MagicMock()
     created_rule.save = AsyncMock()
     gen.client.create = AsyncMock(return_value=created_rule)
@@ -126,7 +127,7 @@ class TestReconcileProxyRule:
         gen = _make_gen_ready()
         existing = MagicMock()
         existing.id = "rule-existing"
-        gen._find_existing_proxy_policy_rule = AsyncMock(return_value=existing)
+        gen._find_rule_by_name = AsyncMock(return_value=existing)
 
         result = asyncio.run(
             gen._reconcile_proxy_rule(
@@ -135,9 +136,7 @@ class TestReconcileProxyRule:
         )
 
         assert result is True
-        gen._find_existing_proxy_policy_rule.assert_awaited_once_with(
-            policy_id="policy-1", rule_name="checkout-to-stripe"
-        )
+        gen._find_rule_by_name.assert_awaited_once_with(ProxyPolicyRule, "policy-1", "checkout-to-stripe")
         assert gen.client.create.call_args.kwargs["data"]["id"] == "rule-existing"
         gen.client.create.return_value.save.assert_awaited_once_with(allow_upsert=True)
 
@@ -164,7 +163,7 @@ class TestReconcileProxyRule:
         )
 
         gen._get_or_create_proxy_policy.assert_awaited_once()
-        assert gen._attach_proxy_policy_to_owner.await_count == 2
+        gen._attach_proxy_policy_to_owner.assert_awaited_once()
         assert gen.client.create.call_count == 2
         destinations = [call.kwargs["data"]["destination"] for call in gen.client.create.call_args_list]
         assert destinations == ["api.stripe.com", "api.github.com"]
@@ -327,11 +326,14 @@ class TestReconcilePrivateAccessComponents:
         gen = _make_gen_ready()
         existing = MagicMock()
         existing.id = "rule-existing"
-        gen._find_existing_proxy_policy_rule = AsyncMock(return_value=existing)
+        gen._find_rule_by_name = AsyncMock(return_value=existing)
 
         created, _ = asyncio.run(gen._reconcile_private_access_components("checkout", [_component()]))
 
         assert created == 1
+        gen._find_rule_by_name.assert_awaited_once_with(
+            ProxyPolicyRule, "policy-1", "publish-checkout.internal.c001.demo.local"
+        )
         assert gen.client.create.call_args.kwargs["data"]["id"] == "rule-existing"
 
     def test_component_without_a_grant_is_not_published(self) -> None:
@@ -492,3 +494,59 @@ class TestReconcilePrivateAccessComponents:
 
         assert (created, skipped) == (0, 1)
         gen.logger.error.assert_called_once()
+
+    def test_policy_creation_failure_counts_as_skipped(self) -> None:
+        """No private-access policy could be found or made: nothing is published or cached."""
+        gen = _make_gen_ready()
+        gen._get_or_create_proxy_policy = AsyncMock(return_value=None)
+
+        created, skipped = asyncio.run(gen._reconcile_private_access_components("checkout", [_component()]))
+
+        assert (created, skipped) == (0, 1)
+        gen._attach_proxy_policy_to_owner.assert_not_awaited()
+        gen.client.create.assert_not_called()
+
+
+class TestUpsertOwnerProxyRuleOwner:
+    """The egress path shares the owner/policy handling with private-access publishing."""
+
+    def test_egress_dependency_without_owner_id_is_skipped(self) -> None:
+        """A source owner without an id cannot own the egress policy."""
+        gen = _make_gen_ready()
+        src_comp = TestReconcileProxyRule._src_comp()
+        owner = src_comp["parent"]["owner"]
+        del owner["id"]
+        del owner["org_id"]
+
+        result = asyncio.run(
+            gen._reconcile_proxy_rule(app_name="checkout", src_comp=src_comp, dep=_egress_dep(), proxy_policies={})
+        )
+
+        assert result is False
+        gen._get_or_create_proxy_policy.assert_not_awaited()
+        gen.client.create.assert_not_called()
+        assert "has no resolvable owner" in gen.logger.warning.call_args.args[0]
+
+
+class TestFindRuleByName:
+    """GetOrCreateByNameMixin._find_rule_by_name, shared by the proxy and segment rule paths."""
+
+    def test_filters_by_kind_policy_and_name(self) -> None:
+        """The first match of the server-side policy/name filter is returned."""
+        gen = _make_gen()
+        rule = MagicMock()
+        gen.client.filters = AsyncMock(return_value=[rule])
+
+        found = asyncio.run(gen._find_rule_by_name(ProxyPolicyRule, "policy-1", "rule-1"))
+
+        assert found is rule
+        gen.client.filters.assert_awaited_once_with(
+            kind=ProxyPolicyRule, policy__ids=["policy-1"], name__value="rule-1"
+        )
+
+    def test_no_match_returns_none(self) -> None:
+        """An empty result is None, not an error."""
+        gen = _make_gen()
+        gen.client.filters = AsyncMock(return_value=[])
+
+        assert asyncio.run(gen._find_rule_by_name(ProxyPolicyRule, "policy-1", "rule-1")) is None

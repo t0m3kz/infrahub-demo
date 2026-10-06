@@ -407,14 +407,14 @@ class TestPools:
     @pytest.mark.asyncio
     async def test_pool_names_kinds_and_parents(self) -> None:
         gen = _make_generator()
-        gen._ensure_sliced_pool = AsyncMock(side_effect=lambda **kw: MagicMock(id=f"pool-{kw['pool_name']}"))
+        gen.ensure_sliced_pool = AsyncMock(side_effect=lambda **kw: MagicMock(id=f"pool-{kw['pool_name']}"))
         gen.upsert_asn_pool = AsyncMock()
         gen.upsert_number_pool = AsyncMock()
         gen.client.get = AsyncMock(return_value=AsyncMock())
 
         await gen._ensure_colocation_pools(metro_id="metro-1")
 
-        calls = {c.kwargs["pool_name"]: c.kwargs for c in gen._ensure_sliced_pool.await_args_list}
+        calls = {c.kwargs["pool_name"]: c.kwargs for c in gen.ensure_sliced_pool.await_args_list}
         assert set(calls) == {
             "fr-loopback-pool",
             "fr-loopback-ipv6-pool",
@@ -428,7 +428,6 @@ class TestPools:
         # The metro hosts stretched segments, so it needs its own VNI pool.
         vni_kwargs = gen.upsert_number_pool.await_args_list[-1].kwargs
         assert vni_kwargs["pool_name"] == "fr-vni-pool"
-        assert vni_kwargs["parent_attr"] == "vni_pool"
         # An address pool for both loopbacks and management: create_devices()
         # feeds each straight to allocate_next_ip_address().
         assert calls["fr-loopback-pool"]["kind"] == "address"
@@ -443,9 +442,10 @@ class TestPools:
         assert calls["fr-technical-pool"]["prefix_length"] == _COLO_TECHNICAL_PREFIX_LENGTH
 
     @pytest.mark.asyncio
-    async def test_asn_pool_is_attached_by_the_pool_helper(self) -> None:
+    async def test_asn_pool_drawn_from_the_name_hash_grid(self) -> None:
+        """The metro ASN pool comes from the same deterministic grid as DC fabric ASNs."""
         gen = _make_generator()
-        gen._ensure_sliced_pool = AsyncMock(return_value=MagicMock(id="pool-x"))
+        gen.ensure_sliced_pool = AsyncMock(return_value=MagicMock(id="pool-x"))
         gen.upsert_asn_pool = AsyncMock()
         gen.upsert_number_pool = AsyncMock()
         gen.client.get = AsyncMock(return_value=AsyncMock())
@@ -454,9 +454,6 @@ class TestPools:
 
         kwargs = gen.upsert_asn_pool.await_args_list[-1].kwargs
         assert kwargs["pool_name"] == "fr-asn-pool"
-        assert kwargs["parent_kind"] == "TopologyColocationMetro"
-        assert kwargs["parent_id"] == "metro-1"
-        assert kwargs["parent_attr"] == "asn_pool"
         # Private-use 4-byte range, from the same deterministic name-hash grid
         # DC fabric ASNs use, so a metro can never collide with a DC.
         assert 4_200_000_000 <= kwargs["start_range"] < kwargs["end_range"] <= 4_294_967_295
@@ -466,9 +463,9 @@ class TestPools:
         """allow_upsert=True would resend every relationship and re-fire the
         fabric_templates `updated` trigger on each pool attach."""
         gen = _make_generator()
-        gen._ensure_sliced_pool = AsyncMock(side_effect=lambda **kw: MagicMock(id=f"id-{kw['pool_name']}"))
-        gen.upsert_asn_pool = AsyncMock()
-        gen.upsert_number_pool = AsyncMock()
+        gen.ensure_sliced_pool = AsyncMock(side_effect=lambda **kw: MagicMock(id=f"id-{kw['pool_name']}"))
+        gen.upsert_asn_pool = AsyncMock(return_value=MagicMock(id="asn-pool"))
+        gen.upsert_number_pool = AsyncMock(return_value=MagicMock(id="vni-pool"))
         metro = AsyncMock()
         gen.client.get = AsyncMock(return_value=metro)
 
@@ -477,7 +474,11 @@ class TestPools:
         assert metro.loopback_pool == {"id": "id-fr-loopback-pool"}
         assert metro.management_pool == {"id": "id-fr-management-pool"}
         assert metro.technical_pool == {"id": "id-fr-technical-pool"}
+        # The ASN and VNI pools ride the same single save.
+        assert metro.asn_pool == {"id": "asn-pool"}
+        assert metro.vni_pool == {"id": "vni-pool"}
         metro.save.assert_awaited_once_with()
+        gen.client.get.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_sliced_address_pool_wraps_the_allocated_prefix(self) -> None:
@@ -486,7 +487,7 @@ class TestPools:
         pool = AsyncMock()
         gen.client.create = AsyncMock(return_value=pool)
 
-        await gen._ensure_sliced_pool(
+        await gen.ensure_sliced_pool(
             pool_name="fr-loopback-pool",
             parent_pool_name="Loopback-IPv4",
             prefix_length=28,
@@ -513,7 +514,7 @@ class TestPools:
         gen._get_parent_pool_with_retry = AsyncMock(return_value=MagicMock(id="parent-1"))
         gen.client.create = AsyncMock(return_value=AsyncMock())
 
-        await gen._ensure_sliced_pool(
+        await gen.ensure_sliced_pool(
             pool_name="fr-technical-pool",
             parent_pool_name="Technical-IPv4",
             prefix_length=26,
@@ -531,7 +532,7 @@ class TestPools:
         gen._get_parent_pool_with_retry = AsyncMock(return_value=MagicMock(id="parent-1"))
         gen.client.create = AsyncMock(return_value=AsyncMock())
 
-        await gen._ensure_sliced_pool(
+        await gen.ensure_sliced_pool(
             pool_name="fr-fw-context-p2p-pool",
             parent_pool_name="FW-Context-P2P-IPv4",
             prefix_length=24,
@@ -545,13 +546,30 @@ class TestPools:
 
 
 class TestFirewallContextPools:
+    """_ensure_firewall_context_pools() now delegates to PoolMixin.
+    ensure_firewall_context_pools, the mechanism shared with dc.py's
+    per-DC equivalent — see that method's docstring for the concurrent-
+    create race it serializes against."""
+
+    def _make_gen(self) -> Any:
+        gen = _make_generator()
+        gen.upsert_number_pool = AsyncMock()
+        gen._get_parent_pool_with_retry = AsyncMock(return_value=MagicMock(id="parent-pool-id"))
+        gen.client.allocate_next_ip_prefix = AsyncMock(return_value=MagicMock(id="metro-slice-id"))
+        # ensure_firewall_context_pools() serializes concurrent callers via
+        # acquire_resource_lock/release_resource_lock — not under test except
+        # in test_serializes_on_a_lock_scoped_to_this_metro below, and the
+        # lock's own client.delete() call has no mock set up on this plain
+        # MagicMock client.
+        gen.acquire_resource_lock = AsyncMock(return_value="lock-id")
+        gen.release_resource_lock = AsyncMock()
+        return gen
+
     @pytest.mark.asyncio
     async def test_vlan_pool_matches_the_dc_range(self) -> None:
         """The pool customer_colocation.py reads by name, numbering
         ManagedFirewallContext.vlan_id in the DC context range."""
-        gen = _make_generator()
-        gen.upsert_number_pool = AsyncMock()
-        gen._ensure_sliced_pool = AsyncMock()
+        gen = self._make_gen()
 
         await gen._ensure_firewall_context_pools()
 
@@ -563,22 +581,32 @@ class TestFirewallContextPools:
 
     @pytest.mark.asyncio
     async def test_p2p_pool_is_a_slice_handing_out_31s(self) -> None:
-        """_allocate_context_p2p names no length, so the pool's default must
-        be a /31 point-to-point link, cut from a slice of the global pool."""
-        gen = _make_generator()
-        gen.upsert_number_pool = AsyncMock()
-        gen._ensure_sliced_pool = AsyncMock()
+        """The pool's default must be a /31 point-to-point link, cut from a
+        slice of the global IPv4 bootstrap pool — the metro's edge legs are
+        always Technical-IPv4, unlike dc.py's dual-stack choice."""
+        gen = self._make_gen()
 
         await gen._ensure_firewall_context_pools()
 
-        gen._ensure_sliced_pool.assert_awaited_once_with(
-            pool_name="fr-fw-context-p2p-pool",
-            parent_pool_name="FW-Context-P2P-IPv4",
-            prefix_length=_COLO_FW_CONTEXT_P2P_SLICE_LENGTH,
-            role="technical",
-            kind="prefix",
-            default_prefix_length=31,
-        )
+        gen._get_parent_pool_with_retry.assert_awaited_once_with("FW-Context-P2P-IPv4")
+        alloc_kwargs = gen.client.allocate_next_ip_prefix.call_args.kwargs
+        assert alloc_kwargs["prefix_length"] == _COLO_FW_CONTEXT_P2P_SLICE_LENGTH
+        create_kwargs = gen.client.create.call_args.kwargs
+        assert create_kwargs["data"]["default_prefix_length"] == 31
+
+    @pytest.mark.asyncio
+    async def test_serializes_on_a_lock_scoped_to_this_metro(self) -> None:
+        """Two overlapping calls for the SAME metro must not both create a
+        CoreIPPrefixPool with the same name — previously unguarded here
+        (dc.py's equivalent already serialized on a per-DC lock)."""
+        gen = self._make_gen()
+        calls: list[str] = []
+        gen.acquire_resource_lock = AsyncMock(side_effect=lambda key: calls.append(f"acquire:{key}") or "lock-id")
+        gen.release_resource_lock = AsyncMock(side_effect=lambda lock_id: calls.append(f"release:{lock_id}"))
+
+        await gen._ensure_firewall_context_pools()
+
+        assert calls == ["acquire:fw-context-pools-fr", "release:lock-id"]
 
 
 class TestMetroDevices:

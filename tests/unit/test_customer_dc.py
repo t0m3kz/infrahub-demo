@@ -17,7 +17,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.common import CommonGenerator
-from generators.protocols import TopologyCustomerDC
 from generators.topology.customer_dc import CustomerDeploymentDCExchangeGenerator
 
 _T = TypeVar("_T", bound=CommonGenerator)
@@ -140,8 +139,7 @@ class TestWaitsForParentDcGenerator:
         await gen.generate(_dc_payload_with_parent(fw_devices=[]))
 
         assert gen.wait_for_parent_generator_and_refetch.await_args_list == [
-            (("add_dc", "dc10-id"), {}),
-            (("dc_pod_cascade", "dc10-id"), {}),
+            ((("add_dc", "dc_pod_cascade"), "dc10-id"), {}),
         ]
 
     @pytest.mark.asyncio
@@ -368,22 +366,24 @@ class TestLinkServingFirewallContext:
         """Shared or dedicated, the context just ensured is the one linked."""
         gen, _, _ = TestFirewallContextProvisioning()._make_gen_with_cluster()
         gen._get_or_create_firewall_context = AsyncMock(return_value=MagicMock(id="ctx-1"))
-        gen._link_serving_firewall_context = AsyncMock()
+        gen.link_serving_firewall_context = AsyncMock()
 
         await gen.generate(_dc_payload_with_parent(customer_id="cust-1"))
 
-        gen._link_serving_firewall_context.assert_awaited_once_with("cust-1", "ctx-1")
+        gen.link_serving_firewall_context.assert_awaited_once_with(
+            kind="TopologyCustomerDC", customer_id="cust-1", context_id="ctx-1"
+        )
 
     @pytest.mark.asyncio
     async def test_context_creation_failure_links_nothing(self) -> None:
         """No context, no link: the deployment keeps whatever it had."""
         gen, _, _ = TestFirewallContextProvisioning()._make_gen_with_cluster()
         gen._get_or_create_firewall_context = AsyncMock(return_value=None)
-        gen._link_serving_firewall_context = AsyncMock()
+        gen.link_serving_firewall_context = AsyncMock()
 
         await gen.generate(_dc_payload_with_parent())
 
-        gen._link_serving_firewall_context.assert_not_awaited()
+        gen.link_serving_firewall_context.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_link_is_saved_untracked(self) -> None:
@@ -395,9 +395,9 @@ class TestLinkServingFirewallContext:
         deployment.save = AsyncMock()
         gen.client.get = AsyncMock(return_value=deployment)
 
-        await gen._link_serving_firewall_context("cust-1", "ctx-1")
+        await gen.link_serving_firewall_context(kind="TopologyCustomerDC", customer_id="cust-1", context_id="ctx-1")
 
-        assert gen.client.get.call_args.kwargs == {"kind": TopologyCustomerDC, "id": "cust-1"}
+        assert gen.client.get.call_args.kwargs == {"kind": "TopologyCustomerDC", "id": "cust-1"}
         assert deployment.serving_firewall_context == "ctx-1"
         deployment.save.assert_awaited_once_with(update_group_context=False)
 
@@ -410,7 +410,7 @@ class TestLinkServingFirewallContext:
         deployment.save = AsyncMock()
         gen.client.get = AsyncMock(return_value=deployment)
 
-        await gen._link_serving_firewall_context("cust-1", "ctx-1")
+        await gen.link_serving_firewall_context(kind="TopologyCustomerDC", customer_id="cust-1", context_id="ctx-1")
 
         deployment.save.assert_not_awaited()
 
@@ -420,7 +420,7 @@ class TestLinkServingFirewallContext:
         gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
         gen.client.get = AsyncMock(side_effect=RuntimeError("boom"))
 
-        await gen._link_serving_firewall_context("cust-1", "ctx-1")
+        await gen.link_serving_firewall_context(kind="TopologyCustomerDC", customer_id="cust-1", context_id="ctx-1")
 
         gen.logger.error.assert_called_once()
 

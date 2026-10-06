@@ -1,7 +1,7 @@
 from typing import Any
 
-from transforms.common import (
-    BaseDeviceTransform,
+from transforms.common import BaseDeviceTransform
+from transforms.helpers.firewall import (
     get_firewall_contexts,
     get_firewall_static_routes,
     get_firewall_zones,
@@ -9,7 +9,8 @@ from transforms.common import (
     place_policies_in_contexts,
 )
 from transforms.helpers.ha import get_ha
-from utils.data_cleaning import clean_data
+from transforms.helpers.policy import merge_policies
+from transforms.helpers.segments import segment_vlan_ids
 
 
 def _build_fw_interfaces(
@@ -25,23 +26,12 @@ def _build_fw_interfaces(
     Only interfaces that have an ip_address are included — transit/management
     interfaces without an IP are skipped for zone rendering purposes.
     """
-    # Build segment-name → security_zone lookup from activations
     seg_zone: dict[str, dict] = {}
     for act in activations:
         seg = act.get("segment") or {}
-        seg_name = seg.get("name")
-        zone = seg.get("security_zone")
-        if seg_name and zone:
-            seg_zone[seg_name] = zone
-
-    # Build segment-name → vlan_id lookup for sub-interface rendering
-    seg_vlan: dict[str, int] = {}
-    for act in activations:
-        seg = act.get("segment") or {}
-        seg_name = seg.get("name")
-        vlan_id = act.get("vlan_id")
-        if seg_name and vlan_id:
-            seg_vlan[seg_name] = vlan_id
+        if seg.get("name") and seg.get("security_zone"):
+            seg_zone[seg["name"]] = seg["security_zone"]
+    seg_vlan = segment_vlan_ids(activations)
 
     fw_ifaces: list[dict[str, Any]] = []
     for iface in interfaces:
@@ -89,100 +79,20 @@ def _collect_segment_policies(activations: list[dict[str, Any]]) -> list[dict[st
     return list(seen.values())
 
 
-def _merge_policies(
-    global_policies: list[dict[str, Any]],
-    segment_policies: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """Merge global (zone-level) and segment-scoped policies, deduplicating by name.
-
-    Segment-scoped policies take precedence on name collision.
-    """
-    merged: dict[str, dict] = {}
-    for policy in global_policies:
-        name = policy.get("name") or policy.get("id")
-        if name:
-            merged[name] = policy
-    for policy in segment_policies:
-        name = policy.get("name") or policy.get("id")
-        if name:
-            merged[name] = policy
-    return list(merged.values())
-
-
 class Firewall(BaseDeviceTransform):
     query = "firewall_config"
     template_subdir = "firewalls"
-
-    def _collect_activations_from_interfaces(
-        self,
-        interfaces: list[dict[str, Any]],
-        *,
-        device_id: str | None = None,
-        device_capabilities: list[dict[str, Any]] | None = None,
-    ) -> list[dict[str, Any]]:
-        """Firewall-specific override: no VLAN-domain resolution.
-
-        BaseDeviceTransform's own _collect_activations_from_interfaces
-        resolves a VxlanSegment's LOCAL vlan_id to the RENDERING DEVICE's own
-        VLAN domain (its ManagedMLAG if paired, else itself) — a leaf/tor
-        concept that doesn't apply to a firewall (never MLAG-paired, never a
-        standalone VLAN domain). A firewall's own tagged sub-interface VLAN
-        comes from a different mechanism entirely (FirewallContext's own
-        dot1q_vlan, see transforms/helpers/vxlan.py) — _build_fw_interfaces
-        here just needs a stable vlan_id per segment name for zone/tag
-        lookup, so this simpler variant takes the first segment_deployments
-        entry directly, exactly like the pre-VLAN-domain behavior. device_id/
-        device_capabilities accepted only for signature compatibility with
-        the base class — unused here.
-        """
-        del device_id, device_capabilities
-        seen: set[str] = set()
-        activations: list[dict[str, Any]] = []
-        for iface in interfaces:
-            for cap in iface.get("interface_capabilities") or []:
-                seg_id = cap.get("id") or cap.get("name")
-                if not seg_id or seg_id in seen:
-                    continue
-                if cap.get("typename") == "ManagedVlanSegment":
-                    if cap.get("status") not in self._ACTIVE_STATUSES:
-                        continue
-                    vlan_id = cap.get("vlan_id")
-                    vni = None
-                else:
-                    seg_deps = cap.get("segment_deployments")
-                    if not seg_deps:
-                        continue
-                    dep = seg_deps[0]
-                    vlan_id = dep.get("vlan_id")
-                    vni = dep.get("vni")
-                seen.add(seg_id)
-                activations.append({"vlan_id": vlan_id, "vni": vni, "segment": cap})
-        return activations
+    resolve_vlan_domain = False
 
     async def transform(self, data: Any) -> Any:
-        cleaned = clean_data(data)
-
-        devices = cleaned.get("DcimPhysicalDevice") or []
-        device = devices[0] if devices else {}
-
-        zones_data = cleaned.get("SecurityZone") or []
-        global_policies_data = cleaned.get("SecurityPolicy") or []
-
-        platform = device.get("platform") or {}
-        platform_name = platform.get("netmiko_device_type")
-
+        device, roots, platform_name = self._device_and_platform(data)
         if not platform_name:
-            device_name = device.get("name", "Unknown Device")
-            return (
-                f"! Device {device_name} has no platform with "
-                f"netmiko_device_type defined.\n! No configuration generated.\n"
-            )
+            return self._no_platform_config(device)
 
         activations = self._collect_activations_from_interfaces(device.get("interfaces") or [])
 
         fw_interfaces = _build_fw_interfaces(device.get("interfaces") or [], activations)
-        segment_policies_data = _collect_segment_policies(activations)
-        all_policies_data = _merge_policies(global_policies_data, segment_policies_data)
+        all_policies_data = merge_policies(roots.get("SecurityPolicy"), _collect_segment_policies(activations))
 
         # Each rule lands in the context (VDOM/vsys) its segments' traffic is
         # redirected to; only rules no context serves stay in the root list.
@@ -193,19 +103,16 @@ class Firewall(BaseDeviceTransform):
         for context in contexts:
             context["policies"] = get_zone_policies(context_policies_data.get(context["id"]))
 
-        zones = get_firewall_zones(zones_data)
+        zones = get_firewall_zones(roots.get("SecurityZone"))
         config = self._build_config(device, platform_name)
-        ha_config = get_ha(device.get("capabilities"), device.get("interfaces"))
         config.update(
             {
                 "fw_interfaces": fw_interfaces,
                 "zones": zones,
                 "zone_policies": get_zone_policies(root_policies_data),
                 "static_routes": get_firewall_static_routes(fw_interfaces, zones),
-                "ha": ha_config,
+                "ha": get_ha(device.get("capabilities"), device.get("interfaces")),
                 "contexts": contexts,
             }
         )
-
-        template = self._load_template(platform_name)
-        return template.render(**config)
+        return self._render(platform_name, config)

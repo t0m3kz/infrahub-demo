@@ -1,11 +1,8 @@
 """Border Leaf device configuration transform."""
 
-from transforms.common import (
-    BaseDeviceTransform,
-    _flatten_deployment_firewall_contexts,
-    _flatten_deployment_segment_activations,
-    get_border_leaf_pbr_rules,
-)
+from transforms.common import BaseDeviceTransform
+from transforms.helpers.firewall import _flatten_deployment_firewall_contexts, get_border_leaf_pbr_rules
+from transforms.helpers.segments import _flatten_deployment_segment_activations
 
 
 class BorderLeaf(BaseDeviceTransform):

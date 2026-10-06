@@ -2,7 +2,8 @@
 
 from typing import Any
 
-from transforms.common import BaseDeviceTransform, get_vlans
+from transforms.common import BaseDeviceTransform
+from transforms.helpers.segments import get_vlans
 
 
 class L2Leaf(BaseDeviceTransform):

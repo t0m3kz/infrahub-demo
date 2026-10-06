@@ -26,14 +26,11 @@ from __future__ import annotations
 from typing import Any
 
 from infrahub_sdk.transforms import InfrahubTransform
-from jinja2 import Environment, FileSystemLoader, Template
+from jinja2 import Template
 
-from transforms.helpers.proxy import (
-    flatten_proxy_rules,
-    get_private_access_segments,
-    get_proxy_policies,
-    merge_policies,
-)
+from transforms.helpers.policy import merge_policies
+from transforms.helpers.proxy import flatten_proxy_rules, get_private_access_segments, get_proxy_policies
+from transforms.helpers.templates import load_template
 from utils.data_cleaning import clean_data
 
 # Web-gateway providers with their own template. Anything else falls back to _DEFAULT_TEMPLATE.
@@ -84,6 +81,8 @@ class ProxyCloud(InfrahubTransform):
         ]
         policies = get_proxy_policies(merge_policies(shared_policies_data, customer_policies))
         rules = flatten_proxy_rules(policies)
+        for rule in rules:
+            rule["verdict"] = "allow" if rule.get("action") in ("allow", "bypass") else "block"
 
         template = self._load_template(_PROVIDER_TEMPLATES.get(provider, _DEFAULT_TEMPLATE))
         return template.render(
@@ -111,6 +110,4 @@ class ProxyCloud(InfrahubTransform):
 
     def _load_template(self, name: str) -> Template:
         """Load the Jinja2 template for the given provider (see _PROVIDER_TEMPLATES)."""
-        path = f"{self.root_directory}/templates/configs"
-        env = Environment(loader=FileSystemLoader(path), autoescape=False, keep_trailing_newline=True)
-        return env.get_template(f"proxies_cloud/{name}.j2")
+        return load_template(f"{self.root_directory}/templates/configs", f"proxies_cloud/{name}.j2")

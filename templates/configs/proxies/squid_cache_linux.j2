@@ -59,9 +59,8 @@ http_access deny all
 dns_nameservers 8.8.8.8 8.8.4.4
 
 # --- Interfaces ---
-{%- set mgmt_iface = proxy_interfaces | selectattr('role', 'equalto', 'management') | list | first | default(None) %}
-{%- if mgmt_iface and mgmt_iface.ip_address %}
-tcp_outgoing_address {{ mgmt_iface.ip_address.address.split('/')[0] }}
+{%- if management_ip %}
+tcp_outgoing_address {{ management_ip }}
 {%- endif %}
 {%- for iface in proxy_interfaces %}
 # {{ iface.name }}{%- if iface.description %}: {{ iface.description }}{%- endif %}{%- if iface.ip_address %} — {{ iface.ip_address.address }}{%- endif %}
@@ -80,8 +79,8 @@ logfile_rotate 7
 
 # --- Stats ---
 cachemgr_passwd disable all
-{%- if mgmt_iface and mgmt_iface.ip_address %}
-http_access allow {{ mgmt_iface.ip_address.address.split('/')[0] }} manager
+{%- if management_ip %}
+http_access allow {{ management_ip }} manager
 {%- endif %}
 {%- if ha %}
 

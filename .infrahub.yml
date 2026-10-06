@@ -557,8 +557,6 @@ queries:
     file_path: queries/topology/add/pod.gql
   - name: rack
     file_path: queries/topology/add/rack.gql
-  - name: rack_devices_with_interfaces
-    file_path: queries/topology/add/rack_devices_with_interfaces.gql
   - name: topology_pop
     file_path: queries/topology/add/pop.gql
   - name: topology_simulator

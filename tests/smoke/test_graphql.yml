@@ -180,14 +180,6 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
-    resource_name: rack_devices_with_interfaces
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/topology/add/rack_devices_with_interfaces.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
     resource_name: virt_cluster_capacity
     tests:
       - name: syntax_check

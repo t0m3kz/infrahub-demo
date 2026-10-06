@@ -974,6 +974,18 @@ class TestRealizeBorderGateways:
         gen = asyncio.run(self._assign([]))
         gen._ensure_vlan_domain_segment.assert_not_awaited()
 
+    def test_mlag_pair_shares_one_domain_segment(self) -> None:
+        """Both peers of one MLAG domain realize the segment once, on that domain."""
+        devices = [_device("bl-1", "border-leaf"), _device("bl-2", "border-leaf")]
+        gen = _make_gen()
+        gen._resolve_vlan_domain = AsyncMock(return_value=("ManagedMLAG", "mlag-1"))
+        gen._ensure_vlan_domain_segment = AsyncMock()
+
+        domain_pools = asyncio.run(gen._realize_segment_on_devices("seg-1", "colo-services-stretch", devices))
+
+        assert domain_pools == {"mlag-1": None}
+        gen._ensure_vlan_domain_segment.assert_awaited_once_with("seg-1", "colo-services-stretch", "mlag-1", None)
+
 
 class TestAssignToDeploymentInterfaces:
     """_assign_to_deployment_interfaces — the stretched-only gate in front of _realize_border_gateways."""

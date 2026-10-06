@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import re
 from abc import ABC, abstractmethod
-from collections import defaultdict
+from collections import Counter, defaultdict
 from typing import TYPE_CHECKING, Any, Literal, Sequence
 
 from netutils.interface import sort_interface_list
@@ -46,43 +46,18 @@ class CableTypeDetector:
     """Determine appropriate cable type based on interface types."""
 
     COPPER_PATTERN = re.compile(r"base-t", re.IGNORECASE)
-    FIBER_PATTERN = re.compile(r"base-[xsle]", re.IGNORECASE)
 
     @classmethod
-    def detect_cable_type(cls, intf1_type: str | None, intf2_type: str | None, prefer_fiber: bool = True) -> str:
-        """Determine cable type for connection. Returns: 'copper', 'mmf', or 'smf'."""
-        if not intf1_type or not intf2_type:
-            return "mmf"
-
-        intf1_is_copper = bool(cls.COPPER_PATTERN.search(intf1_type))
-        intf2_is_copper = bool(cls.COPPER_PATTERN.search(intf2_type))
-
-        if intf1_is_copper and intf2_is_copper:
+    def detect_cable_type(cls, intf1_type: str | None, intf2_type: str | None) -> str:
+        """Return 'copper' when both ends are copper, otherwise 'mmf'."""
+        if (
+            intf1_type
+            and intf2_type
+            and cls.COPPER_PATTERN.search(intf1_type)
+            and cls.COPPER_PATTERN.search(intf2_type)
+        ):
             return "copper"
-        if not intf1_is_copper and not intf2_is_copper:
-            return "mmf"
-
-        return "mmf" if prefer_fiber else "copper"
-
-    @classmethod
-    def get_cable_description(cls, intf1_type: str | None, intf2_type: str | None, cable_type: str) -> str:
-        """Generate human-readable cable description."""
-        if not intf1_type or not intf2_type:
-            return "Standard cable"
-
-        intf1_is_copper = bool(cls.COPPER_PATTERN.search(intf1_type))
-        intf2_is_copper = bool(cls.COPPER_PATTERN.search(intf2_type))
-
-        if intf1_is_copper and intf2_is_copper:
-            return "Copper patch cable"
-        if not intf1_is_copper and not intf2_is_copper:
-            return "Single-mode fiber patch cable" if cable_type == "smf" else "Multi-mode fiber patch cable"
-
-        return (
-            "DAC (Direct Attach Copper) or AOC (Active Optical Cable)"
-            if cable_type == "mmf"
-            else "Media converter or transceiver"
-        )
+        return "mmf"
 
 
 def pick_matched_switch_port_name(
@@ -122,13 +97,15 @@ class ConnectionValidator:
             return False, f"Too many connections: {len(plan)} > {max_connections}"
 
         server_interfaces = [conn.server_interface for conn in plan]
-        if len(server_interfaces) != len(set(server_interfaces)):
-            duplicates = [intf for intf in server_interfaces if server_interfaces.count(intf) > 1]
+        server_counts = Counter(server_interfaces)
+        if len(server_counts) != len(server_interfaces):
+            duplicates = [intf for intf in server_interfaces if server_counts[intf] > 1]
             return False, f"Duplicate server interfaces: {duplicates}"
 
         switch_endpoints = [(conn.switch_name, conn.switch_interface) for conn in plan]
-        if len(switch_endpoints) != len(set(switch_endpoints)):
-            duplicates = [ep for ep in switch_endpoints if switch_endpoints.count(ep) > 1]
+        switch_counts = Counter(switch_endpoints)
+        if len(switch_counts) != len(switch_endpoints):
+            duplicates = [ep for ep in switch_endpoints if switch_counts[ep] > 1]
             return False, f"Duplicate switch endpoints: {duplicates}"
 
         return True, f"Plan validated: {len(plan)} connections"
@@ -315,27 +292,35 @@ class IntraRackCablingStrategy(CablingStrategy):
 
         existing_connections = self._detect_existing_connections(self.planner._sorted_top_devices)
 
-        tor_index = 0
-        for bottom_device in self.planner._sorted_bottom_devices:
+        # Round-robin slots already claimed on each top device, counted for
+        # EVERY earlier ToR (including ones reusing existing cables) so a ToR's
+        # port offsets do not depend on whether its predecessors were re-runs.
+        claimed_per_top = [0] * num_top_devices
+        for tor_index, bottom_device in enumerate(self.planner._sorted_bottom_devices):
             bottom_interfaces = self.planner.bottom_by_device[bottom_device]
-            uplinks_per_tor = len(bottom_interfaces)
+            slots = self._claim_round_robin_slots(tor_index, len(bottom_interfaces), claimed_per_top)
 
             existing_tops = existing_connections.get(bottom_device)
             if existing_tops:
                 self._create_connections_to_existing_tops(bottom_device, bottom_interfaces, existing_tops, cabling_plan)
             else:
-                self._create_round_robin_connections(
-                    bottom_device,
-                    bottom_interfaces,
-                    tor_index,
-                    uplinks_per_tor,
-                    num_top_devices,
-                    self.planner._sorted_top_devices,
-                    cabling_plan,
-                )
-            tor_index += 1
+                self._create_round_robin_connections(bottom_interfaces, slots, cabling_plan)
 
         return cabling_plan
+
+    @staticmethod
+    def _claim_round_robin_slots(
+        tor_index: int, uplinks_per_tor: int, claimed_per_top: list[int]
+    ) -> list[tuple[int, int]]:
+        """Return (top_device_idx, port_offset) per uplink of this ToR and
+        advance the per-top-device claim counters."""
+        num_top_devices = len(claimed_per_top)
+        slots = []
+        for uplink_idx in range(uplinks_per_tor):
+            top_device_idx = (tor_index * uplinks_per_tor + uplink_idx) % num_top_devices
+            slots.append((top_device_idx, claimed_per_top[top_device_idx]))
+            claimed_per_top[top_device_idx] += 1
+        return slots
 
     def _detect_existing_connections(self, candidate_peers: list[str]) -> dict[str, set[str]]:
         """Detect existing connections for idempotency."""
@@ -378,28 +363,14 @@ class IntraRackCablingStrategy(CablingStrategy):
 
     def _create_round_robin_connections(
         self,
-        bottom_device: str,
         bottom_interfaces: list[Any],
-        tor_index: int,
-        uplinks_per_tor: int,
-        num_top_devices: int,
-        sorted_top_devices: list[str],
+        slots: list[tuple[int, int]],
         cabling_plan: list[tuple[Any, Any]],
     ) -> None:
         """Create round-robin connections for first run."""
-        for uplink_idx, bottom_intf in enumerate(bottom_interfaces):
-            top_device_idx = (tor_index * uplinks_per_tor + uplink_idx) % num_top_devices
-            top_device = sorted_top_devices[top_device_idx]
+        for bottom_intf, (top_device_idx, port_offset) in zip(bottom_interfaces, slots):
+            top_device = self.planner._sorted_top_devices[top_device_idx]
             top_interfaces = self.planner.top_by_device[top_device]
-
-            port_offset = self.planner._calculate_round_robin_port_offset(
-                tor_index,
-                uplink_idx,
-                uplinks_per_tor,
-                top_device_idx,
-                num_top_devices,
-                self.planner._sorted_bottom_devices,
-            )
 
             if port_offset < len(top_interfaces):
                 top_intf = top_interfaces[port_offset]
@@ -587,120 +558,25 @@ class CablingPlanner:
         candidate_peers: set[str],
     ) -> set[str]:
         """Extract connected peer device names from interface cable names."""
-        peers: set[str] = set()
-
-        for intf in interfaces:
-            cable = getattr(intf, "cable", None)
-            if cable is None:
-                continue
-
-            cable_peer = getattr(cable, "_peer", None) or cable
-            if cable_peer is None:
-                continue
-
-            raw_name = getattr(cable_peer, "name", None)
-            if raw_name is None:
-                continue
-
-            cable_name = getattr(raw_name, "value", None) or raw_name
-            if not isinstance(cable_name, str) or "__" not in cable_name:
-                continue
-
-            for endpoint in cable_name.split("__"):
-                if "-" not in endpoint:
-                    continue
-                device_name, _ = endpoint.rsplit("-", 1)
-                if device_name in candidate_peers:
-                    peers.add(device_name)
-
-        return peers
-
-    def _calculate_round_robin_port_offset(
-        self,
-        tor_index: int,
-        uplink_idx: int,
-        uplinks_per_tor: int,
-        top_device_idx: int,
-        num_top_devices: int,
-        sorted_bottom_devices: list[str],
-    ) -> int:
-        """Calculate port offset for round-robin ToR-to-Leaf connectivity."""
-        connections_from_previous_tors = sum(
-            1
-            for ti in range(tor_index)
-            for ui in range(len(self.bottom_by_device[sorted_bottom_devices[ti]]))
-            if (ti * len(self.bottom_by_device[sorted_bottom_devices[ti]]) + ui) % num_top_devices == top_device_idx
-        )
-
-        connections_from_current_tor = sum(
-            1 for ui in range(uplink_idx) if (tor_index * uplinks_per_tor + ui) % num_top_devices == top_device_idx
-        )
-
-        return connections_from_previous_tors + connections_from_current_tor
+        return cable_endpoint_device_names(interfaces) & candidate_peers
 
     def _get_interface_speed(self, interface: DcimPhysicalInterface) -> int | None:
         """Extract speed from interface type."""
         return InterfaceSpeedMatcher.extract_speed(str(interface.interface_type.value))
 
-    def _validate_interface_speeds(
+    def build_cabling_plan(
         self,
-        cabling_plan: list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]],
-        strict: bool = False,
-    ) -> list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]]:
-        """Validate interface speed compatibility in cabling plan."""
-        validated_plan = []
-        mismatches = []
-        skipped_connections = []
-
-        for bottom_intf, top_intf in cabling_plan:
-            bottom_speed = self._get_interface_speed(bottom_intf)
-            top_speed = self._get_interface_speed(top_intf)
-
-            bottom_type = bottom_intf.interface_type.value
-            top_type = top_intf.interface_type.value
-
-            if bottom_speed and top_speed and bottom_speed != top_speed:
-                mismatch_msg = (
-                    f"{bottom_intf.device.display_label}:{bottom_intf.name.value} ({bottom_type}, {bottom_speed}Gbps) "
-                    f"↔ {top_intf.device.display_label}:{top_intf.name.value} ({top_type}, {top_speed}Gbps)"
-                )
-                mismatches.append(mismatch_msg)
-
-                if strict:
-                    self.logger.error(f"INTERFACE TYPE MISMATCH - Connection skipped: {mismatch_msg}")
-                    skipped_connections.append(mismatch_msg)
-                    continue
-                else:
-                    self.logger.error(
-                        f"INTERFACE TYPE MISMATCH - Connection will be created but may not work: {mismatch_msg}"
-                    )
-
-            validated_plan.append((bottom_intf, top_intf))
-
-        if mismatches:
-            total_attempted = len(cabling_plan)
-            total_created = len(validated_plan)
-            total_mismatches = len(mismatches)
-
-            if strict:
-                self.logger.error(
-                    f"Speed validation summary: {total_mismatches} incompatible interface type(s) detected. "
-                    f"{len(skipped_connections)} connection(s) skipped. {total_created}/{total_attempted} connections will be created."
-                )
-            else:
-                self.logger.error(
-                    f"Speed validation summary: {total_mismatches} incompatible interface type(s) detected. "
-                    f"All {total_attempted} connections will be created but may not function correctly."
-                )
-
-        return validated_plan
-
-    def _build_speed_aware_plan(
-        self,
-        scenario: str,
+        scenario: str = "rack",
         cabling_offset: int = 0,
     ) -> list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]]:
-        """Build cabling plan with speed-aware grouping."""
+        """Build a speed-aware cabling plan using the given scenario strategy.
+
+        Interfaces are grouped by derived speed and each speed group is cabled
+        separately, so a link between mismatched speeds is never planned.
+        """
+        if scenario not in self._strategies:
+            raise ValueError(f"Unknown cabling scenario: {scenario}")
+
         all_bottom_intfs = []
         all_top_intfs = []
 
@@ -739,11 +615,7 @@ class CablingPlanner:
             )
 
             try:
-                strategy = temp_planner._strategies.get(scenario)
-                if strategy:
-                    speed_plan = strategy.build_plan(cabling_offset=cabling_offset)
-                else:
-                    raise ValueError(f"Unknown scenario for speed-aware mode: {scenario}")
+                speed_plan = temp_planner._strategies[scenario].build_plan(cabling_offset=cabling_offset)
             except ValueError as e:
                 self.logger.warning(f"Speed-aware mode error for scenario '{scenario}': {e}")
                 continue
@@ -753,29 +625,22 @@ class CablingPlanner:
 
         return combined_plan
 
-    def build_cabling_plan(
-        self,
-        scenario: str = "rack",
-        cabling_offset: int = 0,
-        speed_aware: bool = False,
-        validate_speeds: bool = True,
-        strict_speed_validation: bool = False,
-        **kwargs: Any,
-    ) -> list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]]:
-        """Build cabling plan using specified scenario strategy."""
-        strategy = self._strategies.get(scenario)
-        if not strategy:
-            raise ValueError(f"Unknown cabling scenario: {scenario}")
 
-        if speed_aware:
-            cabling_plan = self._build_speed_aware_plan(scenario=scenario, cabling_offset=cabling_offset)
-        else:
-            cabling_plan = strategy.build_plan(cabling_offset=cabling_offset, **kwargs)
-
-            if validate_speeds and cabling_plan:
-                cabling_plan = self._validate_interface_speeds(
-                    cabling_plan=cabling_plan,
-                    strict=strict_speed_validation,
-                )
-
-        return cabling_plan
+def cable_endpoint_device_names(interfaces: list[Any]) -> set[str]:
+    """Device names on either end of each interface's cable, parsed from the
+    cable name convention ("device-interface__device-interface", set by
+    create_cabling). Callers filter out their own device or keep known peers."""
+    names: set[str] = set()
+    for intf in interfaces:
+        cable = getattr(intf, "cable", None)
+        if cable is None:
+            continue
+        cable_peer = getattr(cable, "_peer", None) or cable
+        raw_name = getattr(cable_peer, "name", None)
+        cable_name = getattr(raw_name, "value", None) or raw_name
+        if not isinstance(cable_name, str) or "__" not in cable_name:
+            continue
+        for endpoint_label in cable_name.split("__"):
+            if "-" in endpoint_label:
+                names.add(endpoint_label.rsplit("-", 1)[0])
+    return names

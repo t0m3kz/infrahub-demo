@@ -13,8 +13,8 @@
   of replacing it. Together they make the neighbour see exactly the one ASN its
   own `remote-as` was configured with, and nothing else.
 
-  Expects `session` and `neighbor_id` from the calling loop.
+  Expects `session` from the calling loop.
 -#}
 {%- if session.get('local_as_override') %}
-   neighbor {{ neighbor_id }} local-as {{ session.local_as_override.asn }} no-prepend replace-as
+   neighbor {{ session.neighbor }} local-as {{ session.local_as_override.asn }} no-prepend replace-as
 {%- endif %}

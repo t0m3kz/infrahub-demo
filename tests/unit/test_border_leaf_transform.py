@@ -219,7 +219,7 @@ class TestCiscoNxosBorderLeafPbrTemplate:
 
     def test_no_rules_renders_no_pbr_block(self) -> None:
         ctx = _minimal_ctx(border_leaf_pbr_rules=[])
-        rendered = self._env().get_template("border_leafs/cisco_nxos.j2").render(**ctx)
+        rendered = self._env().get_template("border_leafs/cisco_nxos.j2").render(**ctx, loopback_name="loopback0")
         assert "feature pbr" not in rendered
         assert "route-map RM-BORDER-LEAF-PBR" not in rendered
 
@@ -228,7 +228,7 @@ class TestCiscoNxosBorderLeafPbrTemplate:
             border_leaf_pbr_rules=[_pbr_rule(match_by_tag=True, sgt=10, fw_nexthop="10.65.0.0")],
             interfaces=[{"name": "Ethernet1/1", "role": "uplink", "status": "active", "description": None}],
         )
-        rendered = self._env().get_template("border_leafs/cisco_nxos.j2").render(**ctx)
+        rendered = self._env().get_template("border_leafs/cisco_nxos.j2").render(**ctx, loopback_name="loopback0")
         assert "feature pbr" in rendered
         assert "system routing tcam security-group-acl" in rendered
         assert "match cts sgt 10" in rendered
@@ -248,7 +248,7 @@ class TestCiscoNxosBorderLeafPbrTemplate:
             ],
             interfaces=[{"name": "Ethernet1/1", "role": "uplink", "status": "active", "description": None}],
         )
-        rendered = self._env().get_template("border_leafs/cisco_nxos.j2").render(**ctx)
+        rendered = self._env().get_template("border_leafs/cisco_nxos.j2").render(**ctx, loopback_name="loopback0")
         assert "ip access-list PBR-REDIRECT-web" in rendered
         assert "permit ip 10.10.1.0/24 any" in rendered
         assert "match ip address PBR-REDIRECT-web" in rendered
@@ -268,7 +268,7 @@ class TestCiscoNxosBorderLeafPbrTemplate:
             ],
             interfaces=[{"name": "Ethernet1/1", "role": "uplink", "status": "active", "description": None}],
         )
-        rendered = self._env().get_template("border_leafs/cisco_nxos.j2").render(**ctx)
+        rendered = self._env().get_template("border_leafs/cisco_nxos.j2").render(**ctx, loopback_name="loopback0")
         assert rendered.count("permit ip 10.10.1.0/24 any") == 1
         assert rendered.count("permit ip 10.10.2.0/24 any") == 1
         assert rendered.count("route-map RM-BORDER-LEAF-PBR permit") == 1
@@ -284,7 +284,7 @@ class TestCiscoNxosBorderLeafPbrTemplate:
                 {"name": "Ethernet1/25", "role": "firewall", "status": "active", "description": None},
             ],
         )
-        rendered = self._env().get_template("border_leafs/cisco_nxos.j2").render(**ctx)
+        rendered = self._env().get_template("border_leafs/cisco_nxos.j2").render(**ctx, loopback_name="loopback0")
         assert rendered.count("interface Ethernet1/1\n") == 2
         assert rendered.count("interface Ethernet1/25\n") == 1
         pbr_iface_block = rendered.split("ip policy route-map RM-BORDER-LEAF-PBR")[0].rsplit("interface ", 1)[1]
@@ -298,7 +298,7 @@ class TestCiscoNxosBorderLeafPbrTemplate:
             ],
             interfaces=[{"name": "Ethernet1/1", "role": "uplink", "status": "active", "description": None}],
         )
-        rendered = self._env().get_template("border_leafs/cisco_nxos.j2").render(**ctx)
+        rendered = self._env().get_template("border_leafs/cisco_nxos.j2").render(**ctx, loopback_name="loopback0")
         assert "route-map RM-BORDER-LEAF-PBR permit 10" in rendered
         assert "route-map RM-BORDER-LEAF-PBR permit 20" in rendered
 
@@ -316,7 +316,7 @@ class TestAristaEosBorderLeafPbrTemplate:
 
     def test_no_rules_renders_no_pbr_block(self) -> None:
         ctx = _minimal_ctx(border_leaf_pbr_rules=[])
-        rendered = self._env().get_template("border_leafs/arista_eos.j2").render(**ctx)
+        rendered = self._env().get_template("border_leafs/arista_eos.j2").render(**ctx, loopback_name="Loopback0")
         assert "hardware macro-segmentation Service-Group" not in rendered
         assert "route-map RM-BORDER-LEAF-PBR" not in rendered
 
@@ -325,7 +325,7 @@ class TestAristaEosBorderLeafPbrTemplate:
             border_leaf_pbr_rules=[_pbr_rule(match_by_tag=True, sgt=10, sgt_name="web-tier", fw_nexthop="10.65.0.0")],
             interfaces=[{"name": "Ethernet1", "role": "uplink", "status": "active", "description": None}],
         )
-        rendered = self._env().get_template("border_leafs/arista_eos.j2").render(**ctx)
+        rendered = self._env().get_template("border_leafs/arista_eos.j2").render(**ctx, loopback_name="Loopback0")
         assert "hardware macro-segmentation Service-Group" in rendered
         assert "security-group web-tier" in rendered
         assert "id 10" in rendered
@@ -345,7 +345,7 @@ class TestAristaEosBorderLeafPbrTemplate:
             ],
             interfaces=[{"name": "Ethernet1", "role": "uplink", "status": "active", "description": None}],
         )
-        rendered = self._env().get_template("border_leafs/arista_eos.j2").render(**ctx)
+        rendered = self._env().get_template("border_leafs/arista_eos.j2").render(**ctx, loopback_name="Loopback0")
         assert "ip access-list PBR-REDIRECT-web" in rendered
         assert "permit ip 10.10.1.0/24 any" in rendered
         assert "match ip address PBR-REDIRECT-web" in rendered
@@ -359,7 +359,7 @@ class TestAristaEosBorderLeafPbrTemplate:
                 {"name": "Ethernet25", "role": "firewall", "status": "active", "description": None},
             ],
         )
-        rendered = self._env().get_template("border_leafs/arista_eos.j2").render(**ctx)
+        rendered = self._env().get_template("border_leafs/arista_eos.j2").render(**ctx, loopback_name="Loopback0")
         pbr_iface_block = rendered.split("ip policy route-map RM-BORDER-LEAF-PBR")[0].rsplit("interface ", 1)[1]
         assert pbr_iface_block.startswith("Ethernet1")
 

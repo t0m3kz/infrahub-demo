@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from transforms.helpers.policy import active_rules, enabled_policies, inbound_permits
 from transforms.helpers.segments import _get_segment_prefix_str
 
 _PROTO_MAP = {"any": "ip", "tcp": "tcp", "udp": "udp", "icmp": "icmp"}
@@ -95,14 +96,7 @@ def _build_return_rule(
 def _inbound_permits(seg: dict[str, Any]) -> list[dict[str, Any]]:
     """Active permit rules targeting this segment from another segment."""
     seg_id = seg.get("id")
-    permits = [
-        rule
-        for rule in seg.get("inbound_rules") or []
-        if rule.get("action") == "permit"
-        and not rule.get("disabled")
-        and (rule.get("policy") or {}).get("enabled", True)
-        and (rule.get("source_segment") or {}).get("id") != seg_id
-    ]
+    permits = [rule for rule in inbound_permits(seg) if (rule.get("source_segment") or {}).get("id") != seg_id]
     return sorted(
         permits,
         key=lambda r: (
@@ -195,13 +189,8 @@ def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, 
         rules: list[dict[str, Any]] = []
 
         # Own policies
-        for policy in policies:
-            if not policy.get("enabled", True):
-                continue
-            for rule in sorted(policy.get("rules") or [], key=lambda r: r.get("index") or 0):
-                if rule.get("disabled"):
-                    continue
-                rules.append(_build_acl_rule(rule))
+        for policy in enabled_policies(policies):
+            rules.extend(_build_acl_rule(rule) for rule in active_rules(policy))
 
         # Return legs of the permits into this segment
         own_prefix = _get_segment_prefix_str(seg)

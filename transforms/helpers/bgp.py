@@ -4,6 +4,8 @@ import logging
 from ipaddress import ip_address
 from typing import Any, cast
 
+from transforms.helpers.addressing import host_ip
+
 _log = logging.getLogger(__name__)
 
 # Roles that relay EVPN routes between VTEPs rather than only originating their
@@ -29,8 +31,7 @@ def _sort_key_ip(ip_obj: Any) -> tuple:
     elif isinstance(ip_obj, str):
         addr_str = ip_obj
 
-    # Strip prefix length if present (e.g., "10.0.0.1/31" → "10.0.0.1")
-    addr_str = addr_str.split("/")[0] if addr_str else ""
+    addr_str = host_ip(addr_str) or ""
 
     try:
         return (0, ip_address(addr_str).packed)
@@ -266,6 +267,14 @@ def _build_session_from_peering(
     return session
 
 
+_POLICY_FLAGS = ("send_community", "send_extended_community", "remove_private_as")
+
+
+def _any_flags(sessions: list[dict[str, Any]], *flags: str) -> dict[str, bool]:
+    """{flag: whether any session sets it}, for a peer group's shared policy."""
+    return {flag: any(bool(s.get(flag)) for s in sessions) for flag in flags}
+
+
 def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") -> list[dict[str, Any]]:
     """Assign sessions to peer groups and return group definitions.
 
@@ -306,10 +315,7 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
                 "name": pg_name,
                 "type": "underlay",
                 "session_type": "EBGP",
-                "bfd_enabled": any(bool(s.get("bfd_enabled")) for s in underlay),
-                "send_community": any(bool(s.get("send_community")) for s in underlay),
-                "send_extended_community": any(bool(s.get("send_extended_community")) for s in underlay),
-                "remove_private_as": any(bool(s.get("remove_private_as")) for s in underlay),
+                **_any_flags(underlay, "bfd_enabled", *_POLICY_FLAGS),
                 "address_families": underlay_afs or ["ipv4"],
             }
         )
@@ -342,9 +348,7 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
                 "type": "overlay",
                 "session_type": "IBGP",
                 "remote_as": remote_as,
-                "send_community": any(bool(s.get("send_community")) for s in overlay_ibgp),
-                "send_extended_community": any(bool(s.get("send_extended_community")) for s in overlay_ibgp),
-                "remove_private_as": any(bool(s.get("remove_private_as")) for s in overlay_ibgp),
+                **_any_flags(overlay_ibgp, *_POLICY_FLAGS),
                 "route_reflector_client": rr_client,
                 "next_hop_unchanged": rr_client,  # RRs must not change next-hop for EVPN clients
                 "address_families": ["evpn"],
@@ -374,9 +378,7 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
                 "name": pg_name,
                 "type": "overlay",
                 "session_type": "EBGP",
-                "send_community": any(bool(s.get("send_community")) for s in overlay_ebgp),
-                "send_extended_community": any(bool(s.get("send_extended_community")) for s in overlay_ebgp),
-                "remove_private_as": any(bool(s.get("remove_private_as")) for s in overlay_ebgp),
+                **_any_flags(overlay_ebgp, *_POLICY_FLAGS),
                 "next_hop_unchanged": is_evpn_relay,
                 # A spine carries no VRF and no L2VNI, so it has no import
                 # route-target and would discard the very EVPN NLRI it exists to
@@ -397,10 +399,7 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
                 "name": pg_name,
                 "type": "dci",
                 "session_type": "EBGP",
-                "bfd_enabled": any(bool(s.get("bfd_enabled")) for s in dci),
-                "send_community": any(bool(s.get("send_community")) for s in dci),
-                "send_extended_community": any(bool(s.get("send_extended_community")) for s in dci),
-                "remove_private_as": any(bool(s.get("remove_private_as")) for s in dci),
+                **_any_flags(dci, "bfd_enabled", *_POLICY_FLAGS),
                 "address_families": dci_afs or ["evpn"],
             }
         )
@@ -582,6 +581,49 @@ def get_bgp_profile(
         # makes the intent clear and is considered best practice.
         is_rr = any(pg.get("route_reflector_client") for pg in bgp_config["peer_groups"])
         if is_rr:
-            bgp_config["cluster_id"] = cast(dict[str, Any], bgp_config["router_id"])["address"].split("/")[0]
+            bgp_config["cluster_id"] = host_ip(cast(dict[str, Any], bgp_config["router_id"])["address"])
+        add_template_fields(bgp_config)
 
     return merged
+
+
+def add_template_fields(bgp_config: dict[str, Any]) -> None:
+    """Add the values every vendor BGP template renders from.
+
+    - ``router_ip``: the router-id without its prefix length.
+    - ``session.neighbor``: the interface of an unnumbered session, else the
+      remote address without its prefix length.
+    - ``has_ipv6`` / ``has_evpn``: whether a peer group or global (non-VRF)
+      session carries that address family.
+    - ``vrf_sessions``: VRF name -> its sessions; ``vrf_af_sessions``: VRF
+      name -> {"ipv4"/"ipv6": the VRF's sessions of that family}, families
+      without sessions left out.
+    """
+    bgp_config["router_ip"] = host_ip((bgp_config.get("router_id") or {}).get("address"))
+    sessions = bgp_config.get("sessions") or []
+    for session in sessions:
+        unnumbered = session.get("interface_name") and not session.get("remote_ip")
+        session["neighbor"] = (
+            session["interface_name"] if unnumbered else host_ip((session.get("remote_ip") or {}).get("address"))
+        )
+    global_families = {
+        af
+        for item in [*(bgp_config.get("peer_groups") or []), *(s for s in sessions if not s.get("vrf"))]
+        for af in item.get("address_families") or []
+    }
+    bgp_config["has_ipv6"] = "ipv6" in global_families
+    bgp_config["has_evpn"] = "evpn" in global_families
+    vrf_sessions: dict[str, list[dict[str, Any]]] = {}
+    for session in sessions:
+        if session.get("vrf"):
+            vrf_sessions.setdefault(session["vrf"], []).append(session)
+    bgp_config["vrf_sessions"] = vrf_sessions
+    bgp_config["vrf_af_sessions"] = {
+        vrf: {
+            af: by_af
+            for af in ("ipv4", "ipv6")
+            for by_af in [[s for s in members if af in (s.get("address_families") or [])]]
+            if by_af
+        }
+        for vrf, members in vrf_sessions.items()
+    }

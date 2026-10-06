@@ -2,7 +2,7 @@
 
 Covers:
   - _collect_segment_policies()  — pure helper, deduplication logic
-  - _merge_policies()            — pure helper, merge + precedence logic
+  - merge_policies()            — pure helper, merge + precedence logic
   - Firewall.transform()         — no-platform early-exit path
   - Firewall.transform()         — full Jinja2 render smoke tests (all four vendors)
 """
@@ -15,7 +15,8 @@ from typing import Any
 
 import pytest
 
-from transforms.config.firewall import Firewall, _collect_segment_policies, _merge_policies
+from transforms.config.firewall import Firewall, _collect_segment_policies
+from transforms.helpers.policy import merge_policies
 
 # Project root — needed to point root_directory at the real templates/
 ROOT = str(Path(__file__).parent.parent.parent)
@@ -182,30 +183,30 @@ class TestCollectSegmentPolicies:
 
 
 # ===========================================================================
-# Class 2 — _merge_policies
+# Class 2 — merge_policies
 # ===========================================================================
 
 
 class TestMergePolicies:
     def test_empty_both_returns_empty(self) -> None:
-        assert _merge_policies([], []) == []
+        assert merge_policies([], []) == []
 
     def test_global_only_returned(self) -> None:
         global_pol = _seg_policy("global-pol")
-        result = _merge_policies([global_pol], [])
+        result = merge_policies([global_pol], [])
         assert len(result) == 1
         assert result[0]["name"] == "global-pol"
 
     def test_segment_only_returned(self) -> None:
         seg_pol = _seg_policy("seg-pol")
-        result = _merge_policies([], [seg_pol])
+        result = merge_policies([], [seg_pol])
         assert len(result) == 1
         assert result[0]["name"] == "seg-pol"
 
     def test_no_collision_both_returned(self) -> None:
         global_pol = _seg_policy("global-pol")
         seg_pol = _seg_policy("seg-pol")
-        result = _merge_policies([global_pol], [seg_pol])
+        result = merge_policies([global_pol], [seg_pol])
         assert len(result) == 2
         names = {p["name"] for p in result}
         assert names == {"global-pol", "seg-pol"}
@@ -219,7 +220,7 @@ class TestMergePolicies:
             "enabled": True,
             "rules": [{"seq": 10, "name": "seg-rule"}],
         }
-        result = _merge_policies([global_pol], [seg_pol])
+        result = merge_policies([global_pol], [seg_pol])
         assert len(result) == 1
         merged = result[0]
         # Segment version wins — it has 'rules' content
@@ -228,7 +229,7 @@ class TestMergePolicies:
     def test_global_preserved_when_no_collision(self) -> None:
         global_pol_a = _seg_policy("global-a")
         seg_pol_b = _seg_policy("seg-b")
-        result = _merge_policies([global_pol_a], [seg_pol_b])
+        result = merge_policies([global_pol_a], [seg_pol_b])
         names = {p["name"] for p in result}
         assert "global-a" in names
         assert "seg-b" in names
@@ -237,7 +238,7 @@ class TestMergePolicies:
         """A policy dict with neither 'name' nor 'id' is not added to the merged output."""
         nameless = {"default_action": "deny", "enabled": True, "rules": []}
         valid = _seg_policy("valid-pol")
-        result = _merge_policies([nameless, valid], [])
+        result = merge_policies([nameless, valid], [])
         assert len(result) == 1
         assert result[0]["name"] == "valid-pol"
 

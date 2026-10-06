@@ -1,9 +1,3 @@
-{%- set _lb = namespace(name='Loopback0') -%}
-{%- for iface in interfaces -%}
-{%- if iface.name | lower | truncate(8, true, '') == 'loopback' and _lb.name == 'Loopback0' -%}
-{%- set _lb.name = iface.name -%}
-{%- endif -%}
-{%- endfor -%}
 !
 ! Arista EOS Border Leaf Configuration
 ! Device: {{ hostname }}
@@ -67,12 +61,12 @@ interface {{ interface.name }}
 {%- if bgp %}
 {%- from 'common/arista_eos_bgp.j2' import render_bgp %}
 ! Configure BGP
-{{ render_bgp(bgp, interfaces) }}
+{{ render_bgp(bgp, loopback_name) }}
 {%- endif %}
 
 ! Configure route-maps
 route-map RM-CONN-2-BGP permit 10
-   match interface {{ _lb.name }}
+   match interface {{ loopback_name }}
 
 {%- if vxlan and vxlan.enabled %}
 !
@@ -175,12 +169,6 @@ router bgp {{ bgp_config.local_as.asn }}
 ip virtual-router mac-address {{ vxlan.anycast_gateway.mac }}
 {%- for vlan in vlans %}
 {%- if vlan.gateway_ip or vlan.gateway_ipv6 %}
-{%- set ns = namespace(acl_name=None) %}
-{%- for acl in acls %}
-{%- if acl.vlan_id == vlan.vlan_id %}
-{%- set ns.acl_name = acl.name %}
-{%- endif %}
-{%- endfor %}
 interface Vlan{{ vlan.vlan_id }}
 {%- if vlan.isolation_mode == 'isolated' %}
    ! Isolation Mode: ISOLATED — intra-segment host-to-host traffic blocked via port-isolation
@@ -196,8 +184,8 @@ interface Vlan{{ vlan.vlan_id }}
 {%- if vlan.gateway_ipv6 %}
    ipv6 address virtual {{ vlan.gateway_ipv6 }}
 {%- endif %}
-{%- if ns.acl_name %}
-   ip access-group {{ ns.acl_name }} in
+{%- if vlan.acl_name %}
+   ip access-group {{ vlan.acl_name }} in
 {%- endif %}
 {%- endif %}
 {%- endfor %}

@@ -371,22 +371,6 @@ class TestDependencyEdges:
 
         assert AppApplicationGenerator._dependency_edges_from_components([frontend]) == []
 
-    def test_payload_edges_ignore_a_dependency_without_any_target(self) -> None:
-        """The trigger-payload path drops the same targetless dependency."""
-        source = {"id": "comp-fe", "parent": {"name": "checkout"}}
-        targetless = {**_dep("fe-to-nowhere"), "source": source}
-        external = {**_dep("fe-to-stripe", ports=["tcp/443"], target_fqdn="api.stripe.com"), "source": source}
-
-        edges = AppApplicationGenerator._dependency_edges_from_payload([targetless, external], "checkout")
-
-        assert edges == [(source, external, {})]
-
-    def test_payload_edges_ignore_other_applications(self) -> None:
-        """Only dependencies sourced from the reconciled application are its edges."""
-        dep = {**_dep("other", target=_backend()), "source": {"id": "comp-x", "parent": {"name": "ledger"}}}
-
-        assert AppApplicationGenerator._dependency_edges_from_payload([dep], "checkout") == []
-
 
 # ===========================================================================
 # TestReconcileApplicationRulesSegmentIsolationMode
@@ -465,6 +449,7 @@ class TestReconcileApplicationRulesCloudDispatch:
         gen._get_or_create_policy = AsyncMock()
         gen._attach_policy_to_source_segment = AsyncMock()
         gen._ensure_segment_isolation_mode = AsyncMock()
+        gen._find_rule_by_name = AsyncMock(return_value=None)
         return gen
 
     @staticmethod
@@ -523,7 +508,7 @@ class TestReconcileApplicationRulesPerPort:
         policy = MagicMock()
         policy.id = "policy-src"
         gen._get_or_create_policy = AsyncMock(return_value=policy)
-        gen._find_existing_policy_rule = AsyncMock(return_value=None)
+        gen._find_rule_by_name = AsyncMock(return_value=None)
         gen._create_or_update_policy_rule = AsyncMock(return_value=(MagicMock(), 100))
         gen._reconcile_tag_rule_from_segments = AsyncMock()
         gen._get_zone = AsyncMock(return_value=None)
@@ -690,18 +675,6 @@ class TestReconcileApplicationRulesPerPort:
         gen._reconcile_proxy_rule.assert_not_awaited()
         gen._create_or_update_policy_rule.assert_not_awaited()
         gen.client.create.assert_not_awaited()
-
-    def test_forced_targetless_edge_is_skipped_with_a_warning(self) -> None:
-        """A trigger-supplied edge without any target is logged and skipped, not dispatched."""
-        gen = self._make_gen_ready()
-        frontend = _frontend()
-        targetless = _dep("fe-to-nowhere", ports=["tcp/443"])
-
-        asyncio.run(gen._reconcile_application_rules(_app(frontend), forced_edges=[(frontend, targetless, {})]))
-
-        gen._reconcile_proxy_rule.assert_not_awaited()
-        gen._create_or_update_policy_rule.assert_not_awaited()
-        assert any("has no target" in call.args[0] for call in gen.logger.warning.call_args_list)
 
     def test_unauthorized_dependency_creates_no_rule(self) -> None:
         """A denied dependency is skipped before any port is resolved."""

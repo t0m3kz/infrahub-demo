@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import ipaddress
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
 from infrahub_sdk.protocols import CoreIPPrefixPool
@@ -19,7 +19,6 @@ from .protocols import (
     DcimPhysicalDevice,
     DcimPhysicalInterface,
     DcimVirtualInterface,
-    IpamIPAddress,
     TopologyPod,
 )
 
@@ -50,11 +49,14 @@ class MLAGWiringMixin:
     capabilities/virtual_peer_link changed outside this flow, e.g. a direct
     API/UI edit or branch merge).
 
-    Expects the host class to provide: ``client``, ``logger``.
+    Expects the host class to provide: ``client``, ``logger`` and
+    CablingMixin's ``upsert_p2p_addresses``.
     """
 
     client: InfrahubClient
     logger: logging.Logger
+    # Callable attribute, not a stub method, so it never shadows CablingMixin's via the MRO.
+    upsert_p2p_addresses: Callable[..., Awaitable[list[Any]]]
 
     async def ensure_mlag_wiring(self, mlag_obj: Any, mlag_name: str, *, member_ids: list[str] | None = None) -> None:
         """Wire peer-link interfaces (LAG or virtual loopback) for both
@@ -292,35 +294,15 @@ class MLAGWiringMixin:
             return {}
         self.logger.info(f"  [{mlag_name}] MLAG control prefix {control_prefix.display_label}")
 
-        # Iterate the network directly — .hosts() returns a single address for /31 and /127.
-        addrs = list(ipaddress.ip_network(getattr(control_prefix, "prefix").value, strict=False))
-        ip_namespace = getattr(control_prefix, "ip_namespace")
-        address_length = loopback_length if virtual_peer_link else prefix_length
-
-        ip_ids: dict[str, str] = {}
-        for device_obj, addr in zip(sorted(member_devices, key=lambda d: d.name.value), addrs):
-            address_value = f"{addr}/{address_length}"
-            # Query before creating — IpamIPAddress uniqueness is only enforced
-            # asynchronously (see CablingMixin P2P allocation). Always re-upserted
-            # so the address stays in this run's tracking group.
-            existing = await self.client.get(
-                kind=IpamIPAddress,
-                address__value=address_value,
-                ip_namespace__ids=[ip_namespace.id],
-                raise_when_missing=False,
-            )
-            ip_obj = await self.client.create(
-                kind=IpamIPAddress,
-                data={
-                    **({"id": existing.id} if existing else {}),
-                    "address": address_value,
-                    "ip_namespace": ip_namespace,
-                    "description": f"MLAG control — {mlag_name}",
-                },
-            )
-            await ip_obj.save(allow_upsert=True)
-            ip_ids[device_obj.id] = ip_obj.id
-        return ip_ids
+        ips = await self.upsert_p2p_addresses(
+            control_prefix,
+            address_length=loopback_length if virtual_peer_link else prefix_length,
+            description=f"MLAG control — {mlag_name}",
+        )
+        return {
+            device_obj.id: ip_obj.id
+            for device_obj, ip_obj in zip(sorted(member_devices, key=lambda d: d.name.value), ips)
+        }
 
     async def _ensure_control_svi(self, device_obj: Any, mlag_obj: Any, mlag_name: str, control_ip_id: str) -> None:
         """Create or upsert the Vlan4094 SVI that carries the MLAG control

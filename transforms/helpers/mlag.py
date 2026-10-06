@@ -1,7 +1,9 @@
 """MLAG configuration helpers for device transforms."""
 
-from ipaddress import IPv4Address, ip_interface
+from ipaddress import IPv4Address
 from typing import Any
+
+from transforms.helpers.addressing import host_ip
 
 
 def _control_address(member: dict[str, Any]) -> tuple[str | None, str | None]:
@@ -19,12 +21,8 @@ def _control_address(member: dict[str, Any]) -> tuple[str | None, str | None]:
     return None, None
 
 
-def _ip(address: str | None) -> str | None:
-    return str(ip_interface(address).ip) if address else None
-
-
 def _management_ip(member: dict[str, Any]) -> str | None:
-    return _ip((member.get("primary_address") or {}).get("address"))
+    return host_ip((member.get("primary_address") or {}).get("address"))
 
 
 def get_mlag(
@@ -90,8 +88,8 @@ def get_mlag(
             "devices": [member.get("name") for member in members],
             "control_interface": control_interface,
             "local_address": local_address,
-            "local_ip": _ip(local_address),
-            "peer_ip": _ip(peer_address),
+            "local_ip": host_ip(local_address),
+            "peer_ip": host_ip(peer_address),
             "local_management_ip": _management_ip(own) if own else None,
             "peer_management_ip": _management_ip(peer) if peer else None,
             "peer_link": peer_link,

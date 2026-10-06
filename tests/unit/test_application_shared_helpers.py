@@ -7,62 +7,63 @@ from typing import Any
 
 import pytest
 
-from generators.helpers.rules import RulePlanningHelper, RulesPlanner
+from generators.helpers.rules import RulesPlanner
 from utils.ports import PortProfileHelper
 
 
-class TestRulePlanningHelper:
-    def test_flow_rule_name_normalizes_parts(self) -> None:
-        name = RulePlanningHelper.flow_rule_name("myapp", "Payments API", "Internal API")
+class TestRulesPlannerNamingAndPayload:
+    def test_rule_name_normalizes_component_labels(self) -> None:
+        """Without a dependency name, labels are lower-cased and space-dashed."""
+        name = RulesPlanner.rule_name("myapp", {"name": "Payments API"}, {"name": "Internal API"})
         assert name == "myapp-payments-api-to-internal-api"
 
-    def test_flow_rule_description_uses_explicit_description(self) -> None:
-        description = RulePlanningHelper.flow_rule_description(
-            explicit_description="Allow frontend to backend",
-            src_name="frontend",
-            src_type="frontend",
-            dst_name="backend",
-            dst_type="backend",
-        )
-        assert description == "Allow frontend to backend"
-
-    def test_flow_rule_description_builds_default(self) -> None:
-        description = RulePlanningHelper.flow_rule_description(
-            explicit_description=None,
-            src_name="frontend",
-            src_type="frontend",
-            dst_name="backend",
-            dst_type="backend",
-        )
-        assert description == "Auto-generated: frontend (frontend) -> backend (backend)"
-
-    def test_source_segment_policy_name(self) -> None:
-        assert RulePlanningHelper.source_segment_policy_name("seg-a") == "seg-seg-a-egress"
-
-    def test_build_policy_rule_payload(self) -> None:
-        payload = RulePlanningHelper.build_policy_rule_payload(
+    def test_build_rule_payload_optional_fields(self) -> None:
+        """Ports and expiry are set only when present; microsegmentation on either side applies on switch."""
+        payload = RulesPlanner.build_rule_payload(
             policy_id="policy-1",
             rule_name="app-a-to-b",
+            dep={"access_expires_at": "2026-12-31T00:00:00+00:00"},
+            src_comp={"name": "a"},
+            dst_comp={"name": "b"},
+            src_seg={"id": "seg-a", "isolation_mode": "normal"},
+            dst_seg={"id": "seg-b", "isolation_mode": "microsegmented"},
             protocol="tcp",
-            source_segment_id="seg-a",
-            destination_segment_id="seg-b",
-            source_isolation_mode="normal",
-            destination_isolation_mode="microsegmented",
-            description="test-description",
-            log=True,
             port_start=443,
-            expires_at="2026-12-31T00:00:00+00:00",
-            extra_fields={"source_zone": {"id": "zone-a"}},
+            port_end=None,
+            cross_zone=True,
         )
 
         assert payload["policy"] == {"id": "policy-1"}
         assert payload["name"] == "app-a-to-b"
+        assert payload["action"] == "permit"
         assert payload["protocol"] == "tcp"
         assert payload["log"] is True
+        assert payload["disabled"] is False
         assert payload["apply_on_switch"] is True
         assert payload["port_start"] == 443
+        assert "port_end" not in payload
         assert payload["expires_at"] == "2026-12-31T00:00:00+00:00"
-        assert payload["source_zone"] == {"id": "zone-a"}
+
+    def test_build_rule_payload_without_expiry_or_microsegmentation(self) -> None:
+        """No expiry key without access_expires_at; normal/missing isolation never applies on switch."""
+        payload = RulesPlanner.build_rule_payload(
+            policy_id="policy-1",
+            rule_name="r",
+            dep={},
+            src_comp={},
+            dst_comp={},
+            src_seg={"id": "seg-a"},
+            dst_seg={"id": "seg-b", "isolation_mode": "normal"},
+            protocol="udp",
+            port_start=None,
+            port_end=None,
+            cross_zone=False,
+        )
+
+        assert payload["apply_on_switch"] is False
+        assert payload["log"] is False
+        assert "expires_at" not in payload
+        assert "port_start" not in payload
 
 
 class TestParsePortSpec:

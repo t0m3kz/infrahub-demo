@@ -30,7 +30,11 @@ from typing import Any, NamedTuple
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from utils.fabric_roles import OVERLAY_ROLES, RR_CLIENT_ROLES, RR_ROLES
+
 from ..types import RoutingOptions
+
+_SPINE_ROLES = frozenset({"spine", "border-spine"})
 
 
 class RoutingPlanInput(BaseModel):
@@ -541,12 +545,8 @@ class RoutingPlanner:
             if local_as is None:
                 continue  # already warned above (no pool, no existing AS)
 
-            router_id = info.get("router_id")
+            router_id = self._router_id_or_skip(name, info, "BGP")
             if not router_id:
-                if self.strict:
-                    raise ValueError(f"No router-id for {name}")
-                if self.logger:
-                    self.logger.warning(f"No router-id for {name}, skipping BGP")
                 continue
 
             proc = _make_bgp_proc(
@@ -563,45 +563,7 @@ class RoutingPlanner:
             bgp_planned.add(name)
 
         # Phase 2: Peerings — cable-driven, requires both ends to have BGP.
-        cable_map: dict[str, list] = defaultdict(list)
-        for iface in interfaces:
-            if iface.cable and iface.cable.id:
-                cable_map[iface.cable.id].append(iface)
-
-        cable_pairs: list[tuple] = []
-        for ifaces in cable_map.values():
-            if len(ifaces) != 2:
-                continue
-            a, b = ifaces
-            a_name = id_to_name.get(a.device.id)
-            b_name = id_to_name.get(b.device.id)
-            if not a_name or not b_name:
-                continue
-            if a_name == b_name:
-                # Self-loop: both cable endpoints on the same device.
-                # Can occur due to a race between parallel rack generators tagging
-                # a spine interface twice before the TOR side is committed.
-                # Skipping prevents a BGP peering that references only one device.
-                if self.logger:
-                    self.logger.warning(
-                        f"Self-loop cable detected: both endpoints on '{a_name}' "
-                        f"({a.name.value} / {b.name.value}) — skipping"
-                    )
-                continue
-            if a_name > b_name:
-                a, b = b, a
-                a_name, b_name = b_name, a_name
-            cable_pairs.append((a, b, a_name, b_name))
-
-        cable_pairs.sort(key=lambda x: (x[2], x[3]))
-        seen_pairs: set[tuple[str, str]] = set()
-
-        for a, b, a_name, b_name in cable_pairs:
-            pair = (a_name, b_name)
-            if pair in seen_pairs:
-                continue
-            seen_pairs.add(pair)
-
+        for a, b, a_name, b_name in self._cable_pairs(interfaces, id_to_name):
             if (a_name not in bgp_planned and a_name not in _top) or (b_name not in bgp_planned and b_name not in _top):
                 continue
 
@@ -627,6 +589,56 @@ class RoutingPlanner:
                     **({"password": {"id": password_id}} if password_id else {}),
                 }
             )
+
+    def _router_id_or_skip(self, name: str, info: dict, protocol: str) -> Any:
+        """The device's router-id; when missing, raise in strict mode, else warn that ``protocol`` is skipped."""
+        router_id = info.get("router_id")
+        if not router_id:
+            if self.strict:
+                raise ValueError(f"No router-id for {name}")
+            if self.logger:
+                self.logger.warning(f"No router-id for {name}, skipping {protocol}")
+        return router_id
+
+    def _cable_pairs(self, interfaces: list[Any], id_to_name: dict[str, str]) -> list[tuple[Any, Any, str, str]]:
+        """One (a, b, a_name, b_name) per cabled device pair, a_name < b_name, sorted by names.
+
+        Drops cables not joining two known devices, and self-loops (both ends on
+        one device, from a race between parallel rack generators tagging a spine
+        interface twice before the TOR side is committed). Parallel cables between
+        the same two devices keep only the first.
+        """
+        cable_map: dict[str, list] = defaultdict(list)
+        for iface in interfaces:
+            if iface.cable and iface.cable.id:
+                cable_map[iface.cable.id].append(iface)
+
+        cable_pairs: list[tuple[Any, Any, str, str]] = []
+        for ifaces in cable_map.values():
+            if len(ifaces) != 2:
+                continue
+            a, b = ifaces
+            a_name = id_to_name.get(a.device.id)
+            b_name = id_to_name.get(b.device.id)
+            if not a_name or not b_name:
+                continue
+            if a_name == b_name:
+                if self.logger:
+                    self.logger.warning(
+                        f"Self-loop cable detected: both endpoints on '{a_name}' "
+                        f"({a.name.value} / {b.name.value}) — skipping"
+                    )
+                continue
+            if a_name > b_name:
+                a, b = b, a
+                a_name, b_name = b_name, a_name
+            cable_pairs.append((a, b, a_name, b_name))
+
+        cable_pairs.sort(key=lambda x: (x[2], x[3]))
+        first_by_names: dict[tuple[str, str], tuple[Any, Any, str, str]] = {}
+        for pair in cable_pairs:
+            first_by_names.setdefault((pair[2], pair[3]), pair)
+        return list(first_by_names.values())
 
     # ================================================================
     # Overlay BGP Processes
@@ -673,16 +685,11 @@ class RoutingPlanner:
                     # name here rather than substituting the device name.
                     group_as_refs[group] = PendingASRef(device=group)
 
-        _OVERLAY_ROLES = frozenset(
-            ("leaf", "border-leaf", "tor", "access-leaf", "spine", "border-spine", "super-spine", "hyper-spine")
-        )
-
         for name in sorted(device_map.keys()):
             if name in _top:
                 continue
             info = device_map[name]
-            # ToRs are L2 aggregation only — they are not VTEPs and don't run overlay BGP
-            if info.get("role") not in _OVERLAY_ROLES:
+            if info.get("role") not in OVERLAY_ROLES:
                 continue
 
             as_ref: dict | PendingASRef
@@ -694,13 +701,8 @@ class RoutingPlanner:
                     continue
                 as_ref = maybe_as_ref
 
-            router_id = info.get("router_id")
+            router_id = self._router_id_or_skip(name, info, "BGP") if is_ibgp else info.get("router_id")
             if not router_id:
-                if is_ibgp:
-                    if self.strict:
-                        raise ValueError(f"No router-id for {name}")
-                    if self.logger:
-                        self.logger.warning(f"No router-id for {name}, skipping BGP")
                 continue
 
             proc = _make_bgp_proc(
@@ -742,12 +744,8 @@ class RoutingPlanner:
 
         for name in sorted(device_map.keys()):
             info = device_map[name]
-            router_id = info.get("router_id")
+            router_id = self._router_id_or_skip(name, info, "OSPF")
             if not router_id:
-                if self.strict:
-                    raise ValueError(f"No router-id for {name}")
-                if self.logger:
-                    self.logger.warning(f"No router-id for {name}, skipping OSPF")
                 continue
 
             ospf_name = f"{name}-ospf-underlay"
@@ -782,41 +780,7 @@ class RoutingPlanner:
             )
 
         # Peerings — cable-driven, one ManagedOSPFPeering per physical link.
-        cable_map: dict[str, list] = defaultdict(list)
-        for iface in interfaces:
-            if iface.cable and iface.cable.id:
-                cable_map[iface.cable.id].append(iface)
-
-        cable_pairs: list[tuple] = []
-        for ifaces in cable_map.values():
-            if len(ifaces) != 2:
-                continue
-            a, b = ifaces
-            a_name = id_to_name.get(a.device.id)
-            b_name = id_to_name.get(b.device.id)
-            if not a_name or not b_name:
-                continue
-            if a_name == b_name:
-                if self.logger:
-                    self.logger.warning(
-                        f"Self-loop cable detected: both endpoints on '{a_name}' "
-                        f"({a.name.value} / {b.name.value}) — skipping"
-                    )
-                continue
-            if a_name > b_name:
-                a, b = b, a
-                a_name, b_name = b_name, a_name
-            cable_pairs.append((a, b, a_name, b_name))
-
-        cable_pairs.sort(key=lambda x: (x[2], x[3]))
-        seen_pairs: set[tuple[str, str]] = set()
-
-        for a, b, a_name, b_name in cable_pairs:
-            pair = (a_name, b_name)
-            if pair in seen_pairs:
-                continue
-            seen_pairs.add(pair)
-
+        for a, b, a_name, b_name in self._cable_pairs(interfaces, id_to_name):
             ia = a.name.value
             ib = b.name.value
             ia_h = ia.replace("/", "_")
@@ -905,11 +869,6 @@ class RoutingPlanner:
         if not session_plan:
             return
 
-        _SUPER_SPINE = frozenset(("super-spine",))
-        _HYPER_SPINE = frozenset(("hyper-spine",))
-        _SPINE = frozenset(("spine", "border-spine"))
-        _LEAF_CLIENTS = frozenset(("leaf", "border-leaf", "tor", "access-leaf"))
-
         for d1_name, d1_id, d2_name, d2_id, stype, af_types in session_plan:
             if d1_id not in device_bgp_map or d2_id not in device_bgp_map:
                 continue
@@ -925,12 +884,12 @@ class RoutingPlanner:
             # - spines are clients of super-spines
             # - super-spines are clients of hyper-spines
             rr_client_session = stype == "ibgp" and (
-                (d1_role in _LEAF_CLIENTS and d2_role in (_SPINE | _SUPER_SPINE))
-                or (d1_role in (_SPINE | _SUPER_SPINE) and d2_role in _LEAF_CLIENTS)
-                or (d1_role in _SPINE and d2_role in _SUPER_SPINE)
-                or (d1_role in _SUPER_SPINE and d2_role in _SPINE)
-                or (d1_role in _SUPER_SPINE and d2_role in _HYPER_SPINE)
-                or (d1_role in _HYPER_SPINE and d2_role in _SUPER_SPINE)
+                (d1_role in RR_CLIENT_ROLES and (d2_role in _SPINE_ROLES or d2_role == "super-spine"))
+                or ((d1_role in _SPINE_ROLES or d1_role == "super-spine") and d2_role in RR_CLIENT_ROLES)
+                or (d1_role in _SPINE_ROLES and d2_role == "super-spine")
+                or (d1_role == "super-spine" and d2_role in _SPINE_ROLES)
+                or (d1_role == "super-spine" and d2_role == "hyper-spine")
+                or (d1_role == "hyper-spine" and d2_role == "super-spine")
             )
 
             # Overlay peers via loopback interfaces
@@ -992,8 +951,8 @@ class _BGPSessionPlanner:
           (back-to-back design: spines from different pods peer as equals)
         """
         roles = {d.role for d in self.devices}
-        rrs = [d for d in self.devices if d.role in ("super-spine", "hyper-spine", "spine", "border-spine")]
-        clients = [d for d in self.devices if d.role in ("leaf", "border-leaf", "tor", "access-leaf")]
+        rrs = [d for d in self.devices if d.role in RR_ROLES]
+        clients = [d for d in self.devices if d.role in RR_CLIENT_ROLES]
         af = ["evpn"]
         has_super_spine = "super-spine" in roles
         has_hyper_spine = "hyper-spine" in roles

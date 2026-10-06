@@ -1,9 +1,3 @@
-{%- set _lb = namespace(name='loopback0') -%}
-{%- for iface in interfaces -%}
-{%- if iface.name | lower | truncate(8, true, '') == 'loopback' and _lb.name == 'loopback0' -%}
-{%- set _lb.name = iface.name -%}
-{%- endif -%}
-{%- endfor -%}
 !
 ! {{ name }} Configuration
 !
@@ -63,13 +57,7 @@ interface {{ interface.name }}
   switchport
   switchport mode access
   switchport access vlan {{ interface.vlans[0] }}
-{%- set ns_vlan = namespace(isolation_mode='normal') %}
-{%- for vlan in vlans %}
-{%- if vlan.vlan_id == interface.vlans[0] %}
-{%- set ns_vlan.isolation_mode = vlan.isolation_mode %}
-{%- endif %}
-{%- endfor %}
-{%- if ns_vlan.isolation_mode == 'isolated' %}
+{%- if interface.access_isolation_mode == 'isolated' %}
   ! TODO: configure port-isolation group X (NX-OS port isolation requires interface-level group assignment)
 {%- endif %}
 {%- endif %}
@@ -85,72 +73,11 @@ interface {{ interface.name }}
 ! BGP Configuration
 {% include 'common/cisco_nxos_bgp.j2' %}
 !
-{%- if vxlan and vxlan.enabled %}
-!
-! VXLAN Configuration (netlab-style multivendor)
-!
-{%- for feature in vxlan.features %}
-feature {{ feature }}
-{%- endfor %}
-{%- if vxlan.evpn and vxlan.evpn.enabled %}
-nv overlay evpn
-{%- endif %}
-!
-{%- include 'common/cisco_nxos_vxlan_vrf.j2' %}
-interface {{ vxlan.nve_interface }}
-{%- if vxlan.vtep.ipv4 %}
-  source-interface {{ vxlan.vtep.source_interface }}
-{%- endif %}
-{%- if vxlan.evpn and vxlan.evpn.enabled %}
-  host-reachability protocol bgp
-{%- endif %}
-{%- for mapping in vxlan.l2_vni_mappings %}
-  member vni {{ mapping.vni }}
-    {%- if mapping.arp_suppression %}
-    suppress-arp
-    {%- endif %}
-    {%- if vxlan.evpn and vxlan.evpn.enabled %}
-    ingress-replication protocol bgp
-    {%- elif vxlan.flooding == "static" and vxlan.remote_vteps %}
-    ingress-replication protocol static
-      peer-list {{ vxlan.remote_vteps | join(' ') }}
-    {%- endif %}
-{%- endfor %}
-{%- for mapping in vxlan.l3_vni_mappings %}
-  member vni {{ mapping.l3_vni }} associate-vrf
-{%- endfor %}
-  no shutdown
-!
-{%- if vxlan.evpn and vxlan.evpn.enabled %}
-!
-! EVPN Configuration
-!
-evpn
-{%- for mapping in vxlan.l2_vni_mappings %}
-  vni {{ mapping.vni }} l2
-    {%- if vxlan.evpn.rd_format %}
-    rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.vni | string) }}
-    {%- endif %}
-    {%- if mapping.route_target %}
-    route-target import {{ mapping.route_target }}
-    route-target export {{ mapping.route_target }}
-    {%- endif %}
-{%- endfor %}
-!
-{%- endif %}
-!
-! VLAN to VNI mapping
-!
-{%- for mapping in vxlan.l2_vni_mappings %}
-vlan {{ mapping.vlan_id }}
-  vn-segment {{ mapping.vni }}
-{%- endfor %}
-{%- include 'common/cisco_nxos_l3vni_svi.j2' %}
-{%- endif %}
+{%- include 'common/cisco_nxos_vxlan.j2' -%}
 !
 ! Route-maps
 route-map RM-CONN-2-BGP permit 10
-  match interface {{ _lb.name }}
+  match interface {{ loopback_name }}
 !
 {%- if vxlan and vxlan.l3_vni_mappings %}
 {#- Permit-all, deliberately unqualified: inside a tenant VRF everything that is
@@ -159,49 +86,7 @@ route-map RM-CONN-2-BGP permit 10
 route-map RM-VRF-DIRECT-2-EVPN permit 10
 !
 {%- endif %}
-{%- if vxlan and vxlan.anycast_gateway and vxlan.anycast_gateway.enabled %}
-! Anycast Gateway — identical MAC on every leaf/border-leaf in the fabric
-fabric forwarding anycast-gateway-mac {{ vxlan.anycast_gateway.mac | replace(':', '') | replace('.', '') }}
-!
-{%- endif %}
-{%- if vlans %}
-! VLAN SVI Configuration
-!
-{%- for vlan in vlans %}
-{%- if vlan.gateway_ip or vlan.gateway_ipv6 %}
-{%- set ns = namespace(acl_name=None) %}
-{%- for acl in acls %}
-{%- if acl.vlan_id == vlan.vlan_id %}
-{%- set ns.acl_name = acl.name %}
-{%- endif %}
-{%- endfor %}
-interface Vlan{{ vlan.vlan_id }}
-  description {{ vlan.name }}
-{%- if vlan.isolation_mode == 'isolated' %}
-  ! Isolation Mode: ISOLATED — intra-segment host-to-host traffic blocked via port-isolation
-{%- elif vlan.isolation_mode == 'microsegmented' %}
-  ! Isolation Mode: MICROSEGMENTED — intra+inter segment rules enforced via SVI ACL (and firewall if present)
-{%- endif %}
-{%- if vlan.vrf %}
-  vrf member {{ vlan.vrf }}
-{%- endif %}
-{%- if vlan.gateway_ip %}
-  ip address {{ vlan.gateway_ip }}
-{%- endif %}
-{%- if vlan.gateway_ipv6 %}
-  ipv6 address {{ vlan.gateway_ipv6 }}
-{%- endif %}
-{%- if vxlan and vxlan.anycast_gateway and vxlan.anycast_gateway.enabled %}
-  fabric forwarding mode anycast-gateway
-{%- endif %}
-  no shutdown
-{%- if ns.acl_name %}
-  ip access-group {{ ns.acl_name }} in
-{%- endif %}
-!
-{%- endif %}
-{%- endfor %}
-{%- endif %}
+{%- include 'common/cisco_nxos_svi.j2' -%}
 !
 {%- if vrf_gateways %}
 !

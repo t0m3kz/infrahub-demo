@@ -152,45 +152,6 @@ class TestRackGeneratorMethods:
         assert any("exceeds profile rows" in err for err in errors)
 
     @pytest.mark.asyncio
-    async def test_fetch_rack_devices_with_interfaces_from_context(self) -> None:
-        gen = _build_gen()
-        gen.client.execute_graphql = AsyncMock(
-            return_value={
-                "LocationRack": {
-                    "edges": [
-                        {
-                            "node": {
-                                "devices": {
-                                    "edges": [
-                                        {
-                                            "node": {
-                                                "id": "dev-1",
-                                                "name": {"value": "leaf-01"},
-                                                "role": {"value": "leaf"},
-                                                "interfaces": {
-                                                    "edges": [
-                                                        {"node": {"name": {"value": "Eth1/1"}}},
-                                                        {"node": {"name": {"value": "Eth1/2"}}},
-                                                    ]
-                                                },
-                                            }
-                                        }
-                                    ]
-                                }
-                            }
-                        }
-                    ]
-                }
-            }
-        )
-
-        rows = await gen.fetch_rack_devices_with_interfaces(role_filter="leaf")
-
-        assert len(rows) == 1
-        assert rows[0]["device_name"] == "leaf-01"
-        assert rows[0]["interfaces"] == ["Eth1/1", "Eth1/2"]
-
-    @pytest.mark.asyncio
     async def test_get_leaf_devices_in_row_success(self) -> None:
         gen = _build_gen()
         rack_obj = MagicMock(id="rack-a")

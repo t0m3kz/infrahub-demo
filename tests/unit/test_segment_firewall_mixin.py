@@ -14,9 +14,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from generators.common import CommonGenerator
 from generators.helpers.rules import RulesPlanner
-from generators.protocols import SecurityTagRule
+from generators.protocols import SecurityPolicyRule, SecurityTagRule
 from generators.segment_firewall import SegmentFirewallMixin
 
 
@@ -184,58 +186,13 @@ class TestEnsureSegmentIsolationMode:
 
 
 class TestSegmentPolicyName:
-    def test_segment_policy_name_uses_source_segment_name(self):
-        assert (
-            SegmentFirewallMixin._segment_policy_name({"name": "c001-web-frontend-p"})
-            == "seg-c001-web-frontend-p-egress"
-        )
+    def test_segment_policy_name_uses_source_segment_name(self) -> None:
+        """The egress policy is named after the source segment."""
+        assert RulesPlanner.segment_policy_name({"name": "c001-web-frontend-p"}) == "seg-c001-web-frontend-p-egress"
 
-    def test_segment_policy_name_falls_back_to_id(self):
-        assert SegmentFirewallMixin._segment_policy_name({"id": "seg-123"}) == "seg-seg-123-egress"
-
-
-# ===========================================================================
-# TestDependencyIsAuthorized — the generator-side wrapper delegates to
-# RulesPlanner.dependency_is_authorized (exhaustively tested directly in
-# test_rules_planner.py); these just prove the delegation itself.
-# ===========================================================================
-
-
-class TestDependencyIsAuthorized:
-    def test_cross_owner_dependency_requires_approved_status(self):
-        gen = _make_gen()
-        src_comp = {"parent": {"owner": {"org_id": "C001"}}}
-        dst_comp = {"parent": {"owner": {"org_id": "C002"}}}
-        dep = {"access_status": "pending"}
-
-        allowed, reason = gen._dependency_is_authorized(src_comp=src_comp, dst_comp=dst_comp, dep=dep)
-
-        assert allowed is False
-        assert reason is not None
-        assert "requires access_status=approved" in reason
-
-    def test_cross_owner_dependency_denied_is_blocked(self):
-        gen = _make_gen()
-        src_comp = {"parent": {"owner": {"org_id": "C001"}}}
-        dst_comp = {"parent": {"owner": {"org_id": "C002"}}}
-        dep = {"access_status": "denied"}
-
-        allowed, reason = gen._dependency_is_authorized(src_comp=src_comp, dst_comp=dst_comp, dep=dep)
-
-        assert allowed is False
-        assert reason is not None
-        assert "explicitly denied" in reason
-
-    def test_cross_owner_dependency_allows_when_approved_by_destination_owner(self):
-        gen = _make_gen()
-        src_comp = {"parent": {"owner": {"org_id": "C001"}}}
-        dst_comp = {"parent": {"owner": {"org_id": "C002"}}}
-        dep = {"access_status": "approved"}
-
-        allowed, reason = gen._dependency_is_authorized(src_comp=src_comp, dst_comp=dst_comp, dep=dep)
-
-        assert allowed is True
-        assert reason is None
+    def test_segment_policy_name_falls_back_to_id(self) -> None:
+        """A segment without a name falls back to its id."""
+        assert RulesPlanner.segment_policy_name({"id": "seg-123"}) == "seg-seg-123-egress"
 
 
 # ===========================================================================
@@ -243,112 +200,152 @@ class TestDependencyIsAuthorized:
 # ===========================================================================
 
 
+def _stored_rule(name: str, index: int, *, rule_id: str | None = None, expires_at: str = "") -> MagicMock:
+    """A SecurityPolicyRule as client.filters returns it (SDK attribute shape)."""
+    rule = MagicMock()
+    rule.id = rule_id or f"id-{name}"
+    rule.name.value = name
+    rule.index.value = index
+    rule.expires_at.value = expires_at
+    rule.disabled.value = False
+    return rule
+
+
+def _saved_rule(*, fails_with: str | None = None) -> MagicMock:
+    rule = MagicMock()
+    rule.save = AsyncMock(side_effect=[Exception(fails_with)] if fails_with else None)
+    return rule
+
+
+_COLLISION = "Violates uniqueness constraint 'policy-index'"
+
+
 class TestCreateOrUpdatePolicyRule:
-    def test_create_or_update_assigns_default_expiry_for_new_rule(self):
+    def test_new_rule_gets_default_expiry_and_first_free_index(self) -> None:
+        """A rule with no expiry gets the default one, at the lowest index the policy leaves free."""
         gen = _make_gen()
-        gen._find_existing_policy_rule = AsyncMock(return_value=None)
-        gen._allocate_policy_rule_index = AsyncMock(return_value=100)
+        gen.client.filters = AsyncMock(return_value=[_stored_rule("other", 100)])
+        gen.client.create = AsyncMock(return_value=_saved_rule())
 
-        created_rule = MagicMock()
-        created_rule.save = AsyncMock()
-        gen.client.create = AsyncMock(return_value=created_rule)
-
-        asyncio.run(
+        _rule, index = asyncio.run(
             gen._create_or_update_policy_rule(
                 policy_id="policy-1",
                 rule_name="rule-1",
                 rule_data={"policy": {"id": "policy-1"}, "name": "rule-1", "disabled": False},
+                rule_indexes={},
             )
         )
 
         payload = gen.client.create.call_args.kwargs["data"]
-        assert "expires_at" in payload
+        assert index == 110
+        assert payload["index"] == 110
         assert isinstance(payload["expires_at"], str)
         assert payload["disabled"] is False
+        assert "id" not in payload
 
-    def test_create_or_update_disables_rule_when_expired(self):
+    def test_expired_rule_is_saved_disabled(self) -> None:
+        """An expiry in the past saves the rule disabled."""
         gen = _make_gen()
-        gen._find_existing_policy_rule = AsyncMock(return_value=None)
-        gen._allocate_policy_rule_index = AsyncMock(return_value=100)
-
-        created_rule = MagicMock()
-        created_rule.save = AsyncMock()
-        gen.client.create = AsyncMock(return_value=created_rule)
-
+        gen.client.filters = AsyncMock(return_value=[])
+        gen.client.create = AsyncMock(return_value=_saved_rule())
         expired_at = (datetime.now(timezone.utc) - timedelta(days=1)).replace(microsecond=0).isoformat()
 
         asyncio.run(
             gen._create_or_update_policy_rule(
                 policy_id="policy-1",
                 rule_name="rule-1",
-                rule_data={
-                    "policy": {"id": "policy-1"},
-                    "name": "rule-1",
-                    "expires_at": expired_at,
-                    "disabled": False,
-                },
+                rule_data={"policy": {"id": "policy-1"}, "name": "rule-1", "expires_at": expired_at, "disabled": False},
+                rule_indexes={},
+            )
+        )
+
+        assert gen.client.create.call_args.kwargs["data"]["disabled"] is True
+
+    def test_policy_rules_are_listed_once_per_run(self) -> None:
+        """A second rule in the same policy takes the next index from the run's cache, not the server."""
+        gen = _make_gen()
+        gen.client.filters = AsyncMock(return_value=[])
+        gen.client.create = AsyncMock(side_effect=[_saved_rule(), _saved_rule()])
+        rule_indexes: dict[str, set[int]] = {}
+
+        indexes = [
+            asyncio.run(
+                gen._create_or_update_policy_rule(
+                    policy_id="policy-1",
+                    rule_name=name,
+                    rule_data={"policy": {"id": "policy-1"}, "name": name},
+                    rule_indexes=rule_indexes,
+                )
+            )[1]
+            for name in ("rule-1", "rule-2")
+        ]
+
+        assert indexes == [100, 110]
+        gen.client.filters.assert_awaited_once()
+        assert rule_indexes == {"policy-1": {100, 110}}
+
+    def test_index_collision_rereads_the_policy_and_retries(self) -> None:
+        """Another run took the index: the policy is listed again and the next free index is used."""
+        gen = _make_gen()
+        gen.client.filters = AsyncMock(side_effect=[[], [_stored_rule("other", 100)]])
+        second_rule = _saved_rule()
+        gen.client.create = AsyncMock(side_effect=[_saved_rule(fails_with=_COLLISION), second_rule])
+
+        rule, index = asyncio.run(
+            gen._create_or_update_policy_rule(
+                policy_id="policy-1",
+                rule_name="rule-1",
+                rule_data={"policy": {"id": "policy-1"}, "name": "rule-1"},
+                rule_indexes={},
+            )
+        )
+
+        assert rule is second_rule
+        assert index == 110
+        assert gen.client.filters.await_count == 2
+        assert "id" not in gen.client.create.call_args.kwargs["data"]
+        gen.logger.warning.assert_called_once()
+
+    def test_collision_with_a_rule_of_the_same_name_updates_it_in_place(self) -> None:
+        """A same-named rule another run created meanwhile keeps its id, index and expiry."""
+        gen = _make_gen()
+        existing = _stored_rule("rule-1", 120, rule_id="rule-existing", expires_at="2099-01-01T00:00:00+00:00")
+        gen.client.filters = AsyncMock(side_effect=[[], [_stored_rule("other", 100), existing]])
+        gen.client.create = AsyncMock(side_effect=[_saved_rule(fails_with=_COLLISION), _saved_rule()])
+
+        _rule, index = asyncio.run(
+            gen._create_or_update_policy_rule(
+                policy_id="policy-1",
+                rule_name="rule-1",
+                rule_data={"policy": {"id": "policy-1"}, "name": "rule-1"},
+                rule_indexes={},
             )
         )
 
         payload = gen.client.create.call_args.kwargs["data"]
-        assert payload["disabled"] is True
+        assert index == 120
+        assert payload["id"] == "rule-existing"
+        assert payload["index"] == 120
+        assert payload["expires_at"] == "2099-01-01T00:00:00+00:00"
+        assert payload["disabled"] is False
 
-    def test_create_or_update_policy_rule_retries_on_policy_index_collision(self):
+    def test_other_save_errors_are_raised_without_retry(self) -> None:
+        """Only an index collision is retried."""
         gen = _make_gen()
-        gen._find_existing_policy_rule = AsyncMock(return_value=None)
-        gen._allocate_policy_rule_index = AsyncMock(side_effect=[100, 110])
+        gen.client.filters = AsyncMock(return_value=[])
+        gen.client.create = AsyncMock(return_value=_saved_rule(fails_with="boom"))
 
-        first_rule = MagicMock()
-        first_rule.save = AsyncMock(side_effect=[Exception("Violates uniqueness constraint 'policy-index'")])
-        second_rule = MagicMock()
-        second_rule.save = AsyncMock()
-        gen.client.create = AsyncMock(side_effect=[first_rule, second_rule])
-
-        rule, index = asyncio.run(
-            gen._create_or_update_policy_rule(
-                policy_id="policy-1",
-                rule_name="rule-1",
-                rule_data={"policy": {"id": "policy-1"}, "name": "rule-1"},
+        with pytest.raises(Exception, match="boom"):
+            asyncio.run(
+                gen._create_or_update_policy_rule(
+                    policy_id="policy-1",
+                    rule_name="rule-1",
+                    rule_data={"policy": {"id": "policy-1"}, "name": "rule-1"},
+                    rule_indexes={},
+                )
             )
-        )
 
-        assert rule is second_rule
-        assert index == 110
-        assert gen.client.create.call_count == 2
-
-    def test_create_or_update_policy_rule_existing_rule_retries_on_policy_index_collision(self):
-        gen = _make_gen()
-
-        existing_rule = MagicMock()
-        existing_rule.id = "rule-existing"
-        existing_rule.index = MagicMock()
-        existing_rule.index.value = 100
-        existing_rule.expires_at = MagicMock()
-        existing_rule.expires_at.value = ""
-        existing_rule.disabled = MagicMock()
-        existing_rule.disabled.value = False
-
-        gen._find_existing_policy_rule = AsyncMock(return_value=existing_rule)
-        gen._allocate_policy_rule_index = AsyncMock(return_value=110)
-
-        first_rule = MagicMock()
-        first_rule.save = AsyncMock(side_effect=[Exception("Violates uniqueness constraint 'policy-index'")])
-        second_rule = MagicMock()
-        second_rule.save = AsyncMock()
-        gen.client.create = AsyncMock(side_effect=[first_rule, second_rule])
-
-        rule, index = asyncio.run(
-            gen._create_or_update_policy_rule(
-                policy_id="policy-1",
-                rule_name="rule-1",
-                rule_data={"policy": {"id": "policy-1"}, "name": "rule-1"},
-            )
-        )
-
-        assert rule is second_rule
-        assert index == 110
-        assert gen.client.create.call_count == 2
-        assert gen._allocate_policy_rule_index.await_count == 1
+        gen.client.create.assert_awaited_once()
 
 
 # ===========================================================================
@@ -373,7 +370,7 @@ class TestMicrosegmentedRuleHasNoReturnRule:
         policy = MagicMock()
         policy.id = "policy-src"
         gen._get_or_create_policy = AsyncMock(return_value=policy)
-        gen._find_existing_policy_rule = AsyncMock(return_value=existing_rule)
+        gen._find_rule_by_name = AsyncMock(return_value=existing_rule)
         gen._create_or_update_policy_rule = AsyncMock(return_value=(MagicMock(), 100))
         gen._reconcile_tag_rule_from_segments = AsyncMock()
         gen._get_zone = AsyncMock(return_value=None)
@@ -391,6 +388,7 @@ class TestMicrosegmentedRuleHasNoReturnRule:
                 dst_seg=self._seg("seg-dst"),
                 planner=planner,
                 segment_policies={},
+                rule_indexes={},
                 port=port,
             )
         )
@@ -404,6 +402,7 @@ class TestMicrosegmentedRuleHasNoReturnRule:
         gen._create_or_update_policy_rule.assert_awaited_once()
         kwargs = gen._create_or_update_policy_rule.call_args.kwargs
         assert kwargs["rule_name"] == "frontend-to-backend-tcp-8443"
+        assert kwargs["rule_indexes"] == {}
         assert kwargs["rule_data"]["apply_on_switch"] is True
         assert kwargs["rule_data"]["source_segment"] == {"id": "seg-src"}
         assert kwargs["rule_data"]["destination_segment"] == {"id": "seg-dst"}
@@ -418,8 +417,8 @@ class TestMicrosegmentedRuleHasNoReturnRule:
         assert result == (False, True)
         existing.save.assert_awaited_once_with(allow_upsert=True)
         gen._create_or_update_policy_rule.assert_not_awaited()
-        gen._find_existing_policy_rule.assert_awaited_once_with(
-            policy_id="policy-src", rule_name="frontend-to-backend-tcp-8443"
+        gen._find_rule_by_name.assert_awaited_once_with(
+            SecurityPolicyRule, "policy-src", "frontend-to-backend-tcp-8443"
         )
 
     def test_port_range_is_written_to_the_rule_and_its_name(self) -> None:
@@ -460,6 +459,7 @@ class TestReconcileSegmentRuleEarlyExits:
                 dst_seg={},
                 planner=RulesPlanner(),
                 segment_policies={},
+                rule_indexes={},
                 port=("tcp", 8443, None),
             )
         )
@@ -472,7 +472,7 @@ class TestReconcileSegmentRuleEarlyExits:
         """The source segment's policy could not be found or made: skip the rule."""
         gen = _make_gen()
         gen._get_or_create_policy = AsyncMock(return_value=None)
-        gen._find_existing_policy_rule = AsyncMock()
+        gen._find_rule_by_name = AsyncMock()
         segment_policies: dict[str, Any] = {}
 
         result = asyncio.run(
@@ -486,10 +486,11 @@ class TestReconcileSegmentRuleEarlyExits:
                 dst_seg={"id": "seg-dst", "name": "seg-dst"},
                 planner=RulesPlanner(),
                 segment_policies=segment_policies,
+                rule_indexes={},
                 port=("tcp", 8443, None),
             )
         )
 
         assert result == (False, True)
         assert segment_policies == {}
-        gen._find_existing_policy_rule.assert_not_awaited()
+        gen._find_rule_by_name.assert_not_awaited()

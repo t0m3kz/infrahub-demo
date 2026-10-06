@@ -5,7 +5,8 @@ from typing import Any
 
 from netutils.interface import sort_interface_list
 
-from transforms.helpers.segments import _get_segment_gateways, _get_segment_namespace
+from transforms.helpers.addressing import host_ip
+from transforms.helpers.segments import _get_segment_gateways, _get_segment_namespace, segment_vlan_ids
 
 _log = logging.getLogger(__name__)
 
@@ -167,6 +168,32 @@ def _l3_from_activations(activations: list[dict[str, Any]]) -> list[dict[str, An
     return _collect_l3_vni_from_namespaces(_get_segment_namespace(act.get("segment") or {}) for act in activations)
 
 
+def _circuit_endpoint(service: dict[str, Any]) -> dict[str, Any]:
+    """The circuit service fields shared by physical and virtual circuits."""
+    return {
+        "name": service.get("name"),
+        "description": service.get("description"),
+        "status": service.get("status"),
+        "side": service.get("endpoint"),
+        "endpoint": service.get("endpoint"),
+    }
+
+
+def _display_description(
+    description: str | None, circuits: list[dict[str, Any]], virtual_links: list[dict[str, Any]]
+) -> str | None:
+    """The interface description, else one naming its first circuit or virtual link."""
+    if description:
+        return description
+    if circuits:
+        c = circuits[0]
+        return f"{str(c['circuit_type']).upper()} - {c['circuit_id']} - {c['provider']}"
+    if virtual_links:
+        v = virtual_links[0]
+        return f"{str(v['link_type']).upper()} - {v['link_name']} - {v['provider']}"
+    return None
+
+
 def get_interfaces(
     data: list,
     activations: list[dict[str, Any]] | None = None,
@@ -181,14 +208,11 @@ def get_interfaces(
     if not data:
         return []
 
-    # Build segment name → vlan_id lookup from SegmentDeployment activations
-    segment_vlan: dict[str, int] = {}
+    segment_vlan = segment_vlan_ids(activations)
+    # Isolation mode per local VLAN, first activation wins (as in get_vlans).
+    vlan_isolation: dict[Any, str] = {}
     for act in activations or []:
-        seg = act.get("segment") or {}
-        seg_name = seg.get("name")
-        vlan_id = act.get("vlan_id")
-        if seg_name and vlan_id:
-            segment_vlan[seg_name] = vlan_id
+        vlan_isolation.setdefault(act.get("vlan_id"), (act.get("segment") or {}).get("isolation_mode") or "normal")
 
     sorted_names = sort_interface_list([iface.get("name") for iface in data if iface.get("name")])
     name_to_interface = {}
@@ -197,9 +221,14 @@ def get_interfaces(
         if not name:
             continue
 
+        capabilities = iface.get("interface_capabilities") or []
+        by_type: dict[str | None, list[dict[str, Any]]] = {}
+        for cap in capabilities:
+            by_type.setdefault(cap.get("typename"), []).append(cap)
+
         vlans = [
             segment_vlan[s["name"]]
-            for s in (iface.get("interface_capabilities") or [])
+            for s in capabilities
             if s.get("typename") in ("ManagedVlanSegment", "ManagedVxlanSegment") and s.get("name") in segment_vlan
         ]
 
@@ -210,11 +239,7 @@ def get_interfaces(
         # can't come from `segment_vlan` above like a trunk's access/trunk
         # VLANs do. The context capability carries its own vlan_id directly.
         context_vlan_id = next(
-            (
-                s.get("vlan_id")
-                for s in (iface.get("interface_capabilities") or [])
-                if s.get("typename") == "ManagedFirewallContext" and s.get("vlan_id")
-            ),
+            (s.get("vlan_id") for s in by_type.get("ManagedFirewallContext", []) if s.get("vlan_id")),
             None,
         )
         # A plain routed sub-interface (e.g. the colocation edge's VRF handoff
@@ -232,9 +257,7 @@ def get_interfaces(
         # peering's bgp_processes) — select this device's own process by matching
         # its capabilities.device name, mirroring _extract_remote_asn_from_peering.
         # After clean_data: area is a dict like {"area": 0, "name": "backbone", "area_type": "standard"}
-        ospf_configs = [
-            s for s in (iface.get("interface_capabilities") or []) if s.get("typename") == "RoutingOSPFInterface"
-        ]
+        ospf_configs = by_type.get("RoutingOSPFInterface", [])
         ospf_peerings = [s.get("peering") or {} for s in ospf_configs if s.get("peering")]
         ospf_areas = [p.get("ospf_area", {}).get("area") for p in ospf_peerings if p.get("ospf_area")]
         ospf_modes = [s.get("mode") for s in ospf_configs if s.get("mode")]
@@ -249,40 +272,32 @@ def get_interfaces(
         ospf_auth_modes = [s.get("authentication_mode") for s in ospf_configs if s.get("authentication_mode")]
         ospf_passwords = [(s.get("password") or {}).get("password") for s in ospf_configs if s.get("password")]
 
-        # Extract circuit services (physical circuits)
+        # Circuit services (physical circuits) and virtual circuit services (DCI / overlay links)
         circuits = [
             {
-                "name": s.get("name"),
-                "description": s.get("description"),
-                "status": s.get("status"),
-                "side": s.get("endpoint"),
-                "endpoint": s.get("endpoint"),
-                "circuit_id": s.get("topology_circuit", {}).get("circuit_id"),
-                "circuit_type": s.get("topology_circuit", {}).get("circuit_type"),
-                "bandwidth": s.get("topology_circuit", {}).get("bandwidth"),
-                "provider": s.get("topology_circuit", {}).get("provider", {}).get("name"),
+                **_circuit_endpoint(s),
+                "circuit_id": c.get("circuit_id"),
+                "circuit_type": c.get("circuit_type"),
+                "bandwidth": c.get("bandwidth"),
+                "provider": c.get("provider", {}).get("name"),
             }
-            for s in (iface.get("interface_capabilities") or [])
-            if s.get("typename") == "ManagedPhysicalCircuit" and s.get("topology_circuit")
+            for s in by_type.get("ManagedPhysicalCircuit", [])
+            for c in [s.get("topology_circuit")]
+            if c
         ]
-
-        # Extract virtual circuit services (DCI / overlay links)
         virtual_links = [
             {
-                "name": s.get("name"),
-                "description": s.get("description"),
-                "status": s.get("status"),
-                "side": s.get("endpoint"),
-                "endpoint": s.get("endpoint"),
-                "link_name": s.get("topology_circuit", {}).get("name"),
-                "link_type": s.get("topology_circuit", {}).get("link_type"),
-                "bandwidth": s.get("topology_circuit", {}).get("bandwidth"),
-                "encryption": s.get("topology_circuit", {}).get("encryption"),
-                "cloud_resource_id": s.get("topology_circuit", {}).get("cloud_resource_id"),
-                "provider": s.get("topology_circuit", {}).get("provider", {}).get("name"),
+                **_circuit_endpoint(s),
+                "link_name": c.get("name"),
+                "link_type": c.get("link_type"),
+                "bandwidth": c.get("bandwidth"),
+                "encryption": c.get("encryption"),
+                "cloud_resource_id": c.get("cloud_resource_id"),
+                "provider": c.get("provider", {}).get("name"),
             }
-            for s in (iface.get("interface_capabilities") or [])
-            if s.get("typename") == "ManagedVirtualCircuit" and s.get("topology_circuit")
+            for s in by_type.get("ManagedVirtualCircuit", [])
+            for c in [s.get("topology_circuit")]
+            if c
         ]
 
         # Extract IP addresses - after clean_data, these are dicts with 'address' and 'ip_namespace'
@@ -303,6 +318,8 @@ def get_interfaces(
         iface_dict = {
             "name": name,
             "vlans": vlans,
+            # Isolation mode of the port's access (first) VLAN.
+            "access_isolation_mode": vlan_isolation.get(vlans[0], "normal") if vlans else None,
             "description": iface.get("description"),
             "status": iface.get("status"),
             "role": iface.get("role"),
@@ -330,6 +347,8 @@ def get_interfaces(
                 "authentication_mode": ospf_auth_modes[0] if ospf_auth_modes else None,
                 "password": ospf_passwords[0] if ospf_passwords else None,
             }
+
+        iface_dict["display_description"] = _display_description(iface.get("description"), circuits, virtual_links)
 
         if circuits:
             iface_dict["circuits"] = circuits
@@ -488,7 +507,7 @@ def _warn_unencodable_vnis(
 def _interface_address(iface: dict[str, Any]) -> str | None:
     ip_address = (iface.get("ip_addresses") or [None])[0] or iface.get("ip_address")
     if isinstance(ip_address, dict) and ip_address.get("address"):
-        return ip_address["address"].split("/")[0]
+        return host_ip(ip_address["address"])
     return None
 
 
@@ -629,7 +648,7 @@ def get_vxlan_config(
         # Try to get explicit router_id if configured
         bgp_router_id = evpn_process.get("router_id", {})
         if bgp_router_id:
-            router_id = bgp_router_id.get("address", "").split("/")[0] or vtep_ipv4
+            router_id = host_ip(bgp_router_id.get("address")) or vtep_ipv4
 
     # RT admin field: fabric-wide constant, NOT this device's local ASN.
     # Under ebgp-ebgp every VTEP runs its own ASN, so `{local_as}:{vni}` makes
@@ -726,82 +745,34 @@ def get_vxlan_config(
         # "fabric forwarding anycast-gateway-mac" / "ip virtual-router
         # mac-address" / "ip anycast-mac-address", identical value everywhere).
         # Sourced from the fabric (TopologySegmentHosting), never per-device.
-        # Platform-agnostic here so every _transform_vxlan_* inherits it via
-        # .copy() without recomputing per platform.
+        # Platform-agnostic here so _platform_vxlan_config inherits it
+        # without recomputing per platform.
         "anycast_gateway": {
             "enabled": any(m.get("gateway_ip") for m in l2_vni_mappings),
             "mac": fabric_anycast_mac or _DEFAULT_ANYCAST_GATEWAY_MAC,
         },
     }
 
-    # Platform-specific transformations (netlab style)
-    return _transform_vxlan_platform(base_config, platform, local_as)
+    return _platform_vxlan_config(base_config, platform)
 
 
-def _transform_vxlan_platform(base_config: dict, platform: str, local_as: str | None) -> dict:
-    """Apply platform-specific VXLAN transformations (netlab style).
-
-    Args:
-        base_config: Platform-agnostic VXLAN config
-        platform: Platform name
-        local_as: BGP AS number
-
-    Returns:
-        Platform-specific VXLAN config
-    """
-    platform_lower = platform.lower()
-
-    if "arista" in platform_lower or "eos" in platform_lower:
-        return _transform_vxlan_arista(base_config, local_as)
-    elif "cisco" in platform_lower and "nxos" in platform_lower:
-        return _transform_vxlan_nxos(base_config, local_as)
-    elif "dell" in platform_lower or "sonic" in platform_lower:
-        return _transform_vxlan_sonic(base_config, local_as)
-    else:
-        # Return base config for unsupported platforms
-        return base_config
+# Platform-specific keys added to the platform-agnostic VXLAN config (netlab style).
+_PLATFORM_VXLAN_KEYS: dict[str, dict[str, str]] = {
+    "arista_eos": {"interface": "Vxlan1"},
+    "cisco_nxos": {"nve_interface": "nve1"},
+    "sonic": {"interface": "vtep"},
+    "dell_sonic": {"interface": "vtep"},
+}
+_NXOS_VXLAN_FEATURES = ("nv overlay", "vn-segment-vlan-based", "nve")
 
 
-def _transform_vxlan_arista(vxlan_base: dict, local_as: str | None) -> dict:
-    """Transform VXLAN config for Arista EOS platform.
-
-    anycast_gateway is already computed platform-agnostically in
-    get_vxlan_config's base_config — inherited via .copy(), not recomputed here.
-    """
-    config = vxlan_base.copy()
-    config["interface"] = "Vxlan1"  # EOS convention
-
-    return config
-
-
-def _transform_vxlan_nxos(vxlan_base: dict, local_as: str | None) -> dict:
-    """Transform VXLAN config for Cisco NX-OS platform.
-
-    All config derived from existing data - no VXLAN schema needed.
-    """
-    config = vxlan_base.copy()
-    config["nve_interface"] = "nve1"  # NX-OS convention
-
-    # NX-OS specific features
-    config["features"] = [
-        "nv overlay",
-        "vn-segment-vlan-based",
-        "nve",
-    ]
-    # `fabric forwarding anycast-gateway-mac` and the SVIs' `fabric forwarding
-    # mode anycast-gateway` are rejected until the feature is enabled.
-    if (config.get("anycast_gateway") or {}).get("enabled"):
-        config["features"].append("fabric forwarding")
-
-    return config
-
-
-def _transform_vxlan_sonic(vxlan_base: dict, local_as: str | None) -> dict:
-    """Transform VXLAN config for Dell SONiC platform.
-
-    All config derived from existing data - no VXLAN schema needed.
-    """
-    config = vxlan_base.copy()
-    config["interface"] = "vtep"  # SONiC convention
-
+def _platform_vxlan_config(base_config: dict, platform: str) -> dict:
+    """Add the platform's own VXLAN keys to a copy of the platform-agnostic config."""
+    config: dict[str, Any] = {**base_config, **_PLATFORM_VXLAN_KEYS.get(platform, {})}
+    if platform == "cisco_nxos":
+        config["features"] = list(_NXOS_VXLAN_FEATURES)
+        # `fabric forwarding anycast-gateway-mac` and the SVIs' `fabric forwarding
+        # mode anycast-gateway` are rejected until the feature is enabled.
+        if (config.get("anycast_gateway") or {}).get("enabled"):
+            config["features"].append("fabric forwarding")
     return config

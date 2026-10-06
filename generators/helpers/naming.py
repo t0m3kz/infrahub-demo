@@ -133,9 +133,9 @@ class DeviceNamingConfig(BaseModel):
         if self.strategy == "standard":
             result = self._build_standard_name(ctx, formatted_idx)
         elif self.strategy == "hierarchical":
-            result = ".".join(self._build_hierarchical_components(ctx, formatted_idx))
+            result = ".".join(self._path_components(ctx, formatted_idx))
         elif self.strategy == "flat":
-            result = "".join(self._build_flat_components(ctx, formatted_idx))
+            result = "".join(self._path_components(ctx, formatted_idx))
         elif self.strategy == "computed":
             result = self._build_computed_name(ctx)
         else:
@@ -160,16 +160,9 @@ class DeviceNamingConfig(BaseModel):
         return f"{_role_code(ctx.device_role)}{self.separator}{ctx.fabric_name}{digits}{formatted_idx}"
 
     @staticmethod
-    def _build_hierarchical_components(ctx: DeviceNameContext, formatted_idx: str) -> list[str]:
-        """e.g. ``dc1.2.3.lf01`` (DC-scoped: ``dc1.2.ss01``)."""
-        components = [ctx.fabric_name]
-        components.extend(str(idx) for _, idx in ctx.location_path)
-        components.append(f"{_role_code(ctx.device_role)}{formatted_idx}")
-        return components
-
-    @staticmethod
-    def _build_flat_components(ctx: DeviceNameContext, formatted_idx: str) -> list[str]:
-        """e.g. ``dc123lf01`` (DC-scoped: ``dc12ss01``)."""
+    def _path_components(ctx: DeviceNameContext, formatted_idx: str) -> list[str]:
+        """Fabric name, each location index, then role code + index. Joined
+        with "." for hierarchical (``dc1.2.3.lf01``) or "" for flat (``dc123lf01``)."""
         components = [ctx.fabric_name]
         components.extend(str(idx) for _, idx in ctx.location_path)
         components.append(f"{_role_code(ctx.device_role)}{formatted_idx}")

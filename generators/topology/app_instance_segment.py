@@ -36,14 +36,15 @@ once cabling lands later is a known gap, not solved here.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
+from ..far_end import far_end_interface
 from ..pools import PoolMixin
 from ..protocols import (
-    DcimCable,
     DcimLAGInterface,
     DcimPhysicalDevice,
     DcimPhysicalInterface,
@@ -93,20 +94,22 @@ class AppInstanceSegmentGenerator(PoolMixin, VlanDomainMixin, CommonGenerator):
             self.logger.error(f"Component {fqdn}: could not fetch segment SDK object {segment_id}")
             return
 
+        # Several virtual instances on one host resolve to the same device.
+        device_ids = list(dict.fromkeys(filter(None, map(self._resolve_physical_device_id, instances))))
         total_assigned = 0
         touched_device_ids: set[str] = set()
-        for instance in instances:
-            device_id = self._resolve_physical_device_id(instance)
-            if not device_id:
-                continue
-            assigned, device_ids = await self._tag_instance_interfaces(
-                device_id=device_id,
-                segment_id=segment_id,
-                segment_obj=segment_obj,
-                segment_name=segment_name,
+        for device_id in device_ids:
+            assigned, switch_ids = await self._tag_instance_interfaces(
+                device_id=device_id, segment_id=segment_id, segment_obj=segment_obj
             )
             total_assigned += assigned
-            touched_device_ids.update(device_ids)
+            touched_device_ids.update(switch_ids)
+
+        if touched_device_ids:
+            switches = await self.client.filters(
+                kind=DcimPhysicalDevice, ids=sorted(touched_device_ids), include=["capabilities"]
+            )
+            await self._realize_segment_on_devices(segment_id, segment_name, switches)
 
         self.logger.info(
             f"Component {fqdn}: tagged {total_assigned} interface(s) with segment '{segment_name}' "
@@ -133,12 +136,10 @@ class AppInstanceSegmentGenerator(PoolMixin, VlanDomainMixin, CommonGenerator):
         device_id: str,
         segment_id: str,
         segment_obj: Any,
-        segment_name: str,
     ) -> tuple[int, set[str]]:
         """Tag every switch interface `device_id` is cabled to (role=uplink
         directly, role=lag via its switch-side port-channel) with the
-        segment, and realize that switch's VLAN domain segment. Returns
-        (interfaces newly tagged, switch device ids touched)."""
+        segment. Returns (interfaces newly tagged, switch device ids touched)."""
         nics = await self.client.filters(
             kind=DcimPhysicalInterface,
             device__ids=[device_id],
@@ -152,9 +153,11 @@ class AppInstanceSegmentGenerator(PoolMixin, VlanDomainMixin, CommonGenerator):
 
         # Dedup by resolved target id: several bond members can resolve to
         # the SAME switch-side port-channel (two members, one port-channel).
+        # Each nic's resolution is independent read-only lookups, so they run
+        # concurrently; the dict merge itself stays single-threaded.
+        resolved_targets = await asyncio.gather(*(self._resolve_customer_facing_target(nic) for nic in cabled))
         targets: dict[str, Any] = {}
-        for nic in cabled:
-            target = await self._resolve_customer_facing_target(nic)
+        for target in resolved_targets:
             if target is not None:
                 targets[target.id] = target
 
@@ -178,15 +181,6 @@ class AppInstanceSegmentGenerator(PoolMixin, VlanDomainMixin, CommonGenerator):
                 await target.save(allow_upsert=True, update_group_context=False)
             touched_device_ids.add(target.device.peer.id)
 
-        devices = []
-        for switch_device_id in touched_device_ids:
-            devices.append(
-                await self.client.get(kind=DcimPhysicalDevice, id=switch_device_id, include=["capabilities"])
-            )
-        domain_pools = await self._ensure_vlan_domains_for_devices(devices)
-        for domain_id, pool_id in domain_pools.items():
-            await self._ensure_vlan_domain_segment(segment_id, segment_name, domain_id, pool_id)
-
         return assigned, touched_device_ids
 
     async def _resolve_customer_facing_target(self, nic: Any) -> Any | None:
@@ -195,16 +189,9 @@ class AppInstanceSegmentGenerator(PoolMixin, VlanDomainMixin, CommonGenerator):
         when the far end is a role=lag member — the aggregate is what
         carries the VLAN, not the raw member port. None if the cable has no
         resolvable far end, or a lag far end has no port-channel yet."""
-        cable_obj = await self.client.get(kind=DcimCable, id=nic.cable.id, include=["endpoints"])
-        far_ends = [p for p in cable_obj.endpoints.peers if p.id != nic.id]
-        if not far_ends:
+        far_end = await far_end_interface(self.client, nic, include=["lag", "interface_capabilities", "device"])
+        if far_end is None:
             return None
-
-        far_end = await self.client.get(
-            kind=DcimPhysicalInterface,
-            id=far_ends[0].id,
-            include=["lag", "interface_capabilities", "device"],
-        )
         if far_end.role.value != "lag":
             return far_end
 

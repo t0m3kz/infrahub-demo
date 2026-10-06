@@ -97,6 +97,24 @@ When implementing a new feature or making a change, follow this thought process:
 7. **Do not auto-commit**: only commit when explicitly requested
 8. **Follow Conventional Commits**: when a commit is requested, use the conventional commits format (see below)
 
+### Simplicity Rules
+
+Duplication here usually starts as "copy the sibling generator/template and edit it", then the copies drift
+(one keeps a lock or race guard, the other loses it). To prevent that:
+
+- **One implementation per flow**: grep for the flow (e.g. `allocate_next_ip_prefix`, `TemplateDcimVirtualDevice`,
+  a template stanza) before writing it. If it exists, call it, or move it into a mixin/helper and call it from both
+  places. Per-facility differences become class attributes (see `generators/firewall_context.py`).
+- **Fix shared code, don't special-case call sites**.
+- **No dead knobs**: no flag, parameter, branch or wrapper that nothing in production reaches. Code covered only by its
+  own tests is dead.
+- **No redundant round trips**: one `filters(ids=[...])` instead of `get()` in a loop; no `fetch()` after `include=`;
+  filter by `name__value` instead of listing and scanning.
+- **Template refactors keep output byte-identical**; render the golden fixtures before and after and diff.
+
+For a cleanup sweep, use the `infrahub-simplifying-code` skill (`.claude/skills/`). For change reviews, the review
+board includes a `simplification-reviewer`.
+
 ## Commit Message Standard
 
 This project uses **Conventional Commits** enforced by `commitizen`.

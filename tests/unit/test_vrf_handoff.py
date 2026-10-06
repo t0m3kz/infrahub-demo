@@ -10,7 +10,7 @@ Covers:
   - arista_eos / cisco_ios / nokia_sros / sonic BGP — same split on every platform
   - cisco_nxos_vxlan_vrf.j2 / arista_eos.j2 — remote-site RT imports
   - nokia_sros_vprn_import.j2 / sonic_vxlan.j2 — remote-site RT imports plus own RT
-  - _transform_vxlan_nxos()        — `feature fabric forwarding` with an anycast gateway
+  - _platform_vxlan_config()      — `feature fabric forwarding` with an anycast gateway
   - edges/cisco_nxos.j2            — anycast SVIs and sub-interface encapsulation
 """
 
@@ -23,11 +23,10 @@ from typing import Any
 import jinja2
 import pytest
 
-from transforms.common import _build_peer_groups
-from transforms.helpers.bgp import _build_session_from_peering
+from transforms.helpers.bgp import _build_peer_groups, _build_session_from_peering, add_template_fields
 from transforms.helpers.vxlan import (
     _multisite_vrf_site_asns,
-    _transform_vxlan_nxos,
+    _platform_vxlan_config,
     get_interfaces,
     get_vxlan_config,
 )
@@ -231,7 +230,8 @@ def env() -> jinja2.Environment:
 
 
 def _bgp_with_vrf_session() -> list[dict[str, Any]]:
-    return [
+    """A BGP context with one global and one VRF session, as get_bgp_profile shapes it."""
+    bgp = [
         {
             "local_as": {"asn": 4200000100},
             "router_id": {"address": "10.0.0.1/32"},
@@ -256,31 +256,40 @@ def _bgp_with_vrf_session() -> list[dict[str, Any]]:
             ],
         }
     ]
+    for bgp_config in bgp:
+        add_template_fields(bgp_config)
+    return bgp
 
 
 class TestNxosVrfBgpRendering:
     def test_vrf_neighbor_rendered_under_vrf(self, env: jinja2.Environment) -> None:
-        rendered = env.get_template("common/cisco_nxos_bgp.j2").render(bgp=_bgp_with_vrf_session(), interfaces=[])
+        rendered = env.get_template("common/cisco_nxos_bgp.j2").render(
+            bgp=_bgp_with_vrf_session(), loopback_name="loopback0"
+        )
         vrf_block = rendered.split("  vrf PROD")[1]
         assert "    neighbor 10.255.5.1\n      remote-as 65028" in vrf_block
         assert "      address-family ipv4 unicast" in vrf_block
 
     def test_vrf_neighbor_not_rendered_globally(self, env: jinja2.Environment) -> None:
-        rendered = env.get_template("common/cisco_nxos_bgp.j2").render(bgp=_bgp_with_vrf_session(), interfaces=[])
+        rendered = env.get_template("common/cisco_nxos_bgp.j2").render(
+            bgp=_bgp_with_vrf_session(), loopback_name="loopback0"
+        )
         global_part = rendered.split("  vrf PROD")[0]
         assert "10.255.5.1" not in global_part
         assert "neighbor fd00:2500::1" in global_part
 
     def test_non_evpn_vrf_has_no_evpn_advertisement(self, env: jinja2.Environment) -> None:
         """Without an L3 VNI mapping the VRF only carries its neighbours."""
-        rendered = env.get_template("common/cisco_nxos_bgp.j2").render(bgp=_bgp_with_vrf_session(), interfaces=[])
+        rendered = env.get_template("common/cisco_nxos_bgp.j2").render(
+            bgp=_bgp_with_vrf_session(), loopback_name="loopback0"
+        )
         assert "advertise l2vpn evpn" not in rendered.split("  vrf PROD")[1]
 
 
 class TestEosVrfBgpRendering:
     def _render(self, env: jinja2.Environment) -> str:
         macro = getattr(env.get_template("common/arista_eos_bgp.j2").module, "render_bgp")
-        return str(macro(_bgp_with_vrf_session(), []))
+        return str(macro(_bgp_with_vrf_session(), "Loopback0"))
 
     def test_vrf_neighbor_rendered_under_vrf(self, env: jinja2.Environment) -> None:
         vrf_block = self._render(env).split("   vrf PROD")[1]
@@ -437,13 +446,20 @@ class TestNxosFabricForwardingFeature:
     )
     def test_feature_only_with_anycast_gateway(self, anycast_gateway: dict[str, Any] | None, expected: bool) -> None:
         """The anycast-gateway-mac / SVI commands need the feature enabled first."""
-        config = _transform_vxlan_nxos({"enabled": True, "anycast_gateway": anycast_gateway}, None)
+        config = _platform_vxlan_config({"enabled": True, "anycast_gateway": anycast_gateway}, "cisco_nxos")
         assert ("fabric forwarding" in config["features"]) is expected
 
 
 class TestEdgeTemplate:
     def _render(self, env: jinja2.Environment, **ctx: Any) -> str:
-        base: dict[str, Any] = {"name": "eg-fr01", "interfaces": [], "vlans": [], "bgp": [], "ospf": []}
+        base: dict[str, Any] = {
+            "name": "eg-fr01",
+            "interfaces": [],
+            "loopback_name": "loopback0",
+            "vlans": [],
+            "bgp": [],
+            "ospf": [],
+        }
         base.update(ctx)
         return env.get_template("edges/cisco_nxos.j2").render(**base)
 
@@ -488,6 +504,7 @@ class TestEdgeTemplate:
         """Two sessions in the same VRF declare its context only once."""
         bgp = _bgp_with_vrf_session()
         bgp[0]["sessions"].append({**bgp[0]["sessions"][1], "remote_ip": {"address": "10.255.5.3/31"}})
+        add_template_fields(bgp[0])
         rendered = self._render(env, bgp=bgp)
         assert rendered.count("vrf context PROD") == 1
 
@@ -512,4 +529,5 @@ class TestEdgeTemplate:
         """Default-VRF sessions only: no VRF context block."""
         bgp = _bgp_with_vrf_session()
         bgp[0]["sessions"] = bgp[0]["sessions"][:1]
+        add_template_fields(bgp[0])
         assert "vrf context" not in self._render(env, bgp=bgp)

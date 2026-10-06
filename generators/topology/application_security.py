@@ -11,7 +11,6 @@ from ..cloud_security import CloudSecurityRuleMixin
 from ..common import CommonGenerator
 from ..helpers.rules import RulesPlanner
 from ..named_objects import GetOrCreateByNameMixin
-from ..rules import RuleLifecycleMixin
 from ..segment_firewall import SegmentFirewallMixin
 from ..ztna import ZtnaMixin
 
@@ -28,7 +27,6 @@ class AppApplicationGenerator(
     ZtnaMixin,
     SegmentFirewallMixin,
     GetOrCreateByNameMixin,
-    RuleLifecycleMixin,
     CommonGenerator,
 ):
     """Generate segment-scoped security rules from app dependencies.
@@ -66,96 +64,77 @@ class AppApplicationGenerator(
     async def generate(self, data: dict[str, Any]) -> None:
         cleaned = clean_data(data)
 
-        deps = cleaned.get("AppDependency", [])
-        if deps:
-            dep = deps[0]
-            src_comp = dep.get("source") or {}
-            dst_comp = dep.get("target") or {}
-            if not dst_comp and not dep.get("target_fqdn"):
-                self.logger.warning("Dependency has neither a target component nor a target_fqdn - skipping")
-                return
-            if not src_comp:
-                if not dep.get("source_profile"):
-                    self.logger.warning("Dependency has neither a source component nor a source_profile - skipping")
-                    return
-                # An access-profile grant: the application is the target's,
-                # and publishing reads the grant from the component itself.
-                target_app = (dst_comp.get("parent") or {}).get("name", "")
-                if not target_app:
-                    self.logger.warning("Dependency target has no parent application name - skipping")
-                    return
-                await self._run_for_application_name(str(target_app))
-                return
-
-            app = src_comp.get("parent") or {}
-            app_name = app.get("name", "")
-            if not app_name:
-                self.logger.warning("Dependency source has no parent application name - skipping")
-                return
-
-            # The trigger fires once the dependency is committed, so the
-            # application query already reads it through depends_on. The
-            # app_dependency payload only carries enough to find the
-            # application, too little to build a rule from.
-            self.logger.info(
-                "Dependency trigger '%s' -> full application rule reconciliation for %s",
-                dep.get("name", dep.get("id", "?")),
-                app_name,
-            )
-            await self._run_for_application_name(str(app_name))
+        if deps := cleaned.get("AppDependency"):
+            if app_name := self._dependency_trigger_app_name(deps[0]):
+                await self._run_for_application_name(app_name)
             return
 
-        components = cleaned.get("AppComponent", [])
-        if components:
-            component = components[0]
-            app = component.get("parent") or {}
-            app_name = app.get("name", "")
-            if not app_name:
-                self.logger.warning(
-                    "Component %s has no parent application name - skipping",
-                    component.get("fqdn", component.get("id", "?")),
-                )
-                return
-
-            self.logger.info(
-                "Component trigger '%s' -> full application rule reconciliation for %s",
-                component.get("fqdn", component.get("id", "?")),
-                app_name,
-            )
-            await self._run_for_application_name(str(app_name))
-
-            # Another application's rule into this component names its
-            # segment, and only that application's own run rewrites it. Each
-            # gets an add_app_application run, which does not fan out again,
-            # so two applications calling each other cannot loop.
-            callers = self._calling_application_ids(component)
-            if callers:
-                self.logger.info("Re-reconciling %d calling application(s) of %s", len(callers), app_name)
-                await self.run_generator("add_app_application", callers, wait=False)
+        if components := cleaned.get("AppComponent"):
+            if app_name := self._component_trigger_app_name(components[0]):
+                await self._run_for_application_name(app_name)
+                # Another application's rule into this component names its
+                # segment, and only that application's own run rewrites it. Each
+                # gets an add_app_application run, which does not fan out again,
+                # so two applications calling each other cannot loop.
+                callers = self._calling_application_ids(components[0])
+                if callers:
+                    self.logger.info("Re-reconciling %d calling application(s) of %s", len(callers), app_name)
+                    await self.run_generator("add_app_application", callers, wait=False)
             return
 
         app_list = cleaned.get("AppApplication", [])
         if not app_list:
             self.logger.error("No AppApplication/AppDependency/AppComponent data in GraphQL response")
             return
+        await self._reconcile_application_rules(app_list[0])
 
-        app = app_list[0]
-        app_name = str(app.get("name") or "")
-        payload_deps = cleaned.get("AppDependency", [])
-        forced_edges = self._dependency_edges_from_payload(payload_deps, app_name) if app_name else []
-        if forced_edges:
-            self.logger.info("Using %d dependency edge(s) from application payload", len(forced_edges))
+    def _dependency_trigger_app_name(self, dep: dict[str, Any]) -> str | None:
+        """The application an app_dependency trigger reconciles, or None (logged) to skip."""
+        src_comp = dep.get("source") or {}
+        dst_comp = dep.get("target") or {}
+        if not dst_comp and not dep.get("target_fqdn"):
+            self.logger.warning("Dependency has neither a target component nor a target_fqdn - skipping")
+            return None
+        if not src_comp:
+            if not dep.get("source_profile"):
+                self.logger.warning("Dependency has neither a source component nor a source_profile - skipping")
+                return None
+            # An access-profile grant: the application is the target's,
+            # and publishing reads the grant from the component itself.
+            target_app = (dst_comp.get("parent") or {}).get("name", "")
+            if not target_app:
+                self.logger.warning("Dependency target has no parent application name - skipping")
+                return None
+            return str(target_app)
 
-        await self._reconcile_application_rules(
-            app,
-            forced_edges=forced_edges,
+        app_name = (src_comp.get("parent") or {}).get("name", "")
+        if not app_name:
+            self.logger.warning("Dependency source has no parent application name - skipping")
+            return None
+        # The trigger fires once the dependency is committed, so the
+        # application query already reads it through depends_on. The
+        # app_dependency payload only carries enough to find the
+        # application, too little to build a rule from.
+        self.logger.info(
+            "Dependency trigger '%s' -> full application rule reconciliation for %s",
+            dep.get("name", dep.get("id", "?")),
+            app_name,
         )
+        return str(app_name)
 
-    async def _run_for_application_name(
-        self,
-        app_name: str,
-        forced_edges: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]] | None = None,
-    ) -> None:
+    def _component_trigger_app_name(self, component: dict[str, Any]) -> str | None:
+        """The application an app_component trigger reconciles, or None (logged) to skip."""
+        component_ref = component.get("fqdn", component.get("id", "?"))
+        app_name = (component.get("parent") or {}).get("name", "")
+        if not app_name:
+            self.logger.warning("Component %s has no parent application name - skipping", component_ref)
+            return None
+        self.logger.info(
+            "Component trigger '%s' -> full application rule reconciliation for %s", component_ref, app_name
+        )
+        return str(app_name)
+
+    async def _run_for_application_name(self, app_name: str) -> None:
         if not app_name:
             self.logger.warning("Cannot run application rule reconciliation without application name")
             return
@@ -175,20 +154,9 @@ class AppApplicationGenerator(
             self.logger.warning("Application '%s' not found for rule reconciliation", app_name)
             return
 
-        payload_deps = cleaned.get("AppDependency", [])
-        payload_edges = self._dependency_edges_from_payload(payload_deps, app_name)
+        await self._reconcile_application_rules(app_list[0])
 
-        merged_edges: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]] = payload_edges
-        if forced_edges:
-            merged_edges = payload_edges + forced_edges
-
-        await self._reconcile_application_rules(app_list[0], forced_edges=merged_edges)
-
-    async def _reconcile_application_rules(
-        self,
-        app: dict[str, Any],
-        forced_edges: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]] | None = None,
-    ) -> None:
+    async def _reconcile_application_rules(self, app: dict[str, Any]) -> None:
         planner = RulesPlanner()
 
         app_name: str = app.get("name", "")
@@ -207,20 +175,7 @@ class AppApplicationGenerator(
         for component in components:
             await self._ensure_segment_isolation_mode(component.get("network_segment") or {}, app_security_profile)
 
-        edges: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]] = []
-        warnings: list[str] = []
-        if forced_edges:
-            all_edges = edges + forced_edges
-            deduped: dict[str, tuple[dict[str, Any], dict[str, Any], dict[str, Any]]] = {}
-            for src_comp, dep, dst_comp in all_edges:
-                key = str(dep.get("id") or dep.get("name") or f"{src_comp.get('id')}->{dst_comp.get('id')}")
-                deduped[key] = (src_comp, dep, dst_comp)
-            edges = list(deduped.values())
-            self.logger.info("Applied %d dependency edge(s) from trigger context", len(forced_edges))
-        else:
-            edges = self._dependency_edges_from_components(components)
-        for warning in warnings:
-            self.logger.warning(warning)
+        edges = self._dependency_edges_from_components(components)
 
         # Access-profile grants hang off the target component, not a source
         # component, so they are published whether or not the app has edges.
@@ -233,14 +188,11 @@ class AppApplicationGenerator(
         self.logger.info("Found %d dependency edge(s) for %s", len(edges), app_name)
 
         segment_policies: dict[str, Any] = {}
+        rule_indexes: dict[str, set[int]] = {}
         proxy_policies: dict[str, Any] = {}
 
         for src_comp, dep, dst_comp in edges:
             dep_ref = dep.get("name", dep.get("id", "?"))
-            if not dst_comp and not dep.get("target_fqdn"):
-                self.logger.warning("Dependency '%s' has no target - skipping", dep_ref)
-                rules_skipped += 1
-                continue
             authorized, auth_reason = planner.dependency_is_authorized(src_comp=src_comp, dst_comp=dst_comp, dep=dep)
             if not authorized:
                 self.logger.warning(
@@ -316,6 +268,7 @@ class AppApplicationGenerator(
                     dst_seg=dst_seg,
                     planner=planner,
                     segment_policies=segment_policies,
+                    rule_indexes=rule_indexes,
                     port=port,
                 )
                 rules_created += int(created)
@@ -350,23 +303,6 @@ class AppApplicationGenerator(
             if caller_app_id and caller_app_id != own_app_id:
                 callers.add(str(caller_app_id))
         return sorted(callers)
-
-    @staticmethod
-    def _dependency_edges_from_payload(
-        deps: list[dict[str, Any]],
-        app_name: str,
-    ) -> list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]]:
-        edges: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]] = []
-        for dep in deps:
-            src_comp = dep.get("source") or {}
-            dst_comp = dep.get("target") or {}
-            if not src_comp or not (dst_comp or dep.get("target_fqdn")):
-                continue
-            src_app_name = str((src_comp.get("parent") or {}).get("name") or "")
-            if src_app_name != app_name:
-                continue
-            edges.append((src_comp, dep, dst_comp))
-        return edges
 
     @staticmethod
     def _dependency_edges_from_components(

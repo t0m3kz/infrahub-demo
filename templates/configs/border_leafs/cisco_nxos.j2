@@ -1,9 +1,3 @@
-{%- set _lb = namespace(name='loopback0') -%}
-{%- for iface in interfaces -%}
-{%- if iface.name | lower | truncate(8, true, '') == 'loopback' and _lb.name == 'loopback0' -%}
-{%- set _lb.name = iface.name -%}
-{%- endif -%}
-{%- endfor -%}
 !
 ! {{ name }} Configuration
 !
@@ -34,12 +28,8 @@ vlan {{ vlan.vlan_id }}
 ! Interfaces
 {%- for interface in interfaces if interface.role != 'mlag-peer' %}
 interface {{ interface.name }}
-{%- if interface.description %}
-  description {{ interface.description }}
-{%- elif interface.circuits %}
-  description {{ interface.circuits[0].circuit_type|upper }} - {{ interface.circuits[0].circuit_id }} - {{ interface.circuits[0].provider }}
-{%- elif interface.virtual_links %}
-  description {{ interface.virtual_links[0].link_type|upper }} - {{ interface.virtual_links[0].link_name }} - {{ interface.virtual_links[0].provider }}
+{%- if interface.display_description %}
+  description {{ interface.display_description }}
 {%- endif %}
 {%- if interface.dot1q_vlan %}
   encapsulation dot1q {{ interface.dot1q_vlan }}
@@ -91,56 +81,14 @@ interface {{ interface.name }}
 route-map RM-CONN-2-BGP permit 10
 {#- A BGW also has to advertise its VTEP and site-VIP loopbacks, or the
     remote site has no route to the tunnel endpoints it learns over the DCI. #}
-  match interface {{ ([_lb.name] + (vxlan.multisite.advertise_interfaces if vxlan and vxlan.multisite else [])) | unique | join(' ') }}
+  match interface {{ ([loopback_name] + (vxlan.multisite.advertise_interfaces if vxlan and vxlan.multisite else [])) | unique | join(' ') }}
 !
 {%- if vxlan and vxlan.l3_vni_mappings %}
 {#- Permit-all by design — see the leaf template. #}
 route-map RM-VRF-DIRECT-2-EVPN permit 10
 !
 {%- endif %}
-{%- if vxlan and vxlan.anycast_gateway and vxlan.anycast_gateway.enabled %}
-! Anycast Gateway — identical MAC on every leaf/border-leaf in the fabric
-fabric forwarding anycast-gateway-mac {{ vxlan.anycast_gateway.mac | replace(':', '') | replace('.', '') }}
-!
-{%- endif %}
-{%- if vlans %}
-! VLAN SVI Configuration
-!
-{%- for vlan in vlans %}
-{%- if vlan.gateway_ip or vlan.gateway_ipv6 %}
-{%- set ns = namespace(acl_name=None) %}
-{%- for acl in acls %}
-{%- if acl.vlan_id == vlan.vlan_id %}
-{%- set ns.acl_name = acl.name %}
-{%- endif %}
-{%- endfor %}
-interface Vlan{{ vlan.vlan_id }}
-  description {{ vlan.name }}
-{%- if vlan.isolation_mode == 'isolated' %}
-  ! Isolation Mode: ISOLATED — intra-segment host-to-host traffic blocked via port-isolation
-{%- elif vlan.isolation_mode == 'microsegmented' %}
-  ! Isolation Mode: MICROSEGMENTED — intra+inter segment rules enforced via SVI ACL (and firewall if present)
-{%- endif %}
-{%- if vlan.vrf %}
-  vrf member {{ vlan.vrf }}
-{%- endif %}
-{%- if vlan.gateway_ip %}
-  ip address {{ vlan.gateway_ip }}
-{%- endif %}
-{%- if vlan.gateway_ipv6 %}
-  ipv6 address {{ vlan.gateway_ipv6 }}
-{%- endif %}
-{%- if vxlan and vxlan.anycast_gateway and vxlan.anycast_gateway.enabled %}
-  fabric forwarding mode anycast-gateway
-{%- endif %}
-  no shutdown
-{%- if ns.acl_name %}
-  ip access-group {{ ns.acl_name }} in
-{%- endif %}
-!
-{%- endif %}
-{%- endfor %}
-{%- endif %}
+{%- include 'common/cisco_nxos_svi.j2' -%}
 !
 {%- if vrf_gateways %}
 !

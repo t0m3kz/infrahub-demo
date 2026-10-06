@@ -70,9 +70,6 @@ def _make_generator() -> Any:
     gen._free_interfaces = []
     gen._already_connected = False
     gen._existing_switch_names = set()
-    gen.speed_aware = True
-    gen.validate_speeds = True
-    gen.strict_speed_validation = False
 
     gen.client.get = AsyncMock()
     gen.client.filters = AsyncMock(return_value=[])
@@ -91,24 +88,17 @@ def _iface(
     cabled: bool = False,
     interface_type: str | None = None,
 ) -> MagicMock:
+    """A DcimPhysicalInterface as client.filters returns it with include=["device", "interface_type", "cable"]."""
     intf = MagicMock()
-    intf.name = MagicMock()
     intf.name.value = name
-    if interface_type:
-        intf.interface_type = MagicMock()
-        intf.interface_type.value = interface_type
-    else:
-        intf.interface_type = None
-    intf.device = MagicMock()
-    intf.device.name = MagicMock()
-    intf.device.name.value = device
+    intf.interface_type.value = interface_type
+    intf.device.peer.name.value = device
     if cabled:
         intf.cable = MagicMock()
         intf.cable.id = "cable-1"
     else:
         intf.cable = None
     intf.lag = None
-    intf._device_name_for_grouping = device
     return intf
 
 
@@ -132,20 +122,6 @@ class TestInit:
         assert gen._free_interfaces == []
         assert gen._already_connected is False
         assert gen._existing_switch_names == set()
-        assert gen.speed_aware is True
-        assert gen.validate_speeds is True
-        assert gen.strict_speed_validation is False
-
-    def test_kwargs_override_defaults(self) -> None:
-        gen = EndpointConnectivityGenerator.__new__(EndpointConnectivityGenerator)
-        with patch("generators.logger.FailOnErrorLoggerMixin.__init__", return_value=None):
-            EndpointConnectivityGenerator.__init__(
-                gen, speed_aware=False, validate_speeds=False, strict_speed_validation=True
-            )
-
-        assert gen.speed_aware is False
-        assert gen.validate_speeds is False
-        assert gen.strict_speed_validation is True
 
 
 class TestGenerateGuardClauses:
@@ -368,8 +344,9 @@ class TestGenerateUplinkFlow:
         endpoint_device.deployment = MagicMock(id="pod-1")
         endpoint_device.save = AsyncMock()
         cabled = _iface("eth0", device="server-1", cabled=True)
+        cable_obj = MagicMock(save=AsyncMock())
         gen.client.get = AsyncMock(return_value=endpoint_device)
-        gen.client.filters = AsyncMock(side_effect=[[], [cabled]])
+        gen.client.filters = AsyncMock(side_effect=[[], [cabled], [cable_obj]])
 
         await gen.generate(_endpoint_data())
 
@@ -390,11 +367,8 @@ class TestGenerateUplinkFlow:
         second.cable.id = "cable-2"
         cables = {"cable-1": MagicMock(save=AsyncMock()), "cable-2": MagicMock(save=AsyncMock())}
 
-        async def _get(kind: Any, id: str, **_: Any) -> MagicMock:
-            return cables[id] if id in cables else endpoint_device
-
-        gen.client.get = AsyncMock(side_effect=_get)
-        gen.client.filters = AsyncMock(side_effect=[[], [first, second]])
+        gen.client.get = AsyncMock(return_value=endpoint_device)
+        gen.client.filters = AsyncMock(side_effect=[[], [first, second], [cables["cable-1"], cables["cable-2"]]])
 
         await gen.generate(_endpoint_data())
 
@@ -428,8 +402,9 @@ class TestGenerateUplinkFlow:
         endpoint_device.save = AsyncMock()
         cabled = _iface("eth0", device="leaf-1", cabled=True)
         free_iface = _iface("eth1", device="server-1")
+        cable_obj = MagicMock(save=AsyncMock())
         gen.client.get = AsyncMock(return_value=endpoint_device)
-        gen.client.filters = AsyncMock(side_effect=[[], [cabled, free_iface]])
+        gen.client.filters = AsyncMock(side_effect=[[], [cabled, free_iface], [cable_obj]])
         gen._resolve_target_interfaces = AsyncMock(return_value=[])
 
         await gen.generate(_endpoint_data())
@@ -867,44 +842,14 @@ class TestQueryInterfacesByLocation:
 
 
 class TestExtractDeviceName:
-    def test_prefers_device_name_for_grouping(self) -> None:
-        intf = SimpleNamespace(_device_name_for_grouping="leaf-1", device=None)
+    def test_reads_the_device_peer_name(self) -> None:
+        """The included device peer's name is the grouping key."""
+        assert EndpointConnectivityGenerator._extract_device_name(_iface("Eth1", device="leaf-1")) == "leaf-1"
 
-        assert EndpointConnectivityGenerator._extract_device_name(intf) == "leaf-1"
-
-    def test_falls_back_to_device_peer_name_value(self) -> None:
-        peer = SimpleNamespace(name=SimpleNamespace(value="leaf-2"))
-        intf = SimpleNamespace(device=SimpleNamespace(peer=peer))
-
-        assert EndpointConnectivityGenerator._extract_device_name(intf) == "leaf-2"
-
-    def test_falls_back_to_device_peer_plain_name(self) -> None:
-        peer = SimpleNamespace(name="leaf-3")
-        intf = SimpleNamespace(device=SimpleNamespace(peer=peer))
-
-        assert EndpointConnectivityGenerator._extract_device_name(intf) == "leaf-3"
-
-    def test_peer_none_falls_through_to_device_name(self) -> None:
-        device = SimpleNamespace(peer=None, name=SimpleNamespace(value="leaf-4"))
-        intf = SimpleNamespace(device=device)
-
-        assert EndpointConnectivityGenerator._extract_device_name(intf) == "leaf-4"
-
-    def test_falls_back_to_device_name_value_when_no_peer_attr(self) -> None:
-        device = SimpleNamespace(name=SimpleNamespace(value="leaf-5"))
-        intf = SimpleNamespace(device=device)
-
-        assert EndpointConnectivityGenerator._extract_device_name(intf) == "leaf-5"
-
-    def test_falls_back_to_device_plain_name(self) -> None:
-        device = SimpleNamespace(name="leaf-6")
-        intf = SimpleNamespace(device=device)
-
-        assert EndpointConnectivityGenerator._extract_device_name(intf) == "leaf-6"
-
-    def test_returns_none_when_nothing_resolvable(self) -> None:
-        device = SimpleNamespace()
-        intf = SimpleNamespace(device=device)
+    def test_no_device_peer_returns_none(self) -> None:
+        """An interface without a device peer has no name to group by."""
+        intf = _iface("Eth1", device="leaf-1")
+        intf.device.peer = None
 
         assert EndpointConnectivityGenerator._extract_device_name(intf) is None
 
@@ -1096,7 +1041,7 @@ class TestProcessLagEndpointConnections:
         gen._resolve_target_interfaces = AsyncMock(
             return_value=[_iface("Eth1", device="leaf-1"), _iface("Eth1", device="leaf-2")]
         )
-        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], [], []])
+        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], []])
 
         await gen._process_lag_endpoint_connections({"bond0": [_iface("eth0", device="server-1")]}, "tor")
 
@@ -1113,8 +1058,8 @@ class TestProcessLagEndpointConnections:
         target_b = _iface("Ethernet1", device="leaf-2")
         gen._resolve_target_interfaces = AsyncMock(return_value=[target_a, target_b])
 
-        # filters call order: (1) switches by name, (2) existing LAGs on switch_a, (3) on switch_b
-        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], [], []])
+        # filters call order: (1) switches by name, (2) existing LAGs on both switches
+        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], []])
 
         bond = {"bond0": [_iface("eth0", device="server-1"), _iface("eth1", device="server-1")]}
 
@@ -1125,6 +1070,7 @@ class TestProcessLagEndpointConnections:
         await gen._process_lag_endpoint_connections(bond, "tor")
 
         assert gen.create_cabling.await_count == 2
+        assert gen.client.filters.await_args_list[1].kwargs["device__ids"] == ["sw-a", "sw-b"]
         assert gen.client.create.await_count == 2
         for call in gen.client.create.call_args_list:
             assert call.kwargs["data"]["mlag_domain"] == {"id": mlag_id}
@@ -1140,7 +1086,7 @@ class TestProcessLagEndpointConnections:
         target_a_cabled = _iface("Ethernet1", device="leaf-1", cabled=True)
         target_b = _iface("Ethernet1", device="leaf-2")
         gen._resolve_target_interfaces = AsyncMock(return_value=[target_a_cabled, target_b])
-        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], [], []])
+        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], []])
 
         bond = {"bond0": [_iface("eth0", device="server-1"), _iface("eth1", device="server-1")]}
 
@@ -1175,7 +1121,7 @@ class TestProcessLagEndpointConnections:
         member_1.cable = MagicMock(id="existing-cable-1")
         bond = {"bond0": [member_1, _iface("eth1", device="server-1")]}
 
-        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], [], []])
+        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], []])
         gen.client.get = AsyncMock(side_effect=[existing_cable_obj, far_end_port])
 
         new_lag = MagicMock(id="lag-obj-1")
@@ -1207,7 +1153,7 @@ class TestProcessLagEndpointConnections:
 
         bond = {"bond0": [_iface("eth0", device="server-1"), _iface("eth1", device="server-1")]}
 
-        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], [], []])
+        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], []])
         new_lag = MagicMock(id="lag-obj-1")
         new_lag.save = AsyncMock()
         gen.client.create = AsyncMock(return_value=new_lag)
@@ -1232,7 +1178,7 @@ class TestProcessLagEndpointConnections:
                 _iface("Ethernet2", device="leaf-2", interface_type="25gbase-x-sfp28"),
             ]
         )
-        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], [], []])
+        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], []])
         new_lag = MagicMock()
         new_lag.save = AsyncMock()
         gen.client.create = AsyncMock(return_value=new_lag)
@@ -1257,7 +1203,7 @@ class TestProcessLagEndpointConnections:
                 _iface("Ethernet1", device="leaf-2", interface_type="100gbase-x-qsfp28"),
             ]
         )
-        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], [], []])
+        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], []])
         gen.client.create = AsyncMock()
         members = [
             _iface("eth0", device="server-1", interface_type="25gbase-x-sfp28"),
@@ -1279,7 +1225,7 @@ class TestProcessLagEndpointConnections:
         gen._resolve_target_interfaces = AsyncMock(
             return_value=[_iface("Ethernet1", device="leaf-1"), _iface("Ethernet1", device="leaf-2")]
         )
-        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], [], []])
+        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], []])
         gen.client.create = AsyncMock()
         gen.create_cabling = AsyncMock(side_effect=[[("eth0", "Ethernet1")], []])
         members = [_iface("eth0", device="server-1"), _iface("eth1", device="server-1")]

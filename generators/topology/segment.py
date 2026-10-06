@@ -177,12 +177,7 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Vla
                 segment__ids=[segment_id],
             )
             for existing in existing_deployments:
-                deployment_rel = getattr(existing, "deployment", None)
-                if deployment_rel is not None:
-                    await deployment_rel.fetch()
-                deployment_peer = getattr(deployment_rel, "peer", None)
-                deployment_obj = deployment_peer or deployment_rel
-                deployment_id = getattr(deployment_obj, "id", None)
+                deployment_id = getattr(getattr(existing, "deployment", None), "id", None)
                 if deployment_id and deployment_id not in existing_by_deployment_id:
                     existing_by_deployment_id[deployment_id] = existing
             if stretched:
@@ -472,10 +467,7 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Vla
             self.logger.debug(f"  [{deployment_name}] No border-gateway devices — skipping")
             return
 
-        domain_pools = await self._ensure_vlan_domains_for_devices(devices)
-        for domain_id, pool_id in domain_pools.items():
-            await self._ensure_vlan_domain_segment(segment_id, segment_name, domain_id, pool_id)
-
+        domain_pools = await self._realize_segment_on_devices(segment_id, segment_name, devices)
         self.logger.info(
             f"  [{deployment_name}] Realized segment '{segment_name}' on {len(devices)} border gateway(s) "
             f"across {len(domain_pools)} VLAN domain(s)"

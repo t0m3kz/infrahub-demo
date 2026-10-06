@@ -23,8 +23,7 @@ def _build_generator(
 ) -> RackGenerator:
     """Create a RackGenerator instance with minimal data for offset calculation.
 
-    calculate_cabling_offsets (see generators/helpers/rack.py's
-    RackPlanner.calculate_cabling_offsets) is now derived entirely from live
+    RackGenerator.calculate_cabling_offsets is now derived entirely from live
     rack position (row_index/index) and the caller-supplied device_count /
     racks_in_previous_rows — it no longer reads any design/layout capacity
     numbers (rows, compute_racks_per_row, max_tors_per_compute_rack, etc).

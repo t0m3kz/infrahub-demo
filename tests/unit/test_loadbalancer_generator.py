@@ -6,7 +6,7 @@ import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from generators.topology.loadbalancer import LoadbalancerBackendNexthopGenerator, _dev_id, _dev_name
+from generators.topology.loadbalancer import LoadbalancerBackendNexthopGenerator
 
 
 def _gen() -> Any:
@@ -45,14 +45,6 @@ def _vip(
             "capabilities": [{"id": "lb-01", "name": "lb-01"}] if devices is None else devices,
         },
     }
-
-
-class TestHelpers:
-    def test_dev_id_from_dict(self) -> None:
-        assert _dev_id({"id": "d1", "name": "x"}) == "d1"
-
-    def test_dev_name_from_dict(self) -> None:
-        assert _dev_name({"id": "d1", "name": "x"}) == "x"
 
 
 class TestGenerateNoOps:

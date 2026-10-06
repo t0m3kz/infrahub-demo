@@ -1,72 +1,27 @@
-"""
-Common utilities and base class for Infrahub device transforms.
-
-Public API — all symbols importable directly from ``transforms.common``.
-Implementation lives in ``transforms/helpers/`` submodules.
-"""
+"""Base class and shared helpers for Infrahub device transforms."""
 
 from typing import Any
 
 from infrahub_sdk.transforms import InfrahubTransform
-from jinja2 import Environment, FileSystemLoader, Template
+from jinja2 import Template
 from netutils.utils import jinja2_convenience_function
 
-from transforms.helpers.acl import _build_acl_rule, get_acls
-from transforms.helpers.bgp import (
-    _build_peer_groups,
-    _build_session_from_peering,
-    _normalize_afs,
-    _sort_key_ip,
-    get_bgp_profile,
-)
+from transforms.helpers.acl import get_acls
+from transforms.helpers.bgp import get_bgp_profile
 from transforms.helpers.firewall import (
     _flatten_deployment_firewall_contexts,
-    get_border_leaf_pbr_rules,
     get_customer_pbr_rules,
-    get_firewall_contexts,
-    get_firewall_static_routes,
-    get_firewall_zones,
     get_vrf_default_gateways,
-    get_zone_policies,
-    place_policies_in_contexts,
 )
-from transforms.helpers.ha import _HA_TYPENAMES, get_ha
+from transforms.helpers.ha import _HA_TYPENAMES
 from transforms.helpers.loadbalancer_pbr import _flatten_deployment_lb_vips, get_lb_backend_pbr_rules
 from transforms.helpers.management import get_management_services
 from transforms.helpers.mlag import get_mlag, get_sonic_mlag_config
 from transforms.helpers.ospf import get_ospf
-from transforms.helpers.segments import (
-    _flatten_deployment_segment_activations,
-    _get_segment_gateways,
-    _get_segment_namespace,
-    _get_segment_prefix_str,
-    _vlans_from_activations,
-    get_vlans,
-)
-from transforms.helpers.vxlan import (
-    _collect_l3_vni_from_namespaces,
-    _l2_from_activations,
-    _l3_from_activations,
-    _transform_vxlan_arista,
-    _transform_vxlan_nxos,
-    _transform_vxlan_platform,
-    _transform_vxlan_sonic,
-    get_interfaces,
-    get_vxlan_config,
-)
-from utils.data_cleaning import clean_data, get_data
-
-
-def _segment_hosting_candidates(deployment: Any) -> list[dict]:
-    """Deployments that may carry TopologySegmentHosting, nearest first.
-
-    Only TopologyDataCenter and TopologyColocationMetro inherit
-    TopologySegmentHosting: a border-leaf's deployment IS the DC, but a leaf's
-    deployment is the pod, one hop below it. Shaped by
-    queries/fragments/evpn_fabric.gql's EvpnRtAsOnDeploymentFields.
-    """
-    parent = deployment.get("parent") if isinstance(deployment, dict) else None
-    return [c for c in (deployment, parent) if isinstance(c, dict)]
+from transforms.helpers.segments import get_vlans, segment_hosting_candidates
+from transforms.helpers.templates import load_template
+from transforms.helpers.vxlan import get_interfaces, get_vxlan_config
+from utils.data_cleaning import clean_data
 
 
 def _fabric_rt_asn(deployment: Any) -> int | None:
@@ -78,7 +33,7 @@ def _fabric_rt_asn(deployment: Any) -> int | None:
     other's routes. Returns None when unset, and get_vxlan_config falls back to
     the overlay process ASN.
     """
-    for candidate in _segment_hosting_candidates(deployment):
+    for candidate in segment_hosting_candidates(deployment):
         asn = (candidate.get("evpn_rt_as") or {}).get("asn")
         if isinstance(asn, int):
             return asn
@@ -93,7 +48,7 @@ def _fabric_anycast_mac(deployment: Any) -> str | None:
     gateway MAC, so two VTEPs answering with different MACs blackhole traffic on
     whichever one did not answer. None means get_vxlan_config uses its default.
     """
-    for candidate in _segment_hosting_candidates(deployment):
+    for candidate in segment_hosting_candidates(deployment):
         mac = candidate.get("evpn_anycast_gateway_mac")
         if isinstance(mac, str) and mac.strip():
             return mac.strip()
@@ -154,26 +109,31 @@ def get_capabilities(data: dict[str, Any]) -> dict[str, Any]:
     Returns:
         Dict with capability flags for template rendering.
     """
-    services = data.get("capabilities") or []
-    bgp_enabled = any(s.get("typename") == "ManagedBGP" for s in services)
-    ospf_enabled = any(s.get("typename") == "ManagedOSPF" for s in services)
-    mlag_enabled = any(s.get("typename") == "ManagedMLAG" for s in services)
-    ntp_enabled = any(s.get("typename") == "ManagedNTP" for s in services)
-    syslog_enabled = any(s.get("typename") == "ManagedSyslog" for s in services)
-    snmp_enabled = any(s.get("typename") == "ManagedSNMP" for s in services)
-    aaa_enabled = any(s.get("typename") == "ManagedAAA" for s in services)
-    ha_enabled = any(s.get("typename") in _HA_TYPENAMES for s in services)
-
+    typenames = {s.get("typename") for s in data.get("capabilities") or []}
     return {
-        "bgp_enabled": bgp_enabled,
-        "ospf_enabled": ospf_enabled,
-        "mlag_enabled": mlag_enabled,
-        "ntp_enabled": ntp_enabled,
-        "syslog_enabled": syslog_enabled,
-        "snmp_enabled": snmp_enabled,
-        "aaa_enabled": aaa_enabled,
-        "ha_enabled": ha_enabled,
+        "bgp_enabled": "ManagedBGP" in typenames,
+        "ospf_enabled": "ManagedOSPF" in typenames,
+        "mlag_enabled": "ManagedMLAG" in typenames,
+        "ntp_enabled": "ManagedNTP" in typenames,
+        "syslog_enabled": "ManagedSyslog" in typenames,
+        "snmp_enabled": "ManagedSNMP" in typenames,
+        "aaa_enabled": "ManagedAAA" in typenames,
+        "ha_enabled": not typenames.isdisjoint(_HA_TYPENAMES),
     }
+
+
+def _loopback_name(interfaces: list[dict[str, Any]], platform_name: str) -> str:
+    """The loopback the templates source BGP updates and redistribution from.
+
+    The first interface named "loopback" (any case), or with a name of 14+
+    characters starting with it, else the platform's Loopback0 spelling.
+    Shorter names such as "Loopback1" never match, so devices get Loopback0.
+    """
+    for iface in interfaces:
+        name = iface["name"].lower()
+        if (name if len(name) <= 13 else name[:8]) == "loopback":
+            return iface["name"]
+    return "loopback0" if platform_name == "cisco_nxos" else "Loopback0"
 
 
 def _combine_leaf_pbr_rules(
@@ -210,29 +170,15 @@ class BaseDeviceTransform(InfrahubTransform):
 
     template_subdir: str = ""
     device_role: str = ""
+    # Comment character of the "no platform" stub config.
+    comment_char: str = "!"
+    # Resolve a VxlanSegment's local VLAN through this device's own VLAN domain.
+    resolve_vlan_domain: bool = True
 
     async def transform(self, data: Any) -> Any:
-        cleaned = clean_data(data)
-
-        # Device node is always the first root
-        if not isinstance(cleaned, dict) or not cleaned:
-            raise ValueError("clean_data() did not return a non-empty dictionary")
-        first_key = next(iter(cleaned))
-        first_value = cleaned[first_key]
-        device_data = first_value[0] if isinstance(first_value, list) and first_value else (first_value or {})
-
-        # Extra roots (e.g. DcimFirewallInterface for VRF default gateways)
-        extra_roots = {k: v for k, v in cleaned.items() if k != first_key}
-
-        platform = device_data.get("platform") or {}
-        platform_name = platform.get("netmiko_device_type")
-
+        device_data, extra_roots, platform_name = self._device_and_platform(data)
         if not platform_name:
-            device_name = device_data.get("name", "Unknown Device")
-            return (
-                f"! Device {device_name} has no platform with "
-                f"netmiko_device_type defined.\n! No configuration generated.\n"
-            )
+            return self._no_platform_config(device_data)
 
         # Collect segment activations from interface capabilities (segment → segment_deployments)
         activations = self._collect_activations_from_interfaces(
@@ -258,9 +204,31 @@ class BaseDeviceTransform(InfrahubTransform):
             unsupported = [key for key in ("snmp", "aaa") if config.get(key)]
             if unsupported:
                 raise ValueError(f"{platform_name} ConfigDB rendering does not support: {', '.join(unsupported)}")
+        return self._render(platform_name, config)
 
-        template = self._load_template(platform_name)
-        return template.render(**config)
+    @staticmethod
+    def _device_and_platform(data: Any) -> tuple[dict, dict, str | None]:
+        """Clean `data` and return (device, the other query roots, netmiko platform).
+
+        The device node is always the first query root.
+        """
+        cleaned = clean_data(data)
+        if not isinstance(cleaned, dict) or not cleaned:
+            raise ValueError("clean_data() did not return a non-empty dictionary")
+        first_key = next(iter(cleaned))
+        first_value = cleaned[first_key]
+        device = first_value[0] if isinstance(first_value, list) and first_value else (first_value or {})
+        extra_roots = {k: v for k, v in cleaned.items() if k != first_key}
+        return device, extra_roots, (device.get("platform") or {}).get("netmiko_device_type")
+
+    def _no_platform_config(self, device: dict) -> str:
+        """Placeholder config for a device without a netmiko platform."""
+        c = self.comment_char
+        device_name = device.get("name", "Unknown Device")
+        return f"{c} Device {device_name} has no platform with netmiko_device_type defined.\n{c} No configuration generated.\n"
+
+    def _render(self, platform_name: str, config: dict) -> str:
+        return self._load_template(platform_name).render(**config)
 
     def _build_config(self, data: dict, platform_name: str) -> dict:
         """Build the base template context shared by all device transforms."""
@@ -270,18 +238,20 @@ class BaseDeviceTransform(InfrahubTransform):
         activations = data.get("segment_deployments")
         management_services = get_management_services(device_capabilities)
         mlag = get_mlag(device_capabilities, interfaces, device_name=device_name)
+        # The MLAG control SVI is rendered by the platform's MLAG include
+        # (it needs the peer-link VLAN/trunk group around it), not as a
+        # generic interface.
+        template_interfaces = get_interfaces(
+            [iface for iface in interfaces if iface.get("role") != "mlag-control"],
+            activations=activations,
+            device_name=device_name,
+        )
         config = {
             "name": device_name,
             "hostname": device_name,
             "device_role": data.get("role", ""),
-            # The MLAG control SVI is rendered by the platform's MLAG include
-            # (it needs the peer-link VLAN/trunk group around it), not as a
-            # generic interface.
-            "interfaces": get_interfaces(
-                [iface for iface in interfaces if iface.get("role") != "mlag-control"],
-                activations=activations,
-                device_name=device_name,
-            ),
+            "interfaces": template_interfaces,
+            "loopback_name": _loopback_name(template_interfaces, platform_name),
             "bgp": get_bgp_profile(
                 device_capabilities,
                 interfaces,
@@ -294,10 +264,8 @@ class BaseDeviceTransform(InfrahubTransform):
             "syslog": management_services["syslog"],
             "snmp": management_services["snmp"],
             "aaa": management_services["aaa"],
+            "capabilities": get_capabilities(data),
         }
-        capabilities = get_capabilities(data)
-        if capabilities:
-            config["capabilities"] = capabilities
         if platform_name in {"sonic", "dell_sonic"}:
             config["sonic_mlag"] = get_sonic_mlag_config(mlag)
         return config
@@ -347,6 +315,11 @@ class BaseDeviceTransform(InfrahubTransform):
             if platform_name == "nokia_sros" and (wants_gpo or leaf_pbr_rules):
                 raise ValueError(f"{platform_name} leaf cannot render GPO or PBR policy; refusing unprotected config")
 
+        acls = get_acls(activations=activations)
+        acl_names = {acl["vlan_id"]: acl["name"] for acl in acls}
+        for vlan in vlans:
+            vlan["acl_name"] = acl_names.get(vlan["vlan_id"])
+
         return {
             "vlans": vlans,
             "vxlan": get_vxlan_config(
@@ -357,7 +330,7 @@ class BaseDeviceTransform(InfrahubTransform):
                 fabric_rt_asn=_fabric_rt_asn(data.get("deployment")),
                 fabric_anycast_mac=_fabric_anycast_mac(data.get("deployment")),
             ),
-            "acls": get_acls(activations=activations),
+            "acls": acls,
             "vrf_gateways": vrf_gateways,
             "sgt_rules": sgt_rules,
             "customer_pbr_rules": customer_pbr_rules,
@@ -378,6 +351,18 @@ class BaseDeviceTransform(InfrahubTransform):
                 return cap["id"]
         return device_id
 
+    @staticmethod
+    def _own_vlan_domain_segment(segment: dict, own_domain_id: str | None) -> dict | None:
+        """The segment's vlan_domain_segments entry for this device's own VLAN domain."""
+        return next(
+            (
+                v
+                for v in segment.get("vlan_domain_segments") or []
+                if (v.get("vlan_domain") or {}).get("id") == own_domain_id
+            ),
+            None,
+        )
+
     def _collect_activations_from_interfaces(
         self,
         interfaces: list[dict],
@@ -396,6 +381,8 @@ class BaseDeviceTransform(InfrahubTransform):
         ManagedMLAG if paired, else itself) via _resolve_own_vlan_domain_id.
         A VxlanSegment whose vlan_domain_segments has no entry for this
         device's own domain yet (allocation not converged) is skipped.
+        Without ``resolve_vlan_domain`` (a firewall is never part of a VLAN
+        domain) a VxlanSegment takes the first segment_deployments entry as is.
         We deduplicate by segment id so each segment appears once.
         """
         own_domain_id = self._resolve_own_vlan_domain_id(device_id, device_capabilities or [])
@@ -416,17 +403,13 @@ class BaseDeviceTransform(InfrahubTransform):
                     if not seg_deps:
                         continue
                     vni = seg_deps[0].get("vni")
-                    own_domain_seg = next(
-                        (
-                            v
-                            for v in cap.get("vlan_domain_segments") or []
-                            if (v.get("vlan_domain") or {}).get("id") == own_domain_id
-                        ),
-                        None,
-                    )
-                    if own_domain_seg is None:
-                        continue
-                    vlan_id = own_domain_seg.get("vlan_id")
+                    if self.resolve_vlan_domain:
+                        own_domain_seg = self._own_vlan_domain_segment(cap, own_domain_id)
+                        if own_domain_seg is None:
+                            continue
+                        vlan_id = own_domain_seg.get("vlan_id")
+                    else:
+                        vlan_id = seg_deps[0].get("vlan_id")
                 seen.add(seg_id)
                 activations.append(
                     {
@@ -464,14 +447,7 @@ class BaseDeviceTransform(InfrahubTransform):
             seg_id = seg.get("id")
             if not seg_id or seg_id in seen or (seg.get("stretch_scope") or "local") == "local" or not dep.get("vni"):
                 continue
-            own_domain_seg = next(
-                (
-                    v
-                    for v in seg.get("vlan_domain_segments") or []
-                    if (v.get("vlan_domain") or {}).get("id") == own_domain_id
-                ),
-                None,
-            )
+            own_domain_seg = self._own_vlan_domain_segment(seg, own_domain_id)
             if own_domain_seg is None or not own_domain_seg.get("vlan_id"):
                 continue
             seen.add(seg_id)
@@ -488,56 +464,8 @@ class BaseDeviceTransform(InfrahubTransform):
 
     def _load_template(self, platform_name: str) -> Template:
         """Load the Jinja2 template for the given platform."""
-        path = f"{self.root_directory}/templates/configs"
-        env = Environment(
-            loader=FileSystemLoader(path),
-            autoescape=False,
-            keep_trailing_newline=True,
+        return load_template(
+            f"{self.root_directory}/templates/configs",
+            f"{self.template_subdir}/{platform_name}.j2",
+            filters=jinja2_convenience_function(),
         )
-        env.filters.update(jinja2_convenience_function())
-        return env.get_template(f"{self.template_subdir}/{platform_name}.j2")
-
-
-__all__ = [
-    "BaseDeviceTransform",
-    "_get_sgt_rules",
-    "clean_data",
-    "get_acls",
-    "get_bgp_profile",
-    "get_border_leaf_pbr_rules",
-    "get_capabilities",
-    "get_customer_pbr_rules",
-    "get_data",
-    "get_firewall_contexts",
-    "get_firewall_static_routes",
-    "get_ha",
-    "get_firewall_zones",
-    "get_interfaces",
-    "get_lb_backend_pbr_rules",
-    "get_ospf",
-    "get_vlans",
-    "get_vrf_default_gateways",
-    "get_vxlan_config",
-    "get_zone_policies",
-    "place_policies_in_contexts",
-    # private helpers (imported by unit tests)
-    "_build_acl_rule",
-    "_build_peer_groups",
-    "_build_session_from_peering",
-    "_collect_l3_vni_from_namespaces",
-    "_flatten_deployment_firewall_contexts",
-    "_flatten_deployment_lb_vips",
-    "_flatten_deployment_segment_activations",
-    "_get_segment_gateways",
-    "_get_segment_namespace",
-    "_get_segment_prefix_str",
-    "_l2_from_activations",
-    "_l3_from_activations",
-    "_normalize_afs",
-    "_sort_key_ip",
-    "_transform_vxlan_arista",
-    "_transform_vxlan_nxos",
-    "_transform_vxlan_platform",
-    "_transform_vxlan_sonic",
-    "_vlans_from_activations",
-]
