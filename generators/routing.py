@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import secrets
+from collections.abc import Callable
+from contextlib import AbstractAsyncContextManager
 from typing import TYPE_CHECKING, Any
 
 from infrahub_sdk.exceptions import GraphQLError
@@ -100,7 +102,8 @@ class RoutingMixin:
 
     Expects the host class to provide: ``client``, ``logger``,
     ``deployment_id``, and ``fabric_name`` attributes (all present on
-    ``CommonGenerator`` via ``InfrahubGenerator``).
+    ``CommonGenerator`` via ``InfrahubGenerator``), and PoolMixin's
+    ``resource_lock``.
     """
 
     # Attribute declarations for the type checker — provided by CommonGenerator / InfrahubGenerator
@@ -109,6 +112,8 @@ class RoutingMixin:
     deployment_id: str
     fabric_name: str
     data: Any
+    # PoolMixin.resource_lock — a Callable attribute, not a stub, so it never shadows the real one.
+    resource_lock: Callable[[str], AbstractAsyncContextManager[None]]
 
     async def create_routing(
         self,
@@ -620,7 +625,16 @@ class RoutingMixin:
         The description is the idempotency key: from_pool on a new node would
         allocate a fresh ASN on every run. Returns None when no such AS exists
         and there is no pool to draw one from.
+
+        Serialized per description: add_dc and dc_pod_cascade (and sibling pod
+        runs) can reach this at the same moment, both find nothing, and both
+        draw an AS. The untracked twin then breaks the next run's
+        delete_unused_nodes, since a ManagedBGP still uses it as local_as.
         """
+        async with self.resource_lock(f"shared-as-{description}"):
+            return await self._ensure_shared_as_locked(description=description, asn_pool_id=asn_pool_id)
+
+    async def _ensure_shared_as_locked(self, *, description: str, asn_pool_id: str | None) -> str | None:
         existing = await self.client.filters(kind=RoutingAutonomousSystem, description__value=description)
         if existing:
             as_obj = existing[0]

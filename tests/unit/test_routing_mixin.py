@@ -8,6 +8,8 @@ Covers:
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -23,12 +25,20 @@ from generators.routing import RoutingMixin
 
 def _make_mixin(fabric_name: str = "dc1") -> Any:
     """Create a RoutingMixin typed as Any so ty allows mock attribute assignments."""
-    m = RoutingMixin.__new__(RoutingMixin)
+    m: Any = RoutingMixin.__new__(RoutingMixin)
     m.fabric_name = fabric_name
     m.deployment_id = "dc-id-1"
     m.logger = MagicMock()
     m.client = MagicMock()
     m.client.group_context.related_node_ids = []
+    m.lock_keys = []
+
+    @asynccontextmanager
+    async def _resource_lock(key: str) -> AsyncIterator[None]:
+        m.lock_keys.append(key)
+        yield
+
+    m.resource_lock = _resource_lock
     return m
 
 
@@ -151,6 +161,17 @@ class TestFindExistingOspfArea:
 
 
 class TestEnsureSharedAs:
+    @pytest.mark.asyncio
+    async def test_lookup_runs_under_a_per_description_lock(self) -> None:
+        """Two DC-level runs reaching this at once must not both draw an AS
+        (the untracked twin breaks the next run's delete_unused_nodes)."""
+        m = _make_mixin()
+        m.client.filters = AsyncMock(return_value=[_mock_as_obj()])
+
+        await m.ensure_shared_as(description="dc1 super-spine underlay ASN", asn_pool_id="pool-1")
+
+        assert m.lock_keys == ["shared-as-dc1 super-spine underlay ASN"]
+
     @pytest.mark.asyncio
     async def test_existing_as_reused_and_tracked(self) -> None:
         """An AS found by description is returned and tracked, never re-drawn."""

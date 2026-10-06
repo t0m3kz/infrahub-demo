@@ -22,6 +22,8 @@ def _make_generator(pod_name: str = "dc1-pod1") -> Any:
     gen.client = MagicMock()
     gen.client.group_context = MagicMock()
     gen.client.group_context.related_node_ids = []
+    setattr(gen, "acquire_resource_lock", AsyncMock(return_value="lock-id"))  # noqa: B010
+    setattr(gen, "release_resource_lock", AsyncMock())  # noqa: B010
     return gen
 
 

@@ -595,6 +595,8 @@ class TestCreateSharedRoutingObjects:
         gen.client.group_context.related_node_ids = []
         gen.fabric_name = "dc1"
         gen._ensure_routing_password = AsyncMock()
+        setattr(gen, "acquire_resource_lock", AsyncMock(return_value="lock-id"))  # noqa: B010
+        setattr(gen, "release_resource_lock", AsyncMock())  # noqa: B010
         return gen
 
     @pytest.mark.asyncio

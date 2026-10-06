@@ -88,6 +88,8 @@ def _make_generator() -> Any:
     gen.fabric_name = "fr"
     gen.pod_name = None
     gen.deployment_id = "metro-1"
+    setattr(gen, "acquire_resource_lock", AsyncMock(return_value="lock-id"))  # noqa: B010
+    setattr(gen, "release_resource_lock", AsyncMock())  # noqa: B010
     return gen
 
 
