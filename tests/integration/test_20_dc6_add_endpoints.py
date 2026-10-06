@@ -303,8 +303,9 @@ class TestDC6AddEndpoints(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Run add_app_component_segment over the component. No event rule
-        dispatches it (data/events has no action for it), so it is run by hand."""
+        """Run add_app_component_segment over the component. The AppComponent
+        created-trigger already dispatched it; running it again by hand and
+        asserting success makes the outcome this test checks deterministic."""
         logging.info("=== %s - Step 3c: Run add_app_component_segment ===", SCENARIO_NAME)
 
         component = await async_client_main.get(

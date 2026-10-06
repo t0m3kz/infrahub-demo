@@ -68,6 +68,15 @@ _DEFAULT_INTERNET_PROVIDER_ORG_ID = "P019"
 _TUNNEL_ID_POOL_NAME = "GLOBAL-SDWAN-TUNNEL-ID"
 
 
+def _target_group(name: str) -> dict[str, Any]:
+    """A circuit generator target group (data/bootstrap/00_groups.yml), by HFID.
+
+    Membership is what lets add_circuit/add_virtual_circuit run for the
+    circuits this generator creates, as for the hand-authored ones.
+    """
+    return {"hfid": [name], "kind": "CoreGeneratorGroup"}
+
+
 class SdwanEdgeGenerator(CommonGenerator):
     """add_sdwan_edge — per-office SD-WAN Edge, tunnel, and circuit provisioning."""
 
@@ -278,6 +287,7 @@ class SdwanEdgeGenerator(CommonGenerator):
                     # ["C001-P", "FR2"], the office's own computed name).
                     "locations": [{"id": office_id}, {"id": gateway_zone_id}],
                     "customer_interfaces": [{"id": edge_uplink_id}],
+                    "member_of_groups": [_target_group("physical_circuits")],
                 },
             )
             await circuit.save(allow_upsert=True)
@@ -326,6 +336,7 @@ class SdwanEdgeGenerator(CommonGenerator):
                     "locations": [{"id": office_id}, {"id": gateway_zone_id}],
                     "physical_circuits": [{"id": internet_circuit_id}],
                     "interface_capabilities": [{"id": edge_uplink_id}],
+                    "member_of_groups": [_target_group("virtual_circuits")],
                 },
             )
             await circuit.save(allow_upsert=True)

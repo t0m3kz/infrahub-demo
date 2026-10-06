@@ -15,8 +15,8 @@ asynchronously after the load that triggers them:
 
 - `03_dc/*/05_servers.yml` puts hosts in compute racks. `add_endpoint` then looks for the access-leaf pair
   in the same row, and those leafs only exist once `add_rack` has run.
-- `08_interconnects/01_colo_onramp/02_interfaces.yml` references border leafs by name (`bl-dc101101`).
-  `add_dc` creates them.
+- `08_interconnects/01_colo_onramp/03_physical_circuits.yml` lands the dark fibres on border leafs by name
+  (`bl-dc101101`). `add_dc` creates them, and `add_circuit` then builds each fibre's DCI session.
 - `07_applications` references VMs and customer footprints declared in `06_customer_boarding`.
 
 So `infrahubctl object load data/demos/30_all` in one go only works on an instance whose branch already has

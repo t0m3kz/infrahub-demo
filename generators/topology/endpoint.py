@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Literal, cast
 
+from infrahub_sdk.protocols import CoreGroup
 from netutils.interface import sort_interface_list
 from typing_extensions import TypedDict
 
@@ -28,8 +29,30 @@ from ..far_end import far_end_interface
 from ..helpers.cabling import cable_endpoint_device_names, pick_matched_switch_port_name
 from ..helpers.interface_naming import get_lag_name
 from ..pools import PoolMixin
-from ..protocols import DcimCable, DcimLAGInterface, DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
+from ..protocols import (
+    AppComponent,
+    DcimCable,
+    DcimLAGInterface,
+    DcimPhysicalDevice,
+    DcimPhysicalInterface,
+    DcimVirtualDevice,
+    LocationRack,
+    ManagedControllerVirtual,
+)
 from ..types import ConnectionFingerprint
+
+# Tags the switch ports a component's instances are cabled to with its segment
+# (generators/topology/app_instance_segment.py). A component usually exists
+# before its server is cabled, and its own triggers do not fire when cabling
+# lands later, so a run that cables this endpoint dispatches it for every
+# component instanced on the endpoint or on a VM it hosts.
+_COMPONENT_SEGMENT_GENERATOR = "add_app_component_segment"
+# That definition's `targets` in .infrahub.yml: only members are dispatched.
+_COMPONENT_SEGMENT_TARGETS = "app_components"
+# The endpoint NIC roles this generator cables: plain uplinks and bond members.
+_CABLED_NIC_ROLES = ("uplink", "lag")
+# Instance kinds placed on a physical host through hosting_device.
+_HOSTED_INSTANCE_KINDS = (DcimVirtualDevice, ManagedControllerVirtual)
 
 
 def _is_generated_uplink_cable(cable: Any, own_ends: set[str]) -> bool:
@@ -237,9 +260,12 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, PoolMixin, CablingMixin
             # The members stand in for the plain path's free uplinks: their
             # types narrow the switch-port search to ports of the same speed.
             self._free_interfaces = lag_nics
+            cabled_before = {nic.id for nic in lag_nics if nic.cable and nic.cable.id}
 
             async with self.resource_lock(cabling_lock_key):
                 await self._process_lag_endpoint_connections(members_by_bond, deployment_type)
+            if len(cabled_before) < len(lag_nics):
+                await self._fan_out_component_segments(cabled_before)
             return
 
         # Get all uplink interfaces from endpoint device (idempotency)
@@ -303,6 +329,54 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, PoolMixin, CablingMixin
             all_target_interfaces = await self._resolve_target_interfaces(deployment_type)
             if all_target_interfaces:
                 await self._process_endpoint_connections(all_target_interfaces)
+        if all_target_interfaces:
+            await self._fan_out_component_segments({intf.id for intf in already_cabled_interfaces})
+
+    async def _fan_out_component_segments(self, cabled_before: set[str]) -> None:
+        """Dispatch add_app_component_segment for the components on this endpoint
+        once this run has cabled at least one of its NICs.
+
+        `cabled_before` holds the ids of the NICs that already had a cable when
+        the run started. Only a NIC cabled by this run counts, so a rerun that
+        finds everything wired (or could not wire anything) dispatches nothing.
+        The components are those whose instances include this endpoint or a VM
+        it hosts, limited to members of the definition's target group. Fired
+        without waiting: each run takes its segment's lock itself.
+        """
+        endpoint_id = self.data["id"]
+        nics = await self.client.filters(
+            kind=DcimPhysicalInterface,
+            device__ids=[endpoint_id],
+            role__values=list(_CABLED_NIC_ROLES),
+            include=["cable"],
+        )
+        if not {nic.id for nic in nics if nic.cable and nic.cable.id} - cabled_before:
+            return
+
+        hosted = await asyncio.gather(
+            *(self.client.filters(kind=kind, hosting_device__ids=[endpoint_id]) for kind in _HOSTED_INSTANCE_KINDS)
+        )
+        instance_ids = [endpoint_id, *(instance.id for instances in hosted for instance in instances)]
+        components = await self.client.filters(
+            kind=AppComponent, instances__ids=instance_ids, include=["member_of_groups"]
+        )
+        if not components:
+            return
+
+        target_group = await self.client.get(kind=CoreGroup, name__value=_COMPONENT_SEGMENT_TARGETS)
+        component_ids = sorted(
+            {
+                component.id
+                for component in components
+                if target_group.id in {group.id for group in component.member_of_groups.peers}
+            }
+        )
+        if len(component_ids) < len(components):
+            self.logger.warning(
+                f"Endpoint {self.data['name']}: {len(components) - len(component_ids)} component(s) on it are not "
+                f"in {_COMPONENT_SEGMENT_TARGETS}, so {_COMPONENT_SEGMENT_GENERATOR} cannot run for them"
+            )
+        await self.run_generator(_COMPONENT_SEGMENT_GENERATOR, component_ids, wait=False)
 
     async def _resolve_target_interfaces(self, deployment_type: str) -> list[DcimPhysicalInterface]:
         """Resolve the target switch interfaces for this endpoint's deployment type.

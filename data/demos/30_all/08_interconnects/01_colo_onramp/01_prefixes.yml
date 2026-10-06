@@ -1,27 +1,21 @@
 ---
-# Addressing for the DC <-> cage dark fibre and the EVPN Multi-Site VIPs,
-# consumed by 02_interfaces.yml and 04_multisite_vips.yml.
+# Addressing for the EVPN Multi-Site VIPs, consumed by 04_multisite_vips.yml.
 #
 # IPv6, not IPv4: every DC fabric here runs an IPv6 underlay (DC10/11/12
 # `underlay_protocol: ipv6`), and an EVPN Multi-Site tunnel only forms between
 # border gateways whose VTEPs share one address family. The DCI therefore
 # follows the fabrics rather than the other way round.
+#
+# The dark fibre point-to-points are not here: add_circuit allocates them from
+# the DCI-Technical-IPv6 pool (data/bootstrap/20_dci_pools.yml) for every
+# circuit with peering_role dci (03_physical_circuits.yml).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: IpamPrefix
   data:
     - prefix: "fd00:2500::/48"
-      description: "DC <-> colocation DCI (dark fibre P2P + Multi-Site VIPs)"
-      status: active
-    - prefix: "fd00:2500::/127"
-      description: "eg-fr01 <-> bl-dc101101 (DC10) point-to-point"
-      status: active
-    - prefix: "fd00:2500::2/127"
-      description: "eg-fr01 <-> bl-dc1111101 (DC11) point-to-point"
-      status: active
-    - prefix: "fd00:2500::4/127"
-      description: "eg-pa01 <-> bl-dc1212101 (DC12) point-to-point"
+      description: "DC <-> colocation DCI (Multi-Site VIPs)"
       status: active
     - prefix: "fd00:2500:ff::/64"
       description: "EVPN Multi-Site border-gateway VIPs, one /128 per site"

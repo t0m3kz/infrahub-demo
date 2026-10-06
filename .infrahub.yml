@@ -794,7 +794,6 @@ generator_definitions:
       files:
         - generators/
         - utils/
-        - utils/
   - name: add_mlag
     file_path: generators/topology/mlag.py
     targets: mlag_domains
@@ -949,9 +948,54 @@ generator_definitions:
       files:
         - generators/
         - utils/
-  - name: add_customer_deployment_orchestrator_routing
+  # One definition per customer deployment kind, each targeting the kind's
+  # own CoreGeneratorGroup: every footprint is already a member of that group
+  # (the per-kind created-triggers require it), while the shared
+  # customer_deployments group has no members, so a definition targeting it
+  # never dispatched. Same class and query; the query reads all four kinds by
+  # name and the footprint's computed name is unique across them.
+  - name: add_customer_dc_orchestrator_routing
     file_path: generators/topology/orchestrator_routing.py
-    targets: customer_deployments
+    targets: customer_deployments_dc
+    query: customer_deployment_orchestrator_routing
+    class_name: TopologyOrchestratorRoutingGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
+  - name: add_customer_colocation_orchestrator_routing
+    file_path: generators/topology/orchestrator_routing.py
+    targets: customer_deployments_colocation
+    query: customer_deployment_orchestrator_routing
+    class_name: TopologyOrchestratorRoutingGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
+  - name: add_customer_cloud_orchestrator_routing
+    file_path: generators/topology/orchestrator_routing.py
+    targets: customer_deployments_cloud
+    query: customer_deployment_orchestrator_routing
+    class_name: TopologyOrchestratorRoutingGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
+  - name: add_customer_office_orchestrator_routing
+    file_path: generators/topology/orchestrator_routing.py
+    targets: customer_deployments_office
     query: customer_deployment_orchestrator_routing
     class_name: TopologyOrchestratorRoutingGenerator
     execute_in_proposed_change: false

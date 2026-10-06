@@ -20,6 +20,7 @@ from infrahub_sdk.exceptions import NodeNotFoundError
 
 from generators.decommission.pod import PodDecommissionGenerator
 from generators.devices import DeviceMixin, standalone_vlan_domain_name
+from generators.logger import GeneratorError
 from generators.mlag import MLAGWiringMixin
 from generators.pools import PoolMixin
 from generators.protocols import (
@@ -38,6 +39,7 @@ from generators.protocols import (
 from generators.routing import RoutingMixin
 from generators.topology.orchestrator_routing import ApplicationOrchestratorRoutingGenerator
 from generators.topology.pod import PodTopologyGenerator
+from tests.unit.simulators import circuit_fakes
 
 UNTRACKED_UPSERT = {"allow_upsert": True, "update_group_context": False}
 
@@ -759,3 +761,82 @@ class TestPodDecommission:
         await gen.generate(payload)
 
         assert gen.filter_calls == []
+
+
+# ---------------------------------------------------------------------------
+# Circuit generators: a circuit owns its session, never the ports or the key
+# ---------------------------------------------------------------------------
+
+
+class TestCircuitOwnership:
+    """add_circuit / add_virtual_circuit (generators/topology/circuit.py).
+
+    A circuit run owns what exists only because of that circuit; the template
+    interfaces, devices, BGP processes, fabric key and global address
+    families belong to other runs or to data.
+    """
+
+    @staticmethod
+    def _claimed(client: Any) -> set[str]:
+        """Every node the run's tracking group gets: tracked saves plus appended ids."""
+        tracked_saves = {
+            label
+            for action, label, kwargs in client.writes
+            if action == "save" and kwargs.get("update_group_context") is not False
+        }
+        return tracked_saves | set(client.group_context.related_node_ids)
+
+    @pytest.mark.asyncio
+    async def test_dci_run_claims_prefix_addresses_and_peering_only(self) -> None:
+        client = circuit_fakes.FakeClient(address_families=False)
+
+        await circuit_fakes.physical_generator(client).generate(circuit_fakes.physical_payload())
+
+        assert self._claimed(client) == {
+            circuit_fakes.PREFIX_ID,
+            "IpamIPAddress:fd00:2200::/127",
+            "IpamIPAddress:fd00:2200::1/127",
+            "ManagedBGPPeering:DCI-DF-DC10-EQXFR2",
+        }
+
+    @pytest.mark.asyncio
+    async def test_dci_run_writes_shared_nodes_untracked(self) -> None:
+        """Template interfaces and created address families: written, never claimed."""
+        client = circuit_fakes.FakeClient(address_families=False)
+
+        await circuit_fakes.physical_generator(client).generate(circuit_fakes.physical_payload())
+
+        saves = client.saves()
+        for label in ("if-eg", "if-bl", "RoutingBGPAddressFamily:ipv6", "RoutingBGPAddressFamily:l2vpn"):
+            assert saves[label].get("update_group_context") is False, label
+
+    @pytest.mark.asyncio
+    async def test_dci_run_never_writes_devices_processes_or_key(self) -> None:
+        client = circuit_fakes.FakeClient()
+
+        await circuit_fakes.physical_generator(client).generate(circuit_fakes.physical_payload())
+
+        written = {label for _, label, _ in client.writes}
+        assert circuit_fakes.DC_KEY_ID not in written
+        assert not any(label.startswith(("dev-", "bl-dc101101-bgp", "eg-fr01-bgp")) for label in written)
+        assert {name for name, _, _ in client.created} == {"IpamIPAddress", "ManagedBGPPeering"}
+
+    @pytest.mark.asyncio
+    async def test_refused_dci_run_claims_nothing(self) -> None:
+        """A missing key fails before the first write, so cleanup has nothing new to diff against."""
+        client = circuit_fakes.FakeClient(key=False)
+
+        with pytest.raises(GeneratorError):
+            await circuit_fakes.physical_generator(client).generate(circuit_fakes.physical_payload())
+
+        assert client.writes == []
+
+    @pytest.mark.asyncio
+    async def test_overlay_run_claims_its_peering_only(self) -> None:
+        """The tunnel ports carry several virtual circuits: never written by one."""
+        client = circuit_fakes.FakeClient()
+
+        await circuit_fakes.virtual_generator(client).generate(circuit_fakes.virtual_payload())
+
+        assert self._claimed(client) == {"ManagedBGPPeering:C001-SDWAN-FR2-bgp"}
+        assert [action for action, _, _ in client.writes] == ["save"]

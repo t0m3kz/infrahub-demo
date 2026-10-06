@@ -957,6 +957,7 @@ class TopologyPhysicalCircuit(TopologyCircuit, ManagedGeneric):
     committed_rate: IntegerOptional
     contract_end_date: StringOptional
     install_date: StringOptional
+    peering_role: DropdownOptional
     customer_interfaces: RelationshipManager[DcimInterface]
     provider_interfaces: RelationshipManager[DcimInterface]
 
@@ -1359,6 +1360,7 @@ class TopologyVirtualCircuit(TopologyCircuit, ManagedGeneric, ManagedGenericInte
     cloud_resource_id: StringOptional
     encryption: Boolean
     link_type: Dropdown
+    peering_role: DropdownOptional
     transport_mode: DropdownOptional
     tunnel_id: IntegerOptional
     vni: IntegerOptional

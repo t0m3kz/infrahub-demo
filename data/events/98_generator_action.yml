@@ -44,6 +44,30 @@ spec:
     - name: run-app-component-generator
       description: Re-derive the security policy rules into a component that moved segment or changed ports
       generator: add_app_component
+    - name: run-app-component-segment-generator
+      description: Tag the switch ports a component's instances are cabled to with its segment, reconcile VLAN domains
+      generator: add_app_component_segment
+    - name: run-application-orchestrator-routing-generator
+      description: Sync an application into the routing group of its application_orchestrator
+      generator: add_application_orchestrator_routing
+    - name: run-customer-dc-orchestrator-routing-generator
+      description: Sync a DC customer deployment into the routing group of its infrastructure_orchestrator
+      generator: add_customer_dc_orchestrator_routing
+    - name: run-customer-colocation-orchestrator-routing-generator
+      description: Sync a colocation customer deployment into the routing group of its infrastructure_orchestrator
+      generator: add_customer_colocation_orchestrator_routing
+    - name: run-customer-cloud-orchestrator-routing-generator
+      description: Sync a cloud customer deployment into the routing group of its infrastructure_orchestrator
+      generator: add_customer_cloud_orchestrator_routing
+    - name: run-customer-office-orchestrator-routing-generator
+      description: Sync an office customer deployment into the routing group of its infrastructure_orchestrator
+      generator: add_customer_office_orchestrator_routing
+    - name: run-circuit-generator
+      description: Validate a physical circuit and its customer/provider interfaces
+      generator: add_circuit
+    - name: run-virtual-circuit-generator
+      description: Validate and register a virtual circuit and its endpoint interfaces
+      generator: add_virtual_circuit
     - name: run-endpoint-generator
       description: Run Endpoint Connectivity Generator
       generator: add_endpoint

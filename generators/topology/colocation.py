@@ -547,12 +547,14 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
           admin field of its local route-targets, same role as a DC's fabric AS
           (generators/routing.py's _attach_evpn_rt_as);
         * an overlay ManagedBGP per edge in that ASN, so the DCI peerings
-          (data-driven, peering_role=dci) have a process to attach to;
+          (add_circuit, for a circuit with peering_role=dci) have a process
+          to attach to;
         * an IPv6 VTEP loopback per edge (see _COLO_LOOPBACK_IPV6_PREFIX_LENGTH).
 
-        The DCI sessions themselves and the shared Multi-Site VIP stay in data
-        (data/demos/30_all/08_interconnects/01_colo_onramp/): both need the DC
-        end of the dark fibre, which this generator cannot see.
+        The DCI sessions (add_circuit, generators/topology/circuit.py) and the
+        shared Multi-Site VIP (data/demos/30_all/08_interconnects/
+        01_colo_onramp/) are not built here: both need the DC end of the dark
+        fibre, which this generator cannot see.
 
         Idempotent: the AS is found by its deterministic description before a
         new one is drawn from the pool (a from_pool on a new node would allocate

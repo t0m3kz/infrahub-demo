@@ -16,6 +16,7 @@ spec:
   kind: TopologyVirtualCircuit
   data:
     - name: "C001-SDWAN-FR2"
+      member_of_groups: [virtual_circuits]
       link_type: sd_wan
       transport_mode: internet_backed
       status: active
@@ -35,6 +36,7 @@ spec:
         - ["EQX-FR2-SDWAN-GW1", "eth0.1001"]
 
     - name: "C003-SDWAN-FR2"
+      member_of_groups: [virtual_circuits]
       link_type: sd_wan
       transport_mode: internet_backed
       status: active
@@ -54,6 +56,7 @@ spec:
         - ["EQX-FR2-SDWAN-GW1", "eth0.1003"]
 
     - name: "C015-SDWAN-FR2"
+      member_of_groups: [virtual_circuits]
       link_type: sd_wan
       transport_mode: internet_backed
       status: active
@@ -77,6 +80,7 @@ spec:
     # sub-interfaces) and on the cage router's fabric port, so every tenant tunnel
     # depends on it transitively while no tenant owns it.
     - name: "VC-SDWAN-FR2-AWS-EUC1"
+      member_of_groups: [virtual_circuits]
       link_type: direct_connect_aws
       transport_mode: physical_backed
       status: active

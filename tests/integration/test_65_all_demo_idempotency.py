@@ -52,7 +52,10 @@ RERUN_GENERATORS = {
     "add_customer_deployment_dc": "customer_deployments_dc",
     "add_customer_deployment_colocation": "customer_deployments_colocation",
     "add_application_orchestrator_routing": "app_applications",
-    "add_customer_deployment_orchestrator_routing": "customer_deployments",
+    "add_customer_dc_orchestrator_routing": "customer_deployments_dc",
+    "add_customer_colocation_orchestrator_routing": "customer_deployments_colocation",
+    "add_customer_cloud_orchestrator_routing": "customer_deployments_cloud",
+    "add_customer_office_orchestrator_routing": "customer_deployments_office",
 }
 # These must have targets in 30_all; the others are skipped when their group is empty.
 REQUIRED_RERUN_GENERATORS = {
@@ -65,10 +68,18 @@ REQUIRED_RERUN_GENERATORS = {
 
 # Generators that dispatch others without waiting (dc_pod_cascade ->
 # pod_rack_cascade -> add_rack -> row-dependent add_rack; add_app_dependency
-# and add_app_component -> add_app_application). The queue can go quiet
-# between waves, so their reruns wait for a longer quiet spell before the
-# next generator starts.
-FAN_OUT_GENERATORS = {"dc_pod_cascade", "pod_rack_cascade", "add_rack", "add_app_dependency", "add_app_component"}
+# and add_app_component -> add_app_application; add_circuit ->
+# add_virtual_circuit for the overlay circuits riding it). The queue can go
+# quiet between waves, so their reruns wait for a longer quiet spell before
+# the next generator starts.
+FAN_OUT_GENERATORS = {
+    "dc_pod_cascade",
+    "pod_rack_cascade",
+    "add_rack",
+    "add_app_dependency",
+    "add_app_component",
+    "add_circuit",
+}
 FAN_OUT_STABLE_ZERO = 10
 
 GROUP_MEMBERS_QUERY = """

@@ -28,6 +28,7 @@ spec:
   kind: TopologyVirtualCircuit
   data:
     - name: "C001-SDWAN-HUB"
+      member_of_groups: [virtual_circuits]
       link_type: sd_wan
       transport_mode: internet_backed
       status: active
@@ -60,6 +61,7 @@ spec:
       physical_circuits:
         - "INET-C001-WAW-HUB"
     - name: "C002-SDWAN-HUB"
+      member_of_groups: [virtual_circuits]
       link_type: sd_wan
       transport_mode: internet_backed
       status: active

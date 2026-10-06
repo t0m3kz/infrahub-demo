@@ -16,6 +16,7 @@ spec:
   kind: TopologyPhysicalCircuit
   data:
     - circuit_id: "INET-C001-WAW-FR2"
+      member_of_groups: [physical_circuits]
       name: "INET-C001-WAW-FR2"
       circuit_type: internet
       status: active
@@ -30,6 +31,7 @@ spec:
         - ["C001-EDGE1", "GE1"]
 
     - circuit_id: "INET-C003-MUC-FR2"
+      member_of_groups: [physical_circuits]
       name: "INET-C003-MUC-FR2"
       circuit_type: internet
       status: active
@@ -44,6 +46,7 @@ spec:
         - ["C003-EDGE1", "GE1"]
 
     - circuit_id: "INET-C015-PAR-FR2"
+      member_of_groups: [physical_circuits]
       name: "INET-C015-PAR-FR2"
       circuit_type: internet
       status: active

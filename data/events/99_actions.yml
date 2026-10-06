@@ -375,6 +375,146 @@ spec:
           - attribute_name: ports
             value_match: any
 
+    # ── App Component Segment Tagging ─────────────────────────────────────────
+    # add_app_component_segment tags the switch ports a component's instances
+    # are cabled to with its network_segment and reconciles that segment's
+    # VLAN domain activations (generators/topology/app_instance_segment.py).
+    # It shares app_components with add_app_component but is a second
+    # concern, so the network_segment change dispatches both generators.
+    # `created` covers a component loaded with instances/network_segment
+    # inline (nested under its AppApplication). A component usually exists
+    # before its servers are cabled; add_endpoint fans this generator out to
+    # the components on an endpoint once it cables it, which closes that gap.
+    # The generator writes interface tags and VLAN domain segments, never the
+    # component itself, so neither rule can re-fire itself.
+    - name: trigger-app-component-segment-on-created
+      branch_scope: "other_branches"
+      node_kind: AppComponent
+      mutation_action: "created"
+      action: run-app-component-segment-generator
+
+    - name: trigger-app-component-segment-on-instances-updated
+      branch_scope: "other_branches"
+      node_kind: AppComponent
+      mutation_action: "updated"
+      action: run-app-component-segment-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: instances
+            modification_type: updated
+
+    - name: trigger-app-component-segment-on-segment-updated
+      branch_scope: "other_branches"
+      node_kind: AppComponent
+      mutation_action: "updated"
+      action: run-app-component-segment-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: network_segment
+            modification_type: updated
+
+    # ── Orchestrator Routing Groups ───────────────────────────────────────────
+    # generators/topology/orchestrator_routing.py moves a node into the
+    # routing group (application_*/topology_*) named by its orchestrator
+    # dropdown. It writes only member_of_groups, never the dropdown, so the
+    # attribute-matched `updated` rules cannot re-fire themselves.
+    #
+    # Customer deployments: one generator definition per kind, each targeting
+    # that kind's CoreGeneratorGroup (customer_deployments_dc/colocation/
+    # cloud/office). Every footprint in the demo data already joins its
+    # per-kind group (the add_customer_deployment_* and add_sdwan_edge
+    # created-triggers require it), whereas the shared customer_deployments
+    # group has no members, so a rule dispatching into it would raise for
+    # every node (see the endpoint note above).
+    # TopologyCustomerSaas carries infrastructure_orchestrator too but has no
+    # target group and is not a query root of TopologyOrchestratorRoutingGenerator.
+    - name: trigger-application-orchestrator-routing-on-created
+      branch_scope: "other_branches"
+      node_kind: AppApplication
+      mutation_action: "created"
+      action: run-application-orchestrator-routing-generator
+
+    - name: trigger-application-orchestrator-routing-on-orchestrator-updated
+      branch_scope: "other_branches"
+      node_kind: AppApplication
+      mutation_action: "updated"
+      action: run-application-orchestrator-routing-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: application_orchestrator
+            value_match: any
+
+    - name: trigger-customer-dc-orchestrator-routing-on-created
+      branch_scope: "other_branches"
+      node_kind: TopologyCustomerDC
+      mutation_action: "created"
+      action: run-customer-dc-orchestrator-routing-generator
+
+    - name: trigger-customer-dc-orchestrator-routing-on-orchestrator-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyCustomerDC
+      mutation_action: "updated"
+      action: run-customer-dc-orchestrator-routing-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: infrastructure_orchestrator
+            value_match: any
+
+    - name: trigger-customer-colocation-orchestrator-routing-on-created
+      branch_scope: "other_branches"
+      node_kind: TopologyCustomerColocation
+      mutation_action: "created"
+      action: run-customer-colocation-orchestrator-routing-generator
+
+    - name: trigger-customer-colocation-orchestrator-routing-on-orchestrator-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyCustomerColocation
+      mutation_action: "updated"
+      action: run-customer-colocation-orchestrator-routing-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: infrastructure_orchestrator
+            value_match: any
+
+    - name: trigger-customer-cloud-orchestrator-routing-on-created
+      branch_scope: "other_branches"
+      node_kind: TopologyCustomerCloud
+      mutation_action: "created"
+      action: run-customer-cloud-orchestrator-routing-generator
+
+    - name: trigger-customer-cloud-orchestrator-routing-on-orchestrator-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyCustomerCloud
+      mutation_action: "updated"
+      action: run-customer-cloud-orchestrator-routing-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: infrastructure_orchestrator
+            value_match: any
+
+    - name: trigger-customer-office-orchestrator-routing-on-created
+      branch_scope: "other_branches"
+      node_kind: TopologyCustomerOffice
+      mutation_action: "created"
+      action: run-customer-office-orchestrator-routing-generator
+
+    - name: trigger-customer-office-orchestrator-routing-on-orchestrator-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyCustomerOffice
+      mutation_action: "updated"
+      action: run-customer-office-orchestrator-routing-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: infrastructure_orchestrator
+            value_match: any
+
     # ── Customer Deployment (FirewallContext/dedicated LB) ────────────────────
     # Same generator/query shape for both deployment kinds that still have
     # on-site fabric to provision a FirewallContext on (see
@@ -461,3 +601,134 @@ spec:
         data:
           - relationship_name: sdwan_gateway
             modification_type: updated
+
+    # ── Circuits ──────────────────────────────────────────────────────────────
+    # add_circuit/add_virtual_circuit target physical_circuits/virtual_circuits,
+    # so every circuit — loaded or generator-created (add_sdwan_edge creates
+    # both kinds) — must be a member, or its created-trigger raises (see the
+    # endpoint note above). The `updated` rules watch only what defines a
+    # circuit's ends and role. tunnel_id is deliberately absent: add_sdwan_edge
+    # writes it back onto the overlay circuit, so watching it would re-fire.
+    - name: trigger-circuit-on-created
+      branch_scope: "other_branches"
+      node_kind: TopologyPhysicalCircuit
+      mutation_action: "created"
+      action: run-circuit-generator
+
+    - name: trigger-circuit-on-customer-interfaces-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyPhysicalCircuit
+      mutation_action: "updated"
+      action: run-circuit-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: customer_interfaces
+            modification_type: updated
+
+    - name: trigger-circuit-on-provider-interfaces-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyPhysicalCircuit
+      mutation_action: "updated"
+      action: run-circuit-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: provider_interfaces
+            modification_type: updated
+
+    - name: trigger-circuit-on-status-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyPhysicalCircuit
+      mutation_action: "updated"
+      action: run-circuit-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: status
+            value_match: any
+
+    - name: trigger-circuit-on-circuit-type-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyPhysicalCircuit
+      mutation_action: "updated"
+      action: run-circuit-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: circuit_type
+            value_match: any
+
+    - name: trigger-circuit-on-peering-role-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyPhysicalCircuit
+      mutation_action: "updated"
+      action: run-circuit-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: peering_role
+            value_match: any
+
+    - name: trigger-virtual-circuit-on-created
+      branch_scope: "other_branches"
+      node_kind: TopologyVirtualCircuit
+      mutation_action: "created"
+      action: run-virtual-circuit-generator
+
+    - name: trigger-virtual-circuit-on-interfaces-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyVirtualCircuit
+      mutation_action: "updated"
+      action: run-virtual-circuit-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: interface_capabilities
+            modification_type: updated
+
+    - name: trigger-virtual-circuit-on-physical-circuits-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyVirtualCircuit
+      mutation_action: "updated"
+      action: run-virtual-circuit-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: physical_circuits
+            modification_type: updated
+
+    - name: trigger-virtual-circuit-on-link-type-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyVirtualCircuit
+      mutation_action: "updated"
+      action: run-virtual-circuit-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: link_type
+            value_match: any
+
+    - name: trigger-virtual-circuit-on-peering-role-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyVirtualCircuit
+      mutation_action: "updated"
+      action: run-virtual-circuit-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: peering_role
+            value_match: any
+
+    # The overlay session is active only while the circuit is; no generator
+    # writes a virtual circuit's status, so this cannot re-fire itself.
+    - name: trigger-virtual-circuit-on-status-updated
+      branch_scope: "other_branches"
+      node_kind: TopologyVirtualCircuit
+      mutation_action: "updated"
+      action: run-virtual-circuit-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: status
+            value_match: any

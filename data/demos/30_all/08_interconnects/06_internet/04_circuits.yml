@@ -9,6 +9,7 @@ spec:
   kind: TopologyPhysicalCircuit
   data:
     - circuit_id: "INET-LUMEN-EQXFR2"
+      member_of_groups: [physical_circuits]
       name: "INET-LUMEN-EQXFR2"
       circuit_type: internet
       status: active
@@ -24,6 +25,7 @@ spec:
         - ["EXT-LUMEN-FRA1", "et-0/0/0"]
 
     - circuit_id: "INET-COGENT-EQXFR2"
+      member_of_groups: [physical_circuits]
       name: "INET-COGENT-EQXFR2"
       circuit_type: internet
       status: active
@@ -39,6 +41,7 @@ spec:
         - ["EXT-COGENT-FRA1", "et-0/0/0"]
 
     - circuit_id: "INET-LUMEN-EQXPA4"
+      member_of_groups: [physical_circuits]
       name: "INET-LUMEN-EQXPA4"
       circuit_type: internet
       status: active
@@ -54,6 +57,7 @@ spec:
         - ["EXT-LUMEN-PAR1", "et-0/0/0"]
 
     - circuit_id: "INET-COGENT-EQXPA4"
+      member_of_groups: [physical_circuits]
       name: "INET-COGENT-EQXPA4"
       circuit_type: internet
       status: active

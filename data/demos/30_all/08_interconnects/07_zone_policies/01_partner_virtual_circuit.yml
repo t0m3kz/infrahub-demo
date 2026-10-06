@@ -25,6 +25,7 @@ spec:
   kind: TopologyVirtualCircuit
   data:
     - name: "C001-PARTNER-ACME-FR2"
+      member_of_groups: [virtual_circuits]
       link_type: vpn_ipsec
       transport_mode: internet_backed
       status: active

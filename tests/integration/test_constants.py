@@ -103,6 +103,18 @@ ALL_DEMO_EXPECTED_GENERATORS: dict[str, int] = {
     # trigger when 08_interconnects/04_sdwan/01_gateway.yml sets their
     # sdwan_gateway; 5 is the safe floor.
     "add_sdwan_edge": 5,
+    # Same AppApplication created event as add_app_application.
+    "add_application_orchestrator_routing": 9,
+    # One created-trigger run per declared AppComponent; add_endpoint's
+    # fan-out only adds runs (components load after their servers are cabled,
+    # so in 30_all it finds none).
+    "add_app_component_segment": 22,
+    # One created-trigger run per footprint kind, same floors as the
+    # per-kind generators above (cloud/office: ALL_DEMO_EXPECTED_OBJECTS).
+    "add_customer_dc_orchestrator_routing": 9,
+    "add_customer_colocation_orchestrator_routing": 7,
+    "add_customer_cloud_orchestrator_routing": 4,
+    "add_customer_office_orchestrator_routing": 5,
 }
 
 # Declared-object inventory of data/demos/30_all, measured from the YAML.
@@ -242,6 +254,16 @@ ALL_DEMO_PHYSICAL_CIRCUIT_TYPES: dict[str, int] = {
     # 5 office underlays (C001/C003/C015 hand-authored + C002/C005 from
     # add_sdwan_edge) + 4 shared transit circuits from 06_internet.
     "internet": 9,
+}
+
+# The peering_role=dci dark fibres (08_interconnects/01_colo_onramp/
+# 03_physical_circuits.yml): circuit_id -> (DC whose fabric overlay key keys
+# the session, the two (device, interface) ends). add_circuit builds one
+# DCI-<circuit_id> session per entry.
+ALL_DEMO_DCI_CIRCUITS: dict[str, tuple[str, tuple[tuple[str, str], tuple[str, str]]]] = {
+    "DF-DC10-EQXFR2": ("DC10", (("bl-dc101101", "Ethernet1/35"), ("eg-fr01", "Ethernet1/10"))),
+    "DF-DC11-EQXFR2": ("DC11", (("bl-dc1111101", "Ethernet1/35"), ("eg-fr01", "Ethernet1/11"))),
+    "DF-DC12-EQXPA4": ("DC12", (("bl-dc1212101", "Ethernet1/35"), ("eg-pa01", "Ethernet1/10"))),
 }
 
 # Shared ISP transit (08_interconnects/06_internet): colo edges -> ISP PEs.

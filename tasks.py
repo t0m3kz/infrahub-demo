@@ -411,8 +411,10 @@ ALL_DEMO_BRANCH = "all-demo-scenario"
 #     add_endpoint finding the access-leaf pair in the network rack sharing
 #     the host's row. Those access-leafs are created by add_rack, which is
 #     dispatched asynchronously by the *same* load that declared the rack.
-#   - 08_interconnects/01_colo_onramp/02_interfaces.yml hard-references border
-#     leaves by name ("bl-dc101101"), which add_dc creates.
+#   - 08_interconnects/01_colo_onramp/03_physical_circuits.yml lands its dark
+#     fibres on border leaves by name ("bl-dc101101"), which add_dc creates, and
+#     add_circuit builds their DCI sessions on the overlay BGP processes add_dc
+#     and add_colocation_metro create.
 #   - 07_applications references the VMs and customer deployments declared in
 #     06_customer_boarding.
 #
@@ -478,7 +480,9 @@ ALL_DEMO_LOAD_STAGES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ),
     (
         # Colo on-ramp, cloud hub, virtual circuits, SD-WAN, cloud endpoints.
-        # Pure data — every generator it needs has already run.
+        # Data plus the circuit generators it dispatches (add_circuit builds
+        # the dark fibres' DCI sessions) — every generator those need has
+        # already run.
         "interconnects",
         ("08_interconnects",),
     ),

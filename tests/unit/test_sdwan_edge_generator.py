@@ -202,6 +202,20 @@ class TestGenerateHappyPath:
         ]
 
     @pytest.mark.asyncio
+    async def test_circuits_join_their_generator_target_groups(self) -> None:
+        """The created circuits join physical_circuits/virtual_circuits, so
+        add_circuit/add_virtual_circuit run for them like for data circuits."""
+        gen = self._wire_full_success()
+
+        await gen.generate(_office_payload())
+
+        circuit_calls = gen.client.create.call_args_list[1:3]
+        assert [call.kwargs["data"]["member_of_groups"] for call in circuit_calls] == [
+            [{"hfid": ["physical_circuits"], "kind": "CoreGeneratorGroup"}],
+            [{"hfid": ["virtual_circuits"], "kind": "CoreGeneratorGroup"}],
+        ]
+
+    @pytest.mark.asyncio
     async def test_new_edge_sends_object_template(self) -> None:
         gen = self._wire_full_success()
 

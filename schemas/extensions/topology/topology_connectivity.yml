@@ -140,6 +140,35 @@ nodes:
             description: "DWDM wavelength service"
             color: "#1abc9c"
 
+      # Set explicitly, never derived from circuit_type: the same dark fibre
+      # can be a DCI or a plain underlay hop. add_circuit (generators/topology/
+      # circuit.py) builds the BGP session for `dci`; `underlay` and `transit`
+      # are accepted but not generated yet.
+      - name: peering_role
+        kind: Dropdown
+        label: "Peering Role"
+        description: "BGP session add_circuit builds over this circuit's two endpoints (none = no session)"
+        optional: true
+        default_value: none
+        order_weight: 350
+        choices:
+          - name: none
+            label: "None"
+            description: "No generated BGP session"
+            color: "#bfbfbf"
+          - name: underlay
+            label: "Underlay"
+            description: "Directly connected underlay session (not generated yet)"
+            color: "#74b9ff"
+          - name: dci
+            label: "DCI"
+            description: "EVPN Multi-Site DCI session between the border gateways at each end, on a P2P from the DCI pool"  # yamllint disable-line rule:line-length
+            color: "#a29bfe"
+          - name: transit
+            label: "Transit"
+            description: "IP transit session to the provider (not generated yet)"
+            color: "#fdcb6e"
+
       - name: committed_rate
         kind: Number
         label: "CIR (Mbps)"
@@ -262,6 +291,26 @@ nodes:
             label: "Console Connect"
             description: "PCCW Console Connect"
             color: "#ff6600"
+
+      # Set explicitly, never derived from link_type. add_virtual_circuit
+      # (generators/topology/circuit.py) builds the eBGP session for `overlay`
+      # on a tunnel link type, over the endpoints' existing addresses.
+      - name: peering_role
+        kind: Dropdown
+        label: "Peering Role"
+        description: "BGP session add_virtual_circuit builds over this circuit's two endpoints (none = no session)"
+        optional: true
+        default_value: none
+        order_weight: 350
+        choices:
+          - name: none
+            label: "None"
+            description: "No generated BGP session"
+            color: "#bfbfbf"
+          - name: overlay
+            label: "Overlay"
+            description: "eBGP session across the tunnel, between the two endpoint devices"
+            color: "#fd79a8"
 
       - name: encryption
         kind: Boolean

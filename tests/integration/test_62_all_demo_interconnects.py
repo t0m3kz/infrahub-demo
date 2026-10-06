@@ -23,6 +23,7 @@ stretch segment must carry one leg per DC.
 Runs against the branch test_59 builds; it never loads data of its own.
 """
 
+import ipaddress
 import logging
 
 import pytest
@@ -33,6 +34,7 @@ from .test_constants import (
     ALL_DEMO_BRANCH,
     ALL_DEMO_COLOCATION_SERVED,
     ALL_DEMO_DC_NAMES,
+    ALL_DEMO_DCI_CIRCUITS,
     ALL_DEMO_DEDICATED_FIREWALL_TENANTS,
     ALL_DEMO_INTERNET_TRANSIT_CIRCUITS,
     ALL_DEMO_PHYSICAL_CIRCUIT_TYPES,
@@ -81,6 +83,36 @@ query {
   }
 }
 """
+
+# The DCI sessions add_circuit builds for the peering_role=dci dark fibres.
+DCI_SESSIONS_QUERY = """
+query ($names: [String]) {
+  ManagedBGPPeering(name__values: $names) {
+    edges {
+      node {
+        name { value }
+        peering_role { value }
+        session_type { value }
+        ttl { value }
+        password { node { name { value } } }
+        address_families { edges { node { afi { value } safi { value } } } }
+        bgp_processes { edges { node { name { value } process_role { value } } } }
+        interface_capabilities {
+          edges {
+            node {
+              name { value }
+              device { node { name { value } } }
+              ... on DcimPhysicalInterface { ip_address { node { address { value } } } }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+# DCI-Technical-IPv6 (data/bootstrap/20_dci_pools.yml) — the DC fabrics run an IPv6 underlay.
+DCI_POOL_NETWORK = ipaddress.IPv6Network("fd00:2200::/40")
 
 
 class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
@@ -408,4 +440,80 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             sum(ALL_DEMO_COLOCATION_SERVED.values()),
             len(ALL_DEMO_COLOCATION_SERVED) - sum(ALL_DEMO_COLOCATION_SERVED.values()),
         )
+
+    # ------------------------------------------------------------------
+    # DCI sessions (add_circuit, peering_role dci)
+    # ------------------------------------------------------------------
+
+    @pytest.mark.order(409)
+    @pytest.mark.dependency(scope="session", depends=["all_demo_physical_circuits"])
+    @pytest.mark.asyncio
+    async def test_06_verify_dci_sessions(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """Verify add_circuit built one keyed EVPN Multi-Site session per dark fibre.
+
+        Each session runs between the two ends' overlay BGP processes over a
+        /127 from the DCI pool, carries IPv6 unicast + L2VPN EVPN, and is keyed
+        with the DC fabric's overlay key.
+        """
+        logging.info("=== %s - Step 6: DCI Sessions ===", SCENARIO_NAME)
+
+        expected = {f"DCI-{circuit_id}": ends for circuit_id, ends in ALL_DEMO_DCI_CIRCUITS.items()}
+        result = await async_client_main.execute_graphql(
+            query=DCI_SESSIONS_QUERY, variables={"names": sorted(expected)}, branch_name=scenario_branch
+        )
+        sessions = {edge["node"]["name"]["value"]: edge["node"] for edge in result["ManagedBGPPeering"]["edges"]}
+
+        errors: list[str] = []
+        if sorted(sessions) != sorted(expected):
+            errors.append(f"DCI sessions {sorted(sessions)}, expected {sorted(expected)}")
+
+        for name, (dc_name, ends) in sorted(expected.items()):
+            session = sessions.get(name)
+            if session is None:
+                continue
+            if session["peering_role"]["value"] != "dci" or session["session_type"]["value"] != "EBGP":
+                errors.append(f"{name}: {session['peering_role']['value']}/{session['session_type']['value']}")
+            if session["ttl"]["value"] != 1:
+                errors.append(f"{name}: ttl {session['ttl']['value']}, expected 1 (directly connected)")
+            key = ((session.get("password") or {}).get("node") or {}).get("name", {}).get("value")
+            if key != f"{dc_name.lower()}-overlay-key":
+                errors.append(f"{name}: keyed with '{key}', expected '{dc_name.lower()}-overlay-key'")
+            families = sorted(
+                (edge["node"]["afi"]["value"], edge["node"]["safi"]["value"])
+                for edge in session["address_families"]["edges"]
+            )
+            if families != [("ipv6", "unicast"), ("l2vpn", "evpn")]:
+                errors.append(f"{name}: address families {families}")
+            processes = sorted(
+                (edge["node"]["name"]["value"], edge["node"]["process_role"]["value"])
+                for edge in session["bgp_processes"]["edges"]
+            )
+            if processes != sorted((f"{device}-bgp-overlay", "overlay") for device, _ in ends):
+                errors.append(f"{name}: runs on {processes}")
+            interfaces = {
+                (edge["node"]["device"]["node"]["name"]["value"], edge["node"]["name"]["value"]): (
+                    ((edge["node"].get("ip_address") or {}).get("node") or {}).get("address", {}).get("value")
+                )
+                for edge in session["interface_capabilities"]["edges"]
+            }
+            if sorted(interfaces) != sorted(ends):
+                errors.append(f"{name}: on interfaces {sorted(interfaces)}, expected {sorted(ends)}")
+                continue
+            addresses = [ipaddress.IPv6Interface(a) for a in interfaces.values() if a and ":" in a]
+            if len(addresses) != 2 or addresses[0].network != addresses[1].network:
+                errors.append(
+                    f"{name}: interface addresses {sorted(interfaces.values(), key=str)} are not one IPv6 P2P"
+                )
+            elif addresses[0].network.prefixlen != 127 or not addresses[0].network.subnet_of(DCI_POOL_NETWORK):
+                errors.append(f"{name}: P2P {addresses[0].network} is not a /127 from {DCI_POOL_NETWORK}")
+
+        assert not errors, f"30_all DCI sessions are wrong on branch '{scenario_branch}':\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
+
+        logging.info("DCI sessions verified: %d", len(sessions))
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)

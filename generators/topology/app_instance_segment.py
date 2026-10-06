@@ -40,8 +40,10 @@ tags; the next add_app_component_segment run of any component still on it
 does).
 
 An instance's physical device may not be cabled yet (add_endpoint has not
-run, or hasn't reached it) — nothing is tagged until it is; re-triggering
-once cabling lands later is a known gap, not solved here.
+run, or hasn't reached it) — nothing is tagged until it is. Once add_endpoint
+cables it, that run dispatches this generator for every component instanced
+on the endpoint or a VM it hosts (EndpointConnectivityGenerator.
+_fan_out_component_segments), so the tags follow the cabling.
 """
 
 from __future__ import annotations

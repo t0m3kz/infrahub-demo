@@ -26,6 +26,7 @@ spec:
     # cross-connect into the region. A tenant's reach into AWS therefore depends
     # on both, which is precisely the DC-boundary blind spot this leg closes.
     - name: "VC-C005-DC10-AWS-EUC1"
+      member_of_groups: [virtual_circuits]
       link_type: direct_connect_aws
       transport_mode: physical_backed
       status: active
@@ -45,6 +46,7 @@ spec:
         - ["eg-fr01", "Ethernet1/13"]
 
     - name: "VC-C006-DC11-AWS-EUC1"
+      member_of_groups: [virtual_circuits]
       link_type: direct_connect_aws
       transport_mode: physical_backed
       status: active
@@ -68,6 +70,7 @@ spec:
     # the region. It still proves the second colo is on a genuinely separate
     # underlay — a PA4 change cannot reach the FR2 tenants and vice versa.
     - name: "VC-C008-DC12-AZURE-WEU"
+      member_of_groups: [virtual_circuits]
       link_type: express_route_azure
       transport_mode: physical_backed
       status: active
@@ -92,6 +95,7 @@ spec:
     # underlay with the two DC circuits above, which is what makes
     # XC-EQXFR2-AWS-EUC1 the highest-fan-out object in the leg.
     - name: "VC-C001-EQXFR-AWS-EUC1"
+      member_of_groups: [virtual_circuits]
       link_type: equinix_fabric
       transport_mode: physical_backed
       status: active
