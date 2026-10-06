@@ -221,6 +221,41 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
 
         indexes: list[int] = [dc["index"], pod_index]
 
+        # Interface names come from the first entry's template only — same accepted
+        # limitation as dc.py's super-spine device creation: assumes every spine
+        # template shares consistent downlink-interface naming.
+        spine_template = spine_entries[0]["template"]
+        spine_interfaces = template_interface_names_by_role(
+            interfaces=spine_template.get("interfaces", []),
+            role="uplink",
+        )
+        if not spine_interfaces:
+            self.logger.error(
+                f"Pod {pod_name}: No uplink interfaces found in spine template. "
+                "Cannot create spine-to-super-spine cabling."
+            )
+            return
+
+        super_spine_devices = [device["name"] for device in dc.get("devices", [])]
+        dc_super_spine_entries = templates_by_role(dc.get("fabric_templates", []), "super-spine")
+        super_spine_interfaces = (
+            [iface["name"] for iface in dc_super_spine_entries[0]["template"].get("interfaces", [])]
+            if dc_super_spine_entries
+            else []
+        )
+
+        # Every precondition is checked before the first save. A run that
+        # returned after saving would end with a partial tracked set, and its
+        # cleanup would delete everything else it owned last run (cables, BGP,
+        # border-leaf/FW/LB wiring). Returning before any save leaves the
+        # tracking group untouched.
+        if super_spine_devices and not await self.bgp_processes_ready(super_spine_devices, "overlay"):
+            self.logger.info(
+                "Pod %s: deferring bootstrap until parent DC super-spine overlay BGP is ready",
+                pod_name,
+            )
+            return
+
         # Fixed per-pod pool sizes from this pod's own layout (see
         # pod_config.py's technical_host_bits/loopback_host_bits) — sized
         # generously for the layout's own worst-case device count, instead of
@@ -273,7 +308,8 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
                 # which sends every attribute/relationship (even unmodified ones),
                 # spuriously re-firing unrelated `updated` triggers (index/
                 # fabric_templates/mlag_create) on every ASN-pool link.
-                await pod_obj.save()
+                # Untracked: the pod is this run's target, not its output.
+                await pod_obj.save(update_group_context=False)
                 self.logger.info(f"Pod {pod_name}: linked to DC ASN pool '{dc_asn_pool_name}'")
 
         # Pass management pool ID from DC parent (create_devices resolves ID to SDK object)
@@ -305,26 +341,6 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
             )
             spines.extend(entry_spines)
 
-        # Interface names come from the first entry's template only — same accepted
-        # limitation as dc.py's super-spine device creation: assumes every spine
-        # template shares consistent downlink-interface naming.
-        spine_template = spine_entries[0]["template"]
-
-        super_spine_devices = [device["name"] for device in dc.get("devices", [])]
-        dc_super_spine_entries = templates_by_role(dc.get("fabric_templates", []), "super-spine")
-        super_spine_interfaces = (
-            [iface["name"] for iface in dc_super_spine_entries[0]["template"].get("interfaces", [])]
-            if dc_super_spine_entries
-            else []
-        )
-
-        if super_spine_devices and not await self.bgp_processes_ready(super_spine_devices, "overlay"):
-            self.logger.info(
-                "Pod %s: deferring bootstrap until parent DC super-spine overlay BGP is ready",
-                pod_name,
-            )
-            return
-
         # Pre-seed spine eBGP processes before cabling exists so parallel rack generators
         # find them and don't try to create duplicates.
         # OSPF_IBGP is excluded: spine overlay BGP needs overlay_as_id (resolved inside
@@ -348,17 +364,6 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
                 bottom_role=spine_role,
                 top_role="super-spine",
             )
-
-        spine_interfaces = template_interface_names_by_role(
-            interfaces=spine_template.get("interfaces", []),
-            role="uplink",
-        )
-        if not spine_interfaces:
-            self.logger.error(
-                f"Pod {pod_name}: No uplink interfaces found in spine template. "
-                "Cannot create spine-to-super-spine cabling."
-            )
-            return
 
         # Skip cabling if no super-spines (single-pod DC scenario)
         skip_cabling = False

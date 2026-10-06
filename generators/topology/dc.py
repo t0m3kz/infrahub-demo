@@ -100,13 +100,12 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
 
         self.logger.info(f"Processing Data Center: {dc_name}")
 
-        # Add existing pods to group context to prevent deletion
-        # include=["layout"] also lets _generate_dc_scoped_fabric_devices read each
+        # include=["layout"] lets _generate_dc_scoped_fabric_devices read each
         # pod's own max_border_leafs_per_pod cap via _pod_border_leaf_capacity.
+        # The pods are read, never tracked: they are data, not this run's
+        # output, and a tracked pod that moved to another DC would be deleted
+        # by this DC's next run.
         existing_pods = await self.client.filters(kind=TopologyPod, parent__ids=[dc_id], include=["layout"])
-        related_node_ids = self.client.group_context.related_node_ids
-        for pod in existing_pods:
-            related_node_ids.append(pod.id)
         self._existing_pods = existing_pods
 
         self.deployment_id = dc_id  # Store for cable linking
@@ -210,7 +209,7 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
         # no collision-tracking concern requiring automated allocation).
         # VxlanSegment's LOCAL VLAN ID is allocated per VLAN domain (MLAG pair
         # or standalone device), not per-DC — see generators/devices.py's
-        # _ensure_mlag_pairs/_ensure_standalone_vlan_domain and
+        # _ensure_mlag_pairs/_ensure_standalone_vlan_domains and
         # generators/topology/segment.py's per-domain ManagedVlanDomainSegment
         # allocation. IEEE 802.1Q VLAN ID has only local significance; a
         # DC-wide pool would artificially cap the whole DC to one shared
@@ -257,7 +256,8 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
         # route through create()'s Upsert mutation, which sends every
         # attribute/relationship (even unmodified ones), spuriously re-firing
         # unrelated `updated` triggers (fabric_templates/connectivity_mode/status)
-        # on every pool attach and double-firing dc_pod_cascade.
+        # on every pool attach and double-firing dc_pod_cascade. Untracked: the
+        # DC is this run's target, not its output.
         dc = await self.client.get(kind=TopologyDataCenter, id=dc_id)
         if dc:
             pool_attr_map: dict[str, str] = {
@@ -271,7 +271,7 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
             if fabric_asn_pool_id:
                 dc.fabric_asn_pool = {"id": fabric_asn_pool_id}
             dc.vni_pool = {"id": vni_pool.id}
-            await dc.save()
+            await dc.save(update_group_context=False)
 
         super_spine_names: list[str] = []
         if design_mode == "back-to-back":

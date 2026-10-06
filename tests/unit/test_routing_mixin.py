@@ -458,8 +458,10 @@ class TestGroupContextProtection:
         assert sleep_mock.await_count == 9
 
     @pytest.mark.asyncio
-    async def test_overlay_as_added_to_related_node_ids(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """When overlay_as_id is resolved, it is appended to group_context.related_node_ids."""
+    async def test_resolved_overlay_as_is_used_but_not_tracked(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A resolved overlay_as_id is used, never tracked: add_dc owns the
+        shared AS. Tracked by a pod/rack run too, that run's cleanup would
+        delete it the run it stopped reaching it."""
         from generators.helpers.routing import RoutingStrategy
         from generators.types import RoutingOptions
 
@@ -488,7 +490,8 @@ class TestGroupContextProtection:
             options=options,
         )
 
-        assert "as-overlay-99" in m.client.group_context.related_node_ids
+        assert options["overlay_as_id"] == "as-overlay-99"
+        assert "as-overlay-99" not in m.client.group_context.related_node_ids
 
     @pytest.mark.asyncio
     async def test_planner_is_constructed_in_strict_mode(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -537,9 +540,9 @@ class TestGroupContextProtection:
         assert captured["strict"] is True
 
     @pytest.mark.asyncio
-    async def test_resolved_passwords_added_to_related_node_ids(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """When underlay/overlay password IDs are resolved, both are appended
-        to group_context.related_node_ids, same as overlay_as_id/ospf_area_id."""
+    async def test_resolved_passwords_are_used_but_not_tracked(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Resolved underlay/overlay password IDs are used, never tracked —
+        same as overlay_as_id/ospf_area_id: add_dc owns the shared keys."""
         from generators.helpers.routing import RoutingStrategy
         from generators.types import RoutingOptions
 
@@ -561,8 +564,9 @@ class TestGroupContextProtection:
             options=options,
         )
 
-        assert "pw-underlay-1" in m.client.group_context.related_node_ids
-        assert "pw-overlay-1" in m.client.group_context.related_node_ids
+        assert options["underlay_password_id"] == "pw-underlay-1"
+        assert options["overlay_password_id"] == "pw-overlay-1"
+        assert m.client.group_context.related_node_ids == []
 
     @pytest.mark.asyncio
     async def test_missing_passwords_do_not_block_routing_creation(self, monkeypatch: pytest.MonkeyPatch) -> None:

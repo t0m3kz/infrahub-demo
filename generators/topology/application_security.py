@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from utils.data_cleaning import clean_data
@@ -13,8 +12,6 @@ from ..helpers.rules import RulesPlanner
 from ..named_objects import GetOrCreateByNameMixin
 from ..segment_firewall import SegmentFirewallMixin
 from ..ztna import ZtnaMixin
-
-_APPLICATION_QUERY_PATH = Path(__file__).resolve().parents[2] / "queries/topology/add/application.gql"
 
 
 def _seg_cidr(seg: dict) -> str | None:
@@ -40,7 +37,13 @@ class AppApplicationGenerator(
     """
 
     async def run(self, identifier: str, data: dict[str, Any] | None = None) -> None:
-        """Track generated policy objects independently for each application."""
+        """Track generated policy objects independently for each application.
+
+        Only an AppApplication payload saves anything (see generate()); the
+        dependency/component entry points only fan out, so their groups stay
+        empty and — the SDK skips the group update for a run with no members —
+        never delete anything.
+        """
         if not data:
             data = await self.collect_data()
         unpacked = data.get("data") or data
@@ -62,24 +65,36 @@ class AppApplicationGenerator(
             await self.generate(data=unpacked)
 
     async def generate(self, data: dict[str, Any]) -> None:
+        """Reconcile an application's rules, or fan out to the applications a
+        dependency/component touches.
+
+        Only the add_app_application definition writes: its tracking group is
+        keyed by the application, so it is the one owner of that
+        application's rules. add_app_dependency and add_app_component are the
+        same class under another definition, whose group is keyed by the
+        dependency/component instead — a rule saved there would be claimed by
+        a group that no longer reconciles it once the dependency/component
+        moves to another application, and that group's next run would delete
+        the old application's rules. So those two entry points only trigger
+        add_app_application for the affected application(s) and save nothing.
+        """
         cleaned = clean_data(data)
 
         if deps := cleaned.get("AppDependency"):
-            if app_name := self._dependency_trigger_app_name(deps[0]):
-                await self._run_for_application_name(app_name)
+            await self._fan_out(self._dependency_trigger_app_ids(deps[0]))
             return
 
         if components := cleaned.get("AppComponent"):
-            if app_name := self._component_trigger_app_name(components[0]):
-                await self._run_for_application_name(app_name)
-                # Another application's rule into this component names its
-                # segment, and only that application's own run rewrites it. Each
-                # gets an add_app_application run, which does not fan out again,
-                # so two applications calling each other cannot loop.
-                callers = self._calling_application_ids(components[0])
-                if callers:
-                    self.logger.info("Re-reconciling %d calling application(s) of %s", len(callers), app_name)
-                    await self.run_generator("add_app_application", callers, wait=False)
+            # Another application's rule into this component names its
+            # segment and ports, and only that application's own run rewrites
+            # it. add_app_application does not fan out again, so two
+            # applications calling each other cannot loop.
+            component = components[0]
+            own_app_id = self._component_trigger_app_id(component)
+            callers = self._calling_application_ids(component)
+            if callers:
+                self.logger.info("Re-reconciling %d calling application(s) of %s", len(callers), own_app_id)
+            await self._fan_out(sorted({*([own_app_id] if own_app_id else []), *callers}))
             return
 
         app_list = cleaned.get("AppApplication", [])
@@ -88,73 +103,52 @@ class AppApplicationGenerator(
             return
         await self._reconcile_application_rules(app_list[0])
 
-    def _dependency_trigger_app_name(self, dep: dict[str, Any]) -> str | None:
-        """The application an app_dependency trigger reconciles, or None (logged) to skip."""
+    async def _fan_out(self, app_ids: list[str]) -> None:
+        """Trigger add_app_application for ``app_ids`` without waiting; no-op when empty."""
+        if app_ids:
+            await self.run_generator("add_app_application", app_ids, wait=False)
+
+    def _dependency_trigger_app_ids(self, dep: dict[str, Any]) -> list[str]:
+        """The application(s) an app_dependency trigger reconciles — [] (logged) to skip."""
         src_comp = dep.get("source") or {}
         dst_comp = dep.get("target") or {}
+        dep_ref = dep.get("name", dep.get("id", "?"))
         if not dst_comp and not dep.get("target_fqdn"):
             self.logger.warning("Dependency has neither a target component nor a target_fqdn - skipping")
-            return None
+            return []
         if not src_comp:
             if not dep.get("source_profile"):
                 self.logger.warning("Dependency has neither a source component nor a source_profile - skipping")
-                return None
+                return []
             # An access-profile grant: the application is the target's,
             # and publishing reads the grant from the component itself.
-            target_app = (dst_comp.get("parent") or {}).get("name", "")
-            if not target_app:
-                self.logger.warning("Dependency target has no parent application name - skipping")
-                return None
-            return str(target_app)
+            target_app_id = (dst_comp.get("parent") or {}).get("id", "")
+            if not target_app_id:
+                self.logger.warning("Dependency target has no parent application - skipping")
+                return []
+            self.logger.info("Access grant '%s' -> add_app_application for %s", dep_ref, target_app_id)
+            return [str(target_app_id)]
 
-        app_name = (src_comp.get("parent") or {}).get("name", "")
-        if not app_name:
-            self.logger.warning("Dependency source has no parent application name - skipping")
-            return None
+        app_id = (src_comp.get("parent") or {}).get("id", "")
+        if not app_id:
+            self.logger.warning("Dependency source has no parent application - skipping")
+            return []
         # The trigger fires once the dependency is committed, so the
         # application query already reads it through depends_on. The
         # app_dependency payload only carries enough to find the
         # application, too little to build a rule from.
-        self.logger.info(
-            "Dependency trigger '%s' -> full application rule reconciliation for %s",
-            dep.get("name", dep.get("id", "?")),
-            app_name,
-        )
-        return str(app_name)
+        self.logger.info("Dependency trigger '%s' -> add_app_application for %s", dep_ref, app_id)
+        return [str(app_id)]
 
-    def _component_trigger_app_name(self, component: dict[str, Any]) -> str | None:
-        """The application an app_component trigger reconciles, or None (logged) to skip."""
+    def _component_trigger_app_id(self, component: dict[str, Any]) -> str | None:
+        """The component's own application id, or None (logged) to skip it."""
         component_ref = component.get("fqdn", component.get("id", "?"))
-        app_name = (component.get("parent") or {}).get("name", "")
-        if not app_name:
-            self.logger.warning("Component %s has no parent application name - skipping", component_ref)
+        app_id = (component.get("parent") or {}).get("id", "")
+        if not app_id:
+            self.logger.warning("Component %s has no parent application - skipping", component_ref)
             return None
-        self.logger.info(
-            "Component trigger '%s' -> full application rule reconciliation for %s", component_ref, app_name
-        )
-        return str(app_name)
-
-    async def _run_for_application_name(self, app_name: str) -> None:
-        if not app_name:
-            self.logger.warning("Cannot run application rule reconciliation without application name")
-            return
-
-        try:
-            result = await self.client.execute_graphql(
-                query=_APPLICATION_QUERY_PATH.read_text(),
-                variables={"name": app_name},
-            )
-        except Exception as exc:
-            self.logger.error("Failed to fetch application payload for '%s': %s", app_name, exc)
-            return
-
-        cleaned = clean_data(result)
-        app_list = cleaned.get("AppApplication", [])
-        if not app_list:
-            self.logger.warning("Application '%s' not found for rule reconciliation", app_name)
-            return
-
-        await self._reconcile_application_rules(app_list[0])
+        self.logger.info("Component trigger '%s' -> add_app_application for %s", component_ref, app_id)
+        return str(app_id)
 
     async def _reconcile_application_rules(self, app: dict[str, Any]) -> None:
         planner = RulesPlanner()

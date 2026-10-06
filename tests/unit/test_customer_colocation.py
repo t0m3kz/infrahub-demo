@@ -33,6 +33,9 @@ def _make_generator(cls: type[_T]) -> Any:
     gen.client.get = AsyncMock()
     gen.client.create = AsyncMock()
     gen.client.execute_graphql = AsyncMock()
+    # generate() waits for an in-flight add_colocation_metro on the parent
+    # metro before reading firewall_devices — none in flight here, so no-op.
+    gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
     # The shared FirewallContext is provisioned under a resource lock; the
     # lock itself is PoolMixin's, tested in test_dc_firewall_lb.py.
     setattr(gen, "acquire_resource_lock", AsyncMock(return_value="lock-id"))  # noqa: B010
@@ -118,6 +121,58 @@ class TestColocationDeployment:
         assert gen._all_controllers == []
 
 
+class TestWaitsForParentMetroGenerator:
+    """add_colocation_metro writes the metro's firewall devices and owns their
+    HA pair — a customer boarding concurrently with it waits first."""
+
+    @pytest.mark.asyncio
+    async def test_waits_on_add_colocation_metro_when_parent_present(self) -> None:
+        """The wait targets the parent metro's own generator by the metro id."""
+        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+
+        await gen.generate(_colo_payload_with_parent(fw_devices=[]))
+
+        assert gen.wait_for_parent_generator_and_refetch.await_args_list == [
+            ((("add_colocation_metro",), "fr5-metro-id"), {}),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_no_parent_id_skips_wait(self) -> None:
+        """No parent metro, nothing to wait for."""
+        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+
+        await gen.generate(_colo_payload())
+
+        gen.wait_for_parent_generator_and_refetch.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_refetched_data_is_reparsed_and_used(self) -> None:
+        """Data refreshed after the wait (now with firewall_devices) replaces the original."""
+        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        refreshed = _colo_payload_with_parent(fw_devices=[_fw_device()])
+        gen.wait_for_parent_generator_and_refetch = AsyncMock(side_effect=[refreshed, None])
+        cluster = MagicMock(id="cluster-1")
+        cluster.name.value = "FR5-METRO-FW1-ha"
+        cluster.capabilities.peers = [MagicMock(id="fw-1")]
+        gen.client.filters = AsyncMock(return_value=[cluster])
+        gen._get_or_create_firewall_context = AsyncMock(return_value=None)
+
+        await gen.generate(_colo_payload_with_parent(fw_devices=[]))
+
+        gen._get_or_create_firewall_context.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_refetch_without_the_customer_is_a_hard_error(self) -> None:
+        """A refetch that no longer carries the deployment fails rather than guessing."""
+        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value={"TopologyCustomerColocation": []})
+
+        await gen.generate(_colo_payload_with_parent(fw_devices=[]))
+
+        gen.logger.error.assert_called_once()
+        gen.client.filters.assert_not_called()
+
+
 class TestFirewallContextNoFirewallOrCluster:
     @pytest.mark.asyncio
     async def test_no_parent_is_a_hard_error(self) -> None:
@@ -138,7 +193,9 @@ class TestFirewallContextNoFirewallOrCluster:
         gen.client.create.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_firewall_devices_not_yet_paired_self_heals_via_ensure_ha_pairs(self) -> None:
+    async def test_unpaired_firewalls_wait_for_metro_then_use_its_cluster(self) -> None:
+        """add_colocation_metro owns the metro's HA pair: the customer waits
+        for it and re-queries, never pairing the firewalls itself."""
         gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
         cluster = MagicMock(id="cluster-1")
         cluster.name.value = "FR5-METRO-FW1-FW2-ha"
@@ -153,23 +210,31 @@ class TestFirewallContextNoFirewallOrCluster:
             )
         )
 
-        gen._ensure_ha_pairs.assert_awaited_once_with(
-            ["FR5-METRO-FW1", "FR5-METRO-FW2"], ha_kind="ManagedFirewallHA", role_label="firewall"
+        gen._ensure_ha_pairs.assert_not_awaited()
+        assert gen.wait_for_parent_generator_and_refetch.await_count == 2
+        assert gen.wait_for_parent_generator_and_refetch.await_args_list[-1].args == (
+            ("add_colocation_metro",),
+            "fr5-metro-id",
         )
         gen._get_or_create_firewall_context.assert_awaited_once()
         gen.logger.error.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_firewall_devices_still_unpaired_after_self_heal_is_a_hard_error(self) -> None:
+    async def test_still_unpaired_after_waiting_fails_without_writing(self) -> None:
+        """Still unpaired after the wait: error (raises in a real run), nothing created or paired."""
         gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
         gen.client.filters = AsyncMock(side_effect=[[], []])
         gen._ensure_ha_pairs = AsyncMock()
+        gen._get_or_create_firewall_context = AsyncMock()
 
         await gen.generate(_colo_payload_with_parent(fw_devices=[_fw_device()]))
 
         assert gen.client.filters.await_count == 2
-        gen.logger.error.assert_called()
+        gen._ensure_ha_pairs.assert_not_awaited()
+        gen._get_or_create_firewall_context.assert_not_awaited()
         gen.client.create.assert_not_called()
+        gen.logger.error.assert_called_once()
+        assert "add_colocation_metro" in gen.logger.error.call_args.args[0]
 
 
 class TestFirewallContextProvisioning:
@@ -193,20 +258,42 @@ class TestFirewallContextProvisioning:
 
         await gen.generate(_colo_payload_with_parent(dedicated_firewall=False, fw_devices=[fw_device]))
 
-        gen._get_or_create_firewall_context.assert_awaited_once_with(f"{cluster.name.value}-shared", cluster.id, None)
+        gen._get_or_create_firewall_context.assert_awaited_once_with(
+            f"{cluster.name.value}-shared", cluster.id, None, track=False
+        )
+        assert gen._ensure_context_subinterface.call_args.kwargs["track"] is False
 
     @pytest.mark.asyncio
     async def test_dedicated_context_created_when_design_requests_it(self) -> None:
-        gen, _, cluster = self._make_gen_with_cluster()
+        """A dedicated context on the customer's own dedicated cluster is tracked."""
+        gen, _, _ = self._make_gen_with_cluster()
         context_obj = MagicMock(id="ctx-1")
         gen._get_or_create_firewall_context = AsyncMock(return_value=context_obj)
+        dedicated_cluster = MagicMock(id="dedicated-cluster-1")
+        dedicated_cluster.name.value = "FR5-METRO-FW1-C005-p-dedicated-ha"
+        gen._ensure_dedicated_device_pair = AsyncMock(
+            return_value=(dedicated_cluster, [MagicMock(id="virt-1"), MagicMock(id="virt-2")])
+        )
+
+        await gen.generate(_colo_payload_with_parent(customer_id="cust-1", dedicated_firewall=True))
+
+        gen._get_or_create_firewall_context.assert_awaited_once_with(
+            f"{dedicated_cluster.name.value}-context", "dedicated-cluster-1", "cust-1", track=True
+        )
+        assert gen._ensure_context_subinterface.call_args.kwargs["track"] is True
+
+    @pytest.mark.asyncio
+    async def test_dedicated_request_without_dedicated_pair_falls_back_to_shared(self) -> None:
+        """No dedicated pair provisioned: the shared context, untracked."""
+        gen, _, cluster = self._make_gen_with_cluster()
+        gen._get_or_create_firewall_context = AsyncMock(return_value=MagicMock(id="ctx-1"))
         gen._ensure_dedicated_device_pair = AsyncMock(return_value=None)
 
         await gen.generate(_colo_payload_with_parent(customer_id="cust-1", dedicated_firewall=True))
 
-        call = gen._get_or_create_firewall_context.call_args
-        assert call.args[0] == f"{cluster.name.value}-context"
-        assert call.args[2] == "cust-1"
+        gen._get_or_create_firewall_context.assert_awaited_once_with(
+            f"{cluster.name.value}-shared", cluster.id, None, track=False
+        )
 
     @pytest.mark.asyncio
     async def test_connectivity_mode_is_always_pbr(self) -> None:
@@ -267,6 +354,22 @@ class TestAllocateContextP2p:
         gen.client.create.assert_not_called()
         for ip_obj in existing_ips:
             ip_obj.save.assert_awaited_once_with(allow_upsert=True)
+
+    @pytest.mark.asyncio
+    async def test_shared_context_addresses_are_resaved_untracked(self) -> None:
+        """track=False (shared context): the reused addresses are re-saved but not claimed."""
+        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        allocated = MagicMock()
+        allocated.prefix.value = "100.65.0.0/31"
+        allocated.ip_namespace = MagicMock(id="ns-default")
+        existing_ips = [AsyncMock(id="fw-ip"), AsyncMock(id="edge-ip")]
+        gen.client.get = AsyncMock(side_effect=[MagicMock(id="pool-1"), *existing_ips])
+        gen.client.allocate_next_ip_prefix = AsyncMock(return_value=allocated)
+
+        await gen._allocate_context_p2p("shared-ctx", "FR", track=False)
+
+        for ip_obj in existing_ips:
+            ip_obj.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
 
 
 class TestLinkServingFirewallContext:
@@ -396,6 +499,52 @@ class TestEnsureContextSubinterface:
         assert call_kwargs["deployment__ids"] == ["fr5-metro-id"]
         assert call_kwargs["role__value"] == "edge"
         assert gen._create_context_subinterface.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_track_false_reaches_both_sides_and_the_p2p(self) -> None:
+        """Shared context: fw-side and edge-side sub-interfaces and the P2P
+        allocation all get track=False — every cage reaches them."""
+        gen, context_obj = self._make_gen()
+        fw1 = MagicMock(id="fw-1")
+        fw1.name.value = "fw-1"
+        gen.client.filters = AsyncMock(return_value=[MagicMock(id="edge-1")])
+
+        await gen._ensure_context_subinterface(
+            context_obj=context_obj,
+            fw_devices=[fw1],
+            parent_id="fr5-metro-id",
+            parent_name="FR5-METRO",
+            connectivity_mode="pbr",
+            track=False,
+        )
+
+        assert [c.kwargs["track"] for c in gen._create_context_subinterface.call_args_list] == [False, False]
+        assert gen._allocate_context_p2p.call_args.kwargs["track"] is False
+
+    @pytest.mark.asyncio
+    async def test_shared_context_vlan_allocation_saved_untracked(self) -> None:
+        """The VLAN from_pool write on the shared context is untracked too."""
+        gen, context_obj = self._make_gen()
+        context_obj.vlan_id.value = None
+        vlan_node = AsyncMock()
+        gen.client.create = AsyncMock(return_value=vlan_node)
+        refetched = MagicMock(id="ctx-1")
+        refetched.vlan_id.value = 3001
+        gen.client.get = AsyncMock(side_effect=[MagicMock(id="vlan-pool-1"), refetched])
+        fw1 = MagicMock(id="fw-1")
+        fw1.name.value = "fw-1"
+
+        await gen._ensure_context_subinterface(
+            context_obj=context_obj,
+            fw_devices=[fw1],
+            parent_id="fr5-metro-id",
+            parent_name="FR5-METRO",
+            connectivity_mode="inline",
+            track=False,
+        )
+
+        vlan_node.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
+        assert gen._create_context_subinterface.call_args.kwargs["vlan_id_value"] == 3001
 
     @pytest.mark.asyncio
     async def test_pbr_mode_creates_subinterface_pair_per_firewall(self) -> None:

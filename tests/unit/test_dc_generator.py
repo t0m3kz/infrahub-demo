@@ -194,7 +194,10 @@ class TestGenerateGuardClauses:
 
 class TestGenerateExistingPodsTracking:
     @pytest.mark.asyncio
-    async def test_existing_pods_added_to_group_context(self) -> None:
+    async def test_existing_pods_are_read_but_never_tracked(self) -> None:
+        """Pods are data, not add_dc's output: they are kept for border-leaf
+        placement and the cascade, but never claimed, so a pod moved to
+        another DC is not deleted by this DC's next run."""
         gen = _make_generator()
         pod_a = MagicMock(id="pod-a")
         pod_a.index.value = 1
@@ -204,7 +207,8 @@ class TestGenerateExistingPodsTracking:
 
         await gen.generate(_deployment(design=_design()))
 
-        assert gen.client.group_context.related_node_ids == ["pod-a", "pod-b"]
+        assert gen._existing_pods == [pod_a, pod_b]
+        assert gen.client.group_context.related_node_ids == []
 
 
 class TestGenerateDesignModeDispatch:
@@ -557,7 +561,7 @@ class TestGenerateDCPoolAttachment:
         # (just fetched via client.get()) — allow_upsert=True would force the
         # full-payload Upsert mutation path and spuriously re-fire `updated`
         # triggers on unrelated fields (fabric_templates/connectivity_mode/status).
-        dc_obj.save.assert_awaited_once_with()
+        dc_obj.save.assert_awaited_once_with(update_group_context=False)
 
     @pytest.mark.asyncio
     async def test_asn_and_vni_pools_ride_the_same_single_save(self) -> None:
@@ -572,7 +576,7 @@ class TestGenerateDCPoolAttachment:
 
         assert dc_obj.fabric_asn_pool == {"id": "asn-pool-1"}
         assert dc_obj.vni_pool == {"id": "num-pool-1"}
-        dc_obj.save.assert_awaited_once_with()
+        dc_obj.save.assert_awaited_once_with(update_group_context=False)
         for call in gen.upsert_asn_pool.await_args_list + gen.upsert_number_pool.await_args_list:
             assert "parent_id" not in call.kwargs
 
@@ -663,7 +667,10 @@ class TestCreateSharedRoutingObjects:
         assert "as-existing-1" in gen.client.group_context.related_node_ids
 
     @pytest.mark.asyncio
-    async def test_overlay_as_lookup_exception_is_logged_not_raised(self) -> None:
+    async def test_overlay_as_lookup_exception_fails_the_run(self) -> None:
+        """A lookup failure is logged as an error (raises in a real run): a run
+        that skipped the shared AS would not re-track it, and its cleanup
+        would delete the AS every pod's BGP uses."""
         gen = self._make_generator_for_shared_routing()
         gen.data = MagicMock(routing_strategy="ebgp-ibgp")
         gen.client.filters = AsyncMock(side_effect=Exception("db down"))
@@ -673,7 +680,7 @@ class TestCreateSharedRoutingObjects:
         # ebgp-ibgp's underlay is also eBGP, so both the shared super-spine AS
         # lookup and the shared overlay AS lookup hit the same failing filters()
         # mock and are each logged independently.
-        assert gen.logger.warning.call_count == 2
+        assert gen.logger.error.call_count == 2
 
     @pytest.mark.asyncio
     async def test_ospf_ibgp_creates_overlay_as_and_ospf_area(self) -> None:
@@ -698,7 +705,8 @@ class TestCreateSharedRoutingObjects:
         assert "area-1" in gen.client.group_context.related_node_ids
 
     @pytest.mark.asyncio
-    async def test_ospf_area_creation_exception_is_logged_not_raised(self) -> None:
+    async def test_ospf_area_creation_exception_fails_the_run(self) -> None:
+        """Same as the overlay AS: an error, never a swallowed warning."""
         gen = self._make_generator_for_shared_routing()
         gen.data = MagicMock(routing_strategy="ospf-ibgp")
         gen.client.filters = AsyncMock(return_value=[])
@@ -709,7 +717,7 @@ class TestCreateSharedRoutingObjects:
 
         await gen._create_shared_routing_objects(overlay_asn=65100)
 
-        gen.logger.warning.assert_called_once()
+        gen.logger.error.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_ebgp_ebgp_creates_fabric_as_but_no_ospf_area(self) -> None:

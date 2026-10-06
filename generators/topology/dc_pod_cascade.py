@@ -35,7 +35,7 @@ class DCPodCascadeGenerator(DCTopologyGenerator):
         if not dc_data:
             return
 
-        # Fetched and registered with the tracking group by the parent's generate().
+        # Fetched (read only, never tracked) by the parent's generate().
         existing_pods = getattr(self, "_existing_pods", [])
         if not existing_pods:
             self.logger.info(f"DC {dc_data['name']}: no existing pods to cascade to")

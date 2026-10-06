@@ -550,3 +550,50 @@ class TestFindRuleByName:
         gen.client.filters = AsyncMock(return_value=[])
 
         assert asyncio.run(gen._find_rule_by_name(ProxyPolicyRule, "policy-1", "rule-1")) is None
+
+
+class TestProxyPolicyOwnership:
+    """The owner's per-service ProxyPolicy is shared by all of that owner's
+    applications: written untracked. Its rules stay owned by the application."""
+
+    def test_new_proxy_policy_is_saved_untracked(self) -> None:
+        """A missing policy is created with update_group_context=False."""
+        gen = _make_gen()
+        gen.client.filters = AsyncMock(return_value=[])
+        policy = MagicMock(id="policy-1")
+        policy.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=policy)
+
+        result = asyncio.run(gen._get_or_create_proxy_policy("proxy-C001-zscaler-egress"))
+
+        assert result is policy
+        policy.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
+
+    def test_existing_proxy_policy_is_not_claimed(self) -> None:
+        """An existing policy is returned without a save."""
+        gen = _make_gen()
+        policy = MagicMock(id="policy-1")
+        policy.save = AsyncMock()
+        gen.client.filters = AsyncMock(return_value=[policy])
+
+        assert asyncio.run(gen._get_or_create_proxy_policy("proxy-C001-zscaler-egress")) is policy
+        policy.save.assert_not_called()
+
+    def test_application_rule_is_saved_tracked(self) -> None:
+        """The rule produced for one application stays in that application's group."""
+        gen = _make_gen_ready()
+        owner = {"id": "owner-1", "org_id": "C001"}
+
+        ok = asyncio.run(
+            gen._upsert_owner_proxy_rule(
+                owner=owner,
+                service={"id": "svc-1", "name": "zscaler"},
+                purpose="egress",
+                policies={},
+                subject="dep",
+                rule_data={"name": "rule-1", "destination": "api.stripe.com", "ports": ["tcp/443"]},
+            )
+        )
+
+        assert ok is True
+        gen.client.create.return_value.save.assert_awaited_once_with(allow_upsert=True)

@@ -8,9 +8,17 @@ the snapshot is unchanged: no object lost, none added, no rule renumbered,
 no relationship dropped, no number or address reallocated.
 
 Two passes: the security path (rules, policies, segment attachments, firewall
-contexts with their sub-interfaces and P2P addresses), then the topology path
-(devices, interfaces, cables, addressing and pools of DCs, pods, racks,
-colocation metros, endpoints and SD-WAN edges).
+contexts with their sub-interfaces and P2P addresses, orchestrator routing
+groups), then the topology path (devices, interfaces, cables, addressing and
+pools of DCs, pods, racks, colocation metros, endpoints, MLAG domains,
+circuits, LB next-hops, per-instance segment tagging and SD-WAN edges).
+
+Each pass compares both snapshots, and the topology snapshot also covers
+objects the rerun generators do not own — data-loaded devices, racks, pods,
+DCs, controllers, routing and security objects, groups and pools — so a
+generator whose cleanup deletes a node it merely touched is caught too.
+
+decommission_pod is left out: deleting a pod is what it is for.
 
 It runs last because the reruns rewrite the branch the other modules read.
 """
@@ -33,15 +41,35 @@ SCENARIO_NAME = "Scenario 30_all: Generator Idempotency"
 RERUNS = 2
 
 # Generator definition -> the group it targets (.infrahub.yml). These write
-# the security path: rules and policies (applications), segment policy
-# attachments (segments), serving firewall contexts (deployments).
+# the security path: rules and policies (applications, dependencies,
+# components), segment policy attachments (segments), serving firewall
+# contexts (deployments), orchestrator routing-group membership.
 RERUN_GENERATORS = {
     "add_app_application": "app_applications",
     "add_app_dependency": "app_dependencies",
+    "add_app_component": "app_components",
     "add_vxlan_segment": "vxlan_segments",
     "add_customer_deployment_dc": "customer_deployments_dc",
     "add_customer_deployment_colocation": "customer_deployments_colocation",
+    "add_application_orchestrator_routing": "app_applications",
+    "add_customer_deployment_orchestrator_routing": "customer_deployments",
 }
+# These must have targets in 30_all; the others are skipped when their group is empty.
+REQUIRED_RERUN_GENERATORS = {
+    "add_app_application",
+    "add_app_dependency",
+    "add_vxlan_segment",
+    "add_customer_deployment_dc",
+    "add_customer_deployment_colocation",
+}
+
+# Generators that dispatch others without waiting (dc_pod_cascade ->
+# pod_rack_cascade -> add_rack -> row-dependent add_rack; add_app_dependency
+# and add_app_component -> add_app_application). The queue can go quiet
+# between waves, so their reruns wait for a longer quiet spell before the
+# next generator starts.
+FAN_OUT_GENERATORS = {"dc_pod_cascade", "pod_rack_cascade", "add_rack", "add_app_dependency", "add_app_component"}
+FAN_OUT_STABLE_ZERO = 10
 
 GROUP_MEMBERS_QUERY = """
 query ($name: String!) {
@@ -103,22 +131,35 @@ query {
 """
 
 # Generator definition -> target group for the topology pass, in build order:
-# a rack rerun reads the pod's pools, an endpoint the rack's leafs.
+# a rack rerun reads the pod's pools, an endpoint the rack's leafs, a
+# component's segment tagging the endpoint's cables.
 TOPOLOGY_RERUN_GENERATORS = {
     "add_dc": "topologies_dc",
+    "dc_pod_cascade": "topologies_dc",
     "add_pod": "topologies_pod",
+    "pod_rack_cascade": "topologies_pod",
     "add_rack": "topologies_rack",
+    "add_mlag": "mlag_domains",
     "add_colocation_metro": "colocation_metros",
+    "add_circuit": "physical_circuits",
+    "add_virtual_circuit": "virtual_circuits",
     "add_endpoint": "endpoints",
+    "add_lb_backend_nexthop": "loadbalancer_vips",
+    "add_app_component_segment": "app_components",
     "add_sdwan_edge": "customer_deployments_office",
 }
 
 # Kind -> the selection that must not change on a rerun. Generic kinds, so
-# every concrete device, interface and pool kind is covered; a reallocated
-# address or number shows up as a changed value or a deleted-and-added id.
+# every concrete device (DcimPhysicalDevice, DcimVirtualDevice, ...),
+# interface (DcimPhysicalInterface, DcimVirtualInterface, DcimLAGInterface,
+# ...) and pool kind is covered; a reallocated address or number shows up as a
+# changed value or a deleted-and-added id. The kinds after the generator
+# outputs are mostly data-loaded or owned by another generator: an id lost
+# there is a foreign deletion, i.e. a generator cleaned up a node it does not
+# own. interface_capabilities carries the segment tags on switch ports.
 TOPOLOGY_SNAPSHOT_KINDS = {
     "DcimDevice": "name { value }",
-    "DcimInterface": "name { value }",
+    "DcimInterface": "name { value } interface_capabilities { edges { node { id } } }",
     "DcimCable": "endpoints { edges { node { id } } }",
     "IpamIPAddress": "address { value }",
     "IpamPrefix": "prefix { value }",
@@ -130,7 +171,26 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     "ManagedHA": "group_id { value }",
     "ManagedSegmentDeployment": "vni { value } local_vni_override { value }",
     "ManagedVlanDomainSegment": "vlan_id { value }",
+    "LocationRack": "name { value }",
+    "TopologyPod": "name { value }",
+    "TopologyDataCenter": "name { value }",
+    "ManagedController": "name { value }",
+    "ManagedFirewallHA": "name { value }",
+    "ManagedFirewallContext": "name { value }",
+    "ManagedMLAG": "name { value }",
+    "ManagedStandaloneVlanDomain": "name { value }",
+    "RoutingOSPFArea": "name { value } area { value }",
+    "RoutingPassword": "name { value }",
+    "RoutingBGPAddressFamily": "",
+    "SecurityZone": "name { value }",
+    "SecurityPolicy": "name { value }",
+    "ProxyPolicy": "name { value }",
+    "CoreStandardGroup": "name { value } members { edges { node { id } } }",
 }
+
+# Kind -> name prefixes left out of the snapshot. Resource locks are
+# CoreStandardGroups that every run creates and deletes again.
+SNAPSHOT_EXCLUDED_NAME_PREFIXES = {"CoreStandardGroup": ("lock-",)}
 
 # Explicit GraphQL paging: the branch holds thousands of interfaces and
 # addresses, more than one unpaged query is guaranteed to return.
@@ -212,40 +272,72 @@ def _canonical(value: Any) -> Any:
     return value
 
 
-async def _topology_snapshot(client: InfrahubClient, branch: str) -> dict[str, dict[str, Any]]:
-    """Kind -> {id: comparable state} for TOPOLOGY_SNAPSHOT_KINDS, paged."""
+def _excluded(kind: str, node: dict[str, Any]) -> bool:
+    prefixes = SNAPSHOT_EXCLUDED_NAME_PREFIXES.get(kind)
+    return bool(prefixes) and str(_value(node, "name") or "").startswith(prefixes)
+
+
+async def _topology_snapshot(client: InfrahubClient, branch: str) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
+    """Kind -> {id: comparable state} for TOPOLOGY_SNAPSHOT_KINDS, paged, plus
+    id -> "<concrete kind> <display_label>" so a diff can name what moved."""
     snapshot: dict[str, dict[str, Any]] = {}
+    labels: dict[str, str] = {}
     for kind, selection in TOPOLOGY_SNAPSHOT_KINDS.items():
         objects: dict[str, Any] = {}
         offset = 0
         while True:
             query = (
                 f"query {{ {kind}(limit: {PAGE_SIZE}, offset: {offset}) "
-                f"{{ count edges {{ node {{ id {selection} }} }} }} }}"
+                f"{{ count edges {{ node {{ id __typename display_label {selection} }} }} }} }}"
             )
             result = (await client.execute_graphql(query=query, branch_name=branch))[kind]
             for edge in result["edges"]:
                 node = dict(edge["node"])
-                objects[node.pop("id")] = _canonical(node)
+                if _excluded(kind, node):
+                    continue
+                node_id = node.pop("id")
+                labels[node_id] = f"{node.pop('__typename')} '{node.pop('display_label')}'"
+                objects[node_id] = _canonical(node)
             offset += PAGE_SIZE
             if offset >= result["count"]:
                 break
         snapshot[kind] = objects
-    return snapshot
+    return snapshot, labels
 
 
-def _diff(before: dict[str, dict[str, Any]], after: dict[str, dict[str, Any]]) -> list[str]:
+def _diff(
+    before: dict[str, dict[str, Any]],
+    after: dict[str, dict[str, Any]],
+    labels: dict[str, str] | None = None,
+) -> list[str]:
+    """Deleted, added and changed objects per kind; `labels` (id -> kind and
+    display label, from both snapshots) names each one."""
+    labels = labels or {}
+
+    def _name(kind: str, node_id: str) -> str:
+        return f"{kind} {node_id} [{labels[node_id]}]" if node_id in labels else f"{kind} {node_id}"
+
     changes: list[str] = []
     for kind, old in before.items():
         new = after[kind]
-        changes += [f"{kind} {node_id} deleted: {old[node_id]}" for node_id in sorted(old.keys() - new.keys())]
-        changes += [f"{kind} {node_id} added: {new[node_id]}" for node_id in sorted(new.keys() - old.keys())]
+        changes += [f"{_name(kind, node_id)} deleted: {old[node_id]}" for node_id in sorted(old.keys() - new.keys())]
+        changes += [f"{_name(kind, node_id)} added: {new[node_id]}" for node_id in sorted(new.keys() - old.keys())]
         changes += [
-            f"{kind} {node_id} changed: {old[node_id]} -> {new[node_id]}"
+            f"{_name(kind, node_id)} changed: {old[node_id]} -> {new[node_id]}"
             for node_id in sorted(old.keys() & new.keys())
             if old[node_id] != new[node_id]
         ]
     return changes
+
+
+async def _failed_tasks(client: InfrahubClient, branch: str) -> list[str]:
+    """Failed tasks on the branch, as report lines. Catches what a run's own
+    outcome cannot: generators a rerun dispatched without waiting."""
+    try:
+        await verify_no_failed_tasks(client=client, branch=branch)
+    except AssertionError as exc:
+        return [str(exc)]
+    return []
 
 
 def _rerun_report(label: str, failed: list[str], changes: list[str]) -> str:
@@ -276,6 +368,51 @@ class TestAllDemoIdempotency(TestInfrahubDockerWithClient):
         assert groups, f"Group '{group}' not found"
         return list(_peer_ids(groups[0]["node"], "members"))
 
+    async def _targets(
+        self, client: InfrahubClient, branch: str, generators: dict[str, str], required: set[str]
+    ) -> dict[str, list[str]]:
+        """Generator -> its target group's members; `required` ones must have some."""
+        targets: dict[str, list[str]] = {}
+        for generator, group in generators.items():
+            members = await self._group_members(client, group, branch)
+            if members:
+                targets[generator] = members
+            else:
+                assert generator not in required, f"Group '{group}' has no members to rerun {generator} over"
+                logging.info("Skipping %s: group '%s' is empty", generator, group)
+        assert targets, "No generator has a target to rerun over"
+        return targets
+
+    async def _rerun(
+        self,
+        client: InfrahubClient,
+        branch: str,
+        label: str,
+        targets: dict[str, list[str]],
+        security_before: dict[str, dict[str, Any]],
+        topology_before: dict[str, dict[str, Any]],
+        labels_before: dict[str, str],
+    ) -> None:
+        """Run every generator over its targets RERUNS times; after each pass
+        assert both snapshots are unchanged and no task failed."""
+        failed: list[str] = []
+        for attempt in range(1, RERUNS + 1):
+            for generator, node_ids in targets.items():
+                logging.info("%s %d/%d: %s over %d target(s)", label, attempt, RERUNS, generator, len(node_ids))
+                outcome = await run_generator(client=client, generator_name=generator, node_ids=node_ids, branch=branch)
+                if not outcome["success"]:
+                    failed.append(f"rerun {attempt} {generator}: {outcome}")
+                if generator in FAN_OUT_GENERATORS:
+                    await wait_for_tasks_completion(client, branch, stable_zero_count=FAN_OUT_STABLE_ZERO)
+                else:
+                    await wait_for_tasks_completion(client, branch)
+
+            failed += await _failed_tasks(client, branch)
+            topology_after, labels_after = await _topology_snapshot(client, branch)
+            changes = _diff(topology_before, topology_after, {**labels_after, **labels_before})
+            changes += _diff(security_before, await self._take_snapshot(client, branch))
+            assert not failed and not changes, _rerun_report(f"{label} {attempt}", failed, changes)
+
     @pytest.mark.order(410)
     @pytest.mark.dependency(
         scope="session", name="all_demo_idempotent_reruns", depends=["app_catalogue_every_dependency_enforced"]
@@ -288,37 +425,21 @@ class TestAllDemoIdempotency(TestInfrahubDockerWithClient):
         workflow_state: dict[str, Any],
     ) -> None:
         """Two more runs of every security generator over every target keep
-        each object, its rule index and its relationships as they were."""
+        each object, its rule index and its relationships as they were, and
+        delete nothing they do not own."""
         logging.info("=== %s - Step 1: Rerun Generators ===", SCENARIO_NAME)
 
         client = async_client_main
         await wait_for_tasks_completion(client, scenario_branch)
         before = await self._take_snapshot(client, scenario_branch)
+        topology_before, labels = await _topology_snapshot(client, scenario_branch)
         workflow_state["idempotency_snapshot"] = before
         logging.info("Snapshot: %s", {kind: len(objects) for kind, objects in before.items()})
+        logging.info("Topology snapshot: %s", {kind: len(objects) for kind, objects in topology_before.items()})
         assert before["SecurityPolicyRule"], "No SecurityPolicyRule on the branch to compare"
 
-        targets: dict[str, list[str]] = {}
-        for generator, group in RERUN_GENERATORS.items():
-            targets[generator] = await self._group_members(client, group, scenario_branch)
-            assert targets[generator], f"Group '{group}' has no members to rerun {generator} over"
-
-        failed: list[str] = []
-        for attempt in range(1, RERUNS + 1):
-            for generator, node_ids in targets.items():
-                logging.info("Rerun %d/%d: %s over %d target(s)", attempt, RERUNS, generator, len(node_ids))
-                outcome = await run_generator(
-                    client=client, generator_name=generator, node_ids=node_ids, branch=scenario_branch
-                )
-                if not outcome["success"]:
-                    failed.append(f"rerun {attempt} {generator}: {outcome}")
-                await wait_for_tasks_completion(client, scenario_branch)
-
-            after = await self._take_snapshot(client, scenario_branch)
-            changes = _diff(before, after)
-            assert not failed and not changes, _rerun_report(f"Rerun {attempt}", failed, changes)
-
-        await verify_no_failed_tasks(client=client, branch=scenario_branch)
+        targets = await self._targets(client, scenario_branch, RERUN_GENERATORS, REQUIRED_RERUN_GENERATORS)
+        await self._rerun(client, scenario_branch, "Rerun", targets, before, topology_before, labels)
         logging.info("%d reruns left the branch unchanged", RERUNS)
 
     @pytest.mark.order(411)
@@ -367,42 +488,20 @@ class TestAllDemoIdempotency(TestInfrahubDockerWithClient):
         scenario_branch: str,
     ) -> None:
         """Two more runs of every topology generator, in build order, keep each
-        device, port, cable, address, prefix, pool and allocated number — and
-        leave the security path test_01 checked untouched."""
+        device, port, segment tag, cable, address, prefix, pool and allocated
+        number, delete nothing they do not own, and leave the security path
+        test_01 checked untouched."""
         logging.info("=== %s - Step 4: Rerun Topology Generators ===", SCENARIO_NAME)
 
         client = async_client_main
         await wait_for_tasks_completion(client, scenario_branch)
-        before = await _topology_snapshot(client, scenario_branch)
+        before, labels = await _topology_snapshot(client, scenario_branch)
         security_before = await self._take_snapshot(client, scenario_branch)
         logging.info("Topology snapshot: %s", {kind: len(objects) for kind, objects in before.items()})
         for kind in ("DcimDevice", "DcimInterface", "DcimCable", "IpamIPAddress"):
             assert before[kind], f"No {kind} on the branch to compare"
 
-        targets: dict[str, list[str]] = {}
-        for generator, group in TOPOLOGY_RERUN_GENERATORS.items():
-            members = await self._group_members(client, group, scenario_branch)
-            if members:
-                targets[generator] = members
-            else:
-                logging.info("Skipping %s: group '%s' is empty", generator, group)
-        assert targets, "No topology generator has a target to rerun over"
-
-        failed: list[str] = []
-        for attempt in range(1, RERUNS + 1):
-            for generator, node_ids in targets.items():
-                logging.info("Rerun %d/%d: %s over %d target(s)", attempt, RERUNS, generator, len(node_ids))
-                outcome = await run_generator(
-                    client=client, generator_name=generator, node_ids=node_ids, branch=scenario_branch
-                )
-                if not outcome["success"]:
-                    failed.append(f"rerun {attempt} {generator}: {outcome}")
-                await wait_for_tasks_completion(client, scenario_branch)
-
-            changes = _diff(before, await _topology_snapshot(client, scenario_branch))
-            changes += _diff(security_before, await self._take_snapshot(client, scenario_branch))
-            assert not failed and not changes, _rerun_report(f"Topology rerun {attempt}", failed, changes)
-
-        await verify_no_failed_tasks(client=client, branch=scenario_branch)
+        targets = await self._targets(client, scenario_branch, TOPOLOGY_RERUN_GENERATORS, set())
+        await self._rerun(client, scenario_branch, "Topology rerun", targets, security_before, before, labels)
         logging.info("%d topology reruns left the branch unchanged", RERUNS)
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)

@@ -38,6 +38,8 @@ class TestMlagGeneratorGenerate:
 
     @pytest.mark.asyncio
     async def test_fetches_by_id_and_delegates_to_ensure_mlag_wiring(self) -> None:
+        """Delegates untracked: the wiring belongs to the device generator that
+        created the domain, which re-tracks it on every run."""
         gen = _gen()
         mlag_obj = MagicMock()
         gen.client.get = AsyncMock(return_value=mlag_obj)
@@ -45,7 +47,7 @@ class TestMlagGeneratorGenerate:
         await gen.generate({"ManagedMLAG": [{"id": "mlag-1", "name": "tor-01-tor-02-mlag"}]})
 
         gen.client.get.assert_awaited_once_with(kind=gen.client.get.call_args.kwargs["kind"], id="mlag-1")
-        gen.ensure_mlag_wiring.assert_awaited_once_with(mlag_obj, "tor-01-tor-02-mlag")
+        gen.ensure_mlag_wiring.assert_awaited_once_with(mlag_obj, "tor-01-tor-02-mlag", track=False)
 
     @pytest.mark.asyncio
     async def test_processes_every_mlag_node_in_response(self) -> None:
@@ -63,5 +65,5 @@ class TestMlagGeneratorGenerate:
         )
 
         assert gen.ensure_mlag_wiring.await_count == 2
-        gen.ensure_mlag_wiring.assert_any_await(mlag_obj_1, "tor-01-tor-02-mlag")
-        gen.ensure_mlag_wiring.assert_any_await(mlag_obj_2, "tor-03-tor-04-mlag")
+        gen.ensure_mlag_wiring.assert_any_await(mlag_obj_1, "tor-01-tor-02-mlag", track=False)
+        gen.ensure_mlag_wiring.assert_any_await(mlag_obj_2, "tor-03-tor-04-mlag", track=False)

@@ -463,7 +463,8 @@ class TestPools:
     @pytest.mark.asyncio
     async def test_ip_pools_are_attached_with_a_plain_save(self) -> None:
         """allow_upsert=True would resend every relationship and re-fire the
-        fabric_templates `updated` trigger on each pool attach."""
+        fabric_templates `updated` trigger on each pool attach. Untracked: the
+        metro is the run's target, so its own cleanup must never reach it."""
         gen = _make_generator()
         gen.ensure_sliced_pool = AsyncMock(side_effect=lambda **kw: MagicMock(id=f"id-{kw['pool_name']}"))
         gen.upsert_asn_pool = AsyncMock(return_value=MagicMock(id="asn-pool"))
@@ -479,7 +480,7 @@ class TestPools:
         # The ASN and VNI pools ride the same single save.
         assert metro.asn_pool == {"id": "asn-pool"}
         assert metro.vni_pool == {"id": "vni-pool"}
-        metro.save.assert_awaited_once_with()
+        metro.save.assert_awaited_once_with(update_group_context=False)
         gen.client.get.assert_awaited_once()
 
     @pytest.mark.asyncio

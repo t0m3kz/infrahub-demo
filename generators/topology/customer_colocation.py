@@ -49,6 +49,7 @@ class CustomerDeploymentColocationExchangeGenerator(
     _customer_kind = "TopologyCustomerColocation"
     _parent_label = "ColocationMetro"
     _pbr_peer_role = "edge"
+    _parent_generators = ("add_colocation_metro",)
 
     async def generate(self, data: dict[str, Any]) -> None:
         cleaned = clean_data(data)
@@ -65,6 +66,21 @@ class CustomerDeploymentColocationExchangeGenerator(
             return
 
         self.logger.info(f"Processing Colocation deployment {customer.get('name', customer_id)}")
+
+        # This reads metro-level data (firewall_devices, loadbalancer_devices)
+        # written by add_colocation_metro, which is also the only owner of the
+        # metro's firewall HA pair. A customer can board concurrently with (or
+        # immediately after) its metro's own creation, so wait for an in-flight
+        # metro run and re-parse — same as customer_dc.py waits on add_dc.
+        metro_id = (customer.get("parent") or {}).get("id")
+        if metro_id:
+            refreshed = await self.wait_for_parent_generator_and_refetch(self._parent_generators, metro_id)
+            if refreshed is not None:
+                entries = clean_data(refreshed).get("TopologyCustomerColocation", [])
+                if not entries:
+                    self.logger.error("No TopologyCustomerColocation data in GraphQL response")
+                    return
+                customer = entries[0]
 
         # _all_controllers is read by create_devices() via generators/devices.py's
         # _resolve_role_controller — always empty here: a metro declares no

@@ -17,6 +17,7 @@ from generators.protocols import (
     DcimVirtualInterface,
     ManagedHAInterface,
     ManagedMLAG,
+    ManagedStandaloneVlanDomain,
 )
 
 
@@ -279,8 +280,12 @@ class TestCreateDevicesPairingDispatch:
 
     @pytest.mark.asyncio
     async def test_mlag_create_no_does_not_pair(self) -> None:
+        """No MLAG domain; the unpaired leaf gets its standalone VLAN domain instead."""
         gen = _make_generator()
-        created = [_mock_created_device(DcimPhysicalDevice.__name__, "dc1-leaf-01")]
+        created = [
+            _mock_created_device(DcimPhysicalDevice.__name__, "dc1-leaf-01"),
+            _mock_created_device(ManagedStandaloneVlanDomain.__name__, "dc1-leaf-01-vlan-domain"),
+        ]
         gen.client.create = AsyncMock(side_effect=created)
 
         await gen.create_devices(
@@ -291,7 +296,8 @@ class TestCreateDevicesPairingDispatch:
             options={"mlag_create": "no"},
         )
 
-        gen.client.create.assert_called_once()
+        kinds = [call.kwargs["kind"] for call in gen.client.create.call_args_list]
+        assert kinds == [DcimPhysicalDevice, ManagedStandaloneVlanDomain]
 
 
 class TestEnsureHaPairs:
@@ -1022,7 +1028,8 @@ class TestCreateDevicesControllerRouting:
         create_kwargs = gen.client.create.call_args.kwargs
         assert create_kwargs["data"]["member_of_groups"] == []
         controller_obj.managed_devices.add.assert_called_once_with(created_device)
-        controller_obj.save.assert_awaited_once_with(allow_upsert=True)
+        # Untracked: the data-loaded controller is shared, not this run's output.
+        controller_obj.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
 
     @pytest.mark.asyncio
     async def test_no_matching_controller_falls_back_to_group(self) -> None:

@@ -7,6 +7,9 @@ uplink interfaces to the fabric.
 
 Data: 10 servers across DC6 POD-1 (2, in two new compute racks), POD-2 (2,
 sharing the ToR racks) and POD-3 (6), so DC6 must gain at least 10 endpoints.
+Plus one test-local AppComponent (tests/integration/data/20_endpoints) on the
+DC6 "web-app" local segment, instanced on a POD-1 server: a local segment's
+VLAN ID is realized only where a component instance is cabled to a switch.
 
 Prerequisites: DC6 deployed and merged to main (Scenario 1), segments deployed (Scenario 6).
 
@@ -15,6 +18,8 @@ Steps:
 1.  Create branch and load endpoint data (device type, compute racks, servers)
 2.  Wait for event-triggered generators to complete and verify no failures
 3.  Verify endpoint growth in DC6 and that every loaded server is cabled
+3b. Load the AppComponent; 3c. run add_app_component_segment over it
+3d. Verify the segment's ManagedVlanDomainSegment and switch-port tagging
 4.  Create proposed change
 5.  Wait for validations, verify diff and artifacts
 6.  Merge to main
@@ -30,16 +35,25 @@ import yaml
 from infrahub_sdk import InfrahubClient, InfrahubClientSync
 
 from .conftest import TestInfrahubDockerWithClient
-from .test_constants import DEMO_SERVERS_DATA, SCENARIO_DC_NAME
+from .test_constants import (
+    DEMO_SERVERS_DATA,
+    SCENARIO_DC_NAME,
+    SCENARIO_ENDPOINT_APP_DATA,
+    SCENARIO_ENDPOINT_COMPONENT_FQDN,
+    SCENARIO_ENDPOINT_SEGMENT,
+    SCENARIO_ENDPOINT_SERVER,
+)
 from .test_helpers import (
     fetch_artifacts,
     fetch_endpoint_cabling,
     fetch_proposed_change_diff,
+    fetch_vlan_domain_segments,
     snapshot_dc_device_counts_by_role,
 )
 from .workflow_helpers import (
     create_and_validate_proposed_change,
     merge_proposed_change,
+    run_generator,
     verify_no_failed_tasks,
     wait_for_tasks_completion,
 )
@@ -48,6 +62,22 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 
 SCENARIO_NAME = "Scenario 7: Add Endpoints"
 BRANCH_NAME = "dc6-add-endpoints"
+
+# The switch interfaces a segment is assigned to, with their device.
+SEGMENT_INTERFACES_QUERY = """
+query ($name: String!) {
+  ManagedVxlanSegment(name__value: $name) {
+    edges {
+      node {
+        id
+        interface_capabilities {
+          edges { node { id name { value } device { node { name { value } } } } }
+        }
+      }
+    }
+  }
+}
+"""
 
 
 def _load_server_names(root_dir: Path) -> list[str]:
@@ -236,6 +266,112 @@ class TestDC6AddEndpoints(TestInfrahubDockerWithClient):
         logging.info("All %d servers present and cabled", len(server_names))
 
     # ------------------------------------------------------------------
+    # Step 3b-3d: AppComponent on a cabled server -> segment realized
+    # ------------------------------------------------------------------
+
+    @pytest.mark.order(253)
+    @pytest.mark.dependency(scope="session", name="dc6_add_ep_load_app", depends=["dc6_add_ep_verify_devices"])
+    @pytest.mark.asyncio
+    async def test_03b_load_app_component(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """Load an application whose one component sits on a DC6 local segment,
+        instanced on a server Step 3 found cabled."""
+        logging.info("=== %s - Step 3b: Load AppComponent ===", SCENARIO_NAME)
+
+        load_result = self.execute_command(
+            f"infrahubctl object load {SCENARIO_ENDPOINT_APP_DATA} --branch {scenario_branch}",
+            address=async_client_main.config.address,
+        )
+        assert load_result.returncode == 0, (
+            f"Failed to load application data.\n"
+            f"  Return code: {load_result.returncode}\n"
+            f"  stdout: {load_result.stdout}\n"
+            f"  stderr: {load_result.stderr}"
+        )
+        # The AppApplication created-trigger dispatches add_app_application.
+        await wait_for_tasks_completion(async_client_main, scenario_branch)
+        logging.info("Application data loaded")
+
+    @pytest.mark.order(253)
+    @pytest.mark.dependency(scope="session", name="dc6_add_ep_component_segment", depends=["dc6_add_ep_load_app"])
+    @pytest.mark.asyncio
+    async def test_03c_run_component_segment_generator(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """Run add_app_component_segment over the component. No event rule
+        dispatches it (data/events has no action for it), so it is run by hand."""
+        logging.info("=== %s - Step 3c: Run add_app_component_segment ===", SCENARIO_NAME)
+
+        component = await async_client_main.get(
+            kind="AppComponent", fqdn__value=SCENARIO_ENDPOINT_COMPONENT_FQDN, branch=scenario_branch
+        )
+        outcome = await run_generator(
+            client=async_client_main,
+            generator_name="add_app_component_segment",
+            node_ids=[component.id],
+            branch=scenario_branch,
+        )
+        assert outcome["success"], f"add_app_component_segment failed: {outcome}"
+        await wait_for_tasks_completion(async_client_main, scenario_branch)
+        await verify_no_failed_tasks(client=async_client_main, branch=scenario_branch)
+
+    @pytest.mark.order(253)
+    @pytest.mark.dependency(
+        scope="session", name="dc6_add_ep_verify_vlan_domain", depends=["dc6_add_ep_component_segment"]
+    )
+    @pytest.mark.asyncio
+    async def test_03d_verify_segment_realized_on_server_switches(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """The segment gets a local VLAN ID on the server's switch VLAN
+        domain(s), and exactly the switches the server is cabled to carry it."""
+        logging.info("=== %s - Step 3d: Verify VLAN Domain Segments ===", SCENARIO_NAME)
+
+        result = await async_client_main.execute_graphql(
+            query=SEGMENT_INTERFACES_QUERY, variables={"name": SCENARIO_ENDPOINT_SEGMENT}, branch_name=scenario_branch
+        )
+        segments = result["ManagedVxlanSegment"]["edges"]
+        assert segments, f"Segment '{SCENARIO_ENDPOINT_SEGMENT}' not found on '{scenario_branch}'"
+        segment = segments[0]["node"]
+
+        vlan_domain_result = await fetch_vlan_domain_segments(
+            client=async_client_main, branch=scenario_branch, expected_count=1, segment_id=segment["id"]
+        )
+        records = vlan_domain_result["records"]
+        assert records, (
+            f"No ManagedVlanDomainSegment for '{SCENARIO_ENDPOINT_SEGMENT}' although an AppComponent "
+            f"instance ({SCENARIO_ENDPOINT_SERVER}) is cabled to the fabric"
+        )
+        without_vlan = [r for r in records if r["vlan_id"] is None]
+        assert not without_vlan, f"VLAN domain segment(s) without a VLAN ID: {without_vlan}"
+
+        hosts = {host["name"]: host for host in await fetch_endpoint_cabling(async_client_main, scenario_branch)}
+        cabled_switches = {link["peer_device"] for link in hosts[SCENARIO_ENDPOINT_SERVER]["links"]}
+        tagged = [
+            (edge["node"]["device"]["node"]["name"]["value"], edge["node"]["name"]["value"])
+            for edge in segment["interface_capabilities"]["edges"]
+        ]
+        tagged_switches = {device for device, _ in tagged}
+        assert tagged, f"No switch interface carries '{SCENARIO_ENDPOINT_SEGMENT}'"
+        assert tagged_switches == cabled_switches, (
+            f"'{SCENARIO_ENDPOINT_SEGMENT}' is on interfaces of {sorted(tagged_switches)}, expected exactly the "
+            f"switches {SCENARIO_ENDPOINT_SERVER} is cabled to: {sorted(cabled_switches)} (tagged: {sorted(tagged)})"
+        )
+        logging.info(
+            "Segment %s: %d VLAN domain record(s), tagged %s",
+            SCENARIO_ENDPOINT_SEGMENT,
+            len(records),
+            sorted(tagged),
+        )
+
+    # ------------------------------------------------------------------
     # Step 4-6: Proposed change, validations, merge
     # ------------------------------------------------------------------
 
@@ -243,7 +379,7 @@ class TestDC6AddEndpoints(TestInfrahubDockerWithClient):
     @pytest.mark.dependency(
         scope="session",
         name="dc6_add_ep_create_pc",
-        depends=["dc6_add_ep_verify_devices"],
+        depends=["dc6_add_ep_verify_vlan_domain"],
     )
     def test_04_create_proposed_change(
         self,

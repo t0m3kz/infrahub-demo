@@ -1,8 +1,8 @@
 # add_app_component: a component moved to another segment or changed its
-# ports. Its own application is reconciled from the application query
-# (application.gql); this payload only has to find that application and the
-# other applications whose components call this one, since their rules name
-# its segment and ports too.
+# ports. It triggers add_app_application for its own application and for the
+# other applications whose components call this one (their rules name its
+# segment and ports too), and writes nothing itself; this payload only has to
+# find those applications' ids.
 query app_component($fqdn: String!) {
   AppComponent(fqdn__value: $fqdn) {
     edges {

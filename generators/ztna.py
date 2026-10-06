@@ -132,6 +132,9 @@ class ZtnaMixin(GetOrCreateByNameMixin):
         return True
 
     async def _get_or_create_proxy_policy(self, policy_name: str) -> Any | None:
+        """The owner's per-service, per-purpose ProxyPolicy, untracked: every
+        application of that owner writes its rules into it, so no single
+        application's run owns it (its rules stay owned by their application)."""
         description_subject = policy_name.removesuffix("-egress").removesuffix("-private-access")
         return await self._get_or_create_by_name(
             kind=ProxyPolicy,
@@ -144,6 +147,7 @@ class ZtnaMixin(GetOrCreateByNameMixin):
                 "enabled": True,
             },
             created_log="Created proxy policy: %s",
+            track=False,
         )
 
     async def _attach_proxy_policy_to_owner(self, owner_id: str, policy_id: str) -> None:

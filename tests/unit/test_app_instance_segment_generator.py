@@ -1,21 +1,22 @@
 """Unit tests for AppInstanceSegmentGenerator (generators/topology/app_instance_segment.py).
 
-Covers generate() guard clauses, _resolve_physical_device_id (physical vs
-virtual vs unresolvable AppInstance kinds), _tag_instance_interfaces
-(uplink vs bonded/lag far ends, dedup, idempotency), the once-per-run VLAN
-domain realization, and _resolve_customer_facing_target (the far-end/port-channel
-resolution itself).
+Covers generate() guard clauses and its per-segment reconcile under the
+segment lock, _resolve_physical_device_id (physical vs virtual vs
+unresolvable AppInstance kinds), _reconcile_segment_interface_tags (union
+over every component on the segment; add and remove via relationship
+mutations, never a tracked save), _customer_facing_targets (uplink vs
+bonded/lag far ends, dedup) and _resolve_customer_facing_target.
 
-The (segment, VLAN domain) -> local VLAN ID allocation this generator shares
-with VxlanSegmentGenerator (VlanDomainMixin: _resolve_vlan_domain,
-_ensure_standalone_vlan_domain, _ensure_vlan_domain_segment) is already
-covered by tests/unit/test_segment_generators.py — not re-tested here,
-only stubbed or exercised at the call-site boundary.
+The VLAN domain activation reconcile this generator shares with
+VxlanSegmentGenerator (VlanDomainMixin) is covered by
+tests/unit/test_vlan_domain_reconcile.py — only stubbed here.
 """
 
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -63,24 +64,40 @@ def _iface(name: str, *, role: str = "uplink", cabled: bool = True, iface_id: st
     return intf
 
 
-def _capabilities_iface(*, existing_ids: list[str], device_id: str = "sw-1", iface_id: str = "far-1") -> MagicMock:
-    """A far-end/port-channel interface whose interface_capabilities mirror
-    the SDK's RelationshipManager (add() is synchronous, save() is awaited)."""
-    iface = MagicMock()
-    iface.id = iface_id
-    iface.interface_capabilities.peers = [MagicMock(id=i) for i in existing_ids]
-    iface.interface_capabilities.add = MagicMock(return_value=None)
-    iface.save = AsyncMock()
-    iface.device.peer.id = device_id
-    return iface
-
-
 # ===========================================================================
 # generate() — guard clauses and dispatch
 # ===========================================================================
 
 
+def _gen_with_lock() -> Any:
+    """A generator whose resource_lock records the keys it was taken for."""
+    gen = _make_gen()
+    gen.locked_keys = []
+
+    @asynccontextmanager
+    async def _lock(key: str) -> AsyncIterator[None]:
+        gen.locked_keys.append(key)
+        yield
+
+    gen.resource_lock = _lock
+    return gen
+
+
 class TestGenerate:
+    """generate() reconciles the component's SEGMENT under the segment lock:
+    interface tags first, then VLAN domain activations; it saves nothing tracked."""
+
+    @staticmethod
+    def _ready(*, added: int = 0, removed: int = 0) -> Any:
+        gen = _gen_with_lock()
+        gen.client.get = AsyncMock(return_value=MagicMock(id="seg-1"))
+        gen._fetch_segment_vlan_state = AsyncMock(
+            return_value={"segment": {"id": "seg-1", "interface_capabilities": []}, "activations": {}}
+        )
+        gen._reconcile_segment_interface_tags = AsyncMock(return_value=(added, removed))
+        gen._reconcile_segment_vlan_domains_locked = AsyncMock()
+        return gen
+
     def test_no_component_data_logs_error_and_returns(self) -> None:
         gen = _make_gen()
         asyncio.run(gen.generate({"AppComponent": []}))
@@ -94,101 +111,74 @@ class TestGenerate:
         gen.client.get.assert_not_awaited()
         gen.logger.error.assert_not_called()
 
-    def test_no_instances_logs_info_and_returns(self) -> None:
-        gen = _make_gen()
+    def test_no_instances_still_reconciles_the_segment(self) -> None:
+        """A component whose instances were all removed still untags their old ports."""
+        gen = self._ready()
         data = _component_response(segment={"id": "seg-1", "name": "seg"}, instances=[])
+
         asyncio.run(gen.generate(data))
-        gen.client.get.assert_not_awaited()
+
+        gen._reconcile_segment_interface_tags.assert_awaited_once()
+        gen._reconcile_segment_vlan_domains_locked.assert_awaited_once()
         gen.logger.error.assert_not_called()
 
-    def test_segment_fetch_failure_logs_error_and_returns(self) -> None:
-        gen = _make_gen()
+    def test_non_vxlan_segment_is_skipped_without_error(self) -> None:
+        """A VLAN segment's ports are hand-assigned in data: nothing to reconcile."""
+        gen = self._ready()
         gen.client.get = AsyncMock(return_value=None)
-        gen._tag_instance_interfaces = AsyncMock()
         data = _component_response(
             segment={"id": "seg-1", "name": "seg"}, instances=[{"id": "dev-1", "typename": "DcimPhysicalDevice"}]
         )
 
         asyncio.run(gen.generate(data))
 
-        gen.logger.error.assert_called_once()
-        gen._tag_instance_interfaces.assert_not_awaited()
-
-    def test_happy_path_tags_every_resolvable_instance(self) -> None:
-        """Each instance's device is tagged, then the touched switches' VLAN domains are realized once."""
-        gen = _make_gen()
-        segment_obj = MagicMock(id="seg-1")
-        gen.client.get = AsyncMock(return_value=segment_obj)
-        switches = [MagicMock(id="sw-1"), MagicMock(id="sw-2")]
-        gen.client.filters = AsyncMock(return_value=switches)
-        gen._tag_instance_interfaces = AsyncMock(side_effect=[(1, {"sw-1"}), (1, {"sw-1", "sw-2"})])
-        gen._realize_segment_on_devices = AsyncMock()
-        data = _component_response(
-            segment={"id": "seg-1", "name": "c001-web-p"},
-            instances=[
-                {"id": "dev-1", "typename": "DcimPhysicalDevice"},
-                {"id": "dev-2", "typename": "DcimPhysicalDevice"},
-            ],
-        )
-
-        asyncio.run(gen.generate(data))
-
-        assert [call.kwargs["device_id"] for call in gen._tag_instance_interfaces.await_args_list] == ["dev-1", "dev-2"]
-        for call in gen._tag_instance_interfaces.await_args_list:
-            assert call.kwargs["segment_id"] == "seg-1"
-            assert call.kwargs["segment_obj"] is segment_obj
-        assert gen.client.filters.call_args.kwargs["ids"] == ["sw-1", "sw-2"]
-        gen._realize_segment_on_devices.assert_awaited_once_with("seg-1", "c001-web-p", switches)
-
-    def test_instances_sharing_a_host_tag_it_once(self) -> None:
-        """Two VMs on one hypervisor and the hypervisor itself resolve to one device, handled once."""
-        gen = _make_gen()
-        gen.client.get = AsyncMock(return_value=MagicMock(id="seg-1"))
-        gen._tag_instance_interfaces = AsyncMock(return_value=(1, {"sw-1"}))
-        gen._realize_segment_on_devices = AsyncMock()
-        data = _component_response(
-            segment={"id": "seg-1", "name": "seg"},
-            instances=[
-                {"id": "vm-1", "typename": "DcimVirtualDevice", "hosting_device": {"node": {"id": "host-1"}}},
-                {"id": "vm-2", "typename": "DcimVirtualDevice", "hosting_device": {"node": {"id": "host-1"}}},
-                {"id": "host-1", "typename": "DcimPhysicalDevice"},
-            ],
-        )
-
-        asyncio.run(gen.generate(data))
-
-        gen._tag_instance_interfaces.assert_awaited_once()
-        assert gen._tag_instance_interfaces.call_args.kwargs["device_id"] == "host-1"
-        gen._realize_segment_on_devices.assert_awaited_once()
-
-    def test_no_touched_switch_realizes_no_vlan_domain(self) -> None:
-        """An instance with nothing cabled yet leaves every VLAN domain alone."""
-        gen = _make_gen()
-        gen.client.get = AsyncMock(return_value=MagicMock(id="seg-1"))
-        gen._tag_instance_interfaces = AsyncMock(return_value=(0, set()))
-        gen._realize_segment_on_devices = AsyncMock()
-        data = _component_response(
-            segment={"id": "seg-1", "name": "seg"}, instances=[{"id": "dev-1", "typename": "DcimPhysicalDevice"}]
-        )
-
-        asyncio.run(gen.generate(data))
-
-        gen.client.filters.assert_not_awaited()
-        gen._realize_segment_on_devices.assert_not_awaited()
-
-    def test_unresolvable_instance_is_skipped_without_error(self) -> None:
-        """A cloud instance (no on-prem device) is skipped, not an error."""
-        gen = _make_gen()
-        gen.client.get = AsyncMock(return_value=MagicMock(id="seg-1"))
-        gen._tag_instance_interfaces = AsyncMock()
-        data = _component_response(
-            segment={"id": "seg-1", "name": "seg"}, instances=[{"id": "cloud-1", "typename": "CloudInstance"}]
-        )
-
-        asyncio.run(gen.generate(data))
-
-        gen._tag_instance_interfaces.assert_not_awaited()
+        assert gen.client.get.call_args.kwargs["raise_when_missing"] is False
+        gen._reconcile_segment_interface_tags.assert_not_awaited()
         gen.logger.error.assert_not_called()
+        assert gen.locked_keys == []
+
+    def test_reconciles_tags_then_domains_under_the_segment_lock(self) -> None:
+        """Tags and activations are reconciled for the segment, holding its lock."""
+        gen = self._ready(added=1)
+        segment_obj = gen.client.get.return_value
+        data = _component_response(
+            segment={"id": "seg-1", "name": "c001-web-p"}, instances=[{"id": "dev-1", "typename": "DcimPhysicalDevice"}]
+        )
+
+        asyncio.run(gen.generate(data))
+
+        assert gen.locked_keys == ["segment-vlan-domains-seg-1"]
+        kwargs = gen._reconcile_segment_interface_tags.call_args.kwargs
+        assert kwargs["segment_id"] == "seg-1"
+        assert kwargs["segment_obj"] is segment_obj
+        assert kwargs["current_ids"] == set()
+        # Tags changed: the state is re-read before the domains are reconciled.
+        assert gen._fetch_segment_vlan_state.await_count == 2
+        gen._reconcile_segment_vlan_domains_locked.assert_awaited_once()
+        assert gen._reconcile_segment_vlan_domains_locked.call_args.args[:2] == ("seg-1", "c001-web-p")
+
+    def test_unchanged_tags_reuse_the_state(self) -> None:
+        """No tag change: one state read serves both reconciliations."""
+        gen = self._ready()
+        data = _component_response(
+            segment={"id": "seg-1", "name": "seg"}, instances=[{"id": "dev-1", "typename": "DcimPhysicalDevice"}]
+        )
+
+        asyncio.run(gen.generate(data))
+
+        gen._fetch_segment_vlan_state.assert_awaited_once()
+
+    def test_generate_saves_nothing_into_the_run_group(self) -> None:
+        """No create/save from this run: tags and activations are untracked shared state."""
+        gen = self._ready(added=1, removed=1)
+        data = _component_response(
+            segment={"id": "seg-1", "name": "seg"}, instances=[{"id": "dev-1", "typename": "DcimPhysicalDevice"}]
+        )
+
+        asyncio.run(gen.generate(data))
+
+        gen.client.create.assert_not_called()
+        gen.client.get.return_value.save.assert_not_called()
 
 
 # ===========================================================================
@@ -226,79 +216,153 @@ class TestResolvePhysicalDeviceId:
 
 
 # ===========================================================================
-# _tag_instance_interfaces
+# _reconcile_segment_interface_tags / _customer_facing_targets
 # ===========================================================================
 
 
-class TestTagInstanceInterfaces:
-    def _gen(self) -> Any:
-        return _make_gen()
+def _components(*instance_lists: list[dict[str, Any]]) -> dict[str, Any]:
+    """A raw segment_components.gql response, one component per instance list."""
+    edges = []
+    for index, instances in enumerate(instance_lists):
+        inst_edges = []
+        for inst in instances:
+            node: dict[str, Any] = {"id": inst["id"], "__typename": inst["typename"]}
+            if "host" in inst:
+                node["hosting_device"] = {"node": {"id": inst["host"]}}
+            inst_edges.append({"node": node})
+        edges.append({"node": {"id": f"comp-{index}", "instances": {"edges": inst_edges}}})
+    return {"AppComponent": {"edges": edges}}
 
-    def test_no_cabled_nics_returns_zero_and_empty(self) -> None:
-        gen = self._gen()
+
+class TestReconcileSegmentInterfaceTags:
+    """Desired tags = union of every component's instances' targets on the segment."""
+
+    @staticmethod
+    def _gen(response: dict[str, Any], targets_by_device: dict[str, list[str]]) -> Any:
+        gen = _make_gen()
+        gen.client.execute_graphql = AsyncMock(return_value=response)
+        gen._customer_facing_targets = AsyncMock(
+            side_effect=lambda device_id: {t: MagicMock(id=t) for t in targets_by_device.get(device_id, [])}
+        )
+        return gen
+
+    @staticmethod
+    def _segment_obj() -> MagicMock:
+        obj = MagicMock(id="seg-1")
+        obj.add_relationships = AsyncMock()
+        obj.remove_relationships = AsyncMock()
+        obj.save = AsyncMock()
+        return obj
+
+    def test_union_across_components_tags_missing_ports(self) -> None:
+        """Ports of every component's instances are tagged, deduped across shared hosts."""
+        response = _components(
+            [{"id": "dev-1", "typename": "DcimPhysicalDevice"}],
+            [
+                {"id": "vm-1", "typename": "DcimVirtualDevice", "host": "dev-1"},
+                {"id": "dev-2", "typename": "DcimPhysicalDevice"},
+            ],
+        )
+        gen = self._gen(response, {"dev-1": ["if-a"], "dev-2": ["po-b"]})
+        segment_obj = self._segment_obj()
+
+        result = asyncio.run(
+            gen._reconcile_segment_interface_tags(
+                segment_id="seg-1", segment_name="seg", segment_obj=segment_obj, current_ids=set()
+            )
+        )
+
+        assert result == (2, 0)
+        assert [c.args[0] for c in gen._customer_facing_targets.await_args_list] == ["dev-1", "dev-2"]
+        segment_obj.add_relationships.assert_awaited_once_with(
+            relation_to_update="interface_capabilities", related_nodes=["if-a", "po-b"]
+        )
+        segment_obj.remove_relationships.assert_not_awaited()
+        segment_obj.save.assert_not_called()
+        assert gen.client.execute_graphql.call_args.kwargs["variables"] == {"segment_id": "seg-1"}
+
+    def test_port_no_instance_lands_on_is_untagged(self) -> None:
+        """An instance that moved leaves its old port: the tag is removed, the new one added."""
+        response = _components([{"id": "dev-1", "typename": "DcimPhysicalDevice"}])
+        gen = self._gen(response, {"dev-1": ["if-new"]})
+        segment_obj = self._segment_obj()
+
+        result = asyncio.run(
+            gen._reconcile_segment_interface_tags(
+                segment_id="seg-1", segment_name="seg", segment_obj=segment_obj, current_ids={"if-old"}
+            )
+        )
+
+        assert result == (1, 1)
+        segment_obj.add_relationships.assert_awaited_once_with(
+            relation_to_update="interface_capabilities", related_nodes=["if-new"]
+        )
+        segment_obj.remove_relationships.assert_awaited_once_with(
+            relation_to_update="interface_capabilities", related_nodes=["if-old"]
+        )
+
+    def test_port_still_used_by_another_component_is_kept(self) -> None:
+        """A port another component's instance still lands on keeps the tag."""
+        response = _components([], [{"id": "dev-2", "typename": "DcimPhysicalDevice"}])
+        gen = self._gen(response, {"dev-2": ["if-shared"]})
+        segment_obj = self._segment_obj()
+
+        result = asyncio.run(
+            gen._reconcile_segment_interface_tags(
+                segment_id="seg-1", segment_name="seg", segment_obj=segment_obj, current_ids={"if-shared"}
+            )
+        )
+
+        assert result == (0, 0)
+        segment_obj.add_relationships.assert_not_awaited()
+        segment_obj.remove_relationships.assert_not_awaited()
+
+    def test_cloud_instances_contribute_nothing(self) -> None:
+        """An unresolvable instance has no port; with nothing desired every tag goes."""
+        response = _components([{"id": "cloud-1", "typename": "CloudInstance"}])
+        gen = self._gen(response, {})
+        segment_obj = self._segment_obj()
+
+        result = asyncio.run(
+            gen._reconcile_segment_interface_tags(
+                segment_id="seg-1", segment_name="seg", segment_obj=segment_obj, current_ids={"if-1"}
+            )
+        )
+
+        assert result == (0, 1)
+        gen._customer_facing_targets.assert_not_awaited()
+
+
+class TestCustomerFacingTargets:
+    def test_no_cabled_nics_returns_empty(self) -> None:
+        gen = _make_gen()
         gen.client.filters = AsyncMock(return_value=[_iface("eth0", cabled=False)])
 
-        assigned, devices = asyncio.run(
-            gen._tag_instance_interfaces(device_id="dev-1", segment_id="seg-1", segment_obj=MagicMock())
-        )
+        assert asyncio.run(gen._customer_facing_targets("dev-1")) == {}
 
-        assert (assigned, devices) == (0, set())
-
-    def test_uplink_far_end_tagged_directly(self) -> None:
-        gen = self._gen()
+    def test_uplink_far_end_is_a_target(self) -> None:
+        gen = _make_gen()
         gen.client.filters = AsyncMock(return_value=[_iface("eth0")])
-        target = _capabilities_iface(existing_ids=[])
+        target = MagicMock(id="far-1")
         gen._resolve_customer_facing_target = AsyncMock(return_value=target)
-        segment_obj = MagicMock(id="seg-1")
 
-        assigned, devices = asyncio.run(
-            gen._tag_instance_interfaces(device_id="dev-1", segment_id="seg-1", segment_obj=segment_obj)
-        )
-
-        assert assigned == 1
-        assert devices == {"sw-1"}
-        target.interface_capabilities.add.assert_called_once_with(segment_obj)
-        target.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
+        assert asyncio.run(gen._customer_facing_targets("dev-1")) == {"far-1": target}
 
     def test_bonded_members_dedup_to_one_port_channel(self) -> None:
-        """Two bond members resolving to the SAME port-channel are tagged once, not twice."""
-        gen = self._gen()
+        """Two bond members resolving to the SAME port-channel give one target."""
+        gen = _make_gen()
         gen.client.filters = AsyncMock(return_value=[_iface("eth0"), _iface("eth1")])
-        shared_target = _capabilities_iface(existing_ids=[], iface_id="po-1")
-        gen._resolve_customer_facing_target = AsyncMock(return_value=shared_target)
+        shared = MagicMock(id="po-1")
+        gen._resolve_customer_facing_target = AsyncMock(return_value=shared)
 
-        assigned, devices = asyncio.run(
-            gen._tag_instance_interfaces(device_id="dev-1", segment_id="seg-1", segment_obj=MagicMock(id="seg-1"))
-        )
-
-        assert assigned == 1
-        assert devices == {"sw-1"}
-        shared_target.save.assert_awaited_once()
-
-    def test_already_assigned_target_is_not_resaved(self) -> None:
-        gen = self._gen()
-        gen.client.filters = AsyncMock(return_value=[_iface("eth0")])
-        target = _capabilities_iface(existing_ids=["seg-1"])
-        gen._resolve_customer_facing_target = AsyncMock(return_value=target)
-
-        assigned, _ = asyncio.run(
-            gen._tag_instance_interfaces(device_id="dev-1", segment_id="seg-1", segment_obj=MagicMock(id="seg-1"))
-        )
-
-        assert assigned == 0
-        target.interface_capabilities.add.assert_not_called()
-        target.save.assert_not_awaited()
+        assert asyncio.run(gen._customer_facing_targets("dev-1")) == {"po-1": shared}
 
     def test_unresolvable_far_end_yields_nothing(self) -> None:
-        gen = self._gen()
+        gen = _make_gen()
         gen.client.filters = AsyncMock(return_value=[_iface("eth0")])
         gen._resolve_customer_facing_target = AsyncMock(return_value=None)
 
-        assigned, devices = asyncio.run(
-            gen._tag_instance_interfaces(device_id="dev-1", segment_id="seg-1", segment_obj=MagicMock())
-        )
-
-        assert (assigned, devices) == (0, set())
+        assert asyncio.run(gen._customer_facing_targets("dev-1")) == {}
 
 
 # ===========================================================================

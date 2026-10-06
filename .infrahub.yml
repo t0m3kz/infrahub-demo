@@ -602,6 +602,10 @@ queries:
     file_path: queries/topology/add/app_component.gql
   - name: app_component_segment
     file_path: queries/topology/add/app_component_segment.gql
+  - name: segment_components
+    file_path: queries/topology/add/segment_components.gql
+  - name: segment_vlan_domains
+    file_path: queries/topology/add/segment_vlan_domains.gql
   - name: vxlan_segment_data
     file_path: queries/topology/add/vxlan_segment.gql
   - name: loadbalancer_vip_data
@@ -832,7 +836,8 @@ generator_definitions:
         - utils/
   # Same generator, entered from a dependency: the application trigger fires
   # before the dependencies of a freshly loaded application exist, and a
-  # dependency added later changes no AppApplication at all.
+  # dependency added later changes no AppApplication at all. It only fans out
+  # add_app_application to the affected application and writes nothing.
   - name: add_app_dependency
     file_path: generators/topology/application_security.py
     targets: app_dependencies
@@ -847,8 +852,9 @@ generator_definitions:
         - generators/
         - utils/
   # Same generator, entered from a component that moved to another segment
-  # or changed its ports: it reconciles its own application and fans out
-  # add_app_application to every application calling the component.
+  # or changed its ports: it fans out add_app_application to its own
+  # application and every application calling the component, and writes
+  # nothing itself (only add_app_application owns an application's rules).
   - name: add_app_component
     file_path: generators/topology/application_security.py
     targets: app_components

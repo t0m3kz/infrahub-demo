@@ -190,10 +190,10 @@ class TestFirewallContextNoFirewallOrCluster:
         gen.client.create.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_firewall_devices_not_yet_paired_self_heals_via_ensure_ha_pairs(self) -> None:
-        """A customer can board before, or concurrently with, the DC's own
-        firewall HA-pairing — instead of hard-failing, pair the existing
-        firewall devices with the same DeviceMixin helper dc.py uses."""
+    async def test_unpaired_firewalls_wait_for_parent_then_use_its_cluster(self) -> None:
+        """Unpaired firewalls mean add_dc/dc_pod_cascade has not finished: the
+        customer waits for it and re-queries — it never pairs the DC's
+        firewalls itself (that would claim the DC's HA for this run's group)."""
         gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
         cluster = MagicMock(id="cluster-1")
         cluster.name.value = "DC10-FW1-FW2-ha"
@@ -208,23 +208,34 @@ class TestFirewallContextNoFirewallOrCluster:
             )
         )
 
-        gen._ensure_ha_pairs.assert_awaited_once_with(
-            ["DC10-FW1", "DC10-FW2"], ha_kind="ManagedFirewallHA", role_label="firewall"
+        gen._ensure_ha_pairs.assert_not_awaited()
+        # Once up front in generate(), once more when the cluster is missing.
+        assert gen.wait_for_parent_generator_and_refetch.await_args_list[-1].args == (
+            ("add_dc", "dc_pod_cascade"),
+            "dc10-id",
         )
+        assert gen.wait_for_parent_generator_and_refetch.await_count == 2
         gen._get_or_create_firewall_context.assert_awaited_once()
         gen.logger.error.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_firewall_devices_still_unpaired_after_self_heal_is_a_hard_error(self) -> None:
+    async def test_still_unpaired_after_waiting_fails_without_writing(self) -> None:
+        """Still unpaired after the wait: logger.error (FailOnErrorLogger
+        raises in a real run) and nothing is created, paired or saved."""
         gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
         gen.client.filters = AsyncMock(side_effect=[[], []])
         gen._ensure_ha_pairs = AsyncMock()
+        gen._get_or_create_firewall_context = AsyncMock()
 
         await gen.generate(_dc_payload_with_parent(fw_devices=[_fw_device()]))
 
         assert gen.client.filters.await_count == 2
-        gen.logger.error.assert_called()
+        assert gen.wait_for_parent_generator_and_refetch.await_count == 2
+        gen._ensure_ha_pairs.assert_not_awaited()
+        gen._get_or_create_firewall_context.assert_not_awaited()
         gen.client.create.assert_not_called()
+        gen.logger.error.assert_called_once()
+        assert "not HA-paired" in gen.logger.error.call_args.args[0]
 
 
 class TestAllControllersWiring:
@@ -280,20 +291,46 @@ class TestFirewallContextProvisioning:
 
         await gen.generate(_dc_payload_with_parent(dedicated_firewall=False, fw_devices=[fw_device]))
 
-        gen._get_or_create_firewall_context.assert_awaited_once_with(f"{cluster.name.value}-shared", cluster.id, None)
+        gen._get_or_create_firewall_context.assert_awaited_once_with(
+            f"{cluster.name.value}-shared", cluster.id, None, track=False
+        )
+        assert gen._ensure_context_subinterface.call_args.kwargs["track"] is False
 
     @pytest.mark.asyncio
     async def test_dedicated_context_created_when_design_requests_it(self) -> None:
-        gen, _, cluster = self._make_gen_with_cluster()
+        """A dedicated context sits on the customer's own dedicated cluster and is tracked."""
+        gen, _, _ = self._make_gen_with_cluster()
         context_obj = MagicMock(id="ctx-1")
         gen._get_or_create_firewall_context = AsyncMock(return_value=context_obj)
+        dedicated_cluster = MagicMock(id="dedicated-cluster-1")
+        dedicated_cluster.name.value = "DC10-FW1-C005-p-dedicated-DC10-FW2-C005-p-dedicated-ha"
+        dedicated_fws = [MagicMock(id="virt-1"), MagicMock(id="virt-2")]
+        gen._ensure_dedicated_device_pair = AsyncMock(return_value=(dedicated_cluster, dedicated_fws))
+
+        await gen.generate(_dc_payload_with_parent(customer_id="cust-1", dedicated_firewall=True))
+
+        gen._get_or_create_firewall_context.assert_awaited_once_with(
+            f"{dedicated_cluster.name.value}-context", "dedicated-cluster-1", "cust-1", track=True
+        )
+        sub_kwargs = gen._ensure_context_subinterface.call_args.kwargs
+        assert sub_kwargs["track"] is True
+        assert sub_kwargs["fw_devices"] == dedicated_fws
+
+    @pytest.mark.asyncio
+    async def test_dedicated_request_without_dedicated_pair_falls_back_to_shared(self) -> None:
+        """No dedicated pair (no template/size): shared capacity, untracked —
+        never a tenant-tagged "{shared cluster}-context" every such fallback
+        customer would claim and re-tenant on the same name."""
+        gen, _, cluster = self._make_gen_with_cluster()
+        gen._get_or_create_firewall_context = AsyncMock(return_value=MagicMock(id="ctx-1"))
         gen._ensure_dedicated_device_pair = AsyncMock(return_value=None)
 
         await gen.generate(_dc_payload_with_parent(customer_id="cust-1", dedicated_firewall=True))
 
-        call = gen._get_or_create_firewall_context.call_args
-        assert call.args[0] == f"{cluster.name.value}-context"
-        assert call.args[2] == "cust-1"
+        gen._get_or_create_firewall_context.assert_awaited_once_with(
+            f"{cluster.name.value}-shared", cluster.id, None, track=False
+        )
+        assert gen._ensure_context_subinterface.call_args.kwargs["track"] is False
 
     @pytest.mark.asyncio
     async def test_connectivity_mode_passed_through_to_subinterface_step(self) -> None:
@@ -843,6 +880,17 @@ class TestGetOrCreateFirewallContext:
         created.save.assert_awaited_once_with(allow_upsert=True)
 
     @pytest.mark.asyncio
+    async def test_shared_context_saved_untracked(self) -> None:
+        """track=False: the shared context is written but claimed by no customer's group."""
+        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        created = AsyncMock()
+        gen.client.create = AsyncMock(return_value=created)
+
+        await gen._get_or_create_firewall_context("dc10-shared", "cluster-1", None, track=False)
+
+        created.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
+
+    @pytest.mark.asyncio
     async def test_creates_dedicated_context_with_tenant(self) -> None:
         gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
         gen.client.filters = AsyncMock(return_value=[])
@@ -853,3 +901,143 @@ class TestGetOrCreateFirewallContext:
 
         data = gen.client.create.call_args.kwargs["data"]
         assert data["tenant"] == {"id": "cust-1"}
+
+
+class _RecordingClient:
+    """Fake SDK client for the full FirewallContext path (no helper stubbed).
+
+    Every node create() hands back records its save() kwargs in ``saves`` as
+    (kind, name, kwargs), so a test can assert the tracking decision of every
+    write the boarding run makes — the context, its VLAN allocation, both
+    sub-interfaces per firewall and the P2P addresses.
+    """
+
+    def __init__(self, cluster: Any) -> None:
+        """Serve ``cluster`` as the parent's (or dedicated) ManagedFirewallHA."""
+        self.cluster = cluster
+        self.saves: list[tuple[str, str, dict[str, Any]]] = []
+        self.allocate_next_ip_prefix = AsyncMock(side_effect=self._allocate)
+        self._prefix_index = 0
+
+    async def _allocate(self, **_: Any) -> Any:
+        """A fresh /31 per allocation identifier."""
+        prefix = MagicMock()
+        prefix.prefix.value = f"100.65.0.{self._prefix_index * 2}/31"
+        prefix.ip_namespace = MagicMock(id="ns-default")
+        self._prefix_index += 1
+        return prefix
+
+    async def filters(self, *, kind: Any, **kwargs: Any) -> list[Any]:
+        """Cluster, PBR peers and trunk interfaces, by kind."""
+        name = getattr(kind, "__name__", kind)
+        if name == "ManagedFirewallHA":
+            return [self.cluster]
+        if name == "DcimPhysicalDevice":
+            peer = MagicMock(id="bl-1")
+            peer.name.value = "DC10-BL1"
+            return [peer]
+        if name == "DcimPhysicalInterface":
+            trunk = MagicMock(id=f"trunk-{kwargs['device__ids'][0]}")
+            trunk.name.value = "Ethernet1/25"
+            return [trunk]
+        return []
+
+    async def get(self, *, kind: Any, **kwargs: Any) -> Any:
+        """Pools resolve; addresses do not exist yet; a refetched context carries its VLAN."""
+        name = getattr(kind, "__name__", kind)
+        if name in ("CoreNumberPool", "CoreIPPrefixPool"):
+            return MagicMock(id=f"{name}-1")
+        if name == "ManagedFirewallContext":
+            context = MagicMock(id=kwargs["id"])
+            context.name.value = "ctx"
+            context.vlan_id.value = 3000
+            return context
+        return None
+
+    async def create(self, *, kind: Any, data: dict[str, Any]) -> Any:
+        """A node whose save() records (kind, name/address, kwargs)."""
+        name = getattr(kind, "__name__", kind)
+        node = MagicMock(id=data.get("id") or f"{name}-{len(self.saves)}")
+        node.name.value = data.get("name")
+        if name == "ManagedFirewallContext" and "vlan_id" not in data:
+            node.vlan_id.value = None  # fresh context: VLAN not allocated yet
+        node.interface_capabilities.fetch = AsyncMock()
+        node.interface_capabilities.peers = []
+        label = data.get("name") or data.get("address") or ("vlan_id" if "vlan_id" in data else "")
+
+        async def _save(**save_kwargs: Any) -> None:
+            self.saves.append((name, label, save_kwargs))
+
+        node.save = _save
+        return node
+
+
+class TestFirewallContextOwnership:
+    """The tracking decision for every write of the boarding run.
+
+    The shared context is reached by every customer on the cluster, so it,
+    its VLAN allocation, its per-firewall sub-interfaces (firewall and PBR
+    peer side) and its P2P addresses belong to none of them — all untracked.
+    A dedicated context belongs to its one customer — all tracked.
+    """
+
+    def _make_gen(self, cluster: Any) -> tuple[Any, _RecordingClient]:
+        """A generator whose client records saves; link_serving_firewall_context stubbed (tested above)."""
+        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        client = _RecordingClient(cluster)
+        gen.client = client
+        gen.link_serving_firewall_context = AsyncMock()
+        return gen, client
+
+    @staticmethod
+    def _cluster(name: str, member_ids: list[str]) -> Any:
+        """A ManagedFirewallHA with the given members."""
+        cluster = MagicMock(id=f"{name}-id")
+        cluster.name.value = name
+        cluster.capabilities.peers = [MagicMock(id=member_id) for member_id in member_ids]
+        return cluster
+
+    @pytest.mark.asyncio
+    async def test_shared_path_saves_everything_untracked(self) -> None:
+        """Shared context, VLAN, fw+peer sub-interfaces and P2P IPs: none claimed."""
+        gen, client = self._make_gen(self._cluster("DC10-FW1-FW2-ha", ["fw-1", "fw-2"]))
+
+        await gen.generate(
+            _dc_payload_with_parent(
+                fw_devices=[_fw_device(id="fw-1", name="DC10-FW1"), _fw_device(id="fw-2", name="DC10-FW2")]
+            )
+        )
+
+        kinds = sorted({kind for kind, _, _ in client.saves})
+        assert kinds == ["DcimVirtualInterface", "IpamIPAddress", "ManagedFirewallContext"]
+        # 1 context + 1 VLAN allocation; 2 fws x 2 sides x (save + capability re-save); 2 fws x 2 IPs.
+        assert len(client.saves) == 2 + 8 + 4
+        for kind, label, kwargs in client.saves:
+            assert kwargs == {"allow_upsert": True, "update_group_context": False}, (kind, label)
+        assert ("ManagedFirewallContext", "DC10-FW1-FW2-ha-shared") in {(k, n) for k, n, _ in client.saves}
+        gen.logger.error.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_dedicated_path_saves_everything_tracked(self) -> None:
+        """Dedicated context on the customer's own cluster: every write claimed by the run."""
+        physical_cluster = self._cluster("DC10-FW1-FW2-ha", ["fw-1", "fw-2"])
+        gen, client = self._make_gen(physical_cluster)
+        dedicated_cluster = self._cluster("DC10-FW1-C005-p-dedicated-ha", ["virt-1", "virt-2"])
+        virt1, virt2 = MagicMock(id="virt-1"), MagicMock(id="virt-2")
+        virt1.name.value = "DC10-FW1-C005-p-dedicated"
+        virt2.name.value = "DC10-FW2-C005-p-dedicated"
+        gen._ensure_dedicated_device_pair = AsyncMock(return_value=(dedicated_cluster, [virt1, virt2]))
+
+        await gen.generate(
+            _dc_payload_with_parent(
+                dedicated_firewall=True,
+                fw_devices=[_fw_device(id="fw-1", name="DC10-FW1"), _fw_device(id="fw-2", name="DC10-FW2")],
+            )
+        )
+
+        assert len(client.saves) == 2 + 8 + 4
+        for kind, label, kwargs in client.saves:
+            assert kwargs == {"allow_upsert": True}, (kind, label)
+        assert ("ManagedFirewallContext", "DC10-FW1-C005-p-dedicated-ha-context") in {
+            (k, n) for k, n, _ in client.saves
+        }

@@ -1,7 +1,8 @@
 # add_app_dependency: a dependency created or changed after its application
-# re-runs that application's rule reconciliation. Only the application has to
-# be found here; the rules are built from the application query
-# (application.gql), which reads every dependency through depends_on.
+# triggers add_app_application for that application (by id) and writes
+# nothing itself. Only the application has to be found here; the rules are
+# built by add_app_application from application.gql, which reads every
+# dependency through depends_on.
 #   - a component source reconciles the source component's application
 #   - an access-profile source reconciles the target component's application
 query app_dependency($name: String!) {
@@ -17,6 +18,7 @@ query app_dependency($name: String!) {
               name { value }
               parent {
                 node {
+                  id
                   ... on AppApplication {
                     name { value }
                   }
@@ -38,6 +40,7 @@ query app_dependency($name: String!) {
             ... on AppComponent {
               parent {
                 node {
+                  id
                   ... on AppApplication {
                     name { value }
                   }

@@ -196,6 +196,10 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
             return False, False
 
     async def _get_or_create_policy(self, policy_name: str, app_name: str) -> Any | None:
+        """The source segment's SecurityPolicy, untracked: every application
+        with a component on that segment writes its rules into this one
+        policy, so no application's run owns it (its rules stay owned by the
+        application that produced them)."""
         return await self._get_or_create_by_name(
             kind=SecurityPolicy,
             name=policy_name,
@@ -207,6 +211,7 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
             },
             found_log="Using existing policy: %s",
             created_log="Created policy: %s",
+            track=False,
         )
 
     async def _read_policy_rules(self, policy_id: str, rule_indexes: dict[str, set[int]]) -> list[Any]:
@@ -363,7 +368,6 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
                 destination_tag__ids=[dst_tag_id],
             )
             if existing:
-                await existing[0].save(allow_upsert=True)
                 return
         except Exception:
             pass
@@ -379,7 +383,10 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
                     "description": f"Auto-generated from {app_name} dependency {dep_name}",
                 },
             )
-            await tag_rule.save(allow_upsert=True)
+            # update_group_context=False: one (source tag, destination tag)
+            # pair is reached by every application with a dependency between
+            # those two segments, so no single application's run owns it.
+            await tag_rule.save(allow_upsert=True, update_group_context=False)
             self.logger.info(
                 "  Reconciled SecurityTagRule %s -> %s",
                 src_tag.get("name", src_tag_id),

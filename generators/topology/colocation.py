@@ -426,7 +426,8 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         node.technical_pool = {"id": technical_pool.id}
         node.asn_pool = {"id": asn_pool.id}
         node.vni_pool = {"id": vni_pool.id}
-        await node.save()
+        # Untracked: the metro is this run's target, not its output.
+        await node.save(update_group_context=False)
         self.logger.info(f"Metro {metro}: attached loopback/management/technical/ASN/VNI pool references")
 
     async def _ensure_firewall_context_pools(self) -> None:

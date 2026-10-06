@@ -11,11 +11,13 @@ same task as `invoke infra.start`) — use whichever you prefer.
 
 import logging
 import os
+import re
 import time
 from pathlib import Path
 from typing import cast
 
 from infrahub_sdk import Config, InfrahubClientSync
+from infrahub_sdk.node import InfrahubNodeSync
 from infrahub_sdk.task.models import TaskFilter, TaskState
 from invoke import Collection, Context, Exit, Task
 from invoke import task as _task
@@ -623,6 +625,105 @@ def load_all_demo(context: Context, branch: str = "", from_stage: str = "") -> N
 
 
 # ---------------------------------------------------------------------------
+# Generator tracking groups — one-time migration helper
+# ---------------------------------------------------------------------------
+
+# The SDK's InfrahubGenerator.run() tracks each run in a group of one of these
+# kinds (CoreGeneratorGroup when execute_after_merge, else
+# CoreGeneratorAwareGroup), named "<definition name>-<md5 of the run params>"
+# (InfrahubGroupContextBase._generate_group_name). The bootstrap data also
+# declares *target* groups of kind CoreGeneratorGroup (customer_deployments_dc,
+# ...), which carry no hash suffix — the name pattern is what tells them apart.
+GENERATOR_GROUP_KINDS = ("CoreGeneratorGroup", "CoreGeneratorAwareGroup")
+_TRACKING_GROUP_HASH = re.compile(r"-[0-9a-f]{32}$")
+# Peers per RelationshipRemove mutation: a DC's add_dc group holds thousands.
+_MEMBER_REMOVE_CHUNK = 500
+
+
+def _node_name(node: InfrahubNodeSync) -> str:
+    """Return the node's `name` attribute value (SDK attributes are untyped)."""
+    return str(getattr(node, "name").value)
+
+
+def _is_tracking_group(name: str, definitions: set[str]) -> bool:
+    """True when `name` is "<generator definition>-<params hash>"."""
+    match = _TRACKING_GROUP_HASH.search(name)
+    return bool(match) and name[: match.start()] in definitions
+
+
+def _generator_tracking_groups(client: InfrahubClientSync, branch: str) -> list[InfrahubNodeSync]:
+    """Return the branch's generator tracking groups, with their members loaded.
+
+    Target groups (CoreStandardGroup, and the CoreGeneratorGroup target groups
+    from data/bootstrap/00_groups.yml) and lock-* groups never match.
+    """
+    definitions = {_node_name(d) for d in client.all(kind="CoreGeneratorDefinition", branch=branch)}
+    groups: list[InfrahubNodeSync] = []
+    for kind in GENERATOR_GROUP_KINDS:
+        groups += [
+            group
+            for group in client.all(kind=kind, branch=branch, include=["members"])
+            if _is_tracking_group(_node_name(group), definitions)
+        ]
+    return sorted(groups, key=_node_name)
+
+
+def _reset_branch_generator_groups(client: InfrahubClientSync, branch: str, dry_run: bool) -> int:
+    """Empty every generator tracking group on `branch`; return the members removed (or to remove)."""
+    total = 0
+    for group in _generator_tracking_groups(client, branch):
+        peers = getattr(group, "members").peers  # SDK relationships are untyped
+        kinds: dict[str, int] = {}
+        for peer in peers:
+            kinds[peer.typename or "?"] = kinds.get(peer.typename or "?", 0) + 1
+        histogram = ", ".join(f"{kind}={count}" for kind, count in sorted(kinds.items()))
+        log.info("[%s] %s (%s): %d member(s) %s", branch, _node_name(group), group.get_kind(), len(peers), histogram)
+        total += len(peers)
+        if dry_run or not peers:
+            continue
+        ids = [peer.id for peer in peers if peer.id]
+        for start in range(0, len(ids), _MEMBER_REMOVE_CHUNK):
+            group.remove_relationships(
+                relation_to_update="members", related_nodes=ids[start : start + _MEMBER_REMOVE_CHUNK]
+            )
+    return total
+
+
+@_task
+def reset_generator_groups(
+    context: Context, branch: str = "", all_branches: bool = False, dry_run: bool = False
+) -> None:
+    """Empty every generator tracking group, keeping the groups themselves.
+
+    A generator run deletes `previous members - nodes saved this run`. When a
+    generator stops claiming a node it does not own (its save switched to
+    update_group_context=False), that node is still in the group from earlier
+    runs, so the next run would delete it. Emptying the groups once after
+    deploying such a fix makes the next run delete nothing and re-claim exactly
+    what it saves. The cost: nodes that were already stale are not cleaned up.
+
+    Only tracking groups ("<generator definition>-<params hash>", kind
+    CoreGeneratorGroup or CoreGeneratorAwareGroup) are touched — never target
+    groups (topologies_dc, customer_deployments_dc, ...) or lock-* groups.
+    Members are removed with RelationshipRemove; no member node is deleted.
+
+    Example:
+        uv run invoke reset-generator-groups --branch all-demo-scenario --dry-run
+        uv run invoke reset-generator-groups --branch all-demo-scenario
+        uv run invoke data.reset-generator-groups --all-branches
+    """
+    if not branch and not all_branches:
+        raise Exit("Pass --branch <name> or --all-branches", code=1)
+
+    client = _infrahub_client()
+    branches = sorted(client.branch.all()) if all_branches else [branch]
+    action = "would remove" if dry_run else "removed"
+    for name in branches:
+        total = _reset_branch_generator_groups(client, name, dry_run)
+        log.info("[%s] %s %d tracking-group member(s)", name, action, total)
+
+
+# ---------------------------------------------------------------------------
 # Collections — each task is registered under its namespace AND at the root
 # ---------------------------------------------------------------------------
 
@@ -652,6 +753,7 @@ data_ns.add_task(cast(Task, load_menu), name="load-menu")
 data_ns.add_task(cast(Task, load_objects), name="load-objects")
 data_ns.add_task(cast(Task, load_data), name="load-data")
 data_ns.add_task(cast(Task, load_all_demo), name="load-all-demo")
+data_ns.add_task(cast(Task, reset_generator_groups), name="reset-generator-groups")
 
 ns = Collection()
 ns.add_task(cast(Task, start))
@@ -675,6 +777,7 @@ ns.add_task(cast(Task, load_menu), name="load-menu")
 ns.add_task(cast(Task, load_objects), name="load-objects")
 ns.add_task(cast(Task, load_data), name="load-data")
 ns.add_task(cast(Task, load_all_demo), name="load-all-demo")
+ns.add_task(cast(Task, reset_generator_groups), name="reset-generator-groups")
 ns.add_collection(infra_ns)
 ns.add_collection(dev_ns)
 ns.add_collection(data_ns)

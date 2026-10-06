@@ -9,7 +9,8 @@ Domain logic has its own test files mirroring the mixins it's split across:
 
 This file covers only:
   - _seg_cidr()                        — module-level pure function
-  - generate()'s trigger-shape dispatch (AppDependency/AppComponent)
+  - generate()'s trigger-shape dispatch (AppDependency/AppComponent fan out
+    to add_app_application and write nothing)
   - _reconcile_application_rules()'s per-edge dispatch: target_fqdn -> proxy,
     cloud -> one cloud rule per port, on-prem -> one segment rule per port,
     and skipping of malformed/portless/targetless dependencies
@@ -20,6 +21,7 @@ This file covers only:
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -146,16 +148,27 @@ class TestSegCidr:
 
 
 class TestDependencyRuleGenerator:
+    """add_app_dependency only fans out to add_app_application; it writes nothing."""
+
     def _gen(self) -> Any:
         gen = AppApplicationGenerator.__new__(AppApplicationGenerator)
         gen.client = AsyncMock()
         gen.logger = MagicMock()
-        gen._run_for_application_name = AsyncMock()
+        gen.run_generator = AsyncMock()
+        gen._reconcile_application_rules = AsyncMock()
         return gen
 
-    def test_dependency_generator_triggers_full_parent_application_reconcile(self) -> None:
-        """The trigger payload only names the application; its rules come from
-        the full application query, which already reads the new dependency."""
+    @staticmethod
+    def _assert_wrote_nothing(gen: Any) -> None:
+        """No rule reconciliation, no query, no node created in this run's group."""
+        gen._reconcile_application_rules.assert_not_awaited()
+        gen.client.execute_graphql.assert_not_awaited()
+        gen.client.create.assert_not_awaited()
+        gen.client.filters.assert_not_awaited()
+
+    def test_dependency_fans_out_to_the_source_application(self) -> None:
+        """The trigger payload only names the application; add_app_application
+        builds its rules from the full application query."""
         gen = self._gen()
 
         dep_data = {
@@ -166,19 +179,20 @@ class TestDependencyRuleGenerator:
                     "source": {
                         "id": "comp-fe",
                         "name": "frontend",
-                        "parent": {"name": "myapp", "security_profile": "internal_standard"},
+                        "parent": {"id": "app-1", "name": "myapp"},
                     },
-                    "target": {"id": "comp-api", "parent": {"name": "myapp"}},
+                    "target": {"id": "comp-api", "parent": {"id": "app-1", "name": "myapp"}},
                 }
             ]
         }
 
         asyncio.run(gen.generate(dep_data))
 
-        gen._run_for_application_name.assert_awaited_once_with("myapp")
+        gen.run_generator.assert_awaited_once_with("add_app_application", ["app-1"], wait=False)
+        self._assert_wrote_nothing(gen)
 
-    def test_target_fqdn_dependency_triggers_the_source_application(self) -> None:
-        """An external dependency has no target component; the source's application is reconciled."""
+    def test_target_fqdn_dependency_fans_out_to_the_source_application(self) -> None:
+        """An external dependency has no target component; the source's application is triggered."""
         gen = self._gen()
 
         dep_data = {
@@ -186,7 +200,7 @@ class TestDependencyRuleGenerator:
                 {
                     "id": "dep-1",
                     "name": "backend-to-stripe",
-                    "source": {"id": "comp-be", "name": "backend", "parent": {"name": "myapp"}},
+                    "source": {"id": "comp-be", "name": "backend", "parent": {"id": "app-1", "name": "myapp"}},
                     "target": None,
                     "target_fqdn": "api.stripe.com",
                 }
@@ -195,7 +209,8 @@ class TestDependencyRuleGenerator:
 
         asyncio.run(gen.generate(dep_data))
 
-        gen._run_for_application_name.assert_awaited_once_with("myapp")
+        gen.run_generator.assert_awaited_once_with("add_app_application", ["app-1"], wait=False)
+        self._assert_wrote_nothing(gen)
 
     def test_dependency_generator_skips_when_source_missing(self) -> None:
         """A dependency with neither source nor target names no application."""
@@ -203,17 +218,18 @@ class TestDependencyRuleGenerator:
 
         asyncio.run(gen.generate({"AppDependency": [{"id": "dep-1", "name": "fe-to-api"}]}))
 
-        gen._run_for_application_name.assert_not_called()
+        gen.run_generator.assert_not_called()
+        self._assert_wrote_nothing(gen)
 
     def test_dependency_without_target_and_target_fqdn_is_skipped(self) -> None:
-        """A source with nowhere to go reconciles nothing and says why."""
+        """A source with nowhere to go triggers nothing and says why."""
         gen = self._gen()
         dep_data = {
             "AppDependency": [
                 {
                     "id": "dep-1",
                     "name": "fe-to-nowhere",
-                    "source": {"id": "comp-fe", "parent": {"name": "myapp"}},
+                    "source": {"id": "comp-fe", "parent": {"id": "app-1", "name": "myapp"}},
                     "target": None,
                     "target_fqdn": None,
                 }
@@ -222,13 +238,27 @@ class TestDependencyRuleGenerator:
 
         asyncio.run(gen.generate(dep_data))
 
-        gen._run_for_application_name.assert_not_called()
+        gen.run_generator.assert_not_called()
         gen.logger.warning.assert_called_once()
         assert "neither a target component nor a target_fqdn" in gen.logger.warning.call_args.args[0]
 
-    def test_access_profile_grant_reconciles_the_target_application(self) -> None:
+    def test_source_without_parent_application_is_skipped(self) -> None:
+        """A source component outside any application has nothing to trigger."""
+        gen = self._gen()
+        dep_data = {
+            "AppDependency": [
+                {"id": "dep-1", "name": "x", "source": {"id": "comp-fe", "parent": None}, "target": {"id": "c"}}
+            ]
+        }
+
+        asyncio.run(gen.generate(dep_data))
+
+        gen.run_generator.assert_not_called()
+        gen.logger.warning.assert_called_once()
+
+    def test_access_profile_grant_fans_out_to_the_target_application(self) -> None:
         """A dependency from an access profile has no source component, so the
-        target component's application is the one reconciled."""
+        target component's application is the one triggered."""
         gen = self._gen()
 
         dep_data = {
@@ -237,14 +267,15 @@ class TestDependencyRuleGenerator:
                     "id": "dep-1",
                     "name": "c001-checkout-web-private-access",
                     "source_profile": {"id": "profile-1", "name": "c001-private-access-standard"},
-                    "target": {"id": "comp-fe", "parent": {"name": "c001-checkout-p"}},
+                    "target": {"id": "comp-fe", "parent": {"id": "app-checkout", "name": "c001-checkout-p"}},
                 }
             ]
         }
 
         asyncio.run(gen.generate(dep_data))
 
-        gen._run_for_application_name.assert_awaited_once_with("c001-checkout-p")
+        gen.run_generator.assert_awaited_once_with("add_app_application", ["app-checkout"], wait=False)
+        self._assert_wrote_nothing(gen)
 
     def test_access_profile_grant_without_target_application_is_skipped(self) -> None:
         """A grant whose target component has no parent application cannot be reconciled."""
@@ -262,7 +293,7 @@ class TestDependencyRuleGenerator:
 
         asyncio.run(gen.generate(dep_data))
 
-        gen._run_for_application_name.assert_not_called()
+        gen.run_generator.assert_not_called()
         gen.logger.warning.assert_called_once()
 
     def test_dependency_without_any_source_is_skipped(self) -> None:
@@ -273,7 +304,13 @@ class TestDependencyRuleGenerator:
 
         asyncio.run(gen.generate(dep_data))
 
-        gen._run_for_application_name.assert_not_called()
+        gen.run_generator.assert_not_called()
+
+    def test_dependency_query_selects_parent_application_ids(self, root_dir: Path) -> None:
+        """Fan-out targets applications by id, so the query must select them."""
+        query = (root_dir / "queries" / "topology" / "add" / "app_dependency.gql").read_text()
+        compact = " ".join(query.split())
+        assert compact.count("parent { node { id ... on AppApplication") == 2
 
 
 def _component_payload(*dependents: dict[str, Any]) -> dict[str, Any]:
@@ -295,52 +332,68 @@ def _caller(dep_id: str, app_id: str) -> dict[str, Any]:
 
 
 class TestComponentRuleGenerator:
-    """A component moved to another segment: its rules and its callers' rules name that segment."""
+    """add_app_component only fans out: its own application and every caller."""
 
     def _gen(self) -> Any:
         gen = AppApplicationGenerator.__new__(AppApplicationGenerator)
         gen.client = AsyncMock()
         gen.logger = MagicMock()
-        gen._run_for_application_name = AsyncMock()
         gen.run_generator = AsyncMock()
+        gen._reconcile_application_rules = AsyncMock()
         return gen
 
-    def test_component_generator_triggers_full_parent_application_reconcile(self) -> None:
-        """The component's own application is reconciled in full."""
+    def test_component_fans_out_to_its_own_application(self) -> None:
+        """The component's own application gets an add_app_application run; nothing is written here."""
         gen = self._gen()
 
         asyncio.run(gen.generate(_component_payload()))
 
-        gen._run_for_application_name.assert_awaited_once_with("c001-b-p")
-        gen.run_generator.assert_not_called()
+        gen.run_generator.assert_awaited_once_with("add_app_application", ["app-b"], wait=False)
+        gen._reconcile_application_rules.assert_not_awaited()
+        gen.client.execute_graphql.assert_not_awaited()
+        gen.client.create.assert_not_awaited()
 
-    def test_calling_applications_are_re_reconciled_once_each(self) -> None:
-        """Every other application calling the component gets one add_app_application run."""
+    def test_calling_applications_are_fanned_out_once_each(self) -> None:
+        """Every other application calling the component is in the same single fan-out."""
         gen = self._gen()
         payload = _component_payload(_caller("dep-1", "app-c"), _caller("dep-2", "app-a"), _caller("dep-3", "app-a"))
 
         asyncio.run(gen.generate(payload))
 
-        gen.run_generator.assert_awaited_once_with("add_app_application", ["app-a", "app-c"], wait=False)
+        gen.run_generator.assert_awaited_once_with("add_app_application", ["app-a", "app-b", "app-c"], wait=False)
+        gen._reconcile_application_rules.assert_not_awaited()
 
-    def test_own_application_and_access_grants_are_not_fanned_out(self) -> None:
-        """A call from inside the application and an access-profile grant start no extra run."""
+    def test_own_application_and_access_grants_add_no_extra_application(self) -> None:
+        """A call from inside the application and an access-profile grant add no other application."""
         gen = self._gen()
         grant = {"id": "dep-grant", "source": None, "source_profile": {"id": "profile-1"}}
         payload = _component_payload(_caller("dep-1", "app-b"), grant)
 
         asyncio.run(gen.generate(payload))
 
-        gen.run_generator.assert_not_called()
+        gen.run_generator.assert_awaited_once_with("add_app_application", ["app-b"], wait=False)
 
-    def test_component_without_parent_application_is_skipped(self) -> None:
-        """No parent application name: nothing to reconcile, no fan-out."""
+    def test_component_without_parent_application_still_fans_out_to_callers(self) -> None:
+        """No own application: only the callers (if any) are triggered."""
+        gen = self._gen()
+        payload = {
+            "AppComponent": [
+                {"id": "comp-db", "fqdn": "db.example", "parent": None, "dependents": [_caller("dep-1", "app-a")]}
+            ]
+        }
+
+        asyncio.run(gen.generate(payload))
+
+        gen.run_generator.assert_awaited_once_with("add_app_application", ["app-a"], wait=False)
+        gen.logger.warning.assert_called_once()
+
+    def test_component_without_parent_or_callers_is_skipped(self) -> None:
+        """Nothing to trigger at all: no fan-out."""
         gen = self._gen()
         payload = {"AppComponent": [{"id": "comp-db", "fqdn": "db.example", "parent": None}]}
 
         asyncio.run(gen.generate(payload))
 
-        gen._run_for_application_name.assert_not_called()
         gen.run_generator.assert_not_called()
         gen.logger.warning.assert_called_once()
 

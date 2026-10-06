@@ -43,6 +43,9 @@ class CloudSecurityRuleMixin(GetOrCreateByNameMixin):
             name=sg_name,
             create_data=data,
             created_log="Created CloudSecurityGroup: %s",
+            # sg-{app_name} is this application's alone, written only by its
+            # own add_app_application run: owned, so tracked.
+            track=True,
         )
         cache[sg_name] = sg
         self._sg_cache = cache

@@ -34,7 +34,15 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from generators.protocols import ManagedSegmentDeployment, ManagedVxlanSegment, SecurityZone
+import pytest
+
+from generators.logger import GeneratorError
+from generators.protocols import (
+    ManagedSegmentDeployment,
+    ManagedStandaloneVlanDomain,
+    ManagedVxlanSegment,
+    SecurityZone,
+)
 from generators.topology.segment import STRETCHED_VNI_POOL_NAME, VxlanSegmentGenerator
 
 # ---------------------------------------------------------------------------
@@ -55,9 +63,11 @@ def _make_gen() -> Any:
     # deployment missing its vni_pool (see customer_dc.py's identical
     # wait) — no in-flight parent in these unit tests, so no-op.
     gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
-    # PoolMixin.upsert_number_pool — used by the standalone-VLAN-domain path
-    # in _assign_segment_to_dc_interfaces, not under test in this file.
+    # PoolMixin.upsert_number_pool — used by the inline-VLAN path.
     gen.upsert_number_pool = AsyncMock(return_value=MagicMock(id="vlan-pool-1"))
+    # VLAN domain activation reconciliation has its own tests
+    # (tests/unit/test_vlan_domain_reconcile.py) — stubbed at the boundary.
+    gen.reconcile_segment_vlan_domains = AsyncMock()
     # security_zone assignment is a separate concern with its own test class
     # below (TestEnsureSecurityZone) — stub it out here so generate()-level
     # tests stay focused on SegmentDeployment/interface/inline-sub-interface
@@ -152,7 +162,6 @@ class TestVxlanSegmentGeneratorGenerate:
 
     def test_empty_response_logs_error(self):
         gen = _make_gen()
-        gen._assign_to_deployment_interfaces = AsyncMock()
         gen._create_inline_sub_interfaces = AsyncMock()
         data = {"ManagedVxlanSegment": {"edges": []}}
         asyncio.run(gen.generate(data))
@@ -161,7 +170,6 @@ class TestVxlanSegmentGeneratorGenerate:
 
     def test_missing_segment_id_logs_error(self):
         gen = _make_gen()
-        gen._assign_to_deployment_interfaces = AsyncMock()
         gen._create_inline_sub_interfaces = AsyncMock()
         # id="" triggers the "missing id or name" guard
         data = _seg_response(seg_id="", seg_name="vxlan-1000", deployments=[_DEP_1])
@@ -171,7 +179,6 @@ class TestVxlanSegmentGeneratorGenerate:
 
     def test_no_deployments_logs_error(self):
         gen = _make_gen()
-        gen._assign_to_deployment_interfaces = AsyncMock()
         gen._create_inline_sub_interfaces = AsyncMock()
         data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[])
         asyncio.run(gen.generate(data))
@@ -187,7 +194,6 @@ class TestVxlanSegmentGeneratorGenerate:
         """Two deployments produce two _activate_segment_in_deployment calls."""
         gen = _make_gen()
         gen._activate_segment_in_deployment = AsyncMock()
-        gen._assign_to_deployment_interfaces = AsyncMock()
         gen._create_inline_sub_interfaces = AsyncMock()
 
         data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1, _DEP_2])
@@ -204,7 +210,6 @@ class TestVxlanSegmentGeneratorGenerate:
         """vni_pool from the query's parent fragment is forwarded as-is."""
         gen = _make_gen()
         gen._activate_segment_in_deployment = AsyncMock()
-        gen._assign_to_deployment_interfaces = AsyncMock()
         gen._create_inline_sub_interfaces = AsyncMock()
 
         data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1])
@@ -220,7 +225,6 @@ class TestVxlanSegmentGeneratorGenerate:
         gen.client.get = AsyncMock(return_value=MagicMock(id="pool-global"))
         gen.client.filters = AsyncMock(return_value=[])
         gen._activate_segment_in_deployment = AsyncMock()
-        gen._assign_to_deployment_interfaces = AsyncMock()
         gen._create_inline_sub_interfaces = AsyncMock()
 
         data = _seg_response(
@@ -237,7 +241,6 @@ class TestVxlanSegmentGeneratorGenerate:
         gen = _make_gen()
         gen.client.get = AsyncMock(return_value=None)
         gen._activate_segment_in_deployment = AsyncMock()
-        gen._assign_to_deployment_interfaces = AsyncMock()
         gen._create_inline_sub_interfaces = AsyncMock()
 
         data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1], stretch_scope="global")
@@ -255,7 +258,6 @@ class TestVxlanSegmentGeneratorGenerate:
         existing_dep.deployment = None
         gen.client.filters = AsyncMock(return_value=[existing_dep])
         gen._activate_segment_in_deployment = AsyncMock()
-        gen._assign_to_deployment_interfaces = AsyncMock()
         gen._create_inline_sub_interfaces = AsyncMock()
 
         data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1, _DEP_2])
@@ -269,7 +271,6 @@ class TestVxlanSegmentGeneratorGenerate:
         """A customer deployment entry with id='' is skipped; only the valid one triggers activation."""
         gen = _make_gen()
         gen._activate_segment_in_deployment = AsyncMock()
-        gen._assign_to_deployment_interfaces = AsyncMock()
         gen._create_inline_sub_interfaces = AsyncMock()
 
         data = {
@@ -301,19 +302,19 @@ class TestVxlanSegmentGeneratorGenerate:
         assert gen._activate_segment_in_deployment.call_count == 1
         assert gen._activate_segment_in_deployment.call_args.kwargs["deployment_id"] == "dc-1"
 
-    def test_generate_calls_interface_assignment_and_inline_creation(self):
-        """generate() calls _activate_segment_in_deployment, _assign_to_deployment_interfaces,
-        and _create_inline_sub_interfaces."""
+    def test_generate_reconciles_vlan_domains_and_creates_inline_interfaces(self):
+        """generate() activates each deployment, reconciles the segment's VLAN
+        domain activations (local or stretched alike), and creates inline
+        sub-interfaces."""
         gen = _make_gen()
         gen._activate_segment_in_deployment = AsyncMock()
-        gen._assign_to_deployment_interfaces = AsyncMock()
         gen._create_inline_sub_interfaces = AsyncMock()
 
         data = _seg_response(seg_id="seg-3", seg_name="vxlan-2000", deployments=[_DEP_1])
         asyncio.run(gen.generate(data))
 
         gen._activate_segment_in_deployment.assert_awaited_once()
-        gen._assign_to_deployment_interfaces.assert_awaited_once()
+        gen.reconcile_segment_vlan_domains.assert_awaited_once_with("seg-3", "vxlan-2000")
         gen._create_inline_sub_interfaces.assert_awaited_once()
 
     def test_missing_vni_pool_waits_on_parent_dc_generators(self):
@@ -322,7 +323,6 @@ class TestVxlanSegmentGeneratorGenerate:
         every parent generator before _resolve_target_deployments is retried."""
         gen = _make_gen()
         gen._activate_segment_in_deployment = AsyncMock()
-        gen._assign_to_deployment_interfaces = AsyncMock()
         gen._create_inline_sub_interfaces = AsyncMock()
 
         dep_no_pool = {"id": "cust-1", "name": "C001-P-DC1", "parent": {"id": "dc-1", "name": "DC-1"}}
@@ -341,7 +341,6 @@ class TestVxlanSegmentGeneratorGenerate:
         before target deployments are re-resolved."""
         gen = _make_gen()
         gen._activate_segment_in_deployment = AsyncMock()
-        gen._assign_to_deployment_interfaces = AsyncMock()
         gen._create_inline_sub_interfaces = AsyncMock()
 
         refreshed_payload = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1])
@@ -360,7 +359,6 @@ class TestVxlanSegmentGeneratorGenerate:
     def test_ensure_security_zone_called_with_segment_environment(self):
         gen = _make_gen()
         gen._activate_segment_in_deployment = AsyncMock()
-        gen._assign_to_deployment_interfaces = AsyncMock()
         gen._create_inline_sub_interfaces = AsyncMock()
 
         data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1])
@@ -374,7 +372,6 @@ class TestVxlanSegmentGeneratorGenerate:
     def test_ensure_security_zone_defaults_to_production_environment(self):
         gen = _make_gen()
         gen._activate_segment_in_deployment = AsyncMock()
-        gen._assign_to_deployment_interfaces = AsyncMock()
         gen._create_inline_sub_interfaces = AsyncMock()
 
         data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1])
@@ -687,38 +684,25 @@ class TestResolveVlanDomain:
         assert result == ("DcimPhysicalDevice", "dev-1")
 
 
-class TestEnsureVlanDomainSegment:
-    """Tests for _ensure_vlan_domain_segment — per-(segment, domain) allocation."""
-
-    def test_existing_record_skips_allocation(self) -> None:
-        """An existing pair keeps its vlan_id but is saved again, so the rerun
-        tracks it instead of deleting it."""
-        gen = _make_gen()
-        existing = MagicMock()
-        existing.save = AsyncMock()
-        gen.client.filters = AsyncMock(return_value=[existing])
-
-        asyncio.run(gen._ensure_vlan_domain_segment("seg-1", "vxlan-1000", "mlag-1"))
-
-        gen.client.create.assert_not_called()
-        existing.save.assert_awaited_once_with(allow_upsert=True)
+class TestCreateVlanDomainSegment:
+    """_create_vlan_domain_segment — one new (segment, domain) pair, untracked."""
 
     def test_domain_without_pool_logs_error(self):
         gen = _make_gen()
-        gen.client.filters = AsyncMock(return_value=[])
         domain_obj = MagicMock()
         domain_obj.vlan_pool = None
         gen.client.get = AsyncMock(return_value=domain_obj)
 
-        asyncio.run(gen._ensure_vlan_domain_segment("seg-1", "vxlan-1000", "mlag-1"))
+        asyncio.run(gen._create_vlan_domain_segment("seg-1", "vxlan-1000", "mlag-1"))
 
         gen.client.create.assert_not_called()
         error_msg = gen.logger.error.call_args[0][0]
         assert "vlan_pool" in error_msg
 
-    def test_allocates_vlan_id_from_domain_pool(self):
+    def test_allocates_vlan_id_from_domain_pool_untracked(self) -> None:
+        """The pair is shared desired state of the segment: saved with
+        update_group_context=False, so no run's cleanup can delete it."""
         gen = _make_gen()
-        gen.client.filters = AsyncMock(return_value=[])
         domain_obj = MagicMock()
         domain_obj.vlan_pool = MagicMock(id="pool-vlan-1")
         activation = MagicMock()
@@ -726,32 +710,32 @@ class TestEnsureVlanDomainSegment:
         gen.client.get = AsyncMock(return_value=domain_obj)
         gen.client.create = AsyncMock(return_value=activation)
 
-        asyncio.run(gen._ensure_vlan_domain_segment("seg-1", "vxlan-1000", "mlag-1"))
+        asyncio.run(gen._create_vlan_domain_segment("seg-1", "vxlan-1000", "mlag-1"))
 
         call_kwargs = gen.client.create.call_args.kwargs
         assert call_kwargs["data"]["segment"] == {"id": "seg-1"}
         assert call_kwargs["data"]["vlan_domain"] == {"id": "mlag-1"}
         assert call_kwargs["data"]["vlan_id"]["from_pool"]["id"] == "pool-vlan-1"
-        activation.save.assert_called_once()
+        assert call_kwargs["data"]["vlan_id"]["identifier"] == "seg-1-mlag-1-vlan"
+        activation.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
 
     def test_known_pool_skips_reading_the_domain(self) -> None:
         """A pool id handed over by the caller is used as is, without a domain read."""
         gen = _make_gen()
-        gen.client.filters = AsyncMock(return_value=[])
         activation = MagicMock()
         activation.save = AsyncMock()
         gen.client.get = AsyncMock()
         gen.client.create = AsyncMock(return_value=activation)
 
-        asyncio.run(gen._ensure_vlan_domain_segment("seg-1", "vxlan-1000", "domain-1", "pool-1"))
+        asyncio.run(gen._create_vlan_domain_segment("seg-1", "vxlan-1000", "domain-1", "pool-1"))
 
         gen.client.get.assert_not_called()
         assert gen.client.create.call_args.kwargs["data"]["vlan_id"]["from_pool"]["id"] == "pool-1"
 
 
 class TestEnsureStandaloneVlanDomain:
-    """The domain and its pool are upserted on every run, so a rerun keeps
-    them in its tracking group instead of deleting them."""
+    """The standalone domain and its pool belong to the device's generator:
+    looked up by name, never created or saved here."""
 
     @staticmethod
     def _device() -> MagicMock:
@@ -759,40 +743,44 @@ class TestEnsureStandaloneVlanDomain:
         device.name.value = "bl-dc101101"
         return device
 
-    @staticmethod
-    def _gen() -> Any:
+    def test_existing_domain_is_read_not_saved(self) -> None:
+        """The domain is found by its device-derived name and returned with its pool."""
         gen = _make_gen()
-        domain_obj = MagicMock(id="domain-1")
-        domain_obj.save = AsyncMock()
-        gen.client.create = AsyncMock(return_value=domain_obj)
-        gen.upsert_number_pool = AsyncMock(return_value=MagicMock(id="pool-1"))
-        return gen
-
-    def test_domain_is_upserted_by_name(self) -> None:
-        """Existing or not, the domain goes through the same upsert."""
-        gen = self._gen()
+        domain = MagicMock(id="domain-1")
+        domain.vlan_pool = MagicMock(id="pool-1")
+        domain.save = AsyncMock()
+        gen.client.get = AsyncMock(return_value=domain)
 
         result = asyncio.run(gen._ensure_standalone_vlan_domain(self._device()))
 
         assert result == ("domain-1", "pool-1")
-        data = gen.client.create.call_args.kwargs["data"]
-        assert data["name"] == "bl-dc101101-vlan-domain"
-        assert data["capabilities"] == [{"id": "dev-1"}]
-        gen.client.create.return_value.save.assert_awaited_once_with(allow_upsert=True)
-        gen.client.filters.assert_not_called()
+        kwargs = gen.client.get.call_args.kwargs
+        assert kwargs["kind"] == ManagedStandaloneVlanDomain
+        assert kwargs["name__value"] == "bl-dc101101-vlan-domain"
+        assert kwargs["include"] == ["vlan_pool"]
+        domain.save.assert_not_called()
+        gen.client.create.assert_not_called()
+        gen.upsert_number_pool.assert_not_called()
 
-    def test_pool_is_upserted_and_attached_on_every_run(self) -> None:
-        """Running twice upserts the same pool by name both times."""
-        gen = self._gen()
+    def test_domain_without_pool_returns_none_pool(self) -> None:
+        """A domain whose pool is not attached yet hands back no pool id."""
+        gen = _make_gen()
+        domain = MagicMock(id="domain-1")
+        domain.vlan_pool = None
+        gen.client.get = AsyncMock(return_value=domain)
 
-        asyncio.run(gen._ensure_standalone_vlan_domain(self._device()))
-        asyncio.run(gen._ensure_standalone_vlan_domain(self._device()))
+        assert asyncio.run(gen._ensure_standalone_vlan_domain(self._device())) == ("domain-1", None)
 
-        assert gen.upsert_number_pool.await_count == 2
-        for call in gen.upsert_number_pool.await_args_list:
-            assert call.kwargs["pool_name"] == "bl-dc101101-vlan-domain-vlan-pool"
-            assert call.kwargs["parent_id"] == "domain-1"
-            assert call.kwargs["parent_attr"] == "vlan_pool"
+    def test_missing_domain_is_an_error(self) -> None:
+        """The device generator owns the domain; a missing one fails the run instead of being created."""
+        gen = _make_gen()
+        gen.client.get = AsyncMock(return_value=None)
+
+        with pytest.raises(GeneratorError, match="bl-dc101101-vlan-domain"):
+            asyncio.run(gen._ensure_standalone_vlan_domain(self._device()))
+
+        gen.logger.error.assert_called_once()
+        gen.client.create.assert_not_called()
 
 
 class TestEnsureInlineVlanId:
@@ -883,7 +871,10 @@ class TestEnsureSecurityZone:
             kind=ManagedVxlanSegment,
             data={"id": "seg-1", "security_zone": {"id": "zone-prod-1"}},
         )
-        segment_obj.save.assert_awaited_once_with(allow_upsert=True)
+        # The zone is shared by every segment of the environment: not claimed.
+        existing_zone.save.assert_not_called()
+        # The segment is this run's own target: never put in its group.
+        segment_obj.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
 
     def test_creates_zone_when_missing(self):
         gen = self._make_gen()
@@ -901,6 +892,8 @@ class TestEnsureSecurityZone:
         assert zone_call.kwargs["data"]["name"] == "NONPROD-ZONE"
         assert zone_call.kwargs["data"]["trust_level"] == 50
         assert segment_call.kwargs["data"]["security_zone"] == {"id": "zone-nonprod-1"}
+        zone_obj.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
+        segment_obj.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
 
     def test_non_production_codes_all_map_to_nonprod_zone(self):
         for environment in ("n", "s", "d", "t"):
@@ -922,99 +915,6 @@ class TestEnsureSecurityZone:
         asyncio.run(gen._ensure_security_zone(segment_id="seg-1", segment_name="vxlan-1000", environment="p"))
 
         gen.logger.warning.assert_called_once()
-
-
-# ---------------------------------------------------------------------------
-# Border-gateway VLAN-domain assignment for stretched segments
-# ---------------------------------------------------------------------------
-
-
-def _device(dev_id: str, role: str) -> MagicMock:
-    device = MagicMock()
-    device.id = dev_id
-    device.role.value = role
-    return device
-
-
-class TestRealizeBorderGateways:
-    """A stretched segment gets a VLAN domain segment on every border gateway.
-
-    Customer-port assignment is no longer part of this generator — see
-    tests/unit/test_app_instance_segment_generator.py — so these tests only
-    cover _realize_border_gateways / _assign_to_deployment_interfaces's
-    stretched-only gate.
-    """
-
-    async def _assign(self, devices: list[MagicMock]) -> Any:
-        gen = _make_gen()
-        gen.client.filters = AsyncMock(return_value=devices)
-        gen._resolve_vlan_domain = AsyncMock(side_effect=lambda d: ("ManagedMLAG", f"domain-{d.id}"))
-        gen._ensure_vlan_domain_segment = AsyncMock()
-        await gen._realize_border_gateways(
-            segment_id="seg-1",
-            segment_name="colo-services-stretch",
-            deployment_name="DC10",
-            device_deployment_ids=["dep-1"],
-        )
-        return gen
-
-    def test_queries_border_gateways_only(self) -> None:
-        """border-leaf and edge are the only roles queried — no access/leaf/tor roles."""
-        gen = asyncio.run(self._assign([]))
-        kwargs = gen.client.filters.await_args_list[0].kwargs
-        assert sorted(kwargs["role__values"]) == ["border-leaf", "edge"]
-        assert kwargs["deployment__ids"] == ["dep-1"]
-
-    def test_border_gateway_gets_domain_segment(self) -> None:
-        devices = [_device("bl-1", "border-leaf")]
-        gen = asyncio.run(self._assign(devices))
-        gen._ensure_vlan_domain_segment.assert_awaited_once_with("seg-1", "colo-services-stretch", "domain-bl-1", None)
-
-    def test_no_border_gateways_skips(self) -> None:
-        gen = asyncio.run(self._assign([]))
-        gen._ensure_vlan_domain_segment.assert_not_awaited()
-
-    def test_mlag_pair_shares_one_domain_segment(self) -> None:
-        """Both peers of one MLAG domain realize the segment once, on that domain."""
-        devices = [_device("bl-1", "border-leaf"), _device("bl-2", "border-leaf")]
-        gen = _make_gen()
-        gen._resolve_vlan_domain = AsyncMock(return_value=("ManagedMLAG", "mlag-1"))
-        gen._ensure_vlan_domain_segment = AsyncMock()
-
-        domain_pools = asyncio.run(gen._realize_segment_on_devices("seg-1", "colo-services-stretch", devices))
-
-        assert domain_pools == {"mlag-1": None}
-        gen._ensure_vlan_domain_segment.assert_awaited_once_with("seg-1", "colo-services-stretch", "mlag-1", None)
-
-
-class TestAssignToDeploymentInterfaces:
-    """_assign_to_deployment_interfaces — the stretched-only gate in front of _realize_border_gateways."""
-
-    def test_local_segment_does_nothing(self) -> None:
-        gen = _make_gen()
-        gen._realize_border_gateways = AsyncMock()
-        asyncio.run(
-            gen._assign_to_deployment_interfaces({"id": "seg-1", "name": "seg"}, [{"id": "dc-1"}], stretched=False)
-        )
-        gen._realize_border_gateways.assert_not_awaited()
-
-    def test_stretched_segment_realizes_every_deployment(self) -> None:
-        gen = _make_gen()
-        gen._realize_border_gateways = AsyncMock()
-        deployments = [{"id": "dc-1", "name": "DC6", "children": [{"id": "pod-1"}]}, {"id": "metro-1"}]
-        asyncio.run(gen._assign_to_deployment_interfaces({"id": "seg-1", "name": "seg"}, deployments, stretched=True))
-        assert gen._realize_border_gateways.await_count == 2
-        first_kwargs = gen._realize_border_gateways.await_args_list[0].kwargs
-        assert first_kwargs["device_deployment_ids"] == ["dc-1", "pod-1"]
-        assert first_kwargs["deployment_name"] == "DC6"
-
-    def test_deployment_missing_id_is_skipped(self) -> None:
-        gen = _make_gen()
-        gen._realize_border_gateways = AsyncMock()
-        asyncio.run(
-            gen._assign_to_deployment_interfaces({"id": "seg-1", "name": "seg"}, [{"name": "no-id"}], stretched=True)
-        )
-        gen._realize_border_gateways.assert_not_awaited()
 
 
 class TestDeviceDeploymentIds:

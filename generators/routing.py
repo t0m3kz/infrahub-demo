@@ -283,15 +283,11 @@ class RoutingMixin:
         if needs_overlay_password and overlay_password_id:
             options["overlay_password_id"] = overlay_password_id
 
-        # Protect shared DC-level objects from generator group cleanup
-        for shared_id in [
-            options.get("overlay_as_id"),
-            options.get("ospf_area_id"),
-            options.get("underlay_password_id"),
-            options.get("overlay_password_id"),
-        ]:
-            if shared_id:
-                self.client.group_context.related_node_ids.append(shared_id)
+        # The shared DC-level objects (overlay AS, OSPF area, auth keys) are
+        # only referenced here, never tracked: add_dc/dc_pod_cascade own them
+        # and track them on every run (_create_shared_routing_objects). Tracked
+        # by a pod or rack run too, that run's cleanup would delete them the
+        # run it stops reaching them.
 
         underlay_type = routing_strategy.split("-")[0]
 
@@ -489,7 +485,9 @@ class RoutingMixin:
                 self.client.group_context.related_node_ids.append(existing.id)
                 return existing.id
         except Exception as exc:
-            self.logger.debug(f"Error querying RoutingPassword {name}: {exc}")
+            # Fatal (logger.error raises): add_dc owns this key, and a run that
+            # could not re-track it would delete it in its own cleanup.
+            self.logger.error(f"Error querying RoutingPassword {name}: {exc}")
             return None
 
         try:
@@ -516,6 +514,12 @@ class RoutingMixin:
         deployment_id: str | None = None,
     ) -> str | None:
         """Create shared DC-level routing state used by pod and rack generators.
+
+        add_dc/dc_pod_cascade own all of it and track every object on every
+        run; pod/rack runs only reference it (see create_routing). Every
+        failure here is fatal (logger.error raises): a run that silently
+        skipped one would not re-track it, and its own cleanup would then
+        delete an object every pod still uses.
 
         Returns the shared super-spine underlay AS id (None when the strategy
         has no eBGP underlay, or it could not be found or allocated).
@@ -557,7 +561,7 @@ class RoutingMixin:
                     description=_super_spine_as_description(self.fabric_name), asn_pool_id=asn_pool_id
                 )
             except Exception as exc:
-                self.logger.warning(f"Failed to create shared super-spine AS: {exc}")
+                self.logger.error(f"Failed to create shared super-spine AS: {exc}")
 
         # The fabric AS is created for EVERY strategy, not just the iBGP ones.
         # Under ebgp-ibgp/ospf-ibgp it is the actual overlay BGP local-as. Under
@@ -592,7 +596,7 @@ class RoutingMixin:
             self.client.group_context.related_node_ids.append(as_obj.id)
             await self._attach_evpn_rt_as(deployment_id=deployment_id, as_id=as_obj.id)
         except Exception as exc:
-            self.logger.warning(f"Failed to create shared overlay AS: {exc}")
+            self.logger.error(f"Failed to create shared overlay AS: {exc}")
 
         if strategy == RoutingStrategy.OSPF_IBGP.value:
             area_name = _ospf_area_name(self.fabric_name)
@@ -614,7 +618,7 @@ class RoutingMixin:
                     self.client.group_context.related_node_ids.append(area_obj.id)
                     self.logger.info(f"Created shared OSPF area: {area_name}")
             except Exception as exc:
-                self.logger.warning(f"Failed to create shared OSPF area: {exc}")
+                self.logger.error(f"Failed to create shared OSPF area: {exc}")
 
         return super_spine_as_id
 
@@ -688,9 +692,11 @@ class RoutingMixin:
             # Plain save(), not allow_upsert=True — same reasoning as
             # upsert_number_pool's parent attach in generators/pools.py: the node
             # was just fetched, so update() sends only this field instead of
-            # re-firing triggers on every unmodified attribute.
+            # re-firing triggers on every unmodified attribute. Untracked: the
+            # deployment is this run's target, not its output — tracked, its
+            # own run's cleanup could delete it.
             deployment.evpn_rt_as = {"id": as_id}  # type: ignore[attr-defined]
-            await deployment.save()
+            await deployment.save(update_group_context=False)
             self.logger.info(f"- Linked fabric EVPN route-target AS to deployment ({as_id})")
         except Exception as exc:
             self.logger.warning(f"Failed to attach evpn_rt_as to deployment {deployment_id}: {exc}")
@@ -701,6 +707,10 @@ class RoutingMixin:
         This node must exist before any BGP process or peering can reference it
         via the address_families relationship. The DC1 static demo creates it via
         YAML load; generator-driven topologies need it created here.
+
+        Never tracked: it is one global node every fabric run in every DC
+        references (bootstrap data normally provides it), so it belongs to no
+        run — a tracked one is deleted by whichever run stops reaching it.
         """
         try:
             existing = await self.client.filters(
@@ -709,9 +719,7 @@ class RoutingMixin:
                 safi__value="evpn",
             )
             if existing:
-                node_id = existing[0].id
-                self.client.group_context.related_node_ids.append(node_id)
-                return node_id
+                return existing[0].id
         except Exception as exc:
             self.logger.debug(f"Could not query RoutingBGPAddressFamily: {exc}")
 
@@ -726,7 +734,7 @@ class RoutingMixin:
                     "description": "L2VPN EVPN overlay",
                 },
             )
-            await obj.save(allow_upsert=True)
+            await obj.save(allow_upsert=True, update_group_context=False)
             self.logger.info(f"Upserted RoutingBGPAddressFamily l2vpn/evpn: {obj.id}")
             return obj.id
         except Exception as exc:
@@ -764,10 +772,8 @@ class RoutingMixin:
         combined polling loop — see that loop's docstring for the race this
         closes.
 
-        Protecting the resolved IDs from generator group cleanup is the caller's
-        job (create_routing already does this for every shared_id it collects,
-        from here or from options) — see the "Protect shared DC-level objects"
-        block there.
+        The resolved IDs are only referenced, never tracked, by this caller:
+        add_dc owns them (see _create_shared_routing_objects).
         """
         overlay_as_id: str | None = None
         ospf_area_id: str | None = None

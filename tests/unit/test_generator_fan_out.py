@@ -287,10 +287,9 @@ def _build_dc_cascade_gen() -> Any:
             gen.logger.error("No TopologyDeployment data found in GraphQL response")
             return
         gen.data = deployment_list[0]
-        # Mirrors DCTopologyGenerator.generate(): fetch the DC's pods, register
-        # them with the tracking group, and keep them for the cascade.
+        # Mirrors DCTopologyGenerator.generate(): fetch the DC's pods (read,
+        # never tracked) and keep them for the cascade.
         gen._existing_pods = await gen.client.filters(kind="TopologyPod", parent__ids=[gen.data["id"]])
-        gen.client.group_context.related_node_ids.extend(pod.id for pod in gen._existing_pods)
 
     gen._bootstrap_generate = _fake_bootstrap
     return gen
@@ -310,8 +309,7 @@ class TestDCPodCascadeGenerator:
         await gen.generate({"TopologyDeployment": [{"id": "dc-1", "name": "DC1", "index": 1, "size": "S"}]})
 
         gen.run_generator.assert_awaited_once_with("pod_rack_cascade", [pod1.id, pod2.id], wait=False)
-        assert pod1.id in gen.client.group_context.related_node_ids
-        assert pod2.id in gen.client.group_context.related_node_ids
+        assert gen.client.group_context.related_node_ids == []
 
     @pytest.mark.asyncio
     async def test_no_existing_pods_skips_fan_out(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -410,9 +408,9 @@ def _build_pod_rack_cascade_gen() -> Any:
 
 
 class TestPodRackCascadeGenerator:
-    """PodRackCascadeGenerator.generate(): protect every rack from the tracking
-    group's delete-unused-nodes cleanup, then fan out to add_rack only for the
-    racks this pod is directly responsible for starting."""
+    """PodRackCascadeGenerator.generate(): read the pod's racks (data, never
+    tracked), then fan out to add_rack only for the racks this pod is directly
+    responsible for starting."""
 
     @pytest.mark.asyncio
     async def test_middle_rack_fans_out_to_every_rack(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -427,7 +425,9 @@ class TestPodRackCascadeGenerator:
         await gen.generate(_pod_data(deployment_type="middle_rack"))
 
         gen.run_generator.assert_awaited_once_with("add_rack", [network_rack.id], wait=False)
-        assert network_rack.id in gen.client.group_context.related_node_ids
+        # Racks are data: tracked, a rack moved to another pod would be
+        # deleted by this pod's next run.
+        assert gen.client.group_context.related_node_ids == []
 
     @pytest.mark.asyncio
     async def test_tor_fans_out_to_every_rack(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -446,8 +446,8 @@ class TestPodRackCascadeGenerator:
     @pytest.mark.asyncio
     async def test_mixed_fans_out_to_network_racks_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """mixed's tor/compute racks are started by their network rack's own
-        _fan_out_to_row_dependent_racks(), not by this cascade directly — but
-        they're still protected from the tracking group's cleanup here."""
+        _fan_out_to_row_dependent_racks(), not by this cascade directly. No
+        rack is tracked by this run."""
         gen = _build_pod_rack_cascade_gen()
         monkeypatch.setattr(
             "generators.topology.pod.PodTopologyGenerator.generate",
@@ -461,10 +461,7 @@ class TestPodRackCascadeGenerator:
         await gen.generate(_pod_data(deployment_type="mixed"))
 
         gen.run_generator.assert_awaited_once_with("add_rack", [network_rack.id], wait=False)
-        related = gen.client.group_context.related_node_ids
-        assert network_rack.id in related
-        assert tor_rack.id in related
-        assert compute_rack.id in related
+        assert gen.client.group_context.related_node_ids == []
 
     @pytest.mark.asyncio
     async def test_no_racks_skips_fan_out(self, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -42,6 +42,7 @@ class CustomerDeploymentDCExchangeGenerator(
     _customer_kind = "TopologyCustomerDC"
     _parent_label = "DC"
     _pbr_peer_role = "border-leaf"
+    _parent_generators = ("add_dc", "dc_pod_cascade")
 
     async def generate(self, data: dict[str, Any]) -> None:
         cleaned = clean_data(data)
@@ -68,7 +69,7 @@ class CustomerDeploymentDCExchangeGenerator(
         # wait for the same reason).
         dc_id = (customer.get("parent") or {}).get("id")
         if dc_id:
-            refreshed = await self.wait_for_parent_generator_and_refetch(("add_dc", "dc_pod_cascade"), dc_id)
+            refreshed = await self.wait_for_parent_generator_and_refetch(self._parent_generators, dc_id)
             if refreshed is not None:
                 entries = clean_data(refreshed).get("TopologyCustomerDC", [])
                 if not entries:

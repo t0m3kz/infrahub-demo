@@ -27,6 +27,17 @@ SCENARIO_POD_1 = "DC6-1-POD-1"
 SCENARIO_SEGMENT_DATA = "tests/integration/data/20_segments"
 SCENARIO_SEGMENT_FOOTPRINT = "C001-P-DC6"
 
+# Test-local application data for test_20: data/demos/06_servers declares no
+# AppComponent, and a local segment's VLAN ID is realized only where a
+# component's instance is cabled to a switch (add_app_component_segment), so
+# the scenario declares one component on a SCENARIO_SEGMENT_DATA segment,
+# instanced on one of the servers test_20 cables.
+SCENARIO_ENDPOINT_APP_DATA = "tests/integration/data/20_endpoints"
+SCENARIO_ENDPOINT_APPLICATION = "c001-dc6-endpoint-probe-p"
+SCENARIO_ENDPOINT_COMPONENT_FQDN = "web.dc6-endpoint-probe.c001.test.local"
+SCENARIO_ENDPOINT_SEGMENT = "c001-web-app-p"
+SCENARIO_ENDPOINT_SERVER = "ktw-pod1-server-1"
+
 # Every switching role a DC6 scenario can add. Counted per DC, so a role that
 # never appears in DC6 just stays at 0 on both sides of the comparison.
 SCENARIO_FABRIC_ROLES = ["super-spine", "spine", "leaf", "access-leaf", "l2-leaf", "tor", "border-leaf"]
@@ -208,6 +219,12 @@ ALL_DEMO_CLOUD_APPLICATIONS = ("c003-custody-api-p", "c016-billing-cloud-p")
 # has no compute footprint, so it is out of scope for test_61's switch-port-to-application chain and is not
 # listed in ALL_DEMO_EXPECTED_APPLICATIONS.
 ALL_DEMO_NO_COMPUTE_APPLICATIONS = ("c001-checkout-p",)
+
+# Applications on the branch that test_61's application-graph check does not
+# cover: the no-compute ones above, and test_20's DC6 probe application, which
+# a full suite run merges to main before test_59 branches the 30_all scenario
+# off it (a single DC6 server instance, no HA pair, no hosting_device).
+ALL_DEMO_OUT_OF_SCOPE_APPLICATIONS = (*ALL_DEMO_NO_COMPUTE_APPLICATIONS, SCENARIO_ENDPOINT_APPLICATION)
 
 # Each component is deployed as an HA pair.
 ALL_DEMO_COMPONENT_INSTANCE_COUNT = 2

@@ -32,6 +32,13 @@ from ..protocols import DcimCable, DcimLAGInterface, DcimPhysicalDevice, DcimPhy
 from ..types import ConnectionFingerprint
 
 
+def _is_generated_uplink_cable(cable: Any, own_ends: set[str]) -> bool:
+    """Whether create_cabling made this cable for one of this endpoint's
+    uplinks: its name joins the two "<device>-<interface>" ends with "__",
+    and one of them is ours. Hand-loaded cables use other names (CBL-...)."""
+    return bool(own_ends & set(str(cable.name.value).split("__")))
+
+
 def _interface_type(intf: Any) -> str | None:
     """An interface's interface_type value, or None when unset."""
     return intf.interface_type.value or None
@@ -177,18 +184,15 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, PoolMixin, CablingMixin
 
         self.logger.info(f"Generating connectivity for endpoint {self.data['name']} in {deployment_type} deployment")
 
-        # Update endpoint device to set deployment to pod. Always saved (even when
-        # deployment is already correct) so this run's tracking group always
-        # includes the device — a conditional save here would leave the device
-        # untracked on a no-op re-run, and delete_unused_nodes would then delete
-        # the still-valid device as "unused" (same failure mode create_devices()
-        # in common.py works around by always re-upserting every run).
+        # Point the endpoint device's deployment at the pod. Never tracked: the
+        # server is data-loaded and is this run's target, not its output — a
+        # tracked server is deleted by the first run that does not save it.
         endpoint_device = await self.client.get(kind=DcimPhysicalDevice, id=self.data["id"])
         current_deployment = endpoint_device.deployment.id
         if current_deployment != pod_id:
             endpoint_device.deployment = pod_id
+            await endpoint_device.save(update_group_context=False)
             self.logger.info(f"Updated {self.data['name']} deployment to pod {self.pod_name}")
-        await endpoint_device.save(allow_upsert=True)
 
         # Rack-to-spine cabling avoids port collisions via a deterministic per-device
         # offset (calculate_cabling_offsets); endpoint cabling has no such offset — it
@@ -263,12 +267,17 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, PoolMixin, CablingMixin
 
         # Re-save the cables a prior run made: the run tracks only what it saves,
         # so a cable a rerun finds and skips is one delete_unused_nodes removes.
-        # One batch fetch instead of one get() per cable; the saves themselves
-        # are independent (distinct cables), so they run concurrently too.
+        # Only this generator's own cables, recognized by create_cabling's
+        # naming convention: a cable loaded as data on an uplink is not this
+        # run's output, so it is left alone. One batch fetch instead of one
+        # get() per cable; the saves are independent (distinct cables), so they
+        # run concurrently too.
         cable_ids = sorted({str(intf.cable.id) for intf in already_cabled_interfaces})
         if cable_ids:
             cables = await self.client.filters(kind=DcimCable, ids=cable_ids)
-            await asyncio.gather(*(cable.save(allow_upsert=True) for cable in cables))
+            own_ends = {f"{endpoint_name}-{intf.name.value}" for intf in already_cabled_interfaces}
+            own = [cable for cable in cables if _is_generated_uplink_cable(cable, own_ends)]
+            await asyncio.gather(*(cable.save(allow_upsert=True) for cable in own))
 
         if not endpoint_interfaces:
             if existing_connections > 0:

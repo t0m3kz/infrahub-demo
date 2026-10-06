@@ -32,6 +32,16 @@ _INTERFACE_READY_RETRY_JITTER = 0.25
 BORDER_ROLE_FOR_SERVICES: dict[str, str] = {"firewall": "firewall", "load-balancer": "load-balancer"}
 
 
+def tracked_save_kwargs(track: bool) -> dict[str, bool]:
+    """save() kwargs for a write the run does (track) or does not (not track) own.
+
+    track=False adds update_group_context=False so the node is written but not
+    added to the run's tracking group, so delete_unused_nodes can never reclaim
+    it. track=True keeps the plain upsert (the run claims the node).
+    """
+    return {"allow_upsert": True} if track else {"allow_upsert": True, "update_group_context": False}
+
+
 class CablingMixin:
     """Mixin providing device-to-device cabling methods for CommonGenerator.
 
@@ -242,7 +252,12 @@ class CablingMixin:
         return cabled_pairs
 
     async def upsert_p2p_addresses(
-        self, prefix: Any, *, address_length: int | None = None, description: str | None = None
+        self,
+        prefix: Any,
+        *,
+        address_length: int | None = None,
+        description: str | None = None,
+        track: bool = True,
     ) -> list[Any]:
         """Upsert both addresses of a /31 (RFC 3021) or /127 (RFC 6164) P2P prefix.
 
@@ -256,6 +271,12 @@ class CablingMixin:
 
         address_length defaults to the prefix's own length. description, when
         given, is (re)written on every run.
+
+        track=False saves the addresses with update_group_context=False, for
+        a caller addressing a link it does not own (e.g. a shared
+        FirewallContext reached by every customer on the cluster): the
+        addresses are written but never claimed by this run's tracking group,
+        so no run's cleanup can delete them.
         """
         network = ipaddress.ip_network(prefix.prefix.value, strict=False)
         length = network.prefixlen if address_length is None else address_length
@@ -280,7 +301,7 @@ class CablingMixin:
                         **({"description": description} if description is not None else {}),
                     },
                 )
-            await ip.save(allow_upsert=True)
+            await ip.save(**tracked_save_kwargs(track))
             addresses.append(ip)
         return addresses
 
@@ -383,6 +404,7 @@ class CablingMixin:
         vlan_id_value: int,
         capability_obj: Any,
         ip_address_id: str | None = None,
+        track: bool = True,
     ) -> Any | None:
         """Upsert a VLAN-tagged DcimVirtualInterface (<trunk>.<vlan_id>) on
         trunk_iface, linked to capability_obj via interface_capabilities —
@@ -390,6 +412,14 @@ class CablingMixin:
         sub-interfaces and segment.py's inline VxlanSegment termination.
         Trunk-interface resolution stays with the caller since fallback
         behavior differs (see find_role_interface).
+
+        track=False makes every save here (the sub-interface and its
+        capability-link re-save) use update_group_context=False, for a
+        sub-interface reached by more than one target (e.g. a shared
+        FirewallContext's per-firewall leg): written, never claimed by this
+        run's group, so no run's cleanup can delete it. This helper saves no
+        IP itself — ip_address_id must already exist; untracked addressing is
+        upsert_p2p_addresses(track=False).
         """
         sub_iface_name = f"{trunk_iface.name.value}.{vlan_id_value}"
         sub_iface_data: dict[str, Any] = {
@@ -403,12 +433,12 @@ class CablingMixin:
 
         try:
             sub_iface = await self.client.create(kind=DcimVirtualInterface, data=sub_iface_data)
-            await sub_iface.save(allow_upsert=True)
+            await sub_iface.save(**tracked_save_kwargs(track))
             iface_capabilities = getattr(sub_iface, "interface_capabilities")
             await iface_capabilities.fetch()
             if not any(peer.id == capability_obj.id for peer in iface_capabilities.peers):
                 await self._safe_rel_add(iface_capabilities, capability_obj)
-                await sub_iface.save(allow_upsert=True)
+                await sub_iface.save(**tracked_save_kwargs(track))
             self.logger.info(f"Upserted sub-interface {sub_iface_name} on {device_name}")
             return sub_iface
         except Exception as exc:

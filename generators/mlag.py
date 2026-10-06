@@ -41,6 +41,12 @@ _CONTROL_POOLS: dict[int, tuple[str, int, int]] = {
 }
 
 
+def _save_kwargs(track: bool) -> dict[str, Any]:
+    """save() kwargs for a wiring write: a plain upsert when this run owns the
+    domain's wiring, else one that stays out of the run's tracking group."""
+    return {"allow_upsert": True} if track else {"allow_upsert": True, "update_group_context": False}
+
+
 class MLAGWiringMixin:
     """Mixin providing MLAG peer-link wiring, shared by DeviceMixin
     (synchronous, right after creating/finding a ManagedMLAG domain — no
@@ -60,8 +66,16 @@ class MLAGWiringMixin:
     upsert_p2p_addresses: Callable[..., Awaitable[list[Any]]]
     resource_lock: Callable[[str], AbstractAsyncContextManager[None]]
 
-    async def ensure_mlag_wiring(self, mlag_obj: Any, mlag_name: str, *, member_ids: list[str] | None = None) -> None:
+    async def ensure_mlag_wiring(
+        self, mlag_obj: Any, mlag_name: str, *, member_ids: list[str] | None = None, track: bool = True
+    ) -> None:
         """Wire one MLAG domain, serialized per domain.
+
+        track: whether this run owns the wiring. The device generator that
+        creates the domain (DeviceMixin._ensure_mlag_pairs) does and tracks
+        it; MLAGGenerator only re-wires a domain that generator owns, so it
+        passes track=False and writes everything untracked — tracked, a
+        domain it stopped reaching would lose its peer-link to its cleanup.
 
         The pod/rack generator (via DeviceMixin._ensure_mlag_pairs) and the
         add_mlag trigger can wire the same domain at the same moment. Each
@@ -71,10 +85,10 @@ class MLAGWiringMixin:
         FirewallContext and pool creation paths.
         """
         async with self.resource_lock(f"mlag-wiring-{mlag_obj.id}"):
-            await self._ensure_mlag_wiring_locked(mlag_obj, mlag_name, member_ids=member_ids)
+            await self._ensure_mlag_wiring_locked(mlag_obj, mlag_name, member_ids=member_ids, track=track)
 
     async def _ensure_mlag_wiring_locked(
-        self, mlag_obj: Any, mlag_name: str, *, member_ids: list[str] | None = None
+        self, mlag_obj: Any, mlag_name: str, *, member_ids: list[str] | None = None, track: bool = True
     ) -> None:
         """Wire peer-link interfaces (LAG or virtual loopback) for both
         devices in an MLAG domain. Every peer-link/cable is always
@@ -124,7 +138,7 @@ class MLAGWiringMixin:
             platform_by_id[device_obj.id] = platform_name
 
         control_ip_ids = await self._allocate_control_ips(
-            mlag_obj, mlag_name, member_devices, set(platform_by_id.values()), virtual_peer_link
+            mlag_obj, mlag_name, member_devices, set(platform_by_id.values()), virtual_peer_link, track=track
         )
 
         peer_link_ifaces: list[Any] = []
@@ -135,12 +149,12 @@ class MLAGWiringMixin:
             control_ip_id = control_ip_ids.get(device_obj.id)
             if virtual_peer_link:
                 iface = await self._ensure_virtual_peer_link(
-                    device_obj, mlag_obj, mlag_name, platform_name, control_ip_id
+                    device_obj, mlag_obj, mlag_name, platform_name, control_ip_id, track=track
                 )
             else:
-                iface = await self._ensure_lag_peer_link(device_obj, mlag_obj, platform_name)
+                iface = await self._ensure_lag_peer_link(device_obj, mlag_obj, platform_name, track=track)
                 if control_ip_id:
-                    await self._ensure_control_svi(device_obj, mlag_obj, mlag_name, control_ip_id)
+                    await self._ensure_control_svi(device_obj, mlag_obj, mlag_name, control_ip_id, track=track)
             if iface is not None:
                 peer_link_ifaces.append(iface)
 
@@ -148,7 +162,7 @@ class MLAGWiringMixin:
         if virtual_peer_link:
             await self._disconnect_stale_peer_link_cables(mlag_name, dev_a, dev_b)
         elif len(peer_link_ifaces) == 2:
-            await self._ensure_peer_link_cables(mlag_name, dev_a, dev_b)
+            await self._ensure_peer_link_cables(mlag_name, dev_a, dev_b, track=track)
 
     async def _disconnect_stale_peer_link(self, device_obj: Any, mlag_name: str, virtual_peer_link: bool) -> None:
         """Delete the peer-link interface node left over from the OTHER mode
@@ -171,7 +185,9 @@ class MLAGWiringMixin:
             )
             await self.client.delete(kind=stale_kind, id=stale_obj.id)
 
-    async def _ensure_lag_peer_link(self, device_obj: Any, mlag_obj: Any, platform_name: str) -> Any | None:
+    async def _ensure_lag_peer_link(
+        self, device_obj: Any, mlag_obj: Any, platform_name: str, *, track: bool = True
+    ) -> Any | None:
         """Create or upsert a DcimLAGInterface peer-link, bundling ALL
         role=mlag-peer physical interfaces on this device as
         member_interfaces (unlike HA's single sync interface, an MLAG
@@ -222,7 +238,7 @@ class MLAGWiringMixin:
                 "member_interfaces": [{"id": iface.id} for iface in member_ifaces],
             },
         )
-        await lag_obj.save(allow_upsert=True)
+        await lag_obj.save(**_save_kwargs(track))
         self.logger.info(
             f"  [{dev_name}] {'Updated' if existing_lag else 'Created'} peer-link LAG {lag_name} ({lag_obj.id})"
         )
@@ -235,6 +251,8 @@ class MLAGWiringMixin:
         mlag_name: str,
         platform_name: str,
         control_ip_id: str | None = None,
+        *,
+        track: bool = True,
     ) -> Any | None:
         """Create or upsert a loopback virtual peer-link (single per
         device). Always create()+save()'d with the full desired state
@@ -261,7 +279,7 @@ class MLAGWiringMixin:
                 **({"ip_address": {"id": control_ip_id}} if control_ip_id else {}),
             },
         )
-        await virt_obj.save(allow_upsert=True)
+        await virt_obj.save(**_save_kwargs(track))
         self.logger.info(
             f"  [{dev_name}] {'Updated' if existing_virt else 'Created'} virtual peer-link "
             f"{loopback_name} ({virt_obj.id})"
@@ -275,6 +293,8 @@ class MLAGWiringMixin:
         member_devices: list[Any],
         platforms: set[str],
         virtual_peer_link: bool,
+        *,
+        track: bool = True,
     ) -> dict[str, str]:
         """Allocate the MLAG control-session addresses for both peers and
         return {device_id: IpamIPAddress id}. One /31 (SONiC) or /127 (all
@@ -315,13 +335,16 @@ class MLAGWiringMixin:
             control_prefix,
             address_length=loopback_length if virtual_peer_link else prefix_length,
             description=f"MLAG control — {mlag_name}",
+            track=track,
         )
         return {
             device_obj.id: ip_obj.id
             for device_obj, ip_obj in zip(sorted(member_devices, key=lambda d: d.name.value), ips)
         }
 
-    async def _ensure_control_svi(self, device_obj: Any, mlag_obj: Any, mlag_name: str, control_ip_id: str) -> None:
+    async def _ensure_control_svi(
+        self, device_obj: Any, mlag_obj: Any, mlag_name: str, control_ip_id: str, *, track: bool = True
+    ) -> None:
         """Create or upsert the Vlan4094 SVI that carries the MLAG control
         session over a back-to-back peer-link."""
         existing = await self.client.filters(
@@ -341,7 +364,7 @@ class MLAGWiringMixin:
                 "interface_capabilities": [{"id": mlag_obj.id}],
             },
         )
-        await svi_obj.save(allow_upsert=True)
+        await svi_obj.save(**_save_kwargs(track))
         self.logger.info(
             f"  [{device_obj.name.value}] {'Updated' if existing_svi else 'Created'} MLAG control SVI "
             f"{_CONTROL_SVI_NAME} ({svi_obj.id})"
@@ -378,7 +401,7 @@ class MLAGWiringMixin:
             return None
         return deployment_rel.id
 
-    async def _ensure_peer_link_cables(self, mlag_name: str, dev_a: Any, dev_b: Any) -> None:
+    async def _ensure_peer_link_cables(self, mlag_name: str, dev_a: Any, dev_b: Any, *, track: bool = True) -> None:
         """Create/upsert a DcimCable for each index-matched pair of sorted
         role=mlag-peer physical interfaces between the two devices
         (potentially more than one, unlike HA's single sync cable). Always
@@ -429,7 +452,7 @@ class MLAGWiringMixin:
             if deployment_id:
                 cable_data["deployment"] = {"id": deployment_id}
             cable_obj = await self.client.create(kind=DcimCable, data=cable_data)
-            await cable_obj.save(allow_upsert=True)
+            await cable_obj.save(**_save_kwargs(track))
             self.logger.info(
                 f"  [{mlag_name}] {'Updated' if existing_cable else 'Created'} {cable_name}: "
                 f"{dev_a_name}:{iface_a.name.value} ↔ {dev_b_name}:{iface_b.name.value}"

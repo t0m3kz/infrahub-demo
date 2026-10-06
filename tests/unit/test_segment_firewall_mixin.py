@@ -57,7 +57,10 @@ class TestReconcileTagRuleFromSegments:
         gen.client.filters.assert_not_called()
         gen.client.create.assert_not_called()
 
-    def test_reuses_existing_tag_rule(self):
+    def test_reuses_existing_tag_rule_without_claiming_it(self) -> None:
+        """A (source tag, destination tag) rule is shared by every application
+        with a dependency between those segments: an existing one is reused
+        and not saved, so this run's group never claims it."""
         gen = _make_gen()
         existing_rule = MagicMock()
         existing_rule.save = AsyncMock()
@@ -78,7 +81,7 @@ class TestReconcileTagRuleFromSegments:
         )
 
         gen.client.create.assert_not_called()
-        existing_rule.save.assert_called_once()
+        existing_rule.save.assert_not_called()
 
     def test_creates_tag_rule_when_missing(self):
         gen = _make_gen()
@@ -107,6 +110,43 @@ class TestReconcileTagRuleFromSegments:
         assert data["destination_tag"] == {"id": "tag-dst"}
         assert data["action"] == "permit"
         assert data["log"] is False
+        created_rule.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
+
+
+# ===========================================================================
+# TestSharedPolicyIsUntracked
+# ===========================================================================
+
+
+class TestSharedPolicyIsUntracked:
+    """The per-source-segment SecurityPolicy is reached by every application
+    with a component on that segment: it is written untracked."""
+
+    def test_new_policy_is_saved_untracked(self) -> None:
+        """A missing policy is created with update_group_context=False."""
+        gen = _make_gen()
+        gen.client.filters = AsyncMock(return_value=[])
+        policy = MagicMock(id="pol-1")
+        policy.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=policy)
+
+        result = asyncio.run(gen._get_or_create_policy("seg-src-policy", "seg-src"))
+
+        assert result is policy
+        policy.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
+
+    def test_existing_policy_is_returned_unsaved(self) -> None:
+        """An existing policy is reused without a save, so no run claims it."""
+        gen = _make_gen()
+        policy = MagicMock(id="pol-1")
+        policy.save = AsyncMock()
+        gen.client.filters = AsyncMock(return_value=[policy])
+
+        result = asyncio.run(gen._get_or_create_policy("seg-src-policy", "seg-src"))
+
+        assert result is policy
+        policy.save.assert_not_called()
+        gen.client.create.assert_not_called()
 
 
 # ===========================================================================

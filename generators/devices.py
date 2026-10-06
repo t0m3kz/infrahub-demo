@@ -25,6 +25,7 @@ from .protocols import (
     ManagedController,
     ManagedHAInterface,
     ManagedMLAG,
+    ManagedStandaloneVlanDomain,
 )
 from .types import DeviceOptions, NamingConvention
 
@@ -52,6 +53,21 @@ _FABRIC_ROLES = frozenset(
         "distribution-switch",
     }
 )
+
+# Switch roles that carry customer segments (servers cable into leaf/tor/
+# l2-leaf/access-leaf, see generators/topology/endpoint.py) or act as an EVPN
+# Multi-Site border gateway (border-leaf, edge — generators/topology/
+# segment.py's _BORDER_GATEWAY_ROLES). A physical one that is not MLAG-paired
+# is its own VLAN domain, created with the device — see
+# _ensure_standalone_vlan_domains.
+VLAN_DOMAIN_ROLES = frozenset({"leaf", "tor", "l2-leaf", "access-leaf", "border-leaf", "edge"})
+
+
+def standalone_vlan_domain_name(device_name: str) -> str:
+    """The ManagedStandaloneVlanDomain name for a non-MLAG device; its VLAN
+    pool is f"{this}-vlan-pool". The lookup key segment generators use."""
+    return f"{device_name}-vlan-domain"
+
 
 # A generator query's role-bucketed controller aliases (see queries/topology/
 # add/dc.gql), merged into one list by set_controllers_from.
@@ -81,6 +97,12 @@ _VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE: dict[tuple[str, str], str] = {
     ("f5_tmos", "load-balancer"): "BIG-IP-VE_LOAD_BALANCER",
     ("netscaler", "load-balancer"): "NetScaler-ADC-VPX_LOAD_BALANCER",
 }
+
+
+def _is_generated_sync_port(iface: Any) -> bool:
+    """Whether an HA sync interface is the eth7 _ensure_ha_interfaces creates
+    itself (a DcimVirtualInterface), not one the device's template provides."""
+    return getattr(iface, "typename", None) == DcimVirtualInterface.__name__ and iface.name.value == "eth7"
 
 
 class DeviceMixin(MLAGWiringMixin):
@@ -239,7 +261,10 @@ class DeviceMixin(MLAGWiringMixin):
                         "description": f"Auto-created by generator for role {device_role}",
                     },
                 )
-                await device_group.save(allow_upsert=True)
+                # Untracked: the role group is shared by every generator that
+                # creates this role. Tracked, the creating run would delete it
+                # on its next run, which finds it and does not save it again.
+                await device_group.save(allow_upsert=True, update_group_context=False)
                 self.logger.info(f"Created missing device group '{group_name}' for role '{device_role}'")
         try:
             # Fetch all existing devices in a single batch to optimize performance
@@ -396,7 +421,9 @@ class DeviceMixin(MLAGWiringMixin):
                 for node in created_devices:
                     if node.id not in existing_managed_ids:
                         managed_devices.add(node)
-                await controller.save(allow_upsert=True)
+                # Untracked: the controller is data-loaded and shared by every
+                # deployment it manages — it is not this run's output.
+                await controller.save(allow_upsert=True, update_group_context=False)
                 self.logger.info(
                     f"Added {len(created_devices)} {device_role}(s) to controller {controller.hfid}'s managed_devices"
                 )
@@ -409,8 +436,9 @@ class DeviceMixin(MLAGWiringMixin):
             await self._ensure_ha_pairs(device_names, ha_kind=ha_kind, role_label=device_role, device_kind=device_kind)
 
         mlag_create = options.get("mlag_create", "no")
+        paired_names: set[str] = set()
         if mlag_create != "no":
-            await self._ensure_mlag_pairs(
+            paired_names = await self._ensure_mlag_pairs(
                 device_names,
                 devices_by_name={node.name.value: node for node in created_devices},
                 role_label=device_role,
@@ -419,7 +447,33 @@ class DeviceMixin(MLAGWiringMixin):
                 supports_virtual=options.get("mlag_supports_virtual", True),
             )
 
+        if device_role in VLAN_DOMAIN_ROLES and not virtual:
+            await self._ensure_standalone_vlan_domains(
+                [node for node in created_devices if node.name.value not in paired_names]
+            )
+
         return device_names
+
+    async def _ensure_standalone_vlan_domains(self, devices: list[Any]) -> None:
+        """Upsert each non-MLAG switch's own ManagedStandaloneVlanDomain and
+        its local VLAN pool, every run.
+
+        Created with the device rather than on first segment use: the device's
+        generator is the one run that owns the switch, so the domain lives and
+        dies with it. Segment generators reach a domain from many targets and
+        only look it up by standalone_vlan_domain_name. A device that becomes
+        MLAG-paired no longer gets one, so this run's cleanup removes it.
+        """
+        for device in devices:
+            domain_name = standalone_vlan_domain_name(device.name.value)
+            domain = await self.client.create(
+                kind=ManagedStandaloneVlanDomain,
+                data={"name": domain_name, "status": "active", "capabilities": [{"id": device.id}]},
+            )
+            await domain.save(allow_upsert=True)
+            await self._ensure_vlan_domain_pool(
+                pool_owner_name=domain_name, parent_kind="ManagedStandaloneVlanDomain", parent_id=domain.id
+            )
 
     async def create_ha_role_devices(
         self,
@@ -683,14 +737,17 @@ class DeviceMixin(MLAGWiringMixin):
                     kind=DcimInterface, device__ids=[device_obj.id], role__value="ha"
                 )
             sync_iface = device_sync_ifaces[0] if device_sync_ifaces else None
-            if sync_iface is None and not is_physical:
+            if not is_physical and (sync_iface is None or _is_generated_sync_port(sync_iface)):
                 # Virtual devices from the *_CUSTOMER_* templates get a fixed
                 # eth7 HA sync port (see data/bootstrap's virtual device
                 # templates) — create it on demand rather than requiring
-                # every template author to remember one.
+                # every template author to remember one. Upserted on every
+                # run, not only the first: this run owns it, and a run that
+                # found it and skipped the save would delete it.
                 sync_iface = await self.client.create(
                     kind=DcimVirtualInterface,
                     data={
+                        **({"id": sync_iface.id} if sync_iface is not None else {}),
                         "name": "eth7",
                         "device": {"id": device_obj.id},
                         "status": "active",
@@ -799,7 +856,7 @@ class DeviceMixin(MLAGWiringMixin):
         template: dict[str, Any],
         mlag_create: Literal["back-to-back", "virtual"],
         supports_virtual: bool = True,
-    ) -> None:
+    ) -> set[str]:
         """Pair same-role devices two-at-a-time (sorted, odd one unpaired) into MLAG
         domains, per pod.mlag_create ("back-to-back" / "virtual"), then ensure
         each pair's peer-link interfaces/cable in the same call — no separate
@@ -827,9 +884,13 @@ class DeviceMixin(MLAGWiringMixin):
         one pod-wide setting shared by every role, so a pod with both leaf
         (L3) and l2-leaf (L2-only) roles must fall back for the L2-only ones
         regardless of what's configured for the pod.
+
+        Returns the names of the devices it paired, so create_devices gives
+        every other one its own standalone VLAN domain.
         """
+        paired: set[str] = set()
         if len(device_names) < 2:
-            return
+            return paired
 
         if mlag_create == "virtual" and not supports_virtual:
             self.logger.info(
@@ -845,7 +906,7 @@ class DeviceMixin(MLAGWiringMixin):
                 f"template {template.get('id')} has no mlag-peer interface — "
                 f"cannot create back-to-back MLAG for {role_label}s."
             )
-            return
+            return paired
 
         mlag_group = None
         for pair_index, (first, second) in enumerate(pair_device_names(device_names), start=1):
@@ -883,6 +944,8 @@ class DeviceMixin(MLAGWiringMixin):
             await self._ensure_vlan_domain_pool(
                 pool_owner_name=mlag_name, parent_kind="ManagedMLAG", parent_id=mlag_obj.id
             )
+            paired.update((first, second))
+        return paired
 
     async def _ensure_vlan_domain_pool(self, *, pool_owner_name: str, parent_kind: str, parent_id: str) -> None:
         """Create/upsert this VLAN domain's own local VLAN ID pool.

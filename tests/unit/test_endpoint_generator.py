@@ -217,13 +217,14 @@ class TestGenerateDeploymentUpdate:
         await gen.generate(_endpoint_data())
 
         assert endpoint_device.deployment == "pod-1"
-        endpoint_device.save.assert_awaited_once_with(allow_upsert=True)
+        # Untracked: the data-loaded server is this run's target, not its output.
+        endpoint_device.save.assert_awaited_once_with(update_group_context=False)
 
     @pytest.mark.asyncio
-    async def test_deployment_still_saved_when_already_correct(self) -> None:
-        """Always saved — even a no-op deployment match must re-upsert so this
-        run's tracking group includes the device (see generate()'s comment on
-        delete_unused_nodes)."""
+    async def test_deployment_not_saved_when_already_correct(self) -> None:
+        """The server is never tracked, so a deployment that already matches
+        needs no write at all (a tracked server would be deleted by the first
+        run that skipped the save)."""
         gen = _make_generator()
         endpoint_device = MagicMock()
         endpoint_device.deployment = MagicMock(id="pod-1")
@@ -233,7 +234,7 @@ class TestGenerateDeploymentUpdate:
 
         await gen.generate(_endpoint_data())
 
-        endpoint_device.save.assert_awaited_once_with(allow_upsert=True)
+        endpoint_device.save.assert_not_awaited()
 
 
 def _endpoint_device() -> MagicMock:
@@ -365,7 +366,12 @@ class TestGenerateUplinkFlow:
         first = _iface("eth0", device="server-1", cabled=True)
         second = _iface("eth1", device="server-1", cabled=True)
         second.cable.id = "cable-2"
-        cables = {"cable-1": MagicMock(save=AsyncMock()), "cable-2": MagicMock(save=AsyncMock())}
+        cables = {
+            "cable-1": MagicMock(save=AsyncMock(), id="cable-1"),
+            "cable-2": MagicMock(save=AsyncMock(), id="cable-2"),
+        }
+        cables["cable-1"].name.value = "leaf-1-Ethernet1/1__server-1-eth0"
+        cables["cable-2"].name.value = "leaf-2-Ethernet1/1__server-1-eth1"
 
         gen.client.get = AsyncMock(return_value=endpoint_device)
         gen.client.filters = AsyncMock(side_effect=[[], [first, second], [cables["cable-1"], cables["cable-2"]]])
@@ -375,6 +381,31 @@ class TestGenerateUplinkFlow:
         for cable in cables.values():
             cable.save.assert_awaited_once_with(allow_upsert=True)
         gen.acquire_resource_lock.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_data_loaded_uplink_cable_is_not_claimed(self) -> None:
+        """A cable on an uplink that create_cabling did not make (a hand-loaded
+        CBL-... cable) is not this run's output: never re-saved, so never
+        tracked and never deleted by this run's cleanup."""
+        gen = _make_generator()
+        endpoint_device = MagicMock()
+        endpoint_device.deployment = MagicMock(id="pod-1")
+        endpoint_device.save = AsyncMock()
+        first = _iface("eth0", device="server-1", cabled=True)
+        second = _iface("eth1", device="server-1", cabled=True)
+        second.cable.id = "cable-2"
+        own = MagicMock(save=AsyncMock(), id="cable-1")
+        own.name.value = "leaf-1-Ethernet1/1__server-1-eth0"
+        loaded = MagicMock(save=AsyncMock(), id="cable-2")
+        loaded.name.value = "CBL-DC1-SRV1-2"
+
+        gen.client.get = AsyncMock(return_value=endpoint_device)
+        gen.client.filters = AsyncMock(side_effect=[[], [first, second], [own, loaded]])
+
+        await gen.generate(_endpoint_data())
+
+        own.save.assert_awaited_once_with(allow_upsert=True)
+        loaded.save.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_free_interfaces_trigger_resolve_and_process(self) -> None:

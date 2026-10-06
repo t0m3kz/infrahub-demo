@@ -90,7 +90,7 @@ class LoadbalancerBackendNexthopGenerator(CablingMixin, CommonGenerator):
 
         # ip_prefix is queried as a bare `{ id }` selection — clean_data()
         # collapses that single-key dict straight to the id string.
-        segment_prefix_id = (backend_segment.get("gateway") or {}).get("ip_prefix")
+        segment_prefix_id: str = (backend_segment.get("gateway") or {}).get("ip_prefix") or ""
         pool = None
         if segment_prefix_id:
             pool = await self._ensure_backend_pool(
@@ -104,7 +104,9 @@ class LoadbalancerBackendNexthopGenerator(CablingMixin, CommonGenerator):
             device_name = device["name"]
             ip_id: str | None = None
             if pool is not None:
-                ip_id = await self._allocate_backend_ip(pool=pool, vip_id=vip_id, device_name=device_name)
+                ip_id = await self._allocate_backend_ip(
+                    pool=pool, vip_id=vip_id, segment_prefix_id=segment_prefix_id, device_name=device_name
+                )
 
             try:
                 trunk_iface = await self.find_role_interface(
@@ -124,30 +126,34 @@ class LoadbalancerBackendNexthopGenerator(CablingMixin, CommonGenerator):
                 vlan_id_value=vlan_id_value,
                 capability_obj=vip_obj,
                 ip_address_id=ip_id,
+                # Shared: <downlink>.<vlan> is the same sub-interface for every
+                # no-SNAT VIP on this backend segment, so no VIP's run owns it.
+                # The /32 on it stays owned (and cleaned up) by this VIP's run.
+                track=False,
             )
 
     async def _ensure_backend_pool(
         self, *, vip_id: str, vip_hostname: str, segment_prefix_id: str
     ) -> CoreIPAddressPool | None:
-        """Wrap the backend_segment's EXISTING prefix in a dedicated
+        """Wrap the backend_segment's EXISTING prefix in this VIP's own
         CoreIPAddressPool (identifier=pool name) so allocate_next_ip_address
         can be used — IpamPrefix itself does not inherit CoreResourcePool,
         so from_pool/allocate_next_ip_address only accept a real
         CoreIPAddressPool, never a prefix directly (see infrahub_sdk.client's
-        get_kind() != "CoreIPAddressPool" hard-gate). One pool per VIP, not
-        per segment — two no-SNAT VIPs sharing a backend_segment each get
-        their own /32 out of the same underlying prefix via distinct
-        identifiers on the SAME pool, so pool creation itself must still be
-        idempotent per segment. Mirrors generators/pools.py:322-345's
-        resources: [existing_prefix] pattern (wrap, don't re-slice)."""
-        pool_name = f"lb-backend-{segment_prefix_id}-pool"
-        existing = await self.client.filters(kind=CoreIPAddressPool, name__value=pool_name)
-        if existing:
-            # Saved again so this run keeps tracking the pool: an unsaved one
-            # is deleted with the run's leftovers.
-            await existing[0].save(allow_upsert=True)
-            return existing[0]
+        get_kind() != "CoreIPAddressPool" hard-gate). Mirrors
+        generators/pools.py's resources: [existing_prefix] pattern (wrap,
+        don't re-slice).
 
+        One pool per VIP, named from the VIP's own id: it belongs to this
+        VIP's run alone, so tracking it is safe — a pool named after the
+        segment's prefix was shared by every no-SNAT VIP on that segment, and
+        the first of them to change its backend deleted it for the others.
+        Two VIPs' pools over the same prefix still never hand out the same
+        address: allocation skips addresses that already exist in the prefix.
+        Upserted by name on every run, so a moved backend_segment re-points
+        the pool's resources at the new prefix.
+        """
+        pool_name = f"lb-backend-{vip_id}-pool"
         try:
             pool = await self.client.create(
                 kind=CoreIPAddressPool,
@@ -161,18 +167,24 @@ class LoadbalancerBackendNexthopGenerator(CablingMixin, CommonGenerator):
                 },
             )
             await pool.save(allow_upsert=True)
-            self.logger.info(f"Created backend IP pool '{pool_name}'")
+            self.logger.info(f"Upserted backend IP pool '{pool_name}'")
             return pool
         except Exception as exc:
-            self.logger.error(f"VIP {vip_hostname}: failed to create backend IP pool '{pool_name}': {exc}")
+            self.logger.error(f"VIP {vip_hostname}: failed to upsert backend IP pool '{pool_name}': {exc}")
             return None
 
-    async def _allocate_backend_ip(self, *, pool: CoreIPAddressPool, vip_id: str, device_name: str) -> str | None:
+    async def _allocate_backend_ip(
+        self, *, pool: CoreIPAddressPool, vip_id: str, segment_prefix_id: str, device_name: str
+    ) -> str | None:
+        """This VIP's /32 for ``device_name`` — owned by this VIP's run. The
+        identifier carries the prefix, so a moved backend_segment draws a
+        fresh address from the new prefix instead of the old reservation;
+        the old address is no longer saved and is cleaned up with the run."""
         try:
             ip_obj = await self.client.allocate_next_ip_address(
                 resource_pool=pool,
                 kind=IpamIPAddress,
-                identifier=f"{vip_id}-{device_name}-lb-backend",
+                identifier=f"{vip_id}-{segment_prefix_id}-{device_name}-lb-backend",
                 prefix_length=32,
                 data={"description": f"LB backend return-path — {device_name}"},
             )

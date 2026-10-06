@@ -211,7 +211,12 @@ class PoolMixin:
                 # (even unmodified ones), spuriously re-firing any `updated` trigger
                 # watching those other fields (e.g. index/fabric_templates/mlag_create)
                 # on every pool-reference attach.
-                await parent.save()
+                #
+                # Untracked: attaching a pool does not make this run the parent's
+                # owner. The parent is often the run's own target (DC, pod) or
+                # owned elsewhere; an owned one (an MLAG or standalone VLAN
+                # domain this run just upserted) is already tracked by that save.
+                await parent.save(update_group_context=False)
                 self.logger.info("- Updated %s with %s (id: %s)", parent_kind, parent_attr, pool.id)
 
         return pool
@@ -526,7 +531,8 @@ class PoolMixin:
                 # client.get()) — see comment on the parent.save() call above for why
                 # allow_upsert=True here would spuriously re-fire unrelated `updated`
                 # triggers (index/fabric_templates/mlag_create) on every pool attach.
-                await pod.save()
+                # Untracked: the pod is the run's target, not its output.
+                await pod.save(update_group_context=False)
                 self.logger.info(f"- Saved pod {pod.name.value} with all pool references")
 
         return created_pools

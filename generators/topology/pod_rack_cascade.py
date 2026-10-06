@@ -43,9 +43,9 @@ class PodRackCascadeGenerator(PodTopologyGenerator):
       "tor"/"compute" racks in its own row itself (see RackGenerator.generate()),
       since those need the network rack's leafs to already exist.
 
-    Racks not fanned out to here (mixed's tor/compute racks) still need
-    protecting from the tracking group's delete-unused-nodes cleanup, since
-    this run never touches them directly.
+    Racks are data, never this run's output: they are read, not tracked
+    (tracked, a rack moved to another pod would be deleted by this pod's next
+    run).
     """
 
     async def generate(self, data: dict[str, Any]) -> None:
@@ -61,10 +61,6 @@ class PodRackCascadeGenerator(PodTopologyGenerator):
             pod__ids=[pod_id],
             rack_type__values=["network", "tor", "compute"],
         )
-
-        related_node_ids = self.client.group_context.related_node_ids
-        for rack in racks:
-            related_node_ids.append(rack.id)
 
         if not racks:
             self.logger.info(f"Pod {pod_data['name']}: no existing racks to cascade to")
