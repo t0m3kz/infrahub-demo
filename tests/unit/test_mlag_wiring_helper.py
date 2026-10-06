@@ -19,6 +19,7 @@ from infrahub_sdk.protocols import CoreIPPrefixPool
 
 from generators.connections import CablingMixin
 from generators.mlag import MLAGWiringMixin
+from generators.pools import PoolMixin
 from generators.protocols import (
     DcimCable,
     DcimLAGInterface,
@@ -28,14 +29,16 @@ from generators.protocols import (
 )
 
 
-class _WiringHost(MLAGWiringMixin, CablingMixin):
-    """MLAGWiringMixin with the CablingMixin P2P helper it expects from its host."""
+class _WiringHost(MLAGWiringMixin, CablingMixin, PoolMixin):
+    """MLAGWiringMixin with the CablingMixin P2P helper and PoolMixin lock it expects from its host."""
 
 
 def _gen() -> Any:
     gen = _WiringHost.__new__(_WiringHost)
     gen.client = MagicMock()
     gen.logger = MagicMock()
+    gen.acquire_resource_lock = AsyncMock(return_value="lock-id")
+    gen.release_resource_lock = AsyncMock()
     return gen
 
 
@@ -81,6 +84,21 @@ def _mock_mlag_obj(*, virtual_peer_link: bool = False) -> MagicMock:
 
 
 class TestEnsureMlagWiring:
+    @pytest.mark.asyncio
+    async def test_wiring_runs_under_a_per_domain_lock(self) -> None:
+        """The pod/rack generator and the add_mlag trigger can wire the same
+        domain concurrently; both would create the same control address
+        (Schema Integrity failure at merge), so wiring serializes per domain."""
+        gen = _gen()
+        events: list[str] = []
+        gen.acquire_resource_lock.side_effect = lambda key: events.append(f"acquire:{key}") or "lock-id"
+        gen.release_resource_lock.side_effect = lambda lock_id: events.append("release")
+        gen._ensure_mlag_wiring_locked = AsyncMock(side_effect=lambda *a, **k: events.append("wire"))
+
+        await gen.ensure_mlag_wiring(_mock_mlag_obj(), "tor-01-tor-02-mlag", member_ids=["a", "b"])
+
+        assert events == ["acquire:mlag-wiring-mlag-1", "wire", "release"]
+
     @pytest.mark.asyncio
     async def test_member_ids_param_skips_capabilities_fetch(self) -> None:
         gen = _gen()

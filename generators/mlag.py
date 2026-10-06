@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from contextlib import AbstractAsyncContextManager
 from typing import TYPE_CHECKING, Any
 
 from infrahub_sdk.protocols import CoreIPPrefixPool
@@ -49,16 +50,32 @@ class MLAGWiringMixin:
     capabilities/virtual_peer_link changed outside this flow, e.g. a direct
     API/UI edit or branch merge).
 
-    Expects the host class to provide: ``client``, ``logger`` and
-    CablingMixin's ``upsert_p2p_addresses``.
+    Expects the host class to provide: ``client``, ``logger``, CablingMixin's
+    ``upsert_p2p_addresses`` and PoolMixin's ``resource_lock``.
     """
 
     client: InfrahubClient
     logger: logging.Logger
-    # Callable attribute, not a stub method, so it never shadows CablingMixin's via the MRO.
+    # Callable attributes, not stub methods, so they never shadow the real ones via the MRO.
     upsert_p2p_addresses: Callable[..., Awaitable[list[Any]]]
+    resource_lock: Callable[[str], AbstractAsyncContextManager[None]]
 
     async def ensure_mlag_wiring(self, mlag_obj: Any, mlag_name: str, *, member_ids: list[str] | None = None) -> None:
+        """Wire one MLAG domain, serialized per domain.
+
+        The pod/rack generator (via DeviceMixin._ensure_mlag_pairs) and the
+        add_mlag trigger can wire the same domain at the same moment. Each
+        run's query-before-create guards then both find nothing and both
+        create the same control address, which fails Schema Integrity at
+        merge (seen on DC6's l2-leaf domains). Same lock idiom as the
+        FirewallContext and pool creation paths.
+        """
+        async with self.resource_lock(f"mlag-wiring-{mlag_obj.id}"):
+            await self._ensure_mlag_wiring_locked(mlag_obj, mlag_name, member_ids=member_ids)
+
+    async def _ensure_mlag_wiring_locked(
+        self, mlag_obj: Any, mlag_name: str, *, member_ids: list[str] | None = None
+    ) -> None:
         """Wire peer-link interfaces (LAG or virtual loopback) for both
         devices in an MLAG domain. Every peer-link/cable is always
         created/upserted (existing id passed when found, full desired state
