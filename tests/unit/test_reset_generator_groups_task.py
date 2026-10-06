@@ -21,6 +21,11 @@ def _group(name: str, kind: str, member_kinds: list[str]) -> MagicMock:
     group.name.value = name
     group.get_kind.return_value = kind
     group.members.peers = [SimpleNamespace(id=f"{name}-m{i}", typename=k) for i, k in enumerate(member_kinds)]
+
+    def _remove(relation_to_update: str, related_nodes: list[str]) -> None:
+        group.members.peers = [peer for peer in group.members.peers if peer.id not in related_nodes]
+
+    group.remove_relationships.side_effect = _remove
     return group
 
 
@@ -102,7 +107,8 @@ class TestResetGeneratorGroups:
         _run(client, branch="b1")
 
         group_calls = [c for c in client.all.call_args_list if c.kwargs["kind"] != "CoreGeneratorDefinition"]
-        assert [c.kwargs["kind"] for c in group_calls] == list(tasks.GENERATOR_GROUP_KINDS)
+        # Each pass lists every generator kind once; a confirming pass repeats the listing.
+        assert {c.kwargs["kind"] for c in group_calls} == set(tasks.GENERATOR_GROUP_KINDS)
         assert all(c.kwargs["branch"] == "b1" and c.kwargs["include"] == ["members"] for c in group_calls)
 
     def test_dry_run_writes_nothing(self, groups: dict[str, MagicMock], caplog: pytest.LogCaptureFixture) -> None:
@@ -139,6 +145,30 @@ class TestResetGeneratorGroups:
 
         branches = {c.kwargs["branch"] for c in client.all.call_args_list}
         assert branches == {"main", "b1"}
+
+    def test_repeats_until_members_left_behind_are_gone(self) -> None:
+        """A member the server didn't release on the first pass is removed by a later one."""
+        group = _group(f"add_dc-{HASH}", "CoreGeneratorAwareGroup", ["ManagedMLAG", "RoutingPassword"])
+        sticky = list(group.members.peers)
+        calls: list[list[str]] = []
+
+        def _remove_one_per_call(relation_to_update: str, related_nodes: list[str]) -> None:
+            calls.append(list(related_nodes))
+            group.members.peers = [peer for peer in group.members.peers if peer.id != related_nodes[0]]
+
+        group.remove_relationships.side_effect = _remove_one_per_call
+        _run(_client([group]), branch="b1")
+
+        assert group.members.peers == []
+        assert calls == [[peer.id for peer in sticky], [sticky[1].id]]
+
+    def test_gives_up_when_members_never_go(self) -> None:
+        """Members that survive every pass fail the task loudly instead of looping forever."""
+        group = _group(f"add_dc-{HASH}", "CoreGeneratorAwareGroup", ["ManagedMLAG"])
+        group.remove_relationships.side_effect = None
+        with pytest.raises(Exit):
+            _run(_client([group]), branch="b1")
+        assert group.remove_relationships.call_count == tasks._RESET_MAX_PASSES + 1
 
     def test_requires_branch_or_all_branches(self) -> None:
         """Without a branch selector the task refuses to run."""

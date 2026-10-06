@@ -642,6 +642,7 @@ GENERATOR_GROUP_KINDS = ("CoreGeneratorGroup", "CoreGeneratorAwareGroup")
 _TRACKING_GROUP_HASH = re.compile(r"-[0-9a-f]{32}$")
 # Peers per RelationshipRemove mutation: a DC's add_dc group holds thousands.
 _MEMBER_REMOVE_CHUNK = 500
+_RESET_MAX_PASSES = 10
 
 
 def _node_name(node: InfrahubNodeSync) -> str:
@@ -725,6 +726,18 @@ def reset_generator_groups(
     for name in branches:
         total = _reset_branch_generator_groups(client, name, dry_run)
         log.info("[%s] %s %d tracking-group member(s)", name, action, total)
+        if dry_run:
+            continue
+        # A node that is a member of several groups is not always released from
+        # every one in a single pass (seen on all-demo-scenario: 1223, then 187,
+        # 61, 18, 13, 6 left). Re-read and repeat until a pass finds nothing.
+        for _ in range(_RESET_MAX_PASSES):
+            remaining = _reset_branch_generator_groups(client, name, dry_run=False)
+            if not remaining:
+                break
+            log.info("[%s] removed %d tracking-group member(s) left by the previous pass", name, remaining)
+        else:
+            raise Exit(f"[{name}] tracking groups still have members after {_RESET_MAX_PASSES} passes", code=1)
 
 
 # ---------------------------------------------------------------------------
