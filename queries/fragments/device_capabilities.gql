@@ -145,6 +145,13 @@ fragment DeviceCapabilitiesFields on DcimCapabilities {
 
         ...ManagedAAAServiceFields
 
+        # A non-MLAG switch's own VLAN domain: its id is what that switch's
+        # ManagedVlanDomainSegment.vlan_domain points at
+        # (transforms/common.py _resolve_own_vlan_domain_id).
+        ... on ManagedStandaloneVlanDomain {
+          id
+        }
+
         ... on ManagedMLAG {
           id
           domain_id { value }

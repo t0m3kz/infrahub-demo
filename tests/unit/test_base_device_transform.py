@@ -663,6 +663,23 @@ class TestResolveOwnVlanDomainId:
         )
         assert resolved == "dev-leaf-01"
 
+    def test_standalone_vlan_domain_capability_is_the_domain(self) -> None:
+        """A non-MLAG switch's activations point at its ManagedStandaloneVlanDomain,
+        not at the device, so the domain id must win over the device id."""
+        resolved = BaseDeviceTransform._resolve_own_vlan_domain_id(
+            "dev-leaf-01",
+            [{"typename": "ManagedBGP", "id": "bgp-1"}, {"typename": "ManagedStandaloneVlanDomain", "id": "svd-1"}],
+        )
+        assert resolved == "svd-1"
+
+    def test_mlag_capability_wins_over_a_standalone_domain(self) -> None:
+        """A device left with a stale standalone domain after pairing still uses its MLAG."""
+        resolved = BaseDeviceTransform._resolve_own_vlan_domain_id(
+            "dev-leaf-01",
+            [{"typename": "ManagedStandaloneVlanDomain", "id": "svd-1"}, {"typename": "ManagedMLAG", "id": "mlag-1"}],
+        )
+        assert resolved == "mlag-1"
+
     def test_no_capabilities_falls_back_to_the_device_id(self) -> None:
         assert BaseDeviceTransform._resolve_own_vlan_domain_id("dev-leaf-01", []) == "dev-leaf-01"
 

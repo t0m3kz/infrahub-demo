@@ -9,6 +9,11 @@ infrahub_tests:
         spec:
           kind: python-transform-unit-process
           directory: configs/leaf_arista_eos_ebgp_ibgp
+      - name: arista_eos_standalone_vlan_domain
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_arista_eos_standalone_vlan_domain
       - name: arista_eos_ospf_ibgp
         expect: PASS
         spec:

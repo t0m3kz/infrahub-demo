@@ -343,13 +343,18 @@ class BaseDeviceTransform(InfrahubTransform):
     @staticmethod
     def _resolve_own_vlan_domain_id(device_id: str | None, device_capabilities: list[dict]) -> str | None:
         """Return this device's own VLAN domain id: its ManagedMLAG's id if
-        paired, else its own device id (standalone VLAN domain). Local VLAN
-        ID is allocated per VLAN domain, not DC-wide — see
-        ManagedVlanDomainSegment / generators/topology/segment.py."""
+        paired, else its ManagedStandaloneVlanDomain's id. Local VLAN ID is
+        allocated per VLAN domain, not DC-wide — see ManagedVlanDomainSegment
+        / generators/vlan_domain.py. Falls back to the device id when the
+        device carries neither."""
+        standalone_id: str | None = None
         for cap in device_capabilities:
-            if cap.get("typename") == "ManagedMLAG" and cap.get("id"):
+            typename = cap.get("typename")
+            if typename == "ManagedMLAG" and cap.get("id"):
                 return cap["id"]
-        return device_id
+            if typename == "ManagedStandaloneVlanDomain" and cap.get("id"):
+                standalone_id = cap["id"]
+        return standalone_id or device_id
 
     @staticmethod
     def _own_vlan_domain_segment(segment: dict, own_domain_id: str | None) -> dict | None:
