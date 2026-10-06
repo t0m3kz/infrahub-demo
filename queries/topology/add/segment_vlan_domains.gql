@@ -30,7 +30,9 @@ query segment_vlan_domains($segment_id: ID!) {
                 }
               }
               ... on TopologyCustomerColocation {
-                parent { node { id } }
+                # id alone fails server-side ("Unable to identify the type of
+                # the instance"); select a field, as vxlan_segment.gql does.
+                parent { node { id name { value } } }
               }
             }
           }
