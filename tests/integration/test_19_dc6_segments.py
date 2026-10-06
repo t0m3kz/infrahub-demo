@@ -281,25 +281,20 @@ class TestDC6Segments(TestInfrahubDockerWithClient):
 
         logging.info("Segment deployments verified: %d records, VNIs=%s", len(deployments), vnis)
 
-        # Local VLAN ID lives on ManagedVlanDomainSegment, per VLAN domain
-        # (MLAG pair or standalone device) — NOT DC-wide-unique, so we only
-        # assert range/format, not cross-domain uniqueness.
+        # A local VLAN ID (ManagedVlanDomainSegment) is realized only where an
+        # AppComponent instance is cabled to a switch (add_app_component_segment)
+        # or, for a stretched segment, on its border gateways. These two
+        # segments are local and nothing is cabled to them yet, so there must be
+        # none: the DC-wide sweep that used to tag every leaf is gone.
         vlan_domain_result = await fetch_vlan_domain_segments(
             client=async_client_main,
             branch=scenario_branch,
-            expected_count=len(EXPECTED_SEGMENTS),
+            expected_count=0,
+            max_attempts=1,
         )
-        assert vlan_domain_result["record_count"] >= len(EXPECTED_SEGMENTS), (
-            f"Expected >= {len(EXPECTED_SEGMENTS)} VLAN domain segment(s), found {vlan_domain_result['record_count']}"
-        )
-        for r in vlan_domain_result["records"]:
-            assert 1 <= r["vlan_id"] <= 4094, f"VLAN ID {r['vlan_id']} outside valid 802.1Q range"
-            assert r["vlan_domain_id"], f"VLAN domain segment {r['id']} missing vlan_domain"
-
-        logging.info(
-            "VLAN domain segments verified: %d records, vlan_ids=%s",
-            vlan_domain_result["record_count"],
-            [r["vlan_id"] for r in vlan_domain_result["records"]],
+        assert vlan_domain_result["record_count"] == 0, (
+            "Local segments with no cabled AppComponent instance must not get a VLAN domain segment, "
+            f"found {vlan_domain_result['record_count']}: {vlan_domain_result['records']}"
         )
 
     # ------------------------------------------------------------------
