@@ -29,7 +29,7 @@ spec:
       node: "ManagedSegmentDeployment"
       node_attribute: "vlan_id"
       start_range: 2000
-      end_range: 3999
+      end_range: 3899
     - name: "dc8-vni-pool"
       node: "ManagedSegmentDeployment"
       node_attribute: "vni"

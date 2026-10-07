@@ -34,26 +34,20 @@ class InterfaceSpeedMatcher:
         cls, server_interfaces: list[Any], switch_interfaces: list[Any]
     ) -> dict[int, tuple[list[Any], list[Any]]]:
         """Group interfaces by speed for matched connectivity."""
-        speed_groups: dict[int, tuple[list[Any], list[Any]]] = {}
-
-        # Group server interfaces
-        server_by_speed: dict[int, list[Any]] = {}
-        for intf in server_interfaces:
-            if intf.interface_type:
-                speed = cls.extract_speed(intf.interface_type)
-                if speed:
-                    server_by_speed.setdefault(speed, []).append(intf)
-
-        # Group switch interfaces
-        switch_by_speed: dict[int, list[Any]] = {}
-        for intf in switch_interfaces:
-            if intf.interface_type and intf.interface_type.value:
-                speed = cls.extract_speed(intf.interface_type.value)
-                if speed:
-                    switch_by_speed.setdefault(speed, []).append(intf)
-
-        speed_groups = {
+        server_by_speed = cls._by_speed(server_interfaces)
+        switch_by_speed = cls._by_speed(switch_interfaces)
+        return {
             speed: (server_by_speed[speed], switch_by_speed[speed])
             for speed in server_by_speed.keys() & switch_by_speed.keys()
         }
-        return speed_groups
+
+    @classmethod
+    def _by_speed(cls, interfaces: list[Any]) -> dict[int, list[Any]]:
+        """Bucket interfaces by derived speed, skipping those with no parseable speed."""
+        by_speed: dict[int, list[Any]] = {}
+        for intf in interfaces:
+            if intf.interface_type:
+                speed = cls.extract_speed(intf.interface_type)
+                if speed:
+                    by_speed.setdefault(speed, []).append(intf)
+        return by_speed

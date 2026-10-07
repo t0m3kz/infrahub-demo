@@ -4,22 +4,19 @@ Covers untested classes and methods in generators/helpers/cabling.py:
 - InterfaceSpeedMatcher.extract_speed()         – type string → Gbps int
 - InterfaceSpeedMatcher.group_by_speed()         – matched speed groups
 - CableTypeDetector.detect_cable_type()          – copper/mmf/smf detection
-- CableTypeDetector.get_cable_description()      – human-readable descriptions
 - ConnectionValidator.validate_plan()            – min/max/duplicate checks
 - PodCablingStrategy.build_plan()               – pod-to-pod with offset
 - RackCablingStrategy.build_plan()              – offset overflow → fail-fast + log
 - IntraRackMiddleCablingStrategy._create_leaf_pairs()      – even/odd counts
 - IntraRackMiddleCablingStrategy._validate_min_top_devices() – < 2 logs warning
 - IntraRackMiddleCablingStrategy._connect_tor_to_leaf_pair() – insufficient intfs
-- CablingPlanner._validate_interface_speeds()   – strict/non-strict mismatch
-- CablingPlanner._build_speed_aware_plan()      – no groups → [] + log
-- CablingPlanner.build_cabling_plan(speed_aware=True) – routes to speed-aware
+- CablingPlanner.build_cabling_plan()           – speed grouping, no groups → [] + log
 """
 
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, Mock
 
 import pytest
 from conftest import MockInterface, create_mock_interfaces
@@ -161,12 +158,8 @@ class TestCableTypeDetector:
     def test_both_fiber_returns_mmf(self) -> None:
         assert CableTypeDetector.detect_cable_type("100GBASE-SR4", "100GBASE-LR4") == "mmf"
 
-    def test_mixed_returns_mmf_by_default(self) -> None:
-        # one copper, one fiber → prefer_fiber=True (default)
+    def test_mixed_returns_mmf(self) -> None:
         assert CableTypeDetector.detect_cable_type("1000base-t", "100GBASE-SR4") == "mmf"
-
-    def test_mixed_prefer_copper_returns_copper(self) -> None:
-        assert CableTypeDetector.detect_cable_type("1000base-t", "100GBASE-SR4", prefer_fiber=False) == "copper"
 
     def test_none_intf1_returns_mmf(self) -> None:
         assert CableTypeDetector.detect_cable_type(None, "100GBASE-SR4") == "mmf"
@@ -176,22 +169,6 @@ class TestCableTypeDetector:
 
     def test_both_none_returns_mmf(self) -> None:
         assert CableTypeDetector.detect_cable_type(None, None) == "mmf"
-
-    def test_get_cable_description_copper(self) -> None:
-        desc = CableTypeDetector.get_cable_description("1000base-t", "1000base-t", "copper")
-        assert "Copper" in desc or "copper" in desc.lower()
-
-    def test_get_cable_description_fiber_mmf(self) -> None:
-        desc = CableTypeDetector.get_cable_description("100GBASE-SR4", "100GBASE-LR4", "mmf")
-        assert "Multi-mode" in desc or "fiber" in desc.lower()
-
-    def test_get_cable_description_fiber_smf(self) -> None:
-        desc = CableTypeDetector.get_cable_description("100GBASE-SR4", "100GBASE-LR4", "smf")
-        assert "Single-mode" in desc or "fiber" in desc.lower()
-
-    def test_get_cable_description_none_types(self) -> None:
-        desc = CableTypeDetector.get_cable_description(None, None, "mmf")
-        assert "Standard" in desc
 
 
 # ---------------------------------------------------------------------------
@@ -556,72 +533,12 @@ class TestIntraRackMiddleConnectTorToLeafPairInsufficient:
         assert cabling_plan == []
 
 
-# ---------------------------------------------------------------------------
-# CablingPlanner._validate_interface_speeds
-# ---------------------------------------------------------------------------
-
-
 def _make_speed_interface(name: str, device: str, intf_type: str) -> Any:
-    intf = _make_interface(name, device, intf_type)
-    return intf
-
-
-class TestValidateInterfaceSpeeds:
-    def _planner(self) -> CablingPlanner:
-        return CablingPlanner([], [])
-
-    def test_matching_speeds_pass_through(self) -> None:
-        planner = self._planner()
-        a = _make_speed_interface("Eth1", "leaf-01", "100GBASE-SR4")
-        b = _make_speed_interface("Eth1", "spine-01", "100GBASE-LR4")
-
-        result = planner._validate_interface_speeds([(a, b)])
-        assert result == [(a, b)]
-
-    def test_mismatch_non_strict_keeps_connection_logs_error(self) -> None:
-        planner = self._planner()
-        planner.logger = MagicMock()
-        a = _make_speed_interface("Eth1", "leaf-01", "100GBASE-SR4")
-        b = _make_speed_interface("Eth1", "spine-01", "25GBASE-CR")
-
-        result = planner._validate_interface_speeds([(a, b)], strict=False)
-
-        # Connection kept
-        assert len(result) == 1
-        planner.logger.error.assert_called()
-
-    def test_mismatch_strict_skips_connection_logs_error(self) -> None:
-        planner = self._planner()
-        planner.logger = MagicMock()
-        a = _make_speed_interface("Eth1", "leaf-01", "100GBASE-SR4")
-        b = _make_speed_interface("Eth1", "spine-01", "25GBASE-CR")
-
-        result = planner._validate_interface_speeds([(a, b)], strict=True)
-
-        # Connection dropped
-        assert result == []
-        planner.logger.error.assert_called()
-
-    def test_unrecognized_speed_pattern_does_not_filter(self) -> None:
-        """interface_type values that don't match the speed pattern (e.g. "other")
-        are not filtered out — interface_type is mandatory with a default on the
-        real schema, so it's never actually None, but plenty of real values (patch
-        panels, consoles, "other") carry no parseable speed."""
-        planner = self._planner()
-        a = _make_speed_interface("Eth1", "leaf-01", "other")
-        b = _make_speed_interface("Eth1", "spine-01", "100GBASE-SR4")
-
-        result = planner._validate_interface_speeds([(a, b)], strict=True)
-        # At least one speed is unknown → no mismatch check, connection kept
-        assert len(result) == 1
-
-    def test_empty_plan_returns_empty(self) -> None:
-        planner = self._planner()
-        assert planner._validate_interface_speeds([]) == []
+    return _make_interface(name, device, intf_type)
 
 
 # ---------------------------------------------------------------------------
-# CablingPlanner._build_speed_aware_plan
+# CablingPlanner.build_cabling_plan (speed-aware)
 # ---------------------------------------------------------------------------
 
 
@@ -634,7 +551,7 @@ class TestBuildSpeedAwarePlan:
         planner = CablingPlanner(bottom, top)
         planner.logger = MagicMock()
 
-        result = planner._build_speed_aware_plan(scenario="rack")
+        result = planner.build_cabling_plan(scenario="rack")
 
         assert result == []
         planner.logger.error.assert_called()
@@ -647,68 +564,25 @@ class TestBuildSpeedAwarePlan:
         planner = CablingPlanner(bottom, top)
         planner.logger = MagicMock()
 
-        result = planner._build_speed_aware_plan(scenario="rack")
+        result = planner.build_cabling_plan(scenario="rack")
 
         assert len(result) >= 1
 
-    def test_build_cabling_plan_speed_aware_flag_routes_to_speed_aware(self) -> None:
-        """build_cabling_plan(speed_aware=True) delegates to _build_speed_aware_plan."""
-        bottom = [_make_speed_interface("Eth1", "leaf-01", "100GBASE-SR4")]
-        top = [_make_speed_interface("Eth1", "spine-01", "100GBASE-LR4")]
+    def test_mixed_speeds_are_only_cabled_within_their_speed_group(self) -> None:
+        """A 100G and a 25G uplink per side: each link joins equal speeds, never 100G<->25G."""
+        bottom = [
+            _make_speed_interface("Eth1", "leaf-01", "100GBASE-SR4"),
+            _make_speed_interface("Eth2", "leaf-01", "25GBASE-CR"),
+        ]
+        top = [
+            _make_speed_interface("Eth1", "spine-01", "100GBASE-LR4"),
+            _make_speed_interface("Eth2", "spine-01", "25GBASE-CR"),
+        ]
 
-        planner = CablingPlanner(bottom, top)
+        plan = CablingPlanner(bottom, top).build_cabling_plan(scenario="rack")
 
-        with patch.object(planner, "_build_speed_aware_plan", return_value=[]) as mock_speed:
-            planner.build_cabling_plan(scenario="rack", speed_aware=True)
-
-        mock_speed.assert_called_once_with(scenario="rack", cabling_offset=0)
-
-    def test_build_cabling_plan_speed_aware_false_uses_strategy(self) -> None:
-        """build_cabling_plan(speed_aware=False) uses normal strategy (not speed-aware)."""
-        bottom = [_make_speed_interface("Eth1", "leaf-01", "100GBASE-SR4")]
-        top = [_make_speed_interface("Eth1", "spine-01", "100GBASE-LR4")]
-
-        planner = CablingPlanner(bottom, top)
-
-        with patch.object(planner, "_build_speed_aware_plan") as mock_speed:
-            planner.build_cabling_plan(scenario="rack", speed_aware=False)
-
-        mock_speed.assert_not_called()
-
-    def test_build_cabling_plan_forwards_strict_speed_validation_true(self) -> None:
-        """When strict_speed_validation=True, build path forwards strict=True."""
-        bottom = [_make_speed_interface("Eth1", "leaf-01", "100GBASE-SR4")]
-        top = [_make_speed_interface("Eth1", "spine-01", "100GBASE-LR4")]
-
-        planner = CablingPlanner(bottom, top)
-        fake_plan = [(bottom[0], top[0])]
-
-        with patch.object(planner._strategies["rack"], "build_plan", return_value=fake_plan):
-            with patch.object(planner, "_validate_interface_speeds", return_value=fake_plan) as mock_validate:
-                planner.build_cabling_plan(
-                    scenario="rack",
-                    speed_aware=False,
-                    validate_speeds=True,
-                    strict_speed_validation=True,
-                )
-
-        mock_validate.assert_called_once_with(cabling_plan=fake_plan, strict=True)
-
-    def test_build_cabling_plan_forwards_strict_speed_validation_false(self) -> None:
-        """When strict_speed_validation=False, build path forwards strict=False."""
-        bottom = [_make_speed_interface("Eth1", "leaf-01", "100GBASE-SR4")]
-        top = [_make_speed_interface("Eth1", "spine-01", "100GBASE-LR4")]
-
-        planner = CablingPlanner(bottom, top)
-        fake_plan = [(bottom[0], top[0])]
-
-        with patch.object(planner._strategies["rack"], "build_plan", return_value=fake_plan):
-            with patch.object(planner, "_validate_interface_speeds", return_value=fake_plan) as mock_validate:
-                planner.build_cabling_plan(
-                    scenario="rack",
-                    speed_aware=False,
-                    validate_speeds=True,
-                    strict_speed_validation=False,
-                )
-
-        mock_validate.assert_called_once_with(cabling_plan=fake_plan, strict=False)
+        assert len(plan) == 2
+        for bottom_intf, top_intf in plan:
+            assert InterfaceSpeedMatcher.extract_speed(
+                bottom_intf.interface_type
+            ) == InterfaceSpeedMatcher.extract_speed(top_intf.interface_type)

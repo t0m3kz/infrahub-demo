@@ -1,0 +1,28 @@
+---
+# name is computed ({parent_owner_org_id}-{environment}) — read-only.
+#
+# sdwan_gateway/branch_to_branch are NOT set here even though this office is
+# meant to opt into generators/topology/sdwan_edge.py's SdwanEdgeGenerator
+# (add_sdwan_edge): sdwan_gateway must reference "EQX-FR2-SDWAN-GW1", which
+# doesn't exist yet at this point in the load — 06_customer_boarding loads
+# before 08_interconnects (see tests/integration/test_constants.py's
+# ALL_DEMO_LOAD_STAGES). The opt-in is instead set as a follow-up update in
+# ../../../08_interconnects/04_sdwan/01_gateway.yml, right after the Gateway
+# is created — that fires the `updated`-relationship trigger
+# (trigger-customer-office-sdwan-update-gateway in data/events/99_actions.yml)
+# the same way an office opting in after initial boarding would.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyOfficeCustomer
+  data:
+    - owner: "C002"
+      parent: "Campus and Office"
+      children:
+        - kind: TopologyCustomerOffice
+          data:
+            environment: "p"
+            locations:
+              - "mar-branch"
+            member_of_groups:
+              - customer_deployments_office

@@ -1,5 +1,5 @@
 fragment ComponentGraph on AppComponent {
-  slug {
+  fqdn {
     value
   }
   component_type {

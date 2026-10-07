@@ -433,6 +433,19 @@ extensions:
           order_weight: 905
           identifier: network_segment__security_policies
           description: "Security policies attached to this segment"
+        # Reverse side of SecurityPolicyRule.destination_segment (same
+        # identifier), written only from the rule: the rules that let traffic
+        # INTO this segment. A leaf carrying only this segment builds the
+        # return path from them.
+        - name: inbound_rules
+          peer: SecurityPolicyRule
+          label: Inbound Rules
+          cardinality: many
+          kind: Generic
+          optional: true
+          order_weight: 907
+          identifier: policyrule_destination_segment
+          description: "Policy rules whose destination is this segment"
         - name: security_zone
           peer: SecurityZone
           cardinality: one

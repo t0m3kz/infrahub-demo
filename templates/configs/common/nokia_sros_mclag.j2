@@ -2,19 +2,19 @@
 !
 ! MC-LAG Configuration
 !
-A admin configure redundancy mc-lag admin-state enable
-A admin configure redundancy mc-lag system-priority {{ mlag.domain_id }}
+configure redundancy mc-lag admin-state enable
+configure redundancy mc-lag system-priority {{ mlag.domain_id }}
 {%- if mlag.peer_link_lag_id %}
-A admin configure lag {{ mlag.peer_link_lag_id }} admin-state enable
+configure lag {{ mlag.peer_link_lag_id }} admin-state enable
 {%- if mlag.peer_link_lacp_mode and mlag.peer_link_lacp_mode != 'static' %}
-A admin configure lag {{ mlag.peer_link_lag_id }} lacp admin-state enable
-A admin configure lag {{ mlag.peer_link_lag_id }} lacp mode {{ mlag.peer_link_lacp_mode }}
+configure lag {{ mlag.peer_link_lag_id }} lacp admin-state enable
+configure lag {{ mlag.peer_link_lag_id }} lacp mode {{ mlag.peer_link_lacp_mode }}
 {%- endif %}
 {%- for member in mlag.peer_link_members %}
-A admin configure lag {{ mlag.peer_link_lag_id }} port {{ member }}
+configure lag {{ mlag.peer_link_lag_id }} port {{ member }}
 {%- endfor %}
-A admin configure redundancy mc-lag peer-link lag {{ mlag.peer_link_lag_id }}
+configure redundancy mc-lag peer-link lag {{ mlag.peer_link_lag_id }}
 {%- elif mlag.peer_link %}
-A admin configure redundancy mc-lag peer-link port {{ mlag.peer_link }}
+configure redundancy mc-lag peer-link port {{ mlag.peer_link }}
 {%- endif %}
-{%- endif %}
+{%- endif -%}

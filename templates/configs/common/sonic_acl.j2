@@ -8,6 +8,8 @@
                      IP_PROTOCOL = 6/17/1 (omitted for any)
                      SRC_IP / DST_IP (omitted when "any")
                      L4_DST_PORT or L4_DST_PORT_RANGE (TCP/UDP only)
+                     L4_SRC_PORT or L4_SRC_PORT_RANGE (return legs)
+                     TCP_FLAGS = 0x10/0x10 (established return legs)
 -#}
 {%- set _proto_num = {"tcp": "6", "udp": "17", "icmp": "1"} -%}
 {%- for acl in acls -%}
@@ -50,6 +52,19 @@
 {%- else -%}
 {%- set _ = rule_entry.update({'L4_DST_PORT': rule.dst_port[3:]}) -%}
 {%- endif -%}
+{%- endif -%}
+
+{%- if rule.src_port and rule.protocol in ('tcp', 'udp') -%}
+{%- if rule.src_port.startswith('range ') -%}
+{%- set _ = rule_entry.update({'L4_SRC_PORT_RANGE': rule.src_port[6:] | replace(' ', '-')}) -%}
+{%- else -%}
+{%- set _ = rule_entry.update({'L4_SRC_PORT': rule.src_port[3:]}) -%}
+{%- endif -%}
+{%- endif -%}
+
+{#- established: ACK set (mask 0x10) -#}
+{%- if rule.established -%}
+{%- set _ = rule_entry.update({'TCP_FLAGS': '0x10/0x10'}) -%}
 {%- endif -%}
 
 {%- if rule.log -%}

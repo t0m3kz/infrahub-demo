@@ -17,7 +17,39 @@ query customer_colocation($name: String!) {
             }
           }
         }
-        parent { node { id name { value } } }
+        parent {
+          node {
+            id
+            name { value }
+            # The metro's own firewall/load-balancer pair, which every cage in
+            # it shares — a FirewallContext for this deployment lives on that
+            # pair (generators/topology/customer_colocation.py).
+            ... on TopologyColocationMetro {
+              firewall_devices: devices(role__value: "firewall") {
+                edges {
+                  node {
+                    id
+                    name { value }
+                    ... on DcimPhysicalDevice {
+                      platform { node { name { value } } }
+                    }
+                  }
+                }
+              }
+              loadbalancer_devices: devices(role__value: "load-balancer") {
+                edges {
+                  node {
+                    id
+                    name { value }
+                    ... on DcimPhysicalDevice {
+                      platform { node { name { value } } }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   }

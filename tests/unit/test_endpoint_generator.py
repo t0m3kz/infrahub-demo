@@ -40,7 +40,6 @@ def _rack(*, rack_id: str = "rack-1", row_index: int = 1, rack_type: str = "comp
             "deployment_type": "mixed",
             "parent": {"id": "dc-1", "name": "DC1"},
         },
-        "devices": [],
     }
 
 
@@ -71,9 +70,6 @@ def _make_generator() -> Any:
     gen._free_interfaces = []
     gen._already_connected = False
     gen._existing_switch_names = set()
-    gen.speed_aware = True
-    gen.validate_speeds = True
-    gen.strict_speed_validation = False
 
     gen.client.get = AsyncMock()
     gen.client.filters = AsyncMock(return_value=[])
@@ -81,29 +77,32 @@ def _make_generator() -> Any:
     gen.release_resource_lock = AsyncMock()
     gen._process_endpoint_connections = AsyncMock()
     gen._process_lag_endpoint_connections = AsyncMock()
-    gen.create_cabling = AsyncMock(return_value=[])
+    # Covered on its own in TestFanOutComponentSegments; mocked here so the
+    # generate() tests' filters side_effect lists stay the cabling queries only.
+    gen._fan_out_component_segments = AsyncMock()
+    gen.run_generator = AsyncMock()
+    gen.create_cabling = AsyncMock(return_value=[("server-port", "switch-port")])
     return gen
 
 
-def _iface(name: str, *, device: str, cabled: bool = False, interface_type: str | None = None) -> MagicMock:
+def _iface(
+    name: str,
+    *,
+    device: str,
+    cabled: bool = False,
+    interface_type: str | None = None,
+) -> MagicMock:
+    """A DcimPhysicalInterface as client.filters returns it with include=["device", "interface_type", "cable"]."""
     intf = MagicMock()
-    intf.name = MagicMock()
     intf.name.value = name
-    if interface_type:
-        intf.interface_type = MagicMock()
-        intf.interface_type.value = interface_type
-    else:
-        intf.interface_type = None
-    intf.device = MagicMock()
-    intf.device.name = MagicMock()
-    intf.device.name.value = device
+    intf.interface_type.value = interface_type
+    intf.device.peer.name.value = device
     if cabled:
         intf.cable = MagicMock()
         intf.cable.id = "cable-1"
     else:
         intf.cable = None
     intf.lag = None
-    intf._device_name_for_grouping = device
     return intf
 
 
@@ -127,20 +126,6 @@ class TestInit:
         assert gen._free_interfaces == []
         assert gen._already_connected is False
         assert gen._existing_switch_names == set()
-        assert gen.speed_aware is True
-        assert gen.validate_speeds is True
-        assert gen.strict_speed_validation is False
-
-    def test_kwargs_override_defaults(self) -> None:
-        gen = EndpointConnectivityGenerator.__new__(EndpointConnectivityGenerator)
-        with patch("generators.logger.FailOnErrorLoggerMixin.__init__", return_value=None):
-            EndpointConnectivityGenerator.__init__(
-                gen, speed_aware=False, validate_speeds=False, strict_speed_validation=True
-            )
-
-        assert gen.speed_aware is False
-        assert gen.validate_speeds is False
-        assert gen.strict_speed_validation is True
 
 
 class TestGenerateGuardClauses:
@@ -185,7 +170,7 @@ class TestGenerateGuardClauses:
         """
         gen = _make_generator()
 
-        await gen.generate(_endpoint_data(rack={"id": "rack-1", "name": "NY1-NY1-R1-1", "pod": {}, "devices": []}))
+        await gen.generate(_endpoint_data(rack={"id": "rack-1", "name": "NY1-NY1-R1-1", "pod": {}}))
 
         gen.client.get.assert_not_awaited()
         gen.client.filters.assert_not_awaited()
@@ -197,7 +182,7 @@ class TestGenerateGuardClauses:
         """Same guard covers a rack whose `pod` relationship is unset."""
         gen = _make_generator()
 
-        await gen.generate(_endpoint_data(rack={"id": "rack-1", "name": "ORPHAN-RACK", "devices": []}))
+        await gen.generate(_endpoint_data(rack={"id": "rack-1", "name": "ORPHAN-RACK"}))
 
         gen.client.get.assert_not_awaited()
         gen.logger.error.assert_not_called()
@@ -222,27 +207,6 @@ class TestGenerateGuardClauses:
         assert len(gen.data["interfaces"]) == 1
         assert gen.data["interfaces"][0]["name"] == "eth0"
 
-    @pytest.mark.asyncio
-    async def test_filters_empty_interface_nodes_on_rack_devices(self) -> None:
-        """Same {} filtering applies to rack.devices[*].interfaces (ToR/Leaf
-        devices returned alongside the endpoint for the same query)."""
-        gen = _make_generator()
-        endpoint_device = MagicMock()
-        endpoint_device.deployment = MagicMock(id="pod-1")
-        endpoint_device.save = AsyncMock()
-        gen.client.get = AsyncMock(return_value=endpoint_device)
-        gen.client.filters = AsyncMock(side_effect=[[], []])
-
-        data = _endpoint_data(rack=_rack())
-        data["DcimDevice"][0]["rack"]["devices"] = [
-            {"id": "tor-1", "name": "tor-1", "interfaces": [{}, {"id": "i1", "name": "Eth1"}]}
-        ]
-
-        await gen.generate(data)
-
-        assert len(gen.data["rack"]["devices"][0]["interfaces"]) == 1
-        assert gen.data["rack"]["devices"][0]["interfaces"][0]["name"] == "Eth1"
-
 
 class TestGenerateDeploymentUpdate:
     @pytest.mark.asyncio
@@ -257,13 +221,14 @@ class TestGenerateDeploymentUpdate:
         await gen.generate(_endpoint_data())
 
         assert endpoint_device.deployment == "pod-1"
-        endpoint_device.save.assert_awaited_once_with(allow_upsert=True)
+        # Untracked: the data-loaded server is this run's target, not its output.
+        endpoint_device.save.assert_awaited_once_with(update_group_context=False)
 
     @pytest.mark.asyncio
-    async def test_deployment_still_saved_when_already_correct(self) -> None:
-        """Always saved — even a no-op deployment match must re-upsert so this
-        run's tracking group includes the device (see generate()'s comment on
-        delete_unused_nodes)."""
+    async def test_deployment_not_saved_when_already_correct(self) -> None:
+        """The server is never tracked, so a deployment that already matches
+        needs no write at all (a tracked server would be deleted by the first
+        run that skipped the save)."""
         gen = _make_generator()
         endpoint_device = MagicMock()
         endpoint_device.deployment = MagicMock(id="pod-1")
@@ -273,40 +238,72 @@ class TestGenerateDeploymentUpdate:
 
         await gen.generate(_endpoint_data())
 
-        endpoint_device.save.assert_awaited_once_with(allow_upsert=True)
+        endpoint_device.save.assert_not_awaited()
+
+
+def _endpoint_device() -> MagicMock:
+    endpoint_device = MagicMock()
+    endpoint_device.deployment = MagicMock(id="pod-1")
+    endpoint_device.save = AsyncMock()
+    return endpoint_device
+
+
+def _bond(name: str, members: list[MagicMock]) -> MagicMock:
+    """A server DcimLAGInterface whose member_interfaces peers point at `members` by id."""
+    bond = MagicMock()
+    bond.name = MagicMock(value=name)
+    bond.member_interfaces = MagicMock()
+    bond.member_interfaces.peers = [MagicMock(id=m.id) for m in members]
+    return bond
+
+
+def _nic(name: str) -> MagicMock:
+    nic = _iface(name, device="server-1")
+    nic.id = f"id-{name}"
+    return nic
 
 
 class TestGenerateLagDispatch:
     @pytest.mark.asyncio
     async def test_lag_bonds_dispatch_to_lag_flow_and_lock_pod_row(self) -> None:
+        """Declared bonds take the LAG flow, each with its member NICs from the NIC query."""
         gen = _make_generator()
-        endpoint_device = MagicMock()
-        endpoint_device.deployment = MagicMock(id="pod-1")
-        endpoint_device.save = AsyncMock()
-        bond = MagicMock()
-        bond.member_interfaces = MagicMock()
-        bond.member_interfaces.peers = []
-        gen.client.get = AsyncMock(return_value=endpoint_device)
-        gen.client.filters = AsyncMock(return_value=[bond])
+        eth0, eth1, eth2, eth3 = (_nic(f"eth{i}") for i in range(4))
+        gen.client.get = AsyncMock(return_value=_endpoint_device())
+        # filters call order: (1) server bonds, (2) the server's lag NICs
+        gen.client.filters = AsyncMock(
+            side_effect=[[_bond("bond0", [eth0, eth1]), _bond("bond1", [eth2, eth3])], [eth0, eth1, eth2, eth3]]
+        )
 
         await gen.generate(_endpoint_data())
 
+        assert gen._free_interfaces == [eth0, eth1, eth2, eth3]
         gen.acquire_resource_lock.assert_awaited_once_with("endpoint-cabling-pod-pod-1-row-1")
-        gen._process_lag_endpoint_connections.assert_awaited_once()
+        gen._process_lag_endpoint_connections.assert_awaited_once_with(
+            {"bond0": [eth0, eth1], "bond1": [eth2, eth3]}, "mixed"
+        )
         gen.release_resource_lock.assert_awaited_once_with("lock-1")
         gen._process_endpoint_connections.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_lag_flow_lock_released_even_on_exception(self) -> None:
+    async def test_member_outside_the_lag_nics_is_dropped(self) -> None:
+        """A bond member that is not a role=lag NIC of this server is left out (and the bond then fails < 2 members)."""
         gen = _make_generator()
-        endpoint_device = MagicMock()
-        endpoint_device.deployment = MagicMock(id="pod-1")
-        endpoint_device.save = AsyncMock()
-        bond = MagicMock()
-        bond.member_interfaces = MagicMock()
-        bond.member_interfaces.peers = []
-        gen.client.get = AsyncMock(return_value=endpoint_device)
-        gen.client.filters = AsyncMock(return_value=[bond])
+        eth0, stray = _nic("eth0"), _nic("eth9")
+        gen.client.get = AsyncMock(return_value=_endpoint_device())
+        gen.client.filters = AsyncMock(side_effect=[[_bond("bond0", [eth0, stray])], [eth0]])
+
+        await gen.generate(_endpoint_data())
+
+        gen._process_lag_endpoint_connections.assert_awaited_once_with({"bond0": [eth0]}, "mixed")
+
+    @pytest.mark.asyncio
+    async def test_lag_flow_lock_released_even_on_exception(self) -> None:
+        """The pod-row lock is released when the bond wiring raises."""
+        gen = _make_generator()
+        eth0 = _nic("eth0")
+        gen.client.get = AsyncMock(return_value=_endpoint_device())
+        gen.client.filters = AsyncMock(side_effect=[[_bond("bond0", [eth0])], [eth0]])
         gen._process_lag_endpoint_connections = AsyncMock(side_effect=RuntimeError("boom"))
 
         with pytest.raises(RuntimeError):
@@ -316,28 +313,18 @@ class TestGenerateLagDispatch:
 
     @pytest.mark.asyncio
     async def test_existing_cabled_bond_members_seed_sticky_switch_names(self) -> None:
+        """Switches the NICs are already cabled to stay the bond's switch pair."""
         gen = _make_generator()
-        endpoint_device = MagicMock()
-        endpoint_device.deployment = MagicMock(id="pod-1")
-        endpoint_device.save = AsyncMock()
-
-        cabled_member = MagicMock()
-        cabled_member.cable = MagicMock(id="cable-1")
-        cabled_member.cable._peer = MagicMock()
-        cabled_member.cable._peer.name = MagicMock(value="leaf-1-Eth1__server-1-eth0")
-
-        peer_wrapper = MagicMock()
-        peer_wrapper.peer = cabled_member
-        bond = MagicMock()
-        bond.member_interfaces = MagicMock()
-        bond.member_interfaces.peers = [peer_wrapper]
-
-        gen.client.get = AsyncMock(return_value=endpoint_device)
-        gen.client.filters = AsyncMock(return_value=[bond])
+        cabled, free = _nic("eth0"), _nic("eth1")
+        cabled.cable = MagicMock(id="cable-1")
+        cabled.cable._peer = MagicMock()
+        cabled.cable._peer.name = MagicMock(value="leaf-1-Eth1__server-1-eth0")
+        gen.client.get = AsyncMock(return_value=_endpoint_device())
+        gen.client.filters = AsyncMock(side_effect=[[_bond("bond0", [cabled, free])], [cabled, free]])
 
         await gen.generate(_endpoint_data(name="server-1"))
 
-        assert "leaf-1" in gen._existing_switch_names
+        assert gen._existing_switch_names == {"leaf-1"}
 
 
 class TestGenerateUplinkFlow:
@@ -362,13 +349,67 @@ class TestGenerateUplinkFlow:
         endpoint_device.deployment = MagicMock(id="pod-1")
         endpoint_device.save = AsyncMock()
         cabled = _iface("eth0", device="server-1", cabled=True)
+        cable_obj = MagicMock(save=AsyncMock())
         gen.client.get = AsyncMock(return_value=endpoint_device)
-        gen.client.filters = AsyncMock(side_effect=[[], [cabled]])
+        gen.client.filters = AsyncMock(side_effect=[[], [cabled], [cable_obj]])
 
         await gen.generate(_endpoint_data())
 
         assert any("all interfaces connected, skipping" in str(c.args[0]) for c in gen.logger.info.call_args_list)
         gen.acquire_resource_lock.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_existing_cables_resaved_on_rerun(self) -> None:
+        """A rerun that finds every uplink cabled still saves each cable once:
+        the run tracks only what it saves, and delete_unused_nodes would
+        otherwise delete the cables the first run made."""
+        gen = _make_generator()
+        endpoint_device = MagicMock()
+        endpoint_device.deployment = MagicMock(id="pod-1")
+        endpoint_device.save = AsyncMock()
+        first = _iface("eth0", device="server-1", cabled=True)
+        second = _iface("eth1", device="server-1", cabled=True)
+        second.cable.id = "cable-2"
+        cables = {
+            "cable-1": MagicMock(save=AsyncMock(), id="cable-1"),
+            "cable-2": MagicMock(save=AsyncMock(), id="cable-2"),
+        }
+        cables["cable-1"].name.value = "leaf-1-Ethernet1/1__server-1-eth0"
+        cables["cable-2"].name.value = "leaf-2-Ethernet1/1__server-1-eth1"
+
+        gen.client.get = AsyncMock(return_value=endpoint_device)
+        gen.client.filters = AsyncMock(side_effect=[[], [first, second], [cables["cable-1"], cables["cable-2"]]])
+
+        await gen.generate(_endpoint_data())
+
+        for cable in cables.values():
+            cable.save.assert_awaited_once_with(allow_upsert=True)
+        gen.acquire_resource_lock.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_data_loaded_uplink_cable_is_not_claimed(self) -> None:
+        """A cable on an uplink that create_cabling did not make (a hand-loaded
+        CBL-... cable) is not this run's output: never re-saved, so never
+        tracked and never deleted by this run's cleanup."""
+        gen = _make_generator()
+        endpoint_device = MagicMock()
+        endpoint_device.deployment = MagicMock(id="pod-1")
+        endpoint_device.save = AsyncMock()
+        first = _iface("eth0", device="server-1", cabled=True)
+        second = _iface("eth1", device="server-1", cabled=True)
+        second.cable.id = "cable-2"
+        own = MagicMock(save=AsyncMock(), id="cable-1")
+        own.name.value = "leaf-1-Ethernet1/1__server-1-eth0"
+        loaded = MagicMock(save=AsyncMock(), id="cable-2")
+        loaded.name.value = "CBL-DC1-SRV1-2"
+
+        gen.client.get = AsyncMock(return_value=endpoint_device)
+        gen.client.filters = AsyncMock(side_effect=[[], [first, second], [own, loaded]])
+
+        await gen.generate(_endpoint_data())
+
+        own.save.assert_awaited_once_with(allow_upsert=True)
+        loaded.save.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_free_interfaces_trigger_resolve_and_process(self) -> None:
@@ -396,8 +437,9 @@ class TestGenerateUplinkFlow:
         endpoint_device.save = AsyncMock()
         cabled = _iface("eth0", device="leaf-1", cabled=True)
         free_iface = _iface("eth1", device="server-1")
+        cable_obj = MagicMock(save=AsyncMock())
         gen.client.get = AsyncMock(return_value=endpoint_device)
-        gen.client.filters = AsyncMock(side_effect=[[], [cabled, free_iface]])
+        gen.client.filters = AsyncMock(side_effect=[[], [cabled, free_iface], [cable_obj]])
         gen._resolve_target_interfaces = AsyncMock(return_value=[])
 
         await gen.generate(_endpoint_data())
@@ -437,6 +479,193 @@ class TestGenerateUplinkFlow:
             await gen.generate(_endpoint_data())
 
         gen.release_resource_lock.assert_awaited_once_with("lock-1")
+
+
+# ===========================================================================
+# Component segment fan-out — when generate() calls it, and what it dispatches
+# ===========================================================================
+
+
+class TestGenerateFansOutComponentSegments:
+    """generate() hands the fan-out the NICs cabled before the run, and only
+    calls it when the run had something to cable."""
+
+    @pytest.mark.asyncio
+    async def test_plain_flow_fans_out_after_cabling_with_previously_cabled_ids(self) -> None:
+        """Free uplinks that found target ports: fan out, passing the already-cabled NIC ids."""
+        gen = _make_generator()
+        cabled = _iface("eth0", device="server-1", cabled=True)
+        cabled.id = "nic-0"
+        free_iface = _iface("eth1", device="server-1")
+        free_iface.id = "nic-1"
+        gen.client.get = AsyncMock(return_value=_endpoint_device())
+        gen.client.filters = AsyncMock(side_effect=[[], [cabled, free_iface], [MagicMock(save=AsyncMock())]])
+        gen._resolve_target_interfaces = AsyncMock(return_value=[_iface("Eth1", device="leaf-1")])
+
+        await gen.generate(_endpoint_data())
+
+        gen._fan_out_component_segments.assert_awaited_once_with({"nic-0"})
+
+    @pytest.mark.asyncio
+    async def test_plain_flow_without_target_ports_does_not_fan_out(self) -> None:
+        """Nothing to cable into means nothing was cabled: no fan-out."""
+        gen = _make_generator()
+        gen.client.get = AsyncMock(return_value=_endpoint_device())
+        gen.client.filters = AsyncMock(side_effect=[[], [_iface("eth0", device="server-1")]])
+        gen._resolve_target_interfaces = AsyncMock(return_value=[])
+
+        await gen.generate(_endpoint_data())
+
+        gen._fan_out_component_segments.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_plain_flow_rerun_with_everything_cabled_does_not_fan_out(self) -> None:
+        """A rerun that finds every uplink cabled returns before cabling, so dispatches nothing."""
+        gen = _make_generator()
+        gen.client.get = AsyncMock(return_value=_endpoint_device())
+        cabled = _iface("eth0", device="server-1", cabled=True)
+        gen.client.filters = AsyncMock(side_effect=[[], [cabled], [MagicMock(save=AsyncMock())]])
+
+        await gen.generate(_endpoint_data())
+
+        gen._fan_out_component_segments.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_lag_flow_with_an_uncabled_member_fans_out(self) -> None:
+        """A bond member still to cable: fan out after the bond wiring, with the cabled member's id."""
+        gen = _make_generator()
+        cabled, free = _nic("eth0"), _nic("eth1")
+        cabled.cable = MagicMock(id="cable-1")
+        cabled.cable._peer = MagicMock()
+        cabled.cable._peer.name = MagicMock(value="leaf-1-Eth1__server-1-eth0")
+        gen.client.get = AsyncMock(return_value=_endpoint_device())
+        gen.client.filters = AsyncMock(side_effect=[[_bond("bond0", [cabled, free])], [cabled, free]])
+
+        await gen.generate(_endpoint_data())
+
+        gen._fan_out_component_segments.assert_awaited_once_with({"id-eth0"})
+
+    @pytest.mark.asyncio
+    async def test_lag_flow_with_every_member_cabled_does_not_fan_out(self) -> None:
+        """A rerun over fully cabled bonds re-touches them but dispatches nothing."""
+        gen = _make_generator()
+        eth0, eth1 = _nic("eth0"), _nic("eth1")
+        for nic in (eth0, eth1):
+            nic.cable = MagicMock(id=f"cable-{nic.id}")
+            nic.cable._peer = MagicMock()
+            nic.cable._peer.name = MagicMock(value=f"leaf-1-Eth1__server-1-{nic.name.value}")
+        gen.client.get = AsyncMock(return_value=_endpoint_device())
+        gen.client.filters = AsyncMock(side_effect=[[_bond("bond0", [eth0, eth1])], [eth0, eth1]])
+
+        await gen.generate(_endpoint_data())
+
+        gen._process_lag_endpoint_connections.assert_awaited_once()
+        gen._fan_out_component_segments.assert_not_awaited()
+
+
+def _cabled_nic(nic_id: str, *, cabled: bool) -> MagicMock:
+    """An endpoint NIC as the fan-out's include=["cable"] query returns it."""
+    return MagicMock(id=nic_id, cable=MagicMock(id=f"cable-{nic_id}") if cabled else None)
+
+
+def _component(component_id: str, group_ids: list[str]) -> MagicMock:
+    """An AppComponent as client.filters returns it with include=["member_of_groups"]."""
+    component = MagicMock(id=component_id)
+    component.member_of_groups.peers = [MagicMock(id=group_id) for group_id in group_ids]
+    return component
+
+
+def _fan_out_generator(
+    *,
+    nics: list[MagicMock],
+    virtual_devices: list[MagicMock] | None = None,
+    controllers: list[MagicMock] | None = None,
+    components: list[MagicMock] | None = None,
+) -> Any:
+    """A generator whose real _fan_out_component_segments reads canned query results by kind."""
+    gen = _make_generator()
+    gen.data = {"id": "ep-1", "name": "server-1"}
+    results = {
+        "DcimPhysicalInterface": nics,
+        "DcimVirtualDevice": virtual_devices or [],
+        "ManagedControllerVirtual": controllers or [],
+        "AppComponent": components or [],
+    }
+
+    async def _filters(*, kind: Any, **_: Any) -> list[MagicMock]:
+        return results[kind.__name__]
+
+    gen.client.filters = AsyncMock(side_effect=_filters)
+    gen.client.get = AsyncMock(return_value=MagicMock(id="grp-app-components"))
+    del gen._fan_out_component_segments  # back to the real method
+    return gen
+
+
+def _filter_calls(gen: Any, kind_name: str) -> list[dict[str, Any]]:
+    """The kwargs of every client.filters call for `kind_name`."""
+    return [c.kwargs for c in gen.client.filters.call_args_list if c.kwargs["kind"].__name__ == kind_name]
+
+
+class TestFanOutComponentSegments:
+    """_fan_out_component_segments: dispatch add_app_component_segment for the
+    components on an endpoint this run cabled, and for nothing else."""
+
+    @pytest.mark.asyncio
+    async def test_no_newly_cabled_nic_dispatches_nothing(self) -> None:
+        """Every cabled NIC was cabled before the run: no component lookup, no dispatch."""
+        gen = _fan_out_generator(nics=[_cabled_nic("nic-0", cabled=True), _cabled_nic("nic-1", cabled=False)])
+
+        await gen._fan_out_component_segments({"nic-0"})
+
+        assert _filter_calls(gen, "AppComponent") == []
+        gen.run_generator.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_dispatches_components_on_the_endpoint_and_its_hosted_instances(self) -> None:
+        """Components instanced on the server, its VMs or hosted controllers are
+        dispatched once each, sorted, without waiting."""
+        gen = _fan_out_generator(
+            nics=[_cabled_nic("nic-0", cabled=True), _cabled_nic("nic-1", cabled=True)],
+            virtual_devices=[MagicMock(id="vm-1"), MagicMock(id="vm-2")],
+            controllers=[MagicMock(id="ctl-1")],
+            components=[
+                _component("comp-b", ["grp-app-components"]),
+                _component("comp-a", ["grp-other", "grp-app-components"]),
+            ],
+        )
+
+        await gen._fan_out_component_segments({"nic-0"})
+
+        assert _filter_calls(gen, "DcimPhysicalInterface")[0]["role__values"] == ["uplink", "lag"]
+        for kind_name in ("DcimVirtualDevice", "ManagedControllerVirtual"):
+            assert _filter_calls(gen, kind_name)[0]["hosting_device__ids"] == ["ep-1"]
+        assert _filter_calls(gen, "AppComponent")[0]["instances__ids"] == ["ep-1", "vm-1", "vm-2", "ctl-1"]
+        gen.client.get.assert_awaited_once()
+        assert gen.client.get.await_args.kwargs["name__value"] == "app_components"
+        gen.run_generator.assert_awaited_once_with("add_app_component_segment", ["comp-a", "comp-b"], wait=False)
+
+    @pytest.mark.asyncio
+    async def test_component_outside_the_target_group_is_not_dispatched(self) -> None:
+        """A non-member of app_components would be rejected by the definition: skipped with a warning."""
+        gen = _fan_out_generator(
+            nics=[_cabled_nic("nic-0", cabled=True)],
+            components=[_component("comp-a", ["grp-app-components"]), _component("comp-x", ["grp-other"])],
+        )
+
+        await gen._fan_out_component_segments(set())
+
+        gen.run_generator.assert_awaited_once_with("add_app_component_segment", ["comp-a"], wait=False)
+        gen.logger.warning.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_no_component_on_the_endpoint_dispatches_nothing(self) -> None:
+        """A freshly cabled server no component names: no group lookup, no dispatch."""
+        gen = _fan_out_generator(nics=[_cabled_nic("nic-0", cabled=True)])
+
+        await gen._fan_out_component_segments(set())
+
+        gen.client.get.assert_not_awaited()
+        gen.run_generator.assert_not_awaited()
 
 
 # ===========================================================================
@@ -835,44 +1064,14 @@ class TestQueryInterfacesByLocation:
 
 
 class TestExtractDeviceName:
-    def test_prefers_device_name_for_grouping(self) -> None:
-        intf = SimpleNamespace(_device_name_for_grouping="leaf-1", device=None)
+    def test_reads_the_device_peer_name(self) -> None:
+        """The included device peer's name is the grouping key."""
+        assert EndpointConnectivityGenerator._extract_device_name(_iface("Eth1", device="leaf-1")) == "leaf-1"
 
-        assert EndpointConnectivityGenerator._extract_device_name(intf) == "leaf-1"
-
-    def test_falls_back_to_device_peer_name_value(self) -> None:
-        peer = SimpleNamespace(name=SimpleNamespace(value="leaf-2"))
-        intf = SimpleNamespace(device=SimpleNamespace(peer=peer))
-
-        assert EndpointConnectivityGenerator._extract_device_name(intf) == "leaf-2"
-
-    def test_falls_back_to_device_peer_plain_name(self) -> None:
-        peer = SimpleNamespace(name="leaf-3")
-        intf = SimpleNamespace(device=SimpleNamespace(peer=peer))
-
-        assert EndpointConnectivityGenerator._extract_device_name(intf) == "leaf-3"
-
-    def test_peer_none_falls_through_to_device_name(self) -> None:
-        device = SimpleNamespace(peer=None, name=SimpleNamespace(value="leaf-4"))
-        intf = SimpleNamespace(device=device)
-
-        assert EndpointConnectivityGenerator._extract_device_name(intf) == "leaf-4"
-
-    def test_falls_back_to_device_name_value_when_no_peer_attr(self) -> None:
-        device = SimpleNamespace(name=SimpleNamespace(value="leaf-5"))
-        intf = SimpleNamespace(device=device)
-
-        assert EndpointConnectivityGenerator._extract_device_name(intf) == "leaf-5"
-
-    def test_falls_back_to_device_plain_name(self) -> None:
-        device = SimpleNamespace(name="leaf-6")
-        intf = SimpleNamespace(device=device)
-
-        assert EndpointConnectivityGenerator._extract_device_name(intf) == "leaf-6"
-
-    def test_returns_none_when_nothing_resolvable(self) -> None:
-        device = SimpleNamespace()
-        intf = SimpleNamespace(device=device)
+    def test_no_device_peer_returns_none(self) -> None:
+        """An interface without a device peer has no name to group by."""
+        intf = _iface("Eth1", device="leaf-1")
+        intf.device.peer = None
 
         assert EndpointConnectivityGenerator._extract_device_name(intf) is None
 
@@ -990,7 +1189,7 @@ class TestProcessLagEndpointConnections:
         gen = self._gen()
         gen._resolve_target_interfaces = AsyncMock(return_value=[])
 
-        await gen._process_lag_endpoint_connections([MagicMock()], "tor")
+        await gen._process_lag_endpoint_connections({"bond0": []}, "tor")
 
         gen.client.filters.assert_not_called()
 
@@ -999,7 +1198,7 @@ class TestProcessLagEndpointConnections:
         gen = self._gen()
         gen._resolve_target_interfaces = AsyncMock(return_value=[_iface("Eth1", device="leaf-1")])
 
-        await gen._process_lag_endpoint_connections([MagicMock()], "tor")
+        await gen._process_lag_endpoint_connections({"bond0": []}, "tor")
 
         gen.logger.error.assert_called_once()
 
@@ -1024,7 +1223,7 @@ class TestProcessLagEndpointConnections:
         switch_b.capabilities = _caps([mlag_b])
         gen.client.filters = AsyncMock(return_value=[switch_a, switch_b])
 
-        await gen._process_lag_endpoint_connections([MagicMock()], "tor")
+        await gen._process_lag_endpoint_connections({"bond0": []}, "tor")
 
         gen.logger.error.assert_called_once()
 
@@ -1044,7 +1243,7 @@ class TestProcessLagEndpointConnections:
         switch_b.capabilities = MagicMock(peers=[shared_1, shared_2])
         gen.client.filters = AsyncMock(return_value=[switch_a, switch_b])
 
-        await gen._process_lag_endpoint_connections([MagicMock()], "tor")
+        await gen._process_lag_endpoint_connections({"bond0": []}, "tor")
 
         gen.logger.error.assert_called_once()
 
@@ -1064,16 +1263,9 @@ class TestProcessLagEndpointConnections:
         gen._resolve_target_interfaces = AsyncMock(
             return_value=[_iface("Eth1", device="leaf-1"), _iface("Eth1", device="leaf-2")]
         )
-        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], [], []])
+        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], []])
 
-        bond = MagicMock()
-        bond.name = MagicMock(value="bond0")
-        bond.member_interfaces = MagicMock()
-        single_peer = MagicMock()
-        single_peer.peer = MagicMock()
-        bond.member_interfaces.peers = [single_peer]
-
-        await gen._process_lag_endpoint_connections([bond], "tor")
+        await gen._process_lag_endpoint_connections({"bond0": [_iface("eth0", device="server-1")]}, "tor")
 
         gen.logger.error.assert_called_once()
 
@@ -1088,29 +1280,19 @@ class TestProcessLagEndpointConnections:
         target_b = _iface("Ethernet1", device="leaf-2")
         gen._resolve_target_interfaces = AsyncMock(return_value=[target_a, target_b])
 
-        # filters call order: (1) switches by name, (2) existing LAGs on switch_a, (3) on switch_b
-        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], [], []])
+        # filters call order: (1) switches by name, (2) existing LAGs on both switches
+        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], []])
 
-        member_1 = MagicMock()
-        member_1.name = MagicMock(value="eth0")
-        member_1.cable = None
-        member_2 = MagicMock()
-        member_2.name = MagicMock(value="eth1")
-        member_2.cable = None
-        peer_1, peer_2 = MagicMock(peer=member_1), MagicMock(peer=member_2)
-
-        bond = MagicMock()
-        bond.name = MagicMock(value="bond0")
-        bond.member_interfaces = MagicMock()
-        bond.member_interfaces.peers = [peer_1, peer_2]
+        bond = {"bond0": [_iface("eth0", device="server-1"), _iface("eth1", device="server-1")]}
 
         new_lag = MagicMock(id="lag-obj-1")
         new_lag.save = AsyncMock()
         gen.client.create = AsyncMock(return_value=new_lag)
 
-        await gen._process_lag_endpoint_connections([bond], "tor")
+        await gen._process_lag_endpoint_connections(bond, "tor")
 
         assert gen.create_cabling.await_count == 2
+        assert gen.client.filters.await_args_list[1].kwargs["device__ids"] == ["sw-a", "sw-b"]
         assert gen.client.create.await_count == 2
         for call in gen.client.create.call_args_list:
             assert call.kwargs["data"]["mlag_domain"] == {"id": mlag_id}
@@ -1126,22 +1308,11 @@ class TestProcessLagEndpointConnections:
         target_a_cabled = _iface("Ethernet1", device="leaf-1", cabled=True)
         target_b = _iface("Ethernet1", device="leaf-2")
         gen._resolve_target_interfaces = AsyncMock(return_value=[target_a_cabled, target_b])
-        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], [], []])
+        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], []])
 
-        member_1 = MagicMock()
-        member_1.name = MagicMock(value="eth0")
-        member_1.cable = None
-        member_2 = MagicMock()
-        member_2.name = MagicMock(value="eth1")
-        member_2.cable = None
-        peer_1, peer_2 = MagicMock(peer=member_1), MagicMock(peer=member_2)
+        bond = {"bond0": [_iface("eth0", device="server-1"), _iface("eth1", device="server-1")]}
 
-        bond = MagicMock()
-        bond.name = MagicMock(value="bond0")
-        bond.member_interfaces = MagicMock()
-        bond.member_interfaces.peers = [peer_1, peer_2]
-
-        await gen._process_lag_endpoint_connections([bond], "tor")
+        await gen._process_lag_endpoint_connections(bond, "tor")
 
         gen.logger.error.assert_called_once()
         gen.create_cabling.assert_not_called()
@@ -1167,27 +1338,19 @@ class TestProcessLagEndpointConnections:
         member_own_peer = MagicMock(id="member-own-id")
         existing_cable_obj.endpoints.peers = [member_own_peer, far_end_peer]
 
-        member_1 = MagicMock(id="member-own-id")
-        member_1.name = MagicMock(value="eth0")
+        member_1 = _iface("eth0", device="server-1")
+        member_1.id = "member-own-id"
         member_1.cable = MagicMock(id="existing-cable-1")
-        member_2 = MagicMock()
-        member_2.name = MagicMock(value="eth1")
-        member_2.cable = None
-        peer_1, peer_2 = MagicMock(peer=member_1), MagicMock(peer=member_2)
+        bond = {"bond0": [member_1, _iface("eth1", device="server-1")]}
 
-        bond = MagicMock()
-        bond.name = MagicMock(value="bond0")
-        bond.member_interfaces = MagicMock()
-        bond.member_interfaces.peers = [peer_1, peer_2]
-
-        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], [], []])
+        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], []])
         gen.client.get = AsyncMock(side_effect=[existing_cable_obj, far_end_port])
 
         new_lag = MagicMock(id="lag-obj-1")
         new_lag.save = AsyncMock()
         gen.client.create = AsyncMock(return_value=new_lag)
 
-        await gen._process_lag_endpoint_connections([bond], "tor")
+        await gen._process_lag_endpoint_connections(bond, "tor")
 
         # create_cabling is re-touched for both members (idempotent, allow_upsert
         # server-side) — but member_1's port lookup reused the EXISTING far-end
@@ -1210,25 +1373,88 @@ class TestProcessLagEndpointConnections:
         target_b.lag = MagicMock(id=None, peer=None)
         gen._resolve_target_interfaces = AsyncMock(return_value=[target_a, target_b])
 
-        member_1 = MagicMock()
-        member_1.name = MagicMock(value="eth0")
-        member_1.cable = None
-        member_2 = MagicMock()
-        member_2.name = MagicMock(value="eth1")
-        member_2.cable = None
-        peer_1, peer_2 = MagicMock(peer=member_1), MagicMock(peer=member_2)
+        bond = {"bond0": [_iface("eth0", device="server-1"), _iface("eth1", device="server-1")]}
 
-        bond = MagicMock()
-        bond.name = MagicMock(value="bond0")
-        bond.member_interfaces = MagicMock()
-        bond.member_interfaces.peers = [peer_1, peer_2]
-
-        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], [], []])
+        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], []])
         new_lag = MagicMock(id="lag-obj-1")
         new_lag.save = AsyncMock()
         gen.client.create = AsyncMock(return_value=new_lag)
 
-        await gen._process_lag_endpoint_connections([bond], "tor")
+        await gen._process_lag_endpoint_connections(bond, "tor")
 
         for call in gen.client.create.call_args_list:
             assert call.kwargs["data"]["lag_id"] == 42
+
+    @pytest.mark.asyncio
+    async def test_member_takes_only_a_switch_port_of_its_own_type(self) -> None:
+        """A 25G member skips the switches' 100G ports, even when they sort first."""
+        gen = self._gen()
+        switch_a, switch_b, _ = self._switches_with_shared_domain()
+        switch_a.platform = MagicMock(peer=MagicMock(name=MagicMock(value="dell_sonic")))
+        switch_b.platform = MagicMock(peer=MagicMock(name=MagicMock(value="dell_sonic")))
+        gen._resolve_target_interfaces = AsyncMock(
+            return_value=[
+                _iface("Ethernet1", device="leaf-1", interface_type="100gbase-x-qsfp28"),
+                _iface("Ethernet2", device="leaf-1", interface_type="25gbase-x-sfp28"),
+                _iface("Ethernet1", device="leaf-2", interface_type="100gbase-x-qsfp28"),
+                _iface("Ethernet2", device="leaf-2", interface_type="25gbase-x-sfp28"),
+            ]
+        )
+        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], []])
+        new_lag = MagicMock()
+        new_lag.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=new_lag)
+        members = [
+            _iface("eth0", device="server-1", interface_type="25gbase-x-sfp28"),
+            _iface("eth1", device="server-1", interface_type="25gbase-x-sfp28"),
+        ]
+
+        await gen._process_lag_endpoint_connections({"bond0": members}, "tor")
+
+        assert [c.kwargs["top_interfaces"] for c in gen.create_cabling.call_args_list] == [["Ethernet2"], ["Ethernet2"]]
+        gen.logger.error.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_no_matching_type_port_is_an_error(self) -> None:
+        """A 25G bond facing only 100G ports gets no cable and no port-channel, and fails the run."""
+        gen = self._gen()
+        switch_a, switch_b, _ = self._switches_with_shared_domain()
+        gen._resolve_target_interfaces = AsyncMock(
+            return_value=[
+                _iface("Ethernet1", device="leaf-1", interface_type="100gbase-x-qsfp28"),
+                _iface("Ethernet1", device="leaf-2", interface_type="100gbase-x-qsfp28"),
+            ]
+        )
+        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], []])
+        gen.client.create = AsyncMock()
+        members = [
+            _iface("eth0", device="server-1", interface_type="25gbase-x-sfp28"),
+            _iface("eth1", device="server-1", interface_type="25gbase-x-sfp28"),
+        ]
+
+        await gen._process_lag_endpoint_connections({"bond0": members}, "tor")
+
+        assert gen.logger.error.call_count == 2
+        assert "no free 25gbase-x-sfp28 port" in gen.logger.error.call_args_list[0].args[0]
+        gen.create_cabling.assert_not_called()
+        gen.client.create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_no_port_channel_when_a_member_gets_no_cable(self) -> None:
+        """A member create_cabling did not cable fails the run, and neither switch gets the port-channel."""
+        gen = self._gen()
+        switch_a, switch_b, _ = self._switches_with_shared_domain()
+        gen._resolve_target_interfaces = AsyncMock(
+            return_value=[_iface("Ethernet1", device="leaf-1"), _iface("Ethernet1", device="leaf-2")]
+        )
+        gen.client.filters = AsyncMock(side_effect=[[switch_a, switch_b], []])
+        gen.client.create = AsyncMock()
+        gen.create_cabling = AsyncMock(side_effect=[[("eth0", "Ethernet1")], []])
+        members = [_iface("eth0", device="server-1"), _iface("eth1", device="server-1")]
+
+        await gen._process_lag_endpoint_connections({"bond0": members}, "tor")
+
+        assert gen.create_cabling.await_count == 2
+        gen.logger.error.assert_called_once()
+        assert "no cable from eth1" in gen.logger.error.call_args.args[0]
+        gen.client.create.assert_not_called()

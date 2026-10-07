@@ -13,12 +13,13 @@ from typing import Any
 
 from infrahub_sdk.transforms import InfrahubTransform
 
+from transforms.helpers.addressing import host_ip
+from transforms.helpers.bgp import get_bgp_profile
 from utils.data_cleaning import clean_data
 
 
 def _device_ip(device: dict[str, Any]) -> str | None:
-    address = (device.get("primary_address") or {}).get("address")
-    return address.split("/")[0] if address else None
+    return host_ip((device.get("primary_address") or {}).get("address"))
 
 
 def _build_apic(controller: dict[str, Any]) -> dict[str, Any]:
@@ -97,6 +98,71 @@ def _build_netscaler_adm(controller: dict[str, Any]) -> dict[str, Any]:
     return {"profile": controller.get("name"), "instances": instances}
 
 
+def _vrf_handoffs(device: dict[str, Any]) -> list[dict[str, Any]]:
+    """The device's eBGP handoffs into a tenant VRF, as VCO segment handoffs.
+
+    Sessions come from the same helper the device-config transforms use
+    (transforms/helpers/bgp.py), so both ends of a handoff agree on addresses
+    and ASNs; only VRF sessions qualify (the local address sits in a non-default
+    IpamNamespace). The VLAN is the handoff sub-interface's dot1q tag
+    (`eth0.1900` → 1900); None when the interface is not a sub-interface.
+    """
+    handoffs: list[dict[str, Any]] = []
+    device_name = device.get("name") or ""
+    for bgp_config in get_bgp_profile(device.get("capabilities") or [], device_name=device_name):
+        for session in bgp_config.get("sessions") or []:
+            if not session.get("vrf"):
+                continue
+            interface = session.get("local_interface") or ""
+            _, dot, tag = interface.rpartition(".")
+            handoffs.append(
+                {
+                    "segment": session["vrf"],
+                    "interface": interface or None,
+                    "vlan": int(tag) if dot and tag.isdigit() else None,
+                    "local-address": (session.get("local_ip") or {}).get("address"),
+                    "bgp": {
+                        "local-asn": (session.get("local_as_override") or session.get("local_as") or {}).get("asn"),
+                        "neighbor-ip": host_ip((session.get("remote_ip") or {}).get("address")),
+                        "neighbor-asn": (session.get("remote_as") or {}).get("asn"),
+                        "neighbor": session.get("remote_device"),
+                    },
+                }
+            )
+    return handoffs
+
+
+def _build_velocloud_vco(controller: dict[str, Any]) -> dict[str, Any]:
+    """VCO payload — the Gateway plus every office Edge it manages
+    (generators/topology/sdwan_edge.py's SdwanEdgeGenerator appends Edges to
+    managed_devices; the Gateway itself is added by hand, see
+    data/demos/30_all/08_interconnects/04_sdwan/01_gateway.yml).
+
+    branch_to_branch is read per-edge from its own office
+    (TopologyCustomerOffice.branch_to_branch, schemas/extensions/topology/
+    topology_customer.yml) rather than once for the whole VCO — real
+    VeloCloud business-policy profiles are assigned per edge, and different
+    offices under the same VCO can want different mesh policies. Missing for
+    the Gateway itself (it has no office/deployment carrying that field).
+
+    handoffs are the device's VRF eBGP sessions (see _vrf_handoffs) — e.g. the
+    Gateway's PROD handoff to the colocation BGW. The Orchestrator pushes that
+    side, so no device-config transform here renders it.
+    """
+    edges = [
+        {
+            "hostname": device.get("name"),
+            "ip-address": _device_ip(device),
+            "role": device.get("role"),
+            "status": device.get("status"),
+            "branch-to-branch": ((device.get("deployment") or {}).get("branch_to_branch")),
+            "handoffs": _vrf_handoffs(device),
+        }
+        for device in controller.get("managed_devices") or []
+    ]
+    return {"enterprise": controller.get("name"), "edges": edges}
+
+
 def _build_dna_center(controller: dict[str, Any]) -> dict[str, Any]:
     devices = [
         {
@@ -121,6 +187,7 @@ _BUILDERS: dict[tuple[str, str | None], Any] = {
     ("security_manager", "checkpoint_gaia"): _build_checkpoint_sms,
     ("lb_manager", "f5_tmos"): _build_big_iq,
     ("lb_manager", "netscaler"): _build_netscaler_adm,
+    ("sdwan_orchestrator", "velocloud"): _build_velocloud_vco,
 }
 
 

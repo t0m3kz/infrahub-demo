@@ -22,6 +22,13 @@ def _make_gen() -> Any:
     gen.branch_name = "main"
     gen.fabric_name = "DC1"
     gen.pod_name = None
+    # allocate_resource_pools() serializes concurrent callers for the same
+    # (strategy, id) via acquire_resource_lock/release_resource_lock — not
+    # under test here, and the lock's own client.create(kind=CoreStandardGroup)
+    # call would otherwise show up in gen.client.create.await_args_list
+    # alongside the pool creates these tests actually inspect.
+    gen.acquire_resource_lock = AsyncMock(return_value="lock-id")
+    gen.release_resource_lock = AsyncMock()
     return gen
 
 
@@ -73,3 +80,58 @@ class TestAllocateResourcePoolsNamespaceScoping:
         namespaces = _ip_namespaces_by_pool(gen.client.create.await_args_list)
         assert namespaces["DC1-technical-pool"] == ["default"]
         assert namespaces["DC1-loopback-pool"] == ["default"]
+
+
+class TestAllocateResourcePoolsSerializesConcurrentCallers:
+    """Two overlapping generator runs for the same (strategy, id) must not
+    both create a pool with the same name — see allocate_resource_pools()'s
+    own comment for the reproduced DC4 hyper-spine collision this guards
+    against. Only the lock/unlock discipline is under test here; the pool
+    creation itself is covered above."""
+
+    def test_lock_is_acquired_before_creating_and_released_after(self) -> None:
+        gen = _make_gen()
+        gen._get_parent_pool_with_retry = AsyncMock(return_value=MagicMock())
+        gen.client.allocate_next_ip_prefix = AsyncMock(return_value=MagicMock())
+        created_pool = MagicMock()
+        created_pool.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=created_pool)
+
+        calls: list[str] = []
+        gen.acquire_resource_lock = AsyncMock(side_effect=lambda key: calls.append(f"acquire:{key}") or "lock-id")
+        gen.release_resource_lock = AsyncMock(side_effect=lambda lock_id: calls.append(f"release:{lock_id}"))
+
+        asyncio.run(
+            gen.allocate_resource_pools(
+                strategy="fabric",
+                pools={"technical": 24},
+                id="dc-1",
+            )
+        )
+
+        # Acquired before any pool creation, released only after it finished,
+        # and scoped to this exact (strategy, id) — a different DC's call
+        # would compute a different key and never contend with this one.
+        assert calls == ["acquire:pool-alloc-fabric-dc-1", "release:lock-id"]
+
+    def test_lock_is_released_even_if_pool_creation_raises(self) -> None:
+        """A crash mid-allocation must not leave the lock held — the module's
+        own docstring calls a stale-lock reclaim a fallback, not the norm."""
+        gen = _make_gen()
+        gen._get_parent_pool_with_retry = AsyncMock(side_effect=RuntimeError("boom"))
+
+        gen.acquire_resource_lock = AsyncMock(return_value="lock-id")
+        gen.release_resource_lock = AsyncMock()
+
+        try:
+            asyncio.run(
+                gen.allocate_resource_pools(
+                    strategy="fabric",
+                    pools={"technical": 24},
+                    id="dc-1",
+                )
+            )
+        except RuntimeError:
+            pass
+
+        gen.release_resource_lock.assert_awaited_once_with("lock-id")

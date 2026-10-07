@@ -3,15 +3,13 @@ from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
 
-from utils.data_cleaning import clean_data, get_data
+from utils.data_cleaning import get_data
 
 __all__ = [
     "BaseDeviceCheck",
-    "clean_data",
-    "get_data",
+    "validate_appliance",
     "validate_exchange_gateways",
     "validate_interfaces",
-    "validate_management_services",
     "validate_routing_password",
 ]
 
@@ -53,21 +51,39 @@ def validate_interfaces(data: dict[str, Any]) -> list[str]:
     return errors
 
 
-def validate_management_services(data: dict[str, Any]) -> list[str]:
-    """Validate that AAA, NTP and Syslog capabilities are configured with at least one server."""
+def validate_appliance(device: dict[str, Any], ha_kind: str, label: str) -> list[str]:
+    """Validate a service appliance (load balancer, proxy) is ready for config generation.
+
+    Checks platform, active status, at least one active uplink, and membership
+    in an HA domain of ``ha_kind`` with at least 2 members. ``label`` names the
+    appliance in the standalone-HA message.
+    """
     errors: list[str] = []
-    capabilities = data.get("capabilities", [])
-    types_present = {cap.get("typename") for cap in capabilities}
+    device_name = device.get("name", "Unknown")
 
-    for required in ("ManagedAAA", "ManagedNTP", "ManagedSyslog"):
-        if required not in types_present:
-            errors.append(f"{required} capability is not configured.")
-            continue
+    platform = device.get("platform") or {}
+    if not platform.get("netmiko_device_type"):
+        errors.append(f"Device '{device_name}' has no platform with netmiko_device_type — config generation will fail")
 
-        cap = next(c for c in capabilities if c.get("typename") == required)
-        servers = cap.get("servers", [])
-        if not servers:
-            errors.append(f"{required} has no servers configured.")
+    if device.get("status") != "active":
+        errors.append(f"Device '{device_name}' status is '{device.get('status')}' — expected 'active'")
+
+    interfaces = device.get("interfaces") or []
+    uplinks = [i for i in interfaces if i.get("role") == "uplink"]
+    active_uplinks = [i for i in uplinks if i.get("status") == "active"]
+    if not uplinks:
+        errors.append(f"Device '{device_name}' has no uplink interfaces defined")
+    elif not active_uplinks:
+        errors.append(f"Device '{device_name}' has {len(uplinks)} uplink(s) but none are active")
+
+    capabilities = device.get("capabilities") or []
+    ha_domains = [c for c in capabilities if c.get("typename") == ha_kind]
+    if not ha_domains:
+        errors.append(f"Device '{device_name}' has no HA domain — standalone {label} has no redundancy")
+    else:
+        ha = ha_domains[0]
+        if len(ha.get("capabilities") or []) < 2:
+            errors.append(f"Device '{device_name}' HA domain '{ha.get('name')}' has fewer than 2 members")
 
     return errors
 

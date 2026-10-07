@@ -1,0 +1,18 @@
+{#- Remote-site route-target imports for one tenant vprn (l3_mapping).
+    import_route_targets are the other sites' VRF route-targets, set when a
+    VRF carries an EVPN Multi-Site stretched segment (transforms/helpers/
+    vxlan.py _multisite_vrf_site_asns). SR OS takes a single `route-target
+    import` per vprn, so the extra RTs go through a vrf-import policy. That
+    policy replaces the route-target import, so it matches this site's own
+    RT as well — otherwise the VRF would stop importing its own fabric. -#}
+{%- if l3_mapping.import_route_targets %}
+{%- set _policy = 'VRF-' ~ l3_mapping.vrf_name ~ '-IMPORT' %}
+{%- set _own_rt = vxlan.evpn.rt_format | replace('{vni}', l3_mapping.l3_vni | string) if vxlan.evpn.rt_format and vxlan.evpn.rt_format != 'auto' else none %}
+{%- for rt in ([_own_rt] if _own_rt else []) + l3_mapping.import_route_targets %}
+configure policy-options community "{{ _policy }}" member "target:{{ rt }}"
+{%- endfor %}
+configure policy-options policy-statement "{{ _policy }}" entry 10 from community name "{{ _policy }}"
+configure policy-options policy-statement "{{ _policy }}" entry 10 action action-type accept
+# NOTE: vrf-import leaf path unverified for SR OS MD-CLI — best-effort guess
+configure service vprn {{ l3_mapping.l3_vni }} bgp instance 1 vrf-import "{{ _policy }}"
+{%- endif %}

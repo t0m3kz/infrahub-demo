@@ -53,28 +53,21 @@ ltm monitor tcp tcp_monitor {
 {%- if vips %}
 #
 # --- Nodes and Pools ---
-{%- set seen_members = [] %}
-{%- for vip in vips %}
-{%- for member in vip.members %}
-{%- if member.ip and member.name not in seen_members %}
-{%- set _ = seen_members.append(member.name) %}
+{%- for member in lb_nodes %}
 ltm node {{ member.name }} {
-    address {{ member.ip.split('/')[0] }}
+    address {{ member.address }}
 }
-{%- endif %}
-{%- endfor %}
 {%- endfor %}
 {%- for vip in vips %}
-{%- set pool_name = vip.hostname | replace('.', '_') | replace('-', '_') ~ '_' ~ vip.protocol ~ '_' ~ vip.port ~ '_pool' %}
 {%- if vip.members %}
-ltm pool {{ pool_name }} {
+ltm pool {{ vip.slug }}_pool {
     monitor {{ 'tcp_monitor' if vip.protocol == 'tcp' else 'http_monitor' }}
     load-balancing-mode round-robin
     members {
         {%- for member in vip.members %}
         {%- if member.ip %}
         {{ member.name }}:{{ member.port if member.port else vip.port }} {
-            address {{ member.ip.split('/')[0] }}
+            address {{ member.address }}
             {%- if member.weight and member.weight != 1 %}
             ratio {{ member.weight }}
             {%- endif %}
@@ -88,13 +81,11 @@ ltm pool {{ pool_name }} {
 #
 # --- Virtual Servers (VIPs) ---
 {%- for vip in vips %}
-{%- set vs_name = vip.hostname | replace('.', '_') | replace('-', '_') ~ '_' ~ vip.protocol ~ '_' ~ vip.port %}
-{%- set pool_name = vs_name ~ '_pool' %}
-ltm virtual {{ vs_name }} {
+ltm virtual {{ vip.slug }} {
     destination {{ vip.vip_ip if vip.vip_ip else '0.0.0.0' }}:{{ vip.port }}
     ip-protocol {{ 'tcp' if vip.protocol in ['http', 'https', 'tls', 'tcp'] else 'udp' }}
     {%- if vip.members %}
-    pool {{ pool_name }}
+    pool {{ vip.slug }}_pool
     {%- endif %}
     {%- if vip.protocol == 'https' %}
     profiles {
@@ -120,14 +111,13 @@ ltm virtual {{ vs_name }} {
 {%- if ha %}
 #
 # --- Device Service Clustering (DSC) ---
-{%- set mgmt_ip = (lb_interfaces | selectattr('role', 'equalto', 'management') | map(attribute='ip_address.address') | first | default('')) %}
 cm device {{ name }} {
-{%- if mgmt_ip %}
-    configsync-ip {{ mgmt_ip.split('/')[0] }}
-    mirror-ip {{ mgmt_ip.split('/')[0] }}
+{%- if management_ip %}
+    configsync-ip {{ management_ip }}
+    mirror-ip {{ management_ip }}
     unicast-address {
         {
-            ip {{ mgmt_ip.split('/')[0] }}
+            ip {{ management_ip }}
             port 1026
         }
     }

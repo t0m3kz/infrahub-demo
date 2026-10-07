@@ -20,12 +20,8 @@ vlan {{ vlan.vlan_id }}
 ! Interfaces
 {%- for interface in interfaces %}
 interface {{ interface.name }}
-{%- if interface.description %}
-  description {{ interface.description }}
-{%- elif interface.circuits %}
-  description {{ interface.circuits[0].circuit_type|upper }} - {{ interface.circuits[0].circuit_id }} - {{ interface.circuits[0].provider }}
-{%- elif interface.virtual_links %}
-  description {{ interface.virtual_links[0].link_type|upper }} - {{ interface.virtual_links[0].link_name }} - {{ interface.virtual_links[0].provider }}
+{%- if interface.display_description %}
+  description {{ interface.display_description }}
 {%- endif %}
 {%- if interface.status == 'active' %}
   no shutdown

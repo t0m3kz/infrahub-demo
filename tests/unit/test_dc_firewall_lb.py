@@ -71,6 +71,12 @@ def _make_generator() -> Any:
     gen.create_devices = AsyncMock(return_value=[])
     gen.create_cabling = AsyncMock(return_value=[])
     gen.create_routing = AsyncMock()
+    # _ensure_firewall_context_pools()/allocate_resource_pools() serialize
+    # concurrent callers via acquire_resource_lock/release_resource_lock — not
+    # under test here, and the lock's own client.delete() call has no mock set
+    # up on this plain MagicMock client.
+    gen.acquire_resource_lock = AsyncMock(return_value="lock-id")
+    gen.release_resource_lock = AsyncMock()
 
     gen.data = {
         "id": "dc-1",
@@ -663,3 +669,17 @@ class TestEnsureFirewallContextPools:
         assert ip_prefix_creates == []
         alloc_kwargs = gen.client.allocate_next_ip_prefix.call_args.kwargs
         assert alloc_kwargs["resource_pool"].id == "parent-pool-id"
+
+    @pytest.mark.asyncio
+    async def test_serializes_on_a_lock_scoped_to_this_dc(self) -> None:
+        """Two overlapping calls for the SAME dc_name must not both create a
+        CoreIPPrefixPool with the same name — see the method's own docstring
+        for the reproduced collision this guards against."""
+        gen = self._make_gen()
+        calls: list[str] = []
+        gen.acquire_resource_lock = AsyncMock(side_effect=lambda key: calls.append(f"acquire:{key}") or "lock-id")
+        gen.release_resource_lock = AsyncMock(side_effect=lambda lock_id: calls.append(f"release:{lock_id}"))
+
+        await gen._ensure_firewall_context_pools(dc_name="dc1")
+
+        assert calls == ["acquire:fw-context-pools-dc1", "release:lock-id"]

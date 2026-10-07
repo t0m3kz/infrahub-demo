@@ -117,22 +117,6 @@ class TestRackRolesHelper:
 
         assert options["group_name"] == "loadbalancers"
 
-    def test_template_interfaces_filters_by_role(self) -> None:
-        template = {
-            "id": "tmpl",
-            "interfaces": [
-                {"name": "Eth1/1", "role": "uplink"},
-                {"name": "Eth1/2", "role": "downlink"},
-                {"name": "Eth1/3", "role": "uplink"},
-            ],
-        }
-
-        all_ifaces = RackRolesHelper.template_interfaces(template)
-        uplinks = RackRolesHelper.template_interfaces(template, role="uplink")
-
-        assert all_ifaces == ["Eth1/1", "Eth1/2", "Eth1/3"]
-        assert uplinks == ["Eth1/1", "Eth1/3"]
-
     def test_overlay_only_routing_options(self) -> None:
         """border_leafs_per_rack() was deleted along with border-leaf's rack-level
         generation (moved to TopologyDataCenter's fabric_templates) — only

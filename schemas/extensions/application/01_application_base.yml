@@ -167,11 +167,11 @@ nodes:
     inherit_from:
       - AppGeneric
     parent: AppApplication
-    children: AppEndpoint
+    children: ""
     human_friendly_id:
-      - slug__value
+      - fqdn__value
     order_by:
-      - slug__value
+      - fqdn__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
       - [parent, name__value]
@@ -180,16 +180,12 @@ nodes:
         kind: Text
         optional: false
         order_weight: 100
-      - name: slug
+      - name: fqdn
         kind: Text
         unique: true
-        optional: true
+        optional: false
         order_weight: 150
-        description: "Globally unique slug — {portfolio}-{app}-{env}-{component}"  # yamllint disable-line rule:line-length
-        computed_attribute:
-          kind: Jinja2
-          jinja2_template: "{{ parent__name__value }}-{{ name__value|lower|replace(' ', '-') }}"  # yamllint disable-line rule:line-length
-        read_only: true
+        description: "Service address of this tier; also its human-friendly id"
       - name: component_type
         kind: Dropdown
         optional: false
@@ -213,6 +209,17 @@ nodes:
           - name: worker
             label: "Worker"
             color: "#777777"
+      - name: ports
+        kind: List
+        optional: false
+        order_weight: 500
+        description: "Ports this tier listens on, as protocol/port or protocol/start-end (tcp/443, udp/30000-30010)"  # yamllint disable-line rule:line-length
+      - name: load_balanced
+        kind: Boolean
+        optional: true
+        default_value: false
+        order_weight: 550
+        description: "Front this tier with a VIP per port on the load balancer of its segment"
     relationships:
       - name: network_segment
         peer: ManagedNetworkSegment
@@ -232,16 +239,6 @@ nodes:
         order_weight: 760
         identifier: "app_component__instances"
         description: "Compute instances (physical, virtual, or cloud) running this component"
-      - name: load_balancer
-        peer: ManagedLoadbalancerHA
-        cardinality: one
-        kind: Generic
-        optional: true
-        on_delete: no-action
-        identifier: "app_component__load_balancer"
-        order_weight: 845
-        label: "Load Balancer HA"
-        description: "Assigned LB HA domain used for automatic VIP creation from service ports"
       - name: health_checks
         peer: LoadbalancerHealthCheck
         cardinality: many
@@ -252,6 +249,9 @@ nodes:
         order_weight: 846
         label: "Health Checks"
         description: "Health checks associated with this application component"
+      - name: service_ports
+        peer: AppServicePort
+        state: absent
 extensions:
   nodes:
     - kind: LoadbalancerVIP

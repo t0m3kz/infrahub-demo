@@ -28,7 +28,7 @@ spec:
             suites: [ktw-1-s-1]
             fabric_templates:
               - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
-            mlag_create: virtual
+            mlag_create: back-to-back
             member_of_groups:
               - topologies_pod
             racks:
@@ -56,8 +56,15 @@ spec:
             layout: S_TOR
             deployment_type: tor
             suites: [ktw-1-s-2]
+            # S_TOR's own design assumes 32 downlink ports per spine (2 rows
+            # x 8 racks x 2 ToRs) before border-leaf even needs its own —
+            # N9K-C9336C-FX2_SPINE only wires up 30 (Ethernet1/[1-30]), so
+            # border-leaf cabling's capacity-based offset (reserves the
+            # design's full ToR allocation, not live rack count) always
+            # overflows on this template regardless of how many racks are
+            # actually populated. N9K-C9364C-GX_SPINE has 60.
             fabric_templates:
-              - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
+              - ["2", "spine", "N9K-C9364C-GX_SPINE"]
             mlag_create: back-to-back
             member_of_groups:
               - topologies_pod

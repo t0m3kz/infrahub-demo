@@ -15,6 +15,7 @@ Scenarios:
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import json
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from transforms.config.access_leaf import AccessLeaf
 from transforms.config.border_leaf import BorderLeaf
+from transforms.config.border_spine import BorderSpine
 from transforms.config.edge import Edge
 from transforms.config.firewall import Firewall
 from transforms.config.l2_leaf import L2Leaf
@@ -147,6 +149,7 @@ def _make_interface(
     remote_name: str | None = None,
     remote_ip: str | None = None,
     remote_device: str | None = None,
+    segments: list[dict] | None = None,
 ) -> dict:
     iface: dict[str, Any] = {
         "__typename": typename,
@@ -238,6 +241,10 @@ def _make_interface(
                 ),
             }
         )
+    # Segments are interface capabilities too — this is the only path the
+    # rendering transform reads them from (_collect_activations_from_interfaces).
+    if segments:
+        services.extend(segments)
     iface["interface_capabilities"] = _edges(services)
     return iface
 
@@ -275,7 +282,7 @@ def _make_security_policy(*, name: str, rules: list[dict]) -> dict:
     }
 
 
-def _make_segment_deployment(
+def _make_segment_node(
     *,
     vlan_id: int,
     vni: int | None = None,
@@ -287,8 +294,29 @@ def _make_segment_deployment(
     num_deployments: int = 1,
     isolation_mode: str | None = None,
     has_firewall: bool = False,
+    vlan_domain_id: str | None = None,
+    l3_vni: int | None = None,
 ) -> dict:
-    """Build a SegmentDeployment node."""
+    """Build a ManagedNetworkSegment node, as the query returns it.
+
+    This is the shape that hangs off ``interfaces[].interface_capabilities`` —
+    the ONLY place BaseDeviceTransform._collect_activations_from_interfaces
+    looks for segments, and therefore the only path that produces VXLAN/EVPN
+    output for leaf/tor/access-leaf roles.
+
+    For a VxlanSegment the VNI comes from ``segment_deployments`` (DC-wide) and
+    the LOCAL vlan_id from ``vlan_domain_segments``, matched to this device's own
+    VLAN domain — its ManagedMLAG if paired, else its own device id. A
+    VxlanSegment with no entry for the device's own domain is skipped entirely
+    by the transform, so ``vlan_domain_id`` must match or no VXLAN is rendered.
+
+    The VRF and its L3 VNI are reached ONLY via
+    ``gateway.ip_prefix.ip_namespace`` (see _get_segment_namespace and
+    _get_segment_gateways in transforms/helpers/segments.py). A flat
+    ``segment.prefix`` key — which this generator used to emit — is read by
+    nothing, which is why no fixture ever rendered a VRF or an L3 VNI.
+    See queries/fragments/network_segment.gql's NetworkSegmentFields.
+    """
     seg: dict[str, Any] = {"id": f"seg-{seg_name}"}
 
     if isolation_mode is not None:
@@ -302,25 +330,45 @@ def _make_segment_deployment(
 
     security_zone_node = _node(None)
 
+    # gateway.ip_prefix carries the segment's subnet and its IpamNamespace (the
+    # VRF). Derive the prefix from the gateway address so the two stay coherent.
+    gateway_node: dict[str, Any] | None = None
+    if gateway_ip:
+        iface = ipaddress.ip_interface(gateway_ip)
+        gateway_node = {
+            "address": _v(gateway_ip),
+            "ip_prefix": _node(
+                {
+                    "prefix": _v(str(iface.network)),
+                    "ip_namespace": _node({"name": _v(ns_name), "l3_vni": _v(l3_vni)}),
+                }
+            ),
+        }
+
     if seg_type == "ManagedVxlanSegment":
         seg.update(
             {
                 "__typename": seg_type,
                 "name": _v(seg_name),
+                "status": _v("active"),
                 "customer_name": _v("Customer-A"),
                 "arp_suppression": _v(True),
                 "security_zone": security_zone_node,
-                "gateway": _node({"address": _v(gateway_ip)} if gateway_ip else None),
-                "prefix": _node(
-                    {
-                        "ip_namespace": _node(
-                            {
-                                "name": _v(ns_name),
-                                "l3_vni": _v(50001),
-                                "owner": _node({"name": _v("CustomerA")}),
-                            }
-                        ),
-                    }
+                "gateway": _node(gateway_node),
+                # DC-wide VNI. The transform takes segment_deployments[0]["vni"].
+                "segment_deployments": _edges([{"vni": _v(vni)}]),
+                # Per-VLAN-domain LOCAL vlan_id. Must carry an entry whose
+                # vlan_domain.id equals this device's own domain or the transform
+                # skips the segment and renders no VXLAN at all.
+                "vlan_domain_segments": _edges(
+                    [
+                        {
+                            "vlan_id": _v(vlan_id),
+                            "vlan_domain": _node({"id": vlan_domain_id}),
+                        }
+                    ]
+                    if vlan_domain_id
+                    else []
                 ),
             }
         )
@@ -329,20 +377,13 @@ def _make_segment_deployment(
             {
                 "__typename": seg_type,
                 "name": _v(seg_name),
+                "status": _v("active"),
                 "customer_name": _v("Customer-A"),
+                # A VlanSegment's vlan_id is a plain attribute on the segment —
+                # no realization record, no VNI (single-site, no overlay).
+                "vlan_id": _v(vlan_id),
                 "security_zone": security_zone_node,
-                "gateway": _node({"address": _v(gateway_ip)} if gateway_ip else None),
-                "prefix": _node(
-                    {
-                        "ip_namespace": _node(
-                            {
-                                "name": _v(ns_name),
-                                "l3_vni": _v(None),
-                                "owner": _node(None),
-                            }
-                        ),
-                    }
-                ),
+                "gateway": _node(gateway_node),
             }
         )
 
@@ -352,9 +393,21 @@ def _make_segment_deployment(
     # deployments list drives stretched-segment detection in _filter_segment_deployments()
     seg["deployments"] = _edges([{"id": f"fake-dc-{i}"} for i in range(num_deployments)])
 
+    return seg
+
+
+def _make_segment_deployment(**kwargs: Any) -> dict:
+    """Wrap a segment node in a ManagedSegmentDeployment record.
+
+    This is the ``TopologySegmentHosting.segment_deployments`` shape, reached
+    from a device's own ``deployment`` — used by border-leaf for DC-wide PBR
+    rules (see transforms/config/border_leaf.py), NOT for VXLAN. VXLAN comes
+    exclusively from interface_capabilities via _make_segment_node.
+    """
+    seg = _make_segment_node(**kwargs)
     return {
-        "vlan_id": _v(vlan_id),
-        "vni": _v(vni),
+        "vlan_id": _v(kwargs.get("vlan_id")),
+        "vni": _v(kwargs.get("vni")),
         "status": _v("active"),
         "segment": _node(seg),
     }
@@ -363,6 +416,16 @@ def _make_segment_deployment(
 # ============================================================================
 # Scenario builders
 # ============================================================================
+# Roles that terminate customer segments, so their fixtures need segments attached.
+# Mirrors transforms/helpers/vxlan.py's _VTEP_ROLES plus l2-leaf (pure L2, no VNI).
+SEGMENT_ROLES = ("leaf", "border-leaf", "border-spine", "tor", "l2-leaf", "access-leaf")
+
+# Fabric-wide EVPN route-target administrative ASN
+# (TopologySegmentHosting.evpn_rt_as). Deliberately NOT any device's own ASN:
+# every VTEP in the fabric must derive the same route-target or imports never
+# match, so the golden output must show one constant regardless of the device's
+# local ASN. See transforms/helpers/vxlan.py's rt_asn.
+FABRIC_RT_ASN = 65000
 
 
 def build_device_data(
@@ -379,6 +442,13 @@ def build_device_data(
     """Build a complete raw GraphQL response for a device config query.
 
     Scenarios:
+        ebgp_ebgp: eBGP underlay (TTL=1) + eBGP overlay (TTL=2), per-device ASN
+                   - Underlay and overlay both use the device's own ASN (65001),
+                     so get_bgp_profile merges them into ONE `router bgp` stanza
+                   - This is the schema default (9 of 10 demo topologies) and the
+                     only scenario that produces an EVPN-OVERLAY peer group, so it
+                     is the only one exercising next-hop-unchanged / retain
+                     route-target all on the relaying tier
         ebgp_ibgp: eBGP underlay (TTL=1) + iBGP overlay (TTL=2)
                    - Underlay: per-device ASN (65001), remote spines have different ASNs (65100, 65101)
                    - Overlay: shared iBGP ASN (65000) for all devices
@@ -400,7 +470,107 @@ def build_device_data(
     device_capabilities: list[dict] = []
     use_ospf_on_interfaces = False
 
-    if scenario == "ebgp_ibgp":
+    if scenario == "ebgp_ebgp":
+        # eBGP underlay + eBGP overlay, both on the device's OWN ASN. The
+        # generator really does create two ManagedBGP processes here
+        # (`-bgp-underlay` and `-bgp-overlay`, see generators/helpers/routing.py
+        # _plan_overlay_processes) that share one per-device ASN, and
+        # get_bgp_profile merges same-ASN processes into a single stanza. Keep
+        # both processes in the fixture so that merge stays covered.
+        device_asn = 65001
+        spine1_asn = 65100
+        spine2_asn = 65101
+
+        underlay_peering_1 = _make_bgp_peering(
+            device_name=device_name,
+            device_ip=local_p2p_1,
+            device_asn=device_asn,
+            remote_name="spine-01",
+            remote_ip=remote_p2p_1,
+            remote_asn=spine1_asn,
+            session_type="EBGP",
+            ttl=1,
+            local_iface_name="Ethernet1",
+            remote_iface_name="Ethernet1/1",
+            **(
+                {
+                    "maximum_routes": 1000,
+                    "local_pref": 200,
+                    "med": 50,
+                    "send_extended_community": True,
+                    "remove_private_as": True,
+                    "password": "underlay-s3cr3t",
+                }
+                if security_fields
+                else {}
+            ),
+        )
+        underlay_peering_2 = _make_bgp_peering(
+            device_name=device_name,
+            device_ip=local_p2p_2,
+            device_asn=device_asn,
+            remote_name="spine-02",
+            remote_ip=remote_p2p_2,
+            remote_asn=spine2_asn,
+            session_type="EBGP",
+            ttl=1,
+            local_iface_name="Ethernet2",
+            remote_iface_name="Ethernet1/2",
+        )
+        device_capabilities.append(
+            {
+                "__typename": "ManagedBGP",
+                "name": _v("bgp-underlay"),
+                "status": _v("active"),
+                "multipath": _v(True),
+                "graceful_restart": _v(True),
+                "confederation_identifier": _v(None),
+                "local_as": _node({"asn": _v(device_asn)}),
+                "router_id": _node({"address": _v(router_id)}),
+                "peerings": _edges([underlay_peering_1, underlay_peering_2]),
+            }
+        )
+
+        # Overlay eBGP peerings: multihop over loopbacks, remote ASN is the
+        # spine's own ASN — every VTEP a different AS, which is exactly why the
+        # RT cannot be `auto` and why the spine needs next-hop-unchanged.
+        overlay_peering_1 = _make_bgp_peering(
+            device_name=device_name,
+            device_ip=router_id,
+            device_asn=device_asn,
+            remote_name="spine-01",
+            remote_ip=spine1_loopback,
+            remote_asn=spine1_asn,
+            session_type="EBGP",
+            ttl=2,
+            send_extended_community=True,
+        )
+        overlay_peering_2 = _make_bgp_peering(
+            device_name=device_name,
+            device_ip=router_id,
+            device_asn=device_asn,
+            remote_name="spine-02",
+            remote_ip=spine2_loopback,
+            remote_asn=spine2_asn,
+            session_type="EBGP",
+            ttl=2,
+            send_extended_community=True,
+        )
+        device_capabilities.append(
+            {
+                "__typename": "ManagedBGP",
+                "name": _v("bgp-overlay"),
+                "status": _v("active"),
+                "multipath": _v(True),
+                "graceful_restart": _v(True),
+                "confederation_identifier": _v(None),
+                "local_as": _node({"asn": _v(device_asn)}),
+                "router_id": _node({"address": _v(router_id)}),
+                "peerings": _edges([overlay_peering_1, overlay_peering_2]),
+            }
+        )
+
+    elif scenario == "ebgp_ibgp":
         # eBGP underlay + iBGP overlay with separate ASNs
         underlay_asn = 65001  # per-device underlay ASN
         overlay_asn = 65000  # shared iBGP overlay ASN
@@ -588,18 +758,7 @@ def build_device_data(
         ),
     ]
 
-    if role in ("leaf", "tor", "border_leaf"):
-        interfaces.append(
-            _make_interface(
-                name="Ethernet10",
-                device_name=device_name,
-                description="to server-01",
-                role="server",
-                ip_address=None,
-            )
-        )
-
-    activations: list[dict] = []
+    segment_kwargs: list[dict[str, Any]] = []
     if include_segments:
         # Build optional security policy for with_acl scenario
         policies_vxlan = None
@@ -623,33 +782,66 @@ def build_device_data(
                 )
             ]
 
+        # This device's own VLAN domain. build_device_data never builds a
+        # ManagedMLAG capability, so _resolve_own_vlan_domain_id falls through to
+        # the device id — the vlan_domain_segments entry must use the same value
+        # or the transform skips the VxlanSegment.
+        vlan_domain_id = f"dev-{device_name}"
+
         # microsegmented: assign firewall but still render leaf ACL
         microseg = isolation_mode == "microsegmented"
-        activations.append(
-            _make_segment_deployment(
-                vlan_id=100,
-                vni=10100,
-                seg_name="seg-100",
-                seg_type="ManagedVxlanSegment",
-                gateway_ip="10.100.0.1/24",
-                ns_name="VRF_A",
-                security_policies=policies_vxlan,
-                num_deployments=1,
-                isolation_mode=isolation_mode,
-                has_firewall=microseg,
+        segment_kwargs.append(
+            {
+                "vlan_id": 100,
+                # 10100 is inside the capped L2 range (10001-49999) and stays
+                # clear of the L3 VNI range at 50001-59999.
+                "vni": 10100,
+                "seg_name": "seg-100",
+                "seg_type": "ManagedVxlanSegment",
+                "gateway_ip": "10.100.0.1/24",
+                "ns_name": "VRF_A",
+                # Non-default namespace + l3_vni is what makes this a symmetric-IRB
+                # segment: it drives the L3 VNI / VRF stanza. 50001 is the bottom of
+                # the L3 VNI pool range, disjoint from the L2 range above.
+                "l3_vni": 50001,
+                "security_policies": policies_vxlan,
+                "num_deployments": 1,
+                "isolation_mode": isolation_mode,
+                "has_firewall": microseg,
+                "vlan_domain_id": vlan_domain_id,
+            }
+        )
+        segment_kwargs.append(
+            {
+                "vlan_id": 200,
+                "seg_name": "seg-200",
+                "seg_type": "ManagedVlanSegment",
+                "gateway_ip": "10.200.0.1/24",
+                "security_policies": policies_vlan,
+                "isolation_mode": isolation_mode,
+                "num_deployments": 1,
+            }
+        )
+
+    # VXLAN/EVPN is rendered ONLY from interface_capabilities, so the
+    # customer-facing port must carry the segments. Attaching them solely to
+    # deployment.segment_deployments (as this generator used to) left every
+    # fixture with zero VXLAN output while still passing.
+    if role in SEGMENT_ROLES:
+        interfaces.append(
+            _make_interface(
+                name="Ethernet10",
+                device_name=device_name,
+                description="to server-01",
+                role="server",
+                ip_address=None,
+                segments=[_make_segment_node(**kw) for kw in segment_kwargs],
             )
         )
-        activations.append(
-            _make_segment_deployment(
-                vlan_id=200,
-                seg_name="seg-200",
-                seg_type="ManagedVlanSegment",
-                gateway_ip="10.200.0.1/24",
-                security_policies=policies_vlan,
-                isolation_mode=isolation_mode,
-                num_deployments=1,
-            )
-        )
+
+    # deployment.segment_deployments is a DIFFERENT consumer: border-leaf's
+    # DC-wide PBR rules. Keep both in sync from the same source.
+    activations: list[dict] = [_make_segment_deployment(**kw) for kw in segment_kwargs]
 
     device_node: dict[str, Any] = {
         "__typename": "DcimPhysicalDevice",
@@ -678,6 +870,13 @@ def build_device_data(
             {
                 "id": "dc-1",
                 "name": _v("DC-1"),
+                # TopologySegmentHosting.evpn_rt_as — the fabric-wide EVPN
+                # route-target administrative ASN. Without it, get_vxlan_config
+                # falls back to the device's OWN overlay ASN, which under
+                # ebgp-ebgp gives every VTEP a different route-target. The
+                # generator populates it, so the fixtures must too or the golden
+                # output pins the broken fallback.
+                "evpn_rt_as": _node({"asn": _v(FABRIC_RT_ASN)}),
                 "segment_deployments": _edges(activations),
             }
         ),
@@ -712,14 +911,20 @@ def _make_firewall_interface(
         "arp_suppression": _v(True),
         "segment_deployments": _edges([{"vlan_id": _v(vlan_id), "vni": _v(None)}]),
         "security_zone": _node(zone_node),
-        "gateway": _node(None),
-        "prefix": _edges(
-            [
-                {
-                    "prefix": _v(None),
-                    "ip_namespace": _node({"name": _v(namespace_name), "l3_vni": _v(None), "owner": _node(None)}),
-                }
-            ]
+        # queries/config/firewall.gql reads the segment subnet from
+        # gateway.ip_prefix.prefix — a flat `prefix` key (which this used to
+        # emit) is read by nothing, so zone address-object rendering was never
+        # covered. The firewall's own leg address is the segment gateway here.
+        "gateway": _node(
+            {
+                "address": _v(ip_address),
+                "ip_prefix": _node(
+                    {
+                        "prefix": _v(str(ipaddress.ip_interface(ip_address).network)),
+                        "ip_namespace": _node({"name": _v(namespace_name), "l3_vni": _v(None)}),
+                    }
+                ),
+            }
         ),
         "security_policies": _edges([]),
     }
@@ -1004,16 +1209,44 @@ def build_mlag_device_data(
     if domain_name is None:
         domain_name = f"POD1-{device_name.split('-')[-1].upper()}-{peer_name.split('-')[-1].upper()}-MLAG"
 
+    # MLAG control session addressing mirrors generators/mlag.py: SONiC gets an
+    # IPv4 /31 (ICCP), vPC has none (keepalive over mgmt0), others an IPv6 /127.
+    if platform in {"sonic", "dell_sonic"}:
+        control_addresses: tuple[str, str] | None = ("10.254.0.0/31", "10.254.0.1/31")
+    elif platform == "cisco_nxos":
+        control_addresses = None
+    else:
+        control_addresses = ("fd00:2400::/127", "fd00:2400::1/127")
+
+    def member(name: str, management_address: str, control_address: str | None) -> dict:
+        interfaces = []
+        if control_address:
+            interfaces.append(
+                {
+                    "__typename": "DcimVirtualInterface",
+                    "name": _v("Vlan4094"),
+                    "role": _v("mlag-control"),
+                    "ip_address": _node({"address": _v(control_address)}),
+                }
+            )
+        return {
+            "name": _v(name),
+            "role": _v(role),
+            "primary_address": _node({"address": _v(management_address)}),
+            "interfaces": _edges(interfaces),
+        }
+
     mlag_cap = {
         "__typename": "ManagedMLAG",
+        "id": "mlag-dom-1",
         "name": _v(domain_name),
         "domain_id": _v(domain_id),
         "reload_delay": _v(300),
         "reload_delay_non_mlag": _v(330),
         "capabilities": _edges(
             [
-                {"name": _v(device_name)},
-                {"name": _v(peer_name)},
+                member(device_name, "172.16.0.1/32", control_addresses[0] if control_addresses else None),
+                member(peer_name, "172.16.0.2/32", control_addresses[1] if control_addresses else None),
             ]
         ),
     }
@@ -1026,6 +1259,9 @@ def build_mlag_device_data(
     elif platform == "nokia_sros":
         uplink1, uplink2, member1, member2 = "Ethernet1", "Ethernet2", "Ethernet33", "Ethernet34"
         lag_name, lag_id_val = "lag-100", 100
+    elif platform in {"sonic", "dell_sonic"}:
+        uplink1, uplink2, member1, member2 = "Ethernet1", "Ethernet2", "Ethernet33", "Ethernet34"
+        lag_name, lag_id_val = "PortChannel100", 100
     else:
         uplink1, uplink2, member1, member2 = "Ethernet1", "Ethernet2", "Ethernet33", "Ethernet34"
         lag_name, lag_id_val = "Port-Channel100", 100
@@ -1088,6 +1324,37 @@ def build_mlag_device_data(
         role="mlag-peer",
     )
 
+    device_interfaces = [loopback, up1, up2, lag_iface, mem1, mem2]
+    if control_addresses:
+        # Rendered by the MLAG include only — the transform must keep it out of
+        # the generic interface list.
+        device_interfaces.append(
+            _make_interface(
+                name="Vlan4094",
+                device_name=device_name,
+                description="MLAG control — DC1-POD1-L1-L2-MLAG",
+                role="mlag-control",
+                ip_address=control_addresses[0],
+                typename="DcimVirtualInterface",
+            )
+        )
+    if platform in {"sonic", "dell_sonic"}:
+        device_interfaces.extend(
+            [
+                {
+                    **lag_iface,
+                    "name": _v("PortChannel101"),
+                    "role": _v("lag"),
+                    "lag_id": _v(101),
+                    "mlag_domain": _node({"id": "mlag-dom-1", "name": _v(domain_name)}),
+                    "member_interfaces": _edges([{"name": _v("Ethernet10")}]),
+                },
+                _make_interface(
+                    name="Ethernet10", device_name=device_name, description="MLAG host member", role="customer"
+                ),
+            ]
+        )
+
     device_node: dict = {
         "__typename": "DcimPhysicalDevice",
         "id": f"dev-{device_name}",
@@ -1104,13 +1371,13 @@ def build_mlag_device_data(
         ),
         "primary_address": _node(
             {
-                "address": _v("10.0.2.1/32"),
+                "address": _v("172.16.0.1/32"),
                 "ip_namespace": _node({"name": _v("default")}),
             }
         ),
         "tags": _edges([]),
         "capabilities": _edges([mlag_cap]),
-        "interfaces": _edges([loopback, up1, up2, lag_iface, mem1, mem2]),
+        "interfaces": _edges(device_interfaces),
         "deployment": _node(
             {
                 "id": "dc-1",
@@ -1238,16 +1505,29 @@ FABRIC_PLATFORMS = ["arista_eos", "cisco_nxos", "dell_sonic", "nokia_sros", "son
 # l2-leafs are pure L2 aggregation — no Nokia SROS template exists for this role
 # (not used by any l2-leaf design element in this project's data).
 L2_LEAF_PLATFORMS = ["arista_eos", "cisco_nxos", "dell_sonic", "sonic"]
-SCENARIOS = ["ebgp_ibgp", "ospf_ibgp"]
+# ebgp_ebgp first: it is the schema default (schemas/extensions/topology/topology_dc.yml
+# routing_strategy) and the only scenario that yields an eBGP EVPN overlay.
+SCENARIOS = ["ebgp_ebgp", "ebgp_ibgp", "ospf_ibgp"]
 # ACL smoke tests: leaf only (ACLs are rendered on VLAN SVIs, a leaf concern)
 ACL_PLATFORMS = FABRIC_PLATFORMS
 FIREWALL_PLATFORMS = ["paloalto_panos", "cisco_asa", "fortinet_fortios", "checkpoint_gaia"]
 
+# (transform, role, dir_prefix, platforms).
+#
+# `role` must be the literal value from the role dropdown in schemas/base/dcim.yml
+# — hyphenated, not underscored. get_bgp_profile() and _build_peer_groups() branch
+# on the device's `role` straight out of the query, so an underscored fixture role
+# silently skipped the border-leaf and super-spine branches. `dir_prefix` keeps the
+# underscore so existing fixture directory names are unaffected.
 DEVICE_CONFIGS: list[tuple[type, str, str, list[str]]] = [
     (Leaf, "leaf", "leaf", FABRIC_PLATFORMS),
-    (Spine, "spine", "spine", FABRIC_PLATFORMS + ["edgecore_sonic"]),
-    (SuperSpine, "super_spine", "super_spine", FABRIC_PLATFORMS),
-    (BorderLeaf, "border_leaf", "border_leaf", FABRIC_PLATFORMS),
+    (Spine, "spine", "spine", FABRIC_PLATFORMS),
+    (SuperSpine, "super-spine", "super_spine", FABRIC_PLATFORMS),
+    (BorderLeaf, "border-leaf", "border_leaf", FABRIC_PLATFORMS),
+    # border-spine collapses spine + border-leaf: a relaying tier that is also a
+    # VTEP, so it is the only role exercising both the EVPN relay knobs and the
+    # VXLAN block on the same device.
+    (BorderSpine, "border-spine", "border_spine", FABRIC_PLATFORMS),
     (ToR, "tor", "tor", FABRIC_PLATFORMS),
     (L2Leaf, "l2-leaf", "l2_leaf", L2_LEAF_PLATFORMS),
     (AccessLeaf, "access-leaf", "access_leaf", FABRIC_PLATFORMS),
@@ -1289,7 +1569,9 @@ def _write_fixture(
     try:
         output = run_transform(transform_cls, data)
         with open(test_dir / "output.txt", "w") as f:
-            f.write(output)
+            # Match end-of-file-fixer's normalization (exactly one trailing
+            # newline) so the pre-commit hook never re-touches this file.
+            f.write(output.rstrip("\n") + "\n")
         print(f"  ✓ {dir_name}")
         return 1, 0
     except Exception as e:
@@ -1297,7 +1579,7 @@ def _write_fixture(
         return 0, 1
 
 
-def main() -> None:
+def main() -> int:
     SMOKE_DIR.mkdir(parents=True, exist_ok=True)
 
     generated = 0
@@ -1314,7 +1596,7 @@ def main() -> None:
                     role=role,
                     platform=platform,
                     scenario=scenario,
-                    include_segments=role in ("leaf", "tor", "border_leaf", "l2-leaf", "access-leaf"),
+                    include_segments=role in SEGMENT_ROLES,
                 )
                 generated += g
                 errors += e
@@ -1440,9 +1722,12 @@ def main() -> None:
 
     # MLAG/VPC scenarios: leaf, border_leaf, tor — platforms with MLAG templates
     MLAG_PLATFORMS = ["arista_eos", "cisco_nxos", "dell_sonic", "nokia_sros", "sonic"]
+    # (transform, dir_prefix, role) — note the order differs from DEVICE_CONFIGS.
+    # `role` is the schema dropdown value (hyphenated); dir_prefix keeps the
+    # underscore so fixture directory names are unchanged.
     MLAG_DEVICE_TYPES: list[tuple[type, str, str]] = [
         (Leaf, "leaf", "leaf"),
-        (BorderLeaf, "border_leaf", "border_leaf"),
+        (BorderLeaf, "border_leaf", "border-leaf"),
         (ToR, "tor", "tor"),
     ]
     print("\nGenerating MLAG/VPC fixtures:")
@@ -1505,7 +1790,11 @@ def main() -> None:
                 errors += 1
 
     print(f"\nDone: {generated} generated, {errors} errors")
+    # A fixture that fails to render writes no file, so it leaves no diff for the
+    # CI staleness check to catch — the failure has to surface here instead. That
+    # is how a broken `ipaddr` filter in cisco_wsa_asyncos.j2 went unnoticed.
+    return 1 if errors else 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

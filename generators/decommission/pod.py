@@ -1,7 +1,16 @@
 """Decommission a pod's devices without deleting them.
 
-Sets all devices associated with the pod deployment to status "decommissioned".
-Idempotent: re-running on the same pod simply reaffirms the status.
+Sets the pod's fabric devices (the ones add_pod/add_rack create) to status
+"decommissioned". Idempotent: re-running on the same pod simply reaffirms the
+status.
+
+Owns nothing, so every write is untracked: the devices and interfaces belong
+to add_pod/add_rack. Tracked, the next run (which finds the devices already
+decommissioned and saves nothing) would delete them in its cleanup.
+
+Endpoints (servers) are left alone even though add_endpoint points their
+deployment at the pod: they are data-loaded, not built by the pod. Their
+cables into the pod's switches are still removed, from the switch side.
 """
 
 from typing import Any
@@ -20,8 +29,20 @@ from ..protocols import (
     IpamPrefix,
 )
 
+# Device roles add_pod/add_rack create under a pod's deployment (spine, the
+# rack switch tiers, and a border-spine pod's own firewall/load-balancer).
+_POD_FABRIC_ROLES = frozenset({"spine", "leaf", "tor", "l2-leaf", "access-leaf", "firewall", "load-balancer"})
+
 
 class PodDecommissionGenerator(CommonGenerator):
+    async def _filter_by_ids(self, kind: Any, ids: list[str]) -> list[Any]:
+        """client.filters(ids=...), or [] for no ids: the SDK forwards an
+        empty id list, which does not narrow the query at all."""
+        unique_ids = sorted(set(ids))
+        if not unique_ids:
+            return []
+        return await self.client.filters(kind=kind, ids=unique_ids)
+
     async def generate(self, data: dict[str, Any]) -> None:
         try:
             deployment_list = clean_data(data).get("TopologyPod", [])
@@ -35,9 +56,13 @@ class PodDecommissionGenerator(CommonGenerator):
             self.logger.error("Generation failed due to %s", exc)
             return
 
-        devices: list = [
-            device.get("id") for device in self.data.get("devices", []) if device.get("status") == "active"
+        # Only the pod's own fabric devices — see the module docstring.
+        pod_devices = [
+            device for device in self.data.get("devices", []) or [] if device.get("role") in _POD_FABRIC_ROLES
         ]
+        self.data["devices"] = pod_devices
+
+        devices: list = [device.get("id") for device in pod_devices if device.get("status") == "active"]
 
         physical_interfaces: list[str] = [
             interface.get("id")
@@ -105,8 +130,10 @@ class PodDecommissionGenerator(CommonGenerator):
             if interface.get("cable", {}).get("id")
         ]
 
-        p2p_prefixes: list[str] = [
-            interface.get("ip_address", {}).get("ip_prefix", {}).get("prefix")
+        # By id, not by prefix value: the same prefix can exist in several IP
+        # namespaces, and a value filter would delete every one of them.
+        p2p_prefix_ids: list[str] = [
+            interface.get("ip_address", {}).get("ip_prefix", {}).get("id")
             for device in self.data.get("devices", []) or []
             for interface in device.get("interfaces", []) or []
             if interface.get("typename") == "DcimPhysicalInterface"
@@ -115,14 +142,11 @@ class PodDecommissionGenerator(CommonGenerator):
 
         execute_batch: InfrahubBatch = await self.client.create_batch()
 
-        device_objs: list[DcimPhysicalDevice] = await self.client.filters(
-            kind=DcimPhysicalDevice,
-            ids=devices,
-        )
+        device_objs: list[DcimPhysicalDevice] = await self._filter_by_ids(DcimPhysicalDevice, devices)
 
         for device_obj in device_objs:
             device_obj.status.value = "decommissioned"
-            execute_batch.add(task=device_obj.save, allow_upsert=True, node=device_obj)
+            execute_batch.add(task=device_obj.save, allow_upsert=True, update_group_context=False, node=device_obj)
 
         async for _node, _ in execute_batch.execute():
             self.logger.info(f"Decommissioned {_node.name.value}")
@@ -130,15 +154,16 @@ class PodDecommissionGenerator(CommonGenerator):
         # Set all physical interfaces to free and remove descriptions
         execute_batch: InfrahubBatch = await self.client.create_batch()
 
-        interface_objs: list[DcimPhysicalInterface] = await self.client.filters(
-            kind=DcimPhysicalInterface,
-            ids=list(physical_interfaces + super_spine_interfaces),
+        interface_objs: list[DcimPhysicalInterface] = await self._filter_by_ids(
+            DcimPhysicalInterface, physical_interfaces + super_spine_interfaces
         )
 
         for interface_obj in interface_objs:
             interface_obj.status.value = "free"
             interface_obj.description.value = ""
-            execute_batch.add(task=interface_obj.save, allow_upsert=True, node=interface_obj)
+            execute_batch.add(
+                task=interface_obj.save, allow_upsert=True, update_group_context=False, node=interface_obj
+            )
 
         async for _node, _ in execute_batch.execute():
             self.logger.info(
@@ -146,39 +171,28 @@ class PodDecommissionGenerator(CommonGenerator):
             )
 
         # Remove all virtual interfaces
-        interface_objs: list[DcimVirtualInterface] = await self.client.filters(
-            kind=DcimVirtualInterface,
-            ids=virtual_interfaces,
-        )
+        interface_objs: list[DcimVirtualInterface] = await self._filter_by_ids(DcimVirtualInterface, virtual_interfaces)
         for interface_obj in interface_objs:
             await interface_obj.delete()
             self.logger.info(f"deleted virtual interface {interface_obj.hfid}")
 
         # Remove all ip addresses
-        address_objs: list[IpamIPAddress] = await self.client.filters(
-            kind=IpamIPAddress,
-            ids=list(
-                p2p_addresses + super_spine_p2p_addresses + virtual_interface_addresses + device_primary_addresses
-            ),
+        address_objs: list[IpamIPAddress] = await self._filter_by_ids(
+            IpamIPAddress,
+            p2p_addresses + super_spine_p2p_addresses + virtual_interface_addresses + device_primary_addresses,
         )
         for address_obj in address_objs:
             await address_obj.delete()
             self.logger.info(f"deleted address {address_obj.address.value}")
 
         # Remove all cables attached to pod interfaces (after cleaning interfaces/IPs)
-        cable_objs: list[DcimCable] = await self.client.filters(
-            kind=DcimCable,
-            ids=cables,
-        )
+        cable_objs: list[DcimCable] = await self._filter_by_ids(DcimCable, cables)
         for cable_obj in cable_objs:
             await cable_obj.delete()
             self.logger.info(f"deleted cable {cable_obj.name.value}")
 
         # Remove all p2p prefixes from pools
-        prefix_objs: list[IpamPrefix] = await self.client.filters(
-            kind=IpamPrefix,
-            prefix__values=p2p_prefixes,
-        )
+        prefix_objs: list[IpamPrefix] = await self._filter_by_ids(IpamPrefix, p2p_prefix_ids)
         for prefix_obj in prefix_objs:
             await prefix_obj.delete()
             self.logger.info(f"deleted prefix {prefix_obj.prefix.value}")

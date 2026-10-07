@@ -1,0 +1,31 @@
+---
+# The internet, as one topology: every transit ISP we buy from is a
+# TopologyExternalProviders under a single TopologyExternal, so their provider
+# edges sit together in one place instead of being scattered across the
+# colocation metros they happen to meet us in.
+#
+# Only the FR and PA cages buy transit. The DCs have no circuit of their own:
+# they reach the internet over the dark fibre to their cage (DC10/DC11 via FR2,
+# DC12 via PA4, see ../01_colo_onramp/), so a DC -> internet trace runs DC ->
+# cage edge -> transit circuit -> ISP provider edge and stops there.
+#
+# Two ISPs per metro, one per edge, so losing one carrier or one edge never
+# takes a metro offline.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyExternal
+  data:
+    - name: INTERNET
+      parent: "Internet"
+      children:
+        kind: TopologyExternalProviders
+        data:
+          - name: ISP-LUMEN
+            provider_type: internet
+            status: active
+            provider: "P014"
+          - name: ISP-COGENT
+            provider_type: internet
+            status: active
+            provider: "P023"

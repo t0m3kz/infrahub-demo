@@ -1,8 +1,59 @@
 
 
 {
-  "ACL_RULE": {},
-  "ACL_TABLE": {},
+  "ACL_RULE": {
+    "ACL-VLAN100-IN|SEQ_10": {
+      "IP_PROTOCOL": "6",
+      "IP_TYPE": "IPV4ANY",
+      "L4_DST_PORT": "443",
+      "PACKET_ACTION": "FORWARD",
+      "PRIORITY": "9990"
+    },
+    "ACL-VLAN100-IN|SEQ_20": {
+      "IP_PROTOCOL": "6",
+      "IP_TYPE": "IPV4ANY",
+      "L4_DST_PORT": "80",
+      "PACKET_ACTION": "FORWARD",
+      "PRIORITY": "9980"
+    },
+    "ACL-VLAN100-IN|SEQ_9990": {
+      "IP_TYPE": "IPV4ANY",
+      "LOG_ACTION": "SYSLOG",
+      "PACKET_ACTION": "DROP",
+      "PRIORITY": "10"
+    },
+    "ACL-VLAN200-IN|SEQ_10": {
+      "IP_PROTOCOL": "6",
+      "IP_TYPE": "IPV4ANY",
+      "L4_DST_PORT": "22",
+      "PACKET_ACTION": "FORWARD",
+      "PRIORITY": "9990"
+    },
+    "ACL-VLAN200-IN|SEQ_9990": {
+      "IP_TYPE": "IPV4ANY",
+      "LOG_ACTION": "SYSLOG",
+      "PACKET_ACTION": "DROP",
+      "PRIORITY": "10"
+    }
+  },
+  "ACL_TABLE": {
+    "ACL-VLAN100-IN": {
+      "policy_desc": "Zero-trust ACL for Customer-A",
+      "ports": [
+        "Vlan100"
+      ],
+      "stage": "ingress",
+      "type": "L3"
+    },
+    "ACL-VLAN200-IN": {
+      "policy_desc": "Zero-trust ACL for Customer-A",
+      "ports": [
+        "Vlan200"
+      ],
+      "stage": "ingress",
+      "type": "L3"
+    }
+  },
   "BGP_GLOBALS": {
     "default": {
       "graceful_restart_enable": "true",
@@ -27,6 +78,7 @@
       "admin_status": "true"
     }
   },
+  "BGP_GLOBALS_EVPN_RT": {},
   "BGP_NEIGHBOR": {
     "10.0.0.100": {
       "admin_status": "true",
@@ -53,6 +105,8 @@
       "holdtime": "180",
       "keepalive": "60",
       "local_addr": "10.1.0.1",
+      "local_asn": "65001",
+      "local_asn_no_prepend_replace_as": "UNSUPPORTED_IN_CONFIGDB \u2014 set via FRR vtysh",
       "name": "UNDERLAY-PEERS"
     },
     "10.1.0.2": {
@@ -62,6 +116,8 @@
       "holdtime": "180",
       "keepalive": "60",
       "local_addr": "10.1.0.3",
+      "local_asn": "65001",
+      "local_asn_no_prepend_replace_as": "UNSUPPORTED_IN_CONFIGDB \u2014 set via FRR vtysh",
       "name": "UNDERLAY-PEERS"
     }
   },
@@ -83,7 +139,11 @@
       "type": "LeafRouter"
     }
   },
-  "EVPN_NVO": {},
+  "EVPN_NVO": {
+    "nvo1": {
+      "source_vtep": "vtep"
+    }
+  },
   "INTERFACE": {
     "Ethernet1": {
       "admin_status": "up",
@@ -108,11 +168,40 @@
   "LOOPBACK_INTERFACE": {
     "Loopback0|10.0.0.1/32": {}
   },
+  "NTP_SERVER": {},
   "OSPF_ROUTER": {},
   "STATIC_ROUTE": {},
-  "VLAN": {},
-  "VLAN_INTERFACE": {},
-  "VRF": {},
-  "VXLAN_TUNNEL": {},
-  "VXLAN_TUNNEL_MAP": {}
+  "SYSLOG_SERVER": {},
+  "VLAN": {
+    "Vlan100": {
+      "vlanid": "100"
+    },
+    "Vlan200": {
+      "vlanid": "200"
+    }
+  },
+  "VLAN_INTERFACE": {
+    "Vlan100": {},
+    "Vlan200": {}
+  },
+  "VRF": {
+    "VRF_A": {
+      "vni": "50001"
+    }
+  },
+  "VXLAN_TUNNEL": {
+    "vtep": {
+      "src_ip": "10.0.0.1"
+    }
+  },
+  "VXLAN_TUNNEL_MAP": {
+    "vtep|map_10100_Vlan100": {
+      "vlan": "Vlan100",
+      "vni": "10100"
+    },
+    "vtep|map_50001_VRF_A": {
+      "vni": "50001",
+      "vrf": "VRF_A"
+    }
+  }
 }

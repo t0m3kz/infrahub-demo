@@ -1,0 +1,32 @@
+---
+# Storefront components calling third-party services. An external service is
+# not a component: the dependency names it by target_fqdn and lists its ports,
+# and AppApplicationGenerator turns it into a ProxyPolicyRule on C001's
+# egress_service (shared-cloud-proxy, 00_shared_proxy.yml) instead of a
+# firewall rule. web-frontend and app-backend must end up sharing ONE
+# auto-generated ProxyPolicy scoped to C001 and shared-cloud-proxy, with two
+# rules, not one policy per component.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppDependency
+  data:
+    - name: c001-storefront-p-web-frontend-to-stripe-api
+      source: storefront.c001.demo.local
+      target_fqdn: api.stripe.com
+      ports:
+        - tcp/443
+      access_status: auto
+      description: "Storefront frontend calls the Stripe payment API"
+      member_of_groups:
+        - app_dependencies
+
+    - name: c001-storefront-p-app-backend-to-github-api
+      source: backend.storefront.c001.demo.local
+      target_fqdn: api.github.com
+      ports:
+        - tcp/443
+      access_status: auto
+      description: "Storefront backend calls the GitHub API for deployment status"
+      member_of_groups:
+        - app_dependencies

@@ -10,7 +10,7 @@
     {
       "name": {{ seg.name | tojson }},
       "fqdn": {{ seg.fqdn | tojson }},
-      "ports": [{% for p in seg.ports %}{"port": {{ p.port }}, "protocol": {{ p.protocol | tojson }}}{{ ", " if not loop.last }}{% endfor %}],
+      "ports": [{% for p in seg.ports %}{"port": {{ p.port }}, {% if p.port_end %}"port_end": {{ p.port_end }}, {% endif %}"protocol": {{ p.protocol | tojson }}}{{ ", " if not loop.last }}{% endfor %}],
       "allowed_groups": {{ seg.allowed_groups | tojson }}
     }{{ "," if not loop.last }}
 {%- endfor %}

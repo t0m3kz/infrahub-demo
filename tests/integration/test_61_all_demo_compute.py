@@ -6,8 +6,8 @@ port to a customer application:
 
     access-leaf port -> cable -> host NIC -> host -> VM -> component -> app
 
-That chain is what the change-risk check walks (docs/change_risk.md), so each
-link in it gets its own assertion here. In particular the *shape* of the
+That chain is how a switch-port change reaches an application, so each link
+in it gets its own assertion here. In particular the *shape* of the
 cabling matters, not just its existence: a DC host is dual-homed to two
 distinct access-leafs, and the two hosts in a DC sit in different rack rows so
 their access-leaf pairs are disjoint. A colocation cage host is dual-homed to
@@ -34,7 +34,7 @@ from .test_constants import (
     ALL_DEMO_DC_UNDERLAY_ROLES,
     ALL_DEMO_EXPECTED_APPLICATIONS,
     ALL_DEMO_HOST_LINK_COUNT,
-    ALL_DEMO_NO_COMPUTE_APPLICATIONS,
+    ALL_DEMO_OUT_OF_SCOPE_APPLICATIONS,
 )
 from .test_helpers import (
     compute_role_counts,
@@ -276,7 +276,7 @@ class TestAllDemoCompute(TestInfrahubDockerWithClient):
         logging.info("=== %s - Step 4: Application Graph ===", SCENARIO_NAME)
 
         applications = await fetch_application_graph(client=async_client_main, branch=scenario_branch)
-        by_name = {app["name"]: app for app in applications if app["name"] not in ALL_DEMO_NO_COMPUTE_APPLICATIONS}
+        by_name = {app["name"]: app for app in applications if app["name"] not in ALL_DEMO_OUT_OF_SCOPE_APPLICATIONS}
 
         errors: list[str] = []
 
@@ -299,7 +299,7 @@ class TestAllDemoCompute(TestInfrahubDockerWithClient):
             cloud_native = app_name in ALL_DEMO_CLOUD_APPLICATIONS
 
             for component in app["components"]:
-                label = f"{app_name}/{component['slug'] or '<unnamed>'}"
+                label = f"{app_name}/{component['fqdn'] or '<unnamed>'}"
                 if not component["component_type"]:
                     errors.append(f"{label}: no component_type")
                 if not component["segment"]:

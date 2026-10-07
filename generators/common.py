@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+from collections.abc import Iterable
 from typing import Any
 
 from infrahub_sdk.generator import InfrahubGenerator
@@ -143,65 +144,61 @@ class CommonGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
                 f"Generator '{generator_name}' started for {len(node_ids)} node(s): {node_ids} (task={task_id})"
             )
 
-    async def wait_for_parent_generator_and_refetch(self, generator_name: str, parent_id: str) -> dict | None:
-        """If the parent's own bootstrap generator is currently running for
-        parent_id, wait for it and return freshly re-collected data; else None.
+    async def wait_for_parent_generator_and_refetch(
+        self, generator_names: str | Iterable[str], parent_id: str
+    ) -> dict | None:
+        """If any of the parent's own bootstrap generators is currently running
+        for parent_id, wait for it and return freshly re-collected data; else None.
 
         Used by a cascade generator that may run concurrently with the
         parent's own bootstrap (e.g. add_dc) before its writes have landed.
-        Checks for the parent's own generator task (a different
-        generator_definition, by title + related_node) — never this
-        generator's own task, so it can't deadlock against itself.
+        Checks for the parent's own generator tasks (other generator
+        definitions, by title + related_node) — never this generator's own
+        task, so it can't deadlock against itself. One task query covers
+        every name; a name with nothing in flight whose latest run failed
+        logs an error instead.
         """
-        in_flight = await self.client.task.filter(
+        names = [generator_names] if isinstance(generator_names, str) else list(generator_names)
+        tasks = await self.client.task.filter(
             filter=TaskFilter(
                 branch=self.branch_name,
                 related_node__ids=[parent_id],
-                state=_IN_FLIGHT_STATES,
+                state=[*_IN_FLIGHT_STATES, *_FAILED_PARENT_STATES, TaskState.COMPLETED],
             )
         )
-        parent_task_title = f"Run generator {generator_name}"
-        matching = [task for task in in_flight if task.title == parent_task_title]
-        if not matching:
+
+        def _task_ts(task: Any) -> str:
+            ts = getattr(task, "updated_at", None) or getattr(task, "created_at", None)
+            return str(ts or "")
+
+        in_flight: list[Any] = []
+        for name in names:
+            matching = [task for task in tasks if task.title == f"Run generator {name}"]
+            running = [task for task in matching if task.state in _IN_FLIGHT_STATES]
+            if running:
+                self.logger.info(
+                    f"Parent generator '{name}' is running for {parent_id} — waiting for it before proceeding"
+                )
+                in_flight.extend(running)
+                continue
             # Parent might have already finished in a terminal failed state.
             # Detect a fresh failure and fail-fast with a clear error instead of
             # continuing and surfacing secondary follow-up errors downstream.
-            failed_tasks = await self.client.task.filter(
-                filter=TaskFilter(
-                    branch=self.branch_name,
-                    related_node__ids=[parent_id],
-                    state=_FAILED_PARENT_STATES,
-                )
+            latest_failed_ts = max(
+                (_task_ts(task) for task in matching if task.state in _FAILED_PARENT_STATES), default=None
             )
-            failed_matching = [task for task in failed_tasks if task.title == parent_task_title]
-            if failed_matching:
-                completed_tasks = await self.client.task.filter(
-                    filter=TaskFilter(
-                        branch=self.branch_name,
-                        related_node__ids=[parent_id],
-                        state=[TaskState.COMPLETED],
-                    )
+            latest_completed_ts = max(
+                (_task_ts(task) for task in matching if task.state == TaskState.COMPLETED), default=""
+            )
+            if latest_failed_ts is not None and latest_failed_ts >= latest_completed_ts:
+                self.logger.error(
+                    f"Parent generator '{name}' last run failed for {parent_id} — "
+                    "cannot safely continue child generation until parent succeeds"
                 )
-                completed_matching = [task for task in completed_tasks if task.title == parent_task_title]
 
-                def _task_ts(task: Any) -> str:
-                    ts = getattr(task, "updated_at", None) or getattr(task, "created_at", None)
-                    return str(ts or "")
-
-                latest_failed_ts = max((_task_ts(task) for task in failed_matching), default="")
-                latest_completed_ts = max((_task_ts(task) for task in completed_matching), default="")
-
-                if latest_failed_ts >= latest_completed_ts:
-                    self.logger.error(
-                        f"Parent generator '{generator_name}' last run failed for {parent_id} — "
-                        "cannot safely continue child generation until parent succeeds"
-                    )
+        if not in_flight:
             return None
-
-        self.logger.info(
-            f"Parent generator '{generator_name}' is running for {parent_id} — waiting for it before proceeding"
-        )
-        for task in matching:
+        for task in in_flight:
             await self.client.task.wait_for_completion(
                 id=task.id, interval=_PARENT_WAIT_POLL_INTERVAL, timeout=_PARENT_WAIT_TIMEOUT
             )

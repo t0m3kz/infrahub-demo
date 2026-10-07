@@ -41,6 +41,11 @@ query vxlan_segment_data($name: String!) {
                     ... on TopologySegmentHosting {
                       vni_pool { node { id name { value } } }
                     }
+                    # Leafs/ToRs belong to the DC's pods, not the DC itself;
+                    # other children (customer footprints) come back empty
+                    ... on TopologyDataCenter {
+                      children { edges { node { ... on TopologyPod { id } } } }
+                    }
                   }
                 }
               }

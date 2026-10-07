@@ -1,0 +1,35 @@
+---
+# Destination-side selectors for 05_security_policy.yml's SecurityPolicyRules.
+# These are the reachable networks on the FAR side of a colo interconnect —
+# not our own VRF-scoped addressing, so they sit in the `default` namespace
+# rather than PROD/NON-PROD (see SecurityPolicyRule.destination_prefixes,
+# schemas/extensions/security/security.yml — a prefix-based selector, used
+# here instead of forcing the far side into a ManagedNetworkSegment/
+# SecurityZone it doesn't fit: it has no OrganizationCustomer owner and no
+# VNI/segment lifecycle of its own).
+#
+# AWS's is a real RFC1918 block (typical VPC CIDR shape); partner/SaaS use
+# RFC5737/RFC2544 documentation ranges rather than a real company's public
+# space.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "10.40.0.0/16"
+      ip_namespace: "default"
+      status: active
+      role: public
+      description: "AWS eu-central-1 transit hub — reachable VPC range over VC-C001-EQXFR-AWS-EUC1"
+
+    - prefix: "198.18.0.0/24"
+      ip_namespace: "default"
+      status: active
+      role: public
+      description: "Acme Logistics B2B extranet — reachable range over XC-EQXFR2-PARTNERACME"
+
+    - prefix: "198.51.100.0/24"
+      ip_namespace: "default"
+      status: active
+      role: public
+      description: "Zscaler cloud security PoP — reachable range over the FR colo interconnect"

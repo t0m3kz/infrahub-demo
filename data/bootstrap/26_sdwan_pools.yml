@@ -1,0 +1,23 @@
+---
+# Tunnel ID pool for generators/topology/sdwan_edge.py's SdwanEdgeGenerator —
+# one per office Edge <-> Gateway overlay tunnel_id, allocated via from_pool.
+# Scoped to link_type=sd_wan only: if a future generator ever allocates
+# tunnel_id for another link_type (e.g. gre cross-connects), give it its own
+# disjoint pool rather than widening this one — sharing one ID space across
+# tunnel kinds would make "which kind of tunnel is number 4021" unanswerable
+# without also checking link_type.
+#
+# Range starts above the three offices' hand-picked values (1001/1003/1015,
+# data/demos/30_all/08_interconnects/04_sdwan/05_overlays.yml) so a
+# generator-provisioned office never collides with one of those.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CoreNumberPool
+  data:
+    - name: GLOBAL-SDWAN-TUNNEL-ID
+      description: Tunnel ID pool for generator-provisioned SD-WAN office overlays (link_type=sd_wan)
+      node: TopologyVirtualCircuit
+      node_attribute: tunnel_id
+      start_range: 2000
+      end_range: 9999

@@ -1,6 +1,7 @@
 ---
-# Assign the customer-owned enforcement services used by application_security.py
-# when resolving external_service/private_access dependencies for this customer.
+# Assign the customer-owned enforcement services used by application_security.py:
+# egress_service carries this customer's target_fqdn dependencies, and
+# private_access_service publishes the components its access profiles grant.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

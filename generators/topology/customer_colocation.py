@@ -6,12 +6,14 @@ trigger-customer-deployment-colocation-on-created rule).
 Colocation shares the same PROD/NON-PROD data-plane VRFs as every other
 customer deployment kind (see data/bootstrap/22_namespaces.yml) — there is
 still no VRF-per-customer. This generator provisions only FirewallContext
-(VDOM/vsys) on the parent ColocationMetro's ManagedFirewallHA cluster — in
-practice always a no-op today, since ColocationMetro doesn't inherit
-TopologyDeviceHosting (only its child ColocationZone does), so
-customer.parent.firewall_devices/loadbalancer_devices always arrive empty
-for this kind. Kept for forward-compatibility if that ever changes, and to
-mirror customer_dc.py's structure exactly.
+(VDOM/vsys) on the parent ColocationMetro's ManagedFirewallHA cluster, the
+pair every cage in the metro shares (customer_colocation.gql reads it as
+parent.firewall_devices), and links the deployment to it as its
+serving_firewall_context so the firewall transform places the deployment's
+policies there. A metro without firewalls gets no context. The provisioning
+itself is generators/firewall_context.py's FirewallContextMixin, shared with
+customer_dc.py; the VLAN and P2P pools come from
+generators/topology/colocation.py's _ensure_firewall_context_pools.
 
 Inter-VRF routing (PROD/NON-PROD <-> INTERNET/MANAGEMENT) is no longer
 per-deployment/per-circuit hub detection — with only 4 fixed global
@@ -26,60 +28,28 @@ the customer_deployments group and querying customer_colocation.gql.
 
 from __future__ import annotations
 
-import ipaddress
 from typing import Any
-
-from infrahub_sdk.protocols import CoreIPPrefixPool, CoreNumberPool
 
 from utils.data_cleaning import clean_data
 
-from ..common import CommonGenerator, DeviceOptions
+from ..common import CommonGenerator
 from ..connections import CablingMixin
 from ..devices import DeviceMixin
-from ..protocols import (
-    DcimPhysicalDevice,
-    DcimVirtualDevice,
-    IpamIPAddress,
-    IpamPrefix,
-    ManagedFirewallContext,
-    ManagedFirewallHA,
-)
-from .dc import _VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE
-
-_SHARED_CONTEXT_NAME_SUFFIX = "shared"
+from ..firewall_context import FirewallContextMixin
+from ..pools import PoolMixin
 
 
-def _dev_id(device: Any) -> str:
-    """id accessor for a device that may be either a plain clean_data() dict
-    (GraphQL-sourced, e.g. customer["parent"]["devices"]) or an SDK Node
-    (client.filters()-sourced, e.g. border_leaves/dedicated virtual devices) —
-    lets both flow through the same FirewallContext provisioning code
-    without forcing every device list onto one style."""
-    return device["id"] if isinstance(device, dict) else device.id
-
-
-def _dev_name(device: Any) -> str:
-    """name accessor — see _dev_id()."""
-    return device["name"] if isinstance(device, dict) else device.name.value
-
-
-def _customer_short_id(customer: dict[str, Any], customer_id: str) -> str:
-    """{org_id}-{environment} (e.g. "C009-p") — used for dedicated device/
-    context naming instead of customer["name"] (the full computed
-    {org_id}-{environment}-{parent}, e.g. "C009-P-DC11"). The parent segment
-    is redundant here: physical_name already identifies which cluster a
-    dedicated instance belongs to, so keeping it in the customer portion too
-    only stacks up length once _ensure_ha_pairs joins both instance names."""
-    owner = customer.get("owner") or {}
-    org_id = owner.get("org_id") or customer.get("name", customer_id)
-    environment = customer.get("environment")
-    return f"{org_id}-{environment}" if environment else org_id
-
-
-class CustomerDeploymentColocationExchangeGenerator(DeviceMixin, CablingMixin, CommonGenerator):
-    """add_customer_deployment_colocation — FirewallContext (always a no-op
-    in practice) plus hub-and-spoke exchange for TopologyCustomerColocation.
+class CustomerDeploymentColocationExchangeGenerator(
+    FirewallContextMixin, PoolMixin, DeviceMixin, CablingMixin, CommonGenerator
+):
+    """add_customer_deployment_colocation — FirewallContext on the parent
+    metro's firewall pair for TopologyCustomerColocation.
     """
+
+    _customer_kind = "TopologyCustomerColocation"
+    _parent_label = "ColocationMetro"
+    _pbr_peer_role = "edge"
+    _parent_generators = ("add_colocation_metro",)
 
     async def generate(self, data: dict[str, Any]) -> None:
         cleaned = clean_data(data)
@@ -97,403 +67,27 @@ class CustomerDeploymentColocationExchangeGenerator(DeviceMixin, CablingMixin, C
 
         self.logger.info(f"Processing Colocation deployment {customer.get('name', customer_id)}")
 
+        # This reads metro-level data (firewall_devices, loadbalancer_devices)
+        # written by add_colocation_metro, which is also the only owner of the
+        # metro's firewall HA pair. A customer can board concurrently with (or
+        # immediately after) its metro's own creation, so wait for an in-flight
+        # metro run and re-parse — same as customer_dc.py waits on add_dc.
+        metro_id = (customer.get("parent") or {}).get("id")
+        if metro_id:
+            refreshed = await self.wait_for_parent_generator_and_refetch(self._parent_generators, metro_id)
+            if refreshed is not None:
+                entries = clean_data(refreshed).get("TopologyCustomerColocation", [])
+                if not entries:
+                    self.logger.error("No TopologyCustomerColocation data in GraphQL response")
+                    return
+                customer = entries[0]
+
         # _all_controllers is read by create_devices() via generators/devices.py's
-        # _resolve_role_controller — always empty here since ColocationMetro
-        # doesn't inherit TopologyDeviceHosting, so customer_colocation.gql
-        # has no controllers to fetch in the first place (unlike customer_dc.gql's
-        # security_manager_controllers/lb_manager_controllers aliases).
+        # _resolve_role_controller — always empty here: a metro declares no
+        # controllers, so customer_colocation.gql fetches none (unlike
+        # customer_dc.gql's security_manager_controllers/lb_manager_controllers
+        # aliases).
         self._all_controllers = []
 
         await self._ensure_firewall_context(customer, customer_id)
         await self._ensure_dedicated_loadbalancer(customer, customer_id)
-
-    # ------------------------------------------------------------------
-    # FirewallContext (VDOM/vsys) provisioning — mirrors customer_dc.py
-    # exactly. customer.parent.firewall_devices/loadbalancer_devices always
-    # arrive empty for Colocation (ColocationMetro doesn't host devices
-    # directly, only its child ColocationZone does), so this is a no-op in
-    # practice today.
-    # ------------------------------------------------------------------
-
-    async def _ensure_firewall_context(self, customer: dict[str, Any], customer_id: str) -> None:
-        parent = customer.get("parent") or {}
-        parent_id: str = parent.get("id", "")
-        parent_name: str = parent.get("name", parent_id)
-        if not parent_id:
-            self.logger.error(
-                f"Deployment {customer.get('name', customer_id)}: no parent ColocationMetro — "
-                "cannot provision FirewallContext"
-            )
-            return
-
-        fw_devices: list[Any] = parent.get("firewall_devices") or []
-        if not fw_devices:
-            self.logger.info(f"{parent_name} has no firewall devices — skipping FirewallContext provisioning")
-            return
-
-        try:
-            clusters = await self.client.filters(
-                kind=ManagedFirewallHA, capabilities__ids=[_dev_id(fw_devices[0])], include=["capabilities"]
-            )
-        except Exception as exc:
-            self.logger.error(f"Error looking up ManagedFirewallHA cluster on {parent_name}: {exc}")
-            return
-        if not clusters:
-            self.logger.info(
-                f"{parent_name}: firewall device(s) not yet paired — pairing into a ManagedFirewallHA cluster"
-            )
-            await self._ensure_ha_pairs(
-                sorted(_dev_name(d) for d in fw_devices), ha_kind="ManagedFirewallHA", role_label="firewall"
-            )
-            try:
-                clusters = await self.client.filters(
-                    kind=ManagedFirewallHA, capabilities__ids=[_dev_id(fw_devices[0])], include=["capabilities"]
-                )
-            except Exception as exc:
-                self.logger.error(f"Error looking up ManagedFirewallHA cluster on {parent_name}: {exc}")
-                return
-            if not clusters:
-                self.logger.error(f"{parent_name}: failed to pair firewall device(s) into a ManagedFirewallHA cluster")
-                return
-        cluster = clusters[0]
-
-        member_ids = {peer.id for peer in cluster.capabilities.peers}
-        fw_devices = [d for d in fw_devices if _dev_id(d) in member_ids]
-        if not fw_devices:
-            self.logger.error(
-                f"{parent_name}: no firewall device resolved as a member of cluster '{cluster.name.value}'"
-            )
-            return
-
-        dedicated = bool((customer.get("design") or {}).get("dedicated_firewall"))
-        if dedicated:
-            dedicated_result = await self._ensure_dedicated_device_pair(
-                role="firewall",
-                ha_kind="ManagedFirewallHA",
-                physical_devices=fw_devices,
-                parent_id=parent_id,
-                parent_name=parent_name,
-                dc_size=parent.get("size"),
-                customer_name=_customer_short_id(customer, customer_id),
-            )
-            if dedicated_result is not None:
-                cluster, fw_devices = dedicated_result
-            # cluster.name.value already carries customer_name (see
-            # _ensure_dedicated_device_pair's instance_name) — don't append
-            # it again here, or the context name grows with every extra
-            # "-dedicated" segment stacked on top of the cluster's own.
-            context_name = f"{cluster.name.value}-context"
-            tenant_id: str | None = customer_id
-        else:
-            context_name = f"{cluster.name.value}-{_SHARED_CONTEXT_NAME_SUFFIX}"
-            tenant_id = None
-
-        context_obj = await self._get_or_create_firewall_context(context_name, cluster.id, tenant_id)
-        if context_obj is None:
-            return
-
-        connectivity_mode = parent.get("connectivity_mode") or "pbr"
-        await self._ensure_context_subinterface(
-            context_obj=context_obj,
-            fw_devices=fw_devices,
-            parent_id=parent_id,
-            parent_name=parent_name,
-            connectivity_mode=connectivity_mode,
-        )
-
-    async def _ensure_dedicated_device_pair(
-        self,
-        *,
-        role: str,
-        ha_kind: str,
-        physical_devices: list[Any],
-        parent_id: str,
-        parent_name: str,
-        dc_size: str | None,
-        customer_name: str,
-        tenant_id: str | None = None,
-    ) -> tuple[Any, list[Any]] | None:
-        """Provision a dedicated virtual HA pair (firewall or load-balancer)
-        for this customer — see customer_dc.py's identical method."""
-        if not dc_size:
-            self.logger.warning(f"{parent_name}: no size set — cannot resolve dedicated {role} template size")
-            return None
-
-        physical_pair = physical_devices
-        if len(physical_pair) != 2:
-            self.logger.warning(
-                f"{parent_name}: expected 2 physical {role} peers for dedicated provisioning, "
-                f"found {len(physical_pair)} — falling back to shared capacity"
-            )
-            return None
-
-        platform_name = (physical_pair[0].get("platform") or {}).get("name")
-        prefix = _VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE.get((platform_name, role))
-        if not prefix:
-            self.logger.warning(
-                f"No virtual template mapping for platform={platform_name} role={role} — "
-                "cannot provision dedicated instance, falling back to shared capacity"
-            )
-            return None
-
-        virtual_template_name = f"{prefix}_CUSTOMER_{dc_size}"
-        try:
-            virtual_templates = await self.client.filters(
-                kind="TemplateDcimVirtualDevice",
-                template_name__value=virtual_template_name,
-                include=["device_type", "platform"],
-            )
-        except Exception as exc:
-            self.logger.error(f"Error looking up dedicated {role} template '{virtual_template_name}': {exc}")
-            return None
-        if not virtual_templates:
-            self.logger.warning(
-                f"No dedicated {role} template '{virtual_template_name}' found — falling back to shared capacity"
-            )
-            return None
-        virtual_template_obj = virtual_templates[0]
-        virtual_template = {
-            "id": virtual_template_obj.id,
-            "device_type": {"id": virtual_template_obj.device_type.peer.id},
-            "platform": {"id": virtual_template_obj.platform.peer.id},
-        }
-
-        instance_names: list[str] = []
-        self.fabric_name = parent_name.lower()
-        for physical_device in sorted(physical_pair, key=_dev_name):
-            physical_name = _dev_name(physical_device)
-            # physical_name alone is enough to keep this unique — it's
-            # already the specific host device in the pair. Prefixing with
-            # both hosts' names (the old pair_prefix) just doubled up once
-            # _ensure_ha_pairs joins the two instance names together below.
-            instance_name = f"{physical_name}-{customer_name}-dedicated"
-            names = await self.create_devices(
-                deployment_id=parent_id,
-                device_role=role,
-                quantity=1,
-                template=virtual_template,
-                options=DeviceOptions(virtual=True, name_override=instance_name),
-                hosting_device={"id": _dev_id(physical_device)},
-            )
-            instance_names.extend(names)
-
-        await self._ensure_ha_pairs(
-            instance_names,
-            ha_kind=ha_kind,
-            role_label=f"{role} (dedicated {customer_name})",
-            device_kind=DcimVirtualDevice,
-            tenant_id=tenant_id,
-        )
-
-        try:
-            virtual_devices = await self.client.filters(kind=DcimVirtualDevice, name__values=instance_names)
-            dedicated_clusters = await self.client.filters(
-                kind=ha_kind, capabilities__ids=[virtual_devices[0].id], include=["capabilities"]
-            )
-        except Exception as exc:
-            self.logger.error(f"Error resolving dedicated {ha_kind} cluster for {customer_name}: {exc}")
-            return None
-        if not dedicated_clusters or len(virtual_devices) != 2:
-            self.logger.error(f"{parent_name}: failed to resolve dedicated {role} cluster for {customer_name}")
-            return None
-
-        return dedicated_clusters[0], virtual_devices
-
-    async def _ensure_dedicated_loadbalancer(self, customer: dict[str, Any], customer_id: str) -> None:
-        """Provision a dedicated virtual load-balancer HA pair — see
-        customer_dc.py's identical method."""
-        if not bool((customer.get("design") or {}).get("dedicated_loadbalancer")):
-            return
-
-        parent = customer.get("parent") or {}
-        parent_id: str = parent.get("id", "")
-        parent_name: str = parent.get("name", parent_id)
-        if not parent_id:
-            return
-
-        lb_devices: list[Any] = parent.get("loadbalancer_devices") or []
-        if not lb_devices:
-            self.logger.info(f"{parent_name} has no load-balancer devices — skipping dedicated LB provisioning")
-            return
-
-        await self._ensure_dedicated_device_pair(
-            role="load-balancer",
-            ha_kind="ManagedLoadbalancerHA",
-            physical_devices=lb_devices,
-            parent_id=parent_id,
-            parent_name=parent_name,
-            dc_size=parent.get("size"),
-            customer_name=_customer_short_id(customer, customer_id),
-            tenant_id=customer_id,
-        )
-
-    async def _get_or_create_firewall_context(
-        self, context_name: str, cluster_id: str, tenant_id: str | None
-    ) -> Any | None:
-        try:
-            context_obj = await self.client.create(
-                kind=ManagedFirewallContext,
-                data={
-                    "name": context_name,
-                    "cluster": {"id": cluster_id},
-                    **({"tenant": {"id": tenant_id}} if tenant_id else {}),
-                },
-            )
-            await context_obj.save(allow_upsert=True)
-            self.logger.info(f"Ensured FirewallContext '{context_name}'")
-            return context_obj
-        except Exception as exc:
-            self.logger.error(f"Failed to create FirewallContext '{context_name}': {exc}")
-            return None
-
-    async def _ensure_context_subinterface(
-        self,
-        *,
-        context_obj: Any,
-        fw_devices: list[Any],
-        parent_id: str,
-        parent_name: str,
-        connectivity_mode: str,
-    ) -> None:
-        context_name = context_obj.name.value
-
-        vlan_id = getattr(context_obj, "vlan_id", None)
-        if vlan_id is None or not getattr(vlan_id, "value", None):
-            try:
-                vlan_pool = await self.client.get(
-                    kind=CoreNumberPool, name__value=f"{parent_name.lower()}-fw-context-vlan-pool"
-                )
-            except Exception as exc:
-                self.logger.error(f"Cannot find FW context VLAN pool for {parent_name}: {exc}")
-                return
-            try:
-                node = await self.client.create(
-                    kind=ManagedFirewallContext,
-                    data={
-                        "id": context_obj.id,
-                        "vlan_id": {
-                            "from_pool": {"id": vlan_pool.id},
-                            "identifier": f"{context_obj.id}-fw-context-vlan",
-                        },
-                    },
-                )
-                await node.save(allow_upsert=True)
-            except Exception as exc:
-                self.logger.error(f"Failed to allocate VLAN for FirewallContext '{context_name}': {exc}")
-                return
-            context_obj = await self.client.get(kind=ManagedFirewallContext, id=context_obj.id)
-
-        border_leaves: list[Any] = []
-        if connectivity_mode == "pbr":
-            try:
-                border_leaves = await self.client.filters(
-                    kind=DcimPhysicalDevice, deployment__ids=[parent_id], role__value="border-leaf"
-                )
-            except Exception as exc:
-                self.logger.error(f"Error looking up border-leaf devices on {parent_name}: {exc}")
-                return
-            if not border_leaves:
-                self.logger.error(f"{parent_name}: no border-leaf device found for context '{context_name}' p2p link")
-                return
-
-        for i, fw_device in enumerate(fw_devices):
-            fw_ip_id: str | None = None
-            bl_ip_id: str | None = None
-            if connectivity_mode == "pbr" and border_leaves:
-                ip_pair = await self._allocate_context_p2p(f"{context_name}-{_dev_name(fw_device)}", parent_name)
-                if ip_pair is not None:
-                    fw_ip_id, bl_ip_id = ip_pair
-
-            fw_sub_iface = await self._create_context_subinterface(
-                device_id=_dev_id(fw_device),
-                device_name=_dev_name(fw_device),
-                trunk_role="uplink",
-                vlan_id_value=context_obj.vlan_id.value,
-                context_obj=context_obj,
-                ip_address_id=fw_ip_id,
-            )
-            if fw_sub_iface is None or not border_leaves:
-                continue
-
-            border_leaf = border_leaves[i % len(border_leaves)]
-            await self._create_context_subinterface(
-                device_id=_dev_id(border_leaf),
-                device_name=_dev_name(border_leaf),
-                trunk_role="firewall",
-                vlan_id_value=context_obj.vlan_id.value,
-                context_obj=context_obj,
-                ip_address_id=bl_ip_id,
-            )
-
-    async def _create_context_subinterface(
-        self,
-        *,
-        device_id: str,
-        device_name: str,
-        trunk_role: str,
-        vlan_id_value: int | None,
-        context_obj: Any,
-        ip_address_id: str | None,
-    ) -> Any | None:
-        context_name = context_obj.name.value
-        try:
-            trunk_iface = await self.find_role_interface(device_id=device_id, role=trunk_role)
-        except Exception as exc:
-            self.logger.error(f"Error resolving {trunk_role} interface on {device_name}: {exc}")
-            return None
-        if trunk_iface is None:
-            self.logger.error(
-                f"{device_name}: no role={trunk_role} interface found — cannot create sub-interface for "
-                f"FirewallContext '{context_name}'"
-            )
-            return None
-        if vlan_id_value is None:
-            self.logger.error(f"{device_name}: no VLAN allocated — cannot create sub-interface for {context_name}")
-            return None
-        return await self.ensure_vlan_subinterface(
-            device_id=device_id,
-            device_name=device_name,
-            trunk_iface=trunk_iface,
-            vlan_id_value=vlan_id_value,
-            capability_obj=context_obj,
-            ip_address_id=ip_address_id,
-        )
-
-    async def _allocate_context_p2p(self, context_name: str, parent_name: str) -> tuple[str, str] | None:
-        """Allocate a P2P link from this Colo's FW-context P2P pool — see
-        customer_dc.py's identical method."""
-        pool_name = f"{parent_name.lower()}-fw-context-p2p-pool"
-        try:
-            pool = await self.client.get(kind=CoreIPPrefixPool, name__value=pool_name)
-        except Exception as exc:
-            self.logger.error(f"Cannot find FW context P2P pool '{pool_name}': {exc}")
-            return None
-
-        try:
-            allocated_prefix = await self.client.allocate_next_ip_prefix(
-                resource_pool=pool,
-                kind=IpamPrefix,
-                identifier=f"{context_name}-fw-context-p2p",
-                member_type="address",
-                data={"role": "technical", "is_pool": True},
-            )
-        except Exception as exc:
-            self.logger.error(f"Failed to allocate P2P prefix for FirewallContext '{context_name}': {exc}")
-            return None
-        if allocated_prefix is None:
-            self.logger.error(f"P2P pool '{pool_name}' returned no prefix for FirewallContext '{context_name}'")
-            return None
-
-        network = ipaddress.ip_network(allocated_prefix.prefix.value, strict=False)
-        addrs = list(network)
-        ip_namespace = allocated_prefix.ip_namespace
-
-        ip_ids: list[str] = []
-        for addr in addrs[:2]:
-            ip_obj = await self.client.create(
-                kind=IpamIPAddress,
-                data={"address": f"{addr}/{network.prefixlen}", "ip_namespace": ip_namespace},
-            )
-            await ip_obj.save(allow_upsert=True)
-            ip_ids.append(ip_obj.id)
-        return ip_ids[0], ip_ids[1]

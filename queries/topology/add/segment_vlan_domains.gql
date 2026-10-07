@@ -1,0 +1,60 @@
+# Per-segment desired state for ManagedVlanDomainSegment reconciliation
+# (generators/vlan_domain.py, VlanDomainMixin.reconcile_segment_vlan_domains),
+# shared by add_vxlan_segment and add_app_component_segment. Read by id from
+# Python, not a generator definition's own query.
+#   - interface_capabilities: the switch ports carrying the segment; their
+#     devices' VLAN domains need it (DcimPhysicalInterface/DcimLAGInterface
+#     only — an inline DcimVirtualInterface sub-interface on a firewall/LB
+#     HA pair has its own inline VLAN ID, not a VLAN domain)
+#   - stretch_scope + customer_deployments' hosting parents: a stretched
+#     segment's border gateways need it too (same shape as vxlan_segment.gql)
+#   - ManagedVlanDomainSegment: the activations that exist today
+query segment_vlan_domains($segment_id: ID!) {
+  ManagedVxlanSegment(ids: [$segment_id]) {
+    edges {
+      node {
+        id
+        stretch_scope { value }
+        customer_deployments {
+          edges {
+            node {
+              id
+              ... on TopologyCustomerDC {
+                parent {
+                  node {
+                    id
+                    ... on TopologyDataCenter {
+                      children { edges { node { ... on TopologyPod { id } } } }
+                    }
+                  }
+                }
+              }
+              ... on TopologyCustomerColocation {
+                # id alone fails server-side ("Unable to identify the type of
+                # the instance"); select a field, as vxlan_segment.gql does.
+                parent { node { id name { value } } }
+              }
+            }
+          }
+        }
+        interface_capabilities {
+          edges {
+            node {
+              id
+              __typename
+              device { node { id } }
+            }
+          }
+        }
+      }
+    }
+  }
+  ManagedVlanDomainSegment(segment__ids: [$segment_id]) {
+    edges {
+      node {
+        id
+        vlan_domain { node { id } }
+      }
+    }
+  }
+}

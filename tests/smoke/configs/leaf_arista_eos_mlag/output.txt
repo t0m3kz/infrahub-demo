@@ -34,11 +34,14 @@ interface Ethernet34
 !
 interface Vlan4094
    description MLAG Peer-Link SVI
+   ipv6 address fd00:2400::/127
    no shutdown
 !
 mlag configuration
    domain-id 1
    local-interface Vlan4094
+   peer-address fd00:2400::1
+   peer-address heartbeat 172.16.0.2
    peer-link Port-Channel100
    reload-delay mlag 300
    reload-delay non-mlag 330

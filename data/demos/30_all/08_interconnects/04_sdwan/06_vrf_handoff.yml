@@ -1,0 +1,119 @@
+---
+# L3 handoff between the SD-WAN gateway and the cage's EVPN Multi-Site border
+# gateway, in VRF PROD. This is how the C005 office (Amsterdam Branch) reaches
+# colo-services-stretch: office -> SD-WAN overlay -> GW1 -> eBGP in PROD ->
+# eg-fr01 -> EVPN type-5 -> DC10. The segment itself is never extended to the
+# office at L2; only its PROD prefix is.
+#
+# Rides the same physical path as VC-SDWAN-FR2-AWS-EUC1 (GW1 eth0 <->
+# eg-fr01 Ethernet1/13, see 05_overlays.yml) as a dot1q sub-interface on each
+# side. VLAN 1900 sits outside the SD-WAN tunnel-id pool (2000-9999) and the
+# per-tenant eth0.10xx terminations, so it never collides with a generated one.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "10.255.5.0/31"
+      description: "eg-fr01 <-> EQX-FR2-SDWAN-GW1 PROD handoff"
+      status: active
+      ip_namespace: "PROD"
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: "Ethernet1/13.1900"
+      device: "eg-fr01"
+      role: uplink
+      status: active
+      description: "PROD handoff to EQX-FR2-SDWAN-GW1"
+      parent_interface: ["eg-fr01", "Ethernet1/13"]
+      ip_address:
+        data:
+          address: "10.255.5.0/31"
+          ip_namespace: "PROD"
+    - name: "eth0.1900"
+      device: "EQX-FR2-SDWAN-GW1"
+      role: uplink
+      status: active
+      description: "PROD handoff to eg-fr01"
+      parent_interface: ["EQX-FR2-SDWAN-GW1", "eth0"]
+      ip_address:
+        data:
+          address: "10.255.5.1/31"
+          ip_namespace: "PROD"
+---
+# 2-byte private ASN: every fabric/cage ASN here is 4-byte (42xxxxxxxx), so
+# this can't collide with a generated one.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingAutonomousSystem
+  data:
+    - asn: 65028
+      description: "EQX-FR2-SDWAN-GW1 AS (PROD handoff)"
+---
+# GW1's own BGP process. Its config is pushed by the Orchestrator, not by a
+# transform here — this exists so the peering below has a remote AS and a
+# second endpoint, and so eg-fr01's transform can render its side.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGP
+  data:
+    - name: "EQX-FR2-SDWAN-GW1-bgp"
+      status: active
+      local_as: "AS65028"
+      router_id: ["10.255.5.1/31", "PROD"]
+      capabilities:
+        - "EQX-FR2-SDWAN-GW1"
+---
+# Upserted by HFID [afi, safi] — nothing else in this demo creates ipv4/unicast.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingBGPAddressFamily
+  data:
+    - afi: ipv4
+      safi: unicast
+      description: "IPv4 unicast"
+---
+# Shared key for the PROD handoff below. Neither side is a DC fabric, so there
+# is no generated {fabric}-overlay-key to reuse. Demo-only secret, like the API
+# token in the README.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingPassword
+  data:
+    - name: "eqx-fr2-sdwan-handoff-key"
+      description: "BGP auth key for the eg-fr01 <-> EQX-FR2-SDWAN-GW1 PROD handoff"
+      password: "demo-eqx-fr2-sdwan-handoff"
+---
+# The local interface's address being in PROD (not `default`) is what makes
+# transforms/helpers/bgp.py render this under `vrf PROD` on eg-fr01, outside
+# every peer group.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGPPeering
+  data:
+    - name: "VRF-PROD-EQXFR2-SDWAN"
+      description: "PROD handoff eg-fr01 <-> EQX-FR2-SDWAN-GW1 (office routes into the stretched segments)"
+      session_type: EBGP
+      peering_role: regular
+      ttl: 1
+      bfd_enabled: false
+      send_community: true
+      send_extended_community: true
+      address_families:
+        - ["ipv4", "unicast"]
+      bgp_processes:
+        - "eg-fr01-bgp-overlay"
+        - "EQX-FR2-SDWAN-GW1-bgp"
+      password: "eqx-fr2-sdwan-handoff-key"
+      interface_capabilities:
+        - ["eg-fr01", "Ethernet1/13.1900"]
+        - ["EQX-FR2-SDWAN-GW1", "eth0.1900"]

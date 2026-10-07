@@ -23,40 +23,37 @@ spec:
         kind: AppComponent
         data:
           - name: web-ui
+            fqdn: ui.erp-core.c006.demo.local
             component_type: frontend
+            ports:
+              - tcp/443
             network_segment: c006-nordix-prod-p
             instances:
               - c006-web-ui-dc11-1
               - c006-web-ui-dc11-2
-            service_ports:
-              data:
-                - port: 443
-                  protocol: tcp
             member_of_groups:
               - app_components
 
           - name: erp-backend
+            fqdn: backend.erp-core.c006.demo.local
             component_type: backend
+            ports:
+              - tcp/8443
             network_segment: c006-nordix-prod-p
             instances:
               - c006-erp-backend-dc11-1
               - c006-erp-backend-dc11-2
-            service_ports:
-              data:
-                - port: 8443
-                  protocol: tcp
             member_of_groups:
               - app_components
 
           - name: erp-db
+            fqdn: db.erp-core.c006.demo.local
             component_type: database
+            ports:
+              - tcp/5432
             network_segment: c006-nordix-prod-p
             instances:
               - c006-erp-db-dc11-1
               - c006-erp-db-dc11-2
-            service_ports:
-              data:
-                - port: 5432
-                  protocol: tcp
             member_of_groups:
               - app_components

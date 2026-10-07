@@ -1,0 +1,43 @@
+# add_app_component_segment: a component's instances or network_segment
+# changed. Resolves each instance to the physical device it is actually
+# cabled through (itself if physical, hosting_device if virtual) so
+# AppInstanceSegmentGenerator can tag the exact switch interface it lands
+# on — see generators/topology/app_instance_segment.py.
+query app_component_segment($fqdn: String!) {
+  AppComponent(fqdn__value: $fqdn) {
+    edges {
+      node {
+        id
+        fqdn { value }
+        network_segment {
+          node {
+            id
+            name { value }
+          }
+        }
+        instances {
+          edges {
+            node {
+              id
+              __typename
+              ... on DcimVirtualDevice {
+                hosting_device {
+                  node {
+                    id
+                  }
+                }
+              }
+              ... on ManagedControllerVirtual {
+                hosting_device {
+                  node {
+                    id
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

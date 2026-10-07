@@ -1,0 +1,20 @@
+{#-
+  Per-neighbor local-as override (EOS syntax). Emitted only under ebgp-ibgp.
+
+  transforms/helpers/bgp.py's _collapse_to_single_instance folds a device's two
+  BGP processes into ONE `router bgp` instance — a router can only run one ASN —
+  and keeps the overlay's fabric-wide ASN as the instance ASN so EVPN stays iBGP.
+  The underlay's per-device ASN then has to be reasserted on its own sessions,
+  which is what this does.
+
+  `no-prepend replace-as` is not optional. Without `no-prepend` the instance ASN
+  (65000) is prepended too and leaks fabric-wide into every underlay AS-path;
+  without `replace-as` the local ASN is prepended alongside the override instead
+  of replacing it. Together they make the neighbour see exactly the one ASN its
+  own `remote-as` was configured with, and nothing else.
+
+  Expects `session` from the calling loop.
+-#}
+{%- if session.get('local_as_override') %}
+   neighbor {{ session.neighbor }} local-as {{ session.local_as_override.asn }} no-prepend replace-as
+{%- endif %}

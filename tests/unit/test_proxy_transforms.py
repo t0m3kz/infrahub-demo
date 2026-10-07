@@ -118,7 +118,7 @@ def _make_proxy_transform() -> Proxy:
     return obj
 
 
-_PROXY_CLEAN_DATA_PATH = "transforms.config.proxy.clean_data"
+_PROXY_CLEAN_DATA_PATH = "transforms.common.clean_data"
 
 
 def _cleaned_device(
@@ -208,7 +208,7 @@ class TestProxyTransformContext:
     async def test_proxy_interfaces_key_in_render_context(self) -> None:
         transform = _make_proxy_transform()
         with patch(_PROXY_CLEAN_DATA_PATH, return_value=_cleaned_device()):
-            with patch("transforms.common.Environment") as mock_env:
+            with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()
                 mock_template.render.return_value = ""
                 mock_env.return_value.get_template.return_value = mock_template
@@ -219,7 +219,7 @@ class TestProxyTransformContext:
     async def test_proxy_interfaces_has_three_items(self) -> None:
         transform = _make_proxy_transform()
         with patch(_PROXY_CLEAN_DATA_PATH, return_value=_cleaned_device()):
-            with patch("transforms.common.Environment") as mock_env:
+            with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()
                 mock_template.render.return_value = ""
                 mock_env.return_value.get_template.return_value = mock_template
@@ -231,7 +231,7 @@ class TestProxyTransformContext:
     async def test_interface_with_ip_has_ip_address_dict(self) -> None:
         transform = _make_proxy_transform()
         with patch(_PROXY_CLEAN_DATA_PATH, return_value=_cleaned_device()):
-            with patch("transforms.common.Environment") as mock_env:
+            with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()
                 mock_template.render.return_value = ""
                 mock_env.return_value.get_template.return_value = mock_template
@@ -245,7 +245,7 @@ class TestProxyTransformContext:
     async def test_interface_without_ip_has_none(self) -> None:
         transform = _make_proxy_transform()
         with patch(_PROXY_CLEAN_DATA_PATH, return_value=_cleaned_device()):
-            with patch("transforms.common.Environment") as mock_env:
+            with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()
                 mock_template.render.return_value = ""
                 mock_env.return_value.get_template.return_value = mock_template
@@ -258,7 +258,7 @@ class TestProxyTransformContext:
     async def test_ha_key_in_render_context(self) -> None:
         transform = _make_proxy_transform()
         with patch(_PROXY_CLEAN_DATA_PATH, return_value=_cleaned_device()):
-            with patch("transforms.common.Environment") as mock_env:
+            with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()
                 mock_template.render.return_value = ""
                 mock_env.return_value.get_template.return_value = mock_template
@@ -269,7 +269,7 @@ class TestProxyTransformContext:
     async def test_ha_is_not_none(self) -> None:
         transform = _make_proxy_transform()
         with patch(_PROXY_CLEAN_DATA_PATH, return_value=_cleaned_device()):
-            with patch("transforms.common.Environment") as mock_env:
+            with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()
                 mock_template.render.return_value = ""
                 mock_env.return_value.get_template.return_value = mock_template
@@ -280,7 +280,7 @@ class TestProxyTransformContext:
     async def test_ha_devices_contains_both_peers(self) -> None:
         transform = _make_proxy_transform()
         with patch(_PROXY_CLEAN_DATA_PATH, return_value=_cleaned_device()):
-            with patch("transforms.common.Environment") as mock_env:
+            with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()
                 mock_template.render.return_value = ""
                 mock_env.return_value.get_template.return_value = mock_template
@@ -293,7 +293,7 @@ class TestProxyTransformContext:
     async def test_proxy_type_in_render_context_equals_explicit(self) -> None:
         transform = _make_proxy_transform()
         with patch(_PROXY_CLEAN_DATA_PATH, return_value=_cleaned_device(proxy_type="explicit")):
-            with patch("transforms.common.Environment") as mock_env:
+            with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()
                 mock_template.render.return_value = ""
                 mock_env.return_value.get_template.return_value = mock_template
@@ -304,7 +304,7 @@ class TestProxyTransformContext:
     async def test_proxy_vendor_in_render_context_equals_haproxy(self) -> None:
         transform = _make_proxy_transform()
         with patch(_PROXY_CLEAN_DATA_PATH, return_value=_cleaned_device(proxy_vendor="haproxy")):
-            with patch("transforms.common.Environment") as mock_env:
+            with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()
                 mock_template.render.return_value = ""
                 mock_env.return_value.get_template.return_value = mock_template
@@ -325,7 +325,7 @@ class TestProxyTransformContext:
             }
         ]
         with patch(_PROXY_CLEAN_DATA_PATH, return_value=cleaned):
-            with patch("transforms.common.Environment") as mock_env:
+            with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()
                 mock_template.render.return_value = ""
                 mock_env.return_value.get_template.return_value = mock_template
@@ -345,7 +345,7 @@ class TestProxyTransformContext:
             }
         ]
         with patch(_PROXY_CLEAN_DATA_PATH, return_value=cleaned):
-            with patch("transforms.common.Environment") as mock_env:
+            with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()
                 mock_template.render.return_value = ""
                 mock_env.return_value.get_template.return_value = mock_template
@@ -363,7 +363,7 @@ class TestProxyTransformProxyTypes:
     async def test_transparent_proxy_type_flows_to_render_context(self) -> None:
         transform = _make_proxy_transform()
         with patch(_PROXY_CLEAN_DATA_PATH, return_value=_cleaned_device(proxy_type="transparent")):
-            with patch("transforms.common.Environment") as mock_env:
+            with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()
                 mock_template.render.return_value = ""
                 mock_env.return_value.get_template.return_value = mock_template
@@ -374,7 +374,7 @@ class TestProxyTransformProxyTypes:
     async def test_reverse_proxy_type_flows_to_render_context(self) -> None:
         transform = _make_proxy_transform()
         with patch(_PROXY_CLEAN_DATA_PATH, return_value=_cleaned_device(proxy_type="reverse")):
-            with patch("transforms.common.Environment") as mock_env:
+            with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()
                 mock_template.render.return_value = ""
                 mock_env.return_value.get_template.return_value = mock_template
@@ -392,7 +392,7 @@ class TestProxyTransformProxyRules:
     async def test_proxy_rules_empty_when_no_policies(self) -> None:
         transform = _make_proxy_transform()
         with patch(_PROXY_CLEAN_DATA_PATH, return_value=_cleaned_device()):
-            with patch("transforms.common.Environment") as mock_env:
+            with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()
                 mock_template.render.return_value = ""
                 mock_env.return_value.get_template.return_value = mock_template
@@ -423,7 +423,7 @@ class TestProxyTransformProxyRules:
             }
         ]
         with patch(_PROXY_CLEAN_DATA_PATH, return_value=cleaned):
-            with patch("transforms.common.Environment") as mock_env:
+            with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()
                 mock_template.render.return_value = ""
                 mock_env.return_value.get_template.return_value = mock_template
@@ -462,7 +462,7 @@ class TestProxyTransformProxyRules:
             }
         ]
         with patch(_PROXY_CLEAN_DATA_PATH, return_value=cleaned):
-            with patch("transforms.common.Environment") as mock_env:
+            with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()
                 mock_template.render.return_value = ""
                 mock_env.return_value.get_template.return_value = mock_template

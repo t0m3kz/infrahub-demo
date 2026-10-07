@@ -27,73 +27,41 @@ def _effective_count(pool_node: dict[str, Any]) -> int:
     return 0
 
 
-class VirtClusterTotalCpu(InfrahubTransform):
+class _VirtClusterTotal(InfrahubTransform):
+    """Sum a per-node pool attribute times the pool's effective node count."""
+
+    query = "virt_cluster_capacity"
+    field: str = ""
+
+    async def transform(self, data: dict[str, Any]) -> str:
+        """Return the total across all pools of the cluster as a string ("0" if none is set)."""
+        total = 0
+        for pool_node in _iter_pool_nodes(data):
+            per_node = (pool_node.get(self.field) or {}).get("value")
+            if per_node is not None:
+                total += int(per_node) * _effective_count(pool_node)
+        return str(total)
+
+
+class VirtClusterTotalCpu(_VirtClusterTotal):
     """Return total CPU count across all node pools in a VirtCluster."""
 
-    query = "virt_cluster_capacity"
     url = "virt_cluster_total_cpu"
-
-    async def transform(self, data: dict[str, Any]) -> str:
-        """Sum cpu_per_node * effective_node_count across all pools.
-
-        Args:
-            data: Raw GraphQL response for the virt_cluster_capacity query.
-
-        Returns:
-            Total CPU count as a string, or "0" if no specs are set.
-        """
-        total = 0
-        for pool_node in _iter_pool_nodes(data):
-            cpu = (pool_node.get("cpu_per_node") or {}).get("value")
-            if cpu is not None:
-                total += int(cpu) * _effective_count(pool_node)
-        return str(total)
+    field = "cpu_per_node"
 
 
-class VirtClusterTotalMemoryGb(InfrahubTransform):
+class VirtClusterTotalMemoryGb(_VirtClusterTotal):
     """Return total memory (GB) across all node pools in a VirtCluster."""
 
-    query = "virt_cluster_capacity"
     url = "virt_cluster_total_memory_gb"
-
-    async def transform(self, data: dict[str, Any]) -> str:
-        """Sum memory_per_node_gb * effective_node_count across all pools.
-
-        Args:
-            data: Raw GraphQL response for the virt_cluster_capacity query.
-
-        Returns:
-            Total memory in GB as a string, or "0" if no specs are set.
-        """
-        total = 0
-        for pool_node in _iter_pool_nodes(data):
-            memory = (pool_node.get("memory_per_node_gb") or {}).get("value")
-            if memory is not None:
-                total += int(memory) * _effective_count(pool_node)
-        return str(total)
+    field = "memory_per_node_gb"
 
 
-class VirtClusterTotalStorageGb(InfrahubTransform):
+class VirtClusterTotalStorageGb(_VirtClusterTotal):
     """Return total storage (GB) across all node pools in a VirtCluster."""
 
-    query = "virt_cluster_capacity"
     url = "virt_cluster_total_storage_gb"
-
-    async def transform(self, data: dict[str, Any]) -> str:
-        """Sum storage_per_node_gb * effective_node_count across all pools.
-
-        Args:
-            data: Raw GraphQL response for the virt_cluster_capacity query.
-
-        Returns:
-            Total storage in GB as a string, or "0" if no specs are set.
-        """
-        total = 0
-        for pool_node in _iter_pool_nodes(data):
-            storage = (pool_node.get("storage_per_node_gb") or {}).get("value")
-            if storage is not None:
-                total += int(storage) * _effective_count(pool_node)
-        return str(total)
+    field = "storage_per_node_gb"
 
 
 def _iter_pool_nodes(data: dict[str, Any]):

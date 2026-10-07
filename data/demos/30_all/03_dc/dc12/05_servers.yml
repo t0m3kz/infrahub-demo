@@ -1,5 +1,8 @@
 ---
 # DC12 POD-1 application hosts — see ../dc10/05_servers.yml for the pattern.
+# Owned by P027 (Technology Partner): shared non-prod hosts that several
+# customers' dev VMs run on (C005, C008, C010), unlike the DC10/DC11 hosts that
+# belong to one customer. Prod workloads never land here.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

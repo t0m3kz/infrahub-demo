@@ -1,9 +1,10 @@
 from typing import Any
 
 from transforms.common import BaseDeviceTransform
+from transforms.helpers.addressing import management_ip
 from transforms.helpers.ha import get_ha
-from transforms.helpers.proxy import flatten_proxy_rules, get_proxy_policies, merge_policies
-from utils.data_cleaning import clean_data
+from transforms.helpers.policy import merge_policies
+from transforms.helpers.proxy import flatten_proxy_rules, get_proxy_policies
 
 
 def _build_proxy_interfaces(interfaces: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -25,22 +26,12 @@ def _build_proxy_interfaces(interfaces: list[dict[str, Any]]) -> list[dict[str, 
 class Proxy(BaseDeviceTransform):
     query = "proxy_config"
     template_subdir = "proxies"
+    comment_char = "#"
 
     async def transform(self, data: Any) -> Any:
-        cleaned = clean_data(data)
-
-        devices = cleaned.get("DcimPhysicalDevice") or []
-        device = devices[0] if devices else {}
-
-        platform = device.get("platform") or {}
-        platform_name = platform.get("netmiko_device_type")
-
+        device, _, platform_name = self._device_and_platform(data)
         if not platform_name:
-            device_name = device.get("name", "Unknown Device")
-            return (
-                f"# Device {device_name} has no platform with "
-                f"netmiko_device_type defined.\n# No configuration generated.\n"
-            )
+            return self._no_platform_config(device)
 
         capabilities = device.get("capabilities") or []
         interfaces = device.get("interfaces") or []
@@ -66,6 +57,7 @@ class Proxy(BaseDeviceTransform):
         config.update(
             {
                 "proxy_interfaces": proxy_interfaces,
+                "management_ip": management_ip(proxy_interfaces),
                 "ha": ha_config,
                 "proxy_type": (proxy_ha or {}).get("proxy_type", "explicit"),
                 "proxy_vendor": (proxy_ha or {}).get("proxy_vendor", "haproxy"),
@@ -73,5 +65,4 @@ class Proxy(BaseDeviceTransform):
             }
         )
 
-        template = self._load_template(platform_name)
-        return template.render(**config)
+        return self._render(platform_name, config)

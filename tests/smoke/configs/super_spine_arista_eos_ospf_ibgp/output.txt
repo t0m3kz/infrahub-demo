@@ -60,8 +60,10 @@ router bgp 65000
    neighbor EVPN-PEERS update-source Loopback0
    neighbor EVPN-PEERS send-community
    neighbor 10.0.0.100 peer-group EVPN-PEERS
+
    neighbor 10.0.0.100 description spine-01
    neighbor 10.0.0.101 peer-group EVPN-PEERS
+
    neighbor 10.0.0.101 description spine-02
    !
    address-family ipv4

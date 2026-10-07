@@ -8,6 +8,8 @@ Covers:
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -23,12 +25,20 @@ from generators.routing import RoutingMixin
 
 def _make_mixin(fabric_name: str = "dc1") -> Any:
     """Create a RoutingMixin typed as Any so ty allows mock attribute assignments."""
-    m = RoutingMixin.__new__(RoutingMixin)
+    m: Any = RoutingMixin.__new__(RoutingMixin)
     m.fabric_name = fabric_name
     m.deployment_id = "dc-id-1"
     m.logger = MagicMock()
     m.client = MagicMock()
     m.client.group_context.related_node_ids = []
+    m.lock_keys = []
+
+    @asynccontextmanager
+    async def _resource_lock(key: str) -> AsyncIterator[None]:
+        m.lock_keys.append(key)
+        yield
+
+    m.resource_lock = _resource_lock
     return m
 
 
@@ -146,43 +156,104 @@ class TestFindExistingOspfArea:
 
 
 # ---------------------------------------------------------------------------
-# _resolve_shared_super_spine_as — fabric-wide shared underlay AS lookup
+# ensure_shared_as — find-or-allocate an AS by deterministic description
 # ---------------------------------------------------------------------------
 
 
-class TestResolveSharedSuperSpineAs:
+class TestEnsureSharedAs:
     @pytest.mark.asyncio
-    async def test_returns_id_when_found(self) -> None:
-        m = _make_mixin(fabric_name="dc1")
-        as_obj = _mock_as_obj(asn=65001, obj_id="ss-as-1")
-        m.client.filters = AsyncMock(return_value=[as_obj])
+    async def test_lookup_runs_under_a_per_description_lock(self) -> None:
+        """Two DC-level runs reaching this at once must not both draw an AS
+        (the untracked twin breaks the next run's delete_unused_nodes)."""
+        m = _make_mixin()
+        m.client.filters = AsyncMock(return_value=[_mock_as_obj()])
 
-        result = await m._resolve_shared_super_spine_as()
+        await m.ensure_shared_as(description="dc1 super-spine underlay ASN", asn_pool_id="pool-1")
+
+        assert m.lock_keys == ["shared-as-dc1 super-spine underlay ASN"]
+
+    @pytest.mark.asyncio
+    async def test_existing_as_reused_and_tracked(self) -> None:
+        """An AS found by description is returned and tracked, never re-drawn."""
+        m = _make_mixin()
+        m.client.filters = AsyncMock(return_value=[_mock_as_obj(obj_id="ss-as-1")])
+        m.client.create = AsyncMock()
+
+        result = await m.ensure_shared_as(description="dc1 super-spine underlay ASN", asn_pool_id="pool-1")
 
         assert result == "ss-as-1"
-        m.client.filters.assert_awaited_once_with(
-            kind=m.client.filters.call_args.kwargs["kind"], description__value="dc1 super-spine underlay ASN"
-        )
+        assert m.client.filters.call_args.kwargs["description__value"] == "dc1 super-spine underlay ASN"
+        m.client.create.assert_not_called()
+        assert "ss-as-1" in m.client.group_context.related_node_ids
 
     @pytest.mark.asyncio
-    async def test_returns_none_when_not_found(self) -> None:
+    async def test_new_as_drawn_from_pool(self) -> None:
+        """No AS with the description yet: one is allocated from the pool."""
         m = _make_mixin()
         m.client.filters = AsyncMock(return_value=[])
-        assert await m._resolve_shared_super_spine_as() is None
+        new_as = _mock_as_obj(obj_id="ss-as-new")
+        m.client.create = AsyncMock(return_value=new_as)
+
+        result = await m.ensure_shared_as(description="desc", asn_pool_id="pool-1")
+
+        assert result == "ss-as-new"
+        assert m.client.create.call_args.kwargs["data"] == {
+            "asn": {"from_pool": {"id": "pool-1"}},
+            "description": "desc",
+        }
+        new_as.save.assert_awaited_once_with(allow_upsert=True)
+        assert "ss-as-new" in m.client.group_context.related_node_ids
 
     @pytest.mark.asyncio
-    async def test_returns_none_on_exception(self) -> None:
+    async def test_no_pool_and_no_existing_returns_none(self) -> None:
+        """Nothing to reuse and no pool to draw from returns None."""
+        m = _make_mixin()
+        m.client.filters = AsyncMock(return_value=[])
+        m.client.create = AsyncMock()
+
+        assert await m.ensure_shared_as(description="desc", asn_pool_id=None) is None
+        m.client.create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_lookup_exception_propagates(self) -> None:
+        """Error handling is the caller's: a failed lookup never allocates."""
         m = _make_mixin()
         m.client.filters = AsyncMock(side_effect=Exception("timeout"))
-        assert await m._resolve_shared_super_spine_as() is None
+        m.client.create = AsyncMock()
+
+        with pytest.raises(Exception, match="timeout"):
+            await m.ensure_shared_as(description="desc", asn_pool_id="pool-1")
+        m.client.create.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# bgp_processes_ready — per-device ManagedBGP readiness by process role
+# ---------------------------------------------------------------------------
+
+
+def _mock_bgp(device: str, role: str) -> MagicMock:
+    process = MagicMock()
+    process.process_role.value = role
+    process.capabilities.peers = [MagicMock(display_label=device)]
+    return process
+
+
+class TestBgpProcessesReady:
+    @pytest.mark.asyncio
+    async def test_ready_when_every_device_has_the_role(self) -> None:
+        """Every named device carries a process of the requested role."""
+        m = _make_mixin()
+        m.client.filters = AsyncMock(return_value=[_mock_bgp("sp1", "underlay"), _mock_bgp("sp2", "underlay")])
+
+        assert await m.bgp_processes_ready(["sp1", "sp2"], "underlay")
 
     @pytest.mark.asyncio
-    async def test_description_uses_fabric_name(self) -> None:
-        m = _make_mixin(fabric_name="katowice")
-        m.client.filters = AsyncMock(return_value=[])
-        await m._resolve_shared_super_spine_as()
-        call_kwargs = m.client.filters.call_args.kwargs
-        assert call_kwargs["description__value"] == "katowice super-spine underlay ASN"
+    async def test_other_role_does_not_count(self) -> None:
+        """An overlay process does not satisfy an underlay readiness check."""
+        m = _make_mixin()
+        m.client.filters = AsyncMock(return_value=[_mock_bgp("sp1", "underlay"), _mock_bgp("sp2", "overlay")])
+
+        assert not await m.bgp_processes_ready(["sp1", "sp2"], "underlay")
 
 
 # ---------------------------------------------------------------------------
@@ -387,8 +458,10 @@ class TestGroupContextProtection:
         assert sleep_mock.await_count == 9
 
     @pytest.mark.asyncio
-    async def test_overlay_as_added_to_related_node_ids(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """When overlay_as_id is resolved, it is appended to group_context.related_node_ids."""
+    async def test_resolved_overlay_as_is_used_but_not_tracked(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A resolved overlay_as_id is used, never tracked: add_dc owns the
+        shared AS. Tracked by a pod/rack run too, that run's cleanup would
+        delete it the run it stopped reaching it."""
         from generators.helpers.routing import RoutingStrategy
         from generators.types import RoutingOptions
 
@@ -417,7 +490,8 @@ class TestGroupContextProtection:
             options=options,
         )
 
-        assert "as-overlay-99" in m.client.group_context.related_node_ids
+        assert options["overlay_as_id"] == "as-overlay-99"
+        assert "as-overlay-99" not in m.client.group_context.related_node_ids
 
     @pytest.mark.asyncio
     async def test_planner_is_constructed_in_strict_mode(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -466,9 +540,9 @@ class TestGroupContextProtection:
         assert captured["strict"] is True
 
     @pytest.mark.asyncio
-    async def test_resolved_passwords_added_to_related_node_ids(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """When underlay/overlay password IDs are resolved, both are appended
-        to group_context.related_node_ids, same as overlay_as_id/ospf_area_id."""
+    async def test_resolved_passwords_are_used_but_not_tracked(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Resolved underlay/overlay password IDs are used, never tracked —
+        same as overlay_as_id/ospf_area_id: add_dc owns the shared keys."""
         from generators.helpers.routing import RoutingStrategy
         from generators.types import RoutingOptions
 
@@ -490,8 +564,9 @@ class TestGroupContextProtection:
             options=options,
         )
 
-        assert "pw-underlay-1" in m.client.group_context.related_node_ids
-        assert "pw-overlay-1" in m.client.group_context.related_node_ids
+        assert options["underlay_password_id"] == "pw-underlay-1"
+        assert options["overlay_password_id"] == "pw-overlay-1"
+        assert m.client.group_context.related_node_ids == []
 
     @pytest.mark.asyncio
     async def test_missing_passwords_do_not_block_routing_creation(self, monkeypatch: pytest.MonkeyPatch) -> None:

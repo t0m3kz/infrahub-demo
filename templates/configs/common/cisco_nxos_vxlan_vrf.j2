@@ -1,0 +1,43 @@
+{#-
+  Per-tenant VRF context for NX-OS symmetric IRB.
+
+  One `vrf context` per L3 VNI. This is what makes routing BETWEEN subnets work
+  across VTEPs: the L2 VNIs carry bridged traffic within a subnet, the L3 VNI is
+  the tenant's transit VNI that routed traffic rides. Without it a leaf bridges
+  fine and routes nothing, which presents as an EVPN failure and is not one.
+
+  Two route-targets are deliberately emitted per VRF and they are not redundant:
+  `route-target both X` applies to the VPNv4 address-family and `route-target
+  both X evpn` to L2VPN EVPN. NX-OS keeps them separate and EVPN imports only
+  honour the `evpn`-qualified one.
+
+  import_route_targets are the other sites' VRF route-targets, set when a
+  segment in this VRF is stretched across EVPN Multi-Site
+  (transforms/helpers/vxlan.py): each fabric exports its VRF under its own
+  evpn_rt_as, so without them the type-5 routes of the remote site never land.
+
+  Included by the leaf/border-leaf NX-OS templates from inside their
+  `{% if vxlan and vxlan.enabled %}` guard, so `vxlan` is known non-empty here.
+-#}
+{%- if vxlan.l3_vni_mappings %}
+!
+! VRF Contexts (symmetric IRB — one L3 VNI per tenant)
+!
+{%- for mapping in vxlan.l3_vni_mappings %}
+vrf context {{ mapping.vrf_name }}
+  vni {{ mapping.l3_vni }}
+{%- if vxlan.evpn.rd_format %}
+  rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.l3_vni | string) }}
+{%- endif %}
+  address-family ipv4 unicast
+{%- if vxlan.evpn.rt_format %}
+    route-target both {{ vxlan.evpn.rt_format | replace('{vni}', mapping.l3_vni | string) }}
+    route-target both {{ vxlan.evpn.rt_format | replace('{vni}', mapping.l3_vni | string) }} evpn
+{%- endif %}
+{%- for rt in mapping.import_route_targets | default([]) %}
+    route-target import {{ rt }}
+    route-target import {{ rt }} evpn
+{%- endfor %}
+!
+{%- endfor %}
+{%- endif -%}

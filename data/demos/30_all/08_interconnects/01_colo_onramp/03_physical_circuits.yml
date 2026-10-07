@@ -19,10 +19,18 @@ kind: Object
 spec:
   kind: TopologyPhysicalCircuit
   data:
-    # --- DC <-> cage dark fibre (addressing in 01_prefixes.yml/02_interfaces.yml) -------------
+    # --- DC <-> cage dark fibre ---------------------------------------------
+    # peering_role dci: add_circuit (generators/topology/circuit.py) addresses
+    # both ends from the DCI-Technical-IPv6 pool (data/bootstrap/20_dci_pools.yml)
+    # and builds the EVPN Multi-Site DCI session (DCI-<circuit_id>) between the
+    # border leaf's and the cage edge's overlay BGP processes, keyed with the
+    # DC's {fabric}-overlay-key. Ethernet1/35 is the border leaf's first free
+    # uplink, Ethernet1/[10-11] the cage router's `dci` ports.
     - circuit_id: "DF-DC10-EQXFR2"
+      member_of_groups: [physical_circuits]
       name: "DF-DC10-EQXFR2"
       circuit_type: dark_fiber
+      peering_role: dci
       status: active
       bandwidth: 100000
       provider: "P016"
@@ -36,8 +44,10 @@ spec:
         - ["eg-fr01", "Ethernet1/10"]
 
     - circuit_id: "DF-DC11-EQXFR2"
+      member_of_groups: [physical_circuits]
       name: "DF-DC11-EQXFR2"
       circuit_type: dark_fiber
+      peering_role: dci
       status: active
       bandwidth: 100000
       provider: "P016"
@@ -51,8 +61,10 @@ spec:
         - ["eg-fr01", "Ethernet1/11"]
 
     - circuit_id: "DF-DC12-EQXPA4"
+      member_of_groups: [physical_circuits]
       name: "DF-DC12-EQXPA4"
       circuit_type: dark_fiber
+      peering_role: dci
       status: active
       bandwidth: 100000
       provider: "P016"
@@ -69,6 +81,7 @@ spec:
     # The cloud end is the region, not a zone: an AZ is finer than any provider
     # commits to for a Direct Connect or ExpressRoute hand-off.
     - circuit_id: "XC-EQXFR2-AWS-EUC1"
+      member_of_groups: [physical_circuits]
       name: "XC-EQXFR2-AWS-EUC1"
       circuit_type: cross_connect
       status: active
@@ -82,6 +95,7 @@ spec:
         - ["eg-fr01", "Ethernet1/13"]
 
     - circuit_id: "XC-EQXPA4-AZURE-WEU"
+      member_of_groups: [physical_circuits]
       name: "XC-EQXPA4-AZURE-WEU"
       circuit_type: cross_connect
       status: active

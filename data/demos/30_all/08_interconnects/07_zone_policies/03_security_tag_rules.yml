@@ -1,0 +1,30 @@
+---
+# Coarse VTEP-hardware GPO contracts for the external tags in
+# 02_security_tags.yml. This is additive to, never a substitute for, the
+# firewall-level SecurityPolicyRule in 05_security_policy.yml — both layers
+# must permit (see schemas/extensions/security/security_tags.yml's own
+# comment) — so granting a tag-to-tag contract here does not bypass the
+# mandatory firewall hop; it only lets a Cisco/Arista border/edge device
+# hardware-match the flow instead of falling back to prefix ACLs.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityTagRule
+  data:
+    - source_tag: web-tier
+      destination_tag: cloud-aws
+      action: permit
+      log: false
+      description: "Web frontend to AWS transit hub (C001 Direct Connect)"
+
+    - source_tag: app-tier
+      destination_tag: partner-acme
+      action: permit
+      log: true
+      description: "App backend to Acme Logistics B2B extranet"
+
+    - source_tag: web-tier
+      destination_tag: saas-zscaler
+      action: permit
+      log: false
+      description: "Web frontend to Zscaler cloud security PoP"

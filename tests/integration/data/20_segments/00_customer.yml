@@ -1,0 +1,11 @@
+---
+# C001 (Nordix Ltd.) — the customer organization behind the DC6 segment
+# scenario (test_19). Same name/org_id as data/demos/30_all/00_customer, so a
+# later 30_all load upserts this node instead of colliding with it.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: OrganizationCustomer
+  data:
+    - name: "Nordix Ltd."
+      org_id: "C001"

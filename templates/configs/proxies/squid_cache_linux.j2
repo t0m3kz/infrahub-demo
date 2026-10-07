@@ -45,7 +45,10 @@ http_access deny manager
 # --- Application-derived egress rules (from ProxyPolicy/ProxyPolicyRule) ---
 {%- for rule in proxy_rules %}
 acl {{ rule.acl_name }} dstdomain {{ rule.destinations | join(' ') }}
-http_access {{ 'allow' if rule.action in ('allow', 'bypass') else 'deny' }} {{ rule.acl_name }}{% if rule.description %} # {{ rule.description }}{% endif %}
+{%- if rule.ports %}
+acl {{ rule.acl_name }}_ports port{% for p in rule.ports %} {{ p.port }}{% if p.port_end %}-{{ p.port_end }}{% endif %}{% endfor %}
+{%- endif %}
+http_access {{ 'allow' if rule.action in ('allow', 'bypass') else 'deny' }} {{ rule.acl_name }}{% if rule.ports %} {{ rule.acl_name }}_ports{% endif %}{% if rule.description %} # {{ rule.description }}{% endif %}
 {%- endfor %}
 {%- endif %}
 http_access allow localnet
@@ -56,9 +59,8 @@ http_access deny all
 dns_nameservers 8.8.8.8 8.8.4.4
 
 # --- Interfaces ---
-{%- set mgmt_iface = proxy_interfaces | selectattr('role', 'equalto', 'management') | list | first | default(None) %}
-{%- if mgmt_iface and mgmt_iface.ip_address %}
-tcp_outgoing_address {{ mgmt_iface.ip_address.address.split('/')[0] }}
+{%- if management_ip %}
+tcp_outgoing_address {{ management_ip }}
 {%- endif %}
 {%- for iface in proxy_interfaces %}
 # {{ iface.name }}{%- if iface.description %}: {{ iface.description }}{%- endif %}{%- if iface.ip_address %} — {{ iface.ip_address.address }}{%- endif %}
@@ -77,8 +79,8 @@ logfile_rotate 7
 
 # --- Stats ---
 cachemgr_passwd disable all
-{%- if mgmt_iface and mgmt_iface.ip_address %}
-http_access allow {{ mgmt_iface.ip_address.address.split('/')[0] }} manager
+{%- if management_ip %}
+http_access allow {{ management_ip }} manager
 {%- endif %}
 {%- if ha %}
 

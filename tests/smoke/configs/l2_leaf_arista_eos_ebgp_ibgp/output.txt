@@ -11,6 +11,12 @@ spanning-tree mode mstp
 ! Configure VLAN 1
 no spanning-tree vlan-id 4094
 
+vlan 100
+   name Customer-A
+
+vlan 200
+   name Customer-A
+
 interface Ethernet1
    description to spine-01
    ip address 10.1.0.1/31
@@ -21,6 +27,12 @@ interface Ethernet2
    description to spine-02
    ip address 10.1.0.3/31
 
+   no shutdown
+
+interface Ethernet10
+   description to server-01
+
+   switchport trunk allowed vlan 100,200
    no shutdown
 
 interface Loopback0

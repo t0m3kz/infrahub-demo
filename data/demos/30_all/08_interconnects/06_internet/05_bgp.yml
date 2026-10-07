@@ -1,0 +1,151 @@
+---
+# Each ISP provider edge's BGP process. Its config is the carrier's business,
+# not a transform here: it exists so the peerings below have a remote AS and a
+# second endpoint, and so the cage edge's transform can render its side.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGP
+  data:
+    - name: "EXT-LUMEN-FRA1-bgp"
+      status: active
+      local_as: "AS3356"
+      router_id: ["203.0.113.0/31", "INTERNET"]
+      capabilities:
+        - "EXT-LUMEN-FRA1"
+    - name: "EXT-COGENT-FRA1-bgp"
+      status: active
+      local_as: "AS174"
+      router_id: ["203.0.113.2/31", "INTERNET"]
+      capabilities:
+        - "EXT-COGENT-FRA1"
+    - name: "EXT-LUMEN-PAR1-bgp"
+      status: active
+      local_as: "AS3356"
+      router_id: ["203.0.113.4/31", "INTERNET"]
+      capabilities:
+        - "EXT-LUMEN-PAR1"
+    - name: "EXT-COGENT-PAR1-bgp"
+      status: active
+      local_as: "AS174"
+      router_id: ["203.0.113.6/31", "INTERNET"]
+      capabilities:
+        - "EXT-COGENT-PAR1"
+---
+# Upserted by HFID [afi, safi]; ../04_sdwan/06_vrf_handoff.yml creates it too.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingBGPAddressFamily
+  data:
+    - afi: ipv4
+      safi: unicast
+      description: "IPv4 unicast"
+---
+# One MD5 key per transit session, as the carrier issues them. Demo-only
+# secrets, like the API token in the README.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingPassword
+  data:
+    - name: "inet-lumen-eqxfr2-key"
+      description: "BGP auth key for the eg-fr01 <-> EXT-LUMEN-FRA1 transit session"
+      password: "demo-inet-lumen-eqxfr2"
+    - name: "inet-cogent-eqxfr2-key"
+      description: "BGP auth key for the eg-fr02 <-> EXT-COGENT-FRA1 transit session"
+      password: "demo-inet-cogent-eqxfr2"
+    - name: "inet-lumen-eqxpa4-key"
+      description: "BGP auth key for the eg-pa01 <-> EXT-LUMEN-PAR1 transit session"
+      password: "demo-inet-lumen-eqxpa4"
+    - name: "inet-cogent-eqxpa4-key"
+      description: "BGP auth key for the eg-pa02 <-> EXT-COGENT-PAR1 transit session"
+      password: "demo-inet-cogent-eqxpa4"
+---
+# Transit eBGP, in VRF INTERNET on the cage edge (the local address's namespace,
+# 03_addressing.yml). It rides each edge's existing overlay process: a colocation
+# edge has no other one, and the session never joins its global peer groups.
+#
+# Named TRANSIT-*, not after the circuit: ManagedBGPPeering and
+# TopologyPhysicalCircuit both inherit ManagedGeneric, whose name HFID is shared,
+# so INET-* here would upsert onto the circuit.
+#
+# maximum_routes 100: the ISPs send a default route only. A full table (~1M
+# IPv4 routes) would not fit an N9K-C9316D-GX, which holds 512k.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGPPeering
+  data:
+    - name: "TRANSIT-LUMEN-EQXFR2"
+      description: "Internet transit eg-fr01 <-> EXT-LUMEN-FRA1 (AS3356) over INET-LUMEN-EQXFR2"
+      session_type: EBGP
+      peering_role: regular
+      ttl: 1
+      bfd_enabled: true
+      send_community: true
+      send_extended_community: false
+      maximum_routes: 100
+      address_families:
+        - ["ipv4", "unicast"]
+      bgp_processes:
+        - "eg-fr01-bgp-overlay"
+        - "EXT-LUMEN-FRA1-bgp"
+      password: "inet-lumen-eqxfr2-key"
+      interface_capabilities:
+        - ["eg-fr01", "Ethernet1/14"]
+        - ["EXT-LUMEN-FRA1", "et-0/0/0"]
+    - name: "TRANSIT-COGENT-EQXFR2"
+      description: "Internet transit eg-fr02 <-> EXT-COGENT-FRA1 (AS174) over INET-COGENT-EQXFR2"
+      session_type: EBGP
+      peering_role: regular
+      ttl: 1
+      bfd_enabled: true
+      send_community: true
+      send_extended_community: false
+      maximum_routes: 100
+      address_families:
+        - ["ipv4", "unicast"]
+      bgp_processes:
+        - "eg-fr02-bgp-overlay"
+        - "EXT-COGENT-FRA1-bgp"
+      password: "inet-cogent-eqxfr2-key"
+      interface_capabilities:
+        - ["eg-fr02", "Ethernet1/14"]
+        - ["EXT-COGENT-FRA1", "et-0/0/0"]
+    - name: "TRANSIT-LUMEN-EQXPA4"
+      description: "Internet transit eg-pa01 <-> EXT-LUMEN-PAR1 (AS3356) over INET-LUMEN-EQXPA4"
+      session_type: EBGP
+      peering_role: regular
+      ttl: 1
+      bfd_enabled: true
+      send_community: true
+      send_extended_community: false
+      maximum_routes: 100
+      address_families:
+        - ["ipv4", "unicast"]
+      bgp_processes:
+        - "eg-pa01-bgp-overlay"
+        - "EXT-LUMEN-PAR1-bgp"
+      password: "inet-lumen-eqxpa4-key"
+      interface_capabilities:
+        - ["eg-pa01", "Ethernet1/14"]
+        - ["EXT-LUMEN-PAR1", "et-0/0/0"]
+    - name: "TRANSIT-COGENT-EQXPA4"
+      description: "Internet transit eg-pa02 <-> EXT-COGENT-PAR1 (AS174) over INET-COGENT-EQXPA4"
+      session_type: EBGP
+      peering_role: regular
+      ttl: 1
+      bfd_enabled: true
+      send_community: true
+      send_extended_community: false
+      maximum_routes: 100
+      address_families:
+        - ["ipv4", "unicast"]
+      bgp_processes:
+        - "eg-pa02-bgp-overlay"
+        - "EXT-COGENT-PAR1-bgp"
+      password: "inet-cogent-eqxpa4-key"
+      interface_capabilities:
+        - ["eg-pa02", "Ethernet1/14"]
+        - ["EXT-COGENT-PAR1", "et-0/0/0"]

@@ -66,6 +66,11 @@ nodes:
     order_by:
       - source_tag__name__value
     display_label: "{{ source_tag__name__value }} → {{ destination_tag__name__value }}"
+    # Lets `infrahubctl object load` upsert a rule on re-load instead of
+    # tripping the uniqueness constraint below.
+    human_friendly_id:
+      - source_tag__name__value
+      - destination_tag__name__value
     uniqueness_constraints:
       - [source_tag, destination_tag]
     attributes:

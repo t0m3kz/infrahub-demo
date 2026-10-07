@@ -24,21 +24,24 @@ Tests the `add_pod` generator's ability to:
 - **Index**: 4
 - **Deployment Type**: middle_rack (compute and storage, no direct server connections)
 - **Spines**: 2x N9K-C9336C-FX2_SPINE
-- **Rows**: 3
-- **Max Leafs per Row**: 3
-- **Max ToRs per Row**: 0 (middle_rack deployment)
-- **Initial Racks**: 2 network racks (row 1 & 2, position 1) with leaf+tor templates
+- **Layout**: M_MIDDLE (pod sizing: spines per pod, rows)
+- **Rows**: 2 (suite ktw-1-s-4)
+- **ToRs**: none (middle_rack deployment)
+- **Initial Racks**: 2 network racks (row 1 & 2, position 1), each with 2 leafs + 2 access leafs
+- **Leaf / access-leaf templates**: N9K-C9336C-FX2_LEAF_MR + N9K-C93180YC-EX_ACCESS (NX-OS)
+- **MLAG**: `virtual` (vPC fabric peering). SONiC MC-LAG needs a physical peer-link, and access-leaf templates
+  have no mlag-peer ports, so this pod stays on NX-OS
 
 ## Expected Generator Behavior
 
 The add_pod generator will:
 
 1. Create Suite-4 (ktw-1-s-4)
-2. Create pod "DC1-1-POD-4"
+2. Create pod "DC6-1-POD-4"
 3. Create 2 spine switches
-4. Cable spines to DC1's 2 super-spines
-5. Create 2 network racks with fabric devices (4 leafs + 4 tors total)
-6. Cable leafs to spines and tors to leafs
+4. Cable spines to DC6's 2 super-spines
+5. Create 2 network racks with fabric devices (4 leafs + 4 access leafs total)
+6. Cable leafs to spines and access leafs to leafs
 7. Update deployments and relationships
 
 ## Dependencies

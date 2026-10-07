@@ -12,7 +12,7 @@ from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
 
-OVERLAY_ROLES = {"leaf", "border-leaf", "tor", "access-leaf"}
+from utils.fabric_roles import RR_CLIENT_ROLES
 
 
 class CheckCapabilityGuard(InfrahubCheck):
@@ -30,7 +30,7 @@ class CheckCapabilityGuard(InfrahubCheck):
             device_name = device.get("name", {}).get("value", "unknown")
             device_role = device.get("role", {}).get("value", "")
 
-            if device_role not in OVERLAY_ROLES:
+            if device_role not in RR_CLIENT_ROLES:
                 continue
 
             services = device.get("device_capabilities", {}).get("edges", [])

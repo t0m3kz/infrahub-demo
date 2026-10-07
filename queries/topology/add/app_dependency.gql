@@ -1,0 +1,55 @@
+# add_app_dependency: a dependency created or changed after its application
+# triggers add_app_application for that application (by id) and writes
+# nothing itself. Only the application has to be found here; the rules are
+# built by add_app_application from application.gql, which reads every
+# dependency through depends_on.
+#   - a component source reconciles the source component's application
+#   - an access-profile source reconciles the target component's application
+query app_dependency($name: String!) {
+  AppDependency(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        source {
+          node {
+            id
+            ... on AppComponent {
+              name { value }
+              parent {
+                node {
+                  id
+                  ... on AppApplication {
+                    name { value }
+                  }
+                }
+              }
+            }
+          }
+        }
+        source_profile {
+          node {
+            id
+            name { value }
+          }
+        }
+        target_fqdn { value }
+        target {
+          node {
+            id
+            ... on AppComponent {
+              parent {
+                node {
+                  id
+                  ... on AppApplication {
+                    name { value }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

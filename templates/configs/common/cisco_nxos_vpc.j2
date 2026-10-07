@@ -19,6 +19,11 @@ interface {{ member }}
 {%- endif %}
 {%- endif %}
 vpc domain {{ mlag.domain_id }}
+{#- vPC has no routed control session; the keepalive runs out-of-band over
+    mgmt0, which NX-OS always places in the built-in "management" VRF. #}
+{%- if mlag.local_management_ip and mlag.peer_management_ip %}
+  peer-keepalive destination {{ mlag.peer_management_ip }} source {{ mlag.local_management_ip }} vrf management
+{%- endif %}
 {%- if mlag.reload_delay is not none %}
   delay restore {{ mlag.reload_delay }}
 {%- endif %}

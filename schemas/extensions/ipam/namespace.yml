@@ -15,7 +15,7 @@ version: "1.0"
 #   - NON-PROD:   data-plane VRF for every other environment value (n/s/d/t all
 #                 collapse here — same collapsing rule RulesPlanner.pick_zone_name
 #                 already uses for the PROD-ZONE/NONPROD-ZONE SecurityZone split;
-#                 see RulesPlanner.pick_namespace_name)
+#                 environment p -> PROD, everything else -> NON-PROD)
 #   - INTERNET:   internet-edge VRF
 #   - MANAGEMENT: true OOB (mgmt0/console/ZTP) *and* core infrastructure services
 #                 every workload needs regardless of environment (DNS, DHCP, NTP,
@@ -39,7 +39,7 @@ version: "1.0"
 # Relationship to ManagedNetworkSegment:
 #   segment.prefix.ip_namespace → this node
 #   → VRF name:   ip_namespace.name (PROD or NON-PROD, derived from
-#                  segment.environment via RulesPlanner.pick_namespace_name)
+#                  segment.environment)
 #   → L3VNI:      ip_namespace.l3_vni (allocated from GLOBAL-L3VNI pool)
 #   → Customer:   derived from segment.owner (not stored on the namespace — a
 #                  namespace has no owner/status of its own; PROD/NON-PROD are

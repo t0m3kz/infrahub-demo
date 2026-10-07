@@ -15,6 +15,8 @@ too.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable, Literal
 
@@ -24,6 +26,7 @@ from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool, CoreNumb
 if TYPE_CHECKING:
     import logging
 
+from .helpers.pools import CUSTOMER_VLAN_ID_MAX
 from .logger import GeneratorError
 from .protocols import TopologyPod
 
@@ -133,6 +136,21 @@ class PoolMixin:
         except GraphQLError:
             pass
 
+    @asynccontextmanager
+    async def resource_lock(self, resource_key: str) -> AsyncIterator[None]:
+        """``async with self.resource_lock(key):`` — acquire_resource_lock/
+        release_resource_lock as a single call instead of a manual
+        acquire-try-finally-release triplet at every call site. Same
+        semantics, same lock; this only removes the chance of a call site
+        forgetting the ``finally`` (or the lock scope not actually matching
+        what it wraps, which is easy to miss on review in a long ``try``
+        block)."""
+        lock_id = await self.acquire_resource_lock(resource_key)
+        try:
+            yield
+        finally:
+            await self.release_resource_lock(lock_id)
+
     async def upsert_number_pool(
         self,
         pool_name: str,
@@ -193,7 +211,12 @@ class PoolMixin:
                 # (even unmodified ones), spuriously re-firing any `updated` trigger
                 # watching those other fields (e.g. index/fabric_templates/mlag_create)
                 # on every pool-reference attach.
-                await parent.save()
+                #
+                # Untracked: attaching a pool does not make this run the parent's
+                # owner. The parent is often the run's own target (DC, pod) or
+                # owned elsewhere; an owned one (an MLAG or standalone VLAN
+                # domain this run just upserted) is already tracked by that save.
+                await parent.save(update_group_context=False)
                 self.logger.info("- Updated %s with %s (id: %s)", parent_kind, parent_attr, pool.id)
 
         return pool
@@ -204,9 +227,9 @@ class PoolMixin:
         description: str,
         start_range: int,
         end_range: int,
-        parent_kind: str,
-        parent_id: str,
-        parent_attr: str,
+        parent_kind: str | None = None,
+        parent_id: str | None = None,
+        parent_attr: str | None = None,
     ) -> Any:
         """Create or update an ASN CoreNumberPool. Convenience wrapper around upsert_number_pool."""
         return await self.upsert_number_pool(
@@ -247,6 +270,142 @@ class PoolMixin:
             identifier={"name__value": [parent_pool_name]},
         )
 
+    async def ensure_firewall_context_pools(
+        self,
+        *,
+        name: str,
+        vlan_start: int,
+        parent_pool_name: str,
+        slice_prefix_length: int,
+        default_prefix_length: int,
+        vlan_end: int = CUSTOMER_VLAN_ID_MAX,
+    ) -> None:
+        """Create a fabric's/metro's FirewallContext VLAN + P2P prefix pools.
+
+        Shared by generators/topology/dc.py (per-DC) and generators/topology/
+        colocation.py (per-metro) — same two pools, same race, same fix.
+
+        Per-fabric (not global) so each one's context sub-interfaces and
+        transit links stay within its own numbering. The P2P pool itself is a
+        per-fabric SLICE allocated from a GLOBAL bootstrap pool
+        (FW-Context-P2P-IPv6/IPv4, data/bootstrap/20_dci_pools.yml) — same
+        idiom as allocate_resource_pools()'s technical/loopback pools — not a
+        fresh top-level supernet invented at runtime, which was a real bug: a
+        runtime-created IpamPrefix only exists on the branch it was created
+        on, so re-running a generator on a DIFFERENT branch (e.g. a fresh
+        scratch branch off main) found the pool object by name (globally
+        visible) but its resource prefix didn't resolve there, and every P2P
+        allocation failed with "No more resources available".
+
+        No "does the pool already exist" short-circuit: allocate_next_ip_
+        prefix's identifier makes the slice allocation idempotent, and
+        CoreIPPrefixPool.name is unique + save(allow_upsert=True) makes the
+        pool itself idempotent too — re-running this always converges on the
+        same pool with the same resource, instead of a manual existence check
+        that can permanently skip healing a pool left broken by a prior code
+        version.
+
+        That "unique + upsert" idempotency only holds for sequential re-runs,
+        though — it does not stop two truly concurrent, overlapping calls for
+        this same `name` from both checking "does a pool named X exist?",
+        both finding nothing yet, and both creating a NEW CoreIPPrefixPool
+        with the same name (a real race reproduced on allocate_resource_
+        pools()'s technical pool — see that method's own lock for the full
+        explanation). Every caller gets the lock for free here instead of
+        each generator needing to remember to add its own.
+        """
+        async with self.resource_lock(f"fw-context-pools-{name}"):
+            await self._ensure_firewall_context_pools_locked(
+                name=name,
+                vlan_start=vlan_start,
+                vlan_end=vlan_end,
+                parent_pool_name=parent_pool_name,
+                slice_prefix_length=slice_prefix_length,
+                default_prefix_length=default_prefix_length,
+            )
+
+    async def _ensure_firewall_context_pools_locked(
+        self,
+        *,
+        name: str,
+        vlan_start: int,
+        vlan_end: int,
+        parent_pool_name: str,
+        slice_prefix_length: int,
+        default_prefix_length: int,
+    ) -> None:
+        """The actual pool-creation body of ensure_firewall_context_pools(),
+        run under that method's per-`name` lock."""
+        await self.upsert_number_pool(
+            pool_name=f"{name}-fw-context-vlan-pool",
+            description=f"FirewallContext sub-interface VLAN pool for {name.upper()}",
+            start_range=vlan_start,
+            end_range=vlan_end,
+            node="ManagedFirewallContext",
+            node_attribute="vlan_id",
+        )
+
+        pool_name = f"{name}-fw-context-p2p-pool"
+        await self.ensure_sliced_pool(
+            pool_name=pool_name,
+            parent_pool_name=parent_pool_name,
+            prefix_length=slice_prefix_length,
+            role="technical",
+            kind="prefix",
+            default_prefix_length=default_prefix_length,
+            description=f"P2P pool for border-leaf <-> FirewallContext links on {name.upper()}",
+            identifier=False,
+        )
+        self.logger.info(f"Ensured FirewallContext P2P pool '{pool_name}' from '{parent_pool_name}'")
+
+    async def ensure_sliced_pool(
+        self,
+        *,
+        pool_name: str,
+        parent_pool_name: str,
+        prefix_length: int,
+        role: str,
+        kind: Literal["address", "prefix"],
+        default_prefix_length: int | None = None,
+        namespace: str = "default",
+        description: str | None = None,
+        identifier: bool = True,
+    ) -> Any:
+        """Slice one prefix out of a bootstrap parent pool and upsert a pool around it.
+
+        The slice is keyed by pool_name, so re-runs get the same prefix back.
+        default_prefix_length (what the pool hands out when a caller names no
+        length) defaults to the slice's own length. identifier=True also sets
+        the pool's own identifier to pool_name.
+        """
+        parent_pool = await self._get_parent_pool_with_retry(parent_pool_name)
+        allocated_prefix = await self.client.allocate_next_ip_prefix(
+            resource_pool=parent_pool,
+            identifier=pool_name,
+            prefix_length=prefix_length,
+            data={"role": role},
+        )
+        pool_kind, default_type = (
+            (CoreIPAddressPool, {"default_address_type": "IpamIPAddress"})
+            if kind == "address"
+            else (CoreIPPrefixPool, {"default_prefix_type": "IpamPrefix"})
+        )
+        pool = await self.client.create(
+            kind=pool_kind,
+            data={
+                "name": pool_name,
+                **({"description": description} if description else {}),
+                **default_type,
+                "default_prefix_length": prefix_length if default_prefix_length is None else default_prefix_length,
+                "ip_namespace": {"hfid": [namespace]},
+                **({"identifier": pool_name} if identifier else {}),
+                "resources": [allocated_prefix],
+            },
+        )
+        await pool.save(allow_upsert=True)
+        self.logger.info(f"- Created [{pool_kind.__name__}] {pool_name}")
+        return pool
+
     async def allocate_resource_pools(
         self,
         strategy: Literal["fabric", "pod"],
@@ -273,6 +432,36 @@ class PoolMixin:
         """
         self.logger.info("Implementing resource pools")
 
+        # Two overlapping generator runs for the SAME dc_id/pod_id (this
+        # module's own docstring: "two generator runs racing to allocate from
+        # the same parent pool need to serialize, not to create two divergent
+        # pools") can otherwise both check "does a pool named X exist?", both
+        # see nothing yet, and both client.create()+save(allow_upsert=True) a
+        # NEW CoreIPPrefixPool/CoreIPAddressPool with the identical name —
+        # Upsert only converges on an existing match, it does not prevent two
+        # concurrent creates from succeeding as two separate nodes. Both
+        # duplicates then draw from the SAME parent prefix (allocate_next_ip_
+        # prefix against it IS idempotent per identifier) but each tracks its
+        # OWN "next free" state independently, so both hand out the identical
+        # first few addresses to whichever caller happens to reference it —
+        # reproduced on DC4's hyper-spine mesh technical pool. Serialize on
+        # (strategy, id) so only one caller ever creates this fabric's/pod's
+        # pools; the other waits and then finds them already there.
+        async with self.resource_lock(f"pool-alloc-{strategy}-{id}"):
+            return await self._allocate_resource_pools_locked(
+                strategy=strategy, pools=pools, id=id, ipv6=ipv6, dual_stack=dual_stack
+            )
+
+    async def _allocate_resource_pools_locked(
+        self,
+        strategy: Literal["fabric", "pod"],
+        pools: dict[str, Any],
+        id: str,
+        ipv6: bool = False,
+        dual_stack: bool = False,
+    ) -> dict[str, Any]:
+        """The actual pool-creation body of allocate_resource_pools(), run
+        under that method's per-(strategy, id) lock."""
         fabric_name = self.fabric_name
         pod_name = self.pod_name
         pool_prefix = pod_name if pod_name else fabric_name
@@ -304,63 +493,24 @@ class PoolMixin:
             else:
                 parent_pool_name = f"{fabric_name}-{pool_name}-pool"
 
-            parent_pool = await self._get_parent_pool_with_retry(parent_pool_name)
             self.logger.info(
                 f"Allocating next IP prefix for pool '{pool_name}' (/{pool_size}) in parent '{parent_pool_name}'"
             )
-            pool_full_name = f"{pool_prefix}-{pool_name}-pool"
-
-            # Determine if this is a prefix or address pool
             is_prefix_pool = (strategy == "fabric" and pool_name in ["technical", "loopback"]) or (
                 strategy == "pod" and pool_name == "technical"
             )
-
-            # Allocate prefix from parent pool (idempotent via identifier)
-            allocated_prefix = await self.client.allocate_next_ip_prefix(
-                resource_pool=parent_pool,
-                identifier=pool_full_name,
-                prefix_length=pool_size,
-                data={
-                    "role": f"{pool_name if pool_name in ['management', 'technical', 'loopback'] else pool_name.split('-')[-1]}",
-                },
-            )
-
             # "management" here is true OOB (mgmt0/console/ZTP) — it gets the
             # MANAGEMENT VRF. "technical" (fabric P2P) and "loopback" stay in
             # `default` (the global table): EVPN-VXLAN VTEP loopbacks and
             # underlay BGP peering can't depend on a VRF being provisioned.
-            pool_namespace = "MANAGEMENT" if pool_name == "management" else "default"
-
-            if is_prefix_pool:
-                new_pool = await self.client.create(
-                    kind=CoreIPPrefixPool,
-                    data={
-                        "name": pool_full_name,
-                        "default_prefix_type": "IpamPrefix",
-                        "default_prefix_length": pool_size,
-                        "ip_namespace": {"hfid": [pool_namespace]},
-                        "identifier": pool_full_name,
-                        "resources": [allocated_prefix],
-                    },
-                )
-            else:
-                new_pool = await self.client.create(
-                    kind=CoreIPAddressPool,
-                    data={
-                        "name": pool_full_name,
-                        "default_address_type": "IpamIPAddress",
-                        "default_prefix_length": pool_size,
-                        "ip_namespace": {"hfid": [pool_namespace]},
-                        "identifier": pool_full_name,
-                        "resources": [allocated_prefix],
-                    },
-                )
-
-            await new_pool.save(allow_upsert=True)
-
-            pool_kind = "CoreIPPrefixPool" if is_prefix_pool else "CoreIPAddressPool"
-            self.logger.info(f"- Created [{pool_kind}] {new_pool.hfid}")
-
+            new_pool = await self.ensure_sliced_pool(
+                pool_name=f"{pool_prefix}-{pool_name}-pool",
+                parent_pool_name=parent_pool_name,
+                prefix_length=pool_size,
+                role=pool_name if pool_name in ["management", "technical", "loopback"] else pool_name.split("-")[-1],
+                kind="prefix" if is_prefix_pool else "address",
+                namespace="MANAGEMENT" if pool_name == "management" else "default",
+            )
             created_pools[pool_name] = new_pool
 
         # Update pod with all pool references in a single save
@@ -381,7 +531,8 @@ class PoolMixin:
                 # client.get()) — see comment on the parent.save() call above for why
                 # allow_upsert=True here would spuriously re-fire unrelated `updated`
                 # triggers (index/fabric_templates/mlag_create) on every pool attach.
-                await pod.save()
+                # Untracked: the pod is the run's target, not its output.
+                await pod.save(update_group_context=False)
                 self.logger.info(f"- Saved pod {pod.name.value} with all pool references")
 
         return created_pools

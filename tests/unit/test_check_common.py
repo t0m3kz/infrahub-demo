@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from checks.common import (
     validate_interfaces,
-    validate_management_services,
     validate_routing_password,
 )
 
@@ -41,43 +40,6 @@ class TestValidateInterfaces:
                         "name": "Ethernet1",
                         "role": "access",
                     }
-                ]
-            }
-        )
-        assert errors == []
-
-
-class TestValidateManagementServices:
-    def test_missing_required_capabilities_returns_errors(self) -> None:
-        """AAA, NTP and Syslog are mandatory management capabilities."""
-        errors = validate_management_services({"capabilities": []})
-        assert len(errors) == 3
-        assert any("ManagedAAA" in error for error in errors)
-        assert any("ManagedNTP" in error for error in errors)
-        assert any("ManagedSyslog" in error for error in errors)
-
-    def test_capability_without_servers_returns_error(self) -> None:
-        """Present capability with empty servers list should fail."""
-        errors = validate_management_services(
-            {
-                "capabilities": [
-                    {"typename": "ManagedAAA", "servers": []},
-                    {"typename": "ManagedNTP", "servers": [{"host": "1.1.1.1"}]},
-                    {"typename": "ManagedSyslog", "servers": [{"host": "2.2.2.2"}]},
-                ]
-            }
-        )
-        assert len(errors) == 1
-        assert "ManagedAAA has no servers" in errors[0]
-
-    def test_all_required_services_with_servers_pass(self) -> None:
-        """All required management capabilities with servers should pass."""
-        errors = validate_management_services(
-            {
-                "capabilities": [
-                    {"typename": "ManagedAAA", "servers": [{"host": "1.1.1.1"}]},
-                    {"typename": "ManagedNTP", "servers": [{"host": "2.2.2.2"}]},
-                    {"typename": "ManagedSyslog", "servers": [{"host": "3.3.3.3"}]},
                 ]
             }
         )

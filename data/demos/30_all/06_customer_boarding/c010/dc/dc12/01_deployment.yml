@@ -1,0 +1,21 @@
+---
+# Customer C010 development footprint in DC12, next to its production one
+# (C010-P-DC12, 03_dc/new_customers/c010/). The reporting-portal dev VMs run
+# on the shared DC12 hosts owned by the technology partner (P027), which only
+# carry non-prod workloads, so prod and non-prod never share a hypervisor.
+#
+# name is a computed attribute ({owner_org_id}-{environment}-{parent}) —
+# read-only, do not set it explicitly.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerDC
+  data:
+    - owner: "C010"
+      environment: "d"
+      status: active
+      parent: "DC12"
+      design: "M_DC"
+      member_of_groups:
+        - customer_deployments_dc

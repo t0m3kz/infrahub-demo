@@ -1,0 +1,30 @@
+---
+# External-party SGT tags — same VXLAN GPO mechanism as the internal tier
+# tags in data/bootstrap/20_security_tags.yml, extended to colocation-hosted
+# cloud/partner/SaaS interconnects. Landing these in the *same* shared
+# PROD/NON-PROD VRF as every internal tier (no dedicated namespace, no
+# TopologyExchangeGateway — see docs discussion) is what makes GPO/PBR the
+# only differentiator between "internal segment" and "external interconnect"
+# traffic, and PBR's default-redirect-to-firewall
+# (transforms/helpers/firewall.py::get_border_leaf_pbr_rules) doesn't care
+# about destination — every segment's traffic already hits the firewall
+# first, cloud/partner/SaaS-bound or not.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityTag
+  data:
+    - name: cloud-aws
+      description: "AWS transit hub reachable over a colo Direct Connect/Fabric interconnect"
+      group_id: 70
+      color: "#FF9900"
+
+    - name: partner-acme
+      description: "B2B extranet partner Acme Logistics, reached over a dedicated cross-connect"
+      group_id: 71
+      color: "#8E44AD"
+
+    - name: saas-zscaler
+      description: "Zscaler cloud security PoP, reached over a colo interconnect"
+      group_id: 72
+      color: "#1ABC9C"

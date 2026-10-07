@@ -12,22 +12,22 @@ spec:
       object_template: LINUX-SVC
       status: active
       hosting_device: dc12-pod1-server-1
-      deployment: "C005-D-DC12"
+      deployment: "C005-P-DC12"
 
     - name: c005-order-db-dc12-2
       object_template: LINUX-SVC
       status: active
       hosting_device: dc12-pod1-server-2
-      deployment: "C005-D-DC12"
+      deployment: "C005-P-DC12"
 
     - name: c005-app-backend-dc12-1
       object_template: LINUX-SVC
       status: active
       hosting_device: dc12-pod1-server-1
-      deployment: "C005-D-DC12"
+      deployment: "C005-P-DC12"
 
     - name: c005-event-bus-dc12-1
       object_template: LINUX-SVC
       status: active
       hosting_device: dc12-pod1-server-2
-      deployment: "C005-D-DC12"
+      deployment: "C005-P-DC12"

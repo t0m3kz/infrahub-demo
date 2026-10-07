@@ -11,25 +11,6 @@ fragment PhysicalInterfaceFields on DcimPhysicalInterface {
   }
 }
 
-fragment RackDeviceFields on DcimPhysicalDevice {
-  id
-  name { value }
-  role { value }
-  rack {
-    node {
-      id
-      row_index { value }
-    }
-  }
-  interfaces {
-    edges {
-      node {
-        ...PhysicalInterfaceFields
-      }
-    }
-  }
-}
-
 fragment PodFields on TopologyPod {
   id
   name { value }
@@ -52,13 +33,6 @@ fragment RackFields on LocationRack {
   pod {
     node {
       ...PodFields
-    }
-  }
-  devices(role__values: ["leaf", "tor"]) {
-    edges {
-      node {
-        ...RackDeviceFields
-      }
     }
   }
 }

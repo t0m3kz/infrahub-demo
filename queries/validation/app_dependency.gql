@@ -1,0 +1,59 @@
+# validate_app_dependency: every dependency names exactly one source and one
+# target, and opens ports that parse and that its target actually listens on.
+query app_dependency_validation {
+  AppComponent {
+    edges {
+      node {
+        fqdn { value }
+        ports { value }
+      }
+    }
+  }
+  AppDependency {
+    edges {
+      node {
+        name { value }
+        ports { value }
+        target_fqdn { value }
+        source_profile {
+          node {
+            id
+          }
+        }
+        source {
+          node {
+            id
+            ... on AppComponent {
+              fqdn { value }
+              parent {
+                node {
+                  ... on AppApplication {
+                    owner {
+                      node {
+                        name { value }
+                        egress_service {
+                          node {
+                            id
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        target {
+          node {
+            id
+            ... on AppComponent {
+              fqdn { value }
+              ports { value }
+            }
+          }
+        }
+      }
+    }
+  }
+}

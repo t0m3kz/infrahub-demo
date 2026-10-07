@@ -1,0 +1,59 @@
+{#- SONiC ConfigDB leaf PBR variable building (customer firewall / LB redirect).
+    Populates pre-initialized dicts from parent scope via in-place .update():
+    acl_table, acl_rule
+
+    One PBR-type ACL table per VLAN, bound ingress on VlanXXX — the ConfigDB
+    equivalent of the route-map the Arista/NX-OS leafs attach to the SVI, and
+    a separate table type from the zero-trust L3 ACL on the same VLAN, so the
+    permit/deny filter and the steering both apply.
+
+    Same evaluation order as the CLI route-map (higher PRIORITY matches first):
+      LB_<n>       9000-n  SRC_IP backend      -> REDIRECT:lb_nexthop (no-SNAT return path)
+      BYPASS_<n>   8000-n  DST_IP permitted    -> FORWARD (normal routing)
+      FW_REDIRECT  1000    everything else     -> REDIRECT:fw_nexthop
+    Bypass rules only exist alongside a firewall redirect, as on the CLI side.
+-#}
+{%- macro _ip_type(address) -%}{{ 'IPV6ANY' if ':' in address else 'IPV4ANY' }}{%- endmacro -%}
+{%- macro _host(address) -%}{{ address if '/' in address else address ~ ('/128' if ':' in address else '/32') }}{%- endmacro -%}
+{%- for rule in leaf_pbr_rules | default([]) -%}
+{%- set table = 'PBR-VLAN' ~ rule.vlan_id -%}
+{%- set _ = acl_table.update({
+  table: {
+    'type': 'PBR',
+    'policy_desc': 'Leaf PBR for ' ~ (rule.customer_name or 'any') ~ '/' ~ (rule.environment or 'any'),
+    'ports': ['Vlan' ~ rule.vlan_id],
+    'stage': 'ingress'
+  }
+}) -%}
+{%- if rule.lb_nexthop -%}
+{%- for ip in rule.backend_ips -%}
+{%- set _ = acl_rule.update({
+  table ~ '|LB_' ~ loop.index: {
+    'PRIORITY': (9000 - loop.index)|string,
+    'IP_TYPE': _ip_type(ip),
+    'SRC_IP': _host(ip),
+    'PACKET_ACTION': 'REDIRECT:' ~ rule.lb_nexthop
+  }
+}) -%}
+{%- endfor -%}
+{%- endif -%}
+{%- if rule.fw_nexthop -%}
+{%- for prefix in rule.bypass_prefixes -%}
+{%- set _ = acl_rule.update({
+  table ~ '|BYPASS_' ~ loop.index: {
+    'PRIORITY': (8000 - loop.index)|string,
+    'IP_TYPE': _ip_type(prefix),
+    'DST_IP': prefix,
+    'PACKET_ACTION': 'FORWARD'
+  }
+}) -%}
+{%- endfor -%}
+{%- set _ = acl_rule.update({
+  table ~ '|FW_REDIRECT': {
+    'PRIORITY': '1000',
+    'IP_TYPE': _ip_type(rule.fw_nexthop),
+    'PACKET_ACTION': 'REDIRECT:' ~ rule.fw_nexthop
+  }
+}) -%}
+{%- endif -%}
+{%- endfor -%}

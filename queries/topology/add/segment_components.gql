@@ -1,0 +1,38 @@
+# Every AppComponent on one network segment, with the instances whose cabled
+# switch ports should carry it — the union is the desired set of tagged
+# interfaces when AppInstanceSegmentGenerator reconciles the segment's
+# interface tags (generators/topology/app_instance_segment.py). Same
+# instance shape as app_component_segment.gql. Read by id from Python, not a
+# generator definition's own query.
+query segment_components($segment_id: ID!) {
+  AppComponent(network_segment__ids: [$segment_id]) {
+    edges {
+      node {
+        id
+        fqdn { value }
+        instances {
+          edges {
+            node {
+              id
+              __typename
+              ... on DcimVirtualDevice {
+                hosting_device {
+                  node {
+                    id
+                  }
+                }
+              }
+              ... on ManagedControllerVirtual {
+                hosting_device {
+                  node {
+                    id
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

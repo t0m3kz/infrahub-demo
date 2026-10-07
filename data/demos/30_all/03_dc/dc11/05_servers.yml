@@ -1,5 +1,6 @@
 ---
 # DC11 POD-1 application hosts — see ../dc10/05_servers.yml for the pattern.
+# Owned by C006, whose VMs run on them.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -7,7 +8,7 @@ spec:
   data:
     - name: dc11-pod1-server-1
       object_template: PowerEdge-R640_SERVER
-      owner: "P027"
+      owner: "C006"
       rack: lyo-1-s-1-r-1-1
       status: active
       position: 10
@@ -18,7 +19,7 @@ spec:
 
     - name: dc11-pod1-server-2
       object_template: PowerEdge-R640_SERVER
-      owner: "P027"
+      owner: "C006"
       rack: lyo-1-s-1-r-2-1
       status: active
       position: 10

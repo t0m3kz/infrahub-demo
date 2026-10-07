@@ -1,9 +1,3 @@
-{%- set _lb = namespace(name='Loopback0') -%}
-{%- for iface in interfaces -%}
-{%- if iface.name | lower | truncate(8, true, '') == 'loopback' and _lb.name == 'Loopback0' -%}
-{%- set _lb.name = iface.name -%}
-{%- endif -%}
-{%- endfor -%}
 !
 ! Arista EOS Super Spine Configuration
 ! Device: {{ hostname }}
@@ -27,12 +21,8 @@ vlan {{ vlan.vlan_id }}
 {#- All Interfaces (Loopback, Physical, Virtual) -#}
 {%- for interface in interfaces %}
 interface {{ interface.name }}
-{%- if interface.description %}
-   description {{ interface.description }}
-{%- elif interface.circuits %}
-   description {{ interface.circuits[0].circuit_type|upper }} - {{ interface.circuits[0].circuit_id }} - {{ interface.circuits[0].provider }}
-{%- elif interface.virtual_links %}
-   description {{ interface.virtual_links[0].link_type|upper }} - {{ interface.virtual_links[0].link_name }} - {{ interface.virtual_links[0].provider }}
+{%- if interface.display_description %}
+   description {{ interface.display_description }}
 {%- endif %}
 {%- include 'common/arista_eos_interface_ip.j2' %}
 {%- if interface.vlans %}
@@ -57,12 +47,12 @@ interface {{ interface.name }}
 {%- if bgp %}
 {%- from 'common/arista_eos_bgp.j2' import render_bgp %}
 ! Configure BGP
-{{ render_bgp(bgp, interfaces) }}
+{{ render_bgp(bgp, loopback_name) }}
 {%- endif %}
 
 ! Configure route-maps
 route-map RM-CONN-2-BGP permit 10
-   match interface {{ _lb.name }}
+   match interface {{ loopback_name }}
 
 {%- include 'common/arista_eos_management.j2' %}
 

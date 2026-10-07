@@ -70,6 +70,7 @@ query firewall_config(
                           ... on TopologyCustomerColocation { name { value } }
                         }
                       }
+                      served_deployments { edges { node { id } } }
                     }
                   }
                 }
@@ -128,8 +129,8 @@ query firewall_config(
                   id
                   security_zone { node { name { value } } }
                   security_tag { node { id name { value } } }
-                  ... on ManagedVlanSegment { name { value } customer_name { value } environment { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
-                  ... on ManagedVxlanSegment { name { value } customer_name { value } environment { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
+                  ... on ManagedVlanSegment { name { value } customer_name { value } environment { value } gateway { node { ip_prefix { node { prefix { value } } } } } customer_deployment { node { id } } }
+                  ... on ManagedVxlanSegment { name { value } customer_name { value } environment { value } gateway { node { ip_prefix { node { prefix { value } } } } } customer_deployments { edges { node { id } } } }
                 }
               }
               destination_segment {
@@ -137,8 +138,8 @@ query firewall_config(
                   id
                   security_zone { node { name { value } } }
                   security_tag { node { id name { value } } }
-                  ... on ManagedVlanSegment { name { value } customer_name { value } environment { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
-                  ... on ManagedVxlanSegment { name { value } customer_name { value } environment { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
+                  ... on ManagedVlanSegment { name { value } customer_name { value } environment { value } gateway { node { ip_prefix { node { prefix { value } } } } } customer_deployment { node { id } } }
+                  ... on ManagedVxlanSegment { name { value } customer_name { value } environment { value } gateway { node { ip_prefix { node { prefix { value } } } } } customer_deployments { edges { node { id } } } }
                 }
               }
               source_ip_addresses { edges { node { id address { value } } } }

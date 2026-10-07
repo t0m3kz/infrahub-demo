@@ -1,6 +1,17 @@
 """LB backend no-SNAT return-path PBR helpers for device transforms."""
 
+from collections.abc import Iterator
 from typing import Any
+
+from transforms.helpers.addressing import host_ip
+from transforms.helpers.segments import segment_hosting_candidates
+
+
+def pool_interfaces(vip: dict[str, Any]) -> Iterator[tuple[dict[str, Any], dict[str, Any]]]:
+    """(member, pool interface) for every pool interface of the VIP's members."""
+    for member in vip.get("members") or []:
+        for pool_iface in member.get("pool_interfaces") or []:
+            yield member, pool_iface
 
 
 def _flatten_deployment_lb_vips(deployment: dict[str, Any] | None) -> list[dict[str, Any]]:
@@ -35,10 +46,9 @@ def _flatten_deployment_lb_vips(deployment: dict[str, Any] | None) -> list[dict[
                     found.append({"vip": cap, "ip_address": ip_address})
         return found
 
-    entries = _entries_from_device_hosting(deployment)
-    parent = deployment.get("parent")
-    if parent:
-        entries.extend(_entries_from_device_hosting(parent))
+    entries = [
+        entry for hosting in segment_hosting_candidates(deployment) for entry in _entries_from_device_hosting(hosting)
+    ]
 
     deduped: dict[tuple[str, str], dict[str, Any]] = {}
     for entry in entries:
@@ -85,20 +95,19 @@ def get_lb_backend_pbr_rules(
         if not seg_id:
             continue
 
-        address = (entry.get("ip_address") or {}).get("address")
-        if address and seg_id not in nexthop_by_segment:
-            nexthop_by_segment[seg_id] = address.split("/")[0]
+        nexthop = host_ip((entry.get("ip_address") or {}).get("address"))
+        if nexthop and seg_id not in nexthop_by_segment:
+            nexthop_by_segment[seg_id] = nexthop
 
         identity_by_segment.setdefault(
             seg_id, (backend_segment.get("customer_name"), backend_segment.get("environment"))
         )
 
         member_ips = backend_ips_by_segment.setdefault(seg_id, set())
-        for member in vip.get("members") or []:
-            for pool_iface in member.get("pool_interfaces") or []:
-                member_address = (pool_iface.get("ip_address") or {}).get("address")
-                if member_address:
-                    member_ips.add(member_address.split("/")[0])
+        for _, pool_iface in pool_interfaces(vip):
+            member_ip = host_ip((pool_iface.get("ip_address") or {}).get("address"))
+            if member_ip:
+                member_ips.add(member_ip)
 
     if not nexthop_by_segment:
         return []

@@ -9,7 +9,7 @@
             "value": "DC1-POD1-L1"
           },
           "role": {
-            "value": "border_leaf"
+            "value": "border-leaf"
           },
           "platform": {
             "node": {
@@ -31,7 +31,7 @@
           "primary_address": {
             "node": {
               "address": {
-                "value": "10.0.2.1/32"
+                "value": "172.16.0.1/32"
               },
               "ip_namespace": {
                 "node": {
@@ -50,6 +50,7 @@
               {
                 "node": {
                   "__typename": "ManagedMLAG",
+                  "id": "mlag-dom-1",
                   "name": {
                     "value": "DC1-POD1-L1-L2-MLAG"
                   },
@@ -68,6 +69,38 @@
                         "node": {
                           "name": {
                             "value": "DC1-POD1-L1"
+                          },
+                          "role": {
+                            "value": "border-leaf"
+                          },
+                          "primary_address": {
+                            "node": {
+                              "address": {
+                                "value": "172.16.0.1/32"
+                              }
+                            }
+                          },
+                          "interfaces": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "__typename": "DcimVirtualInterface",
+                                  "name": {
+                                    "value": "Vlan4094"
+                                  },
+                                  "role": {
+                                    "value": "mlag-control"
+                                  },
+                                  "ip_address": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.254.0.0/31"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
                           }
                         }
                       },
@@ -75,6 +108,38 @@
                         "node": {
                           "name": {
                             "value": "DC1-POD1-L2"
+                          },
+                          "role": {
+                            "value": "border-leaf"
+                          },
+                          "primary_address": {
+                            "node": {
+                              "address": {
+                                "value": "172.16.0.2/32"
+                              }
+                            }
+                          },
+                          "interfaces": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "__typename": "DcimVirtualInterface",
+                                  "name": {
+                                    "value": "Vlan4094"
+                                  },
+                                  "role": {
+                                    "value": "mlag-control"
+                                  },
+                                  "ip_address": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.254.0.1/31"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
                           }
                         }
                       }
@@ -210,7 +275,7 @@
                 "node": {
                   "__typename": "DcimLAGInterface",
                   "name": {
-                    "value": "Port-Channel100"
+                    "value": "PortChannel100"
                   },
                   "description": {
                     "value": "MLAG Peer-Link"
@@ -313,6 +378,126 @@
                   },
                   "role": {
                     "value": "mlag-peer"
+                  },
+                  "interface_type": {
+                    "value": "10gbase-x-sfpp"
+                  },
+                  "mtu": {
+                    "value": 9000
+                  },
+                  "ip_address": {
+                    "node": null
+                  },
+                  "cable": {
+                    "node": null
+                  },
+                  "interface_capabilities": {
+                    "edges": []
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimVirtualInterface",
+                  "name": {
+                    "value": "Vlan4094"
+                  },
+                  "description": {
+                    "value": "MLAG control \u2014 DC1-POD1-L1-L2-MLAG"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "mlag-control"
+                  },
+                  "ip_address": {
+                    "node": {
+                      "address": {
+                        "value": "10.254.0.0/31"
+                      },
+                      "ip_namespace": {
+                        "node": {
+                          "name": {
+                            "value": "default"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "interface_capabilities": {
+                    "edges": []
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimLAGInterface",
+                  "name": {
+                    "value": "PortChannel101"
+                  },
+                  "description": {
+                    "value": "MLAG Peer-Link"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "lag"
+                  },
+                  "lag_id": {
+                    "value": 101
+                  },
+                  "lacp_mode": {
+                    "value": "active"
+                  },
+                  "mtu": {
+                    "value": 9000
+                  },
+                  "minimum_links": {
+                    "value": 1
+                  },
+                  "ip_address": {
+                    "node": null
+                  },
+                  "mlag_domain": {
+                    "node": {
+                      "id": "mlag-dom-1",
+                      "name": {
+                        "value": "DC1-POD1-L1-L2-MLAG"
+                      }
+                    }
+                  },
+                  "member_interfaces": {
+                    "edges": [
+                      {
+                        "node": {
+                          "name": {
+                            "value": "Ethernet10"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "interface_capabilities": {
+                    "edges": []
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimPhysicalInterface",
+                  "name": {
+                    "value": "Ethernet10"
+                  },
+                  "description": {
+                    "value": "MLAG host member"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "customer"
                   },
                   "interface_type": {
                     "value": "10gbase-x-sfpp"

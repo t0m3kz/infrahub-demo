@@ -1,4 +1,13 @@
 {#- Cisco ASA — zone-based firewall configuration -#}
+{#- One ACL per source zone; a context has a single customer-pbr interface,
+    so its rules share one ACL bound there (acl_name). -#}
+{%- macro access_lists(policies, acl_name=none) %}
+{%- for policy in policies %}
+{%- for rule in policy.rules %}
+access-list {{ acl_name or ((rule.src_zone or 'global') + '-in') }} extended {{ 'permit' if rule.action == 'permit' else 'deny' }} {{ rule.protocol }} {{ rule.src or 'any' }} {{ rule.dst or 'any' }}{{ ' ' + rule.dst_port if rule.dst_port else '' }}{{ ' log' if rule.log else '' }}
+{%- endfor %}
+{%- endfor %}
+{%- endmacro -%}
 !
 hostname {{ name }}
 !
@@ -38,12 +47,7 @@ route {{ route.interface }} {{ route.destination | replace('/', ' ') }} {{ route
 {%- endif %}
 {%- if zone_policies %}
 ! --- Access Control Lists ---
-{%- for policy in zone_policies %}
-{%- for rule in policy.rules %}
-{%- set acl_name = (rule.src_zone or 'global') + '-in' %}
-access-list {{ acl_name }} extended {{ 'permit' if rule.action == 'permit' else 'deny' }} {{ rule.protocol }} {{ rule.src or 'any' }} {{ rule.dst or 'any' }}{{ ' ' + rule.dst_port if rule.dst_port else '' }}{{ ' log' if rule.log else '' }}
-{%- endfor %}
-{%- endfor %}
+{{- access_lists(zone_policies) }}
 !
 ! --- Access Groups ---
 {%- for iface in fw_interfaces %}
@@ -90,6 +94,15 @@ interface {{ context.parent_interface.name }}.{{ context.vlan_id }}
  no shutdown
 !
 {%- endif %}
+{%- endfor %}
+{%- for context in contexts if context.policies %}
+changeto context {{ context.name }}
+! --- Access Control Lists in context {{ context.name }} ---
+{{- access_lists(context.policies, 'customer-pbr-in') }}
+{%- if context.vlan_id and context.parent_interface.name and context.ip_address %}
+access-group customer-pbr-in in interface customer-pbr
+{%- endif %}
+!
 {%- endfor %}
 {%- endif %}
 {%- if ha %}

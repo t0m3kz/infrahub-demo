@@ -8,7 +8,11 @@ Covers:
 
 from __future__ import annotations
 
-from transforms.helpers.mlag import get_mlag
+from pathlib import Path
+
+import jinja2
+
+from transforms.helpers.mlag import get_mlag, get_sonic_mlag_config
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -93,6 +97,91 @@ class TestGetMlagDomainExtraction:
         assert result is not None
         assert result["devices"] == []
 
+    def test_control_addresses_come_from_mlag_control_svi(self) -> None:
+        """Control IPs come from the role=mlag-control SVI; management IPs stay separate."""
+        cap = _mlag_cap()
+        cap["devices"] = [
+            {
+                "name": "leaf-1",
+                "role": "leaf",
+                "primary_address": {"address": "192.0.2.1/32"},
+                "interfaces": [
+                    {"name": "Port-Channel100", "role": "mlag-peer"},
+                    {"name": "Vlan4094", "role": "mlag-control", "ip_address": {"address": "fd00:2400::/127"}},
+                ],
+            },
+            {
+                "name": "leaf-2",
+                "role": "leaf",
+                "primary_address": {"address": "192.0.2.2/32"},
+                "interfaces": [
+                    {"name": "Vlan4094", "role": "mlag-control", "ip_address": {"address": "fd00:2400::1/127"}},
+                ],
+            },
+        ]
+        result = get_mlag([cap], device_name="leaf-2")
+        assert result is not None
+        assert result["control_interface"] == "Vlan4094"
+        assert result["local_address"] == "fd00:2400::1/127"
+        assert result["local_ip"] == "fd00:2400::1"
+        assert result["peer_ip"] == "fd00:2400::"
+        assert result["local_management_ip"] == "192.0.2.2"
+        assert result["peer_management_ip"] == "192.0.2.1"
+
+    def test_virtual_peer_link_loopback_carries_control_address(self) -> None:
+        """Without a control SVI, the addressed virtual peer-link loopback is the control interface."""
+        cap = _mlag_cap()
+        cap["devices"] = [
+            {
+                "name": f"leaf-{idx}",
+                "role": "leaf",
+                "interfaces": [
+                    {"name": "Loopback100", "role": "mlag-peer", "ip_address": {"address": f"fd00:2400::{idx}/128"}}
+                ],
+            }
+            for idx in (1, 2)
+        ]
+        result = get_mlag([cap], device_name="leaf-1")
+        assert result is not None
+        assert result["control_interface"] == "Loopback100"
+        assert result["local_ip"] == "fd00:2400::1"
+        assert result["peer_ip"] == "fd00:2400::2"
+
+    def test_l2_leaf_uses_control_svi_not_management(self) -> None:
+        """l2-leafs get a control SVI like any other MLAG pair — no management-IP fallback."""
+        cap = _mlag_cap()
+        cap["capabilities"] = [
+            {
+                "name": f"l2-{idx}",
+                "role": "l2-leaf",
+                "primary_address": {"address": f"192.0.2.{idx}/32"},
+                "interfaces": [
+                    {"name": "Vlan4094", "role": "mlag-control", "ip_address": {"address": f"10.254.0.{idx - 1}/31"}}
+                ],
+            }
+            for idx in (1, 2)
+        ]
+        del cap["devices"]
+        result = get_mlag([cap], device_name="l2-1")
+        assert result is not None
+        assert result["local_ip"] == "10.254.0.0"
+        assert result["peer_ip"] == "10.254.0.1"
+        assert result["peer_management_ip"] == "192.0.2.2"
+
+    def test_no_control_address_for_vpc(self) -> None:
+        """vPC pairs have no control interface; only management IPs are populated."""
+        cap = _mlag_cap()
+        cap["devices"] = [
+            {"name": f"nx-{idx}", "primary_address": {"address": f"192.0.2.{idx}/32"}, "interfaces": []}
+            for idx in (1, 2)
+        ]
+        result = get_mlag([cap], device_name="nx-1")
+        assert result is not None
+        assert result["control_interface"] is None
+        assert result["local_ip"] is None
+        assert result["peer_ip"] is None
+        assert result["peer_management_ip"] == "192.0.2.2"
+
 
 class TestGetMlagPeerLink:
     def test_peer_link_found_by_role(self) -> None:
@@ -135,6 +224,122 @@ class TestGetMlagPeerLink:
         result = get_mlag([_mlag_cap()], ifaces)
         assert result is not None
         assert result["peer_link"] == "Ethernet1/33"
+
+
+def _sonic_mlag(**overrides: object) -> dict:
+    return {
+        "domain_id": 1,
+        "control_interface": "Vlan4094",
+        "local_address": "10.254.0.0/31",
+        "local_ip": "10.254.0.0",
+        "peer_ip": "10.254.0.1",
+        "local_management_ip": "192.0.2.1",
+        "peer_management_ip": "192.0.2.2",
+        "peer_link": "PortChannel100",
+        "peer_link_lag_id": 100,
+        "peer_link_members": ["Ethernet33", "Ethernet34"],
+        "mclag_interfaces": [{"name": "PortChannel101", "members": ["Ethernet10"]}],
+        **overrides,
+    }
+
+
+class TestSonicMlagConfig:
+    def test_domain_and_portchannel_members(self) -> None:
+        """MCLAG_DOMAIN uses the control SVI IPv4 addresses, not management."""
+        config = get_sonic_mlag_config(_sonic_mlag())
+        assert config["MCLAG_DOMAIN"] == {
+            "1": {"source_ip": "10.254.0.0", "peer_ip": "10.254.0.1", "peer_link": "PortChannel100"}
+        }
+        assert config["MCLAG_INTERFACE"] == {"1|PortChannel101": {"if_type": "PortChannel"}}
+        assert config["PORTCHANNEL"] == {
+            "PortChannel100": {"admin_status": "up"},
+            "PortChannel101": {"admin_status": "up"},
+        }
+        assert config["PORTCHANNEL_MEMBER"] == {
+            "PortChannel100|Ethernet33": {},
+            "PortChannel100|Ethernet34": {},
+            "PortChannel101|Ethernet10": {},
+        }
+
+    def test_control_svi_tables(self) -> None:
+        """The control SVI's VLAN, tagged peer-link membership and /31 are emitted."""
+        config = get_sonic_mlag_config(_sonic_mlag())
+        assert config["VLAN"] == {"Vlan4094": {"vlanid": "4094", "admin_status": "up"}}
+        assert config["VLAN_MEMBER"] == {"Vlan4094|PortChannel100": {"tagging_mode": "tagged"}}
+        assert config["VLAN_INTERFACE"] == {"Vlan4094": {}, "Vlan4094|10.254.0.0/31": {}}
+
+    def test_ipv6_control_address_fails(self) -> None:
+        """SONiC ICCP only accepts IPv4 — an IPv6 control address is rejected."""
+        from ipaddress import AddressValueError
+
+        import pytest
+
+        with pytest.raises(AddressValueError):
+            get_sonic_mlag_config(
+                _sonic_mlag(local_address="fd00:2400::/127", local_ip="fd00:2400::", peer_ip="fd00:2400::1")
+            )
+
+    def test_missing_control_addresses_or_physical_peer_link_fails(self) -> None:
+        """Missing control addresses or a virtual peer-link are rejected."""
+        import pytest
+
+        with pytest.raises(ValueError, match="requires a domain"):
+            get_sonic_mlag_config({"domain_id": 1, "peer_link": "Loopback100"})
+        with pytest.raises(ValueError, match="requires a domain"):
+            get_sonic_mlag_config(_sonic_mlag(peer_link_lag_id=None))
+
+    def test_duplicate_addresses_and_out_of_range_domain_fail(self) -> None:
+        """Identical peer IPs and out-of-range domain IDs are rejected."""
+        import pytest
+
+        config = _sonic_mlag(peer_ip="10.254.0.0")
+        with pytest.raises(ValueError, match="distinct control IPs"):
+            get_sonic_mlag_config(config)
+        with pytest.raises(ValueError, match="between 1 and 4095"):
+            get_sonic_mlag_config({**config, "domain_id": 4096})
+
+
+def _render_common(template_name: str, **context: object) -> str:
+    template_dir = Path(__file__).parents[2] / "templates" / "configs"
+    env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(template_dir)))
+    return env.get_template(template_name).render(**context)
+
+
+def test_cisco_vpc_keepalive_uses_management_vrf() -> None:
+    """vPC keepalive runs over the management IPs in the built-in management VRF."""
+    rendered = _render_common(
+        "common/cisco_nxos_vpc.j2",
+        mlag={
+            "domain_id": 1,
+            "peer_link": "port-channel100",
+            "local_management_ip": "192.0.2.1",
+            "peer_management_ip": "192.0.2.2",
+            "reload_delay": 300,
+            "reload_delay_non_mlag": 330,
+        },
+    )
+    assert "vpc peer-link" in rendered
+    assert "peer-keepalive destination 192.0.2.2 source 192.0.2.1 vrf management" in rendered
+
+
+def test_arista_mlag_control_svi_and_peer_addresses() -> None:
+    """Arista gets the IPv6 control address on Vlan4094, peer-address and a management heartbeat."""
+    rendered = _render_common(
+        "common/arista_eos_mlag.j2",
+        mlag={
+            "domain_id": 1,
+            "peer_link": "Port-Channel100",
+            "control_interface": "Vlan4094",
+            "local_address": "fd00:2400::/127",
+            "peer_ip": "fd00:2400::1",
+            "peer_management_ip": "192.0.2.2",
+            "reload_delay": 300,
+            "reload_delay_non_mlag": 330,
+        },
+    )
+    assert "interface Vlan4094\n   description MLAG Peer-Link SVI\n   ipv6 address fd00:2400::/127" in rendered
+    assert "   peer-address fd00:2400::1\n" in rendered
+    assert "   peer-address heartbeat 192.0.2.2\n" in rendered
 
 
 class TestGetMlagFirstCapabilityWins:
@@ -182,7 +387,7 @@ class TestDC1Pod1MLAGScenario:
             {"name": "Ethernet1/2", "role": "uplink"},
             {"name": "Ethernet1/33", "role": "mlag-peer"},
             {"name": "Ethernet1/34", "role": "mlag-peer"},
-            {"name": "Port-Channel100", "role": "mlag-peer"},
+            {"name": "Port-Channel100", "role": "mlag-peer", "lag_id": 100},
         ]
 
     def test_mlag_domain_extracted(self) -> None:
@@ -194,7 +399,7 @@ class TestDC1Pod1MLAGScenario:
     def test_peer_link_is_port_channel100(self) -> None:
         result = get_mlag(self._l1_caps(), self._l1_interfaces())
         assert result is not None
-        assert result["peer_link"] == "Ethernet1/33"
+        assert result["peer_link"] == "Port-Channel100"
 
     def test_peer_devices_include_both_leaves(self) -> None:
         result = get_mlag(self._l1_caps(), self._l1_interfaces())

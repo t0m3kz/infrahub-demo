@@ -10,7 +10,7 @@
     {
       "name": {{ (rule.name or rule.acl_name) | tojson }},
       "rule_order": {{ loop.index }},
-      "action": {{ ('allow' if rule.action in ('allow', 'bypass') else 'block') | tojson }},
+      "action": {{ rule.verdict | tojson }},
       "domains": {{ rule.destinations | tojson }},
       "description": {{ (rule.description or '') | tojson }}
     }{{ "," if not loop.last }}

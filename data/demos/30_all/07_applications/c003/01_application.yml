@@ -19,33 +19,25 @@ spec:
         kind: AppComponent
         data:
           - name: api-frontend
+            fqdn: frontend.custody-api.c003.demo.local
             component_type: frontend
+            ports:
+              - tcp/443
             network_segment: c003-vaultex-subnet-prod-p
             instances:
               - c003-api-frontend-euc1-1
               - c003-api-frontend-euc1-2
-            service_ports:
-              data:
-                - port: 443
-                  protocol: tcp
             member_of_groups:
               - app_components
 
           - name: api-backend
+            fqdn: backend.custody-api.c003.demo.local
             component_type: backend
+            ports:
+              - tcp/8443
             network_segment: c003-vaultex-subnet-prod-p
             instances:
               - c003-api-backend-euc1-1
               - c003-api-backend-euc1-2
-            service_ports:
-              data:
-                - port: 8443
-                  protocol: tcp
-            children:
-              kind: AppEndpoint
-              data:
-                - name: api-backend-internal
-                  endpoint_type: internal_service
-                  fqdn: backend.custody-api.c003.demo.local
             member_of_groups:
               - app_components

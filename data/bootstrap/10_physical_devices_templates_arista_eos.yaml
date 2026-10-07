@@ -234,12 +234,20 @@ spec:
             name: Ethernet[1-10]/1
             role: customer
             interface_type: 100gbase-x-qsfp28
-          - template_name: DCS-7050CX3-32C-R_LEAF_MIXED_Ethernet[11-28]/1
-            name: Ethernet[11-28]/1
+          - template_name: DCS-7050CX3-32C-R_LEAF_MIXED_Ethernet[11-26]/1
+            name: Ethernet[11-26]/1
             role: downlink
             interface_type: 100gbase-x-qsfp28
-          - template_name: DCS-7050CX3-32C-R_LEAF_MIXED_Ethernet[29-30]/1
-            name: Ethernet[29-30]/1
+          # 4 uplinks, taken out of what used to be 18 downlinks (Ethernet[11-28]/1)
+          # with only 2 uplinks. A leaf dual-homes to EVERY spine in its pod, so 2
+          # uplinks capped this template at a 2-spine pod — and DC4's S_MIXED pod has
+          # 4. Every other leaf/tor template in the fleet already has 4-8 uplinks,
+          # including this one's NX-OS counterpart N9K-C9336C-FX2_LEAF_MIXED; 2 was
+          # the outlier. The downlink block is where the slack was: a mixed pod's
+          # leaf pair fans out to ToRs at 1 port per ToR, so 16 is still far beyond
+          # any pod layout here.
+          - template_name: DCS-7050CX3-32C-R_LEAF_MIXED_Ethernet[27-30]/1
+            name: Ethernet[27-30]/1
             role: uplink
             interface_type: 100gbase-x-qsfp28
           - template_name: DCS-7050CX3-32C-R_LEAF_MIXED_Ethernet[31-32]/1

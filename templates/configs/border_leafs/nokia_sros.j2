@@ -1,90 +1,157 @@
-#!/usr/bin/env python3
-# Nokia SROS Border Leaf Configuration Template
-# Device: {{ hostname }}
-# Generated configuration
-
-{#- Nokia SROS Configuration -#}
-A admin configure system hostname "{{ hostname }}"
-A admin configure system dns resolver admin-state enable
+{#- Nokia SR OS Border-Leaf Configuration — flat MD-CLI form (every command
+    is a full path from "configure", no nested block/exit), consistent with
+    every common/nokia_sros_*.j2 fragment this file includes. Same VXLAN/EVPN
+    shape as leafs/nokia_sros.j2 (border-leaf is a leaf with EVPN relay), plus
+    border-leaf PBR — no zero-trust per-segment ACLs here, those are a leaf
+    concern. -#}
+configure system hostname "{{ hostname }}"
+configure system dns resolver admin-state enable
 {%- include 'common/nokia_sros_mclag.j2' %}
-A admin configure router "Base" admin-state enable
-A admin configure router "Base" router-id "{{ bgp[0].router_id.address.split('/')[0] if bgp else '0.0.0.0' }}"
+configure router "Base" admin-state enable
+configure router "Base" router-id "{{ bgp[0].router_ip if bgp else '0.0.0.0' }}"
 
-{#- Loopback Interface -#}
-A admin configure port "system" admin-state enable
-A admin configure port "system" mtu 9212
-A admin configure router "Base" interface "system" admin-state enable
-A admin configure router "Base" interface "system" ip-mtu 9000
-A admin configure router "Base" interface "system" ipv4 admin-state enable
-A admin configure router "Base" interface "system" ipv4 primary address "{{ bgp[0].router_id.address if bgp else '0.0.0.1/32' }}"
+{# Loopback Interface #}
+configure port "system" admin-state enable
+configure port "system" mtu 9212
+configure router "Base" interface "system" admin-state enable
+configure router "Base" interface "system" ip-mtu 9000
+configure router "Base" interface "system" ipv4 admin-state enable
+configure router "Base" interface "system" ipv4 primary address "{{ bgp[0].router_id.address if bgp else '0.0.0.1/32' }}"
 
-{#- VRF Configuration -#}
-A admin configure service vprn 1000 customer 1 admin-state enable
-A admin configure service vprn 1000 route-distinguisher auto
-A admin configure service vprn 1000 vrf-import policy "TENANT_IMPORT"
-A admin configure service vprn 1000 vrf-export policy "TENANT_EXPORT"
-
-{#- External VRF Configuration -#}
-A admin configure service vprn 2000 customer 1 admin-state enable
-A admin configure service vprn 2000 route-distinguisher auto
-A admin configure service vprn 2000 vrf-import policy "EXTERNAL_IMPORT"
-A admin configure service vprn 2000 vrf-export policy "EXTERNAL_EXPORT"
-
-{#- VLAN Configuration -#}
-{%- if vlans and vlans|length > 0 %}
-{%- for vlan in vlans %}
-A admin configure service vpls {{ vlan.id }} customer 1 admin-state enable
-A admin configure service vpls {{ vlan.id }} description "{{ vlan.name }}"
-{%- endfor %}
-{%- endif %}
-
-{#- Physical Interfaces -#}
-{%- for interface in interfaces %}
-A admin configure port "{{ interface.name }}" admin-state enable
-A admin configure port "{{ interface.name }}" mtu 9212
-{%- if interface.role == 'external' %}
-A admin configure service vprn 2000 interface "{{ interface.name }}" admin-state enable
-A admin configure service vprn 2000 interface "{{ interface.name }}" mtu 9000
-A admin configure service vprn 2000 interface "{{ interface.name }}" description "{{ interface.description or interface.role|title }}"
-{%- if interface.ip_addresses %}
-A admin configure service vprn 2000 interface "{{ interface.name }}" ipv4 admin-state enable
-{%- for ip in interface.ip_addresses %}
-A admin configure service vprn 2000 interface "{{ interface.name }}" ipv4 primary address "{{ ip.address }}"
-{%- endfor %}
-{%- endif %}
+{# Physical Interfaces #}
+{%- for interface in interfaces if interface.role != 'mlag-peer' and 'loopback' not in interface.name|lower %}
+configure port "{{ interface.name }}" admin-state enable
+configure port "{{ interface.name }}" mtu 9212
+{%- if interface.vlans %}
+configure port "{{ interface.name }}" ethernet encap-type dot1q
 {%- else %}
-A admin configure router "Base" interface "{{ interface.name }}" admin-state enable
-A admin configure router "Base" interface "{{ interface.name }}" mtu 9000
-A admin configure router "Base" interface "{{ interface.name }}" description "{{ interface.description or interface.role|title }}"
+configure router "Base" interface "{{ interface.name }}" admin-state enable
+configure router "Base" interface "{{ interface.name }}" mtu 9000
+configure router "Base" interface "{{ interface.name }}" description "{{ interface.description or interface.role|title }}"
 {%- if interface.ip_addresses %}
-A admin configure router "Base" interface "{{ interface.name }}" ipv4 admin-state enable
+configure router "Base" interface "{{ interface.name }}" ipv4 admin-state enable
 {%- for ip in interface.ip_addresses %}
-A admin configure router "Base" interface "{{ interface.name }}" ipv4 primary address "{{ ip.address }}"
+configure router "Base" interface "{{ interface.name }}" ipv4 primary address "{{ ip.address }}"
+{%- endfor %}
+{%- endif %}
+{%- if interface.get('ospf') %}
+configure router "Base" ospf 1 interface "{{ interface.name }}" admin-state enable
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+
+{%- include 'common/nokia_sros_ospf.j2' -%}
+{%- include 'common/nokia_sros_bgp.j2' -%}
+{%- if vxlan and vxlan.enabled %}
+!
+! VXLAN / EVPN — one "vpls" service per L2 VNI, bridged over the loopback VTEP
+!
+{%- for mapping in vxlan.l2_vni_mappings %}
+configure service vpls "vpls-{{ mapping.vni }}" admin-state enable
+configure service vpls "vpls-{{ mapping.vni }}" service-id {{ mapping.vni }}
+configure service vpls "vpls-{{ mapping.vni }}" customer 1
+{%- if vxlan.vtep.ipv4 %}
+configure service vpls "vpls-{{ mapping.vni }}" vxlan instance 1 source-address "{{ vxlan.vtep.ipv4 }}"
+{%- endif %}
+configure service vpls "vpls-{{ mapping.vni }}" vxlan instance 1 vni {{ mapping.vni }}
+configure service vpls "vpls-{{ mapping.vni }}" vxlan instance 1 create
+{%- if vxlan.evpn and vxlan.evpn.enabled %}
+configure service vpls "vpls-{{ mapping.vni }}" bgp-evpn evi {{ mapping.vni }}
+configure service vpls "vpls-{{ mapping.vni }}" bgp-evpn vxlan bgp-instance 1 vxlan-instance 1
+configure service vpls "vpls-{{ mapping.vni }}" bgp-evpn vxlan bgp-instance 1 admin-state enable
+{%- endif %}
+{%- if vxlan.evpn.rd_format %}
+configure service vpls "vpls-{{ mapping.vni }}" bgp instance 1 route-distinguisher "{{ vxlan.evpn.rd_format | replace('{vni}', mapping.vni | string) }}"
+{%- endif %}
+{%- if mapping.route_target %}
+configure service vpls "vpls-{{ mapping.vni }}" bgp instance 1 route-target export "target:{{ mapping.route_target }}"
+configure service vpls "vpls-{{ mapping.vni }}" bgp instance 1 route-target import "target:{{ mapping.route_target }}"
+{%- endif %}
+{%- for interface in interfaces if interface.vlans and interface.vlans[0] == mapping.vlan_id %}
+configure service vpls "vpls-{{ mapping.vni }}" sap {{ interface.name }}:{{ mapping.vlan_id }} admin-state enable
+configure service vpls "vpls-{{ mapping.vni }}" sap {{ interface.name }}:{{ mapping.vlan_id }} create
+{%- endfor %}
+!
+{%- endfor %}
+{%- if vxlan.l3_vni_mappings %}
+!
+! Tenant VRF — one "vprn" per L3 VNI, IRB into each bridged VNI above
+!
+{%- for l3_mapping in vxlan.l3_vni_mappings %}
+configure service vprn {{ l3_mapping.l3_vni }} admin-state enable
+configure service vprn {{ l3_mapping.l3_vni }} customer 1
+{%- if vxlan.evpn.rd_format %}
+configure service vprn {{ l3_mapping.l3_vni }} bgp instance 1 route-distinguisher "{{ vxlan.evpn.rd_format | replace('{vni}', l3_mapping.l3_vni | string) }}"
+{%- endif %}
+{%- if vxlan.evpn.rt_format %}
+configure service vprn {{ l3_mapping.l3_vni }} bgp instance 1 route-target export "target:{{ vxlan.evpn.rt_format | replace('{vni}', l3_mapping.l3_vni | string) }}"
+configure service vprn {{ l3_mapping.l3_vni }} bgp instance 1 route-target import "target:{{ vxlan.evpn.rt_format | replace('{vni}', l3_mapping.l3_vni | string) }}"
+{%- endif %}
+{%- include 'common/nokia_sros_vprn_import.j2' %}
+configure service vprn {{ l3_mapping.l3_vni }} bgp-evpn evi {{ l3_mapping.l3_vni }}
+configure service vprn {{ l3_mapping.l3_vni }} bgp-evpn vxlan bgp-instance 1 vxlan-instance 1
+configure service vprn {{ l3_mapping.l3_vni }} bgp-evpn vxlan bgp-instance 1 admin-state enable
+{%- endfor %}
+{%- endif %}
+{%- if vlans %}
+!
+! IRB Interfaces (anycast gateway) — one per bridged VLAN with a gateway
+!
+{%- for vlan in vlans if vlan.gateway_ip or vlan.gateway_ipv6 %}
+{%- set vni = vlan.get('vni', vlan.vlan_id) %}
+configure service vprn {{ vlan.get('l3_vni', vni) }} interface "int-vpls-{{ vni }}" admin-state enable
+configure service vprn {{ vlan.get('l3_vni', vni) }} interface "int-vpls-{{ vni }}" vpls "vpls-{{ vni }}"
+{%- if vxlan.anycast_gateway and vxlan.anycast_gateway.enabled %}
+configure service vprn {{ vlan.get('l3_vni', vni) }} interface "int-vpls-{{ vni }}" mac "{{ vxlan.anycast_gateway.mac }}"
+{%- endif %}
+{%- if vlan.gateway_ip %}
+configure service vprn {{ vlan.get('l3_vni', vni) }} interface "int-vpls-{{ vni }}" ipv4 primary-address "{{ vlan.gateway_ip }}"
+{%- endif %}
+{%- if vlan.gateway_ipv6 %}
+configure service vprn {{ vlan.get('l3_vni', vni) }} interface "int-vpls-{{ vni }}" ipv6 primary-address "{{ vlan.gateway_ipv6 }}"
+{%- endif %}
+!
 {%- endfor %}
 {%- endif %}
 {%- endif %}
-{%- if interface.role == 'server' and interface.get('vlan') %}
-A admin configure port "{{ interface.name }}" ethernet encap-type dot1q
-A admin configure port "{{ interface.name }}" ethernet access vlan {{ interface.vlan }}
-{%- endif %}
-{% endfor %}
-
-{#- OSPF Configuration -#}
-{% include 'common/nokia_sros_ospf.j2' %}
-
-{#- BGP Configuration -#}
-{% include 'common/nokia_sros_bgp.j2' %}
 
 {%- if vrf_gateways %}
 !
 ! VRF Default Routes — inter-VRF hop on this device (TopologyRoutedExchange)
 !
 {%- for vrf, nexthop in vrf_gateways.items() %}
-A admin configure service vprn 1000 static-routes route 0.0.0.0/0 next-hop {{ nexthop }} admin-state enable
+configure service vprn {{ vrf }} static-routes route 0.0.0.0/0 next-hop "{{ nexthop }}" admin-state enable
+{%- endfor %}
+!
+{%- endif %}
+
+{%- if border_leaf_pbr_rules %}
+!
+! Border-leaf PBR (.dev/scenariusze.txt "CTS PBR + SINGLE VRF") — default-
+! redirect every segment's traffic to its firewall context's nexthop. SR OS
+! has no equivalent to Cisco's in-band CTS/SGT tag match, so every rule here
+! uses the source-prefix fallback path (cisco_nxos.j2's non-tag branch) —
+! match source prefixes in an ip-filter entry, action forward to the
+! firewall's next-hop.
+!
+{%- for rule in border_leaf_pbr_rules %}
+! Customer: {{ rule.customer_name or 'any' }}/{{ rule.environment or 'any' }}
+configure filter ip-filter "{{ rule.acl_name }}" admin-state enable
+{%- for prefix in rule.source_prefixes %}
+configure filter ip-filter "{{ rule.acl_name }}" entry {{ loop.index }} admin-state enable
+configure filter ip-filter "{{ rule.acl_name }}" entry {{ loop.index }} match src-ip prefix-list "{{ prefix }}"
+configure filter ip-filter "{{ rule.acl_name }}" entry {{ loop.index }} action forward next-hop "{{ rule.fw_nexthop }}"
+{%- endfor %}
+!
+{%- endfor %}
+! Applied on every uplink (fabric-facing) interface — that's where traffic
+! from any leaf in this DC arrives at the border-leaf.
+{%- for interface in interfaces if interface.role == 'uplink' %}
+{%- for rule in border_leaf_pbr_rules %}
+configure router "Base" interface "{{ interface.name }}" ingress filter ip "{{ rule.acl_name }}"
+{%- endfor %}
 {%- endfor %}
 !
 {%- endif %}
 
 {%- include 'common/nokia_sros_management.j2' %}
-
-! End of configuration

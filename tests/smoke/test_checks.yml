@@ -50,3 +50,10 @@ infrahub_tests:
       - name: syntax_check
         spec:
           kind: check-smoke
+
+  - resource: Check
+    resource_name: validate_sdwan_orchestrator
+    tests:
+      - name: syntax_check
+        spec:
+          kind: check-smoke

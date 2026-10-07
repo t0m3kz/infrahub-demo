@@ -1,7 +1,7 @@
 """Unit tests for RackGenerator parsing and row-dependent-rack fan-out.
 
 Covers:
-- _parse_rack_data()                    – direct node dict vs GQL result vs unknown shape
+- parse_rack_data()                     – direct node dict vs GQL result vs unknown shape
 - _fan_out_to_row_dependent_racks()      – only fires for mixed+network with leafs
 - generate() role-vs-deployment gate     – _role_compatibility_errors
 """
@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from generators.helpers.rack import parse_rack_data
 from generators.topology.rack import RackGenerator, TopologyRackData
 
 # ---------------------------------------------------------------------------
@@ -80,13 +81,13 @@ def _mock_rack(name: str, rack_type: str, row_index: int = 1, index: int = 1) ->
 
 
 # ---------------------------------------------------------------------------
-# _parse_rack_data
+# parse_rack_data
 # ---------------------------------------------------------------------------
 
 
 class TestParseRackData:
     def test_direct_node_dict_dispatches_on_name_being_dict(self) -> None:
-        """_parse_rack_data takes the direct-node path when data['name'] is a dict.
+        """parse_rack_data takes the direct-node path when data['name'] is a dict.
 
         The direct-node path returns data as-is, unvalidated (no more
         Pydantic model in the loop) — the dispatch condition itself (not
@@ -97,7 +98,7 @@ class TestParseRackData:
         """
         # name is a dict → triggers the 'direct node data' branch
         data = {"name": {"value": "TEST-RACK"}, "checksum": "abc", "index": 5}
-        result = RackGenerator._parse_rack_data(data)
+        result = parse_rack_data(data)
         assert result is data
 
     def test_direct_node_dict_with_cleaned_name(self) -> None:
@@ -136,7 +137,7 @@ class TestParseRackData:
         # name is a plain string → NOT a dict → falls through to the GQL/unknown branch
         # (raises ValueError "Unknown data structure" because 'LocationRack' key is missing)
         with pytest.raises(ValueError, match="Unknown data structure"):
-            RackGenerator._parse_rack_data(data)
+            parse_rack_data(data)
 
     def test_gql_result_with_edges_parsed(self) -> None:
         """Data shaped as {LocationRack: {edges: [...]}} is cleaned and parsed."""
@@ -184,18 +185,18 @@ class TestParseRackData:
                 ]
             }
         }
-        result = RackGenerator._parse_rack_data(raw)
+        result = parse_rack_data(raw)
         assert result["name"] == "GQL-RACK"
         assert result["rack_type"] == "tor"
 
     def test_empty_edges_raises_value_error(self) -> None:
         raw = {"LocationRack": {"edges": []}}
         with pytest.raises(ValueError, match="no edges"):
-            RackGenerator._parse_rack_data(raw)
+            parse_rack_data(raw)
 
     def test_unknown_shape_raises_value_error(self) -> None:
         with pytest.raises(ValueError, match="Unknown data structure"):
-            RackGenerator._parse_rack_data({"weird_key": "data"})
+            parse_rack_data({"weird_key": "data"})
 
 
 class TestDeriveSpineInfo:

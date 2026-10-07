@@ -2,40 +2,34 @@
 
 from typing import Any
 
+from transforms.helpers.policy import active_rules, enabled_policies, inbound_permits
 from transforms.helpers.segments import _get_segment_prefix_str
 
+_PROTO_MAP = {"any": "ip", "tcp": "tcp", "udp": "udp", "icmp": "icmp"}
 
-def _build_acl_rule(rule: dict[str, Any], *, mirror_dst: bool = False) -> dict[str, Any]:
-    """Convert a SecurityPolicyRule dict (from clean_data) into an ACL rule dict.
 
-    Args:
-        rule: Cleaned SecurityPolicyRule dict.
-        mirror_dst: When True, set dst="any" (used for symmetric East-West mirroring
-            where the rule fires on the *destination* segment's inbound SVI).
-    """
-    protocol = rule.get("protocol") or "any"
-    proto_map = {"any": "ip", "tcp": "tcp", "udp": "udp", "icmp": "icmp"}
-    acl_proto = proto_map.get(protocol, "ip")
+def _port_match(rule: dict[str, Any], acl_proto: str) -> str | None:
+    """`eq N` / `range N M` for a tcp/udp rule's port, else None."""
+    port_start = rule.get("port_start")
+    port_end = rule.get("port_end")
+    if not port_start or acl_proto not in ("tcp", "udp"):
+        return None
+    if port_end and port_end != port_start:
+        return f"range {port_start} {port_end}"
+    return f"eq {port_start}"
+
+
+def _build_acl_rule(rule: dict[str, Any]) -> dict[str, Any]:
+    """Convert a SecurityPolicyRule dict (from clean_data) into an ACL rule dict."""
+    acl_proto = _PROTO_MAP.get(rule.get("protocol") or "any", "ip")
 
     src_seg = rule.get("source_segment") or {}
     src_prefix = _get_segment_prefix_str(src_seg) if src_seg else None
     src = src_prefix or "any"
 
-    if mirror_dst:
-        dst = "any"
-    else:
-        dst_seg = rule.get("destination_segment") or {}
-        dst_prefix = _get_segment_prefix_str(dst_seg) if dst_seg else None
-        dst = dst_prefix or "any"
-
-    port_start = rule.get("port_start")
-    port_end = rule.get("port_end")
-    dst_port: str | None = None
-    if port_start and acl_proto in ("tcp", "udp"):
-        if port_end and port_end != port_start:
-            dst_port = f"range {port_start} {port_end}"
-        else:
-            dst_port = f"eq {port_start}"
+    dst_seg = rule.get("destination_segment") or {}
+    dst_prefix = _get_segment_prefix_str(dst_seg) if dst_seg else None
+    dst = dst_prefix or "any"
 
     # Zone fields — for zone-aware platforms or remark/comment rendering
     src_zone = (rule.get("source_zone") or {}).get("name") or None
@@ -43,53 +37,97 @@ def _build_acl_rule(rule: dict[str, Any], *, mirror_dst: bool = False) -> dict[s
 
     # Customer/environment identity — per-rule, not just per-ACL, since a
     # single policy can mix rules from different customers' segments on the
-    # same VLAN (via source_segment/destination_segment). mirror_dst=True
-    # sets dst="any" above but the destination segment's own identity is
-    # still this rule's real target — callers rendering a mirrored rule on
-    # the destination segment's own VLAN should prefer their own
-    # segment_name/environment over dst_customer/dst_environment here (see
-    # get_acls()'s mirrored-rule loop).
-    src_customer = (src_seg or {}).get("customer_name") or None
-    src_environment = (src_seg or {}).get("environment") or None
-    dst_seg_for_identity = rule.get("destination_segment") or {}
-    dst_customer = dst_seg_for_identity.get("customer_name") or None
-    dst_environment = dst_seg_for_identity.get("environment") or None
-
+    # same VLAN (via source_segment/destination_segment).
     return {
         "seq": rule.get("index"),
         "action": rule.get("action", "deny"),
         "protocol": acl_proto,
         "src": src,
+        "src_port": None,
         "dst": dst,
-        "dst_port": dst_port,
+        "dst_port": _port_match(rule, acl_proto),
+        "established": False,
         "log": bool(rule.get("log")),
         "name": rule.get("name") or "",
         "src_zone": src_zone,
         "dst_zone": dst_zone,
-        "src_customer": src_customer,
-        "src_environment": src_environment,
-        "dst_customer": dst_customer,
-        "dst_environment": dst_environment,
+        "src_customer": src_seg.get("customer_name") or None,
+        "src_environment": src_seg.get("environment") or None,
+        "dst_customer": dst_seg.get("customer_name") or None,
+        "dst_environment": dst_seg.get("environment") or None,
     }
+
+
+def _build_return_rule(
+    rule: dict[str, Any], own_prefix: str | None, own_name: str, own_environment: str | None
+) -> dict[str, Any]:
+    """The reply leg of an inbound permit, for this segment's own ingress ACL.
+
+    The forward rule A -> B:port sits on A's VLAN. B's hosts answer from
+    B:port to A, so B's ACL needs src=B, src_port=port, dst=A. tcp is held
+    to `established` (ACK/RST set), so B still can't open a connection to A
+    on the strength of A's rule. udp has no such flag, and any/icmp have no
+    port: those return legs are the plain reverse match.
+    """
+    acl_proto = _PROTO_MAP.get(rule.get("protocol") or "any", "ip")
+    src_seg = rule.get("source_segment") or {}
+    peer_prefix = _get_segment_prefix_str(src_seg) if src_seg else None
+    peer_name = src_seg.get("customer_name") or src_seg.get("name") or "any"
+    return {
+        "seq": None,
+        "action": "permit",
+        "protocol": acl_proto,
+        "src": own_prefix or "any",
+        "src_port": _port_match(rule, acl_proto),
+        "dst": peer_prefix or "any",
+        "dst_port": None,
+        "established": acl_proto == "tcp",
+        "log": False,
+        "name": f"return-to-{peer_name.replace(' ', '-')}-{rule.get('name') or ''}",
+        "src_zone": None,
+        "dst_zone": None,
+        "src_customer": own_name,
+        "src_environment": own_environment,
+        "dst_customer": src_seg.get("customer_name") or None,
+        "dst_environment": src_seg.get("environment") or None,
+    }
+
+
+def _inbound_permits(seg: dict[str, Any]) -> list[dict[str, Any]]:
+    """Active permit rules targeting this segment from another segment."""
+    seg_id = seg.get("id")
+    permits = [rule for rule in inbound_permits(seg) if (rule.get("source_segment") or {}).get("id") != seg_id]
+    return sorted(
+        permits,
+        key=lambda r: (
+            str((r.get("source_segment") or {}).get("name") or ""),
+            r.get("index") or 0,
+            r.get("name") or "",
+        ),
+    )
 
 
 def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     """Build ACL list from SegmentDeployment security policies (zero-trust).
 
-    Generates inbound ACLs for each segment with security_policies present.
-    Includes two microsegmentation enhancements:
+    Generates an ingress ACL on each segment's SVI, i.e. for traffic its own
+    hosts send:
 
-    1. **Symmetric East-West ACLs**: When Segment A has a rule targeting Segment B,
-       a mirrored rule is automatically added to Segment B's inbound ACL (src from
-       A's rule, dst=any). This ensures both sides enforce the same intent.
+    1. **Own rules**: the segment's own egress policies (A -> B on A's VLAN).
 
-    2. **Zone support**: source_zone / destination_zone names are passed through as
+    2. **Return rules**: every permit whose destination is this segment
+       (``inbound_rules``, from any segment's policy, on any leaf) adds its
+       reply leg here: src=own prefix, src_port=the rule's port,
+       dst=the rule's source, ``established`` for tcp. Without it the
+       implicit deny drops B's answers to A. They are read from the segment
+       itself, so they don't depend on A being on the same leaf.
+
+    3. **Zone support**: source_zone / destination_zone names are passed through as
        ``src_zone`` / ``dst_zone`` fields for templates to render as remarks/comments
        or to drive zone-aware platform ACL APIs.
 
-    3. **Customer/environment attribution**: each rule also carries
+    4. **Customer/environment attribution**: each rule also carries
        ``src_customer``/``src_environment``/``dst_customer``/``dst_environment``
-       (from source_segment/destination_segment's own customer_name/environment)
        so a policy mixing rules from different customers' segments on the
        same VLAN can be attributed per-rule, not just at the whole-ACL
        ``segment_name`` level.
@@ -106,8 +144,13 @@ def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, 
             "segment_name": "...",
             "rules": [
               {"seq": 10, "action": "permit", "protocol": "tcp",
-               "src": "any", "dst": "10.0.2.0/24", "dst_port": "eq 80",
+               "src": "10.0.1.0/24", "src_port": None,
+               "dst": "10.0.2.0/24", "dst_port": "eq 80", "established": False,
                "log": False, "src_zone": None, "dst_zone": "internal"},
+              {"seq": 5000, "action": "permit", "protocol": "tcp",
+               "src": "10.0.1.0/24", "src_port": "eq 5432",
+               "dst": "10.0.3.0/24", "dst_port": None, "established": True,
+               "name": "return-to-db-clients-app-to-db"},
               {"seq": 9990, "action": "deny", "protocol": "ip",
                "src": "any", "dst": "any", "log": True, "name": "implicit-deny-all"},
             ],
@@ -117,46 +160,6 @@ def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, 
     if not activations:
         return []
 
-    # --- Index: segment_id → vlan_id for cross-segment rule mirroring ---
-    # Also track which segments have a firewall — those are skipped for leaf ACLs.
-    seg_id_to_vlan: dict[str, int] = {}
-    seg_has_firewall: set[str] = set()
-    for act in activations:
-        vlan_id = act.get("vlan_id")
-        seg = act.get("segment") or {}
-        seg_id = seg.get("id")
-        if vlan_id and seg_id:
-            seg_id_to_vlan[seg_id] = vlan_id
-        fw_node = (seg.get("inline_service") or {}).get("id") or (seg.get("inline_service") or {}).get("name")
-        if fw_node and seg_id:
-            seg_has_firewall.add(seg_id)
-
-    # --- Collect mirrored rules: rules from other segments that target this segment ---
-    # mirrored_by_vlan[dst_vlan] = [(original_rule, src_segment_name), ...]
-    mirrored_by_vlan: dict[int, list[tuple[dict[str, Any], str]]] = {}
-    for act in activations:
-        src_vlan = act.get("vlan_id")
-        if not src_vlan:
-            continue
-        seg = act.get("segment") or {}
-        if "security_policies" not in seg:
-            continue
-        src_seg_name = seg.get("customer_name") or seg.get("name") or f"VLAN_{src_vlan}"
-        for policy in seg.get("security_policies") or []:
-            if not policy.get("enabled", True):
-                continue
-            for rule in policy.get("rules") or []:
-                if rule.get("disabled"):
-                    continue
-                dst_seg_id = (rule.get("destination_segment") or {}).get("id")
-                if not dst_seg_id:
-                    continue
-                dst_vlan = seg_id_to_vlan.get(dst_seg_id)
-                if not dst_vlan or dst_vlan == src_vlan:
-                    continue
-                mirrored_by_vlan.setdefault(dst_vlan, []).append((rule, src_seg_name))
-
-    # --- Build per-segment ACLs ---
     acls: list[dict[str, Any]] = []
     seen_vlans: set[int] = set()
 
@@ -166,12 +169,12 @@ def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, 
             continue
 
         seg = act.get("segment") or {}
-        seg_id = seg.get("id")
 
         # Segment has a dedicated firewall — policy is enforced there, not on the leaf SVI.
         # Exception: microsegmented segments always get a leaf ACL regardless of firewall.
         isolation_mode = seg.get("isolation_mode") or "normal"
-        if seg_id and seg_id in seg_has_firewall and isolation_mode != "microsegmented":
+        inline = seg.get("inline_service") or {}
+        if (inline.get("id") or inline.get("name")) and isolation_mode != "microsegmented":
             seen_vlans.add(vlan_id)
             continue
 
@@ -186,32 +189,23 @@ def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, 
         rules: list[dict[str, Any]] = []
 
         # Own policies
-        for policy in policies:
-            if not policy.get("enabled", True):
-                continue
-            for rule in sorted(policy.get("rules") or [], key=lambda r: r.get("index") or 0):
-                if rule.get("disabled"):
-                    continue
-                rules.append(_build_acl_rule(rule))
+        for policy in enabled_policies(policies):
+            rules.extend(_build_acl_rule(rule) for rule in active_rules(policy))
 
-        # Mirrored rules from other segments' policies (symmetric East-West)
+        # Return legs of the permits into this segment
+        own_prefix = _get_segment_prefix_str(seg)
         own_max_seq = max((r["seq"] or 0 for r in rules), default=0)
-        mirror_seq_start = max(own_max_seq + 10, 5000)
-        for i, (orig_rule, from_name) in enumerate(
-            sorted(mirrored_by_vlan.get(vlan_id, []), key=lambda t: t[0].get("index") or 0)
-        ):
-            mirrored = _build_acl_rule(orig_rule, mirror_dst=True)
-            mirrored["seq"] = mirror_seq_start + i * 10
-            safe_from = from_name.replace(" ", "-")
-            mirrored["name"] = f"mirror-from-{safe_from}-{orig_rule.get('name', '')}"
-            # This rule is firing on THIS segment's own VLAN (the mirror's
-            # target) — the destination identity is this segment's own
-            # customer/environment, not whatever _build_acl_rule derived
-            # from the original rule's destination_segment (which may be a
-            # stale/different segment reference once mirrored).
-            mirrored["dst_customer"] = segment_name
-            mirrored["dst_environment"] = segment_environment
-            rules.append(mirrored)
+        seq = max(own_max_seq + 10, 5000)
+        seen_returns: set[tuple[Any, ...]] = set()
+        for inbound in _inbound_permits(seg):
+            ret = _build_return_rule(inbound, own_prefix, segment_name, segment_environment)
+            key = (ret["protocol"], ret["src"], ret["src_port"], ret["dst"])
+            if key in seen_returns:
+                continue
+            seen_returns.add(key)
+            ret["seq"] = seq
+            seq += 10
+            rules.append(ret)
 
         # Implicit deny
         if rules:
@@ -226,8 +220,10 @@ def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, 
                 "action": "deny",
                 "protocol": "ip",
                 "src": "any",
+                "src_port": None,
                 "dst": "any",
                 "dst_port": None,
+                "established": False,
                 "log": True,
                 "name": "implicit-deny-all",
                 "src_zone": None,

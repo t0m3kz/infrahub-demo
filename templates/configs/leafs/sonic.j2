@@ -24,6 +24,7 @@
 {%- set vxlan_tunnel = {} -%}
 {%- set vxlan_tunnel_map = {} -%}
 {%- set vrf_config = {} -%}
+{%- set bgp_evpn_rt = {} -%}
 {%- set vrf_loopback_interfaces = {} -%}
 {%- set evpn_nvo = {} -%}
 {%- include 'common/sonic_vxlan.j2' %}
@@ -31,6 +32,7 @@
 {%- set acl_table = {} -%}
 {%- set acl_rule = {} -%}
 {%- include 'common/sonic_acl.j2' %}
+{%- include 'common/sonic_pbr.j2' %}
 
 {%- set static_route_table = {} -%}
 {%- if vrf_gateways %}
@@ -38,8 +40,11 @@
 {%- set _ = static_route_table.update({vrf + '|0.0.0.0/0': {'nexthop': nexthop, 'ifname': '', 'nexthop-vrf': ''}}) -%}
 {%- endfor %}
 {%- endif %}
+{%- set ntp_servers = {} -%}
+{%- set syslog_servers = {} -%}
+{%- include 'common/sonic_management.j2' %}
 
-{{ {
+{%- set configdb = {
   'DEVICE_METADATA': device_metadata,
   'VLAN': vlan_config,
   'LOOPBACK_INTERFACE': loopback_interfaces,
@@ -54,10 +59,18 @@
   'VXLAN_TUNNEL': vxlan_tunnel,
   'VXLAN_TUNNEL_MAP': vxlan_tunnel_map,
   'VRF': vrf_config,
+  'BGP_GLOBALS_EVPN_RT': bgp_evpn_rt,
   'EVPN_NVO': evpn_nvo,
   'ACL_TABLE': acl_table,
   'ACL_RULE': acl_rule,
-  'STATIC_ROUTE': static_route_table
-} | tojson(indent=2) }}
-{%- include 'common/sonic_mclag.j2' -%}
-{%- include 'common/sonic_management.j2' %}
+  'STATIC_ROUTE': static_route_table,
+  'NTP_SERVER': ntp_servers,
+  'SYSLOG_SERVER': syslog_servers
+} -%}
+{#- Per-table merge: MC-LAG contributes VLAN/VLAN_MEMBER/VLAN_INTERFACE
+    entries that must not replace the tables built above. #}
+{%- for table, entries in (sonic_mlag | default({})).items() %}
+{%- set _ = configdb.update({table: dict(configdb.get(table) or {}, **entries)}) %}
+{%- endfor %}
+
+{{ configdb | tojson(indent=2) }}

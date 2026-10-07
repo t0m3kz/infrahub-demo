@@ -71,79 +71,54 @@ class CheckFirewall(InfrahubCheck):
                 if rule.get("disabled"):
                     continue
                 rule_name = rule.get("name", "<unnamed>")
-                for field in ("source_zone", "destination_zone"):
-                    zone_ref = rule.get(field) or {}
-                    zone_name = zone_ref.get("name") if isinstance(zone_ref, dict) else zone_ref
+                sides = [
+                    (side, self._rel_name(rule.get(f"{side}_zone")), rule.get(f"{side}_segment") or {})
+                    for side in ("source", "destination")
+                ]
+                for side, zone_name, _seg in sides:
                     if not zone_name:
                         continue
                     if zone_name not in zone_cidrs:
                         self.log_error(
                             message=(
                                 f"Policy '{policy_name}' rule '{rule_name}': "
-                                f"{field} '{zone_name}' references a non-existent SecurityZone"
+                                f"{side}_zone '{zone_name}' references a non-existent SecurityZone"
                             )
                         )
                     elif not zone_cidrs[zone_name]:
                         self.log_info(
                             message=(
                                 f"Policy '{policy_name}' rule '{rule_name}': "
-                                f"{field} '{zone_name}' has no member segments — zone CIDRs will be empty"
+                                f"{side}_zone '{zone_name}' has no member segments — zone CIDRs will be empty"
                             )
                         )
 
-                src_zone_name = self._rel_name(rule.get("source_zone"))
-                dst_zone_name = self._rel_name(rule.get("destination_zone"))
-                src_seg = rule.get("source_segment") or {}
-                dst_seg = rule.get("destination_segment") or {}
-                src_seg_zone_name = self._rel_name(src_seg.get("security_zone"))
-                dst_seg_zone_name = self._rel_name(dst_seg.get("security_zone"))
-
-                if src_zone_name and src_seg_zone_name and src_zone_name != src_seg_zone_name:
-                    self.log_error(
-                        message=(
-                            f"Policy '{policy_name}' rule '{rule_name}': source_zone '{src_zone_name}' "
-                            f"does not match source_segment zone '{src_seg_zone_name}'"
+                for side, zone_name, seg in sides:
+                    seg_zone_name = self._rel_name(seg.get("security_zone"))
+                    if zone_name and seg_zone_name and zone_name != seg_zone_name:
+                        self.log_error(
+                            message=(
+                                f"Policy '{policy_name}' rule '{rule_name}': {side}_zone '{zone_name}' "
+                                f"does not match {side}_segment zone '{seg_zone_name}'"
+                            )
                         )
+
+                for side, zone_name, seg in sides:
+                    selectors = (
+                        bool(zone_name)
+                        + bool(self._rel_id(seg))
+                        + self._rel_list_count(rule.get(f"{side}_ip_addresses"))
+                        + self._rel_list_count(rule.get(f"{side}_prefixes"))
                     )
-                if dst_zone_name and dst_seg_zone_name and dst_zone_name != dst_seg_zone_name:
-                    self.log_error(
-                        message=(
-                            f"Policy '{policy_name}' rule '{rule_name}': destination_zone '{dst_zone_name}' "
-                            f"does not match destination_segment zone '{dst_seg_zone_name}'"
+                    if selectors == 0:
+                        self.log_error(
+                            message=(
+                                f"Policy '{policy_name}' rule '{rule_name}' has no {side} selector "
+                                "(zone, segment, IP, or prefix)"
+                            )
                         )
-                    )
 
-                src_selectors = 0
-                if src_zone_name:
-                    src_selectors += 1
-                if self._rel_id(src_seg):
-                    src_selectors += 1
-                src_selectors += self._rel_list_count(rule.get("source_ip_addresses"))
-                src_selectors += self._rel_list_count(rule.get("source_prefixes"))
-
-                dst_selectors = 0
-                if dst_zone_name:
-                    dst_selectors += 1
-                if self._rel_id(dst_seg):
-                    dst_selectors += 1
-                dst_selectors += self._rel_list_count(rule.get("destination_ip_addresses"))
-                dst_selectors += self._rel_list_count(rule.get("destination_prefixes"))
-
-                if src_selectors == 0:
-                    self.log_error(
-                        message=(
-                            f"Policy '{policy_name}' rule '{rule_name}' has no source selector "
-                            "(zone, segment, IP, or prefix)"
-                        )
-                    )
-                if dst_selectors == 0:
-                    self.log_error(
-                        message=(
-                            f"Policy '{policy_name}' rule '{rule_name}' has no destination selector "
-                            "(zone, segment, IP, or prefix)"
-                        )
-                    )
-
+                src_seg, dst_seg = sides[0][2], sides[1][2]
                 src_tag = self._rel_id(src_seg.get("security_tag"))
                 dst_tag = self._rel_id(dst_seg.get("security_tag"))
                 if src_tag and dst_tag and (src_tag, dst_tag) not in tag_contracts:

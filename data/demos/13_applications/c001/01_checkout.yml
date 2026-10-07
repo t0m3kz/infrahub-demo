@@ -3,6 +3,10 @@
 # external payment gateway. Companion to storefront (00_applications.yml).
 # Authored directly — no separate request/approval object graph; a branch +
 # proposed-change review is the approval step for anything declared here.
+#
+# The frontend is published through the ZTNA broker under its fqdn; the
+# payment gateway is not a component, so its dependency names it by
+# target_fqdn and goes out through C001's egress proxy.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -21,23 +25,35 @@ spec:
         kind: AppComponent
         data:
           - name: frontend
+            fqdn: checkout.internal.c001.demo.local
             component_type: frontend
-            children:
-              kind: AppEndpoint
-              data:
-                - name: checkout-web
-                  endpoint_type: private_access
-                  fqdn: checkout.internal.c001.demo.local
-                  service_ports:
-                    data:
-                      - port: 443
-                        protocol: tcp
-                - name: payment-gateway
-                  endpoint_type: external_service
-                  fqdn: api.paymentgw.example.com
+            ports:
+              - tcp/443
             member_of_groups:
               - app_components
-
+---
+# Engineering opens the checkout frontend through the ZTNA broker: the access
+# profile is the source of the dependency, which opens the frontend's ports.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityIdentityGroup
+  data:
+    - name: c001-engineering
+      description: "C001 engineering users"
+      source: manual
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityAccessProfile
+  data:
+    - name: c001-private-access-standard
+      description: "C001 standard private-access controls"
+      mfa_required: true
+      device_posture_required: true
+      allowed_groups:
+        - c001-engineering
 ---
 apiVersion: infrahub.app/v1
 kind: Object
@@ -45,9 +61,18 @@ spec:
   kind: AppDependency
   data:
     - name: c001-checkout-to-payment-gateway
-      source: c001-checkout-p-frontend
-      target: ["c001-checkout-p-frontend", "payment-gateway"]
-      protocol: tcp
-      port_start: 443
+      source: checkout.internal.c001.demo.local
+      target_fqdn: api.paymentgw.example.com
+      ports:
+        - tcp/443
       access_status: approved
       decision_reason: "Payment authorization is required by checkout"
+      member_of_groups:
+        - app_dependencies
+    - name: c001-checkout-web-private-access
+      source_profile: c001-private-access-standard
+      target: checkout.internal.c001.demo.local
+      access_status: approved
+      decision_reason: "Engineering opens the checkout console through the ZTNA broker"
+      member_of_groups:
+        - app_dependencies

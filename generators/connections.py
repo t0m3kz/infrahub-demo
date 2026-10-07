@@ -32,6 +32,16 @@ _INTERFACE_READY_RETRY_JITTER = 0.25
 BORDER_ROLE_FOR_SERVICES: dict[str, str] = {"firewall": "firewall", "load-balancer": "load-balancer"}
 
 
+def tracked_save_kwargs(track: bool) -> dict[str, bool]:
+    """save() kwargs for a write the run does (track) or does not (not track) own.
+
+    track=False adds update_group_context=False so the node is written but not
+    added to the run's tracking group, so delete_unused_nodes can never reclaim
+    it. track=True keeps the plain upsert (the run claims the node).
+    """
+    return {"allow_upsert": True} if track else {"allow_upsert": True, "update_group_context": False}
+
+
 class CablingMixin:
     """Mixin providing device-to-device cabling methods for CommonGenerator.
 
@@ -77,7 +87,7 @@ class CablingMixin:
         cabling_offset: int = int(options.get("cabling_offset", 0))
         self.logger.info(
             f"Creating cabling: {len(bottom_devices)} bottom → {len(top_devices)} top "
-            f"[strategy={strategy}, offset={cabling_offset}, strict_speed_validation=True]"
+            f"[strategy={strategy}, offset={cabling_offset}, speed-matched]"
         )
 
         # Retry querying interfaces until template instantiation completes.
@@ -129,18 +139,7 @@ class CablingMixin:
             bottom_sorting=bottom_sorting,
             top_sorting=top_sorting,
         )
-        strict_plan_profile = {
-            # Always enforce speed-aware strict matching for physical cabling plans.
-            # Creating mismatched links is not useful operationally.
-            "speed_aware": True,
-            "validate_speeds": True,
-            "strict_speed_validation": True,
-        }
-        cabling_plan = planner.build_cabling_plan(
-            scenario=strategy,
-            cabling_offset=cabling_offset,
-            **strict_plan_profile,
-        )
+        cabling_plan = planner.build_cabling_plan(scenario=strategy, cabling_offset=cabling_offset)
 
         if not cabling_plan:
             self.logger.warning("No cabling connections planned")
@@ -180,22 +179,11 @@ class CablingMixin:
                 src_interface.interface_type.value, dst_interface.interface_type.value
             )
 
-            cable = await self.client.create(
-                kind=DcimCable,
-                data={
-                    "name": cable_name,
-                    "type": cable_type,
-                    "endpoints": [src_interface.id, dst_interface.id],
-                    "deployment": {"id": self.deployment_id} if self.deployment_id else None,
-                },
-            )
-            await cable.save(allow_upsert=True)
-
-            # Use already-fetched interface objects; set cable to prevent upsert sending null
+            # Use the already-fetched interface objects. Their `cable` relationship
+            # was loaded with include=["cable"], so re-saving them below preserves
+            # whatever cable they already point at instead of sending null.
             updated_src = iface_map[src_interface.id]
             updated_dst = iface_map[dst_interface.id]
-            updated_src.cable = cable
-            updated_dst.cable = cable
 
             # Allocate P2P addresses if pool provided
             # prefix_length: 127 for IPv6 (RFC 6164, default), 31 for IPv4 (RFC 3021, exception)
@@ -210,19 +198,9 @@ class CablingMixin:
                 )
                 self.logger.info(f"- Allocated prefix {p2p_prefix.display_label} for {cable_name}")
 
-                # Iterate the network directly — works for both /31 (RFC 3021) and
-                # /127 (RFC 6164) where .hosts() returns only one address in Python.
-                network = ipaddress.ip_network(p2p_prefix.prefix.value, strict=False)
-                addrs = list(network)
-                ip_namespace = p2p_prefix.ip_namespace
-
-                for iface, addr in [(updated_src, addrs[0]), (updated_dst, addrs[1])]:
-                    ip = await self.client.create(
-                        kind=IpamIPAddress,
-                        data={"address": f"{addr}/{p2p_prefix_length}", "ip_namespace": ip_namespace},
-                    )
-                    await ip.save(allow_upsert=True)
-                    iface.ip_address = ip.id
+                src_ip, dst_ip = await self.upsert_p2p_addresses(p2p_prefix)
+                updated_src.ip_address = src_ip.id
+                updated_dst.ip_address = dst_ip.id
 
             # update_group_context=False: physical interfaces come from the device's
             # object_template, not from this generator run — they must never be
@@ -238,10 +216,94 @@ class CablingMixin:
             updated_dst.status.value = "active"
             await updated_dst.save(allow_upsert=True, update_group_context=False)
 
+            # Create the cable LAST, and let it establish the link from its own
+            # side via `endpoints` — the reverse of the interface's `cable`.
+            #
+            # Never the other way round: writing the freshly created cable's id
+            # back onto an interface reads a node the server may not have made
+            # visible yet, which fails as
+            #   "Unable to find the node <uuid> / DcimCable in the database"
+            #   (NODE_NOT_FOUND, 404)
+            # intermittently under concurrent generator runs. The cable's
+            # endpoints reference interfaces that came from the device's
+            # object_template, so they are always already visible.
+            cable = await self.client.create(
+                kind=DcimCable,
+                data={
+                    "name": cable_name,
+                    "type": cable_type,
+                    "endpoints": [updated_src.id, updated_dst.id],
+                    "deployment": {"id": self.deployment_id} if self.deployment_id else None,
+                },
+            )
+            await cable.save(allow_upsert=True)
+
+            # In-memory only, after the last save of either interface: create_routing()
+            # builds the underlay peerings from the cables of the interface objects
+            # returned here (cable_map in generators/helpers/routing.py), so they have
+            # to carry it. Nothing saves these interfaces again, so the cable id this
+            # assignment holds is never sent back to a server that cannot yet see it.
+            updated_src.cable = cable
+            updated_dst.cable = cable
+
             cabled_pairs.append((updated_src, updated_dst))
             self.logger.info(f"  - Created connection {cable_name}")
 
         return cabled_pairs
+
+    async def upsert_p2p_addresses(
+        self,
+        prefix: Any,
+        *,
+        address_length: int | None = None,
+        description: str | None = None,
+        track: bool = True,
+    ) -> list[Any]:
+        """Upsert both addresses of a /31 (RFC 3021) or /127 (RFC 6164) P2P prefix.
+
+        Queried before created: allocate_next_ip_prefix() is idempotent per
+        identifier, but IpamIPAddress's (address, ip_namespace) uniqueness is
+        only enforced by an async validator, so two overlapping runs for the
+        same link would otherwise both blind-create the same address (seen on
+        DC4's hyper-spine mesh as a "Process schema integrity" merge failure).
+        Saved even when found: the run tracks only what it saves, so a reused
+        but unsaved address is one delete_unused_nodes removes.
+
+        address_length defaults to the prefix's own length. description, when
+        given, is (re)written on every run.
+
+        track=False saves the addresses with update_group_context=False, for
+        a caller addressing a link it does not own (e.g. a shared
+        FirewallContext reached by every customer on the cluster): the
+        addresses are written but never claimed by this run's tracking group,
+        so no run's cleanup can delete them.
+        """
+        network = ipaddress.ip_network(prefix.prefix.value, strict=False)
+        length = network.prefixlen if address_length is None else address_length
+        ip_namespace = prefix.ip_namespace
+        addresses: list[Any] = []
+        # list(network), not .hosts(): .hosts() yields one address for /31 and /127.
+        for addr in list(network)[:2]:
+            address_value = f"{addr}/{length}"
+            ip = await self.client.get(
+                kind=IpamIPAddress,
+                address__value=address_value,
+                ip_namespace__ids=[ip_namespace.id],
+                raise_when_missing=False,
+            )
+            if not ip or description is not None:
+                ip = await self.client.create(
+                    kind=IpamIPAddress,
+                    data={
+                        **({"id": ip.id} if ip else {}),
+                        "address": address_value,
+                        "ip_namespace": ip_namespace,
+                        **({"description": description} if description is not None else {}),
+                    },
+                )
+            await ip.save(**tracked_save_kwargs(track))
+            addresses.append(ip)
+        return addresses
 
     async def create_chain_cabling(
         self, hops: list[ChainHop], options: CablingOptions | None = None
@@ -299,13 +361,7 @@ class CablingMixin:
 
             iface_map: dict[str, Any] = {iface.id: iface for iface in list(bottom_interfaces) + list(top_interfaces)}
             planner = CablingPlanner(bottom_interfaces=bottom_interfaces, top_interfaces=top_interfaces)
-            leg_plan = planner.build_cabling_plan(
-                scenario="chain",
-                cabling_offset=cabling_offset,
-                speed_aware=True,
-                validate_speeds=True,
-                strict_speed_validation=True,
-            )
+            leg_plan = planner.build_cabling_plan(scenario="chain", cabling_offset=cabling_offset)
             if not leg_plan:
                 self.logger.error(
                     f"create_chain_cabling: {sorted(top_devices)}<->{sorted(bottom_devices)} cabling produced "
@@ -348,6 +404,7 @@ class CablingMixin:
         vlan_id_value: int,
         capability_obj: Any,
         ip_address_id: str | None = None,
+        track: bool = True,
     ) -> Any | None:
         """Upsert a VLAN-tagged DcimVirtualInterface (<trunk>.<vlan_id>) on
         trunk_iface, linked to capability_obj via interface_capabilities —
@@ -355,6 +412,14 @@ class CablingMixin:
         sub-interfaces and segment.py's inline VxlanSegment termination.
         Trunk-interface resolution stays with the caller since fallback
         behavior differs (see find_role_interface).
+
+        track=False makes every save here (the sub-interface and its
+        capability-link re-save) use update_group_context=False, for a
+        sub-interface reached by more than one target (e.g. a shared
+        FirewallContext's per-firewall leg): written, never claimed by this
+        run's group, so no run's cleanup can delete it. This helper saves no
+        IP itself — ip_address_id must already exist; untracked addressing is
+        upsert_p2p_addresses(track=False).
         """
         sub_iface_name = f"{trunk_iface.name.value}.{vlan_id_value}"
         sub_iface_data: dict[str, Any] = {
@@ -368,12 +433,12 @@ class CablingMixin:
 
         try:
             sub_iface = await self.client.create(kind=DcimVirtualInterface, data=sub_iface_data)
-            await sub_iface.save(allow_upsert=True)
+            await sub_iface.save(**tracked_save_kwargs(track))
             iface_capabilities = getattr(sub_iface, "interface_capabilities")
             await iface_capabilities.fetch()
             if not any(peer.id == capability_obj.id for peer in iface_capabilities.peers):
                 await self._safe_rel_add(iface_capabilities, capability_obj)
-                await sub_iface.save(allow_upsert=True)
+                await sub_iface.save(**tracked_save_kwargs(track))
             self.logger.info(f"Upserted sub-interface {sub_iface_name} on {device_name}")
             return sub_iface
         except Exception as exc:

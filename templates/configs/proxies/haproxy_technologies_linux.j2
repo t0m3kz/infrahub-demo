@@ -42,9 +42,8 @@ defaults
 {%- endfor %}
 #
 # --- Stats ---
-{%- set mgmt_iface = proxy_interfaces | selectattr('role', 'equalto', 'management') | list | first | default(None) %}
 frontend stats
-    bind {{ mgmt_iface.ip_address.address.split('/')[0] if mgmt_iface and mgmt_iface.ip_address else '127.0.0.1' }}:8404
+    bind {{ management_ip or '127.0.0.1' }}:8404
     mode http
     stats enable
     stats uri /stats

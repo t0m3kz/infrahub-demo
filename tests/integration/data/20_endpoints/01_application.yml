@@ -1,0 +1,36 @@
+---
+# One C001 application with a single component on the DC6 "web-app" local
+# segment (../20_segments/02_segments.yml), instanced on a server that
+# data/demos/06_servers puts in DC6 POD-1 and add_endpoint cables to the
+# POD-1 leafs. test_20 runs add_app_component_segment over the component and
+# asserts the segment's local VLAN ID is realized on that switch's VLAN
+# domain and the server-facing switch port-channels carry the segment.
+# Memberships: the AppApplication created-trigger dispatches
+# add_app_application, which raises for a non-member of app_applications;
+# add_app_component_segment targets app_components.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppApplication
+  data:
+    - label: dc6-endpoint-probe
+      environment: p
+      criticality: low
+      security_profile: internal_standard
+      fqdn: dc6-endpoint-probe.c001.test.local
+      owner: "C001"
+      member_of_groups:
+        - app_applications
+      children:
+        kind: AppComponent
+        data:
+          - name: web
+            fqdn: web.dc6-endpoint-probe.c001.test.local
+            component_type: frontend
+            ports:
+              - tcp/443
+            network_segment: c001-web-app-p
+            instances:
+              - ktw-pod1-server-1
+            member_of_groups:
+              - app_components

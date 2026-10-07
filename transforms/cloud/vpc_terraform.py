@@ -105,24 +105,7 @@ def _provider_block_gcp(project: str, region: str) -> list[str]:
     ]
 
 
-def _vpc_blocks_aws(
-    vpc: dict,
-    sgs_by_vpc: dict,
-    instances_by_vpc: dict,
-    igws_by_vpc: dict,
-    nats_by_vpc: dict,
-    rts_by_vpc: dict,
-    nacls_by_vpc: dict,
-    vpngws_by_vpc: dict,
-    asgs_by_vpc: dict,
-    routes: list,
-    public_ips: list,
-    tgws: list,
-    cgws: list,
-    peerings: list,
-    direct_connects: list,
-    provider_attr: str = "",
-) -> list[str]:
+def _vpc_blocks_aws(vpc: dict, ctx: dict, provider_attr: str = "") -> list[str]:
     lines: list[str] = []
     vpc_name = vpc.get("name", "")
     vpc_id = _tf_id(vpc_name)
@@ -159,7 +142,7 @@ def _vpc_blocks_aws(
             provider_attr,
         )
 
-    for sg in sgs_by_vpc.get(vpc_name) or []:
+    for sg in ctx["sgs_by_vpc"].get(vpc_name) or []:
         sg_name = sg.get("name", "")
         sg_id = _tf_id(sg_name)
         lines += _res(
@@ -207,7 +190,7 @@ def _vpc_blocks_aws(
                 attrs.append('cidr_ipv4 = "0.0.0.0/0"')
             lines += _res(res_type, rule_id, attrs, provider_attr)
 
-    for inst in instances_by_vpc.get(vpc_name) or []:
+    for inst in ctx["inst_by_vpc"].get(vpc_name) or []:
         inst_name = inst.get("name", "")
         inst_id = _tf_id(inst_name)
         seg_ref = inst.get("network_segment") or {}
@@ -235,7 +218,7 @@ def _vpc_blocks_aws(
         lines += block
 
     # Internet Gateways
-    for igw in igws_by_vpc.get(vpc_name) or []:
+    for igw in ctx["igws_by_vpc"].get(vpc_name) or []:
         igw_name = igw.get("name", "")
         igw_id = _tf_id(igw_name)
         lines += _res(
@@ -249,7 +232,7 @@ def _vpc_blocks_aws(
         )
 
     # NAT Gateways (with optional EIP)
-    for nat in nats_by_vpc.get(vpc_name) or []:
+    for nat in ctx["nats_by_vpc"].get(vpc_name) or []:
         nat_name = nat.get("name", "")
         nat_id = _tf_id(nat_name)
         nat_segs = nat.get("network_segments") or []
@@ -289,7 +272,7 @@ def _vpc_blocks_aws(
             )
 
     # Route Tables and their subnet associations
-    for rt in rts_by_vpc.get(vpc_name) or []:
+    for rt in ctx["rts_by_vpc"].get(vpc_name) or []:
         rt_name = rt.get("name", "")
         rt_id = _tf_id(rt_name)
         lines += _res(
@@ -303,7 +286,7 @@ def _vpc_blocks_aws(
         )
 
         # Routes belonging to this route table
-        for route in routes:
+        for route in ctx["routes"]:
             route_rt = (route.get("route_table") or {}).get("name", "")
             if route_rt != rt_name:
                 continue
@@ -351,7 +334,7 @@ def _vpc_blocks_aws(
             lines += assoc_block
 
     # Network ACLs
-    for nacl in nacls_by_vpc.get(vpc_name) or []:
+    for nacl in ctx["nacls_by_vpc"].get(vpc_name) or []:
         nacl_name = nacl.get("name", "")
         nacl_id = _tf_id(nacl_name)
         nacl_segs = nacl.get("network_segments") or []
@@ -368,7 +351,7 @@ def _vpc_blocks_aws(
         lines += nacl_block
 
     # VPN Gateways (per-VPC)
-    for vpngw in vpngws_by_vpc.get(vpc_name) or []:
+    for vpngw in ctx["vpngws_by_vpc"].get(vpc_name) or []:
         vpngw_name = vpngw.get("name", "")
         vpngw_id = _tf_id(vpngw_name)
         lines += _res(
@@ -382,7 +365,7 @@ def _vpc_blocks_aws(
         )
 
     # Auto Scaling Groups
-    for asg in asgs_by_vpc.get(vpc_name) or []:
+    for asg in ctx["asgs_by_vpc"].get(vpc_name) or []:
         asg_name = asg.get("name", "")
         asg_id = _tf_id(asg_name)
         lt_id = f"{asg_id}_lt"
@@ -429,17 +412,11 @@ def _vpc_blocks_aws(
     return lines
 
 
-def _account_blocks_aws(
-    tgws: list,
-    cgws: list,
-    peerings: list,
-    direct_connects: list,
-    provider_attr: str = "",
-) -> list[str]:
+def _account_blocks_aws(ctx: dict, provider_attr: str = "") -> list[str]:
     """Emit account-scoped AWS resources that are not tied to a single VPC."""
     lines: list[str] = []
 
-    for tgw in tgws:
+    for tgw in ctx["transit_gateways"]:
         tgw_name = tgw.get("name", "")
         tgw_id = _tf_id(tgw_name)
         # aws_transit_gateway uses wide alignment for provider key — emit manually
@@ -472,7 +449,7 @@ def _account_blocks_aws(
             attach_block += ["}", ""]
             lines += attach_block
 
-    for cgw in cgws:
+    for cgw in ctx["customer_gateways"]:
         cgw_name = cgw.get("name", "")
         cgw_id = _tf_id(cgw_name)
         asn_val = (cgw.get("asn") or {}).get("asn", 65000) or 65000
@@ -489,7 +466,7 @@ def _account_blocks_aws(
             provider_attr,
         )
 
-    for peering in peerings:
+    for peering in ctx["peerings"]:
         peering_name = peering.get("name", "")
         req_vpc = (peering.get("requester_virtual_network") or {}).get("name", "")
         acc_vpc = (peering.get("accepter_virtual_network") or {}).get("name", "")
@@ -506,7 +483,7 @@ def _account_blocks_aws(
             provider_attr,
         )
 
-    for dc in direct_connects:
+    for dc in ctx["direct_connects"]:
         dc_name = dc.get("name", "")
         dc_id = _tf_id(dc_name)
         lines += _res(
@@ -524,21 +501,7 @@ def _account_blocks_aws(
     return lines
 
 
-def _vpc_blocks_azure(
-    vpc: dict,
-    sgs_by_vpc: dict,
-    instances_by_vpc: dict,
-    igws_by_vpc: dict,
-    nats_by_vpc: dict,
-    rts_by_vpc: dict,
-    nacls_by_vpc: dict,
-    vpngws_by_vpc: dict,
-    asgs_by_vpc: dict,
-    routes: list,
-    public_ips: list,
-    rg_ref: str,
-    location: str,
-) -> list[str]:
+def _vpc_blocks_azure(vpc: dict, ctx: dict, rg_ref: str, location: str) -> list[str]:
     lines: list[str] = []
     vpc_name = vpc.get("name", "")
     vpc_id = _tf_id(vpc_name)
@@ -571,7 +534,7 @@ def _vpc_blocks_azure(
             "",
         ]
 
-    for sg in sgs_by_vpc.get(vpc_name) or []:
+    for sg in ctx["sgs_by_vpc"].get(vpc_name) or []:
         sg_name = sg.get("name", "")
         sg_id = _tf_id(sg_name)
         lines += [
@@ -617,7 +580,7 @@ def _vpc_blocks_azure(
                 "",
             ]
 
-    for inst in instances_by_vpc.get(vpc_name) or []:
+    for inst in ctx["inst_by_vpc"].get(vpc_name) or []:
         inst_name = inst.get("name", "")
         inst_id = _tf_id(inst_name)
         os_type = (inst.get("os_type") or "").lower()
@@ -645,7 +608,7 @@ def _vpc_blocks_azure(
         ]
 
     # Public IPs (account-scoped but emitted per-VPC context not needed; emit all here)
-    for pip in public_ips:
+    for pip in ctx["public_ips"]:
         pip_name = pip.get("name", "")
         pip_id = _tf_id(pip_name)
         lines += [
@@ -660,7 +623,7 @@ def _vpc_blocks_azure(
         ]
 
     # NAT Gateways
-    for nat in nats_by_vpc.get(vpc_name) or []:
+    for nat in ctx["nats_by_vpc"].get(vpc_name) or []:
         nat_name = nat.get("name", "")
         nat_id = _tf_id(nat_name)
         nat_segs = nat.get("network_segments") or []
@@ -697,7 +660,7 @@ def _vpc_blocks_azure(
             ]
 
     # Route Tables and routes
-    for rt in rts_by_vpc.get(vpc_name) or []:
+    for rt in ctx["rts_by_vpc"].get(vpc_name) or []:
         rt_name = rt.get("name", "")
         rt_id = _tf_id(rt_name)
         lines += [
@@ -709,7 +672,7 @@ def _vpc_blocks_azure(
             "}",
             "",
         ]
-        for route in routes:
+        for route in ctx["routes"]:
             route_rt = (route.get("route_table") or {}).get("name", "")
             if route_rt != rt_name:
                 continue
@@ -743,7 +706,7 @@ def _vpc_blocks_azure(
             ]
 
     # Network ACLs → subnet NSG associations in Azure
-    for nacl in nacls_by_vpc.get(vpc_name) or []:
+    for nacl in ctx["nacls_by_vpc"].get(vpc_name) or []:
         nacl_name = nacl.get("name", "")
         nacl_id = _tf_id(nacl_name)
         for seg in nacl.get("network_segments") or []:
@@ -760,7 +723,7 @@ def _vpc_blocks_azure(
             ]
 
     # VPN Gateways
-    for vpngw in vpngws_by_vpc.get(vpc_name) or []:
+    for vpngw in ctx["vpngws_by_vpc"].get(vpc_name) or []:
         vpngw_name = vpngw.get("name", "")
         vpngw_id = _tf_id(vpngw_name)
         lines += [
@@ -780,7 +743,7 @@ def _vpc_blocks_azure(
         ]
 
     # Auto Scaling Groups → Azure VMSS
-    for asg in asgs_by_vpc.get(vpc_name) or []:
+    for asg in ctx["asgs_by_vpc"].get(vpc_name) or []:
         asg_name = asg.get("name", "")
         asg_id = _tf_id(asg_name)
         subnet_id = (
@@ -820,17 +783,10 @@ def _vpc_blocks_azure(
     return lines
 
 
-def _account_blocks_azure(
-    tgws: list,
-    cgws: list,
-    peerings: list,
-    direct_connects: list,
-    rg_ref: str,
-    location: str,
-) -> list[str]:
+def _account_blocks_azure(ctx: dict, rg_ref: str, location: str) -> list[str]:
     lines: list[str] = []
 
-    for cgw in cgws:
+    for cgw in ctx["customer_gateways"]:
         cgw_name = cgw.get("name", "")
         cgw_id = _tf_id(cgw_name)
         ip_val = (cgw.get("ip_address") or {}).get("address", "")
@@ -845,7 +801,7 @@ def _account_blocks_azure(
             "",
         ]
 
-    for peering in peerings:
+    for peering in ctx["peerings"]:
         req_vpc = (peering.get("requester_virtual_network") or {}).get("name", "")
         acc_vpc = (peering.get("accepter_virtual_network") or {}).get("name", "")
         req_id = _tf_id(f"{req_vpc}_to_{acc_vpc}")
@@ -867,7 +823,7 @@ def _account_blocks_azure(
             "",
         ]
 
-    for dc in direct_connects:
+    for dc in ctx["direct_connects"]:
         dc_name = dc.get("name", "")
         dc_id = _tf_id(dc_name)
         lines += [
@@ -892,18 +848,7 @@ def _account_blocks_azure(
     return lines
 
 
-def _vpc_blocks_gcp(
-    vpc: dict,
-    sgs_by_vpc: dict,
-    instances_by_vpc: dict,
-    nats_by_vpc: dict,
-    rts_by_vpc: dict,
-    vpngws_by_vpc: dict,
-    asgs_by_vpc: dict,
-    routes: list,
-    public_ips: list,
-    region: str,
-) -> list[str]:
+def _vpc_blocks_gcp(vpc: dict, ctx: dict, region: str) -> list[str]:
     lines: list[str] = []
     vpc_name = vpc.get("name", "")
     vpc_id = _tf_id(vpc_name)
@@ -932,7 +877,7 @@ def _vpc_blocks_gcp(
             "",
         ]
 
-    for sg in sgs_by_vpc.get(vpc_name) or []:
+    for sg in ctx["sgs_by_vpc"].get(vpc_name) or []:
         sg_name = sg.get("name", "")
         sg_id = _tf_id(sg_name)
         rules_for_sg = sg.get("rules") or []
@@ -988,7 +933,7 @@ def _vpc_blocks_gcp(
                     ]
             lines += ["}", ""]
 
-    for inst in instances_by_vpc.get(vpc_name) or []:
+    for inst in ctx["inst_by_vpc"].get(vpc_name) or []:
         inst_name = inst.get("name", "")
         inst_id = _tf_id(inst_name)
         az_name = (inst.get("availability_zone") or {}).get("name", "")
@@ -1015,7 +960,7 @@ def _vpc_blocks_gcp(
         ]
 
     # Public IPs (GCP compute addresses)
-    for pip in public_ips:
+    for pip in ctx["public_ips"]:
         pip_name = pip.get("name", "")
         pip_id = _tf_id(pip_name)
         lines += [
@@ -1027,7 +972,7 @@ def _vpc_blocks_gcp(
         ]
 
     # Cloud Router + NAT
-    for nat in nats_by_vpc.get(vpc_name) or []:
+    for nat in ctx["nats_by_vpc"].get(vpc_name) or []:
         nat_name = nat.get("name", "")
         nat_id = _tf_id(nat_name)
         router_id = f"router_{nat_id}"
@@ -1049,10 +994,10 @@ def _vpc_blocks_gcp(
         ]
 
     # Routes
-    for route in routes:
+    for route in ctx["routes"]:
         route_rt = (route.get("route_table") or {}).get("name", "")
         # For GCP, filter routes belonging to this VPC via route table grouping
-        rt_obj = next((rt for rt in (rts_by_vpc.get(vpc_name) or []) if rt.get("name") == route_rt), None)
+        rt_obj = next((rt for rt in (ctx["rts_by_vpc"].get(vpc_name) or []) if rt.get("name") == route_rt), None)
         if rt_obj is None:
             continue
         route_name = route.get("name", "")
@@ -1071,7 +1016,7 @@ def _vpc_blocks_gcp(
         lines += ["}", ""]
 
     # VPN Gateways
-    for vpngw in vpngws_by_vpc.get(vpc_name) or []:
+    for vpngw in ctx["vpngws_by_vpc"].get(vpc_name) or []:
         vpngw_name = vpngw.get("name", "")
         vpngw_id = _tf_id(vpngw_name)
         lines += [
@@ -1084,7 +1029,7 @@ def _vpc_blocks_gcp(
         ]
 
     # Auto Scaling Groups → GCP instance group manager + autoscaler
-    for asg in asgs_by_vpc.get(vpc_name) or []:
+    for asg in ctx["asgs_by_vpc"].get(vpc_name) or []:
         asg_name = asg.get("name", "")
         asg_id = _tf_id(asg_name)
         it_id = f"{asg_id}_template"
@@ -1130,17 +1075,10 @@ def _vpc_blocks_gcp(
     return lines
 
 
-def _account_blocks_gcp(
-    tgws: list,
-    cgws: list,
-    peerings: list,
-    direct_connects: list,
-    vifs: list,
-    region: str,
-) -> list[str]:
+def _account_blocks_gcp(ctx: dict, region: str) -> list[str]:
     lines: list[str] = []
 
-    for cgw in cgws:
+    for cgw in ctx["customer_gateways"]:
         cgw_name = cgw.get("name", "")
         cgw_id = _tf_id(cgw_name)
         ip_val = (cgw.get("ip_address") or {}).get("address", "")
@@ -1156,7 +1094,7 @@ def _account_blocks_gcp(
             "",
         ]
 
-    for peering in peerings:
+    for peering in ctx["peerings"]:
         req_vpc = (peering.get("requester_virtual_network") or {}).get("name", "")
         acc_vpc = (peering.get("accepter_virtual_network") or {}).get("name", "")
         req_id = _tf_id(f"{req_vpc}_to_{acc_vpc}")
@@ -1176,7 +1114,7 @@ def _account_blocks_gcp(
             "",
         ]
 
-    for vif in vifs:
+    for vif in ctx["vifs"]:
         vif_name = vif.get("name", "")
         vif_id = _tf_id(vif_name)
         lines += [
@@ -1207,22 +1145,6 @@ class CloudVpcTerraform(InfrahubTransform):
         vpcs = ctx["vpcs"]
         provider_name = ctx["provider_name"]
         account = ctx["account"]
-        public_ips = ctx["public_ips"]
-        transit_gateways = ctx["transit_gateways"]
-        customer_gateways = ctx["customer_gateways"]
-        direct_connects = ctx["direct_connects"]
-        routes = ctx["routes"]
-        peerings = ctx["peerings"]
-        vifs = ctx["vifs"]
-        sgs_by_vpc = ctx["sgs_by_vpc"]
-        igws_by_vpc = ctx["igws_by_vpc"]
-        nats_by_vpc = ctx["nats_by_vpc"]
-        rts_by_vpc = ctx["rts_by_vpc"]
-        nacls_by_vpc = ctx["nacls_by_vpc"]
-        vpngws_by_vpc = ctx["vpngws_by_vpc"]
-        inst_by_vpc = ctx["inst_by_vpc"]
-        asgs_by_vpc = ctx["asgs_by_vpc"]
-
         lines: list[str] = []
 
         if provider_name == "aws":
@@ -1235,27 +1157,8 @@ class CloudVpcTerraform(InfrahubTransform):
                 region = vpc_region_map.get(vpc.get("name", ""), "")
                 alias = _tf_id(region) if region else ""
                 provider_attr = f"aws.{alias}" if region != default_region and alias else ""
-                lines += _vpc_blocks_aws(
-                    vpc,
-                    sgs_by_vpc,
-                    inst_by_vpc,
-                    igws_by_vpc,
-                    nats_by_vpc,
-                    rts_by_vpc,
-                    nacls_by_vpc,
-                    vpngws_by_vpc,
-                    asgs_by_vpc,
-                    routes,
-                    public_ips,
-                    transit_gateways,
-                    customer_gateways,
-                    peerings,
-                    direct_connects,
-                    provider_attr=provider_attr,
-                )
-            lines += _account_blocks_aws(
-                transit_gateways, customer_gateways, peerings, direct_connects, provider_attr=""
-            )  # TGW is account-wide; use default
+                lines += _vpc_blocks_aws(vpc, ctx, provider_attr=provider_attr)
+            lines += _account_blocks_aws(ctx)  # TGW is account-wide; use default
 
         elif provider_name == "azure":
             account_name = account.get("name", "default")
@@ -1264,24 +1167,8 @@ class CloudVpcTerraform(InfrahubTransform):
             rg_ref = "var.resource_group_name"
             lines += _provider_block_azure(account_name)
             for vpc in vpcs:
-                lines += _vpc_blocks_azure(
-                    vpc,
-                    sgs_by_vpc,
-                    inst_by_vpc,
-                    igws_by_vpc,
-                    nats_by_vpc,
-                    rts_by_vpc,
-                    nacls_by_vpc,
-                    vpngws_by_vpc,
-                    asgs_by_vpc,
-                    routes,
-                    public_ips,
-                    rg_ref,
-                    location,
-                )
-            lines += _account_blocks_azure(
-                transit_gateways, customer_gateways, peerings, direct_connects, rg_ref, location
-            )
+                lines += _vpc_blocks_azure(vpc, ctx, rg_ref, location)
+            lines += _account_blocks_azure(ctx, rg_ref, location)
 
         else:  # gcp
             project = account.get("account_id", "")
@@ -1289,18 +1176,7 @@ class CloudVpcTerraform(InfrahubTransform):
             region = region_obj.get("name", "") if region_obj else ""
             lines += _provider_block_gcp(project, region)
             for vpc in vpcs:
-                lines += _vpc_blocks_gcp(
-                    vpc,
-                    sgs_by_vpc,
-                    inst_by_vpc,
-                    nats_by_vpc,
-                    rts_by_vpc,
-                    vpngws_by_vpc,
-                    asgs_by_vpc,
-                    routes,
-                    public_ips,
-                    region,
-                )
-            lines += _account_blocks_gcp(transit_gateways, customer_gateways, peerings, direct_connects, vifs, region)
+                lines += _vpc_blocks_gcp(vpc, ctx, region)
+            lines += _account_blocks_gcp(ctx, region)
 
         return "\n".join(lines)

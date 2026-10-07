@@ -28,12 +28,8 @@ vlan {{ vlan.vlan_id }}
 ! Interfaces
 {%- for interface in interfaces if interface.role != 'mlag-peer' %}
 interface {{ interface.name }}
-{%- if interface.description %}
-  description {{ interface.description }}
-{%- elif interface.circuits %}
-  description {{ interface.circuits[0].circuit_type|upper }} - {{ interface.circuits[0].circuit_id }} - {{ interface.circuits[0].provider }}
-{%- elif interface.virtual_links %}
-  description {{ interface.virtual_links[0].link_type|upper }} - {{ interface.virtual_links[0].link_name }} - {{ interface.virtual_links[0].provider }}
+{%- if interface.display_description %}
+  description {{ interface.display_description }}
 {%- endif %}
 {%- if interface.dot1q_vlan %}
   encapsulation dot1q {{ interface.dot1q_vlan }}
@@ -75,87 +71,24 @@ interface {{ interface.name }}
 ! BGP Configuration
 {% include 'common/cisco_nxos_bgp.j2' %}
 !
-{%- if vxlan and vxlan.enabled %}
+{%- include 'common/cisco_nxos_vxlan.j2' -%}
 !
-! VXLAN Configuration (netlab-style multivendor) — border-leaf is a VTEP too,
-! terminating customer/shared VNIs the same as a regular leaf.
+! Route-maps
+{#- Referenced by cisco_nxos_bgp.j2's `redistribute direct`. An NX-OS
+    `redistribute` naming an undefined route-map redistributes NOTHING, so
+    without this the border-leaf's loopback never enters BGP and no overlay
+    peer can reach its VTEP address. #}
+route-map RM-CONN-2-BGP permit 10
+{#- A BGW also has to advertise its VTEP and site-VIP loopbacks, or the
+    remote site has no route to the tunnel endpoints it learns over the DCI. #}
+  match interface {{ ([loopback_name] + (vxlan.multisite.advertise_interfaces if vxlan and vxlan.multisite else [])) | unique | join(' ') }}
 !
-{%- for feature in vxlan.features %}
-feature {{ feature }}
-{%- endfor %}
-!
-interface {{ vxlan.nve_interface }}
-{%- if vxlan.vtep.ipv4 %}
-  source-interface {{ vxlan.vtep.source_interface }}
-{%- endif %}
-{%- for mapping in vxlan.l2_vni_mappings %}
-  member vni {{ mapping.vni }}
-    {%- if vxlan.evpn and vxlan.evpn.enabled %}
-    ingress-replication protocol bgp
-    {%- elif vxlan.flooding == "static" and vxlan.remote_vteps %}
-    ingress-replication protocol static
-      peer-list {{ vxlan.remote_vteps | join(' ') }}
-    {%- endif %}
-{%- endfor %}
-  no shutdown
-!
-{%- if vxlan.evpn and vxlan.evpn.enabled %}
-!
-! EVPN Configuration
-!
-evpn
-{%- for mapping in vxlan.l2_vni_mappings %}
-  vni {{ mapping.vni }} l2
-    rd {{ vxlan.evpn.rd_format }}
-    route-target import {{ bgp[0].local_as.asn }}:{{ mapping.vni }}
-    route-target export {{ bgp[0].local_as.asn }}:{{ mapping.vni }}
-{%- endfor %}
+{%- if vxlan and vxlan.l3_vni_mappings %}
+{#- Permit-all by design — see the leaf template. #}
+route-map RM-VRF-DIRECT-2-EVPN permit 10
 !
 {%- endif %}
-!
-! VLAN to VNI mapping
-!
-{%- for mapping in vxlan.l2_vni_mappings %}
-vlan {{ mapping.vlan_id }}
-  vn-segment {{ mapping.vni }}
-{%- endfor %}
-{%- endif %}
-!
-{%- if vlans %}
-! VLAN SVI Configuration
-!
-{%- for vlan in vlans %}
-{%- if vlan.gateway_ip or vlan.gateway_ipv6 %}
-{%- set ns = namespace(acl_name=None) %}
-{%- for acl in acls %}
-{%- if acl.vlan_id == vlan.vlan_id %}
-{%- set ns.acl_name = acl.name %}
-{%- endif %}
-{%- endfor %}
-interface Vlan{{ vlan.vlan_id }}
-  description {{ vlan.name }}
-{%- if vlan.isolation_mode == 'isolated' %}
-  ! Isolation Mode: ISOLATED — intra-segment host-to-host traffic blocked via port-isolation
-{%- elif vlan.isolation_mode == 'microsegmented' %}
-  ! Isolation Mode: MICROSEGMENTED — intra+inter segment rules enforced via SVI ACL (and firewall if present)
-{%- endif %}
-{%- if vlan.vrf %}
-  vrf member {{ vlan.vrf }}
-{%- endif %}
-{%- if vlan.gateway_ip %}
-  ip address {{ vlan.gateway_ip }}
-{%- endif %}
-{%- if vlan.gateway_ipv6 %}
-  ipv6 address {{ vlan.gateway_ipv6 }}
-{%- endif %}
-  no shutdown
-{%- if ns.acl_name %}
-  ip access-group {{ ns.acl_name }} in
-{%- endif %}
-!
-{%- endif %}
-{%- endfor %}
-{%- endif %}
+{%- include 'common/cisco_nxos_svi.j2' -%}
 !
 {%- if vrf_gateways %}
 !

@@ -28,6 +28,7 @@ interface Ethernet1/34
   no shutdown
 !
 vpc domain 1
+  peer-keepalive destination 172.16.0.2 source 172.16.0.1 vrf management
   delay restore 300
   delay restore interface-vlan 330
 !
@@ -63,6 +64,10 @@ interface Loopback0
 ! BGP disabled by capability profile
 
 !
+!
+! Route-maps
+route-map RM-CONN-2-BGP permit 10
+  match interface loopback0
 !
 !
 

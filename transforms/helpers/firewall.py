@@ -3,7 +3,10 @@
 from ipaddress import ip_interface, ip_network
 from typing import Any
 
-from transforms.helpers.segments import _get_segment_prefix_str
+from transforms.helpers.acl import _PROTO_MAP, _port_match
+from transforms.helpers.addressing import host_ip
+from transforms.helpers.policy import active_rules, enabled_policies, inbound_permits
+from transforms.helpers.segments import _get_segment_prefix_str, segment_hosting_candidates
 
 # Border-leaf platforms with a native hardware SGT/security-group matching
 # primitive — Cisco CTS ("match cts sgt") is proprietary VXLAN-GBP encoding,
@@ -116,9 +119,9 @@ def get_firewall_static_routes(
         # More precisely: the OTHER host in the /30 (the leaf SVI).
         try:
             net = ip_network(ip_addr, strict=False)
-            hosts = list(net.hosts())
             fw_ip = ip_interface(ip_addr).ip
-            leaf_ip = next((h for h in hosts if h != fw_ip), None)
+            # Lazy: an IPv6 /64 has 2^64 hosts — never materialize the list.
+            leaf_ip = next((h for h in net.hosts() if h != fw_ip), None)
             if leaf_ip is None:
                 continue
             nexthop = str(leaf_ip)
@@ -141,11 +144,9 @@ def get_firewall_static_routes(
 def _iface_ip_and_namespace(iface: dict[str, Any]) -> tuple[str | None, str | None]:
     """Return (ip_without_prefixlen, namespace_name) for one interface_capabilities leg."""
     ip_obj = iface.get("ip_address") or {}
-    address = ip_obj.get("address")
-    if not address:
+    if not ip_obj.get("address"):
         return None, None
-    ns_name = (ip_obj.get("ip_namespace") or {}).get("name")
-    return address.split("/")[0], ns_name
+    return host_ip(ip_obj["address"]), (ip_obj.get("ip_namespace") or {}).get("name")
 
 
 def get_vrf_default_gateways(
@@ -227,6 +228,9 @@ def get_firewall_contexts(interfaces: list[dict[str, Any]] | None) -> list[dict[
             tenant = cap.get("tenant") or {}
             contexts.append(
                 {
+                    "id": context_id,
+                    "tenant_id": tenant.get("id"),
+                    "served_deployment_ids": [d["id"] for d in cap.get("served_deployments") or [] if d.get("id")],
                     "name": cap.get("name"),
                     "context_id": cap.get("context_id"),
                     "vlan_id": cap.get("vlan_id"),
@@ -238,6 +242,101 @@ def get_firewall_contexts(interfaces: list[dict[str, Any]] | None) -> list[dict[
             )
     contexts.sort(key=lambda c: c.get("name") or "")
     return contexts
+
+
+def place_policies_in_contexts(
+    policies_data: list[dict[str, Any]] | None,
+    contexts: list[dict[str, Any]],
+    segments: list[dict[str, Any]] | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
+    """Split SecurityPolicy rules between this firewall's contexts.
+
+    A segment terminates on the context serving one of its customer
+    deployments (the context's served_deployments, written by the
+    deployment's own boarding run), so a rule sits in the context its
+    traffic is sent to. A rule goes to its source segment's context; when
+    the destination segment is served by another context it is repeated
+    there as the ingress leg, since traffic between two tenants crosses both
+    contexts and each one denies by default.
+
+    A segment of a deployment no context here serves belongs to another
+    firewall: a rule whose segments all terminate elsewhere is left out.
+    Until any context here lists its deployments (data boarded before the
+    link existed), a segment falls back to its tenant's dedicated context,
+    else the shared (tenant-less) one. A segment with no deployment uses
+    the shared context; rules no context serves stay in the root list.
+
+    `segments` adds deployment links for segments whose copy inside a rule
+    lacks them (the per-segment policy fragment does not select them).
+
+    Returns (root policies, context id -> policies), each policy holding
+    only the rules placed there. A policy with no rules at all stays in the
+    root list; one whose rules all moved to contexts leaves it.
+    """
+    if not policies_data:
+        return [], {}
+    if not contexts:
+        return list(policies_data), {}
+
+    serving = {ctx["tenant_id"]: ctx["id"] for ctx in contexts if ctx.get("tenant_id")}
+    linked = False
+    for ctx in contexts:
+        for deployment_id in ctx.get("served_deployment_ids") or []:
+            serving[deployment_id] = ctx["id"]
+            linked = True
+    shared = next((ctx["id"] for ctx in contexts if not ctx.get("tenant_id")), None)
+
+    deployments_by_segment: dict[str, list[str]] = {}
+
+    def _learn(segment: dict[str, Any] | None) -> None:
+        if segment and segment.get("id"):
+            ids = _segment_deployment_ids(segment)
+            if ids:
+                deployments_by_segment.setdefault(segment["id"], ids)
+
+    for segment in segments or []:
+        _learn(segment)
+    for policy in policies_data:
+        for rule in policy.get("rules") or []:
+            _learn(rule.get("source_segment"))
+            _learn(rule.get("destination_segment"))
+
+    def _deployments_of(segment: dict[str, Any]) -> list[str]:
+        return deployments_by_segment.get(str(segment.get("id"))) or _segment_deployment_ids(segment)
+
+    def _context_of(segment: dict[str, Any] | None) -> str | None:
+        if not segment:
+            return None
+        ids = _deployments_of(segment)
+        home = next((serving[d] for d in ids if d in serving), None)
+        if home or (linked and ids):
+            return home
+        return shared
+
+    def _terminates_elsewhere(rule: dict[str, Any]) -> bool:
+        """Every segment of the rule belongs to deployments served elsewhere."""
+        ends = [s for s in (rule.get("source_segment"), rule.get("destination_segment")) if s]
+        return linked and bool(ends) and all(_deployments_of(s) for s in ends)
+
+    root: list[dict[str, Any]] = []
+    by_context: dict[str, list[dict[str, Any]]] = {}
+    for policy in policies_data:
+        root_rules: list[dict[str, Any]] = []
+        context_rules: dict[str, list[dict[str, Any]]] = {}
+        for rule in policy.get("rules") or []:
+            homes: list[str] = []
+            for ctx_id in (_context_of(rule.get("source_segment")), _context_of(rule.get("destination_segment"))):
+                if ctx_id and ctx_id not in homes:
+                    homes.append(ctx_id)
+            if not homes and not _terminates_elsewhere(rule):
+                root_rules.append(rule)
+            for ctx_id in homes:
+                context_rules.setdefault(ctx_id, []).append(rule)
+        if root_rules or not policy.get("rules"):
+            root.append({**policy, "rules": root_rules})
+        for ctx_id, rules in context_rules.items():
+            by_context.setdefault(ctx_id, []).append({**policy, "rules": rules})
+    return root, by_context
 
 
 def _flatten_deployment_firewall_contexts(deployment: dict[str, Any] | None) -> list[dict[str, Any]]:
@@ -267,10 +366,9 @@ def _flatten_deployment_firewall_contexts(deployment: dict[str, Any] | None) -> 
                 found.extend(cap.get("contexts") or [])
         return found
 
-    contexts = _contexts_from_device_hosting(deployment)
-    parent = deployment.get("parent")
-    if parent:
-        contexts.extend(_contexts_from_device_hosting(parent))
+    contexts = [
+        ctx for hosting in segment_hosting_candidates(deployment) for ctx in _contexts_from_device_hosting(hosting)
+    ]
 
     deduped: dict[str, dict[str, Any]] = {}
     for ctx in contexts:
@@ -278,6 +376,36 @@ def _flatten_deployment_firewall_contexts(deployment: dict[str, Any] | None) -> 
         if ctx_id and ctx_id not in deduped:
             deduped[ctx_id] = ctx
     return list(deduped.values())
+
+
+def _segment_deployment_ids(segment: dict[str, Any]) -> list[str]:
+    """TopologyCustomer ids a segment serves: customer_deployment on a
+    VlanSegment, customer_deployments on a VxlanSegment (one relationship,
+    split by cardinality)."""
+    deployment_ids: list[str] = []
+    single_deployment = segment.get("customer_deployment")
+    if single_deployment and single_deployment.get("id"):
+        deployment_ids.append(single_deployment["id"])
+    for dep in segment.get("customer_deployments") or []:
+        if dep.get("id"):
+            deployment_ids.append(dep["id"])
+    return deployment_ids
+
+
+def _context_leg_ip(ctx: dict[str, Any]) -> str | None:
+    """The context's own firewall-leg IP, the PBR nexthop toward it."""
+    for leg in ctx.get("interface_capabilities") or []:
+        device = leg.get("device") or {}
+        if device.get("role") != "firewall":
+            continue
+        address = (leg.get("ip_address") or {}).get("address")
+        if not address:
+            continue
+        try:
+            return str(ip_interface(address).ip)
+        except ValueError:
+            continue
+    return None
 
 
 def _resolve_context_nexthops(
@@ -290,20 +418,7 @@ def _resolve_context_nexthops(
     context_nexthop_by_deployment: dict[str, str] = {}
     shared_nexthop: str | None = None
     for ctx in firewall_contexts or []:
-        fw_ip: str | None = None
-        for leg in ctx.get("interface_capabilities") or []:
-            device = leg.get("device") or {}
-            if device.get("role") != "firewall":
-                continue
-            ip_obj = leg.get("ip_address") or {}
-            address = ip_obj.get("address")
-            if not address:
-                continue
-            try:
-                fw_ip = str(ip_interface(address).ip)
-            except ValueError:
-                continue
-            break
+        fw_ip = _context_leg_ip(ctx)
         if fw_ip is None:
             continue
         tenant = ctx.get("tenant") or {}
@@ -313,6 +428,47 @@ def _resolve_context_nexthops(
         else:
             shared_nexthop = fw_ip
     return context_nexthop_by_deployment, shared_nexthop
+
+
+def _redirect_nexthop(
+    deployment_ids: list[str], nexthop_by_deployment: dict[str, str], shared_nexthop: str | None
+) -> str | None:
+    """Nexthop of the deployment's dedicated context, else the shared one."""
+    return next((nexthop_by_deployment[d] for d in deployment_ids if d in nexthop_by_deployment), shared_nexthop)
+
+
+def _serving_context_nexthops(firewall_contexts: list[dict[str, Any]] | None) -> dict[str, str]:
+    """Deployment id -> nexthop of the context its segments terminate on.
+
+    Strict: only a context that names the deployment (its dedicated tenant,
+    or one of its served_deployments) counts. Unlike the redirect nexthop
+    there is no shared fallback, since a deployment served by another DC's
+    firewall would otherwise look like it shares this DC's shared context.
+    """
+    serving: dict[str, str] = {}
+    for ctx in firewall_contexts or []:
+        fw_ip = _context_leg_ip(ctx)
+        if fw_ip is None:
+            continue
+        tenant_id = (ctx.get("tenant") or {}).get("id")
+        for deployment_id in [tenant_id] + [d.get("id") for d in ctx.get("served_deployments") or []]:
+            if deployment_id:
+                serving.setdefault(deployment_id, fw_ip)
+    return serving
+
+
+def _needs_firewall(
+    rule: dict[str, Any], own_nexthop: str, peer: dict[str, Any] | None, serving: dict[str, str]
+) -> bool:
+    """A permit is enforced on the firewall, not bypassed, when it carries a
+    security profile (inspection) and its peer segment terminates on the
+    same context as this one. Both directions then cross that one context,
+    which holds the session. Across contexts no context sees both legs, so
+    the flow stays on the fabric (bypass plus leaf ACL)."""
+    if not rule.get("security_profile"):
+        return False
+    peer_nexthop = next((serving[d] for d in _segment_deployment_ids(peer or {}) if d in serving), None)
+    return peer_nexthop == own_nexthop
 
 
 def get_customer_pbr_rules(
@@ -325,7 +481,14 @@ def get_customer_pbr_rules(
     a SecurityPolicyRule permit is the only bypass — the SAME rule data
     get_acls() already reads for its ACL rendering (_get_segment_prefix_str
     per rule.destination_segment), just consumed here for a different
-    purpose. Not filtered by owner: a cross-owner permit bypasses PBR the
+    purpose. The bypass is symmetric: a permit A -> B bypasses B on A's
+    VLAN and, via B's inbound_rules, A on B's VLAN, so the reply never
+    reaches a firewall that saw no forward packet.
+
+    The one exception is an inspected flow: a permit with a security
+    profile between two segments served by the SAME context is not
+    bypassed on either side, so both directions cross that context
+    (_needs_firewall). Between contexts every permit stays on the fabric. Not filtered by owner: a cross-owner permit bypasses PBR the
     same as a same-owner one, since intra- and inter-customer traffic use
     one unified default-redirect model.
 
@@ -361,6 +524,7 @@ def get_customer_pbr_rules(
     context_nexthop_by_deployment, shared_nexthop = _resolve_context_nexthops(firewall_contexts)
     if not context_nexthop_by_deployment and shared_nexthop is None:
         return []
+    serving = _serving_context_nexthops(firewall_contexts)
 
     rules: list[dict[str, Any]] = []
     seen_vlans: set[int] = set()
@@ -373,40 +537,49 @@ def get_customer_pbr_rules(
             continue
         seen_vlans.add(vlan_id)
 
-        deployment_ids: list[str] = []
-        single_deployment = seg.get("customer_deployment")
-        if single_deployment and single_deployment.get("id"):
-            deployment_ids.append(single_deployment["id"])
-        for dep in seg.get("customer_deployments") or []:
-            if dep.get("id"):
-                deployment_ids.append(dep["id"])
+        deployment_ids = _segment_deployment_ids(seg)
 
-        fw_nexthop = next(
-            (context_nexthop_by_deployment[d] for d in deployment_ids if d in context_nexthop_by_deployment),
-            None,
-        )
-        if fw_nexthop is None:
-            fw_nexthop = shared_nexthop
+        fw_nexthop = _redirect_nexthop(deployment_ids, context_nexthop_by_deployment, shared_nexthop)
         if fw_nexthop is None:
             continue
 
-        bypass_prefixes: list[str] = []
-        for policy in seg.get("security_policies") or []:
-            if not policy.get("enabled", True):
-                continue
-            for rule in policy.get("rules") or []:
-                if rule.get("disabled") or rule.get("action") != "permit":
-                    continue
-                dst_seg = rule.get("destination_segment") or {}
-                dst_prefix = _get_segment_prefix_str(dst_seg) if dst_seg else None
-                if dst_prefix:
-                    bypass_prefixes.append(dst_prefix)
+        # The flow is inspected only if this segment's own context is the
+        # one its traffic is redirected to.
+        own_nexthop = next((serving[d] for d in deployment_ids if d in serving), None)
+        inspected = own_nexthop is not None and own_nexthop == fw_nexthop
+
+        bypass: set[str] = set()
+        via_firewall: set[str] = set()
+
+        def _classify(rule: dict[str, Any], peer: dict[str, Any] | None) -> None:
+            prefix = _get_segment_prefix_str(peer) if peer else None
+            if not prefix:
+                return
+            if inspected and _needs_firewall(rule, fw_nexthop, peer, serving):
+                via_firewall.add(prefix)
+            else:
+                bypass.add(prefix)
+
+        for policy in enabled_policies(seg.get("security_policies")):
+            for rule in active_rules(policy):
+                if rule.get("action") == "permit":
+                    _classify(rule, rule.get("destination_segment"))
+        # Reply leg of every permit INTO this segment: a forward packet that
+        # bypassed the firewall on the source's leaf must be answered past it
+        # too, or the firewall drops the reply with no session. The return
+        # ACL (get_acls) still restricts it to the rule's port.
+        for rule in inbound_permits(seg):
+            _classify(rule, rule.get("source_segment"))
+
+        # The bypass is per prefix: one inspected flow to a peer sends all
+        # traffic to it through the firewall, the same on both leaves.
+        bypass_prefixes = bypass - via_firewall
 
         rules.append(
             {
                 "vlan_id": vlan_id,
                 "segment_name": seg.get("customer_name") or seg.get("name") or f"VLAN_{vlan_id}",
-                "bypass_prefixes": sorted(set(bypass_prefixes)),
+                "bypass_prefixes": sorted(bypass_prefixes),
                 "fw_nexthop": fw_nexthop,
                 "customer_name": seg.get("customer_name"),
                 "environment": seg.get("environment"),
@@ -465,20 +638,9 @@ def get_border_leaf_pbr_rules(
             continue
         seen_keys.add(dedup_key)
 
-        deployment_ids: list[str] = []
-        single_deployment = seg.get("customer_deployment")
-        if single_deployment and single_deployment.get("id"):
-            deployment_ids.append(single_deployment["id"])
-        for dep in seg.get("customer_deployments") or []:
-            if dep.get("id"):
-                deployment_ids.append(dep["id"])
+        deployment_ids = _segment_deployment_ids(seg)
 
-        fw_nexthop = next(
-            (context_nexthop_by_deployment[d] for d in deployment_ids if d in context_nexthop_by_deployment),
-            None,
-        )
-        if fw_nexthop is None:
-            fw_nexthop = shared_nexthop
+        fw_nexthop = _redirect_nexthop(deployment_ids, context_nexthop_by_deployment, shared_nexthop)
         if fw_nexthop is None:
             continue
 
@@ -547,11 +709,37 @@ def get_border_leaf_pbr_rules(
     return rules
 
 
+def _first_selector_cidr(
+    prefixes: list[dict[str, Any]] | None, ip_addresses: list[dict[str, Any]] | None
+) -> str | None:
+    """First explicit source_prefixes/destination_prefixes or *_ip_addresses
+    selector, as a CIDR/address string. Every rendering template's src/dst is
+    a single scalar (templates/configs/firewalls/*.j2), so a multi-value
+    selector list can only ever render its first entry — a documented
+    limitation, not a full address-group/fanout implementation. Prefixes are
+    checked before IP addresses since a prefix-based rule is the common case
+    for the cloud/partner/SaaS CIDR this selector shape was added for."""
+    for prefix in prefixes or []:
+        cidr = prefix.get("prefix")
+        if cidr:
+            return cidr
+    for ip in ip_addresses or []:
+        address = ip.get("address")
+        if address:
+            return address
+    return None
+
+
 def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     """Build a zone policy list from SecurityPolicy nodes (global query).
 
-    Disabled policies and disabled rules are skipped. An implicit deny-all rule
-    is appended as the last entry in every policy's rule list.
+    Disabled policies and disabled rules are skipped. Every template renders
+    the policies as one flat rule table (a context's, or the root one), so
+    rules are numbered 10, 20, ... across the whole table in policy order,
+    then rule index order: per-policy indexes collide (each policy starts
+    at the same index) and FortiOS `edit <seq>` / Check Point `position`
+    would overwrite or reorder them. One implicit deny-all closes the table,
+    on the last policy; one per policy would shadow every later policy.
 
     Args:
         policies_data: List of cleaned SecurityPolicy dicts.
@@ -565,7 +753,8 @@ def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list
             "rules": [
               {
                 "seq": 10, "name": "allow-https",
-                "action": "permit", "protocol": "tcp",
+                "action": "permit", "protocol": "tcp", "raw_protocol": "tcp",
+                "port_start": 443, "port_end": None,
                 "src_zone": "dmz", "dst_zone": "internal",
                 "src": None, "dst": None,
                 "dst_port": "eq 443", "log": True,
@@ -578,46 +767,48 @@ def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list
     if not policies_data:
         return []
 
-    proto_map = {"any": "ip", "tcp": "tcp", "udp": "udp", "icmp": "icmp"}
-
     policies: list[dict[str, Any]] = []
-    for policy in policies_data:
-        if not policy.get("enabled", True):
-            continue
-
+    seq = 0
+    for policy in enabled_policies(policies_data):
         rules: list[dict[str, Any]] = []
-        for rule in sorted(policy.get("rules") or [], key=lambda r: r.get("index") or 0):
-            if rule.get("disabled"):
-                continue
+        for rule in active_rules(policy):
+            seq += 10
 
             protocol = rule.get("protocol") or "any"
-            acl_proto = proto_map.get(protocol, "ip")
+            acl_proto = _PROTO_MAP.get(protocol, "ip")
 
             src_zone = (rule.get("source_zone") or {}).get("name")
             dst_zone = (rule.get("destination_zone") or {}).get("name")
 
             src_seg = rule.get("source_segment") or {}
             src = _get_segment_prefix_str(src_seg) if src_seg else None
+            if src is None:
+                src = _first_selector_cidr(rule.get("source_prefixes"), rule.get("source_ip_addresses"))
             dst_seg = rule.get("destination_segment") or {}
             dst = _get_segment_prefix_str(dst_seg) if dst_seg else None
+            if dst is None:
+                dst = _first_selector_cidr(rule.get("destination_prefixes"), rule.get("destination_ip_addresses"))
 
             port_start = rule.get("port_start")
             port_end = rule.get("port_end")
-            dst_port: str | None = None
-            if port_start and acl_proto in ("tcp", "udp"):
-                if port_end and port_end != port_start:
-                    dst_port = f"range {port_start} {port_end}"
-                else:
-                    dst_port = f"eq {port_start}"
+            dst_port = _port_match(rule, acl_proto)
 
             profile = (rule.get("security_profile") or {}).get("name")
 
             rules.append(
                 {
-                    "seq": rule.get("index"),
+                    "seq": seq,
                     "name": rule.get("name") or "",
                     "action": rule.get("action", "deny"),
                     "protocol": acl_proto,
+                    # Unmapped protocol ("tcp"/"udp"/"icmp"/"any") plus raw
+                    # numeric ports, for templates that build their own
+                    # service/application object (PAN-OS, Junos) instead of
+                    # consuming the pre-formatted Cisco-ACL-style dst_port
+                    # string above ("eq 443" / "range 8080 8090").
+                    "raw_protocol": protocol,
+                    "port_start": port_start,
+                    "port_end": port_end,
                     "src_zone": src_zone,
                     "dst_zone": dst_zone,
                     "src": src,
@@ -629,15 +820,25 @@ def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list
                 }
             )
 
-        # Implicit deny-all (mirrors get_acls() behaviour)
-        last_seq = max((r["seq"] or 0 for r in rules), default=0)
-        implicit_seq = max(last_seq + 10, 9990)
-        rules.append(
+        policies.append(
             {
-                "seq": implicit_seq,
+                "name": policy.get("name") or "",
+                "default_action": policy.get("default_action", "deny"),
+                "rules": rules,
+            }
+        )
+
+    if policies:
+        # Implicit deny-all (mirrors get_acls() behaviour)
+        policies[-1]["rules"].append(
+            {
+                "seq": max(seq + 10, 9990),
                 "name": "implicit-deny-all",
                 "action": "deny",
                 "protocol": "ip",
+                "raw_protocol": "any",
+                "port_start": None,
+                "port_end": None,
                 "src_zone": None,
                 "dst_zone": None,
                 "src": None,
@@ -646,14 +847,6 @@ def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list
                 "log": True,
                 "description": "Implicit deny all",
                 "security_profile": None,
-            }
-        )
-
-        policies.append(
-            {
-                "name": policy.get("name") or "",
-                "default_action": policy.get("default_action", "deny"),
-                "rules": rules,
             }
         )
     return policies

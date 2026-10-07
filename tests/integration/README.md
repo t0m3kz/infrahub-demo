@@ -29,15 +29,20 @@ Each scenario creates infrastructure incrementally and merges to main:
 
 **Scenario Tests:**
 
-- `test_09_bulk_dc_trigger_routing.py` - **Scenario 0:** Bulk DC load, trigger-dispatched routing
 - `test_10_dc_deployment.py` - **Scenario 1:** Initial datacenter deployment
-- `test_12_dc1_add_switch.py` - **Scenario 2:** Add a switch to an existing DC
-- `test_14_dc1_add_rack.py` - **Scenario 3:** Add a rack to an existing pod
-- `test_16_dc1_add_pod.py` - **Scenario 4:** Add a pod to an existing DC
-- `test_18_dc1_add_spine.py` - **Scenario 5:** Add a spine to an existing fabric
-- `test_19_dc1_segments.py` - **Scenario 6:** Segments and their legs
-- `test_20_dc1_add_endpoints.py` - **Scenario 7:** Endpoint servers across deployment types
-- `test_59` - `test_63` - **Scenario 8:** The `30_all` demo, end to end (see [The 30_all Suite](#the-30_all-suite)). This one deviates from the pattern above: it loads in stages, shares one branch across five modules, and does not merge to main.
+- `test_12_dc6_add_switch.py` - **Scenario 2:** Add switches to an existing DC6 rack (`data/demos/02_switch_dc6`)
+- `test_14_dc6_add_rack.py` - **Scenario 3:** Add a rack to an existing DC6 pod (`data/demos/03_rack_dc6`)
+- `test_16_dc6_add_pod.py` - **Scenario 4:** Add a pod to DC6 (`data/demos/04_pod_dc6`)
+- `test_18_dc6_add_spine.py` - **Scenario 5:** Add a spine to DC6-1-POD-1 by swapping its spine element
+- `test_19_dc6_segments.py` - **Scenario 6:** Board C001 into DC6 and deploy two VXLAN segments (`data/20_segments`)
+- `test_20_dc6_add_endpoints.py` - **Scenario 7:** Endpoint servers across DC6's pods (`data/demos/06_servers`)
+- `test_59` - `test_65` - **Scenario 8:** The `30_all` demo, end to end (see [The 30_all Suite](#the-30_all-suite)). This one deviates from the pattern above: it loads in stages, shares one branch across six modules, and does not merge to main.
+
+Scenarios 2-7 form one chain on DC6: `test_12` depends on `dc6_verify_after_merge` from `test_10`, and each
+later module depends on the previous one's merge. Every growth check is scoped to DC6 (devices reachable from
+the DC, its pods and their racks), and every pre-existing underlay switch must keep its ASN. Only DC6 has to be
+deployed for the chain, so `DC_DEPLOYMENT_TEST_DCS=dc6` cuts `test_10` down to that one DC (see
+[Run Specific Scenario](#run-specific-scenario)).
 
 ### Shared Utilities
 
@@ -49,7 +54,6 @@ Each scenario creates infrastructure incrementally and merges to main:
 - `create_proposed_change()` - Create PC with diff
 - `wait_for_validations()` - Wait for validation checks
 - `merge_proposed_change()` - Merge PC to main
-- `verify_merged_to_main()` - Verify object exists in main branch
 
 #### `test_helpers.py` - Generic Async Utilities
 
@@ -67,15 +71,16 @@ Test data is organized by scenario in `tests/integration/data/`:
 
 ```text
 data/
-├── 02_switch/                 # Switch additions
-├── 03_racks/                  # Rack additions
-├── 05_endpoint_connectivity/  # Endpoint servers in various deployments
-├── 12_dc1_add_rack/           # Rack added to an existing DC1 pod
-├── 20_segments/               # Segments and their legs
+├── 20_segments/               # C001's DC6 footprint and two VXLAN segments (test_19)
 └── 60_app_catalogue/          # Application catalogue and deployment requests
 ```
 
-The `30_all` suite (`test_59`-`test_63`) is the exception: it loads from `data/demos/30_all/` at the repository
+The DC6 chain (`test_12`-`test_20`) loads its switch, rack, pod and server data straight from `data/demos/`
+(paths in `test_constants.py`), so the demos and the tests cannot drift apart. `20_segments` is the one
+test-local exception: `data/demos/07_customers` and `08_segments` depend on the `30_all` customer organizations
+and still use the old `[org_id, environment]` footprint HFID, so they cannot be loaded on their own.
+
+The `30_all` suite (`test_59`-`test_65`) is the exception: it loads from `data/demos/30_all/` at the repository
 root, not from here, because it exercises the shipped demo rather than test-only fixtures.
 
 ## Running Tests
@@ -131,17 +136,18 @@ The fast profile intentionally stops after setup and repository synchronization.
 
 ### The 30_all Suite
 
-`test_59` through `test_63` are one scenario split across five modules. They share a single branch (`ALL_DEMO_BRANCH`) and run in dependency order:
+`test_59` through `test_65` are one scenario split across six modules. They share a single branch (`ALL_DEMO_BRANCH`) and run in dependency order:
 
 | Module | Covers |
 | --- | --- |
 | `test_59_all_demo_load.py` | The staged load, no failed tasks, every trigger-dispatched generator, declared-object inventory |
 | `test_60_app_catalogue.py` | Deployment-request materialization, proxy egress rule, inter-segment firewall rule |
 | `test_61_all_demo_compute.py` | The three fabrics, their routing, host cabling, and the application graph down to hosting devices |
-| `test_62_all_demo_interconnects.py` | Physical and virtual circuits, cloud terminations, firewall contexts, segment legs |
-| `test_63_all_demo_change_risk.py` | `CheckChangeRisk` over the branch diff: traversal resolves and reaches a verdict |
+| `test_62_all_demo_interconnects.py` | Physical and virtual circuits, cloud terminations, firewall contexts, segment legs, which metro's firewalls serve each colocation deployment |
+| `test_64_all_demo_firewall_config.py` | Colo cloud/partner/SaaS zone policies: served by the FR metro's firewall pair, `CheckFirewall` passes, every pair member renders them and a firewall outside the pair does not |
+| `test_65_all_demo_idempotency.py` | Two more runs of the security generators, then of the topology generators, leave rules, contexts, devices, cables, addresses, pools and allocated numbers unchanged |
 
-Only `test_59` loads data, and the load is deliberately staged — later stages reference objects that only exist once an earlier stage's generators have finished. `ALL_DEMO_LOAD_STAGES` in `test_constants.py` documents which stage needs what. Running `test_60`-`test_63` on their own will skip: their session-scoped dependencies are unmet without `test_59`.
+Only `test_59` loads data, and the load is deliberately staged — later stages reference objects that only exist once an earlier stage's generators have finished. `ALL_DEMO_LOAD_STAGES` in `tasks.py` (shared with `invoke load-all-demo`, re-exported by `test_constants.py`) documents which stage needs what. Running `test_60`-`test_65` on their own will skip: their session-scoped dependencies are unmet without `test_59`.
 
 ### Run Setup Only
 
@@ -159,11 +165,17 @@ without its prerequisites skips rather than fails:
 uv run invoke test-integration --tests "tests/integration/test_01_setup.py \
   tests/integration/test_02_repository.py tests/integration/test_10_dc_deployment.py"
 
-# DC + switches
-uv run invoke test-integration --tests "tests/integration/test_01_setup.py \
+# DC6 + the whole DC6 scenario chain (switch, rack, pod, spine, segments, endpoints)
+DC_DEPLOYMENT_TEST_DCS=dc6 uv run invoke test-integration --tests "tests/integration/test_01_setup.py \
   tests/integration/test_02_repository.py tests/integration/test_10_dc_deployment.py \
-  tests/integration/test_12_dc1_add_switch.py"
+  tests/integration/test_12_dc6_add_switch.py tests/integration/test_14_dc6_add_rack.py \
+  tests/integration/test_16_dc6_add_pod.py tests/integration/test_18_dc6_add_spine.py \
+  tests/integration/test_19_dc6_segments.py tests/integration/test_20_dc6_add_endpoints.py"
 ```
+
+The DC6 chain and the `30_all` suite can share a session. `test_19` merges C001's DC6 footprint and its
+segments into main, so `test_62` scopes its exact firewall-context and segment-leg counts to the `30_all` DCs
+(`scope_tenant_services_to_dcs`) rather than counting them across the whole instance.
 
 `--server-port` moves the stack off the default 8100 if you need two runs side by side.
 
@@ -247,19 +259,6 @@ class TestScenarioName(TestInfrahubDockerWithClient):
         pc_id = workflow_state["scenarioXX_pc_id"]
         result = merge_proposed_change(client=client_main, pc_id=pc_id)
         assert result["success"], f"Merge failed: {result}"
-        pass
-
-    @pytest.mark.order(106)
-    @pytest.mark.dependency(name="scenarioXX_complete", depends=["scenarioXX_merge"])
-    @pytest.mark.asyncio
-    async def test_07_verify_in_main(self, async_client_main):
-        """Verify object exists in main branch after merge."""
-        success = await verify_merged_to_main(
-            client=async_client_main,
-            expected_object_kind="TopologyDataCenter",
-            expected_object_name="DC1",
-        )
-        assert success
         pass
 ```
 
@@ -380,7 +379,4 @@ wait_for_validations(client, "PC Name")
 
 # Merge PC
 result = merge_proposed_change(client, pc_id)
-
-# Verify in main
-success = await verify_merged_to_main(client, "TopologyDataCenter", "DC1")
 ```

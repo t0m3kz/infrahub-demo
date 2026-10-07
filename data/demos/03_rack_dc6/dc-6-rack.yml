@@ -11,6 +11,9 @@ spec:
       pod: DC6-1-POD-1
       parent: ktw-1-s-1
       member_of_groups: [topologies_rack]
+      # Pod 1 is mlag_create: back-to-back, so the rack mirrors the pod's other
+      # network racks: an L2-only l2-leaf pair on a template with mlag-peer
+      # ports. Access-leaf templates carry none and only work in virtual pods.
       fabric_templates:
         - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
-        - ["2", "access-leaf", "PowerSwitch-S5224F-ON_ACCESS"]
+        - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]

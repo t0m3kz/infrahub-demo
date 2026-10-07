@@ -1,0 +1,38 @@
+{#- Anycast-gateway MAC and per-VLAN SVIs, shared by the NX-OS leaf and border-leaf. -#}
+{%- if vxlan and vxlan.anycast_gateway and vxlan.anycast_gateway.enabled %}
+! Anycast Gateway — identical MAC on every leaf/border-leaf in the fabric
+fabric forwarding anycast-gateway-mac {{ vxlan.anycast_gateway.mac | replace(':', '') | replace('.', '') }}
+!
+{%- endif %}
+{%- if vlans %}
+! VLAN SVI Configuration
+!
+{%- for vlan in vlans %}
+{%- if vlan.gateway_ip or vlan.gateway_ipv6 %}
+interface Vlan{{ vlan.vlan_id }}
+  description {{ vlan.name }}
+{%- if vlan.isolation_mode == 'isolated' %}
+  ! Isolation Mode: ISOLATED — intra-segment host-to-host traffic blocked via port-isolation
+{%- elif vlan.isolation_mode == 'microsegmented' %}
+  ! Isolation Mode: MICROSEGMENTED — intra+inter segment rules enforced via SVI ACL (and firewall if present)
+{%- endif %}
+{%- if vlan.vrf %}
+  vrf member {{ vlan.vrf }}
+{%- endif %}
+{%- if vlan.gateway_ip %}
+  ip address {{ vlan.gateway_ip }}
+{%- endif %}
+{%- if vlan.gateway_ipv6 %}
+  ipv6 address {{ vlan.gateway_ipv6 }}
+{%- endif %}
+{%- if vxlan and vxlan.anycast_gateway and vxlan.anycast_gateway.enabled %}
+  fabric forwarding mode anycast-gateway
+{%- endif %}
+  no shutdown
+{%- if vlan.acl_name %}
+  ip access-group {{ vlan.acl_name }} in
+{%- endif %}
+!
+{%- endif %}
+{%- endfor %}
+{%- endif %}

@@ -230,6 +230,9 @@ spec:
       template: N9K-C9336C-FX2_SPINE
     - quantity: 2
       role: spine
+      template: N9K-C9364C-GX_SPINE
+    - quantity: 2
+      role: spine
       template: DCS-7050CX3-32C-R_SPINE
     - quantity: 4
       role: spine

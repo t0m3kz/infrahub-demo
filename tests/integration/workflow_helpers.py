@@ -21,7 +21,6 @@ from .test_constants import (
     DATA_PROPAGATION_DELAY,
     DIFF_TASK_TIMEOUT,
     GENERATOR_TASK_TIMEOUT,
-    MERGE_PROPAGATION_DELAY,
     MERGE_TASK_TIMEOUT,
     VALIDATION_MAX_ATTEMPTS,
     VALIDATION_POLL_INTERVAL,
@@ -103,44 +102,6 @@ async def verify_no_failed_tasks(
         "failed_count": 0,
         "failed_details": [],
     }
-
-
-async def verify_merged_to_main(
-    client: InfrahubClient,
-    expected_object_kind: str,
-    expected_object_name: str,
-) -> bool:
-    """Verify that an object exists in main branch after merge."""
-    client.default_branch = "main"
-    await asyncio.sleep(MERGE_PROPAGATION_DELAY)
-
-    logger.info("Verifying '%s' named '%s' exists in main", expected_object_kind, expected_object_name)
-
-    async def _check() -> tuple[bool, bool]:
-        try:
-            obj = await client.get(
-                kind=expected_object_kind,
-                name__value=expected_object_name,
-                raise_when_missing=False,
-            )
-            return bool(obj), bool(obj)
-        except Exception as e:
-            logger.warning("Retrying lookup for '%s' in main due to error: %s", expected_object_name, e)
-            return False, False
-
-    found = await wait_for_condition(
-        check_fn=_check,
-        max_attempts=12,
-        poll_interval=5,
-        description=f"{expected_object_kind} '{expected_object_name}' in main",
-    )
-
-    if found:
-        logger.info("Found '%s' in main branch", expected_object_name)
-        return True
-
-    logger.error("'%s' not found in main branch", expected_object_name)
-    return False
 
 
 # ------------------------------------------------------------------
@@ -487,6 +448,70 @@ def wait_for_validations(
     return validation_results
 
 
+def _fetch_failed_checks(client: InfrahubClientSync, pc_id: str) -> list[str]:
+    """Return one description per failing CoreCheck on this proposed change.
+
+    Infrahub's own merge task rejects a merge whose validators contain a
+    failing check ("Unable to merge proposed change containing failing
+    checks") without saying which one — wait_for_validations() only sees a
+    validator's own conclusion, not the individual checks under it, and a
+    validator can still show "success" overall depending on aggregation. This
+    is the only path to the actual self.log_error() message a check reported,
+    which is the one piece of information that turns "the merge failed" into
+    something actionable.
+    """
+    query = """
+        query ProposedChangeFailedChecks($pc_id: ID!) {
+            CoreProposedChange(ids: [$pc_id]) {
+                edges {
+                    node {
+                        validations {
+                            edges {
+                                node {
+                                    label { value }
+                                    checks {
+                                        edges {
+                                            node {
+                                                kind { value }
+                                                label { value }
+                                                conclusion { value }
+                                                message { value }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    """
+    try:
+        response = client.execute_graphql(query=query, variables={"pc_id": pc_id})
+    except Exception as exc:  # noqa: BLE001 - diagnostic-only, must never mask the real failure
+        return [f"<could not fetch check details: {exc}>"]
+
+    descriptions: list[str] = []
+    edges = (response.get("CoreProposedChange") or {}).get("edges") or []
+    for pc_edge in edges:
+        validations = ((pc_edge.get("node") or {}).get("validations") or {}).get("edges") or []
+        for validation_edge in validations:
+            validator = validation_edge.get("node") or {}
+            validator_label = (validator.get("label") or {}).get("value") or "<unnamed validator>"
+            checks = (validator.get("checks") or {}).get("edges") or []
+            for check_edge in checks:
+                check = check_edge.get("node") or {}
+                conclusion = (check.get("conclusion") or {}).get("value")
+                if conclusion != "failure":
+                    continue
+                kind = (check.get("kind") or {}).get("value") or "<unknown kind>"
+                label = (check.get("label") or {}).get("value") or "<unnamed check>"
+                message = (check.get("message") or {}).get("value") or "<no message>"
+                descriptions.append(f"[{validator_label}] {kind} '{label}': {message}")
+    return descriptions
+
+
 def merge_proposed_change(
     client: InfrahubClientSync,
     pc_id: str,
@@ -509,6 +534,7 @@ def merge_proposed_change(
     pc_state_before = pc.state.value if hasattr(pc.state, "value") else pc.state
 
     source_branch: str = getattr(getattr(pc, "source_branch", None), "value", "") or ""
+    failed_checks: list[str] = []
 
     for attempt in range(1, max_retries + 1):
         # Wait for in-flight tasks on the source branch before each merge attempt
@@ -559,6 +585,25 @@ def merge_proposed_change(
                 "success": True,
             }
 
+        # Only an OPEN proposed change can be merged. A crashed merge task leaves
+        # it in "merging", so every remaining attempt raises a 422 "Only proposed
+        # change in OPEN state can be merged" out of execute_graphql — which
+        # propagates as *the* error and buries the one that actually matters
+        # (observed hiding a Neo4j DeadlockDetected during the merge). Stop and
+        # report the real state instead of retrying into a guaranteed failure.
+        if pc_state_after != "open":
+            failed_checks = _fetch_failed_checks(client, pc_id)
+            logger.error(
+                "Merge task %s ended in %s and left the proposed change in state %r — not retryable, "
+                "only an OPEN proposed change can be merged. Task message: %s%s",
+                task_id,
+                task.state,
+                pc_state_after,
+                getattr(task, "state_message", None) or "<none>",
+                ("\n  Failing checks:\n  - " + "\n  - ".join(failed_checks)) if failed_checks else "",
+            )
+            break
+
         if attempt < max_retries:
             logger.warning(
                 "Merge attempt %d/%d failed (PC state: %s, task state: %s). Retrying in %ds...",
@@ -570,17 +615,21 @@ def merge_proposed_change(
             )
             time.sleep(retry_delay)
         else:
+            failed_checks = _fetch_failed_checks(client, pc_id)
             logger.error(
                 "Merge failed after %d attempts. PC state: %s -> %s", max_retries, pc_state_before, pc_state_after
             )
             if hasattr(task, "state_message") and task.state_message:
                 logger.error("Task message: %s", task.state_message)
+            if failed_checks:
+                logger.error("Failing checks:\n  - %s", "\n  - ".join(failed_checks))
 
     return {
         "task_id": task_id,
         "task_state": str(task.state),
         "pc_state_before": pc_state_before,
         "pc_state_after": pc_state_after,
+        "failed_checks": failed_checks,
         "success": False,
     }
 
@@ -660,31 +709,3 @@ async def run_full_dc_pipeline(
     logger.info("Full DC pipeline completed for %s on branch '%s'", dc_name, branch)
 
     return result
-
-
-async def materialize_branch_diff(client: InfrahubClient, branch: str) -> None:
-    """Compute and store the branch's diff against main.
-
-    ``DiffTree`` — and therefore ``client.get_diff_summary()`` — returns nothing
-    at all until a ``DiffUpdate`` has run for the branch. Anything that reads a
-    diff outside a Proposed Change (the change-risk check, for one) has to ask
-    for it first, and wait: a diff over a full demo load takes a while and the
-    caller's next query would otherwise read an empty tree and conclude the
-    branch changed nothing.
-    """
-    logger.info("Materializing diff for branch '%s'", branch)
-
-    mutation = Mutation(
-        mutation="DiffUpdate",
-        input_data={"data": {"name": f"diff-{branch}", "branch": branch, "wait_for_completion": False}},
-        query={"ok": None, "task": {"id": None}},
-    )
-    response = await client.execute_graphql(query=mutation.render())
-    task_id = response["DiffUpdate"]["task"]["id"]
-
-    task = await client.task.wait_for_completion(id=task_id, timeout=DIFF_TASK_TIMEOUT)
-    assert task.state == TaskState.COMPLETED, (
-        f"DiffUpdate failed for branch '{branch}'.\n  Task ID: {task_id}\n  Task state: {task.state}"
-    )
-
-    logger.info("Diff materialized for branch '%s'", branch)

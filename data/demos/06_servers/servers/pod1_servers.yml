@@ -1,6 +1,7 @@
 ---
 # DC6 POD-1 (M_MIDDLE) — web-frontend tier compute. 2 servers, 2 bonds each
 # (bond0/bond1), so each server hosts two customers' web-frontend tier.
+# 25G NICs: the POD-1 l2-leafs (S5224F) only have 25G customer ports.
 
 apiVersion: infrahub.app/v1
 kind: Object
@@ -21,22 +22,22 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             name: eth0
-            interface_type: 100gbase-x-qsfp28
+            interface_type: 25gbase-x-sfp28
             role: lag
         - kind: DcimPhysicalInterface
           data:
             name: eth1
-            interface_type: 100gbase-x-qsfp28
+            interface_type: 25gbase-x-sfp28
             role: lag
         - kind: DcimPhysicalInterface
           data:
             name: eth2
-            interface_type: 100gbase-x-qsfp28
+            interface_type: 25gbase-x-sfp28
             role: lag
         - kind: DcimPhysicalInterface
           data:
             name: eth3
-            interface_type: 100gbase-x-qsfp28
+            interface_type: 25gbase-x-sfp28
             role: lag
         - kind: DcimLAGInterface
           data:
@@ -77,22 +78,22 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             name: eth0
-            interface_type: 100gbase-x-qsfp28
+            interface_type: 25gbase-x-sfp28
             role: lag
         - kind: DcimPhysicalInterface
           data:
             name: eth1
-            interface_type: 100gbase-x-qsfp28
+            interface_type: 25gbase-x-sfp28
             role: lag
         - kind: DcimPhysicalInterface
           data:
             name: eth2
-            interface_type: 100gbase-x-qsfp28
+            interface_type: 25gbase-x-sfp28
             role: lag
         - kind: DcimPhysicalInterface
           data:
             name: eth3
-            interface_type: 100gbase-x-qsfp28
+            interface_type: 25gbase-x-sfp28
             role: lag
         - kind: DcimLAGInterface
           data:

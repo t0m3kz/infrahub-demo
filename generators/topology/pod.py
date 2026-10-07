@@ -12,15 +12,16 @@ from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
 from ..dc_config import host_bits_to_prefix_length, resolve_dc_size_layout
 from ..devices import DeviceMixin
 from ..helpers.naming import DeviceNamingConfig
-from ..helpers.rack import expected_device_names
+from ..helpers.rack import base_offset, expected_device_names
 from ..helpers.routing import RoutingStrategy
 from ..helpers.routing import p2p_addressing as p2p_addressing_for
 from ..helpers.routing import underlay_is_dual_stack, underlay_is_ipv6
 from ..helpers.template_interfaces import template_interface_names_by_role
 from ..pod_config import resolve_pod_layout, spine_slot_role, spine_slot_templates, templates_by_role
 from ..pools import PoolMixin
-from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, ManagedBGP, RoutingAutonomousSystem, TopologyPod
+from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, TopologyPod
 from ..routing import RoutingMixin
+from ..types import naming_convention_of
 
 _SIBLING_SPINE_MAX_RETRIES = 10
 _SIBLING_SPINE_RETRY_DELAY = 3.0
@@ -93,10 +94,6 @@ class TopologyPodData(TypedDict, total=False):
     asn_pool: dict[str, Any] | None
 
 
-def _base_offset(numbering_start: int) -> int:
-    return max(0, numbering_start - 1)
-
-
 class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, CommonGenerator):
     """Generate pod topology with resource pools and spine infrastructure.
 
@@ -129,14 +126,12 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
             # wait for it and re-parse rather than risk running on partial data.
             dc_id = deployment_list[0].get("parent", {}).get("id")
             if dc_id:
-                for parent_generator in ("add_dc", "dc_pod_cascade"):
-                    refreshed = await self.wait_for_parent_generator_and_refetch(parent_generator, dc_id)
-                    if refreshed is not None:
-                        data = refreshed
-                        deployment_list = clean_data(data).get("TopologyPod", [])
-                        if not deployment_list:
-                            self.logger.error("No Pod Deployment data found in GraphQL response")
-                            return
+                refreshed = await self.wait_for_parent_generator_and_refetch(("add_dc", "dc_pod_cascade"), dc_id)
+                if refreshed is not None:
+                    deployment_list = clean_data(refreshed).get("TopologyPod", [])
+                    if not deployment_list:
+                        self.logger.error("No Pod Deployment data found in GraphQL response")
+                        return
 
             self.data = cast(TopologyPodData, deployment_list[0])
             # No Pydantic validation left to catch a malformed/partial GraphQL
@@ -189,15 +184,9 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
 
         self.logger.info(f"Generating topology for pod {pod_name}")
 
-        # Merge the parent DC's own pre-fetched, role-bucketed controller
-        # lists (see queries/topology/add/pod.gql's DataCenterFields
-        # fragment) into one flat list create_devices() reads synchronously —
-        # see generators/devices.py's _resolve_role_controller.
-        self._all_controllers = [
-            *dc.get("fabric_controllers", []),
-            *dc.get("security_manager_controllers", []),
-            *dc.get("lb_manager_controllers", []),
-        ]
+        # The parent DC's controllers (queries/topology/add/pod.gql's
+        # DataCenterFields fragment), read by create_devices().
+        self.set_controllers_from(dc)
 
         self.deployment_id = dc_id  # Store for cable linking
         self.pod_name = pod_name.lower()
@@ -221,10 +210,7 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
             self.logger.error(f"Pod {pod_name}: no spine/border-spine fabric_templates entries — cannot build fabric")
             return
         spine_count = sum(entry["quantity"] for entry in spine_entries)
-        naming_conv = cast(
-            Literal["standard", "hierarchical", "flat", "computed"],
-            dc.get("naming_convention", "standard"),
-        )
+        naming_conv = naming_convention_of(dc, lower=False)
 
         if spine_count > design["max_spines_per_pod"]:
             self.logger.error(
@@ -234,6 +220,41 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
             return
 
         indexes: list[int] = [dc["index"], pod_index]
+
+        # Interface names come from the first entry's template only — same accepted
+        # limitation as dc.py's super-spine device creation: assumes every spine
+        # template shares consistent downlink-interface naming.
+        spine_template = spine_entries[0]["template"]
+        spine_interfaces = template_interface_names_by_role(
+            interfaces=spine_template.get("interfaces", []),
+            role="uplink",
+        )
+        if not spine_interfaces:
+            self.logger.error(
+                f"Pod {pod_name}: No uplink interfaces found in spine template. "
+                "Cannot create spine-to-super-spine cabling."
+            )
+            return
+
+        super_spine_devices = [device["name"] for device in dc.get("devices", [])]
+        dc_super_spine_entries = templates_by_role(dc.get("fabric_templates", []), "super-spine")
+        super_spine_interfaces = (
+            [iface["name"] for iface in dc_super_spine_entries[0]["template"].get("interfaces", [])]
+            if dc_super_spine_entries
+            else []
+        )
+
+        # Every precondition is checked before the first save. A run that
+        # returned after saving would end with a partial tracked set, and its
+        # cleanup would delete everything else it owned last run (cables, BGP,
+        # border-leaf/FW/LB wiring). Returning before any save leaves the
+        # tracking group untouched.
+        if super_spine_devices and not await self.bgp_processes_ready(super_spine_devices, "overlay"):
+            self.logger.info(
+                "Pod %s: deferring bootstrap until parent DC super-spine overlay BGP is ready",
+                pod_name,
+            )
+            return
 
         # Fixed per-pod pool sizes from this pod's own layout (see
         # pod_config.py's technical_host_bits/loopback_host_bits) — sized
@@ -287,7 +308,8 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
                 # which sends every attribute/relationship (even unmodified ones),
                 # spuriously re-firing unrelated `updated` triggers (index/
                 # fabric_templates/mlag_create) on every ASN-pool link.
-                await pod_obj.save()
+                # Untracked: the pod is this run's target, not its output.
+                await pod_obj.save(update_group_context=False)
                 self.logger.info(f"Pod {pod_name}: linked to DC ASN pool '{dc_asn_pool_name}'")
 
         # Pass management pool ID from DC parent (create_devices resolves ID to SDK object)
@@ -319,26 +341,6 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
             )
             spines.extend(entry_spines)
 
-        # Interface names come from the first entry's template only — same accepted
-        # limitation as dc.py's super-spine device creation: assumes every spine
-        # template shares consistent downlink-interface naming.
-        spine_template = spine_entries[0]["template"]
-
-        super_spine_devices = [device["name"] for device in dc.get("devices", [])]
-        dc_super_spine_entries = templates_by_role(dc.get("fabric_templates", []), "super-spine")
-        super_spine_interfaces = (
-            [iface["name"] for iface in dc_super_spine_entries[0]["template"].get("interfaces", [])]
-            if dc_super_spine_entries
-            else []
-        )
-
-        if super_spine_devices and not await self._super_spine_overlay_ready(super_spine_devices):
-            self.logger.info(
-                "Pod %s: deferring bootstrap until parent DC super-spine overlay BGP is ready",
-                pod_name,
-            )
-            return
-
         # Pre-seed spine eBGP processes before cabling exists so parallel rack generators
         # find them and don't try to create duplicates.
         # OSPF_IBGP is excluded: spine overlay BGP needs overlay_as_id (resolved inside
@@ -362,17 +364,6 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
                 bottom_role=spine_role,
                 top_role="super-spine",
             )
-
-        spine_interfaces = template_interface_names_by_role(
-            interfaces=spine_template.get("interfaces", []),
-            role="uplink",
-        )
-        if not spine_interfaces:
-            self.logger.error(
-                f"Pod {pod_name}: No uplink interfaces found in spine template. "
-                "Cannot create spine-to-super-spine cabling."
-            )
-            return
 
         # Skip cabling if no super-spines (single-pod DC scenario)
         skip_cabling = False
@@ -408,7 +399,7 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
 
         if not skip_cabling:
             dc_max_spines = dc_design["max_spines_per_pod"]
-            cabling_offset = _base_offset(self.data.get("spine_link_numbering_start", 1)) + (
+            cabling_offset = base_offset(self.data.get("spine_link_numbering_start", 1)) + (
                 (pod_index - 1) * dc_max_spines
             )
             p2p_prefix_length = 127 if is_ipv6 else 31
@@ -484,21 +475,6 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
         # its own concurrent dc_pod_cascade re-run against the same DC-level pools/
         # ASN pool, racing the DC's own already-in-flight bootstrap.
 
-    async def _super_spine_overlay_ready(self, super_spine_devices: list[str]) -> bool:
-        """Return whether every parent super-spine has its overlay BGP process."""
-        processes = await self.client.filters(
-            kind=ManagedBGP,
-            capabilities__name__values=super_spine_devices,
-            include=["capabilities"],
-            prefetch_relationships=True,
-        )
-        overlay_devices = {
-            process.capabilities.peers[0].display_label
-            for process in processes
-            if process.process_role.value == "overlay" and len(process.capabilities.peers) == 1
-        }
-        return set(super_spine_devices).issubset(overlay_devices)
-
     async def _generate_pod_scoped_border_services(self, *, spines: list[str]) -> None:
         """Create this pod's own firewall/load-balancer and cable them to this
         pod's border-spine devices. Per-pod counterpart to dc.py's DC-wide
@@ -516,10 +492,7 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
             return
 
         dc = self.data["parent"]
-        naming_conv = cast(
-            Literal["standard", "hierarchical", "flat", "computed"],
-            dc.get("naming_convention", "standard").lower(),
-        )
+        naming_conv = naming_convention_of(dc)
         device_indexes = [dc["index"], self.data["index"]]
 
         firewall_names = [
@@ -555,36 +528,18 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
     async def _ensure_pod_spine_as(self, asn_pool_id: str | None) -> str | None:
         """Find-or-create the ONE underlay AS shared by every spine in this
         pod (.dev/bgp.txt: all spines within a pod share the same ASN,
-        different pods get different ASNs) — same find-or-create-by-
-        deterministic-description idiom as dc.py's shared overlay/
-        super-spine AS (generators/routing.py's _create_shared_routing_objects).
-        Idempotent across repeated pod generator runs; returns None (and
-        logs a warning) if no ASN pool is available yet."""
-        spine_as_desc = f"{self.pod_name} spine underlay ASN"
+        different pods get different ASNs). Returns None (and logs a
+        warning) if no ASN pool is available yet."""
         try:
-            existing = await self.client.filters(kind=RoutingAutonomousSystem, description__value=spine_as_desc)
-            if existing:
-                self.client.group_context.related_node_ids.append(existing[0].id)
-                return existing[0].id
-        except Exception as exc:
-            self.logger.warning(f"Error querying pod spine AS for {self.pod_name}: {exc}")
-
-        if not asn_pool_id:
-            self.logger.warning(f"Pod {self.pod_name}: no ASN pool available — cannot allocate shared spine AS")
-            return None
-
-        try:
-            as_obj = await self.client.create(
-                kind=RoutingAutonomousSystem,
-                data={"asn": {"from_pool": {"id": asn_pool_id}}, "description": spine_as_desc},
+            as_id = await self.ensure_shared_as(
+                description=f"{self.pod_name} spine underlay ASN", asn_pool_id=asn_pool_id
             )
-            await as_obj.save(allow_upsert=True)
-            self.client.group_context.related_node_ids.append(as_obj.id)
-            self.logger.info(f"Created shared spine AS for pod {self.pod_name}: AS{as_obj.asn.value} ({as_obj.id})")
-            return as_obj.id
         except Exception as exc:
-            self.logger.error(f"Failed to create shared spine AS for pod {self.pod_name}: {exc}")
+            self.logger.error(f"Failed to ensure shared spine AS for pod {self.pod_name}: {exc}")
             return None
+        if as_id is None:
+            self.logger.warning(f"Pod {self.pod_name}: no ASN pool available — cannot allocate shared spine AS")
+        return as_id
 
     async def _cable_border_leafs_to_spines(
         self,
@@ -614,11 +569,7 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
         max_border_leafs_per_fabric = resolve_dc_size_layout(dc["size"])["max_border_leafs_per_fabric"]
         if max_border_leafs_per_fabric <= 0:
             return
-        naming = DeviceNamingConfig(
-            strategy=cast(
-                Literal["standard", "hierarchical", "flat", "computed"], dc.get("naming_convention", "standard")
-            )
-        )
+        naming = DeviceNamingConfig(strategy=naming_convention_of(dc, lower=False))
         candidate_names = expected_device_names(
             naming_config=naming,
             fabric_name=self.fabric_name,
@@ -657,7 +608,7 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
             return
 
         design = resolve_pod_layout(self.data["layout"])
-        spine_link_base_offset = _base_offset(self.data.get("spine_link_numbering_start", 1))
+        spine_link_base_offset = base_offset(self.data.get("spine_link_numbering_start", 1))
         if self.data["deployment_type"] == "tor":
             offset = spine_link_base_offset + (
                 design["rows"] * design["compute_racks_per_row"] * design["max_tors_per_compute_rack"]
@@ -814,7 +765,7 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
             # pod3's inbound link to pod2 both claimed pod2's first uplink pair).
             sibling_own_outbound_slots = sibling.index.value - 1
             pair_slot = sibling_own_outbound_slots + max(0, pod_index - sibling.index.value - 1)
-            spine_link_base_offset = _base_offset(self.data.get("spine_link_numbering_start", 1))
+            spine_link_base_offset = base_offset(self.data.get("spine_link_numbering_start", 1))
             cabling_offset = spine_link_base_offset + (pair_slot * links_per_sibling)
             self.logger.info(
                 f"Pod {pod_name} (idx={pod_index}): cabling to sibling pod idx={sibling.index.value} "

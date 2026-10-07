@@ -27,8 +27,9 @@ repos:
         args: [--fix=lf]
 
   # Python code quality
+  # Keep in step with the ruff uv installs: infrahub-sdk -> ariadne-codegen caps it at <0.16.
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.20
+    rev: v0.15.22
     hooks:
       # Linter
       - id: ruff
@@ -54,7 +55,7 @@ repos:
 
   # Markdown linting (config: pyproject.toml [tool.rumdl] - line-length 120, MD013/MD024 disabled)
   - repo: https://github.com/rvben/rumdl-pre-commit
-    rev: v0.2.9
+    rev: v0.2.78
     hooks:
       - id: rumdl-fmt
         exclude: ^(\.ai/|\.dev/|\.github/|docs/)

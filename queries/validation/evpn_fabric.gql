@@ -1,0 +1,73 @@
+query evpn_fabric {
+  # Fabric-wide EVPN constants. routing_strategy exists only on TopologyDataCenter
+  # (schemas/extensions/topology/topology_dc.yml) — TopologyColocationMetro has no
+  # strategy attribute yet, so it is queried separately and only for evpn_rt_as.
+  TopologyDataCenter {
+    edges {
+      node {
+        id
+        name { value }
+        routing_strategy { value }
+        evpn_rt_as {
+          node {
+            asn { value }
+          }
+        }
+      }
+    }
+  }
+
+  TopologyColocationMetro {
+    edges {
+      node {
+        id
+        name { value }
+        evpn_rt_as {
+          node {
+            asn { value }
+          }
+        }
+      }
+    }
+  }
+
+  # L2 VNIs: allocated per SegmentDeployment, so the same segment stretched across
+  # two fabrics legitimately holds two different VNIs and uniqueness has to be
+  # judged per deployment, not per segment.
+  ManagedVxlanSegment {
+    edges {
+      node {
+        id
+        name { value }
+        segment_deployments {
+          edges {
+            node {
+              id
+              vni { value }
+              deployment {
+                node {
+                  id
+                  __typename
+                  name { value }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  # L3 VNIs: one per VRF namespace, allocated from the GLOBAL-L3VNI pool, so these
+  # are global and must not collide with each other or with any L2 VNI — on the
+  # wire a VNI is a single 24-bit field with no L2/L3 discriminator.
+  IpamNamespace {
+    edges {
+      node {
+        id
+        name { value }
+        l3_vni { value }
+      }
+    }
+  }
+}
