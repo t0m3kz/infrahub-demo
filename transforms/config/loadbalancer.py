@@ -1,8 +1,9 @@
 from typing import Any
 
 from transforms.common import BaseDeviceTransform
+from transforms.helpers.addressing import host_ip, management_ip
 from transforms.helpers.ha import get_ha
-from utils.data_cleaning import clean_data
+from transforms.helpers.loadbalancer_pbr import pool_interfaces
 
 
 def _build_lb_interfaces(interfaces: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -24,6 +25,16 @@ def _build_lb_interfaces(interfaces: list[dict[str, Any]]) -> list[dict[str, Any
     return lb_ifaces
 
 
+def _lb_nodes(vips: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Pool members with an address across all VIPs, once per member name."""
+    nodes: dict[str, dict[str, Any]] = {}
+    for vip in vips:
+        for member in vip["members"]:
+            if member["ip"] and member["name"] not in nodes:
+                nodes[member["name"]] = member
+    return list(nodes.values())
+
+
 def _build_vips_from_interfaces(interfaces: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Build VIP list from interface_capabilities — LoadbalancerVIP is an interface capability."""
     vips = []
@@ -34,18 +45,16 @@ def _build_vips_from_interfaces(interfaces: list[dict[str, Any]]) -> list[dict[s
             vip_ip_obj = cap.get("vip_ip") or {}
             lb_node = cap.get("load_balancer") or {}
 
-            members = []
-            for m in cap.get("members") or []:
-                for pi in m.get("pool_interfaces") or []:
-                    ip_obj = pi.get("ip_address") or {}
-                    members.append(
-                        {
-                            "name": m.get("name"),
-                            "port": pi.get("port"),
-                            "weight": m.get("weight", 1),
-                            "ip": ip_obj.get("address"),
-                        }
-                    )
+            members = [
+                {
+                    "name": m.get("name"),
+                    "port": pi.get("port"),
+                    "weight": m.get("weight", 1),
+                    "ip": (pi.get("ip_address") or {}).get("address"),
+                    "address": host_ip((pi.get("ip_address") or {}).get("address")),
+                }
+                for m, pi in pool_interfaces(cap)
+            ]
 
             health_checks = []
             for hc in cap.get("health_checks") or []:
@@ -63,6 +72,8 @@ def _build_vips_from_interfaces(interfaces: list[dict[str, Any]]) -> list[dict[s
                     "lb_name": lb_node.get("name", ""),
                     "interface": iface.get("name"),
                     "hostname": cap.get("hostname"),
+                    # Object-name stem: hostname with . and - as _, plus protocol and port.
+                    "slug": f"{str(cap.get('hostname')).replace('.', '_').replace('-', '_')}_{cap.get('protocol')}_{cap.get('port')}",
                     "protocol": cap.get("protocol"),
                     "port": cap.get("port"),
                     "status": cap.get("status"),
@@ -82,35 +93,21 @@ class LoadBalancer(BaseDeviceTransform):
     template_subdir = "loadbalancers"
 
     async def transform(self, data: Any) -> Any:
-        cleaned = clean_data(data)
-
-        devices = cleaned.get("DcimPhysicalDevice") or []
-        device = devices[0] if devices else {}
-
-        platform = device.get("platform") or {}
-        platform_name = platform.get("netmiko_device_type")
-
+        device, _, platform_name = self._device_and_platform(data)
         if not platform_name:
-            device_name = device.get("name", "Unknown Device")
-            return (
-                f"! Device {device_name} has no platform with "
-                f"netmiko_device_type defined.\n! No configuration generated.\n"
-            )
+            return self._no_platform_config(device)
 
-        capabilities = device.get("capabilities") or []
         interfaces = device.get("interfaces") or []
         lb_interfaces = _build_lb_interfaces(interfaces)
-        ha_config = get_ha(capabilities, interfaces)
         vips = _build_vips_from_interfaces(interfaces)
-
         config = self._build_config(device, platform_name)
         config.update(
             {
                 "lb_interfaces": lb_interfaces,
+                "management_ip": management_ip(lb_interfaces),
                 "vips": vips,
-                "ha": ha_config,
+                "lb_nodes": _lb_nodes(vips),
+                "ha": get_ha(device.get("capabilities") or [], interfaces),
             }
         )
-
-        template = self._load_template(platform_name)
-        return template.render(**config)
+        return self._render(platform_name, config)

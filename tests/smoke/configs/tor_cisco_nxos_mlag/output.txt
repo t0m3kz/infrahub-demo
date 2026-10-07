@@ -30,6 +30,7 @@ interface Ethernet1/34
   no shutdown
 !
 vpc domain 1
+  peer-keepalive destination 172.16.0.2 source 172.16.0.1 vrf management
   delay restore 300
   delay restore interface-vlan 330
 !

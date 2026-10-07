@@ -1,9 +1,11 @@
 """Unit tests for ZtnaMixin (generators/ztna.py).
 
 Covers:
-  - _reconcile_proxy_rule()               — external_service egress
-  - _reconcile_private_access_endpoints() — ZTNA broker publish
-  - _ensure_endpoint_access_profile()     — access-profile derivation
+  - _reconcile_proxy_rule()                — target_fqdn egress through the
+                                             owner's egress_service
+  - private_access_grants()                — which dependents admit users
+  - _reconcile_private_access_components() — ZTNA broker publish of
+                                             access-profile grants
 """
 
 from __future__ import annotations
@@ -13,6 +15,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 from generators.common import CommonGenerator
+from generators.protocols import ProxyPolicyRule
 from generators.ztna import ZtnaMixin
 
 
@@ -24,18 +27,32 @@ def _make_gen() -> Any:
     return gen
 
 
-def _dep(
-    protocol: str | None = None,
-    port_start: int | None = None,
-    port_end: int | None = None,
-    name: str = "dep-1",
-) -> dict:
+def _make_gen_ready() -> Any:
+    """A mixin whose policy lookup, owner attach and rule create are mocked out."""
+    gen = _make_gen()
+    policy = MagicMock()
+    policy.id = "policy-1"
+    policy.save = AsyncMock()
+    gen._get_or_create_proxy_policy = AsyncMock(return_value=policy)
+    gen._attach_proxy_policy_to_owner = AsyncMock()
+    gen._find_rule_by_name = AsyncMock(return_value=None)
+    created_rule = MagicMock()
+    created_rule.save = AsyncMock()
+    gen.client.create = AsyncMock(return_value=created_rule)
+    return gen
+
+
+def _egress_dep(
+    name: str = "checkout-to-stripe",
+    target_fqdn: str = "api.stripe.com",
+    ports: list[str] | None = None,
+) -> dict[str, Any]:
+    """An AppDependency on an external host, as it appears in component.depends_on."""
     return {
         "id": f"dep-{name}",
         "name": name,
-        "protocol": protocol,
-        "port_start": port_start,
-        "port_end": port_end,
+        "target_fqdn": target_fqdn,
+        "ports": ["tcp/443"] if ports is None else ports,
         "description": None,
     }
 
@@ -46,11 +63,13 @@ def _dep(
 
 
 class TestReconcileProxyRule:
+    """A target_fqdn dependency becomes one fqdn rule in the owner's egress policy."""
+
     @staticmethod
-    def _src_comp(comp_id: str = "comp-src", proxy_id: str = "proxy-1") -> dict:
+    def _src_comp(comp_id: str = "comp-src", proxy_id: str = "proxy-1") -> dict[str, Any]:
         return {
             "id": comp_id,
-            "slug": "checkout-frontend",
+            "fqdn": "checkout.c001.demo.local",
             "name": "frontend",
             "component_type": "frontend",
             "parent": {
@@ -62,39 +81,15 @@ class TestReconcileProxyRule:
             },
         }
 
-    @staticmethod
-    def _dst_endpoint(fqdn: str = "api.stripe.com") -> dict:
-        return {
-            "id": "endpoint-dst",
-            "name": "stripe-api-public",
-            "endpoint_type": "external_service",
-            "fqdn": fqdn,
-            "parent": {"id": "comp-dst", "name": "stripe-api", "component_type": "backend"},
-        }
-
-    def _make_gen_ready(self) -> Any:
-        gen = _make_gen()
-        policy = MagicMock()
-        policy.id = "policy-1"
-        policy.save = AsyncMock()
-        gen._get_or_create_proxy_policy = AsyncMock(return_value=policy)
-        gen._attach_proxy_policy_to_owner = AsyncMock()
-        gen._find_existing_proxy_policy_rule = AsyncMock(return_value=None)
-        created_rule = MagicMock()
-        created_rule.save = AsyncMock()
-        gen.client.create = AsyncMock(return_value=created_rule)
-        return gen
-
-    def test_creates_policy_rule_for_external_dependency(self):
-        gen = self._make_gen_ready()
-        dep = _dep(name="checkout-to-stripe")
+    def test_creates_policy_rule_for_target_fqdn_dependency(self) -> None:
+        """The rule lands in the owner's egress policy and targets the dependency's fqdn."""
+        gen = _make_gen_ready()
 
         result = asyncio.run(
             gen._reconcile_proxy_rule(
                 app_name="checkout",
                 src_comp=self._src_comp(),
-                dep=dep,
-                dst_endpoint=self._dst_endpoint(),
+                dep=_egress_dep(),
                 proxy_policies={},
             )
         )
@@ -104,20 +99,57 @@ class TestReconcileProxyRule:
         gen._attach_proxy_policy_to_owner.assert_awaited_once_with(owner_id="customer-1", policy_id="policy-1")
         rule_data = gen.client.create.call_args.kwargs["data"]
         assert rule_data["policy"] == {"id": "policy-1"}
+        assert rule_data["name"] == "checkout-to-stripe"
         assert rule_data["action"] == "allow"
         assert rule_data["destination_type"] == "fqdn"
         assert rule_data["destination"] == "api.stripe.com"
+        assert rule_data["ports"] == ["tcp/443"]
+        assert "id" not in rule_data
 
-    def test_components_sharing_proxy_service_share_one_policy(self):
-        gen = self._make_gen_ready()
+    def test_multi_port_dependency_stays_one_rule_with_formatted_ports(self) -> None:
+        """A proxy rule matches a host on a port list, so ports are normalized, deduped
+        and kept on a single rule rather than split per port."""
+        gen = _make_gen_ready()
+        dep = _egress_dep(ports=["TCP/443", " tcp/8443 ", "udp/30000-30010", "tcp/443"])
+
+        result = asyncio.run(
+            gen._reconcile_proxy_rule(app_name="checkout", src_comp=self._src_comp(), dep=dep, proxy_policies={})
+        )
+
+        assert result is True
+        assert gen.client.create.call_count == 1
+        rule_data = gen.client.create.call_args.kwargs["data"]
+        assert rule_data["name"] == "checkout-to-stripe"
+        assert rule_data["ports"] == ["tcp/443", "tcp/8443", "udp/30000-30010"]
+
+    def test_existing_rule_is_upserted_by_id(self) -> None:
+        """A rerun reuses the existing rule's id so the upsert updates it in place."""
+        gen = _make_gen_ready()
+        existing = MagicMock()
+        existing.id = "rule-existing"
+        gen._find_rule_by_name = AsyncMock(return_value=existing)
+
+        result = asyncio.run(
+            gen._reconcile_proxy_rule(
+                app_name="checkout", src_comp=self._src_comp(), dep=_egress_dep(), proxy_policies={}
+            )
+        )
+
+        assert result is True
+        gen._find_rule_by_name.assert_awaited_once_with(ProxyPolicyRule, "policy-1", "checkout-to-stripe")
+        assert gen.client.create.call_args.kwargs["data"]["id"] == "rule-existing"
+        gen.client.create.return_value.save.assert_awaited_once_with(allow_upsert=True)
+
+    def test_components_sharing_proxy_service_share_one_policy(self) -> None:
+        """The egress policy is created once per owner/proxy and reused across components."""
+        gen = _make_gen_ready()
         proxy_policies: dict[str, Any] = {}
 
         asyncio.run(
             gen._reconcile_proxy_rule(
                 app_name="checkout",
                 src_comp=self._src_comp(comp_id="comp-web"),
-                dep=_dep(name="web-to-stripe"),
-                dst_endpoint=self._dst_endpoint("api.stripe.com"),
+                dep=_egress_dep(name="web-to-stripe"),
                 proxy_policies=proxy_policies,
             )
         )
@@ -125,292 +157,443 @@ class TestReconcileProxyRule:
             gen._reconcile_proxy_rule(
                 app_name="checkout",
                 src_comp=self._src_comp(comp_id="comp-backend"),
-                dep=_dep(name="backend-to-github"),
-                dst_endpoint=self._dst_endpoint("api.github.com"),
+                dep=_egress_dep(name="backend-to-github", target_fqdn="api.github.com"),
                 proxy_policies=proxy_policies,
             )
         )
 
         gen._get_or_create_proxy_policy.assert_awaited_once()
-        assert gen._attach_proxy_policy_to_owner.await_count == 2
+        gen._attach_proxy_policy_to_owner.assert_awaited_once()
         assert gen.client.create.call_count == 2
+        destinations = [call.kwargs["data"]["destination"] for call in gen.client.create.call_args_list]
+        assert destinations == ["api.stripe.com", "api.github.com"]
 
-    def test_missing_owner_egress_service_is_skipped(self):
-        gen = self._make_gen_ready()
+    def test_missing_owner_egress_service_is_skipped(self) -> None:
+        """Without an egress_service there is no proxy to place the rule on."""
+        gen = _make_gen_ready()
         src_comp = self._src_comp()
         src_comp["parent"]["owner"]["egress_service"] = {}
-        dep = _dep(name="checkout-to-stripe")
 
         result = asyncio.run(
-            gen._reconcile_proxy_rule(
-                app_name="checkout", src_comp=src_comp, dep=dep, dst_endpoint=self._dst_endpoint(), proxy_policies={}
-            )
+            gen._reconcile_proxy_rule(app_name="checkout", src_comp=src_comp, dep=_egress_dep(), proxy_policies={})
         )
 
         assert result is False
+        gen._get_or_create_proxy_policy.assert_not_awaited()
         gen.client.create.assert_not_called()
 
-    def test_missing_fqdn_is_skipped(self):
-        gen = self._make_gen_ready()
-        dep = _dep(name="checkout-to-stripe")
+    def test_dependency_with_malformed_ports_is_skipped(self) -> None:
+        """A port typo must never turn into an any-port egress rule."""
+        gen = _make_gen_ready()
+        dep = _egress_dep(ports=["tcp/443", "https"])
+
+        result = asyncio.run(
+            gen._reconcile_proxy_rule(app_name="checkout", src_comp=self._src_comp(), dep=dep, proxy_policies={})
+        )
+
+        assert result is False
+        gen._get_or_create_proxy_policy.assert_not_awaited()
+        gen.client.create.assert_not_called()
+
+    def test_dependency_without_ports_is_skipped(self) -> None:
+        """An external host has no component ports to fall back to, so ports are required."""
+        gen = _make_gen_ready()
+        dep = _egress_dep(ports=[])
+
+        result = asyncio.run(
+            gen._reconcile_proxy_rule(app_name="checkout", src_comp=self._src_comp(), dep=dep, proxy_policies={})
+        )
+
+        assert result is False
+        gen._get_or_create_proxy_policy.assert_not_awaited()
+        gen.client.create.assert_not_called()
+
+    def test_blank_target_fqdn_is_skipped(self) -> None:
+        """A whitespace-only target_fqdn never becomes a rule with an empty destination."""
+        gen = _make_gen_ready()
 
         result = asyncio.run(
             gen._reconcile_proxy_rule(
-                app_name="checkout",
-                src_comp=self._src_comp(),
-                dep=dep,
-                dst_endpoint=self._dst_endpoint(fqdn=""),
-                proxy_policies={},
+                app_name="checkout", src_comp=self._src_comp(), dep=_egress_dep(target_fqdn="  "), proxy_policies={}
             )
         )
 
         assert result is False
+        gen._get_or_create_proxy_policy.assert_not_awaited()
+        gen.client.create.assert_not_called()
+
+    def test_failed_save_reports_false(self) -> None:
+        """A rejected upsert is logged and reported as not reconciled."""
+        gen = _make_gen_ready()
+        gen.client.create.return_value.save = AsyncMock(side_effect=RuntimeError("boom"))
+
+        result = asyncio.run(
+            gen._reconcile_proxy_rule(
+                app_name="checkout", src_comp=self._src_comp(), dep=_egress_dep(), proxy_policies={}
+            )
+        )
+
+        assert result is False
+        gen.logger.error.assert_called_once()
 
 
 # ===========================================================================
-# TestReconcilePrivateAccessEndpoints
+# TestReconcilePrivateAccessComponents
 # ===========================================================================
 
 
-class TestReconcilePrivateAccessEndpoints:
-    """private_access endpoints used to have no code path at all: this
-    dispatch previously fell through to the segment-firewall branch, found
-    no network_segment, and silently skipped — the endpoint was never
-    published anywhere. Published independently of any AppDependency edge,
-    since who may reach it is gated by its own access_profile, not by which
-    component "depends on" it."""
+def _grant(
+    profile: str = "c001-private-access-standard",
+    status: str = "approved",
+    ports: list[str] | None = None,
+) -> dict[str, Any]:
+    """An AppDependency from an access profile, as it appears in component.dependents."""
+    return {
+        "id": f"dep-{profile}",
+        "name": f"{profile}-to-checkout-frontend",
+        "ports": ["tcp/443"] if ports is None else ports,
+        "access_status": status,
+        "source_profile": {"id": f"profile-{profile}", "name": profile},
+    }
 
-    @staticmethod
-    def _component(endpoints: list[dict], comp_id: str = "comp-frontend", broker_id: str = "broker-1") -> dict:
-        return {
-            "id": comp_id,
-            "slug": "checkout-frontend",
-            "name": "frontend",
-            "component_type": "frontend",
-            "parent": {
-                "owner": {
-                    "id": "customer-1",
-                    "org_id": "C001",
-                    "private_access_service": ({"id": broker_id, "name": "c001-private-access"} if broker_id else {}),
-                }
-            },
-            "children": endpoints,
-        }
 
-    @staticmethod
-    def _endpoint(
-        name: str = "checkout-web",
-        endpoint_type: str = "private_access",
-        fqdn: str = "checkout.internal.c001.demo.local",
-    ) -> dict:
-        return {"id": f"endpoint-{name}", "name": name, "endpoint_type": endpoint_type, "fqdn": fqdn}
+def _component(
+    name: str = "frontend",
+    fqdn: str = "checkout.internal.c001.demo.local",
+    ports: list[str] | None = None,
+    dependents: list[dict[str, Any]] | None = None,
+    broker_id: str = "broker-1",
+) -> dict[str, Any]:
+    return {
+        "id": f"comp-{name}",
+        "fqdn": fqdn,
+        "name": name,
+        "component_type": "frontend",
+        "ports": ["tcp/443"] if ports is None else ports,
+        "parent": {
+            "owner": {
+                "id": "customer-1",
+                "org_id": "C001",
+                "private_access_service": ({"id": broker_id, "name": "c001-private-access"} if broker_id else {}),
+            }
+        },
+        "dependents": [_grant()] if dependents is None else dependents,
+    }
 
-    def _make_gen_ready(self) -> Any:
-        gen = _make_gen()
-        policy = MagicMock()
-        policy.id = "policy-1"
-        policy.save = AsyncMock()
-        gen._get_or_create_proxy_policy = AsyncMock(return_value=policy)
-        gen._attach_proxy_policy_to_owner = AsyncMock()
-        gen._find_existing_proxy_policy_rule = AsyncMock(return_value=None)
-        created_rule = MagicMock()
-        created_rule.save = AsyncMock()
-        gen.client.create = AsyncMock(return_value=created_rule)
-        # Access-profile derivation is a separate concern with its own test
-        # class below — stub it out here so these tests stay focused on the
-        # ZTNA broker publish path.
-        gen._ensure_endpoint_access_profile = AsyncMock()
-        return gen
 
-    def test_publishes_a_private_access_endpoint(self):
-        gen = self._make_gen_ready()
-        component = self._component([self._endpoint()])
+class TestPrivateAccessGrants:
+    def test_only_non_denied_profile_dependents_are_grants(self) -> None:
+        """Component callers and denied grants admit nobody; auto/pending/approved do."""
+        caller = {**_grant(), "source_profile": None, "source": {"id": "comp-other"}}
+        approved = _grant("approved-profile")
+        auto = _grant("auto-profile", status="auto")
+        denied = _grant("denied-profile", status="DENIED ")
+        component = _component(dependents=[caller, approved, auto, denied])
 
-        created, skipped = asyncio.run(gen._reconcile_private_access_endpoints("checkout", [component]))
+        assert ZtnaMixin.private_access_grants(component) == [approved, auto]
+
+    def test_component_without_dependents_has_no_grants(self) -> None:
+        assert ZtnaMixin.private_access_grants({"dependents": None}) == []
+        assert ZtnaMixin.private_access_grants({}) == []
+
+
+class TestReconcilePrivateAccessComponents:
+    """A component is published through the owner's ZTNA broker when an access
+    profile is granted to it: an AppDependency whose source_profile is set,
+    found in the component's dependents."""
+
+    def test_publishes_a_granted_component(self) -> None:
+        """A granted component becomes an fqdn rule under the owner's private-access policy."""
+        gen = _make_gen_ready()
+
+        created, skipped = asyncio.run(gen._reconcile_private_access_components("checkout", [_component()]))
 
         assert (created, skipped) == (1, 0)
         gen._get_or_create_proxy_policy.assert_awaited_once_with("proxy-C001-c001-private-access-private-access")
         gen._attach_proxy_policy_to_owner.assert_awaited_once_with(owner_id="customer-1", policy_id="policy-1")
         rule_data = gen.client.create.call_args.kwargs["data"]
+        assert rule_data["name"] == "publish-checkout.internal.c001.demo.local"
+        assert rule_data["action"] == "allow"
         assert rule_data["destination_type"] == "fqdn"
         assert rule_data["destination"] == "checkout.internal.c001.demo.local"
-
-    def test_internal_and_external_endpoints_are_not_published(self):
-        gen = self._make_gen_ready()
-        component = self._component(
-            [
-                self._endpoint(name="internal-api", endpoint_type="internal_service"),
-                self._endpoint(name="external-api", endpoint_type="external_service"),
-            ]
+        assert rule_data["ports"] == ["tcp/443"]
+        assert rule_data["description"] == (
+            "Publish checkout/frontend via private access broker for c001-private-access-standard"
         )
 
-        created, skipped = asyncio.run(gen._reconcile_private_access_endpoints("checkout", [component]))
+    def test_existing_publish_rule_is_upserted_by_id(self) -> None:
+        """A rerun reuses the existing publish rule instead of creating a duplicate."""
+        gen = _make_gen_ready()
+        existing = MagicMock()
+        existing.id = "rule-existing"
+        gen._find_rule_by_name = AsyncMock(return_value=existing)
+
+        created, _ = asyncio.run(gen._reconcile_private_access_components("checkout", [_component()]))
+
+        assert created == 1
+        gen._find_rule_by_name.assert_awaited_once_with(
+            ProxyPolicyRule, "policy-1", "publish-checkout.internal.c001.demo.local"
+        )
+        assert gen.client.create.call_args.kwargs["data"]["id"] == "rule-existing"
+
+    def test_component_without_a_grant_is_not_published(self) -> None:
+        """Nobody is granted to the component, so it is neither published nor counted as skipped."""
+        gen = _make_gen_ready()
+
+        created, skipped = asyncio.run(
+            gen._reconcile_private_access_components("checkout", [_component(dependents=[])])
+        )
+
+        assert (created, skipped) == (0, 0)
+        gen._get_or_create_proxy_policy.assert_not_awaited()
+        gen.client.create.assert_not_called()
+
+    def test_denied_grant_does_not_publish(self) -> None:
+        """A denied access-profile dependency admits nobody."""
+        gen = _make_gen_ready()
+        component = _component(dependents=[_grant(status="denied")])
+
+        created, skipped = asyncio.run(gen._reconcile_private_access_components("checkout", [component]))
 
         assert (created, skipped) == (0, 0)
         gen.client.create.assert_not_called()
 
-    def test_missing_broker_is_skipped(self):
-        gen = self._make_gen_ready()
-        component = self._component([self._endpoint()], broker_id="")
+    def test_component_caller_is_not_a_grant(self) -> None:
+        """A component-sourced dependency grants no ZTNA access."""
+        gen = _make_gen_ready()
+        caller = {**_grant(), "source_profile": None, "source": {"id": "comp-other"}}
+        component = _component(dependents=[caller])
 
-        created, skipped = asyncio.run(gen._reconcile_private_access_endpoints("checkout", [component]))
+        created, skipped = asyncio.run(gen._reconcile_private_access_components("checkout", [component]))
+
+        assert (created, skipped) == (0, 0)
+        gen.client.create.assert_not_called()
+
+    def test_missing_broker_is_skipped(self) -> None:
+        """An owner without private_access_service has nowhere to publish."""
+        gen = _make_gen_ready()
+
+        created, skipped = asyncio.run(gen._reconcile_private_access_components("checkout", [_component(broker_id="")]))
 
         assert (created, skipped) == (0, 1)
         gen.client.create.assert_not_called()
 
-    def test_missing_fqdn_is_skipped(self):
-        gen = self._make_gen_ready()
-        component = self._component([self._endpoint(fqdn="")])
+    def test_missing_fqdn_is_skipped(self) -> None:
+        """The broker publishes by fqdn, so a component without one is skipped."""
+        gen = _make_gen_ready()
 
-        created, skipped = asyncio.run(gen._reconcile_private_access_endpoints("checkout", [component]))
+        created, skipped = asyncio.run(gen._reconcile_private_access_components("checkout", [_component(fqdn="")]))
 
         assert (created, skipped) == (0, 1)
         gen.client.create.assert_not_called()
 
-    def test_two_endpoints_sharing_a_broker_share_one_policy(self):
-        gen = self._make_gen_ready()
-        component = self._component(
-            [
-                self._endpoint(name="checkout-web"),
-                self._endpoint(name="admin-web", fqdn="admin.internal.c001.demo.local"),
-            ]
-        )
+    def test_unresolvable_owner_is_skipped(self) -> None:
+        """A broker without an owner id cannot be attached to a policy owner."""
+        gen = _make_gen_ready()
+        component = _component()
+        owner = component["parent"]["owner"]
+        del owner["id"]
+        del owner["org_id"]
 
-        created, skipped = asyncio.run(gen._reconcile_private_access_endpoints("checkout", [component]))
+        created, skipped = asyncio.run(gen._reconcile_private_access_components("checkout", [component]))
+
+        assert (created, skipped) == (0, 1)
+        gen._get_or_create_proxy_policy.assert_not_awaited()
+        gen.client.create.assert_not_called()
+
+    def test_publish_ports_are_the_union_across_grants(self) -> None:
+        """Each grant opens its own ports; the rule carries their deduplicated union in order."""
+        gen = _make_gen_ready()
+        grants = [
+            _grant("c001-private-access-standard", ports=["tcp/443"]),
+            _grant("c001-ops", ports=["tcp/22", "tcp/443"]),
+        ]
+        component = _component(ports=["tcp/443", "tcp/22", "tcp/8443"], dependents=grants)
+
+        created, _ = asyncio.run(gen._reconcile_private_access_components("checkout", [component]))
+
+        assert created == 1
+        assert gen.client.create.call_args.kwargs["data"]["ports"] == ["tcp/443", "tcp/22"]
+
+    def test_grant_without_ports_falls_back_to_component_ports(self) -> None:
+        """A grant listing no ports opens every port of the component."""
+        gen = _make_gen_ready()
+        component = _component(ports=["tcp/443", "udp/30000-30010"], dependents=[_grant(ports=[])])
+
+        created, _ = asyncio.run(gen._reconcile_private_access_components("checkout", [component]))
+
+        assert created == 1
+        assert gen.client.create.call_args.kwargs["data"]["ports"] == ["tcp/443", "udp/30000-30010"]
+
+    def test_mixed_grants_union_explicit_and_component_ports(self) -> None:
+        """One grant with explicit ports plus one falling back give the union of both."""
+        gen = _make_gen_ready()
+        grants = [_grant("c001-ops", ports=["tcp/22"]), _grant("c001-private-access-standard", ports=[])]
+        component = _component(ports=["tcp/443", "tcp/22"], dependents=grants)
+
+        asyncio.run(gen._reconcile_private_access_components("checkout", [component]))
+
+        assert gen.client.create.call_args.kwargs["data"]["ports"] == ["tcp/22", "tcp/443"]
+
+    def test_malformed_grant_port_skips_publish(self) -> None:
+        """A port typo on any grant skips the component rather than publishing any port."""
+        gen = _make_gen_ready()
+        grants = [_grant("c001-ops", ports=["tcp/22"]), _grant("c001-private-access-standard", ports=["tcp/0"])]
+        component = _component(dependents=grants)
+
+        created, skipped = asyncio.run(gen._reconcile_private_access_components("checkout", [component]))
+
+        assert (created, skipped) == (0, 1)
+        gen._get_or_create_proxy_policy.assert_not_awaited()
+        gen.client.create.assert_not_called()
+
+    def test_grant_resolving_to_no_ports_skips_publish(self) -> None:
+        """No grant ports and no component ports would publish every port, so nothing is published."""
+        gen = _make_gen_ready()
+        component = _component(ports=[], dependents=[_grant(ports=[])])
+
+        created, skipped = asyncio.run(gen._reconcile_private_access_components("checkout", [component]))
+
+        assert (created, skipped) == (0, 1)
+        gen._get_or_create_proxy_policy.assert_not_awaited()
+        gen.client.create.assert_not_called()
+
+    def test_two_components_sharing_a_broker_share_one_policy(self) -> None:
+        """Components of one owner on one broker land in a single policy, one rule each."""
+        gen = _make_gen_ready()
+        components = [
+            _component(name="frontend"),
+            _component(name="admin", fqdn="admin.internal.c001.demo.local"),
+        ]
+
+        created, skipped = asyncio.run(gen._reconcile_private_access_components("checkout", components))
 
         assert (created, skipped) == (2, 0)
         gen._get_or_create_proxy_policy.assert_awaited_once()
-        assert gen.client.create.call_count == 2
+        names = [call.kwargs["data"]["name"] for call in gen.client.create.call_args_list]
+        assert names == ["publish-checkout.internal.c001.demo.local", "publish-admin.internal.c001.demo.local"]
 
-    def test_derives_access_profile_when_endpoint_has_none(self):
-        gen = self._make_gen_ready()
-        endpoint = self._endpoint()
-        assert "access_profile" not in endpoint
-        component = self._component([endpoint])
+    def test_rule_description_lists_every_granted_profile(self) -> None:
+        """Two profiles granted to one component still give one rule, naming both."""
+        gen = _make_gen_ready()
+        grants = [_grant("c001-private-access-standard"), _grant("c001-ops")]
 
-        asyncio.run(gen._reconcile_private_access_endpoints("checkout", [component], "internet_exposed"))
+        created, _ = asyncio.run(gen._reconcile_private_access_components("checkout", [_component(dependents=grants)]))
 
-        gen._ensure_endpoint_access_profile.assert_awaited_once_with(
-            endpoint_id="endpoint-checkout-web",
-            endpoint_name="checkout-web",
-            owner_org_id="C001",
-            app_security_profile="internet_exposed",
+        assert created == 1
+        assert gen.client.create.call_count == 1
+        description = gen.client.create.call_args.kwargs["data"]["description"]
+        assert description.endswith("for c001-ops, c001-private-access-standard")
+
+    def test_failed_save_counts_as_skipped(self) -> None:
+        """A rejected upsert is logged and counted as skipped."""
+        gen = _make_gen_ready()
+        gen.client.create.return_value.save = AsyncMock(side_effect=RuntimeError("boom"))
+
+        created, skipped = asyncio.run(gen._reconcile_private_access_components("checkout", [_component()]))
+
+        assert (created, skipped) == (0, 1)
+        gen.logger.error.assert_called_once()
+
+    def test_policy_creation_failure_counts_as_skipped(self) -> None:
+        """No private-access policy could be found or made: nothing is published or cached."""
+        gen = _make_gen_ready()
+        gen._get_or_create_proxy_policy = AsyncMock(return_value=None)
+
+        created, skipped = asyncio.run(gen._reconcile_private_access_components("checkout", [_component()]))
+
+        assert (created, skipped) == (0, 1)
+        gen._attach_proxy_policy_to_owner.assert_not_awaited()
+        gen.client.create.assert_not_called()
+
+
+class TestUpsertOwnerProxyRuleOwner:
+    """The egress path shares the owner/policy handling with private-access publishing."""
+
+    def test_egress_dependency_without_owner_id_is_skipped(self) -> None:
+        """A source owner without an id cannot own the egress policy."""
+        gen = _make_gen_ready()
+        src_comp = TestReconcileProxyRule._src_comp()
+        owner = src_comp["parent"]["owner"]
+        del owner["id"]
+        del owner["org_id"]
+
+        result = asyncio.run(
+            gen._reconcile_proxy_rule(app_name="checkout", src_comp=src_comp, dep=_egress_dep(), proxy_policies={})
         )
 
-    def test_does_not_override_an_explicit_access_profile(self):
-        gen = self._make_gen_ready()
-        endpoint = self._endpoint()
-        endpoint["access_profile"] = {"id": "profile-custom", "allowed_groups": []}
-        component = self._component([endpoint])
-
-        asyncio.run(gen._reconcile_private_access_endpoints("checkout", [component]))
-
-        gen._ensure_endpoint_access_profile.assert_not_awaited()
+        assert result is False
+        gen._get_or_create_proxy_policy.assert_not_awaited()
+        gen.client.create.assert_not_called()
+        assert "has no resolvable owner" in gen.logger.warning.call_args.args[0]
 
 
-# ===========================================================================
-# TestEnsureEndpointAccessProfile
-# ===========================================================================
+class TestFindRuleByName:
+    """GetOrCreateByNameMixin._find_rule_by_name, shared by the proxy and segment rule paths."""
 
-
-class TestEnsureEndpointAccessProfile:
-    """SecurityAccessProfile/SecurityIdentityGroup used to be hand-authored
-    per customer (data/demos/30_all/07_applications/00_base_security_*.yml);
-    this derives the same shape from the endpoint's owner + the app's
-    security_profile so it scales past one hand-written example."""
-
-    def _make_gen_ready(self, *, group: Any = None, profile: Any = None) -> Any:
+    def test_filters_by_kind_policy_and_name(self) -> None:
+        """The first match of the server-side policy/name filter is returned."""
         gen = _make_gen()
-        group = group or MagicMock(id="group-1")
-        profile = profile or MagicMock(id="profile-1")
-        gen._get_or_create_by_name = AsyncMock(side_effect=[group, profile])
-        endpoint = MagicMock()
-        endpoint.save = AsyncMock()
-        gen.client.create = AsyncMock(return_value=endpoint)
-        return gen
+        rule = MagicMock()
+        gen.client.filters = AsyncMock(return_value=[rule])
 
-    def test_creates_group_and_profile_with_deterministic_names(self):
-        gen = self._make_gen_ready()
+        found = asyncio.run(gen._find_rule_by_name(ProxyPolicyRule, "policy-1", "rule-1"))
 
-        asyncio.run(
-            gen._ensure_endpoint_access_profile(
-                endpoint_id="endpoint-1",
-                endpoint_name="checkout-web",
-                owner_org_id="C001",
-                app_security_profile="internet_exposed",
-            )
+        assert found is rule
+        gen.client.filters.assert_awaited_once_with(
+            kind=ProxyPolicyRule, policy__ids=["policy-1"], name__value="rule-1"
         )
 
-        group_call, profile_call = gen._get_or_create_by_name.call_args_list
-        assert group_call.kwargs["kind"] == "SecurityIdentityGroup"
-        assert group_call.kwargs["name"] == "c001-engineering"
-        assert profile_call.kwargs["kind"] == "SecurityAccessProfile"
-        assert profile_call.kwargs["name"] == "c001-private-access-standard"
-
-    def test_profile_policy_matches_internet_exposed_defaults(self):
-        gen = self._make_gen_ready()
-
-        asyncio.run(
-            gen._ensure_endpoint_access_profile(
-                endpoint_id="endpoint-1",
-                endpoint_name="checkout-web",
-                owner_org_id="C001",
-                app_security_profile="internet_exposed",
-            )
-        )
-
-        _, profile_call = gen._get_or_create_by_name.call_args_list
-        create_data = profile_call.kwargs["create_data"]
-        assert create_data["mfa_required"] is True
-        assert create_data["device_posture_required"] is True
-        assert create_data["session_timeout_minutes"] == 480
-        assert create_data["allowed_groups"] == ["group-1"]
-
-    def test_sets_access_profile_on_endpoint(self):
-        gen = self._make_gen_ready()
-
-        asyncio.run(
-            gen._ensure_endpoint_access_profile(
-                endpoint_id="endpoint-1",
-                endpoint_name="checkout-web",
-                owner_org_id="C001",
-                app_security_profile="internet_exposed",
-            )
-        )
-
-        gen.client.create.assert_awaited_once_with(
-            kind="AppEndpoint",
-            data={"id": "endpoint-1", "access_profile": {"id": "profile-1"}},
-        )
-
-    def test_skips_without_endpoint_id(self):
-        gen = self._make_gen_ready()
-
-        asyncio.run(
-            gen._ensure_endpoint_access_profile(
-                endpoint_id="",
-                endpoint_name="checkout-web",
-                owner_org_id="C001",
-                app_security_profile="internet_exposed",
-            )
-        )
-
-        gen._get_or_create_by_name.assert_not_awaited()
-        gen.client.create.assert_not_awaited()
-
-    def test_skips_endpoint_update_when_group_lookup_fails(self):
+    def test_no_match_returns_none(self) -> None:
+        """An empty result is None, not an error."""
         gen = _make_gen()
-        gen._get_or_create_by_name = AsyncMock(return_value=None)
-        gen.client.create = AsyncMock()
+        gen.client.filters = AsyncMock(return_value=[])
 
-        asyncio.run(
-            gen._ensure_endpoint_access_profile(
-                endpoint_id="endpoint-1",
-                endpoint_name="checkout-web",
-                owner_org_id="C001",
-                app_security_profile="internet_exposed",
+        assert asyncio.run(gen._find_rule_by_name(ProxyPolicyRule, "policy-1", "rule-1")) is None
+
+
+class TestProxyPolicyOwnership:
+    """The owner's per-service ProxyPolicy is shared by all of that owner's
+    applications: written untracked. Its rules stay owned by the application."""
+
+    def test_new_proxy_policy_is_saved_untracked(self) -> None:
+        """A missing policy is created with update_group_context=False."""
+        gen = _make_gen()
+        gen.client.filters = AsyncMock(return_value=[])
+        policy = MagicMock(id="policy-1")
+        policy.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=policy)
+
+        result = asyncio.run(gen._get_or_create_proxy_policy("proxy-C001-zscaler-egress"))
+
+        assert result is policy
+        policy.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
+
+    def test_existing_proxy_policy_is_not_claimed(self) -> None:
+        """An existing policy is returned without a save."""
+        gen = _make_gen()
+        policy = MagicMock(id="policy-1")
+        policy.save = AsyncMock()
+        gen.client.filters = AsyncMock(return_value=[policy])
+
+        assert asyncio.run(gen._get_or_create_proxy_policy("proxy-C001-zscaler-egress")) is policy
+        policy.save.assert_not_called()
+
+    def test_application_rule_is_saved_tracked(self) -> None:
+        """The rule produced for one application stays in that application's group."""
+        gen = _make_gen_ready()
+        owner = {"id": "owner-1", "org_id": "C001"}
+
+        ok = asyncio.run(
+            gen._upsert_owner_proxy_rule(
+                owner=owner,
+                service={"id": "svc-1", "name": "zscaler"},
+                purpose="egress",
+                policies={},
+                subject="dep",
+                rule_data={"name": "rule-1", "destination": "api.stripe.com", "ports": ["tcp/443"]},
             )
         )
 
-        gen._get_or_create_by_name.assert_awaited_once()
-        gen.client.create.assert_not_awaited()
+        assert ok is True
+        gen.client.create.return_value.save.assert_awaited_once_with(allow_upsert=True)

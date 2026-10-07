@@ -1,5 +1,5 @@
 #- Citrix NetScaler ADC — load balancer configuration -#
-set ns config -IPAddress {{ (lb_interfaces | selectattr('role', 'equalto', 'management') | map(attribute='ip_address.address') | first | default('') ).split('/')[0] }} -netmask 255.255.255.0
+set ns config -IPAddress {{ management_ip }} -netmask 255.255.255.0
 set ns hostName {{ name }}
 {%- if lb_interfaces %}
 #
@@ -20,17 +20,11 @@ add lb monitor tcp_monitor TCP -LRTM DISABLED
 {%- if vips %}
 #
 # --- Servers, Service Groups and Bindings ---
-{%- set seen_members = [] %}
-{%- for vip in vips %}
-{%- for member in vip.members %}
-{%- if member.ip and member.name not in seen_members %}
-{%- set _ = seen_members.append(member.name) %}
-add server {{ member.name }} {{ member.ip.split('/')[0] }}
-{%- endif %}
-{%- endfor %}
+{%- for member in lb_nodes %}
+add server {{ member.name }} {{ member.address }}
 {%- endfor %}
 {%- for vip in vips %}
-{%- set sg_name = vip.hostname | replace('.', '_') | replace('-', '_') ~ '_' ~ vip.protocol ~ '_' ~ vip.port ~ '_sg' %}
+{%- set sg_name = vip.slug ~ '_sg' %}
 {%- if vip.members %}
 add serviceGroup {{ sg_name }} {{ 'TCP' if vip.protocol == 'tcp' else 'HTTP' }} -maxClient 0 -maxReq 0 -cip DISABLED -usip NO -useproxyport YES -cltTimeout 180 -svrTimeout 360
 bind serviceGroup {{ sg_name }} -monitorName {{ 'tcp_monitor' if vip.protocol == 'tcp' else 'http_monitor' }}
@@ -45,7 +39,7 @@ bind serviceGroup {{ sg_name }} {{ member.name }} {{ member.port if member.port 
 #
 # --- Virtual Servers (VIPs) ---
 {%- for vip in vips %}
-{%- set vs_name = vip.hostname | replace('.', '_') | replace('-', '_') ~ '_' ~ vip.protocol ~ '_' ~ vip.port %}
+{%- set vs_name = vip.slug %}
 {%- set sg_name = vs_name ~ '_sg' %}
 add lb vserver {{ vs_name }} {{ 'TCP' if vip.protocol == 'tcp' else 'HTTP' }} {{ vip.vip_ip if vip.vip_ip else '0.0.0.0' }} {{ vip.port }} -persistenceType {{ 'SOURCEIP' if vip.session_persistence else 'NONE' }}
 {%- if vip.members %}
@@ -66,11 +60,10 @@ disable lb vserver {{ vs_name }}
 {%- if ha %}
 #
 # --- High Availability (HA Node Pair) ---
-{%- set mgmt_ip = (lb_interfaces | selectattr('role', 'equalto', 'management') | map(attribute='ip_address.address') | first | default('')) %}
 {%- if ha.devices %}
 {%- for peer in ha.devices %}
 {%- if peer != name %}
-add ha node 1 {{ mgmt_ip.split('/')[0] if mgmt_ip else peer }}
+add ha node 1 {{ management_ip or peer }}
 {%- endif %}
 {%- endfor %}
 {%- endif %}

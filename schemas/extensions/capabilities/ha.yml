@@ -226,6 +226,19 @@ nodes:
         optional: true
         identifier: firewall_context__tenant
         order_weight: 950
+      # Every deployment this context filters for, dedicated (the tenant) and
+      # shared alike. Written only from the deployment side (its own
+      # serving_firewall_context, set by customer_dc.py/customer_colocation.py),
+      # so concurrent boardings onto one shared context never race on a list.
+      - name: served_deployments
+        peer: ManagedTenantScoped
+        label: "Served Deployments"
+        description: "Deployments whose segments terminate on this context"
+        cardinality: many
+        kind: Generic
+        optional: true
+        identifier: firewall_context__served_deployments
+        order_weight: 1000
 
   # ── Load Balancer HA domain (on-prem, physical devices) ───────────────────
   - name: LoadbalancerHA
@@ -455,7 +468,7 @@ nodes:
             color: "#2ECC71"
           - name: private_access
             label: "Private Access (ZTNA)"
-            description: "Inbound app publishing via AppComponent.published_via_ztna"
+            description: "Inbound app publishing for AppComponents granted to an access profile"
             color: "#E74C3C"
       - name: region
         kind: Text
@@ -562,6 +575,15 @@ extensions:
           identifier: firewall_context__tenant
           order_weight: 900
           description: "Dedicated FirewallContext (VDOM/vsys), if any, this deployment is the tenant of."
+        - name: serving_firewall_context
+          label: "Serving Firewall Context"
+          peer: ManagedFirewallContext
+          kind: Attribute
+          cardinality: one
+          optional: true
+          identifier: firewall_context__served_deployments
+          order_weight: 925
+          description: "FirewallContext its segments terminate on: its dedicated one, else the shared one."
         - name: loadbalancer_ha
           label: "Dedicated Load Balancer HA"
           peer: ManagedLoadbalancerHA

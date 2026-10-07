@@ -10,7 +10,8 @@
     {
       "name": {{ seg.name | tojson }},
       "domain_names": [{{ seg.fqdn | tojson }}],
-      "tcp_port_ranges": [{% for p in seg.ports %}{{ (p.port | string) | tojson }}, {{ ((p.port_end or p.port) | string) | tojson }}{{ ", " if not loop.last }}{% endfor %}],
+      "tcp_port_ranges": [{% for p in seg.ports | selectattr("protocol", "equalto", "tcp") %}{{ (p.port | string) | tojson }}, {{ ((p.port_end or p.port) | string) | tojson }}{{ ", " if not loop.last }}{% endfor %}],
+      "udp_port_ranges": [{% for p in seg.ports | selectattr("protocol", "equalto", "udp") %}{{ (p.port | string) | tojson }}, {{ ((p.port_end or p.port) | string) | tojson }}{{ ", " if not loop.last }}{% endfor %}],
       "allowed_groups": {{ seg.allowed_groups | tojson }}
     }{{ "," if not loop.last }}
 {%- endfor %}

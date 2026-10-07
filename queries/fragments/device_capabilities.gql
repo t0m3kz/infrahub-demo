@@ -2,6 +2,7 @@ fragment ManagedBGPServiceFields on ManagedBGP {
   multipath { value }
   graceful_restart { value }
   confederation_identifier { value }
+  process_role { value }
   local_as { node { asn { value } } }
   router_id { node { address { value } } }
   peerings {
@@ -9,6 +10,7 @@ fragment ManagedBGPServiceFields on ManagedBGP {
       node {
         id
         name { value }
+        peering_role { value }
         session_type { value }
         bfd_enabled { value }
         send_community { value }
@@ -32,11 +34,13 @@ fragment ManagedBGPServiceFields on ManagedBGP {
           edges {
             node {
               name { value }
+              # ip_namespace: a peering whose local address sits in a tenant
+              # namespace is a VRF session (transforms/helpers/bgp.py).
               ... on DcimPhysicalInterface {
-                ip_address { node { address { value } } }
+                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
               }
               ... on DcimVirtualInterface {
-                ip_address { node { address { value } } }
+                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
               }
               device { node { name { value } } }
             }
@@ -141,12 +145,40 @@ fragment DeviceCapabilitiesFields on DcimCapabilities {
 
         ...ManagedAAAServiceFields
 
+        # A non-MLAG switch's own VLAN domain: its id is what that switch's
+        # ManagedVlanDomainSegment.vlan_domain points at
+        # (transforms/common.py _resolve_own_vlan_domain_id).
+        ... on ManagedStandaloneVlanDomain {
+          id
+        }
+
         ... on ManagedMLAG {
           id
           domain_id { value }
           reload_delay { value }
           reload_delay_non_mlag { value }
-          capabilities { edges { node { name { value } } } }
+          capabilities {
+            edges {
+              node {
+                name { value }
+                ... on DcimDevice {
+                  role { value }
+                  primary_address { node { address { value } } }
+                  interfaces(role__values: ["mlag-control", "mlag-peer"]) {
+                    edges {
+                      node {
+                        name { value }
+                        role { value }
+                        ... on DcimVirtualInterface {
+                          ip_address { node { address { value } } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     }

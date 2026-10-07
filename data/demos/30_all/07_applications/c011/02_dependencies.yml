@@ -1,0 +1,16 @@
+---
+# Who calls whom inside edge-analytics. Source and target are component fqdns;
+# without ports a dependency opens every port its target component lists in
+# 01_application.yml.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppDependency
+  data:
+    - name: c011-edge-analytics-edge-ingress-to-stream-worker
+      source: ingress.edge-analytics.c011.demo.local
+      target: stream.edge-analytics.c011.demo.local
+      access_status: auto
+      description: "Edge ingress feeds events to the stream worker"
+      member_of_groups:
+        - app_dependencies

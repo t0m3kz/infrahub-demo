@@ -1,8 +1,11 @@
-"""Mixin for ZTNA/proxy-policy dependency rules (external + private-access endpoints)."""
+"""Mixin for ZTNA/proxy-policy dependency rules (external egress + private-access publishing)."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Callable
+
+from utils.dependency_access import dependency_access_status
+from utils.ports import PortProfileHelper
 
 from .helpers.rules import RulesPlanner
 from .named_objects import GetOrCreateByNameMixin
@@ -13,12 +16,10 @@ if TYPE_CHECKING:
 
 
 class ZtnaMixin(GetOrCreateByNameMixin):
-    """Owner-scoped ProxyPolicy/ProxyPolicyRule handling: external_service
-    dependencies (egress through the owner's egress_service) and
-    private_access endpoints (published through the owner's
-    private_access_service, e.g. Zscaler ZPA — plus deriving a
-    SecurityAccessProfile/SecurityIdentityGroup for them when the author
-    hasn't set one explicitly).
+    """Owner-scoped ProxyPolicy/ProxyPolicyRule handling: target_fqdn
+    dependencies (egress through the owner's egress_service) and components
+    granted to an access profile (published through the owner's
+    private_access_service, e.g. Zscaler ZPA).
 
     Expects the host class to provide: ``client``, ``logger``, ``_safe_rel_add``.
     """
@@ -32,75 +33,108 @@ class ZtnaMixin(GetOrCreateByNameMixin):
         app_name: str,
         src_comp: dict[str, Any],
         dep: dict[str, Any],
-        dst_endpoint: dict[str, Any],
         proxy_policies: dict[str, Any],
     ) -> bool:
-        """Turn an external endpoint dependency into an owner-scoped ProxyPolicyRule."""
+        """Turn a target_fqdn dependency into an owner-scoped egress ProxyPolicyRule."""
         planner = RulesPlanner()
         dep_ref = dep.get("name", dep.get("id", "?"))
-        src_label = src_comp.get("slug") or src_comp.get("name") or "?"
+        src_label = src_comp.get("fqdn") or src_comp.get("name") or "?"
 
+        # checks/app_dependency.py reports both of these as errors; the
+        # generator only refuses to write a rule it cannot place.
         owner = (src_comp.get("parent") or {}).get("owner") or {}
         proxy_service = owner.get("egress_service") or {}
-        proxy_id = proxy_service.get("id")
-        if not proxy_id:
+        if not proxy_service.get("id"):
             self.logger.warning(
-                "  Dependency '%s' targets an external endpoint but source owner for '%s' has no egress_service - skipping",
+                "  Dependency '%s' targets an external fqdn but source owner for '%s' has no egress_service - skipping",
                 dep_ref,
                 src_label,
             )
             return False
 
-        external_fqdn = str(dst_endpoint.get("fqdn") or "").strip()
+        external_fqdn = str(dep.get("target_fqdn") or "").strip()
         if not external_fqdn:
-            self.logger.warning(
-                "  Dependency '%s': external endpoint '%s' has no fqdn - skipping",
-                dep_ref,
-                dst_endpoint.get("name") or "?",
-            )
+            self.logger.warning("  Dependency '%s' has a blank target_fqdn - skipping", dep_ref)
+            return False
+        try:
+            ports = planner.resolve_ports(dep)
+        except ValueError as exc:
+            self.logger.warning("  Dependency '%s': %s - skipping", dep_ref, exc)
+            return False
+        if not ports:
+            self.logger.warning("  Dependency '%s' targets %s without ports - skipping", dep_ref, external_fqdn)
             return False
 
+        # A proxy rule matches a host on a list of ports, so one dependency
+        # stays one rule however many ports it opens.
+        return await self._upsert_owner_proxy_rule(
+            owner=owner,
+            service=proxy_service,
+            purpose="egress",
+            policies=proxy_policies,
+            subject=f"Dependency '{dep_ref}' source '{src_label}'",
+            rule_data={
+                "name": planner.rule_name(app_name, src_comp, {}, dep),
+                "action": "allow",
+                "destination_type": "fqdn",
+                "destination": external_fqdn,
+                "ports": [PortProfileHelper.format_port_spec(port) for port in ports],
+                "description": planner.rule_description(dep, src_comp, {}),
+            },
+        )
+
+    async def _upsert_owner_proxy_rule(
+        self,
+        *,
+        owner: dict[str, Any],
+        service: dict[str, Any],
+        purpose: str,
+        policies: dict[str, Any],
+        subject: str,
+        rule_data: dict[str, Any],
+    ) -> bool:
+        """Upsert ``rule_data`` into the owner's ``purpose`` ProxyPolicy on ``service``.
+
+        The policy is fetched or created (and attached to the owner) once per
+        owner/service, then cached in ``policies``. An existing rule of the
+        same name is updated in place. False when the owner has no id, the
+        policy cannot be made, or the save fails.
+        """
         owner_org_id = str(owner.get("org_id") or owner.get("id") or "")
         owner_node_id = str(owner.get("id") or "")
         if not owner_org_id or not owner_node_id:
-            self.logger.warning("  Dependency '%s' source '%s' has no owner identifier - skipping", dep_ref, src_label)
+            self.logger.warning("  %s has no resolvable owner - skipping", subject)
             return False
-        policy_key = f"{owner_org_id}:{proxy_id}"
-        policy = proxy_policies.get(policy_key)
+
+        service_id = service["id"]
+        policy_key = f"{owner_org_id}:{service_id}"
+        policy = policies.get(policy_key)
         if policy is None:
-            proxy_name = str(proxy_service.get("name") or proxy_id)
-            policy_name = f"proxy-{owner_org_id}-{proxy_name}-egress"
-            policy = await self._get_or_create_proxy_policy(policy_name)
+            service_name = str(service.get("name") or service_id)
+            policy = await self._get_or_create_proxy_policy(f"proxy-{owner_org_id}-{service_name}-{purpose}")
             if policy is None:
                 return False
-            proxy_policies[policy_key] = policy
+            policies[policy_key] = policy
+            await self._attach_proxy_policy_to_owner(owner_id=owner_node_id, policy_id=policy.id)
 
-        await self._attach_proxy_policy_to_owner(owner_id=owner_node_id, policy_id=policy.id)
-
-        dst_comp = dst_endpoint.get("parent") or {}
-        rule_name = planner.rule_name(app_name, src_comp, dst_comp)
-        rule_data: dict[str, Any] = {
-            "policy": {"id": policy.id},
-            "name": rule_name,
-            "action": "allow",
-            "destination_type": "fqdn",
-            "destination": external_fqdn,
-            "description": planner.rule_description(dep, src_comp, dst_comp),
-        }
-
-        existing_rule = await self._find_existing_proxy_policy_rule(policy_id=policy.id, rule_name=rule_name)
+        rule_name = rule_data["name"]
+        data: dict[str, Any] = {"policy": {"id": policy.id}, **rule_data}
+        existing_rule = await self._find_rule_by_name(ProxyPolicyRule, policy.id, rule_name)
+        if existing_rule is not None:
+            data["id"] = existing_rule.id
         try:
-            if existing_rule is not None:
-                rule_data["id"] = existing_rule.id
-            rule = await self.client.create(kind=ProxyPolicyRule, data=rule_data)
+            rule = await self.client.create(kind=ProxyPolicyRule, data=data)
             await rule.save(allow_upsert=True)
-            self.logger.info("  Reconciled ProxyPolicyRule '%s' (-> %s)", rule_name, external_fqdn)
-            return True
         except Exception as exc:
             self.logger.error("  Failed to reconcile ProxyPolicyRule '%s': %s", rule_name, exc)
             return False
+        self.logger.info("  Reconciled ProxyPolicyRule '%s' (-> %s %s)", rule_name, data["destination"], data["ports"])
+        return True
 
     async def _get_or_create_proxy_policy(self, policy_name: str) -> Any | None:
+        """The owner's per-service, per-purpose ProxyPolicy, untracked: every
+        application of that owner writes its rules into it, so no single
+        application's run owns it (its rules stay owned by their application)."""
         description_subject = policy_name.removesuffix("-egress").removesuffix("-private-access")
         return await self._get_or_create_by_name(
             kind=ProxyPolicy,
@@ -113,195 +147,110 @@ class ZtnaMixin(GetOrCreateByNameMixin):
                 "enabled": True,
             },
             created_log="Created proxy policy: %s",
+            track=False,
         )
-
-    async def _find_existing_proxy_policy_rule(self, policy_id: str, rule_name: str) -> Any | None:
-        existing_rules = await self.client.filters(kind=ProxyPolicyRule, policy__ids=[policy_id])
-        for rule in existing_rules:
-            if getattr(rule, "name", None) and rule.name.value == rule_name:
-                return rule
-        return None
 
     async def _attach_proxy_policy_to_owner(self, owner_id: str, policy_id: str) -> None:
         try:
-            owner_obj = await self.client.get(kind="OrganizationCustomer", id=owner_id)
+            owner_obj = await self.client.get(kind="OrganizationCustomer", id=owner_id, include=["proxy_policies"])
             policies_rel = getattr(owner_obj, "proxy_policies")
-            await policies_rel.fetch()
             if policy_id not in {peer.id for peer in policies_rel.peers}:
                 await self._safe_rel_add(policies_rel, {"id": policy_id})
                 await owner_obj.save(allow_upsert=True, update_group_context=False)
         except Exception as exc:
             self.logger.warning("  Could not attach proxy policy to owner %s: %s", owner_id, exc)
 
-    async def _reconcile_private_access_endpoints(
+    @staticmethod
+    def private_access_grants(component: dict[str, Any]) -> list[dict[str, Any]]:
+        """Dependencies that admit an access profile's users to this component.
+
+        A denied grant admits nobody. A component-sourced dependency is an
+        ordinary call, not a ZTNA grant.
+        """
+        return [
+            dep
+            for dep in component.get("dependents") or []
+            if dep.get("source_profile") and dependency_access_status(dep) != "denied"
+        ]
+
+    async def _reconcile_private_access_components(
         self,
         app_name: str,
         components: list[dict[str, Any]],
-        app_security_profile: str = "internal_standard",
     ) -> tuple[int, int]:
-        """Publish every private_access endpoint via its owning customer's
-        private_access_service (ZTNA broker: e.g. Zscaler ZPA), and derive its
-        SecurityAccessProfile/SecurityIdentityGroup when the author hasn't set
-        one explicitly.
+        """Publish every component an access profile is granted to, via its
+        owning customer's private_access_service (ZTNA broker: e.g. Zscaler ZPA).
 
-        Not dependency-edge-driven like external_service/internal_service:
-        who may reach a private_access endpoint is gated by its own
-        access_profile (MFA/device posture/allowed_groups), not by which
-        component "depends on" it, so every such endpoint gets published
-        here regardless of whether any AppDependency targets it — matching
-        this module's own docstring ("Device/proxy selections are resolved
-        from the owning customer... rather than authored on every
-        AppComponent").
+        The grant is an AppDependency whose source_profile is a
+        SecurityAccessProfile: it says which users (allowed_groups,
+        MFA/device posture) reach the component, and on which of its ports.
+        A component nobody is granted to stays unpublished.
         """
         created = 0
         skipped = 0
         policies: dict[str, Any] = {}
 
         for component in components:
+            grants = self.private_access_grants(component)
+            if not grants:
+                continue
+
             owner = (component.get("parent") or {}).get("owner") or {}
-            for endpoint in component.get("children") or []:
-                if endpoint.get("endpoint_type") != "private_access":
-                    continue
+            comp_label = str(component.get("fqdn") or component.get("name") or component.get("id") or "?")
 
-                endpoint_name = str(endpoint.get("name") or endpoint.get("id") or "?")
-                comp_label = component.get("slug") or component.get("name") or "?"
+            broker = owner.get("private_access_service") or {}
+            if not broker.get("id"):
+                self.logger.warning(
+                    "  Component '%s' is granted to an access profile but its owner has no"
+                    " private_access_service - skipping publish",
+                    comp_label,
+                )
+                skipped += 1
+                continue
 
-                owner_org_id_raw = str(owner.get("org_id") or owner.get("id") or "")
-                if owner_org_id_raw and not endpoint.get("access_profile"):
-                    await self._ensure_endpoint_access_profile(
-                        endpoint_id=str(endpoint.get("id") or ""),
-                        endpoint_name=endpoint_name,
-                        owner_org_id=owner_org_id_raw,
-                        app_security_profile=app_security_profile,
-                    )
+            component_fqdn = str(component.get("fqdn") or "").strip()
+            if not component_fqdn:
+                self.logger.warning("  Component '%s' has no fqdn - skipping publish", comp_label)
+                skipped += 1
+                continue
 
-                broker = owner.get("private_access_service") or {}
-                broker_id = broker.get("id")
-                if not broker_id:
-                    self.logger.warning(
-                        "  Endpoint '%s' on '%s' is private_access but its owner has no"
-                        " private_access_service - skipping publish",
-                        endpoint_name,
-                        comp_label,
-                    )
-                    skipped += 1
-                    continue
+            ports: list[str] = []
+            try:
+                for dep in grants:
+                    for port in RulesPlanner.resolve_ports(dep, component):
+                        spec = PortProfileHelper.format_port_spec(port)
+                        if spec not in ports:
+                            ports.append(spec)
+            except ValueError as exc:
+                self.logger.warning("  Component '%s': %s - skipping publish", comp_label, exc)
+                skipped += 1
+                continue
+            if not ports:
+                # An empty port list would publish every port.
+                self.logger.warning("  Component '%s' is granted without ports - skipping publish", comp_label)
+                skipped += 1
+                continue
 
-                endpoint_fqdn = str(endpoint.get("fqdn") or "").strip()
-                if not endpoint_fqdn:
-                    self.logger.warning(
-                        "  Endpoint '%s' on '%s' is private_access but has no fqdn - skipping publish",
-                        endpoint_name,
-                        comp_label,
-                    )
-                    skipped += 1
-                    continue
-
-                owner_org_id = str(owner.get("org_id") or owner.get("id") or "")
-                owner_node_id = str(owner.get("id") or "")
-                if not owner_org_id or not owner_node_id:
-                    self.logger.warning(
-                        "  Endpoint '%s' on '%s' has no resolvable owner - skipping publish",
-                        endpoint_name,
-                        comp_label,
-                    )
-                    skipped += 1
-                    continue
-
-                policy_key = f"{owner_org_id}:{broker_id}"
-                policy = policies.get(policy_key)
-                if policy is None:
-                    broker_name = str(broker.get("name") or broker_id)
-                    policy_name = f"proxy-{owner_org_id}-{broker_name}-private-access"
-                    policy = await self._get_or_create_proxy_policy(policy_name)
-                    if policy is None:
-                        skipped += 1
-                        continue
-                    policies[policy_key] = policy
-
-                await self._attach_proxy_policy_to_owner(owner_id=owner_node_id, policy_id=policy.id)
-
-                rule_name = f"publish-{comp_label}-{endpoint_name}"
-                rule_data: dict[str, Any] = {
-                    "policy": {"id": policy.id},
-                    "name": rule_name,
+            profiles = sorted({str((dep.get("source_profile") or {}).get("name") or "?") for dep in grants})
+            published = await self._upsert_owner_proxy_rule(
+                owner=owner,
+                service=broker,
+                purpose="private-access",
+                policies=policies,
+                subject=f"Component '{comp_label}'",
+                rule_data={
+                    "name": f"publish-{component_fqdn}",
                     "action": "allow",
                     "destination_type": "fqdn",
-                    "destination": endpoint_fqdn,
-                    "description": f"Publish {comp_label}/{endpoint_name} via private access broker",
-                }
-
-                existing_rule = await self._find_existing_proxy_policy_rule(policy_id=policy.id, rule_name=rule_name)
-                try:
-                    if existing_rule is not None:
-                        rule_data["id"] = existing_rule.id
-                    rule = await self.client.create(kind=ProxyPolicyRule, data=rule_data)
-                    await rule.save(allow_upsert=True)
-                    self.logger.info("  Published private-access endpoint '%s' (-> %s)", rule_name, endpoint_fqdn)
-                    created += 1
-                except Exception as exc:
-                    self.logger.error("  Failed to publish private-access endpoint '%s': %s", rule_name, exc)
-                    skipped += 1
+                    "destination": component_fqdn,
+                    "ports": ports,
+                    "description": f"Publish {app_name}/{component.get('name') or comp_label} via private access"
+                    f" broker for {', '.join(profiles)}",
+                },
+            )
+            if published:
+                created += 1
+            else:
+                skipped += 1
 
         return created, skipped
-
-    async def _ensure_endpoint_access_profile(
-        self,
-        *,
-        endpoint_id: str,
-        endpoint_name: str,
-        owner_org_id: str,
-        app_security_profile: str,
-    ) -> None:
-        """Derive and attach a SecurityAccessProfile/SecurityIdentityGroup for
-        a private_access endpoint that has none, so ZTNA access policy
-        doesn't have to be hand-authored per customer. Skipped entirely when
-        the endpoint already has an explicit access_profile — never clobbers
-        an author's override.
-        """
-        if not endpoint_id:
-            return
-
-        org_slug = owner_org_id.lower()
-        group_name = f"{org_slug}-engineering"
-        profile_name = f"{org_slug}-private-access-standard"
-
-        group = await self._get_or_create_by_name(
-            kind="SecurityIdentityGroup",
-            name=group_name,
-            create_data={
-                "name": group_name,
-                "description": f"{owner_org_id} engineering users",
-                "source": "manual",
-            },
-            found_log="Using existing identity group: %s",
-            created_log="Created identity group: %s",
-        )
-        if group is None:
-            return
-
-        policy = RulesPlanner.pick_access_policy(app_security_profile)
-        profile = await self._get_or_create_by_name(
-            kind="SecurityAccessProfile",
-            name=profile_name,
-            create_data={
-                "name": profile_name,
-                "description": f"{owner_org_id} standard private-access controls",
-                "allowed_groups": [group.id],
-                **policy,
-            },
-            found_log="Using existing access profile: %s",
-            created_log="Created access profile: %s",
-        )
-        if profile is None:
-            return
-
-        try:
-            endpoint = await self.client.create(
-                kind="AppEndpoint",
-                data={"id": endpoint_id, "access_profile": {"id": profile.id}},
-            )
-            await endpoint.save(allow_upsert=True)
-            self.logger.info("  Derived access_profile '%s' for endpoint '%s'", profile_name, endpoint_name)
-        except Exception as exc:
-            self.logger.warning("  Failed to set access_profile on endpoint '%s': %s", endpoint_name, exc)

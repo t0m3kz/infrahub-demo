@@ -12,16 +12,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from infrahub_sdk.generator import InfrahubGenerator
-
 from utils.data_cleaning import clean_data
 
-from ..logger import FailOnErrorLoggerMixin
+from ..common import CommonGenerator
+from ..connections import CablingMixin
 from ..mlag import MLAGWiringMixin
+from ..pools import PoolMixin
 from ..protocols import ManagedMLAG
 
 
-class MLAGGenerator(MLAGWiringMixin, FailOnErrorLoggerMixin, InfrahubGenerator):
+class MLAGGenerator(MLAGWiringMixin, CablingMixin, PoolMixin, CommonGenerator):
     """Wire capabilities and peer-link interfaces for both devices in an MLAG domain."""
 
     async def generate(self, data: dict[str, Any]) -> None:
@@ -34,4 +34,7 @@ class MLAGGenerator(MLAGWiringMixin, FailOnErrorLoggerMixin, InfrahubGenerator):
 
         for mlag in mlag_nodes:
             mlag_obj = await self.client.get(kind=ManagedMLAG, id=mlag["id"])
-            await self.ensure_mlag_wiring(mlag_obj, mlag["name"])
+            # track=False: the wiring belongs to the device generator that
+            # created this domain (DeviceMixin._ensure_mlag_pairs), which
+            # re-tracks it on every run. This trigger only re-wires it.
+            await self.ensure_mlag_wiring(mlag_obj, mlag["name"], track=False)

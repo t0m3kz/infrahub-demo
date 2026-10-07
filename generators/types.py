@@ -2,10 +2,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from typing_extensions import TypedDict
+
+NamingConvention = Literal["standard", "hierarchical", "flat", "computed"]
+
+
+def naming_convention_of(data: Mapping[str, Any], *, lower: bool = True) -> NamingConvention:
+    """A deployment's naming_convention ("standard" when unset), lower-cased unless lower=False."""
+    value = data.get("naming_convention") or "standard"
+    return cast(NamingConvention, value.lower() if lower else value)
 
 
 class DeviceOptions(TypedDict, total=False):
@@ -93,8 +102,6 @@ class RoutingOptions(TypedDict, total=False):
     reads it via ``dict.get()`` (see generators/routing.py)."""
     asn_pool: Any
     """Default ASN pool for all devices (SDK object, pool ID, or pool name)."""
-    asn_pool_name: str
-    """Legacy: default ASN pool name for all devices."""
     overlay_as_id: str | None
     """Pre-resolved overlay AS ID to skip DB lookup in create_routing."""
     ospf_area_id: str | None
@@ -125,9 +132,6 @@ class ConnectionFingerprint:
     server_interface: str
     switch_name: str
     switch_interface: str
-
-    def __hash__(self) -> int:
-        return hash((self.server_name, self.server_interface, self.switch_name, self.switch_interface))
 
     def __repr__(self) -> str:
         return f"{self.server_name}:{self.server_interface} → {self.switch_name}:{self.switch_interface}"

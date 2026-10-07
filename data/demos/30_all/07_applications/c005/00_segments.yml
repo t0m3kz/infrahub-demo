@@ -5,7 +5,8 @@
 # relationship — owner is set automatically from the parent, no need to
 # repeat it on each segment. customer_deployments references the existing
 # TopologyCustomerDC footprints from 06_customer_boarding/c005/dc/ by their
-# computed name (DC10 is "p" -> C005-P-DC10, DC12 is "d" -> C005-D-DC12).
+# computed name (C005-P-DC10 and C005-P-DC12; every segment here is prod, like
+# payment-core, so each sits only on prod footprints).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -35,24 +36,24 @@ spec:
             # microsegmented for it (see _ensure_segment_isolation_mode) since
             # 01_application.yml's security_profile is fintech_strict. That in
             # turn is what makes the web-frontend -> app-backend AppDependency
-            # (07_applications/c005/03_dependencies.yml) exercise the
-            # return-rule reconciliation path — apply_on_switch has no
-            # connection tracking, so the forward permit alone would otherwise
-            # leave the response leg dropped.
+            # (07_applications/c005/03_dependencies.yml) an apply_on_switch
+            # rule. The leaf ACL is stateless, so the destination segment's
+            # leaf answers it with a return leg built from inbound_rules
+            # (transforms/helpers/acl.py).
             customer_deployments:
               - "C005-P-DC10"
-              - "C005-D-DC12"
+              - "C005-P-DC12"
             member_of_groups:
               - vxlan_segments
 
         - kind: ManagedVxlanSegment
           data:
             customer_name: "database-local-dc12"
-            environment: "d"
+            environment: "p"
             stretch_scope: local
             arp_suppression: true
             customer_deployments:
-              - "C005-D-DC12"
+              - "C005-P-DC12"
             member_of_groups:
               - vxlan_segments
 
@@ -64,6 +65,40 @@ spec:
             arp_suppression: true
             customer_deployments:
               - "C005-P-DC10"
-              - "C005-D-DC12"
+              - "C005-P-DC12"
+            member_of_groups:
+              - vxlan_segments
+
+        # Stretched DC10 <-> Equinix FR through the colocation's EVPN
+        # Multi-Site border gateways (bl-dc101101 <-> eg-fr01 over
+        # DF-DC10-EQXFR2). `global` because it crosses from a DC into a
+        # different metro, not between two DCs of one pair.
+        #
+        # The PROD gateway makes it routable as well: every VTEP carrying it
+        # (DC10 leafs/BLs and eg-fr01) gets an anycast SVI in VRF PROD, and
+        # the C005 office reaches it over the SD-WAN gateway's PROD handoff
+        # into eg-fr01 (../../08_interconnects/04_sdwan/06_vrf_handoff.yml).
+        - kind: ManagedVxlanSegment
+          data:
+            customer_name: "colo-services-stretch"
+            environment: "p"
+            stretch_scope: global
+            arp_suppression: true
+            gateway:
+              data:
+                address: "10.5.50.1/24"
+                description: "colo-services-stretch anycast gateway"
+                ip_namespace: "PROD"
+                ip_prefix:
+                  kind: IpamPrefix
+                  data:
+                    prefix: "10.5.50.0/24"
+                    description: "colo-services-stretch (C005, DC10 <-> Equinix FR)"
+                    status: active
+                    role: customer
+                    ip_namespace: "PROD"
+            customer_deployments:
+              - "C005-P-DC10"
+              - "C005-P-FR"
             member_of_groups:
               - vxlan_segments

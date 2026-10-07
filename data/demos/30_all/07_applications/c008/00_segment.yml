@@ -1,0 +1,19 @@
+---
+# Dev VLAN segment in C008's DC12 development footprint. Loaded before
+# 01_application.yml since components there reference it by human_friendly_id.
+# Nested under OrganizationCustomer (owner) via the network_segments reverse
+# relationship — owner is set automatically from the parent.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: OrganizationCustomer
+  data:
+    - name: "Krafven GmbH"
+      org_id: "C008"
+      network_segments:
+        - kind: ManagedVlanSegment
+          data:
+            customer_name: "krafven-dev"
+            environment: "d"
+            vlan_id: 108
+            customer_deployment: "C008-D-DC12"

@@ -1,11 +1,17 @@
+# add_virtual_circuit (generators/topology/circuit.py). An overlay session runs
+# between the two endpoint interfaces (interface_capabilities) over their
+# existing addresses, on each device's BGP process; physical_circuits are the
+# underlay whose add_circuit runs it waits for.
 query virtual_circuit_data($name: String!) {
   TopologyVirtualCircuit(name__value: $name) {
     edges {
       node {
         id
         name { value }
+        status { value }
         link_type { value }
         transport_mode { value }
+        peering_role { value }
         vni { value }
         tunnel_id { value }
         interface_capabilities {
@@ -14,10 +20,36 @@ query virtual_circuit_data($name: String!) {
               id
               name { value }
               __typename
+              ... on DcimPhysicalInterface {
+                ip_address { node { id address { value } } }
+              }
+              ... on DcimVirtualInterface {
+                ip_address { node { id address { value } } }
+              }
               device {
                 node {
                   id
                   name { value }
+                  ... on DcimPhysicalDevice {
+                    deployment { node { ...VirtualCircuitDeployment } }
+                  }
+                  ... on DcimVirtualDevice {
+                    deployment { node { ...VirtualCircuitDeployment } }
+                  }
+                  ... on DcimCapabilities {
+                    capabilities {
+                      edges {
+                        node {
+                          id
+                          __typename
+                          ... on ManagedBGP {
+                            name { value }
+                            process_role { value }
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -42,5 +74,14 @@ query virtual_circuit_data($name: String!) {
         }
       }
     }
+  }
+}
+
+fragment VirtualCircuitDeployment on TopologyDeployment {
+  id
+  __typename
+  ... on TopologyDataCenter {
+    name { value }
+    underlay_protocol { value }
   }
 }

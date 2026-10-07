@@ -15,7 +15,7 @@ from unittest.mock import Mock
 import pytest
 from conftest import create_mock_interfaces
 
-from generators.helpers import CablingPlanner
+from generators.helpers import CablingPlanError, CablingPlanner
 
 # ============================================================================
 # Helper Classes and Functions
@@ -55,6 +55,20 @@ def create_mock_interfaces_with_cables(
     """
     cable = Mock() if connected else None
     return [MockCableInterface(name, device_label, cable) for name in interface_names]
+
+
+def _build_strategy_plan(planner: CablingPlanner, scenario: str, cabling_offset: int = 0) -> list[tuple[Any, Any]]:
+    """Run one cabling strategy directly, bypassing the planner's speed grouping.
+
+    Args:
+        planner: Planner holding the interfaces under test
+        scenario: Strategy key in the planner's strategy table
+        cabling_offset: Offset passed through to the strategy
+
+    Returns:
+        The strategy's (bottom, top) interface pairs
+    """
+    return planner._strategies[scenario].build_plan(cabling_offset=cabling_offset)
 
 
 # ============================================================================
@@ -138,7 +152,7 @@ class TestCablingScenarios:
         top = create_mock_interfaces("spine-01", ["Ethernet1/1", "Ethernet1/2"])
 
         planner = CablingPlanner(bottom, top)
-        plan = planner.build_cabling_plan(scenario="rack", cabling_offset=0)
+        plan = _build_strategy_plan(planner, "rack")
 
         assert len(plan) >= 1
         assert all(isinstance(conn, tuple) for conn in plan)
@@ -148,6 +162,44 @@ class TestCablingScenarios:
             src, dst = connection
             assert hasattr(src, "name") and hasattr(src, "device")
             assert hasattr(dst, "name") and hasattr(dst, "device")
+
+    def test_rack_gives_every_spine_its_own_bottom_port(self) -> None:
+        """One leaf, four spines: four DISTINCT leaf uplinks, never a reused one.
+
+        The bottom port index used to wrap modulo the port count, so spine-03
+        landed back on the port already cabled to spine-01. Infrahub only caught
+        that at save time, as a relationship-cardinality error on a node id.
+        """
+        bottom = create_mock_interfaces("leaf-01", [f"Ethernet{n}/1" for n in (27, 28, 29, 30)])
+        top = [iface for n in range(1, 5) for iface in create_mock_interfaces(f"spine-0{n}", ["Ethernet1/1"])]
+
+        planner = CablingPlanner(bottom, top)
+        plan = _build_strategy_plan(planner, "rack")
+
+        assert len(plan) == 4
+        bottom_ports = [src.name.value for src, _dst in plan]
+        assert sorted(bottom_ports) == ["Ethernet27/1", "Ethernet28/1", "Ethernet29/1", "Ethernet30/1"]
+
+    def test_rack_rejects_a_bottom_device_with_too_few_ports(self) -> None:
+        """Two uplinks cannot reach four spines — fail before planning anything."""
+        bottom = create_mock_interfaces("leaf-01", ["Ethernet29/1", "Ethernet30/1"])
+        top = [iface for n in range(1, 5) for iface in create_mock_interfaces(f"spine-0{n}", ["Ethernet1/1"])]
+
+        planner = CablingPlanner(bottom, top)
+        with pytest.raises(CablingPlanError, match=r"leaf-01: 2 port\(s\) available but 4 top device\(s\)"):
+            _build_strategy_plan(planner, "rack")
+
+    def test_rack_allows_more_bottom_ports_than_top_devices(self) -> None:
+        """Spare uplinks are normal (a 6-uplink leaf in a 2-spine pod) and the
+        surplus must simply go uncabled, not trip the shortfall check."""
+        bottom = create_mock_interfaces("leaf-01", [f"Ethernet{n}/1" for n in (25, 26, 27, 28, 29, 30)])
+        top = [iface for n in (1, 2) for iface in create_mock_interfaces(f"spine-0{n}", ["Ethernet1/1"])]
+
+        planner = CablingPlanner(bottom, top)
+        plan = _build_strategy_plan(planner, "rack")
+
+        assert len(plan) == 2
+        assert len({src.name.value for src, _dst in plan}) == 2
 
     def test_intra_rack_tor_to_leaf_basic(self) -> None:
         """Test INTRA_RACK scenario with basic ToR-Leaf setup."""
@@ -160,7 +212,7 @@ class TestCablingScenarios:
         leaf2 = create_mock_interfaces("leaf-02", ["Ethernet1/25", "Ethernet1/26"])
 
         planner = CablingPlanner(cast(list, tor1 + tor2), cast(list, leaf1 + leaf2))
-        cabling_plan = planner.build_cabling_plan(scenario="intra_rack")
+        cabling_plan = _build_strategy_plan(planner, "intra_rack")
 
         # Each ToR connects to 2 Leafs (least loaded)
         # 2 ToRs × 2 uplinks = 4 total connections expected
@@ -180,7 +232,7 @@ class TestCablingScenarios:
             leaf_interfaces.extend(create_mock_interfaces(f"leaf-{leaf_num:02d}", ["Ethernet1/25", "Ethernet1/26"]))
 
         planner = CablingPlanner(cast(list, tor_interfaces), cast(list, leaf_interfaces))
-        cabling_plan = planner.build_cabling_plan(scenario="intra_rack")
+        cabling_plan = _build_strategy_plan(planner, "intra_rack")
 
         # Count connections per Leaf to verify load balancing
         leaf_connection_count: dict[str, int] = {}
@@ -210,7 +262,7 @@ class TestCablingScenarios:
             intf.cable = type("CableRef", (), {"_peer": cable_peer})()
 
         planner = CablingPlanner(cast(list, tor1 + tor2), cast(list, leaf1 + leaf2))
-        cabling_plan = planner.build_cabling_plan(scenario="intra_rack")
+        cabling_plan = _build_strategy_plan(planner, "intra_rack")
 
         # All connections originating from tor-01 should target leaf-02
         tor1_targets = [dst.device.display_label for src, dst in cabling_plan if src.device.display_label == "tor-01"]
@@ -240,7 +292,7 @@ class TestCablingScenarios:
         planner = CablingPlanner(bottom_interfaces=tor_interfaces, top_interfaces=leaf_interfaces)
 
         # Build cabling plan with offset=0 (first rack in row)
-        cabling_plan = planner.build_cabling_plan(scenario="intra_rack_mixed", cabling_offset=0)
+        cabling_plan = _build_strategy_plan(planner, "intra_rack_mixed")
 
         # Verify connections
         assert len(cabling_plan) == 4  # 2 ToRs × 2 uplinks
@@ -268,11 +320,11 @@ class TestCablingIdempotency:
 
         # Run 1
         planner1 = CablingPlanner(tors, spines)
-        plan1 = planner1.build_cabling_plan(scenario="intra_rack")
+        plan1 = _build_strategy_plan(planner1, "intra_rack")
 
         # Run 2 with same input
         planner2 = CablingPlanner(tors, spines)
-        plan2 = planner2.build_cabling_plan(scenario="intra_rack")
+        plan2 = _build_strategy_plan(planner2, "intra_rack")
 
         # Plans must be identical
         assert len(plan1) == len(plan2)
@@ -295,10 +347,38 @@ class TestCablingIdempotency:
         spine4 = create_mock_interfaces_with_cables("spine-04", ["Ethernet1/1", "Ethernet1/2"], connected=False)
 
         planner = CablingPlanner(tor1 + tor2, spine1 + spine2 + spine3 + spine4)
-        cabling_plan = planner.build_cabling_plan(scenario="intra_rack")
+        cabling_plan = _build_strategy_plan(planner, "intra_rack")
 
         # Should still return all 4 connections (existing connections included)
         assert len(cabling_plan) == 4
+
+    def test_round_robin_offsets_count_tors_that_reused_existing_cables(self) -> None:
+        """A ToR that keeps its existing cables still claims its round-robin slots,
+        so the next fresh ToR lands on the second port of each leaf, not the first."""
+        tor1 = create_mock_interfaces_with_cables("tor-01", ["Ethernet1/31", "Ethernet1/32"])
+        tor2 = create_mock_interfaces_with_cables("tor-02", ["Ethernet1/31", "Ethernet1/32"])
+        leafs = [
+            iface
+            for leaf in ("leaf-01", "leaf-02")
+            for iface in create_mock_interfaces_with_cables(leaf, [f"Ethernet1/{n}" for n in (25, 26, 27, 28)])
+        ]
+        for intf, cable_name in zip(
+            tor1, ["leaf-02-Ethernet1/25__tor-01-Ethernet1/31", "leaf-02-Ethernet1/26__tor-01-Ethernet1/32"]
+        ):
+            intf.cable = Mock(_peer=Mock(name=None))
+            intf.cable._peer.name = Mock(value=cable_name)
+
+        plan = _build_strategy_plan(CablingPlanner(tor1 + tor2, leafs), "intra_rack")
+
+        tor2_links = [
+            (src.name.value, dst.device.display_label, dst.name.value)
+            for src, dst in plan
+            if src.device.display_label == "tor-02"
+        ]
+        assert tor2_links == [
+            ("Ethernet1/31", "leaf-01", "Ethernet1/26"),
+            ("Ethernet1/32", "leaf-02", "Ethernet1/26"),
+        ]
 
     def test_deterministic_ordering(self) -> None:
         """Test that connection order is deterministic and follows expected pattern."""
@@ -313,7 +393,7 @@ class TestCablingIdempotency:
             spines.extend(create_mock_interfaces_with_cables(f"spine-{i:02d}", ["Ethernet1/1", "Ethernet1/2"]))
 
         planner = CablingPlanner(tors, spines)
-        plan = planner.build_cabling_plan(scenario="intra_rack")
+        plan = _build_strategy_plan(planner, "intra_rack")
 
         # Expected deterministic round-robin pattern
         expected_connections = [
@@ -351,7 +431,7 @@ class TestCablingEdgeCases:
         top = create_mock_interfaces("spine-01", ["Ethernet1/1"])
 
         planner = CablingPlanner(cast(list, bottom), cast(list, top))
-        cabling_plan = planner.build_cabling_plan()
+        cabling_plan = _build_strategy_plan(planner, "rack")
 
         assert isinstance(cabling_plan, list)
         assert len(cabling_plan) >= 1
@@ -367,7 +447,7 @@ class TestCablingEdgeCases:
         spine = create_mock_interfaces("spine-01", ["Ethernet1/1", "Ethernet1/2"])
 
         planner = CablingPlanner(cast(list, tors), cast(list, spine))
-        cabling_plan = planner.build_cabling_plan(scenario="intra_rack")
+        cabling_plan = _build_strategy_plan(planner, "intra_rack")
 
         # Should create as many connections as possible without failing
         assert len(cabling_plan) >= 1
@@ -379,7 +459,7 @@ class TestCablingEdgeCases:
         spine = create_mock_interfaces_with_cables("spine-01", ["Ethernet1/1", "Ethernet1/2"])
 
         planner = CablingPlanner(tor, spine)
-        plan = planner.build_cabling_plan(scenario="intra_rack")
+        plan = _build_strategy_plan(planner, "intra_rack")
 
         # 1 ToR × 2 uplinks to 1 Spine = 2 connections
         assert len(plan) == 2
@@ -392,7 +472,7 @@ class TestCablingEdgeCases:
         leaf2 = create_mock_interfaces("leaf-02", ["Ethernet1/25", "Ethernet1/26"])
 
         planner = CablingPlanner(cast(list, tor1 + tor2), cast(list, leaf1 + leaf2))
-        cabling_plan = planner.build_cabling_plan(scenario="intra_rack")
+        cabling_plan = _build_strategy_plan(planner, "intra_rack")
 
         # Check for duplicate connections
         connection_set = set()

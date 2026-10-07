@@ -32,6 +32,7 @@ if TYPE_CHECKING:
         IntegerOptional,
         IPHost,
         IPHostOptional,
+        ListAttributeOptional,
         String,
         StringOptional,
         URLOptional,
@@ -66,6 +67,7 @@ class TopologyConnector(CoreNode):
 
 
 class ManagedController(CoreNode):
+    name: String
     controller_type: Dropdown
     managed_devices: RelationshipManager[DcimDevice]
 
@@ -240,6 +242,7 @@ class ManagedNetworkSegment(CoreNode):
     segment_type: DropdownOptional
     status: Dropdown
     gateway: RelationshipAttribute[IpamIPAddress]
+    inbound_rules: RelationshipManager[SecurityPolicyRule]
     owner: RelationshipAttribute[OrganizationCustomer]
 
 
@@ -262,16 +265,6 @@ class ManagedProxyService(CoreNode):
     name: String
 
 
-class CustomerQuotation(CoreNode):
-    description: StringOptional
-    estimated_total_cost: IntegerOptional
-    name: String
-    request_type: Dropdown
-    status: Dropdown
-    line_items: RelationshipManager[CustomerQuotationLineItem]
-    owner: RelationshipAttribute[OrganizationEntity]
-
-
 class TopologyRackHosting(CoreNode):
     name: String
     racks: RelationshipManager[LocationRack]
@@ -291,6 +284,7 @@ class CloudHybridAttachment(CoreNode):
 class ManagedTenantScoped(CoreNode):
     firewall_context: RelationshipAttribute[ManagedFirewallContext]
     loadbalancer_ha: RelationshipAttribute[ManagedLoadbalancerHA]
+    serving_firewall_context: RelationshipAttribute[ManagedFirewallContext]
 
 
 class ManagedRouting(CoreNode):
@@ -529,11 +523,14 @@ class TopologyCommonExchange(CoreNode):
 
 class AppComponent(AppGeneric):
     component_type: Dropdown
+    fqdn: String
+    load_balanced: BooleanOptional
     name: String
-    slug: StringOptional
+    ports: ListAttributeOptional
+    depends_on: RelationshipManager[AppDependency]
+    dependents: RelationshipManager[AppDependency]
     health_checks: RelationshipManager[LoadbalancerHealthCheck]
     instances: RelationshipManager[AppInstance]
-    load_balancer: RelationshipAttribute[ManagedLoadbalancerHA]
     network_segment: RelationshipAttribute[ManagedNetworkSegment]
 
 
@@ -662,10 +659,10 @@ class AppDependency(CoreNode):
     decision_reason: StringOptional
     description: StringOptional
     name: String
-    port_end: IntegerOptional
-    port_start: IntegerOptional
-    protocol: DropdownOptional
+    ports: ListAttributeOptional
+    target_fqdn: StringOptional
     source: RelationshipAttribute[AppComponent]
+    source_profile: RelationshipAttribute[CoreNode]
     target: RelationshipAttribute[AppComponent]
 
 
@@ -727,6 +724,7 @@ class ManagedFirewallContext(ManagedGeneric, ManagedGenericInterfaces, ManagedIn
     vlan_id: IntegerOptional
     cluster: RelationshipAttribute[ManagedFirewallHA]
     tenant: RelationshipAttribute[ManagedTenantScoped]
+    served_deployments: RelationshipManager[ManagedTenantScoped]
 
 
 class ManagedFirewallHA(ManagedHA, ManagedGeneric, ManagedGenericDevice, ManagedInlineService):
@@ -959,6 +957,7 @@ class TopologyPhysicalCircuit(TopologyCircuit, ManagedGeneric):
     committed_rate: IntegerOptional
     contract_end_date: StringOptional
     install_date: StringOptional
+    peering_role: DropdownOptional
     customer_interfaces: RelationshipManager[DcimInterface]
     provider_interfaces: RelationshipManager[DcimInterface]
 
@@ -1035,6 +1034,7 @@ class ProxyPolicyRule(CoreNode):
     disabled: Boolean
     log: Boolean
     name: String
+    ports: ListAttributeOptional
     priority: Integer
     categories: RelationshipManager[ProxyURLCategory]
     policy: RelationshipAttribute[ProxyPolicy]
@@ -1097,147 +1097,6 @@ class CloudPublicIP(CloudResource):
     account: RelationshipAttribute[CloudAccount]
     instance: RelationshipAttribute[CloudInstance]
     region: RelationshipAttribute[TopologyCloudRegion]
-
-
-class CustomerQuotationCampusBuilding(CoreNode):
-    access_points: IntegerOptional
-    access_switches: IntegerOptional
-    demand_mbps: IntegerOptional
-    distribution_switches: IntegerOptional
-    floors: IntegerOptional
-    name: String
-    design: RelationshipAttribute[CustomerQuotationCampusDesign]
-    floors_breakdown: RelationshipManager[CustomerQuotationCampusFloor]
-    source_building: RelationshipAttribute[CustomerQuotationOfficeBuilding]
-
-
-class CustomerQuotationCampusDesign(CoreNode):
-    name: StringOptional
-    total_access_points: IntegerOptional
-    total_access_switches: IntegerOptional
-    total_buildings: IntegerOptional
-    total_core_routers: IntegerOptional
-    total_demand_mbps: IntegerOptional
-    total_distribution_switches: IntegerOptional
-    total_floors: IntegerOptional
-    buildings: RelationshipManager[CustomerQuotationCampusBuilding]
-    quotation: RelationshipAttribute[CustomerQuotationOffice]
-
-
-class CustomerQuotationCampusFloor(CoreNode):
-    access_points: IntegerOptional
-    access_switches: IntegerOptional
-    demand_mbps: IntegerOptional
-    index: Integer
-    wired_endpoints: IntegerOptional
-    building: RelationshipAttribute[CustomerQuotationCampusBuilding]
-
-
-class CustomerQuotationDC(CustomerQuotation):
-    growth_buffer_percent: Integer
-    pod_count: Integer
-    preferred_firewall_vendor: StringOptional
-    preferred_load_balancer_vendor: StringOptional
-    preferred_switch_vendor: StringOptional
-    recommended_switch_vendor: StringOptional
-    topology_strategy: Dropdown
-    proposed_design: RelationshipAttribute[CustomerQuotationProposedDesign]
-    rooms: RelationshipManager[CustomerQuotationRoom]
-
-
-class CustomerQuotationLineItem(CoreNode):
-    quantity: Integer
-    role: Dropdown
-    speed: DropdownOptional
-    total_cost: IntegerOptional
-    unit_price: IntegerOptional
-    device_type: RelationshipAttribute[DcimDeviceType]
-    quotation: RelationshipAttribute[CustomerQuotation]
-
-
-class CustomerQuotationOffice(CustomerQuotation):
-    access_switch_port_density: Integer
-    access_switch_reserved_ports: Integer
-    access_switch_utilization_target: Integer
-    access_to_distribution_oversub: Integer
-    conference_concurrency: Integer
-    conference_room_mbps: Integer
-    core_router_port_density: Integer
-    core_router_reserved_ports: Integer
-    core_router_utilization_target: Integer
-    dist_core_uplinks_per_dist: Integer
-    dist_switch_reserved_ports: Integer
-    dist_switch_util_target: Integer
-    distribution_switch_port_density: Integer
-    distribution_to_core_oversub: Integer
-    endpoint_growth_ratio: Integer
-    m2_per_ap: Integer
-    min_core_routers: Integer
-    min_distribution_switches: Integer
-    preferred_switch_vendor: StringOptional
-    printer_concurrency: Integer
-    printer_mbps: Integer
-    size_for_single_link_failure: Boolean
-    uplinks_per_access_switch: Integer
-    user_concurrency: Integer
-    users_per_ap: Integer
-    wifi_mbps_per_user: Integer
-    buildings: RelationshipManager[CustomerQuotationOfficeBuilding]
-    proposed_campus_design: RelationshipAttribute[CustomerQuotationCampusDesign]
-
-
-class CustomerQuotationOfficeBuilding(CoreNode):
-    area_m2_per_floor: Integer
-    conference_rooms_per_floor: Integer
-    floors: Integer
-    name: String
-    people_per_floor: Integer
-    printers_per_floor: Integer
-    quotation: RelationshipAttribute[CustomerQuotationOffice]
-
-
-class CustomerQuotationProposedDesign(CoreNode):
-    name: StringOptional
-    pods: RelationshipManager[CustomerQuotationProposedPod]
-    quotation: RelationshipAttribute[CustomerQuotationDC]
-    recommended_dc_design: RelationshipManager[TopologyDataCenterDesign]
-
-
-class CustomerQuotationProposedPod(CoreNode):
-    compute_rack_share: IntegerOptional
-    index: Integer
-    leaf_count: IntegerOptional
-    recommended_pod_layout: StringOptional
-    spine_count: IntegerOptional
-    storage_rack_share: IntegerOptional
-    design: RelationshipAttribute[CustomerQuotationProposedDesign]
-    racks: RelationshipManager[CustomerQuotationProposedRack]
-    recommended_pod_design: RelationshipManager[TopologyPodDesign]
-
-
-class CustomerQuotationProposedRack(CoreNode):
-    index: Integer
-    rack_type: Dropdown
-    pod: RelationshipAttribute[CustomerQuotationProposedPod]
-    room: RelationshipAttribute[CustomerQuotationRoom]
-
-
-class CustomerQuotationRoom(CoreNode):
-    compute_rack_count: Integer
-    name: String
-    port_count_100g: Integer
-    port_count_10g: Integer
-    port_count_25g: Integer
-    port_count_400g: Integer
-    port_count_40g: Integer
-    preferred_cabling_method: Dropdown
-    preferred_leaf_link_offset: Integer
-    preferred_spine_uplink_offset: Integer
-    rack_assignment_strategy: Dropdown
-    racks_per_row: Integer
-    rows: Integer
-    storage_rack_count: Integer
-    quotation: RelationshipAttribute[CustomerQuotationDC]
 
 
 class LocationRack(LocationGeneric, CoreArtifactTarget):
@@ -1362,14 +1221,6 @@ class ManagedVlanDomainSegment(CoreNode):
     vlan_id: Integer
     segment: RelationshipAttribute[ManagedVxlanSegment]
     vlan_domain: RelationshipAttribute[ManagedGenericVlanDomain]
-
-
-class AppServicePort(CoreNode):
-    description: StringOptional
-    name: StringOptional
-    port: Integer
-    port_end: IntegerOptional
-    protocol: Dropdown
 
 
 class DcimSoftwareImage(CoreNode):
@@ -1509,6 +1360,7 @@ class TopologyVirtualCircuit(TopologyCircuit, ManagedGeneric, ManagedGenericInte
     cloud_resource_id: StringOptional
     encryption: Boolean
     link_type: Dropdown
+    peering_role: DropdownOptional
     transport_mode: DropdownOptional
     tunnel_id: IntegerOptional
     vni: IntegerOptional

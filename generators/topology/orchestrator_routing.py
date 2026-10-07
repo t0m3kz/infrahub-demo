@@ -10,7 +10,13 @@ from ..common import CommonGenerator
 
 
 class BaseOrchestratorRoutingGenerator(CommonGenerator):
-    """Synchronize routing groups from an orchestrator dropdown field."""
+    """Synchronize routing groups from an orchestrator dropdown field.
+
+    Owns nothing, so every write is untracked: the routing group is shared by
+    every node routed into it, and the node is this run's target. Tracked,
+    either would be deleted by the first run that does not save it again
+    (an unchanged node, or an orchestrator switched to another group).
+    """
 
     query_roots: tuple[str, ...] = ()
     orchestrator_field = ""
@@ -34,7 +40,7 @@ class BaseOrchestratorRoutingGenerator(CommonGenerator):
                     "description": f"Auto-created orchestrator routing group {group_name}",
                 },
             )
-            await group.save(allow_upsert=True)
+            await group.save(allow_upsert=True, update_group_context=False)
             self.logger.info(f"Created missing routing group '{group_name}'")
             return group
 
@@ -85,7 +91,7 @@ class BaseOrchestratorRoutingGenerator(CommonGenerator):
                 "member_of_groups": [{"id": group_id} for group_id in final_group_ids],
             },
         )
-        await obj.save(allow_upsert=True)
+        await obj.save(allow_upsert=True, update_group_context=False)
         self.logger.info(
             f"Updated routing groups for {node_kind} '{node_name}' -> {routing_group_name or 'manual/no-routing-group'}"
         )

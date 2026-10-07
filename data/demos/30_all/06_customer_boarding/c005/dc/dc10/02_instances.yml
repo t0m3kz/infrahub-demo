@@ -12,8 +12,7 @@
 # AppComponent.instances points at (see ../../../../07_applications/c005/
 # 01_application.yml). hosting_device pins each VM to a physical host, which
 # is the hop that ties an application component to a rack, a cable and a
-# switch port — the compute half of the blast radius the change-risk check
-# walks (checks/risk_model.py's TRAVERSAL_EDGES).
+# switch port — the compute half of an application's blast radius.
 #
 # Placement mirrors each segment's stretch_scope:
 #   - web-frontend (local dc10) -> both DC10 hosts

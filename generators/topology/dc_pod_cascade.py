@@ -22,7 +22,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..protocols import TopologyPod
 from .dc import DCTopologyGenerator
 
 
@@ -36,12 +35,8 @@ class DCPodCascadeGenerator(DCTopologyGenerator):
         if not dc_data:
             return
 
-        dc_id = dc_data["id"]
-        existing_pods = await self.client.filters(kind=TopologyPod, parent__ids=[dc_id])
-        related_node_ids = self.client.group_context.related_node_ids
-        for pod in existing_pods:
-            related_node_ids.append(pod.id)
-
+        # Fetched (read only, never tracked) by the parent's generate().
+        existing_pods = getattr(self, "_existing_pods", [])
         if not existing_pods:
             self.logger.info(f"DC {dc_data['name']}: no existing pods to cascade to")
             return

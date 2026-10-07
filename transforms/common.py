@@ -1,59 +1,58 @@
-"""
-Common utilities and base class for Infrahub device transforms.
-
-Public API — all symbols importable directly from ``transforms.common``.
-Implementation lives in ``transforms/helpers/`` submodules.
-"""
+"""Base class and shared helpers for Infrahub device transforms."""
 
 from typing import Any
 
 from infrahub_sdk.transforms import InfrahubTransform
-from jinja2 import Environment, FileSystemLoader, Template
+from jinja2 import Template
 from netutils.utils import jinja2_convenience_function
 
-from transforms.helpers.acl import _build_acl_rule, get_acls
-from transforms.helpers.bgp import (
-    _build_peer_groups,
-    _build_session_from_peering,
-    _normalize_afs,
-    _sort_key_ip,
-    get_bgp_profile,
-)
+from transforms.helpers.acl import get_acls
+from transforms.helpers.bgp import get_bgp_profile
 from transforms.helpers.firewall import (
     _flatten_deployment_firewall_contexts,
-    get_border_leaf_pbr_rules,
     get_customer_pbr_rules,
-    get_firewall_contexts,
-    get_firewall_static_routes,
-    get_firewall_zones,
     get_vrf_default_gateways,
-    get_zone_policies,
 )
-from transforms.helpers.ha import _HA_TYPENAMES, get_ha
+from transforms.helpers.ha import _HA_TYPENAMES
 from transforms.helpers.loadbalancer_pbr import _flatten_deployment_lb_vips, get_lb_backend_pbr_rules
 from transforms.helpers.management import get_management_services
-from transforms.helpers.mlag import get_mlag
+from transforms.helpers.mlag import get_mlag, get_sonic_mlag_config
 from transforms.helpers.ospf import get_ospf
-from transforms.helpers.segments import (
-    _flatten_deployment_segment_activations,
-    _get_segment_gateways,
-    _get_segment_namespace,
-    _get_segment_prefix_str,
-    _vlans_from_activations,
-    get_vlans,
-)
-from transforms.helpers.vxlan import (
-    _collect_l3_vni_from_namespaces,
-    _l2_from_activations,
-    _l3_from_activations,
-    _transform_vxlan_arista,
-    _transform_vxlan_nxos,
-    _transform_vxlan_platform,
-    _transform_vxlan_sonic,
-    get_interfaces,
-    get_vxlan_config,
-)
-from utils.data_cleaning import clean_data, get_data
+from transforms.helpers.segments import get_vlans, segment_hosting_candidates
+from transforms.helpers.templates import load_template
+from transforms.helpers.vxlan import get_interfaces, get_vxlan_config
+from utils.data_cleaning import clean_data
+
+
+def _fabric_rt_asn(deployment: Any) -> int | None:
+    """Return the fabric-wide EVPN route-target admin ASN, if the fabric has one.
+
+    Reads ``TopologySegmentHosting.evpn_rt_as`` off the device's own deployment.
+    Every VTEP in a fabric resolves the same value here, which is the whole
+    point: route-targets must match fabric-wide or VTEPs never import each
+    other's routes. Returns None when unset, and get_vxlan_config falls back to
+    the overlay process ASN.
+    """
+    for candidate in segment_hosting_candidates(deployment):
+        asn = (candidate.get("evpn_rt_as") or {}).get("asn")
+        if isinstance(asn, int):
+            return asn
+    return None
+
+
+def _fabric_anycast_mac(deployment: Any) -> str | None:
+    """Return the fabric-wide anycast-gateway MAC, if the fabric sets one.
+
+    Reads ``TopologySegmentHosting.evpn_anycast_gateway_mac``. Same fabric-wide
+    resolution as _fabric_rt_asn and for the same reason: a host caches its
+    gateway MAC, so two VTEPs answering with different MACs blackhole traffic on
+    whichever one did not answer. None means get_vxlan_config uses its default.
+    """
+    for candidate in segment_hosting_candidates(deployment):
+        mac = candidate.get("evpn_anycast_gateway_mac")
+        if isinstance(mac, str) and mac.strip():
+            return mac.strip()
+    return None
 
 
 def _get_sgt_rules(activations: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
@@ -110,26 +109,45 @@ def get_capabilities(data: dict[str, Any]) -> dict[str, Any]:
     Returns:
         Dict with capability flags for template rendering.
     """
-    services = data.get("capabilities") or []
-    bgp_enabled = any(s.get("typename") == "ManagedBGP" for s in services)
-    ospf_enabled = any(s.get("typename") == "ManagedOSPF" for s in services)
-    mlag_enabled = any(s.get("typename") == "ManagedMLAG" for s in services)
-    ntp_enabled = any(s.get("typename") == "ManagedNTP" for s in services)
-    syslog_enabled = any(s.get("typename") == "ManagedSyslog" for s in services)
-    snmp_enabled = any(s.get("typename") == "ManagedSNMP" for s in services)
-    aaa_enabled = any(s.get("typename") == "ManagedAAA" for s in services)
-    ha_enabled = any(s.get("typename") in _HA_TYPENAMES for s in services)
-
+    typenames = {s.get("typename") for s in data.get("capabilities") or []}
     return {
-        "bgp_enabled": bgp_enabled,
-        "ospf_enabled": ospf_enabled,
-        "mlag_enabled": mlag_enabled,
-        "ntp_enabled": ntp_enabled,
-        "syslog_enabled": syslog_enabled,
-        "snmp_enabled": snmp_enabled,
-        "aaa_enabled": aaa_enabled,
-        "ha_enabled": ha_enabled,
+        "bgp_enabled": "ManagedBGP" in typenames,
+        "ospf_enabled": "ManagedOSPF" in typenames,
+        "mlag_enabled": "ManagedMLAG" in typenames,
+        "ntp_enabled": "ManagedNTP" in typenames,
+        "syslog_enabled": "ManagedSyslog" in typenames,
+        "snmp_enabled": "ManagedSNMP" in typenames,
+        "aaa_enabled": "ManagedAAA" in typenames,
+        "ha_enabled": not typenames.isdisjoint(_HA_TYPENAMES),
     }
+
+
+def _loopback_name(interfaces: list[dict[str, Any]], platform_name: str) -> str:
+    """The loopback the templates source BGP updates and redistribution from.
+
+    The first interface named "loopback" (any case), or with a name of 14+
+    characters starting with it, else the platform's Loopback0 spelling.
+    Shorter names such as "Loopback1" never match, so devices get Loopback0.
+    """
+    for iface in interfaces:
+        name = iface["name"].lower()
+        if (name if len(name) <= 13 else name[:8]) == "loopback":
+            return iface["name"]
+    return "loopback0" if platform_name == "cisco_nxos" else "Loopback0"
+
+
+def _combine_leaf_pbr_rules(
+    customer_rules: list[dict[str, Any]], lb_backend_rules: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Combine firewall and LB redirects into one policy per VLAN."""
+    by_vlan = {rule["vlan_id"]: {**rule, "backend_ips": [], "lb_nexthop": None} for rule in customer_rules}
+    for rule in lb_backend_rules:
+        vlan_id = rule["vlan_id"]
+        if vlan_id in by_vlan:
+            by_vlan[vlan_id].update(backend_ips=rule["backend_ips"], lb_nexthop=rule["lb_nexthop"])
+        else:
+            by_vlan[vlan_id] = {**rule, "bypass_prefixes": [], "fw_nexthop": None}
+    return [by_vlan[vlan_id] for vlan_id in sorted(by_vlan)]
 
 
 class BaseDeviceTransform(InfrahubTransform):
@@ -152,29 +170,15 @@ class BaseDeviceTransform(InfrahubTransform):
 
     template_subdir: str = ""
     device_role: str = ""
+    # Comment character of the "no platform" stub config.
+    comment_char: str = "!"
+    # Resolve a VxlanSegment's local VLAN through this device's own VLAN domain.
+    resolve_vlan_domain: bool = True
 
     async def transform(self, data: Any) -> Any:
-        cleaned = clean_data(data)
-
-        # Device node is always the first root
-        if not isinstance(cleaned, dict) or not cleaned:
-            raise ValueError("clean_data() did not return a non-empty dictionary")
-        first_key = next(iter(cleaned))
-        first_value = cleaned[first_key]
-        device_data = first_value[0] if isinstance(first_value, list) and first_value else (first_value or {})
-
-        # Extra roots (e.g. DcimFirewallInterface for VRF default gateways)
-        extra_roots = {k: v for k, v in cleaned.items() if k != first_key}
-
-        platform = device_data.get("platform") or {}
-        platform_name = platform.get("netmiko_device_type")
-
+        device_data, extra_roots, platform_name = self._device_and_platform(data)
         if not platform_name:
-            device_name = device_data.get("name", "Unknown Device")
-            return (
-                f"! Device {device_name} has no platform with "
-                f"netmiko_device_type defined.\n! No configuration generated.\n"
-            )
+            return self._no_platform_config(device_data)
 
         # Collect segment activations from interface capabilities (segment → segment_deployments)
         activations = self._collect_activations_from_interfaces(
@@ -182,14 +186,49 @@ class BaseDeviceTransform(InfrahubTransform):
             device_id=device_data.get("id"),
             device_capabilities=device_data.get("capabilities") or [],
         )
+        if any(iface.get("role") == "multisite-vip" for iface in device_data.get("interfaces") or []):
+            activations.extend(
+                self._collect_border_gateway_activations(
+                    device_data.get("deployment"),
+                    device_id=device_data.get("id"),
+                    device_capabilities=device_data.get("capabilities") or [],
+                    seen={(act.get("segment") or {}).get("id") for act in activations},
+                )
+            )
         if activations:
             device_data["segment_deployments"] = self._filter_segment_deployments(activations)
 
         config = self._build_config(device_data, platform_name)
         config.update(self._extra_config(device_data, platform_name, extra_roots=extra_roots))
+        if platform_name in {"sonic", "dell_sonic"}:
+            unsupported = [key for key in ("snmp", "aaa") if config.get(key)]
+            if unsupported:
+                raise ValueError(f"{platform_name} ConfigDB rendering does not support: {', '.join(unsupported)}")
+        return self._render(platform_name, config)
 
-        template = self._load_template(platform_name)
-        return template.render(**config)
+    @staticmethod
+    def _device_and_platform(data: Any) -> tuple[dict, dict, str | None]:
+        """Clean `data` and return (device, the other query roots, netmiko platform).
+
+        The device node is always the first query root.
+        """
+        cleaned = clean_data(data)
+        if not isinstance(cleaned, dict) or not cleaned:
+            raise ValueError("clean_data() did not return a non-empty dictionary")
+        first_key = next(iter(cleaned))
+        first_value = cleaned[first_key]
+        device = first_value[0] if isinstance(first_value, list) and first_value else (first_value or {})
+        extra_roots = {k: v for k, v in cleaned.items() if k != first_key}
+        return device, extra_roots, (device.get("platform") or {}).get("netmiko_device_type")
+
+    def _no_platform_config(self, device: dict) -> str:
+        """Placeholder config for a device without a netmiko platform."""
+        c = self.comment_char
+        device_name = device.get("name", "Unknown Device")
+        return f"{c} Device {device_name} has no platform with netmiko_device_type defined.\n{c} No configuration generated.\n"
+
+    def _render(self, platform_name: str, config: dict) -> str:
+        return self._load_template(platform_name).render(**config)
 
     def _build_config(self, data: dict, platform_name: str) -> dict:
         """Build the base template context shared by all device transforms."""
@@ -198,11 +237,21 @@ class BaseDeviceTransform(InfrahubTransform):
         device_name = data.get("name", "")
         activations = data.get("segment_deployments")
         management_services = get_management_services(device_capabilities)
+        mlag = get_mlag(device_capabilities, interfaces, device_name=device_name)
+        # The MLAG control SVI is rendered by the platform's MLAG include
+        # (it needs the peer-link VLAN/trunk group around it), not as a
+        # generic interface.
+        template_interfaces = get_interfaces(
+            [iface for iface in interfaces if iface.get("role") != "mlag-control"],
+            activations=activations,
+            device_name=device_name,
+        )
         config = {
             "name": device_name,
             "hostname": device_name,
             "device_role": data.get("role", ""),
-            "interfaces": get_interfaces(interfaces, activations=activations, device_name=device_name),
+            "interfaces": template_interfaces,
+            "loopback_name": _loopback_name(template_interfaces, platform_name),
             "bgp": get_bgp_profile(
                 device_capabilities,
                 interfaces,
@@ -210,15 +259,15 @@ class BaseDeviceTransform(InfrahubTransform):
                 device_role=data.get("role", ""),
             ),
             "ospf": get_ospf(device_capabilities, interfaces),
-            "mlag": get_mlag(device_capabilities, interfaces),
+            "mlag": mlag,
             "ntp": management_services["ntp"],
             "syslog": management_services["syslog"],
             "snmp": management_services["snmp"],
             "aaa": management_services["aaa"],
+            "capabilities": get_capabilities(data),
         }
-        capabilities = get_capabilities(data)
-        if capabilities:
-            config["capabilities"] = capabilities
+        if platform_name in {"sonic", "dell_sonic"}:
+            config["sonic_mlag"] = get_sonic_mlag_config(mlag)
         return config
 
     def _extra_config(self, data: dict, platform_name: str, extra_roots: dict | None = None) -> dict:
@@ -255,15 +304,38 @@ class BaseDeviceTransform(InfrahubTransform):
         # border-leaf never hosts pool members (no activations there).
         lb_vips = _flatten_deployment_lb_vips(data.get("deployment"))
         lb_backend_pbr_rules = get_lb_backend_pbr_rules(activations, lb_vips)
+        leaf_pbr_rules = _combine_leaf_pbr_rules(customer_pbr_rules, lb_backend_pbr_rules)
+        if self.device_role in {"leaf", "tor", "access-leaf"}:
+            # SONiC renders PBR (ConfigDB PBR ACL table) but has no GPO;
+            # SR OS leafs render neither. Refuse rather than ship a VLAN
+            # whose firewall steering or segmentation silently vanished.
+            wants_gpo = bool(sgt_rules) or any(vlan.get("sgt") for vlan in vlans)
+            if platform_name in {"sonic", "dell_sonic"} and wants_gpo:
+                raise ValueError(f"{platform_name} leaf cannot render GPO policy; refusing unprotected config")
+            if platform_name == "nokia_sros" and (wants_gpo or leaf_pbr_rules):
+                raise ValueError(f"{platform_name} leaf cannot render GPO or PBR policy; refusing unprotected config")
+
+        acls = get_acls(activations=activations)
+        acl_names = {acl["vlan_id"]: acl["name"] for acl in acls}
+        for vlan in vlans:
+            vlan["acl_name"] = acl_names.get(vlan["vlan_id"])
 
         return {
             "vlans": vlans,
-            "vxlan": get_vxlan_config(data, platform_name, device_role=self.device_role, activations=activations),
-            "acls": get_acls(activations=activations),
+            "vxlan": get_vxlan_config(
+                data,
+                platform_name,
+                device_role=self.device_role,
+                activations=activations,
+                fabric_rt_asn=_fabric_rt_asn(data.get("deployment")),
+                fabric_anycast_mac=_fabric_anycast_mac(data.get("deployment")),
+            ),
+            "acls": acls,
             "vrf_gateways": vrf_gateways,
             "sgt_rules": sgt_rules,
             "customer_pbr_rules": customer_pbr_rules,
             "lb_backend_pbr_rules": lb_backend_pbr_rules,
+            "leaf_pbr_rules": leaf_pbr_rules,
         }
 
     _ACTIVE_STATUSES = ("active", "provisioning")
@@ -271,13 +343,30 @@ class BaseDeviceTransform(InfrahubTransform):
     @staticmethod
     def _resolve_own_vlan_domain_id(device_id: str | None, device_capabilities: list[dict]) -> str | None:
         """Return this device's own VLAN domain id: its ManagedMLAG's id if
-        paired, else its own device id (standalone VLAN domain). Local VLAN
-        ID is allocated per VLAN domain, not DC-wide — see
-        ManagedVlanDomainSegment / generators/topology/segment.py."""
+        paired, else its ManagedStandaloneVlanDomain's id. Local VLAN ID is
+        allocated per VLAN domain, not DC-wide — see ManagedVlanDomainSegment
+        / generators/vlan_domain.py. Falls back to the device id when the
+        device carries neither."""
+        standalone_id: str | None = None
         for cap in device_capabilities:
-            if cap.get("typename") == "ManagedMLAG" and cap.get("id"):
+            typename = cap.get("typename")
+            if typename == "ManagedMLAG" and cap.get("id"):
                 return cap["id"]
-        return device_id
+            if typename == "ManagedStandaloneVlanDomain" and cap.get("id"):
+                standalone_id = cap["id"]
+        return standalone_id or device_id
+
+    @staticmethod
+    def _own_vlan_domain_segment(segment: dict, own_domain_id: str | None) -> dict | None:
+        """The segment's vlan_domain_segments entry for this device's own VLAN domain."""
+        return next(
+            (
+                v
+                for v in segment.get("vlan_domain_segments") or []
+                if (v.get("vlan_domain") or {}).get("id") == own_domain_id
+            ),
+            None,
+        )
 
     def _collect_activations_from_interfaces(
         self,
@@ -297,6 +386,8 @@ class BaseDeviceTransform(InfrahubTransform):
         ManagedMLAG if paired, else itself) via _resolve_own_vlan_domain_id.
         A VxlanSegment whose vlan_domain_segments has no entry for this
         device's own domain yet (allocation not converged) is skipped.
+        Without ``resolve_vlan_domain`` (a firewall is never part of a VLAN
+        domain) a VxlanSegment takes the first segment_deployments entry as is.
         We deduplicate by segment id so each segment appears once.
         """
         own_domain_id = self._resolve_own_vlan_domain_id(device_id, device_capabilities or [])
@@ -317,17 +408,13 @@ class BaseDeviceTransform(InfrahubTransform):
                     if not seg_deps:
                         continue
                     vni = seg_deps[0].get("vni")
-                    own_domain_seg = next(
-                        (
-                            v
-                            for v in cap.get("vlan_domain_segments") or []
-                            if (v.get("vlan_domain") or {}).get("id") == own_domain_id
-                        ),
-                        None,
-                    )
-                    if own_domain_seg is None:
-                        continue
-                    vlan_id = own_domain_seg.get("vlan_id")
+                    if self.resolve_vlan_domain:
+                        own_domain_seg = self._own_vlan_domain_segment(cap, own_domain_id)
+                        if own_domain_seg is None:
+                            continue
+                        vlan_id = own_domain_seg.get("vlan_id")
+                    else:
+                        vlan_id = seg_deps[0].get("vlan_id")
                 seen.add(seg_id)
                 activations.append(
                     {
@@ -336,6 +423,40 @@ class BaseDeviceTransform(InfrahubTransform):
                         "segment": cap,
                     }
                 )
+        return activations
+
+    def _collect_border_gateway_activations(
+        self,
+        deployment: dict[str, Any] | None,
+        *,
+        device_id: str | None,
+        device_capabilities: list[dict[str, Any]],
+        seen: set[str | None],
+    ) -> list[dict[str, Any]]:
+        """Activations for every stretched VXLAN segment of an EVPN Multi-Site BGW's site.
+
+        A border gateway stitches each stretched segment between its fabric and
+        the DCI without any customer-facing port carrying it, so
+        interface_capabilities never surface those segments. They come from the
+        site's own TopologySegmentHosting.segment_deployments instead (queries/
+        fragments/network_segment.gql SegmentDeploymentsOnDeploymentFields),
+        keeping only stretch_scope != local. The local VLAN still has to be the
+        BGW's own vlan_domain entry (generators/topology/segment.py assigns one
+        to border-leaf/edge devices for stretched segments); a segment without
+        one has not converged yet and is skipped, same as on a leaf.
+        """
+        own_domain_id = self._resolve_own_vlan_domain_id(device_id, device_capabilities)
+        activations: list[dict[str, Any]] = []
+        for dep in (deployment or {}).get("segment_deployments") or []:
+            seg = dep.get("segment") or {}
+            seg_id = seg.get("id")
+            if not seg_id or seg_id in seen or (seg.get("stretch_scope") or "local") == "local" or not dep.get("vni"):
+                continue
+            own_domain_seg = self._own_vlan_domain_segment(seg, own_domain_id)
+            if own_domain_seg is None or not own_domain_seg.get("vlan_id"):
+                continue
+            seen.add(seg_id)
+            activations.append({"vlan_id": own_domain_seg["vlan_id"], "vni": dep["vni"], "segment": seg})
         return activations
 
     def _filter_segment_deployments(self, activations: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -348,55 +469,8 @@ class BaseDeviceTransform(InfrahubTransform):
 
     def _load_template(self, platform_name: str) -> Template:
         """Load the Jinja2 template for the given platform."""
-        path = f"{self.root_directory}/templates/configs"
-        env = Environment(
-            loader=FileSystemLoader(path),
-            autoescape=False,
-            keep_trailing_newline=True,
+        return load_template(
+            f"{self.root_directory}/templates/configs",
+            f"{self.template_subdir}/{platform_name}.j2",
+            filters=jinja2_convenience_function(),
         )
-        env.filters.update(jinja2_convenience_function())
-        return env.get_template(f"{self.template_subdir}/{platform_name}.j2")
-
-
-__all__ = [
-    "BaseDeviceTransform",
-    "_get_sgt_rules",
-    "clean_data",
-    "get_acls",
-    "get_bgp_profile",
-    "get_border_leaf_pbr_rules",
-    "get_capabilities",
-    "get_customer_pbr_rules",
-    "get_data",
-    "get_firewall_contexts",
-    "get_firewall_static_routes",
-    "get_ha",
-    "get_firewall_zones",
-    "get_interfaces",
-    "get_lb_backend_pbr_rules",
-    "get_ospf",
-    "get_vlans",
-    "get_vrf_default_gateways",
-    "get_vxlan_config",
-    "get_zone_policies",
-    # private helpers (imported by unit tests)
-    "_build_acl_rule",
-    "_build_peer_groups",
-    "_build_session_from_peering",
-    "_collect_l3_vni_from_namespaces",
-    "_flatten_deployment_firewall_contexts",
-    "_flatten_deployment_lb_vips",
-    "_flatten_deployment_segment_activations",
-    "_get_segment_gateways",
-    "_get_segment_namespace",
-    "_get_segment_prefix_str",
-    "_l2_from_activations",
-    "_l3_from_activations",
-    "_normalize_afs",
-    "_sort_key_ip",
-    "_transform_vxlan_arista",
-    "_transform_vxlan_nxos",
-    "_transform_vxlan_platform",
-    "_transform_vxlan_sonic",
-    "_vlans_from_activations",
-]

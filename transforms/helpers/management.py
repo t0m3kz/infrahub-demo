@@ -98,23 +98,3 @@ def _aaa_from_service(service: dict[str, Any] | None) -> dict[str, Any] | None:
         "accounting_enabled": service.get("accounting_enabled", False),
         "servers": servers,
     }
-
-
-def get_ntp(device_capabilities: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """Extract NTP configuration from device capabilities."""
-    return _ntp_from_service(_capabilities_by_typename(device_capabilities).get("ManagedNTP"))
-
-
-def get_syslog(device_capabilities: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """Extract Syslog configuration from device capabilities."""
-    return _syslog_from_service(_capabilities_by_typename(device_capabilities).get("ManagedSyslog"))
-
-
-def get_snmp(device_capabilities: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """Extract SNMP configuration from device capabilities."""
-    return _snmp_from_service(_capabilities_by_typename(device_capabilities).get("ManagedSNMP"))
-
-
-def get_aaa(device_capabilities: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """Extract AAA configuration from device capabilities."""
-    return _aaa_from_service(_capabilities_by_typename(device_capabilities).get("ManagedAAA"))

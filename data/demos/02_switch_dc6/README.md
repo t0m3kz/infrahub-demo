@@ -16,7 +16,8 @@ When you just need two more switches (famous last words)
 
 Enhancing existing rack (`ktw-1-s-1-r-2-5`) with:
 
-- **+2x Dell PowerSwitch leafs and 4x L2 leafs** - More switches than the original request admitted
+- **L2 leafs 2 -> 4** - the rack's `l2-leaf` entry moves to a new `["4", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]` element, so
+  2 more Dell PowerSwitch L2 leafs join the existing pair (the 2 leafs stay as they are)
 - **Location:** Katowice DC6, Pod 1, Suite 1, Row 2 - Where "just a small expansion" goes to retire
 
 ---

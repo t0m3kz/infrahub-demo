@@ -1,16 +1,34 @@
 ---
-# Internal firewall-path proof: web-frontend reaches app-backend on TCP/8443.
-# The source/target components use different network segments, so the
-# application generator must create a SecurityPolicyRule between them.
+# Internal firewall-path proof: web-frontend reaches app-backend on TCP/8443,
+# app-backend publishes to the event bus on AMQP (TCP/5672) and keeps its
+# orders in the DC12 database on PostgreSQL (TCP/5432). Each pair of
+# components sits on different network segments, so the application generator
+# must create a SecurityPolicyRule for each dependency. The ports are those
+# the target component lists in 01_application.yml; source and target are
+# component fqdns.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: AppDependency
   data:
     - name: c005-payment-web-to-backend
-      source: c005-payment-core-p-web-frontend
-      target: ["c005-payment-core-p-app-backend", "app-backend-api"]
-      protocol: tcp
-      port_start: 8443
+      source: api.payment-core.c005.demo.local
+      target: backend.payment-core.c005.demo.local
       access_status: auto
       description: "Payment web frontend calls the internal backend API"
+      member_of_groups:
+        - app_dependencies
+    - name: c005-payment-backend-to-event-bus
+      source: backend.payment-core.c005.demo.local
+      target: events.payment-core.c005.demo.local
+      access_status: auto
+      description: "Payment backend publishes order events to the event bus"
+      member_of_groups:
+        - app_dependencies
+    - name: c005-payment-backend-to-order-db
+      source: backend.payment-core.c005.demo.local
+      target: orders-db.payment-core.c005.demo.local
+      access_status: auto
+      description: "Payment backend reads and writes orders in the DC12 database"
+      member_of_groups:
+        - app_dependencies

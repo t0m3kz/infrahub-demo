@@ -16,7 +16,9 @@ The minimalist's approach (or "I ran out of budget")
 
 One humble rack (`ktw-1-s-1-r-4-5`) containing:
 
-- **2x Dell PowerSwitch access leafs** - The bare minimum for redundancy and plausible deniability
+- **2x Dell PowerSwitch leafs** - Cabled to the existing DC6 Pod 1 spines
+- **2x Dell PowerSwitch L2 leafs** - The bare minimum for redundancy and plausible deniability, cabled to the rack's own leafs
+  and paired as a back-to-back MLAG (Pod 1 is `mlag_create: back-to-back`, like the pod's other network racks)
 - **Deployment Type:** Network rack - connects to the existing DC6 Pod 1 fabric
 - **Location:** Katowice DC6, Pod 1, Row 4, Index 5
 
@@ -45,10 +47,9 @@ The rack generator will trigger **automatically** when the rack object is create
 
 The generator will:
 
-1. **Detect mixed deployment** and existing middle rack in row 2
-2. **Automatically inherit checksum** from middle rack
-3. **Generate ToR devices** immediately
-4. **Connect to next available ports** on middle rack leafs
+1. **Create the 2 leafs** and cable them to the next free ports on the Pod 1 spines
+2. **Create the 2 L2 leafs** and cable them to the rack's own leaf pair
+3. **Allocate underlay ASNs and routing** for the new leafs (the L2 leafs carry no BGP), leaving every existing switch's ASN alone
 
 **After generator completes,** manually regenerate the cabling artifact:
 
@@ -68,43 +69,15 @@ Run `uv run invoke test-integration` for the full rack lifecycle. If the change 
 
 **Prerequisite:** DC6 Pod 1 must already exist with its parent fabric (created via the DC6 scenario).
 
-Pod 2's mixed deployment means:
+Pod 1 is a middle_rack pod, so a network rack carries its own leafs:
 
-- Some racks have leafs (middle racks at index=5 in each row)
-- Some racks have only ToRs that connect to those middle rack leafs
+1. **Rack generator runs** (automatic trigger on create — the rack is in `topologies_rack`)
+2. **Resolves the pod's spines** through `pod: DC6-1-POD-1`
+3. **Creates and cables the leafs** to the spines, then the L2 leafs to those leafs
+4. **No spine regeneration needed** - the CablingPlanner picks the next free spine ports
 
-When you add this ToR rack to row 2:
-
-1. **ToR generator runs** (automatic trigger on create)
-2. **Queries existing middle rack leafs** in row 2 (at index=5)
-3. **Calculates cabling offset** based on existing ToRs in row 2
-4. **Connects to next available ports** on middle rack leafs
-5. **No middle rack regeneration needed** - leafs already exist with all interfaces
-
-**Why no regeneration?** The middle rack (index=5, row 2) was created in Scenario 01 with all its leafs and interfaces. The new ToR just uses the next available ports based on its calculated offset - the CablingPlanner handles port selection automatically.
-
----
-
-## How Mixed Deployment Ordering Works
-
-The system ensures middle racks are created before ToR racks can connect to them:
-
-Scenario 1: Middle rack exists before ToR (normal flow)
-
-1. Middle rack creates first with leafs
-2. Middle rack sets checksums on all ToR racks in same row
-3. Checksum update triggers ToR rack generation
-4. ToRs connect to middle rack leafs
-
-Scenario 2: ToR added to existing middle rack (Scenario 03)
-
-1. New ToR rack created without checksum
-2. ToR generator detects mixed deployment + existing middle rack
-3. **Automatically inherits checksum** from middle rack in same row
-4. ToR generation proceeds immediately
-5. Connects to next available ports on middle rack leafs
-
-This dual-path mechanism ensures ToRs never generate without middle racks, regardless of creation order!
+Row 4 is past the 3 rows the DC6 data declares for suite `ktw-1-s-1`, but within the 4 rows the pod's M_MIDDLE
+design allows.
 
 ---
 

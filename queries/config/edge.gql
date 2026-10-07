@@ -33,6 +33,17 @@ query edge_config($device: String!) {
         # Device Services (BGP, OSPF) with nested peerings
         ...DeviceCapabilitiesOnDeviceFields
 
+        # EVPN Multi-Site: the metro edge is its site's border gateway, so it
+        # needs the metro's stretched segments and fabric RT ASN (site-id).
+        ... on DcimPhysicalDevice {
+          deployment {
+            node {
+              ...SegmentDeploymentsOnDeploymentFields
+              ...EvpnRtAsOnDeploymentFields
+            }
+          }
+        }
+
         # Interface Information
         interfaces {
           edges {

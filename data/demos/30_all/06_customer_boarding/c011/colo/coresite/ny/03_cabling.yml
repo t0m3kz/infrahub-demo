@@ -1,8 +1,7 @@
 ---
 # Both NICs of each host land on the single cage switch: NIC-level redundancy
 # without switch-level redundancy. That is deliberate — a one-switch cage is
-# the honest small-colocation shape, and it gives the change-risk check a
-# genuine shared-fate example to contrast with the DC pods, where the two
+# the honest small-colocation shape, and a genuine shared-fate example to contrast with the DC pods, where the two
 # rows' access-leaf pairs are independent.
 apiVersion: infrahub.app/v1
 kind: Object

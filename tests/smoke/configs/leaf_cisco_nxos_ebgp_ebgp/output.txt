@@ -1,0 +1,203 @@
+!
+! dc1-leaf-01 Configuration
+!
+hostname dc1-leaf-01
+!
+system routing tcam security-group-acl
+!
+feature ospf
+feature bgp
+feature interface-vlan
+feature lacp
+feature vpc
+feature lldp
+!
+
+! VLANs
+vlan 100
+  name Customer-A
+!
+vlan 200
+  name Customer-A
+!
+!
+!
+! Interfaces
+interface Ethernet1
+  no shutdown
+  ip address 10.1.0.1/31
+
+!
+interface Ethernet2
+  no shutdown
+  ip address 10.1.0.3/31
+
+!
+interface Ethernet10
+  no shutdown
+
+  switchport
+  switchport mode access
+  switchport access vlan 100
+!
+interface Loopback0
+  no shutdown
+  ip address 10.0.0.1/32
+
+!
+!
+! OSPF Configuration
+
+
+!
+! BGP Configuration
+
+router bgp 65001
+  router-id 10.0.0.1
+  graceful-restart
+  !
+  template peer-policy EVPN-OVERLAY-POLICY
+    send-community
+    send-community extended
+  !
+  template peer-session EVPN-OVERLAY-SESSION
+    update-source loopback0
+    ebgp-multihop 255
+  !
+  !
+  template peer-policy UNDERLAY-PEERS-POLICY
+    send-community
+  !
+  template peer-session UNDERLAY-PEERS-SESSION
+    bfd
+  !
+  address-family ipv4 unicast
+    redistribute direct route-map RM-CONN-2-BGP
+    maximum-paths 8
+  !
+  address-family l2vpn evpn
+  !
+  neighbor 10.1.0.0
+    remote-as 65100
+    description spine-01
+    inherit peer-session UNDERLAY-PEERS-SESSION
+    address-family ipv4 unicast
+      inherit peer-policy UNDERLAY-PEERS-POLICY
+    !
+  neighbor 10.1.0.2
+    remote-as 65101
+    description spine-02
+    inherit peer-session UNDERLAY-PEERS-SESSION
+    address-family ipv4 unicast
+      inherit peer-policy UNDERLAY-PEERS-POLICY
+    !
+  neighbor 10.0.0.100
+    remote-as 65100
+    description spine-01
+    inherit peer-session EVPN-OVERLAY-SESSION
+    address-family l2vpn evpn
+      inherit peer-policy EVPN-OVERLAY-POLICY
+    !
+  neighbor 10.0.0.101
+    remote-as 65101
+    description spine-02
+    inherit peer-session EVPN-OVERLAY-SESSION
+    address-family l2vpn evpn
+      inherit peer-policy EVPN-OVERLAY-POLICY
+    !
+  vrf VRF_A
+    address-family ipv4 unicast
+      advertise l2vpn evpn
+      redistribute direct route-map RM-VRF-DIRECT-2-EVPN
+  !
+!
+
+!
+!
+! VXLAN Configuration (netlab-style multivendor)
+!
+feature nv overlay
+feature vn-segment-vlan-based
+feature nve
+feature fabric forwarding
+nv overlay evpn
+!
+!
+! VRF Contexts (symmetric IRB — one L3 VNI per tenant)
+!
+vrf context VRF_A
+  vni 50001
+  rd 10.0.0.1:50001
+  address-family ipv4 unicast
+    route-target both 65000:50001
+    route-target both 65000:50001 evpn
+!
+interface nve1
+  source-interface Loopback0
+  host-reachability protocol bgp
+  member vni 10100
+    suppress-arp
+    ingress-replication protocol bgp
+  member vni 50001 associate-vrf
+  no shutdown
+!
+!
+! EVPN Configuration
+!
+evpn
+  vni 10100 l2
+    rd 10.0.0.1:10100
+    route-target import 65000:10100
+    route-target export 65000:10100
+!
+!
+! VLAN to VNI mapping
+!
+vlan 100
+  vn-segment 10100
+!
+! L3 VNI Transit SVIs (symmetric IRB — no host addressing, forwarding only)
+!
+vlan 3900
+  name L3VNI_VRF_A
+  vn-segment 50001
+!
+interface Vlan3900
+  description L3VNI transit SVI for VRF VRF_A
+  vrf member VRF_A
+  ip forward
+  mtu 9216
+  no shutdown
+!
+!
+! Route-maps
+route-map RM-CONN-2-BGP permit 10
+  match interface loopback0
+!
+route-map RM-VRF-DIRECT-2-EVPN permit 10
+!
+! Anycast Gateway — identical MAC on every leaf/border-leaf in the fabric
+fabric forwarding anycast-gateway-mac 001c7300dc01
+!
+! VLAN SVI Configuration
+!
+interface Vlan100
+  description Customer-A
+  vrf member VRF_A
+  ip address 10.100.0.1/24
+  fabric forwarding mode anycast-gateway
+  no shutdown
+!
+interface Vlan200
+  description Customer-A
+  ip address 10.200.0.1/24
+  fabric forwarding mode anycast-gateway
+  no shutdown
+!
+!
+
+!
+! Management
+line console
+line vty
+!

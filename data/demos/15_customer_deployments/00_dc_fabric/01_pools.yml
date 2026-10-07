@@ -2,6 +2,16 @@
 # Minimal VLAN/VNI/L3-VNI pools for DC1-DC6 — enough for the
 # add_vxlan_segment generator to allocate real pool-backed values when
 # testing VXLAN network segments against these fake fabrics.
+#
+# Ranges must match the generator-created pools (a fabric may have either):
+#   vlan  100-3899   — 3900-3967 reserved for NX-OS L3VNI SVIs, 3968-4094 is
+#                      NX-OS's own reserved band. See CUSTOMER_VLAN_ID_MAX in
+#                      generators/helpers/pools.py.
+#   vni   10001-39999 — 16-bit RD/RT ceiling, and disjoint from both the
+#                       stretched-segment GLOBAL-L2VNI pool (40000-49999) and
+#                       l3vni below (the VNI space is one flat namespace per
+#                       device).
+#   l3vni 50001-59999 — must stay disjoint from the L2 vni range above.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -11,12 +21,12 @@ spec:
       node: "ManagedSegmentDeployment"
       node_attribute: "vlan_id"
       start_range: 100
-      end_range: 3999
+      end_range: 3899
     - name: "dc1-vni-pool"
       node: "ManagedSegmentDeployment"
       node_attribute: "vni"
       start_range: 10001
-      end_range: 16777215
+      end_range: 39999
     - name: "dc1-l3vni-pool"
       node: "IpamNamespace"
       node_attribute: "l3_vni"
@@ -27,12 +37,12 @@ spec:
       node: "ManagedSegmentDeployment"
       node_attribute: "vlan_id"
       start_range: 100
-      end_range: 3999
+      end_range: 3899
     - name: "dc2-vni-pool"
       node: "ManagedSegmentDeployment"
       node_attribute: "vni"
       start_range: 10001
-      end_range: 16777215
+      end_range: 39999
     - name: "dc2-l3vni-pool"
       node: "IpamNamespace"
       node_attribute: "l3_vni"
@@ -43,12 +53,12 @@ spec:
       node: "ManagedSegmentDeployment"
       node_attribute: "vlan_id"
       start_range: 100
-      end_range: 3999
+      end_range: 3899
     - name: "dc3-vni-pool"
       node: "ManagedSegmentDeployment"
       node_attribute: "vni"
       start_range: 10001
-      end_range: 16777215
+      end_range: 39999
     - name: "dc3-l3vni-pool"
       node: "IpamNamespace"
       node_attribute: "l3_vni"
@@ -59,12 +69,12 @@ spec:
       node: "ManagedSegmentDeployment"
       node_attribute: "vlan_id"
       start_range: 100
-      end_range: 3999
+      end_range: 3899
     - name: "dc4-vni-pool"
       node: "ManagedSegmentDeployment"
       node_attribute: "vni"
       start_range: 10001
-      end_range: 16777215
+      end_range: 39999
     - name: "dc4-l3vni-pool"
       node: "IpamNamespace"
       node_attribute: "l3_vni"
@@ -75,12 +85,12 @@ spec:
       node: "ManagedSegmentDeployment"
       node_attribute: "vlan_id"
       start_range: 100
-      end_range: 3999
+      end_range: 3899
     - name: "dc5-vni-pool"
       node: "ManagedSegmentDeployment"
       node_attribute: "vni"
       start_range: 10001
-      end_range: 16777215
+      end_range: 39999
     - name: "dc5-l3vni-pool"
       node: "IpamNamespace"
       node_attribute: "l3_vni"
@@ -91,12 +101,12 @@ spec:
       node: "ManagedSegmentDeployment"
       node_attribute: "vlan_id"
       start_range: 100
-      end_range: 3999
+      end_range: 3899
     - name: "dc6-vni-pool"
       node: "ManagedSegmentDeployment"
       node_attribute: "vni"
       start_range: 10001
-      end_range: 16777215
+      end_range: 39999
     - name: "dc6-l3vni-pool"
       node: "IpamNamespace"
       node_attribute: "l3_vni"

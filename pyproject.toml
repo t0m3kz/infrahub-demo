@@ -19,7 +19,7 @@ readme = "README.md"
 [dependency-groups]
 dev = [
     "commitizen>=4.0.0",
-    "infrahub-testcontainers>=1.5.2",
+    "infrahub-testcontainers>=1.11.4",
     "invoke>=2.2.0",
     "isort>=5.13.0",
     "pip-licenses>=4.4.0",
@@ -49,6 +49,13 @@ changelog_start_rev = "v0.1.0"
 [tool.ruff]
 line-length = 120
 exclude = [".venv/", ".dev/"]
+
+[tool.ruff.lint]
+# Pinned to the pre-0.16 default rule set. Ruff 0.16 widened its defaults
+# (LOG015, BLE001, SIM117, RUF012, ...: 408 hits) and its autofix rewrites
+# deliberate `getattr` calls on dynamic SDK attributes and drops needed
+# noqa comments. Adopt new rules one at a time instead of all at once.
+select = ["E4", "E7", "E9", "F"]
 
 [tool.rumdl]
 line-length = 120

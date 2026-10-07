@@ -2,7 +2,7 @@
 {%- set device_metadata = {
   'localhost': {
     'hostname': hostname,
-    'type': 'SpineRouter'
+    'type': sonic_device_type | default('SpineRouter')
   }
 } -%}
 {%- if bgp %}
@@ -20,6 +20,9 @@
 {%- set bgp_globals_af = {} -%}
 {%- set ospf_router = {} -%}
 {%- include 'common/sonic_common.j2' %}
+{%- set ntp_servers = {} -%}
+{%- set syslog_servers = {} -%}
+{%- include 'common/sonic_management.j2' %}
 
 {{ {
   'DEVICE_METADATA': device_metadata,
@@ -32,6 +35,7 @@
   'BGP_GLOBALS_AF': bgp_globals_af,
   'BGP_PEER_GROUP': bgp_peer_groups,
   'BGP_NEIGHBOR': bgp_neighbors,
-  'OSPF_ROUTER': ospf_router
+  'OSPF_ROUTER': ospf_router,
+  'NTP_SERVER': ntp_servers,
+  'SYSLOG_SERVER': syslog_servers
 } | tojson(indent=2) }}
-{%- include 'common/sonic_management.j2' %}

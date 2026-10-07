@@ -35,6 +35,14 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: proxy_cloud_config
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/config/proxy_cloud.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: loadbalancer_cloud
     tests:
       - name: syntax_check
@@ -172,14 +180,6 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
-    resource_name: rack_devices_with_interfaces
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/topology/add/rack_devices_with_interfaces.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
     resource_name: virt_cluster_capacity
     tests:
       - name: syntax_check
@@ -193,6 +193,46 @@ infrahub_tests:
       - name: syntax_check
         spec:
           path: queries/topology/add/application.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: app_dependency
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/app_dependency.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: app_component
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/app_component.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: app_component_segment
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/app_component_segment.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: segment_components
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/segment_components.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: segment_vlan_domains
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/segment_vlan_domains.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
@@ -225,14 +265,6 @@ infrahub_tests:
       - name: syntax_check
         spec:
           path: queries/topology/add/virtual_circuit.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
-    resource_name: interconnect_request_data
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/topology/add/interconnect_request.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
@@ -269,6 +301,14 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: app_dependency_validation
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/app_dependency.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: loadbalancer_validation
     tests:
       - name: syntax_check
@@ -282,4 +322,20 @@ infrahub_tests:
       - name: syntax_check
         spec:
           path: queries/validation/proxy.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: segment_placement
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/segment_placement.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: evpn_fabric
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/evpn_fabric.gql
           kind: graphql-query-smoke

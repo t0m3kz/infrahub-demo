@@ -23,6 +23,7 @@ stretch segment must carry one leg per DC.
 Runs against the branch test_59 builds; it never loads data of its own.
 """
 
+import ipaddress
 import logging
 
 import pytest
@@ -31,17 +32,87 @@ from infrahub_sdk import InfrahubClient
 from .conftest import TestInfrahubDockerWithClient
 from .test_constants import (
     ALL_DEMO_BRANCH,
+    ALL_DEMO_COLOCATION_SERVED,
+    ALL_DEMO_DC_NAMES,
+    ALL_DEMO_DCI_CIRCUITS,
     ALL_DEMO_DEDICATED_FIREWALL_TENANTS,
+    ALL_DEMO_INTERNET_TRANSIT_CIRCUITS,
     ALL_DEMO_PHYSICAL_CIRCUIT_TYPES,
     ALL_DEMO_SEGMENT_LEGS,
     ALL_DEMO_SHARED_FIREWALL_CONTEXTS,
     ALL_DEMO_VIRTUAL_CIRCUITS,
 )
-from .test_helpers import fetch_interconnect_inventory, fetch_tenant_services
+from .test_helpers import fetch_interconnect_inventory, fetch_tenant_services, scope_tenant_services_to_dcs
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 SCENARIO_NAME = "Scenario 30_all: Interconnects"
+
+COLOCATION_CONTEXTS_QUERY = """
+query {
+  TopologyCustomerColocation {
+    edges {
+      node {
+        name { value }
+        parent {
+          node {
+            ... on TopologyColocationMetro {
+              devices(role__value: "firewall") { edges { node { id } } }
+            }
+          }
+        }
+        serving_firewall_context {
+          node {
+            name { value }
+            vlan_id { value }
+            tenant { node { id } }
+            cluster { node { ... on ManagedFirewallHA { capabilities { edges { node { id } } } } } }
+            interface_capabilities {
+              edges {
+                node {
+                  name { value }
+                  device { node { id } }
+                  ... on DcimVirtualInterface { ip_address { node { address { value } } } }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
+# The DCI sessions add_circuit builds for the peering_role=dci dark fibres.
+DCI_SESSIONS_QUERY = """
+query ($names: [String]) {
+  ManagedBGPPeering(name__values: $names) {
+    edges {
+      node {
+        name { value }
+        peering_role { value }
+        session_type { value }
+        ttl { value }
+        password { node { name { value } } }
+        address_families { edges { node { afi { value } safi { value } } } }
+        bgp_processes { edges { node { name { value } process_role { value } } } }
+        interface_capabilities {
+          edges {
+            node {
+              name { value }
+              device { node { name { value } } }
+              ... on DcimPhysicalInterface { ip_address { node { address { value } } } }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+# DCI-Technical-IPv6 (data/bootstrap/20_dci_pools.yml) — the DC fabrics run an IPv6 underlay.
+DCI_POOL_NETWORK = ipaddress.IPv6Network("fd00:2200::/40")
 
 
 class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
@@ -94,11 +165,14 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 errors.append(f"{circuit_id}: no provider")
             if len(circuit["locations"]) != 2:
                 errors.append(f"{circuit_id}: terminates at {circuit['locations']}, expected exactly 2 locations")
-            # The shared backbone circuits (dark fibre, cross-connects) are
+            # The shared circuits (dark fibre, cross-connects, ISP transit) are
             # deliberately unowned; only a customer's own internet underlay
             # names an owner.
-            if circuit["circuit_type"] == "internet" and not circuit["owner"]:
+            transit = circuit_id in ALL_DEMO_INTERNET_TRANSIT_CIRCUITS
+            if circuit["circuit_type"] == "internet" and not transit and not circuit["owner"]:
                 errors.append(f"{circuit_id}: internet underlay with no owning customer")
+            if transit and circuit["owner"]:
+                errors.append(f"{circuit_id}: shared transit circuit owned by '{circuit['owner']}'")
             if circuit["circuit_type"] in ("dark_fiber", "cross_connect") and circuit["owner"]:
                 errors.append(f"{circuit_id}: shared {circuit['circuit_type']} circuit owned by '{circuit['owner']}'")
 
@@ -186,14 +260,19 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
     ) -> None:
         """Verify the firewall contexts match the customers' design blueprints.
 
-        A context with no tenant is the DC's shared low-risk context; a context
-        with a tenant exists only because that customer's design sets
-        dedicated_firewall. Getting this wrong is how a customer silently ends
+        A context with no tenant is a cluster's shared low-risk context (each
+        DC's, and the colocation metro's); a context with a tenant exists only
+        because that customer's design sets dedicated_firewall. Getting this wrong is how a customer silently ends
         up sharing a security context with everyone else.
+
+        Scoped to the 30_all DCs (and every colocation): the DC6 scenario
+        chain merges its own customer footprint into main in the same session.
         """
         logging.info("=== %s - Step 3: Firewall Contexts ===", SCENARIO_NAME)
 
-        services = await fetch_tenant_services(client=async_client_main, branch=scenario_branch)
+        services = scope_tenant_services_to_dcs(
+            await fetch_tenant_services(client=async_client_main, branch=scenario_branch), ALL_DEMO_DC_NAMES
+        )
         contexts = services["firewall_contexts"]
 
         errors: list[str] = []
@@ -202,7 +281,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         if len(shared) != ALL_DEMO_SHARED_FIREWALL_CONTEXTS:
             errors.append(
                 f"{len(shared)} shared (tenant-less) firewall context(s), "
-                f"expected {ALL_DEMO_SHARED_FIREWALL_CONTEXTS} — one per DC cluster"
+                f"expected {ALL_DEMO_SHARED_FIREWALL_CONTEXTS} — one per firewall cluster"
             )
 
         dedicated = {str(context["tenant"]): context for context in contexts if context["tenant"]}
@@ -243,10 +322,14 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         A ``dc_pair``-scoped segment that only materialises one leg looks fine
         in isolation — the segment exists, the VNI is allocated — but half the
         stretch is missing.
+
+        Scoped like test_03: legs in another suite's DC are not 30_all's.
         """
         logging.info("=== %s - Step 4: Segment Deployment Legs ===", SCENARIO_NAME)
 
-        services = await fetch_tenant_services(client=async_client_main, branch=scenario_branch)
+        services = scope_tenant_services_to_dcs(
+            await fetch_tenant_services(client=async_client_main, branch=scenario_branch), ALL_DEMO_DC_NAMES
+        )
 
         legs_by_segment: dict[str, list[str]] = {}
         for leg in services["segment_deployments"]:
@@ -275,4 +358,162 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         logging.info(
             "Segment legs verified: %d across %d segment(s)", len(services["segment_deployments"]), len(legs_by_segment)
         )
+
+    @pytest.mark.order(408)
+    @pytest.mark.dependency(scope="session", depends=["all_demo_tenant_services"])
+    @pytest.mark.asyncio
+    async def test_05_verify_colocation_serving_contexts(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """Verify each colocation deployment is served by its own metro's firewalls.
+
+        A deployment in a metro with a firewall pair is served by that pair's
+        shared context, which carries one tagged sub-interface per firewall
+        member and one on the edge it is cabled to, each with a P2P address. A
+        deployment in an edge-only metro has no context: pointing it at another
+        metro's firewalls would hairpin its traffic across the WAN.
+        """
+        logging.info("=== %s - Step 5: Colocation Serving Contexts ===", SCENARIO_NAME)
+
+        result = await async_client_main.execute_graphql(query=COLOCATION_CONTEXTS_QUERY, branch_name=scenario_branch)
+        deployments = {
+            edge["node"]["name"]["value"]: edge["node"] for edge in result["TopologyCustomerColocation"]["edges"]
+        }
+
+        errors: list[str] = []
+        if sorted(deployments) != sorted(ALL_DEMO_COLOCATION_SERVED):
+            errors.append(
+                f"colocation deployments {sorted(deployments)}, expected {sorted(ALL_DEMO_COLOCATION_SERVED)}"
+            )
+
+        for name, served in sorted(ALL_DEMO_COLOCATION_SERVED.items()):
+            deployment = deployments.get(name)
+            if deployment is None:
+                continue
+            metro = (deployment.get("parent") or {}).get("node") or {}
+            metro_firewalls = {edge["node"]["id"] for edge in (metro.get("devices") or {}).get("edges", [])}
+            context = (deployment.get("serving_firewall_context") or {}).get("node")
+
+            if not served:
+                if metro_firewalls:
+                    errors.append(f"{name}: metro has firewalls, expected an edge-only metro")
+                if context:
+                    errors.append(f"{name}: edge-only metro, but served by '{context['name']['value']}'")
+                continue
+
+            if not context:
+                errors.append(f"{name}: metro has firewalls but the deployment has no serving_firewall_context")
+                continue
+            context_name = context["name"]["value"]
+            if (context.get("tenant") or {}).get("node"):
+                errors.append(f"{name}: served by tenant-dedicated '{context_name}', expected the metro's shared one")
+            cluster = (context.get("cluster") or {}).get("node") or {}
+            members = {edge["node"]["id"] for edge in (cluster.get("capabilities") or {}).get("edges", [])}
+            if not metro_firewalls or members != metro_firewalls:
+                errors.append(f"{name}: '{context_name}' is on cluster {sorted(members)}, not the metro's firewalls")
+
+            vlan_id = (context.get("vlan_id") or {}).get("value")
+            interfaces = [edge["node"] for edge in (context.get("interface_capabilities") or {}).get("edges", [])]
+            on_firewalls = [i for i in interfaces if ((i.get("device") or {}).get("node") or {}).get("id") in members]
+            if not vlan_id:
+                errors.append(f"{name}: '{context_name}' has no VLAN allocated")
+            if len(interfaces) != 2 * len(members) or len(on_firewalls) != len(members):
+                errors.append(
+                    f"{name}: '{context_name}' has {len(on_firewalls)} firewall and "
+                    f"{len(interfaces) - len(on_firewalls)} edge sub-interface(s), expected {len(members)} of each"
+                )
+            for interface in interfaces:
+                iface = interface["name"]["value"]
+                if not iface.endswith(f".{vlan_id}"):
+                    errors.append(f"{name}: '{context_name}' sub-interface '{iface}' is not tagged {vlan_id}")
+                if not ((interface.get("ip_address") or {}).get("node") or {}).get("address", {}).get("value"):
+                    errors.append(f"{name}: '{context_name}' sub-interface '{iface}' has no P2P address")
+
+        assert not errors, f"30_all colocation serving contexts are wrong on branch '{scenario_branch}':\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
+
+        logging.info(
+            "Colocation serving contexts verified: %d served, %d edge-only",
+            sum(ALL_DEMO_COLOCATION_SERVED.values()),
+            len(ALL_DEMO_COLOCATION_SERVED) - sum(ALL_DEMO_COLOCATION_SERVED.values()),
+        )
+
+    # ------------------------------------------------------------------
+    # DCI sessions (add_circuit, peering_role dci)
+    # ------------------------------------------------------------------
+
+    @pytest.mark.order(409)
+    @pytest.mark.dependency(scope="session", depends=["all_demo_physical_circuits"])
+    @pytest.mark.asyncio
+    async def test_06_verify_dci_sessions(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """Verify add_circuit built one keyed EVPN Multi-Site session per dark fibre.
+
+        Each session runs between the two ends' overlay BGP processes over a
+        /127 from the DCI pool, carries IPv6 unicast + L2VPN EVPN, and is keyed
+        with the DC fabric's overlay key.
+        """
+        logging.info("=== %s - Step 6: DCI Sessions ===", SCENARIO_NAME)
+
+        expected = {f"DCI-{circuit_id}": ends for circuit_id, ends in ALL_DEMO_DCI_CIRCUITS.items()}
+        result = await async_client_main.execute_graphql(
+            query=DCI_SESSIONS_QUERY, variables={"names": sorted(expected)}, branch_name=scenario_branch
+        )
+        sessions = {edge["node"]["name"]["value"]: edge["node"] for edge in result["ManagedBGPPeering"]["edges"]}
+
+        errors: list[str] = []
+        if sorted(sessions) != sorted(expected):
+            errors.append(f"DCI sessions {sorted(sessions)}, expected {sorted(expected)}")
+
+        for name, (dc_name, ends) in sorted(expected.items()):
+            session = sessions.get(name)
+            if session is None:
+                continue
+            if session["peering_role"]["value"] != "dci" or session["session_type"]["value"] != "EBGP":
+                errors.append(f"{name}: {session['peering_role']['value']}/{session['session_type']['value']}")
+            if session["ttl"]["value"] != 1:
+                errors.append(f"{name}: ttl {session['ttl']['value']}, expected 1 (directly connected)")
+            key = ((session.get("password") or {}).get("node") or {}).get("name", {}).get("value")
+            if key != f"{dc_name.lower()}-overlay-key":
+                errors.append(f"{name}: keyed with '{key}', expected '{dc_name.lower()}-overlay-key'")
+            families = sorted(
+                (edge["node"]["afi"]["value"], edge["node"]["safi"]["value"])
+                for edge in session["address_families"]["edges"]
+            )
+            if families != [("ipv6", "unicast"), ("l2vpn", "evpn")]:
+                errors.append(f"{name}: address families {families}")
+            processes = sorted(
+                (edge["node"]["name"]["value"], edge["node"]["process_role"]["value"])
+                for edge in session["bgp_processes"]["edges"]
+            )
+            if processes != sorted((f"{device}-bgp-overlay", "overlay") for device, _ in ends):
+                errors.append(f"{name}: runs on {processes}")
+            interfaces = {
+                (edge["node"]["device"]["node"]["name"]["value"], edge["node"]["name"]["value"]): (
+                    ((edge["node"].get("ip_address") or {}).get("node") or {}).get("address", {}).get("value")
+                )
+                for edge in session["interface_capabilities"]["edges"]
+            }
+            if sorted(interfaces) != sorted(ends):
+                errors.append(f"{name}: on interfaces {sorted(interfaces)}, expected {sorted(ends)}")
+                continue
+            addresses = [ipaddress.IPv6Interface(a) for a in interfaces.values() if a and ":" in a]
+            if len(addresses) != 2 or addresses[0].network != addresses[1].network:
+                errors.append(
+                    f"{name}: interface addresses {sorted(interfaces.values(), key=str)} are not one IPv6 P2P"
+                )
+            elif addresses[0].network.prefixlen != 127 or not addresses[0].network.subnet_of(DCI_POOL_NETWORK):
+                errors.append(f"{name}: P2P {addresses[0].network} is not a /127 from {DCI_POOL_NETWORK}")
+
+        assert not errors, f"30_all DCI sessions are wrong on branch '{scenario_branch}':\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
+
+        logging.info("DCI sessions verified: %d", len(sessions))
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)

@@ -1,7 +1,7 @@
 ---
 # Common Exchange stretch segment across DC7 and DC8 for a single customer.
 # This models a typical stretched VXLAN deployment for C003 across two DCs.
-# environment=p -> PROD namespace (RulesPlanner.pick_namespace_name).
+# environment=p -> PROD namespace.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

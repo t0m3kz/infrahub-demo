@@ -2,19 +2,19 @@
 dual-homing cabling flow used by EndpointConnectivityGenerator for role="uplink"
 endpoints (as opposed to the LAG/MLAG bond flow in generators/topology/endpoint.py).
 
-Covers _process_endpoint_connections, _process_speed_aware, _process_with_validation,
-_validate_connection_speeds, _execute_cabling, and _build_connection_plan.
+Covers _process_endpoint_connections, _process_speed_aware, _execute_cabling,
+and _build_connection_plan.
 """
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from generators.endpoint import EndpointUplinkMixin
+from generators.topology.endpoint import EndpointConnectivityGenerator
 from generators.types import ConnectionFingerprint
 
 
@@ -24,61 +24,33 @@ class _Host(EndpointUplinkMixin):
 
 
 def _iface(name: str, *, device: str, interface_type: str | None = None, cabled: bool = False) -> MagicMock:
+    """A DcimPhysicalInterface as client.filters returns it with include=["device", "interface_type", "cable"]."""
     intf = MagicMock()
-    intf.name = MagicMock()
     intf.name.value = name
-    if interface_type:
-        intf.interface_type = MagicMock()
-        intf.interface_type.value = interface_type
-    else:
-        intf.interface_type = None
+    intf.interface_type.value = interface_type
+    intf.device.peer.name.value = device
     if cabled:
         intf.cable = MagicMock()
         intf.cable.id = "cable-1"
     else:
         intf.cable = None
-    intf._device_name_for_grouping = device
     return intf
 
 
-def _server_iface(name: str, *, interface_type: str) -> Any:
-    """EndpointInterface-shaped fixture: `.name` is a plain str (Pydantic
-    model field), unlike the SDK's `.name.value` shape used by `_iface`."""
-    return SimpleNamespace(name=name, interface_type=interface_type)
-
-
-def _make_host(*, speed_aware: bool = True, validate_speeds: bool = True, strict: bool = False) -> Any:
+def _make_host() -> Any:
     host = _Host()
     host.client = MagicMock()
     host.logger = MagicMock()
     host.data = {"name": "server-1"}
     host.planned_connections = set()
-    host.speed_aware = speed_aware
-    host.validate_speeds = validate_speeds
-    host.strict_speed_validation = strict
     host._free_interfaces = []
     host._existing_switch_names = set()
-
-    def _extract_device_name(intf: Any) -> str | None:
-        return getattr(intf, "_device_name_for_grouping", None)
-
-    host._extract_device_name = _extract_device_name
-    host.create_cabling = AsyncMock(return_value=[])
+    host._extract_device_name = EndpointConnectivityGenerator._extract_device_name
+    host.create_cabling = AsyncMock(return_value=[("server-port", "switch-port")])
     return host
 
 
 class TestProcessEndpointConnections:
-    @pytest.mark.asyncio
-    async def test_no_free_interfaces_logs_info_and_returns(self) -> None:
-        host = _make_host()
-        cabled = _iface("eth0", device="leaf-1", cabled=True)
-        host._free_interfaces = [cabled]
-
-        await host._process_endpoint_connections([_iface("Eth1", device="leaf-1")])
-
-        host.logger.info.assert_called_once()
-        host.create_cabling.assert_not_called()
-
     @pytest.mark.asyncio
     async def test_no_target_interfaces_logs_error_and_returns(self) -> None:
         host = _make_host()
@@ -105,7 +77,7 @@ class TestProcessEndpointConnections:
         host = _make_host()
         host._free_interfaces = [_iface("eth0", device="server-1")]
         unresolvable = _iface("Eth1", device="leaf-1")
-        unresolvable._device_name_for_grouping = None
+        unresolvable.device.peer = None
         targets = [unresolvable, _iface("Eth2", device="leaf-2")]
 
         await host._process_endpoint_connections(targets)
@@ -116,7 +88,7 @@ class TestProcessEndpointConnections:
 
     @pytest.mark.asyncio
     async def test_speed_aware_default_dispatches_to_process_speed_aware(self) -> None:
-        host = _make_host()  # speed_aware=True is the default
+        host = _make_host()
         host._free_interfaces = [
             _iface("eth0", device="server-1", interface_type="100gbase-x-qsfp28"),
         ]
@@ -133,7 +105,7 @@ class TestProcessEndpointConnections:
     async def test_sticky_devices_preferred_over_first_two(self) -> None:
         """A device this endpoint is already cabled to must be selected even if
         it doesn't sort first among the discovered target devices."""
-        host = _make_host(speed_aware=False, validate_speeds=False)
+        host = _make_host()
         host._existing_switch_names = {"leaf-2"}
         host._free_interfaces = [
             _iface("eth0", device="server-1"),
@@ -218,7 +190,7 @@ class TestProcessSpeedAware:
         host = _make_host()
         server_intfs = [_iface("eth0", device="server-1", interface_type="100gbase-x-qsfp28")]
         unresolvable_switch = _iface("Eth1", device="leaf-1", interface_type="100gbase-x-qsfp28")
-        unresolvable_switch._device_name_for_grouping = None
+        unresolvable_switch.device.peer = None
         switch_intfs = [unresolvable_switch]
 
         await host._process_speed_aware(
@@ -228,129 +200,6 @@ class TestProcessSpeedAware:
         )
 
         host.create_cabling.assert_not_called()
-
-
-class TestProcessWithValidation:
-    @pytest.mark.asyncio
-    async def test_empty_connection_plan_logs_warning(self) -> None:
-        host = _make_host(speed_aware=False)
-        unresolvable = _iface("Eth1", device="leaf-1")
-        unresolvable._device_name_for_grouping = None
-
-        await host._process_with_validation(
-            available_endpoint_interfaces=[_iface("eth0", device="server-1")],
-            all_target_interfaces=[unresolvable],
-            target_device_names=["leaf-1", "leaf-2"],
-        )
-
-        assert any("No connection plan created" in str(c.args[0]) for c in host.logger.warning.call_args_list)
-        host.create_cabling.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_insufficient_connections_fails_validation(self) -> None:
-        """min_connections=2 in validation-only mode — a single-interface plan
-        must be rejected even though a plan was built."""
-        host = _make_host(speed_aware=False)
-        server_intfs = [_iface("eth0", device="server-1")]
-        switch_intfs = [_iface("Eth1", device="leaf-1"), _iface("Eth1", device="leaf-2")]
-
-        await host._process_with_validation(
-            available_endpoint_interfaces=server_intfs,
-            all_target_interfaces=switch_intfs,
-            target_device_names=["leaf-1", "leaf-2"],
-        )
-
-        host.logger.error.assert_called_once()
-        host.create_cabling.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_valid_plan_executes_cabling(self) -> None:
-        host = _make_host(speed_aware=False, validate_speeds=False)
-        server_intfs = [_iface(f"eth{i}", device="server-1") for i in range(4)]
-        switch_intfs = [
-            _iface("Eth1", device="leaf-1"),
-            _iface("Eth2", device="leaf-1"),
-            _iface("Eth1", device="leaf-2"),
-            _iface("Eth2", device="leaf-2"),
-        ]
-
-        await host._process_with_validation(
-            available_endpoint_interfaces=server_intfs,
-            all_target_interfaces=switch_intfs,
-            target_device_names=["leaf-1", "leaf-2"],
-        )
-
-        host.create_cabling.assert_awaited_once()
-        assert len(host.planned_connections) == 4
-
-    @pytest.mark.asyncio
-    async def test_speed_validation_invoked_when_enabled(self) -> None:
-        host = _make_host(speed_aware=False, validate_speeds=True)
-        server_intfs = [
-            _server_iface("eth0", interface_type="100gbase-x-qsfp28"),
-            _server_iface("eth1", interface_type="25gbase-x-sfp28"),
-        ]
-        switch_intfs = [
-            _iface("Eth1", device="leaf-1", interface_type="100gbase-x-qsfp28"),
-            _iface("Eth1", device="leaf-2", interface_type="100gbase-x-qsfp28"),
-        ]
-
-        await host._process_with_validation(
-            available_endpoint_interfaces=server_intfs,
-            all_target_interfaces=switch_intfs,
-            target_device_names=["leaf-1", "leaf-2"],
-        )
-
-        # Speed mismatch is a warning, not strict-skip by default — connection proceeds.
-        assert any("Speed mismatch" in str(c.args[0]) for c in host.logger.warning.call_args_list)
-        host.create_cabling.assert_awaited_once()
-
-
-class TestValidateConnectionSpeeds:
-    def test_matching_speeds_pass_through(self) -> None:
-        host = _make_host()
-        server = _server_iface("eth0", interface_type="100gbase-x-qsfp28")
-        switch = _iface("Eth1", device="leaf-1", interface_type="100gbase-x-qsfp28")
-        conn = ConnectionFingerprint("server-1", "eth0", "leaf-1", "Eth1")
-
-        result = host._validate_connection_speeds(
-            connection_plan=[conn],
-            available_endpoint_interfaces=[server],
-            all_target_interfaces=[switch],
-        )
-
-        assert result == [conn]
-        host.logger.warning.assert_not_called()
-
-    def test_mismatched_speeds_warns_but_keeps_connection_by_default(self) -> None:
-        host = _make_host(strict=False)
-        server = _server_iface("eth0", interface_type="25gbase-x-sfp28")
-        switch = _iface("Eth1", device="leaf-1", interface_type="100gbase-x-qsfp28")
-        conn = ConnectionFingerprint("server-1", "eth0", "leaf-1", "Eth1")
-
-        result = host._validate_connection_speeds(
-            connection_plan=[conn],
-            available_endpoint_interfaces=[server],
-            all_target_interfaces=[switch],
-        )
-
-        assert result == [conn]
-        host.logger.warning.assert_called()
-        host.logger.info.assert_called_once()
-
-    def test_mismatched_speeds_dropped_when_strict(self) -> None:
-        host = _make_host(strict=True)
-        server = _server_iface("eth0", interface_type="25gbase-x-sfp28")
-        switch = _iface("Eth1", device="leaf-1", interface_type="100gbase-x-qsfp28")
-        conn = ConnectionFingerprint("server-1", "eth0", "leaf-1", "Eth1")
-
-        result = host._validate_connection_speeds(
-            connection_plan=[conn],
-            available_endpoint_interfaces=[server],
-            all_target_interfaces=[switch],
-        )
-
-        assert result == []
 
 
 class TestExecuteCabling:
@@ -371,6 +220,19 @@ class TestExecuteCabling:
         assert call_kwargs["top_interfaces"] == ["Eth2"]
         assert call_kwargs["top_devices"] == ["leaf-1", "leaf-2"]
         assert call_kwargs["strategy"] == "intra_rack"
+        host.logger.error.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_no_cable_created_is_an_error(self) -> None:
+        """create_cabling planning nothing (e.g. a speed mismatch) fails the run instead of passing silently."""
+        host = _make_host()
+        host.create_cabling = AsyncMock(return_value=[])
+        plan = [ConnectionFingerprint("server-1", "eth0", "leaf-1", "Eth1")]
+
+        await host._execute_cabling(plan, ["leaf-1", "leaf-2"])
+
+        host.logger.error.assert_called_once()
+        assert "no cable created" in host.logger.error.call_args.args[0]
 
 
 class TestBuildConnectionPlan:
@@ -443,7 +305,7 @@ class TestBuildConnectionPlan:
     def test_missing_device_name_on_switch_side_is_skipped_with_warning(self) -> None:
         host = _make_host()
         unresolvable = _iface("Eth1", device="leaf-1")
-        unresolvable._device_name_for_grouping = None
+        unresolvable.device.peer = None
         server_intfs = [_iface("eth0", device="server-1")]
 
         plan = host._build_connection_plan(

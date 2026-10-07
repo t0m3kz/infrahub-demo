@@ -1,17 +1,26 @@
 ---
 # Arista SD-WAN (formerly VeloCloud) device templates
 # VCE-610: branch edge appliance (physical, 1RU)
+# VCG-VA_GATEWAY: physical gateway appliance (colocation-hosted)
 #
 # Interface naming:
 #   GE1-GE4  — WAN/LAN copper GigabitEthernet ports on VCE-610
+#   eth0     — VCG-VA gateway uplink
 #   mgmt0    — out-of-band management
 #
-# The physical VCG-VA gateway/controller template lives in
-# 10_physical_devices_templates_controllers.yaml (ManagedControllerPhysical,
-# controller_type: sdwan_orchestrator) — a colocation SD-WAN gateway is a
-# controller, not a bare edge device. The SD-WAN overlay (DMPO sessions) is
-# orchestrated automatically by Arista SD-WAN Orchestrator — no tunnel
-# interfaces are modelled here.
+# The Gateway is managed BY the Orchestrator (VCO-VA_ORCHESTRATOR,
+# ManagedControllerVirtual, controller_type: sdwan_orchestrator — see
+# 09_virtual_device_templates_controllers.yaml), not a controller itself: it
+# doesn't manage a fleet of anything, it's just the on-ramp appliance edges
+# tunnel to. Both VCG-VA_GATEWAY here and its cloud-hosted virtual sibling
+# VCG-VA_CLOUD (09_virtual_device_templates_velocloud.yaml) are plain
+# Dcim*Device templates for exactly that reason — a previous version of this
+# template modelled the physical variant as ManagedControllerPhysical with
+# controller_type: sdwan_orchestrator, which was simply wrong (that's the
+# Orchestrator's role, and a Gateway/Orchestrator pair collapsed into one
+# device is not this project's SD-WAN architecture). The SD-WAN overlay
+# (DMPO sessions) is orchestrated automatically by the VCO — no tunnel
+# interfaces are modelled on either the Edge or the Gateway here.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -51,3 +60,26 @@ spec:
             name: mgmt0
             role: management
             interface_type: 1000base-t
+
+    # -------------------------------------------------------------------------
+    # VCG-VA — physical Gateway appliance hosted at a colocation PoP
+    # (height=0, no rack slot — same device_type as the cloud-hosted virtual
+    # VCG-VA_CLOUD in 09_virtual_device_templates_velocloud.yaml, just
+    # deployed on physical hardware at a colo instead of a cloud VM).
+    # -------------------------------------------------------------------------
+    - template_name: VCG-VA_GATEWAY
+      owner: "P027"
+      device_type: VCG-VA
+      platform: velocloud
+      software_image: velocloud-6.0.0
+      role: edge
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: VCG-VA_GATEWAY_eth0
+            name: eth0
+            role: uplink
+            interface_type: 1000base-t
+      member_of_groups:
+        - sdwan_gateways

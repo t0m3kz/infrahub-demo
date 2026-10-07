@@ -1,22 +1,22 @@
 from typing import Any
 
 from infrahub_sdk.transforms import InfrahubTransform
-from jinja2 import Environment, FileSystemLoader, Template
+from jinja2 import Template
 
+from transforms.helpers.addressing import host_ip
+from transforms.helpers.loadbalancer_pbr import pool_interfaces
+from transforms.helpers.templates import load_template
 from utils.data_cleaning import clean_data
 
 
 def _members_to_targets(vip: dict) -> list[dict]:
-    targets = []
-    for m in vip.get("members", []):
-        for pi in m.get("pool_interfaces", []):
-            ip_obj = pi.get("ip_address") or {}
-            ip = (ip_obj.get("address") or "").split("/")[0]
-            if ip:
-                targets.append(
-                    {"name": m.get("name", ""), "ip": ip, "port": pi.get("port"), "weight": m.get("weight", 1)}
-                )
-    return targets
+    """Pool members with an address: name, ip (no prefix length), port, weight."""
+    return [
+        {"name": m.get("name", ""), "ip": ip, "port": pi.get("port"), "weight": m.get("weight", 1)}
+        for m, pi in pool_interfaces(vip)
+        for ip in [host_ip((pi.get("ip_address") or {}).get("address"))]
+        if ip
+    ]
 
 
 def prepare_aws_data(lb: dict, vips: list[dict]) -> dict:
@@ -83,13 +83,7 @@ def prepare_azure_data(lb: dict, vips: list[dict]) -> dict:
             }
         )
 
-        backend_addresses = []
-        for m in vip.get("members", []):
-            for pi in m.get("pool_interfaces", []):
-                ip_obj = pi.get("ip_address") or {}
-                ip = (ip_obj.get("address") or "").split("/")[0]
-                if ip:
-                    backend_addresses.append({"name": m.get("name", ""), "ip_address": ip})
+        backend_addresses = [{"name": t["name"], "ip_address": t["ip"]} for t in _members_to_targets(vip)]
 
         pool_data: dict = {"name": pool_name, "backend_addresses": backend_addresses}
 
@@ -138,13 +132,7 @@ def prepare_gcp_data(lb: dict, vips: list[dict]) -> dict:
             }
         )
 
-        targets = []
-        for m in vip.get("members", []):
-            for pi in m.get("pool_interfaces", []):
-                ip_obj = pi.get("ip_address") or {}
-                ip = (ip_obj.get("address") or "").split("/")[0]
-                if ip:
-                    targets.append({"name": m.get("name", ""), "ip": ip})
+        targets = [{"name": t["name"], "ip": t["ip"]} for t in _members_to_targets(vip)]
 
         backend_services.append(
             {
@@ -184,6 +172,9 @@ def prepare_gcp_data(lb: dict, vips: list[dict]) -> dict:
     }
 
 
+_PREPARERS = {"aws": prepare_aws_data, "azure": prepare_azure_data, "gcp": prepare_gcp_data}
+
+
 class LoadBalancerCloud(InfrahubTransform):
     """
     Transform to generate Terraform HCL (.tf) for cloud load balancers.
@@ -215,33 +206,18 @@ class LoadBalancerCloud(InfrahubTransform):
 
         vips = cleaned.get("LoadbalancerVIP") or []
 
-        # Determine cloud provider from load balancer's virtual network account/provider
-        cloud_provider = "aws"  # default
-        vnet = lb.get("virtual_network") or {}
-        account = vnet.get("account") or {}
-        if account:
-            provider_name = (account.get("provider") or {}).get("name", "").lower()
-            if provider_name in ["aws", "azure", "gcp"]:
-                cloud_provider = provider_name
+        # Cloud provider from the load balancer's virtual network account/provider; AWS by default.
+        account = (lb.get("virtual_network") or {}).get("account") or {}
+        provider_name = (account.get("provider") or {}).get("name", "").lower() if account else ""
+        cloud_provider = provider_name if provider_name in _PREPARERS else "aws"
 
-        # Validate cloud provider
-        if cloud_provider not in ["aws", "azure", "gcp"]:
-            raise ValueError(f"Unsupported cloud provider: {cloud_provider}. Must be aws, azure, or gcp")
-
-        # Prepare data for the specific cloud provider
-        if cloud_provider == "aws":
-            config = prepare_aws_data(lb, vips)
-        elif cloud_provider == "azure":
-            config = prepare_azure_data(lb, vips)
-        else:  # gcp
-            config = prepare_gcp_data(lb, vips)
-
-        template = self._load_template(cloud_provider)
-        return template.render(**config)
+        config = _PREPARERS[cloud_provider](lb, vips)
+        return self._load_template(cloud_provider).render(**config)
 
     def _load_template(self, name: str) -> Template:
         """Load the Jinja2 HCL template for the given cloud provider (aws/azure/gcp)."""
-        path = f"{self.root_directory}/templates/configs"
-        env = Environment(loader=FileSystemLoader(path), autoescape=False, keep_trailing_newline=True)
-        env.filters["tf_id"] = lambda value: str(value).replace(".", "_").replace("-", "_")
-        return env.get_template(f"loadbalancers_cloud/{name}.j2")
+        return load_template(
+            f"{self.root_directory}/templates/configs",
+            f"loadbalancers_cloud/{name}.j2",
+            filters={"tf_id": lambda value: str(value).replace(".", "_").replace("-", "_")},
+        )

@@ -10,6 +10,7 @@ spec:
   kind: TopologyPhysicalCircuit
   data:
     - circuit_id: "INET-C001-WAW-HUB"
+      member_of_groups: [physical_circuits]
       name: "INET-C001-WAW-HUB"
       circuit_type: internet_underlay
       status: active
@@ -38,6 +39,7 @@ spec:
             parent: "eu-central-1"
 
     - circuit_id: "INET-C002-WAW-HUB"
+      member_of_groups: [physical_circuits]
       name: "INET-C002-WAW-HUB"
       circuit_type: internet_underlay
       status: active

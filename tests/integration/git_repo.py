@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import shutil
 from dataclasses import dataclass, field
 from enum import Enum
@@ -9,18 +8,10 @@ from typing import TYPE_CHECKING
 
 from dulwich import porcelain
 from infrahub_sdk.graphql import Mutation
-from infrahub_sdk.protocols import CoreGenericRepository
 from infrahub_sdk.repository import GitRepoManager
 
 if TYPE_CHECKING:
     from infrahub_sdk import InfrahubClient
-
-
-class RepositorySyncStatus(str, Enum):
-    UNKNOWN = "unknown"
-    IN_SYNC = "in-sync"
-    ERROR_IMPORT = "error-import"
-    SYNCING = "syncing"
 
 
 class GitRepoType(str, Enum):
@@ -110,26 +101,3 @@ class GitRepo:
             branch_name=branch or self.initial_branch,
             tracker="mutation-repository-create",
         )
-
-    async def wait_for_sync_to_complete(
-        self,
-        client: InfrahubClient,
-        branch: str | None = None,
-        interval: int = 5,
-        retries: int = 6,
-    ) -> bool:
-        for _ in range(retries):
-            repo = await client.get(
-                kind=CoreGenericRepository,
-                name__value=self.name,
-                branch=branch or self.initial_branch,
-            )
-            status = repo.sync_status.value
-            if status == RepositorySyncStatus.IN_SYNC.value:
-                return True
-            if status == RepositorySyncStatus.ERROR_IMPORT.value:
-                return False
-
-            await asyncio.sleep(interval)
-
-        return False

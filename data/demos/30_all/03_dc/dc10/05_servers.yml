@@ -7,6 +7,11 @@
 # NICs (eno1/eno2); add_endpoint dual-homes them across the access-leaf pair
 # in the network rack that shares the host's row, and sets the host's
 # deployment to POD-1 on the way.
+#
+# Each host is owned by the customer whose VMs run on it
+# (06_customer_boarding/<customer>/dc/<dc>/02_instances.yml), so ownership
+# follows the workload rather than whoever racked the box. DC12's hosts are
+# the exception: shared non-prod hosts owned by the technology partner (P027).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -14,7 +19,7 @@ spec:
   data:
     - name: dc10-pod1-server-1
       object_template: PowerEdge-R640_SERVER
-      owner: "P027"
+      owner: "C005"
       rack: fra-1-s-1-r-1-1
       status: active
       position: 10
@@ -25,7 +30,7 @@ spec:
 
     - name: dc10-pod1-server-2
       object_template: PowerEdge-R640_SERVER
-      owner: "P027"
+      owner: "C005"
       rack: fra-1-s-1-r-2-1
       status: active
       position: 10

@@ -279,6 +279,7 @@ spec:
 
     - name: sonic-202405
       version: "202405"
+      containerlab_image: vrnetlab/vr-sonic:202405
       release_type: ga
       is_approved: true
       is_recommended: true

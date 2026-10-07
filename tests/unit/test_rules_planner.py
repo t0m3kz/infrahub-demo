@@ -1,51 +1,187 @@
 """Unit tests for RulesPlanner (generators/helpers/rules.py) — pure logic,
 no generator instance needed.
 
-Covers dependency authorization (cross-owner/cross-application/cross-environment),
+Covers rule naming (one rule per dependency and port), rule descriptions
+(including target_fqdn external targets), dependency authorization (owner
+approval, prod/non-prod separation),
 rule-payload building, zone context, and the security_profile-driven mappings
-(pick_zone_name, zone_seed, pick_access_policy).
+(pick_zone_name, zone_seed).
 """
 
 from __future__ import annotations
 
+import pytest
+
 from generators.helpers.rules import RulesPlanner
 
 # ===========================================================================
-# TestCrossApplicationAuthorization
+# TestRuleName
 # ===========================================================================
 
 
-class TestCrossApplicationAuthorization:
-    def test_same_owner_different_application_requires_approved_status(self):
-        src_comp = {"parent": {"name": "checkout", "owner": {"org_id": "C001"}}}
-        dst_comp = {"parent": {"name": "authentication", "owner": {"org_id": "C001"}}}
-        dep = {"access_status": "auto"}
+class TestRuleName:
+    """A rule is named after its dependency, so each dependency gets its own rule."""
 
-        allowed, reason = RulesPlanner.dependency_is_authorized(src_comp=src_comp, dst_comp=dst_comp, dep=dep)
+    SRC = {"label": "backend"}
+    DST = {"label": "cache"}
+
+    def test_rule_is_named_after_the_dependency(self) -> None:
+        """The dependency name is the rule name."""
+        dep = {"name": "c001-checkout-backend-to-cache-redis"}
+        assert RulesPlanner.rule_name("c001-checkout-p", self.SRC, self.DST, dep) == dep["name"]
+
+    def test_two_dependencies_between_one_pair_get_two_rules(self) -> None:
+        """tcp/6379 and udp/30000-30010 from backend to cache no longer collapse into one rule."""
+        tcp = RulesPlanner.rule_name("app", self.SRC, self.DST, {"name": "backend-to-cache-redis"})
+        udp = RulesPlanner.rule_name("app", self.SRC, self.DST, {"name": "backend-to-cache-gossip"})
+        assert tcp != udp
+
+    def test_dependency_name_is_normalized(self) -> None:
+        """Spaces and upper case are normalized like the component labels are."""
+        assert RulesPlanner.rule_name("app", self.SRC, self.DST, {"name": " Web To API "}) == "web-to-api"
+
+    def test_unnamed_dependency_falls_back_to_the_component_pair(self) -> None:
+        """Without a dependency name the rule keeps the app-src-to-dst name."""
+        assert RulesPlanner.rule_name("app", self.SRC, self.DST, {}) == "app-backend-to-cache"
+        assert RulesPlanner.rule_name("app", self.SRC, self.DST) == "app-backend-to-cache"
+
+    def test_unnamed_dependency_falls_back_to_component_fqdn(self) -> None:
+        """Without a label the component fqdn names the pair (fqdn replaced slug)."""
+        src = {"fqdn": "web.checkout.example", "name": "web"}
+        dst = {"fqdn": "api.checkout.example", "name": "api"}
+        assert RulesPlanner.rule_name("app", src, dst) == "app-web.checkout.example-to-api.checkout.example"
+
+    def test_unnamed_dependency_falls_back_to_component_name(self) -> None:
+        """Without label or fqdn the component name is used."""
+        assert RulesPlanner.rule_name("app", {"name": "web"}, {"name": "api"}) == "app-web-to-api"
+
+    @pytest.mark.parametrize(
+        ("port", "expected"),
+        [
+            (("tcp", 8443, None), "backend-to-cache-tcp-8443"),
+            (("udp", 30000, 30010), "backend-to-cache-udp-30000-30010"),
+        ],
+        ids=["single-port", "port-range"],
+    )
+    def test_port_is_suffixed_onto_the_dependency_name(self, port: tuple[str, int, int | None], expected: str) -> None:
+        """One rule per port: the port, slash and dash both as dashes, follows the dependency name."""
+        dep = {"name": "backend-to-cache"}
+        assert RulesPlanner.rule_name("app", self.SRC, self.DST, dep, port) == expected
+
+    def test_port_is_suffixed_onto_the_component_pair_fallback(self) -> None:
+        """An unnamed dependency still gets a per-port name."""
+        assert RulesPlanner.rule_name("app", self.SRC, self.DST, None, ("tcp", 6379, None)) == (
+            "app-backend-to-cache-tcp-6379"
+        )
+
+    def test_each_port_of_one_dependency_gets_its_own_rule_name(self) -> None:
+        """tcp/6379 and udp/30000-30010 of one dependency do not collide."""
+        dep = {"name": "backend-to-cache"}
+        names = {
+            RulesPlanner.rule_name("app", self.SRC, self.DST, dep, port)
+            for port in (("tcp", 6379, None), ("udp", 30000, 30010), ("udp", 6379, None))
+        }
+        assert len(names) == 3
+
+    def test_no_port_keeps_the_bare_dependency_name(self) -> None:
+        """The proxy path (one rule per dependency) passes no port and gets no suffix."""
+        assert RulesPlanner.rule_name("app", self.SRC, {}, {"name": "backend-to-stripe"}) == "backend-to-stripe"
+
+
+# ===========================================================================
+# TestRuleDescription
+# ===========================================================================
+
+
+class TestRuleDescription:
+    """The generated description names both ends; an external target is its fqdn."""
+
+    SRC = {"name": "backend", "component_type": "backend"}
+
+    def test_component_target_description(self) -> None:
+        """Both component names and types appear."""
+        dst = {"name": "db", "component_type": "database"}
+        assert RulesPlanner.rule_description({}, self.SRC, dst) == "Auto-generated: backend (backend) -> db (database)"
+
+    def test_target_fqdn_description_names_the_external_host(self) -> None:
+        """No target component: the fqdn is the destination and its type is external."""
+        dep = {"target_fqdn": "api.stripe.com"}
+        assert RulesPlanner.rule_description(dep, self.SRC, {}) == (
+            "Auto-generated: backend (backend) -> api.stripe.com (external)"
+        )
+
+    def test_explicit_description_wins_over_target_fqdn(self) -> None:
+        """A hand-written description is used as-is."""
+        dep = {"target_fqdn": "api.stripe.com", "description": "Card payments"}
+        assert RulesPlanner.rule_description(dep, self.SRC, {}) == "Card payments"
+
+    def test_missing_target_and_fqdn_defaults_to_unknown_backend(self) -> None:
+        """Nothing about the destination known: placeholder name, backend type."""
+        assert RulesPlanner.rule_description({}, self.SRC, {}) == "Auto-generated: backend (backend) -> ? (backend)"
+
+
+# ===========================================================================
+# TestOwnerAuthorization
+# ===========================================================================
+
+
+def _comp(app: str, owner: str, environment: str | None = None) -> dict:
+    parent: dict = {"name": app, "owner": {"org_id": owner}}
+    if environment:
+        parent["environment"] = environment
+    return {"parent": parent}
+
+
+class TestOwnerAuthorization:
+    """Only the destination owner's approval opens a flow; inside one owner
+    every flow is auto-approved."""
+
+    @pytest.mark.parametrize(
+        ("src", "dst"),
+        [
+            (_comp("checkout", "C001"), _comp("checkout", "C001")),
+            (_comp("checkout", "C001"), _comp("authentication", "C001")),
+            (_comp("checkout", "C001", "s"), _comp("checkout", "C001", "d")),
+        ],
+        ids=["same-app", "cross-app", "cross-non-prod-environment"],
+    )
+    def test_same_owner_is_auto_authorized(self, src: dict, dst: dict) -> None:
+        """A flow inside one owner needs no approval."""
+        allowed, reason = RulesPlanner.dependency_is_authorized(
+            src_comp=src, dst_comp=dst, dep={"access_status": "auto"}
+        )
+
+        assert allowed is True
+        assert reason is None
+
+    @pytest.mark.parametrize("status", ["auto", "pending"])
+    def test_cross_owner_waits_for_approval(self, status: str) -> None:
+        """Calling another owner's application is held until that owner approves."""
+        allowed, reason = RulesPlanner.dependency_is_authorized(
+            src_comp=_comp("checkout", "C001"), dst_comp=_comp("ledger", "C002"), dep={"access_status": status}
+        )
 
         assert allowed is False
         assert reason is not None
-        assert "cross-application flow" in reason
+        assert "cross-owner flow C001->C002 requires access_status=approved" in reason
 
-    def test_same_owner_different_application_allowed_when_approved(self):
-        src_comp = {"parent": {"name": "checkout", "owner": {"org_id": "C001"}}}
-        dst_comp = {"parent": {"name": "authentication", "owner": {"org_id": "C001"}}}
-        dep = {"access_status": "approved"}
-
-        allowed, reason = RulesPlanner.dependency_is_authorized(src_comp=src_comp, dst_comp=dst_comp, dep=dep)
-
-        assert allowed is True
-        assert reason is None
-
-    def test_same_owner_same_application_is_auto_authorized(self):
-        src_comp = {"parent": {"name": "checkout", "owner": {"org_id": "C001"}}}
-        dst_comp = {"parent": {"name": "checkout", "owner": {"org_id": "C001"}}}
-        dep = {"access_status": "auto"}
-
-        allowed, reason = RulesPlanner.dependency_is_authorized(src_comp=src_comp, dst_comp=dst_comp, dep=dep)
+    def test_cross_owner_allowed_once_approved(self) -> None:
+        """The destination owner's approval opens the flow."""
+        allowed, reason = RulesPlanner.dependency_is_authorized(
+            src_comp=_comp("checkout", "C001"), dst_comp=_comp("ledger", "C002"), dep={"access_status": "approved"}
+        )
 
         assert allowed is True
         assert reason is None
+
+    def test_denied_blocks_even_inside_one_owner(self) -> None:
+        """An explicit denial overrides the same-owner auto-approval."""
+        allowed, reason = RulesPlanner.dependency_is_authorized(
+            src_comp=_comp("checkout", "C001"), dst_comp=_comp("checkout", "C001"), dep={"access_status": "denied"}
+        )
+
+        assert allowed is False
+        assert reason == "explicitly denied"
 
 
 # ===========================================================================
@@ -54,33 +190,32 @@ class TestCrossApplicationAuthorization:
 
 
 class TestCrossEnvironmentAuthorization:
-    """Application.environment used to be fetched (on the top-level app dict
-    the whole reconcile pass runs against) but never actually compared
-    anywhere — a component's own parent-application fragment in
-    queries/topology/add/application.gql didn't even select it, so this was
-    unreachable regardless. Both the query and this check needed fixing
-    together."""
+    """Prod and non-prod are never joined; the environment is read from each
+    component's own parent application."""
 
-    def test_different_environment_requires_approved_status(self):
-        src_comp = {"parent": {"name": "checkout", "environment": "p", "owner": {"org_id": "C001"}}}
-        dst_comp = {"parent": {"name": "checkout", "environment": "s", "owner": {"org_id": "C001"}}}
-        dep = {"access_status": "auto"}
+    @pytest.mark.parametrize(
+        ("src_owner", "dst_owner", "src_app", "dst_app"),
+        [
+            ("C001", "C001", "checkout", "checkout"),
+            ("C001", "C001", "checkout", "authentication"),
+            ("C001", "C002", "checkout", "ledger"),
+        ],
+        ids=["same-app", "cross-app", "cross-owner"],
+    )
+    @pytest.mark.parametrize(("src_env", "dst_env"), [("p", "s"), ("d", "p")], ids=["p-to-s", "d-to-p"])
+    def test_prod_and_non_prod_are_never_joined_even_when_approved(
+        self, src_owner: str, dst_owner: str, src_app: str, dst_app: str, src_env: str, dst_env: str
+    ) -> None:
+        """An approval opens a cross-owner flow, never prod <-> non-prod."""
+        src_comp = _comp(src_app, src_owner, src_env)
+        dst_comp = _comp(dst_app, dst_owner, dst_env)
+        dep = {"access_status": "approved"}
 
         allowed, reason = RulesPlanner.dependency_is_authorized(src_comp=src_comp, dst_comp=dst_comp, dep=dep)
 
         assert allowed is False
         assert reason is not None
-        assert "cross-environment flow" in reason
-
-    def test_different_environment_allowed_when_approved(self):
-        src_comp = {"parent": {"name": "checkout", "environment": "p", "owner": {"org_id": "C001"}}}
-        dst_comp = {"parent": {"name": "checkout", "environment": "s", "owner": {"org_id": "C001"}}}
-        dep = {"access_status": "approved"}
-
-        allowed, reason = RulesPlanner.dependency_is_authorized(src_comp=src_comp, dst_comp=dst_comp, dep=dep)
-
-        assert allowed is True
-        assert reason is None
+        assert "joins prod and non-prod" in reason
 
     def test_same_environment_is_auto_authorized(self):
         src_comp = {"parent": {"name": "checkout", "environment": "p", "owner": {"org_id": "C001"}}}
@@ -180,18 +315,6 @@ class TestZoneSeed:
         assert RulesPlanner.zone_seed("NONPROD-ZONE")["trust_level"] == 50
 
 
-class TestPickNamespaceName:
-    """Routing-level counterpart to TestPickZoneName's firewall-zone split —
-    same collapsing rule, different fixed namespace pair."""
-
-    def test_pick_namespace_name_maps_production_environment(self):
-        assert RulesPlanner.pick_namespace_name("p") == "PROD"
-
-    def test_pick_namespace_name_maps_every_non_production_environment_to_non_prod(self):
-        for environment in ("n", "s", "d", "t"):
-            assert RulesPlanner.pick_namespace_name(environment) == "NON-PROD"
-
-
 # ===========================================================================
 # TestPickProfileName
 # ===========================================================================
@@ -234,22 +357,3 @@ class TestPickIsolationMode:
     def test_every_other_profile_gets_normal(self):
         for profile in ("internal_standard", "internet_exposed", "unknown"):
             assert RulesPlanner.pick_isolation_mode(profile) == "normal"
-
-
-# ===========================================================================
-# TestPickAccessPolicy
-# ===========================================================================
-
-
-class TestPickAccessPolicy:
-    def test_pick_access_policy_internet_exposed_requires_mfa_and_posture(self):
-        policy = RulesPlanner.pick_access_policy("internet_exposed")
-
-        assert policy == {
-            "mfa_required": True,
-            "device_posture_required": True,
-            "session_timeout_minutes": 480,
-        }
-
-    def test_pick_access_policy_unknown_profile_falls_back_to_internal_standard(self):
-        assert RulesPlanner.pick_access_policy("unknown") == RulesPlanner.pick_access_policy("internal_standard")

@@ -107,3 +107,34 @@ spec:
             is_pool: true
             role: technical
       ip_namespace: default
+    # MLAG control session (peer-link SVI / virtual peer-link loopback).
+    # Link-local to each MLAG pair, never routed — IPv4 only for SONiC
+    # MC-LAG (ICCP requires IPv4), IPv6 for every other platform.
+    - name: MLAG-Control-IPv4
+      description: MLAG control IPv4 Prefix Pool (/31 per MLAG domain, SONiC)
+      default_prefix_type: IpamPrefix
+      default_prefix_length: 31
+      resources:
+        kind: IpamPrefix
+        data:
+          - prefix: 10.254.0.0/16
+            description: MLAG control /31s for SONiC MC-LAG domains
+            status: active
+            member_type: prefix
+            is_pool: true
+            role: technical
+      ip_namespace: default
+    - name: MLAG-Control-IPv6
+      description: MLAG control IPv6 Prefix Pool (/127 per MLAG domain)
+      default_prefix_type: IpamPrefix
+      default_prefix_length: 127
+      resources:
+        kind: IpamPrefix
+        data:
+          - prefix: fd00:2400::/40
+            description: MLAG control /127s for MLAG domains
+            status: active
+            member_type: prefix
+            is_pool: true
+            role: technical
+      ip_namespace: default

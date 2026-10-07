@@ -4,121 +4,168 @@
     consistent underlay/overlay rendering. -#}
 {%- if bgp %}
 {%- for bgp_config in bgp %}
-A admin configure router "Base" bgp 1 admin-state enable
-A admin configure router "Base" bgp 1 router-id "{{ bgp_config.router_id.address.split('/')[0] }}"
-A admin configure router "Base" bgp 1 local-as {{ bgp_config.local_as.asn }}
-A admin configure router "Base" bgp 1 ebgp-default-reject-policy import false
-A admin configure router "Base" bgp 1 ebgp-default-reject-policy export false
+configure router "Base" bgp 1 admin-state enable
+configure router "Base" bgp 1 router-id "{{ bgp_config.router_ip }}"
+configure router "Base" bgp 1 local-as {{ bgp_config.local_as.asn }}
+configure router "Base" bgp 1 ebgp-default-reject-policy import false
+configure router "Base" bgp 1 ebgp-default-reject-policy export false
 {%- if bgp_config.graceful_restart %}
-A admin configure router "Base" bgp 1 graceful-restart admin-state enable
+configure router "Base" bgp 1 graceful-restart admin-state enable
 {%- endif %}
 {%- if bgp_config.multipath %}
-A admin configure router "Base" bgp 1 multipath max-paths 64
+configure router "Base" bgp 1 multipath max-paths 64
 {%- endif %}
-{#- Peer groups -#}
+{#- Peer groups #}
 {%- for pg in bgp_config.peer_groups | default([]) %}
-A admin configure router "Base" bgp 1 group "{{ pg.name }}" admin-state enable
+configure router "Base" bgp 1 group "{{ pg.name }}" admin-state enable
 {%- if pg.get('remote_as') %}
-A admin configure router "Base" bgp 1 group "{{ pg.name }}" peer-as {{ pg.remote_as }}
+configure router "Base" bgp 1 group "{{ pg.name }}" peer-as {{ pg.remote_as }}
 {%- endif %}
 {%- if pg.type == 'overlay' %}
-A admin configure router "Base" bgp 1 group "{{ pg.name }}" local-address "{{ bgp_config.router_id.address.split('/')[0] }}"
-A admin configure router "Base" bgp 1 group "{{ pg.name }}" family evpn
+configure router "Base" bgp 1 group "{{ pg.name }}" local-address "{{ bgp_config.router_ip }}"
+configure router "Base" bgp 1 group "{{ pg.name }}" family evpn
 {%- if pg.route_reflector_client is defined and pg.route_reflector_client %}
-A admin configure router "Base" bgp 1 group "{{ pg.name }}" cluster {{ bgp_config.router_id.address.split('/')[0] }}
+configure router "Base" bgp 1 group "{{ pg.name }}" cluster {{ bgp_config.router_ip }}
 {%- endif %}
 {%- endif %}
 {%- if 'ipv4' in (pg.address_families | default([])) %}
-A admin configure router "Base" bgp 1 group "{{ pg.name }}" family ipv4
+configure router "Base" bgp 1 group "{{ pg.name }}" family ipv4
 {%- endif %}
 {%- if 'ipv6' in (pg.address_families | default([])) %}
-A admin configure router "Base" bgp 1 group "{{ pg.name }}" family ipv6
+configure router "Base" bgp 1 group "{{ pg.name }}" family ipv6
 {%- endif %}
 {%- if pg.get('ebgp_multihop') %}
-A admin configure router "Base" bgp 1 group "{{ pg.name }}" multihop {{ pg.ebgp_multihop }}
+configure router "Base" bgp 1 group "{{ pg.name }}" multihop {{ pg.ebgp_multihop }}
 {%- endif %}
 {%- if pg.get('bfd_enabled') %}
-A admin configure router "Base" bgp 1 group "{{ pg.name }}" bfd-liveness true
+configure router "Base" bgp 1 group "{{ pg.name }}" bfd-liveness true
 {%- endif %}
 {%- if pg.get('send_extended_community') %}
-A admin configure router "Base" bgp 1 group "{{ pg.name }}" send-community extended
+configure router "Base" bgp 1 group "{{ pg.name }}" send-community extended
 {%- elif pg.get('send_community') %}
-A admin configure router "Base" bgp 1 group "{{ pg.name }}" send-community standard
+configure router "Base" bgp 1 group "{{ pg.name }}" send-community standard
 {%- endif %}
 {%- if pg.get('remove_private_as') %}
 # NOTE: remove-private-as leaf name unverified for SR OS MD-CLI — best-effort guess
-A admin configure router "Base" bgp 1 group "{{ pg.name }}" remove-private-as true
+configure router "Base" bgp 1 group "{{ pg.name }}" remove-private-as true
 {%- endif %}
 {%- if pg.get('maximum_routes') %}
 # NOTE: prefix-limit leaf path unverified for SR OS MD-CLI — best-effort guess
-A admin configure router "Base" bgp 1 group "{{ pg.name }}" prefix-limit ipv4 maximum {{ pg.maximum_routes }}
+configure router "Base" bgp 1 group "{{ pg.name }}" prefix-limit ipv4 maximum {{ pg.maximum_routes }}
 {%- endif %}
 {%- endfor %}
 {%- for session in bgp_config.sessions %}
 {%- if session.get('local_pref') %}
-A admin configure router "Base" policy-options policy-statement "{{ session.name }}-LOCAL-PREF-IN" entry 10 action local-preference set {{ session.local_pref }}
-A admin configure router "Base" policy-options policy-statement "{{ session.name }}-LOCAL-PREF-IN" entry 10 action action-type accept
+configure router "Base" policy-options policy-statement "{{ session.name }}-LOCAL-PREF-IN" entry 10 action local-preference set {{ session.local_pref }}
+configure router "Base" policy-options policy-statement "{{ session.name }}-LOCAL-PREF-IN" entry 10 action action-type accept
 {%- endif %}
 {%- if session.get('med') %}
-A admin configure router "Base" policy-options policy-statement "{{ session.name }}-MED-OUT" entry 10 action metric set {{ session.med }}
-A admin configure router "Base" policy-options policy-statement "{{ session.name }}-MED-OUT" entry 10 action action-type accept
+configure router "Base" policy-options policy-statement "{{ session.name }}-MED-OUT" entry 10 action metric set {{ session.med }}
+configure router "Base" policy-options policy-statement "{{ session.name }}-MED-OUT" entry 10 action action-type accept
 {%- endif %}
 {%- endfor %}
-{#- BGP Neighbors -#}
-{%- for session in bgp_config.sessions %}
-{%- set is_unnumbered = session.get('interface_name') and not session.get('remote_ip') %}
-{%- set remote_ip = session.interface_name if is_unnumbered else session.remote_ip.address.split('/')[0] %}
-A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" admin-state enable
-A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" peer-as {{ session.remote_as.asn }}
+{#- BGP Neighbors #}
+{%- for session in bgp_config.sessions if not session.get('vrf') %}
+configure router "Base" bgp 1 neighbor "{{ session.neighbor }}" admin-state enable
+configure router "Base" bgp 1 neighbor "{{ session.neighbor }}" peer-as {{ session.remote_as.asn }}
+{#- See _bgp_local_as_eos.j2 for why this exists. SR OS splits the two keywords
+    into separate leaves under `local-as`: `prepend-global-as false` is its
+    `no-prepend`, and `private true` keeps the overridden ASN out of the
+    advertised AS-path the way `replace-as` does. #}
+{%- if session.get('local_as_override') %}
+configure router "Base" bgp 1 neighbor "{{ session.neighbor }}" local-as as-number {{ session.local_as_override.asn }}
+configure router "Base" bgp 1 neighbor "{{ session.neighbor }}" local-as prepend-global-as false
+configure router "Base" bgp 1 neighbor "{{ session.neighbor }}" local-as private true
+{%- endif %}
 {%- if session.get('remote_device') %}
-A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" description "{{ session.remote_device }}"
+configure router "Base" bgp 1 neighbor "{{ session.neighbor }}" description "{{ session.remote_device }}"
 {%- endif %}
 {%- if session.peer_group is defined %}
-A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" group "{{ session.peer_group }}"
+configure router "Base" bgp 1 neighbor "{{ session.neighbor }}" group "{{ session.peer_group }}"
 {%- else %}
 {%- set _afs = session.address_families | default([]) %}
 {%- if 'evpn' in _afs %}
-A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" local-address "{{ bgp_config.router_id.address.split('/')[0] }}"
-A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" family evpn
+configure router "Base" bgp 1 neighbor "{{ session.neighbor }}" local-address "{{ bgp_config.router_ip }}"
+configure router "Base" bgp 1 neighbor "{{ session.neighbor }}" family evpn
 {%- if session.get('route_reflector_client') %}
-A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" cluster {{ bgp_config.router_id.address.split('/')[0] }}
+configure router "Base" bgp 1 neighbor "{{ session.neighbor }}" cluster {{ bgp_config.router_ip }}
 {%- endif %}
 {%- endif %}
 {%- if 'ipv4' in _afs %}
-A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" family ipv4
+configure router "Base" bgp 1 neighbor "{{ session.neighbor }}" family ipv4
 {%- endif %}
 {%- if 'ipv6' in _afs %}
-A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" family ipv6
+configure router "Base" bgp 1 neighbor "{{ session.neighbor }}" family ipv6
 {%- endif %}
 {%- if session.get('send_extended_community') %}
-A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" send-community extended
+configure router "Base" bgp 1 neighbor "{{ session.neighbor }}" send-community extended
 {%- elif session.get('send_community') %}
-A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" send-community standard
+configure router "Base" bgp 1 neighbor "{{ session.neighbor }}" send-community standard
 {%- endif %}
 {%- if session.get('remove_private_as') %}
 # NOTE: remove-private-as leaf name unverified for SR OS MD-CLI — best-effort guess
-A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" remove-private-as true
+configure router "Base" bgp 1 neighbor "{{ session.neighbor }}" remove-private-as true
 {%- endif %}
 {%- if session.get('bfd_enabled') %}
-A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" bfd-liveness true
+configure router "Base" bgp 1 neighbor "{{ session.neighbor }}" bfd-liveness true
 {%- endif %}
 {%- endif %}
 {%- if session.get('maximum_routes') %}
 # NOTE: prefix-limit leaf path unverified for SR OS MD-CLI — best-effort guess
-A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" prefix-limit ipv4 maximum {{ session.maximum_routes }}
+configure router "Base" bgp 1 neighbor "{{ session.neighbor }}" prefix-limit ipv4 maximum {{ session.maximum_routes }}
 {%- endif %}
 {%- if session.get('password') %}
 # NOTE: authentication-key leaf name unverified for SR OS MD-CLI — best-effort guess
-A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" authentication-key "{{ session.password }}"
+configure router "Base" bgp 1 neighbor "{{ session.neighbor }}" authentication-key "{{ session.password }}"
 {%- endif %}
 {%- if session.get('local_pref') %}
-A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" import policy "{{ session.name }}-LOCAL-PREF-IN"
+configure router "Base" bgp 1 neighbor "{{ session.neighbor }}" import policy "{{ session.name }}-LOCAL-PREF-IN"
 {%- endif %}
 {%- if session.get('med') %}
-A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" export policy "{{ session.name }}-MED-OUT"
+configure router "Base" bgp 1 neighbor "{{ session.neighbor }}" export policy "{{ session.name }}-MED-OUT"
 {%- endif %}
 {%- endfor %}
-{#- Export policy for connected routes -#}
-A admin configure router "Base" bgp 1 export policy "RM-CONN-2-BGP"
-{% endfor %}
+{#- VRF neighbours: eBGP handoffs whose local address sits in a tenant
+    namespace (transforms/helpers/bgp.py sets session.vrf). SR OS peers them
+    from the VRF's vprn — one per L3 VNI, created by the leaf/border-leaf
+    templates — so a VRF without an L3 VNI on this device has nowhere to go.
+    `vxlan` is undefined on spine templates; non-strict Undefined is falsy. -#}
+{%- for session in bgp_config.sessions if session.get('vrf') %}
+{%- set _vprn = namespace(id=none) %}
+{%- for mapping in (vxlan.l3_vni_mappings if vxlan and vxlan.l3_vni_mappings else []) if mapping.vrf_name == session.vrf %}
+{%- set _vprn.id = mapping.l3_vni %}
+{%- endfor %}
+{%- if _vprn.id is none %}
+# VRF session {{ session.name }} to {{ session.neighbor }} not rendered: VRF {{ session.vrf }} has no L3 VNI (vprn) on this device
+{%- else %}
+{%- set _group = session.vrf ~ '-PEERS' %}
+configure service vprn {{ _vprn.id }} bgp admin-state enable
+configure service vprn {{ _vprn.id }} bgp group "{{ _group }}" admin-state enable
+{%- for _af in session.address_families | default([]) if _af in ['ipv4', 'ipv6'] %}
+configure service vprn {{ _vprn.id }} bgp group "{{ _group }}" family {{ _af }}
+{%- endfor %}
+configure service vprn {{ _vprn.id }} bgp neighbor "{{ session.neighbor }}" group "{{ _group }}"
+configure service vprn {{ _vprn.id }} bgp neighbor "{{ session.neighbor }}" peer-as {{ session.remote_as.asn }}
+{%- if session.get('remote_device') %}
+configure service vprn {{ _vprn.id }} bgp neighbor "{{ session.neighbor }}" description "{{ session.remote_device }}"
 {%- endif %}
+{%- if session.get('send_extended_community') %}
+configure service vprn {{ _vprn.id }} bgp neighbor "{{ session.neighbor }}" send-community extended
+{%- elif session.get('send_community') %}
+configure service vprn {{ _vprn.id }} bgp neighbor "{{ session.neighbor }}" send-community standard
+{%- endif %}
+{%- if session.get('bfd_enabled') %}
+configure service vprn {{ _vprn.id }} bgp neighbor "{{ session.neighbor }}" bfd-liveness true
+{%- endif %}
+{%- if session.get('local_pref') %}
+configure service vprn {{ _vprn.id }} bgp neighbor "{{ session.neighbor }}" import policy "{{ session.name }}-LOCAL-PREF-IN"
+{%- endif %}
+{%- if session.get('med') %}
+configure service vprn {{ _vprn.id }} bgp neighbor "{{ session.neighbor }}" export policy "{{ session.name }}-MED-OUT"
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+{#- Export policy for connected routes #}
+configure router "Base" bgp 1 export policy "RM-CONN-2-BGP"
+{%- endfor %}
+{%- endif -%}

@@ -43,6 +43,13 @@ nodes:
         order_weight: 200
         description: "Release version string (e.g. 4.28.3M, 22.04.3, R81.20)"
 
+      - name: containerlab_image
+        kind: Text
+        label: "Containerlab Image"
+        optional: true
+        description: "Exact container image reference used by Containerlab for this software release"
+        order_weight: 250
+
       - name: release_type
         kind: Dropdown
         optional: true

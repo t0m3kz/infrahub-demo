@@ -24,6 +24,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from infrahub_sdk.exceptions import NodeNotFoundError
+from infrahub_sdk.task.models import TaskState
 
 from generators.common import CommonGenerator
 from generators.pools import PoolMixin
@@ -103,10 +104,12 @@ class TestRunGenerator:
         gen.logger.error.assert_called_once()
 
 
-def _mock_task(*, id: str, title: str) -> MagicMock:
+def _mock_task(*, id: str, title: str, state: TaskState = TaskState.RUNNING, updated_at: str = "") -> MagicMock:
     t = MagicMock()
     t.id = id
     t.title = title
+    t.state = state
+    t.updated_at = updated_at
     return t
 
 
@@ -120,9 +123,8 @@ class TestWaitForParentGeneratorAndRefetch:
         result = await gen.wait_for_parent_generator_and_refetch("add_dc", "dc-1")
 
         assert result is None
-        # No active parent task found: implementation also checks whether the
-        # latest parent run failed before returning.
-        assert gen.client.task.filter.await_count == 2
+        # One query covers both the in-flight and the failed-last-run checks.
+        assert gen.client.task.filter.await_count == 1
 
     @pytest.mark.asyncio
     async def test_unrelated_task_title_returns_none(self) -> None:
@@ -148,6 +150,72 @@ class TestWaitForParentGeneratorAndRefetch:
         assert gen.client.task.wait_for_completion.call_args.kwargs["id"] == "t-1"
         gen.collect_data.assert_awaited_once()
         assert result == {"refetched": True}
+
+    @pytest.mark.asyncio
+    async def test_several_names_share_one_query_and_one_refetch(self) -> None:
+        """Every in-flight parent is waited on, then data is re-collected once."""
+        gen = _build_common_gen()
+        gen.client.task = MagicMock()
+        gen.client.task.filter = AsyncMock(
+            return_value=[
+                _mock_task(id="t-dc", title="Run generator add_dc"),
+                _mock_task(id="t-cascade", title="Run generator dc_pod_cascade"),
+            ]
+        )
+        gen.client.task.wait_for_completion = AsyncMock()
+        gen.collect_data = AsyncMock(return_value={"refetched": True})
+
+        result = await gen.wait_for_parent_generator_and_refetch(("add_dc", "dc_pod_cascade"), "dc-1")
+
+        assert result == {"refetched": True}
+        gen.client.task.filter.assert_awaited_once()
+        waited = [c.kwargs["id"] for c in gen.client.task.wait_for_completion.await_args_list]
+        assert waited == ["t-dc", "t-cascade"]
+        gen.collect_data.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_finished_task_is_not_waited_on(self) -> None:
+        """A completed parent run is history, not something to wait for."""
+        gen = _build_common_gen()
+        gen.client.task = MagicMock()
+        gen.client.task.filter = AsyncMock(
+            return_value=[_mock_task(id="t-1", title="Run generator add_dc", state=TaskState.COMPLETED)]
+        )
+        gen.client.task.wait_for_completion = AsyncMock()
+
+        assert await gen.wait_for_parent_generator_and_refetch("add_dc", "dc-1") is None
+        gen.client.task.wait_for_completion.assert_not_awaited()
+        gen.logger.error.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_failed_latest_run_logs_error(self) -> None:
+        """A parent whose latest run failed (newer than its last success) is reported."""
+        gen = _build_common_gen()
+        gen.client.task = MagicMock()
+        gen.client.task.filter = AsyncMock(
+            return_value=[
+                _mock_task(id="t-1", title="Run generator add_dc", state=TaskState.COMPLETED, updated_at="2026-01-01"),
+                _mock_task(id="t-2", title="Run generator add_dc", state=TaskState.FAILED, updated_at="2026-01-02"),
+            ]
+        )
+
+        assert await gen.wait_for_parent_generator_and_refetch("add_dc", "dc-1") is None
+        gen.logger.error.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_failure_followed_by_success_is_not_an_error(self) -> None:
+        """A failure a later successful run superseded does not block the child."""
+        gen = _build_common_gen()
+        gen.client.task = MagicMock()
+        gen.client.task.filter = AsyncMock(
+            return_value=[
+                _mock_task(id="t-1", title="Run generator add_dc", state=TaskState.FAILED, updated_at="2026-01-01"),
+                _mock_task(id="t-2", title="Run generator add_dc", state=TaskState.COMPLETED, updated_at="2026-01-02"),
+            ]
+        )
+
+        assert await gen.wait_for_parent_generator_and_refetch("add_dc", "dc-1") is None
+        gen.logger.error.assert_not_called()
 
 
 class TestGetParentPoolWithRetry:
@@ -219,6 +287,9 @@ def _build_dc_cascade_gen() -> Any:
             gen.logger.error("No TopologyDeployment data found in GraphQL response")
             return
         gen.data = deployment_list[0]
+        # Mirrors DCTopologyGenerator.generate(): fetch the DC's pods (read,
+        # never tracked) and keep them for the cascade.
+        gen._existing_pods = await gen.client.filters(kind="TopologyPod", parent__ids=[gen.data["id"]])
 
     gen._bootstrap_generate = _fake_bootstrap
     return gen
@@ -238,8 +309,7 @@ class TestDCPodCascadeGenerator:
         await gen.generate({"TopologyDeployment": [{"id": "dc-1", "name": "DC1", "index": 1, "size": "S"}]})
 
         gen.run_generator.assert_awaited_once_with("pod_rack_cascade", [pod1.id, pod2.id], wait=False)
-        assert pod1.id in gen.client.group_context.related_node_ids
-        assert pod2.id in gen.client.group_context.related_node_ids
+        assert gen.client.group_context.related_node_ids == []
 
     @pytest.mark.asyncio
     async def test_no_existing_pods_skips_fan_out(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -338,9 +408,9 @@ def _build_pod_rack_cascade_gen() -> Any:
 
 
 class TestPodRackCascadeGenerator:
-    """PodRackCascadeGenerator.generate(): protect every rack from the tracking
-    group's delete-unused-nodes cleanup, then fan out to add_rack only for the
-    racks this pod is directly responsible for starting."""
+    """PodRackCascadeGenerator.generate(): read the pod's racks (data, never
+    tracked), then fan out to add_rack only for the racks this pod is directly
+    responsible for starting."""
 
     @pytest.mark.asyncio
     async def test_middle_rack_fans_out_to_every_rack(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -355,7 +425,9 @@ class TestPodRackCascadeGenerator:
         await gen.generate(_pod_data(deployment_type="middle_rack"))
 
         gen.run_generator.assert_awaited_once_with("add_rack", [network_rack.id], wait=False)
-        assert network_rack.id in gen.client.group_context.related_node_ids
+        # Racks are data: tracked, a rack moved to another pod would be
+        # deleted by this pod's next run.
+        assert gen.client.group_context.related_node_ids == []
 
     @pytest.mark.asyncio
     async def test_tor_fans_out_to_every_rack(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -374,8 +446,8 @@ class TestPodRackCascadeGenerator:
     @pytest.mark.asyncio
     async def test_mixed_fans_out_to_network_racks_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """mixed's tor/compute racks are started by their network rack's own
-        _fan_out_to_row_dependent_racks(), not by this cascade directly — but
-        they're still protected from the tracking group's cleanup here."""
+        _fan_out_to_row_dependent_racks(), not by this cascade directly. No
+        rack is tracked by this run."""
         gen = _build_pod_rack_cascade_gen()
         monkeypatch.setattr(
             "generators.topology.pod.PodTopologyGenerator.generate",
@@ -389,10 +461,7 @@ class TestPodRackCascadeGenerator:
         await gen.generate(_pod_data(deployment_type="mixed"))
 
         gen.run_generator.assert_awaited_once_with("add_rack", [network_rack.id], wait=False)
-        related = gen.client.group_context.related_node_ids
-        assert network_rack.id in related
-        assert tor_rack.id in related
-        assert compute_rack.id in related
+        assert gen.client.group_context.related_node_ids == []
 
     @pytest.mark.asyncio
     async def test_no_racks_skips_fan_out(self, monkeypatch: pytest.MonkeyPatch) -> None:

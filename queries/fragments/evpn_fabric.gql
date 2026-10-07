@@ -1,0 +1,30 @@
+fragment EvpnRtAsOnSegmentHostingFields on TopologySegmentHosting {
+  evpn_rt_as {
+    node {
+      asn { value }
+    }
+  }
+  evpn_anycast_gateway_mac { value }
+}
+
+# Fabric-wide EVPN constants, reached from a device's own `deployment`: the
+# route-target admin ASN and the anycast-gateway MAC. Both must be identical on
+# every VTEP in the fabric, which is why they live on TopologySegmentHosting and
+# are read here rather than per-device.
+#
+# Only TopologyDataCenter and TopologyColocationMetro inherit
+# TopologySegmentHosting (schemas/extensions/topology/topology.yml) — TopologyPod
+# does not. So DC-level tiers (border-leaf, border-spine) match the generic
+# directly, while pod-level tiers (leaf, tor, access-leaf) whose deployment IS
+# the pod need one `parent` hop to reach the DC. Same two-shape traversal as
+# FirewallContextsOnDeploymentFields in queries/fragments/firewall_contexts.gql.
+fragment EvpnRtAsOnDeploymentFields on TopologyDeployment {
+  ...EvpnRtAsOnSegmentHostingFields
+  ... on TopologyPod {
+    parent {
+      node {
+        ...EvpnRtAsOnSegmentHostingFields
+      }
+    }
+  }
+}

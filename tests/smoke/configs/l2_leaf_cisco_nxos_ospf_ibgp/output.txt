@@ -10,6 +10,12 @@ feature lldp
 !
 
 ! VLANs
+vlan 100
+  name Customer-A
+!
+vlan 200
+  name Customer-A
+!
 !
 ! Interfaces
 interface Ethernet1
@@ -21,6 +27,13 @@ interface Ethernet2
   no shutdown
   ip address 10.1.0.3/31
 
+!
+interface Ethernet10
+  no shutdown
+
+  switchport
+  switchport mode access
+  switchport access vlan 100
 !
 interface Loopback0
   no shutdown

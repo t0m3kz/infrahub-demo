@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     import logging
@@ -13,8 +13,8 @@ from .helpers import DeviceNameContext, DeviceNamingConfig
 from .helpers.routing import RoutingStrategy, p2p_is_ipv6, underlay_is_ipv6
 from .helpers.template_interfaces import template_interface_names_by_role
 from .pod_config import spine_slot_role, spine_slot_templates
-from .protocols import LocationRack, TopologyPod
-from .types import RoutingOptions
+from .protocols import TopologyPod
+from .types import RoutingOptions, naming_convention_of
 
 _POD_POOL_MAX_RETRIES = 10
 _POD_POOL_RETRY_DELAY = 3.0
@@ -87,15 +87,6 @@ class RackMixin:
     # mixin never shadows the real staticmethod at runtime via MRO.
     _retry_delay: Callable[..., float]
 
-    async def fetch_rack_devices_with_interfaces(
-        self,
-        rack: LocationRack | None = None,
-        role_filter: str | None = None,
-        interface_role: str = "downlink",
-    ) -> list[dict]:
-        """Implemented by RackGenerator; declared here for static type checking."""
-        raise NotImplementedError
-
     def _present_roles(self) -> set[str]:
         """Implemented by RackGenerator; declared here for static type checking."""
         raise NotImplementedError
@@ -126,7 +117,7 @@ class RackMixin:
                 f"Rack {self.data['name']}: Cannot derive spine info - no spine/border-spine fabric_templates entries"
             )
 
-        naming = DeviceNamingConfig(strategy=dc.get("naming_convention", "standard"))
+        naming = DeviceNamingConfig(strategy=naming_convention_of(dc, lower=False))
         spine_indexes = [dc["index"], pod["index"]]
         device_names: list[str] = []
         for entry in spine_entries:
@@ -268,10 +259,7 @@ class RackMixin:
                 f"rack_index={self.data['index']}"
             )
 
-        self._naming_conv = cast(
-            Literal["standard", "hierarchical", "flat", "computed"],
-            dc.get("naming_convention", "standard"),
-        )
+        self._naming_conv = naming_convention_of(dc, lower=False)
         self._is_ipv6 = underlay_is_ipv6(dc.get("underlay_protocol", "ipv6"))
 
         self._spine_role: Literal["spine", "border-spine"] = spine_slot_role(pod.get("fabric_templates", []))

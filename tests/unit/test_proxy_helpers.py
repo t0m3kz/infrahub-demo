@@ -5,25 +5,40 @@ Covers:
 - get_proxy_policies()         — ProxyPolicy/ProxyPolicyRule -> render-ready shape,
                                   category expansion, disabled/enabled filtering
 - flatten_proxy_rules()        — global ordering + unique acl_name assignment
+- _render_ports()              — protocol/port specs -> render-ready port dicts
+- get_private_access_segments() — granted components -> ZTNA segments
 """
 
 from __future__ import annotations
 
+from typing import Any
+
+import pytest
+
+from transforms.helpers.policy import merge_policies
 from transforms.helpers.proxy import (
+    _render_ports,
     flatten_proxy_rules,
     get_private_access_segments,
     get_proxy_policies,
-    merge_policies,
 )
 
 
-def _fqdn_rule(name: str, priority: int, destination: str, action: str = "allow", disabled: bool = False) -> dict:
+def _fqdn_rule(
+    name: str,
+    priority: int,
+    destination: str,
+    action: str = "allow",
+    disabled: bool = False,
+    ports: list[str] | None = None,
+) -> dict:
     return {
         "name": name,
         "priority": priority,
         "action": action,
         "destination_type": "fqdn",
         "destination": destination,
+        "ports": ports,
         "log": False,
         "description": "",
         "disabled": disabled,
@@ -40,6 +55,19 @@ def _category_rule(name: str, priority: int, categories: list[dict], action: str
         "log": False,
         "description": "",
         "disabled": False,
+    }
+
+
+def _grant(
+    status: str = "approved",
+    groups: tuple[str, ...] = ("engineering",),
+    ports: list[str] | None = None,
+) -> dict[str, Any]:
+    """An AppDependency from an access profile, as seen in component.dependents."""
+    return {
+        "ports": ["tcp/443"] if ports is None else ports,
+        "access_status": status,
+        "source_profile": {"name": "private-access-standard", "allowed_groups": [{"name": g} for g in groups]},
     }
 
 
@@ -132,6 +160,35 @@ class TestGetProxyPolicies:
         assert get_proxy_policies(None) == []
         assert get_proxy_policies([]) == []
 
+    def test_rule_ports_are_rendered(self) -> None:
+        """ProxyPolicyRule.ports specs become render-ready port dicts on the rule."""
+        policies = [
+            {
+                "name": "p1",
+                "enabled": True,
+                "default_action": "block",
+                "rules": [_fqdn_rule("r1", 10, "api.stripe.com", ports=["tcp/443", "udp/30000-30010"])],
+            }
+        ]
+        result = get_proxy_policies(policies)
+        assert result[0]["rules"][0]["ports"] == [
+            {"port": 443, "port_end": None, "protocol": "tcp"},
+            {"port": 30000, "port_end": 30010, "protocol": "udp"},
+        ]
+
+    def test_rule_without_ports_matches_any_port(self) -> None:
+        """A rule with no ports (hand-written or pre-ports data) keeps an empty port list."""
+        policies = [
+            {
+                "name": "p1",
+                "enabled": True,
+                "default_action": "block",
+                "rules": [_fqdn_rule("r1", 10, "api.stripe.com")],
+            }
+        ]
+        result = get_proxy_policies(policies)
+        assert result[0]["rules"][0]["ports"] == []
+
 
 class TestFlattenProxyRules:
     def test_assigns_unique_acl_names_across_policies(self) -> None:
@@ -180,37 +237,130 @@ class TestFlattenProxyRules:
         assert flatten_proxy_rules([]) == []
 
 
+class TestRenderPorts:
+    def test_single_port(self) -> None:
+        assert _render_ports(["tcp/443"]) == [{"port": 443, "port_end": None, "protocol": "tcp"}]
+
+    def test_port_range(self) -> None:
+        assert _render_ports(["udp/30000-30010"]) == [{"port": 30000, "port_end": 30010, "protocol": "udp"}]
+
+    def test_duplicates_collapse_and_order_is_kept(self) -> None:
+        """Specs that parse to the same port render once, in first-seen order."""
+        assert _render_ports(["tcp/8443", "TCP/443", "tcp/8443", " tcp/443 "]) == [
+            {"port": 8443, "port_end": None, "protocol": "tcp"},
+            {"port": 443, "port_end": None, "protocol": "tcp"},
+        ]
+
+    def test_no_specs_render_no_ports(self) -> None:
+        assert _render_ports(None) == []
+        assert _render_ports([]) == []
+
+    @pytest.mark.parametrize("spec", ["443", "https", "tcp/0", "tcp/70000", "tcp/443-80", "icmp/1"])
+    def test_malformed_spec_raises(self, spec: str) -> None:
+        """A malformed port raises instead of silently becoming an any-port rule."""
+        with pytest.raises(ValueError, match="invalid port"):
+            _render_ports([spec])
+
+
 class TestGetPrivateAccessSegments:
-    def test_private_access_endpoint_is_included(self) -> None:
+    @staticmethod
+    def _customers(
+        dependents: list[dict[str, Any]],
+        component_ports: list[str] | None = None,
+        app_name: str | None = "c001-checkout-p",
+        comp_name: str | None = "frontend",
+        fqdn: str = "checkout.internal.c001.demo.local",
+    ) -> list[dict[str, Any]]:
+        component = {
+            "name": comp_name,
+            "fqdn": fqdn,
+            "ports": ["tcp/443"] if component_ports is None else component_ports,
+            "dependents": dependents,
+        }
+        return [{"applications": [{"name": app_name, "children": [component]}]}]
+
+    def test_granted_component_is_included(self) -> None:
+        """A granted component becomes a segment named after its application and component."""
+        (segment,) = get_private_access_segments(self._customers([_grant()]))
+        assert segment == {
+            "name": "c001-checkout-p-frontend",
+            "fqdn": "checkout.internal.c001.demo.local",
+            "ports": [{"port": 443, "port_end": None, "protocol": "tcp"}],
+            "allowed_groups": ["engineering"],
+        }
+
+    def test_segment_name_falls_back_to_fqdn(self) -> None:
+        """Without both an application and a component name, the fqdn names the segment."""
+        (no_app,) = get_private_access_segments(self._customers([_grant()], app_name=None))
+        (no_comp,) = get_private_access_segments(self._customers([_grant()], comp_name=None))
+        assert no_app["name"] == "checkout.internal.c001.demo.local"
+        assert no_comp["name"] == "checkout.internal.c001.demo.local"
+
+    def test_same_component_name_in_two_applications_gives_distinct_segments(self) -> None:
+        """Every app has a frontend; the broker still needs one name per segment."""
         customers = [
             {
                 "applications": [
                     {
+                        "name": "c001-checkout-p",
                         "children": [
-                            {
-                                "children": [
-                                    {
-                                        "name": "checkout-api",
-                                        "endpoint_type": "private_access",
-                                        "fqdn": "checkout-api.internal.example.com",
-                                        "service_ports": [{"port": 443, "port_end": None, "protocol": "tcp"}],
-                                        "access_profile": {"allowed_groups": [{"name": "engineering"}]},
-                                    }
-                                ]
-                            }
-                        ]
-                    }
+                            {"name": "frontend", "fqdn": "checkout.c001.local", "dependents": [_grant()]},
+                        ],
+                    },
+                    {
+                        "name": "c001-billing-p",
+                        "children": [
+                            {"name": "frontend", "fqdn": "billing.c001.local", "dependents": [_grant()]},
+                        ],
+                    },
                 ]
             }
         ]
-        result = get_private_access_segments(customers)
-        assert len(result) == 1
-        assert result[0]["name"] == "checkout-api"
-        assert result[0]["fqdn"] == "checkout-api.internal.example.com"
-        assert result[0]["ports"] == [{"port": 443, "port_end": None, "protocol": "tcp"}]
-        assert result[0]["allowed_groups"] == ["engineering"]
+        names = [segment["name"] for segment in get_private_access_segments(customers)]
+        assert names == ["c001-checkout-p-frontend", "c001-billing-p-frontend"]
 
-    def test_non_private_endpoint_and_empty_input_are_skipped(self) -> None:
-        customers = [{"applications": [{"children": [{"children": [{"endpoint_type": "internal_service"}]}]}]}]
-        assert get_private_access_segments(customers) == []
+    def test_component_without_a_grant_is_not_published(self) -> None:
+        """Only an access-profile dependency makes a component a segment."""
+        component_caller = {**_grant(), "source_profile": None}
+        assert get_private_access_segments(self._customers([])) == []
+        assert get_private_access_segments(self._customers([component_caller])) == []
+
+    def test_denied_grant_admits_nobody(self) -> None:
+        """A denied grant contributes neither ports nor groups."""
+        assert get_private_access_segments(self._customers([_grant(status="denied")])) == []
+        denied_ssh = _grant(status="denied", groups=("contractors",), ports=["tcp/22"])
+        (segment,) = get_private_access_segments(self._customers([_grant(), denied_ssh]))
+        assert segment["allowed_groups"] == ["engineering"]
+        assert segment["ports"] == [{"port": 443, "port_end": None, "protocol": "tcp"}]
+
+    def test_grants_merge_ports_and_groups_without_duplicates(self) -> None:
+        """Two profiles on one component give one segment with the union of ports and groups."""
+        ssh = _grant(groups=("engineering", "ops"), ports=["tcp/22"])
+        (segment,) = get_private_access_segments(self._customers([_grant(), ssh, _grant()]))
+        assert segment["ports"] == [
+            {"port": 443, "port_end": None, "protocol": "tcp"},
+            {"port": 22, "port_end": None, "protocol": "tcp"},
+        ]
+        assert segment["allowed_groups"] == ["engineering", "ops"]
+
+    def test_grant_without_ports_opens_every_component_port(self) -> None:
+        """A grant listing no ports falls back to all of the component's ports."""
+        customers = self._customers([_grant(ports=[])], component_ports=["tcp/443", "udp/30000-30010"])
+        (segment,) = get_private_access_segments(customers)
+        assert segment["ports"] == [
+            {"port": 443, "port_end": None, "protocol": "tcp"},
+            {"port": 30000, "port_end": 30010, "protocol": "udp"},
+        ]
+
+    def test_grants_resolving_to_no_ports_are_not_published(self) -> None:
+        """A segment with no ports would be open on every port, so it is left out."""
+        assert get_private_access_segments(self._customers([_grant(ports=[])], component_ports=[])) == []
+
+    def test_denied_status_is_matched_case_insensitively(self) -> None:
+        """The transform treats a denied grant the way the generator does, whatever its case."""
+        assert get_private_access_segments(self._customers([_grant(status=" DENIED ")])) == []
+
+    def test_component_without_fqdn_and_empty_input_are_skipped(self) -> None:
+        assert get_private_access_segments(self._customers([_grant()], fqdn="  ")) == []
+        assert get_private_access_segments([{"applications": [{"children": [{}]}]}]) == []
         assert get_private_access_segments(None) == []

@@ -1,0 +1,73 @@
+---
+# IP transit, cage -> ISP. Unowned like the rest of the on-ramp underlay
+# (../01_colo_onramp/03_physical_circuits.yml): every tenant's internet traffic
+# leaves over these. The cage end is the zone the dark fibre also lands in, the
+# far end the ISP's endpoint in the INTERNET topology (01_topology.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyPhysicalCircuit
+  data:
+    - circuit_id: "INET-LUMEN-EQXFR2"
+      member_of_groups: [physical_circuits]
+      name: "INET-LUMEN-EQXFR2"
+      circuit_type: internet
+      status: active
+      bandwidth: 10000
+      provider: "P014"
+      description: "Lumen IP transit to the Equinix FR2 cage, 10G"
+      locations:
+        - "FR2"
+        - "ISP-LUMEN"
+      customer_interfaces:
+        - ["eg-fr01", "Ethernet1/14"]
+      provider_interfaces:
+        - ["EXT-LUMEN-FRA1", "et-0/0/0"]
+
+    - circuit_id: "INET-COGENT-EQXFR2"
+      member_of_groups: [physical_circuits]
+      name: "INET-COGENT-EQXFR2"
+      circuit_type: internet
+      status: active
+      bandwidth: 10000
+      provider: "P023"
+      description: "Cogent IP transit to the Equinix FR2 cage, 10G"
+      locations:
+        - "FR2"
+        - "ISP-COGENT"
+      customer_interfaces:
+        - ["eg-fr02", "Ethernet1/14"]
+      provider_interfaces:
+        - ["EXT-COGENT-FRA1", "et-0/0/0"]
+
+    - circuit_id: "INET-LUMEN-EQXPA4"
+      member_of_groups: [physical_circuits]
+      name: "INET-LUMEN-EQXPA4"
+      circuit_type: internet
+      status: active
+      bandwidth: 10000
+      provider: "P014"
+      description: "Lumen IP transit to the Equinix PA4 cage, 10G"
+      locations:
+        - "PA4"
+        - "ISP-LUMEN"
+      customer_interfaces:
+        - ["eg-pa01", "Ethernet1/14"]
+      provider_interfaces:
+        - ["EXT-LUMEN-PAR1", "et-0/0/0"]
+
+    - circuit_id: "INET-COGENT-EQXPA4"
+      member_of_groups: [physical_circuits]
+      name: "INET-COGENT-EQXPA4"
+      circuit_type: internet
+      status: active
+      bandwidth: 10000
+      provider: "P023"
+      description: "Cogent IP transit to the Equinix PA4 cage, 10G"
+      locations:
+        - "PA4"
+        - "ISP-COGENT"
+      customer_interfaces:
+        - ["eg-pa02", "Ethernet1/14"]
+      provider_interfaces:
+        - ["EXT-COGENT-PAR1", "et-0/0/0"]

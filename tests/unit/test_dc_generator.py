@@ -131,6 +131,12 @@ def _make_generator() -> Any:
 
     # Stub out every CommonGenerator/RoutingMixin collaborator generate() calls —
     # these are exercised by their own dedicated test modules, not here.
+    # acquire_resource_lock/release_resource_lock serialize the super-spine<->
+    # hyper-spine cabling call against a concurrent, overlapping generator run
+    # for the same DC — not under test here, and the lock's own client.create()
+    # call has no CoreStandardGroup-shaped mock on this plain MagicMock client.
+    gen.acquire_resource_lock = AsyncMock(return_value="lock-id")
+    gen.release_resource_lock = AsyncMock()
     gen.allocate_resource_pools = AsyncMock(return_value={})
     gen.upsert_asn_pool = AsyncMock(return_value=MagicMock(id="asn-pool-1"))
     gen.upsert_number_pool = AsyncMock(return_value=MagicMock(id="num-pool-1"))
@@ -188,7 +194,10 @@ class TestGenerateGuardClauses:
 
 class TestGenerateExistingPodsTracking:
     @pytest.mark.asyncio
-    async def test_existing_pods_added_to_group_context(self) -> None:
+    async def test_existing_pods_are_read_but_never_tracked(self) -> None:
+        """Pods are data, not add_dc's output: they are kept for border-leaf
+        placement and the cascade, but never claimed, so a pod moved to
+        another DC is not deleted by this DC's next run."""
         gen = _make_generator()
         pod_a = MagicMock(id="pod-a")
         pod_a.index.value = 1
@@ -198,7 +207,8 @@ class TestGenerateExistingPodsTracking:
 
         await gen.generate(_deployment(design=_design()))
 
-        assert gen.client.group_context.related_node_ids == ["pod-a", "pod-b"]
+        assert gen._existing_pods == [pod_a, pod_b]
+        assert gen.client.group_context.related_node_ids == []
 
 
 class TestGenerateDesignModeDispatch:
@@ -427,6 +437,43 @@ class TestGenerateHyperSpineTier:
         assert cross_tier_call["bottom_role"] == "super-spine"
         assert cross_tier_call["top_role"] == "hyper-spine"
 
+        # Serialized against a concurrent, overlapping generate() for the
+        # same DC — see generate()'s own comment for the reproduced DC4
+        # collision this guards against.
+        gen.acquire_resource_lock.assert_awaited_once_with("hyperspine-cabling-dc-1")
+        gen.release_resource_lock.assert_awaited_once_with("lock-id")
+
+    @pytest.mark.asyncio
+    async def test_lock_is_held_only_around_the_cabling_call(self) -> None:
+        """Acquired right before create_cabling, released right after — not
+        held across create_routing, which does not share the race."""
+        gen = _make_generator()
+        gen.create_devices = AsyncMock(
+            side_effect=[
+                ["dc1-ss-01"],
+                ["dc1-hs-01"],
+            ]
+        )
+        calls: list[str] = []
+        gen.acquire_resource_lock = AsyncMock(side_effect=lambda key: calls.append(f"acquire:{key}") or "lock-id")
+        gen.release_resource_lock = AsyncMock(side_effect=lambda lock_id: calls.append(f"release:{lock_id}"))
+        gen.create_cabling = AsyncMock(side_effect=lambda **_: calls.append("cabling") or [])
+        gen.create_routing = AsyncMock(side_effect=lambda **_: calls.append("routing"))
+        data = _deployment(
+            design=_design(max_super_spines_per_fabric=1, max_hyper_spines_per_fabric=1),
+            amount_of_super_spines=1,
+            super_spine_template={"id": "tmpl-ss", "interfaces": [{"name": "Ethernet1", "role": "uplink"}]},
+            amount_of_hyper_spines=1,
+            hyper_spine_template={"id": "tmpl-hs", "interfaces": [{"name": "Ethernet1", "role": "downlink"}]},
+        )
+
+        await gen.generate(data)
+
+        acquire_idx = calls.index("acquire:hyperspine-cabling-dc-1")
+        cabling_idx = calls.index("cabling")
+        release_idx = calls.index("release:lock-id")
+        assert acquire_idx < cabling_idx < release_idx
+
     @pytest.mark.asyncio
     async def test_missing_interfaces_logs_error_and_skips_cabling(self) -> None:
         """No dynamic fallback anymore — templates with no interfaces skip
@@ -514,7 +561,24 @@ class TestGenerateDCPoolAttachment:
         # (just fetched via client.get()) — allow_upsert=True would force the
         # full-payload Upsert mutation path and spuriously re-fire `updated`
         # triggers on unrelated fields (fabric_templates/connectivity_mode/status).
-        dc_obj.save.assert_awaited_once_with()
+        dc_obj.save.assert_awaited_once_with(update_group_context=False)
+
+    @pytest.mark.asyncio
+    async def test_asn_and_vni_pools_ride_the_same_single_save(self) -> None:
+        """The ASN and VNI pools are attached on the DC's one save, not by the
+        pool helpers fetching and saving the DC again."""
+        gen = _make_generator()
+        dc_obj = MagicMock()
+        dc_obj.save = AsyncMock()
+        gen.client.get = AsyncMock(return_value=dc_obj)
+
+        await gen.generate(_deployment(design=_design()))
+
+        assert dc_obj.fabric_asn_pool == {"id": "asn-pool-1"}
+        assert dc_obj.vni_pool == {"id": "num-pool-1"}
+        dc_obj.save.assert_awaited_once_with(update_group_context=False)
+        for call in gen.upsert_asn_pool.await_args_list + gen.upsert_number_pool.await_args_list:
+            assert "parent_id" not in call.kwargs
 
     @pytest.mark.asyncio
     async def test_dc_not_found_skips_pool_attachment_without_error(self) -> None:
@@ -535,19 +599,35 @@ class TestCreateSharedRoutingObjects:
         gen.client.group_context.related_node_ids = []
         gen.fabric_name = "dc1"
         gen._ensure_routing_password = AsyncMock()
+        setattr(gen, "acquire_resource_lock", AsyncMock(return_value="lock-id"))  # noqa: B010
+        setattr(gen, "release_resource_lock", AsyncMock())  # noqa: B010
         return gen
 
     @pytest.mark.asyncio
-    async def test_ebgp_ebgp_creates_passwords_only(self) -> None:
+    async def test_ebgp_ebgp_creates_fabric_as_for_route_targets(self) -> None:
+        """ebgp-ebgp gets the fabric AS too — it is the EVPN route-target identity.
+
+        Under ebgp-ebgp every VTEP runs its own ASN, so there is no other
+        fabric-constant ASN to stamp into route-targets. Creating this AS only
+        for the iBGP strategies left 9 of 10 demo topologies with no valid RT
+        source at all, which is why it is now unconditional.
+        """
         gen = self._make_generator_for_shared_routing()
         gen.data = MagicMock(routing_strategy="ebgp-ebgp")
         gen.client.filters = AsyncMock(return_value=[])
-        gen.client.create = AsyncMock()
+        fabric_as = MagicMock(id="fabric-as-1")
+        fabric_as.asn.value = 65100
+        fabric_as.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=fabric_as)
 
         await gen._create_shared_routing_objects(overlay_asn=65100)
 
         assert gen._ensure_routing_password.await_count == 2
-        gen.client.create.assert_not_called()
+        # No asn_pool_id, so the super-spine AS is skipped — the only create()
+        # is the fabric AS.
+        gen.client.create.assert_awaited_once()
+        assert gen.client.create.call_args.kwargs["data"]["asn"] == 65100
+        assert "fabric-as-1" in gen.client.group_context.related_node_ids
 
     @pytest.mark.asyncio
     async def test_ebgp_ibgp_creates_new_overlay_as(self) -> None:
@@ -587,7 +667,10 @@ class TestCreateSharedRoutingObjects:
         assert "as-existing-1" in gen.client.group_context.related_node_ids
 
     @pytest.mark.asyncio
-    async def test_overlay_as_lookup_exception_is_logged_not_raised(self) -> None:
+    async def test_overlay_as_lookup_exception_fails_the_run(self) -> None:
+        """A lookup failure is logged as an error (raises in a real run): a run
+        that skipped the shared AS would not re-track it, and its cleanup
+        would delete the AS every pod's BGP uses."""
         gen = self._make_generator_for_shared_routing()
         gen.data = MagicMock(routing_strategy="ebgp-ibgp")
         gen.client.filters = AsyncMock(side_effect=Exception("db down"))
@@ -597,7 +680,7 @@ class TestCreateSharedRoutingObjects:
         # ebgp-ibgp's underlay is also eBGP, so both the shared super-spine AS
         # lookup and the shared overlay AS lookup hit the same failing filters()
         # mock and are each logged independently.
-        assert gen.logger.warning.call_count == 2
+        assert gen.logger.error.call_count == 2
 
     @pytest.mark.asyncio
     async def test_ospf_ibgp_creates_overlay_as_and_ospf_area(self) -> None:
@@ -622,7 +705,8 @@ class TestCreateSharedRoutingObjects:
         assert "area-1" in gen.client.group_context.related_node_ids
 
     @pytest.mark.asyncio
-    async def test_ospf_area_creation_exception_is_logged_not_raised(self) -> None:
+    async def test_ospf_area_creation_exception_fails_the_run(self) -> None:
+        """Same as the overlay AS: an error, never a swallowed warning."""
         gen = self._make_generator_for_shared_routing()
         gen.data = MagicMock(routing_strategy="ospf-ibgp")
         gen.client.filters = AsyncMock(return_value=[])
@@ -633,23 +717,34 @@ class TestCreateSharedRoutingObjects:
 
         await gen._create_shared_routing_objects(overlay_asn=65100)
 
-        gen.logger.warning.assert_called_once()
+        gen.logger.error.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_ebgp_ebgp_creates_neither_overlay_as_nor_ospf_area(self) -> None:
-        """No overlay AS or OSPF area — but the shared super-spine underlay AS
-        (also eBGP) is still looked up; with no asn_pool_id, nothing is created."""
+    async def test_ebgp_ebgp_creates_fabric_as_but_no_ospf_area(self) -> None:
+        """ebgp-ebgp gets no OSPF area, but does get the fabric AS.
+
+        Both eBGP AS lookups run: the shared super-spine underlay AS and the
+        fabric route-target AS. The OSPF area stays strategy-gated.
+        """
         gen = self._make_generator_for_shared_routing()
         gen.data = MagicMock(routing_strategy=RoutingStrategy.EBGP_EBGP.value)
         gen.client.filters = AsyncMock(return_value=[])
-        gen.client.create = AsyncMock()
+        fabric_as = MagicMock(id="fabric-as-1")
+        fabric_as.asn.value = 65100
+        fabric_as.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=fabric_as)
 
         await gen._create_shared_routing_objects(overlay_asn=65100)
 
-        gen.client.filters.assert_called_once_with(
-            kind=RoutingAutonomousSystem, description__value="dc1 super-spine underlay ASN"
-        )
-        gen.client.create.assert_not_called()
+        lookup_descriptions = [c.kwargs["description__value"] for c in gen.client.filters.call_args_list]
+        assert lookup_descriptions == [
+            "dc1 super-spine underlay ASN",
+            "dc1 overlay ASN for iBGP EVPN",
+        ]
+        # Exactly one create: the fabric AS. No OSPF area (that stays gated on
+        # ospf-ibgp) and no super-spine AS (no asn_pool_id was passed).
+        gen.client.create.assert_awaited_once()
+        assert gen.client.create.call_args.kwargs["data"]["description"] == "dc1 overlay ASN for iBGP EVPN"
 
     @pytest.mark.asyncio
     async def test_ebgp_ebgp_creates_new_super_spine_as_when_pool_given(self) -> None:
@@ -663,11 +758,13 @@ class TestCreateSharedRoutingObjects:
 
         await gen._create_shared_routing_objects(overlay_asn=65100, asn_pool_id="pool-1")
 
-        gen.client.create.assert_awaited_once_with(
-            kind=RoutingAutonomousSystem,
-            data={"asn": {"from_pool": {"id": "pool-1"}}, "description": "dc1 super-spine underlay ASN"},
-        )
-        as_obj.save.assert_awaited_once_with(allow_upsert=True)
+        # Two creates now: the super-spine underlay AS (from the pool) and the
+        # fabric route-target AS (explicit ASN). Assert on the super-spine one.
+        assert gen.client.create.await_args_list[0].kwargs == {
+            "kind": RoutingAutonomousSystem,
+            "data": {"asn": {"from_pool": {"id": "pool-1"}}, "description": "dc1 super-spine underlay ASN"},
+        }
+        as_obj.save.assert_awaited_with(allow_upsert=True)
         assert "ss-as-1" in gen.client.group_context.related_node_ids
 
     @pytest.mark.asyncio

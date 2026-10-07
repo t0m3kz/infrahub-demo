@@ -1,27 +1,20 @@
 from typing import Any
 
 from infrahub_sdk.transforms import InfrahubTransform
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+from jinja2 import select_autoescape
 
-from transforms.common import get_data
+from transforms.helpers.templates import load_template
+from utils.data_cleaning import get_data
 
 
 class EquinixPOP(InfrahubTransform):
     query = "topology_pop"
 
     async def transform(self, data: Any) -> Any:
-        data = get_data(data)
-
-        # Set up Jinja2 environment to load templates from the role subfolder
-        template_path = f"{self.root_directory}/templates/configs/equinix"
-        env = Environment(
-            loader=FileSystemLoader(template_path),
+        template = load_template(
+            f"{self.root_directory}/templates/configs/equinix",
+            "virtual_pop.j2",
             autoescape=select_autoescape(["j2"]),
+            keep_trailing_newline=False,
         )
-        # Select the template for leaf devices based on platform
-        template_name = "virtual_pop.j2"
-
-        # Render the template with enhanced data
-        template = env.get_template(template_name)
-
-        return template.render(**data)
+        return template.render(**get_data(data))

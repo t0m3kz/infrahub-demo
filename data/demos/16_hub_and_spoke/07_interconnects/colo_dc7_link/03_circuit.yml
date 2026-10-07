@@ -13,6 +13,7 @@ spec:
     # ../../03_dc/01_datacenter.yml — this upserts onto the existing nodes
     # rather than creating duplicates.
     - name: "C004-WAW1-DC7"
+      member_of_groups: [physical_circuits]
       circuit_id: "C004-WAW1-DC7"
       circuit_type: dark_fiber
       status: active

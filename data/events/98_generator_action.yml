@@ -38,6 +38,36 @@ spec:
     - name: run-app-application-generator
       description: Derive security policy rules from application component dependencies
       generator: add_app_application
+    - name: run-app-dependency-generator
+      description: Re-derive an application's security policy rules when one of its dependencies changes
+      generator: add_app_dependency
+    - name: run-app-component-generator
+      description: Re-derive the security policy rules into a component that moved segment or changed ports
+      generator: add_app_component
+    - name: run-app-component-segment-generator
+      description: Tag the switch ports a component's instances are cabled to with its segment, reconcile VLAN domains
+      generator: add_app_component_segment
+    - name: run-application-orchestrator-routing-generator
+      description: Sync an application into the routing group of its application_orchestrator
+      generator: add_application_orchestrator_routing
+    - name: run-customer-dc-orchestrator-routing-generator
+      description: Sync a DC customer deployment into the routing group of its infrastructure_orchestrator
+      generator: add_customer_dc_orchestrator_routing
+    - name: run-customer-colocation-orchestrator-routing-generator
+      description: Sync a colocation customer deployment into the routing group of its infrastructure_orchestrator
+      generator: add_customer_colocation_orchestrator_routing
+    - name: run-customer-cloud-orchestrator-routing-generator
+      description: Sync a cloud customer deployment into the routing group of its infrastructure_orchestrator
+      generator: add_customer_cloud_orchestrator_routing
+    - name: run-customer-office-orchestrator-routing-generator
+      description: Sync an office customer deployment into the routing group of its infrastructure_orchestrator
+      generator: add_customer_office_orchestrator_routing
+    - name: run-circuit-generator
+      description: Validate a physical circuit and its customer/provider interfaces
+      generator: add_circuit
+    - name: run-virtual-circuit-generator
+      description: Validate and register a virtual circuit and its endpoint interfaces
+      generator: add_virtual_circuit
     - name: run-endpoint-generator
       description: Run Endpoint Connectivity Generator
       generator: add_endpoint
@@ -50,6 +80,6 @@ spec:
     - name: run-colocation-metro-generator
       description: Create a colocation metro's resource pools and its own on-ramp devices
       generator: add_colocation_metro
-    - name: run-interconnect-generator
-      description: Reconcile a TopologyInterconnectRequest into virtual/physical circuit(s)
-      generator: add_interconnect
+    - name: run-sdwan-edge-generator
+      description: Provision an SD-WAN Edge, tunnel, and circuits for a customer office that opted in
+      generator: add_sdwan_edge

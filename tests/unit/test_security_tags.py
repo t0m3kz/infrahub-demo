@@ -16,12 +16,6 @@ from transforms.common import _get_sgt_rules
 from transforms.helpers.segments import _vlans_from_activations
 from transforms.helpers.vxlan import _l2_from_activations
 
-
-# Convenience: build a sgt_rules list directly from activations for template tests
-def _rules_from_acts(acts: list) -> list:
-    return _get_sgt_rules(acts)
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -284,6 +278,7 @@ class TestAristaEosSgtTemplate:
             vlans=vlans,
             sgt_rules=sgt_rules,
             interfaces=[],
+            loopback_name="Loopback0",
             acls=[],
             vxlan=None,
             vrf_gateways={},
@@ -292,7 +287,7 @@ class TestAristaEosSgtTemplate:
             mlag=None,
         )
 
-    def test_no_sgt_rules_no_sgt_block(self) -> None:
+    def test_tag_without_rules_still_renders_profile(self) -> None:
         vlans = [
             {
                 "vlan_id": 10,
@@ -307,7 +302,7 @@ class TestAristaEosSgtTemplate:
             }
         ]
         output = self._render(vlans, [])
-        assert "mac security" not in output
+        assert "mac security profile SGT-20" in output
         assert "sgt-policy" not in output
 
     def test_sgt_block_rendered_when_rules_present(self) -> None:
@@ -362,6 +357,7 @@ class TestCiscoNxosSgtTemplate:
             vlans=vlans,
             sgt_rules=sgt_rules,
             interfaces=[],
+            loopback_name="loopback0",
             acls=[],
             vxlan=None,
             vrf_gateways={},
@@ -370,11 +366,12 @@ class TestCiscoNxosSgtTemplate:
             mlag=None,
         )
 
-    def test_no_sgt_rules_no_cts_block(self) -> None:
+    def test_tag_without_rules_still_renders_vlan_mapping(self) -> None:
         vlans = [{"vlan_id": 10, "name": "web", "sgt": 20, "sgt_name": "web-tier", "isolation_mode": "normal"}]
         output = self._render(vlans, [])
-        assert "feature cts" not in output
-        assert "cts role-based" not in output
+        assert "feature cts" in output
+        assert "cts role-based sgt-map vlan 10 sgt 20" in output
+        assert "cts role-based permissions" not in output
 
     def test_cts_block_rendered_when_rules_present(self) -> None:
         vlans = [{"vlan_id": 10, "name": "web-frontend", "sgt": 20, "sgt_name": "web-tier", "isolation_mode": "normal"}]

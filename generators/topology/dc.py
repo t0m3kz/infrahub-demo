@@ -9,48 +9,34 @@ from utils.data_cleaning import clean_data
 from ..common import CommonGenerator, DeviceOptions
 from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
 from ..dc_config import host_bits_to_prefix_length, resolve_dc_size_layout
-from ..devices import DeviceMixin
+from ..devices import HA_KIND_BY_ROLE, DeviceMixin
 from ..helpers import name_to_asn_range
 from ..helpers.pairing import pair_device_names
 from ..helpers.routing import RoutingStrategy, p2p_is_ipv6
 from ..helpers.template_interfaces import template_interface_names_by_role
-from ..pod_config import POD_LAYOUTS
+from ..pod_config import POD_LAYOUTS, templates_by_role
 from ..pools import PoolMixin
 from ..protocols import (
-    CoreIPPrefixPool,
     DcimPhysicalDevice,
     DcimVirtualDevice,
     TopologyDataCenter,
     TopologyPod,
 )
 from ..routing import RoutingMixin
-from ..types import CablingOptions, RoutingOptions
+from ..types import CablingOptions, NamingConvention, RoutingOptions, naming_convention_of
 
 _DC_VALID_FABRIC_ROLES = frozenset({"super-spine", "hyper-spine", "border-leaf", "firewall", "load-balancer"})
-
-# device_role -> HA node kind. HA pairing itself happens inside
-# DeviceMixin.create_devices() (see DeviceOptions.ha_kind) — only the right
-# kind per role needs picking here.
-_HA_KIND_BY_ROLE: dict[str, str] = {
-    "firewall": "ManagedFirewallHA",
-    "load-balancer": "ManagedLoadbalancerHA",
-}
 
 # environments each physical firewall/load-balancer HA pair gets a shared
 # virtual instance pair for — see _provision_shared_virtual_instances.
 _SHARED_ENVIRONMENTS: tuple[str, ...] = ("production", "non-production")
 
-# (physical template's platform name, device_role) -> matching virtual
-# template's name prefix — see data/bootstrap's 09_virtual_device_templates_
-# *.yaml, where every platform/role combination provides an _S/_M/_L/_XL
-# variant per DC size (e.g. "CloudGuard_EDGE_L"), matched against dc.size.
-_VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE: dict[tuple[str, str], str] = {
-    ("checkpoint_gaia", "firewall"): "CloudGuard_EDGE",
-    ("panos", "firewall"): "PA-VM_EDGE",
-    ("junos", "firewall"): "vSRX_EDGE",
-    ("f5_tmos", "load-balancer"): "BIG-IP-VE_LOAD_BALANCER",
-    ("netscaler", "load-balancer"): "NetScaler-ADC-VPX_LOAD_BALANCER",
-}
+# Strategies under which dc.py pre-seeds its own DC-scoped tiers' BGP.
+_SEEDED_STRATEGIES = (
+    RoutingStrategy.EBGP_EBGP.value,
+    RoutingStrategy.EBGP_IBGP.value,
+    RoutingStrategy.OSPF_IBGP.value,
+)
 
 
 class TopologyDcData(TypedDict, total=False):
@@ -77,11 +63,6 @@ class TopologyDcData(TypedDict, total=False):
     fabric_controllers: list[dict[str, Any]]
     security_manager_controllers: list[dict[str, Any]]
     lb_manager_controllers: list[dict[str, Any]]
-
-
-def _templates_by_role(templates: list[dict[str, Any]], role: str) -> list[dict[str, Any]]:
-    """Filter a fabric_templates list down to one role's positive-quantity entries."""
-    return [t for t in templates if t.get("role") == role and t.get("quantity", 0) > 0]
 
 
 class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, CommonGenerator):
@@ -113,34 +94,26 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
             self.logger.error(f"Generation failed due to {exc}")
             return
 
-        # Merge this DC's own pre-fetched, role-bucketed controller lists
-        # (see queries/topology/add/dc.gql's fabric_controllers/
-        # security_manager_controllers/lb_manager_controllers aliases) into
-        # one flat list create_devices() reads synchronously — see
-        # generators/devices.py's _resolve_role_controller.
-        self._all_controllers = [
-            *self.data.get("fabric_controllers", []),
-            *self.data.get("security_manager_controllers", []),
-            *self.data.get("lb_manager_controllers", []),
-        ]
+        # This DC's controllers (queries/topology/add/dc.gql's aliases), read
+        # by create_devices() — see generators/devices.py's _resolve_role_controller.
+        self.set_controllers_from(self.data)
 
         self.logger.info(f"Processing Data Center: {dc_name}")
 
-        # Add existing pods to group context to prevent deletion
-        # include=["layout"] also lets _generate_dc_scoped_fabric_devices read each
+        # include=["layout"] lets _generate_dc_scoped_fabric_devices read each
         # pod's own max_border_leafs_per_pod cap via _pod_border_leaf_capacity.
+        # The pods are read, never tracked: they are data, not this run's
+        # output, and a tracked pod that moved to another DC would be deleted
+        # by this DC's next run.
         existing_pods = await self.client.filters(kind=TopologyPod, parent__ids=[dc_id], include=["layout"])
-        related_node_ids = self.client.group_context.related_node_ids
-        for pod in existing_pods:
-            related_node_ids.append(pod.id)
+        self._existing_pods = existing_pods
 
         self.deployment_id = dc_id  # Store for cable linking
         self.fabric_name = dc_name.lower()
         self._validate_fabric_template_roles()
-        super_spine_entries = _templates_by_role(self.data.get("fabric_templates", []), "super-spine")
+        super_spine_entries = templates_by_role(self.data.get("fabric_templates", []), "super-spine")
         amount_of_super_spines = sum(entry["quantity"] for entry in super_spine_entries)
         self.logger.info(f"Generating topology for data center {self.fabric_name.upper()}")
-        indexes: list[int] = [dc_index]
 
         if amount_of_super_spines > dc_design["max_super_spines_per_fabric"]:
             raise RuntimeError(
@@ -148,7 +121,6 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
                 f"design allows at most {dc_design['max_super_spines_per_fabric']}"
             )
 
-        naming_convention = self.data.get("naming_convention", "standard")
         underlay_protocol = self.data.get("underlay_protocol", "ipv6")
         is_ipv6 = underlay_protocol == "ipv6"
         is_dual_stack = underlay_protocol == "dual_stack"
@@ -204,26 +176,6 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
             dual_stack=is_dual_stack,
         )
 
-        # Attach pool references to the DC every run — allocate_resource_pools()
-        # returns the same (upserted) pool objects whether they were just created or
-        # already existed, so this setattr+save is itself idempotent.
-        dc = await self.client.get(kind=TopologyDataCenter, id=dc_id)
-        if dc:
-            pool_attr_map: dict[str, str] = {
-                "loopback": "loopback_pool",
-                "management": "management_pool",
-                "technical": "technical_pool",
-            }
-            for pool_name, pool_obj in dc_pools.items():
-                if pool_name in pool_attr_map:
-                    setattr(dc, pool_attr_map[pool_name], {"id": pool_obj.id})
-            # Plain save(): dc is a known-existing node (just fetched) — allow_upsert=True
-            # would route through create()'s Upsert mutation, which sends every
-            # attribute/relationship (even unmodified ones), spuriously re-firing
-            # unrelated `updated` triggers (fabric_templates/connectivity_mode/status)
-            # on every pool attach and double-firing dc_pod_cascade.
-            await dc.save()
-
         # Derive deterministic ASN range from DC name (unique per site).
         # max_border_leafs_per_fabric is included since border-leaf devices draw
         # from this same fabric_asn_pool (see upsert_asn_pool below). super-spine
@@ -249,9 +201,6 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
                 description=f"ASN pool for {self.fabric_name.upper()} fabric",
                 start_range=asn_start,
                 end_range=asn_end,
-                parent_kind="TopologyDataCenter",
-                parent_id=dc_id,
-                parent_attr="fabric_asn_pool",
             )
             if asn_pool_obj:
                 fabric_asn_pool_id = asn_pool_obj.id
@@ -260,7 +209,7 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
         # no collision-tracking concern requiring automated allocation).
         # VxlanSegment's LOCAL VLAN ID is allocated per VLAN domain (MLAG pair
         # or standalone device), not per-DC — see generators/devices.py's
-        # _ensure_mlag_pairs/_ensure_standalone_vlan_domain and
+        # _ensure_mlag_pairs/_ensure_standalone_vlan_domains and
         # generators/topology/segment.py's per-domain ManagedVlanDomainSegment
         # allocation. IEEE 802.1Q VLAN ID has only local significance; a
         # DC-wide pool would artificially cap the whole DC to one shared
@@ -268,17 +217,61 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
 
         # L2 VNI pool for the VXLAN overlay (VRF-lite: no VRF stretches over
         # EVPN, so there's no L3 VNI pool — border-leaf VRFs are local-only).
-        await self.upsert_number_pool(
+        #
+        # Capped at 39999 even though a VNI is a 24-bit field. Three independent
+        # constraints, the first two of which the device enforces by rejecting
+        # the line:
+        #
+        #   1. 16-bit RD/RT ceiling (65535). The EVPN route-distinguisher and
+        #      route-target are derived from the VNI (transforms/helpers/vxlan.py),
+        #      and every ASN here is a 4-byte private ASN — so both a type-1 RD
+        #      (IPv4:assigned) and a type-2 RT (4-byte-ASN:assigned) leave only
+        #      16 bits for the VNI.
+        #   2. Must stay disjoint from the L3 VNI range (50001-59999, supplied
+        #      by data — see data/demos/.../01_pools.yml `*-l3vni-pool`). The VNI
+        #      space is a single flat namespace per device, NOT one namespace per
+        #      VNI type, so an L2 segment allocated on top of a VRF's L3 VNI
+        #      collides and the `member vni ... associate` line fails.
+        #   3. Must stay disjoint from GLOBAL-L2VNI (40000-49999, data/bootstrap/
+        #      18_vni_pools.yml), where stretched segments draw their one shared
+        #      VNI. Every site pool hands out this same band, so a stretched VNI
+        #      drawn from one site and reused in another would collide with that
+        #      site's own local allocations (see generators/topology/segment.py).
+        #
+        # 39999 satisfies all three. 30k local segments per fabric is far beyond
+        # any real fabric, so this costs nothing.
+        vni_pool = await self.upsert_number_pool(
             pool_name=f"{self.fabric_name}-vni-pool",
             description=f"L2 VNI pool for {self.fabric_name.upper()}",
             start_range=10001,
-            end_range=16777215,
+            end_range=39999,
             node="ManagedSegmentDeployment",
             node_attribute="vni",
-            parent_kind="TopologyDataCenter",
-            parent_id=dc_id,
-            parent_attr="vni_pool",
         )
+
+        # Attach every pool reference to the DC with one fetch and one save,
+        # every run — the pools above are the same upserted objects whether
+        # just created or already there, so this is idempotent. Plain save():
+        # dc is a known-existing node (just fetched) — allow_upsert=True would
+        # route through create()'s Upsert mutation, which sends every
+        # attribute/relationship (even unmodified ones), spuriously re-firing
+        # unrelated `updated` triggers (fabric_templates/connectivity_mode/status)
+        # on every pool attach and double-firing dc_pod_cascade. Untracked: the
+        # DC is this run's target, not its output.
+        dc = await self.client.get(kind=TopologyDataCenter, id=dc_id)
+        if dc:
+            pool_attr_map: dict[str, str] = {
+                "loopback": "loopback_pool",
+                "management": "management_pool",
+                "technical": "technical_pool",
+            }
+            for pool_name, pool_obj in dc_pools.items():
+                if pool_name in pool_attr_map:
+                    setattr(dc, pool_attr_map[pool_name], {"id": pool_obj.id})
+            if fabric_asn_pool_id:
+                dc.fabric_asn_pool = {"id": fabric_asn_pool_id}
+            dc.vni_pool = {"id": vni_pool.id}
+            await dc.save(update_group_context=False)
 
         super_spine_names: list[str] = []
         if design_mode == "back-to-back":
@@ -286,26 +279,10 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
                 f"DC {self.fabric_name}: design_mode=back-to-back — "
                 "skipping super-spine tier, spines will connect directly across pods"
             )
-        elif amount_of_super_spines > 0 and super_spine_entries:
-            for entry in super_spine_entries:
-                entry_names = await self.create_devices(
-                    deployment_id=dc_id,
-                    device_role="super-spine",
-                    quantity=entry["quantity"],
-                    template=entry["template"],
-                    naming_convention=cast(
-                        Literal["standard", "hierarchical", "flat", "computed"],
-                        naming_convention.lower(),
-                    ),
-                    options=DeviceOptions(
-                        indexes=indexes,
-                        allocate_loopback=True,
-                        loopback_pool=dc_pools.get("dc-fabric-loopback"),
-                        loopback_prefix_length=128 if is_ipv6 else 32,
-                        management_pool=dc_pools.get("management"),
-                    ),
-                )
-                super_spine_names.extend(entry_names)
+        elif super_spine_entries:
+            super_spine_names = await self._create_dc_tier_devices(
+                "super-spine", super_spine_entries, indexes=[dc_index], dc_pools=dc_pools, is_ipv6=is_ipv6
+            )
 
         # Hyper-spine: a 4th tier above super-spine, only present in XL fabrics
         # (design.max_hyper_spines_per_fabric > 0). Unlike super-spine (cabled
@@ -313,89 +290,47 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
         # HERE, DC-to-DC-level, since both tiers are DC-scoped — dc.py never
         # cables its own tiers together anywhere else, this is the one case
         # where it does.
-        hyper_spine_entries = _templates_by_role(self.data.get("fabric_templates", []), "hyper-spine")
+        hyper_spine_entries = templates_by_role(self.data.get("fabric_templates", []), "hyper-spine")
         amount_of_hyper_spines = sum(entry["quantity"] for entry in hyper_spine_entries)
-        max_hyper_spines_cap = dc_design["max_hyper_spines_per_fabric"]
         if amount_of_hyper_spines > max_hyper_spines_cap:
             raise RuntimeError(
                 f"DC {self.fabric_name.upper()} requests {amount_of_hyper_spines} hyper-spines but the assigned "
                 f"design allows at most {max_hyper_spines_cap}"
             )
 
-        hyper_spine_names: list[str] = []
-        if amount_of_hyper_spines > 0 and hyper_spine_entries:
-            for entry in hyper_spine_entries:
-                entry_names = await self.create_devices(
-                    deployment_id=dc_id,
-                    device_role="hyper-spine",
-                    quantity=entry["quantity"],
-                    template=entry["template"],
-                    naming_convention=cast(
-                        Literal["standard", "hierarchical", "flat", "computed"],
-                        naming_convention.lower(),
-                    ),
-                    options=DeviceOptions(
-                        indexes=indexes,
-                        allocate_loopback=True,
-                        loopback_pool=dc_pools.get("dc-fabric-loopback"),
-                        loopback_prefix_length=128 if is_ipv6 else 32,
-                        management_pool=dc_pools.get("management"),
-                    ),
-                )
-                hyper_spine_names.extend(entry_names)
+        hyper_spine_names = await self._create_dc_tier_devices(
+            "hyper-spine", hyper_spine_entries, indexes=[dc_index], dc_pools=dc_pools, is_ipv6=is_ipv6
+        )
 
         # Create shared routing objects (overlay AS, OSPF area, and — for eBGP
         # underlay strategies — the single super-spine underlay AS shared
         # fabric-wide, .dev/bgp.txt) at the DC level so pod/rack generators
         # always find them and never create duplicates.
-        # overlay_asn is asn_end + 1 to avoid collision with the per-device pool range [asn_start, asn_end]
-        await self._create_shared_routing_objects(overlay_asn=asn_end + 1, asn_pool_id=fabric_asn_pool_id)
+        # overlay_asn is asn_end + 1: outside the per-device pool range [asn_start, asn_end]
+        # but still inside this DC's grid slot (see name_to_asn_range)
+        super_spine_as_id = await self._create_shared_routing_objects(
+            overlay_asn=asn_end + 1,
+            asn_pool_id=fabric_asn_pool_id,
+            deployment_id=dc_id,
+        )
 
-        # Create super-spine routing objects here so they exist before any pod generator runs.
-        # For eBGP strategies: underlay + overlay BGP processes.
-        # For ospf-ibgp: overlay BGP only — super-spines sit above the OSPF domain and are
-        # skipped as top_devices in pod-level routing, so their overlay BGP must be seeded here.
-        if super_spine_names and routing_strategy in (
-            RoutingStrategy.EBGP_EBGP.value,
-            RoutingStrategy.EBGP_IBGP.value,
-            RoutingStrategy.OSPF_IBGP.value,
-        ):
-            routing_opts = RoutingOptions(design=self.data, asn_pool=fabric_asn_pool_id)
-            if routing_strategy == RoutingStrategy.OSPF_IBGP.value:
-                routing_opts["skip_underlay"] = True
-            else:
-                super_spine_as_id = await self._resolve_shared_super_spine_as()
-                if super_spine_as_id:
-                    routing_opts["shared_underlay_as_id"] = super_spine_as_id
-                    self.client.group_context.related_node_ids.append(super_spine_as_id)
-            await self.create_routing(
-                bottom_devices=super_spine_names,
-                top_devices=[],
-                options=routing_opts,
-                p2p_interfaces=[],
-                bottom_role="super-spine",
+        # Pre-seed each DC-scoped tier's own BGP so it exists before any pod
+        # generator (or the hyper-spine cabling below) runs: the later calls
+        # treat these tiers as top_devices, which skips underlay/overlay BGP
+        # creation for them. Super-spines pre-seed their overlay even under
+        # ospf-ibgp, since they sit above the OSPF domain.
+        if super_spine_names and routing_strategy in _SEEDED_STRATEGIES:
+            await self._preseed_tier_routing(
+                "super-spine",
+                super_spine_names,
+                routing_strategy=routing_strategy,
+                asn_pool_id=fabric_asn_pool_id,
+                shared_underlay_as_id=super_spine_as_id,
             )
 
-        if hyper_spine_names and routing_strategy in (
-            RoutingStrategy.EBGP_EBGP.value,
-            RoutingStrategy.EBGP_IBGP.value,
-            RoutingStrategy.OSPF_IBGP.value,
-        ):
-            # Pre-seed hyper-spine's own underlay+overlay BGP before cabling it
-            # to super-spine — same reason as super-spine's own pre-seed above:
-            # the real cabling+routing call below treats hyper-spine as
-            # top_devices, which skips underlay/overlay BGP *creation* for it
-            # (assumed already created by "an upper generator layer" — this call
-            # IS that layer, since hyper-spine has no tier above it).
-            hyper_routing_opts = RoutingOptions(design=self.data, asn_pool=fabric_asn_pool_id)
-            if routing_strategy == RoutingStrategy.OSPF_IBGP.value:
-                hyper_routing_opts["skip_underlay"] = True
-            await self.create_routing(
-                bottom_devices=hyper_spine_names,
-                top_devices=[],
-                options=hyper_routing_opts,
-                p2p_interfaces=[],
-                bottom_role="hyper-spine",
+        if hyper_spine_names and routing_strategy in _SEEDED_STRATEGIES:
+            await self._preseed_tier_routing(
+                "hyper-spine", hyper_spine_names, routing_strategy=routing_strategy, asn_pool_id=fabric_asn_pool_id
             )
 
             # Cable super-spine <-> hyper-spine full mesh (same "pod" strategy
@@ -419,17 +354,33 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
             ]
             if super_spine_names and super_spine_uplink_interfaces and hyper_spine_downlink_interfaces:
                 p2p_prefix_length = 127 if is_ipv6 else 31
-                p2p_pairs = await self.create_cabling(
-                    bottom_devices=super_spine_names,
-                    bottom_interfaces=super_spine_uplink_interfaces,
-                    top_devices=hyper_spine_names,
-                    top_interfaces=hyper_spine_downlink_interfaces,
-                    strategy="pod",
-                    options=CablingOptions(
-                        pool=dc_pools.get("technical"),
-                        p2p_prefix_length=p2p_prefix_length,
-                    ),
-                )
+                # Confirmed live on DC4: the DC-level technical pool itself is
+                # NOT duplicated (allocate_resource_pools()'s own lock already
+                # rules that out) — the race is here, in create_cabling()'s
+                # P2P address creation. Two overlapping invocations of this
+                # generator for the same DC (whatever fires them — this
+                # section's only caller-visible clue is that it, not device
+                # or border-leaf creation just above, is where the collision
+                # lands) can both find the SAME two hyper-spine<->super-spine
+                # interfaces still uncabled and both create the same
+                # addresses for them; IpamIPAddress's uniqueness_constraint
+                # is only enforced asynchronously, so both writes succeed and
+                # only the later "Process schema integrity" check catches it.
+                # Serialize on dc_id: only one overlapping caller ever cables
+                # this DC's hyper-spine mesh; the other finds every interface
+                # already cabled and does nothing.
+                async with self.resource_lock(f"hyperspine-cabling-{dc_id}"):
+                    p2p_pairs = await self.create_cabling(
+                        bottom_devices=super_spine_names,
+                        bottom_interfaces=super_spine_uplink_interfaces,
+                        top_devices=hyper_spine_names,
+                        top_interfaces=hyper_spine_downlink_interfaces,
+                        strategy="pod",
+                        options=CablingOptions(
+                            pool=dc_pools.get("technical"),
+                            p2p_prefix_length=p2p_prefix_length,
+                        ),
+                    )
                 await self.create_routing(
                     bottom_devices=super_spine_names,
                     top_devices=hyper_spine_names,
@@ -456,11 +407,63 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
         # This also makes incremental single-pod-add work correctly with no DC-level
         # orchestration, since add_pod alone (no add_dc) is a supported entry point.
 
-        self._existing_pods = existing_pods
         self._is_ipv6 = is_ipv6
         dc_fabric_loopback_pool = dc_pools.get("dc-fabric-loopback")
         self._dc_fabric_loopback_pool_id = dc_fabric_loopback_pool.id if dc_fabric_loopback_pool else None
         await self._generate_dc_scoped_fabric_devices()
+
+    async def _create_dc_tier_devices(
+        self,
+        role: str,
+        entries: list[dict[str, Any]],
+        *,
+        indexes: list[int],
+        dc_pools: dict[str, Any],
+        is_ipv6: bool,
+    ) -> list[str]:
+        """Create one DC-scoped fabric tier (super-spine/hyper-spine), one
+        create_devices() call per fabric_templates entry, looped back from
+        the DC-fabric loopback pool."""
+        names: list[str] = []
+        for entry in entries:
+            names.extend(
+                await self.create_devices(
+                    deployment_id=self.data["id"],
+                    device_role=role,
+                    quantity=entry["quantity"],
+                    template=entry["template"],
+                    naming_convention=naming_convention_of(self.data),
+                    options=DeviceOptions(
+                        indexes=indexes,
+                        allocate_loopback=True,
+                        loopback_pool=dc_pools.get("dc-fabric-loopback"),
+                        loopback_prefix_length=128 if is_ipv6 else 32,
+                        management_pool=dc_pools.get("management"),
+                    ),
+                )
+            )
+        return names
+
+    async def _preseed_tier_routing(
+        self,
+        role: str,
+        names: list[str],
+        *,
+        routing_strategy: str,
+        asn_pool_id: str | None,
+        shared_underlay_as_id: str | None = None,
+    ) -> None:
+        """Create a DC-scoped tier's own BGP processes, before any cabling:
+        overlay only under ospf-ibgp, otherwise underlay (on
+        shared_underlay_as_id when given) plus overlay."""
+        options = RoutingOptions(design=self.data, asn_pool=asn_pool_id)
+        if routing_strategy == RoutingStrategy.OSPF_IBGP.value:
+            options["skip_underlay"] = True
+        elif shared_underlay_as_id:
+            options["shared_underlay_as_id"] = shared_underlay_as_id
+        await self.create_routing(
+            bottom_devices=names, top_devices=[], options=options, p2p_interfaces=[], bottom_role=role
+        )
 
     def _validate_fabric_template_roles(self) -> None:
         """Log+skip (don't abort) any fabric_templates entry using a role this
@@ -502,7 +505,7 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
         rack/index placement, not by deployment) during its own bootstrap.
         Returns every border-leaf name created this run, DC-wide, for
         BLF<->FW<->LB cabling below."""
-        entries = _templates_by_role(self.data.get("fabric_templates", []), "border-leaf")
+        entries = templates_by_role(self.data.get("fabric_templates", []), "border-leaf")
         if not entries:
             return []
 
@@ -543,17 +546,24 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
                     device_role="border-leaf",
                     quantity=share,
                     template=entry["template"],
-                    naming_convention=cast(
-                        Literal["standard", "hierarchical", "flat", "computed"], self.data["naming_convention"].lower()
-                    ),
+                    naming_convention=naming_convention_of(self.data),
                     options=device_options,
                 )
                 all_names.extend(names)
 
             if remaining > 0:
+                # Deliberately a warning, not a failure: a DC may legitimately
+                # declare border-leafs before all its pods exist, and the
+                # remainder gets placed when dc_pod_cascade runs for the new pod.
+                # It is still a data error when the pods are all present, so name
+                # the numbers — the symptom otherwise surfaces much later as a
+                # border-leaf count that is short of what the DC declared.
+                capacity = sum(self._pod_border_leaf_capacity(pod) for pod in sorted_pods)
                 self.logger.warning(
-                    f"DC {self.fabric_name}: border-leaf entry has {remaining} device(s) left unplaced — "
-                    "no pod had remaining max_border_leafs_per_pod capacity."
+                    f"DC {self.fabric_name}: border-leaf entry requested {entry['quantity']} device(s) but "
+                    f"{remaining} are left unplaced — the DC's {len(sorted_pods)} pod(s) offer "
+                    f"max_border_leafs_per_pod capacity for {capacity} in total. Add pods, or lower the "
+                    "entry's quantity to match."
                 )
 
         return all_names
@@ -564,7 +574,7 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
         role: Literal["firewall", "load-balancer"],
         entries: list[dict[str, Any]],
         deployment_id: str,
-        naming_convention: Literal["standard", "hierarchical", "flat", "computed"],
+        naming_convention: NamingConvention,
         indexes: list[int],
     ) -> list[str]:
         """Create firewall/load-balancer devices for one fabric_templates role,
@@ -619,33 +629,14 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
             )
             return
 
-        prefix = _VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE.get((platform, role))
-        if not prefix:
-            self.logger.warning(
-                f"No virtual template mapping for platform={platform} role={role} — "
-                "skipping shared virtual instance provisioning."
-            )
-            return
-
-        dc_size = self.data["size"]
-        virtual_template_name = f"{prefix}_{dc_size}"
-        virtual_templates = await self.client.filters(
-            kind="TemplateDcimVirtualDevice",
-            template_name__value=virtual_template_name,
-            include=["device_type", "platform"],
+        virtual_template = await self.resolve_virtual_template(
+            platform=platform,
+            role=role,
+            size_suffix=self.data["size"],
+            fallback="skipping shared virtual instance provisioning",
         )
-        if not virtual_templates:
-            self.logger.warning(
-                f"No virtual template '{virtual_template_name}' found for platform={platform} role={role} — "
-                "skipping shared virtual instance provisioning."
-            )
+        if virtual_template is None:
             return
-        virtual_template_obj = virtual_templates[0]
-        virtual_template = {
-            "id": virtual_template_obj.id,
-            "device_type": {"id": virtual_template_obj.device_type.peer.id},
-            "platform": {"id": virtual_template_obj.platform.peer.id},
-        }
 
         for first, second in pair_device_names(physical_names):
             physical_pair = await self.client.filters(kind=DcimPhysicalDevice, name__values=[first, second])
@@ -671,7 +662,7 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
 
                 await self._ensure_ha_pairs(
                     instance_names,
-                    ha_kind=_HA_KIND_BY_ROLE[role],
+                    ha_kind=HA_KIND_BY_ROLE[role],
                     role_label=f"{role} ({environment})",
                     device_kind=DcimVirtualDevice,
                 )
@@ -695,15 +686,10 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
         by create_devices(), any quantity) and cable them to border-leaf."""
 
         data = self.data
-        naming_convention = cast(
-            Literal["standard", "hierarchical", "flat", "computed"],
-            data.get("naming_convention", "standard").lower(),
-        )
+        naming_convention = naming_convention_of(data)
         fabric_templates = data.get("fabric_templates", [])
-        firewall_templates = [t for t in fabric_templates if t.get("role") == "firewall" and t.get("quantity", 0) > 0]
-        load_balancer_templates = [
-            t for t in fabric_templates if t.get("role") == "load-balancer" and t.get("quantity", 0) > 0
-        ]
+        firewall_templates = templates_by_role(fabric_templates, "firewall")
+        load_balancer_templates = templates_by_role(fabric_templates, "load-balancer")
         firewall_names = await self._create_role_devices(
             role="firewall",
             entries=firewall_templates,
@@ -735,61 +721,21 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
 
         Per-DC (not global) so each fabric's context sub-interfaces and
         transit links stay within its own numbering, matching the existing
-        {fabric_name}-vlan-pool/{fabric_name}-vni-pool pattern above. The
-        P2P pool itself is a per-DC SLICE allocated from a GLOBAL bootstrap
-        pool (FW-Context-P2P-IPv6/IPv4, data/bootstrap/20_dci_pools.yml) —
-        same idiom as PoolMixin.allocate_resource_pools()'s technical/
-        loopback pools — not a fresh top-level supernet invented at runtime,
-        which was a real bug: a runtime-created IpamPrefix only exists on
-        the branch it was created on, so re-running this generator on a
-        DIFFERENT branch (e.g. a fresh scratch branch off main) found the
-        pool object by name (globally visible) but its resource prefix
-        didn't resolve there, and every P2P allocation failed with
-        "No more resources available".
+        {fabric_name}-vlan-pool/{fabric_name}-vni-pool pattern above.
 
         generators/topology/customer_dc.py's _ensure_firewall_context
         allocates from these once a customer boards onto this DC.
 
-        No "does the pool already exist" short-circuit: allocate_next_ip_prefix's
-        identifier makes the slice allocation idempotent, and CoreIPPrefixPool.name
-        is unique + save(allow_upsert=True) makes the pool itself idempotent too —
-        re-running this always converges on the same pool with the same resource,
-        instead of a manual existence check that (as seen live) can permanently
-        skip healing a pool left broken by a prior code version.
+        See PoolMixin.ensure_firewall_context_pools for the shared
+        pool-creation mechanism (also used by generators/topology/
+        colocation.py for the metro equivalent) and its locking rationale.
         """
-        await self.upsert_number_pool(
-            pool_name=f"{dc_name}-fw-context-vlan-pool",
-            description=f"FirewallContext sub-interface VLAN pool for {dc_name.upper()}",
-            start_range=3000,
-            end_range=3999,
-            node="ManagedFirewallContext",
-            node_attribute="vlan_id",
-        )
-
-        pool_name = f"{dc_name}-fw-context-p2p-pool"
         underlay_protocol = self.data.get("underlay_protocol", "ipv6")
         use_ipv6 = p2p_is_ipv6(underlay_protocol)
-        parent_pool_name = "FW-Context-P2P-IPv6" if use_ipv6 else "FW-Context-P2P-IPv4"
-        slice_prefix_length = 56 if use_ipv6 else 24
-        parent_pool = await self._get_parent_pool_with_retry(parent_pool_name)
-
-        dc_slice = await self.client.allocate_next_ip_prefix(
-            resource_pool=parent_pool,
-            identifier=pool_name,
-            prefix_length=slice_prefix_length,
-            data={"role": "technical"},
+        await self.ensure_firewall_context_pools(
+            name=dc_name,
+            vlan_start=3000,
+            parent_pool_name="FW-Context-P2P-IPv6" if use_ipv6 else "FW-Context-P2P-IPv4",
+            slice_prefix_length=56 if use_ipv6 else 24,
+            default_prefix_length=127 if use_ipv6 else 31,
         )
-
-        pool = await self.client.create(
-            kind=CoreIPPrefixPool,
-            data={
-                "name": pool_name,
-                "description": f"P2P pool for border-leaf <-> FirewallContext links on {dc_name.upper()}",
-                "default_prefix_type": "IpamPrefix",
-                "default_prefix_length": 127 if use_ipv6 else 31,
-                "ip_namespace": {"hfid": ["default"]},
-                "resources": [dc_slice.id],
-            },
-        )
-        await pool.save(allow_upsert=True)
-        self.logger.info(f"Ensured FirewallContext P2P pool '{pool_name}' from '{parent_pool_name}'")

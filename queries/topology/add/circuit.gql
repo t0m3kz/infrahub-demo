@@ -1,5 +1,12 @@
+# add_circuit (generators/topology/circuit.py). Filters on name, the
+# generator's registered parameter (.infrahub.yml `name: name__value`).
+#
+# A circuit's endpoints are customer_interfaces + provider_interfaces together
+# (data fills the two inconsistently). Each endpoint carries what a DCI session
+# needs: its address, its device's deployment (a TopologyDataCenter end names
+# the fabric key and the address family) and the device's BGP processes.
 query circuit_data($name: String!) {
-  TopologyPhysicalCircuit(circuit_id__value: $name) {
+  TopologyPhysicalCircuit(name__value: $name) {
     edges {
       node {
         id
@@ -7,38 +14,69 @@ query circuit_data($name: String!) {
         circuit_id { value }
         circuit_type { value }
         status { value }
+        peering_role { value }
         customer_interfaces {
           edges {
             node {
-              id
-              name { value }
-              ... on DcimPhysicalInterface {
-                ip_address { node { address { value } } }
-              }
-              device {
-                node {
-                  id
-                  name { value }
-                }
-              }
+              ...CircuitEndpoint
             }
           }
         }
         provider_interfaces {
           edges {
             node {
+              ...CircuitEndpoint
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment CircuitEndpoint on DcimInterface {
+  id
+  __typename
+  name { value }
+  ... on DcimPhysicalInterface {
+    ip_address { node { id address { value } } }
+  }
+  ... on DcimVirtualInterface {
+    ip_address { node { id address { value } } }
+  }
+  device {
+    node {
+      id
+      name { value }
+      ... on DcimPhysicalDevice {
+        deployment { node { ...CircuitDeployment } }
+      }
+      ... on DcimVirtualDevice {
+        deployment { node { ...CircuitDeployment } }
+      }
+      ... on DcimCapabilities {
+        capabilities {
+          edges {
+            node {
               id
-              name { value }
-              device {
-                node {
-                  id
-                  name { value }
-                }
+              __typename
+              ... on ManagedBGP {
+                name { value }
+                process_role { value }
               }
             }
           }
         }
       }
     }
+  }
+}
+
+fragment CircuitDeployment on TopologyDeployment {
+  id
+  __typename
+  ... on TopologyDataCenter {
+    name { value }
+    underlay_protocol { value }
   }
 }

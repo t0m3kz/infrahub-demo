@@ -17,6 +17,7 @@ from generators.protocols import (
     DcimVirtualInterface,
     ManagedHAInterface,
     ManagedMLAG,
+    ManagedStandaloneVlanDomain,
 )
 
 
@@ -279,8 +280,12 @@ class TestCreateDevicesPairingDispatch:
 
     @pytest.mark.asyncio
     async def test_mlag_create_no_does_not_pair(self) -> None:
+        """No MLAG domain; the unpaired leaf gets its standalone VLAN domain instead."""
         gen = _make_generator()
-        created = [_mock_created_device(DcimPhysicalDevice.__name__, "dc1-leaf-01")]
+        created = [
+            _mock_created_device(DcimPhysicalDevice.__name__, "dc1-leaf-01"),
+            _mock_created_device(ManagedStandaloneVlanDomain.__name__, "dc1-leaf-01-vlan-domain"),
+        ]
         gen.client.create = AsyncMock(side_effect=created)
 
         await gen.create_devices(
@@ -291,7 +296,8 @@ class TestCreateDevicesPairingDispatch:
             options={"mlag_create": "no"},
         )
 
-        gen.client.create.assert_called_once()
+        kinds = [call.kwargs["kind"] for call in gen.client.create.call_args_list]
+        assert kinds == [DcimPhysicalDevice, ManagedStandaloneVlanDomain]
 
 
 class TestEnsureHaPairs:
@@ -852,11 +858,11 @@ class TestEnsureHaCable:
     @pytest.mark.asyncio
     async def test_creates_new_cable_with_deployment(self) -> None:
         gen = self._gen()
+        gen.deployment_id = "dep-1"
         created = MagicMock(save=AsyncMock())
         gen.client.create = AsyncMock(return_value=created)
-        dev_1 = MagicMock(deployment=MagicMock(initialized=True))
+        dev_1 = MagicMock()
         dev_1.name = MagicMock(value="fw-01")
-        dev_1.deployment.peer = MagicMock(id="dep-1")
         dev_2 = MagicMock()
         dev_2.name = MagicMock(value="fw-02")
         iface_1 = _mock_iface("iface-1", "sync0")
@@ -869,6 +875,29 @@ class TestEnsureHaCable:
         assert call_kwargs["data"]["name"] == "CBL-fw-01-fw-02-ha-SYNC"
         assert call_kwargs["data"]["endpoints"] == ["iface-1", "iface-2"]
         assert call_kwargs["data"]["deployment"] == {"id": "dep-1"}
+
+    @pytest.mark.asyncio
+    async def test_pod_scoped_devices_still_get_the_dc_as_cable_deployment(self) -> None:
+        """The regression this guards against: a pod-scoped HA pair (dc7's
+        border-spine firewall/load-balancer, deployment=TopologyPod on the
+        devices themselves) must still get the enclosing DC as the CABLE's
+        deployment — DcimCable.deployment's peer type has no TopologyPod."""
+        gen = self._gen()
+        gen.deployment_id = "dc-7"
+        created = MagicMock(save=AsyncMock())
+        gen.client.create = AsyncMock(return_value=created)
+        dev_1 = MagicMock(deployment=MagicMock(initialized=True))
+        dev_1.name = MagicMock(value="fw-01")
+        dev_1.deployment.peer = MagicMock(id="pod-1")  # device itself is pod-scoped
+        dev_2 = MagicMock()
+        dev_2.name = MagicMock(value="fw-02")
+        iface_1 = _mock_iface("iface-1", "sync0")
+        iface_2 = _mock_iface("iface-2", "sync0")
+
+        await gen._ensure_ha_cable("fw-01-fw-02-ha", [(dev_2, iface_2), (dev_1, iface_1)])
+
+        call_kwargs = gen.client.create.call_args.kwargs
+        assert call_kwargs["data"]["deployment"] == {"id": "dc-7"}
         created.save.assert_awaited_once_with(allow_upsert=True)
 
 
@@ -999,7 +1028,8 @@ class TestCreateDevicesControllerRouting:
         create_kwargs = gen.client.create.call_args.kwargs
         assert create_kwargs["data"]["member_of_groups"] == []
         controller_obj.managed_devices.add.assert_called_once_with(created_device)
-        controller_obj.save.assert_awaited_once_with(allow_upsert=True)
+        # Untracked: the data-loaded controller is shared, not this run's output.
+        controller_obj.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
 
     @pytest.mark.asyncio
     async def test_no_matching_controller_falls_back_to_group(self) -> None:
