@@ -1,5 +1,56 @@
 # Changelog
 
+## v0.5.0 (2026-10-07)
+
+### BREAKING CHANGE
+
+- an eBGP overlay now requires fabric_rt_asn on the topology.
+Fabrics using routing_strategy ebgp-ebgp or ebgp-ibgp without it previously
+rendered per-VTEP route-targets and must set it before regenerating artifacts.
+Rendered BGP configuration changes for every ebgp-ibgp device: one instance on
+the overlay ASN with per-session local-as, replacing two stanzas.
+- the CustomerQuotation* and TopologyInterconnectRequest
+schema kinds no longer exist. Branches holding objects of these kinds must
+delete them before loading this schema, and the add_quotation_dc,
+add_quotation_office and add_interconnect generators are gone.
+- AppServicePort and Application.service_ports are
+removed; ports live on AppDependency. Existing "-return" policy rules are
+deleted by the generator on its next run.
+- AppEndpoint and AppExternalService are removed,
+AppComponent.slug is replaced by fqdn, and the AppDependency.target peer
+changed. The schema cannot be migrated in place; a fresh load is
+required. Generated rule names change and old rules are cleaned up by
+delete_unused_nodes on the first rerun.
+- a ManagedVxlanSegment with no AppComponent wiring loses its
+customer-port VLAN assignment on the next generator run. Every segment that
+needs one must have an AppComponent naming it via network_segment with at
+least one instance.
+- AppComponent object-load data without a ports list will
+be rejected by the schema.
+- IpamNamespace.namespace_type choices transit/shared/customer
+are removed (replaced by prod/non_prod/management); the TRANSIT namespace and
+the orphaned data/segments/ per-customer-VRF fixture are deleted.
+- AppDeploymentRequest, AppDeploymentRequestComponent,
+AppDeploymentRequestEndpoint, and AppDeploymentRequestDependency no longer
+exist. Anything that declared applications through that graph must author
+AppApplication/AppComponent/AppEndpoint/AppDependency directly instead.
+
+### Feat
+
+- simplify VRF namespaces to 4 fixed globals, automate inter-topology interconnects (#159)
+- automate ZTNA access profiles and DC-fabric security zones (#155)
+- **application**: simplify application graph, remove DeploymentRequest duplicate schema (#153)
+
+### Fix
+
+- **evpn**: EVPN correctness, segment-anchored security, AppComponent model, generator ownership, DCI from circuits (#160)
+- **generators**: publish private_access endpoints via private_access_service
+- **colocation**: drop uncablable service entries and dedup border-service device creation (#152)
+
+### Refactor
+
+- **generator**: split AppApplicationGenerator into domain mixins (#157)
+
 ## v0.4.0 (2026-09-24)
 
 ### Feat
