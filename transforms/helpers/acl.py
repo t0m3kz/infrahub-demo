@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from transforms.helpers.policy import active_rules, enabled_policies, inbound_permits
+from transforms.helpers.policy import active_rules, enabled_policies, inbound_permits, rule_zone
 from transforms.helpers.segments import _get_segment_prefix_str
 
 _PROTO_MAP = {"any": "ip", "tcp": "tcp", "udp": "udp", "icmp": "icmp"}
@@ -32,8 +32,8 @@ def _build_acl_rule(rule: dict[str, Any]) -> dict[str, Any]:
     dst = dst_prefix or "any"
 
     # Zone fields — for zone-aware platforms or remark/comment rendering
-    src_zone = (rule.get("source_zone") or {}).get("name") or None
-    dst_zone = (rule.get("destination_zone") or {}).get("name") or None
+    src_zone = rule_zone(rule, "source")
+    dst_zone = rule_zone(rule, "destination")
 
     # Customer/environment identity — per-rule, not just per-ACL, since a
     # single policy can mix rules from different customers' segments on the
@@ -122,8 +122,8 @@ def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, 
        implicit deny drops B's answers to A. They are read from the segment
        itself, so they don't depend on A being on the same leaf.
 
-    3. **Zone support**: source_zone / destination_zone names are passed through as
-       ``src_zone`` / ``dst_zone`` fields for templates to render as remarks/comments
+    3. **Zone support**: the source/destination segments' security_zone names are passed
+       through as ``src_zone`` / ``dst_zone`` fields for templates to render as remarks/comments
        or to drive zone-aware platform ACL APIs.
 
     4. **Customer/environment attribution**: each rule also carries

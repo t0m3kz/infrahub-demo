@@ -429,10 +429,11 @@ def _rule(
         "log": log,
         "disabled": disabled,
     }
+    # A rule's zone is its segment's security_zone.
     if src_zone is not None:
-        rule["source_zone"] = {"name": src_zone}
+        rule["source_segment"] = {**(rule["source_segment"] or {}), "security_zone": {"name": src_zone}}
     if dst_zone is not None:
-        rule["destination_zone"] = {"name": dst_zone}
+        rule["destination_segment"] = {**(rule["destination_segment"] or {}), "security_zone": {"name": dst_zone}}
     return rule
 
 
@@ -725,7 +726,7 @@ class TestGetAclsReturnRules:
 
 class TestGetAclsZoneSupport:
     def test_zone_fields_passed_through(self) -> None:
-        """src_zone / dst_zone appear in each rule dict when set on the schema rule."""
+        """src_zone / dst_zone come from the rule segments' security_zone."""
         rule = _rule(index=10, src_zone="dmz", dst_zone="internal")
         acts = [_make_acl_activation(vlan_id=100, security_policies=[_policy(rules=[rule])])]
         r = get_acls(activations=acts)[0]["rules"][0]
@@ -733,7 +734,7 @@ class TestGetAclsZoneSupport:
         assert r["dst_zone"] == "internal"
 
     def test_zone_fields_none_when_absent(self) -> None:
-        """Rules without zone references have src_zone=None, dst_zone=None."""
+        """Rules whose segments carry no zone have src_zone=None, dst_zone=None."""
         acts = [_make_acl_activation(vlan_id=100, security_policies=[_policy(rules=[_rule()])])]
         r = get_acls(activations=acts)[0]["rules"][0]
         assert r["src_zone"] is None

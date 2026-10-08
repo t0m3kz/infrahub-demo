@@ -9,7 +9,7 @@ from utils.ports import PortSpec
 
 from .helpers.rules import RulesPlanner
 from .named_objects import GetOrCreateByNameMixin
-from .protocols import SecurityPolicy, SecurityPolicyRule, SecuritySecurityProfile, SecurityTagRule, SecurityZone
+from .protocols import SecurityPolicy, SecurityPolicyRule, SecuritySecurityProfile, SecurityTagRule
 
 if TYPE_CHECKING:
     import logging
@@ -55,7 +55,7 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
     """On-prem segment-to-segment dependency rules — the SecurityPolicy/
     SecurityPolicyRule path dispatched from _reconcile_application_rules for
     every AppDependency edge that isn't cloud-side (CloudSecurityRuleMixin)
-    or external (target_fqdn, ZtnaMixin's egress path). Also owns macro-zone/threat-profile lookups and the SecurityTagRule
+    or external (target_fqdn, ZtnaMixin's egress path). Also owns threat-profile lookups and the SecurityTagRule
     micro-segmentation mirror. The return leg of a rule is not a rule of its
     own: the destination segment's leaf ACL builds it from inbound_rules
     (transforms/helpers/acl.py).
@@ -150,16 +150,6 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
             port_end=port_end,
             cross_zone=cross_zone,
         )
-
-        if src_zone:
-            src_zone_obj = await self._get_zone(src_zone)
-            if src_zone_obj:
-                rule_data["source_zone"] = {"id": src_zone_obj.id}
-
-        if dst_zone:
-            dst_zone_obj = await self._get_zone(dst_zone)
-            if dst_zone_obj:
-                rule_data["destination_zone"] = {"id": dst_zone_obj.id}
 
         profile_name = planner.pick_profile_name(app_security_profile, cross_zone)
         if profile_name:
@@ -286,9 +276,6 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
                 cache[name] = None
             setattr(self, cache_attr, cache)
         return cache[name]
-
-    async def _get_zone(self, zone_name: str) -> Any | None:
-        return await self._cached_lookup_by_name(cache_attr="_zone_cache", kind=SecurityZone, name=zone_name)
 
     async def _get_profile(self, profile_name: str) -> Any | None:
         return await self._cached_lookup_by_name(

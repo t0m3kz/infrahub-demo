@@ -81,6 +81,9 @@ fragment SegmentSecurityPolicyFields on ManagedNetworkSegment {
     }
   }
   ... on ManagedVlanSegment {
+    inline_service {
+      node { id name { value } }
+    }
     customer_deployment {
       node { id }
     }
@@ -131,11 +134,10 @@ fragment SegmentSecurityPolicyFields on ManagedNetworkSegment {
               log { value }
               disabled { value }
               security_profile { node { name { value } } }
-              source_zone { node { name { value } } }
-              destination_zone { node { name { value } } }
               source_segment {
                 node {
                   id
+                  security_zone { node { name { value } } }
                   ... on ManagedVlanSegment {
                     name { value }
                     customer_name { value }
@@ -153,6 +155,7 @@ fragment SegmentSecurityPolicyFields on ManagedNetworkSegment {
               destination_segment {
                 node {
                   id
+                  security_zone { node { name { value } } }
                   ... on ManagedVlanSegment {
                     name { value }
                     customer_name { value }
@@ -221,6 +224,7 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
     description { value }
     status { value }
     vlan_id { value }
+    terminate_inline { value }
     customer_name { value }
     environment { value }
     gateway {
@@ -251,6 +255,7 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
     environment { value }
     arp_suppression { value }
     stretch_scope { value }
+    terminate_inline { value }
     # deployment.evpn_rt_as: a stretched segment's route-target must be the
     # same at every site it spans, so its admin field is anchored on the
     # lowest evpn_rt_as across all of them (transforms/helpers/vxlan.py).
@@ -321,6 +326,8 @@ fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
             ... on ManagedVlanSegment {
               customer_name { value }
               environment { value }
+              # terminate_inline: routed by its HA pair, so no border-leaf PBR.
+              terminate_inline { value }
               security_tag { node { name { value } group_id { value } } }
               gateway { node { ip_prefix { node { prefix { value } } } } }
               customer_deployment { node { id } }
@@ -356,6 +363,9 @@ fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
               customer_name { value }
               environment { value }
               arp_suppression { value }
+              # terminate_inline: no border-leaf PBR, and a BGW stays pure L2
+              # for it (no SVI / VRF; transforms/helpers/segments.py).
+              terminate_inline { value }
               # EVPN Multi-Site border gateways carry every stretched segment
               # of their site without a customer-facing port, so they need the
               # local VLAN (own vlan_domain) and the cross-site RT anchor here.

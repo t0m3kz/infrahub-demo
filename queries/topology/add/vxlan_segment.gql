@@ -8,20 +8,19 @@ query vxlan_segment_data($name: String!) {
         stretch_scope { value }
         arp_suppression { value }
         terminate_inline { value }
+        # terminate_inline: the HA pair members' ports cabled to border-leaf
+        # service ports are where the segment terminates (generators/topology/segment.py).
         inline_service {
           node {
             id
             name { value }
-            ... on ManagedHA {
-              inline_vlan_id { value }
-              inline_vlan_pool { node { id } }
-            }
             ... on ManagedGenericDevice {
               capabilities {
                 edges {
                   node {
                     id
                     __typename
+                    name { value }
                   }
                 }
               }
@@ -63,7 +62,13 @@ query vxlan_segment_data($name: String!) {
             }
           }
         }
-        gateway { node { id address { value } } }
+        gateway {
+          node {
+            id
+            address { value }
+            ip_prefix { node { id prefix { value } ip_namespace { node { id } } } }
+          }
+        }
       }
     }
   }

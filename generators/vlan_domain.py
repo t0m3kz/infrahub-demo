@@ -32,6 +32,7 @@ from typing import Any
 
 from utils.data_cleaning import clean_data
 
+from .connections import BORDER_ROLE_FOR_SERVICES
 from .devices import standalone_vlan_domain_name
 from .logger import GeneratorError
 from .protocols import DcimPhysicalDevice, ManagedStandaloneVlanDomain, ManagedVlanDomainSegment
@@ -44,8 +45,11 @@ from .protocols import DcimPhysicalDevice, ManagedStandaloneVlanDomain, ManagedV
 BORDER_GATEWAY_ROLES = frozenset({"border-leaf", "edge"})
 # Interface kinds whose segment tag puts the device's VLAN domain in scope. A
 # DcimVirtualInterface carrying the segment is an inline sub-interface on a
-# firewall/LB HA pair, which has its own inline VLAN ID, not a VLAN domain.
+# firewall/LB HA pair, which takes the facing border leaf's VLAN instead.
 TAGGABLE_INTERFACE_KINDS = frozenset({"DcimPhysicalInterface", "DcimLAGInterface"})
+# Border-leaf ports facing a firewall/load-balancer: tagged with a segment
+# only by its inline termination (segment.py), never by its AppComponents.
+SERVICE_PORT_ROLES = frozenset(BORDER_ROLE_FOR_SERVICES.values())
 
 _SEGMENT_VLAN_DOMAINS_QUERY_PATH = Path(__file__).resolve().parents[1] / "queries/topology/add/segment_vlan_domains.gql"
 
@@ -201,12 +205,16 @@ class VlanDomainMixin:
         return {"segment": segments[0], "activations": activations}
 
     @staticmethod
-    def tagged_interface_ids(segment: dict[str, Any]) -> set[str]:
-        """Ids of the switch ports (physical or port-channel) carrying the segment."""
+    def tagged_interface_ids(segment: dict[str, Any], *, service_ports: bool = False) -> set[str]:
+        """Ids of the switch ports (physical or port-channel) carrying the
+        segment: its customer-facing ports, or with service_ports the
+        border-leaf ports facing its inline-terminating HA pair."""
         return {
             iface["id"]
             for iface in segment.get("interface_capabilities") or []
-            if iface.get("typename") in TAGGABLE_INTERFACE_KINDS and iface.get("id")
+            if iface.get("typename") in TAGGABLE_INTERFACE_KINDS
+            and iface.get("id")
+            and (iface.get("role") in SERVICE_PORT_ROLES) == service_ports
         }
 
     async def _segment_vlan_devices(self, segment: dict[str, Any]) -> list[Any]:

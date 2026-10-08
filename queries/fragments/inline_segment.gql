@@ -1,0 +1,31 @@
+# The interfaces carrying a segment, with their device and own address —
+# on an HA pair terminating the segment inline, the secondary member's
+# address is the ASA `standby` address (transforms/helpers/ha.py).
+fragment InlineSegmentMemberFields on ManagedGenericInterfaces {
+  interface_capabilities {
+    edges {
+      node {
+        device { node { name { value } } }
+        ... on DcimVirtualInterface { ip_address { node { address { value } } } }
+      }
+    }
+  }
+}
+
+# Everything a firewall/LB/proxy HA member needs to render a segment its pair
+# terminates inline: the flag, the terminating pair, the gateway (the pair's
+# virtual IP) and the members' own addresses.
+fragment InlineTerminationFields on ManagedNetworkSegment {
+  ... on ManagedVxlanSegment {
+    terminate_inline { value }
+    inline_service { node { name { value } } }
+    gateway { node { address { value } } }
+    ...InlineSegmentMemberFields
+  }
+  ... on ManagedVlanSegment {
+    terminate_inline { value }
+    inline_service { node { name { value } } }
+    gateway { node { address { value } } }
+    ...InlineSegmentMemberFields
+  }
+}

@@ -413,7 +413,6 @@ class TestMicrosegmentedRuleHasNoReturnRule:
         gen._find_rule_by_name = AsyncMock(return_value=existing_rule)
         gen._create_or_update_policy_rule = AsyncMock(return_value=(MagicMock(), 100))
         gen._reconcile_tag_rule_from_segments = AsyncMock()
-        gen._get_zone = AsyncMock(return_value=None)
         gen._get_profile = AsyncMock(return_value=None)
         planner = MagicMock(wraps=RulesPlanner())
         planner.zone_context = MagicMock(return_value=("PROD-ZONE", "PROD-ZONE", False))

@@ -74,4 +74,8 @@ logconfig
 ! Peers: {{ ha.devices | join(', ') }}
 ! Note: WSA HA is managed via Cisco Centralized Management (SMA). Failover is
 ! handled at the network layer (WCCP or PBR) — not natively on the appliance.
+{%- for iface in proxy_interfaces if iface.virtual_ip %}
+! {{ iface.name }}: segment gateway {{ iface.virtual_ip }} cannot float between WSA
+! appliances — terminate this segment on a firewall or load balancer instead.
+{%- endfor %}
 {%- endif %}

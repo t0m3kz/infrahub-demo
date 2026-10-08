@@ -8,7 +8,7 @@ from transforms.helpers.firewall import (
     get_zone_policies,
     place_policies_in_contexts,
 )
-from transforms.helpers.ha import get_ha
+from transforms.helpers.ha import get_ha, inline_addresses
 from transforms.helpers.policy import merge_policies
 from transforms.helpers.segments import segment_vlan_ids
 
@@ -16,12 +16,15 @@ from transforms.helpers.segments import segment_vlan_ids
 def _build_fw_interfaces(
     interfaces: list[dict[str, Any]],
     activations: list[dict[str, Any]],
+    ha: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Build firewall interface list enriched with security_zone from segment activations.
 
     The firewall has physical interfaces and virtual (sub-)interfaces.  Zone assignment
-    now lives on the segment, not the interface.  For each interface we look up the
-    segment deployed on it (via activations) and attach its security_zone.
+    lives on the segment, not the interface.  For each interface we look up the
+    segment deployed on it (via activations, by segment id) and attach its security_zone.
+    On an HA pair terminating that segment inline, virtual_ip/standby_ip are the
+    pair's addresses on it (see transforms.helpers.ha.inline_addresses).
 
     Only interfaces that have an ip_address are included — transit/management
     interfaces without an IP are skipped for zone rendering purposes.
@@ -29,8 +32,8 @@ def _build_fw_interfaces(
     seg_zone: dict[str, dict] = {}
     for act in activations:
         seg = act.get("segment") or {}
-        if seg.get("name") and seg.get("security_zone"):
-            seg_zone[seg["name"]] = seg["security_zone"]
+        if seg.get("id") and seg.get("security_zone"):
+            seg_zone[seg["id"]] = seg["security_zone"]
     seg_vlan = segment_vlan_ids(activations)
 
     fw_ifaces: list[dict[str, Any]] = []
@@ -41,14 +44,12 @@ def _build_fw_interfaces(
 
         zone: dict | None = None
         vlan_id: int | None = None
-        for cap in iface.get("interface_capabilities") or []:
-            cap_name = cap.get("name")
-            if not cap_name:
-                continue
-            if cap_name in seg_zone and zone is None:
-                zone = seg_zone[cap_name]
-            if cap_name in seg_vlan and vlan_id is None:
-                vlan_id = seg_vlan[cap_name]
+        capabilities = iface.get("interface_capabilities") or []
+        for cap in capabilities:
+            if cap.get("id") in seg_zone and zone is None:
+                zone = seg_zone[cap["id"]]
+            if cap.get("name") in seg_vlan and vlan_id is None:
+                vlan_id = seg_vlan[cap["name"]]
 
         fw_ifaces.append(
             {
@@ -59,6 +60,7 @@ def _build_fw_interfaces(
                 "parent_interface": iface.get("parent_interface"),
                 "ip_address": ip_obj,
                 "security_zone": zone,
+                **inline_addresses(capabilities, ha),
             }
         )
     return fw_ifaces
@@ -91,7 +93,8 @@ class Firewall(BaseDeviceTransform):
 
         activations = self._collect_activations_from_interfaces(device.get("interfaces") or [])
 
-        fw_interfaces = _build_fw_interfaces(device.get("interfaces") or [], activations)
+        ha = get_ha(device.get("capabilities"), device.get("interfaces"), device.get("name"))
+        fw_interfaces = _build_fw_interfaces(device.get("interfaces") or [], activations, ha)
         all_policies_data = merge_policies(roots.get("SecurityPolicy"), _collect_segment_policies(activations))
 
         # Each rule lands in the context (VDOM/vsys) its segments' traffic is
@@ -111,7 +114,7 @@ class Firewall(BaseDeviceTransform):
                 "zones": zones,
                 "zone_policies": get_zone_policies(root_policies_data),
                 "static_routes": get_firewall_static_routes(fw_interfaces, zones),
-                "ha": get_ha(device.get("capabilities"), device.get("interfaces")),
+                "ha": ha,
                 "contexts": contexts,
             }
         )

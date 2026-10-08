@@ -324,8 +324,6 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
                                         "disabled": {"value": False},
                                         "apply_on_switch": {"value": False},
                                         "description": {"value": "HTTPS"},
-                                        "source_zone": {"node": None},
-                                        "destination_zone": {"node": None},
                                         "source_segment": {"node": None},
                                         "destination_segment": {"node": None},
                                         "security_profile": {"node": None},
@@ -432,8 +430,6 @@ def _make_destination_prefix_policy_data(platform: str) -> dict[str, Any]:
         "disabled": {"value": False},
         "apply_on_switch": {"value": False},
         "description": {"value": "Nordix web/app tier to AWS transit hub"},
-        "source_zone": {"node": None},
-        "destination_zone": {"node": None},
         "source_segment": {"node": None},
         "destination_segment": {"node": None},
         "source_prefixes": {"edges": []},
@@ -471,8 +467,6 @@ def _make_protocol_port_policy_data(
         "disabled": {"value": False},
         "apply_on_switch": {"value": False},
         "description": {"value": ""},
-        "source_zone": {"node": None},
-        "destination_zone": {"node": None},
         "source_segment": {"node": None},
         "destination_segment": {"node": None},
         "source_prefixes": {"edges": []},
@@ -609,11 +603,13 @@ class TestFirewallTransformSmoke:
     async def test_destination_prefix_rule_renders_cidr_all_platforms(self, platform: str) -> None:
         """Same coverage as the PAN-OS-specific test above, across every
         vendor template — each renders the CIDR as a literal destination
-        match rather than silently falling back to 'any'/'Any'."""
+        match rather than silently falling back to 'any'/'Any'. ASA takes
+        an IPv4 network as "address netmask"."""
         fw = _make_fw()
         data = _make_destination_prefix_policy_data(platform)
         result = await fw.transform(data)
-        assert "10.40.0.0/16" in result
+        expected = "10.40.0.0 255.255.0.0" if platform == "cisco_asa" else "10.40.0.0/16"
+        assert expected in result
 
     @pytest.mark.asyncio
     async def test_single_port_renders_service_object_on_paloalto(self) -> None:
@@ -754,8 +750,6 @@ class TestFirewallTransformSmoke:
             "disabled": {"value": False},
             "apply_on_switch": {"value": False},
             "description": {"value": ""},
-            "source_zone": {"node": None},
-            "destination_zone": {"node": None},
             "source_segment": {"node": None},
             "destination_segment": {"node": None},
             "source_prefixes": {"edges": []},
@@ -1011,7 +1005,10 @@ class TestPerContextPolicyRendering:
 
     def test_asa_binds_the_context_acl_to_its_customer_pbr_interface(self) -> None:
         out = _render_template("cisco_asa", name="fw1", contexts=[_policy_context()])
-        assert "access-list customer-pbr-in extended permit tcp 10.5.1.0/24 10.5.2.0/24 eq 8443" in out
+        assert (
+            "access-list customer-pbr-in extended permit tcp 10.5.1.0 255.255.255.0 10.5.2.0 255.255.255.0 eq 8443"
+            in out
+        )
         assert "access-group customer-pbr-in in interface customer-pbr" in out
 
     def test_asa_skips_the_access_group_without_a_context_interface(self) -> None:

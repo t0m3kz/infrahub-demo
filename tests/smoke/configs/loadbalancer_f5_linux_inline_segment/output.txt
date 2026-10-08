@@ -1,0 +1,86 @@
+sys global-settings {
+    hostname DC3-LB-01
+    gui-setup disabled
+    mgmt-dhcp disabled
+}
+sys ntp {
+    timezone UTC
+}
+sys dns {
+    name-servers { 8.8.8.8 8.8.4.4 }
+}
+sys snmp {
+    agent-addresses { udp:161 }
+    communities {
+        public {
+            access ro
+            source default
+        }
+    }
+}
+#
+#
+# --- Self IPs ---
+net self mgmt_self {
+    address 192.168.2.1/24
+    allow-service default
+    traffic-group traffic-group-local-only
+    vlan mgmt
+}
+# mgmt: OOB management
+net self eth2.220_self {
+    address 10.3.0.2/24
+    allow-service default
+    traffic-group traffic-group-local-only
+    vlan eth2.220
+}
+# eth2.220: Inline web segment
+#
+# --- Health Monitors ---
+ltm monitor http http_monitor {
+    defaults-from http
+    interval 30
+    timeout 91
+    send "GET /health HTTP/1.1\r\nHost: \r\nConnection: Close\r\n\r\n"
+    recv "200 OK"
+}
+ltm monitor tcp tcp_monitor {
+    defaults-from tcp
+    interval 30
+    timeout 91
+}
+#
+# --- Device Service Clustering (DSC) ---
+cm device DC3-LB-01 {
+    configsync-ip 192.168.2.1
+    mirror-ip 192.168.2.1
+    unicast-address {
+        {
+            ip 192.168.2.1
+            port 1026
+        }
+    }
+}
+cm trust-domain Root {
+    ca-devices { /Common/DC3-LB-01 }
+    name Root
+}
+cm device-group DC3-LB-01_dg {
+    auto-sync enabled
+    network-failover enabled
+    type sync-failover
+    devices {
+        /Common/DC3-LB-01 { }
+        /Common/DC3-LB-02 { }
+    }
+}
+cm traffic-group traffic-group-1 {
+    ha-order { DC3-LB-01 DC3-LB-02 }
+}
+net self eth2.220_float {
+    address 10.3.0.1/24
+    allow-service default
+    traffic-group traffic-group-1
+    vlan eth2.220
+}
+#

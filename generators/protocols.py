@@ -188,11 +188,9 @@ class DcimGenericSFP(CoreNode):
 
 class ManagedHA(CoreNode):
     group_id: IntegerOptional
-    inline_vlan_id: IntegerOptional
     mode: Dropdown
     preempt: Boolean
     priority: Integer
-    inline_vlan_pool: RelationshipAttribute[CoreNumberPool]
 
 
 class ManagedInlineService(CoreNode):
@@ -243,6 +241,7 @@ class ManagedNetworkSegment(CoreNode):
     status: Dropdown
     gateway: RelationshipAttribute[IpamIPAddress]
     inbound_rules: RelationshipManager[SecurityPolicyRule]
+    outbound_rules: RelationshipManager[SecurityPolicyRule]
     owner: RelationshipAttribute[OrganizationCustomer]
 
 
@@ -1055,13 +1054,11 @@ class SecurityPolicyRule(CoreNode):
     destination_ip_addresses: RelationshipManager[IpamIPAddress]
     destination_prefixes: RelationshipManager[IpamPrefix]
     destination_segment: RelationshipAttribute[ManagedNetworkSegment]
-    destination_zone: RelationshipAttribute[SecurityZone]
     policy: RelationshipAttribute[SecurityPolicy]
     security_profile: RelationshipAttribute[SecuritySecurityProfile]
     source_ip_addresses: RelationshipManager[IpamIPAddress]
     source_prefixes: RelationshipManager[IpamPrefix]
     source_segment: RelationshipAttribute[ManagedNetworkSegment]
-    source_zone: RelationshipAttribute[SecurityZone]
 
 
 class LoadbalancerPoolInterface(ManagedGeneric, ManagedGenericInterfaces):
@@ -1403,8 +1400,10 @@ class CloudVirtualNetwork(CloudResource):
 
 class ManagedVlanSegment(ManagedGeneric, ManagedNetworkSegment, ManagedGenericInterfaces):
     segment_type: Dropdown
+    terminate_inline: Boolean
     vlan_id: IntegerOptional
     customer_deployment: RelationshipAttribute[TopologyCustomer]
+    inline_service: RelationshipAttribute[ManagedGeneric]
 
 
 class ManagedVxlanSegment(ManagedGeneric, ManagedNetworkSegment, ManagedGenericInterfaces):
@@ -1412,6 +1411,7 @@ class ManagedVxlanSegment(ManagedGeneric, ManagedNetworkSegment, ManagedGenericI
     segment_type: Dropdown
     terminate_inline: Boolean
     customer_deployments: RelationshipManager[TopologyCustomer]
+    inline_service: RelationshipAttribute[ManagedGeneric]
 
 
 class SecurityZone(CoreNode):
@@ -1420,5 +1420,3 @@ class SecurityZone(CoreNode):
     trust_level: Integer
     zone_type: Dropdown
     network_segments: RelationshipManager[ManagedNetworkSegment]
-    rules_as_dest: RelationshipManager[SecurityPolicyRule]
-    rules_as_source: RelationshipManager[SecurityPolicyRule]

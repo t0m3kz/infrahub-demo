@@ -28,6 +28,7 @@ from transforms.config.edge import Edge
 from transforms.config.firewall import Firewall
 from transforms.config.l2_leaf import L2Leaf
 from transforms.config.leaf import Leaf
+from transforms.config.loadbalancer import LoadBalancer
 from transforms.config.proxy import Proxy
 from transforms.config.spine import Spine
 from transforms.config.super_spine import SuperSpine
@@ -885,6 +886,66 @@ def build_device_data(
     return {"DcimDevice": _edges([device_node])}
 
 
+# terminate_inline segment: gatewayed by a firewall HA pair (its gateway is
+# the pair's VIP), so every fabric switch carries it as pure L2 — VLAN + L2
+# VNI, no SVI / VRF / L3 VNI. The gateway still sits in VRF_A with an L3 VNI
+# so the fixtures prove the fabric drops both.
+_INLINE_SEGMENT_KWARGS: dict[str, Any] = {
+    "vlan_id": 150,
+    "vni": 10150,
+    "seg_name": "seg-inline-150",
+    "seg_type": "ManagedVxlanSegment",
+    "gateway_ip": "10.150.0.1/24",
+    "ns_name": "VRF_A",
+    "l3_vni": 50001,
+}
+
+
+def _make_inline_segment_node(vlan_domain_id: str) -> dict:
+    """The terminate_inline VXLAN segment, with this device's vlan_domain_segments row."""
+    seg = _make_segment_node(**_INLINE_SEGMENT_KWARGS, vlan_domain_id=vlan_domain_id)
+    seg["terminate_inline"] = _v(True)
+    seg["inline_service"] = _node({"id": "fw-ha-dc1", "name": _v("dc1-fw-ha")})
+    return seg
+
+
+def build_inline_segment_data(*, device_name: str, role: str, platform: str) -> dict:
+    """A leaf or border-leaf carrying one terminate_inline segment.
+
+    leaf: the segment is on the customer port (Ethernet10, access) — VLAN +
+    L2 VNI, no SVI. border-leaf: the segment is on a firewall-role service
+    port (Ethernet20) facing an HA member, which the generator tags with it —
+    rendered as a tagged trunk. Either way the segment is in the device's own
+    VLAN domain (its device id: build_device_data builds no ManagedMLAG).
+    """
+    data = build_device_data(
+        device_name=device_name, role=role, platform=platform, scenario="ebgp_ibgp", include_segments=False
+    )
+    device_node = data["DcimDevice"]["edges"][0]["node"]
+    seg = _make_inline_segment_node(vlan_domain_id=device_node["id"])
+    interfaces = device_node["interfaces"]["edges"]
+    if role == "border-leaf":
+        interfaces.append(
+            {
+                "node": _make_interface(
+                    name="Ethernet20",
+                    device_name=device_name,
+                    description="to dc1-fw-01",
+                    role="firewall",
+                    segments=[seg],
+                )
+            }
+        )
+    else:
+        customer_port = next(e["node"] for e in interfaces if e["node"]["name"]["value"] == "Ethernet10")
+        customer_port["interface_capabilities"] = _edges([seg])
+    # DC-wide view (border-leaf PBR / BGW): the same segment, still no PBR.
+    device_node["deployment"]["node"]["segment_deployments"] = _edges(
+        [{"vni": _v(_INLINE_SEGMENT_KWARGS["vni"]), "status": _v("active"), "segment": _node(seg)}]
+    )
+    return data
+
+
 def _make_firewall_interface(
     *,
     name: str,
@@ -975,7 +1036,18 @@ def _make_zone(
     }
 
 
-def _make_zone_rule(
+def _make_rule_segment(*, cidr: str, zone_name: str) -> dict:
+    """A rule's source/destination segment, carrying the zone the rule matches on."""
+    return {
+        "id": f"seg-{cidr.replace('/', '-').replace('.', '-')}",
+        "__typename": "ManagedVlanSegment",
+        "name": _v(f"seg-{cidr.replace('/', '-').replace('.', '-')}"),
+        "security_zone": _node({"name": _v(zone_name)}),
+        "gateway": _node({"ip_prefix": _node({"prefix": _v(cidr)})}),
+    }
+
+
+def _make_segment_rule(
     *,
     index: int,
     name: str,
@@ -983,8 +1055,8 @@ def _make_zone_rule(
     protocol: str = "tcp",
     port_start: int | None = None,
     port_end: int | None = None,
-    src_zone: str | None = None,
-    dst_zone: str | None = None,
+    src_segment: dict | None = None,
+    dst_segment: dict | None = None,
     log: bool = False,
     description: str = "",
     security_profile: str | None = None,
@@ -999,10 +1071,8 @@ def _make_zone_rule(
         "log": _v(log),
         "disabled": _v(False),
         "description": _v(description),
-        "source_zone": _node({"name": _v(src_zone)} if src_zone else None),
-        "destination_zone": _node({"name": _v(dst_zone)} if dst_zone else None),
-        "source_segment": _node(None),
-        "destination_segment": _node(None),
+        "source_segment": _node(src_segment),
+        "destination_segment": _node(dst_segment),
         "security_profile": _node({"name": _v(security_profile)} if security_profile else None),
     }
 
@@ -1013,7 +1083,7 @@ def build_firewall_data(*, device_name: str, platform: str) -> dict:
     Includes:
       - DcimPhysicalDevice with DcimFirewallInterface nodes (one per zone)
       - SecurityZone nodes with member segment CIDRs
-      - SecurityPolicy nodes with zone-based rules
+      - SecurityPolicy nodes with segment-based rules (zone derived from the segment)
     """
     # Sub-interfaces on trunk uplink (ethernet1/1) — one /30 per zone/namespace.
     # Leaf IP is .2, FW IP is .1 in each /30.
@@ -1101,6 +1171,8 @@ def build_firewall_data(*, device_name: str, platform: str) -> dict:
         ),
     ]
 
+    dmz_segment = _make_rule_segment(cidr="10.0.2.0/24", zone_name="dmz")
+    internal_segment = _make_rule_segment(cidr="10.0.1.0/24", zone_name="internal")
     policies = [
         {
             "name": _v("dmz-to-internal"),
@@ -1108,24 +1180,24 @@ def build_firewall_data(*, device_name: str, platform: str) -> dict:
             "default_action": _v("deny"),
             "rules": _edges(
                 [
-                    _make_zone_rule(
+                    _make_segment_rule(
                         index=10,
                         name="allow-https",
                         protocol="tcp",
                         port_start=443,
-                        src_zone="dmz",
-                        dst_zone="internal",
+                        src_segment=dmz_segment,
+                        dst_segment=internal_segment,
                         log=True,
                         description="Allow HTTPS from DMZ to Internal",
                         security_profile="strict-av",
                     ),
-                    _make_zone_rule(
+                    _make_segment_rule(
                         index=20,
                         name="allow-ssh",
                         protocol="tcp",
                         port_start=22,
-                        src_zone="dmz",
-                        dst_zone="internal",
+                        src_segment=dmz_segment,
+                        dst_segment=internal_segment,
                         log=True,
                         description="Allow SSH from DMZ to Internal",
                     ),
@@ -1138,12 +1210,12 @@ def build_firewall_data(*, device_name: str, platform: str) -> dict:
             "default_action": _v("deny"),
             "rules": _edges(
                 [
-                    _make_zone_rule(
+                    _make_segment_rule(
                         index=10,
                         name="allow-any",
                         protocol="any",
-                        src_zone="internal",
-                        dst_zone="dmz",
+                        src_segment=internal_segment,
+                        dst_segment=dmz_segment,
                         log=False,
                         description="Allow all from Internal to DMZ",
                     ),
@@ -1175,7 +1247,6 @@ def build_firewall_ha_data(*, device_name: str, platform: str) -> dict:
         "priority": _v(100),
         "preempt": _v(False),
         "ha_timer": _v("aggressive"),
-        "virtual_ip": _v("10.0.0.254"),
         "capabilities": _edges(
             [
                 {"name": _v("dc1-fw-01")},
@@ -1184,10 +1255,57 @@ def build_firewall_ha_data(*, device_name: str, platform: str) -> dict:
         ),
     }
 
-    # Inject the HA capability into the device node
+    # Inject the HA capability and the HA sync port into the device node
     devices_edges = data["DcimPhysicalDevice"]["edges"]
     devices_edges[0]["node"]["capabilities"] = _edges([ha_cap])
+    devices_edges[0]["node"]["interfaces"]["edges"].append(
+        {
+            "node": {
+                "__typename": "DcimPhysicalInterface",
+                "name": _v("ethernet1/7"),
+                "description": _v("HA sync"),
+                "status": _v("active"),
+                "role": _v("ha"),
+                "ip_address": _node(None),
+                "interface_capabilities": _edges([]),
+            }
+        }
+    )
 
+    return data
+
+
+def build_firewall_inline_data(*, device_name: str, platform: str) -> dict:
+    """Firewall HA pair (device = primary member) terminating a segment inline.
+
+    Adds ethernet1/1.210 carrying a terminate_inline VXLAN segment whose
+    inline_service is this HA pair: the member's own address is 10.1.0.2/24,
+    the secondary's 10.1.0.3/24, and the segment gateway 10.1.0.1/24 is the
+    pair's virtual IP.
+    """
+    data = build_firewall_ha_data(device_name=device_name, platform=platform)
+    inline_iface = _make_firewall_interface(
+        name="ethernet1/1.210",
+        ip_address="10.1.0.1/24",
+        zone_name="web",
+        trust_level=60,
+        zone_type="dmz",
+        description="Inline web segment",
+        vlan_id=210,
+        parent_interface_name="ethernet1/1",
+        namespace_name="PROD",
+    )
+    inline_iface["ip_address"] = _node({"address": _v("10.1.0.2/24"), "ip_namespace": _node({"name": _v("PROD")})})
+    segment = inline_iface["interface_capabilities"]["edges"][0]["node"]
+    segment["terminate_inline"] = _v(True)
+    segment["inline_service"] = _node({"id": "ha-1", "name": _v("dc1-fw-ha")})
+    segment["interface_capabilities"] = _edges(
+        [
+            {"device": _node({"name": _v("dc1-fw-01")}), "ip_address": _node({"address": _v("10.1.0.2/24")})},
+            {"device": _node({"name": _v("dc1-fw-02")}), "ip_address": _node({"address": _v("10.1.0.3/24")})},
+        ]
+    )
+    data["DcimPhysicalDevice"]["edges"][0]["node"]["interfaces"]["edges"].append({"node": inline_iface})
     return data
 
 
@@ -1477,6 +1595,108 @@ def build_proxy_data(
     return {"DcimPhysicalDevice": _edges([device_node])}
 
 
+def _inline_segment_cap(*, ha_name: str, gateway: str, members: dict[str, str]) -> dict:
+    """A terminate_inline segment capability gatewayed by the HA pair ``ha_name``;
+    ``members`` maps each member device to its own address on the segment."""
+    return {
+        "__typename": "ManagedVxlanSegment",
+        "id": "seg-inline",
+        "name": _v("c001-web-p"),
+        "terminate_inline": _v(True),
+        "inline_service": _node({"name": _v(ha_name)}),
+        "gateway": _node({"address": _v(gateway)}),
+        "interface_capabilities": _edges(
+            [
+                {"device": _node({"name": _v(device)}), "ip_address": _node({"address": _v(address)})}
+                for device, address in members.items()
+            ]
+        ),
+    }
+
+
+def _inline_member_interface(*, name: str, address: str, segment: dict) -> dict:
+    """The primary member's <port>.<vlan> sub-interface carrying ``segment``."""
+    return {
+        "__typename": "DcimVirtualInterface",
+        "name": _v(name),
+        "description": _v("Inline web segment"),
+        "status": _v("active"),
+        "role": _v("service"),
+        "ip_address": _node({"address": _v(address)}),
+        "parent_interface": _node({"name": _v(name.split(".")[0])}),
+        "interface_capabilities": _edges([segment]),
+    }
+
+
+def build_proxy_inline_data(*, device_name: str, platform: str) -> dict:
+    """Proxy HA pair (device = primary member) terminating a segment inline on eth1.210."""
+    data = build_proxy_data(device_name=device_name, platform=platform, proxy_type="transparent")
+    segment = _inline_segment_cap(
+        ha_name=f"{device_name}-HA",
+        gateway="10.2.0.1/24",
+        members={device_name: "10.2.0.2/24", device_name.replace("01", "02"): "10.2.0.3/24"},
+    )
+    data["DcimPhysicalDevice"]["edges"][0]["node"]["interfaces"]["edges"].append(
+        {"node": _inline_member_interface(name="eth1.210", address="10.2.0.2/24", segment=segment)}
+    )
+    return data
+
+
+LB_PLATFORMS = ["f5_linux", "haproxy_technologies_linux", "netscaler"]
+
+
+def build_lb_inline_data(*, device_name: str, platform: str) -> dict:
+    """Load-balancer HA pair (device = primary member) terminating a segment
+    inline on eth2.220, next to a management port."""
+    peer_name = device_name.replace("01", "02")
+    ha_cap = {
+        "__typename": "ManagedLoadbalancerHA",
+        "name": _v(f"{device_name}-{peer_name}-ha"),
+        "group_id": _v(2),
+        "mode": _v("active-passive"),
+        "priority": _v(100),
+        "preempt": _v(False),
+        "capabilities": _edges([{"name": _v(device_name)}, {"name": _v(peer_name)}]),
+    }
+    segment = _inline_segment_cap(
+        ha_name=f"{device_name}-{peer_name}-ha",
+        gateway="10.3.0.1/24",
+        members={device_name: "10.3.0.2/24", peer_name: "10.3.0.3/24"},
+    )
+    interfaces = [
+        {
+            "__typename": "DcimPhysicalInterface",
+            "name": _v("mgmt"),
+            "description": _v("OOB management"),
+            "status": _v("active"),
+            "role": _v("management"),
+            "ip_address": _node({"address": _v("192.168.2.1/24")}),
+            "interface_capabilities": _edges([]),
+        },
+        _inline_member_interface(name="eth2.220", address="10.3.0.2/24", segment=segment),
+    ]
+    device_node: dict = {
+        "__typename": "DcimPhysicalDevice",
+        "id": f"dev-{device_name}",
+        "name": _v(device_name),
+        "role": _v("load-balancer"),
+        "platform": _node(
+            {
+                "id": f"plat-{platform}",
+                "name": _v(platform),
+                "netmiko_device_type": _v(platform),
+                "napalm_driver": _v(platform),
+                "ansible_network_os": _v(platform),
+            }
+        ),
+        "primary_address": _node(None),
+        "tags": _edges([]),
+        "capabilities": _edges([ha_cap]),
+        "interfaces": _edges(interfaces),
+    }
+    return {"DcimPhysicalDevice": _edges([device_node])}
+
+
 def run_transform(transform_cls: type, data: dict) -> str:
     mock_client = MagicMock()
     mock_client.clone.return_value = mock_client  # SDK clones client in __init__
@@ -1547,9 +1767,6 @@ def _write_fixture(
     isolation_mode: str | None = None,
     security_fields: bool = False,
 ) -> tuple[int, int]:
-    test_dir = SMOKE_DIR / dir_name
-    test_dir.mkdir(parents=True, exist_ok=True)
-
     data = build_device_data(
         device_name=dev_name,
         role=role,
@@ -1560,6 +1777,13 @@ def _write_fixture(
         isolation_mode=isolation_mode,
         security_fields=security_fields,
     )
+    return _write_data_fixture(transform_cls, dir_name, data)
+
+
+def _write_data_fixture(transform_cls: type, dir_name: str, data: dict) -> tuple[int, int]:
+    """Write `data` as input.json and its rendered config as output.txt."""
+    test_dir = SMOKE_DIR / dir_name
+    test_dir.mkdir(parents=True, exist_ok=True)
 
     input_path = test_dir / "input.json"
     with open(input_path, "w") as f:
@@ -1634,6 +1858,21 @@ def main() -> int:
         generated += g
         errors += e
 
+    # terminate_inline segment: pure L2 on the fabric (no SVI / VRF / L3 VNI);
+    # the border-leaf trunks it tagged towards the HA pair gatewaying it.
+    print("\nGenerating inline-terminated segment fixtures (leaf, border-leaf):")
+    for transform_cls, role, type_prefix in ((Leaf, "leaf", "leaf"), (BorderLeaf, "border-leaf", "border_leaf")):
+        for platform in FABRIC_PLATFORMS:
+            g, e = _write_data_fixture(
+                transform_cls,
+                f"{type_prefix}_{platform}_inline_segment",
+                build_inline_segment_data(
+                    device_name=f"dc1-{type_prefix.replace('_', '-')}-01", role=role, platform=platform
+                ),
+            )
+            generated += g
+            errors += e
+
     # Firewall scenarios: zone-based policy per vendor
     print("\nGenerating firewall fixtures:")
     for platform in FIREWALL_PLATFORMS:
@@ -1685,6 +1924,17 @@ def main() -> int:
         except Exception as e:
             print(f"  ✗ {dir_name}: {e}")
             errors += 1
+
+    # Firewall HA pair terminating a segment inline: virtual IP + standby per vendor
+    print("\nGenerating firewall inline-segment fixtures:")
+    for platform in [*FIREWALL_PLATFORMS, "juniper_junos"]:
+        g, e = _write_data_fixture(
+            Firewall,
+            f"firewall_{platform}_inline_segment",
+            build_firewall_inline_data(device_name="dc1-fw-01", platform=platform),
+        )
+        generated += g
+        errors += e
 
     # Isolation mode: isolated — switchport protected, no intra-segment forwarding
     print("\nGenerating isolated segment fixtures (leaf):")
@@ -1788,6 +2038,25 @@ def main() -> int:
             except Exception as e:
                 print(f"  ✗ {dir_name}: {e}")
                 errors += 1
+
+    # Proxy / load-balancer HA pairs terminating a segment inline: virtual IP per vendor
+    print("\nGenerating proxy and load-balancer inline-segment fixtures:")
+    for platform in PROXY_PLATFORMS:
+        g, e = _write_data_fixture(
+            Proxy,
+            f"proxy_{platform}_inline_segment",
+            build_proxy_inline_data(device_name="DC3-PRX-01", platform=platform),
+        )
+        generated += g
+        errors += e
+    for platform in LB_PLATFORMS:
+        g, e = _write_data_fixture(
+            LoadBalancer,
+            f"loadbalancer_{platform}_inline_segment",
+            build_lb_inline_data(device_name="DC3-LB-01", platform=platform),
+        )
+        generated += g
+        errors += e
 
     print(f"\nDone: {generated} generated, {errors} errors")
     # A fixture that fails to render writes no file, so it leaves no diff for the

@@ -1,0 +1,65 @@
+set system host-name dc1-fw-01
+#
+#
+# --- Interfaces & Zone Assignments ---
+set interfaces ethernet1/1 unit 10 vlan-id 10
+set interfaces ethernet1/1 unit 10 family inet address 10.0.1.1/30
+set interfaces ethernet1/1 unit 10 description "Internal LAN link"
+set security zones security-zone internal interfaces ethernet1/1.10
+set interfaces ethernet1/1 unit 20 vlan-id 20
+set interfaces ethernet1/1 unit 20 family inet address 10.0.2.1/30
+set interfaces ethernet1/1 unit 20 description "DMZ link"
+set security zones security-zone dmz interfaces ethernet1/1.20
+set interfaces ethernet1/1 unit 30 vlan-id 30
+set interfaces ethernet1/1 unit 30 family inet address 10.0.3.1/30
+set interfaces ethernet1/1 unit 30 description "External link"
+set security zones security-zone external interfaces ethernet1/1.30
+set interfaces ethernet1/1 unit 210 vlan-id 210
+set interfaces ethernet1/1 unit 210 family inet address 10.1.0.1/24
+set interfaces ethernet1/1 unit 210 description "Inline web segment"
+set security zones security-zone web interfaces ethernet1/1.210
+#
+#
+# --- Address Books (one per zone) ---
+set security zones security-zone internal address-book address addr-10-0-1-0-24 10.0.1.0/24
+set security zones security-zone internal address-book address addr-10-0-10-0-24 10.0.10.0/24
+set security zones security-zone dmz address-book address addr-10-0-2-0-24 10.0.2.0/24
+#
+#
+# --- Static Routes (return path to leaf per zone) ---
+set routing-instances VRF-DMZ routing-options static route 10.0.2.0/24 next-hop 10.0.2.2
+set routing-instances VRF-INTERNAL routing-options static route 10.0.1.0/24 next-hop 10.0.1.2
+set routing-instances VRF-INTERNAL routing-options static route 10.0.10.0/24 next-hop 10.0.1.2
+#
+#
+# --- Security Policies ---
+set security policies from-zone dmz to-zone internal policy allow-https match source-address 10.0.2.0/24
+set security policies from-zone dmz to-zone internal policy allow-https match destination-address 10.0.1.0/24
+set applications application app-tcp-443 protocol tcp destination-port 443
+set security policies from-zone dmz to-zone internal policy allow-https match application app-tcp-443
+set security policies from-zone dmz to-zone internal policy allow-https then permit
+set security policies from-zone dmz to-zone internal policy allow-https then log session-close
+set security policies from-zone dmz to-zone internal policy allow-ssh match source-address 10.0.2.0/24
+set security policies from-zone dmz to-zone internal policy allow-ssh match destination-address 10.0.1.0/24
+set applications application app-tcp-22 protocol tcp destination-port 22
+set security policies from-zone dmz to-zone internal policy allow-ssh match application app-tcp-22
+set security policies from-zone dmz to-zone internal policy allow-ssh then permit
+set security policies from-zone dmz to-zone internal policy allow-ssh then log session-close
+set security policies from-zone internal to-zone dmz policy allow-any match source-address 10.0.1.0/24
+set security policies from-zone internal to-zone dmz policy allow-any match destination-address 10.0.2.0/24
+set security policies from-zone internal to-zone dmz policy allow-any match application any
+set security policies from-zone internal to-zone dmz policy allow-any then permit
+set security policies from-zone any to-zone any policy implicit-deny-all match source-address any
+set security policies from-zone any to-zone any policy implicit-deny-all match destination-address any
+set security policies from-zone any to-zone any policy implicit-deny-all match application any
+set security policies from-zone any to-zone any policy implicit-deny-all then deny
+set security policies from-zone any to-zone any policy implicit-deny-all then log session-close
+#
+#
+# --- Chassis Cluster ---
+set chassis cluster reth-count 2
+set chassis cluster redundancy-group 0 node 0 priority 100
+set chassis cluster redundancy-group 1 node 0 priority 100
+set chassis cluster redundancy-group 1 preempt off
+set interfaces ethernet1/7 fabric-options member-interfaces ethernet1/7
+#

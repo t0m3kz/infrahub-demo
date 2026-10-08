@@ -71,24 +71,15 @@ nodes:
         order_weight: 2100
         identifier: network_segment__security_zone
         description: "Network segments assigned to this security zone"
+      # A rule's zone is its segment's security_zone, never set on the rule.
       - name: rules_as_source
         peer: SecurityPolicyRule
-        label: Rules as Source
-        cardinality: many
-        kind: Generic
-        optional: true
-        order_weight: 2200
         identifier: policyrule_source_zone
-        description: "Policy rules where this zone is the source"
+        state: absent
       - name: rules_as_dest
         peer: SecurityPolicyRule
-        label: Rules as Destination
-        cardinality: many
-        kind: Generic
-        optional: true
-        order_weight: 2300
         identifier: policyrule_destination_zone
-        description: "Policy rules where this zone is the destination"
+        state: absent
 
   # ==========================================
   # Security Profiles — Threat Prevention
@@ -337,25 +328,16 @@ nodes:
         kind: Attribute
         optional: false
         order_weight: 2000
-      # Macro-segmentation: zone-level match
+      # Zone-level match is derived from the segment's security_zone; a
+      # second zone on the rule could only disagree with it.
       - name: source_zone
         peer: SecurityZone
-        label: Source Zone
-        cardinality: one
-        kind: Attribute
-        optional: true
         identifier: policyrule_source_zone
-        order_weight: 2100
-        description: "Source security zone (macro-segmentation)"
+        state: absent
       - name: destination_zone
         peer: SecurityZone
-        label: Destination Zone
-        cardinality: one
-        kind: Attribute
-        optional: true
         identifier: policyrule_destination_zone
-        order_weight: 2200
-        description: "Destination security zone (macro-segmentation)"
+        state: absent
       # Micro-segmentation: segment-level match
       - name: source_segment
         peer: ManagedNetworkSegment
@@ -446,6 +428,18 @@ extensions:
           order_weight: 907
           identifier: policyrule_destination_segment
           description: "Policy rules whose destination is this segment"
+        # Reverse side of SecurityPolicyRule.source_segment: the rules that let
+        # traffic OUT of this segment. With inbound_rules, "may A reach B?" is
+        # A.outbound_rules filtered on destination_segment B.
+        - name: outbound_rules
+          peer: SecurityPolicyRule
+          label: Outbound Rules
+          cardinality: many
+          kind: Generic
+          optional: true
+          order_weight: 906
+          identifier: policyrule_source_segment
+          description: "Policy rules whose source is this segment"
         - name: security_zone
           peer: SecurityZone
           cardinality: one

@@ -1,0 +1,16 @@
+#- Citrix NetScaler ADC — load balancer configuration -#
+set ns config -IPAddress 192.168.2.1 -netmask 255.255.255.0
+set ns hostName DC3-LB-01
+#
+# --- SNIPs (Subnet IPs) ---
+add ns ip 10.3.0.1 255.255.255.0 -type SNIP
+# eth2.220: Inline web segment
+#
+# --- Health Monitors ---
+add lb monitor http_monitor HTTP -httpRequest "HEAD /health" -respCode 200 -LRTM DISABLED
+add lb monitor tcp_monitor TCP -LRTM DISABLED
+#
+# --- High Availability (HA Node Pair) ---
+add ha node 1 192.168.2.1
+#
+save ns config

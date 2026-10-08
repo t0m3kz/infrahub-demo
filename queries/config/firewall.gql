@@ -58,6 +58,11 @@ query firewall_config(
                   node {
                     __typename
                     ...NetworkSegmentFields
+                    # The segment's other interfaces: on an HA pair terminating
+                    # it inline, the secondary member's own address is the
+                    # ASA `standby` address (transforms/helpers/ha.py).
+                    ... on ManagedVxlanSegment { ...InlineSegmentMemberFields }
+                    ... on ManagedVlanSegment { ...InlineSegmentMemberFields }
                     ... on ManagedFirewallContext {
                       id
                       name { value }
@@ -122,8 +127,6 @@ query firewall_config(
               disabled { value }
               apply_on_switch { value }
               description { value }
-              source_zone { node { name { value } } }
-              destination_zone { node { name { value } } }
               source_segment {
                 node {
                   id

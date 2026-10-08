@@ -18,7 +18,7 @@ from transforms.helpers.loadbalancer_pbr import _flatten_deployment_lb_vips, get
 from transforms.helpers.management import get_management_services
 from transforms.helpers.mlag import get_mlag, get_sonic_mlag_config
 from transforms.helpers.ospf import get_ospf
-from transforms.helpers.segments import get_vlans, segment_hosting_candidates
+from transforms.helpers.segments import get_vlans, routed_activations, segment_hosting_candidates
 from transforms.helpers.templates import load_template
 from transforms.helpers.vxlan import get_interfaces, get_vxlan_config
 from utils.data_cleaning import clean_data
@@ -281,6 +281,9 @@ class BaseDeviceTransform(InfrahubTransform):
             return {}
         activations = data.get("segment_deployments")
         vlans = get_vlans(activations=activations)
+        # PBR and the zero-trust ACLs hang off the segment's SVI; a
+        # terminate_inline segment has none here (its HA pair routes it).
+        routed = routed_activations(activations)
 
         # VRF default gateways: from TopologyRoutedExchange capabilities on this
         # device's own interfaces — both legs of the inter-VRF hop live here.
@@ -297,13 +300,13 @@ class BaseDeviceTransform(InfrahubTransform):
         # leaf ever owns a FirewallContext interface itself, only the
         # firewall/border-leaf do.
         firewall_contexts = _flatten_deployment_firewall_contexts(data.get("deployment"))
-        customer_pbr_rules = get_customer_pbr_rules(activations, firewall_contexts)
+        customer_pbr_rules = get_customer_pbr_rules(routed, firewall_contexts)
 
         # LB backend no-SNAT return-path PBR: same device-scoped deployment
         # traversal as firewall_contexts above, leaf-only in practice since
         # border-leaf never hosts pool members (no activations there).
         lb_vips = _flatten_deployment_lb_vips(data.get("deployment"))
-        lb_backend_pbr_rules = get_lb_backend_pbr_rules(activations, lb_vips)
+        lb_backend_pbr_rules = get_lb_backend_pbr_rules(routed, lb_vips)
         leaf_pbr_rules = _combine_leaf_pbr_rules(customer_pbr_rules, lb_backend_pbr_rules)
         if self.device_role in {"leaf", "tor", "access-leaf"}:
             # SONiC renders PBR (ConfigDB PBR ACL table) but has no GPO;
@@ -315,7 +318,7 @@ class BaseDeviceTransform(InfrahubTransform):
             if platform_name == "nokia_sros" and (wants_gpo or leaf_pbr_rules):
                 raise ValueError(f"{platform_name} leaf cannot render GPO or PBR policy; refusing unprotected config")
 
-        acls = get_acls(activations=activations)
+        acls = get_acls(activations=routed)
         acl_names = {acl["vlan_id"]: acl["name"] for acl in acls}
         for vlan in vlans:
             vlan["acl_name"] = acl_names.get(vlan["vlan_id"])

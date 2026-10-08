@@ -25,6 +25,12 @@ def active_rules(policy: dict[str, Any], order_by: str = "index") -> list[dict[s
     return [rule for rule in rules if not rule.get("disabled")]
 
 
+def rule_zone(rule: dict[str, Any], side: str) -> str | None:
+    """Zone a rule matches on `side` ("source"/"destination"): its segment's security_zone."""
+    zone = (rule.get(f"{side}_segment") or {}).get("security_zone") or {}
+    return zone.get("name") or None
+
+
 def inbound_permits(segment: dict[str, Any]) -> list[dict[str, Any]]:
     """Active permit rules of enabled policies targeting `segment` (its inbound_rules)."""
     return [

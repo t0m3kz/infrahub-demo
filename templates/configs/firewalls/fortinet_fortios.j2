@@ -1,4 +1,6 @@
 {#- Fortinet FortiOS — zone-based firewall configuration -#}
+{#- An HA pair terminating a segment inline owns its gateway (virtual_ip): config
+    sync gives both members that one interface address. -#}
 {%- macro security_policies(policies) %}
 #
 # --- Service Objects (unique protocol/port combinations referenced below) ---
@@ -69,10 +71,10 @@ config system interface
     edit "{{ iface.name }}"
 {%- endif %}
 {%- if iface.ip_address %}
-{%- if ':' in iface.ip_address.address %}
-        set ip6-address {{ iface.ip_address.address }}
+{%- if ':' in (iface.virtual_ip or iface.ip_address.address) %}
+        set ip6-address {{ (iface.virtual_ip or iface.ip_address.address) }}
 {%- else %}
-        set ip {{ iface.ip_address.address }}
+        set ip {{ (iface.virtual_ip or iface.ip_address.address) }}
 {%- endif %}
 {%- endif %}
         set allowaccess ping https ssh
@@ -172,9 +174,6 @@ config system ha
     set override {{ 'enable' if ha.preempt else 'disable' }}
 {%- if ha.ha_link %}
     set hbdev "{{ ha.ha_link }}" 50
-{%- endif %}
-{%- if ha.virtual_ip %}
-    set vcluster-id {{ ha.group_id }}
 {%- endif %}
 end
 #

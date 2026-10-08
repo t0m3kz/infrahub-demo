@@ -29,7 +29,7 @@ from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
 from ..connections import CablingMixin
-from ..protocols import IpamIPAddress, LoadbalancerVIP
+from ..protocols import LoadbalancerVIP
 
 
 class LoadbalancerBackendNexthopGenerator(CablingMixin, CommonGenerator):
@@ -135,14 +135,8 @@ class LoadbalancerBackendNexthopGenerator(CablingMixin, CommonGenerator):
     async def _ensure_backend_pool(
         self, *, vip_id: str, vip_hostname: str, segment_prefix_id: str
     ) -> CoreIPAddressPool | None:
-        """Wrap the backend_segment's EXISTING prefix in this VIP's own
-        CoreIPAddressPool (identifier=pool name) so allocate_next_ip_address
-        can be used — IpamPrefix itself does not inherit CoreResourcePool,
-        so from_pool/allocate_next_ip_address only accept a real
-        CoreIPAddressPool, never a prefix directly (see infrahub_sdk.client's
-        get_kind() != "CoreIPAddressPool" hard-gate). Mirrors
-        generators/pools.py's resources: [existing_prefix] pattern (wrap,
-        don't re-slice).
+        """The backend_segment's EXISTING prefix wrapped in this VIP's own
+        CoreIPAddressPool (see CablingMixin.ensure_prefix_address_pool).
 
         One pool per VIP, named from the VIP's own id: it belongs to this
         VIP's run alone, so tracking it is safe — a pool named after the
@@ -150,28 +144,13 @@ class LoadbalancerBackendNexthopGenerator(CablingMixin, CommonGenerator):
         the first of them to change its backend deleted it for the others.
         Two VIPs' pools over the same prefix still never hand out the same
         address: allocation skips addresses that already exist in the prefix.
-        Upserted by name on every run, so a moved backend_segment re-points
-        the pool's resources at the new prefix.
         """
-        pool_name = f"lb-backend-{vip_id}-pool"
-        try:
-            pool = await self.client.create(
-                kind=CoreIPAddressPool,
-                data={
-                    "name": pool_name,
-                    "default_address_type": "IpamIPAddress",
-                    "default_prefix_length": 32,
-                    "ip_namespace": {"hfid": ["default"]},
-                    "identifier": pool_name,
-                    "resources": [segment_prefix_id],
-                },
-            )
-            await pool.save(allow_upsert=True)
-            self.logger.info(f"Upserted backend IP pool '{pool_name}'")
-            return pool
-        except Exception as exc:
-            self.logger.error(f"VIP {vip_hostname}: failed to upsert backend IP pool '{pool_name}': {exc}")
-            return None
+        pool = await self.ensure_prefix_address_pool(
+            pool_name=f"lb-backend-{vip_id}-pool", prefix_id=segment_prefix_id, prefix_length=32
+        )
+        if pool is None:
+            self.logger.error(f"VIP {vip_hostname}: no backend IP pool — sub-interfaces get no address")
+        return pool
 
     async def _allocate_backend_ip(
         self, *, pool: CoreIPAddressPool, vip_id: str, segment_prefix_id: str, device_name: str
@@ -180,15 +159,9 @@ class LoadbalancerBackendNexthopGenerator(CablingMixin, CommonGenerator):
         identifier carries the prefix, so a moved backend_segment draws a
         fresh address from the new prefix instead of the old reservation;
         the old address is no longer saved and is cleaned up with the run."""
-        try:
-            ip_obj = await self.client.allocate_next_ip_address(
-                resource_pool=pool,
-                kind=IpamIPAddress,
-                identifier=f"{vip_id}-{segment_prefix_id}-{device_name}-lb-backend",
-                prefix_length=32,
-                data={"description": f"LB backend return-path — {device_name}"},
-            )
-        except Exception as exc:
-            self.logger.error(f"Failed to allocate backend IP for {device_name}: {exc}")
-            return None
-        return ip_obj.id if ip_obj is not None else None
+        return await self.allocate_prefix_address(
+            pool=pool,
+            identifier=f"{vip_id}-{segment_prefix_id}-{device_name}-lb-backend",
+            prefix_length=32,
+            description=f"LB backend return-path — {device_name}",
+        )

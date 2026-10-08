@@ -5,7 +5,7 @@ from typing import Any
 
 from transforms.helpers.acl import _PROTO_MAP, _port_match
 from transforms.helpers.addressing import host_ip
-from transforms.helpers.policy import active_rules, enabled_policies, inbound_permits
+from transforms.helpers.policy import active_rules, enabled_policies, inbound_permits, rule_zone
 from transforms.helpers.segments import _get_segment_prefix_str, segment_hosting_candidates
 
 # Border-leaf platforms with a native hardware SGT/security-group matching
@@ -97,6 +97,7 @@ def get_firewall_static_routes(
             "destination": "10.99.0.0/24",     # zone member CIDR
             "nexthop":     "10.99.99.2",        # leaf /30 IP (.2 in the /30 link)
             "interface":   "eth0.99",           # FW sub-interface name
+            "zone":        "internal",          # its zone (ASA routes by nameif)
           }
         ]
     """
@@ -113,6 +114,10 @@ def get_firewall_static_routes(
         iface_name = iface.get("name")
 
         if not (zone_name and ns_name and ip_addr and iface_name):
+            continue
+        # A segment the firewall terminates inline is directly connected:
+        # there is no leaf behind this interface to route the zone through.
+        if iface.get("virtual_ip"):
             continue
 
         # Derive the leaf nexthop: leaf is .2 in the /30, FW is .1.
@@ -135,6 +140,7 @@ def get_firewall_static_routes(
                     "destination": cidr,
                     "nexthop": nexthop,
                     "interface": iface_name,
+                    "zone": zone_name,
                 }
             )
 
@@ -777,8 +783,8 @@ def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list
             protocol = rule.get("protocol") or "any"
             acl_proto = _PROTO_MAP.get(protocol, "ip")
 
-            src_zone = (rule.get("source_zone") or {}).get("name")
-            dst_zone = (rule.get("destination_zone") or {}).get("name")
+            src_zone = rule_zone(rule, "source")
+            dst_zone = rule_zone(rule, "destination")
 
             src_seg = rule.get("source_segment") or {}
             src = _get_segment_prefix_str(src_seg) if src_seg else None

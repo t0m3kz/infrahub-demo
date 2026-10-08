@@ -58,4 +58,8 @@ inline ha:
   heartbeat-interface {{ ha.ha_link }}
 {%- endif %}
   preempt {{ 'yes' if ha.preempt else 'no' }}
+{%- for iface in proxy_interfaces if iface.virtual_ip %}
+  ; failover group per inline segment gateway, owned by the active appliance
+  virtual-ip {{ iface.virtual_ip.split('/')[0] }} interface {{ iface.name }}
+{%- endfor %}
 {%- endif %}

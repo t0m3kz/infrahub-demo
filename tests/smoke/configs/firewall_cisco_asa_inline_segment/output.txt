@@ -1,0 +1,61 @@
+!
+hostname dc1-fw-01
+!
+! --- Interfaces ---
+interface ethernet1/1.10
+ vlan 10
+ ip address 10.0.1.1 255.255.255.252
+ nameif internal
+ security-level 100
+ description Internal LAN link
+ no shutdown
+!
+interface ethernet1/1.20
+ vlan 20
+ ip address 10.0.2.1 255.255.255.252
+ nameif dmz
+ security-level 50
+ description DMZ link
+ no shutdown
+!
+interface ethernet1/1.30
+ vlan 30
+ ip address 10.0.3.1 255.255.255.252
+ nameif external
+ security-level 0
+ description External link
+ no shutdown
+!
+interface ethernet1/1.210
+ vlan 210
+ ip address 10.1.0.1 255.255.255.0 standby 10.1.0.3
+ nameif web
+ security-level 60
+ description Inline web segment
+ no shutdown
+!
+! --- Static Routes (return path to leaf per zone) ---
+route dmz 10.0.2.0 255.255.255.0 10.0.2.2 1
+route internal 10.0.1.0 255.255.255.0 10.0.1.2 1
+route internal 10.0.10.0 255.255.255.0 10.0.1.2 1
+!
+! --- Access Control Lists ---
+access-list dmz-in extended permit tcp 10.0.2.0 255.255.255.0 10.0.1.0 255.255.255.0 eq 443 log
+access-list dmz-in extended permit tcp 10.0.2.0 255.255.255.0 10.0.1.0 255.255.255.0 eq 22 log
+access-list internal-in extended permit ip 10.0.1.0 255.255.255.0 10.0.2.0 255.255.255.0
+access-list global-in extended deny ip any any log
+!
+! --- Access Groups ---
+access-group internal-in in interface internal
+access-group dmz-in in interface dmz
+access-group external-in in interface external
+access-group web-in in interface web
+!
+! --- Failover (HA) ---
+failover lan unit primary
+failover lan interface FOLINK ethernet1/7
+failover link FOLINK ethernet1/7
+failover interface ip FOLINK 169.254.255.1 255.255.255.252 standby 169.254.255.2
+failover
+!
+end

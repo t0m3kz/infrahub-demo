@@ -90,8 +90,8 @@ config firewall policy
         set name "allow-https"
         set srcintf "dmz"
         set dstintf "internal"
-        set srcaddr "all"
-        set dstaddr "all"
+        set srcaddr "10.0.2.0/24"
+        set dstaddr "10.0.1.0/24"
         set action accept
         set schedule "always"
         set service "svc-tcp-443"
@@ -104,8 +104,8 @@ config firewall policy
         set name "allow-ssh"
         set srcintf "dmz"
         set dstintf "internal"
-        set srcaddr "all"
-        set dstaddr "all"
+        set srcaddr "10.0.2.0/24"
+        set dstaddr "10.0.1.0/24"
         set action accept
         set schedule "always"
         set service "svc-tcp-22"
@@ -116,8 +116,8 @@ config firewall policy
         set name "allow-any"
         set srcintf "internal"
         set dstintf "dmz"
-        set srcaddr "all"
-        set dstaddr "all"
+        set srcaddr "10.0.1.0/24"
+        set dstaddr "10.0.2.0/24"
         set action accept
         set schedule "always"
         set service "ALL"

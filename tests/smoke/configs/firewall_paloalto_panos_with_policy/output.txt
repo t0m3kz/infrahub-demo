@@ -45,8 +45,8 @@ set network virtual-router default routing-table ip static-route VRF-INTERNAL-3 
 # --- Security Policies ---
 set rulebase security rules allow-https from dmz
 set rulebase security rules allow-https to internal
-set rulebase security rules allow-https source ag-dmz
-set rulebase security rules allow-https destination ag-internal
+set rulebase security rules allow-https source 10.0.2.0/24
+set rulebase security rules allow-https destination 10.0.1.0/24
 set rulebase security rules allow-https application any
 set service svc-tcp-443 protocol tcp port 443
 set rulebase security rules allow-https service svc-tcp-443
@@ -56,8 +56,8 @@ set rulebase security rules allow-https log-end yes
 set rulebase security rules allow-https description "Allow HTTPS from DMZ to Internal"
 set rulebase security rules allow-ssh from dmz
 set rulebase security rules allow-ssh to internal
-set rulebase security rules allow-ssh source ag-dmz
-set rulebase security rules allow-ssh destination ag-internal
+set rulebase security rules allow-ssh source 10.0.2.0/24
+set rulebase security rules allow-ssh destination 10.0.1.0/24
 set rulebase security rules allow-ssh application any
 set service svc-tcp-22 protocol tcp port 22
 set rulebase security rules allow-ssh service svc-tcp-22
@@ -66,8 +66,8 @@ set rulebase security rules allow-ssh log-end yes
 set rulebase security rules allow-ssh description "Allow SSH from DMZ to Internal"
 set rulebase security rules allow-any from internal
 set rulebase security rules allow-any to dmz
-set rulebase security rules allow-any source ag-internal
-set rulebase security rules allow-any destination ag-dmz
+set rulebase security rules allow-any source 10.0.1.0/24
+set rulebase security rules allow-any destination 10.0.2.0/24
 set rulebase security rules allow-any application any
 set rulebase security rules allow-any service any
 set rulebase security rules allow-any action allow

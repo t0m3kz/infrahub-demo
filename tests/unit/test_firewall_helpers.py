@@ -168,10 +168,11 @@ def _make_rule(
         "disabled": disabled,
         "description": description or "",
     }
+    # A rule's zone is its segment's security_zone.
     if src_zone is not None:
-        rule["source_zone"] = {"name": src_zone}
+        rule["source_segment"] = {**(rule["source_segment"] or {}), "security_zone": {"name": src_zone}}
     if dst_zone is not None:
-        rule["destination_zone"] = {"name": dst_zone}
+        rule["destination_segment"] = {**(rule["destination_segment"] or {}), "security_zone": {"name": dst_zone}}
     if security_profile is not None:
         rule["security_profile"] = security_profile
     return rule

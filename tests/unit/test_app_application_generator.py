@@ -564,7 +564,6 @@ class TestReconcileApplicationRulesPerPort:
         gen._find_rule_by_name = AsyncMock(return_value=None)
         gen._create_or_update_policy_rule = AsyncMock(return_value=(MagicMock(), 100))
         gen._reconcile_tag_rule_from_segments = AsyncMock()
-        gen._get_zone = AsyncMock(return_value=None)
         gen._get_profile = AsyncMock(return_value=None)
         # CloudSecurityRuleMixin boundaries
         sg = MagicMock()

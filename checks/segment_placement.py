@@ -28,11 +28,46 @@ class CheckSegmentPlacement(InfrahubCheck):
         "TopologyColocationMetro",
     }
 
+    # HA pairs that can be a segment's gateway (terminate_inline): the fabric
+    # renders such a segment pure L2, so nothing else would route it.
+    _INLINE_SERVICE_KINDS = {
+        "ManagedFirewallHA",
+        "ManagedLoadbalancerHA",
+        "ManagedProxyHA",
+    }
+
     def validate(self, data: Any) -> None:
         cleaned = clean_data(data)
         self._validate_vlan_segments(cleaned.get("ManagedVlanSegment") or [])
         self._validate_vxlan_segments(cleaned.get("ManagedVxlanSegment") or [])
         self._validate_cloud_segments(cleaned.get("CloudNetworkSegment") or [])
+        for segment in [*(cleaned.get("ManagedVlanSegment") or []), *(cleaned.get("ManagedVxlanSegment") or [])]:
+            self._validate_inline_termination(segment)
+
+    def _validate_inline_termination(self, segment: dict[str, Any]) -> None:
+        """terminate_inline needs an on-prem HA pair as inline_service: leaves
+        and border leaves drop the segment's gateway, so without one the
+        segment has no gateway anywhere."""
+        if not segment.get("terminate_inline"):
+            return
+        seg_name = segment.get("name", "<unnamed-segment>")
+        inline_service = segment.get("inline_service")
+        if not isinstance(inline_service, dict):
+            self.log_error(
+                message=(
+                    f"Segment '{seg_name}' has terminate_inline=true but no inline_service — "
+                    "the fabric renders it pure L2, so it has no gateway at all"
+                )
+            )
+            return
+        kind = inline_service.get("typename")
+        if kind not in self._INLINE_SERVICE_KINDS:
+            self.log_error(
+                message=(
+                    f"Segment '{seg_name}' inline_service '{inline_service.get('name', '<unknown>')}' is a "
+                    f"'{kind}', which cannot be its gateway. Allowed: {sorted(self._INLINE_SERVICE_KINDS)}"
+                )
+            )
 
     def _validate_vlan_segments(self, segments: list[dict[str, Any]]) -> None:
         for segment in segments:

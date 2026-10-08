@@ -1,0 +1,116 @@
+!
+! Arista EOS Leaf VXLAN/EVPN Configuration
+! Device: dc1-leaf-01
+! Generated for Arista EOS
+!
+
+hostname dc1-leaf-01
+
+! EVPN on EOS requires the multi-agent routing model (the legacy ribd model has
+! no EVPN address-family at all). Changing it reloads the routing agents, so it
+! must be present from the first push, not added later.
+service routing protocols model multi-agent
+
+! Configure spanning tree mode
+spanning-tree mode mstp
+
+! Configure VLAN 1
+no spanning-tree vlan-id 4094
+
+vlan 150
+   name Customer-A
+
+interface Ethernet1
+   description to spine-01
+   ip address 10.1.0.1/31
+
+   no shutdown
+
+interface Ethernet2
+   description to spine-02
+   ip address 10.1.0.3/31
+
+   no shutdown
+
+interface Ethernet10
+   description to server-01
+
+   switchport access vlan 150
+   no shutdown
+
+interface Loopback0
+   description Router ID
+   ip address 10.0.0.1/32
+
+   no shutdown
+
+! Configure BGP
+
+router bgp 65000
+   router-id 10.0.0.1
+   no bgp default ipv4-unicast
+   distance bgp 20 200 200
+   graceful-restart
+   maximum-paths 4 ecmp 64
+   !
+   neighbor EVPN-PEERS peer-group
+   neighbor EVPN-PEERS remote-as 65000
+   neighbor EVPN-PEERS update-source Loopback0
+   neighbor EVPN-PEERS send-community
+   !
+   neighbor UNDERLAY-PEERS peer-group
+   neighbor UNDERLAY-PEERS send-community
+   neighbor UNDERLAY-PEERS bfd
+   neighbor 10.1.0.0 peer-group UNDERLAY-PEERS
+   neighbor 10.1.0.0 remote-as 65100
+   neighbor 10.1.0.0 local-as 65001 no-prepend replace-as
+
+   neighbor 10.1.0.0 description spine-01
+   neighbor 10.1.0.2 peer-group UNDERLAY-PEERS
+   neighbor 10.1.0.2 remote-as 65101
+   neighbor 10.1.0.2 local-as 65001 no-prepend replace-as
+
+   neighbor 10.1.0.2 description spine-02
+   neighbor 10.0.0.100 peer-group EVPN-PEERS
+
+   neighbor 10.0.0.100 description spine-01
+   neighbor 10.0.0.101 peer-group EVPN-PEERS
+
+   neighbor 10.0.0.101 description spine-02
+   !
+   address-family ipv4
+      redistribute connected route-map RM-CONN-2-BGP
+      neighbor UNDERLAY-PEERS activate
+   !
+   address-family evpn
+      neighbor EVPN-PEERS activate
+
+
+! Configure route-maps
+route-map RM-CONN-2-BGP permit 10
+   match interface Loopback0
+!
+! VXLAN Configuration with Microsegmentation (VRF-aware VNIs)
+!
+!
+interface Vxlan1
+   vxlan source-interface Loopback0
+   !
+   ! L2 VNI Mappings (VLAN segments)
+   vxlan vlan 150 vni 10150
+!
+!
+! EVPN Configuration (L2 + L3 VNI)
+!
+router bgp 65000
+   !
+   ! L2 EVPN (VLAN-based)
+   vlan 150
+      rd 10.0.0.1:10150
+      route-target both 65000:10150
+      redistribute learned
+      arp proxy
+
+
+
+! End of configuration

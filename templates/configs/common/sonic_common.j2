@@ -41,7 +41,8 @@
 {%- endif -%}
 {%- endfor -%}
 {%- if vlans and vlans|length > 0 -%}
-{%- for vlan in vlans -%}
+{#- No VLAN_INTERFACE for a terminate_inline VLAN: its HA pair is the L3 hop. -#}
+{%- for vlan in vlans if not vlan.terminate_inline -%}
 {%- set key = 'Vlan' + vlan.vlan_id|string -%}
 {%- set _ = vlan_interfaces.update({key: {}}) -%}
 {%- endfor -%}

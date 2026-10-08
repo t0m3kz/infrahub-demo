@@ -57,9 +57,6 @@
                   "ha_timer": {
                     "value": "aggressive"
                   },
-                  "virtual_ip": {
-                    "value": "10.0.0.254"
-                  },
                   "capabilities": {
                     "edges": [
                       {
@@ -425,6 +422,29 @@
                     ]
                   }
                 }
+              },
+              {
+                "node": {
+                  "__typename": "DcimPhysicalInterface",
+                  "name": {
+                    "value": "ethernet1/7"
+                  },
+                  "description": {
+                    "value": "HA sync"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "ha"
+                  },
+                  "ip_address": {
+                    "node": null
+                  },
+                  "interface_capabilities": {
+                    "edges": []
+                  }
+                }
               }
             ]
           },
@@ -602,25 +622,59 @@
                   "description": {
                     "value": "Allow HTTPS from DMZ to Internal"
                   },
-                  "source_zone": {
-                    "node": {
-                      "name": {
-                        "value": "dmz"
-                      }
-                    }
-                  },
-                  "destination_zone": {
-                    "node": {
-                      "name": {
-                        "value": "internal"
-                      }
-                    }
-                  },
                   "source_segment": {
-                    "node": null
+                    "node": {
+                      "id": "seg-10-0-2-0-24",
+                      "__typename": "ManagedVlanSegment",
+                      "name": {
+                        "value": "seg-10-0-2-0-24"
+                      },
+                      "security_zone": {
+                        "node": {
+                          "name": {
+                            "value": "dmz"
+                          }
+                        }
+                      },
+                      "gateway": {
+                        "node": {
+                          "ip_prefix": {
+                            "node": {
+                              "prefix": {
+                                "value": "10.0.2.0/24"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
                   },
                   "destination_segment": {
-                    "node": null
+                    "node": {
+                      "id": "seg-10-0-1-0-24",
+                      "__typename": "ManagedVlanSegment",
+                      "name": {
+                        "value": "seg-10-0-1-0-24"
+                      },
+                      "security_zone": {
+                        "node": {
+                          "name": {
+                            "value": "internal"
+                          }
+                        }
+                      },
+                      "gateway": {
+                        "node": {
+                          "ip_prefix": {
+                            "node": {
+                              "prefix": {
+                                "value": "10.0.1.0/24"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
                   },
                   "security_profile": {
                     "node": {
@@ -660,25 +714,59 @@
                   "description": {
                     "value": "Allow SSH from DMZ to Internal"
                   },
-                  "source_zone": {
-                    "node": {
-                      "name": {
-                        "value": "dmz"
-                      }
-                    }
-                  },
-                  "destination_zone": {
-                    "node": {
-                      "name": {
-                        "value": "internal"
-                      }
-                    }
-                  },
                   "source_segment": {
-                    "node": null
+                    "node": {
+                      "id": "seg-10-0-2-0-24",
+                      "__typename": "ManagedVlanSegment",
+                      "name": {
+                        "value": "seg-10-0-2-0-24"
+                      },
+                      "security_zone": {
+                        "node": {
+                          "name": {
+                            "value": "dmz"
+                          }
+                        }
+                      },
+                      "gateway": {
+                        "node": {
+                          "ip_prefix": {
+                            "node": {
+                              "prefix": {
+                                "value": "10.0.2.0/24"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
                   },
                   "destination_segment": {
-                    "node": null
+                    "node": {
+                      "id": "seg-10-0-1-0-24",
+                      "__typename": "ManagedVlanSegment",
+                      "name": {
+                        "value": "seg-10-0-1-0-24"
+                      },
+                      "security_zone": {
+                        "node": {
+                          "name": {
+                            "value": "internal"
+                          }
+                        }
+                      },
+                      "gateway": {
+                        "node": {
+                          "ip_prefix": {
+                            "node": {
+                              "prefix": {
+                                "value": "10.0.1.0/24"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
                   },
                   "security_profile": {
                     "node": null
@@ -731,25 +819,59 @@
                   "description": {
                     "value": "Allow all from Internal to DMZ"
                   },
-                  "source_zone": {
-                    "node": {
-                      "name": {
-                        "value": "internal"
-                      }
-                    }
-                  },
-                  "destination_zone": {
-                    "node": {
-                      "name": {
-                        "value": "dmz"
-                      }
-                    }
-                  },
                   "source_segment": {
-                    "node": null
+                    "node": {
+                      "id": "seg-10-0-1-0-24",
+                      "__typename": "ManagedVlanSegment",
+                      "name": {
+                        "value": "seg-10-0-1-0-24"
+                      },
+                      "security_zone": {
+                        "node": {
+                          "name": {
+                            "value": "internal"
+                          }
+                        }
+                      },
+                      "gateway": {
+                        "node": {
+                          "ip_prefix": {
+                            "node": {
+                              "prefix": {
+                                "value": "10.0.1.0/24"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
                   },
                   "destination_segment": {
-                    "node": null
+                    "node": {
+                      "id": "seg-10-0-2-0-24",
+                      "__typename": "ManagedVlanSegment",
+                      "name": {
+                        "value": "seg-10-0-2-0-24"
+                      },
+                      "security_zone": {
+                        "node": {
+                          "name": {
+                            "value": "dmz"
+                          }
+                        }
+                      },
+                      "gateway": {
+                        "node": {
+                          "ip_prefix": {
+                            "node": {
+                              "prefix": {
+                                "value": "10.0.2.0/24"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
                   },
                   "security_profile": {
                     "node": null
