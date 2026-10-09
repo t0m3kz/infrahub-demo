@@ -64,6 +64,8 @@ def _build_gen(*, deployment_type: Literal["middle_rack", "tor", "mixed"] = "mix
     gen.data = cast(TopologyRackData, rack)
     gen.logger = MagicMock()
     gen.client = MagicMock()
+    # No pod generator in flight unless a test says so.
+    gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
     gen.client.group_context = MagicMock()
     gen.client.group_context.related_node_ids = []
 
@@ -180,6 +182,31 @@ class TestRackMixinAdditional:
         sleep_mock.assert_awaited_once()
         assert gen._loopback_pool_id == "lo-pool-2"
         assert gen._technical_pool_id == "p2p-pool-2"
+
+    @pytest.mark.asyncio
+    async def test_prepare_generation_context_waits_for_in_flight_pod_generator(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Pools missing while add_pod is in flight: the rack waits for that run
+        instead of spending a blind retry, then reads the pools it wrote."""
+        gen = _build_gen()
+        gen.data["pod"]["loopback_pool"] = None
+        gen.client.get = AsyncMock(
+            side_effect=[
+                _mock_pod_pools(loopback_id=None, prefix_id="p2p-pool"),
+                _mock_pod_pools(loopback_id="lo-pool-late", prefix_id="p2p-pool"),
+            ]
+        )
+        gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value={"TopologyPod": []})
+        sleep_mock = AsyncMock()
+        monkeypatch.setattr("generators.rack.asyncio.sleep", sleep_mock)
+
+        await gen._prepare_generation_context()
+
+        gen.wait_for_parent_generator_and_refetch.assert_awaited_once_with(("add_pod", "pod_rack_cascade"), "pod-1")
+        sleep_mock.assert_not_awaited()
+        gen.logger.error.assert_not_called()
+        assert gen._loopback_pool_id == "lo-pool-late"
 
     @pytest.mark.asyncio
     async def test_prepare_generation_context_waits_for_asn_pool_alone(self, monkeypatch: pytest.MonkeyPatch) -> None:
