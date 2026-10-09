@@ -396,12 +396,6 @@ spec:
             kind: SecurityTag
             icon: "mdi:tag-outline"
 
-          - namespace: Security
-            name: SecurityTagRuleItem
-            label: Security Tag Rules
-            kind: SecurityTagRule
-            icon: "mdi:tag-arrow-right-outline"
-
           - namespace: Proxy
             name: ProxyURLCategoryItem
             label: URL Categories

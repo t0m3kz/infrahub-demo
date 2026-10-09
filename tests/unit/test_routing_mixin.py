@@ -8,7 +8,7 @@ Covers:
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from typing import Any
@@ -34,7 +34,7 @@ def _make_mixin(fabric_name: str = "dc1") -> Any:
     m.lock_keys = []
 
     @asynccontextmanager
-    async def _resource_lock(key: str) -> AsyncIterator[None]:
+    async def _resource_lock(key: str) -> AsyncGenerator[None]:
         m.lock_keys.append(key)
         yield
 

@@ -1,0 +1,157 @@
+!
+! dc1-border-leaf-01 Configuration
+!
+hostname dc1-border-leaf-01
+!
+feature ospf
+feature bgp
+feature interface-vlan
+feature lacp
+feature vpc
+feature lldp
+!
+
+! VLANs
+vlan 150
+  name Customer-A
+!
+!
+! Interfaces
+interface Ethernet1
+  description to spine-01
+  no shutdown
+  ip address 10.1.0.1/31
+
+!
+interface Ethernet2
+  description to spine-02
+  no shutdown
+  ip address 10.1.0.3/31
+
+!
+interface Ethernet10
+  description to server-01
+  no shutdown
+
+!
+interface Ethernet20
+  description to dc1-fw-01
+  no shutdown
+
+  switchport
+  switchport mode trunk
+  switchport trunk allowed vlan 150
+!
+interface Loopback0
+  description Router ID
+  no shutdown
+  ip address 10.0.0.1/32
+
+!
+!
+! OSPF Configuration
+
+
+!
+! BGP Configuration
+
+router bgp 65000
+  router-id 10.0.0.1
+  graceful-restart
+  !
+  template peer-policy EVPN-PEERS-POLICY
+    send-community
+  !
+  template peer-session EVPN-PEERS-SESSION
+    update-source loopback0
+  !
+  !
+  template peer-policy UNDERLAY-PEERS-POLICY
+    send-community
+  !
+  template peer-session UNDERLAY-PEERS-SESSION
+    bfd
+  !
+  address-family ipv4 unicast
+    redistribute direct route-map RM-CONN-2-BGP
+    maximum-paths 8
+  !
+  address-family l2vpn evpn
+  !
+  neighbor 10.1.0.0
+    remote-as 65100
+    local-as 65001 no-prepend replace-as
+    description spine-01
+    inherit peer-session UNDERLAY-PEERS-SESSION
+    address-family ipv4 unicast
+      inherit peer-policy UNDERLAY-PEERS-POLICY
+    !
+  neighbor 10.1.0.2
+    remote-as 65101
+    local-as 65001 no-prepend replace-as
+    description spine-02
+    inherit peer-session UNDERLAY-PEERS-SESSION
+    address-family ipv4 unicast
+      inherit peer-policy UNDERLAY-PEERS-POLICY
+    !
+  neighbor 10.0.0.100
+    remote-as 65000
+    description spine-01
+    inherit peer-session EVPN-PEERS-SESSION
+    address-family l2vpn evpn
+      inherit peer-policy EVPN-PEERS-POLICY
+    !
+  neighbor 10.0.0.101
+    remote-as 65000
+    description spine-02
+    inherit peer-session EVPN-PEERS-SESSION
+    address-family l2vpn evpn
+      inherit peer-policy EVPN-PEERS-POLICY
+    !
+!
+
+!
+!
+! VXLAN Configuration (netlab-style multivendor)
+!
+feature nv overlay
+feature vn-segment-vlan-based
+feature nve
+nv overlay evpn
+!
+interface nve1
+  source-interface Loopback0
+  host-reachability protocol bgp
+  member vni 10150
+    suppress-arp
+    ingress-replication protocol bgp
+  no shutdown
+!
+!
+! EVPN Configuration
+!
+evpn
+  vni 10150 l2
+    rd 10.0.0.1:10150
+    route-target import 65000:10150
+    route-target export 65000:10150
+!
+!
+! VLAN to VNI mapping
+!
+vlan 150
+  vn-segment 10150
+!
+! Route-maps
+route-map RM-CONN-2-BGP permit 10
+  match interface loopback0
+!
+! VLAN SVI Configuration
+!
+!
+
+!
+! Management
+line console
+line vty
+!

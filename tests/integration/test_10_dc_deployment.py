@@ -1,44 +1,45 @@
 """Integration test — Phase 01: DC Deployments (DC1 – DC7).
 
-Each DC runs sequentially on its own branch (deploy-dc1 … deploy-dc7):
-  1. Load demo data from data/demos/01_data_center/<dc>/
-  2. Run add_dc generator, wait for cascade (add_pod, add_rack)
-  3. Verify no failed tasks
-  4. Verify topology
-  5. Create proposed change
-  6. Wait for validations
-  7. Verify artifacts
-  8. Merge to main
-  9. Verify devices and routing on main (post-merge)
+Every DC deploys on its own branch (deploy-dc1 … deploy-dc7), all at the same
+time — as several operators boarding DCs at once would — then merges in turn:
+
+  test_00_deploy_all (concurrent, up to DC_DEPLOYMENT_CONCURRENCY at once):
+    1. Load demo data from data/demos/01_data_center/<dc>/
+    2. Run add_dc generator, wait for cascade (add_pod, add_rack)
+    3. Verify no failed tasks
+    4. Verify topology
+    5. Create proposed change
+    6. Wait for validations
+    7. Verify artifacts
+  test_01_merge (one per DC, in DC order):
+    8. Merge to main
+  test_02_verify_after_merge (one per DC):
+    9. Verify devices and routing on main (post-merge)
+
+Every branch is cut from main before any DC merges, so no DC depends on
+another's merge: each merge test checks its own DC's deploy outcome and runs
+whether or not an earlier DC failed. That only holds while DCs share no
+branch-created node — shared singletons (BGP address families, role groups,
+security zones) live in data/bootstrap so every branch finds one on main
+instead of creating its own, which would fail the second merge on uniqueness.
 
 The DC6 expansion chain (test_12 - test_20: add-switch, add-rack …) depends on
-``dc6_verify_after_merge`` so it only starts once DC6 is verified in main. DC7
-(micro-fabric / border-spine pattern) still deploys here, before that chain by
-order number, but nothing in the chain depends on it.
-
-Steps 1-8 (deploy_and_merge) and step 9 (verify_after_merge) are two separate
-test functions per DC, not one. The NEXT DC's dependency is on THIS DC's merge
-alone (``{dc_key}_merged``) — not on its post-merge verification. A DC's own
-merge landing in main is a real prerequisite for the next DC (it creates its
-branch off that same main), but whether THIS DC's post-merge topology/routing
-assertions happen to pass is not: a flaky re-verification (or a transient
-server-side failure during the merge task itself, e.g. a Neo4j deadlock)
-would otherwise skip every remaining DC via the dependency chain, for a
-reason that has nothing to do with them. ``dc6_verify_after_merge`` is kept
-as the name test_12 depends on, produced by the verify_after_merge test.
+``dc6_verify_after_merge`` so it only starts once DC6 is verified in main.
+DC7 (micro-fabric / border-spine pattern) still deploys here, but nothing in
+the chain depends on it. Merge and post-merge verification are two separate
+tests per DC so that a flaky re-verification never hides a successful merge.
 
 Per-DC configuration and expected results are defined in ``DC_CONFIGS`` below.
-Per-DC execution is modeled as two end-to-end test functions that perform all
-steps in sequence for that DC. DC-level ordering/dependencies are expressed via
-``pytest.param`` marks.
 """
 
+import asyncio
 import logging
 import os
 from typing import Any, Literal
 
 import pytest
-from infrahub_sdk import InfrahubClient, InfrahubClientSync
+from infrahub_sdk import Config, InfrahubClient, InfrahubClientSync
+from infrahub_sdk.task.models import TaskFilter
 
 from .conftest import TestInfrahubDockerWithClient
 from .test_constants import DEMO_DC_DATA_ROOT
@@ -52,7 +53,8 @@ from .test_helpers import (
 from .workflow_helpers import (
     create_and_validate_proposed_change,
     merge_proposed_change,
-    run_dc_generator_pipeline,
+    verify_no_failed_tasks,
+    wait_for_tasks_completion,
 )
 
 # ---------------------------------------------------------------------------
@@ -174,11 +176,10 @@ for _cfg in DC_CONFIGS.values():
 
 
 def _resolve_dc_order() -> list[str]:
-    """Full dc1..dc7 chain by default. Set DC_DEPLOYMENT_TEST_DCS to a
+    """Full dc1..dc7 set by default. Set DC_DEPLOYMENT_TEST_DCS to a
     comma-separated subset (e.g. "dc6" or "dc6,dc7") to isolate just those
-    DCs for a fast re-check without editing this file — the first selected
-    DC depends on "triggers_active" (runs standalone), and any further ones
-    still chain off each other in the given order.
+    DCs for a fast re-check without editing this file; they merge in the
+    given order.
 
     Example:
         DC_DEPLOYMENT_TEST_DCS=dc6 uv run invoke dev.test-integration-routing
@@ -194,39 +195,36 @@ def _resolve_dc_order() -> list[str]:
     return dc_keys
 
 
-# Sequential deployment order — determines dependency chain and order numbers
+# Merge order
 DC_ORDER = _resolve_dc_order()
+
+# How many DCs deploy at once; unset or 0 means all of them. The stack's task
+# workers are shared, so a lower value trades wall-clock time for headroom.
+DC_DEPLOYMENT_CONCURRENCY = int(os.environ.get("DC_DEPLOYMENT_CONCURRENCY", "0")) or len(DC_ORDER)
+# Polls (5s apart) a branch's generator cascade may take to settle: every DC's
+# cascade shares the task workers with the others in flight.
+DC_CASCADE_MAX_POLLS = 240
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # ---------------------------------------------------------------------------
-# Build two pytest.param sequences per DC: one for deploy_and_merge (steps
-# 1-8), one for verify_after_merge (step 9).
-#
-# Execution order is linear and interleaved: dc1_deploy, dc1_verify, dc2_deploy,
-# dc2_verify, … (even order numbers deploy, odd order numbers verify) — pytest
-# runs strictly in order-number order regardless of skips, so dc(N+1)_deploy
-# always executes right after dc(N)_verify whether or not dc(N)_verify ran or
-# was skipped.
-#
-# The dependency chain only ever threads through "_merged": dc(N+1)_deploy
-# depends on dc(N)_merged, never on dc(N)_verify_after_merge — see the module
-# docstring for why. verify_after_merge depends on its OWN DC's merge, and
-# produces "_verify_after_merge" only for test_12's sake; nothing in this
-# file's own chain consumes it.
+# One merge and one verify test per DC, interleaved by order number: dc1_merge,
+# dc1_verify, dc2_merge, … — all after test_00_deploy_all (order 99). A merge
+# depends only on triggers_active (its DC's deploy outcome is checked inside,
+# from _DEPLOYED), never on another DC; verify depends on its own DC's merge
+# and produces "_verify_after_merge" for test_12's sake.
 # ---------------------------------------------------------------------------
 
-_PARAMS_DEPLOY_SEQUENCE = []
+_PARAMS_MERGE_SEQUENCE = []
 _PARAMS_VERIFY_SEQUENCE = []
 for i, dc_key in enumerate(DC_ORDER):
     merged_name = f"{dc_key}_merged"
-    prev_merged = "triggers_active" if i == 0 else f"{DC_ORDER[i - 1]}_merged"
-    _PARAMS_DEPLOY_SEQUENCE.append(
+    _PARAMS_MERGE_SEQUENCE.append(
         pytest.param(
             dc_key,
             marks=[
                 pytest.mark.order(100 + i * 2),
-                pytest.mark.dependency(scope="session", name=merged_name, depends=[prev_merged]),
+                pytest.mark.dependency(scope="session", name=merged_name, depends=["triggers_active"]),
             ],
             id=dc_key,
         )
@@ -241,6 +239,10 @@ for i, dc_key in enumerate(DC_ORDER):
             id=dc_key,
         )
     )
+
+# dc_key -> its proposed change id, or the exception its deploy raised
+# (written by test_00_deploy_all, read by test_01_merge).
+_DEPLOYED: dict[str, str | BaseException] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -436,92 +438,125 @@ def _check_routing(
 # ---------------------------------------------------------------------------
 
 
+async def _deploy_dc(dc_key: str, config: Config, execute_command: Any) -> str:
+    """Steps 1-7 for one DC on its own clients (the deploys run concurrently):
+    load, let the triggered generators settle, verify, open and validate the
+    proposed change, check artifacts. Returns the proposed change id."""
+    cfg = DC_CONFIGS[dc_key]
+    branch = cfg["branch"]
+    dc_name = cfg["dc_name"]
+    client = InfrahubClient(config=Config(**config.model_dump()))
+    sync_client = InfrahubClientSync(config=Config(**config.model_dump()))
+
+    logging.info("=== %s — Step 1: Load Data ===", dc_name)
+    if branch in sync_client.branch.all():
+        sync_client.branch.delete(branch_name=branch)
+        logging.info("Deleted stale branch: %s", branch)
+    sync_client.branch.create(branch_name=branch, sync_with_git=False, wait_until_completion=True)
+    load_result = await asyncio.to_thread(
+        execute_command, f"infrahubctl object load {cfg['data_path']} --branch {branch}", address=config.address
+    )
+    assert load_result.returncode == 0, (
+        f"Failed to load {dc_name} data.\n  stdout: {load_result.stdout}\n  stderr: {load_result.stderr}"
+    )
+    logging.info("%s data loaded", dc_name)
+
+    # Loading the DC fires trigger-dc-generator-on-created (add_dc), which
+    # fans out to add_pod/add_rack per pod. Those per-pod events are not
+    # dispatched together, so the queue can go quiet between pods: 10 empty
+    # polls (50s) comfortably exceed that spread before "settled" is trusted.
+    logging.info("=== %s — Step 2-3: Triggered Generators + No Failed Tasks ===", dc_name)
+    # A busy event queue can hold the trigger back for longer than the quiet
+    # window below, which would then call an untouched branch "settled": wait
+    # for the triggered add_dc to have been dispatched first.
+
+    async def _add_dc_dispatched() -> tuple[bool, None]:
+        tasks = await client.task.filter(filter=TaskFilter(branch=branch))
+        return any(task.title == "Run generator add_dc" for task in tasks), None
+
+    await wait_for_condition(
+        check_fn=_add_dc_dispatched,
+        max_attempts=DC_CASCADE_MAX_POLLS,
+        poll_interval=5,
+        description=f"add_dc dispatched on branch '{branch}'",
+    )
+    await wait_for_tasks_completion(
+        client, branch, initial_delay=10, stable_zero_count=10, max_wait_attempts=DC_CASCADE_MAX_POLLS
+    )
+    await verify_no_failed_tasks(client=client, branch=branch)
+
+    logging.info("=== %s — Step 4: Verify Topology ===", dc_name)
+    topo, routing = await _fetch_topology_and_routing_when_settled(
+        client=client, branch=branch, dc_name=dc_name, cfg=cfg
+    )
+    _check_topology(topo, compute_role_counts(topo["devices"]), dc_name, branch, cfg, exact_roles=False)
+    _check_routing(routing, dc_name, branch, cfg)
+    logging.info("%s verified: %d devices, %d cables", dc_name, len(topo["devices"]), topo["cable_count"])
+
+    logging.info("=== %s — Step 5-6: Proposed Change + Validations ===", dc_name)
+    pc_result = await asyncio.to_thread(
+        create_and_validate_proposed_change,
+        client=sync_client,
+        name=f"deploy-{dc_key}",
+        source_branch=branch,
+        destination_branch="main",
+    )
+    logging.info("%s PC %s: %d validations", dc_name, pc_result["pc_id"], len(pc_result["validations"]))
+
+    logging.info("=== %s — Step 7: Verify Artifacts ===", dc_name)
+    # The pipeline creates the artifact validator only after the validators
+    # wait_for_validations already saw, and its "Check artifact creation"
+    # tasks queue behind every other DC's on the shared workers: let the
+    # branch settle, and give fetch_artifacts the cascade's window rather
+    # than its default two minutes.
+    await wait_for_tasks_completion(client, branch, stable_zero_count=3, max_wait_attempts=DC_CASCADE_MAX_POLLS)
+    artifacts_result = await fetch_artifacts(
+        client=client, branch=branch, expected_min_total=1, max_polls=DC_CASCADE_MAX_POLLS // 2
+    )
+    assert artifacts_result["total"] >= 1, f"Expected >= 1 artifact for {dc_name}, got {artifacts_result['total']}"
+    for art in artifacts_result["failed"]:
+        raise AssertionError(f"Artifact '{art['name']}' for {art['object']} has status '{art['status']}'")
+    logging.info("%s artifacts: %d", dc_name, artifacts_result["total"])
+    return pc_result["pc_id"]
+
+
 class TestDCDeployment(TestInfrahubDockerWithClient):
-    """Deploy DC1 – DC7 sequentially, each on its own branch."""
+    """Deploy DC1 – DC7 at the same time, each on its own branch, then merge them in turn."""
 
-    @pytest.mark.parametrize("dc_key", _PARAMS_DEPLOY_SEQUENCE)
+    @pytest.mark.order(99)
+    @pytest.mark.dependency(scope="session", depends=["triggers_active"])
     @pytest.mark.asyncio
-    async def test_01_deploy_and_merge(
-        self,
-        dc_key: str,
-        async_client_main: InfrahubClient,
-        client_main: InfrahubClientSync,
-    ) -> None:
-        """Load, generate, verify, and merge a single DC — steps 1-8.
+    async def test_00_deploy_all(self, client_main: InfrahubClientSync) -> None:
+        """Steps 1-7 for every DC concurrently. Each DC's outcome is recorded
+        in _DEPLOYED for its own merge test; this test fails if any DC did."""
+        limit = asyncio.Semaphore(DC_DEPLOYMENT_CONCURRENCY)
 
-        Deliberately stops at the merge. The next DC's dependency is on
-        this test alone (see the module docstring), so nothing this DC still
-        needs to check about its own post-merge state belongs here — that is
-        test_02_verify_after_merge's job, and it is not on the critical path
-        for any other DC.
-        """
-        cfg = DC_CONFIGS[dc_key]
-        branch = cfg["branch"]
-        dc_name = cfg["dc_name"]
+        async def _one(dc_key: str) -> None:
+            async with limit:
+                try:
+                    _DEPLOYED[dc_key] = await _deploy_dc(dc_key, client_main.config, self.execute_command)
+                except Exception as exc:
+                    logging.exception("%s deploy failed", DC_CONFIGS[dc_key]["dc_name"])
+                    _DEPLOYED[dc_key] = exc
 
-        logging.info("=== %s — Step 1: Load Data ===", dc_name)
-        existing = client_main.branch.all()
-        if branch in existing:
-            client_main.branch.delete(branch_name=branch)
-            logging.info("Deleted stale branch: %s", branch)
-        client_main.branch.create(branch_name=branch, sync_with_git=False, wait_until_completion=True)
-        logging.info("Created branch: %s", branch)
+        logging.info("Deploying %s, %d at a time", DC_ORDER, DC_DEPLOYMENT_CONCURRENCY)
+        await asyncio.gather(*(_one(dc_key) for dc_key in DC_ORDER))
+        failed = {key: outcome for key, outcome in _DEPLOYED.items() if isinstance(outcome, BaseException)}
+        assert not failed, "DC deploy(s) failed:\n" + "\n".join(f"  - {key}: {exc}" for key, exc in failed.items())
 
-        load_result = self.execute_command(
-            f"infrahubctl object load {cfg['data_path']} --branch {branch}",
-            address=client_main.config.address,
-        )
-        assert load_result.returncode == 0, (
-            f"Failed to load {dc_name} data.\n  stdout: {load_result.stdout}\n  stderr: {load_result.stderr}"
-        )
-        logging.info("%s data loaded", dc_name)
-
-        logging.info("=== %s — Step 2-3: Generator Pipeline + No Failed Tasks ===", dc_name)
-        pipeline_result = await run_dc_generator_pipeline(
-            client=async_client_main,
-            branch=branch,
-            dc_name=dc_name,
-            generator_name="add_dc",
-        )
-        logging.info("Generator task: %s", pipeline_result["generator"]["task_state"])
-
-        logging.info("=== %s — Step 4: Verify Topology ===", dc_name)
-
-        topo, routing = await _fetch_topology_and_routing_when_settled(
-            client=async_client_main,
-            branch=branch,
-            dc_name=dc_name,
-            cfg=cfg,
-        )
-        role_counts = compute_role_counts(topo["devices"])
-
-        _check_topology(topo, role_counts, dc_name, branch, cfg, exact_roles=False)
-        _check_routing(routing, dc_name, branch, cfg)
-
-        logging.info("%s verified: %d devices, %d cables", dc_name, len(topo["devices"]), topo["cable_count"])
-
-        logging.info("=== %s — Step 5: Create Proposed Change ===", dc_name)
-        pc_name = f"deploy-{dc_key}"
-        pc_result = create_and_validate_proposed_change(
-            client=client_main,
-            name=pc_name,
-            source_branch=cfg["branch"],
-            destination_branch="main",
-        )
-        pc_id = pc_result["pc_id"]
-        logging.info("PC created: %s", pc_id)
-        logging.info("=== %s — Step 6: Validations Completed ===", dc_name)
-        logging.info("Validations: %d checks", len(pc_result["validations"]))
-
-        logging.info("=== %s — Step 7: Verify Artifacts ===", dc_name)
-        artifacts_result = await fetch_artifacts(client=async_client_main, branch=branch, expected_min_total=1)
-        assert artifacts_result["total"] >= 1, f"Expected >= 1 artifact for {dc_name}, got {artifacts_result['total']}"
-        for art in artifacts_result["failed"]:
-            raise AssertionError(f"Artifact '{art['name']}' for {art['object']} has status '{art['status']}'")
-        logging.info("Artifacts: %d", artifacts_result["total"])
+    @pytest.mark.parametrize("dc_key", _PARAMS_MERGE_SEQUENCE)
+    def test_01_merge(self, dc_key: str, client_main: InfrahubClientSync) -> None:
+        """Merge this DC's proposed change — step 8. Needs only its own
+        deploy: every branch was cut before any DC merged."""
+        dc_name = DC_CONFIGS[dc_key]["dc_name"]
+        outcome = _DEPLOYED.get(dc_key)
+        if outcome is None:
+            pytest.fail(f"{dc_name} was not deployed (test_00_deploy_all did not run)")
+        if isinstance(outcome, BaseException):
+            raise AssertionError(f"{dc_name} deploy failed: {outcome}") from outcome
 
         logging.info("=== %s — Step 8: Merge to Main ===", dc_name)
-        merge_result = merge_proposed_change(client=client_main, pc_id=pc_id)
+        merge_result = merge_proposed_change(client=client_main, pc_id=outcome)
         failed_checks = merge_result.get("failed_checks") or []
         assert merge_result["success"], (
             f"Merge failed for {dc_name}.\n"
@@ -545,8 +580,7 @@ class TestDCDeployment(TestInfrahubDockerWithClient):
         """Verify devices and routing on main after the merge — step 9.
 
         Runs only once this DC's own merge succeeded (dependency: its
-        "_merged" marker), but a failure here does not skip the next DC —
-        see the module docstring.
+        "_merged" marker); a failure here touches no other DC.
         """
         cfg = DC_CONFIGS[dc_key]
         dc_name = cfg["dc_name"]

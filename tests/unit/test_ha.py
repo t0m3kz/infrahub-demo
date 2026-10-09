@@ -8,7 +8,7 @@ Covers:
 
 from __future__ import annotations
 
-from transforms.helpers.ha import get_ha
+from transforms.helpers.ha import HA_LINK_ADDRESSES, get_ha, inline_addresses
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -572,3 +572,80 @@ class TestGetHaProxyHA:
         result = get_ha([cap])
         assert result is not None
         assert result["name"] == "DC3-PRX-HA"
+
+
+def _ha_of(capabilities: list[dict], interfaces: list[dict], device_name: str) -> dict:
+    """get_ha() for a device that has an HA domain."""
+    ha = get_ha(capabilities, interfaces, device_name=device_name)
+    assert ha is not None
+    return ha
+
+
+class TestHaUnit:
+    """get_ha's unit and HA-link addresses follow the members sorted by name."""
+
+    @staticmethod
+    def _cap() -> dict:
+        return {
+            "typename": "ManagedFirewallHA",
+            "name": "fw-ha",
+            "capabilities": [{"name": "fw-02"}, {"name": "fw-01"}],
+        }
+
+    def test_first_member_by_name_is_primary(self) -> None:
+        """The lowest name is primary regardless of query order."""
+        assert _ha_of([self._cap()], [], "fw-01")["unit"] == "primary"
+        assert _ha_of([self._cap()], [], "fw-02")["unit"] == "secondary"
+        assert _ha_of([self._cap()], [], "other")["unit"] is None
+
+    def test_link_addresses_only_with_an_ha_link(self) -> None:
+        """The fixed link-local /30 is offered only when the device has an HA sync port."""
+        assert _ha_of([self._cap()], [], "fw-01")["link_addresses"] is None
+        ha = _ha_of([self._cap()], [{"name": "eth7", "role": "ha"}], "fw-01")
+        assert ha["link_addresses"] == HA_LINK_ADDRESSES
+
+
+class TestInlineAddresses:
+    """The pair's virtual IP and the secondary's own address on an inline-terminated segment."""
+
+    @staticmethod
+    def _ha() -> dict:
+        return _ha_of(
+            [
+                {
+                    "typename": "ManagedFirewallHA",
+                    "name": "fw-ha",
+                    "capabilities": [{"name": "fw-01"}, {"name": "fw-02"}],
+                }
+            ],
+            [],
+            "fw-01",
+        )
+
+    @staticmethod
+    def _segment(**overrides: object) -> dict:
+        segment = {
+            "terminate_inline": True,
+            "inline_service": {"name": "fw-ha"},
+            "gateway": {"address": "10.1.0.1/24"},
+            "interface_capabilities": [
+                {"device": {"name": "fw-01"}, "ip_address": {"address": "10.1.0.2/24"}},
+                {"device": {"name": "fw-02"}, "ip_address": {"address": "10.1.0.3/24"}},
+            ],
+        }
+        segment.update(overrides)
+        return segment
+
+    def test_virtual_ip_is_gateway_and_standby_is_secondary(self) -> None:
+        """Gateway becomes the virtual IP; the secondary member's address is the standby."""
+        assert inline_addresses([self._segment()], self._ha()) == {
+            "virtual_ip": "10.1.0.1/24",
+            "standby_ip": "10.1.0.3/24",
+        }
+
+    def test_segment_not_terminated_by_this_pair_has_none(self) -> None:
+        """Another pair's segment, or one not terminated inline, gives no addresses."""
+        none = {"virtual_ip": None, "standby_ip": None}
+        assert inline_addresses([self._segment(inline_service={"name": "lb-ha"})], self._ha()) == none
+        assert inline_addresses([self._segment(terminate_inline=False)], self._ha()) == none
+        assert inline_addresses([self._segment()], None) == none

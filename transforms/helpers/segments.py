@@ -3,17 +3,42 @@
 from typing import Any
 
 
+def is_inline_terminated(seg: dict) -> bool:
+    """True when the segment's L3 gateway is its inline_service HA pair, not the fabric.
+
+    terminate_inline segments still carry a `gateway` — the HA pair's virtual
+    IP, rendered by the firewall/LB/proxy transforms — but on every fabric
+    switch (leaf, ToR, border-leaf) they are pure L2: VLAN + L2 VNI only, no
+    SVI, no VRF, no L3 VNI, no PBR or SVI ACL. _get_segment_gateways and
+    _get_segment_namespace hide the gateway behind this check, so every fabric
+    consumer of them drops the L3 side at once.
+    """
+    return bool(seg.get("terminate_inline"))
+
+
+def routed_activations(activations: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    """The activations whose segment the fabric routes (not inline-terminated).
+
+    Input for everything that hangs off the segment's SVI: leaf/border-leaf
+    PBR and the zero-trust SVI ACLs.
+    """
+    return [act for act in activations or [] if not is_inline_terminated(act.get("segment") or {})]
+
+
 def _get_segment_gateways(seg: dict) -> tuple[str | None, str | None, str | None, Any]:
     """Extract the anycast gateway (v4 or v6) and VRF from a segment.
 
     The gateway (and its enclosing prefix/VRF) lives on the segment itself,
     reached via gateway.ip_prefix. A segment has at most one gateway address
     (either IPv4 or IPv6), so at most one subnet/VRF is derivable this way.
-    Segments with no gateway (L2-only, or terminate_inline where a firewall/LB
-    is the L3 boundary) have no resolvable subnet/VRF.
+    Segments with no gateway (L2-only) have no resolvable subnet/VRF, and a
+    terminate_inline segment's gateway belongs to its HA pair, so the fabric
+    sees none either (is_inline_terminated).
 
     Returns: (gateway_ip, gateway_ipv6, vrf, l3_vni)
     """
+    if is_inline_terminated(seg):
+        return None, None, None, None
     gateway_ip: str | None = None
     gateway_ipv6: str | None = None
     gw = seg.get("gateway") or {}
@@ -24,7 +49,7 @@ def _get_segment_gateways(seg: dict) -> tuple[str | None, str | None, str | None
         else:
             gateway_ip = gw_addr
 
-    ns = (gw.get("ip_prefix") or {}).get("ip_namespace") or {}
+    ns = _get_segment_namespace(seg)
     ns_name = ns.get("name")
     vrf = ns_name if ns_name and ns_name != "default" else None
     l3_vni = ns.get("l3_vni")
@@ -44,7 +69,14 @@ def _get_segment_prefix_str(seg: dict, family: str = "ipv4") -> str | None:
 
 
 def _get_segment_namespace(seg: dict) -> dict:
-    """Return the ip_namespace dict from the segment's gateway prefix."""
+    """Return the ip_namespace (VRF) the fabric routes the segment in.
+
+    Empty for a terminate_inline segment: the fabric does not route it, so it
+    contributes no VRF / L3 VNI (_l3_from_activations) and no multi-site VRF
+    import (_multisite_vrf_site_asns).
+    """
+    if is_inline_terminated(seg):
+        return {}
     return ((seg.get("gateway") or {}).get("ip_prefix") or {}).get("ip_namespace") or {}
 
 
@@ -129,6 +161,9 @@ def _vlans_from_activations(activations: list[dict[str, Any]]) -> list[dict[str,
                 "arp_suppression": seg.get("arp_suppression", True),
                 "vrf": vrf,
                 "isolation_mode": seg.get("isolation_mode") or "normal",
+                # Pure L2 on the fabric: no SVI of any kind (SONiC's
+                # VLAN_INTERFACE is emitted even for gateway-less VLANs).
+                "terminate_inline": is_inline_terminated(seg),
                 "sgt": sgt.get("group_id"),
                 "sgt_name": sgt.get("name"),
             }

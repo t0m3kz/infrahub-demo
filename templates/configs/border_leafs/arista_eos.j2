@@ -39,7 +39,10 @@ interface {{ interface.name }}
    encapsulation dot1q vlan {{ interface.dot1q_vlan }}
 {%- endif %}
 {%- include 'common/arista_eos_interface_ip.j2' %}
-{%- if interface.vlans %}
+{%- if interface.mode == 'trunk' %}
+   switchport mode trunk
+   switchport trunk allowed vlan {{ interface.vlans|join(',') }}
+{%- elif interface.vlans %}
 {%- if interface.vlans|length == 1 %}
    switchport access vlan {{ interface.vlans[0] }}
 {%- else %}

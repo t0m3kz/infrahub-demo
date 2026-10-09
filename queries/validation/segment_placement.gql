@@ -4,6 +4,8 @@ query segment_placement {
       node {
         id
         name { value }
+        terminate_inline { value }
+        inline_service { node { id __typename name { value } } }
         customer_deployment {
           node {
             id
@@ -21,6 +23,8 @@ query segment_placement {
         id
         name { value }
         stretch_scope { value }
+        terminate_inline { value }
+        inline_service { node { id __typename name { value } } }
         customer_deployments {
           edges {
             node {

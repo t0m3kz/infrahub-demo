@@ -1,0 +1,21 @@
+---
+# Global BGP address families every fabric references. They live in bootstrap,
+# on main, so that branches deploying fabrics in parallel all find the same
+# node: a branch that creates its own (generators/routing.py's
+# _ensure_evpn_af_node keeps that only as a fallback) collides with every
+# other such branch on merge (uniqueness [afi, safi]). Values mirror that
+# fallback. ipv4/unicast is the one the interconnect demos (30_all
+# 08_interconnects) reference.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingBGPAddressFamily
+  data:
+    - afi: l2vpn
+      safi: evpn
+      advertise_all_vni: true
+      advertise_default_gw: true
+      description: "L2VPN EVPN overlay"
+    - afi: ipv4
+      safi: unicast
+      description: "IPv4 unicast"

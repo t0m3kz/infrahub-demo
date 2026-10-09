@@ -37,6 +37,13 @@ nodes:
         parameters:
           min_value: 1
           max_value: 4094
+      - name: terminate_inline
+        kind: Boolean
+        label: Terminate Inline
+        optional: true
+        default_value: false
+        order_weight: 16
+        description: "When true, the inline_service HA pair is the segment's gateway. Leaf is pure L2."
     relationships:
       - name: customer_deployment
         peer: TopologyCustomer
@@ -87,7 +94,7 @@ nodes:
         optional: true
         default_value: false
         order_weight: 4
-        description: "When true, FW/LB terminates traffic inline. Leaf is pure L2."
+        description: "When true, the inline_service HA pair is the segment's gateway. Leaf is pure L2."
       - name: stretch_scope
         kind: Dropdown
         label: Stretch Scope
@@ -149,9 +156,6 @@ nodes:
     uniqueness_constraints:
       - [segment, deployment]
     attributes:
-      - name: vlan_id
-        kind: Number
-        state: absent
       - name: vni
         kind: Number
         label: L2 VNI

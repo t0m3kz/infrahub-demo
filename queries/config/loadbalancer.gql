@@ -51,6 +51,7 @@ query loadbalancer_config($device: String!) {
                 edges {
                   node {
                     __typename
+                    ...InlineTerminationFields
                     ... on LoadbalancerVIP {
                       hostname { value }
                       protocol { value }

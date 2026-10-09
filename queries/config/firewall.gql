@@ -58,6 +58,22 @@ query firewall_config(
                   node {
                     __typename
                     ...NetworkSegmentFields
+                    # The segment's other interfaces: on an HA pair terminating
+                    # it inline, the secondary member's own address is the
+                    # ASA `standby` address (transforms/helpers/ha.py).
+                    ... on ManagedVxlanSegment { ...InlineSegmentMemberFields }
+                    ... on ManagedVlanSegment { ...InlineSegmentMemberFields }
+                    # A context-less firewall also enforces the rules of
+                    # every segment in a zone bound on one of its interfaces:
+                    # it routes that zone's CIDRs through the leg
+                    # (transforms/helpers/firewall.py place_policies_in_contexts).
+                    ... on ManagedNetworkSegment {
+                      security_zone {
+                        node {
+                          network_segments { edges { node { id ...SegmentRulesFields } } }
+                        }
+                      }
+                    }
                     ... on ManagedFirewallContext {
                       id
                       name { value }
@@ -70,7 +86,19 @@ query firewall_config(
                           ... on TopologyCustomerColocation { name { value } }
                         }
                       }
-                      served_deployments { edges { node { id } } }
+                      # The segments terminating on this context: every
+                      # segment of a deployment it serves. Its rule table is
+                      # their rules and the rules into them.
+                      served_deployments {
+                        edges {
+                          node {
+                            id
+                            ... on TopologyCustomer {
+                              network_segments { edges { node { id ...SegmentRulesFields } } }
+                            }
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -82,12 +110,13 @@ query firewall_config(
     }
   }
 
+  # Every zone with its member CIDRs: the address objects and the static
+  # routes behind each zone leg (get_firewall_zones / get_firewall_static_routes).
   SecurityZone {
     edges {
       node {
         name { value }
         trust_level { value }
-        zone_type { value }
         description { value }
         network_segments {
           edges {
@@ -98,68 +127,6 @@ query firewall_config(
             }
           }
         }
-      }
-    }
-  }
-
-  SecurityPolicy {
-    edges {
-      node {
-        id
-        name { value }
-        enabled { value }
-        default_action { value }
-        rules {
-          edges {
-            node {
-              index { value }
-              name { value }
-              action { value }
-              protocol { value }
-              port_start { value }
-              port_end { value }
-              log { value }
-              disabled { value }
-              apply_on_switch { value }
-              description { value }
-              source_zone { node { name { value } } }
-              destination_zone { node { name { value } } }
-              source_segment {
-                node {
-                  id
-                  security_zone { node { name { value } } }
-                  security_tag { node { id name { value } } }
-                  ... on ManagedVlanSegment { name { value } customer_name { value } environment { value } gateway { node { ip_prefix { node { prefix { value } } } } } customer_deployment { node { id } } }
-                  ... on ManagedVxlanSegment { name { value } customer_name { value } environment { value } gateway { node { ip_prefix { node { prefix { value } } } } } customer_deployments { edges { node { id } } } }
-                }
-              }
-              destination_segment {
-                node {
-                  id
-                  security_zone { node { name { value } } }
-                  security_tag { node { id name { value } } }
-                  ... on ManagedVlanSegment { name { value } customer_name { value } environment { value } gateway { node { ip_prefix { node { prefix { value } } } } } customer_deployment { node { id } } }
-                  ... on ManagedVxlanSegment { name { value } customer_name { value } environment { value } gateway { node { ip_prefix { node { prefix { value } } } } } customer_deployments { edges { node { id } } } }
-                }
-              }
-              source_ip_addresses { edges { node { id address { value } } } }
-              destination_ip_addresses { edges { node { id address { value } } } }
-              source_prefixes { edges { node { id prefix { value } } } }
-              destination_prefixes { edges { node { id prefix { value } } } }
-              security_profile { node { name { value } } }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  SecurityTagRule {
-    edges {
-      node {
-        source_tag { node { id name { value } } }
-        destination_tag { node { id name { value } } }
-        action { value }
       }
     }
   }

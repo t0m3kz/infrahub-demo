@@ -5,7 +5,7 @@ Covers rule naming (one rule per dependency and port), rule descriptions
 (including target_fqdn external targets), dependency authorization (owner
 approval, prod/non-prod separation),
 rule-payload building, zone context, and the security_profile-driven mappings
-(pick_zone_name, zone_seed).
+(pick_zone_name).
 """
 
 from __future__ import annotations
@@ -307,12 +307,6 @@ class TestPickZoneName:
     def test_pick_zone_name_maps_every_non_production_environment_to_nonprod(self):
         for environment in ("n", "s", "d", "t"):
             assert RulesPlanner.pick_zone_name(environment) == "NONPROD-ZONE"
-
-
-class TestZoneSeed:
-    def test_zone_seed_matches_prod_and_nonprod_trust_levels(self):
-        assert RulesPlanner.zone_seed("PROD-ZONE")["trust_level"] == 70
-        assert RulesPlanner.zone_seed("NONPROD-ZONE")["trust_level"] == 50
 
 
 # ===========================================================================

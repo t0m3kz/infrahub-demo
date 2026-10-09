@@ -41,26 +41,6 @@ nodes:
         description: "Trust level (0-100), higher is more trusted"
         optional: false
         order_weight: 1200
-      - name: zone_type
-        kind: Dropdown
-        label: Zone Type
-        description: "Type of security zone"
-        choices:
-          - name: internal
-            label: Internal
-            description: "Internal trusted network"
-          - name: dmz
-            label: DMZ
-            description: "Demilitarized zone"
-          - name: external
-            label: External
-            description: "External untrusted network"
-          - name: management
-            label: Management
-            description: "Management network"
-        default_value: internal
-        optional: true
-        order_weight: 1300
     relationships:
       - name: network_segments
         peer: ManagedNetworkSegment
@@ -71,24 +51,6 @@ nodes:
         order_weight: 2100
         identifier: network_segment__security_zone
         description: "Network segments assigned to this security zone"
-      - name: rules_as_source
-        peer: SecurityPolicyRule
-        label: Rules as Source
-        cardinality: many
-        kind: Generic
-        optional: true
-        order_weight: 2200
-        identifier: policyrule_source_zone
-        description: "Policy rules where this zone is the source"
-      - name: rules_as_dest
-        peer: SecurityPolicyRule
-        label: Rules as Destination
-        cardinality: many
-        kind: Generic
-        optional: true
-        order_weight: 2300
-        identifier: policyrule_destination_zone
-        description: "Policy rules where this zone is the destination"
 
   # ==========================================
   # Security Profiles — Threat Prevention
@@ -115,41 +77,6 @@ nodes:
         label: Description
         optional: true
         order_weight: 1100
-      - name: antivirus_enabled
-        kind: Boolean
-        label: Antivirus Enabled
-        description: "Enable antivirus scanning"
-        default_value: false
-        optional: true
-        order_weight: 1200
-      - name: ips_enabled
-        kind: Boolean
-        label: IPS Enabled
-        description: "Enable intrusion prevention system"
-        default_value: false
-        optional: true
-        order_weight: 1300
-      - name: url_filtering_enabled
-        kind: Boolean
-        label: URL Filtering Enabled
-        description: "Enable URL filtering"
-        default_value: false
-        optional: true
-        order_weight: 1400
-      - name: ssl_inspection_enabled
-        kind: Boolean
-        label: SSL Inspection Enabled
-        description: "Enable SSL/TLS inspection"
-        default_value: false
-        optional: true
-        order_weight: 1500
-      - name: data_loss_prevention_enabled
-        kind: Boolean
-        label: DLP Enabled
-        description: "Enable data loss prevention"
-        default_value: false
-        optional: true
-        order_weight: 1600
 
   # ==========================================
   # Security Policies — Segment Contracts
@@ -161,11 +88,13 @@ nodes:
     icon: "mdi:file-document-outline"
     include_in_menu: false
     menu_placement: SecurityZone
-    inherit_from:
-      - ManagedGenericDevice
     order_by:
       - name__value
     display_label: "{{ name__value }}"
+    # Generated and hand-written rules of one segment meet in one policy, so
+    # the object loader has to find it by name rather than create a second.
+    human_friendly_id:
+      - name__value
     attributes:
       - name: name
         kind: Text
@@ -208,6 +137,17 @@ nodes:
         optional: true
         order_weight: 2000
         description: "Ordered rules in this policy"
+      # Reverse of ManagedNetworkSegment.security_policy: the segment whose
+      # outbound traffic this policy is the contract for.
+      - name: segment
+        peer: ManagedNetworkSegment
+        label: Segment
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 1900
+        identifier: network_segment__security_policy
+        description: "The segment whose outbound traffic this policy governs"
 
   # ==========================================
   # Policy Rules — Per-Flow Enforcement
@@ -223,6 +163,7 @@ nodes:
       - index__value
     display_label: "{{ name__value }}"
     human_friendly_id:
+      - policy__name__value
       - name__value
     uniqueness_constraints:
       - [policy, index__value]
@@ -337,35 +278,18 @@ nodes:
         kind: Attribute
         optional: false
         order_weight: 2000
-      # Macro-segmentation: zone-level match
-      - name: source_zone
-        peer: SecurityZone
-        label: Source Zone
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: policyrule_source_zone
-        order_weight: 2100
-        description: "Source security zone (macro-segmentation)"
-      - name: destination_zone
-        peer: SecurityZone
-        label: Destination Zone
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: policyrule_destination_zone
-        order_weight: 2200
-        description: "Destination security zone (macro-segmentation)"
       # Micro-segmentation: segment-level match
+      # Every rule lives in its source segment's policy, so every rule has one;
+      # source_prefixes/source_ip_addresses only narrow it.
       - name: source_segment
         peer: ManagedNetworkSegment
         label: Source Segment
         cardinality: one
         kind: Attribute
-        optional: true
+        optional: false
         order_weight: 2300
         identifier: policyrule_source_segment
-        description: "Source network segment (micro-segmentation)"
+        description: "Source network segment — the segment whose policy holds this rule"
       - name: destination_segment
         peer: ManagedNetworkSegment
         label: Destination Segment
@@ -425,18 +349,20 @@ extensions:
   nodes:
     - kind: ManagedNetworkSegment
       relationships:
-        - name: security_policies
+        - name: security_policy
           peer: SecurityPolicy
-          cardinality: many
-          kind: Generic
+          label: Security Policy
+          cardinality: one
+          kind: Attribute
           optional: true
           order_weight: 905
-          identifier: network_segment__security_policies
-          description: "Security policies attached to this segment"
+          identifier: network_segment__security_policy
+          description: "The segment's egress contract: default action and ordered rules for traffic leaving it"
         # Reverse side of SecurityPolicyRule.destination_segment (same
         # identifier), written only from the rule: the rules that let traffic
-        # INTO this segment. A leaf carrying only this segment builds the
-        # return path from them.
+        # INTO this segment, from whichever segment's policy holds them. A leaf
+        # carrying only this segment builds the return path from them; the
+        # rules OUT of it are its own security_policy's.
         - name: inbound_rules
           peer: SecurityPolicyRule
           label: Inbound Rules

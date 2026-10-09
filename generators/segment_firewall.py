@@ -9,7 +9,7 @@ from utils.ports import PortSpec
 
 from .helpers.rules import RulesPlanner
 from .named_objects import GetOrCreateByNameMixin
-from .protocols import SecurityPolicy, SecurityPolicyRule, SecuritySecurityProfile, SecurityTagRule, SecurityZone
+from .protocols import SecurityPolicy, SecurityPolicyRule, SecuritySecurityProfile
 
 if TYPE_CHECKING:
     import logging
@@ -55,8 +55,8 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
     """On-prem segment-to-segment dependency rules — the SecurityPolicy/
     SecurityPolicyRule path dispatched from _reconcile_application_rules for
     every AppDependency edge that isn't cloud-side (CloudSecurityRuleMixin)
-    or external (target_fqdn, ZtnaMixin's egress path). Also owns macro-zone/threat-profile lookups and the SecurityTagRule
-    micro-segmentation mirror. The return leg of a rule is not a rule of its
+    or external (target_fqdn, ZtnaMixin's egress path). Also owns
+    threat-profile lookups. The return leg of a rule is not a rule of its
     own: the destination segment's leaf ACL builds it from inbound_rules
     (transforms/helpers/acl.py).
 
@@ -104,8 +104,7 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
 
         policy = segment_policies.get(src_seg_id)
         if policy is None:
-            policy_name = planner.segment_policy_name(src_seg)
-            policy = await self._get_or_create_policy(policy_name, src_seg_name)
+            policy = await self._segment_policy(src_seg, planner.segment_policy_name(src_seg))
             if policy is None:
                 return False, True
             segment_policies[src_seg_id] = policy
@@ -126,15 +125,23 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
 
         existing_rule = await self._find_rule_by_name(SecurityPolicyRule, policy_id, rule_name)
         if existing_rule is not None:
+            existing_index = existing_rule.index.value
+            if existing_index is not None and int(existing_index) < RULE_INDEX_START:
+                # A hand-written rule of the segment (index < 100) with this
+                # name: never adopt it into this application's group, whose
+                # cleanup would then delete it.
+                self.logger.error(
+                    "  Rule '%s' is a hand-written rule (index %s) of policy %s — rename one of them",
+                    rule_name,
+                    existing_index,
+                    policy_id,
+                )
+                return False, True
             self.logger.info("  Rule '%s' already exists - registering with tracker", rule_name)
+            if _is_expired(existing_rule.expires_at.value) and not existing_rule.disabled.value:
+                existing_rule.disabled.value = True
+                self.logger.info("  Rule '%s' expired — disabling it", rule_name)
             await existing_rule.save(allow_upsert=True)
-            await self._reconcile_tag_rule_from_segments(
-                src_seg=src_seg,
-                dst_seg=dst_seg,
-                app_name=app_name,
-                dep_name=dep.get("name", dep.get("id", "?")),
-                log=cross_zone,
-            )
             return False, True
 
         rule_data = planner.build_rule_payload(
@@ -150,16 +157,6 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
             port_end=port_end,
             cross_zone=cross_zone,
         )
-
-        if src_zone:
-            src_zone_obj = await self._get_zone(src_zone)
-            if src_zone_obj:
-                rule_data["source_zone"] = {"id": src_zone_obj.id}
-
-        if dst_zone:
-            dst_zone_obj = await self._get_zone(dst_zone)
-            if dst_zone_obj:
-                rule_data["destination_zone"] = {"id": dst_zone_obj.id}
 
         profile_name = planner.pick_profile_name(app_security_profile, cross_zone)
         if profile_name:
@@ -183,31 +180,31 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
                 protocol,
                 port_start or "any",
             )
-            await self._reconcile_tag_rule_from_segments(
-                src_seg=src_seg,
-                dst_seg=dst_seg,
-                app_name=app_name,
-                dep_name=dep.get("name", dep.get("id", "?")),
-                log=cross_zone,
-            )
             return True, False
         except Exception as exc:
             self.logger.error("  Failed to create rule '%s': %s", rule_name, exc)
             return False, False
 
-    async def _get_or_create_policy(self, policy_name: str, app_name: str) -> Any | None:
-        """The source segment's SecurityPolicy, untracked: every application
-        with a component on that segment writes its rules into this one
-        policy, so no application's run owns it (its rules stay owned by the
+    async def _segment_policy(self, segment: dict[str, Any], policy_name: str) -> Any | None:
+        """The source segment's one SecurityPolicy: the one it already has
+        (from this generator or a hand-written data file), else its
+        deterministic seg-<segment>-egress, created with the segment set.
+        Untracked: every application with a component on that segment writes
+        its rules into this one policy, and hand-written rules live there too,
+        so no application's run owns it (its rules stay owned by the
         application that produced them)."""
+        existing_id = (segment.get("security_policy") or {}).get("id")
+        if existing_id:
+            return await self.client.get(kind=SecurityPolicy, id=existing_id)
         return await self._get_or_create_by_name(
             kind=SecurityPolicy,
             name=policy_name,
             create_data={
                 "name": policy_name,
-                "description": f"Auto-generated dependency rules for source segment {app_name}",
+                "description": f"Egress contract of segment {segment.get('name') or segment.get('id')}",
                 "default_action": "deny",
                 "enabled": True,
+                "segment": {"id": segment["id"]},
             },
             found_log="Using existing policy: %s",
             created_log="Created policy: %s",
@@ -287,37 +284,10 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
             setattr(self, cache_attr, cache)
         return cache[name]
 
-    async def _get_zone(self, zone_name: str) -> Any | None:
-        return await self._cached_lookup_by_name(cache_attr="_zone_cache", kind=SecurityZone, name=zone_name)
-
     async def _get_profile(self, profile_name: str) -> Any | None:
         return await self._cached_lookup_by_name(
             cache_attr="_profile_cache", kind=SecuritySecurityProfile, name=profile_name
         )
-
-    async def _attach_policy_to_source_segment(self, segment: dict[str, Any], policy_id: str) -> None:
-        seg_id = segment.get("id")
-        if not seg_id:
-            return
-
-        seg_typename = segment.get("typename", "ManagedVxlanSegment")
-        try:
-            seg_obj = await self.client.get(kind=seg_typename, id=seg_id)
-            policies_rel = getattr(seg_obj, "security_policies")
-            await policies_rel.fetch()
-            existing_policy_ids = {peer.id for peer in policies_rel.peers}
-            if policy_id not in existing_policy_ids:
-                await self._safe_rel_add(policies_rel, {"id": policy_id})
-                await seg_obj.save(allow_upsert=True, update_group_context=False)
-                self.logger.info("  Attached source policy to segment %s", segment.get("name", seg_id))
-            else:
-                await seg_obj.save(allow_upsert=True, update_group_context=False)
-        except Exception as exc:
-            self.logger.warning(
-                "  Could not attach source policy to segment %s: %s",
-                segment.get("name", seg_id),
-                exc,
-            )
 
     async def _ensure_segment_isolation_mode(self, segment: dict[str, Any], app_security_profile: str) -> None:
         """Derive and set a segment's isolation_mode from its application's
@@ -344,58 +314,3 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
             self.logger.info("  Derived isolation_mode '%s' for segment %s", derived, segment.get("name", seg_id))
         except Exception as exc:
             self.logger.warning("  Could not set isolation_mode on segment %s: %s", segment.get("name", seg_id), exc)
-
-    async def _reconcile_tag_rule_from_segments(
-        self,
-        src_seg: dict[str, Any],
-        dst_seg: dict[str, Any],
-        app_name: str,
-        dep_name: str,
-        log: bool,
-    ) -> None:
-        src_tag = src_seg.get("security_tag") or {}
-        dst_tag = dst_seg.get("security_tag") or {}
-        src_tag_id = str(src_tag.get("id") or "")
-        dst_tag_id = str(dst_tag.get("id") or "")
-
-        if not src_tag_id or not dst_tag_id:
-            return
-
-        try:
-            existing = await self.client.filters(
-                kind=SecurityTagRule,
-                source_tag__ids=[src_tag_id],
-                destination_tag__ids=[dst_tag_id],
-            )
-            if existing:
-                return
-        except Exception:
-            pass
-
-        try:
-            tag_rule = await self.client.create(
-                kind=SecurityTagRule,
-                data={
-                    "source_tag": {"id": src_tag_id},
-                    "destination_tag": {"id": dst_tag_id},
-                    "action": "permit",
-                    "log": log,
-                    "description": f"Auto-generated from {app_name} dependency {dep_name}",
-                },
-            )
-            # update_group_context=False: one (source tag, destination tag)
-            # pair is reached by every application with a dependency between
-            # those two segments, so no single application's run owns it.
-            await tag_rule.save(allow_upsert=True, update_group_context=False)
-            self.logger.info(
-                "  Reconciled SecurityTagRule %s -> %s",
-                src_tag.get("name", src_tag_id),
-                dst_tag.get("name", dst_tag_id),
-            )
-        except Exception as exc:
-            self.logger.warning(
-                "  Could not reconcile SecurityTagRule for %s -> %s: %s",
-                src_tag.get("name", src_tag_id),
-                dst_tag.get("name", dst_tag_id),
-                exc,
-            )

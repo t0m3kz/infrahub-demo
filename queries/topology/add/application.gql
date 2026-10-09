@@ -4,6 +4,9 @@ fragment SegmentSecurityFields on ManagedNetworkSegment {
   security_zone { node { name { value } trust_level { value } } }
   security_tag { node { id name { value } } }
   gateway { node { ip_prefix { node { prefix { value } } } } }
+  # The segment's one egress policy, whoever created it (this generator or a
+  # hand-written data file): its rules are added there, never to a second one.
+  security_policy { node { id name { value } } }
 }
 
 fragment AppComponentSecurityFields on AppComponent {

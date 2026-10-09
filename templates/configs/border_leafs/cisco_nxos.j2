@@ -38,7 +38,11 @@ interface {{ interface.name }}
   no shutdown
 {%- endif %}
 {%- include 'common/cisco_nxos_interface_ip.j2' %}
-{%- if interface.vlans %}
+{%- if interface.mode == 'trunk' %}
+  switchport
+  switchport mode trunk
+  switchport trunk allowed vlan {{ interface.vlans|join(',') }}
+{%- elif interface.vlans %}
   switchport
   switchport mode access
   switchport access vlan {{ interface.vlans[0] }}

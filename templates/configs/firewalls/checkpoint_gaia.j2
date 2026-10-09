@@ -94,11 +94,18 @@ set virtual-system {{ context.name }}
 ! --- ClusterXL ---
 set cluster member priority {{ ha.priority }}
 set cluster mode {{ 'HighAvailability' if ha.mode == 'active-passive' else 'LoadSharing' }}
-{%- if ha.virtual_ip %}
-set cluster virtual-ip {{ ha.virtual_ip }}
-{%- endif %}
 {%- if ha.ha_link %}
+{%- if ha.unit %}
+set interface {{ ha.ha_link }} ipv4-address {{ ha.link_addresses[ha.unit] | replace('/', ' mask-length ') }}
+{%- endif %}
 set cluster sync-interface {{ ha.ha_link }}
 {%- endif %}
+{#- ClusterXL: each member keeps its own interface address; the cluster
+    virtual IP of a segment the pair terminates inline is its gateway,
+    defined on the cluster object through the management API. -#}
+{%- for iface in fw_interfaces if iface.virtual_ip %}
+{%- set iface_name = (iface.parent_interface.name + '.' + iface.vlan_id | string) if (iface.vlan_id and iface.parent_interface) else iface.name %}
+mgmt_cli set simple-cluster name "{{ ha.name }}" interfaces.add.1.name "{{ iface_name }}" interfaces.add.1.interface-type "cluster" interfaces.add.1.ip-address "{{ iface.virtual_ip.split('/')[0] }}" interfaces.add.1.network-mask "{{ iface.virtual_ip.split('/')[1] | int | cidr_to_netmask }}"
+{%- endfor %}
 !
 {%- endif %}

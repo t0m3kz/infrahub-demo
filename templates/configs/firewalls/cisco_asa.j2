@@ -1,10 +1,22 @@
 {#- Cisco ASA — zone-based firewall configuration -#}
 {#- One ACL per source zone; a context has a single customer-pbr interface,
     so its rules share one ACL bound there (acl_name). -#}
+{#- ASA takes IPv4 networks as "address netmask" and a /32 as "host address";
+    IPv6 keeps prefix notation. -#}
+{%- macro asa_addr(cidr) -%}
+{%- if not cidr -%}any
+{%- elif ':' in cidr -%}{{ cidr }}
+{%- elif cidr.endswith('/32') -%}host {{ cidr.split('/')[0] }}
+{%- else -%}{{ cidr.split('/')[0] }} {{ cidr.split('/')[1] | int | cidr_to_netmask }}
+{%- endif -%}
+{%- endmacro -%}
+{%- macro asa_ip(address) -%}
+{{ address.split('/')[0] }} {{ address.split('/')[1] | int | cidr_to_netmask }}
+{%- endmacro -%}
 {%- macro access_lists(policies, acl_name=none) %}
 {%- for policy in policies %}
 {%- for rule in policy.rules %}
-access-list {{ acl_name or ((rule.src_zone or 'global') + '-in') }} extended {{ 'permit' if rule.action == 'permit' else 'deny' }} {{ rule.protocol }} {{ rule.src or 'any' }} {{ rule.dst or 'any' }}{{ ' ' + rule.dst_port if rule.dst_port else '' }}{{ ' log' if rule.log else '' }}
+access-list {{ acl_name or ((rule.src_zone or 'global') + '-in') }} extended {{ 'permit' if rule.action == 'permit' else 'deny' }} {{ rule.protocol }} {{ asa_addr(rule.src) }} {{ asa_addr(rule.dst) }}{{ ' ' + rule.dst_port if rule.dst_port else '' }}{{ ' log' if rule.log else '' }}
 {%- endfor %}
 {%- endfor %}
 {%- endmacro -%}
@@ -21,10 +33,13 @@ interface {{ iface.parent_interface.name }}.{{ iface.vlan_id }}
 interface {{ iface.name }}
 {%- endif %}
 {%- if iface.ip_address %}
-{%- if ':' in iface.ip_address.address %}
- ipv6 address {{ iface.ip_address.address }}
+{#- On an HA pair terminating the segment inline, the active unit holds the
+    gateway (virtual_ip) and the standby unit the secondary's own address. -#}
+{%- set addr = iface.virtual_ip or iface.ip_address.address %}
+{%- if ':' in addr %}
+ ipv6 address {{ addr }}{{ ' standby ' + iface.standby_ip.split('/')[0] if iface.standby_ip else '' }}
 {%- else %}
- ip address {{ iface.ip_address.address | replace('/', ' ') }}
+ ip address {{ asa_ip(addr) }}{{ ' standby ' + iface.standby_ip.split('/')[0] if iface.standby_ip else '' }}
 {%- endif %}
 {%- endif %}
 {%- if iface.security_zone %}
@@ -41,7 +56,7 @@ interface {{ iface.name }}
 {%- if static_routes %}
 ! --- Static Routes (return path to leaf per zone) ---
 {%- for route in static_routes %}
-route {{ route.interface }} {{ route.destination | replace('/', ' ') }} {{ route.nexthop }} 1
+route {{ route.zone }} {{ asa_addr(route.destination) }} {{ route.nexthop }} 1
 {%- endfor %}
 !
 {%- endif %}
@@ -50,11 +65,24 @@ route {{ route.interface }} {{ route.destination | replace('/', ' ') }} {{ route
 {{- access_lists(zone_policies) }}
 !
 ! --- Access Groups ---
+{#- Bind only ACLs that exist: an access-group naming an ACL with no entries
+    is rejected. Rules with no source zone (and the implicit deny) form the
+    global ACL, applied to every interface after its own. #}
+{%- set acl_names = [] %}
+{%- for policy in zone_policies %}
+{%- for rule in policy.rules %}
+{%- set acl = (rule.src_zone or 'global') + '-in' %}
+{%- if acl not in acl_names %}{%- set _ = acl_names.append(acl) %}{%- endif %}
+{%- endfor %}
+{%- endfor %}
 {%- for iface in fw_interfaces %}
-{%- if iface.security_zone %}
+{%- if iface.security_zone and (iface.security_zone.name + '-in') in acl_names %}
 access-group {{ iface.security_zone.name }}-in in interface {{ iface.security_zone.name }}
 {%- endif %}
 {%- endfor %}
+{%- if 'global-in' in acl_names %}
+access-group global-in global
+{%- endif %}
 {%- endif %}
 {%- if contexts %}
 !
@@ -87,11 +115,14 @@ interface {{ context.parent_interface.name }}.{{ context.vlan_id }}
 {%- if ':' in context.ip_address %}
  ipv6 address {{ context.ip_address }}
 {%- else %}
- ip address {{ context.ip_address | replace('/', ' ') }}
+ ip address {{ asa_ip(context.ip_address) }}
 {%- endif %}
  nameif customer-pbr
  security-level 50
  no shutdown
+!
+{#- PBR sends the redirected traffic back out of the interface it came in on. #}
+same-security-traffic permit intra-interface
 !
 {%- endif %}
 {%- endfor %}
@@ -108,19 +139,19 @@ access-group customer-pbr-in in interface customer-pbr
 {%- if ha %}
 !
 ! --- Failover (HA) ---
-failover
-failover group {{ ha.group_id }}
+{%- if ha.unit %}
+failover lan unit {{ ha.unit }}
+{%- endif %}
+{%- if ha.ha_link %}
+failover lan interface FOLINK {{ ha.ha_link }}
+failover link FOLINK {{ ha.ha_link }}
+failover interface ip FOLINK {{ asa_ip(ha.link_addresses.primary) }} standby {{ ha.link_addresses.secondary.split('/')[0] }}
+{%- endif %}
 {%- if ha.mode == 'active-active' %}
 failover group {{ ha.group_id }}
  primary
 {%- endif %}
-{%- if ha.ha_link %}
-failover interface ip {{ ha.ha_link }} standby
-failover link {{ ha.ha_link }}
-{%- endif %}
-{%- if ha.virtual_ip %}
-failover interface ip mgmt {{ ha.virtual_ip }} 255.255.255.0 standby {{ ha.virtual_ip }}
-{%- endif %}
+failover
 !
 {%- endif %}
 end

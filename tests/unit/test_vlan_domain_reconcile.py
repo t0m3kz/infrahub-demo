@@ -13,7 +13,7 @@ the lock, and that a missing standalone domain aborts before any delete.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -38,7 +38,7 @@ def _make_gen() -> Any:
     gen.locked_keys = []
 
     @asynccontextmanager
-    async def _lock(key: str) -> AsyncIterator[None]:
+    async def _lock(key: str) -> AsyncGenerator[None]:
         gen.locked_keys.append(key)
         yield
 
@@ -143,7 +143,10 @@ class TestFetchSegmentVlanState:
         query = (root_dir / "queries" / "topology" / "add" / "segment_vlan_domains.gql").read_text()
         compact = " ".join(query.split())
         assert "... on TopologyDataCenter { children { edges { node { ... on TopologyPod { id } } } } }" in compact
-        assert "interface_capabilities { edges { node { id __typename device { node { id } } } } }" in compact
+        assert (
+            "interface_capabilities { edges { node { id __typename role { value } device { node { id } } } } }"
+            in compact
+        )
         assert "ManagedVlanDomainSegment(segment__ids: [$segment_id])" in compact
 
 
@@ -158,6 +161,18 @@ class TestTaggedInterfaceIds:
             ]
         }
         assert VlanDomainMixin.tagged_interface_ids(segment) == {"if-1", "po-1"}
+
+    def test_service_ports_are_kept_apart_from_customer_ports(self) -> None:
+        """Border-leaf firewall/load-balancer ports belong to inline termination, not to AppComponents."""
+        segment = {
+            "interface_capabilities": [
+                {"id": "if-1", "typename": "DcimPhysicalInterface", "role": "customer"},
+                {"id": "fw-1", "typename": "DcimPhysicalInterface", "role": "firewall"},
+                {"id": "lb-1", "typename": "DcimPhysicalInterface", "role": "load-balancer"},
+            ]
+        }
+        assert VlanDomainMixin.tagged_interface_ids(segment) == {"if-1"}
+        assert VlanDomainMixin.tagged_interface_ids(segment, service_ports=True) == {"fw-1", "lb-1"}
 
 
 # ===========================================================================

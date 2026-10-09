@@ -115,3 +115,58 @@ class TestSegmentPlacementCheck:
         check.validate(payload)
 
         assert check._captured_errors == []
+
+
+class TestInlineTermination:
+    """terminate_inline needs an on-prem HA pair: the fabric drops the segment's gateway."""
+
+    @staticmethod
+    def _vlan_segment(inline_service: dict[str, Any] | None, terminate_inline: bool = True) -> dict[str, Any]:
+        return {
+            "ManagedVlanSegment": [
+                {
+                    "name": "seg-web",
+                    "customer_deployment": {"typename": "TopologyCustomerDC", "name": "C001-P-DC1"},
+                    "terminate_inline": terminate_inline,
+                    "inline_service": inline_service,
+                }
+            ]
+        }
+
+    def test_inline_without_service_is_an_error(self) -> None:
+        """No inline_service means no gateway anywhere."""
+        check = _check()
+
+        check.validate(self._vlan_segment(None))
+
+        assert len(check._captured_errors) == 1
+        assert "no inline_service" in check._captured_errors[0]
+
+    def test_inline_service_must_be_an_ha_pair(self) -> None:
+        """A firewall context (or anything but an FW/LB/proxy HA pair) cannot be the gateway."""
+        check = _check()
+
+        check.validate(self._vlan_segment({"typename": "ManagedFirewallContext", "name": "ctx-1"}))
+
+        assert len(check._captured_errors) == 1
+        assert "cannot be its gateway" in check._captured_errors[0]
+
+    def test_firewall_ha_pair_is_accepted(self) -> None:
+        """A ManagedFirewallHA terminating the segment passes; so does a segment not terminated inline."""
+        check = _check()
+
+        check.validate(self._vlan_segment({"typename": "ManagedFirewallHA", "name": "fw-ha"}))
+        check.validate(self._vlan_segment(None, terminate_inline=False))
+
+        assert check._captured_errors == []
+
+
+class TestVlanSegmentDeployment:
+    def test_vlan_segment_without_deployment_is_an_error(self) -> None:
+        """Every segment needs its deployment — without one it terminates nowhere."""
+        check = _check()
+
+        check.validate({"ManagedVlanSegment": [{"name": "seg-orphan", "customer_deployment": None}]})
+
+        assert len(check._captured_errors) == 1
+        assert "has no customer_deployment" in check._captured_errors[0]
