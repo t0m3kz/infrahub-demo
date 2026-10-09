@@ -504,11 +504,15 @@ async def _deploy_dc(dc_key: str, config: Config, execute_command: Any) -> str:
     logging.info("%s PC %s: %d validations", dc_name, pc_result["pc_id"], len(pc_result["validations"]))
 
     logging.info("=== %s — Step 7: Verify Artifacts ===", dc_name)
-    # The proposed change's "Check artifact creation" tasks run on this branch
-    # and queue behind every other DC's on the shared workers: let them settle
-    # first, or fetch_artifacts' own short poll gives up with none.
+    # The pipeline creates the artifact validator only after the validators
+    # wait_for_validations already saw, and its "Check artifact creation"
+    # tasks queue behind every other DC's on the shared workers: let the
+    # branch settle, and give fetch_artifacts the cascade's window rather
+    # than its default two minutes.
     await wait_for_tasks_completion(client, branch, stable_zero_count=3, max_wait_attempts=DC_CASCADE_MAX_POLLS)
-    artifacts_result = await fetch_artifacts(client=client, branch=branch, expected_min_total=1)
+    artifacts_result = await fetch_artifacts(
+        client=client, branch=branch, expected_min_total=1, max_polls=DC_CASCADE_MAX_POLLS // 2
+    )
     assert artifacts_result["total"] >= 1, f"Expected >= 1 artifact for {dc_name}, got {artifacts_result['total']}"
     for art in artifacts_result["failed"]:
         raise AssertionError(f"Artifact '{art['name']}' for {art['object']} has status '{art['status']}'")
