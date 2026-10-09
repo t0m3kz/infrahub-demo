@@ -1,0 +1,20 @@
+---
+# The two macro trust zones every segment is classified into
+# (generators/helpers/rules.py RulesPlanner.pick_zone_name, by environment).
+# On main from the start so branches boarding segments in parallel share one
+# node each; a zone created on a branch (segment.py's fallback) collides with
+# every other such branch on merge (unique name). Values mirror
+# RulesPlanner.zone_seed.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityZone
+  data:
+    - name: "PROD-ZONE"
+      description: "Production workload zone — web, app, and database tiers"
+      trust_level: 70
+      zone_type: internal
+    - name: "NONPROD-ZONE"
+      description: "Non-production zone — dev, staging, QA environments"
+      trust_level: 50
+      zone_type: internal

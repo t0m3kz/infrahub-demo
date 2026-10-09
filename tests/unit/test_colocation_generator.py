@@ -656,9 +656,8 @@ class TestMetroDevices:
         assert kwargs["options"]["allocate_loopback"] is True
 
     @pytest.mark.asyncio
-    async def test_load_balancer_overrides_the_derived_group_name(self) -> None:
-        """create_devices() would derive "load-balancers"; the bootstrap group
-        is "loadbalancers"."""
+    async def test_load_balancer_leaves_its_group_to_create_devices(self) -> None:
+        """The role's bootstrap group is resolved once, in create_devices (ROLE_GROUP_NAMES)."""
         gen = _make_generator()
         gen.create_devices = AsyncMock(return_value=["lb-fr01"])
         templates = [{"role": "load-balancer", "quantity": 2, "template": _EDGE_TEMPLATE}]
@@ -666,7 +665,7 @@ class TestMetroDevices:
         gen.data = _metro(fabric_templates=templates)
         await gen._create_metro_devices(templates=templates, metro_id="metro-1")
 
-        assert gen.create_devices.await_args_list[-1].kwargs["options"]["group_name"] == "loadbalancers"
+        assert "group_name" not in gen.create_devices.await_args_list[-1].kwargs["options"]
 
     @pytest.mark.parametrize(
         ("role", "expected_ha_kind"),
