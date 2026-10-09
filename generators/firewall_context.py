@@ -42,6 +42,17 @@ def _dev_name(device: Any) -> str:
     return device["name"] if isinstance(device, dict) else device.name.value
 
 
+def _physical_devices(devices: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The parent's physical devices of a role, by name.
+
+    devices(role__value: ...) also returns the virtual instances hosted on
+    them (the customers' dedicated pairs share the parent deployment and the
+    role), so the shared cluster and the dedicated pair's hosts are resolved
+    from the physical ones only, in a stable order.
+    """
+    return sorted((d for d in devices if d.get("kind") == "DcimPhysicalDevice"), key=_dev_name)
+
+
 def _customer_short_id(customer: dict[str, Any], customer_id: str) -> str:
     """{org_id}-{environment} (e.g. "C009-p") — used for dedicated device/
     context naming instead of customer["name"] (the full computed
@@ -102,7 +113,7 @@ class FirewallContextMixin:
 
         # Firewall devices arrive with the deployment's own GraphQL response
         # (customer.parent.firewall_devices) — no separate filters() round-trip.
-        fw_devices: list[Any] = parent.get("firewall_devices") or []
+        fw_devices: list[Any] = _physical_devices(parent.get("firewall_devices") or [])
         if not fw_devices:
             self.logger.info(f"{parent_name} has no firewall devices — skipping FirewallContext provisioning")
             return
@@ -184,7 +195,7 @@ class FirewallContextMixin:
             )
 
     async def _resolve_parent_cluster(self, fw_devices: list[Any], *, parent_id: str, parent_name: str) -> Any | None:
-        """The parent's physical ManagedFirewallHA cluster holding fw_devices[0].
+        """The parent's ManagedFirewallHA cluster holding fw_devices[0], the first physical firewall by name.
 
         Never pairs the firewalls itself. The parent's own generator
         (_parent_generators) is the only owner of that HA pair, its HA
@@ -236,10 +247,8 @@ class FirewallContextMixin:
     ) -> tuple[Any, list[Any]] | None:
         """Provision a dedicated virtual HA pair (firewall or load-balancer)
         for this customer, one virtual instance hosted on each of the shared
-        cluster's physical peers — same host-per-peer pattern as dc.py's
-        _provision_shared_virtual_instances, but scoped to one customer and
-        sourced from the *_CUSTOMER_* template variant (data/bootstrap's
-        09_virtual_device_templates_*.yaml) instead of the shared one.
+        cluster's physical peers, sourced from the *_CUSTOMER_* template
+        variant (data/bootstrap's 09_virtual_device_templates_*.yaml).
 
         tenant_id sets ManagedTenantScoped.tenant on ha_kind — meaningful for
         the load-balancer path (ManagedLoadbalancerHA carries that field);
@@ -337,7 +346,7 @@ class FirewallContextMixin:
         if not parent_id:
             return
 
-        lb_devices: list[Any] = parent.get("loadbalancer_devices") or []
+        lb_devices: list[Any] = _physical_devices(parent.get("loadbalancer_devices") or [])
         if not lb_devices:
             self.logger.info(f"{parent_name} has no load-balancer devices — skipping dedicated LB provisioning")
             return

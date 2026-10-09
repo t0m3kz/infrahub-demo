@@ -56,7 +56,7 @@ def _dc_payload(*, customer_id: str = "cust-1") -> dict:
 
 
 def _fw_device(*, id: str = "fw-1", name: str = "DC10-FW1", platform: str = "checkpoint_gaia") -> dict:
-    return {"id": id, "name": name, "platform": {"name": platform}}
+    return {"id": id, "name": name, "kind": "DcimPhysicalDevice", "platform": {"name": platform}}
 
 
 def _dc_payload_with_parent(
@@ -317,6 +317,27 @@ class TestFirewallContextProvisioning:
         assert sub_kwargs["fw_devices"] == dedicated_fws
 
     @pytest.mark.asyncio
+    async def test_virtual_instances_on_the_parent_are_ignored(self) -> None:
+        """The role-filtered parent list also holds other customers' dedicated
+        virtual firewalls: the shared cluster is looked up by the first
+        physical firewall by name, and the dedicated pair is hosted on the 2
+        physical ones only."""
+        gen, _, cluster = self._make_gen_with_cluster()
+        cluster.capabilities.peers = [MagicMock(id="fw-1"), MagicMock(id="fw-2")]
+        gen._get_or_create_firewall_context = AsyncMock(return_value=MagicMock(id="ctx-1"))
+        gen._ensure_dedicated_device_pair = AsyncMock(return_value=None)
+        virtual = {"id": "virt-1", "name": "DC10-FW0-C001-p-dedicated", "kind": "DcimVirtualDevice"}
+        fw2 = _fw_device(id="fw-2", name="DC10-FW2")
+        fw1 = _fw_device(id="fw-1", name="DC10-FW1")
+
+        await gen.generate(
+            _dc_payload_with_parent(customer_id="cust-1", dedicated_firewall=True, fw_devices=[virtual, fw2, fw1])
+        )
+
+        assert gen.client.filters.call_args.kwargs["capabilities__ids"] == ["fw-1"]
+        assert gen._ensure_dedicated_device_pair.call_args.kwargs["physical_devices"] == [fw1, fw2]
+
+    @pytest.mark.asyncio
     async def test_dedicated_request_without_dedicated_pair_falls_back_to_shared(self) -> None:
         """No dedicated pair (no template/size): shared capacity, untracked —
         never a tenant-tagged "{shared cluster}-context" every such fallback
@@ -465,8 +486,7 @@ class TestLinkServingFirewallContext:
 class TestEnsureDedicatedDevicePair:
     """Dedicated customers get an actual dedicated virtual HA pair (firewall
     or load-balancer) from the *_CUSTOMER_* template, not just shared
-    capacity — one virtual instance hosted on each physical peer, same
-    host-per-peer pattern as dc.py's _provision_shared_virtual_instances."""
+    capacity — one virtual instance hosted on each physical peer."""
 
     def _make_gen(self) -> Any:
         gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
@@ -630,8 +650,8 @@ class TestEnsureDedicatedLoadbalancer:
     async def test_requested_with_devices_calls_ensure_dedicated_device_pair(self) -> None:
         gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
         gen._ensure_dedicated_device_pair = AsyncMock()
-        lb1 = {"id": "lb-1", "name": "DC10-LB1", "platform": {"name": "f5_tmos"}}
-        lb2 = {"id": "lb-2", "name": "DC10-LB2", "platform": {"name": "f5_tmos"}}
+        lb1 = {"id": "lb-1", "name": "DC10-LB1", "kind": "DcimPhysicalDevice", "platform": {"name": "f5_tmos"}}
+        lb2 = {"id": "lb-2", "name": "DC10-LB2", "kind": "DcimPhysicalDevice", "platform": {"name": "f5_tmos"}}
 
         await gen.generate(_dc_payload_with_parent(dedicated_loadbalancer=True, lb_devices=[lb1, lb2]))
 
@@ -652,8 +672,8 @@ class TestEnsureDedicatedLoadbalancer:
         devices — _ensure_firewall_context's own early-return must not gate it."""
         gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
         gen._ensure_dedicated_device_pair = AsyncMock()
-        lb1 = {"id": "lb-1", "name": "DC10-LB1", "platform": {"name": "f5_tmos"}}
-        lb2 = {"id": "lb-2", "name": "DC10-LB2", "platform": {"name": "f5_tmos"}}
+        lb1 = {"id": "lb-1", "name": "DC10-LB1", "kind": "DcimPhysicalDevice", "platform": {"name": "f5_tmos"}}
+        lb2 = {"id": "lb-2", "name": "DC10-LB2", "kind": "DcimPhysicalDevice", "platform": {"name": "f5_tmos"}}
 
         await gen.generate(_dc_payload_with_parent(fw_devices=[], dedicated_loadbalancer=True, lb_devices=[lb1, lb2]))
 

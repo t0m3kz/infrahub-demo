@@ -56,8 +56,8 @@ class DeviceOptions(TypedDict, total=False):
     name_override: str
     """Explicit device name, bypassing the naming_convention-generated
     role-index name — only valid with quantity=1. Used for devices whose
-    name doesn't fit the standard fabric/pod/role/index scheme, e.g. dc.py's
-    per-environment shared virtual firewall/load-balancer instances."""
+    name doesn't fit the standard fabric/pod/role/index scheme, e.g. a
+    customer's dedicated virtual firewall/load-balancer instances."""
 
 
 class ChainHop(TypedDict, total=False):

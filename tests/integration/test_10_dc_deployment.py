@@ -262,17 +262,11 @@ def _check_naming_convention(
       - flat: no separators at all, fabric_name first, e.g. "dc123lf01"
       - standard: role code, one hyphen, then fabric_name+indexes, e.g. "lf-dc11312401"
       - hierarchical: dot-joined fabric_name + indexes + role, e.g. "dc1.2.3.lf01"
-
-    Shared HA virtual-instance names (``{dev1}-{dev2}-shared-<env>-NN``) use an
-    explicit name_override that deliberately bypasses naming_convention (see
-    generators/types.py's DeviceOptions.name_override) — skip them.
     """
     dc_lower = dc_name.lower()
     mismatches = []
     for name in device_names:
         name_lower = name.lower()
-        if "-shared-" in name_lower:
-            continue
         if naming_convention == "flat":
             if "-" in name_lower or "." in name_lower or not name_lower.startswith(dc_lower):
                 mismatches.append(name)

@@ -57,7 +57,7 @@ def _colo_payload(*, customer_id: str = "cust-1") -> dict:
 
 
 def _fw_device(*, id: str = "fw-1", name: str = "FR5-METRO-FW1", platform: str = "checkpoint_gaia") -> dict:
-    return {"id": id, "name": name, "platform": {"name": platform}}
+    return {"id": id, "name": name, "kind": "DcimPhysicalDevice", "platform": {"name": platform}}
 
 
 def _colo_payload_with_parent(

@@ -154,9 +154,9 @@ ALL_DEMO_DC_NAMES = ("DC10", "DC11", "DC12")
 # The three fabrics are declared with identical shapes (size L, ebgp-ebgp,
 # ipv6 underlay, pbr), so one expected role map covers all of them:
 #   DC level : 2 super-spine + 2 border-leaf, plus the firewall and
-#              load-balancer HA pairs and their shared/dedicated virtual
-#              instances (each DC hosts exactly one dedicated-firewall
-#              customer — see ALL_DEMO_DEDICATED_FIREWALL_TENANTS)
+#              load-balancer HA pairs and the dedicated virtual firewall pair
+#              of the DC's one dedicated-firewall customer (see
+#              ALL_DEMO_DEDICATED_FIREWALL_TENANTS)
 #   POD level: 2 spines each, two pods
 #   Racks    : two network racks x (2 leaf + 2 access-leaf)
 #   Compute  : one application host per row (see ALL_DEMO_DC_HOST_ROWS)
@@ -166,8 +166,8 @@ ALL_DEMO_DC_ROLE_COUNTS: dict[str, int] = {
     "spine": 4,
     "leaf": 4,
     "access-leaf": 4,
-    "firewall": 8,
-    "load-balancer": 6,
+    "firewall": 4,
+    "load-balancer": 2,
     "endpoint": 2,
 }
 

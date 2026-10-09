@@ -133,7 +133,7 @@ class TestDeviceMixinCreateDevices:
     @pytest.mark.asyncio
     async def test_name_override_bypasses_naming_convention(self) -> None:
         gen = _make_generator()
-        created_device = _mock_created_device(DcimVirtualDevice.__name__, "fw-01-fw-02-shared-production-01")
+        created_device = _mock_created_device(DcimVirtualDevice.__name__, "dc1-fw-01-C001-p-dedicated")
         gen.client.create = AsyncMock(return_value=created_device)
 
         names = await gen.create_devices(
@@ -141,12 +141,12 @@ class TestDeviceMixinCreateDevices:
             quantity=1,
             deployment_id="dep-1",
             template={"device_type": {"id": "dt-1"}, "platform": {"name": "checkpoint_gaia"}},
-            options={"virtual": True, "name_override": "fw-01-fw-02-shared-production-01"},
+            options={"virtual": True, "name_override": "dc1-fw-01-C001-p-dedicated"},
         )
 
-        assert names == ["fw-01-fw-02-shared-production-01"]
+        assert names == ["dc1-fw-01-C001-p-dedicated"]
         create_kwargs = gen.client.create.call_args.kwargs
-        assert create_kwargs["data"]["name"] == "fw-01-fw-02-shared-production-01"
+        assert create_kwargs["data"]["name"] == "dc1-fw-01-C001-p-dedicated"
 
     @pytest.mark.asyncio
     async def test_logs_updated_not_created_for_pre_existing_device(self) -> None:
@@ -184,7 +184,7 @@ class TestDeviceMixinCreateDevices:
                 quantity=2,
                 deployment_id="dep-1",
                 template={"device_type": {"id": "dt-1"}, "platform": {"name": "checkpoint_gaia"}},
-                options={"virtual": True, "name_override": "fw-shared-production-01"},
+                options={"virtual": True, "name_override": "dc1-fw-01-C001-p-dedicated"},
             )
 
 
@@ -387,7 +387,7 @@ class TestEnsureHaPairs:
 
     @pytest.mark.asyncio
     async def test_device_kind_defaults_to_physical_but_can_be_overridden(self) -> None:
-        """dc.py's shared virtual production/non-production instances pass
+        """A customer's dedicated virtual instances pass
         device_kind=DcimVirtualDevice — pair resolution must query that kind,
         not the default DcimPhysicalDevice."""
         gen = self._gen()

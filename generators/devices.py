@@ -95,8 +95,8 @@ ROLE_GROUP_NAMES: dict[str, str] = {"load-balancer": "loadbalancers"}
 
 # (physical template's platform name, device_role) -> matching virtual
 # template's name prefix — see data/bootstrap's 09_virtual_device_templates_
-# *.yaml, where every platform/role combination provides an _S/_M/_L/_XL
-# variant per DC size (e.g. "CloudGuard_EDGE_L") and a _CUSTOMER_<size> one.
+# *.yaml, where every platform/role combination provides a _CUSTOMER_<size>
+# variant per DC size (e.g. "CloudGuard_EDGE_CUSTOMER_L").
 _VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE: dict[tuple[str, str], str] = {
     ("checkpoint_gaia", "firewall"): "CloudGuard_EDGE",
     ("panos", "firewall"): "PA-VM_EDGE",
@@ -501,8 +501,8 @@ class DeviceMixin(MLAGWiringMixin):
         these appliances sit off the underlay/overlay, not in it.
 
         Returns (entry, created_names) per fabric_templates entry rather than
-        one flat list, so a caller that needs per-entry follow-up (dc.py's
-        _provision_shared_virtual_instances) still has the entry at hand.
+        one flat list, so a caller that needs per-entry follow-up (colocation.py
+        registers virtual and physical entries apart) still has the entry at hand.
 
         virtual_template_kind: when given, an entry whose own
         template["template_kind"] matches it gets DeviceOptions.virtual=True
