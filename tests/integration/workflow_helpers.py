@@ -267,54 +267,6 @@ async def run_generator(
     }
 
 
-async def run_dc_generator_pipeline(
-    client: InfrahubClient,
-    branch: str,
-    dc_name: str,
-    generator_name: str = "add_dc",
-    stable_zero_count: int = 10,
-) -> dict[str, Any]:
-    """Run a DC generator workflow and verify task health.
-
-    Steps:
-      1. Resolve DC object on branch
-      2. Run generator — after the add_dc that loading the DC triggered
-         (trigger-dc-generator-on-created) has settled, see run_generator
-      3. Wait for cascading tasks to settle
-      4. Ensure no failed tasks on branch for this DC
-
-    A DC's pods are all created together by the object loader, each firing its
-    own independent `trigger-pod-generator-on-created` -> add_pod event (see
-    data/events/99_actions.yml). Dispatch of those per-pod events is not
-    synchronized, so the task queue can go briefly quiet between one pod's
-    bootstrap landing and the next pod's being enqueued — a real gap, not
-    stalled work. stable_zero_count=10 (50s of quiet, at the default 5s
-    poll_interval) needs to comfortably exceed that dispatch spread across a
-    DC's pods so we don't mistake "waiting on the next pod" for "done".
-    """
-    original_branch = client.default_branch
-    client.default_branch = branch
-
-    dc = await client.get(kind=TopologyDataCenter, name__value=dc_name, populate_store=True)
-    assert dc, f"{dc_name} not found on branch {branch}"
-
-    generator_result = await run_generator(
-        client=client,
-        generator_name=generator_name,
-        node_ids=[dc.id],
-        branch=branch,
-        settle_zero_count=stable_zero_count,
-    )
-    await wait_for_tasks_completion(client, branch, initial_delay=10, stable_zero_count=stable_zero_count)
-    no_failed_result = await verify_no_failed_tasks(client=client, branch=branch)
-
-    client.default_branch = original_branch
-    return {
-        "generator": generator_result,
-        "no_failed": no_failed_result,
-    }
-
-
 def create_proposed_change(
     client: InfrahubClientSync,
     name: str,
@@ -705,7 +657,6 @@ async def run_full_dc_pipeline(
     Returns:
         Dictionary with generator result info
     """
-    from generators.protocols import TopologyDataCenter
 
     original_branch = client.default_branch
     client.default_branch = branch
