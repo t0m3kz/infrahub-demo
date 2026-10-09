@@ -23,7 +23,6 @@ class TestSegmentPlacementCheck:
             "ManagedVxlanSegment": [
                 {
                     "name": "seg-vx-1",
-                    "owner": "cust-1",
                     "stretch_scope": "local",
                     "customer_deployments": [
                         {
@@ -49,7 +48,6 @@ class TestSegmentPlacementCheck:
             "ManagedVxlanSegment": [
                 {
                     "name": "seg-vx-2",
-                    "owner": "cust-1",
                     "stretch_scope": "local",
                     "customer_deployments": [
                         {
@@ -79,7 +77,6 @@ class TestSegmentPlacementCheck:
             "CloudNetworkSegment": [
                 {
                     "name": "seg-cloud-1",
-                    "owner": "cust-1",
                     "customer_deployment": {"typename": "TopologyCustomerDC", "name": "C001-P-DC11"},
                 }
             ]
@@ -97,7 +94,6 @@ class TestSegmentPlacementCheck:
             "ManagedVxlanSegment": [
                 {
                     "name": "seg-vx-4",
-                    "owner": "cust-1",
                     "stretch_scope": "global",
                     "customer_deployments": [
                         {
@@ -130,7 +126,6 @@ class TestInlineTermination:
             "ManagedVlanSegment": [
                 {
                     "name": "seg-web",
-                    "owner": "cust-1",
                     "customer_deployment": {"typename": "TopologyCustomerDC", "name": "C001-P-DC1"},
                     "terminate_inline": terminate_inline,
                     "inline_service": inline_service,
@@ -171,19 +166,7 @@ class TestVlanSegmentDeployment:
         """Every segment needs its deployment — without one it terminates nowhere."""
         check = _check()
 
-        check.validate({"ManagedVlanSegment": [{"name": "seg-orphan", "owner": "cust-1", "customer_deployment": None}]})
+        check.validate({"ManagedVlanSegment": [{"name": "seg-orphan", "customer_deployment": None}]})
 
         assert len(check._captured_errors) == 1
         assert "has no customer_deployment" in check._captured_errors[0]
-
-
-class TestOwner:
-    def test_customer_segment_without_owner_is_an_error(self) -> None:
-        """The schema leaves owner optional (for ManagedExternalSegment), so the check holds customer segments to it."""
-        check = _check()
-        deployment = {"typename": "TopologyCustomerDC", "name": "C001-P-DC1"}
-
-        check.validate({"ManagedVlanSegment": [{"name": "seg-web", "owner": None, "customer_deployment": deployment}]})
-
-        assert len(check._captured_errors) == 1
-        assert "has no owner" in check._captured_errors[0]

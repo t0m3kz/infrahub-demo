@@ -79,3 +79,7 @@ spec:
     # Arista (P029), which is the switch vendor.
     - name: "VMware VeloCloud"
       org_id: "P035"
+    # Stands in as the owner of the internet segment (27_external_segments.yml):
+    # a segment's name is computed from its owner, and the internet has none.
+    - name: "Internet"
+      org_id: "P036"
