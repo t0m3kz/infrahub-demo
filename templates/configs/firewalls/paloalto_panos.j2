@@ -19,9 +19,10 @@ set {{ scope }}rulebase security rules {{ rule_name }} service {{ svc_name }}
 {%- else %}
 set {{ scope }}rulebase security rules {{ rule_name }} service any
 {%- endif %}
-set {{ scope }}rulebase security rules {{ rule_name }} action {{ 'allow' if rule.action == 'permit' else 'deny' }}
+set {{ scope }}rulebase security rules {{ rule_name }} action {{ {'permit': 'allow', 'drop': 'drop', 'reject': 'reset-both'}.get(rule.action, 'deny') }}
+{#- A SecuritySecurityProfile is a named inspection bundle: a profile group. #}
 {%- if rule.security_profile %}
-set {{ scope }}rulebase security rules {{ rule_name }} profile-setting profiles virus {{ rule.security_profile }}
+set {{ scope }}rulebase security rules {{ rule_name }} profile-setting group {{ rule.security_profile }}
 {%- endif %}
 {%- if rule.log %}
 set {{ scope }}rulebase security rules {{ rule_name }} log-end yes

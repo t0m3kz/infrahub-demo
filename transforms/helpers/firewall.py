@@ -757,6 +757,32 @@ def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list
                 }
             )
 
+        if policy.get("default_action") == "permit":
+            # Default permit closes the policy's own segment, not the table:
+            # unmatched traffic FROM that segment passes, everything else still
+            # falls through to the implicit deny below.
+            seq += 10
+            segment = policy.get("segment") or {}
+            rules.append(
+                {
+                    "seq": seq,
+                    "name": f"{policy.get('name') or 'policy'}-default-permit",
+                    "action": "permit",
+                    "protocol": "ip",
+                    "raw_protocol": "any",
+                    "port_start": None,
+                    "port_end": None,
+                    "src_zone": (segment.get("security_zone") or {}).get("name") or None,
+                    "dst_zone": None,
+                    "src": _get_segment_prefix_str(segment) if segment else None,
+                    "dst": None,
+                    "dst_port": None,
+                    "log": False,
+                    "description": f"Default action of {policy.get('name') or 'policy'}",
+                    "security_profile": None,
+                }
+            )
+
         policies.append(
             {
                 "name": policy.get("name") or "",

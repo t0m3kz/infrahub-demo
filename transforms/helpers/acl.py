@@ -225,25 +225,27 @@ def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, 
             seq += 10
             rules.append(ret)
 
-        # Implicit deny
+        # Closing rule: the segment policy's default action (deny unless the
+        # enabled policy says permit), for everything the rules above miss.
         if rules:
             last_seq = max(r["seq"] or 0 for r in rules)
             implicit_seq = max(last_seq + 10, 9990)
         else:
             implicit_seq = 9990
+        default_permit = any(policy.get("default_action") == "permit" for policy in enabled_policies(policies))
 
         rules.append(
             {
                 "seq": implicit_seq,
-                "action": "deny",
+                "action": "permit" if default_permit else "deny",
                 "protocol": "ip",
                 "src": "any",
                 "src_port": None,
                 "dst": "any",
                 "dst_port": None,
                 "established": False,
-                "log": True,
-                "name": "implicit-deny-all",
+                "log": not default_permit,
+                "name": "default-permit-all" if default_permit else "implicit-deny-all",
                 "src_zone": None,
                 "dst_zone": None,
                 "src_customer": None,

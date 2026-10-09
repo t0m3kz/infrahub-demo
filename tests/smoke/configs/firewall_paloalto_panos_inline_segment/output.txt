@@ -55,7 +55,7 @@ set rulebase security rules allow-https application any
 set service svc-tcp-443 protocol tcp port 443
 set rulebase security rules allow-https service svc-tcp-443
 set rulebase security rules allow-https action allow
-set rulebase security rules allow-https profile-setting profiles virus strict-av
+set rulebase security rules allow-https profile-setting group strict-av
 set rulebase security rules allow-https log-end yes
 set rulebase security rules allow-https description "Allow HTTPS from DMZ to Internal"
 set rulebase security rules allow-ssh from dmz

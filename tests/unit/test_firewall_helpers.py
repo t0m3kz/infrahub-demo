@@ -485,6 +485,30 @@ class TestGetVrfDefaultGateways:
 # ===========================================================================
 
 
+class TestGetZonePoliciesDefaultAction:
+    def test_default_permit_adds_a_catch_all_for_the_policys_segment(self) -> None:
+        """Unmatched traffic from the policy's segment passes; the table still ends in deny."""
+        policy = {
+            **_make_policy(name="seg-web-egress", default_action="permit", rules=[_make_rule()]),
+            "segment": {**_make_segment_with_prefix("10.1.0.0/24"), "security_zone": {"name": "web"}},
+        }
+        rules = get_zone_policies([policy])[0]["rules"]
+        catch_all = rules[-2]
+        assert (catch_all["name"], catch_all["action"], catch_all["src"], catch_all["src_zone"], catch_all["dst"]) == (
+            "seg-web-egress-default-permit",
+            "permit",
+            "10.1.0.0/24",
+            "web",
+            None,
+        )
+        assert rules[-1]["name"] == "implicit-deny-all"
+
+    def test_default_deny_adds_nothing_before_the_implicit_deny(self) -> None:
+        """Deny is what the implicit deny-all already does."""
+        rules = get_zone_policies([_make_policy(rules=[_make_rule()])])[0]["rules"]
+        assert [rule["name"] for rule in rules] == ["rule-10", "implicit-deny-all"]
+
+
 class TestGetZonePolicies:
     def test_none_returns_empty(self) -> None:
         assert get_zone_policies(None) == []

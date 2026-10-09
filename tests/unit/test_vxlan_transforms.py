@@ -401,8 +401,8 @@ def _make_acl_activation(
     return {"vlan_id": vlan_id, "vni": 10000 + vlan_id, "status": "active", "segment": seg}
 
 
-def _policy(rules: list | None = None, enabled: bool = True) -> dict:
-    return {"name": "p", "default_action": "deny", "enabled": enabled, "rules": rules or []}
+def _policy(rules: list | None = None, enabled: bool = True, default_action: str = "deny") -> dict:
+    return {"name": "p", "default_action": default_action, "enabled": enabled, "rules": rules or []}
 
 
 def _rule(
@@ -569,6 +569,22 @@ class TestAclRuleEndpointResolver:
         act = _make_acl_activation(seg_id="seg-b", prefix="10.2.0.0/24", security_policies=[], inbound_rules=[inbound])
         returns = [r for r in get_acls(activations=[act])[0]["rules"] if r["name"].startswith("return-to-")]
         assert [(r["src"], r["dst"], r["src_port"]) for r in returns] == [("10.2.0.0/24", "10.9.0.0/24", "eq 5432")]
+
+
+class TestGetAclsDefaultAction:
+    def test_default_permit_policy_closes_the_acl_with_a_permit(self) -> None:
+        """The segment policy's default action is the ACL's last word."""
+        acts = [
+            _make_acl_activation(vlan_id=100, security_policies=[_policy(rules=[_rule()], default_action="permit")])
+        ]
+        last = get_acls(activations=acts)[0]["rules"][-1]
+        assert (last["name"], last["action"], last["log"]) == ("default-permit-all", "permit", False)
+
+    def test_disabled_default_permit_policy_still_ends_in_deny(self) -> None:
+        """A disabled policy's default action does not apply."""
+        acts = [_make_acl_activation(vlan_id=100, security_policies=[_policy(enabled=False, default_action="permit")])]
+        last = get_acls(activations=acts)[0]["rules"][-1]
+        assert (last["name"], last["action"]) == ("implicit-deny-all", "deny")
 
 
 class TestGetAclsImplicitDeny:

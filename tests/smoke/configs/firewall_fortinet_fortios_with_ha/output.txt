@@ -36,19 +36,29 @@ config system interface
     next
 end
 #
-# --- Address Objects (one per zone member CIDR) ---
+# --- Zones ---
+config system zone
+    edit "internal"
+        set interface "ethernet1/1.10"
+    next
+    edit "dmz"
+        set interface "ethernet1/1.20"
+    next
+    edit "external"
+        set interface "ethernet1/1.30"
+    next
+end
+#
+# --- Address Objects (zone members and policy endpoints) ---
 config firewall address
     edit "10.0.1.0/24"
-        set subnet 10.0.1.0 24
-        set comment "Zone: internal"
+        set subnet 10.0.1.0 255.255.255.0
     next
     edit "10.0.10.0/24"
-        set subnet 10.0.10.0 24
-        set comment "Zone: internal"
+        set subnet 10.0.10.0 255.255.255.0
     next
     edit "10.0.2.0/24"
-        set subnet 10.0.2.0 24
-        set comment "Zone: dmz"
+        set subnet 10.0.2.0 255.255.255.0
     next
 end
 #
@@ -97,7 +107,8 @@ config firewall policy
         set service "svc-tcp-443"
         set logtraffic all
         set utm-status enable
-        set av-profile "strict-av"
+        set profile-type group
+        set profile-group "strict-av"
         set comments "Allow HTTPS from DMZ to Internal"
     next
     edit 20

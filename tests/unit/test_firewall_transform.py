@@ -873,6 +873,20 @@ class TestPerContextPolicyRendering:
         out = _render_template(platform, name="fw1", contexts=[_policy_context()], zone_policies=[])
         assert rule_marker in out.split(scope_marker, 1)[1]
 
+    def test_fortios_vdom_matches_its_interface_and_defines_its_addresses(self) -> None:
+        """A VDOM's policies match its hairpin interface and name address objects defined in that VDOM."""
+        out = _render_template("fortinet_fortios", name="fw1", contexts=[_policy_context()], zone_policies=[]).split(
+            'config vdom\n    edit "c005-dedicated"', 1
+        )[1]
+        assert 'set srcintf "eth1.3005"' in out
+        assert 'set dstintf "eth1.3005"' in out
+        assert out.index("config firewall address") < out.index("config firewall policy")
+
+    def test_asa_context_permits_the_pbr_hairpin(self) -> None:
+        """PBR returns redirected traffic out of the interface it came in on."""
+        out = _render_template("cisco_asa", name="fw1", contexts=[_policy_context()], zone_policies=[])
+        assert "same-security-traffic permit intra-interface" in out.split("changeto context c005-dedicated", 1)[1]
+
     @pytest.mark.parametrize(
         "platform,root_marker",
         [

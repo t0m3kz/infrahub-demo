@@ -25,7 +25,8 @@ fragment SecurityPolicyFields on SecurityPolicy {
   name { value }
   enabled { value }
   default_action { value }
-  segment { node { id name { value } } }
+  # The segment the policy governs — what its default action applies to.
+  segment { node { ...PolicyRuleSegmentFields } }
 }
 
 fragment SecurityPolicyRuleFields on SecurityPolicyRule {

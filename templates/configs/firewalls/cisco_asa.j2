@@ -65,11 +65,24 @@ route {{ route.zone }} {{ asa_addr(route.destination) }} {{ route.nexthop }} 1
 {{- access_lists(zone_policies) }}
 !
 ! --- Access Groups ---
+{#- Bind only ACLs that exist: an access-group naming an ACL with no entries
+    is rejected. Rules with no source zone (and the implicit deny) form the
+    global ACL, applied to every interface after its own. #}
+{%- set acl_names = [] %}
+{%- for policy in zone_policies %}
+{%- for rule in policy.rules %}
+{%- set acl = (rule.src_zone or 'global') + '-in' %}
+{%- if acl not in acl_names %}{%- set _ = acl_names.append(acl) %}{%- endif %}
+{%- endfor %}
+{%- endfor %}
 {%- for iface in fw_interfaces %}
-{%- if iface.security_zone %}
+{%- if iface.security_zone and (iface.security_zone.name + '-in') in acl_names %}
 access-group {{ iface.security_zone.name }}-in in interface {{ iface.security_zone.name }}
 {%- endif %}
 {%- endfor %}
+{%- if 'global-in' in acl_names %}
+access-group global-in global
+{%- endif %}
 {%- endif %}
 {%- if contexts %}
 !
@@ -107,6 +120,9 @@ interface {{ context.parent_interface.name }}.{{ context.vlan_id }}
  nameif customer-pbr
  security-level 50
  no shutdown
+!
+{#- PBR sends the redirected traffic back out of the interface it came in on. #}
+same-security-traffic permit intra-interface
 !
 {%- endif %}
 {%- endfor %}
