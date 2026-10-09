@@ -594,10 +594,13 @@ def _pod_payload() -> dict[str, Any]:
 
 class TestPodDefersBeforeFirstSave:
     @pytest.mark.asyncio
-    async def test_unready_super_spine_overlay_defers_before_any_write(self) -> None:
-        """A deferred run saves nothing, so its tracking group is left as it
-        was — returning after the pools and spines were saved made its cleanup
-        delete the cables, BGP and border wiring the previous run owned."""
+    async def test_unready_super_spine_overlay_fails_before_any_write(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Super-spine overlay BGP that never lands fails the run, still before
+        any save: its tracking group is left as it was (returning after the
+        pools and spines were saved made its cleanup delete the cables, BGP and
+        border wiring the previous run owned), and nothing re-runs a pod that
+        returns quietly, so the failure is what makes it visible."""
+        monkeypatch.setattr("generators.topology.pod.asyncio.sleep", AsyncMock())
         gen: Any = PodTopologyGenerator.__new__(PodTopologyGenerator)
         gen.logger = MagicMock()
         gen.client = _client()
@@ -609,10 +612,31 @@ class TestPodDefersBeforeFirstSave:
 
         await gen.generate(_pod_payload())
 
-        gen.bgp_processes_ready.assert_awaited_once_with(["ss-dc1-01", "ss-dc1-02"], "overlay")
+        assert gen.bgp_processes_ready.await_count == 10
+        gen.bgp_processes_ready.assert_awaited_with(["ss-dc1-01", "ss-dc1-02"], "overlay")
         gen.allocate_resource_pools.assert_not_awaited()
         gen.create_devices.assert_not_awaited()
         gen.client.get.assert_not_called()
+        gen.logger.error.assert_called_once()
+        assert "never appeared" in gen.logger.error.call_args[0][0]
+
+    @pytest.mark.asyncio
+    async def test_super_spine_overlay_waits_for_in_flight_add_dc(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An add_dc that surfaces only after the up-front check is waited for,
+        and the pod goes on once its super-spines have their overlay BGP."""
+        sleep = AsyncMock()
+        monkeypatch.setattr("generators.topology.pod.asyncio.sleep", sleep)
+        gen: Any = PodTopologyGenerator.__new__(PodTopologyGenerator)
+        gen.logger = MagicMock()
+        gen.client = _client()
+        # add_dc is in flight when the overlay is first found missing.
+        gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value={"TopologyPod": []})
+        gen.bgp_processes_ready = AsyncMock(side_effect=[False, True])
+
+        ready = await gen._wait_for_super_spine_overlay(["ss-dc1-01"], "dc-1", "pod-1")
+
+        assert ready is True
+        sleep.assert_not_awaited()
         gen.logger.error.assert_not_called()
 
     @pytest.mark.asyncio

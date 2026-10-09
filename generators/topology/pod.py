@@ -249,11 +249,7 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
         # cleanup would delete everything else it owned last run (cables, BGP,
         # border-leaf/FW/LB wiring). Returning before any save leaves the
         # tracking group untouched.
-        if super_spine_devices and not await self.bgp_processes_ready(super_spine_devices, "overlay"):
-            self.logger.info(
-                "Pod %s: deferring bootstrap until parent DC super-spine overlay BGP is ready",
-                pod_name,
-            )
+        if super_spine_devices and not await self._wait_for_super_spine_overlay(super_spine_devices, dc_id, pod_name):
             return
 
         # Fixed per-pod pool sizes from this pod's own layout (see
@@ -474,6 +470,36 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
         # add_pod run (including each pod during a bulk multi-DC load) would fire
         # its own concurrent dc_pod_cascade re-run against the same DC-level pools/
         # ASN pool, racing the DC's own already-in-flight bootstrap.
+
+    async def _wait_for_super_spine_overlay(self, super_spine_devices: list[str], dc_id: str, pod_name: str) -> bool:
+        """Whether the parent DC's super-spines have their overlay BGP — waited for, never skipped.
+
+        The spines' overlay sessions peer with those processes, so the pod
+        cannot bootstrap before them. They come from add_dc, which this run
+        normally waits out up front; under load its task can surface only
+        after that check, while it is still writing. Nothing re-runs a pod
+        that returned here (a created DC fires plain add_dc, not
+        dc_pod_cascade), so returning would leave it with no pools for good
+        and its racks failing: wait for the add_dc once it is visible, retry
+        with backoff otherwise, and fail the run if the processes never land.
+        """
+        for attempt in range(_DC_READY_MAX_RETRIES):
+            if await self.bgp_processes_ready(super_spine_devices, "overlay"):
+                return True
+            if await self.wait_for_parent_generator_and_refetch(("add_dc", "dc_pod_cascade"), dc_id) is not None:
+                continue
+            if attempt < _DC_READY_MAX_RETRIES - 1:
+                delay = self._retry_delay(_DC_READY_RETRY_DELAY, attempt)
+                self.logger.info(
+                    f"Pod {pod_name}: parent DC super-spine overlay BGP not ready yet — "
+                    f"retrying in {delay:.2f}s (attempt {attempt + 1}/{_DC_READY_MAX_RETRIES})"
+                )
+                await asyncio.sleep(delay)
+        self.logger.error(
+            f"Pod {pod_name}: parent DC super-spine overlay BGP never appeared after {_DC_READY_MAX_RETRIES} "
+            "attempts — run add_dc for its DC first"
+        )
+        return False
 
     async def _generate_pod_scoped_border_services(self, *, spines: list[str]) -> None:
         """Create this pod's own firewall/load-balancer and cable them to this
