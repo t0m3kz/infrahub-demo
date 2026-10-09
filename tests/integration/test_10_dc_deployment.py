@@ -39,6 +39,7 @@ from typing import Any, Literal
 
 import pytest
 from infrahub_sdk import Config, InfrahubClient, InfrahubClientSync
+from infrahub_sdk.task.models import TaskFilter
 
 from .conftest import TestInfrahubDockerWithClient
 from .test_constants import DEMO_DC_DATA_ROOT
@@ -465,6 +466,20 @@ async def _deploy_dc(dc_key: str, config: Config, execute_command: Any) -> str:
     # dispatched together, so the queue can go quiet between pods: 10 empty
     # polls (50s) comfortably exceed that spread before "settled" is trusted.
     logging.info("=== %s — Step 2-3: Triggered Generators + No Failed Tasks ===", dc_name)
+    # A busy event queue can hold the trigger back for longer than the quiet
+    # window below, which would then call an untouched branch "settled": wait
+    # for the triggered add_dc to have been dispatched first.
+
+    async def _add_dc_dispatched() -> tuple[bool, None]:
+        tasks = await client.task.filter(filter=TaskFilter(branch=branch))
+        return any(task.title == "Run generator add_dc" for task in tasks), None
+
+    await wait_for_condition(
+        check_fn=_add_dc_dispatched,
+        max_attempts=DC_CASCADE_MAX_POLLS,
+        poll_interval=5,
+        description=f"add_dc dispatched on branch '{branch}'",
+    )
     await wait_for_tasks_completion(
         client, branch, initial_delay=10, stable_zero_count=10, max_wait_attempts=DC_CASCADE_MAX_POLLS
     )

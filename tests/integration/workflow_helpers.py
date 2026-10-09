@@ -319,35 +319,43 @@ def create_proposed_change(
 
 def _wait_for_no_running_tasks(
     client: InfrahubClientSync,
-    branch: str,
-    max_attempts: int = 30,
+    branch: str | None,
+    max_attempts: int = 120,
     poll_interval: int = 5,
+    stable_zero: int = 3,
 ) -> None:
-    """Wait until no tasks are pending/running/scheduled on the given branch."""
+    """Wait until no task is pending/running/scheduled on ``branch`` — on any
+    branch when None — for ``stable_zero`` consecutive polls."""
     from infrahub_sdk.task.models import TaskFilter, TaskState
 
     in_flight_states = [TaskState.PENDING, TaskState.RUNNING, TaskState.SCHEDULED]
+    scope = f"branch '{branch}'" if branch else "any branch"
+    consecutive_zero = 0
 
     for attempt in range(1, max_attempts + 1):
-        in_flight = client.task.filter(
-            filter=TaskFilter(state=in_flight_states, branch=branch),
+        task_filter = (
+            TaskFilter(state=in_flight_states, branch=branch) if branch else TaskFilter(state=in_flight_states)
         )
+        in_flight = client.task.filter(filter=task_filter)
         if not in_flight:
-            logger.info("No in-flight tasks on branch '%s'", branch)
-            return
-
-        titles = [t.title for t in in_flight[:5]]
-        logger.info(
-            "Waiting for %d in-flight task(s) on branch '%s'... attempt %d/%d — %s",
-            len(in_flight),
-            branch,
-            attempt,
-            max_attempts,
-            titles,
-        )
+            consecutive_zero += 1
+            if consecutive_zero >= stable_zero:
+                logger.info("No in-flight tasks on %s (%d consecutive zero checks)", scope, consecutive_zero)
+                return
+        else:
+            consecutive_zero = 0
+            titles = [t.title for t in in_flight[:5]]
+            logger.info(
+                "Waiting for %d in-flight task(s) on %s... attempt %d/%d — %s",
+                len(in_flight),
+                scope,
+                attempt,
+                max_attempts,
+                titles,
+            )
         time.sleep(poll_interval)
 
-    logger.warning("Timed out waiting for tasks to finish on branch '%s'", branch)
+    logger.warning("Timed out waiting for tasks to finish on %s", scope)
 
 
 def wait_for_validations(
@@ -502,13 +510,15 @@ def merge_proposed_change(
     pc = client.get("CoreProposedChange", id=pc_id)
     pc_state_before = pc.state.value if hasattr(pc.state, "value") else pc.state
 
-    source_branch: str = getattr(getattr(pc, "source_branch", None), "value", "") or ""
     failed_checks: list[str] = []
 
     for attempt in range(1, max_retries + 1):
-        # Wait for in-flight tasks on the source branch before each merge attempt
-        if source_branch:
-            _wait_for_no_running_tasks(client, branch=source_branch)
+        # A merge blocks every write on every branch while it runs
+        # (MERGE_IN_PROGRESS): anything still in flight anywhere — this
+        # branch's tasks, or other open proposed changes' pipelines that the
+        # previous merge into main re-triggered — would fail mid-write. Wait
+        # for the whole queue, not just the source branch.
+        _wait_for_no_running_tasks(client, branch=None)
 
         mutation = Mutation(
             mutation="CoreProposedChangeMerge",
