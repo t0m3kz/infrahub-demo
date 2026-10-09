@@ -250,6 +250,37 @@ def get_firewall_contexts(interfaces: list[dict[str, Any]] | None) -> list[dict[
     return contexts
 
 
+def _rules_served_here(
+    policies_data: list[dict[str, Any]], segments: list[dict[str, Any]] | None
+) -> list[dict[str, Any]]:
+    """A context-less firewall's rules: those with no segment, or with a
+    segment it serves — one it carries on an interface (``segments``) or one
+    in a zone bound on an interface, whose CIDRs it routes through that leg
+    (get_firewall_static_routes). Every other rule belongs to the firewall
+    serving its segments: the query returns every SecurityPolicy, so without
+    this a firewall with no contexts rendered all of them. A policy with no
+    rules at all is kept, one left empty is not."""
+    own = {segment["id"] for segment in segments or [] if segment.get("id")}
+    own_zones = {
+        zone_name for segment in segments or [] if (zone_name := (segment.get("security_zone") or {}).get("name"))
+    }
+
+    def _served(end: dict[str, Any]) -> bool:
+        return end.get("id") in own or (end.get("security_zone") or {}).get("name") in own_zones
+
+    placed: list[dict[str, Any]] = []
+    for policy in policies_data:
+        rules = [
+            rule
+            for rule in policy.get("rules") or []
+            if not (ends := [s for s in (rule.get("source_segment"), rule.get("destination_segment")) if s])
+            or any(_served(end) for end in ends)
+        ]
+        if rules or not policy.get("rules"):
+            placed.append({**policy, "rules": rules})
+    return placed
+
+
 def place_policies_in_contexts(
     policies_data: list[dict[str, Any]] | None,
     contexts: list[dict[str, Any]],
@@ -266,7 +297,9 @@ def place_policies_in_contexts(
     contexts and each one denies by default.
 
     A segment of a deployment no context here serves belongs to another
-    firewall: a rule whose segments all terminate elsewhere is left out.
+    firewall: a rule whose segments all terminate elsewhere is left out. A
+    firewall with no contexts keeps only the rules of its own segments (and
+    segment-less ones), see _rules_served_here.
     Until any context here lists its deployments (data boarded before the
     link existed), a segment falls back to its tenant's dedicated context,
     else the shared (tenant-less) one. A segment with no deployment uses
@@ -282,7 +315,7 @@ def place_policies_in_contexts(
     if not policies_data:
         return [], {}
     if not contexts:
-        return list(policies_data), {}
+        return _rules_served_here(policies_data, segments), {}
 
     serving = {ctx["tenant_id"]: ctx["id"] for ctx in contexts if ctx.get("tenant_id")}
     linked = False

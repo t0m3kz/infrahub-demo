@@ -1214,11 +1214,29 @@ class TestPlacePoliciesInContexts:
     def test_no_policies_returns_empty(self) -> None:
         assert place_policies_in_contexts(None, [_SHARED_CTX]) == ([], {})
 
-    def test_without_contexts_everything_stays_in_root(self) -> None:
-        policies = [_ctx_policy("p1", _ctx_rule("r1", _vxlan_seg("s1", "dep-c005"), None))]
-        root, by_ctx = place_policies_in_contexts(policies, [])
-        assert root == policies
+    def test_without_contexts_only_the_firewalls_own_segments_stay(self) -> None:
+        """A context-less firewall keeps segment-less rules and rules of the
+        segments it carries; another firewall's rules are left out."""
+        own = _vxlan_seg("s1", "dep-c005")
+        policies = [
+            _ctx_policy("p1", _ctx_rule("own", own, None), _ctx_rule("elsewhere", _vxlan_seg("s9", "dep-x"), None)),
+            _ctx_policy("p2", _ctx_rule("prefix-only", None, None)),
+            _ctx_policy("p3", _ctx_rule("only-elsewhere", _vxlan_seg("s8", "dep-y"), None)),
+        ]
+        root, by_ctx = place_policies_in_contexts(policies, [], segments=[own])
+        assert [(policy["name"], _rule_names([policy])) for policy in root] == [
+            ("p1", ["own"]),
+            ("p2", ["prefix-only"]),
+        ]
         assert by_ctx == {}
+
+    def test_without_contexts_a_bound_zone_counts_as_served(self) -> None:
+        """A transit firewall routes a bound zone's CIDRs, so rules of that zone's segments stay."""
+        carried = {**_vxlan_seg("leg", "dep-a"), "security_zone": {"name": "dmz"}}
+        zoned = {**_vxlan_seg("s2", "dep-b"), "security_zone": {"name": "dmz"}}
+        policies = [_ctx_policy("p1", _ctx_rule("zone-rule", zoned, None))]
+        root, _ = place_policies_in_contexts(policies, [], segments=[carried])
+        assert _rule_names(root) == ["zone-rule"]
 
     def test_rule_goes_to_the_dedicated_context_of_its_segment(self) -> None:
         policies = [_ctx_policy("p1", _ctx_rule("r1", _vxlan_seg("s1", "dep-c005"), _vxlan_seg("s2", "dep-c005")))]
