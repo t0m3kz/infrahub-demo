@@ -55,8 +55,8 @@ nodes:
         description: "Customer deployment footprint this VLAN segment is activated in."
 
   # A network outside every customer's control (the internet): classified into
-  # a zone and matched by policy rules like any segment. It has an owner (a
-  # pseudo-provider, P036) only because the segment name is computed from it;
+  # a zone and matched by policy rules like any segment. It has an owner (the
+  # Internet pseudo-customer) only because the segment name is computed from it;
   # it is never activated, gatewayed or terminated anywhere.
   - name: ExternalSegment
     namespace: Managed
