@@ -48,7 +48,6 @@ class CustomerDeploymentColocationExchangeGenerator(
 
     _customer_kind = "TopologyCustomerColocation"
     _parent_label = "ColocationMetro"
-    _pbr_peer_role = "edge"
     _parent_generators = ("add_colocation_metro",)
 
     async def generate(self, data: dict[str, Any]) -> None:
