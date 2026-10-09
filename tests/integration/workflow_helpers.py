@@ -22,6 +22,7 @@ from .test_constants import (
     DIFF_TASK_TIMEOUT,
     GENERATOR_TASK_TIMEOUT,
     MERGE_TASK_TIMEOUT,
+    POST_MERGE_STABLE_ZERO,
     VALIDATION_MAX_ATTEMPTS,
     VALIDATION_POLL_INTERVAL,
 )
@@ -194,12 +195,23 @@ async def run_generator(
     generator_name: str,
     node_ids: list[str],
     branch: str,
+    settle_zero_count: int = 2,
 ) -> dict[str, Any]:
     """Run a generator and wait for completion.
+
+    First waits for the branch's in-flight tasks to settle
+    (``settle_zero_count`` consecutive empty polls): the object load that
+    precedes most calls fires event triggers that run the same generator on
+    the same nodes. Two runs of one generator on one target share a tracking
+    group, and one run's cleanup then deletes nodes the other has just linked
+    (observed: add_dc deleting a RoutingAutonomousSystem still held by
+    ManagedBGP.local_as). Started after the triggered run, this one is an
+    idempotent re-run.
 
     Returns:
         Dictionary with task_id, task_state, and success flag
     """
+    await wait_for_tasks_completion(client, branch, stable_zero_count=settle_zero_count)
     logger.info("Running generator '%s' on branch '%s' with %d node(s)", generator_name, branch, len(node_ids))
 
     from infrahub_sdk.protocols import CoreGeneratorDefinition
@@ -266,7 +278,8 @@ async def run_dc_generator_pipeline(
 
     Steps:
       1. Resolve DC object on branch
-      2. Run generator
+      2. Run generator — after the add_dc that loading the DC triggered
+         (trigger-dc-generator-on-created) has settled, see run_generator
       3. Wait for cascading tasks to settle
       4. Ensure no failed tasks on branch for this DC
 
@@ -286,7 +299,11 @@ async def run_dc_generator_pipeline(
     assert dc, f"{dc_name} not found on branch {branch}"
 
     generator_result = await run_generator(
-        client=client, generator_name=generator_name, node_ids=[dc.id], branch=branch
+        client=client,
+        generator_name=generator_name,
+        node_ids=[dc.id],
+        branch=branch,
+        settle_zero_count=stable_zero_count,
     )
     await wait_for_tasks_completion(client, branch, initial_delay=10, stable_zero_count=stable_zero_count)
     no_failed_result = await verify_no_failed_tasks(client=client, branch=branch)
@@ -562,20 +579,32 @@ def merge_proposed_change(
         pc_state_after = pc_after.state.value if hasattr(pc_after.state, "value") else pc_after.state
 
         if pc_state_after in ["merged", "closed"]:
-            # Wait for post-merge background tasks on main
+            # Wait for post-merge background tasks on main. Triggers schedule
+            # them a few seconds after the merge, so one empty poll is not
+            # "done": require POST_MERGE_STABLE_ZERO consecutive empty polls,
+            # or the next scenario's branch is cut while main is still moving.
             logger.info("Merge succeeded, waiting for post-merge tasks on main...")
             time.sleep(5)
             in_flight_states = [TaskState.PENDING, TaskState.RUNNING, TaskState.SCHEDULED]
+            consecutive_zero = 0
             for poll in range(1, 61):
                 in_flight = client.task.filter(
                     filter=TaskFilter(state=in_flight_states, branch="main"),
                 )
                 if not in_flight:
-                    logger.info("All post-merge tasks completed on main")
-                    break
-                titles = [t.title for t in in_flight[:5]]
-                logger.info("Waiting for %d post-merge task(s)... %d/60 — %s", len(in_flight), poll, titles)
+                    consecutive_zero += 1
+                    if consecutive_zero >= POST_MERGE_STABLE_ZERO:
+                        logger.info(
+                            "All post-merge tasks completed on main (%d consecutive zero checks)", consecutive_zero
+                        )
+                        break
+                else:
+                    consecutive_zero = 0
+                    titles = [t.title for t in in_flight[:5]]
+                    logger.info("Waiting for %d post-merge task(s)... %d/60 — %s", len(in_flight), poll, titles)
                 time.sleep(5)
+            else:
+                logger.warning("Post-merge tasks on main still in flight after 60 polls")
 
             return {
                 "task_id": task_id,

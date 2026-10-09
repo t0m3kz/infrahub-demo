@@ -437,6 +437,9 @@ REPO_SYNC_POLL_INTERVAL = 5  # seconds
 GENERATOR_TASK_TIMEOUT = 1800  # 30 minutes
 DIFF_TASK_TIMEOUT = 600  # 10 minutes
 MERGE_TASK_TIMEOUT = 600  # 10 minutes
+# Consecutive empty polls (5s apart) of main's task queue before a merge's
+# post-merge work counts as done — triggers schedule it a few seconds late.
+POST_MERGE_STABLE_ZERO = 3
 VALIDATION_MAX_ATTEMPTS = 30
 VALIDATION_POLL_INTERVAL = 10  # seconds
 DATA_PROPAGATION_DELAY = 3  # seconds
