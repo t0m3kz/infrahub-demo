@@ -9,7 +9,7 @@ from transforms.helpers.firewall import (
     place_policies_in_contexts,
 )
 from transforms.helpers.ha import get_ha, inline_addresses
-from transforms.helpers.policy import merge_policies
+from transforms.helpers.policy import merge_policies, segment_policies
 from transforms.helpers.segments import segment_vlan_ids
 
 
@@ -69,12 +69,12 @@ def _build_fw_interfaces(
 def _collect_segment_policies(activations: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Extract SecurityPolicy nodes from segment activations.
 
-    Traversal path: activation → segment → security_policies
+    Traversal path: activation → segment → security_policy
     """
     seen: dict[str, dict] = {}
     for act in activations:
         seg = act.get("segment") or {}
-        for policy in seg.get("security_policies") or []:
+        for policy in segment_policies(seg):
             name = policy.get("name") or policy.get("id")
             if name and name not in seen:
                 seen[name] = policy

@@ -241,8 +241,8 @@ class ManagedNetworkSegment(CoreNode):
     status: Dropdown
     gateway: RelationshipAttribute[IpamIPAddress]
     inbound_rules: RelationshipManager[SecurityPolicyRule]
-    outbound_rules: RelationshipManager[SecurityPolicyRule]
     owner: RelationshipAttribute[OrganizationCustomer]
+    security_policy: RelationshipAttribute[SecurityPolicy]
 
 
 class ManagedPeering(CoreNode):

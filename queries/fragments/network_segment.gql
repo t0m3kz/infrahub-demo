@@ -115,61 +115,59 @@ fragment SegmentSecurityPolicyFields on ManagedNetworkSegment {
       }
     }
   }
-  security_policies {
-    edges {
-      node {
-        id
-        name { value }
-        enabled { value }
-        default_action { value }
-        rules {
-          edges {
-            node {
-              index { value }
-              name { value }
-              action { value }
-              protocol { value }
-              port_start { value }
-              port_end { value }
-              log { value }
-              disabled { value }
-              security_profile { node { name { value } } }
-              source_segment {
-                node {
-                  id
-                  security_zone { node { name { value } } }
-                  ... on ManagedVlanSegment {
-                    name { value }
-                    customer_name { value }
-                    environment { value }
-                    gateway { node { ip_prefix { node { prefix { value } } } } }
-                  }
-                  ... on ManagedVxlanSegment {
-                    name { value }
-                    customer_name { value }
-                    environment { value }
-                    gateway { node { ip_prefix { node { prefix { value } } } } }
-                  }
+  security_policy {
+    node {
+      id
+      name { value }
+      enabled { value }
+      default_action { value }
+      rules {
+        edges {
+          node {
+            index { value }
+            name { value }
+            action { value }
+            protocol { value }
+            port_start { value }
+            port_end { value }
+            log { value }
+            disabled { value }
+            security_profile { node { name { value } } }
+            source_segment {
+              node {
+                id
+                security_zone { node { name { value } } }
+                ... on ManagedVlanSegment {
+                  name { value }
+                  customer_name { value }
+                  environment { value }
+                  gateway { node { ip_prefix { node { prefix { value } } } } }
+                }
+                ... on ManagedVxlanSegment {
+                  name { value }
+                  customer_name { value }
+                  environment { value }
+                  gateway { node { ip_prefix { node { prefix { value } } } } }
                 }
               }
-              destination_segment {
-                node {
-                  id
-                  security_zone { node { name { value } } }
-                  ... on ManagedVlanSegment {
-                    name { value }
-                    customer_name { value }
-                    environment { value }
-                    gateway { node { ip_prefix { node { prefix { value } } } } }
-                    customer_deployment { node { id } }
-                  }
-                  ... on ManagedVxlanSegment {
-                    name { value }
-                    customer_name { value }
-                    environment { value }
-                    gateway { node { ip_prefix { node { prefix { value } } } } }
-                    customer_deployments { edges { node { id } } }
-                  }
+            }
+            destination_segment {
+              node {
+                id
+                security_zone { node { name { value } } }
+                ... on ManagedVlanSegment {
+                  name { value }
+                  customer_name { value }
+                  environment { value }
+                  gateway { node { ip_prefix { node { prefix { value } } } } }
+                  customer_deployment { node { id } }
+                }
+                ... on ManagedVxlanSegment {
+                  name { value }
+                  customer_name { value }
+                  environment { value }
+                  gateway { node { ip_prefix { node { prefix { value } } } } }
+                  customer_deployments { edges { node { id } } }
                 }
               }
             }
@@ -331,24 +329,22 @@ fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
               security_tag { node { name { value } group_id { value } } }
               gateway { node { ip_prefix { node { prefix { value } } } } }
               customer_deployment { node { id } }
-              security_policies {
-                edges {
-                  node {
-                    enabled { value }
-                    rules {
-                      edges {
-                        node {
-                          action { value }
-                          disabled { value }
-                          destination_segment {
-                            node {
-                              id
-                              ... on ManagedVlanSegment {
-                                gateway { node { ip_prefix { node { prefix { value } } } } }
-                              }
-                              ... on ManagedVxlanSegment {
-                                gateway { node { ip_prefix { node { prefix { value } } } } }
-                              }
+              security_policy {
+                node {
+                  enabled { value }
+                  rules {
+                    edges {
+                      node {
+                        action { value }
+                        disabled { value }
+                        destination_segment {
+                          node {
+                            id
+                            ... on ManagedVlanSegment {
+                              gateway { node { ip_prefix { node { prefix { value } } } } }
+                            }
+                            ... on ManagedVxlanSegment {
+                              gateway { node { ip_prefix { node { prefix { value } } } } }
                             }
                           }
                         }
@@ -401,24 +397,22 @@ fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
                 }
               }
               customer_deployments { edges { node { id } } }
-              security_policies {
-                edges {
-                  node {
-                    enabled { value }
-                    rules {
-                      edges {
-                        node {
-                          action { value }
-                          disabled { value }
-                          destination_segment {
-                            node {
-                              id
-                              ... on ManagedVlanSegment {
-                                gateway { node { ip_prefix { node { prefix { value } } } } }
-                              }
-                              ... on ManagedVxlanSegment {
-                                gateway { node { ip_prefix { node { prefix { value } } } } }
-                              }
+              security_policy {
+                node {
+                  enabled { value }
+                  rules {
+                    edges {
+                      node {
+                        action { value }
+                        disabled { value }
+                        destination_segment {
+                          node {
+                            id
+                            ... on ManagedVlanSegment {
+                              gateway { node { ip_prefix { node { prefix { value } } } } }
+                            }
+                            ... on ManagedVxlanSegment {
+                              gateway { node { ip_prefix { node { prefix { value } } } } }
                             }
                           }
                         }

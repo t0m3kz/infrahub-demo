@@ -6,7 +6,7 @@ Covers:
   - _l2_from_activations()       — L2 VNI mappings from activations
   - _l3_from_activations()       — L3 VNI (VRF) mappings from activations
   - _platform_vxlan_config()     — Arista keys; anycast_gateway inherited from the base config
-  - get_acls()                   — zero-trust ACL list from security_policies on segments
+  - get_acls()                   — zero-trust ACL list from each segment's security_policy
   - isolation_mode propagation   — _vlans_from_activations and arista_eos.j2 rendering
 """
 
@@ -381,7 +381,8 @@ def _make_acl_activation(
     prefix: str | None = None,
     inbound_rules: list | None = None,
 ) -> dict:
-    """Build a cleaned SegmentDeployment dict with optional security_policies."""
+    """Build a cleaned SegmentDeployment dict. security_policies is the
+    segment's own policy as a 0/1-item list; None leaves the field unqueried."""
     ip_prefix: dict = {"ip_namespace": {"name": "tenant-a", "l3_vni": 50001}}
     if prefix is not None:
         ip_prefix["prefix"] = prefix
@@ -394,7 +395,7 @@ def _make_acl_activation(
     if seg_id is not None:
         seg["id"] = seg_id
     if security_policies is not None:
-        seg["security_policies"] = security_policies
+        seg["security_policy"] = security_policies[0] if security_policies else None
     if inbound_rules is not None:
         seg["inbound_rules"] = inbound_rules
     return {"vlan_id": vlan_id, "vni": 10000 + vlan_id, "status": "active", "segment": seg}
@@ -454,7 +455,7 @@ class TestGetAclsEmpty:
         assert get_acls(activations=[]) == []
 
     def test_missing_security_policies_key_skips_acl(self) -> None:
-        """Segments without security_policies in query data produce no ACL (backwards compat)."""
+        """Segments without security_policy in query data produce no ACL (backwards compat)."""
         act = _make_acl_activation(vlan_id=100, security_policies=None)
         assert get_acls(activations=[act]) == []
 
@@ -801,7 +802,7 @@ def _make_isolation_activation(
 ) -> dict:
     """Return a single activation dict for isolation_mode / firewall-skip tests.
 
-    The segment always has ``security_policies`` present so that the skip vs.
+    The segment always has ``security_policy`` present so that the skip vs.
     render decision is exercised rather than the "field not queried" early-exit.
     """
     seg: dict = {
@@ -810,7 +811,7 @@ def _make_isolation_activation(
         "customer_name": f"vlan{vlan_id}",
         "arp_suppression": True,
         "prefix": {"ip_namespace": {"name": "tenant-a", "l3_vni": 50001}},
-        "security_policies": policies if policies is not None else [],
+        "security_policy": policies[0] if policies else None,
         "isolation_mode": isolation_mode,
     }
     if firewall_id is not None:

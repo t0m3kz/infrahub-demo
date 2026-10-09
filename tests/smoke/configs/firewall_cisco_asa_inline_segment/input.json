@@ -186,8 +186,8 @@
                               }
                             }
                           },
-                          "security_policies": {
-                            "edges": []
+                          "security_policy": {
+                            "node": null
                           }
                         }
                       }
@@ -300,8 +300,8 @@
                               }
                             }
                           },
-                          "security_policies": {
-                            "edges": []
+                          "security_policy": {
+                            "node": null
                           }
                         }
                       }
@@ -414,8 +414,8 @@
                               }
                             }
                           },
-                          "security_policies": {
-                            "edges": []
+                          "security_policy": {
+                            "node": null
                           }
                         }
                       }
@@ -551,8 +551,8 @@
                               }
                             }
                           },
-                          "security_policies": {
-                            "edges": []
+                          "security_policy": {
+                            "node": null
                           },
                           "terminate_inline": {
                             "value": true

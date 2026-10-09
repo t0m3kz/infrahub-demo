@@ -149,6 +149,40 @@ class TestSharedPolicyIsUntracked:
         gen.client.create.assert_not_called()
 
 
+class TestAttachPolicyToSourceSegment:
+    """The policy becomes the source segment's one security_policy, untracked."""
+
+    def test_sets_the_segments_policy_untracked(self) -> None:
+        """A segment without this policy gets it as its security_policy."""
+        gen = _make_gen()
+        seg_obj = MagicMock()
+        seg_obj.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=seg_obj)
+
+        asyncio.run(
+            gen._attach_policy_to_source_segment(
+                segment={"id": "seg-1", "typename": "ManagedVlanSegment"}, policy_id="pol-1"
+            )
+        )
+
+        gen.client.create.assert_awaited_once_with(
+            kind="ManagedVlanSegment", data={"id": "seg-1", "security_policy": {"id": "pol-1"}}
+        )
+        seg_obj.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
+
+    def test_segment_already_on_the_policy_is_not_written(self) -> None:
+        """A segment whose security_policy is already this one needs no write."""
+        gen = _make_gen()
+
+        asyncio.run(
+            gen._attach_policy_to_source_segment(
+                segment={"id": "seg-1", "security_policy": {"id": "pol-1"}}, policy_id="pol-1"
+            )
+        )
+
+        gen.client.create.assert_not_called()
+
+
 # ===========================================================================
 # TestEnsureSegmentIsolationMode
 # ===========================================================================

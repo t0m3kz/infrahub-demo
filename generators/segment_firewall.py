@@ -283,25 +283,24 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
         )
 
     async def _attach_policy_to_source_segment(self, segment: dict[str, Any], policy_id: str) -> None:
+        """Make ``policy_id`` the source segment's own security_policy (its
+        one egress contract). Untracked: the segment is not this run's."""
         seg_id = segment.get("id")
         if not seg_id:
+            return
+        if (segment.get("security_policy") or {}).get("id") == policy_id:
             return
 
         seg_typename = segment.get("typename", "ManagedVxlanSegment")
         try:
-            seg_obj = await self.client.get(kind=seg_typename, id=seg_id)
-            policies_rel = getattr(seg_obj, "security_policies")
-            await policies_rel.fetch()
-            existing_policy_ids = {peer.id for peer in policies_rel.peers}
-            if policy_id not in existing_policy_ids:
-                await self._safe_rel_add(policies_rel, {"id": policy_id})
-                await seg_obj.save(allow_upsert=True, update_group_context=False)
-                self.logger.info("  Attached source policy to segment %s", segment.get("name", seg_id))
-            else:
-                await seg_obj.save(allow_upsert=True, update_group_context=False)
+            seg_obj = await self.client.create(
+                kind=seg_typename, data={"id": seg_id, "security_policy": {"id": policy_id}}
+            )
+            await seg_obj.save(allow_upsert=True, update_group_context=False)
+            self.logger.info("  Set source policy of segment %s", segment.get("name", seg_id))
         except Exception as exc:
             self.logger.warning(
-                "  Could not attach source policy to segment %s: %s",
+                "  Could not set source policy of segment %s: %s",
                 segment.get("name", seg_id),
                 exc,
             )

@@ -14,6 +14,12 @@ def merge_policies(*policy_lists: list[dict[str, Any]] | None) -> list[dict[str,
     return list(merged.values())
 
 
+def segment_policies(segment: dict[str, Any]) -> list[dict[str, Any]]:
+    """The segment's own SecurityPolicy (its egress contract) as a 0/1-item list."""
+    policy = segment.get("security_policy")
+    return [policy] if isinstance(policy, dict) and policy else []
+
+
 def enabled_policies(policies: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
     """Policies not switched off (`enabled` defaults to True)."""
     return [policy for policy in policies or [] if policy.get("enabled", True)]

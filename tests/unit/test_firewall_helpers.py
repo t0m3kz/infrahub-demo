@@ -789,8 +789,9 @@ def _make_pbr_activation(
     }
     if environment is not None:
         seg["environment"] = environment
+    # The segment's own policy, as a 0/1-item list; None leaves it unqueried.
     if security_policies is not None:
-        seg["security_policies"] = security_policies
+        seg["security_policy"] = security_policies[0] if security_policies else None
     return {"vlan_id": vlan_id, "segment": seg}
 
 
@@ -890,7 +891,7 @@ class TestGetCustomerPbrRules:
         assert get_customer_pbr_rules(activations, []) == []
 
     def test_segment_without_security_policies_key_is_skipped(self) -> None:
-        """Missing 'security_policies' key (not queried) means no PBR rule — same
+        """Missing 'security_policy' key (not queried) means no PBR rule — same
         gate get_acls() uses."""
         activations = [_make_pbr_activation(security_policies=None)]
         contexts = [_make_context_leg()]
@@ -933,7 +934,7 @@ class TestGetCustomerPbrRules:
                     "name": "seg-1",
                     "customer_name": "web",
                     "customer_deployments": [{"id": "dep-a"}, {"id": "dep-b"}],
-                    "security_policies": [],
+                    "security_policy": None,
                 },
             }
         ]
@@ -954,7 +955,7 @@ class TestGetCustomerPbrRules:
                     "customer_name": "web",
                     "owner": {"id": "dep-a"},
                     "customer_deployments": [],
-                    "security_policies": [],
+                    "security_policy": None,
                 },
             }
         ]
@@ -1035,9 +1036,10 @@ class TestGetCustomerPbrRules:
 
     def test_own_and_inbound_bypasses_merge_without_duplicates(self) -> None:
         activations = self._with_inbound(self._inbound(src_prefix="10.0.2.0/24"))
-        activations[0]["segment"]["security_policies"] = [
-            {"enabled": True, "rules": [_make_pbr_rule(dst_prefix="10.0.2.0/24")]}
-        ]
+        activations[0]["segment"]["security_policy"] = {
+            "enabled": True,
+            "rules": [_make_pbr_rule(dst_prefix="10.0.2.0/24")],
+        }
         result = get_customer_pbr_rules(activations, [_make_context_leg()])
         assert result[0]["bypass_prefixes"] == ["10.0.2.0/24"]
 

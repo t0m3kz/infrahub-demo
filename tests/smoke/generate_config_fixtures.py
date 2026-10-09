@@ -291,7 +291,7 @@ def _make_segment_node(
     seg_type: str = "ManagedVlanSegment",
     gateway_ip: str | None = None,
     ns_name: str = "default",
-    security_policies: list[dict] | None = None,
+    security_policy: dict | None = None,
     num_deployments: int = 1,
     isolation_mode: str | None = None,
     has_firewall: bool = False,
@@ -388,8 +388,8 @@ def _make_segment_node(
             }
         )
 
-    if security_policies is not None:
-        seg["security_policies"] = _edges(security_policies)
+    if security_policy is not None:
+        seg["security_policy"] = _node(security_policy)
 
     # deployments list drives stretched-segment detection in _filter_segment_deployments()
     seg["deployments"] = _edges([{"id": f"fake-dc-{i}"} for i in range(num_deployments)])
@@ -762,26 +762,22 @@ def build_device_data(
     segment_kwargs: list[dict[str, Any]] = []
     if include_segments:
         # Build optional security policy for with_acl scenario
-        policies_vxlan = None
-        policies_vlan = None
+        policy_vxlan = None
+        policy_vlan = None
         if include_acls:
-            policies_vxlan = [
-                _make_security_policy(
-                    name="policy-vxlan-seg",
-                    rules=[
-                        _make_policy_rule(index=10, name="allow-https", protocol="tcp", port_start=443),
-                        _make_policy_rule(index=20, name="allow-http", protocol="tcp", port_start=80),
-                    ],
-                )
-            ]
-            policies_vlan = [
-                _make_security_policy(
-                    name="policy-vlan-seg",
-                    rules=[
-                        _make_policy_rule(index=10, name="allow-ssh", protocol="tcp", port_start=22),
-                    ],
-                )
-            ]
+            policy_vxlan = _make_security_policy(
+                name="policy-vxlan-seg",
+                rules=[
+                    _make_policy_rule(index=10, name="allow-https", protocol="tcp", port_start=443),
+                    _make_policy_rule(index=20, name="allow-http", protocol="tcp", port_start=80),
+                ],
+            )
+            policy_vlan = _make_security_policy(
+                name="policy-vlan-seg",
+                rules=[
+                    _make_policy_rule(index=10, name="allow-ssh", protocol="tcp", port_start=22),
+                ],
+            )
 
         # This device's own VLAN domain. build_device_data never builds a
         # ManagedMLAG capability, so _resolve_own_vlan_domain_id falls through to
@@ -805,7 +801,7 @@ def build_device_data(
                 # segment: it drives the L3 VNI / VRF stanza. 50001 is the bottom of
                 # the L3 VNI pool range, disjoint from the L2 range above.
                 "l3_vni": 50001,
-                "security_policies": policies_vxlan,
+                "security_policy": policy_vxlan,
                 "num_deployments": 1,
                 "isolation_mode": isolation_mode,
                 "has_firewall": microseg,
@@ -818,7 +814,7 @@ def build_device_data(
                 "seg_name": "seg-200",
                 "seg_type": "ManagedVlanSegment",
                 "gateway_ip": "10.200.0.1/24",
-                "security_policies": policies_vlan,
+                "security_policy": policy_vlan,
                 "isolation_mode": isolation_mode,
                 "num_deployments": 1,
             }
@@ -987,7 +983,7 @@ def _make_firewall_interface(
                 ),
             }
         ),
-        "security_policies": _edges([]),
+        "security_policy": _node(None),
     }
     return {
         "__typename": "DcimVirtualInterface",
@@ -1825,7 +1821,7 @@ def main() -> int:
                 generated += g
                 errors += e
 
-    # ACL scenario: leaf only, ebgp_ibgp base, with security_policies on segments
+    # ACL scenario: leaf only, ebgp_ibgp base, with a security_policy on each segment
     print("\nGenerating ACL fixtures (leaf):")
     for platform in ACL_PLATFORMS:
         g, e = _write_fixture(

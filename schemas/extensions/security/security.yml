@@ -407,18 +407,26 @@ extensions:
   nodes:
     - kind: ManagedNetworkSegment
       relationships:
+        # One egress contract per segment (security_policy below): its
+        # default action and ordered rules for traffic leaving it.
         - name: security_policies
           peer: SecurityPolicy
-          cardinality: many
-          kind: Generic
+          identifier: network_segment__security_policies
+          state: absent
+        - name: security_policy
+          peer: SecurityPolicy
+          label: Security Policy
+          cardinality: one
+          kind: Attribute
           optional: true
           order_weight: 905
-          identifier: network_segment__security_policies
-          description: "Security policies attached to this segment"
+          identifier: network_segment__security_policy
+          description: "The segment's egress contract: default action and ordered rules for traffic leaving it"
         # Reverse side of SecurityPolicyRule.destination_segment (same
         # identifier), written only from the rule: the rules that let traffic
-        # INTO this segment. A leaf carrying only this segment builds the
-        # return path from them.
+        # INTO this segment, from whichever segment's policy holds them. A leaf
+        # carrying only this segment builds the return path from them; the
+        # rules OUT of it are its own security_policy's.
         - name: inbound_rules
           peer: SecurityPolicyRule
           label: Inbound Rules
@@ -428,18 +436,6 @@ extensions:
           order_weight: 907
           identifier: policyrule_destination_segment
           description: "Policy rules whose destination is this segment"
-        # Reverse side of SecurityPolicyRule.source_segment: the rules that let
-        # traffic OUT of this segment. With inbound_rules, "may A reach B?" is
-        # A.outbound_rules filtered on destination_segment B.
-        - name: outbound_rules
-          peer: SecurityPolicyRule
-          label: Outbound Rules
-          cardinality: many
-          kind: Generic
-          optional: true
-          order_weight: 906
-          identifier: policyrule_source_segment
-          description: "Policy rules whose source is this segment"
         - name: security_zone
           peer: SecurityZone
           cardinality: one

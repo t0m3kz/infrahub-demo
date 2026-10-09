@@ -121,14 +121,15 @@ def _activation_with_policies(
     zone_name: str = "internal",
     policies: list[dict] | None = None,
 ) -> dict:
-    """Cleaned SegmentDeployment activation dict with security_policies on the segment."""
+    """Cleaned SegmentDeployment activation dict; policies is the segment's
+    own security_policy as a 0/1-item list."""
     return {
         "vlan_id": 10,
         "vni": 10010,
         "segment": {
             "name": seg_name,
             "security_zone": {"name": zone_name},
-            "security_policies": policies or [],
+            "security_policy": policies[0] if policies else None,
         },
     }
 
@@ -175,8 +176,9 @@ class TestCollectSegmentPolicies:
         pol_b = _seg_policy("pol-b")
         pol_c = _seg_policy("pol-c")
         act1 = _activation_with_policies(seg_name="seg-01", policies=[pol_a])
-        act2 = _activation_with_policies(seg_name="seg-02", policies=[pol_b, pol_c])
-        result = _collect_segment_policies([act1, act2])
+        act2 = _activation_with_policies(seg_name="seg-02", policies=[pol_b])
+        act3 = _activation_with_policies(seg_name="seg-03", policies=[pol_c])
+        result = _collect_segment_policies([act1, act2, act3])
         assert len(result) == 3
         names = {p["name"] for p in result}
         assert names == {"pol-a", "pol-b", "pol-c"}
@@ -303,37 +305,33 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
                 "zone_type": {"value": "internal"},
             }
         },
-        "security_policies": {
-            "edges": [
-                {
-                    "node": {
-                        "name": {"value": "seg-pol-smoke"},
-                        "default_action": {"value": "deny"},
-                        "enabled": {"value": True},
-                        "rules": {
-                            "edges": [
-                                {
-                                    "node": {
-                                        "index": {"value": 10},
-                                        "name": {"value": "smoke-permit-rule"},
-                                        "action": {"value": "permit"},
-                                        "protocol": {"value": "tcp"},
-                                        "port_start": {"value": 443},
-                                        "port_end": {"value": None},
-                                        "log": {"value": False},
-                                        "disabled": {"value": False},
-                                        "apply_on_switch": {"value": False},
-                                        "description": {"value": "HTTPS"},
-                                        "source_segment": {"node": None},
-                                        "destination_segment": {"node": None},
-                                        "security_profile": {"node": None},
-                                    }
-                                }
-                            ]
-                        },
-                    }
-                }
-            ]
+        "security_policy": {
+            "node": {
+                "name": {"value": "seg-pol-smoke"},
+                "default_action": {"value": "deny"},
+                "enabled": {"value": True},
+                "rules": {
+                    "edges": [
+                        {
+                            "node": {
+                                "index": {"value": 10},
+                                "name": {"value": "smoke-permit-rule"},
+                                "action": {"value": "permit"},
+                                "protocol": {"value": "tcp"},
+                                "port_start": {"value": 443},
+                                "port_end": {"value": None},
+                                "log": {"value": False},
+                                "disabled": {"value": False},
+                                "apply_on_switch": {"value": False},
+                                "description": {"value": "HTTPS"},
+                                "source_segment": {"node": None},
+                                "destination_segment": {"node": None},
+                                "security_profile": {"node": None},
+                            }
+                        }
+                    ]
+                },
+            }
         },
     }
 
@@ -805,10 +803,10 @@ class TestFirewallTransformSmoke:
         fw = _make_fw()
         data = _make_smoke_data(platform)
         data["SecurityPolicy"] = {"edges": []}
-        # Strip segment security_policies from the interface_capabilities segment node
+        # Strip the segment's security_policy from the interface_capabilities segment node
         iface_node = data["DcimPhysicalDevice"]["edges"][0]["node"]["interfaces"]["edges"][0]["node"]
         seg_node = iface_node["interface_capabilities"]["edges"][0]["node"]
-        seg_node["security_policies"] = {"edges": []}
+        seg_node["security_policy"] = {"node": None}
         result = await fw.transform(data)
         assert isinstance(result, str)
         assert len(result) > 0
@@ -1035,7 +1033,7 @@ def _make_context_smoke_data(platform: str, *, tenant_matches: bool) -> dict[str
     seg_node = fw_iface["interface_capabilities"]["edges"][0]["node"]
     seg_node["id"] = "seg-smoke"
     seg_node["customer_deployments"] = {"edges": [{"node": {"id": "dep-c005"}}]}
-    rule = seg_node["security_policies"]["edges"][0]["node"]["rules"]["edges"][0]["node"]
+    rule = seg_node["security_policy"]["node"]["rules"]["edges"][0]["node"]
     rule["source_segment"] = {"node": {"id": "seg-smoke", "name": {"value": "seg-smoke"}}}
     context_iface: dict[str, Any] = {
         "__typename": {"value": "DcimVirtualInterface"},

@@ -5,7 +5,7 @@ from typing import Any
 
 from transforms.helpers.acl import _PROTO_MAP, _port_match
 from transforms.helpers.addressing import host_ip
-from transforms.helpers.policy import active_rules, enabled_policies, inbound_permits, rule_zone
+from transforms.helpers.policy import active_rules, enabled_policies, inbound_permits, rule_zone, segment_policies
 from transforms.helpers.segments import _get_segment_prefix_str, segment_hosting_candidates
 
 # Border-leaf platforms with a native hardware SGT/security-group matching
@@ -572,7 +572,7 @@ def get_customer_pbr_rules(
         if not vlan_id or vlan_id in seen_vlans:
             continue
         seg = act.get("segment") or {}
-        if "security_policies" not in seg:
+        if "security_policy" not in seg:
             continue
         seen_vlans.add(vlan_id)
 
@@ -599,7 +599,7 @@ def get_customer_pbr_rules(
             else:
                 bypass.add(prefix)
 
-        for policy in enabled_policies(seg.get("security_policies")):
+        for policy in enabled_policies(segment_policies(seg)):
             for rule in active_rules(policy):
                 if rule.get("action") == "permit":
                     _classify(rule, rule.get("destination_segment"))

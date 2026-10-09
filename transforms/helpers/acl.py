@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from transforms.helpers.policy import active_rules, enabled_policies, inbound_permits, rule_zone
+from transforms.helpers.policy import active_rules, enabled_policies, inbound_permits, rule_zone, segment_policies
 from transforms.helpers.segments import _get_segment_prefix_str
 
 _PROTO_MAP = {"any": "ip", "tcp": "tcp", "udp": "udp", "icmp": "icmp"}
@@ -178,13 +178,13 @@ def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, 
             seen_vlans.add(vlan_id)
             continue
 
-        # Only render ACLs when security_policies is explicitly in the data
+        # Only render ACLs when security_policy is explicitly in the data
         # (i.e. the query included it). Missing key = field not queried → skip.
-        if "security_policies" not in seg:
+        if "security_policy" not in seg:
             continue
         segment_name = seg.get("customer_name") or seg.get("name") or f"VLAN_{vlan_id}"
         segment_environment = seg.get("environment")
-        policies = seg.get("security_policies") or []
+        policies = segment_policies(seg)
 
         rules: list[dict[str, Any]] = []
 
