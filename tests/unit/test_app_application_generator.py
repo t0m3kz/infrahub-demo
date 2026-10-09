@@ -499,8 +499,7 @@ class TestReconcileApplicationRulesCloudDispatch:
         gen = _make_gen()
         gen._reconcile_private_access_components = AsyncMock(return_value=(0, 0))
         gen._create_cloud_rule = AsyncMock(return_value=True)
-        gen._get_or_create_policy = AsyncMock()
-        gen._attach_policy_to_source_segment = AsyncMock()
+        gen._segment_policy = AsyncMock()
         gen._ensure_segment_isolation_mode = AsyncMock()
         gen._find_rule_by_name = AsyncMock(return_value=None)
         return gen
@@ -516,7 +515,7 @@ class TestReconcileApplicationRulesCloudDispatch:
         asyncio.run(gen._reconcile_application_rules(self._single_port_app(dst_typename="CloudNetworkSegment")))
 
         gen._create_cloud_rule.assert_awaited_once()
-        gen._get_or_create_policy.assert_not_awaited()
+        gen._segment_policy.assert_not_awaited()
 
     def test_cloud_source_segment_also_dispatches_to_create_cloud_rule(self) -> None:
         gen = self._make_gen_ready()
@@ -528,7 +527,7 @@ class TestReconcileApplicationRulesCloudDispatch:
         )
 
         gen._create_cloud_rule.assert_awaited_once()
-        gen._get_or_create_policy.assert_not_awaited()
+        gen._segment_policy.assert_not_awaited()
 
     def test_both_on_prem_segments_use_the_on_prem_path_not_cloud(self) -> None:
         gen = self._make_gen_ready()
@@ -536,7 +535,7 @@ class TestReconcileApplicationRulesCloudDispatch:
         asyncio.run(gen._reconcile_application_rules(self._single_port_app(dst_typename="ManagedVxlanSegment")))
 
         gen._create_cloud_rule.assert_not_awaited()
-        gen._get_or_create_policy.assert_awaited_once()
+        gen._segment_policy.assert_awaited_once()
 
 
 # ===========================================================================
@@ -556,14 +555,12 @@ class TestReconcileApplicationRulesPerPort:
         gen._ensure_segment_isolation_mode = AsyncMock()
         gen._reconcile_private_access_components = AsyncMock(return_value=(0, 0))
         gen._reconcile_proxy_rule = AsyncMock(return_value=True)
-        gen._attach_policy_to_source_segment = AsyncMock()
         # SegmentFirewallMixin boundaries (each one queries Infrahub)
         policy = MagicMock()
         policy.id = "policy-src"
-        gen._get_or_create_policy = AsyncMock(return_value=policy)
+        gen._segment_policy = AsyncMock(return_value=policy)
         gen._find_rule_by_name = AsyncMock(return_value=None)
         gen._create_or_update_policy_rule = AsyncMock(return_value=(MagicMock(), 100))
-        gen._reconcile_tag_rule_from_segments = AsyncMock()
         gen._get_profile = AsyncMock(return_value=None)
         # CloudSecurityRuleMixin boundaries
         sg = MagicMock()
@@ -602,8 +599,7 @@ class TestReconcileApplicationRulesPerPort:
             assert data["source_segment"] == {"id": "seg-src"}
             assert data["destination_segment"] == {"id": "seg-dst"}
         # One policy per source segment, shared across both rules, attached once.
-        gen._get_or_create_policy.assert_awaited_once()
-        gen._attach_policy_to_source_segment.assert_awaited_once()
+        gen._segment_policy.assert_awaited_once()
         gen.client.create.assert_not_awaited()
 
     def test_dependency_ports_narrow_the_target_ports(self) -> None:
@@ -642,7 +638,7 @@ class TestReconcileApplicationRulesPerPort:
         ]
         assert all(data["direction"] == "ingress" for data in created)
         gen._create_or_update_policy_rule.assert_not_awaited()
-        gen._get_or_create_policy.assert_not_awaited()
+        gen._segment_policy.assert_not_awaited()
 
     def test_target_fqdn_dependency_goes_to_the_proxy_path(self) -> None:
         """An external fqdn is one proxy rule; no firewall or cloud rule is attempted."""

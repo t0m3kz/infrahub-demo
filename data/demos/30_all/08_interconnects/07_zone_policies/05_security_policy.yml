@@ -1,16 +1,15 @@
 ---
-# Firewall-level enforcement for colo-hosted cloud/partner/SaaS interconnects
-# (see 02_security_tags.yml's SecurityTag layer for the additive coarse GPO
-# contract). Rules match by source_segment (C001's existing "nordix-prod"
-# segment, data/demos/30_all/07_applications/c001/00_segment.yml) and
-# destination_prefixes (04_destination_prefixes.yml) — no source/destination
-# zone is set, since no SecurityZone data exists in this repo yet for
-# INTERNET/MANAGEMENT either; destination_prefixes alone is a complete,
-# schema-legal selector (checks/firewall.py counts zone, segment, IP, and
-# prefix selectors together, any one is sufficient).
+# Firewall-level enforcement for colo-hosted cloud/partner/SaaS interconnects.
+# These are rules of C001's "nordix-prod" segment
+# (data/demos/30_all/07_applications/c001/00_segment.yml), so they live in that
+# segment's own policy — every rule does: seg-<segment>-egress is the one
+# policy per segment, shared with the rules the application generator writes
+# for the segment's AppDependencies (they take index >= 100; these hand-written
+# ones stay below). The destination is a prefix (04_destination_prefixes.yml)
+# on the far side of the interconnect, not a segment.
 #
-# default_action: deny means nothing beyond these three explicit permits
-# reaches AWS/Acme/Zscaler from this segment — and getting there at all still
+# default_action: deny means nothing beyond the explicit permits reaches
+# AWS/Acme/Zscaler from this segment — and getting there at all still
 # requires the traffic to have been PBR-redirected to the FR metro firewall
 # first (transforms/helpers/firewall.py::get_border_leaf_pbr_rules), since
 # that redirect doesn't look at destination — this policy is the SECOND gate,
@@ -20,8 +19,9 @@ kind: Object
 spec:
   kind: SecurityPolicy
   data:
-    - name: colo-fr-external-egress
-      description: "C001 FR cage: permitted flows from internal tiers to colo-hosted cloud/partner/SaaS interconnects"
+    - name: seg-c001-nordix-prod-p-egress
+      description: "Egress contract of c001-nordix-prod-p, incl. its colo-hosted cloud/partner/SaaS interconnects"
+      segment: "c001-nordix-prod-p"
       default_action: deny
       enabled: true
       rules:

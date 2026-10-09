@@ -2,9 +2,8 @@
 
 Covers on-prem segment-to-segment SecurityPolicy/SecurityPolicyRule
 handling: segment policy naming, dependency-authorization delegation,
-indexed rule create/update (retry-on-collision), the SecurityTagRule
-micro-segmentation mirror, and that a microsegmented rule gets no generated
-return rule.
+indexed rule create/update (retry-on-collision), the segment's one policy,
+and that a microsegmented rule gets no generated return rule.
 """
 
 from __future__ import annotations
@@ -18,7 +17,7 @@ import pytest
 
 from generators.common import CommonGenerator
 from generators.helpers.rules import RulesPlanner
-from generators.protocols import SecurityPolicyRule, SecurityTagRule
+from generators.protocols import SecurityPolicy, SecurityPolicyRule
 from generators.segment_firewall import SegmentFirewallMixin
 
 
@@ -31,156 +30,44 @@ def _make_gen() -> Any:
 
 
 # ===========================================================================
-# TestReconcileTagRuleFromSegments
-# ===========================================================================
-
-
-class TestReconcileTagRuleFromSegments:
-    def test_skips_when_tag_missing(self):
-        gen = _make_gen()
-        gen.client.filters = AsyncMock()
-        gen.client.create = AsyncMock()
-
-        src_seg = {"id": "seg-1", "name": "src"}
-        dst_seg = {"id": "seg-2", "name": "dst", "security_tag": {"id": "tag-dst", "name": "dst-tier"}}
-
-        asyncio.run(
-            gen._reconcile_tag_rule_from_segments(
-                src_seg=src_seg,
-                dst_seg=dst_seg,
-                app_name="myapp",
-                dep_name="web-to-api",
-                log=True,
-            )
-        )
-
-        gen.client.filters.assert_not_called()
-        gen.client.create.assert_not_called()
-
-    def test_reuses_existing_tag_rule_without_claiming_it(self) -> None:
-        """A (source tag, destination tag) rule is shared by every application
-        with a dependency between those segments: an existing one is reused
-        and not saved, so this run's group never claims it."""
-        gen = _make_gen()
-        existing_rule = MagicMock()
-        existing_rule.save = AsyncMock()
-        gen.client.filters = AsyncMock(return_value=[existing_rule])
-        gen.client.create = AsyncMock()
-
-        src_seg = {"security_tag": {"id": "tag-src", "name": "web-tier"}}
-        dst_seg = {"security_tag": {"id": "tag-dst", "name": "app-tier"}}
-
-        asyncio.run(
-            gen._reconcile_tag_rule_from_segments(
-                src_seg=src_seg,
-                dst_seg=dst_seg,
-                app_name="myapp",
-                dep_name="web-to-api",
-                log=True,
-            )
-        )
-
-        gen.client.create.assert_not_called()
-        existing_rule.save.assert_not_called()
-
-    def test_creates_tag_rule_when_missing(self):
-        gen = _make_gen()
-        gen.client.filters = AsyncMock(return_value=[])
-        created_rule = MagicMock()
-        created_rule.save = AsyncMock()
-        gen.client.create = AsyncMock(return_value=created_rule)
-
-        src_seg = {"security_tag": {"id": "tag-src", "name": "web-tier"}}
-        dst_seg = {"security_tag": {"id": "tag-dst", "name": "app-tier"}}
-
-        asyncio.run(
-            gen._reconcile_tag_rule_from_segments(
-                src_seg=src_seg,
-                dst_seg=dst_seg,
-                app_name="myapp",
-                dep_name="web-to-api",
-                log=False,
-            )
-        )
-
-        call_kwargs = gen.client.create.call_args.kwargs
-        assert call_kwargs["kind"] == SecurityTagRule
-        data = call_kwargs["data"]
-        assert data["source_tag"] == {"id": "tag-src"}
-        assert data["destination_tag"] == {"id": "tag-dst"}
-        assert data["action"] == "permit"
-        assert data["log"] is False
-        created_rule.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
-
-
-# ===========================================================================
 # TestSharedPolicyIsUntracked
 # ===========================================================================
 
 
-class TestSharedPolicyIsUntracked:
-    """The per-source-segment SecurityPolicy is reached by every application
-    with a component on that segment: it is written untracked."""
+class TestSegmentPolicy:
+    """The source segment's one SecurityPolicy, shared by every application
+    with a component on it and by its hand-written rules: written untracked,
+    never a second one."""
 
-    def test_new_policy_is_saved_untracked(self) -> None:
-        """A missing policy is created with update_group_context=False."""
+    def test_existing_segment_policy_is_used(self) -> None:
+        """A segment that already has its policy (generated or hand-written) keeps it."""
+        gen = _make_gen()
+        policy = MagicMock(id="pol-manual")
+        gen.client.get = AsyncMock(return_value=policy)
+
+        result = asyncio.run(
+            gen._segment_policy({"id": "seg-1", "security_policy": {"id": "pol-manual"}}, "seg-seg-1-egress")
+        )
+
+        assert result is policy
+        gen.client.get.assert_awaited_once_with(kind=SecurityPolicy, id="pol-manual")
+        gen.client.create.assert_not_called()
+
+    def test_new_policy_is_created_for_the_segment_untracked(self) -> None:
+        """A segment without one gets seg-<segment>-egress, created with the segment set."""
         gen = _make_gen()
         gen.client.filters = AsyncMock(return_value=[])
         policy = MagicMock(id="pol-1")
         policy.save = AsyncMock()
         gen.client.create = AsyncMock(return_value=policy)
 
-        result = asyncio.run(gen._get_or_create_policy("seg-src-policy", "seg-src"))
+        result = asyncio.run(gen._segment_policy({"id": "seg-1", "name": "seg-1"}, "seg-seg-1-egress"))
 
         assert result is policy
+        data = gen.client.create.call_args.kwargs["data"]
+        assert data["name"] == "seg-seg-1-egress"
+        assert data["segment"] == {"id": "seg-1"}
         policy.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
-
-    def test_existing_policy_is_returned_unsaved(self) -> None:
-        """An existing policy is reused without a save, so no run claims it."""
-        gen = _make_gen()
-        policy = MagicMock(id="pol-1")
-        policy.save = AsyncMock()
-        gen.client.filters = AsyncMock(return_value=[policy])
-
-        result = asyncio.run(gen._get_or_create_policy("seg-src-policy", "seg-src"))
-
-        assert result is policy
-        policy.save.assert_not_called()
-        gen.client.create.assert_not_called()
-
-
-class TestAttachPolicyToSourceSegment:
-    """The policy becomes the source segment's one security_policy, untracked."""
-
-    def test_sets_the_segments_policy_untracked(self) -> None:
-        """A segment without this policy gets it as its security_policy."""
-        gen = _make_gen()
-        seg_obj = MagicMock()
-        seg_obj.save = AsyncMock()
-        gen.client.create = AsyncMock(return_value=seg_obj)
-
-        asyncio.run(
-            gen._attach_policy_to_source_segment(
-                segment={"id": "seg-1", "typename": "ManagedVlanSegment"}, policy_id="pol-1"
-            )
-        )
-
-        gen.client.create.assert_awaited_once_with(
-            kind="ManagedVlanSegment", data={"id": "seg-1", "security_policy": {"id": "pol-1"}}
-        )
-        seg_obj.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
-
-    def test_segment_already_on_the_policy_is_not_written(self) -> None:
-        """A segment whose security_policy is already this one needs no write."""
-        gen = _make_gen()
-
-        asyncio.run(
-            gen._attach_policy_to_source_segment(
-                segment={"id": "seg-1", "security_policy": {"id": "pol-1"}}, policy_id="pol-1"
-            )
-        )
-
-        gen.client.create.assert_not_called()
 
 
 # ===========================================================================
@@ -443,10 +330,9 @@ class TestMicrosegmentedRuleHasNoReturnRule:
         gen = _make_gen()
         policy = MagicMock()
         policy.id = "policy-src"
-        gen._get_or_create_policy = AsyncMock(return_value=policy)
+        gen._segment_policy = AsyncMock(return_value=policy)
         gen._find_rule_by_name = AsyncMock(return_value=existing_rule)
         gen._create_or_update_policy_rule = AsyncMock(return_value=(MagicMock(), 100))
-        gen._reconcile_tag_rule_from_segments = AsyncMock()
         gen._get_profile = AsyncMock(return_value=None)
         planner = MagicMock(wraps=RulesPlanner())
         planner.zone_context = MagicMock(return_value=("PROD-ZONE", "PROD-ZONE", False))
@@ -479,12 +365,20 @@ class TestMicrosegmentedRuleHasNoReturnRule:
         assert kwargs["rule_data"]["apply_on_switch"] is True
         assert kwargs["rule_data"]["source_segment"] == {"id": "seg-src"}
         assert kwargs["rule_data"]["destination_segment"] == {"id": "seg-dst"}
-        gen._get_or_create_policy.assert_awaited_once()
+        gen._segment_policy.assert_awaited_once()
+
+    @staticmethod
+    def _existing(index: int = 100, expires_at: Any = None, disabled: bool = False) -> Any:
+        existing = MagicMock()
+        existing.index.value = index
+        existing.expires_at.value = expires_at
+        existing.disabled.value = disabled
+        existing.save = AsyncMock()
+        return existing
 
     def test_existing_rule_does_not_create_a_return_rule(self) -> None:
         """Re-running over an existing rule only re-registers it."""
-        existing = MagicMock()
-        existing.save = AsyncMock()
+        existing = self._existing()
         gen, result = self._run(existing_rule=existing)
 
         assert result == (False, True)
@@ -493,6 +387,25 @@ class TestMicrosegmentedRuleHasNoReturnRule:
         gen._find_rule_by_name.assert_awaited_once_with(
             SecurityPolicyRule, "policy-src", "frontend-to-backend-tcp-8443"
         )
+
+    def test_hand_written_rule_of_the_same_name_is_not_adopted(self) -> None:
+        """A rule below index 100 belongs to the segment's data file: never saved into this run's group."""
+        existing = self._existing(index=10)
+        gen, result = self._run(existing_rule=existing)
+
+        assert result == (False, True)
+        existing.save.assert_not_awaited()
+        gen._create_or_update_policy_rule.assert_not_awaited()
+        gen.logger.error.assert_called_once()
+
+    def test_expired_existing_rule_is_disabled_on_rerun(self) -> None:
+        """An existing rule past expires_at is disabled when re-registered."""
+        existing = self._existing(expires_at=(datetime.now(timezone.utc) - timedelta(days=1)).isoformat())
+        _, result = self._run(existing_rule=existing)
+
+        assert result == (False, True)
+        assert existing.disabled.value is True
+        existing.save.assert_awaited_once_with(allow_upsert=True)
 
     def test_port_range_is_written_to_the_rule_and_its_name(self) -> None:
         """The rule takes protocol and range from the port it is handed, suffixed onto its name."""
@@ -519,7 +432,7 @@ class TestReconcileSegmentRuleEarlyExits:
     def test_missing_segment_contributes_to_neither_counter(self) -> None:
         """No network_segment on one side: warn, neither created nor skipped."""
         gen = _make_gen()
-        gen._get_or_create_policy = AsyncMock()
+        gen._segment_policy = AsyncMock()
 
         result = asyncio.run(
             gen._reconcile_segment_rule(
@@ -538,13 +451,13 @@ class TestReconcileSegmentRuleEarlyExits:
         )
 
         assert result == (False, False)
-        gen._get_or_create_policy.assert_not_awaited()
+        gen._segment_policy.assert_not_awaited()
         gen.logger.warning.assert_called_once()
 
     def test_policy_creation_failure_counts_as_skipped(self) -> None:
         """The source segment's policy could not be found or made: skip the rule."""
         gen = _make_gen()
-        gen._get_or_create_policy = AsyncMock(return_value=None)
+        gen._segment_policy = AsyncMock(return_value=None)
         gen._find_rule_by_name = AsyncMock()
         segment_policies: dict[str, Any] = {}
 

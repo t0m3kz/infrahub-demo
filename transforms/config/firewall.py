@@ -9,7 +9,6 @@ from transforms.helpers.firewall import (
     place_policies_in_contexts,
 )
 from transforms.helpers.ha import get_ha, inline_addresses
-from transforms.helpers.policy import merge_policies, segment_policies
 from transforms.helpers.segments import segment_vlan_ids
 
 
@@ -66,43 +65,33 @@ def _build_fw_interfaces(
     return fw_ifaces
 
 
-def _collect_segment_policies(activations: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Extract SecurityPolicy nodes from segment activations.
-
-    Traversal path: activation → segment → security_policy
-    """
-    seen: dict[str, dict] = {}
-    for act in activations:
-        seg = act.get("segment") or {}
-        for policy in segment_policies(seg):
-            name = policy.get("name") or policy.get("id")
-            if name and name not in seen:
-                seen[name] = policy
-    return list(seen.values())
-
-
 class Firewall(BaseDeviceTransform):
     query = "firewall_config"
     template_subdir = "firewalls"
     resolve_vlan_domain = False
+
+    def collect_policies(
+        self, device: dict[str, Any]
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
+        """(activations, contexts, root policies, context id -> policies) of a
+        firewall: the rules of the segments it serves, placed in the table of
+        the context they terminate on (place_policies_in_contexts). Shared
+        with checks/firewall.py, which validates exactly these rules."""
+        interfaces = device.get("interfaces") or []
+        activations = self._collect_activations_from_interfaces(interfaces)
+        contexts = get_firewall_contexts(interfaces)
+        root, by_context = place_policies_in_contexts(contexts, [act.get("segment") or {} for act in activations])
+        return activations, contexts, root, by_context
 
     async def transform(self, data: Any) -> Any:
         device, roots, platform_name = self._device_and_platform(data)
         if not platform_name:
             return self._no_platform_config(device)
 
-        activations = self._collect_activations_from_interfaces(device.get("interfaces") or [])
+        activations, contexts, root_policies_data, context_policies_data = self.collect_policies(device)
 
         ha = get_ha(device.get("capabilities"), device.get("interfaces"), device.get("name"))
         fw_interfaces = _build_fw_interfaces(device.get("interfaces") or [], activations, ha)
-        all_policies_data = merge_policies(roots.get("SecurityPolicy"), _collect_segment_policies(activations))
-
-        # Each rule lands in the context (VDOM/vsys) its segments' traffic is
-        # redirected to; only rules no context serves stay in the root list.
-        contexts = get_firewall_contexts(device.get("interfaces"))
-        root_policies_data, context_policies_data = place_policies_in_contexts(
-            all_policies_data, contexts, segments=[act.get("segment") or {} for act in activations]
-        )
         for context in contexts:
             context["policies"] = get_zone_policies(context_policies_data.get(context["id"]))
 

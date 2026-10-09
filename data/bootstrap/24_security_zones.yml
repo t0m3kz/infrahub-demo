@@ -13,8 +13,6 @@ spec:
     - name: "PROD-ZONE"
       description: "Production workload zone — web, app, and database tiers"
       trust_level: 70
-      zone_type: internal
     - name: "NONPROD-ZONE"
       description: "Non-production zone — dev, staging, QA environments"
       trust_level: 50
-      zone_type: internal

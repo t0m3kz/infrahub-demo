@@ -156,9 +156,6 @@ nodes:
     uniqueness_constraints:
       - [segment, deployment]
     attributes:
-      - name: vlan_id
-        kind: Number
-        state: absent
       - name: vni
         kind: Number
         label: L2 VNI

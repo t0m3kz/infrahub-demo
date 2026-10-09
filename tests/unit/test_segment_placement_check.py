@@ -124,7 +124,12 @@ class TestInlineTermination:
     def _vlan_segment(inline_service: dict[str, Any] | None, terminate_inline: bool = True) -> dict[str, Any]:
         return {
             "ManagedVlanSegment": [
-                {"name": "seg-web", "terminate_inline": terminate_inline, "inline_service": inline_service}
+                {
+                    "name": "seg-web",
+                    "customer_deployment": {"typename": "TopologyCustomerDC", "name": "C001-P-DC1"},
+                    "terminate_inline": terminate_inline,
+                    "inline_service": inline_service,
+                }
             ]
         }
 
@@ -154,3 +159,14 @@ class TestInlineTermination:
         check.validate(self._vlan_segment(None, terminate_inline=False))
 
         assert check._captured_errors == []
+
+
+class TestVlanSegmentDeployment:
+    def test_vlan_segment_without_deployment_is_an_error(self) -> None:
+        """Every segment needs its deployment — without one it terminates nowhere."""
+        check = _check()
+
+        check.validate({"ManagedVlanSegment": [{"name": "seg-orphan", "customer_deployment": None}]})
+
+        assert len(check._captured_errors) == 1
+        assert "has no customer_deployment" in check._captured_errors[0]

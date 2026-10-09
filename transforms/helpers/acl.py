@@ -2,7 +2,14 @@
 
 from typing import Any
 
-from transforms.helpers.policy import active_rules, enabled_policies, inbound_permits, rule_zone, segment_policies
+from transforms.helpers.policy import (
+    active_rules,
+    enabled_policies,
+    inbound_permits,
+    rule_endpoint,
+    rule_zone,
+    segment_policies,
+)
 from transforms.helpers.segments import _get_segment_prefix_str
 
 _PROTO_MAP = {"any": "ip", "tcp": "tcp", "udp": "udp", "icmp": "icmp"}
@@ -22,14 +29,8 @@ def _port_match(rule: dict[str, Any], acl_proto: str) -> str | None:
 def _build_acl_rule(rule: dict[str, Any]) -> dict[str, Any]:
     """Convert a SecurityPolicyRule dict (from clean_data) into an ACL rule dict."""
     acl_proto = _PROTO_MAP.get(rule.get("protocol") or "any", "ip")
-
     src_seg = rule.get("source_segment") or {}
-    src_prefix = _get_segment_prefix_str(src_seg) if src_seg else None
-    src = src_prefix or "any"
-
     dst_seg = rule.get("destination_segment") or {}
-    dst_prefix = _get_segment_prefix_str(dst_seg) if dst_seg else None
-    dst = dst_prefix or "any"
 
     # Zone fields — for zone-aware platforms or remark/comment rendering
     src_zone = rule_zone(rule, "source")
@@ -42,9 +43,9 @@ def _build_acl_rule(rule: dict[str, Any]) -> dict[str, Any]:
         "seq": rule.get("index"),
         "action": rule.get("action", "deny"),
         "protocol": acl_proto,
-        "src": src,
+        "src": rule_endpoint(rule, "source") or "any",
         "src_port": None,
-        "dst": dst,
+        "dst": rule_endpoint(rule, "destination") or "any",
         "dst_port": _port_match(rule, acl_proto),
         "established": False,
         "log": bool(rule.get("log")),
@@ -71,7 +72,7 @@ def _build_return_rule(
     """
     acl_proto = _PROTO_MAP.get(rule.get("protocol") or "any", "ip")
     src_seg = rule.get("source_segment") or {}
-    peer_prefix = _get_segment_prefix_str(src_seg) if src_seg else None
+    peer_prefix = rule_endpoint(rule, "source")
     peer_name = src_seg.get("customer_name") or src_seg.get("name") or "any"
     return {
         "seq": None,
@@ -104,6 +105,26 @@ def _inbound_permits(seg: dict[str, Any]) -> list[dict[str, Any]]:
             r.get("index") or 0,
             r.get("name") or "",
         ),
+    )
+
+
+def _leaf_enforces(seg: dict[str, Any]) -> bool:
+    """Whether the segment's policy is enforced on its leaf SVI.
+
+    A segment with a dedicated firewall (inline_service) is enforced there,
+    not on the leaf, unless it is microsegmented or one of its own active
+    rules is apply_on_switch: such a rule must hold on the switch regardless
+    of the firewall, and an ACL is all-or-nothing on the SVI (its implicit
+    deny drops whatever it does not permit), so the segment then gets its
+    whole ACL, like a microsegmented one.
+    """
+    inline = seg.get("inline_service") or {}
+    if not (inline.get("id") or inline.get("name")) or seg.get("isolation_mode") == "microsegmented":
+        return True
+    return any(
+        rule.get("apply_on_switch")
+        for policy in enabled_policies(segment_policies(seg))
+        for rule in active_rules(policy)
     )
 
 
@@ -170,11 +191,8 @@ def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, 
 
         seg = act.get("segment") or {}
 
-        # Segment has a dedicated firewall — policy is enforced there, not on the leaf SVI.
-        # Exception: microsegmented segments always get a leaf ACL regardless of firewall.
         isolation_mode = seg.get("isolation_mode") or "normal"
-        inline = seg.get("inline_service") or {}
-        if (inline.get("id") or inline.get("name")) and isolation_mode != "microsegmented":
+        if not _leaf_enforces(seg):
             seen_vlans.add(vlan_id)
             continue
 

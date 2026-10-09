@@ -141,9 +141,6 @@ generics:
         regex: "^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$"
         description: "Shared anycast-gateway MAC for every VTEP in this fabric (colon-separated). Must be identical fabric-wide."  # yamllint disable-line rule:line-length
     relationships:
-      - name: vlan_pool
-        peer: CoreNumberPool
-        state: absent
       - name: vni_pool
         peer: CoreNumberPool
         kind: Attribute

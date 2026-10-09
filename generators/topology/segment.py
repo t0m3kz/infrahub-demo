@@ -54,7 +54,6 @@ from utils.data_cleaning import clean_data
 from ..common import CommonGenerator
 from ..connections import CablingMixin
 from ..helpers.rules import RulesPlanner
-from ..named_objects import GetOrCreateByNameMixin
 from ..pools import PoolMixin
 from ..protocols import (
     DcimCable,
@@ -73,7 +72,7 @@ from ..vlan_domain import SERVICE_PORT_ROLES, VlanDomainMixin, segment_lock_key
 STRETCHED_VNI_POOL_NAME = "GLOBAL-L2VNI"
 
 
-class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, VlanDomainMixin, CommonGenerator):
+class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGenerator):
     """VXLAN segment generator — allocates a VNI from the DC's pool,
     reconciles the segment's LOCAL VLAN ID activations (border gateways of a
     stretched segment included), and creates inline sub-interfaces when
@@ -240,18 +239,15 @@ class VxlanSegmentGenerator(GetOrCreateByNameMixin, PoolMixin, CablingMixin, Vla
         is otherwise permanently inert — no segment ever carried security_zone.
         """
         zone_name = RulesPlanner.pick_zone_name(environment)
-        zone_obj = await self._get_or_create_by_name(
-            kind=SecurityZone,
-            name=zone_name,
-            create_data={"name": zone_name, **RulesPlanner.zone_seed(zone_name)},
-            created_log="Created security zone: %s",
-            # Shared by every segment of the environment: no segment owns it.
-            track=False,
-        )
-        if zone_obj is None:
-            self.logger.warning(f"Segment {segment_name}: could not get-or-create security zone {zone_name}")
+        # The zones are bootstrap data (data/bootstrap/24_security_zones.yml),
+        # on main before any branch is cut: looked up, never created here.
+        zones = await self.client.filters(kind=SecurityZone, name__value=zone_name)
+        if not zones:
+            self.logger.error(
+                f"Segment {segment_name}: security zone {zone_name} not found — load data/bootstrap/24_security_zones.yml"
+            )
             return
-        zone_id = zone_obj.id
+        zone_id = zones[0].id
 
         try:
             segment_obj = await self.client.create(

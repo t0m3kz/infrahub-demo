@@ -111,7 +111,7 @@ feature cts
 cts role-based sgt-map vlan {{ vlan.vlan_id }} sgt {{ vlan.sgt }}
 {%- endfor %}
 !
-! CTS role-based permissions (SecurityTagRule — coarse tier-to-tier)
+! CTS role-based permissions (derived from the segments' permit rules — coarse tier-to-tier)
 {%- for rule in sgt_rules %}
 cts role-based permissions from {{ rule.src_sgt }} to {{ rule.dst_sgt }} {{ rule.action }}
   ! {{ rule.src_name }} → {{ rule.dst_name }}

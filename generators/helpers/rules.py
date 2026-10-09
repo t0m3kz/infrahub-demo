@@ -176,23 +176,6 @@ class RulesPlanner:
         return "PROD-ZONE" if environment == "p" else "NONPROD-ZONE"
 
     @staticmethod
-    def zone_seed(zone_name: str) -> dict[str, Any]:
-        """Fixed classification for a generator-owned SecurityZone, keyed by name."""
-        seeds = {
-            "PROD-ZONE": {
-                "description": "Production workload zone — web, app, and database tiers",
-                "trust_level": 70,
-                "zone_type": "internal",
-            },
-            "NONPROD-ZONE": {
-                "description": "Non-production zone — dev, staging, QA environments",
-                "trust_level": 50,
-                "zone_type": "internal",
-            },
-        }
-        return seeds[zone_name]
-
-    @staticmethod
     def pick_isolation_mode(app_security_profile: str) -> str:
         """Intra-segment enforcement for a segment, derived from the
         security_profile of the application using it. fintech_strict is a

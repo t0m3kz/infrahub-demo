@@ -1017,10 +1017,9 @@ class TestCreateInlineSubInterfaces:
 
 
 class TestEnsureSecurityZone:
-    """security_zone used to be hand-authored (data/security/01_security_zones.yml,
-    never loaded by anything, never set on a real segment). This derives the
-    same PROD-ZONE/NONPROD-ZONE classification from the segment's own
-    `environment`, unlocking the cross-zone branch in
+    """A segment's macro trust zone is derived from its own `environment`
+    (PROD-ZONE/NONPROD-ZONE, bootstrap data in data/bootstrap/
+    24_security_zones.yml), unlocking the cross-zone branch in
     generators/helpers/rules.py's RulesPlanner.zone_context/pick_profile_name.
 
     Builds its own generator rather than using the shared _make_gen(), which
@@ -1055,24 +1054,16 @@ class TestEnsureSecurityZone:
         # The segment is this run's own target: never put in its group.
         segment_obj.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
 
-    def test_creates_zone_when_missing(self):
+    def test_missing_zone_is_an_error_and_creates_nothing(self):
+        """The zones are bootstrap data: a missing one is a setup error, never created here."""
         gen = self._make_gen()
-        zone_obj = MagicMock(id="zone-nonprod-1")
-        zone_obj.save = AsyncMock()
-        segment_obj = MagicMock()
-        segment_obj.save = AsyncMock()
         gen.client.filters = AsyncMock(return_value=[])
-        gen.client.create = AsyncMock(side_effect=[zone_obj, segment_obj])
 
         asyncio.run(gen._ensure_security_zone(segment_id="seg-1", segment_name="vxlan-1000", environment="d"))
 
-        zone_call, segment_call = gen.client.create.call_args_list
-        assert zone_call.kwargs["kind"] == SecurityZone
-        assert zone_call.kwargs["data"]["name"] == "NONPROD-ZONE"
-        assert zone_call.kwargs["data"]["trust_level"] == 50
-        assert segment_call.kwargs["data"]["security_zone"] == {"id": "zone-nonprod-1"}
-        zone_obj.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
-        segment_obj.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
+        gen.client.filters.assert_awaited_once_with(kind=SecurityZone, name__value="NONPROD-ZONE")
+        gen.client.create.assert_not_called()
+        gen.logger.error.assert_called_once()
 
     def test_non_production_codes_all_map_to_nonprod_zone(self):
         for environment in ("n", "s", "d", "t"):

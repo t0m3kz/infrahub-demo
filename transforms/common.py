@@ -18,6 +18,7 @@ from transforms.helpers.loadbalancer_pbr import _flatten_deployment_lb_vips, get
 from transforms.helpers.management import get_management_services
 from transforms.helpers.mlag import get_mlag, get_sonic_mlag_config
 from transforms.helpers.ospf import get_ospf
+from transforms.helpers.policy import get_sgt_rules
 from transforms.helpers.segments import get_vlans, routed_activations, segment_hosting_candidates
 from transforms.helpers.templates import load_template
 from transforms.helpers.vxlan import get_interfaces, get_vxlan_config
@@ -53,49 +54,6 @@ def _fabric_anycast_mac(deployment: Any) -> str | None:
         if isinstance(mac, str) and mac.strip():
             return mac.strip()
     return None
-
-
-def _get_sgt_rules(activations: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
-    """Derive SecurityTagRule list from segment activations.
-
-    Traverses segment → security_tag → rules_as_source to collect only the
-    rules relevant to segments present on this device. Deduplicates by
-    (src_sgt, dst_sgt) pair.
-    """
-    if not activations:
-        return []
-    seen: set[tuple[int, int]] = set()
-    rules: list[dict[str, Any]] = []
-    for act in activations:
-        segment = act.get("segment") or {}
-        tag = segment.get("security_tag") or {}
-        src_sgt = tag.get("group_id")
-        src_name = tag.get("name")
-        if not src_sgt:
-            continue
-        for rule in tag.get("rules_as_source") or []:
-            dst = rule.get("destination_tag") or {}
-            dst_sgt = dst.get("group_id")
-            dst_name = dst.get("name")
-            if not dst_sgt:
-                continue
-            key = (src_sgt, dst_sgt)
-            if key in seen:
-                continue
-            seen.add(key)
-            rules.append(
-                {
-                    "src_name": src_name,
-                    "src_sgt": src_sgt,
-                    "dst_name": dst_name,
-                    "dst_sgt": dst_sgt,
-                    "action": rule.get("action", "permit"),
-                    "log": rule.get("log", False),
-                    "src_customer": segment.get("customer_name"),
-                    "src_environment": segment.get("environment"),
-                }
-            )
-    return rules
 
 
 def get_capabilities(data: dict[str, Any]) -> dict[str, Any]:
@@ -289,8 +247,8 @@ class BaseDeviceTransform(InfrahubTransform):
         # device's own interfaces — both legs of the inter-VRF hop live here.
         vrf_gateways = get_vrf_default_gateways(data.get("interfaces"))
 
-        # SGT rules derived from segment activations (via security_tag.rules_as_source)
-        sgt_rules = _get_sgt_rules(activations)
+        # Tier-to-tier GPO contracts, derived from the segments' permit rules
+        sgt_rules = get_sgt_rules(activations)
 
         # Customer PBR: default-redirect to the firewall context serving this
         # segment's owner; a SecurityPolicyRule permit is the only bypass.

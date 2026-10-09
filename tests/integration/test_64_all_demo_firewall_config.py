@@ -9,15 +9,16 @@ firewall_config artifact definition targeting every firewall in the
 generation across a hundred-odd devices to prove something one device's worth
 of query+check+render already proves.
 
-CheckFirewall (checks/firewall.py) validates the whole SecurityZone/
-SecurityPolicy/SecurityTagRule graph, not a specific device — its own query
-just happens to be device-shaped (queries/config/firewall.gql, $device
-required) because it reuses the artifact's own query. The render is not
+CheckFirewall (checks/firewall.py) validates the rules one firewall enforces —
+the same ones its config renders (Firewall.collect_policies): the policies of
+the segments it serves and the rules into them. The render is not
 device-agnostic: place_policies_in_contexts() (transforms/helpers/firewall.py)
-puts a rule only on the firewall context serving its segments' deployments,
+gives a context only the rules of the segments of the deployments it serves,
 so the render runs on every member of the cluster serving the policy's source
 segment (c001-nordix-prod-p, deployment C001-P-FR — the FR metro's firewall
-pair), and once on a firewall outside it that must not carry the rules.
+pair), whose rules are in that segment's own policy
+(seg-c001-nordix-prod-p-egress), and once on a firewall outside it that must
+not carry the rules.
 """
 
 from __future__ import annotations
@@ -102,7 +103,7 @@ async def _render(client: InfrahubClient, branch: str, device: str) -> str:
 
 
 class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
-    """Validate and render the colo-fr-external-egress policy on the firewalls serving it."""
+    """Validate and render the nordix segment's egress policy on the firewalls serving it."""
 
     @pytest.fixture(scope="class")
     def scenario_branch(self) -> str:
@@ -177,9 +178,9 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         scenario_branch: str,
         serving_cluster: dict[str, Any],
     ) -> None:
-        """CheckFirewall must find no selector/zone/tag-contract errors across
-        the whole SecurityPolicy graph — including the new colo-fr-external-
-        egress policy's destination_prefixes-only rules (no zone/segment)."""
+        """CheckFirewall must find no errors in the rules the serving firewall
+        enforces — including seg-c001-nordix-prod-p-egress's rules, whose
+        destination is a prefix only (no destination segment/zone)."""
         logging.info("=== %s - Step 1: CheckFirewall ===", SCENARIO_NAME)
         serving_firewall_device_name = serving_cluster["members"][0]
 
@@ -224,7 +225,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
             rendered = await _render(async_client_main, scenario_branch, device)
             missing = [name for name in (*EXPECTED_RULE_NAMES, *EXPECTED_DESTINATION_CIDRS) if name not in rendered]
             if missing:
-                errors.append(f"{device}: missing colo-fr-external-egress rule(s)/CIDR(s) {missing}")
+                errors.append(f"{device}: missing seg-c001-nordix-prod-p-egress rule(s)/CIDR(s) {missing}")
 
         outsider = serving_cluster["outsider"]
         assert outsider, f"no firewall outside {serving_cluster['members']} on their platform to render against"

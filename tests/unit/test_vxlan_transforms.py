@@ -536,6 +536,41 @@ class TestGetAclsRuleExtraction:
         assert get_acls(activations=acts)[0]["rules"][0]["src"] == "10.1.0.0/16"
 
 
+class TestAclRuleEndpointResolver:
+    """The leaf ACL resolves a side like the firewall rule table does
+    (transforms/helpers/policy.py rule_endpoint): segment prefix, else the
+    first prefix/IP selector, else any."""
+
+    def test_destination_prefix_selector_without_segment(self) -> None:
+        rule = {**_rule(src=_seg_ref("10.1.0.0/24")), "destination_prefixes": [{"prefix": "10.40.0.0/16"}]}
+        acl_rule = _build_acl_rule(rule)
+        assert (acl_rule["src"], acl_rule["dst"]) == ("10.1.0.0/24", "10.40.0.0/16")
+
+    def test_destination_ip_selector_without_segment(self) -> None:
+        rule = {**_rule(src=_seg_ref("10.1.0.0/24")), "destination_ip_addresses": [{"address": "198.51.100.7/32"}]}
+        assert _build_acl_rule(rule)["dst"] == "198.51.100.7/32"
+
+    def test_segment_prefix_wins_over_selectors(self) -> None:
+        rule = {**_rule(dst=_seg_ref("10.2.0.0/24")), "destination_prefixes": [{"prefix": "10.40.0.0/16"}]}
+        assert _build_acl_rule(rule)["dst"] == "10.2.0.0/24"
+
+    def test_no_segment_and_no_selector_is_any(self) -> None:
+        assert _build_acl_rule(_rule())["dst"] == "any"
+
+    def test_return_leg_of_an_inbound_rule_uses_the_same_resolver(self) -> None:
+        """The reply goes back to what the forward rule matched as its source."""
+        inbound = {
+            **_rule(port_start=5432),
+            "source_segment": {"id": "seg-a", "name": "a"},
+            "source_prefixes": [{"prefix": "10.9.0.0/24"}],
+            "destination_segment": {"id": "seg-b"},
+            "policy": {"enabled": True},
+        }
+        act = _make_acl_activation(seg_id="seg-b", prefix="10.2.0.0/24", security_policies=[], inbound_rules=[inbound])
+        returns = [r for r in get_acls(activations=[act])[0]["rules"] if r["name"].startswith("return-to-")]
+        assert [(r["src"], r["dst"], r["src_port"]) for r in returns] == [("10.2.0.0/24", "10.9.0.0/24", "eq 5432")]
+
+
 class TestGetAclsImplicitDeny:
     def test_implicit_deny_always_last(self) -> None:
         rules = [_rule(index=10), _rule(index=20)]
@@ -890,6 +925,22 @@ class TestGetAclsIsolationMode:
         result = get_acls(activations=[act])
         assert len(result) == 1
         assert result[0]["isolation_mode"] == "normal"
+
+    def test_apply_on_switch_rule_renders_despite_the_firewall(self) -> None:
+        """An apply_on_switch rule holds on the leaf even when the segment has an
+        inline_service: its whole ACL renders (an SVI ACL denies what it does not permit)."""
+        forced = {**_rule(index=10), "apply_on_switch": True}
+        policies = [_policy(rules=[forced, _rule(index=20, port_start=22)])]
+        act = _make_isolation_activation(vlan_id=107, seg_id="seg-fw-forced", firewall_id="fw-1", policies=policies)
+        result = get_acls(activations=[act])
+        assert [rule["name"] for rule in result[0]["rules"]] == ["rule-10", "rule-20", "implicit-deny-all"]
+
+    def test_disabled_apply_on_switch_rule_does_not_force_the_acl(self) -> None:
+        forced = {**_rule(index=10, disabled=True), "apply_on_switch": True}
+        act = _make_isolation_activation(
+            vlan_id=108, seg_id="seg-fw-off", firewall_id="fw-1", policies=[_policy(rules=[forced])]
+        )
+        assert get_acls(activations=[act]) == []
 
     def test_apply_on_switch_field_present_in_rule(self) -> None:
         """_build_acl_rule must not crash when 'apply_on_switch' appears in the rule dict."""

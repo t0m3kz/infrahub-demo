@@ -1,86 +1,66 @@
-"""Validate firewall policy rule integrity."""
+"""Validate the policy rules a firewall enforces."""
 
 from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
 
-from utils.data_cleaning import clean_data
+from transforms.config.firewall import Firewall
 
 
 class CheckFirewall(InfrahubCheck):
-    """Validate that every enabled security policy rule has a selector on both
-    sides and that segment tags it relies on have a SecurityTagRule contract.
-    A rule's zone is its segment's security_zone; a segment without one is
-    reported, since zone-based firewalls then match any zone on that side."""
+    """Validate the rules this firewall gets — the same ones its config renders
+    (Firewall.collect_policies: its served segments' policies and the rules
+    into them, per context). Every rule lives in its source segment's policy,
+    so a rule whose source is another segment is an error, as is a rule with
+    no destination selector (segment, prefix or IP). A rule's zone is its
+    segment's security_zone; a segment without one is reported, since
+    zone-based firewalls then match any zone on that side."""
 
     query = "firewall_config"
 
-    @staticmethod
-    def _rel_id(value: Any) -> str | None:
-        if isinstance(value, dict):
-            rel_id = value.get("id")
-            if rel_id:
-                return str(rel_id)
-        return None
-
-    @staticmethod
-    def _rel_list_count(value: Any) -> int:
-        if isinstance(value, list):
-            return len(value)
-        return 0
-
     def validate(self, data: Any) -> None:
-        # firewall.gql is a multi-root query — extract policies directly
-        cleaned = clean_data(data)
-        policies_data = cleaned.get("SecurityPolicy") or []
-        tag_rules_data = cleaned.get("SecurityTagRule") or []
+        device, _, _ = Firewall._device_and_platform(data)
+        # collect_policies only reads class attributes, no client: the check
+        # validates exactly what the transform places, not a second copy.
+        _, _, root, by_context = Firewall.__new__(Firewall).collect_policies(device)
 
-        tag_contracts: set[tuple[str, str]] = set()
-        for tag_rule in tag_rules_data:
-            src_tag = self._rel_id(tag_rule.get("source_tag"))
-            dst_tag = self._rel_id(tag_rule.get("destination_tag"))
-            if src_tag and dst_tag:
-                tag_contracts.add((src_tag, dst_tag))
-
-        for policy in policies_data:
+        seen: set[str] = set()
+        for policy in [*root, *(policy for policies in by_context.values() for policy in policies)]:
             if not policy.get("enabled", True):
                 continue
             policy_name = policy.get("name", "<unnamed>")
+            policy_segment = (policy.get("segment") or {}).get("id")
             for rule in policy.get("rules") or []:
-                if rule.get("disabled"):
+                rule_id = str(rule.get("id") or (policy_name, rule.get("name")))
+                if rule.get("disabled") or rule_id in seen:
                     continue
-                rule_name = rule.get("name", "<unnamed>")
-                for side in ("source", "destination"):
-                    seg = rule.get(f"{side}_segment") or {}
-                    selectors = (
-                        bool(self._rel_id(seg))
-                        + self._rel_list_count(rule.get(f"{side}_ip_addresses"))
-                        + self._rel_list_count(rule.get(f"{side}_prefixes"))
-                    )
-                    if selectors == 0:
-                        self.log_error(
-                            message=(
-                                f"Policy '{policy_name}' rule '{rule_name}' has no {side} selector "
-                                "(segment, IP, or prefix)"
-                            )
-                        )
-                    elif self._rel_id(seg) and not seg.get("security_zone"):
-                        self.log_info(
-                            message=(
-                                f"Policy '{policy_name}' rule '{rule_name}': {side}_segment "
-                                f"'{seg.get('name', seg.get('id'))}' has no security_zone — zone-based "
-                                "firewalls match any zone on that side"
-                            )
-                        )
+                seen.add(rule_id)
+                self._validate_rule(rule, policy_name, policy_segment)
 
-                src_seg = rule.get("source_segment") or {}
-                dst_seg = rule.get("destination_segment") or {}
-                src_tag = self._rel_id(src_seg.get("security_tag"))
-                dst_tag = self._rel_id(dst_seg.get("security_tag"))
-                if src_tag and dst_tag and (src_tag, dst_tag) not in tag_contracts:
-                    self.log_error(
-                        message=(
-                            f"Policy '{policy_name}' rule '{rule_name}' uses segment tags without "
-                            "a matching SecurityTagRule contract"
-                        )
+    def _validate_rule(self, rule: dict[str, Any], policy_name: str, policy_segment: str | None) -> None:
+        rule_name = rule.get("name", "<unnamed>")
+        source = rule.get("source_segment") or {}
+        if not policy_segment or source.get("id") != policy_segment:
+            self.log_error(
+                message=(
+                    f"Policy '{policy_name}' rule '{rule_name}': source segment "
+                    f"'{source.get('name') or source.get('id') or '<none>'}' is not the policy's segment — "
+                    "a rule belongs in its source segment's policy"
+                )
+            )
+        destination = rule.get("destination_segment") or {}
+        if not (destination.get("id") or rule.get("destination_prefixes") or rule.get("destination_ip_addresses")):
+            self.log_error(
+                message=(
+                    f"Policy '{policy_name}' rule '{rule_name}' has no destination selector (segment, IP, or prefix)"
+                )
+            )
+        for side, segment in (("source", source), ("destination", destination)):
+            if segment.get("id") and not segment.get("security_zone"):
+                self.log_info(
+                    message=(
+                        f"Policy '{policy_name}' rule '{rule_name}': {side}_segment "
+                        f"'{segment.get('name', segment.get('id'))}' has no security_zone — zone-based "
+                        "firewalls match any zone on that side"
                     )
+                )

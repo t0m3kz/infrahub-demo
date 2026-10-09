@@ -1,0 +1,67 @@
+# A segment's security rules, as every consumer reads them: the leaf ACL,
+# PBR bypass and SGT contracts (transforms/helpers/acl.py, firewall.py,
+# policy.py) and the firewall rule tables (transforms/helpers/firewall.py
+# place_policies_in_contexts / get_zone_policies). Every rule lives in its
+# source segment's one policy, so a segment's own rules are its
+# security_policy's, and the rules into it are its inbound_rules (from
+# whichever segment's policy holds them, so they carry that policy).
+
+# One end of a rule: what it matches on (gateway prefix), its zone, its tier
+# tag and the customer deployments a firewall context / PBR resolves it by.
+fragment PolicyRuleSegmentFields on ManagedNetworkSegment {
+  id
+  name { value }
+  customer_name { value }
+  environment { value }
+  security_zone { node { name { value } } }
+  security_tag { node { id name { value } group_id { value } } }
+  gateway { node { ip_prefix { node { prefix { value } } } } }
+  ... on ManagedVlanSegment { customer_deployment { node { id } } }
+  ... on ManagedVxlanSegment { customer_deployments { edges { node { id } } } }
+}
+
+fragment SecurityPolicyFields on SecurityPolicy {
+  id
+  name { value }
+  enabled { value }
+  default_action { value }
+  segment { node { id name { value } } }
+}
+
+fragment SecurityPolicyRuleFields on SecurityPolicyRule {
+  id
+  index { value }
+  name { value }
+  action { value }
+  protocol { value }
+  port_start { value }
+  port_end { value }
+  log { value }
+  disabled { value }
+  description { value }
+  apply_on_switch { value }
+  security_profile { node { name { value } } }
+  source_segment { node { ...PolicyRuleSegmentFields } }
+  destination_segment { node { ...PolicyRuleSegmentFields } }
+  source_prefixes { edges { node { id prefix { value } } } }
+  destination_prefixes { edges { node { id prefix { value } } } }
+  source_ip_addresses { edges { node { id address { value } } } }
+  destination_ip_addresses { edges { node { id address { value } } } }
+}
+
+fragment SegmentRulesFields on ManagedNetworkSegment {
+  security_policy {
+    node {
+      ...SecurityPolicyFields
+      rules { edges { node { ...SecurityPolicyRuleFields } } }
+    }
+  }
+  inbound_rules {
+    edges {
+      node {
+        ...SecurityPolicyRuleFields
+        policy { node { ...SecurityPolicyFields } }
+      }
+    }
+  }
+}

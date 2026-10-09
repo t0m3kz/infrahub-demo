@@ -74,6 +74,11 @@ class CheckSegmentPlacement(InfrahubCheck):
             seg_name = segment.get("name", "<unnamed-vlan-segment>")
             deployment = segment.get("customer_deployment")
             if not isinstance(deployment, dict):
+                # A segment with no deployment terminates nowhere: no leaf
+                # carries it and no firewall context serves it.
+                self.log_error(
+                    message=f"VLAN segment '{seg_name}' has no customer_deployment. Attach it to its deployment."
+                )
                 continue
 
             dep_kind = deployment.get("typename")

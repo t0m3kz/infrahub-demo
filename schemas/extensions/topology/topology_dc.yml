@@ -272,9 +272,6 @@ nodes:
             description: "BL->FW->LB->BL physical chain; FW and LB sit directly in the forwarding path"
             color: "#BF7F7F"
     relationships:
-      - name: design
-        peer: TopologyDataCenterDesign
-        state: absent
       - name: fabric_templates
         peer: TopologyElement
         label: "Fabric Elements"
@@ -465,9 +462,6 @@ nodes:
         optional: true
         order_weight: 4500
     relationships:
-      - name: design
-        peer: TopologyPodDesign
-        state: absent
       - name: fabric_templates
         peer: TopologyElement
         label: "Fabric Elements"

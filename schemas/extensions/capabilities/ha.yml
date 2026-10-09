@@ -87,17 +87,6 @@ generics:
         optional: true
         default_value: false
         order_weight: 1300
-      # An inline-terminated segment's VLAN tag is its VLAN ID in the facing
-      # border leaf's VLAN domain (generators/topology/segment.py), so the HA
-      # pair no longer carries a single inline VLAN slot of its own.
-      - name: inline_vlan_id
-        kind: Number
-        state: absent
-    relationships:
-      - name: inline_vlan_pool
-        peer: CoreNumberPool
-        identifier: "ha__inline_vlan_pool"
-        state: absent
 
 nodes:
   # ── Firewall HA domain ────────────────────────────────────────────────────

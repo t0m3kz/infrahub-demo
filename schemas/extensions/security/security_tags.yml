@@ -3,11 +3,11 @@
 #
 # SecurityTag:     global tier label + globally-unique group_id (SGT on Cisco,
 #                  security-group on Arista). Allocated from SGT-POOL.
-# SecurityTagRule: intent — permitted tier-to-tier flows (coarse, no port).
-#                  Firewall SecurityPolicyRule handles port/protocol detail.
+# Tier-to-tier contracts are derived from the segments' SecurityPolicyRules
+# (permit rules between tagged segments) wherever they are rendered.
 #
 # Enforcement layers (additive — both must permit):
-#   1. VTEP hardware  — VXLAN GPO / SGT contract (SecurityTagRule)
+#   1. VTEP hardware  — VXLAN GPO / SGT contract (derived from the rules)
 #   2. Leaf SVI ACL   — isolation_mode: microsegmented (SecurityPolicyRule)
 #   3. Firewall       — stateful inspection (SecurityPolicyRule)
 version: "1.0"
@@ -56,84 +56,8 @@ nodes:
         order_weight: 400
         description: "Display color for UI (hex, e.g. #3498DB)"
 
-  - name: TagRule
-    namespace: Security
-    description: "Permitted tier-to-tier flow — coarse hardware enforcement via VXLAN GPO / SGT contract"
-    label: Security Tag Rule
-    icon: "mdi:tag-arrow-right-outline"
-    include_in_menu: false
-    menu_placement: SecurityZone
-    order_by:
-      - source_tag__name__value
-    display_label: "{{ source_tag__name__value }} → {{ destination_tag__name__value }}"
-    # Lets `infrahubctl object load` upsert a rule on re-load instead of
-    # tripping the uniqueness constraint below.
-    human_friendly_id:
-      - source_tag__name__value
-      - destination_tag__name__value
-    uniqueness_constraints:
-      - [source_tag, destination_tag]
-    attributes:
-      - name: action
-        kind: Dropdown
-        label: Action
-        optional: true
-        default_value: permit
-        order_weight: 300
-        choices:
-          - name: permit
-            label: Permit
-            description: "Allow traffic between these tiers"
-            color: "#2ECC71"
-          - name: deny
-            label: Deny
-            description: "Block traffic between these tiers"
-            color: "#E74C3C"
-      - name: description
-        kind: Text
-        label: Description
-        optional: true
-        order_weight: 400
-      - name: log
-        kind: Boolean
-        label: Log
-        optional: true
-        default_value: false
-        order_weight: 500
-    relationships:
-      - name: source_tag
-        peer: SecurityTag
-        label: Source Tag
-        cardinality: one
-        kind: Attribute
-        optional: false
-        order_weight: 100
-        identifier: tagrule__source_tag
-        description: "Source security tier"
-      - name: destination_tag
-        peer: SecurityTag
-        label: Destination Tag
-        cardinality: one
-        kind: Attribute
-        optional: false
-        order_weight: 200
-        identifier: tagrule__destination_tag
-        description: "Destination security tier"
-
 extensions:
   nodes:
-    - kind: SecurityTag
-      relationships:
-        - name: rules_as_source
-          peer: SecurityTagRule
-          label: Rules as Source
-          cardinality: many
-          kind: Generic
-          optional: true
-          order_weight: 500
-          identifier: tagrule__source_tag
-          description: "Tag rules where this tag is the source tier"
-
     - kind: ManagedNetworkSegment
       relationships:
         - name: security_tag

@@ -948,17 +948,21 @@ def _make_firewall_interface(
     ip_address: str,
     zone_name: str,
     trust_level: int,
-    zone_type: str = "internal",
     description: str = "",
     vlan_id: int | None = None,
     parent_interface_name: str | None = None,
     namespace_name: str | None = None,
+    zone_members: list[dict] | None = None,
 ) -> dict:
+    """A firewall leg carrying its zone's segment. ``zone_members`` are the
+    zone's segments with their rules (queries/config/firewall.gql's
+    security_zone.network_segments): where a context-less firewall gets the
+    rules of the zone it routes through this leg."""
     seg_name = f"seg-{zone_name}"
     zone_node = {
         "name": _v(zone_name),
         "trust_level": _v(trust_level),
-        "zone_type": _v(zone_type),
+        "network_segments": _edges(zone_members or []),
     }
     seg_node = {
         "__typename": "ManagedVxlanSegment",
@@ -984,6 +988,7 @@ def _make_firewall_interface(
             }
         ),
         "security_policy": _node(None),
+        "inbound_rules": _edges([]),
     }
     return {
         "__typename": "DcimVirtualInterface",
@@ -1007,7 +1012,6 @@ def _make_zone(
     *,
     name: str,
     trust_level: int,
-    zone_type: str = "internal",
     description: str = "",
     cidrs: list[str] | None = None,
     namespace_name: str | None = None,
@@ -1026,38 +1030,42 @@ def _make_zone(
     return {
         "name": _v(name),
         "trust_level": _v(trust_level),
-        "zone_type": _v(zone_type),
         "description": _v(description),
         "network_segments": _edges(segments),
     }
 
 
 def _make_rule_segment(*, cidr: str, zone_name: str) -> dict:
-    """A rule's source/destination segment, carrying the zone the rule matches on."""
+    """A rule's source/destination segment (PolicyRuleSegmentFields), carrying the zone the rule matches on."""
     return {
         "id": f"seg-{cidr.replace('/', '-').replace('.', '-')}",
         "__typename": "ManagedVlanSegment",
         "name": _v(f"seg-{cidr.replace('/', '-').replace('.', '-')}"),
         "security_zone": _node({"name": _v(zone_name)}),
+        "security_tag": _node(None),
         "gateway": _node({"ip_prefix": _node({"prefix": _v(cidr)})}),
+        "customer_deployment": _node(None),
     }
 
 
 def _make_segment_rule(
     *,
+    policy: str,
     index: int,
     name: str,
     action: str = "permit",
     protocol: str = "tcp",
     port_start: int | None = None,
     port_end: int | None = None,
-    src_segment: dict | None = None,
+    src_segment: dict,
     dst_segment: dict | None = None,
     log: bool = False,
     description: str = "",
     security_profile: str | None = None,
 ) -> dict:
+    """A SecurityPolicyRule (SecurityPolicyRuleFields) of ``policy``, the policy of ``src_segment``."""
     return {
+        "id": f"rule-{policy}-{name}",
         "index": _v(index),
         "name": _v(name),
         "action": _v(action),
@@ -1067,10 +1075,44 @@ def _make_segment_rule(
         "log": _v(log),
         "disabled": _v(False),
         "description": _v(description),
+        "apply_on_switch": _v(False),
         "source_segment": _node(src_segment),
         "destination_segment": _node(dst_segment),
+        "source_prefixes": _edges([]),
+        "destination_prefixes": _edges([]),
+        "source_ip_addresses": _edges([]),
+        "destination_ip_addresses": _edges([]),
         "security_profile": _node({"name": _v(security_profile)} if security_profile else None),
     }
+
+
+def _make_policy_header(*, name: str, segment: dict) -> dict:
+    """SecurityPolicyFields: the source segment's one policy, without its rules."""
+    return {
+        "id": f"policy-{name}",
+        "name": _v(name),
+        "enabled": _v(True),
+        "default_action": _v("deny"),
+        "segment": _node({"id": segment["id"], "name": segment["name"]}),
+    }
+
+
+def _make_rule_bearing_segments(endpoints: list[dict], policies: list[tuple[dict, list[dict]]]) -> dict[str, dict]:
+    """Segment id -> the segment as SegmentRulesFields returns it: its own
+    policy (the one whose header names it) with its rules, and the rules of
+    every policy whose destination it is, each carrying its policy."""
+    segments: dict[str, dict] = {
+        endpoint["id"]: {"id": endpoint["id"], "security_policy": _node(None), "inbound_rules": _edges([])}
+        for endpoint in endpoints
+    }
+    for header, rules in policies:
+        owner = segments[header["segment"]["node"]["id"]]
+        owner["security_policy"] = _node({**header, "rules": _edges(rules)})
+        for rule in rules:
+            destination = (rule["destination_segment"]["node"] or {}).get("id")
+            if destination in segments:
+                segments[destination]["inbound_rules"]["edges"].append({"node": {**rule, "policy": _node(header)}})
+    return segments
 
 
 def build_firewall_data(*, device_name: str, platform: str) -> dict:
@@ -1079,8 +1121,64 @@ def build_firewall_data(*, device_name: str, platform: str) -> dict:
     Includes:
       - DcimPhysicalDevice with DcimFirewallInterface nodes (one per zone)
       - SecurityZone nodes with member segment CIDRs
-      - SecurityPolicy nodes with segment-based rules (zone derived from the segment)
+      - the zones' member segments with their policies and inbound rules,
+        reached through the zone of each leg's segment: a firewall with no
+        contexts enforces the rules of the zones it routes
     """
+    dmz_segment = _make_rule_segment(cidr="10.0.2.0/24", zone_name="dmz")
+    internal_segment = _make_rule_segment(cidr="10.0.1.0/24", zone_name="internal")
+    internal_lan_segment = _make_rule_segment(cidr="10.0.10.0/24", zone_name="internal")
+    dmz_to_internal = _make_policy_header(name="dmz-to-internal", segment=dmz_segment)
+    internal_to_dmz = _make_policy_header(name="internal-to-dmz", segment=internal_segment)
+    segments = _make_rule_bearing_segments(
+        [dmz_segment, internal_segment, internal_lan_segment],
+        [
+            (
+                dmz_to_internal,
+                [
+                    _make_segment_rule(
+                        policy="dmz-to-internal",
+                        index=10,
+                        name="allow-https",
+                        protocol="tcp",
+                        port_start=443,
+                        src_segment=dmz_segment,
+                        dst_segment=internal_segment,
+                        log=True,
+                        description="Allow HTTPS from DMZ to Internal",
+                        security_profile="strict-av",
+                    ),
+                    _make_segment_rule(
+                        policy="dmz-to-internal",
+                        index=20,
+                        name="allow-ssh",
+                        protocol="tcp",
+                        port_start=22,
+                        src_segment=dmz_segment,
+                        dst_segment=internal_segment,
+                        log=True,
+                        description="Allow SSH from DMZ to Internal",
+                    ),
+                ],
+            ),
+            (
+                internal_to_dmz,
+                [
+                    _make_segment_rule(
+                        policy="internal-to-dmz",
+                        index=10,
+                        name="allow-any",
+                        protocol="any",
+                        src_segment=internal_segment,
+                        dst_segment=dmz_segment,
+                        log=False,
+                        description="Allow all from Internal to DMZ",
+                    ),
+                ],
+            ),
+        ],
+    )
+
     # Sub-interfaces on trunk uplink (ethernet1/1) — one /30 per zone/namespace.
     # Leaf IP is .2, FW IP is .1 in each /30.
     fw_interfaces = [
@@ -1089,29 +1187,28 @@ def build_firewall_data(*, device_name: str, platform: str) -> dict:
             ip_address="10.0.1.1/30",
             zone_name="internal",
             trust_level=100,
-            zone_type="internal",
             description="Internal LAN link",
             vlan_id=10,
             parent_interface_name="ethernet1/1",
             namespace_name="VRF-INTERNAL",
+            zone_members=[segments[internal_segment["id"]], segments[internal_lan_segment["id"]]],
         ),
         _make_firewall_interface(
             name="ethernet1/1.20",
             ip_address="10.0.2.1/30",
             zone_name="dmz",
             trust_level=50,
-            zone_type="dmz",
             description="DMZ link",
             vlan_id=20,
             parent_interface_name="ethernet1/1",
             namespace_name="VRF-DMZ",
+            zone_members=[segments[dmz_segment["id"]]],
         ),
         _make_firewall_interface(
             name="ethernet1/1.30",
             ip_address="10.0.3.1/30",
             zone_name="external",
             trust_level=0,
-            zone_type="external",
             description="External link",
             vlan_id=30,
             parent_interface_name="ethernet1/1",
@@ -1144,7 +1241,6 @@ def build_firewall_data(*, device_name: str, platform: str) -> dict:
         _make_zone(
             name="internal",
             trust_level=100,
-            zone_type="internal",
             description="Internal trusted network",
             cidrs=["10.0.1.0/24", "10.0.10.0/24"],
             namespace_name="VRF-INTERNAL",
@@ -1152,7 +1248,6 @@ def build_firewall_data(*, device_name: str, platform: str) -> dict:
         _make_zone(
             name="dmz",
             trust_level=50,
-            zone_type="dmz",
             description="Demilitarized zone",
             cidrs=["10.0.2.0/24"],
             namespace_name="VRF-DMZ",
@@ -1160,70 +1255,15 @@ def build_firewall_data(*, device_name: str, platform: str) -> dict:
         _make_zone(
             name="external",
             trust_level=0,
-            zone_type="external",
             description="External untrusted network",
             cidrs=[],
             namespace_name="VRF-EXTERNAL",
         ),
     ]
 
-    dmz_segment = _make_rule_segment(cidr="10.0.2.0/24", zone_name="dmz")
-    internal_segment = _make_rule_segment(cidr="10.0.1.0/24", zone_name="internal")
-    policies = [
-        {
-            "name": _v("dmz-to-internal"),
-            "enabled": _v(True),
-            "default_action": _v("deny"),
-            "rules": _edges(
-                [
-                    _make_segment_rule(
-                        index=10,
-                        name="allow-https",
-                        protocol="tcp",
-                        port_start=443,
-                        src_segment=dmz_segment,
-                        dst_segment=internal_segment,
-                        log=True,
-                        description="Allow HTTPS from DMZ to Internal",
-                        security_profile="strict-av",
-                    ),
-                    _make_segment_rule(
-                        index=20,
-                        name="allow-ssh",
-                        protocol="tcp",
-                        port_start=22,
-                        src_segment=dmz_segment,
-                        dst_segment=internal_segment,
-                        log=True,
-                        description="Allow SSH from DMZ to Internal",
-                    ),
-                ]
-            ),
-        },
-        {
-            "name": _v("internal-to-dmz"),
-            "enabled": _v(True),
-            "default_action": _v("deny"),
-            "rules": _edges(
-                [
-                    _make_segment_rule(
-                        index=10,
-                        name="allow-any",
-                        protocol="any",
-                        src_segment=internal_segment,
-                        dst_segment=dmz_segment,
-                        log=False,
-                        description="Allow all from Internal to DMZ",
-                    ),
-                ]
-            ),
-        },
-    ]
-
     return {
         "DcimPhysicalDevice": _edges([device_node]),
         "SecurityZone": _edges(zones),
-        "SecurityPolicy": _edges(policies),
     }
 
 
@@ -1285,7 +1325,6 @@ def build_firewall_inline_data(*, device_name: str, platform: str) -> dict:
         ip_address="10.1.0.1/24",
         zone_name="web",
         trust_level=60,
-        zone_type="dmz",
         description="Inline web segment",
         vlan_id=210,
         parent_interface_name="ethernet1/1",

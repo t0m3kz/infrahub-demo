@@ -639,16 +639,11 @@ class TopologyDataCenter(
     status: Dropdown
     underlay_protocol: Dropdown
     controllers: RelationshipManager[ManagedController]
-    design: RelationshipManager[TopologyDataCenterDesign]
     fabric_asn_pool: RelationshipAttribute[CoreNumberPool]
     fabric_templates: RelationshipManager[TopologyElement]
     loopback_pool: RelationshipAttribute[CoreIPPrefixPool]
     management_pool: RelationshipAttribute[CoreIPAddressPool]
     technical_pool: RelationshipAttribute[CoreIPPrefixPool]
-
-
-class TopologyDataCenterDesign(CoreNode):
-    pass
 
 
 class AppDependency(CoreNode):
@@ -996,15 +991,10 @@ class TopologyPod(TopologyDeployment, TopologyRackHosting, TopologyDeviceHosting
     spine_interface_sorting_method: Dropdown
     status: Dropdown
     asn_pool: RelationshipAttribute[CoreNumberPool]
-    design: RelationshipManager[TopologyPodDesign]
     fabric_templates: RelationshipManager[TopologyElement]
     loopback_pool: RelationshipAttribute[CoreIPAddressPool]
     prefix_pool: RelationshipAttribute[CoreIPPrefixPool]
     suites: RelationshipManager[LocationSuite]
-
-
-class TopologyPodDesign(CoreNode):
-    pass
 
 
 class ProxyPolicy(CoreNode):
@@ -1017,12 +1007,13 @@ class ProxyPolicy(CoreNode):
     rules: RelationshipManager[ProxyPolicyRule]
 
 
-class SecurityPolicy(ManagedGenericDevice):
+class SecurityPolicy(CoreNode):
     default_action: Dropdown
     description: StringOptional
     enabled: Boolean
     name: String
     rules: RelationshipManager[SecurityPolicyRule]
+    segment: RelationshipAttribute[ManagedNetworkSegment]
 
 
 class ProxyPolicyRule(CoreNode):
@@ -1197,13 +1188,8 @@ class CloudSecurityGroupRule(CloudResource):
 
 
 class SecuritySecurityProfile(CoreNode):
-    antivirus_enabled: Boolean
-    data_loss_prevention_enabled: Boolean
     description: StringOptional
-    ips_enabled: Boolean
     name: String
-    ssl_inspection_enabled: Boolean
-    url_filtering_enabled: Boolean
 
 
 class ManagedSegmentDeployment(CoreNode):
@@ -1278,14 +1264,6 @@ class SecurityTag(CoreNode):
     description: StringOptional
     group_id: Integer
     name: String
-
-
-class SecurityTagRule(CoreNode):
-    action: Dropdown
-    description: StringOptional
-    log: Boolean
-    destination_tag: RelationshipAttribute[SecurityTag]
-    source_tag: RelationshipAttribute[SecurityTag]
 
 
 class CloudTransitGateway(CloudResource):
@@ -1418,5 +1396,4 @@ class SecurityZone(CoreNode):
     description: StringOptional
     name: String
     trust_level: Integer
-    zone_type: Dropdown
     network_segments: RelationshipManager[ManagedNetworkSegment]

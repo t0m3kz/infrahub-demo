@@ -5,7 +5,15 @@ from typing import Any
 
 from transforms.helpers.acl import _PROTO_MAP, _port_match
 from transforms.helpers.addressing import host_ip
-from transforms.helpers.policy import active_rules, enabled_policies, inbound_permits, rule_zone, segment_policies
+from transforms.helpers.policy import (
+    active_rules,
+    enabled_policies,
+    inbound_permits,
+    rule_endpoint,
+    rule_zone,
+    segment_policies,
+    segment_rule_policies,
+)
 from transforms.helpers.segments import _get_segment_prefix_str, segment_hosting_candidates
 
 # Border-leaf platforms with a native hardware SGT/security-group matching
@@ -29,7 +37,7 @@ _TAG_CAPABLE_BORDER_LEAF_PLATFORMS = frozenset({"cisco_nxos", "arista_eos"})
 
 
 def get_firewall_zones(zones_data: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
-    """Build a zone list from SecurityZone nodes (global query).
+    """Build the zone list (address objects, static routes) from the SecurityZone root.
 
     Args:
         zones_data: List of cleaned SecurityZone dicts.
@@ -40,11 +48,8 @@ def get_firewall_zones(zones_data: list[dict[str, Any]] | None = None) -> list[d
           {
             "name": "internal",
             "trust_level": 100,
-            "zone_type": "internal",
             "description": "...",
             "member_cidrs": ["10.0.1.0/24", "10.0.2.0/24"],
-            "namespace_name": "VRF-INTERNAL",
-            "namespace_l3vni": 10099,
           }
         ]
     """
@@ -65,7 +70,6 @@ def get_firewall_zones(zones_data: list[dict[str, Any]] | None = None) -> list[d
             {
                 "name": name,
                 "trust_level": zone.get("trust_level") or 0,
-                "zone_type": zone.get("zone_type") or "internal",
                 "description": zone.get("description") or "",
                 "member_cidrs": sorted(member_cidrs),
             }
@@ -215,6 +219,10 @@ def get_firewall_contexts(interfaces: list[dict[str, Any]] | None) -> list[dict[
     only have one sub-interface per firewall device, so this is a plain
     one-pass collection, no cross-interface pairing needed (unlike
     get_vrf_default_gateways, which pairs two legs of the SAME exchange).
+
+    ``segments`` are the segments terminating on the context: every segment
+    of a deployment it serves (served_deployments, written by each
+    deployment's own boarding run), de-duplicated by id.
     """
     if not interfaces:
         return []
@@ -231,12 +239,15 @@ def get_firewall_contexts(interfaces: list[dict[str, Any]] | None) -> list[dict[
             if not context_id or context_id in seen_ids:
                 continue
             seen_ids.add(context_id)
+            segments: dict[str, dict[str, Any]] = {}
+            for deployment in cap.get("served_deployments") or []:
+                for segment in deployment.get("network_segments") or []:
+                    if segment.get("id"):
+                        segments.setdefault(segment["id"], segment)
             tenant = cap.get("tenant") or {}
             contexts.append(
                 {
                     "id": context_id,
-                    "tenant_id": tenant.get("id"),
-                    "served_deployment_ids": [d["id"] for d in cap.get("served_deployments") or [] if d.get("id")],
                     "name": cap.get("name"),
                     "context_id": cap.get("context_id"),
                     "vlan_id": cap.get("vlan_id"),
@@ -244,138 +255,52 @@ def get_firewall_contexts(interfaces: list[dict[str, Any]] | None) -> list[dict[
                     "sub_interface": iface.get("name"),
                     "parent_interface": parent_iface,
                     "ip_address": ip_obj.get("address"),
+                    "segments": list(segments.values()),
                 }
             )
     contexts.sort(key=lambda c: c.get("name") or "")
     return contexts
 
 
-def _rules_served_here(
-    policies_data: list[dict[str, Any]], segments: list[dict[str, Any]] | None
-) -> list[dict[str, Any]]:
-    """A context-less firewall's rules: those with no segment, or with a
-    segment it serves — one it carries on an interface (``segments``) or one
-    in a zone bound on an interface, whose CIDRs it routes through that leg
-    (get_firewall_static_routes). Every other rule belongs to the firewall
-    serving its segments: the query returns every SecurityPolicy, so without
-    this a firewall with no contexts rendered all of them. A policy with no
-    rules at all is kept, one left empty is not."""
-    own = {segment["id"] for segment in segments or [] if segment.get("id")}
-    own_zones = {
-        zone_name for segment in segments or [] if (zone_name := (segment.get("security_zone") or {}).get("name"))
-    }
-
-    def _served(end: dict[str, Any]) -> bool:
-        return end.get("id") in own or (end.get("security_zone") or {}).get("name") in own_zones
-
-    placed: list[dict[str, Any]] = []
-    for policy in policies_data:
-        rules = [
-            rule
-            for rule in policy.get("rules") or []
-            if not (ends := [s for s in (rule.get("source_segment"), rule.get("destination_segment")) if s])
-            or any(_served(end) for end in ends)
-        ]
-        if rules or not policy.get("rules"):
-            placed.append({**policy, "rules": rules})
-    return placed
+def _zone_member_segments(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Every segment in a zone one of `segments` (those on this firewall's
+    interfaces) belongs to: the firewall routes that zone's CIDRs through the
+    leg (get_firewall_static_routes), so it is where their rules hold."""
+    return [
+        member for segment in segments for member in (segment.get("security_zone") or {}).get("network_segments") or []
+    ]
 
 
 def place_policies_in_contexts(
-    policies_data: list[dict[str, Any]] | None,
     contexts: list[dict[str, Any]],
     segments: list[dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
-    """Split SecurityPolicy rules between this firewall's contexts.
+    """This firewall's policies: the rules of the segments it serves, per table.
 
-    A segment terminates on the context serving one of its customer
-    deployments (the context's served_deployments, written by the
-    deployment's own boarding run), so a rule sits in the context its
-    traffic is sent to. A rule goes to its source segment's context; when
-    the destination segment is served by another context it is repeated
-    there as the ingress leg, since traffic between two tenants crosses both
-    contexts and each one denies by default.
-
-    A segment of a deployment no context here serves belongs to another
-    firewall: a rule whose segments all terminate elsewhere is left out. A
-    firewall with no contexts keeps only the rules of its own segments (and
-    segment-less ones), see _rules_served_here.
-    Until any context here lists its deployments (data boarded before the
-    link existed), a segment falls back to its tenant's dedicated context,
-    else the shared (tenant-less) one. A segment with no deployment uses
-    the shared context; rules no context serves stay in the root list.
-
-    `segments` adds deployment links for segments whose copy inside a rule
-    lacks them (the per-segment policy fragment does not select them).
+    Each context's table holds its segments' own policies (their egress
+    rules) and the rules into them (the ingress leg: traffic between two
+    tenants crosses both contexts and each one denies by default), see
+    segment_rule_policies. The root table holds the rules of the segments
+    the firewall carries on its interfaces (``segments``) that no context
+    already holds; a firewall with no contexts also takes the rules of every
+    segment in a zone bound on one of its interfaces. A rule of a segment
+    served nowhere here is on the firewall serving it, not on this one.
 
     Returns (root policies, context id -> policies), each policy holding
-    only the rules placed there. A policy with no rules at all stays in the
-    root list; one whose rules all moved to contexts leaves it.
+    only the rules placed in that table.
     """
-    if not policies_data:
-        return [], {}
+    by_context = {ctx["id"]: segment_rule_policies(ctx.get("segments") or []) for ctx in contexts}
+    placed = {
+        str(rule.get("id"))
+        for policies in by_context.values()
+        for policy in policies
+        for rule in policy["rules"]
+        if rule.get("id")
+    }
+    own = list(segments or [])
     if not contexts:
-        return _rules_served_here(policies_data, segments), {}
-
-    serving = {ctx["tenant_id"]: ctx["id"] for ctx in contexts if ctx.get("tenant_id")}
-    linked = False
-    for ctx in contexts:
-        for deployment_id in ctx.get("served_deployment_ids") or []:
-            serving[deployment_id] = ctx["id"]
-            linked = True
-    shared = next((ctx["id"] for ctx in contexts if not ctx.get("tenant_id")), None)
-
-    deployments_by_segment: dict[str, list[str]] = {}
-
-    def _learn(segment: dict[str, Any] | None) -> None:
-        if segment and segment.get("id"):
-            ids = _segment_deployment_ids(segment)
-            if ids:
-                deployments_by_segment.setdefault(segment["id"], ids)
-
-    for segment in segments or []:
-        _learn(segment)
-    for policy in policies_data:
-        for rule in policy.get("rules") or []:
-            _learn(rule.get("source_segment"))
-            _learn(rule.get("destination_segment"))
-
-    def _deployments_of(segment: dict[str, Any]) -> list[str]:
-        return deployments_by_segment.get(str(segment.get("id"))) or _segment_deployment_ids(segment)
-
-    def _context_of(segment: dict[str, Any] | None) -> str | None:
-        if not segment:
-            return None
-        ids = _deployments_of(segment)
-        home = next((serving[d] for d in ids if d in serving), None)
-        if home or (linked and ids):
-            return home
-        return shared
-
-    def _terminates_elsewhere(rule: dict[str, Any]) -> bool:
-        """Every segment of the rule belongs to deployments served elsewhere."""
-        ends = [s for s in (rule.get("source_segment"), rule.get("destination_segment")) if s]
-        return linked and bool(ends) and all(_deployments_of(s) for s in ends)
-
-    root: list[dict[str, Any]] = []
-    by_context: dict[str, list[dict[str, Any]]] = {}
-    for policy in policies_data:
-        root_rules: list[dict[str, Any]] = []
-        context_rules: dict[str, list[dict[str, Any]]] = {}
-        for rule in policy.get("rules") or []:
-            homes: list[str] = []
-            for ctx_id in (_context_of(rule.get("source_segment")), _context_of(rule.get("destination_segment"))):
-                if ctx_id and ctx_id not in homes:
-                    homes.append(ctx_id)
-            if not homes and not _terminates_elsewhere(rule):
-                root_rules.append(rule)
-            for ctx_id in homes:
-                context_rules.setdefault(ctx_id, []).append(rule)
-        if root_rules or not policy.get("rules"):
-            root.append({**policy, "rules": root_rules})
-        for ctx_id, rules in context_rules.items():
-            by_context.setdefault(ctx_id, []).append({**policy, "rules": rules})
-    return root, by_context
+        own += _zone_member_segments(own)
+    return segment_rule_policies(own, exclude=placed), by_context
 
 
 def _flatten_deployment_firewall_contexts(deployment: dict[str, Any] | None) -> list[dict[str, Any]]:
@@ -748,29 +673,8 @@ def get_border_leaf_pbr_rules(
     return rules
 
 
-def _first_selector_cidr(
-    prefixes: list[dict[str, Any]] | None, ip_addresses: list[dict[str, Any]] | None
-) -> str | None:
-    """First explicit source_prefixes/destination_prefixes or *_ip_addresses
-    selector, as a CIDR/address string. Every rendering template's src/dst is
-    a single scalar (templates/configs/firewalls/*.j2), so a multi-value
-    selector list can only ever render its first entry — a documented
-    limitation, not a full address-group/fanout implementation. Prefixes are
-    checked before IP addresses since a prefix-based rule is the common case
-    for the cloud/partner/SaaS CIDR this selector shape was added for."""
-    for prefix in prefixes or []:
-        cidr = prefix.get("prefix")
-        if cidr:
-            return cidr
-    for ip in ip_addresses or []:
-        address = ip.get("address")
-        if address:
-            return address
-    return None
-
-
 def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
-    """Build a zone policy list from SecurityPolicy nodes (global query).
+    """Build a rule table from SecurityPolicy dicts (place_policies_in_contexts).
 
     Disabled policies and disabled rules are skipped. Every template renders
     the policies as one flat rule table (a context's, or the root one), so
@@ -819,14 +723,8 @@ def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list
             src_zone = rule_zone(rule, "source")
             dst_zone = rule_zone(rule, "destination")
 
-            src_seg = rule.get("source_segment") or {}
-            src = _get_segment_prefix_str(src_seg) if src_seg else None
-            if src is None:
-                src = _first_selector_cidr(rule.get("source_prefixes"), rule.get("source_ip_addresses"))
-            dst_seg = rule.get("destination_segment") or {}
-            dst = _get_segment_prefix_str(dst_seg) if dst_seg else None
-            if dst is None:
-                dst = _first_selector_cidr(rule.get("destination_prefixes"), rule.get("destination_ip_addresses"))
+            src = rule_endpoint(rule, "source")
+            dst = rule_endpoint(rule, "destination")
 
             port_start = rule.get("port_start")
             port_end = rule.get("port_end")

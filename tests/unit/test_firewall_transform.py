@@ -1,22 +1,22 @@
 """Unit + smoke tests for transforms/firewall.py.
 
 Covers:
-  - _collect_segment_policies()  — pure helper, deduplication logic
-  - merge_policies()            — pure helper, merge + precedence logic
   - Firewall.transform()         — no-platform early-exit path
-  - Firewall.transform()         — full Jinja2 render smoke tests (all four vendors)
+  - Firewall.transform()         — full Jinja2 render smoke tests (all vendors)
+  - Firewall.transform()         — rules come from the served segments only
+                                   (own policy, inbound rules, contexts)
 """
 
 from __future__ import annotations
 
 import asyncio
+import copy
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from transforms.config.firewall import Firewall, _collect_segment_policies
-from transforms.helpers.policy import merge_policies
+from transforms.config.firewall import Firewall
 
 # Project root — needed to point root_directory at the real templates/
 ROOT = str(Path(__file__).parent.parent.parent)
@@ -32,7 +32,6 @@ def _make_raw_data(
     platform_name: str | None = None,
     interfaces: list[dict] | None = None,
     zones: list[dict] | None = None,
-    global_policies: list[dict] | None = None,
 ) -> dict[str, Any]:
     """Build a minimal raw GraphQL response dict for the firewall_config query.
 
@@ -48,8 +47,6 @@ def _make_raw_data(
 
     # Build SecurityZone edges
     raw_zones = [{"node": _zone_to_raw(z)} for z in (zones or [])]
-    # Build SecurityPolicy edges
-    raw_policies = [{"node": _policy_to_raw(p)} for p in (global_policies or [])]
 
     return {
         "DcimPhysicalDevice": {
@@ -66,7 +63,6 @@ def _make_raw_data(
             ]
         },
         "SecurityZone": {"edges": raw_zones},
-        "SecurityPolicy": {"edges": raw_policies},
     }
 
 
@@ -88,17 +84,6 @@ def _zone_to_raw(zone: dict) -> dict:
     return raw
 
 
-def _policy_to_raw(policy: dict) -> dict:
-    """Same treatment for SecurityPolicy nodes."""
-    raw: dict[str, Any] = {}
-    for k, v in policy.items():
-        if isinstance(v, (str, int, float, bool)) or v is None:
-            raw[k] = {"value": v}
-        else:
-            raw[k] = v
-    return raw
-
-
 def _make_fw() -> Firewall:
     """Instantiate Firewall bypassing InfrahubTransform __init__."""
     fw = Firewall.__new__(Firewall)
@@ -107,146 +92,7 @@ def _make_fw() -> Firewall:
 
 
 # ===========================================================================
-# Helpers used by both pure-function and smoke tests
-# ===========================================================================
-
-
-def _seg_policy(name: str, rules: list | None = None, **extra: Any) -> dict:
-    """Minimal security policy dict (already cleaned)."""
-    return {"name": name, "default_action": "deny", "enabled": True, "rules": rules or [], **extra}
-
-
-def _activation_with_policies(
-    seg_name: str = "seg-01",
-    zone_name: str = "internal",
-    policies: list[dict] | None = None,
-) -> dict:
-    """Cleaned SegmentDeployment activation dict; policies is the segment's
-    own security_policy as a 0/1-item list."""
-    return {
-        "vlan_id": 10,
-        "vni": 10010,
-        "segment": {
-            "name": seg_name,
-            "security_zone": {"name": zone_name},
-            "security_policy": policies[0] if policies else None,
-        },
-    }
-
-
-# ===========================================================================
-# Class 1 — _collect_segment_policies
-# ===========================================================================
-
-
-class TestCollectSegmentPolicies:
-    def test_empty_activations_returns_empty(self) -> None:
-        assert _collect_segment_policies([]) == []
-
-    def test_activation_without_policies_returns_empty(self) -> None:
-        act = _activation_with_policies(policies=[])
-        assert _collect_segment_policies([act]) == []
-
-    def test_single_policy_extracted(self) -> None:
-        policy = _seg_policy("allow-https")
-        act = _activation_with_policies(policies=[policy])
-        result = _collect_segment_policies([act])
-        assert len(result) == 1
-        assert result[0]["name"] == "allow-https"
-
-    def test_duplicate_policy_name_deduped(self) -> None:
-        """Two activations sharing the same policy name → only one entry returned."""
-        act1 = _activation_with_policies(seg_name="seg-01", policies=[_seg_policy("shared-pol")])
-        act2 = _activation_with_policies(seg_name="seg-02", policies=[_seg_policy("shared-pol")])
-        result = _collect_segment_policies([act1, act2])
-        assert len(result) == 1
-
-    def test_first_seen_policy_wins_on_same_name(self) -> None:
-        """When two activations share a policy name, the FIRST one encountered is kept."""
-        first_policy = _seg_policy("dup-pol", rules=[{"seq": 10, "name": "first-rule"}])
-        second_policy = _seg_policy("dup-pol", rules=[{"seq": 20, "name": "second-rule"}])
-        act1 = _activation_with_policies(seg_name="seg-01", policies=[first_policy])
-        act2 = _activation_with_policies(seg_name="seg-02", policies=[second_policy])
-        result = _collect_segment_policies([act1, act2])
-        assert len(result) == 1
-        assert result[0]["rules"][0]["name"] == "first-rule"
-
-    def test_multiple_distinct_policies_all_returned(self) -> None:
-        pol_a = _seg_policy("pol-a")
-        pol_b = _seg_policy("pol-b")
-        pol_c = _seg_policy("pol-c")
-        act1 = _activation_with_policies(seg_name="seg-01", policies=[pol_a])
-        act2 = _activation_with_policies(seg_name="seg-02", policies=[pol_b])
-        act3 = _activation_with_policies(seg_name="seg-03", policies=[pol_c])
-        result = _collect_segment_policies([act1, act2, act3])
-        assert len(result) == 3
-        names = {p["name"] for p in result}
-        assert names == {"pol-a", "pol-b", "pol-c"}
-
-
-# ===========================================================================
-# Class 2 — merge_policies
-# ===========================================================================
-
-
-class TestMergePolicies:
-    def test_empty_both_returns_empty(self) -> None:
-        assert merge_policies([], []) == []
-
-    def test_global_only_returned(self) -> None:
-        global_pol = _seg_policy("global-pol")
-        result = merge_policies([global_pol], [])
-        assert len(result) == 1
-        assert result[0]["name"] == "global-pol"
-
-    def test_segment_only_returned(self) -> None:
-        seg_pol = _seg_policy("seg-pol")
-        result = merge_policies([], [seg_pol])
-        assert len(result) == 1
-        assert result[0]["name"] == "seg-pol"
-
-    def test_no_collision_both_returned(self) -> None:
-        global_pol = _seg_policy("global-pol")
-        seg_pol = _seg_policy("seg-pol")
-        result = merge_policies([global_pol], [seg_pol])
-        assert len(result) == 2
-        names = {p["name"] for p in result}
-        assert names == {"global-pol", "seg-pol"}
-
-    def test_segment_wins_on_name_collision(self) -> None:
-        """Segment version has extra 'rules' data and must overwrite the global one."""
-        global_pol = {"name": "shared", "default_action": "deny", "enabled": True, "rules": []}
-        seg_pol = {
-            "name": "shared",
-            "default_action": "permit",
-            "enabled": True,
-            "rules": [{"seq": 10, "name": "seg-rule"}],
-        }
-        result = merge_policies([global_pol], [seg_pol])
-        assert len(result) == 1
-        merged = result[0]
-        # Segment version wins — it has 'rules' content
-        assert merged["rules"] == [{"seq": 10, "name": "seg-rule"}]
-
-    def test_global_preserved_when_no_collision(self) -> None:
-        global_pol_a = _seg_policy("global-a")
-        seg_pol_b = _seg_policy("seg-b")
-        result = merge_policies([global_pol_a], [seg_pol_b])
-        names = {p["name"] for p in result}
-        assert "global-a" in names
-        assert "seg-b" in names
-
-    def test_policy_without_name_or_id_skipped(self) -> None:
-        """A policy dict with neither 'name' nor 'id' is not added to the merged output."""
-        nameless = {"default_action": "deny", "enabled": True, "rules": []}
-        valid = _seg_policy("valid-pol")
-        result = merge_policies([nameless, valid], [])
-        assert len(result) == 1
-        assert result[0]["name"] == "valid-pol"
-
-
-# ===========================================================================
-# Class 3 — Firewall.transform() — no-platform early exit
+# Class 1 — Firewall.transform() — no-platform early exit
 # ===========================================================================
 
 
@@ -271,18 +117,22 @@ class TestFirewallTransformNoPlatform:
 # ===========================================================================
 
 
+# The smoke segment as a rule references it (PolicyRuleSegmentFields).
+_SMOKE_SEGMENT_REF: dict[str, Any] = {"id": "seg-smoke", "name": {"value": "seg-smoke"}}
+
+
 def _make_smoke_data(platform: str) -> dict[str, Any]:
     """Build a realistic but minimal raw GQL dict for a full-render smoke test.
 
     Includes:
     - One FW device with the given platform
     - One DcimFirewallInterface with a security_zone
-    - One zone with one segment with one permit rule
-    - One global SecurityPolicy (empty rules)
+    - One zone with one segment whose own policy has one permit rule
     """
     # Segment node embedded in interface_capabilities (security_zone + policies on segment)
     seg_node: dict[str, Any] = {
         "__typename": {"value": "ManagedVxlanSegment"},
+        "id": "seg-smoke",
         "name": {"value": "seg-smoke"},
         "status": {"value": "active"},
         "arp_suppression": {"value": True},
@@ -302,18 +152,21 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
             "node": {
                 "name": {"value": "internal"},
                 "trust_level": {"value": 100},
-                "zone_type": {"value": "internal"},
             }
         },
+        "inbound_rules": {"edges": []},
         "security_policy": {
             "node": {
+                "id": "pol-smoke",
                 "name": {"value": "seg-pol-smoke"},
+                "segment": {"node": {"id": "seg-smoke", "name": {"value": "seg-smoke"}}},
                 "default_action": {"value": "deny"},
                 "enabled": {"value": True},
                 "rules": {
                     "edges": [
                         {
                             "node": {
+                                "id": "rule-smoke-permit",
                                 "index": {"value": 10},
                                 "name": {"value": "smoke-permit-rule"},
                                 "action": {"value": "permit"},
@@ -324,7 +177,7 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
                                 "disabled": {"value": False},
                                 "apply_on_switch": {"value": False},
                                 "description": {"value": "HTTPS"},
-                                "source_segment": {"node": None},
+                                "source_segment": {"node": _SMOKE_SEGMENT_REF},
                                 "destination_segment": {"node": None},
                                 "security_profile": {"node": None},
                             }
@@ -357,7 +210,6 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
     zone_node: dict[str, Any] = {
         "name": {"value": "internal"},
         "trust_level": {"value": 100},
-        "zone_type": {"value": "internal"},
         "description": {"value": "Internal zone"},
         "network_segments": {
             "edges": [
@@ -379,14 +231,6 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
         },
     }
 
-    # Global SecurityPolicy (empty rules — global policies are the top-level list)
-    global_policy_node: dict[str, Any] = {
-        "name": {"value": "global-pol-smoke"},
-        "default_action": {"value": "deny"},
-        "enabled": {"value": True},
-        "rules": {"edges": []},
-    }
-
     return {
         "DcimPhysicalDevice": {
             "edges": [
@@ -406,8 +250,19 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
             ]
         },
         "SecurityZone": {"edges": [{"node": zone_node}]},
-        "SecurityPolicy": {"edges": [{"node": global_policy_node}]},
     }
+
+
+def _smoke_segment(data: dict[str, Any]) -> dict[str, Any]:
+    """The segment the smoke firewall carries on eth0.100."""
+    iface = data["DcimPhysicalDevice"]["edges"][0]["node"]["interfaces"]["edges"][0]["node"]
+    return iface["interface_capabilities"]["edges"][0]["node"]
+
+
+def _add_segment_rule(data: dict[str, Any], rule_node: dict[str, Any]) -> None:
+    """Append a rule to the carried segment's own policy (every rule lives in
+    its source segment's policy)."""
+    _smoke_segment(data)["security_policy"]["node"]["rules"]["edges"].append({"node": rule_node})
 
 
 def _make_destination_prefix_policy_data(platform: str) -> dict[str, Any]:
@@ -418,7 +273,8 @@ def _make_destination_prefix_policy_data(platform: str) -> dict[str, Any]:
     base = _make_smoke_data(platform)
 
     prefix_rule_node: dict[str, Any] = {
-        "index": {"value": 10},
+        "id": "rule-nordix-prod-to-aws",
+        "index": {"value": 20},
         "name": {"value": "nordix-prod-to-aws"},
         "action": {"value": "permit"},
         "protocol": {"value": "tcp"},
@@ -428,7 +284,7 @@ def _make_destination_prefix_policy_data(platform: str) -> dict[str, Any]:
         "disabled": {"value": False},
         "apply_on_switch": {"value": False},
         "description": {"value": "Nordix web/app tier to AWS transit hub"},
-        "source_segment": {"node": None},
+        "source_segment": {"node": _SMOKE_SEGMENT_REF},
         "destination_segment": {"node": None},
         "source_prefixes": {"edges": []},
         "destination_prefixes": {"edges": [{"node": {"id": "px-1", "prefix": {"value": "10.40.0.0/16"}}}]},
@@ -436,13 +292,7 @@ def _make_destination_prefix_policy_data(platform: str) -> dict[str, Any]:
         "destination_ip_addresses": {"edges": []},
         "security_profile": {"node": None},
     }
-    prefix_policy_node: dict[str, Any] = {
-        "name": {"value": "colo-fr-external-egress"},
-        "default_action": {"value": "deny"},
-        "enabled": {"value": True},
-        "rules": {"edges": [{"node": prefix_rule_node}]},
-    }
-    base["SecurityPolicy"]["edges"].append({"node": prefix_policy_node})
+    _add_segment_rule(base, prefix_rule_node)
     return base
 
 
@@ -455,7 +305,8 @@ def _make_protocol_port_policy_data(
     base = _make_smoke_data(platform)
 
     rule_node: dict[str, Any] = {
-        "index": {"value": 10},
+        "id": "rule-proto-port",
+        "index": {"value": 20},
         "name": {"value": "proto-port-rule"},
         "action": {"value": "permit"},
         "protocol": {"value": protocol},
@@ -465,7 +316,7 @@ def _make_protocol_port_policy_data(
         "disabled": {"value": False},
         "apply_on_switch": {"value": False},
         "description": {"value": ""},
-        "source_segment": {"node": None},
+        "source_segment": {"node": _SMOKE_SEGMENT_REF},
         "destination_segment": {"node": None},
         "source_prefixes": {"edges": []},
         "destination_prefixes": {"edges": [{"node": {"id": "px-1", "prefix": {"value": "10.40.0.0/16"}}}]},
@@ -473,33 +324,51 @@ def _make_protocol_port_policy_data(
         "destination_ip_addresses": {"edges": []},
         "security_profile": {"node": None},
     }
-    policy_node: dict[str, Any] = {
-        "name": {"value": "proto-port-policy"},
-        "default_action": {"value": "deny"},
-        "enabled": {"value": True},
-        "rules": {"edges": [{"node": rule_node}]},
-    }
-    base["SecurityPolicy"]["edges"].append({"node": policy_node})
+    _add_segment_rule(base, rule_node)
     return base
 
 
-def _make_merged_policies_data(platform: str) -> dict[str, Any]:
-    """Build smoke data that includes BOTH a global and a segment policy with distinct names."""
-    base = _make_smoke_data(platform)
-
-    # Add a second global policy "global-pol" alongside the existing "global-pol-smoke"
-    extra_global: dict[str, Any] = {
-        "name": {"value": "global-pol"},
-        "default_action": {"value": "deny"},
-        "enabled": {"value": True},
-        "rules": {"edges": []},
+def _inbound_rule_node(name: str, *, policy: str, enabled: bool = True) -> dict[str, Any]:
+    """A rule of another segment's policy whose destination is the smoke segment."""
+    return {
+        "id": f"rule-{name}",
+        "index": {"value": 10},
+        "name": {"value": name},
+        "action": {"value": "permit"},
+        "protocol": {"value": "tcp"},
+        "port_start": {"value": 5432},
+        "port_end": {"value": None},
+        "log": {"value": False},
+        "disabled": {"value": False},
+        "apply_on_switch": {"value": False},
+        "description": {"value": ""},
+        "source_segment": {
+            "node": {
+                "id": "seg-peer",
+                "name": {"value": "seg-peer"},
+                "gateway": {"node": {"ip_prefix": {"node": {"prefix": {"value": "10.20.0.0/24"}}}}},
+            }
+        },
+        "destination_segment": {"node": _SMOKE_SEGMENT_REF},
+        "source_prefixes": {"edges": []},
+        "destination_prefixes": {"edges": []},
+        "source_ip_addresses": {"edges": []},
+        "destination_ip_addresses": {"edges": []},
+        "security_profile": {"node": None},
+        "policy": {
+            "node": {
+                "id": f"pol-{policy}",
+                "name": {"value": policy},
+                "enabled": {"value": enabled},
+                "default_action": {"value": "deny"},
+                "segment": {"node": {"id": "seg-peer", "name": {"value": "seg-peer"}}},
+            }
+        },
     }
-    base["SecurityPolicy"]["edges"].append({"node": extra_global})
-    return base
 
 
 # ===========================================================================
-# Class 4 — Firewall.transform() — full render smoke tests
+# Class 2 — Firewall.transform() — full render smoke tests
 # ===========================================================================
 
 
@@ -555,20 +424,49 @@ class TestFirewallTransformSmoke:
         assert "smoke-permit-rule" in result
 
     @pytest.mark.asyncio
-    async def test_global_and_segment_policies_merged(self) -> None:
-        """Both global-pol (global) and seg-pol-smoke (segment) rules appear in output."""
-        fw = _make_fw()
-        data = _make_merged_policies_data("paloalto_panos")
-        result = await fw.transform(data)
-        # global-pol-smoke has no rules so its name won't appear, but it contributes
-        # to zone_policies; seg-pol-smoke has "smoke-permit-rule" which should appear.
-        # global-pol also has no rules, but "global-pol" name itself does not appear
-        # in PAN-OS output (rules are rendered per-rule, not per-policy).
-        # What we CAN verify is that the segment rule still renders correctly
-        # alongside extra global policies (no crash, rule present).
-        assert "smoke-permit-rule" in result
-        # Also verify the render didn't short-circuit (non-empty output)
-        assert len(result) > 50
+    async def test_inbound_rule_of_a_carried_segment_renders(self) -> None:
+        """The ingress leg: a rule of another segment's policy INTO the carried
+        segment renders here, under its own policy, after the egress policy."""
+        data = _make_smoke_data("paloalto_panos")
+        _smoke_segment(data)["inbound_rules"]["edges"].append(
+            {"node": _inbound_rule_node("peer-to-db", policy="zz-peer")}
+        )
+        result = await _make_fw().transform(data)
+        assert "set rulebase security rules peer-to-db source 10.20.0.0/24" in result
+        assert result.index("rules smoke-permit-rule ") < result.index("rules peer-to-db ")
+
+    @pytest.mark.asyncio
+    async def test_inbound_rule_of_a_disabled_policy_is_skipped(self) -> None:
+        data = _make_smoke_data("paloalto_panos")
+        inbound = _inbound_rule_node("peer-to-db", policy="zz-peer", enabled=False)
+        _smoke_segment(data)["inbound_rules"]["edges"].append({"node": inbound})
+        result = await _make_fw().transform(data)
+        assert "peer-to-db" not in result
+
+    @pytest.mark.asyncio
+    async def test_rule_reached_twice_renders_once(self) -> None:
+        """A rule from the carried segment to itself is its egress rule and its
+        inbound rule: de-duplicated by id, one rulebase entry."""
+        data = _make_smoke_data("paloalto_panos")
+        segment = _smoke_segment(data)
+        egress = segment["security_policy"]["node"]["rules"]["edges"][0]["node"]
+        policy = {k: v for k, v in segment["security_policy"]["node"].items() if k != "rules"}
+        segment["inbound_rules"]["edges"].append({"node": {**egress, "policy": {"node": policy}}})
+        result = await _make_fw().transform(data)
+        assert result.count("set rulebase security rules smoke-permit-rule action") == 1
+
+    @pytest.mark.asyncio
+    async def test_no_root_policy_list_is_read(self) -> None:
+        """Only the served segments' policies render: a stray SecurityPolicy root is ignored."""
+        data = _make_smoke_data("paloalto_panos")
+        stray = {
+            "name": {"value": "stray"},
+            "enabled": {"value": True},
+            "rules": {"edges": [{"node": _inbound_rule_node("stray-rule", policy="stray")}]},
+        }
+        data["SecurityPolicy"] = {"edges": [{"node": stray}]}
+        result = await _make_fw().transform(data)
+        assert "stray-rule" not in result
 
     @pytest.mark.asyncio
     async def test_destination_prefix_rule_renders_cidr_on_paloalto(self) -> None:
@@ -738,7 +636,8 @@ class TestFirewallTransformSmoke:
         service object, not one per rule."""
         base = _make_smoke_data("fortinet_fortios")
         rule_a = {
-            "index": {"value": 10},
+            "id": "rule-a",
+            "index": {"value": 20},
             "name": {"value": "rule-a"},
             "action": {"value": "permit"},
             "protocol": {"value": "tcp"},
@@ -748,7 +647,7 @@ class TestFirewallTransformSmoke:
             "disabled": {"value": False},
             "apply_on_switch": {"value": False},
             "description": {"value": ""},
-            "source_segment": {"node": None},
+            "source_segment": {"node": _SMOKE_SEGMENT_REF},
             "destination_segment": {"node": None},
             "source_prefixes": {"edges": []},
             "destination_prefixes": {"edges": [{"node": {"id": "px-1", "prefix": {"value": "10.1.0.0/16"}}}]},
@@ -756,14 +655,9 @@ class TestFirewallTransformSmoke:
             "destination_ip_addresses": {"edges": []},
             "security_profile": {"node": None},
         }
-        rule_b = {**rule_a, "index": {"value": 20}, "name": {"value": "rule-b"}}
-        policy_node = {
-            "name": {"value": "dual-rule-policy"},
-            "default_action": {"value": "deny"},
-            "enabled": {"value": True},
-            "rules": {"edges": [{"node": rule_a}, {"node": rule_b}]},
-        }
-        base["SecurityPolicy"]["edges"].append({"node": policy_node})
+        rule_b = {**rule_a, "id": "rule-b", "index": {"value": 30}, "name": {"value": "rule-b"}}
+        _add_segment_rule(base, rule_a)
+        _add_segment_rule(base, rule_b)
 
         fw = _make_fw()
         result = await fw.transform(base)
@@ -802,18 +696,14 @@ class TestFirewallTransformSmoke:
         """Templates must render without exception when zone_policies is empty."""
         fw = _make_fw()
         data = _make_smoke_data(platform)
-        data["SecurityPolicy"] = {"edges": []}
-        # Strip the segment's security_policy from the interface_capabilities segment node
-        iface_node = data["DcimPhysicalDevice"]["edges"][0]["node"]["interfaces"]["edges"][0]["node"]
-        seg_node = iface_node["interface_capabilities"]["edges"][0]["node"]
-        seg_node["security_policy"] = {"node": None}
+        _smoke_segment(data)["security_policy"] = {"node": None}
         result = await fw.transform(data)
         assert isinstance(result, str)
         assert len(result) > 0
 
 
 # ===========================================================================
-# Class 5 — Address-family-aware rendering (IPv6 P2P links, IPv4 fw_interfaces)
+# Class 3 — Address-family-aware rendering (IPv6 P2P links, IPv4 fw_interfaces)
 # ===========================================================================
 #
 # FW-context P2P links default to IPv6 (/127, generators/topology/dc.py's
@@ -949,7 +839,6 @@ _CTX_RULE = {
 def _policy_context(**extra: Any) -> dict[str, Any]:
     return {
         "id": "ctx-c005",
-        "tenant_id": "dep-c005",
         "name": "c005-dedicated",
         "tenant_name": "C005-P-DC12",
         "vlan_id": 3005,
@@ -1023,18 +912,18 @@ class TestPerContextPolicyRendering:
         assert "c005-web-to-api" not in out
 
 
-def _make_context_smoke_data(platform: str, *, tenant_matches: bool) -> dict[str, Any]:
-    """Smoke data whose segment rule names the segment and whose firewall has a
-    dedicated context; the context serves the segment only when its tenant is
-    one of the segment's customer deployments."""
+def _make_context_smoke_data(platform: str, *, serves_segment: bool) -> dict[str, Any]:
+    """Smoke data whose firewall also has a dedicated context. The context
+    serves the carried segment only when one of its served deployments
+    lists it among its network_segments."""
     data = _make_smoke_data(platform)
     device = data["DcimPhysicalDevice"]["edges"][0]["node"]
-    fw_iface = device["interfaces"]["edges"][0]["node"]
-    seg_node = fw_iface["interface_capabilities"]["edges"][0]["node"]
-    seg_node["id"] = "seg-smoke"
-    seg_node["customer_deployments"] = {"edges": [{"node": {"id": "dep-c005"}}]}
-    rule = seg_node["security_policy"]["node"]["rules"]["edges"][0]["node"]
-    rule["source_segment"] = {"node": {"id": "seg-smoke", "name": {"value": "seg-smoke"}}}
+    segment = _smoke_segment(data)
+    served_segment = {
+        "id": segment["id"],
+        "security_policy": copy.deepcopy(segment["security_policy"]),
+        "inbound_rules": {"edges": []},
+    }
     context_iface: dict[str, Any] = {
         "__typename": {"value": "DcimVirtualInterface"},
         "name": {"value": "eth1.3005"},
@@ -1053,11 +942,18 @@ def _make_context_smoke_data(platform: str, *, tenant_matches: bool) -> dict[str
                         "name": {"value": "c005-dedicated"},
                         "vlan_id": {"value": 3005},
                         "context_id": {"value": None},
-                        "tenant": {
-                            "node": {
-                                "id": "dep-c005" if tenant_matches else "dep-other",
-                                "name": {"value": "C005-P-DC12"},
-                            }
+                        "tenant": {"node": {"id": "dep-c005", "name": {"value": "C005-P-DC12"}}},
+                        "served_deployments": {
+                            "edges": [
+                                {
+                                    "node": {
+                                        "id": "dep-c005",
+                                        "network_segments": {
+                                            "edges": [{"node": served_segment}] if serves_segment else []
+                                        },
+                                    }
+                                }
+                            ]
                         },
                     }
                 }
@@ -1070,15 +966,15 @@ def _make_context_smoke_data(platform: str, *, tenant_matches: bool) -> dict[str
 
 class TestFirewallTransformContextPlacement:
     @pytest.mark.asyncio
-    async def test_segment_rule_moves_into_its_tenants_context(self) -> None:
+    async def test_segment_rule_moves_into_the_context_serving_it(self) -> None:
         """The rule renders under the vsys and no longer in the root rulebase."""
-        out = await _make_fw().transform(_make_context_smoke_data("paloalto_panos", tenant_matches=True))
+        out = await _make_fw().transform(_make_context_smoke_data("paloalto_panos", serves_segment=True))
         assert "set vsys c005-dedicated rulebase security rules smoke-permit-rule" in out
         assert "set rulebase security rules smoke-permit-rule" not in out
 
     @pytest.mark.asyncio
-    async def test_rule_of_an_unserved_segment_stays_in_root(self) -> None:
-        """A dedicated context of another tenant does not take the rule."""
-        out = await _make_fw().transform(_make_context_smoke_data("paloalto_panos", tenant_matches=False))
+    async def test_rule_of_a_carried_segment_no_context_serves_stays_in_root(self) -> None:
+        """A context serving other segments does not take the rule."""
+        out = await _make_fw().transform(_make_context_smoke_data("paloalto_panos", serves_segment=False))
         assert "set rulebase security rules smoke-permit-rule" in out
         assert "set vsys c005-dedicated rulebase" not in out

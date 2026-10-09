@@ -64,7 +64,6 @@ fragment SegmentSecurityZoneFields on ManagedNetworkSegment {
     node {
       name { value }
       trust_level { value }
-      zone_type { value }
     }
   }
 }
@@ -99,120 +98,13 @@ fragment SegmentSecurityPolicyFields on ManagedNetworkSegment {
     node {
       name { value }
       group_id { value }
-      rules_as_source {
-        edges {
-          node {
-            action { value }
-            log { value }
-            destination_tag {
-              node {
-                name { value }
-                group_id { value }
-              }
-            }
-          }
-        }
-      }
     }
   }
-  security_policy {
-    node {
-      id
-      name { value }
-      enabled { value }
-      default_action { value }
-      rules {
-        edges {
-          node {
-            index { value }
-            name { value }
-            action { value }
-            protocol { value }
-            port_start { value }
-            port_end { value }
-            log { value }
-            disabled { value }
-            security_profile { node { name { value } } }
-            source_segment {
-              node {
-                id
-                security_zone { node { name { value } } }
-                ... on ManagedVlanSegment {
-                  name { value }
-                  customer_name { value }
-                  environment { value }
-                  gateway { node { ip_prefix { node { prefix { value } } } } }
-                }
-                ... on ManagedVxlanSegment {
-                  name { value }
-                  customer_name { value }
-                  environment { value }
-                  gateway { node { ip_prefix { node { prefix { value } } } } }
-                }
-              }
-            }
-            destination_segment {
-              node {
-                id
-                security_zone { node { name { value } } }
-                ... on ManagedVlanSegment {
-                  name { value }
-                  customer_name { value }
-                  environment { value }
-                  gateway { node { ip_prefix { node { prefix { value } } } } }
-                  customer_deployment { node { id } }
-                }
-                ... on ManagedVxlanSegment {
-                  name { value }
-                  customer_name { value }
-                  environment { value }
-                  gateway { node { ip_prefix { node { prefix { value } } } } }
-                  customer_deployments { edges { node { id } } }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-  # Rules whose destination is this segment, from any segment's policy: a leaf
-  # carrying only this segment answers those flows from them (return ACL and
-  # PBR bypass, transforms/helpers/acl.py and firewall.py).
-  inbound_rules {
-    edges {
-      node {
-        index { value }
-        name { value }
-        action { value }
-        protocol { value }
-        port_start { value }
-        port_end { value }
-        disabled { value }
-        security_profile { node { name { value } } }
-        policy { node { enabled { value } } }
-        source_segment {
-          node {
-            id
-            ... on ManagedVlanSegment {
-              name { value }
-              customer_name { value }
-              environment { value }
-              gateway { node { ip_prefix { node { prefix { value } } } } }
-              customer_deployment { node { id } }
-            }
-            ... on ManagedVxlanSegment {
-              name { value }
-              customer_name { value }
-              environment { value }
-              gateway { node { ip_prefix { node { prefix { value } } } } }
-              customer_deployments { edges { node { id } } }
-            }
-          }
-        }
-      }
-    }
-  }
+  # The segment's own rules (its security_policy) and the rules into it
+  # (inbound_rules): a leaf carrying only the destination answers those
+  # flows from them (return ACL and PBR bypass, transforms/helpers/acl.py
+  # and firewall.py).
+  ...SegmentRulesFields
 }
 
 fragment NetworkSegmentFields on ManagedNetworkSegment {
