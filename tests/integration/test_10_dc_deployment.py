@@ -489,6 +489,10 @@ async def _deploy_dc(dc_key: str, config: Config, execute_command: Any) -> str:
     logging.info("%s PC %s: %d validations", dc_name, pc_result["pc_id"], len(pc_result["validations"]))
 
     logging.info("=== %s — Step 7: Verify Artifacts ===", dc_name)
+    # The proposed change's "Check artifact creation" tasks run on this branch
+    # and queue behind every other DC's on the shared workers: let them settle
+    # first, or fetch_artifacts' own short poll gives up with none.
+    await wait_for_tasks_completion(client, branch, stable_zero_count=3, max_wait_attempts=DC_CASCADE_MAX_POLLS)
     artifacts_result = await fetch_artifacts(client=client, branch=branch, expected_min_total=1)
     assert artifacts_result["total"] >= 1, f"Expected >= 1 artifact for {dc_name}, got {artifacts_result['total']}"
     for art in artifacts_result["failed"]:
