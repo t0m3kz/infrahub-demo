@@ -4,6 +4,7 @@ query segment_placement {
       node {
         id
         name { value }
+        owner { node { id } }
         terminate_inline { value }
         inline_service { node { id __typename name { value } } }
         customer_deployment {
@@ -22,6 +23,7 @@ query segment_placement {
       node {
         id
         name { value }
+        owner { node { id } }
         stretch_scope { value }
         terminate_inline { value }
         inline_service { node { id __typename name { value } } }
@@ -67,6 +69,7 @@ query segment_placement {
       node {
         id
         name { value }
+        owner { node { id } }
         customer_deployment {
           node {
             id

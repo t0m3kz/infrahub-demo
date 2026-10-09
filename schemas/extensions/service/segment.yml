@@ -17,7 +17,7 @@ nodes:
       - ManagedNetworkSegment
       - ManagedGenericInterfaces
     uniqueness_constraints:
-      - [owner, environment__value, customer_name__value]
+      - [name__value]
     attributes:
       - name: segment_type
         kind: Dropdown
@@ -54,6 +54,22 @@ nodes:
         identifier: "segment__customer_deployments"
         description: "Customer deployment footprint this VLAN segment is activated in."
 
+  # A network outside every customer's control (the internet, a partner
+  # network): classified into a zone and matched by policy rules, but owned
+  # by nobody and never activated, gatewayed or terminated anywhere.
+  # segment_checks (checks/segment_placement.py) holds customer segments to
+  # an owner; this kind is the only one allowed without.
+  - name: ExternalSegment
+    namespace: Managed
+    description: "Network outside customer control (internet, partner), matched by policy rules"
+    label: External Segment
+    icon: "carbon:cloud"
+    include_in_menu: false
+    inherit_from:
+      - ManagedNetworkSegment
+    uniqueness_constraints:
+      - [customer_name__value]
+
   # VXLAN overlay segment with EVPN multi-tenancy.
   # Zero trust: prefix → ip_namespace (VRF+l3_vni+owner) → tenant isolation.
   # For stretched segments, generator behavior is local-pool-first: first
@@ -70,7 +86,7 @@ nodes:
       - ManagedNetworkSegment
       - ManagedGenericInterfaces
     uniqueness_constraints:
-      - [owner, environment__value, customer_name__value]
+      - [name__value]
     attributes:
       - name: segment_type
         kind: Dropdown

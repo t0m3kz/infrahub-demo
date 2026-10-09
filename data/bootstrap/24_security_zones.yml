@@ -16,3 +16,6 @@ spec:
     - name: "NONPROD-ZONE"
       description: "Non-production zone — dev, staging, QA environments"
       trust_level: 50
+    - name: "INTERNET-ZONE"
+      description: "Untrusted external networks — the internet"
+      trust_level: 0

@@ -38,11 +38,24 @@ class CheckSegmentPlacement(InfrahubCheck):
 
     def validate(self, data: Any) -> None:
         cleaned = clean_data(data)
+        self._validate_owners(cleaned)
         self._validate_vlan_segments(cleaned.get("ManagedVlanSegment") or [])
         self._validate_vxlan_segments(cleaned.get("ManagedVxlanSegment") or [])
         self._validate_cloud_segments(cleaned.get("CloudNetworkSegment") or [])
         for segment in [*(cleaned.get("ManagedVlanSegment") or []), *(cleaned.get("ManagedVxlanSegment") or [])]:
             self._validate_inline_termination(segment)
+
+    def _validate_owners(self, cleaned: dict[str, Any]) -> None:
+        """Every customer segment has an owner. The schema cannot say so: owner
+        is optional on ManagedNetworkSegment so a ManagedExternalSegment (the
+        internet) can have none, and a uniqueness constraint cannot use an
+        optional relationship."""
+        for kind in ("ManagedVlanSegment", "ManagedVxlanSegment", "CloudNetworkSegment"):
+            for segment in cleaned.get(kind) or []:
+                if not segment.get("owner"):
+                    self.log_error(
+                        message=f"{kind} '{segment.get('name', '<unnamed-segment>')}' has no owner. Set its owner customer."
+                    )
 
     def _validate_inline_termination(self, segment: dict[str, Any]) -> None:
         """terminate_inline needs an on-prem HA pair as inline_service: leaves
