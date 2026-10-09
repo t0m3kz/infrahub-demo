@@ -285,7 +285,7 @@ mac security profile SGT-{{ vlan.sgt }}
 {%- endif %}
 {%- if sgt_rules %}
 !
-! SGT contracts (SecurityTagRule — coarse tier-to-tier, no port/protocol)
+! SGT contracts (derived from the segments' permit rules — coarse tier-to-tier, no port/protocol)
 {%- for rule in sgt_rules %}
 mac security sgt-policy {{ rule.src_sgt }}-to-{{ rule.dst_sgt }}
    ! {{ rule.src_name }} → {{ rule.dst_name }}

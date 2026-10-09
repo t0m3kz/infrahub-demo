@@ -256,7 +256,8 @@ class TestCreateRoleDevices:
     (deployment_id=pod.id), see test_pod_border_services.py."""
 
     @pytest.mark.asyncio
-    async def test_load_balancer_uses_loadbalancers_group_override(self) -> None:
+    async def test_load_balancer_leaves_its_group_to_create_devices(self) -> None:
+        """The role's bootstrap group is resolved once, in create_devices (ROLE_GROUP_NAMES)."""
         gen = _make_generator()
         gen.create_devices = AsyncMock(return_value=["lb-01"])
         entries = [_entry("load-balancer", 1, _LB_TEMPLATE)]
@@ -271,7 +272,7 @@ class TestCreateRoleDevices:
 
         assert names == ["lb-01"]
         create_kwargs = gen.create_devices.call_args.kwargs
-        assert create_kwargs["options"]["group_name"] == "loadbalancers"
+        assert "group_name" not in create_kwargs["options"]
         assert create_kwargs["deployment_id"] == gen.data["id"]
 
     @pytest.mark.asyncio

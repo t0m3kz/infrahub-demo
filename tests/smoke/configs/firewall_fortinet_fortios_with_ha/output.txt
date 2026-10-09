@@ -36,19 +36,29 @@ config system interface
     next
 end
 #
-# --- Address Objects (one per zone member CIDR) ---
+# --- Zones ---
+config system zone
+    edit "internal"
+        set interface "ethernet1/1.10"
+    next
+    edit "dmz"
+        set interface "ethernet1/1.20"
+    next
+    edit "external"
+        set interface "ethernet1/1.30"
+    next
+end
+#
+# --- Address Objects (zone members and policy endpoints) ---
 config firewall address
     edit "10.0.1.0/24"
-        set subnet 10.0.1.0 24
-        set comment "Zone: internal"
+        set subnet 10.0.1.0 255.255.255.0
     next
     edit "10.0.10.0/24"
-        set subnet 10.0.10.0 24
-        set comment "Zone: internal"
+        set subnet 10.0.10.0 255.255.255.0
     next
     edit "10.0.2.0/24"
-        set subnet 10.0.2.0 24
-        set comment "Zone: dmz"
+        set subnet 10.0.2.0 255.255.255.0
     next
 end
 #
@@ -90,22 +100,23 @@ config firewall policy
         set name "allow-https"
         set srcintf "dmz"
         set dstintf "internal"
-        set srcaddr "all"
-        set dstaddr "all"
+        set srcaddr "10.0.2.0/24"
+        set dstaddr "10.0.1.0/24"
         set action accept
         set schedule "always"
         set service "svc-tcp-443"
         set logtraffic all
         set utm-status enable
-        set av-profile "strict-av"
+        set profile-type group
+        set profile-group "strict-av"
         set comments "Allow HTTPS from DMZ to Internal"
     next
     edit 20
         set name "allow-ssh"
         set srcintf "dmz"
         set dstintf "internal"
-        set srcaddr "all"
-        set dstaddr "all"
+        set srcaddr "10.0.2.0/24"
+        set dstaddr "10.0.1.0/24"
         set action accept
         set schedule "always"
         set service "svc-tcp-22"
@@ -116,8 +127,8 @@ config firewall policy
         set name "allow-any"
         set srcintf "internal"
         set dstintf "dmz"
-        set srcaddr "all"
-        set dstaddr "all"
+        set srcaddr "10.0.1.0/24"
+        set dstaddr "10.0.2.0/24"
         set action accept
         set schedule "always"
         set service "ALL"
@@ -143,5 +154,6 @@ config system ha
     set mode a-p
     set priority 100
     set override disable
+    set hbdev "ethernet1/7" 50
 end
 #

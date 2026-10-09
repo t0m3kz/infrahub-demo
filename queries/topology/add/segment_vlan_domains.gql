@@ -5,7 +5,8 @@
 #   - interface_capabilities: the switch ports carrying the segment; their
 #     devices' VLAN domains need it (DcimPhysicalInterface/DcimLAGInterface
 #     only — an inline DcimVirtualInterface sub-interface on a firewall/LB
-#     HA pair has its own inline VLAN ID, not a VLAN domain)
+#     HA pair takes the facing border leaf's VLAN, it has no domain). role
+#     tells the customer-facing ports from the border-leaf service ports.
 #   - stretch_scope + customer_deployments' hosting parents: a stretched
 #     segment's border gateways need it too (same shape as vxlan_segment.gql)
 #   - ManagedVlanDomainSegment: the activations that exist today
@@ -42,6 +43,7 @@ query segment_vlan_domains($segment_id: ID!) {
             node {
               id
               __typename
+              role { value }
               device { node { id } }
             }
           }

@@ -1,0 +1,60 @@
+!
+! Device:     DC3-PRX-01
+! Proxy type: transparent
+! HA mode:    active-passive
+!
+
+! --- Interfaces ---
+interfaceconfig
+  interface mgmt
+    ipv4 192.168.1.1 255.255.255.0
+    enabled
+  !
+interfaceconfig
+  interface eth1.210
+    ipv4 10.2.0.2 255.255.255.0
+    enabled
+  !
+
+! --- Proxy Ports ---
+proxyconfig
+  http-port 80 transparent
+  https-port 443 transparent
+  max-connections 10000
+!
+
+! --- DNS ---
+dnsconfig
+  primary 8.8.8.8
+  secondary 8.8.4.4
+!
+
+! --- Access Policy ---
+accesspolicies
+  policy global
+    protocols http https ftp
+    action monitor
+  !
+  policy block-malware
+    url-category malware
+    action block
+  !
+  policy allow-internal
+    src-network 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+    action allow
+  !
+!
+
+! --- Logging ---
+logconfig
+  access-log enabled
+  format squid
+!
+
+! --- High Availability ---
+! HA group: 1  mode: active-passive  priority: 100
+! Peers: DC3-PRX-01, DC3-PRX-02
+! Note: WSA HA is managed via Cisco Centralized Management (SMA). Failover is
+! handled at the network layer (WCCP or PBR) — not natively on the appliance.
+! eth1.210: segment gateway 10.2.0.1/24 cannot float between WSA
+! appliances — terminate this segment on a firewall or load balancer instead.

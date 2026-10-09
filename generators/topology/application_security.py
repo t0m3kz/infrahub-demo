@@ -268,16 +268,6 @@ class AppApplicationGenerator(
                 rules_created += int(created)
                 rules_skipped += int(skipped)
 
-        attached_seg_ids: set[str] = set()
-        for src_comp, _dep, dst_comp in edges:
-            for comp in (src_comp, dst_comp):
-                seg = comp.get("network_segment") or {}
-                seg_id = seg.get("id")
-                if not seg_id or seg_id not in segment_policies or seg_id in attached_seg_ids:
-                    continue
-                await self._attach_policy_to_source_segment(segment=seg, policy_id=segment_policies[seg_id].id)
-                attached_seg_ids.add(seg_id)
-
         self.logger.info(
             "Application %s: %d rule(s) created, %d already existed",
             app_name,

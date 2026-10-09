@@ -29,6 +29,12 @@ _log = logging.getLogger(__name__)
 _L3VNI_SVI_VLAN_BASE = 3900
 _L3VNI_SVI_VLAN_MAX = 3967
 
+# Border-leaf port roles facing a firewall / load-balancer HA member — the
+# values of generators/connections.py's BORDER_ROLE_FOR_SERVICES. Such a port
+# carrying segment VLANs is a tagged L2 trunk (never also the routed parent of
+# pbr-mode FirewallContext sub-interfaces; the segment generator refuses that).
+_SERVICE_TRUNK_ROLES = frozenset({"firewall", "load-balancer"})
+
 
 def _collect_l3_vni_from_namespaces(namespaces) -> list[dict[str, Any]]:
     """Collect unique L3 VNI (VRF) mappings from an iterable of namespace dicts.
@@ -318,6 +324,11 @@ def get_interfaces(
         iface_dict = {
             "name": name,
             "vlans": vlans,
+            # A border-leaf service port facing an HA pair member carries the
+            # VLANs of the terminate_inline segments that pair gateways, tagged
+            # (one <member-port>.<vlan> sub-interface per segment on the HA
+            # side). Every other port keeps its access/legacy rendering (None).
+            "mode": "trunk" if vlans and iface.get("role") in _SERVICE_TRUNK_ROLES else None,
             # Isolation mode of the port's access (first) VLAN.
             "access_isolation_mode": vlan_isolation.get(vlans[0], "normal") if vlans else None,
             "description": iface.get("description"),

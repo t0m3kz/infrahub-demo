@@ -32,16 +32,6 @@ spec:
       capabilities:
         - "EXT-COGENT-PAR1"
 ---
-# Upserted by HFID [afi, safi]; ../04_sdwan/06_vrf_handoff.yml creates it too.
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: RoutingBGPAddressFamily
-  data:
-    - afi: ipv4
-      safi: unicast
-      description: "IPv4 unicast"
----
 # One MD5 key per transit session, as the carrier issues them. Demo-only
 # secrets, like the API token in the README.
 apiVersion: infrahub.app/v1

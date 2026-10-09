@@ -1,0 +1,215 @@
+{
+  "DcimPhysicalDevice": {
+    "edges": [
+      {
+        "node": {
+          "__typename": "DcimPhysicalDevice",
+          "id": "dev-DC3-LB-01",
+          "name": {
+            "value": "DC3-LB-01"
+          },
+          "role": {
+            "value": "load-balancer"
+          },
+          "platform": {
+            "node": {
+              "id": "plat-haproxy_technologies_linux",
+              "name": {
+                "value": "haproxy_technologies_linux"
+              },
+              "netmiko_device_type": {
+                "value": "haproxy_technologies_linux"
+              },
+              "napalm_driver": {
+                "value": "haproxy_technologies_linux"
+              },
+              "ansible_network_os": {
+                "value": "haproxy_technologies_linux"
+              }
+            }
+          },
+          "primary_address": {
+            "node": null
+          },
+          "tags": {
+            "edges": []
+          },
+          "capabilities": {
+            "edges": [
+              {
+                "node": {
+                  "__typename": "ManagedLoadbalancerHA",
+                  "name": {
+                    "value": "DC3-LB-01-DC3-LB-02-ha"
+                  },
+                  "group_id": {
+                    "value": 2
+                  },
+                  "mode": {
+                    "value": "active-passive"
+                  },
+                  "priority": {
+                    "value": 100
+                  },
+                  "preempt": {
+                    "value": false
+                  },
+                  "capabilities": {
+                    "edges": [
+                      {
+                        "node": {
+                          "name": {
+                            "value": "DC3-LB-01"
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "name": {
+                            "value": "DC3-LB-02"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          "interfaces": {
+            "edges": [
+              {
+                "node": {
+                  "__typename": "DcimPhysicalInterface",
+                  "name": {
+                    "value": "mgmt"
+                  },
+                  "description": {
+                    "value": "OOB management"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "management"
+                  },
+                  "ip_address": {
+                    "node": {
+                      "address": {
+                        "value": "192.168.2.1/24"
+                      }
+                    }
+                  },
+                  "interface_capabilities": {
+                    "edges": []
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimVirtualInterface",
+                  "name": {
+                    "value": "eth2.220"
+                  },
+                  "description": {
+                    "value": "Inline web segment"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "service"
+                  },
+                  "ip_address": {
+                    "node": {
+                      "address": {
+                        "value": "10.3.0.2/24"
+                      }
+                    }
+                  },
+                  "parent_interface": {
+                    "node": {
+                      "name": {
+                        "value": "eth2"
+                      }
+                    }
+                  },
+                  "interface_capabilities": {
+                    "edges": [
+                      {
+                        "node": {
+                          "__typename": "ManagedVxlanSegment",
+                          "id": "seg-inline",
+                          "name": {
+                            "value": "c001-web-p"
+                          },
+                          "terminate_inline": {
+                            "value": true
+                          },
+                          "inline_service": {
+                            "node": {
+                              "name": {
+                                "value": "DC3-LB-01-DC3-LB-02-ha"
+                              }
+                            }
+                          },
+                          "gateway": {
+                            "node": {
+                              "address": {
+                                "value": "10.3.0.1/24"
+                              }
+                            }
+                          },
+                          "interface_capabilities": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "device": {
+                                    "node": {
+                                      "name": {
+                                        "value": "DC3-LB-01"
+                                      }
+                                    }
+                                  },
+                                  "ip_address": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.3.0.2/24"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "node": {
+                                  "device": {
+                                    "node": {
+                                      "name": {
+                                        "value": "DC3-LB-02"
+                                      }
+                                    }
+                                  },
+                                  "ip_address": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.3.0.3/24"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

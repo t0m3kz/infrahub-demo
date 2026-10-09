@@ -6,7 +6,7 @@ import asyncio
 import ipaddress
 from typing import TYPE_CHECKING, Any, Callable, Literal
 
-from infrahub_sdk.protocols import CoreIPPrefixPool
+from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool
 
 if TYPE_CHECKING:
     import logging
@@ -444,6 +444,53 @@ class CablingMixin:
         except Exception as exc:
             self.logger.error(f"Failed to create sub-interface {sub_iface_name} on {device_name}: {exc}")
             return None
+
+    async def ensure_prefix_address_pool(
+        self, *, pool_name: str, prefix_id: str, prefix_length: int, namespace_id: str | None = None
+    ) -> Any | None:
+        """Wrap an EXISTING prefix in a CoreIPAddressPool named (and identified
+        by) pool_name, so allocate_next_ip_address can hand out its addresses —
+        IpamPrefix itself is not a CoreResourcePool, and the SDK only allocates
+        from a real CoreIPAddressPool. Upserted by name on every run (the
+        caller's run owns it), so a moved prefix re-points the pool's resources.
+        Addresses that already exist in the prefix (a gateway, another pool's
+        reservation) are never handed out again. None on error."""
+        try:
+            pool = await self.client.create(
+                kind=CoreIPAddressPool,
+                data={
+                    "name": pool_name,
+                    "default_address_type": "IpamIPAddress",
+                    "default_prefix_length": prefix_length,
+                    "ip_namespace": {"id": namespace_id} if namespace_id else {"hfid": ["default"]},
+                    "identifier": pool_name,
+                    "resources": [prefix_id],
+                },
+            )
+            await pool.save(allow_upsert=True)
+            self.logger.info(f"Upserted IP address pool '{pool_name}'")
+            return pool
+        except Exception as exc:
+            self.logger.error(f"Failed to upsert IP address pool '{pool_name}': {exc}")
+            return None
+
+    async def allocate_prefix_address(
+        self, *, pool: Any, identifier: str, prefix_length: int, description: str
+    ) -> str | None:
+        """The id of the address ``identifier`` reserves in ``pool`` — the same
+        address on every run with the same identifier. None on error."""
+        try:
+            ip_obj = await self.client.allocate_next_ip_address(
+                resource_pool=pool,
+                kind=IpamIPAddress,
+                identifier=identifier,
+                prefix_length=prefix_length,
+                data={"description": description},
+            )
+        except Exception as exc:
+            self.logger.error(f"Failed to allocate address '{identifier}': {exc}")
+            return None
+        return ip_obj.id if ip_obj is not None else None
 
     async def _cable_border_services(
         self,

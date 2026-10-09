@@ -1,0 +1,18 @@
+{#- keepalived VRRP for a Linux HA pair (HAProxy, Squid) terminating segments
+    inline: one instance per interface whose segment gateway is the pair's
+    virtual_ip. Rendered as comments — keepalived.conf is its own file next
+    to the service's config. The primary member is MASTER and outranks the
+    secondary by 10. -#}
+{%- macro vrrp_instances(interfaces, ha) -%}
+{%- for iface in interfaces if iface.virtual_ip %}
+# vrrp_instance {{ ha.name }}-{{ iface.name }} {
+#     state {{ 'MASTER' if ha.unit == 'primary' else 'BACKUP' }}
+#     interface {{ iface.name }}
+#     virtual_router_id {{ ha.group_id or 1 }}
+#     priority {{ ha.priority if ha.unit == 'primary' else ha.priority - 10 }}
+#     virtual_ipaddress {
+#         {{ iface.virtual_ip }}
+#     }
+# }
+{%- endfor %}
+{%- endmacro -%}

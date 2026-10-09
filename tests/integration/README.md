@@ -29,7 +29,7 @@ Each scenario creates infrastructure incrementally and merges to main:
 
 **Scenario Tests:**
 
-- `test_10_dc_deployment.py` - **Scenario 1:** Initial datacenter deployment
+- `test_10_dc_deployment.py` - **Scenario 1:** Initial datacenter deployment — every DC loads, generates and validates its proposed change at the same time on its own branch (`DC_DEPLOYMENT_CONCURRENCY` caps how many; unset means all), then the DCs merge one after another
 - `test_12_dc6_add_switch.py` - **Scenario 2:** Add switches to an existing DC6 rack (`data/demos/02_switch_dc6`)
 - `test_14_dc6_add_rack.py` - **Scenario 3:** Add a rack to an existing DC6 pod (`data/demos/03_rack_dc6`)
 - `test_16_dc6_add_pod.py` - **Scenario 4:** Add a pod to DC6 (`data/demos/04_pod_dc6`)

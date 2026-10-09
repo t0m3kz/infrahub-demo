@@ -15,7 +15,7 @@ tests/unit/test_vlan_domain_reconcile.py — only stubbed here.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -75,7 +75,7 @@ def _gen_with_lock() -> Any:
     gen.locked_keys = []
 
     @asynccontextmanager
-    async def _lock(key: str) -> AsyncIterator[None]:
+    async def _lock(key: str) -> AsyncGenerator[None]:
         gen.locked_keys.append(key)
         yield
 

@@ -6,6 +6,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
+from infrahub_sdk.protocols import CoreStandardGroup
 
 from generators.devices import DeviceMixin
 from generators.protocols import (
@@ -1046,3 +1047,23 @@ class TestCreateDevicesControllerRouting:
 
         create_kwargs = gen.client.create.call_args.kwargs
         assert create_kwargs["data"]["member_of_groups"] == [{"id": "group-1"}]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("role", "group"), [("load-balancer", "loadbalancers"), ("firewall", "firewalls")])
+    async def test_role_joins_its_bootstrap_group(self, role: str, group: str) -> None:
+        """Every caller lands a role in its bootstrap group — load-balancer is
+        "loadbalancers", not the derived "load-balancers" a branch would create."""
+        gen = _make_generator()
+        gen.client.create = AsyncMock(return_value=_mock_created_device(DcimPhysicalDevice.__name__, f"dc1-{role}-01"))
+
+        await gen.create_devices(
+            device_role=role,
+            quantity=1,
+            deployment_id="dc-1",
+            template={"device_type": {"id": "dt-1"}, "platform": {"id": "plat-1"}},
+        )
+
+        group_lookup = next(
+            call for call in gen.client.get.call_args_list if call.kwargs.get("kind") is CoreStandardGroup
+        )
+        assert group_lookup.kwargs["name__value"] == group

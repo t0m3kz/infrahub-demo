@@ -8,7 +8,7 @@ Covers:
   - get_customer_pbr_rules()      — default-redirect-to-firewall PBR rules per VLAN
   - get_border_leaf_pbr_rules()   — same, but SGT/prefix-matched, DC-wide (border-leaf)
   - get_firewall_contexts()       — per-tenant FirewallContext list from this device's interfaces
-  - place_policies_in_contexts()  — split of policy rules between those contexts
+  - place_policies_in_contexts()  — the rules of the segments a firewall serves, per context
 """
 
 from transforms.helpers.firewall import (
@@ -32,7 +32,6 @@ def _make_zone(
     *,
     name: str = "internal",
     trust_level: int | None = 100,
-    zone_type: str | None = "internal",
     description: str | None = "Test zone",
     network_segments: list | None = None,
 ) -> dict:
@@ -40,8 +39,6 @@ def _make_zone(
     zone: dict = {"name": name}
     if trust_level is not None:
         zone["trust_level"] = trust_level
-    if zone_type is not None:
-        zone["zone_type"] = zone_type
     if description is not None:
         zone["description"] = description
     if network_segments is not None:
@@ -168,10 +165,11 @@ def _make_rule(
         "disabled": disabled,
         "description": description or "",
     }
+    # A rule's zone is its segment's security_zone.
     if src_zone is not None:
-        rule["source_zone"] = {"name": src_zone}
+        rule["source_segment"] = {**(rule["source_segment"] or {}), "security_zone": {"name": src_zone}}
     if dst_zone is not None:
-        rule["destination_zone"] = {"name": dst_zone}
+        rule["destination_segment"] = {**(rule["destination_segment"] or {}), "security_zone": {"name": dst_zone}}
     if security_profile is not None:
         rule["security_profile"] = security_profile
     return rule
@@ -190,18 +188,13 @@ class TestGetFirewallZones:
         assert get_firewall_zones([]) == []
 
     def test_zone_without_name_is_skipped(self) -> None:
-        result = get_firewall_zones([{"trust_level": 50, "zone_type": "dmz"}])
+        result = get_firewall_zones([{"trust_level": 50}])
         assert result == []
 
     def test_single_zone_basic_fields(self) -> None:
-        zone = _make_zone(name="internal", trust_level=100, zone_type="internal", description="Corp LAN")
+        zone = _make_zone(name="internal", trust_level=100, description="Corp LAN")
         result = get_firewall_zones([zone])
-        assert len(result) == 1
-        assert result[0]["name"] == "internal"
-        assert result[0]["trust_level"] == 100
-        assert result[0]["zone_type"] == "internal"
-        assert result[0]["description"] == "Corp LAN"
-        assert result[0]["member_cidrs"] == []
+        assert result == [{"name": "internal", "trust_level": 100, "description": "Corp LAN", "member_cidrs": []}]
 
     def test_zone_with_network_segments(self) -> None:
         segs = [
@@ -224,9 +217,9 @@ class TestGetFirewallZones:
 
     def test_zones_sorted_by_trust_level_descending(self) -> None:
         zones = [
-            _make_zone(name="untrust", trust_level=0, zone_type="external"),
-            _make_zone(name="dmz", trust_level=50, zone_type="dmz"),
-            _make_zone(name="internal", trust_level=100, zone_type="internal"),
+            _make_zone(name="untrust", trust_level=0),
+            _make_zone(name="dmz", trust_level=50),
+            _make_zone(name="internal", trust_level=100),
         ]
         result = get_firewall_zones(zones)
         assert [z["name"] for z in result] == ["internal", "dmz", "untrust"]
@@ -236,11 +229,6 @@ class TestGetFirewallZones:
         result = get_firewall_zones([zone])
         assert len(result) == 1
         assert result[0]["trust_level"] == 0
-
-    def test_zone_missing_optional_zone_type_defaults_to_internal(self) -> None:
-        zone = {"name": "bare-zone"}
-        result = get_firewall_zones([zone])
-        assert result[0]["zone_type"] == "internal"
 
     def test_zone_missing_optional_description_defaults_to_empty_string(self) -> None:
         zone = {"name": "no-desc"}
@@ -280,12 +268,12 @@ class TestGetFirewallStaticRoutes:
 
     def test_interface_missing_zone_name_is_skipped(self) -> None:
         iface = _make_fw_interface(zone_name=None)
-        zone = {"name": "internal", "trust_level": 100, "zone_type": "internal", "member_cidrs": ["10.0.0.0/8"]}
+        zone = {"name": "internal", "trust_level": 100, "member_cidrs": ["10.0.0.0/8"]}
         assert get_firewall_static_routes([iface], [zone]) == []
 
     def test_interface_missing_ip_address_is_skipped(self) -> None:
         iface = {"name": "eth0.10", "security_zone": {"name": "internal"}}
-        zone = {"name": "internal", "trust_level": 100, "zone_type": "internal", "member_cidrs": ["10.0.0.0/8"]}
+        zone = {"name": "internal", "trust_level": 100, "member_cidrs": ["10.0.0.0/8"]}
         assert get_firewall_static_routes([iface], [zone]) == []
 
     def test_interface_missing_ns_name_is_skipped(self) -> None:
@@ -294,7 +282,7 @@ class TestGetFirewallStaticRoutes:
             "security_zone": {"name": "internal"},
             "ip_address": {"address": "10.0.0.1/30"},
         }
-        zone = {"name": "internal", "trust_level": 100, "zone_type": "internal", "member_cidrs": ["10.0.0.0/8"]}
+        zone = {"name": "internal", "trust_level": 100, "member_cidrs": ["10.0.0.0/8"]}
         assert get_firewall_static_routes([iface], [zone]) == []
 
     def test_single_interface_with_zone_cidr(self) -> None:
@@ -308,7 +296,6 @@ class TestGetFirewallStaticRoutes:
         zone = {
             "name": "internal",
             "trust_level": 100,
-            "zone_type": "internal",
             "member_cidrs": ["10.0.1.0/24"],
         }
         result = get_firewall_static_routes([iface], [zone])
@@ -326,7 +313,7 @@ class TestGetFirewallStaticRoutes:
             ip_addr="172.16.0.2/30",
             ns_name="VRF-DMZ",
         )
-        zone = {"name": "dmz", "trust_level": 50, "zone_type": "dmz", "member_cidrs": ["192.168.1.0/24"]}
+        zone = {"name": "dmz", "trust_level": 50, "member_cidrs": ["192.168.1.0/24"]}
         result = get_firewall_static_routes([iface], [zone])
         assert result[0]["nexthop"] == "172.16.0.1"
 
@@ -341,7 +328,6 @@ class TestGetFirewallStaticRoutes:
         zone = {
             "name": "internal",
             "trust_level": 100,
-            "zone_type": "internal",
             "member_cidrs": ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"],
         }
         result = get_firewall_static_routes([iface], [zone])
@@ -355,8 +341,8 @@ class TestGetFirewallStaticRoutes:
             _make_fw_interface(name="eth0.20", zone_name="dmz", ip_addr="10.0.1.1/30", ns_name="VRF-B"),
         ]
         zones = [
-            {"name": "internal", "trust_level": 100, "zone_type": "internal", "member_cidrs": ["10.10.0.0/24"]},
-            {"name": "dmz", "trust_level": 50, "zone_type": "dmz", "member_cidrs": ["192.168.0.0/24"]},
+            {"name": "internal", "trust_level": 100, "member_cidrs": ["10.10.0.0/24"]},
+            {"name": "dmz", "trust_level": 50, "member_cidrs": ["192.168.0.0/24"]},
         ]
         result = get_firewall_static_routes(ifaces, zones)
         assert len(result) == 2
@@ -369,8 +355,8 @@ class TestGetFirewallStaticRoutes:
             _make_fw_interface(name="eth0.10", zone_name="internal", ip_addr="10.0.0.1/30", ns_name="VRF-A"),
         ]
         zones = [
-            {"name": "internal", "trust_level": 100, "zone_type": "internal", "member_cidrs": ["10.10.1.0/24"]},
-            {"name": "external", "trust_level": 0, "zone_type": "external", "member_cidrs": ["10.20.1.0/24"]},
+            {"name": "internal", "trust_level": 100, "member_cidrs": ["10.10.1.0/24"]},
+            {"name": "external", "trust_level": 0, "member_cidrs": ["10.20.1.0/24"]},
         ]
         result = get_firewall_static_routes(ifaces, zones)
         # Both VRF-A — sorted by destination
@@ -382,13 +368,13 @@ class TestGetFirewallStaticRoutes:
             "security_zone": {"name": "internal"},
             "ip_address": {"address": "not-an-ip", "ip_namespace": {"name": "VRF-INTERNAL"}},
         }
-        zone = {"name": "internal", "trust_level": 100, "zone_type": "internal", "member_cidrs": ["10.0.0.0/8"]}
+        zone = {"name": "internal", "trust_level": 100, "member_cidrs": ["10.0.0.0/8"]}
         result = get_firewall_static_routes([iface], [zone])
         assert result == []
 
     def test_zone_not_found_in_lookup_skips_interface(self) -> None:
         iface = _make_fw_interface(zone_name="nonexistent-zone")
-        zone = {"name": "internal", "trust_level": 100, "zone_type": "internal", "member_cidrs": ["10.0.0.0/8"]}
+        zone = {"name": "internal", "trust_level": 100, "member_cidrs": ["10.0.0.0/8"]}
         result = get_firewall_static_routes([iface], [zone])
         assert result == []
 
@@ -497,6 +483,30 @@ class TestGetVrfDefaultGateways:
 # ===========================================================================
 # get_zone_policies()
 # ===========================================================================
+
+
+class TestGetZonePoliciesDefaultAction:
+    def test_default_permit_adds_a_catch_all_for_the_policys_segment(self) -> None:
+        """Unmatched traffic from the policy's segment passes; the table still ends in deny."""
+        policy = {
+            **_make_policy(name="seg-web-egress", default_action="permit", rules=[_make_rule()]),
+            "segment": {**_make_segment_with_prefix("10.1.0.0/24"), "security_zone": {"name": "web"}},
+        }
+        rules = get_zone_policies([policy])[0]["rules"]
+        catch_all = rules[-2]
+        assert (catch_all["name"], catch_all["action"], catch_all["src"], catch_all["src_zone"], catch_all["dst"]) == (
+            "seg-web-egress-default-permit",
+            "permit",
+            "10.1.0.0/24",
+            "web",
+            None,
+        )
+        assert rules[-1]["name"] == "implicit-deny-all"
+
+    def test_default_deny_adds_nothing_before_the_implicit_deny(self) -> None:
+        """Deny is what the implicit deny-all already does."""
+        rules = get_zone_policies([_make_policy(rules=[_make_rule()])])[0]["rules"]
+        assert [rule["name"] for rule in rules] == ["rule-10", "implicit-deny-all"]
 
 
 class TestGetZonePolicies:
@@ -788,8 +798,9 @@ def _make_pbr_activation(
     }
     if environment is not None:
         seg["environment"] = environment
+    # The segment's own policy, as a 0/1-item list; None leaves it unqueried.
     if security_policies is not None:
-        seg["security_policies"] = security_policies
+        seg["security_policy"] = security_policies[0] if security_policies else None
     return {"vlan_id": vlan_id, "segment": seg}
 
 
@@ -889,7 +900,7 @@ class TestGetCustomerPbrRules:
         assert get_customer_pbr_rules(activations, []) == []
 
     def test_segment_without_security_policies_key_is_skipped(self) -> None:
-        """Missing 'security_policies' key (not queried) means no PBR rule — same
+        """Missing 'security_policy' key (not queried) means no PBR rule — same
         gate get_acls() uses."""
         activations = [_make_pbr_activation(security_policies=None)]
         contexts = [_make_context_leg()]
@@ -932,7 +943,7 @@ class TestGetCustomerPbrRules:
                     "name": "seg-1",
                     "customer_name": "web",
                     "customer_deployments": [{"id": "dep-a"}, {"id": "dep-b"}],
-                    "security_policies": [],
+                    "security_policy": None,
                 },
             }
         ]
@@ -953,7 +964,7 @@ class TestGetCustomerPbrRules:
                     "customer_name": "web",
                     "owner": {"id": "dep-a"},
                     "customer_deployments": [],
-                    "security_policies": [],
+                    "security_policy": None,
                 },
             }
         ]
@@ -1034,9 +1045,10 @@ class TestGetCustomerPbrRules:
 
     def test_own_and_inbound_bypasses_merge_without_duplicates(self) -> None:
         activations = self._with_inbound(self._inbound(src_prefix="10.0.2.0/24"))
-        activations[0]["segment"]["security_policies"] = [
-            {"enabled": True, "rules": [_make_pbr_rule(dst_prefix="10.0.2.0/24")]}
-        ]
+        activations[0]["segment"]["security_policy"] = {
+            "enabled": True,
+            "rules": [_make_pbr_rule(dst_prefix="10.0.2.0/24")],
+        }
         result = get_customer_pbr_rules(activations, [_make_context_leg()])
         assert result[0]["bypass_prefixes"] == ["10.0.2.0/24"]
 
@@ -1086,14 +1098,11 @@ def _make_fw_context_interface(
     context_name: str = "dc10-shared",
     vlan_id: int = 3000,
     tenant_name: str | None = None,
-    tenant_id: str | None = None,
     served: list[dict] | None = None,
 ) -> dict:
     tenant: dict = {}
     if tenant_name:
         tenant["name"] = tenant_name
-    if tenant_id:
-        tenant["id"] = tenant_id
     cap = {
         "typename": "ManagedFirewallContext",
         "id": context_id,
@@ -1139,14 +1148,10 @@ class TestGetFirewallContexts:
         result = get_firewall_contexts([_make_fw_context_interface(tenant_name="C005-P-DC10")])
         assert result[0]["tenant_name"] == "C005-P-DC10"
 
-    def test_context_carries_its_id_and_tenant_id(self) -> None:
-        """place_policies_in_contexts keys contexts by id and matches tenants by id."""
-        result = get_firewall_contexts([_make_fw_context_interface(context_id="ctx-9", tenant_id="dep-c005")])
+    def test_context_carries_its_id(self) -> None:
+        """place_policies_in_contexts keys its tables by context id."""
+        result = get_firewall_contexts([_make_fw_context_interface(context_id="ctx-9")])
         assert result[0]["id"] == "ctx-9"
-        assert result[0]["tenant_id"] == "dep-c005"
-
-    def test_shared_context_has_no_tenant_id(self) -> None:
-        assert get_firewall_contexts([_make_fw_context_interface()])[0]["tenant_id"] is None
 
     def test_context_without_ip_still_extracted(self) -> None:
         """inline connectivity_mode contexts have no dedicated p2p IP."""
@@ -1161,13 +1166,17 @@ class TestGetFirewallContexts:
         ]
         assert len(get_firewall_contexts(ifaces)) == 1
 
-    def test_served_deployment_ids_collected(self) -> None:
-        """Entries without an id (a partial query response) are skipped."""
-        iface = _make_fw_context_interface(served=[{"id": "dep-a"}, {}, {"id": "dep-b"}])
-        assert get_firewall_contexts([iface])[0]["served_deployment_ids"] == ["dep-a", "dep-b"]
+    def test_segments_of_served_deployments_collected(self) -> None:
+        """Every segment of every served deployment, once; entries without an id are skipped."""
+        served = [
+            {"id": "dep-a", "network_segments": [{"id": "s1"}, {}, {"id": "s2"}]},
+            {"id": "dep-b", "network_segments": [{"id": "s2"}, {"id": "s3"}]},
+        ]
+        iface = _make_fw_context_interface(served=served)
+        assert [seg["id"] for seg in get_firewall_contexts([iface])[0]["segments"]] == ["s1", "s2", "s3"]
 
-    def test_no_served_deployments_yields_empty_list(self) -> None:
-        assert get_firewall_contexts([_make_fw_context_interface()])[0]["served_deployment_ids"] == []
+    def test_no_served_deployments_yields_no_segments(self) -> None:
+        assert get_firewall_contexts([_make_fw_context_interface()])[0]["segments"] == []
 
     def test_multiple_contexts_sorted_by_name(self) -> None:
         ifaces = [
@@ -1182,157 +1191,142 @@ class TestGetFirewallContexts:
 # place_policies_in_contexts()
 # ===========================================================================
 
-_SHARED_CTX = {"id": "ctx-shared", "tenant_id": None}
-_C005_CTX = {"id": "ctx-c005", "tenant_id": "dep-c005"}
-_C006_CTX = {"id": "ctx-c006", "tenant_id": "dep-c006"}
+
+def _placement_rule(rule_id: str, src: str, dst: str | None = None, index: int = 10) -> dict:
+    """A rule of ``src``'s policy, as SecurityPolicyRuleFields returns it (cleaned)."""
+    return {
+        "id": rule_id,
+        "index": index,
+        "name": rule_id,
+        "action": "permit",
+        "source_segment": {"id": src},
+        "destination_segment": {"id": dst} if dst else None,
+    }
 
 
-def _vxlan_seg(seg_id: str, *deployment_ids: str) -> dict:
-    """Segment as a rule references it; deployment links only when given."""
-    seg: dict = {"id": seg_id, "name": seg_id}
-    if deployment_ids:
-        seg["customer_deployments"] = [{"id": d} for d in deployment_ids]
-    return seg
+def _segments(*rules: dict, ids: tuple[str, ...] = (), policy_names: dict[str, str] | None = None) -> dict[str, dict]:
+    """Segment id -> the segment as SegmentRulesFields returns it (cleaned):
+    its own policy holding the rules whose source it is, and the rules into
+    it carrying their policy. ``ids`` adds segments without rules."""
+    names = policy_names or {}
+    segments: dict[str, dict] = {}
+
+    def _segment(seg_id: str) -> dict:
+        return segments.setdefault(seg_id, {"id": seg_id, "security_policy": None, "inbound_rules": []})
+
+    def _header(seg_id: str) -> dict:
+        name = names.get(seg_id, f"seg-{seg_id}-egress")
+        return {"id": f"pol-{seg_id}", "name": name, "enabled": True, "segment": {"id": seg_id}}
+
+    for seg_id in ids:
+        _segment(seg_id)
+    for rule in rules:
+        src = rule["source_segment"]["id"]
+        owner = _segment(src)
+        if owner["security_policy"] is None:
+            owner["security_policy"] = {**_header(src), "rules": []}
+        owner["security_policy"]["rules"].append(rule)
+        dst = (rule.get("destination_segment") or {}).get("id")
+        if dst:
+            _segment(dst)["inbound_rules"].append({**rule, "policy": _header(src)})
+    return segments
 
 
-def _ctx_rule(name: str, src: dict | None, dst: dict | None) -> dict:
-    return {"name": name, "action": "permit", "source_segment": src, "destination_segment": dst}
+def _ctx(ctx_id: str, *segments: dict) -> dict:
+    return {"id": ctx_id, "segments": list(segments)}
 
 
-def _ctx_policy(name: str, *rules: dict) -> dict:
-    return {"name": name, "enabled": True, "rules": list(rules)}
-
-
-def _rule_names(policies: list[dict]) -> list[str]:
-    return [rule["name"] for policy in policies for rule in policy["rules"]]
+def _table(policies: list[dict]) -> list[tuple[str, list[str]]]:
+    return [(policy["name"], [rule["name"] for rule in policy["rules"]]) for policy in policies]
 
 
 class TestPlacePoliciesInContexts:
-    """A rule sits in the context its segments' traffic is redirected to."""
+    """A firewall enforces the rules of the segments it serves, per table."""
 
-    def test_no_policies_returns_empty(self) -> None:
-        assert place_policies_in_contexts(None, [_SHARED_CTX]) == ([], {})
+    def test_nothing_served_returns_empty(self) -> None:
+        assert place_policies_in_contexts([], []) == ([], {})
 
-    def test_without_contexts_everything_stays_in_root(self) -> None:
-        policies = [_ctx_policy("p1", _ctx_rule("r1", _vxlan_seg("s1", "dep-c005"), None))]
-        root, by_ctx = place_policies_in_contexts(policies, [])
-        assert root == policies
+    def test_without_contexts_the_carried_segments_rules_are_root(self) -> None:
+        """Its egress rules and the rules into it (ingress leg), policies sorted by name."""
+        segs = _segments(_placement_rule("out", "s1", "s2"), _placement_rule("in", "s3", "s1"))
+        root, by_ctx = place_policies_in_contexts([], [segs["s1"]])
+        assert _table(root) == [("seg-s1-egress", ["out"]), ("seg-s3-egress", ["in"])]
         assert by_ctx == {}
 
-    def test_rule_goes_to_the_dedicated_context_of_its_segment(self) -> None:
-        policies = [_ctx_policy("p1", _ctx_rule("r1", _vxlan_seg("s1", "dep-c005"), _vxlan_seg("s2", "dep-c005")))]
-        root, by_ctx = place_policies_in_contexts(policies, [_SHARED_CTX, _C005_CTX])
-        assert root == []
-        assert list(by_ctx) == ["ctx-c005"]
-        assert _rule_names(by_ctx["ctx-c005"]) == ["r1"]
+    def test_rules_of_segments_served_nowhere_here_are_left_out(self) -> None:
+        segs = _segments(_placement_rule("own", "s1"), _placement_rule("elsewhere", "s9", "s8"))
+        root, _ = place_policies_in_contexts([], [segs["s1"]])
+        assert _table(root) == [("seg-s1-egress", ["own"])]
 
-    def test_segment_without_dedicated_context_falls_back_to_shared(self) -> None:
-        policies = [_ctx_policy("p1", _ctx_rule("r1", _vxlan_seg("s1", "dep-other"), _vxlan_seg("s2")))]
-        root, by_ctx = place_policies_in_contexts(policies, [_SHARED_CTX, _C005_CTX])
-        assert root == []
-        assert _rule_names(by_ctx["ctx-shared"]) == ["r1"]
+    def test_without_contexts_a_bound_zone_counts_as_served(self) -> None:
+        """A transit firewall routes a bound zone's CIDRs, so rules of that zone's segments stay."""
+        segs = _segments(_placement_rule("zone-rule", "s2", "s9"), ids=("leg",))
+        carried = {**segs["leg"], "security_zone": {"name": "dmz", "network_segments": [segs["s2"]]}}
+        root, _ = place_policies_in_contexts([], [carried])
+        assert _table(root) == [("seg-s2-egress", ["zone-rule"])]
 
-    def test_cross_context_rule_is_repeated_as_the_ingress_leg(self) -> None:
+    def test_with_contexts_a_bound_zone_does_not_count(self) -> None:
+        """The zone's other segments terminate on contexts (here or on another firewall)."""
+        segs = _segments(_placement_rule("zone-rule", "s2", "s9"), ids=("leg",))
+        carried = {**segs["leg"], "security_zone": {"name": "dmz", "network_segments": [segs["s2"]]}}
+        root, by_ctx = place_policies_in_contexts([_ctx("ctx-a")], [carried])
+        assert root == []
+        assert by_ctx == {"ctx-a": []}
+
+    def test_context_gets_its_segments_egress_and_ingress_rules(self) -> None:
+        segs = _segments(_placement_rule("out", "s1", "s2"), _placement_rule("in", "s3", "s1"))
+        root, by_ctx = place_policies_in_contexts([_ctx("ctx-a", segs["s1"])], [])
+        assert root == []
+        assert _table(by_ctx["ctx-a"]) == [("seg-s1-egress", ["out"]), ("seg-s3-egress", ["in"])]
+
+    def test_cross_context_rule_is_in_both_contexts(self) -> None:
         """Between two tenants the flow crosses both contexts, each denying by default."""
-        rule = _ctx_rule("c005-to-c006", _vxlan_seg("s1", "dep-c005"), _vxlan_seg("s2", "dep-c006"))
-        root, by_ctx = place_policies_in_contexts([_ctx_policy("p1", rule)], [_C005_CTX, _C006_CTX])
+        segs = _segments(_placement_rule("a-to-b", "s1", "s2"))
+        _, by_ctx = place_policies_in_contexts([_ctx("ctx-a", segs["s1"]), _ctx("ctx-b", segs["s2"])], [])
+        assert _table(by_ctx["ctx-a"]) == [("seg-s1-egress", ["a-to-b"])]
+        assert _table(by_ctx["ctx-b"]) == [("seg-s1-egress", ["a-to-b"])]
+
+    def test_rule_between_two_served_segments_appears_once(self) -> None:
+        """Reached as s1's egress rule and as s2's inbound rule: de-duplicated by id."""
+        segs = _segments(_placement_rule("a-to-b", "s1", "s2"))
+        _, by_ctx = place_policies_in_contexts([_ctx("ctx-a", segs["s1"], segs["s2"])], [])
+        assert _table(by_ctx["ctx-a"]) == [("seg-s1-egress", ["a-to-b"])]
+
+    def test_carried_segment_served_by_a_context_is_not_repeated_in_root(self) -> None:
+        segs = _segments(_placement_rule("r1", "s1"))
+        root, by_ctx = place_policies_in_contexts([_ctx("ctx-a", segs["s1"])], [segs["s1"]])
         assert root == []
-        assert _rule_names(by_ctx["ctx-c005"]) == ["c005-to-c006"]
-        assert _rule_names(by_ctx["ctx-c006"]) == ["c005-to-c006"]
+        assert _table(by_ctx["ctx-a"]) == [("seg-s1-egress", ["r1"])]
 
-    def test_rule_without_segments_stays_in_root(self) -> None:
-        """A prefix-only rule (interconnect) has no segment a context could serve."""
-        policies = [_ctx_policy("p1", _ctx_rule("prefix-only", None, None))]
-        root, by_ctx = place_policies_in_contexts(policies, [_SHARED_CTX, _C005_CTX])
-        assert _rule_names(root) == ["prefix-only"]
-        assert by_ctx == {}
+    def test_carried_segment_no_context_serves_stays_in_root(self) -> None:
+        segs = _segments(_placement_rule("served", "s1"), _placement_rule("carried", "s2"))
+        root, by_ctx = place_policies_in_contexts([_ctx("ctx-a", segs["s1"])], [segs["s2"]])
+        assert _table(root) == [("seg-s2-egress", ["carried"])]
+        assert _table(by_ctx["ctx-a"]) == [("seg-s1-egress", ["served"])]
 
-    def test_segment_unserved_without_shared_context_stays_in_root(self) -> None:
-        policies = [_ctx_policy("p1", _ctx_rule("r1", _vxlan_seg("s1", "dep-other"), None))]
-        root, by_ctx = place_policies_in_contexts(policies, [_C005_CTX])
-        assert _rule_names(root) == ["r1"]
-        assert by_ctx == {}
+    def test_policy_order_is_by_name_not_input_order(self) -> None:
+        """The rule table is numbered across policies, so their order must be stable."""
+        segs = _segments(
+            _placement_rule("r-b", "s1"), _placement_rule("r-a", "s2"), policy_names={"s1": "b-pol", "s2": "a-pol"}
+        )
+        root, _ = place_policies_in_contexts([], [segs["s1"], segs["s2"]])
+        assert _table(root) == [("a-pol", ["r-a"]), ("b-pol", ["r-b"])]
 
-    def test_policy_is_split_between_root_and_context(self) -> None:
-        policies = [
-            _ctx_policy(
-                "p1",
-                _ctx_rule("in-ctx", _vxlan_seg("s1", "dep-c005"), None),
-                _ctx_rule("prefix-only", None, None),
-            )
-        ]
-        root, by_ctx = place_policies_in_contexts(policies, [_C005_CTX])
-        assert _rule_names(root) == ["prefix-only"]
-        assert _rule_names(by_ctx["ctx-c005"]) == ["in-ctx"]
-        assert root[0]["name"] == by_ctx["ctx-c005"][0]["name"] == "p1"
+    def test_ruleless_policy_is_kept(self) -> None:
+        segment = {"id": "s1", "security_policy": {"id": "p", "name": "empty", "rules": []}, "inbound_rules": []}
+        root, _ = place_policies_in_contexts([], [segment])
+        assert _table(root) == [("empty", [])]
 
-    def test_ruleless_policy_stays_in_root(self) -> None:
-        root, by_ctx = place_policies_in_contexts([_ctx_policy("empty")], [_SHARED_CTX])
-        assert [p["name"] for p in root] == ["empty"]
-        assert by_ctx == {}
-
-    def test_segments_argument_supplies_missing_deployment_links(self) -> None:
-        """The rule's copy of a segment lacks its deployments; the activation's copy has them."""
-        policies = [_ctx_policy("p1", _ctx_rule("r1", _vxlan_seg("s1"), None))]
-        activation_seg = {"id": "s1", "customer_deployment": {"id": "dep-c005"}}
-        root, by_ctx = place_policies_in_contexts(policies, [_SHARED_CTX, _C005_CTX], segments=[activation_seg])
+    def test_policy_whose_rules_are_all_in_a_context_leaves_root(self) -> None:
+        segs = _segments(_placement_rule("a-to-b", "s1", "s2"))
+        root, _ = place_policies_in_contexts([_ctx("ctx-a", segs["s1"])], [segs["s2"]])
         assert root == []
-        assert list(by_ctx) == ["ctx-c005"]
 
-    def test_served_deployment_places_rule_in_the_shared_context(self) -> None:
-        """A shared-context customer has no tenant link; served_deployments names it."""
-        shared = {**_SHARED_CTX, "served_deployment_ids": ["dep-c007"]}
-        policies = [_ctx_policy("p1", _ctx_rule("r1", _vxlan_seg("s1", "dep-c007"), None))]
-        root, by_ctx = place_policies_in_contexts(policies, [shared, _C005_CTX])
-        assert root == []
-        assert _rule_names(by_ctx["ctx-shared"]) == ["r1"]
-
-    def test_rule_of_another_firewalls_deployments_is_left_out(self) -> None:
-        """Once linked, an unserved deployment no longer falls back to the shared context."""
-        shared = {**_SHARED_CTX, "served_deployment_ids": ["dep-c007"]}
-        rule = _ctx_rule("other-dc", _vxlan_seg("s1", "dep-dc12"), _vxlan_seg("s2", "dep-dc12"))
-        root, by_ctx = place_policies_in_contexts([_ctx_policy("p1", rule)], [shared])
-        assert root == []
-        assert by_ctx == {}
-
-    def test_rule_toward_another_firewall_keeps_only_the_local_leg(self) -> None:
-        """Source here, destination served elsewhere: only the egress copy is local."""
-        shared = {**_SHARED_CTX, "served_deployment_ids": ["dep-c007"]}
-        rule = _ctx_rule("to-dc12", _vxlan_seg("s1", "dep-c007"), _vxlan_seg("s2", "dep-dc12"))
-        root, by_ctx = place_policies_in_contexts([_ctx_policy("p1", rule)], [shared])
-        assert root == []
-        assert list(by_ctx) == ["ctx-shared"]
-
-    def test_segment_without_deployment_still_uses_the_shared_context_once_linked(self) -> None:
-        shared = {**_SHARED_CTX, "served_deployment_ids": ["dep-c007"]}
-        policies = [_ctx_policy("p1", _ctx_rule("infra", _vxlan_seg("s1"), None))]
-        root, by_ctx = place_policies_in_contexts(policies, [shared])
-        assert root == []
-        assert _rule_names(by_ctx["ctx-shared"]) == ["infra"]
-
-    def test_tenant_link_still_counts_when_another_context_is_linked(self) -> None:
-        """A dedicated context whose deployment has not re-run yet keeps its rules."""
-        shared = {**_SHARED_CTX, "served_deployment_ids": ["dep-c007"]}
-        policies = [_ctx_policy("p1", _ctx_rule("r1", _vxlan_seg("s1", "dep-c005"), None))]
-        root, by_ctx = place_policies_in_contexts(policies, [shared, _C005_CTX])
-        assert root == []
-        assert list(by_ctx) == ["ctx-c005"]
-
-    def test_policy_whose_rules_all_terminate_elsewhere_is_dropped(self) -> None:
-        shared = {**_SHARED_CTX, "served_deployment_ids": ["dep-c007"]}
-        policies = [
-            _ctx_policy("local", _ctx_rule("r1", _vxlan_seg("s1", "dep-c007"), None)),
-            _ctx_policy("remote", _ctx_rule("r2", _vxlan_seg("s2", "dep-dc12"), None)),
-        ]
-        root, by_ctx = place_policies_in_contexts(policies, [shared])
-        assert root == []
-        assert [p["name"] for p in by_ctx["ctx-shared"]] == ["local"]
-
-    def test_input_policies_are_not_mutated(self) -> None:
-        rule = _ctx_rule("r1", _vxlan_seg("s1", "dep-c005"), None)
-        policies = [_ctx_policy("p1", rule, _ctx_rule("prefix-only", None, None))]
-        place_policies_in_contexts(policies, [_C005_CTX])
-        assert _rule_names(policies) == ["r1", "prefix-only"]
+    def test_input_segments_are_not_mutated(self) -> None:
+        segs = _segments(_placement_rule("r1", "s1", "s2"), _placement_rule("r2", "s2", "s1"))
+        place_policies_in_contexts([_ctx("ctx-a", segs["s1"])], [segs["s2"]])
+        assert [rule["id"] for rule in segs["s1"]["security_policy"]["rules"]] == ["r1"]
+        assert [rule["id"] for rule in segs["s1"]["inbound_rules"]] == ["r2"]
 
 
 # ===========================================================================

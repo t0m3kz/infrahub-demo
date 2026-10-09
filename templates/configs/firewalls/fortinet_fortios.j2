@@ -1,5 +1,9 @@
 {#- Fortinet FortiOS — zone-based firewall configuration -#}
-{%- macro security_policies(policies) %}
+{#- An HA pair terminating a segment inline owns its gateway (virtual_ip): config
+    sync gives both members that one interface address. -#}
+{#- A VDOM's rules match on its one hairpin interface (intf); the root
+    table's on the zones its interfaces belong to. -#}
+{%- macro security_policies(policies, intf=none) %}
 #
 # --- Service Objects (unique protocol/port combinations referenced below) ---
 config firewall service custom
@@ -30,8 +34,8 @@ config firewall policy
 {%- endif %}
     edit {{ rule.seq }}
         set name "{{ rule.name }}"
-        set srcintf "{{ rule.src_zone or 'any' }}"
-        set dstintf "{{ rule.dst_zone or 'any' }}"
+        set srcintf "{{ intf or rule.src_zone or 'any' }}"
+        set dstintf "{{ intf or rule.dst_zone or 'any' }}"
         set srcaddr "{{ rule.src or 'all' }}"
         set dstaddr "{{ rule.dst or 'all' }}"
         set action {{ 'accept' if rule.action == 'permit' else 'deny' }}
@@ -42,7 +46,8 @@ config firewall policy
 {%- endif %}
 {%- if rule.security_profile %}
         set utm-status enable
-        set av-profile "{{ rule.security_profile }}"
+        set profile-type group
+        set profile-group "{{ rule.security_profile }}"
 {%- endif %}
 {%- if rule.description %}
         set comments "{{ rule.description }}"
@@ -51,6 +56,39 @@ config firewall policy
 {%- endfor %}
 {%- endfor %}
 end
+{%- endmacro -%}
+{#- One address object per CIDR a table references: a policy's srcaddr/dstaddr
+    must name an existing object. -#}
+{%- macro address_objects(cidrs, title) %}
+{%- set v4 = [] %}{%- set v6 = [] %}
+{%- for cidr in cidrs %}{%- set _ = (v6 if ':' in cidr else v4).append(cidr) %}{%- endfor %}
+#
+# --- Address Objects ({{ title }}) ---
+{%- if v4 %}
+config firewall address
+{%- for cidr in v4 %}
+    edit "{{ cidr }}"
+        set subnet {{ cidr.split('/')[0] }} {{ cidr.split('/')[1] | int | cidr_to_netmask }}
+    next
+{%- endfor %}
+end
+{%- endif %}
+{%- if v6 %}
+config firewall address6
+{%- for cidr in v6 %}
+    edit "{{ cidr }}"
+        set ip6 {{ cidr }}
+    next
+{%- endfor %}
+end
+{%- endif %}
+{%- endmacro -%}
+{%- macro rule_cidrs(policies, known=[]) -%}
+{%- set found = [] %}
+{%- for policy in policies %}{%- for rule in policy.rules %}{%- for cidr in (rule.src, rule.dst) %}
+{%- if cidr and cidr not in known and cidr not in found %}{%- set _ = found.append(cidr) %}{%- endif %}
+{%- endfor %}{%- endfor %}{%- endfor %}
+{{- found | join(',') -}}
 {%- endmacro -%}
 config system global
     set hostname "{{ name }}"
@@ -69,10 +107,10 @@ config system interface
     edit "{{ iface.name }}"
 {%- endif %}
 {%- if iface.ip_address %}
-{%- if ':' in iface.ip_address.address %}
-        set ip6-address {{ iface.ip_address.address }}
+{%- if ':' in (iface.virtual_ip or iface.ip_address.address) %}
+        set ip6-address {{ (iface.virtual_ip or iface.ip_address.address) }}
 {%- else %}
-        set ip {{ iface.ip_address.address }}
+        set ip {{ (iface.virtual_ip or iface.ip_address.address) }}
 {%- endif %}
 {%- endif %}
         set allowaccess ping https ssh
@@ -86,20 +124,30 @@ config system interface
     next
 {%- endfor %}
 end
-{%- endif %}
-{%- if zones %}
+{#- The root table's srcintf/dstintf are zone names: each zone groups the
+    interfaces bound to it. #}
+{%- set zone_members = {} %}
+{%- for iface in fw_interfaces if iface.security_zone %}
+{%- set ifname = (iface.parent_interface.name + '.' + iface.vlan_id | string) if (iface.vlan_id and iface.parent_interface) else iface.name %}
+{%- set _ = zone_members.setdefault(iface.security_zone.name, []).append(ifname) %}
+{%- endfor %}
+{%- if zone_members %}
 #
-# --- Address Objects (one per zone member CIDR) ---
-config firewall address
-{%- for zone in zones %}
-{%- for cidr in zone.member_cidrs %}
-    edit "{{ cidr }}"
-        set subnet {{ cidr | replace('/', ' ') }}
-        set comment "Zone: {{ zone.name }}"
+# --- Zones ---
+config system zone
+{%- for zone_name, members in zone_members.items() %}
+    edit "{{ zone_name }}"
+        set interface {% for member in members %}"{{ member }}"{{ ' ' if not loop.last }}{% endfor %}
     next
 {%- endfor %}
-{%- endfor %}
 end
+{%- endif %}
+{%- endif %}
+{%- set zone_cidrs = [] %}
+{%- for zone in zones or [] %}{%- for cidr in zone.member_cidrs %}{%- if cidr not in zone_cidrs %}{%- set _ = zone_cidrs.append(cidr) %}{%- endif %}{%- endfor %}{%- endfor %}
+{%- set root_rule_cidrs = rule_cidrs(zone_policies or [], zone_cidrs) %}
+{%- set root_cidrs = zone_cidrs + (root_rule_cidrs.split(',') if root_rule_cidrs else []) %}
+{%- if root_cidrs %}{{ address_objects(root_cidrs, 'zone members and policy endpoints') }}
 {%- endif %}
 {%- if static_routes %}
 #
@@ -153,11 +201,15 @@ end
 {%- endif %}
 {%- endfor %}
 {%- for context in contexts if context.policies %}
+{%- set ctx_cidrs = rule_cidrs(context.policies) %}
+{%- set ctx_intf = (context.parent_interface.name + '.' + context.vlan_id | string) if (context.vlan_id and context.parent_interface.name) else none %}
 #
 # --- Security Policies in VDOM {{ context.name }} ---
 config vdom
     edit "{{ context.name }}"
-{{- security_policies(context.policies) }}
+{%- if ctx_cidrs %}{{ address_objects(ctx_cidrs.split(','), 'VDOM ' + context.name) }}
+{%- endif %}
+{{- security_policies(context.policies, ctx_intf) }}
     next
 end
 {%- endfor %}
@@ -172,9 +224,6 @@ config system ha
     set override {{ 'enable' if ha.preempt else 'disable' }}
 {%- if ha.ha_link %}
     set hbdev "{{ ha.ha_link }}" 50
-{%- endif %}
-{%- if ha.virtual_ip %}
-    set vcluster-id {{ ha.group_id }}
 {%- endif %}
 end
 #

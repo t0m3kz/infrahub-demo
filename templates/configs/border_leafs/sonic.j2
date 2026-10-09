@@ -60,6 +60,18 @@
   'NTP_SERVER': ntp_servers,
   'SYSLOG_SERVER': syslog_servers
 } -%}
+{#- HA-facing service ports (interface.mode == 'trunk') carry their
+    terminate_inline segments' VLANs tagged. Only added when present, so
+    border-leafs without one keep their table set. -#}
+{%- set vlan_members = {} -%}
+{%- for interface in interfaces if interface.mode == 'trunk' -%}
+{%- for vlan_id in interface.vlans -%}
+{%- set _ = vlan_members.update({'Vlan' ~ vlan_id ~ '|' ~ interface.name: {'tagging_mode': 'tagged'}}) -%}
+{%- endfor -%}
+{%- endfor -%}
+{%- if vlan_members -%}
+{%- set _ = configdb.update({'VLAN_MEMBER': vlan_members}) -%}
+{%- endif -%}
 {#- Per-table merge: MC-LAG contributes VLAN/VLAN_MEMBER/VLAN_INTERFACE
     entries that must not replace the tables built above. #}
 {%- for table, entries in (sonic_mlag | default({})).items() %}

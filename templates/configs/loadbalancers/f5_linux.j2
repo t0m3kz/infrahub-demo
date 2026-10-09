@@ -141,16 +141,21 @@ cm device-group {{ name }}_dg {
         {%- endif %}
     }
 }
-{%- if ha.virtual_ip %}
+{#- Floating self IP per VLAN whose segment the pair terminates inline: the
+    segment gateway, owned by the active unit (traffic-group-1). -#}
+{%- set floating = lb_interfaces | selectattr('virtual_ip') | list %}
+{%- if floating %}
 cm traffic-group traffic-group-1 {
-    ha-order { {{ ha.devices | join(' ') if ha.devices else name }} }
+    ha-order { {{ ha.members | join(' ') }} }
 }
-net self float_self {
-    address {{ ha.virtual_ip }}/24
+{%- for iface in floating %}
+net self {{ iface.name }}_float {
+    address {{ iface.virtual_ip }}
     allow-service default
     traffic-group traffic-group-1
-    vlan internal
+    vlan {{ iface.name }}
 }
+{%- endfor %}
 {%- endif %}
 #
 {%- endif %}

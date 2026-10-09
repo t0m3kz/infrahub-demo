@@ -1,11 +1,11 @@
+{%- import 'common/keepalived.j2' as keepalived -%}
 #
 # HAProxy Load Balancer Configuration
 # Device: {{ name }}
 # Type: {{ lb_type|default('software') }} Load Balancer
 # Scheme: {{ scheme|default('internal') }}
-# Management IP: {{ loadbalancer_config.management_ip }}
-# Device Role: {{ loadbalancer_config.device_role }}
-# Device Status: {{ loadbalancer_config.device_status }}
+# Management IP: {{ management_ip }}
+# Device Role: {{ device_role }}
 #
 
 # Global section
@@ -47,13 +47,13 @@ defaults
 
 # HAProxy Stats
 listen haproxy-stats
-    bind {{ loadbalancer_config.management_ip }}:{{ loadbalancer_config.stats_port }}
+    bind {{ management_ip }}:8404
     mode http
     stats enable
     stats uri /stats
     stats refresh 30s
     stats admin if TRUE
-    acl network_allowed src 127.0.0.1 {{ loadbalancer_config.management_ip }}
+    acl network_allowed src 127.0.0.1 {{ management_ip }}
     acl network_allowed src 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
     http-request deny unless network_allowed
 
@@ -123,4 +123,5 @@ peers haproxy_cluster
 {%- for peer_name in ha.devices %}
     peer {{ peer_name }} {{ peer_name }}:1024
 {%- endfor %}
+{{- keepalived.vrrp_instances(lb_interfaces, ha) }}
 {%- endif %}

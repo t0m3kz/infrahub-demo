@@ -2,11 +2,13 @@ from typing import Any
 
 from transforms.common import BaseDeviceTransform
 from transforms.helpers.addressing import host_ip, management_ip
-from transforms.helpers.ha import get_ha
+from transforms.helpers.ha import get_ha, inline_addresses
 from transforms.helpers.loadbalancer_pbr import pool_interfaces
 
 
-def _build_lb_interfaces(interfaces: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _build_lb_interfaces(interfaces: list[dict[str, Any]], ha: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """Addressed interfaces, with the HA pair's virtual_ip/standby_ip on a
+    segment it terminates inline (transforms.helpers.ha.inline_addresses)."""
     lb_ifaces = []
     for iface in interfaces:
         ip_obj = iface.get("ip_address") or {}
@@ -20,6 +22,7 @@ def _build_lb_interfaces(interfaces: list[dict[str, Any]]) -> list[dict[str, Any
                 "role": iface.get("role"),
                 "ip_address": ip_obj,
                 "parent_interface": iface.get("parent_interface"),
+                **inline_addresses(iface.get("interface_capabilities"), ha),
             }
         )
     return lb_ifaces
@@ -98,7 +101,8 @@ class LoadBalancer(BaseDeviceTransform):
             return self._no_platform_config(device)
 
         interfaces = device.get("interfaces") or []
-        lb_interfaces = _build_lb_interfaces(interfaces)
+        ha = get_ha(device.get("capabilities") or [], interfaces, device.get("name"))
+        lb_interfaces = _build_lb_interfaces(interfaces, ha)
         vips = _build_vips_from_interfaces(interfaces)
         config = self._build_config(device, platform_name)
         config.update(
@@ -107,7 +111,7 @@ class LoadBalancer(BaseDeviceTransform):
                 "management_ip": management_ip(lb_interfaces),
                 "vips": vips,
                 "lb_nodes": _lb_nodes(vips),
-                "ha": get_ha(device.get("capabilities") or [], interfaces),
+                "ha": ha,
             }
         )
         return self._render(platform_name, config)

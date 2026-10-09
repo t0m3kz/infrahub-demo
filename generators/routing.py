@@ -705,12 +705,15 @@ class RoutingMixin:
         """Upsert the L2VPN/EVPN RoutingBGPAddressFamily node and return its ID.
 
         This node must exist before any BGP process or peering can reference it
-        via the address_families relationship. The DC1 static demo creates it via
-        YAML load; generator-driven topologies need it created here.
+        via the address_families relationship. data/bootstrap/
+        15_bgp_address_families.yml provides it on main; creating it here is
+        only a fallback for a branch cut from a main without bootstrap — two
+        such branches each create their own and the second merge fails
+        (uniqueness [afi, safi]).
 
         Never tracked: it is one global node every fabric run in every DC
-        references (bootstrap data normally provides it), so it belongs to no
-        run — a tracked one is deleted by whichever run stops reaching it.
+        references, so it belongs to no run — a tracked one is deleted by
+        whichever run stops reaching it.
         """
         try:
             existing = await self.client.filters(

@@ -115,8 +115,451 @@
                               "trust_level": {
                                 "value": 100
                               },
-                              "zone_type": {
-                                "value": "internal"
+                              "network_segments": {
+                                "edges": [
+                                  {
+                                    "node": {
+                                      "id": "seg-10-0-1-0-24",
+                                      "security_policy": {
+                                        "node": {
+                                          "id": "policy-internal-to-dmz",
+                                          "name": {
+                                            "value": "internal-to-dmz"
+                                          },
+                                          "enabled": {
+                                            "value": true
+                                          },
+                                          "default_action": {
+                                            "value": "deny"
+                                          },
+                                          "segment": {
+                                            "node": {
+                                              "id": "seg-10-0-1-0-24",
+                                              "name": {
+                                                "value": "seg-10-0-1-0-24"
+                                              }
+                                            }
+                                          },
+                                          "rules": {
+                                            "edges": [
+                                              {
+                                                "node": {
+                                                  "id": "rule-internal-to-dmz-allow-any",
+                                                  "index": {
+                                                    "value": 10
+                                                  },
+                                                  "name": {
+                                                    "value": "allow-any"
+                                                  },
+                                                  "action": {
+                                                    "value": "permit"
+                                                  },
+                                                  "protocol": {
+                                                    "value": "any"
+                                                  },
+                                                  "port_start": {
+                                                    "value": null
+                                                  },
+                                                  "port_end": {
+                                                    "value": null
+                                                  },
+                                                  "log": {
+                                                    "value": false
+                                                  },
+                                                  "disabled": {
+                                                    "value": false
+                                                  },
+                                                  "description": {
+                                                    "value": "Allow all from Internal to DMZ"
+                                                  },
+                                                  "apply_on_switch": {
+                                                    "value": false
+                                                  },
+                                                  "source_segment": {
+                                                    "node": {
+                                                      "id": "seg-10-0-1-0-24",
+                                                      "__typename": "ManagedVlanSegment",
+                                                      "name": {
+                                                        "value": "seg-10-0-1-0-24"
+                                                      },
+                                                      "security_zone": {
+                                                        "node": {
+                                                          "name": {
+                                                            "value": "internal"
+                                                          }
+                                                        }
+                                                      },
+                                                      "security_tag": {
+                                                        "node": null
+                                                      },
+                                                      "gateway": {
+                                                        "node": {
+                                                          "ip_prefix": {
+                                                            "node": {
+                                                              "prefix": {
+                                                                "value": "10.0.1.0/24"
+                                                              }
+                                                            }
+                                                          }
+                                                        }
+                                                      },
+                                                      "customer_deployment": {
+                                                        "node": null
+                                                      }
+                                                    }
+                                                  },
+                                                  "destination_segment": {
+                                                    "node": {
+                                                      "id": "seg-10-0-2-0-24",
+                                                      "__typename": "ManagedVlanSegment",
+                                                      "name": {
+                                                        "value": "seg-10-0-2-0-24"
+                                                      },
+                                                      "security_zone": {
+                                                        "node": {
+                                                          "name": {
+                                                            "value": "dmz"
+                                                          }
+                                                        }
+                                                      },
+                                                      "security_tag": {
+                                                        "node": null
+                                                      },
+                                                      "gateway": {
+                                                        "node": {
+                                                          "ip_prefix": {
+                                                            "node": {
+                                                              "prefix": {
+                                                                "value": "10.0.2.0/24"
+                                                              }
+                                                            }
+                                                          }
+                                                        }
+                                                      },
+                                                      "customer_deployment": {
+                                                        "node": null
+                                                      }
+                                                    }
+                                                  },
+                                                  "source_prefixes": {
+                                                    "edges": []
+                                                  },
+                                                  "destination_prefixes": {
+                                                    "edges": []
+                                                  },
+                                                  "source_ip_addresses": {
+                                                    "edges": []
+                                                  },
+                                                  "destination_ip_addresses": {
+                                                    "edges": []
+                                                  },
+                                                  "security_profile": {
+                                                    "node": null
+                                                  }
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      },
+                                      "inbound_rules": {
+                                        "edges": [
+                                          {
+                                            "node": {
+                                              "id": "rule-dmz-to-internal-allow-https",
+                                              "index": {
+                                                "value": 10
+                                              },
+                                              "name": {
+                                                "value": "allow-https"
+                                              },
+                                              "action": {
+                                                "value": "permit"
+                                              },
+                                              "protocol": {
+                                                "value": "tcp"
+                                              },
+                                              "port_start": {
+                                                "value": 443
+                                              },
+                                              "port_end": {
+                                                "value": null
+                                              },
+                                              "log": {
+                                                "value": true
+                                              },
+                                              "disabled": {
+                                                "value": false
+                                              },
+                                              "description": {
+                                                "value": "Allow HTTPS from DMZ to Internal"
+                                              },
+                                              "apply_on_switch": {
+                                                "value": false
+                                              },
+                                              "source_segment": {
+                                                "node": {
+                                                  "id": "seg-10-0-2-0-24",
+                                                  "__typename": "ManagedVlanSegment",
+                                                  "name": {
+                                                    "value": "seg-10-0-2-0-24"
+                                                  },
+                                                  "security_zone": {
+                                                    "node": {
+                                                      "name": {
+                                                        "value": "dmz"
+                                                      }
+                                                    }
+                                                  },
+                                                  "security_tag": {
+                                                    "node": null
+                                                  },
+                                                  "gateway": {
+                                                    "node": {
+                                                      "ip_prefix": {
+                                                        "node": {
+                                                          "prefix": {
+                                                            "value": "10.0.2.0/24"
+                                                          }
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  "customer_deployment": {
+                                                    "node": null
+                                                  }
+                                                }
+                                              },
+                                              "destination_segment": {
+                                                "node": {
+                                                  "id": "seg-10-0-1-0-24",
+                                                  "__typename": "ManagedVlanSegment",
+                                                  "name": {
+                                                    "value": "seg-10-0-1-0-24"
+                                                  },
+                                                  "security_zone": {
+                                                    "node": {
+                                                      "name": {
+                                                        "value": "internal"
+                                                      }
+                                                    }
+                                                  },
+                                                  "security_tag": {
+                                                    "node": null
+                                                  },
+                                                  "gateway": {
+                                                    "node": {
+                                                      "ip_prefix": {
+                                                        "node": {
+                                                          "prefix": {
+                                                            "value": "10.0.1.0/24"
+                                                          }
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  "customer_deployment": {
+                                                    "node": null
+                                                  }
+                                                }
+                                              },
+                                              "source_prefixes": {
+                                                "edges": []
+                                              },
+                                              "destination_prefixes": {
+                                                "edges": []
+                                              },
+                                              "source_ip_addresses": {
+                                                "edges": []
+                                              },
+                                              "destination_ip_addresses": {
+                                                "edges": []
+                                              },
+                                              "security_profile": {
+                                                "node": {
+                                                  "name": {
+                                                    "value": "strict-av"
+                                                  }
+                                                }
+                                              },
+                                              "policy": {
+                                                "node": {
+                                                  "id": "policy-dmz-to-internal",
+                                                  "name": {
+                                                    "value": "dmz-to-internal"
+                                                  },
+                                                  "enabled": {
+                                                    "value": true
+                                                  },
+                                                  "default_action": {
+                                                    "value": "deny"
+                                                  },
+                                                  "segment": {
+                                                    "node": {
+                                                      "id": "seg-10-0-2-0-24",
+                                                      "name": {
+                                                        "value": "seg-10-0-2-0-24"
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          },
+                                          {
+                                            "node": {
+                                              "id": "rule-dmz-to-internal-allow-ssh",
+                                              "index": {
+                                                "value": 20
+                                              },
+                                              "name": {
+                                                "value": "allow-ssh"
+                                              },
+                                              "action": {
+                                                "value": "permit"
+                                              },
+                                              "protocol": {
+                                                "value": "tcp"
+                                              },
+                                              "port_start": {
+                                                "value": 22
+                                              },
+                                              "port_end": {
+                                                "value": null
+                                              },
+                                              "log": {
+                                                "value": true
+                                              },
+                                              "disabled": {
+                                                "value": false
+                                              },
+                                              "description": {
+                                                "value": "Allow SSH from DMZ to Internal"
+                                              },
+                                              "apply_on_switch": {
+                                                "value": false
+                                              },
+                                              "source_segment": {
+                                                "node": {
+                                                  "id": "seg-10-0-2-0-24",
+                                                  "__typename": "ManagedVlanSegment",
+                                                  "name": {
+                                                    "value": "seg-10-0-2-0-24"
+                                                  },
+                                                  "security_zone": {
+                                                    "node": {
+                                                      "name": {
+                                                        "value": "dmz"
+                                                      }
+                                                    }
+                                                  },
+                                                  "security_tag": {
+                                                    "node": null
+                                                  },
+                                                  "gateway": {
+                                                    "node": {
+                                                      "ip_prefix": {
+                                                        "node": {
+                                                          "prefix": {
+                                                            "value": "10.0.2.0/24"
+                                                          }
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  "customer_deployment": {
+                                                    "node": null
+                                                  }
+                                                }
+                                              },
+                                              "destination_segment": {
+                                                "node": {
+                                                  "id": "seg-10-0-1-0-24",
+                                                  "__typename": "ManagedVlanSegment",
+                                                  "name": {
+                                                    "value": "seg-10-0-1-0-24"
+                                                  },
+                                                  "security_zone": {
+                                                    "node": {
+                                                      "name": {
+                                                        "value": "internal"
+                                                      }
+                                                    }
+                                                  },
+                                                  "security_tag": {
+                                                    "node": null
+                                                  },
+                                                  "gateway": {
+                                                    "node": {
+                                                      "ip_prefix": {
+                                                        "node": {
+                                                          "prefix": {
+                                                            "value": "10.0.1.0/24"
+                                                          }
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  "customer_deployment": {
+                                                    "node": null
+                                                  }
+                                                }
+                                              },
+                                              "source_prefixes": {
+                                                "edges": []
+                                              },
+                                              "destination_prefixes": {
+                                                "edges": []
+                                              },
+                                              "source_ip_addresses": {
+                                                "edges": []
+                                              },
+                                              "destination_ip_addresses": {
+                                                "edges": []
+                                              },
+                                              "security_profile": {
+                                                "node": null
+                                              },
+                                              "policy": {
+                                                "node": {
+                                                  "id": "policy-dmz-to-internal",
+                                                  "name": {
+                                                    "value": "dmz-to-internal"
+                                                  },
+                                                  "enabled": {
+                                                    "value": true
+                                                  },
+                                                  "default_action": {
+                                                    "value": "deny"
+                                                  },
+                                                  "segment": {
+                                                    "node": {
+                                                      "id": "seg-10-0-2-0-24",
+                                                      "name": {
+                                                        "value": "seg-10-0-2-0-24"
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "node": {
+                                      "id": "seg-10-0-10-0-24",
+                                      "security_policy": {
+                                        "node": null
+                                      },
+                                      "inbound_rules": {
+                                        "edges": []
+                                      }
+                                    }
+                                  }
+                                ]
                               }
                             }
                           },
@@ -144,7 +587,10 @@
                               }
                             }
                           },
-                          "security_policies": {
+                          "security_policy": {
+                            "node": null
+                          },
+                          "inbound_rules": {
                             "edges": []
                           }
                         }
@@ -229,8 +675,418 @@
                               "trust_level": {
                                 "value": 50
                               },
-                              "zone_type": {
-                                "value": "dmz"
+                              "network_segments": {
+                                "edges": [
+                                  {
+                                    "node": {
+                                      "id": "seg-10-0-2-0-24",
+                                      "security_policy": {
+                                        "node": {
+                                          "id": "policy-dmz-to-internal",
+                                          "name": {
+                                            "value": "dmz-to-internal"
+                                          },
+                                          "enabled": {
+                                            "value": true
+                                          },
+                                          "default_action": {
+                                            "value": "deny"
+                                          },
+                                          "segment": {
+                                            "node": {
+                                              "id": "seg-10-0-2-0-24",
+                                              "name": {
+                                                "value": "seg-10-0-2-0-24"
+                                              }
+                                            }
+                                          },
+                                          "rules": {
+                                            "edges": [
+                                              {
+                                                "node": {
+                                                  "id": "rule-dmz-to-internal-allow-https",
+                                                  "index": {
+                                                    "value": 10
+                                                  },
+                                                  "name": {
+                                                    "value": "allow-https"
+                                                  },
+                                                  "action": {
+                                                    "value": "permit"
+                                                  },
+                                                  "protocol": {
+                                                    "value": "tcp"
+                                                  },
+                                                  "port_start": {
+                                                    "value": 443
+                                                  },
+                                                  "port_end": {
+                                                    "value": null
+                                                  },
+                                                  "log": {
+                                                    "value": true
+                                                  },
+                                                  "disabled": {
+                                                    "value": false
+                                                  },
+                                                  "description": {
+                                                    "value": "Allow HTTPS from DMZ to Internal"
+                                                  },
+                                                  "apply_on_switch": {
+                                                    "value": false
+                                                  },
+                                                  "source_segment": {
+                                                    "node": {
+                                                      "id": "seg-10-0-2-0-24",
+                                                      "__typename": "ManagedVlanSegment",
+                                                      "name": {
+                                                        "value": "seg-10-0-2-0-24"
+                                                      },
+                                                      "security_zone": {
+                                                        "node": {
+                                                          "name": {
+                                                            "value": "dmz"
+                                                          }
+                                                        }
+                                                      },
+                                                      "security_tag": {
+                                                        "node": null
+                                                      },
+                                                      "gateway": {
+                                                        "node": {
+                                                          "ip_prefix": {
+                                                            "node": {
+                                                              "prefix": {
+                                                                "value": "10.0.2.0/24"
+                                                              }
+                                                            }
+                                                          }
+                                                        }
+                                                      },
+                                                      "customer_deployment": {
+                                                        "node": null
+                                                      }
+                                                    }
+                                                  },
+                                                  "destination_segment": {
+                                                    "node": {
+                                                      "id": "seg-10-0-1-0-24",
+                                                      "__typename": "ManagedVlanSegment",
+                                                      "name": {
+                                                        "value": "seg-10-0-1-0-24"
+                                                      },
+                                                      "security_zone": {
+                                                        "node": {
+                                                          "name": {
+                                                            "value": "internal"
+                                                          }
+                                                        }
+                                                      },
+                                                      "security_tag": {
+                                                        "node": null
+                                                      },
+                                                      "gateway": {
+                                                        "node": {
+                                                          "ip_prefix": {
+                                                            "node": {
+                                                              "prefix": {
+                                                                "value": "10.0.1.0/24"
+                                                              }
+                                                            }
+                                                          }
+                                                        }
+                                                      },
+                                                      "customer_deployment": {
+                                                        "node": null
+                                                      }
+                                                    }
+                                                  },
+                                                  "source_prefixes": {
+                                                    "edges": []
+                                                  },
+                                                  "destination_prefixes": {
+                                                    "edges": []
+                                                  },
+                                                  "source_ip_addresses": {
+                                                    "edges": []
+                                                  },
+                                                  "destination_ip_addresses": {
+                                                    "edges": []
+                                                  },
+                                                  "security_profile": {
+                                                    "node": {
+                                                      "name": {
+                                                        "value": "strict-av"
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              },
+                                              {
+                                                "node": {
+                                                  "id": "rule-dmz-to-internal-allow-ssh",
+                                                  "index": {
+                                                    "value": 20
+                                                  },
+                                                  "name": {
+                                                    "value": "allow-ssh"
+                                                  },
+                                                  "action": {
+                                                    "value": "permit"
+                                                  },
+                                                  "protocol": {
+                                                    "value": "tcp"
+                                                  },
+                                                  "port_start": {
+                                                    "value": 22
+                                                  },
+                                                  "port_end": {
+                                                    "value": null
+                                                  },
+                                                  "log": {
+                                                    "value": true
+                                                  },
+                                                  "disabled": {
+                                                    "value": false
+                                                  },
+                                                  "description": {
+                                                    "value": "Allow SSH from DMZ to Internal"
+                                                  },
+                                                  "apply_on_switch": {
+                                                    "value": false
+                                                  },
+                                                  "source_segment": {
+                                                    "node": {
+                                                      "id": "seg-10-0-2-0-24",
+                                                      "__typename": "ManagedVlanSegment",
+                                                      "name": {
+                                                        "value": "seg-10-0-2-0-24"
+                                                      },
+                                                      "security_zone": {
+                                                        "node": {
+                                                          "name": {
+                                                            "value": "dmz"
+                                                          }
+                                                        }
+                                                      },
+                                                      "security_tag": {
+                                                        "node": null
+                                                      },
+                                                      "gateway": {
+                                                        "node": {
+                                                          "ip_prefix": {
+                                                            "node": {
+                                                              "prefix": {
+                                                                "value": "10.0.2.0/24"
+                                                              }
+                                                            }
+                                                          }
+                                                        }
+                                                      },
+                                                      "customer_deployment": {
+                                                        "node": null
+                                                      }
+                                                    }
+                                                  },
+                                                  "destination_segment": {
+                                                    "node": {
+                                                      "id": "seg-10-0-1-0-24",
+                                                      "__typename": "ManagedVlanSegment",
+                                                      "name": {
+                                                        "value": "seg-10-0-1-0-24"
+                                                      },
+                                                      "security_zone": {
+                                                        "node": {
+                                                          "name": {
+                                                            "value": "internal"
+                                                          }
+                                                        }
+                                                      },
+                                                      "security_tag": {
+                                                        "node": null
+                                                      },
+                                                      "gateway": {
+                                                        "node": {
+                                                          "ip_prefix": {
+                                                            "node": {
+                                                              "prefix": {
+                                                                "value": "10.0.1.0/24"
+                                                              }
+                                                            }
+                                                          }
+                                                        }
+                                                      },
+                                                      "customer_deployment": {
+                                                        "node": null
+                                                      }
+                                                    }
+                                                  },
+                                                  "source_prefixes": {
+                                                    "edges": []
+                                                  },
+                                                  "destination_prefixes": {
+                                                    "edges": []
+                                                  },
+                                                  "source_ip_addresses": {
+                                                    "edges": []
+                                                  },
+                                                  "destination_ip_addresses": {
+                                                    "edges": []
+                                                  },
+                                                  "security_profile": {
+                                                    "node": null
+                                                  }
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      },
+                                      "inbound_rules": {
+                                        "edges": [
+                                          {
+                                            "node": {
+                                              "id": "rule-internal-to-dmz-allow-any",
+                                              "index": {
+                                                "value": 10
+                                              },
+                                              "name": {
+                                                "value": "allow-any"
+                                              },
+                                              "action": {
+                                                "value": "permit"
+                                              },
+                                              "protocol": {
+                                                "value": "any"
+                                              },
+                                              "port_start": {
+                                                "value": null
+                                              },
+                                              "port_end": {
+                                                "value": null
+                                              },
+                                              "log": {
+                                                "value": false
+                                              },
+                                              "disabled": {
+                                                "value": false
+                                              },
+                                              "description": {
+                                                "value": "Allow all from Internal to DMZ"
+                                              },
+                                              "apply_on_switch": {
+                                                "value": false
+                                              },
+                                              "source_segment": {
+                                                "node": {
+                                                  "id": "seg-10-0-1-0-24",
+                                                  "__typename": "ManagedVlanSegment",
+                                                  "name": {
+                                                    "value": "seg-10-0-1-0-24"
+                                                  },
+                                                  "security_zone": {
+                                                    "node": {
+                                                      "name": {
+                                                        "value": "internal"
+                                                      }
+                                                    }
+                                                  },
+                                                  "security_tag": {
+                                                    "node": null
+                                                  },
+                                                  "gateway": {
+                                                    "node": {
+                                                      "ip_prefix": {
+                                                        "node": {
+                                                          "prefix": {
+                                                            "value": "10.0.1.0/24"
+                                                          }
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  "customer_deployment": {
+                                                    "node": null
+                                                  }
+                                                }
+                                              },
+                                              "destination_segment": {
+                                                "node": {
+                                                  "id": "seg-10-0-2-0-24",
+                                                  "__typename": "ManagedVlanSegment",
+                                                  "name": {
+                                                    "value": "seg-10-0-2-0-24"
+                                                  },
+                                                  "security_zone": {
+                                                    "node": {
+                                                      "name": {
+                                                        "value": "dmz"
+                                                      }
+                                                    }
+                                                  },
+                                                  "security_tag": {
+                                                    "node": null
+                                                  },
+                                                  "gateway": {
+                                                    "node": {
+                                                      "ip_prefix": {
+                                                        "node": {
+                                                          "prefix": {
+                                                            "value": "10.0.2.0/24"
+                                                          }
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  "customer_deployment": {
+                                                    "node": null
+                                                  }
+                                                }
+                                              },
+                                              "source_prefixes": {
+                                                "edges": []
+                                              },
+                                              "destination_prefixes": {
+                                                "edges": []
+                                              },
+                                              "source_ip_addresses": {
+                                                "edges": []
+                                              },
+                                              "destination_ip_addresses": {
+                                                "edges": []
+                                              },
+                                              "security_profile": {
+                                                "node": null
+                                              },
+                                              "policy": {
+                                                "node": {
+                                                  "id": "policy-internal-to-dmz",
+                                                  "name": {
+                                                    "value": "internal-to-dmz"
+                                                  },
+                                                  "enabled": {
+                                                    "value": true
+                                                  },
+                                                  "default_action": {
+                                                    "value": "deny"
+                                                  },
+                                                  "segment": {
+                                                    "node": {
+                                                      "id": "seg-10-0-1-0-24",
+                                                      "name": {
+                                                        "value": "seg-10-0-1-0-24"
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  }
+                                ]
                               }
                             }
                           },
@@ -258,7 +1114,10 @@
                               }
                             }
                           },
-                          "security_policies": {
+                          "security_policy": {
+                            "node": null
+                          },
+                          "inbound_rules": {
                             "edges": []
                           }
                         }
@@ -343,8 +1202,8 @@
                               "trust_level": {
                                 "value": 0
                               },
-                              "zone_type": {
-                                "value": "external"
+                              "network_segments": {
+                                "edges": []
                               }
                             }
                           },
@@ -372,7 +1231,10 @@
                               }
                             }
                           },
-                          "security_policies": {
+                          "security_policy": {
+                            "node": null
+                          },
+                          "inbound_rules": {
                             "edges": []
                           }
                         }
@@ -399,9 +1261,6 @@
           },
           "trust_level": {
             "value": 100
-          },
-          "zone_type": {
-            "value": "internal"
           },
           "description": {
             "value": "Internal trusted network"
@@ -460,9 +1319,6 @@
           "trust_level": {
             "value": 50
           },
-          "zone_type": {
-            "value": "dmz"
-          },
           "description": {
             "value": "Demilitarized zone"
           },
@@ -500,218 +1356,11 @@
           "trust_level": {
             "value": 0
           },
-          "zone_type": {
-            "value": "external"
-          },
           "description": {
             "value": "External untrusted network"
           },
           "network_segments": {
             "edges": []
-          }
-        }
-      }
-    ]
-  },
-  "SecurityPolicy": {
-    "edges": [
-      {
-        "node": {
-          "name": {
-            "value": "dmz-to-internal"
-          },
-          "enabled": {
-            "value": true
-          },
-          "default_action": {
-            "value": "deny"
-          },
-          "rules": {
-            "edges": [
-              {
-                "node": {
-                  "index": {
-                    "value": 10
-                  },
-                  "name": {
-                    "value": "allow-https"
-                  },
-                  "action": {
-                    "value": "permit"
-                  },
-                  "protocol": {
-                    "value": "tcp"
-                  },
-                  "port_start": {
-                    "value": 443
-                  },
-                  "port_end": {
-                    "value": null
-                  },
-                  "log": {
-                    "value": true
-                  },
-                  "disabled": {
-                    "value": false
-                  },
-                  "description": {
-                    "value": "Allow HTTPS from DMZ to Internal"
-                  },
-                  "source_zone": {
-                    "node": {
-                      "name": {
-                        "value": "dmz"
-                      }
-                    }
-                  },
-                  "destination_zone": {
-                    "node": {
-                      "name": {
-                        "value": "internal"
-                      }
-                    }
-                  },
-                  "source_segment": {
-                    "node": null
-                  },
-                  "destination_segment": {
-                    "node": null
-                  },
-                  "security_profile": {
-                    "node": {
-                      "name": {
-                        "value": "strict-av"
-                      }
-                    }
-                  }
-                }
-              },
-              {
-                "node": {
-                  "index": {
-                    "value": 20
-                  },
-                  "name": {
-                    "value": "allow-ssh"
-                  },
-                  "action": {
-                    "value": "permit"
-                  },
-                  "protocol": {
-                    "value": "tcp"
-                  },
-                  "port_start": {
-                    "value": 22
-                  },
-                  "port_end": {
-                    "value": null
-                  },
-                  "log": {
-                    "value": true
-                  },
-                  "disabled": {
-                    "value": false
-                  },
-                  "description": {
-                    "value": "Allow SSH from DMZ to Internal"
-                  },
-                  "source_zone": {
-                    "node": {
-                      "name": {
-                        "value": "dmz"
-                      }
-                    }
-                  },
-                  "destination_zone": {
-                    "node": {
-                      "name": {
-                        "value": "internal"
-                      }
-                    }
-                  },
-                  "source_segment": {
-                    "node": null
-                  },
-                  "destination_segment": {
-                    "node": null
-                  },
-                  "security_profile": {
-                    "node": null
-                  }
-                }
-              }
-            ]
-          }
-        }
-      },
-      {
-        "node": {
-          "name": {
-            "value": "internal-to-dmz"
-          },
-          "enabled": {
-            "value": true
-          },
-          "default_action": {
-            "value": "deny"
-          },
-          "rules": {
-            "edges": [
-              {
-                "node": {
-                  "index": {
-                    "value": 10
-                  },
-                  "name": {
-                    "value": "allow-any"
-                  },
-                  "action": {
-                    "value": "permit"
-                  },
-                  "protocol": {
-                    "value": "any"
-                  },
-                  "port_start": {
-                    "value": null
-                  },
-                  "port_end": {
-                    "value": null
-                  },
-                  "log": {
-                    "value": false
-                  },
-                  "disabled": {
-                    "value": false
-                  },
-                  "description": {
-                    "value": "Allow all from Internal to DMZ"
-                  },
-                  "source_zone": {
-                    "node": {
-                      "name": {
-                        "value": "internal"
-                      }
-                    }
-                  },
-                  "destination_zone": {
-                    "node": {
-                      "name": {
-                        "value": "dmz"
-                      }
-                    }
-                  },
-                  "source_segment": {
-                    "node": null
-                  },
-                  "destination_segment": {
-                    "node": null
-                  },
-                  "security_profile": {
-                    "node": null
-                  }
-                }
-              }
-            ]
           }
         }
       }

@@ -29,7 +29,7 @@ uv run infrahubctl object load data/demos/12_saas/ --branch zscaler_demo
 ## Next steps
 
 - Attach `VPNConnection` objects to your edge devices pointing at the Zscaler endpoints
-- Map specific user groups or network segments to the cloud policy via the `network_segments` relationship on `SecurityPolicy`
+- Give a network segment its egress rules toward the SaaS endpoints in the segment's own `security_policy` (one per segment)
 - Extend rules with `application_categories` if you also populate application data
 
 For the application and proxy acceptance workflow, run `uv run invoke test-integration-all-demo`. Use `uv run invoke test-integration` when the SaaS changes are part of a broader topology update.

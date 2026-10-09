@@ -35,10 +35,8 @@ class DeviceOptions(TypedDict, total=False):
     rack: str
     """Rack ID for device placement."""
     group_name: str
-    """Override the CoreStandardGroup devices are tracked in — default is
-    f"{device_role}s". Needed when a role's group predates and doesn't follow
-    that naming convention (e.g. device_role="load-balancer" would mechanically
-    resolve to "load-balancers", but the pre-existing group is "loadbalancers")."""
+    """Override the CoreStandardGroup devices are tracked in — default is the
+    role's bootstrap group (devices.ROLE_GROUP_NAMES, else f"{device_role}s")."""
     ha_kind: str
     """When set, create_devices() pairs the created devices two-at-a-time
     (sorted names, odd one left unpaired) into this HA node kind — e.g.

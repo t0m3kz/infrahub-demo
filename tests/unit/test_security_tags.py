@@ -1,7 +1,7 @@
 """Unit tests for SecurityTag / SGT helpers.
 
 Covers:
-  - _get_sgt_rules()              — extract rules from extra_roots
+  - get_sgt_rules()               — tier contracts derived from the segments' permit rules
   - sgt/sgt_name in VLAN dicts   — _vlans_from_activations with security_tag
   - sgt/sgt_name in L2 VNI dicts — _l2_from_activations with security_tag
   - Arista EOS template           — mac security sgt-policy blocks rendered
@@ -12,7 +12,7 @@ from pathlib import Path
 
 import jinja2
 
-from transforms.common import _get_sgt_rules
+from transforms.helpers.policy import get_sgt_rules
 from transforms.helpers.segments import _vlans_from_activations
 from transforms.helpers.vxlan import _l2_from_activations
 
@@ -69,151 +69,102 @@ def _make_sgt_rule(
     }
 
 
-def _make_activation_with_rules(
-    *,
-    vlan_id: int = 100,
-    vni: int = 10100,
-    customer_name: str = "web-frontend",
-    environment: str | None = None,
-    sgt_name: str | None = None,
-    sgt_group_id: int | None = None,
-    rules: list[dict] | None = None,
-) -> dict:
-    """Build activation with security_tag.rules_as_source populated."""
-    seg: dict = {
-        "name": f"c001-{customer_name}-p",
-        "customer_name": customer_name,
-        "arp_suppression": True,
-        "prefix": {"ip_namespace": {"name": "C001-PROD"}},
+def _tagged(seg_id: str, tag: str | None, group_id: int | None, **extra: object) -> dict:
+    """A rule end (PolicyRuleSegmentFields, cleaned) with its tier tag."""
+    return {
+        "id": seg_id,
+        "name": seg_id,
+        "security_tag": {"name": tag, "group_id": group_id} if group_id else None,
+        **extra,
     }
-    if environment is not None:
-        seg["environment"] = environment
-    if sgt_name or sgt_group_id:
-        seg["security_tag"] = {
-            "name": sgt_name,
-            "group_id": sgt_group_id,
-            "rules_as_source": [
-                {
-                    "action": r["action"],
-                    "log": r.get("log", False),
-                    "destination_tag": {"name": r["dst_name"], "group_id": r["dst_sgt"]},
-                }
-                for r in (rules or [])
-            ],
-        }
-    return {"vlan_id": vlan_id, "vni": vni, "segment": seg}
+
+
+_WEB = _tagged("seg-web", "web-tier", 20, customer_name="web-frontend", environment="s")
+_APP = _tagged("seg-app", "app-tier", 30, customer_name="app-backend")
+_DB = _tagged("seg-db", "database", 50, customer_name="db")
+_UNTAGGED = _tagged("seg-plain", None, None)
+
+
+def _rule(src: dict, dst: dict | None, *, action: str = "permit", disabled: bool = False, log: bool = False) -> dict:
+    return {
+        "name": f"{src['id']}-to-{(dst or {}).get('id')}",
+        "action": action,
+        "disabled": disabled,
+        "log": log,
+        "source_segment": src,
+        "destination_segment": dst,
+    }
+
+
+def _rules_activation(
+    segment: dict, *, rules: list[dict] | None = None, inbound: list[dict] | None = None, enabled: bool = True
+) -> dict:
+    """Activation of ``segment`` with its own policy's rules and the rules into it."""
+    seg = {
+        **segment,
+        "security_policy": {"name": f"{segment['id']}-egress", "enabled": enabled, "rules": rules or []},
+        "inbound_rules": [{**rule, "policy": {"enabled": True}} for rule in inbound or []],
+    }
+    return {"vlan_id": 100, "vni": 10100, "segment": seg}
 
 
 # ===========================================================================
-# _get_sgt_rules()
+# get_sgt_rules()
 # ===========================================================================
 
 
 class TestGetSgtRules:
     def test_none_returns_empty(self) -> None:
-        assert _get_sgt_rules(None) == []
+        assert get_sgt_rules(None) == []
 
     def test_empty_list_returns_empty(self) -> None:
-        assert _get_sgt_rules([]) == []
+        assert get_sgt_rules([]) == []
 
     def test_untagged_segment_returns_empty(self) -> None:
-        acts = [_make_activation(vlan_id=10)]
-        assert _get_sgt_rules(acts) == []
+        assert get_sgt_rules([_make_activation(vlan_id=10)]) == []
 
-    def test_basic_rule_extracted(self) -> None:
-        acts = [
-            _make_activation_with_rules(
-                sgt_name="web-tier",
-                sgt_group_id=20,
-                rules=[_make_sgt_rule()],
-            )
+    def test_permit_between_tagged_segments_is_a_contract(self) -> None:
+        result = get_sgt_rules([_rules_activation(_WEB, rules=[_rule(_WEB, _APP, log=True)])])
+        assert result == [
+            {
+                "src_name": "web-tier",
+                "src_sgt": 20,
+                "dst_name": "app-tier",
+                "dst_sgt": 30,
+                "action": "permit",
+                "log": True,
+                "src_customer": "web-frontend",
+                "src_environment": "s",
+            }
         ]
-        result = _get_sgt_rules(acts)
-        assert len(result) == 1
-        r = result[0]
-        assert r["src_name"] == "web-tier"
-        assert r["src_sgt"] == 20
-        assert r["dst_name"] == "app-tier"
-        assert r["dst_sgt"] == 30
-        assert r["action"] == "permit"
 
-    def test_multiple_segments_rules_merged(self) -> None:
-        acts = [
-            _make_activation_with_rules(
-                vlan_id=10,
-                customer_name="web-frontend",
-                sgt_name="web-tier",
-                sgt_group_id=20,
-                rules=[_make_sgt_rule(src_name="web-tier", src_sgt=20, dst_name="app-tier", dst_sgt=30)],
-            ),
-            _make_activation_with_rules(
-                vlan_id=20,
-                customer_name="app-backend",
-                sgt_name="app-tier",
-                sgt_group_id=30,
-                rules=[_make_sgt_rule(src_name="app-tier", src_sgt=30, dst_name="database", dst_sgt=50)],
-            ),
-        ]
-        result = _get_sgt_rules(acts)
-        assert len(result) == 2
-        assert result[1]["src_name"] == "app-tier"
-        assert result[1]["dst_sgt"] == 50
-
-    def test_duplicate_rules_deduplicated(self) -> None:
-        rule = _make_sgt_rule()
-        acts = [
-            _make_activation_with_rules(vlan_id=10, sgt_name="web-tier", sgt_group_id=20, rules=[rule]),
-            _make_activation_with_rules(
-                vlan_id=11, customer_name="web2", sgt_name="web-tier", sgt_group_id=20, rules=[rule]
-            ),
-        ]
-        result = _get_sgt_rules(acts)
-        assert len(result) == 1
-
-    def test_rule_missing_dst_group_id_skipped(self) -> None:
-        acts = [
-            _make_activation_with_rules(
-                sgt_name="web-tier",
-                sgt_group_id=20,
-                rules=[{"action": "permit", "dst_name": "app-tier", "dst_sgt": None}],
-            )
-        ]
-        assert _get_sgt_rules(acts) == []
-
-    def test_deny_action_preserved(self) -> None:
-        acts = [
-            _make_activation_with_rules(
-                sgt_name="web-tier",
-                sgt_group_id=20,
-                rules=[_make_sgt_rule(action="deny")],
-            )
-        ]
-        result = _get_sgt_rules(acts)
-        assert result[0]["action"] == "deny"
-
-    def test_src_customer_and_environment_passed_through(self) -> None:
-        acts = [
-            _make_activation_with_rules(
-                customer_name="web-frontend",
-                environment="s",
-                sgt_name="web-tier",
-                sgt_group_id=20,
-                rules=[_make_sgt_rule()],
-            )
-        ]
-        result = _get_sgt_rules(acts)
+    def test_inbound_permit_is_a_contract_on_the_destination_leaf(self) -> None:
+        """The egress VTEP enforces the contract, so a leaf carrying only the destination needs it."""
+        result = get_sgt_rules([_rules_activation(_APP, inbound=[_rule(_WEB, _APP)])])
+        assert [(r["src_sgt"], r["dst_sgt"]) for r in result] == [(20, 30)]
         assert result[0]["src_customer"] == "web-frontend"
-        assert result[0]["src_environment"] == "s"
+
+    def test_deny_disabled_and_disabled_policy_rules_are_not_contracts(self) -> None:
+        acts = [
+            _rules_activation(_WEB, rules=[_rule(_WEB, _APP, action="deny"), _rule(_WEB, _DB, disabled=True)]),
+            _rules_activation(_APP, rules=[_rule(_APP, _DB)], enabled=False),
+        ]
+        assert get_sgt_rules(acts) == []
+
+    def test_an_untagged_end_is_not_a_contract(self) -> None:
+        acts = [_rules_activation(_WEB, rules=[_rule(_WEB, _UNTAGGED), _rule(_WEB, None)])]
+        assert get_sgt_rules(acts) == []
+
+    def test_tag_pair_deduplicated_and_sorted(self) -> None:
+        """Several rules (and both ends of one) between two tiers are one contract."""
+        acts = [
+            _rules_activation(_APP, rules=[_rule(_APP, _DB)], inbound=[_rule(_WEB, _APP)]),
+            _rules_activation(_WEB, rules=[_rule(_WEB, _APP), _rule(_WEB, _APP, log=True)]),
+        ]
+        assert [(r["src_sgt"], r["dst_sgt"]) for r in get_sgt_rules(acts)] == [(20, 30), (30, 50)]
 
     def test_environment_none_when_absent(self) -> None:
-        acts = [
-            _make_activation_with_rules(
-                sgt_name="web-tier",
-                sgt_group_id=20,
-                rules=[_make_sgt_rule()],
-            )
-        ]
-        result = _get_sgt_rules(acts)
+        result = get_sgt_rules([_rules_activation(_APP, rules=[_rule(_APP, _DB)])])
         assert result[0]["src_environment"] is None
 
 

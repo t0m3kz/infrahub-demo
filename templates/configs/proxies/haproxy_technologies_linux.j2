@@ -1,3 +1,4 @@
+{%- import 'common/keepalived.j2' as keepalived -%}
 {#- HAProxy — {{ proxy_type | default('explicit') }} proxy configuration -#}
 #
 # Device:     {{ name }}
@@ -126,4 +127,5 @@ peers haproxy_cluster
 
 # Keepalived integration — managed externally via /etc/keepalived/keepalived.conf
 # HA group: {{ ha.group_id }}  mode: {{ ha.mode }}  priority: {{ ha.priority }}
+{{- keepalived.vrrp_instances(proxy_interfaces, ha) }}
 {%- endif %}

@@ -105,7 +105,6 @@ query {
       }
     }
   }
-  SecurityTagRule { edges { node { id } } }
   CloudSecurityGroupRule { edges { node { id name { value } } } }
   ProxyPolicyRule { edges { node { id name { value } } } }
   ManagedNetworkSegment {
@@ -113,7 +112,7 @@ query {
       node {
         id
         isolation_mode { value }
-        security_policies { edges { node { id } } }
+        security_policy { node { id } }
         inbound_rules { edges { node { id } } }
       }
     }
@@ -240,13 +239,12 @@ def _snapshot(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
             )
             for n in _nodes(result, "SecurityPolicyRule")
         },
-        "SecurityTagRule": {n["id"]: None for n in _nodes(result, "SecurityTagRule")},
         "CloudSecurityGroupRule": {n["id"]: _value(n, "name") for n in _nodes(result, "CloudSecurityGroupRule")},
         "ProxyPolicyRule": {n["id"]: _value(n, "name") for n in _nodes(result, "ProxyPolicyRule")},
         "ManagedNetworkSegment": {
             n["id"]: (
                 _value(n, "isolation_mode"),
-                _peer_ids(n, "security_policies"),
+                _peer_id(n, "security_policy"),
                 _peer_ids(n, "inbound_rules"),
             )
             for n in _nodes(result, "ManagedNetworkSegment")

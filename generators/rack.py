@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
@@ -20,6 +20,9 @@ _POD_POOL_MAX_RETRIES = 10
 _POD_POOL_RETRY_DELAY = 3.0
 _POD_POOL_RETRY_CAP = 20.0
 _POD_POOL_RETRY_JITTER = 0.25
+# The pod's own generators — a rack waits for an in-flight one before reading
+# pod-level data (spines, pools).
+POD_GENERATORS = ("add_pod", "pod_rack_cascade")
 
 # Pod-level pools this generator cannot proceed without, in the order add_pod
 # writes them. asn_pool comes last and is conditional — see _wait_for_pod_pools.
@@ -86,6 +89,8 @@ class RackMixin:
     # CommonGenerator._retry_delay — annotation only (no method body), so this
     # mixin never shadows the real staticmethod at runtime via MRO.
     _retry_delay: Callable[..., float]
+    # CommonGenerator.wait_for_parent_generator_and_refetch — annotation only.
+    wait_for_parent_generator_and_refetch: Callable[..., Awaitable[dict | None]]
 
     def _present_roles(self) -> set[str]:
         """Implemented by RackGenerator; declared here for static type checking."""
@@ -198,6 +203,11 @@ class RackMixin:
             missing = self._missing_pod_pools(pod, needs_asn_pool=needs_asn_pool)
             if not missing:
                 return pod
+            # Under load add_pod's own task can surface only now, queued behind
+            # other fabrics' work: once it is in flight, wait for it outright
+            # rather than spending blind retries until they run out.
+            if await self.wait_for_parent_generator_and_refetch(POD_GENERATORS, pod["id"]) is not None:
+                continue
             if attempt < _POD_POOL_MAX_RETRIES - 1:
                 delay = self._retry_delay(
                     _POD_POOL_RETRY_DELAY, attempt, cap=_POD_POOL_RETRY_CAP, jitter=_POD_POOL_RETRY_JITTER

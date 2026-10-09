@@ -6,7 +6,7 @@ Covers:
   - _l2_from_activations()       — L2 VNI mappings from activations
   - _l3_from_activations()       — L3 VNI (VRF) mappings from activations
   - _platform_vxlan_config()     — Arista keys; anycast_gateway inherited from the base config
-  - get_acls()                   — zero-trust ACL list from security_policies on segments
+  - get_acls()                   — zero-trust ACL list from each segment's security_policy
   - isolation_mode propagation   — _vlans_from_activations and arista_eos.j2 rendering
 """
 
@@ -381,7 +381,8 @@ def _make_acl_activation(
     prefix: str | None = None,
     inbound_rules: list | None = None,
 ) -> dict:
-    """Build a cleaned SegmentDeployment dict with optional security_policies."""
+    """Build a cleaned SegmentDeployment dict. security_policies is the
+    segment's own policy as a 0/1-item list; None leaves the field unqueried."""
     ip_prefix: dict = {"ip_namespace": {"name": "tenant-a", "l3_vni": 50001}}
     if prefix is not None:
         ip_prefix["prefix"] = prefix
@@ -394,14 +395,14 @@ def _make_acl_activation(
     if seg_id is not None:
         seg["id"] = seg_id
     if security_policies is not None:
-        seg["security_policies"] = security_policies
+        seg["security_policy"] = security_policies[0] if security_policies else None
     if inbound_rules is not None:
         seg["inbound_rules"] = inbound_rules
     return {"vlan_id": vlan_id, "vni": 10000 + vlan_id, "status": "active", "segment": seg}
 
 
-def _policy(rules: list | None = None, enabled: bool = True) -> dict:
-    return {"name": "p", "default_action": "deny", "enabled": enabled, "rules": rules or []}
+def _policy(rules: list | None = None, enabled: bool = True, default_action: str = "deny") -> dict:
+    return {"name": "p", "default_action": default_action, "enabled": enabled, "rules": rules or []}
 
 
 def _rule(
@@ -429,10 +430,11 @@ def _rule(
         "log": log,
         "disabled": disabled,
     }
+    # A rule's zone is its segment's security_zone.
     if src_zone is not None:
-        rule["source_zone"] = {"name": src_zone}
+        rule["source_segment"] = {**(rule["source_segment"] or {}), "security_zone": {"name": src_zone}}
     if dst_zone is not None:
-        rule["destination_zone"] = {"name": dst_zone}
+        rule["destination_segment"] = {**(rule["destination_segment"] or {}), "security_zone": {"name": dst_zone}}
     return rule
 
 
@@ -453,7 +455,7 @@ class TestGetAclsEmpty:
         assert get_acls(activations=[]) == []
 
     def test_missing_security_policies_key_skips_acl(self) -> None:
-        """Segments without security_policies in query data produce no ACL (backwards compat)."""
+        """Segments without security_policy in query data produce no ACL (backwards compat)."""
         act = _make_acl_activation(vlan_id=100, security_policies=None)
         assert get_acls(activations=[act]) == []
 
@@ -532,6 +534,57 @@ class TestGetAclsRuleExtraction:
         r = _rule(src=_seg_ref("10.1.0.0/16"))
         acts = [_make_acl_activation(vlan_id=501, security_policies=[_policy(rules=[r])])]
         assert get_acls(activations=acts)[0]["rules"][0]["src"] == "10.1.0.0/16"
+
+
+class TestAclRuleEndpointResolver:
+    """The leaf ACL resolves a side like the firewall rule table does
+    (transforms/helpers/policy.py rule_endpoint): segment prefix, else the
+    first prefix/IP selector, else any."""
+
+    def test_destination_prefix_selector_without_segment(self) -> None:
+        rule = {**_rule(src=_seg_ref("10.1.0.0/24")), "destination_prefixes": [{"prefix": "10.40.0.0/16"}]}
+        acl_rule = _build_acl_rule(rule)
+        assert (acl_rule["src"], acl_rule["dst"]) == ("10.1.0.0/24", "10.40.0.0/16")
+
+    def test_destination_ip_selector_without_segment(self) -> None:
+        rule = {**_rule(src=_seg_ref("10.1.0.0/24")), "destination_ip_addresses": [{"address": "198.51.100.7/32"}]}
+        assert _build_acl_rule(rule)["dst"] == "198.51.100.7/32"
+
+    def test_segment_prefix_wins_over_selectors(self) -> None:
+        rule = {**_rule(dst=_seg_ref("10.2.0.0/24")), "destination_prefixes": [{"prefix": "10.40.0.0/16"}]}
+        assert _build_acl_rule(rule)["dst"] == "10.2.0.0/24"
+
+    def test_no_segment_and_no_selector_is_any(self) -> None:
+        assert _build_acl_rule(_rule())["dst"] == "any"
+
+    def test_return_leg_of_an_inbound_rule_uses_the_same_resolver(self) -> None:
+        """The reply goes back to what the forward rule matched as its source."""
+        inbound = {
+            **_rule(port_start=5432),
+            "source_segment": {"id": "seg-a", "name": "a"},
+            "source_prefixes": [{"prefix": "10.9.0.0/24"}],
+            "destination_segment": {"id": "seg-b"},
+            "policy": {"enabled": True},
+        }
+        act = _make_acl_activation(seg_id="seg-b", prefix="10.2.0.0/24", security_policies=[], inbound_rules=[inbound])
+        returns = [r for r in get_acls(activations=[act])[0]["rules"] if r["name"].startswith("return-to-")]
+        assert [(r["src"], r["dst"], r["src_port"]) for r in returns] == [("10.2.0.0/24", "10.9.0.0/24", "eq 5432")]
+
+
+class TestGetAclsDefaultAction:
+    def test_default_permit_policy_closes_the_acl_with_a_permit(self) -> None:
+        """The segment policy's default action is the ACL's last word."""
+        acts = [
+            _make_acl_activation(vlan_id=100, security_policies=[_policy(rules=[_rule()], default_action="permit")])
+        ]
+        last = get_acls(activations=acts)[0]["rules"][-1]
+        assert (last["name"], last["action"], last["log"]) == ("default-permit-all", "permit", False)
+
+    def test_disabled_default_permit_policy_still_ends_in_deny(self) -> None:
+        """A disabled policy's default action does not apply."""
+        acts = [_make_acl_activation(vlan_id=100, security_policies=[_policy(enabled=False, default_action="permit")])]
+        last = get_acls(activations=acts)[0]["rules"][-1]
+        assert (last["name"], last["action"]) == ("implicit-deny-all", "deny")
 
 
 class TestGetAclsImplicitDeny:
@@ -725,7 +778,7 @@ class TestGetAclsReturnRules:
 
 class TestGetAclsZoneSupport:
     def test_zone_fields_passed_through(self) -> None:
-        """src_zone / dst_zone appear in each rule dict when set on the schema rule."""
+        """src_zone / dst_zone come from the rule segments' security_zone."""
         rule = _rule(index=10, src_zone="dmz", dst_zone="internal")
         acts = [_make_acl_activation(vlan_id=100, security_policies=[_policy(rules=[rule])])]
         r = get_acls(activations=acts)[0]["rules"][0]
@@ -733,7 +786,7 @@ class TestGetAclsZoneSupport:
         assert r["dst_zone"] == "internal"
 
     def test_zone_fields_none_when_absent(self) -> None:
-        """Rules without zone references have src_zone=None, dst_zone=None."""
+        """Rules whose segments carry no zone have src_zone=None, dst_zone=None."""
         acts = [_make_acl_activation(vlan_id=100, security_policies=[_policy(rules=[_rule()])])]
         r = get_acls(activations=acts)[0]["rules"][0]
         assert r["src_zone"] is None
@@ -800,7 +853,7 @@ def _make_isolation_activation(
 ) -> dict:
     """Return a single activation dict for isolation_mode / firewall-skip tests.
 
-    The segment always has ``security_policies`` present so that the skip vs.
+    The segment always has ``security_policy`` present so that the skip vs.
     render decision is exercised rather than the "field not queried" early-exit.
     """
     seg: dict = {
@@ -809,7 +862,7 @@ def _make_isolation_activation(
         "customer_name": f"vlan{vlan_id}",
         "arp_suppression": True,
         "prefix": {"ip_namespace": {"name": "tenant-a", "l3_vni": 50001}},
-        "security_policies": policies if policies is not None else [],
+        "security_policy": policies[0] if policies else None,
         "isolation_mode": isolation_mode,
     }
     if firewall_id is not None:
@@ -888,6 +941,22 @@ class TestGetAclsIsolationMode:
         result = get_acls(activations=[act])
         assert len(result) == 1
         assert result[0]["isolation_mode"] == "normal"
+
+    def test_apply_on_switch_rule_renders_despite_the_firewall(self) -> None:
+        """An apply_on_switch rule holds on the leaf even when the segment has an
+        inline_service: its whole ACL renders (an SVI ACL denies what it does not permit)."""
+        forced = {**_rule(index=10), "apply_on_switch": True}
+        policies = [_policy(rules=[forced, _rule(index=20, port_start=22)])]
+        act = _make_isolation_activation(vlan_id=107, seg_id="seg-fw-forced", firewall_id="fw-1", policies=policies)
+        result = get_acls(activations=[act])
+        assert [rule["name"] for rule in result[0]["rules"]] == ["rule-10", "rule-20", "implicit-deny-all"]
+
+    def test_disabled_apply_on_switch_rule_does_not_force_the_acl(self) -> None:
+        forced = {**_rule(index=10, disabled=True), "apply_on_switch": True}
+        act = _make_isolation_activation(
+            vlan_id=108, seg_id="seg-fw-off", firewall_id="fw-1", policies=[_policy(rules=[forced])]
+        )
+        assert get_acls(activations=[act]) == []
 
     def test_apply_on_switch_field_present_in_rule(self) -> None:
         """_build_acl_rule must not crash when 'apply_on_switch' appears in the rule dict."""

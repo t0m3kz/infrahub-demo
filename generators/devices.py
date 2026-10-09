@@ -86,6 +86,13 @@ HA_KIND_BY_ROLE: dict[str, str] = {
     "load-balancer": "ManagedLoadbalancerHA",
 }
 
+# device_role -> the bootstrap CoreStandardGroup its devices join
+# (data/bootstrap/00_groups.yml), for roles whose group does not follow the
+# f"{device_role}s" convention. One map for every create_devices() caller: a
+# group created on a branch because a caller missed it collides with every
+# other branch that creates it when both merge.
+ROLE_GROUP_NAMES: dict[str, str] = {"load-balancer": "loadbalancers"}
+
 # (physical template's platform name, device_role) -> matching virtual
 # template's name prefix — see data/bootstrap's 09_virtual_device_templates_
 # *.yaml, where every platform/role combination provides an _S/_M/_L/_XL
@@ -248,7 +255,7 @@ class DeviceMixin(MLAGWiringMixin):
 
         device_group = None
         if controller is None:
-            group_name = options.get("group_name") or f"{device_role}s"
+            group_name = options.get("group_name") or ROLE_GROUP_NAMES.get(device_role) or f"{device_role}s"
             try:
                 device_group = await self.client.get(kind=CoreStandardGroup, name__value=group_name)
             except NodeNotFoundError:
@@ -503,11 +510,6 @@ class DeviceMixin(MLAGWiringMixin):
         unlike dc.py's/pod.py's, which are always physical).
         """
         options = DeviceOptions(indexes=indexes, ha_kind=HA_KIND_BY_ROLE[role])
-        if role == "load-balancer":
-            # create_devices()'s default group_name is f"{device_role}s" =
-            # "load-balancers", but the bootstrap group is named
-            # "loadbalancers" (no hyphen) — override.
-            options["group_name"] = "loadbalancers"
 
         results: list[tuple[dict[str, Any], list[str]]] = []
         for entry in entries:

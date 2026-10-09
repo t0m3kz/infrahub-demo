@@ -15,6 +15,7 @@ from ..pools import PoolMixin
 from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
 from ..rack import (
     MUTUALLY_EXCLUSIVE_ROLE_GROUPS,
+    POD_GENERATORS,
     ROLES_BY_DEPLOYMENT_TYPE,
     ROW_DEPENDENT_RACK_TYPES,
     RackMixin,
@@ -531,7 +532,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
 
         # Wait for an in-flight add_pod/pod_rack_cascade on our pod before reading
         # pod-level data (spine devices, ASN/loopback pools) — avoid partial data.
-        refreshed = await self.wait_for_parent_generator_and_refetch(("add_pod", "pod_rack_cascade"), pod["id"])
+        refreshed = await self.wait_for_parent_generator_and_refetch(POD_GENERATORS, pod["id"])
         if refreshed is not None:
             try:
                 self.data = cast(TopologyRackData, parse_rack_data(refreshed))

@@ -1,4 +1,6 @@
 {#- Juniper JunOS SRX — zone-based firewall configuration -#}
+{#- An HA pair terminating a segment inline owns its gateway (virtual_ip): config
+    sync gives both members that one interface address. -#}
 {%- macro security_policies(policies, scope='', title='Security Policies') %}
 #
 # --- {{ title }} ---
@@ -31,7 +33,7 @@ set system host-name {{ name }}
 {%- set iface_ref = iface.parent_interface.name + '.' + iface.vlan_id | string %}
 set interfaces {{ iface.parent_interface.name }} unit {{ iface.vlan_id }} vlan-id {{ iface.vlan_id }}
 {%- if iface.ip_address %}
-set interfaces {{ iface.parent_interface.name }} unit {{ iface.vlan_id }} family {{ 'inet6' if ':' in iface.ip_address.address else 'inet' }} address {{ iface.ip_address.address }}
+set interfaces {{ iface.parent_interface.name }} unit {{ iface.vlan_id }} family {{ 'inet6' if ':' in (iface.virtual_ip or iface.ip_address.address) else 'inet' }} address {{ (iface.virtual_ip or iface.ip_address.address) }}
 {%- endif %}
 {%- if iface.description %}
 set interfaces {{ iface.parent_interface.name }} unit {{ iface.vlan_id }} description "{{ iface.description }}"
@@ -42,7 +44,7 @@ set security zones security-zone {{ iface.security_zone.name }} interfaces {{ if
 {%- else %}
 set interfaces {{ iface.name }} unit 0 description "{{ iface.description }}"
 {%- if iface.ip_address %}
-set interfaces {{ iface.name }} unit 0 family {{ 'inet6' if ':' in iface.ip_address.address else 'inet' }} address {{ iface.ip_address.address }}
+set interfaces {{ iface.name }} unit 0 family {{ 'inet6' if ':' in (iface.virtual_ip or iface.ip_address.address) else 'inet' }} address {{ (iface.virtual_ip or iface.ip_address.address) }}
 {%- endif %}
 {%- if iface.security_zone %}
 set security zones security-zone {{ iface.security_zone.name }} interfaces {{ iface.name }}.0
@@ -84,9 +86,6 @@ set chassis cluster redundancy-group 1 node 0 priority {{ ha.priority }}
 set chassis cluster redundancy-group 1 preempt {{ 'on' if ha.preempt else 'off' }}
 {%- if ha.ha_link %}
 set interfaces {{ ha.ha_link }} fabric-options member-interfaces {{ ha.ha_link }}
-{%- endif %}
-{%- if ha.virtual_ip %}
-set interfaces reth0 unit 0 family inet address {{ ha.virtual_ip }}
 {%- endif %}
 #
 {%- endif %}

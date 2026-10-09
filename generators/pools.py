@@ -15,7 +15,7 @@ too.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable, Literal
@@ -137,7 +137,7 @@ class PoolMixin:
             pass
 
     @asynccontextmanager
-    async def resource_lock(self, resource_key: str) -> AsyncIterator[None]:
+    async def resource_lock(self, resource_key: str) -> AsyncGenerator[None]:
         """``async with self.resource_lock(key):`` — acquire_resource_lock/
         release_resource_lock as a single call instead of a manual
         acquire-try-finally-release triplet at every call site. Same

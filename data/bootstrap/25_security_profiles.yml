@@ -11,16 +11,6 @@ spec:
   data:
     - name: "strict"
       description: "Full inspection — production database and critical workloads"
-      antivirus_enabled: true
-      ips_enabled: true
-      url_filtering_enabled: true
-      ssl_inspection_enabled: true
-      data_loss_prevention_enabled: true
 
     - name: "standard"
       description: "Standard inspection — general production traffic"
-      antivirus_enabled: true
-      ips_enabled: true
-      url_filtering_enabled: true
-      ssl_inspection_enabled: false
-      data_loss_prevention_enabled: false

@@ -2,7 +2,7 @@
 
 from transforms.common import BaseDeviceTransform
 from transforms.helpers.firewall import _flatten_deployment_firewall_contexts, get_border_leaf_pbr_rules
-from transforms.helpers.segments import _flatten_deployment_segment_activations
+from transforms.helpers.segments import _flatten_deployment_segment_activations, routed_activations
 
 
 class BorderLeaf(BaseDeviceTransform):
@@ -26,7 +26,9 @@ class BorderLeaf(BaseDeviceTransform):
         config = super()._extra_config(data, platform_name, extra_roots=extra_roots)
         config.pop("customer_pbr_rules", None)
 
-        dc_activations = _flatten_deployment_segment_activations(data.get("deployment"))
+        # A terminate_inline segment is routed by its HA pair, never by the
+        # fabric, so the border-leaf has nothing to steer for it either.
+        dc_activations = routed_activations(_flatten_deployment_segment_activations(data.get("deployment")))
         firewall_contexts = _flatten_deployment_firewall_contexts(data.get("deployment"))
         config["border_leaf_pbr_rules"] = get_border_leaf_pbr_rules(dc_activations, firewall_contexts, platform_name)
         if platform_name in {"sonic", "dell_sonic", "nokia_sros"} and config["border_leaf_pbr_rules"]:

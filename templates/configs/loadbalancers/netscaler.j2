@@ -6,7 +6,10 @@ set ns hostName {{ name }}
 # --- SNIPs (Subnet IPs) ---
 {%- for iface in lb_interfaces %}
 {%- if iface.role != 'management' %}
-add ns ip {{ iface.ip_address.address.split('/')[0] }} {{ iface.ip_address.address.split('/')[0] }} -netmask 255.255.255.0 -type SNIP
+{#- In an HA pair the SNIP floats with the primary node: on a segment the pair
+    terminates inline it is the segment gateway (virtual_ip). -#}
+{%- set addr = iface.virtual_ip or iface.ip_address.address %}
+add ns ip {{ addr.split('/')[0] }} {{ addr.split('/')[1] | int | cidr_to_netmask }} -type SNIP
 {%- if iface.description %}
 # {{ iface.name }}: {{ iface.description }}
 {%- endif %}

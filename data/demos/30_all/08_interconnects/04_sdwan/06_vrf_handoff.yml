@@ -70,16 +70,6 @@ spec:
       capabilities:
         - "EQX-FR2-SDWAN-GW1"
 ---
-# Upserted by HFID [afi, safi] — nothing else in this demo creates ipv4/unicast.
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: RoutingBGPAddressFamily
-  data:
-    - afi: ipv4
-      safi: unicast
-      description: "IPv4 unicast"
----
 # Shared key for the PROD handoff below. Neither side is a DC fabric, so there
 # is no generated {fabric}-overlay-key to reuse. Demo-only secret, like the API
 # token in the README.

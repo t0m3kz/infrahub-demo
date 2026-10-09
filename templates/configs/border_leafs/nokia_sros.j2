@@ -67,7 +67,9 @@ configure service vpls "vpls-{{ mapping.vni }}" bgp instance 1 route-distinguish
 configure service vpls "vpls-{{ mapping.vni }}" bgp instance 1 route-target export "target:{{ mapping.route_target }}"
 configure service vpls "vpls-{{ mapping.vni }}" bgp instance 1 route-target import "target:{{ mapping.route_target }}"
 {%- endif %}
-{%- for interface in interfaces if interface.vlans and interface.vlans[0] == mapping.vlan_id %}
+{#- An access port binds its first VLAN; a trunk (HA-facing service port)
+    one dot1q SAP per VLAN it carries. -#}
+{%- for interface in interfaces if mapping.vlan_id in (interface.vlans if interface.mode == 'trunk' else interface.vlans[:1]) %}
 configure service vpls "vpls-{{ mapping.vni }}" sap {{ interface.name }}:{{ mapping.vlan_id }} admin-state enable
 configure service vpls "vpls-{{ mapping.vni }}" sap {{ interface.name }}:{{ mapping.vlan_id }} create
 {%- endfor %}

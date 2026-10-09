@@ -744,6 +744,7 @@ async def fetch_artifacts(
     client: InfrahubClient,
     branch: str,
     expected_min_total: int = 0,
+    max_polls: int = 12,
 ) -> dict[str, Any]:
     """Fetch artifacts generated for a proposed change via its validators.
 
@@ -758,6 +759,8 @@ async def fetch_artifacts(
         client: Infrahub async client
         branch: Source branch name (used to find the proposed change)
         expected_min_total: Minimum total artifact count to poll for
+        max_polls: Polls (10s apart) before giving up — raise it when the
+            proposed change's pipeline shares the workers with others
 
     Returns:
         Dict with ``total``, ``by_definition`` summary, and ``failed`` list.
@@ -799,7 +802,6 @@ async def fetch_artifacts(
     }
     """
 
-    max_polls = 12
     poll_wait = 10
     artifacts: list[dict[str, str]] = []
 

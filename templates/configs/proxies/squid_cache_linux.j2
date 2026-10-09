@@ -1,3 +1,4 @@
+{%- import 'common/keepalived.j2' as keepalived -%}
 {#- Squid — {{ proxy_type | default('explicit') }} proxy configuration -#}
 #
 # Device:     {{ name }}
@@ -88,4 +89,5 @@ http_access allow {{ management_ip }} manager
 # HA group: {{ ha.group_id }}  mode: {{ ha.mode }}  priority: {{ ha.priority }}
 # Peers: {{ ha.devices | join(', ') }}
 # Failover managed externally via keepalived — Squid itself is stateless.
+{{- keepalived.vrrp_instances(proxy_interfaces, ha) }}
 {%- endif %}

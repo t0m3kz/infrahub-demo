@@ -105,6 +105,14 @@ query proxy_config($device: String!) {
                 ip_address { node { address { value } ip_namespace { node { name { value } } } } }
                 parent_interface { node { name { value } } }
               }
+              interface_capabilities {
+                edges {
+                  node {
+                    __typename
+                    ...InlineTerminationFields
+                  }
+                }
+              }
             }
           }
         }
