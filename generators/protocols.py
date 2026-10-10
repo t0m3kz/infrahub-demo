@@ -77,7 +77,6 @@ class TopologyCustomer(CoreNode):
     name: String
     org_id: String
     status: Dropdown
-    exchange_gateways: RelationshipManager[TopologyExchangeGateway]
     namespace: RelationshipAttribute[BuiltinIPNamespace]
     network_segments: RelationshipManager[ManagedNetworkSegment]
     owner: RelationshipAttribute[OrganizationEntity]
@@ -129,11 +128,6 @@ class OrganizationEntity(CoreNode):
 
 
 class TopologyExchangeGateway(CoreNode):
-    description: StringOptional
-    name: String
-    status: Dropdown
-    common_exchange: RelationshipAttribute[TopologyCommonExchange]
-    customer_deployments: RelationshipManager[TopologyDeployment]
     namespace_a: RelationshipAttribute[IpamNamespace]
     namespace_z: RelationshipAttribute[IpamNamespace]
 
@@ -509,15 +503,6 @@ class TopologyColocationZone(
     TopologyConnectableLocation,
 ):
     deployment_type: Dropdown
-
-
-class TopologyCommonExchange(CoreNode):
-    description: StringOptional
-    is_default: Boolean
-    name: String
-    deployments: RelationshipManager[TopologyDeployment]
-    exchange_gateways: RelationshipManager[TopologyExchangeGateway]
-    namespace: RelationshipAttribute[IpamNamespace]
 
 
 class AppComponent(AppGeneric):
