@@ -110,15 +110,16 @@ def _flatten_deployment_segment_activations(deployment: dict[str, Any] | None) -
     — NOT `vlan_id`, which no longer exists on SegmentDeployment (local VLAN
     ID is per VLAN domain, not DC-wide; see ManagedVlanDomainSegment).
 
-    Border-leaf needs every segment activation in its own DC to run PBR
-    (.dev/scenariusze.txt: SGT travels in-band inside the VXLAN header
-    end-to-end, so border-leaf never needs its own customer-facing
-    interface_capabilities the way a leaf does) — TopologyDataCenter inherits
+    Border-leaf needs every segment activation in its own DC to route the
+    INTERNET-VRF return prefixes to the context serving each segment
+    (SGT travels in-band inside the VXLAN header end-to-end, so border-leaf
+    never needs its own customer-facing interface_capabilities the way a
+    leaf does) — TopologyDataCenter inherits
     TopologySegmentHosting directly (schemas/extensions/topology/topology_dc.yml),
     so `deployment.segment_deployments` already covers the whole DC in one hop.
     VNI (not vlan_id) is the correct DC-wide/fabric-wide key here — the only
-    caller (transforms/helpers/firewall.py's get_border_leaf_pbr_rules) dedups
-    and names PBR rules by it.
+    caller (transforms/helpers/firewall.py's get_exchange_routes) joins the
+    activations to the serving context by it. There is no border-leaf PBR.
     """
     if not deployment:
         return []

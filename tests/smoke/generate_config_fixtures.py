@@ -1344,6 +1344,237 @@ def build_firewall_inline_data(*, device_name: str, platform: str) -> dict:
     return data
 
 
+# ----------------------------------------------------------------------------
+# Inter-VRF exchange through firewall contexts (transit legs)
+# ----------------------------------------------------------------------------
+# One /29 per (context, VRF) leg: .1 border-leaf anycast, .4 firewall VIP,
+# .5/.6 members (utils/exchange_transit.py). The shared context (no tenant)
+# serves deployment dep-shared; the dedicated one (tenant) serves dep-ded.
+_XCHG_NAMESPACES: dict[str, tuple[str, int]] = {
+    "prod": ("PROD", 50001),
+    "non_prod": ("NON-PROD", 50002),
+    "internet": ("INTERNET", 50003),
+}
+# context -> (context id, name, context vlan, tenant name or None, served deployment id, {ns_type: /29})
+_XCHG_CONTEXTS: dict[str, dict[str, Any]] = {
+    "shared": {
+        "id": "ctx-shared",
+        "name": "dc1-fw-shared",
+        "vlan": 3000,
+        "tenant": None,
+        "deployment": "dep-shared",
+        "prefixes": {"prod": "100.66.0.0/29", "non_prod": "100.66.16.0/29", "internet": "100.66.32.0/29"},
+    },
+    "dedicated": {
+        "id": "ctx-dedicated",
+        "name": "dc1-fw-acme",
+        "vlan": 3001,
+        "tenant": "Acme",
+        "deployment": "dep-acme",
+        "prefixes": {"prod": "100.66.0.8/29", "internet": "100.66.32.8/29"},
+    },
+}
+
+
+def _xchg_ns_node(ns_type: str, *, with_vni: bool = True) -> dict:
+    name, l3_vni = _XCHG_NAMESPACES[ns_type]
+    inner: dict[str, Any] = {"name": _v(name), "namespace_type": _v(ns_type)}
+    if with_vni:
+        inner["l3_vni"] = _v(l3_vni)
+    return _node(inner)
+
+
+def _xchg_exchange(ctx: dict[str, Any], a_type: str) -> dict:
+    """The exchange {context}-{A}-INTERNET of one tenant VRF, gated by ``ctx``."""
+    return {
+        "id": f"xchg-{ctx['name']}-{a_type}",
+        "namespace_a": _xchg_ns_node(a_type, with_vni=False),
+        "namespace_z": _xchg_ns_node("internet", with_vni=False),
+        "gateway": _node({"id": ctx["id"], "tenant": _node({"id": "tenant-acme"}) if ctx["tenant"] else _node(None)}),
+    }
+
+
+def _xchg_segment(*, seg_name: str, vlan: int, vni: int, gateway_ip: str, deployment: str, domain: str) -> dict:
+    seg = _make_segment_node(
+        vlan_id=vlan,
+        vni=vni,
+        seg_name=seg_name,
+        seg_type="ManagedVxlanSegment",
+        gateway_ip=gateway_ip,
+        ns_name="PROD",
+        l3_vni=_XCHG_NAMESPACES["prod"][1],
+        vlan_domain_id=domain,
+    )
+    ns = seg["gateway"]["node"]["ip_prefix"]["node"]["ip_namespace"]["node"]
+    ns["namespace_type"] = _v("prod")
+    seg["customer_deployments"] = _edges([{"id": deployment}])
+    return seg
+
+
+def build_exchange_transit_bl_data(*, device_name: str, platform: str) -> dict:
+    """A border leaf whose firewall-role port is tagged with two contexts.
+
+    Shared context dc1-fw-shared (no tenant): legs in PROD and INTERNET, so
+    PROD gets 0/0 -> VIP. Dedicated context dc1-fw-acme (tenant Acme): legs in
+    PROD and INTERNET, no 0/0 (its tenant is steered by leaf PBR). Each context
+    serves one PROD segment (seg-shared, seg-acme), which becomes a static in
+    INTERNET towards the serving context's INTERNET VIP. seg-shared is also
+    carried on the customer port, to prove a plain segment and the transit
+    legs share the PROD VRF.
+    """
+    data = build_device_data(
+        device_name=device_name, role="border-leaf", platform=platform, scenario="ebgp_ibgp", include_segments=False
+    )
+    device_node = data["DcimDevice"]["edges"][0]["node"]
+    domain = device_node["id"]
+    shared = _xchg_segment(
+        seg_name="seg-shared", vlan=100, vni=10100, gateway_ip="10.1.0.1/24", deployment="dep-shared", domain=domain
+    )
+    acme = _xchg_segment(
+        seg_name="seg-acme", vlan=110, vni=10110, gateway_ip="10.2.0.1/24", deployment="dep-acme", domain=domain
+    )
+
+    context_nodes = []
+    for ctx in _XCHG_CONTEXTS.values():
+        legs = []
+        for ns_type, prefix in ctx["prefixes"].items():
+            if ns_type == "non_prod":
+                continue  # the border leaf fixture exchanges PROD <-> INTERNET only
+            net = ipaddress.ip_network(prefix)
+            # both legs of the PROD <-> INTERNET exchange carry that exchange
+            exchanges = [_xchg_exchange(ctx, "prod")]
+            for member, host in (("dc1-fw-01", 5), ("dc1-fw-02", 6)):
+                legs.append(
+                    {
+                        "name": _v(
+                            f"ethernet1/1.{ctx['vlan'] + 200 * {'prod': 0, 'non_prod': 1, 'internet': 2}[ns_type]}"
+                        ),
+                        "device": _node({"name": _v(member), "role": _v("firewall")}),
+                        "ip_address": _node(
+                            {
+                                "address": _v(f"{net[host]}/{net.prefixlen}"),
+                                "ip_namespace": _xchg_ns_node(ns_type),
+                            }
+                        ),
+                        "interface_capabilities": _edges(exchanges),
+                    }
+                )
+        context_nodes.append(
+            {
+                "__typename": "ManagedFirewallContext",
+                "id": ctx["id"],
+                "name": _v(ctx["name"]),
+                "vlan_id": _v(ctx["vlan"]),
+                "tenant": _node({"id": "tenant-acme"}) if ctx["tenant"] else _node(None),
+                "served_deployments": _edges([{"id": ctx["deployment"]}]),
+                "interface_capabilities": _edges(legs),
+            }
+        )
+
+    interfaces = device_node["interfaces"]["edges"]
+    interfaces.append(
+        {
+            "node": {
+                "__typename": "DcimPhysicalInterface",
+                "name": _v("Ethernet20"),
+                "description": _v("to dc1-fw-01"),
+                "status": _v("active"),
+                "role": _v("firewall"),
+                "interface_type": _v("10gbase-x-sfpp"),
+                "mtu": _v(9000),
+                "ip_address": _node(None),
+                "cable": _node(None),
+                "interface_capabilities": _edges(context_nodes),
+            }
+        }
+    )
+    customer_port = next(e["node"] for e in interfaces if e["node"]["name"]["value"] == "Ethernet10")
+    customer_port["interface_capabilities"] = _edges([shared])
+    device_node["deployment"]["node"]["segment_deployments"] = _edges(
+        [
+            {"vni": _v(10100), "status": _v("active"), "segment": _node(shared)},
+            {"vni": _v(10110), "status": _v("active"), "segment": _node(acme)},
+        ]
+    )
+    return data
+
+
+def build_firewall_exchange_data(*, device_name: str, platform: str) -> dict:
+    """An HA pair member (the first) carrying two contexts' transit legs.
+
+    dc1-fw-shared holds PROD, NON-PROD and INTERNET (so it renders the explicit
+    PROD<->NON-PROD deny); dc1-fw-acme holds PROD and INTERNET. Served segments:
+    seg-prod 10.1.0.0/24 and seg-nonprod 10.2.0.0/24 (shared), seg-acme
+    10.3.0.0/24 (dedicated).
+    """
+    data = build_firewall_ha_data(device_name=device_name, platform=platform)
+    device = data["DcimPhysicalDevice"]["edges"][0]["node"]
+
+    def zone_segment(seg_id: str, prefix: str) -> dict:
+        return {
+            "id": seg_id,
+            "__typename": "ManagedVxlanSegment",
+            "name": _v(seg_id),
+            "gateway": _node({"ip_prefix": _node({"prefix": _v(prefix)})}),
+        }
+
+    seg_prod = zone_segment("seg-prod", "10.1.0.0/24")
+    seg_nonprod = zone_segment("seg-nonprod", "10.2.0.0/24")
+    seg_acme = zone_segment("seg-acme", "10.3.0.0/24")
+    served = {
+        "shared": [seg_prod, seg_nonprod],
+        "dedicated": [seg_acme],
+    }
+
+    interfaces = []
+    for key, ctx in _XCHG_CONTEXTS.items():
+        cap = {
+            "__typename": "ManagedFirewallContext",
+            "id": ctx["id"],
+            "name": _v(ctx["name"]),
+            "vlan_id": _v(ctx["vlan"]),
+            "context_id": _v(None),
+            "tenant": _node({"name": _v(ctx["tenant"])}) if ctx["tenant"] else _node(None),
+            "served_deployments": _edges([{"id": ctx["deployment"], "network_segments": _edges(served[key])}]),
+        }
+        for ns_type, prefix in ctx["prefixes"].items():
+            ns_name = _XCHG_NAMESPACES[ns_type][0]
+            vlan = ctx["vlan"] + {"prod": 0, "non_prod": 200, "internet": 400}[ns_type]
+            net = ipaddress.ip_network(prefix)
+            interfaces.append(
+                {
+                    "__typename": "DcimVirtualInterface",
+                    "name": _v(f"ethernet1/1.{vlan}"),
+                    "description": _v(None),
+                    "status": _v("active"),
+                    "role": _v(None),
+                    "parent_interface": _node({"name": _v("ethernet1/1")}),
+                    "ip_address": _node(
+                        {
+                            "address": _v(f"{net[5]}/{net.prefixlen}"),
+                            "ip_namespace": _node({"name": _v(ns_name), "namespace_type": _v(ns_type)}),
+                        }
+                    ),
+                    "ha_domain": _node(None),
+                    "interface_capabilities": _edges([cap]),
+                }
+            )
+    # keep the HA sync port of the HA fixture, replace the zone legs by the context legs
+    ha_port = [e for e in device["interfaces"]["edges"] if e["node"]["name"]["value"] == "ethernet1/7"]
+    device["interfaces"]["edges"] = [{"node": i} for i in interfaces] + ha_port
+
+    def zone(name: str, segments: list[dict]) -> dict:
+        return {
+            "name": _v(name),
+            "trust_level": _v(50),
+            "description": _v(""),
+            "network_segments": _edges(segments),
+        }
+
+    data["SecurityZone"] = _edges([zone("PROD-ZONE", [seg_prod, seg_acme]), zone("NONPROD-ZONE", [seg_nonprod])])
+    return data
+
+
 def build_mlag_device_data(
     *,
     device_name: str,
@@ -1907,6 +2138,26 @@ def main() -> int:
             )
             generated += g
             errors += e
+
+    # Inter-VRF exchange through firewall contexts: border-leaf transit VLANs,
+    # VNIs, anycast gateways and statics; firewall legs, VIPs, routes, zones.
+    print("\nGenerating exchange-transit fixtures:")
+    for platform in ["cisco_nxos", "arista_eos", "nokia_sros"]:
+        g, e = _write_data_fixture(
+            BorderLeaf,
+            f"border_leaf_{platform}_exchange_transit",
+            build_exchange_transit_bl_data(device_name="dc1-border-leaf-01", platform=platform),
+        )
+        generated += g
+        errors += e
+    for platform in [*FIREWALL_PLATFORMS, "juniper_junos"]:
+        g, e = _write_data_fixture(
+            Firewall,
+            f"firewall_{platform}_exchange_transit",
+            build_firewall_exchange_data(device_name="dc1-fw-01", platform=platform),
+        )
+        generated += g
+        errors += e
 
     # Firewall scenarios: zone-based policy per vendor
     print("\nGenerating firewall fixtures:")

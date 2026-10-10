@@ -1,0 +1,215 @@
+!
+! Arista EOS Border Leaf Configuration
+! Device: dc1-border-leaf-01
+! Generated for Arista EOS
+!
+
+hostname dc1-border-leaf-01
+
+! EVPN on EOS requires the multi-agent routing model (the legacy ribd model has
+! no EVPN address-family at all). Changing it reloads the routing agents, so it
+! must be present from the first push, not added later.
+service routing protocols model multi-agent
+
+! Configure spanning tree mode
+spanning-tree mode mstp
+
+! Configure VLAN 1
+no spanning-tree vlan-id 4094
+
+vlan 100
+   name Customer-A
+
+vlan 3000
+   name XCHG-dc1-fw-shared-PROD
+
+vlan 3001
+   name XCHG-dc1-fw-acme-PROD
+
+vlan 3400
+   name XCHG-dc1-fw-shared-INTERNET
+
+vlan 3401
+   name XCHG-dc1-fw-acme-INTERNET
+
+interface Ethernet1
+   description to spine-01
+   ip address 10.1.0.1/31
+
+   no shutdown
+
+interface Ethernet2
+   description to spine-02
+   ip address 10.1.0.3/31
+
+   no shutdown
+
+interface Ethernet10
+   description to server-01
+
+   switchport access vlan 100
+   no shutdown
+
+interface Ethernet20
+   description to dc1-fw-01
+
+   switchport mode trunk
+   switchport trunk allowed vlan 3000,3001,3400,3401
+   no shutdown
+
+interface Loopback0
+   description Router ID
+   ip address 10.0.0.1/32
+
+   no shutdown
+
+! Configure BGP
+
+router bgp 65000
+   router-id 10.0.0.1
+   no bgp default ipv4-unicast
+   distance bgp 20 200 200
+   graceful-restart
+   maximum-paths 4 ecmp 64
+   !
+   neighbor EVPN-PEERS peer-group
+   neighbor EVPN-PEERS remote-as 65000
+   neighbor EVPN-PEERS update-source Loopback0
+   neighbor EVPN-PEERS send-community
+   !
+   neighbor UNDERLAY-PEERS peer-group
+   neighbor UNDERLAY-PEERS send-community
+   neighbor UNDERLAY-PEERS bfd
+   neighbor 10.1.0.0 peer-group UNDERLAY-PEERS
+   neighbor 10.1.0.0 remote-as 65100
+   neighbor 10.1.0.0 local-as 65001 no-prepend replace-as
+
+   neighbor 10.1.0.0 description spine-01
+   neighbor 10.1.0.2 peer-group UNDERLAY-PEERS
+   neighbor 10.1.0.2 remote-as 65101
+   neighbor 10.1.0.2 local-as 65001 no-prepend replace-as
+
+   neighbor 10.1.0.2 description spine-02
+   neighbor 10.0.0.100 peer-group EVPN-PEERS
+
+   neighbor 10.0.0.100 description spine-01
+   neighbor 10.0.0.101 peer-group EVPN-PEERS
+
+   neighbor 10.0.0.101 description spine-02
+   !
+   address-family ipv4
+      redistribute connected route-map RM-CONN-2-BGP
+      neighbor UNDERLAY-PEERS activate
+   !
+   address-family evpn
+      neighbor EVPN-PEERS activate
+
+
+! Configure route-maps
+route-map RM-CONN-2-BGP permit 10
+   match interface Loopback0
+ip prefix-list PL-VRF-STATIC seq 10 permit 10.1.0.0/24
+ip prefix-list PL-VRF-STATIC seq 20 permit 10.2.0.0/24
+ip prefix-list PL-VRF-STATIC seq 30 permit 0.0.0.0/0
+route-map RM-VRF-STATIC-2-EVPN permit 10
+   match ip address prefix-list PL-VRF-STATIC
+!
+! VXLAN Configuration — border-leaf is a VTEP too, terminating customer/shared
+! VNIs the same as a regular leaf.
+!
+interface Vxlan1
+   vxlan source-interface Loopback0
+   !
+   ! L2 VNI Mappings (VLAN segments)
+   vxlan vlan 100 vni 10100
+   vxlan vlan 3000 vni 64000
+   vxlan vlan 3001 vni 64001
+   vxlan vlan 3400 vni 64400
+   vxlan vlan 3401 vni 64401
+   !
+   ! L3 VNI Mappings (VRF segments for microsegmentation)
+   vxlan vrf INTERNET vni 50003
+   vxlan vrf PROD vni 50001
+!
+!
+! VRF Definitions (Microsegmentation)
+!
+vrf instance INTERNET
+   description Tenant VRF for microsegmentation
+   rd 10.0.0.1:50003
+!ip routing vrf INTERNET
+!
+vrf instance PROD
+   description Tenant VRF for microsegmentation
+   rd 10.0.0.1:50001
+!ip routing vrf PROD
+!
+!
+! EVPN Configuration (L2 + L3 VNI)
+!
+router bgp 65000
+   !
+   ! L2 EVPN (VLAN-based)
+   vlan 100
+      rd 10.0.0.1:10100
+      route-target both 65000:10100
+      redistribute learned
+   vlan 3000
+      rd 10.0.0.1:64000
+      route-target both 65000:64000
+      redistribute learned
+   vlan 3001
+      rd 10.0.0.1:64001
+      route-target both 65000:64001
+      redistribute learned
+   vlan 3400
+      rd 10.0.0.1:64400
+      route-target both 65000:64400
+      redistribute learned
+   vlan 3401
+      rd 10.0.0.1:64401
+      route-target both 65000:64401
+      redistribute learned
+   !
+   ! L3 EVPN (VRF-based for microsegmentation)
+   vrf INTERNET
+      rd 10.0.0.1:50003
+      route-target import evpn 65000:50003
+      route-target export evpn 65000:50003
+      redistribute connected
+      redistribute static route-map RM-VRF-STATIC-2-EVPN
+   vrf PROD
+      rd 10.0.0.1:50001
+      route-target import evpn 65000:50001
+      route-target export evpn 65000:50001
+      redistribute connected
+      redistribute static route-map RM-VRF-STATIC-2-EVPN
+
+!
+! Anycast Gateway Configuration
+!
+ip virtual-router mac-address 00:1c:73:00:dc:01
+interface Vlan100
+   vrf PROD
+   ip address virtual 10.1.0.1/24
+interface Vlan3000
+   vrf PROD
+   ip address virtual 100.66.0.1/29
+interface Vlan3001
+   vrf PROD
+   ip address virtual 100.66.0.9/29
+interface Vlan3400
+   vrf INTERNET
+   ip address virtual 100.66.32.1/29
+interface Vlan3401
+   vrf INTERNET
+   ip address virtual 100.66.32.9/29
+!
+! Inter-VRF exchange routes (TopologyRoutedExchange, via the firewall context)
+!
+ip route vrf INTERNET 10.1.0.0/24 100.66.32.4
+ip route vrf INTERNET 10.2.0.0/24 100.66.32.12
+ip route vrf PROD 0.0.0.0/0 100.66.0.4
+
+
+! End of configuration

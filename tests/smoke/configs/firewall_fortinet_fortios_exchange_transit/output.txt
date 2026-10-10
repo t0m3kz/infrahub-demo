@@ -1,0 +1,181 @@
+config system global
+    set hostname "dc1-fw-01"
+end
+#
+# --- Address Objects (zone members and policy endpoints) ---
+config firewall address
+    edit "10.1.0.0/24"
+        set subnet 10.1.0.0 255.255.255.0
+    next
+    edit "10.3.0.0/24"
+        set subnet 10.3.0.0 255.255.255.0
+    next
+    edit "10.2.0.0/24"
+        set subnet 10.2.0.0 255.255.255.0
+    next
+end
+#
+# --- Firewall Contexts (VDOMs) — one per tenant, per ManagedFirewallContext ---
+config system vdom
+    edit "dc1-fw-acme"
+    next
+    edit "dc1-fw-shared"
+    next
+end
+config global
+    config system interface
+        edit "ethernet1/1.3001"
+            set type vlan
+            set vlanid 3001
+            set interface "ethernet1/1"
+            set vdom "dc1-fw-acme"
+            set ip 100.66.0.12/29
+            set allowaccess ping
+            set status up
+            set alias "PROD-ZONE"
+        next
+        edit "ethernet1/1.3401"
+            set type vlan
+            set vlanid 3401
+            set interface "ethernet1/1"
+            set vdom "dc1-fw-acme"
+            set ip 100.66.32.12/29
+            set allowaccess ping
+            set status up
+            set alias "INTERNET-ZONE"
+        next
+    end
+end
+#
+# --- Zones and routes in VDOM dc1-fw-acme ---
+config vdom
+    edit "dc1-fw-acme"
+        config system zone
+            edit "PROD-ZONE"
+                set intrazone allow
+                set interface "ethernet1/1.3001"
+            next
+            edit "INTERNET-ZONE"
+                set intrazone allow
+                set interface "ethernet1/1.3401"
+            next
+        end
+        config router static
+            edit 1
+                set dst 10.3.0.0/24
+                set gateway 100.66.0.9
+                set device "ethernet1/1.3001"
+            next
+            edit 2
+                set dst 0.0.0.0/0
+                set gateway 100.66.32.9
+                set device "ethernet1/1.3401"
+            next
+        end
+    next
+end
+config global
+    config system interface
+        edit "ethernet1/1.3000"
+            set type vlan
+            set vlanid 3000
+            set interface "ethernet1/1"
+            set vdom "dc1-fw-shared"
+            set ip 100.66.0.4/29
+            set allowaccess ping
+            set status up
+            set alias "PROD-ZONE"
+        next
+        edit "ethernet1/1.3200"
+            set type vlan
+            set vlanid 3200
+            set interface "ethernet1/1"
+            set vdom "dc1-fw-shared"
+            set ip 100.66.16.4/29
+            set allowaccess ping
+            set status up
+            set alias "NONPROD-ZONE"
+        next
+        edit "ethernet1/1.3400"
+            set type vlan
+            set vlanid 3400
+            set interface "ethernet1/1"
+            set vdom "dc1-fw-shared"
+            set ip 100.66.32.4/29
+            set allowaccess ping
+            set status up
+            set alias "INTERNET-ZONE"
+        next
+    end
+end
+#
+# --- Zones and routes in VDOM dc1-fw-shared ---
+config vdom
+    edit "dc1-fw-shared"
+        config system zone
+            edit "PROD-ZONE"
+                set intrazone allow
+                set interface "ethernet1/1.3000"
+            next
+            edit "NONPROD-ZONE"
+                set intrazone allow
+                set interface "ethernet1/1.3200"
+            next
+            edit "INTERNET-ZONE"
+                set intrazone allow
+                set interface "ethernet1/1.3400"
+            next
+        end
+        config router static
+            edit 1
+                set dst 10.1.0.0/24
+                set gateway 100.66.0.1
+                set device "ethernet1/1.3000"
+            next
+            edit 2
+                set dst 10.2.0.0/24
+                set gateway 100.66.16.1
+                set device "ethernet1/1.3200"
+            next
+            edit 3
+                set dst 0.0.0.0/0
+                set gateway 100.66.32.1
+                set device "ethernet1/1.3400"
+            next
+        end
+        config firewall policy
+            edit 900001
+                set name "deny-PROD-ZONE-to-NONPROD-ZONE"
+                set srcintf "PROD-ZONE"
+                set dstintf "NONPROD-ZONE"
+                set srcaddr "all"
+                set dstaddr "all"
+                set action deny
+                set schedule "always"
+                set service "ALL"
+                set logtraffic all
+            next
+            edit 900002
+                set name "deny-NONPROD-ZONE-to-PROD-ZONE"
+                set srcintf "NONPROD-ZONE"
+                set dstintf "PROD-ZONE"
+                set srcaddr "all"
+                set dstaddr "all"
+                set action deny
+                set schedule "always"
+                set service "ALL"
+                set logtraffic all
+            next
+        end
+    next
+end
+#
+# --- HA Configuration ---
+config system ha
+    set group-id 1
+    set mode a-p
+    set priority 100
+    set override disable
+    set hbdev "ethernet1/7" 50
+end
+#

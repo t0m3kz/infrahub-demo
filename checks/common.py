@@ -1,9 +1,19 @@
 from collections.abc import Callable
+from ipaddress import ip_interface
 from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
 
 from utils.data_cleaning import get_data
+from utils.exchange_transit import (
+    OFFSET_MEMBER_A,
+    OFFSET_MEMBER_B,
+    TRANSIT_SLOT,
+    transit_addresses,
+    transit_vlan,
+)
+
+TRANSIT_PREFIXLEN = 29
 
 __all__ = [
     "BaseDeviceCheck",
@@ -118,67 +128,110 @@ def validate_routing_password(data: dict[str, Any]) -> list[str]:
 
 
 def validate_exchange_gateways(data: dict[str, Any]) -> list[str]:
-    """Validate TopologyRoutedExchange invariants not enforced by the schema.
+    """Validate the legs of the TopologyRoutedExchange a device holds.
 
-    RoutedExchange models one device routing between two VRFs via two local
-    SVIs/sub-interfaces (router-on-a-stick). The schema cannot express "exactly
-    2 legs, each in a different referenced namespace, both on this device" —
-    ManagedGenericInterfaces gives an unconstrained many-cardinality relation
-    (min_count/max_count can't be overridden per-node on a generic-inherited
-    relationship without colliding on the shared identifier). Enforced here
-    instead, from the same interface_capabilities data the config transform reads.
+    The schema cannot say "this device holds exactly one leg per namespace of
+    the exchange, addressed in the transit /29, on the transit VLAN". Enforced
+    here from the device's own sub-interfaces: a leg is an interface tagged
+    with the exchange, and with the gateway context whose VLAN it derives from
+    (utils/exchange_transit.py is the one rule set the generator, the border
+    leaf transform and this check share). Only firewalls hold legs; a border
+    leaf carries the context on its ports, which validate_transit_vlans covers.
+
+    Per exchange cap on this device's interfaces:
+
+    - exactly one leg in namespace_a and one in namespace_z, none elsewhere;
+    - each leg's address is a member address (.5 / .6) of a /29 in its namespace;
+    - the leg is tagged with the exchange's gateway context;
+    - the sub-interface VLAN (``<uplink>.<vlan>``) is
+      transit_vlan(context VLAN, namespace type).
     """
     errors: list[str] = []
     device_name = data.get("name", "unknown")
-    seen_exchange_ids: set[str] = set()
+    exchanges: dict[str, dict[str, Any]] = {}
+    legs: dict[str, list[tuple[dict[str, Any], dict[str, Any] | None]]] = {}
 
-    for interface in data.get("interfaces", []):
-        for capability in interface.get("interface_capabilities", []):
-            if capability.get("typename") != "TopologyRoutedExchange":
+    for interface in data.get("interfaces") or []:
+        caps = interface.get("interface_capabilities") or []
+        context = next((c for c in caps if c.get("typename") == "ManagedFirewallContext"), None)
+        for cap in caps:
+            exchange_id = cap.get("id")
+            if cap.get("typename") != "TopologyRoutedExchange" or not exchange_id:
                 continue
-            exchange_id = capability.get("id")
-            if not exchange_id or exchange_id in seen_exchange_ids:
+            exchanges.setdefault(exchange_id, cap)
+            legs.setdefault(exchange_id, []).append((interface, context))
+
+    for exchange_id, exchange in exchanges.items():
+        exchange_name = exchange.get("name", exchange_id)
+        label = f"RoutedExchange '{exchange_name}' on '{device_name}'"
+        sides = {"namespace_a": exchange.get("namespace_a") or {}, "namespace_z": exchange.get("namespace_z") or {}}
+        by_namespace: dict[str, list[str]] = {}
+
+        for interface, context in legs[exchange_id]:
+            iface_name = interface.get("name", "unknown")
+            ip_address = interface.get("ip_address") or {}
+            address = ip_address.get("address")
+            namespace = (ip_address.get("ip_namespace") or {}).get("name")
+            if not address or not namespace:
+                errors.append(f"{label}: leg '{iface_name}' has no IP address / namespace assigned.")
                 continue
-            seen_exchange_ids.add(exchange_id)
+            by_namespace.setdefault(namespace, []).append(iface_name)
 
-            exchange_name = capability.get("name", exchange_id)
-            legs = capability.get("interface_capabilities", [])
-            namespace_a = (capability.get("namespace_a") or {}).get("name")
-            namespace_z = (capability.get("namespace_z") or {}).get("name")
-
-            if len(legs) != 2:
+            side = next((s for s in sides.values() if s.get("name") == namespace), None)
+            if side is None:
                 errors.append(
-                    f"RoutedExchange '{exchange_name}' on '{device_name}' has {len(legs)} "
-                    "interface(s) — exactly 2 are required (one per namespace)."
+                    f"{label}: leg '{iface_name}' is in namespace '{namespace}', which is neither "
+                    f"namespace_a ({sides['namespace_a'].get('name')}) nor namespace_z "
+                    f"({sides['namespace_z'].get('name')})."
                 )
                 continue
+            errors.extend(_validate_leg(label, iface_name, address, side, context, exchange))
 
-            leg_namespaces_raw: list[str | None] = []
-            for leg in legs:
-                ns = (leg.get("ip_address") or {}).get("ip_namespace") or {}
-                leg_namespaces_raw.append(ns.get("name"))
-
-            if None in leg_namespaces_raw:
+        for side_name, side in sides.items():
+            count = len(by_namespace.get(side.get("name") or "", []))
+            if count != 1:
                 errors.append(
-                    f"RoutedExchange '{exchange_name}' on '{device_name}' has a leg with no "
-                    "IP address / namespace assigned."
-                )
-                continue
-
-            leg_namespaces: list[str] = [ns for ns in leg_namespaces_raw if ns is not None]
-
-            if leg_namespaces[0] == leg_namespaces[1]:
-                errors.append(
-                    f"RoutedExchange '{exchange_name}' on '{device_name}' has both legs in the "
-                    f"same namespace ('{leg_namespaces[0]}') — they must be in namespace_a and namespace_z."  # noqa: E501
-                )
-                continue
-
-            if {namespace_a, namespace_z} != set(leg_namespaces):
-                errors.append(
-                    f"RoutedExchange '{exchange_name}' on '{device_name}' leg namespaces "
-                    f"{sorted(leg_namespaces)} do not match its namespace_a/namespace_z "
-                    f"({namespace_a}/{namespace_z})."
+                    f"{label} has {count} leg(s) in {side_name} '{side.get('name')}' — exactly 1 is required."
                 )
 
+    return errors
+
+
+def _validate_leg(
+    label: str,
+    iface_name: str,
+    address: str,
+    side: dict[str, Any],
+    context: dict[str, Any] | None,
+    exchange: dict[str, Any],
+) -> list[str]:
+    """Address, gateway-context and VLAN rules of one leg (see validate_exchange_gateways)."""
+    errors: list[str] = []
+    network = ip_interface(address).network
+    if network.version != 4 or network.prefixlen != TRANSIT_PREFIXLEN:
+        errors.append(f"{label}: leg '{iface_name}' address {address} is not inside a /{TRANSIT_PREFIXLEN}.")
+    elif address.split("/")[0] not in transit_addresses(str(network))["members"]:
+        errors.append(
+            f"{label}: leg '{iface_name}' address {address} is not a firewall member address "
+            f"(.{OFFSET_MEMBER_A} / .{OFFSET_MEMBER_B}) of its transit /{TRANSIT_PREFIXLEN}."
+        )
+
+    gateway_id = (exchange.get("gateway") or {}).get("id")
+    if context is None or (gateway_id and context.get("id") != gateway_id):
+        errors.append(f"{label}: leg '{iface_name}' is not tagged with the exchange's gateway context.")
+        return errors
+
+    ns_type = side.get("namespace_type")
+    context_vlan = context.get("vlan_id")
+    suffix = iface_name.rsplit(".", 1)[-1]
+    if ns_type not in TRANSIT_SLOT or not isinstance(context_vlan, int):
+        errors.append(
+            f"{label}: leg '{iface_name}' cannot derive its transit VLAN "
+            f"(namespace type '{ns_type}', context VLAN '{context_vlan}')."
+        )
+    elif not suffix.isdigit() or int(suffix) != transit_vlan(context_vlan, ns_type):
+        errors.append(
+            f"{label}: leg '{iface_name}' VLAN is '{suffix}', expected {transit_vlan(context_vlan, ns_type)} "
+            f"(context VLAN {context_vlan} in a {ns_type} namespace)."
+        )
     return errors

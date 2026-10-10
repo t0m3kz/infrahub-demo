@@ -5,10 +5,11 @@
 # PROD/NON-PROD VRF as every internal tier (no dedicated namespace, no
 # TopologyExchangeGateway — see docs discussion) is what makes GPO/PBR the
 # only differentiator between "internal segment" and "external interconnect"
-# traffic, and PBR's default-redirect-to-firewall
-# (transforms/helpers/firewall.py::get_border_leaf_pbr_rules) doesn't care
-# about destination — every segment's traffic already hits the firewall
-# first, cloud/partner/SaaS-bound or not.
+# traffic, and the leaf's PBR default-redirect-to-firewall
+# (transforms/helpers/firewall.py::get_customer_pbr_rules; next-hop = VIP of the
+# serving context's leg in the segment's VRF) doesn't care about destination —
+# every segment's traffic already hits the firewall first,
+# cloud/partner/SaaS-bound or not. The border leaf does no PBR.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

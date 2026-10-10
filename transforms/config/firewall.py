@@ -104,7 +104,11 @@ def apply_context_routes(context: dict[str, Any], segment_prefixes: dict[str, tu
     for leg in legs:
         leg["prefixes"] = []
     for segment in context.get("segments") or []:
-        zone, prefix = segment_prefixes.get(segment.get("id"), (None, _get_segment_prefix_str(segment)))
+        root_zone, root_prefix = segment_prefixes.get(segment.get("id"), (None, None))
+        # The segment's own gateway prefix and zone win; the SecurityZone root
+        # only fills what the segment did not carry.
+        prefix = _get_segment_prefix_str(segment) or root_prefix
+        zone = (segment.get("security_zone") or {}).get("name") or root_zone
         if not prefix:
             continue
         leg = next((x for x in tenant_legs if x["zone"] == zone), None)

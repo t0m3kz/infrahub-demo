@@ -95,7 +95,21 @@ query firewall_config(
                           node {
                             id
                             ... on TopologyCustomer {
-                              network_segments { edges { node { id ...SegmentRulesFields } } }
+                              network_segments {
+                                edges {
+                                  node {
+                                    id
+                                    ...SegmentRulesFields
+                                    # Own gateway prefix and zone: the context's
+                                    # routes (apply_context_routes) read these,
+                                    # not the SecurityZone root.
+                                    ... on ManagedNetworkSegment {
+                                      gateway { node { ip_prefix { node { prefix { value } } } } }
+                                      security_zone { node { name { value } } }
+                                    }
+                                  }
+                                }
+                              }
                             }
                           }
                         }
