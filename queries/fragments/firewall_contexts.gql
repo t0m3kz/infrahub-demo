@@ -7,9 +7,15 @@ fragment FirewallContextLegFields on ManagedFirewallContext {
   interface_capabilities {
     edges {
       node {
+        name { value }
         device { node { role { value } } }
         ... on DcimVirtualInterface {
-          ip_address { node { address { value } } }
+          ip_address {
+            node {
+              address { value }
+              ip_namespace { node { name { value } namespace_type { value } } }
+            }
+          }
         }
       }
     }

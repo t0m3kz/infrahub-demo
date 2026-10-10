@@ -5,8 +5,10 @@ generators/topology/customer_dc.py (TopologyCustomerDC on a DataCenter) and
 generators/topology/customer_colocation.py (TopologyCustomerColocation on a
 ColocationMetro) board a customer the same way: a shared or dedicated context
 on the parent's ManagedFirewallHA cluster, a VLAN-tagged sub-interface per
-firewall, a P2P link to the PBR peer in pbr mode, and an optional dedicated
-load-balancer pair. Only the customer kind and the parent's label differ, and
+firewall, a transit leg per VRF the context serves (utils/exchange_transit.py)
+joined by a TopologyRoutedExchange, and an optional dedicated load-balancer
+pair. A host with `_transit_legs = False` (colocation) keeps the legacy
+default-namespace P2P link to the PBR peer instead. Only the customer kind and the parent's label differ, and
 the host class sets those as class attributes.
 """
 
@@ -15,22 +17,64 @@ from __future__ import annotations
 import logging
 from collections.abc import Awaitable, Callable
 from contextlib import AbstractAsyncContextManager
+from dataclasses import dataclass
 from typing import Any
 
-from infrahub_sdk.protocols import CoreIPPrefixPool, CoreNumberPool
+from infrahub_sdk.protocols import CoreIPPrefixPool, CoreNumberPool, IpamNamespace
+
+from utils.exchange_transit import (
+    EXCHANGE_PEERS,
+    OFFSET_MEMBER_A,
+    OFFSET_MEMBER_B,
+    TRANSIT_OFFSETS,
+    namespace_type_for_environment,
+    transit_vlan,
+)
 
 from .connections import BORDER_ROLE_FOR_SERVICES, tracked_save_kwargs
 from .far_end import far_end_interface
+from .helpers.common import save_with_node_not_found_retry
 from .protocols import (
     DcimPhysicalDevice,
+    DcimPhysicalInterface,
     DcimVirtualDevice,
+    DcimVirtualInterface,
+    IpamIPAddress,
     IpamPrefix,
     ManagedFirewallContext,
     ManagedFirewallHA,
+    TopologyRoutedExchange,
 )
 from .types import DeviceOptions
 
 _SHARED_CONTEXT_NAME_SUFFIX = "shared"
+_TRANSIT_PREFIX_LENGTH = 29
+_MEMBER_OFFSETS = (OFFSET_MEMBER_A, OFFSET_MEMBER_B)
+
+
+@dataclass(frozen=True)
+class _TransitMember:
+    """A firewall HA member as a transit leg sees it.
+
+    offset is the member's /29 host offset: members sorted by name take
+    .5 / .6, the order transforms/helpers/ha.py uses. bl_port is the border
+    service port its uplink is cabled to.
+    """
+
+    name: str
+    device_id: str
+    trunk: Any
+    bl_port: Any
+    offset: int
+
+
+@dataclass(frozen=True)
+class _TransitState:
+    """What a context already has of its transit legs (see _transit_state)."""
+
+    context: Any | None
+    complete: bool
+    untagged_port_ids: list[str]
 
 
 def _dev_id(device: Any) -> str:
@@ -74,7 +118,7 @@ class FirewallContextMixin:
     DeviceMixin (``create_devices``, ``_ensure_ha_pairs``,
     ``link_serving_firewall_context``, ``resolve_virtual_template``) and CablingMixin
     (``find_role_interface``, ``ensure_vlan_subinterface``,
-    ``upsert_p2p_addresses``).
+    ``upsert_p2p_addresses``, ``upsert_prefix_addresses``).
     """
 
     # Per-facility configuration, set by the host class. _parent_generators
@@ -83,6 +127,11 @@ class FirewallContextMixin:
     _customer_kind: str
     _parent_label: str
     _parent_generators: tuple[str, ...]
+    # True: legs are namespaced /29 transits (utils/exchange_transit.py), one
+    # per VRF the context serves, joined by a TopologyRoutedExchange.
+    # False: the legacy default-namespace P2P link to the PBR peer. Colocation
+    # keeps False until PR 4 deletes the legacy path.
+    _transit_legs: bool
 
     # Provided by the host class and its other mixins. Callable attributes,
     # not stub methods, so they never shadow the real ones via the MRO.
@@ -97,6 +146,7 @@ class FirewallContextMixin:
     find_role_interface: Callable[..., Awaitable[Any]]
     ensure_vlan_subinterface: Callable[..., Awaitable[Any]]
     upsert_p2p_addresses: Callable[..., Awaitable[list[Any]]]
+    upsert_prefix_addresses: Callable[..., Awaitable[dict[int, Any]]]
     wait_for_parent_generator_and_refetch: Callable[..., Awaitable[dict | None]]
 
     async def _ensure_firewall_context(self, customer: dict[str, Any], customer_id: str) -> None:
@@ -169,6 +219,19 @@ class FirewallContextMixin:
             tenant_id = None
             track = False
 
+        if self._transit_legs:
+            await self._ensure_transit_legs(
+                customer=customer,
+                customer_id=customer_id,
+                context_name=context_name,
+                cluster_id=cluster.id,
+                tenant_id=tenant_id,
+                track=track,
+                fw_devices=fw_devices,
+                parent_name=parent_name,
+            )
+            return
+
         # Every customer boarding onto this cluster provisions the same shared
         # context, and those runs execute concurrently. The query-then-create
         # guards below (context, P2P addresses, sub-interfaces) only hold for
@@ -191,6 +254,276 @@ class FirewallContextMixin:
                 connectivity_mode=connectivity_mode,
                 track=track,
             )
+
+    async def _ensure_transit_legs(
+        self,
+        *,
+        customer: dict[str, Any],
+        customer_id: str,
+        context_name: str,
+        cluster_id: str,
+        tenant_id: str | None,
+        track: bool,
+        fw_devices: list[Any],
+        parent_name: str,
+    ) -> None:
+        """The context and its transit legs for the VRFs this customer is in.
+
+        A leg is (context, namespace): every firewall member's VLAN
+        sub-interface `<uplink>.<transit_vlan>` addressed from a /29 in that
+        VRF (utils/exchange_transit.py), linked to the context and to the
+        exchange(s) of the leg. The legs of the customer's tenant namespace
+        (from its environment) and of INTERNET are joined by one
+        TopologyRoutedExchange `{context}-{A}-{Z}` per EXCHANGE_PEERS pair, so
+        PROD is never paired with NON-PROD. Legs and exchanges are created
+        lazily: a shared context serving PROD and NON-PROD customers grows the
+        NON-PROD leg when the first NON-PROD customer boards.
+
+        Shared context (track=False): a re-run, or a second customer on a
+        context that is already complete, finds that out by reads alone
+        (_transit_state) and writes nothing but its own serving link. Dedicated
+        context (track=True): the run owns every write and must re-save them
+        all, or delete_unused_nodes reclaims what it merely found.
+
+        Writes run under the context's lock; the completeness check repeats
+        inside it, so the run that waited on the lock finds the work done.
+        """
+        tenant_type = namespace_type_for_environment(customer.get("environment") or "")
+        leg_types = (tenant_type, *EXCHANGE_PEERS[tenant_type])
+        namespaces = await self._transit_namespaces(leg_types)
+        if namespaces is None:
+            return
+        members = await self._resolve_transit_members(fw_devices, context_name=context_name)
+        if not members:
+            self.logger.error(f"{context_name}: no firewall member has an uplink cabled to a border service port")
+            return
+        # (exchange name, A type, Z type): the tenant namespace to each peer.
+        exchange_specs = [
+            (f"{context_name}-{namespaces[tenant_type].name.value}-{namespaces[peer].name.value}", tenant_type, peer)
+            for peer in leg_types[1:]
+        ]
+
+        if not track:
+            state = await self._transit_state(context_name, members, namespaces, leg_types, exchange_specs)
+            if state.complete and state.context is not None:
+                await self.link_serving_firewall_context(
+                    kind=self._customer_kind, customer_id=customer_id, context_id=state.context.id
+                )
+                return
+
+        async with self.resource_lock(f"fw-context-{context_name}"):
+            state = await self._transit_state(context_name, members, namespaces, leg_types, exchange_specs)
+            if not track and state.complete and state.context is not None:
+                await self.link_serving_firewall_context(
+                    kind=self._customer_kind, customer_id=customer_id, context_id=state.context.id
+                )
+                return
+            pools = await self._transit_pools(namespaces)
+            if pools is None:
+                return
+            context_obj = await self._get_or_create_firewall_context(context_name, cluster_id, tenant_id, track=track)
+            if context_obj is None:
+                return
+            await self.link_serving_firewall_context(
+                kind=self._customer_kind, customer_id=customer_id, context_id=context_obj.id
+            )
+            context_obj = await self._ensure_context_vlan(context_obj, parent_name, track=track)
+            if context_obj is None:
+                return
+            vlan_id: int = context_obj.vlan_id.value
+
+            addresses: dict[str, dict[int, Any]] = {}
+            for leg_type in leg_types:
+                leg_addresses = await self._allocate_transit_addresses(
+                    context_obj=context_obj, namespace=namespaces[leg_type], pool=pools[leg_type], track=track
+                )
+                if leg_addresses is None:
+                    return
+                addresses[leg_type] = leg_addresses
+
+            exchanges: dict[str, Any] = {}
+            for exchange_name, a_type, z_type in exchange_specs:
+                try:
+                    exchange = await self.client.create(
+                        kind=TopologyRoutedExchange,
+                        data={
+                            "name": exchange_name,
+                            "namespace_a": {"id": namespaces[a_type].id},
+                            "namespace_z": {"id": namespaces[z_type].id},
+                            "gateway": {"id": context_obj.id},
+                            "status": "active",
+                        },
+                    )
+                    await save_with_node_not_found_retry(exchange, self.logger, **tracked_save_kwargs(track))
+                except Exception as exc:
+                    self.logger.error(f"Failed to upsert exchange '{exchange_name}': {exc}")
+                    return
+                exchanges[exchange_name] = exchange
+
+            for leg_type in leg_types:
+                leg_exchanges = [
+                    exchanges[name] for name, a_type, z_type in exchange_specs if leg_type in (a_type, z_type)
+                ]
+                for member in members:
+                    await self.ensure_vlan_subinterface(
+                        device_id=member.device_id,
+                        device_name=member.name,
+                        trunk_iface=member.trunk,
+                        vlan_id_value=transit_vlan(vlan_id, leg_type),
+                        capability_obj=context_obj,
+                        extra_capability_objs=leg_exchanges,
+                        ip_address_id=addresses[leg_type][member.offset].id,
+                        track=track,
+                    )
+
+            # Additive RelationshipAdd (never assign the list), same as
+            # segment.py's service-port tags: other generators tag the same
+            # ports with their segments, and a bulk load writes them concurrently.
+            if state.untagged_port_ids:
+                await context_obj.add_relationships(
+                    relation_to_update="interface_capabilities", related_nodes=state.untagged_port_ids
+                )
+                self.logger.info(f"{context_name}: tagged {len(state.untagged_port_ids)} border service port(s)")
+
+    async def _transit_namespaces(self, leg_types: tuple[str, ...]) -> dict[str, Any] | None:
+        """The VRF namespace of each leg type by namespace_type, one query; None (logged) when one is missing."""
+        nodes = await self.client.filters(kind=IpamNamespace, namespace_type__values=list(leg_types))
+        by_type = {getattr(node, "namespace_type").value: node for node in nodes}
+        missing = [leg_type for leg_type in leg_types if leg_type not in by_type]
+        if missing:
+            self.logger.error(f"No IpamNamespace with namespace_type {missing} — cannot provision transit legs")
+            return None
+        return by_type
+
+    async def _transit_pools(self, namespaces: dict[str, Any]) -> dict[str, Any] | None:
+        """The FW-Transit-<VRF>-IPv4 pool of each namespace (data/bootstrap), one query; None (logged) when one is missing."""
+        pool_names = {leg_type: f"FW-Transit-{ns.name.value}-IPv4" for leg_type, ns in namespaces.items()}
+        pools = {
+            pool.name.value: pool
+            for pool in await self.client.filters(kind=CoreIPPrefixPool, name__values=sorted(pool_names.values()))
+        }
+        missing = sorted(name for name in pool_names.values() if name not in pools)
+        if missing:
+            self.logger.error(f"Transit pool(s) {missing} not found — cannot allocate transit legs")
+            return None
+        return {leg_type: pools[name] for leg_type, name in pool_names.items()}
+
+    async def _resolve_transit_members(self, fw_devices: list[Any], *, context_name: str) -> list[_TransitMember]:
+        """The members that have both an uplink and a cabled border service port, with their /29 offsets.
+
+        The offset follows the position among ALL members (sorted by name), not
+        among the resolved ones, so a member that cannot be resolved this run
+        never shifts the other's address.
+        """
+        members: list[_TransitMember] = []
+        for fw_device, offset in zip(sorted(fw_devices, key=_dev_name), _MEMBER_OFFSETS, strict=False):
+            fw_name = _dev_name(fw_device)
+            trunk = await self._context_trunk(device_id=_dev_id(fw_device), device_name=fw_name, role="uplink")
+            if trunk is None:
+                continue
+            bl_port = await self._border_service_port(fw_device, context_name=context_name)
+            if bl_port is None:
+                continue
+            members.append(
+                _TransitMember(name=fw_name, device_id=_dev_id(fw_device), trunk=trunk, bl_port=bl_port, offset=offset)
+            )
+        return members
+
+    async def _transit_state(
+        self,
+        context_name: str,
+        members: list[_TransitMember],
+        namespaces: dict[str, Any],
+        leg_types: tuple[str, ...],
+        exchange_specs: list[tuple[str, str, str]],
+    ) -> _TransitState:
+        """Read-only completeness check of a context's transit legs.
+
+        Complete means: the context has its VLAN; every member's border port
+        carries the context; every exchange exists; every member has a
+        sub-interface per leg with an address in that leg's namespace, linked
+        to the leg's exchanges. Sub-interfaces are written last, so one with
+        its address implies the leg's other addresses exist. Also returns the
+        border ports still to tag with the context.
+        """
+        every_port = [member.bl_port.id for member in members]
+        contexts = await self.client.filters(kind=ManagedFirewallContext, name__value=context_name)
+        if not contexts:
+            return _TransitState(context=None, complete=False, untagged_port_ids=every_port)
+        context = contexts[0]
+        ports = await self.client.filters(
+            kind=DcimPhysicalInterface, ids=every_port, include=["interface_capabilities"]
+        )
+        tagged = {port.id for port in ports if any(cap.id == context.id for cap in port.interface_capabilities.peers)}
+        untagged = [port_id for port_id in every_port if port_id not in tagged]
+        vlan_id = getattr(context.vlan_id, "value", None)
+        incomplete = _TransitState(context=context, complete=False, untagged_port_ids=untagged)
+        if untagged or not vlan_id:
+            return incomplete
+
+        exchange_names = [name for name, _, _ in exchange_specs]
+        exchange_ids = {
+            exchange.name.value: exchange.id
+            for exchange in await self.client.filters(kind=TopologyRoutedExchange, name__values=exchange_names)
+        }
+        if len(exchange_ids) != len(exchange_names):
+            return incomplete
+
+        sub_interfaces = {
+            (sub.device.id, sub.name.value): sub
+            for sub in await self.client.filters(
+                kind=DcimVirtualInterface, interface_capabilities__ids=[context.id], include=["interface_capabilities"]
+            )
+        }
+        address_namespace: dict[str, str] = {}  # IpamIPAddress id -> namespace id it must be in
+        for leg_type in leg_types:
+            wanted = {exchange_ids[name] for name, a_type, z_type in exchange_specs if leg_type in (a_type, z_type)}
+            for member in members:
+                sub = sub_interfaces.get(
+                    (member.device_id, f"{member.trunk.name.value}.{transit_vlan(vlan_id, leg_type)}")
+                )
+                if sub is None or not sub.ip_address.id:
+                    return incomplete
+                if not wanted <= {cap.id for cap in sub.interface_capabilities.peers}:
+                    return incomplete
+                address_namespace[sub.ip_address.id] = namespaces[leg_type].id
+        addresses = await self.client.filters(
+            kind=IpamIPAddress, ids=sorted(address_namespace), include=["ip_namespace"]
+        )
+        in_namespace = {
+            address.id for address in addresses if address.ip_namespace.id == address_namespace.get(address.id)
+        }
+        if in_namespace != set(address_namespace):
+            return incomplete
+        return _TransitState(context=context, complete=True, untagged_port_ids=[])
+
+    async def _allocate_transit_addresses(
+        self, *, context_obj: Any, namespace: Any, pool: Any, track: bool
+    ) -> dict[int, Any] | None:
+        """The leg's /29 from the VRF's FW-Transit pool, with its fixed-offset addresses upserted.
+
+        The allocation identifier makes the prefix stable per (context,
+        namespace). The prefix itself never enters the tracking group:
+        allocate_next_ip_prefix() is a pool mutation, not a save(). None
+        (logged) when the pool hands out nothing.
+        """
+        label = f"{context_obj.name.value}/{namespace.name.value}"
+        try:
+            prefix = await self.client.allocate_next_ip_prefix(
+                resource_pool=pool,
+                kind=IpamPrefix,
+                identifier=f"{context_obj.id}-{namespace.name.value}-transit",
+                prefix_length=_TRANSIT_PREFIX_LENGTH,
+                member_type="address",
+                data={"role": "technical"},
+            )
+        except Exception as exc:
+            self.logger.error(f"Failed to allocate the transit /29 for {label}: {exc}")
+            return None
+        if prefix is None:
+            self.logger.error(f"Transit pool '{pool.name.value}' returned no prefix for {label}")
+            return None
+        return await self.upsert_prefix_addresses(prefix, offsets=TRANSIT_OFFSETS, track=track)
 
     async def _resolve_parent_cluster(self, fw_devices: list[Any], *, parent_id: str, parent_name: str) -> Any | None:
         """The parent's ManagedFirewallHA cluster holding fw_devices[0], the first physical firewall by name.
@@ -385,6 +718,40 @@ class FirewallContextMixin:
             self.logger.error(f"Failed to create FirewallContext '{context_name}': {exc}")
             return None
 
+    async def _ensure_context_vlan(self, context_obj: Any, parent_name: str, *, track: bool) -> Any | None:
+        """context_obj with its vlan_id allocated from the parent's pool; None (logged) when that fails.
+
+        Number-pool allocation is idempotent per consumer node id, so a context
+        that already has its VLAN is returned untouched and never re-saved.
+        """
+        vlan_id = getattr(context_obj, "vlan_id", None)
+        if vlan_id is not None and getattr(vlan_id, "value", None):
+            return context_obj
+        context_name = context_obj.name.value
+        try:
+            vlan_pool = await self.client.get(
+                kind=CoreNumberPool, name__value=f"{parent_name.lower()}-fw-context-vlan-pool"
+            )
+        except Exception as exc:
+            self.logger.error(f"Cannot find FW context VLAN pool for {parent_name}: {exc}")
+            return None
+        try:
+            node = await self.client.create(
+                kind=ManagedFirewallContext,
+                data={
+                    "id": context_obj.id,
+                    "vlan_id": {
+                        "from_pool": {"id": vlan_pool.id},
+                        "identifier": f"{context_obj.id}-fw-context-vlan",
+                    },
+                },
+            )
+            await node.save(**tracked_save_kwargs(track))
+        except Exception as exc:
+            self.logger.error(f"Failed to allocate VLAN for FirewallContext '{context_name}': {exc}")
+            return None
+        return await self.client.get(kind=ManagedFirewallContext, id=context_obj.id)
+
     async def _ensure_context_subinterface(
         self,
         *,
@@ -394,7 +761,8 @@ class FirewallContextMixin:
         connectivity_mode: str,
         track: bool = True,
     ) -> None:
-        """Ensure this context has a VLAN-tagged sub-interface on the cluster's
+        """LEGACY (`_transit_legs = False`, colocation; deleted in PR 4).
+        Ensure this context has a VLAN-tagged sub-interface on the cluster's
         uplink toward the PBR peer (the same "uplink"-role interface
         create_chain_cabling() cables in both connectivity_mode). pbr mode
         also gets a matching peer-side sub-interface with a dedicated
@@ -405,7 +773,7 @@ class FirewallContextMixin:
 
         Every firewall in the HA pair gets its own sub-interface, and its
         peer-side one goes on the border port its uplink is cabled to
-        (_pbr_peer_port), never on a peer picked by position: each firewall
+        (_border_service_port), never on a peer picked by position: each firewall
         is an independent path, and two firewalls on one border device land
         on two different ports.
 
@@ -413,32 +781,10 @@ class FirewallContextMixin:
         sub-interfaces and the P2P addresses untracked — see
         _ensure_firewall_context for the ownership rule."""
         context_name = context_obj.name.value
-
-        vlan_id = getattr(context_obj, "vlan_id", None)
-        if vlan_id is None or not getattr(vlan_id, "value", None):
-            try:
-                vlan_pool = await self.client.get(
-                    kind=CoreNumberPool, name__value=f"{parent_name.lower()}-fw-context-vlan-pool"
-                )
-            except Exception as exc:
-                self.logger.error(f"Cannot find FW context VLAN pool for {parent_name}: {exc}")
-                return
-            try:
-                node = await self.client.create(
-                    kind=ManagedFirewallContext,
-                    data={
-                        "id": context_obj.id,
-                        "vlan_id": {
-                            "from_pool": {"id": vlan_pool.id},
-                            "identifier": f"{context_obj.id}-fw-context-vlan",
-                        },
-                    },
-                )
-                await node.save(**tracked_save_kwargs(track))
-            except Exception as exc:
-                self.logger.error(f"Failed to allocate VLAN for FirewallContext '{context_name}': {exc}")
-                return
-            context_obj = await self.client.get(kind=ManagedFirewallContext, id=context_obj.id)
+        refreshed = await self._ensure_context_vlan(context_obj, parent_name, track=track)
+        if refreshed is None:
+            return
+        context_obj = refreshed
 
         for fw_device in fw_devices:
             fw_name = _dev_name(fw_device)
@@ -449,7 +795,7 @@ class FirewallContextMixin:
             fw_ip_id: str | None = None
             peer_ip_id: str | None = None
             if connectivity_mode == "pbr":
-                peer_port = await self._pbr_peer_port(fw_device, context_name=context_name)
+                peer_port = await self._border_service_port(fw_device, context_name=context_name)
                 if peer_port is None:
                     continue
                 ip_pair = await self._allocate_context_p2p(f"{context_name}-{fw_name}", parent_name, track=track)
@@ -489,15 +835,16 @@ class FirewallContextMixin:
             self.logger.error(f"{device_name}: no role={role} interface found — cannot create a context sub-interface")
         return trunk_iface
 
-    async def _pbr_peer_port(self, fw_device: Any, *, context_name: str) -> Any | None:
-        """The PBR peer's service port cabled to fw_device's uplink.
+    async def _border_service_port(self, fw_device: Any, *, context_name: str) -> Any | None:
+        """The border service port cabled to fw_device's uplink.
 
         A virtual instance has no cable of its own: its traffic leaves through
         the uplink of the physical firewall hosting it, so that cable is the
         one followed. The far end must be a border service port (role
         firewall, BORDER_ROLE_FOR_SERVICES) on a border leaf or edge — the one
-        port the context's P2P leg can live on for this firewall, whatever
-        the number of border devices.
+        port the context's leg (transit or legacy P2P) faces for this
+        firewall, whatever the number of border devices. Fetched with its
+        interface_capabilities, the context tags read from it.
         """
         fw_name = _dev_name(fw_device)
         hosting = None if isinstance(fw_device, dict) else getattr(fw_device, "hosting_device", None)
@@ -508,7 +855,7 @@ class FirewallContextMixin:
         if not getattr(getattr(uplink, "cable", None), "id", None):
             self.logger.error(f"{fw_name}: uplink {uplink.name.value} is not cabled — no PBR peer for '{context_name}'")
             return None
-        peer_port = await far_end_interface(self.client, uplink, include=["device"])
+        peer_port = await far_end_interface(self.client, uplink, include=["device", "interface_capabilities"])
         if peer_port is None or peer_port.role.value != BORDER_ROLE_FOR_SERVICES["firewall"]:
             self.logger.error(
                 f"{fw_name}: uplink {uplink.name.value} is not cabled to a "

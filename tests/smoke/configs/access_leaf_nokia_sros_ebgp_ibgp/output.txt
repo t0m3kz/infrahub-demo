@@ -101,10 +101,10 @@ configure service vprn 50001 bgp-evpn vxlan bgp-instance 1 admin-state enable
 !
 ! IRB Interfaces (anycast gateway) — one per bridged VLAN with a gateway
 !
-configure service vprn 100 interface "int-vpls-100" admin-state enable
-configure service vprn 100 interface "int-vpls-100" vpls "vpls-100"
-configure service vprn 100 interface "int-vpls-100" mac "00:1c:73:00:dc:01"
-configure service vprn 100 interface "int-vpls-100" ipv4 primary-address "10.100.0.1/24"
+configure service vprn 50001 interface "int-vpls-10100" admin-state enable
+configure service vprn 50001 interface "int-vpls-10100" vpls "vpls-10100"
+configure service vprn 50001 interface "int-vpls-10100" mac "00:1c:73:00:dc:01"
+configure service vprn 50001 interface "int-vpls-10100" ipv4 primary-address "10.100.0.1/24"
 !
 configure service vprn 200 interface "int-vpls-200" admin-state enable
 configure service vprn 200 interface "int-vpls-200" vpls "vpls-200"

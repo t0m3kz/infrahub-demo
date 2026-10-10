@@ -106,7 +106,26 @@ set vsys {{ context.name }}
 {%- if context.tenant_name %}
 set vsys {{ context.name }} display-name "{{ context.tenant_name }}"
 {%- endif %}
-{%- if context.vlan_id and context.parent_interface.name %}
+{#- Transit legs: one VLAN sub-interface per VRF (zone), all in the vsys's own
+    virtual router — a global router cannot hold two contexts' 0/0. The HA
+    pair's VIP is the interface address (config sync gives both members it). #}
+{%- if context.legs %}
+{%- set vr = 'vr-' + context.name %}
+{%- for leg in context.legs %}
+{%- set leg_ref = leg.parent_interface.name + '.' + leg.vlan | string %}
+set network interface ethernet {{ leg.parent_interface.name }} layer3 units {{ leg_ref }} tag {{ leg.vlan }}
+set network interface ethernet {{ leg.parent_interface.name }} layer3 units {{ leg_ref }} ip {{ leg.virtual_ip or leg.own_ip }}
+set vsys {{ context.name }} import network interface {{ leg_ref }}
+set vsys {{ context.name }} zone {{ leg.zone }} network layer3 {{ leg_ref }}
+set network virtual-router {{ vr }} interface {{ leg_ref }}
+{%- endfor %}
+set vsys {{ context.name }} import network virtual-router {{ vr }}
+{%- for route in context.routes %}
+set network virtual-router {{ vr }} routing-table ip static-route rt-{{ loop.index }} destination {{ route.destination }}
+set network virtual-router {{ vr }} routing-table ip static-route rt-{{ loop.index }} nexthop ip-address {{ route.nexthop }}
+set network virtual-router {{ vr }} routing-table ip static-route rt-{{ loop.index }} interface {{ route.interface }}
+{%- endfor %}
+{%- elif context.vlan_id and context.parent_interface.name %}
 {%- set ctx_iface_ref = context.parent_interface.name + '.' + context.vlan_id | string %}
 set network interface ethernet {{ context.parent_interface.name }} layer3 units {{ ctx_iface_ref }} tag {{ context.vlan_id }}
 {%- if context.ip_address %}
@@ -114,6 +133,20 @@ set network interface ethernet {{ context.parent_interface.name }} layer3 units 
 {%- endif %}
 set vsys {{ context.name }} import network interface {{ ctx_iface_ref }}
 {%- endif %}
+{%- endfor %}
+{%- for context in contexts if context.isolation %}
+#
+# --- PROD <-> NON-PROD isolation in vsys {{ context.name }} ---
+{%- for deny in context.isolation %}
+set vsys {{ context.name }} rulebase security rules deny-{{ deny.src_zone }}-to-{{ deny.dst_zone }} from {{ deny.src_zone }}
+set vsys {{ context.name }} rulebase security rules deny-{{ deny.src_zone }}-to-{{ deny.dst_zone }} to {{ deny.dst_zone }}
+set vsys {{ context.name }} rulebase security rules deny-{{ deny.src_zone }}-to-{{ deny.dst_zone }} source any
+set vsys {{ context.name }} rulebase security rules deny-{{ deny.src_zone }}-to-{{ deny.dst_zone }} destination any
+set vsys {{ context.name }} rulebase security rules deny-{{ deny.src_zone }}-to-{{ deny.dst_zone }} application any
+set vsys {{ context.name }} rulebase security rules deny-{{ deny.src_zone }}-to-{{ deny.dst_zone }} service any
+set vsys {{ context.name }} rulebase security rules deny-{{ deny.src_zone }}-to-{{ deny.dst_zone }} action deny
+set vsys {{ context.name }} rulebase security rules deny-{{ deny.src_zone }}-to-{{ deny.dst_zone }} log-end yes
+{%- endfor %}
 {%- endfor %}
 {%- for context in contexts if context.policies %}
 {{- security_policies(context.policies, 'vsys ' + context.name + ' ', 'Security Policies in vsys ' + context.name) }}

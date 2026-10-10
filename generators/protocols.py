@@ -1116,7 +1116,7 @@ class CloudRouteTable(CloudResource):
 
 
 class TopologyRoutedExchange(TopologyExchangeGateway, ManagedGeneric, ManagedGenericInterfaces):
-    pass
+    gateway: RelationshipAttribute[ManagedFirewallContext]
 
 
 class ManagedSNMP(ManagedGeneric, ManagedGenericDevice):

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from utils.dependency_access import dependency_access_status
+from utils.exchange_transit import namespace_type_for_environment, zone_name_for_namespace_type
 from utils.ports import PortProfileHelper, PortSpec
 
 
@@ -173,7 +174,7 @@ class RulesPlanner:
     @staticmethod
     def pick_zone_name(environment: str) -> str:
         """Macro trust zone for a segment, derived from its own `environment`."""
-        return "PROD-ZONE" if environment == "p" else "NONPROD-ZONE"
+        return zone_name_for_namespace_type(namespace_type_for_environment(environment))
 
     @staticmethod
     def pick_isolation_mode(app_security_profile: str) -> str:

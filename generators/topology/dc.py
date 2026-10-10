@@ -12,7 +12,7 @@ from ..dc_config import host_bits_to_prefix_length, resolve_dc_size_layout
 from ..devices import DeviceMixin
 from ..helpers import name_to_asn_range
 from ..helpers.pools import FW_CONTEXT_VLAN_START
-from ..helpers.routing import RoutingStrategy, p2p_is_ipv6
+from ..helpers.routing import RoutingStrategy
 from ..helpers.template_interfaces import template_interface_names_by_role
 from ..pod_config import POD_LAYOUTS, templates_by_role
 from ..pools import PoolMixin
@@ -638,25 +638,19 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
         )
 
     async def _ensure_firewall_context_pools(self, *, dc_name: str) -> None:
-        """Create this DC's own FirewallContext VLAN + P2P prefix pools.
+        """Create this DC's own FirewallContext VLAN pool.
 
-        Per-DC (not global) so each fabric's context sub-interfaces and
-        transit links stay within its own numbering, matching the existing
-        {fabric_name}-vlan-pool/{fabric_name}-vni-pool pattern above.
+        Per-DC (not global) so each fabric's context sub-interfaces stay
+        within its own numbering, matching the existing
+        {fabric_name}-vlan-pool/{fabric_name}-vni-pool pattern above. The
+        contexts' transit /29s come from the per-VRF FW-Transit-* bootstrap
+        pools, so there is no per-DC P2P pool.
 
         generators/topology/customer_dc.py's _ensure_firewall_context
-        allocates from these once a customer boards onto this DC.
+        allocates from the VLAN pool once a customer boards onto this DC.
 
         See PoolMixin.ensure_firewall_context_pools for the shared
         pool-creation mechanism (also used by generators/topology/
         colocation.py for the metro equivalent) and its locking rationale.
         """
-        underlay_protocol = self.data.get("underlay_protocol", "ipv6")
-        use_ipv6 = p2p_is_ipv6(underlay_protocol)
-        await self.ensure_firewall_context_pools(
-            name=dc_name,
-            vlan_start=FW_CONTEXT_VLAN_START,
-            parent_pool_name="FW-Context-P2P-IPv6" if use_ipv6 else "FW-Context-P2P-IPv4",
-            slice_prefix_length=56 if use_ipv6 else 24,
-            default_prefix_length=127 if use_ipv6 else 31,
-        )
+        await self.ensure_firewall_context_pools(name=dc_name, vlan_start=FW_CONTEXT_VLAN_START)

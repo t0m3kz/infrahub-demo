@@ -74,6 +74,36 @@ set routing-instances {{ route.vrf | replace(' ', '-') }} routing-options static
 {%- endif %}
 {%- if zone_policies %}{{ security_policies(zone_policies) }}
 {%- endif %}
+{#- Transit legs: one VLAN unit per VRF in the tenant system, bound to a
+    zone and to the tenant's own routing-instance, which holds the routes. The
+    HA pair's VIP is the unit address (cluster config sync gives both members
+    it). #}
+{%- for context in contexts if context.legs %}
+{%- set ri = 'ri-' + context.name %}
+#
+# --- Interfaces, zones and routes in tenant system {{ context.name }} ---
+set tenants {{ context.name }} routing-instances {{ ri }} instance-type virtual-router
+{%- for leg in context.legs %}
+{%- if loop.first or leg.parent_interface.name != context.legs[loop.index0 - 1].parent_interface.name %}
+set interfaces {{ leg.parent_interface.name }} vlan-tagging
+{%- endif %}
+set tenants {{ context.name }} interfaces {{ leg.parent_interface.name }} unit {{ leg.vlan }} vlan-id {{ leg.vlan }}
+set tenants {{ context.name }} interfaces {{ leg.parent_interface.name }} unit {{ leg.vlan }} family inet address {{ leg.virtual_ip or leg.own_ip }}
+set tenants {{ context.name }} security zones security-zone {{ leg.zone }} interfaces {{ leg.parent_interface.name }}.{{ leg.vlan }}
+set tenants {{ context.name }} routing-instances {{ ri }} interface {{ leg.parent_interface.name }}.{{ leg.vlan }}
+{%- endfor %}
+{%- for route in context.routes %}
+set tenants {{ context.name }} routing-instances {{ ri }} routing-options static route {{ route.destination }} next-hop {{ route.nexthop }}
+{%- endfor %}
+{%- for deny in context.isolation %}
+set tenants {{ context.name }} security policies from-zone {{ deny.src_zone }} to-zone {{ deny.dst_zone }} policy deny-{{ deny.src_zone }}-to-{{ deny.dst_zone }} match source-address any
+set tenants {{ context.name }} security policies from-zone {{ deny.src_zone }} to-zone {{ deny.dst_zone }} policy deny-{{ deny.src_zone }}-to-{{ deny.dst_zone }} match destination-address any
+set tenants {{ context.name }} security policies from-zone {{ deny.src_zone }} to-zone {{ deny.dst_zone }} policy deny-{{ deny.src_zone }}-to-{{ deny.dst_zone }} match application any
+set tenants {{ context.name }} security policies from-zone {{ deny.src_zone }} to-zone {{ deny.dst_zone }} policy deny-{{ deny.src_zone }}-to-{{ deny.dst_zone }} then deny
+set tenants {{ context.name }} security policies from-zone {{ deny.src_zone }} to-zone {{ deny.dst_zone }} policy deny-{{ deny.src_zone }}-to-{{ deny.dst_zone }} then log session-init
+{%- endfor %}
+#
+{%- endfor %}
 {%- for context in contexts if context.policies %}
 {{- security_policies(context.policies, 'tenants ' + context.name + ' ', 'Security Policies in tenant system ' + context.name) }}
 {%- endfor %}

@@ -1,0 +1,101 @@
+!
+hostname dc1-fw-01
+!
+!
+! --- Firewall Contexts (Security Contexts) — one per tenant, per ManagedFirewallContext ---
+! mode multiple must already be set on this ASA (system exec space, requires reload) —
+! not idempotently re-set here.
+interface ethernet1/1.3001
+ vlan 3001
+ no shutdown
+!
+interface ethernet1/1.3401
+ vlan 3401
+ no shutdown
+!
+interface ethernet1/1.3000
+ vlan 3000
+ no shutdown
+!
+interface ethernet1/1.3200
+ vlan 3200
+ no shutdown
+!
+interface ethernet1/1.3400
+ vlan 3400
+ no shutdown
+!
+context dc1-fw-acme
+ allocate-interface ethernet1/1.3001
+ allocate-interface ethernet1/1.3401
+ config-url disk0:/dc1-fw-acme.cfg
+ description Acme
+!
+context dc1-fw-shared
+ allocate-interface ethernet1/1.3000
+ allocate-interface ethernet1/1.3200
+ allocate-interface ethernet1/1.3400
+ config-url disk0:/dc1-fw-shared.cfg
+!
+changeto context dc1-fw-acme
+interface ethernet1/1.3001
+ nameif prod
+ security-level 100
+ ip address 100.66.0.12 255.255.255.248 standby 100.66.0.14
+ no shutdown
+!
+interface ethernet1/1.3401
+ nameif internet
+ security-level 0
+ ip address 100.66.32.12 255.255.255.248 standby 100.66.32.14
+ no shutdown
+!
+same-security-traffic permit intra-interface
+!
+route prod 10.3.0.0 255.255.255.0 100.66.0.9 1
+route internet 0.0.0.0 0.0.0.0 100.66.32.9 1
+!
+access-list prod-in extended deny ip any any log
+access-group prod-in in interface prod
+!
+changeto context dc1-fw-shared
+interface ethernet1/1.3000
+ nameif prod
+ security-level 100
+ ip address 100.66.0.4 255.255.255.248 standby 100.66.0.6
+ no shutdown
+!
+interface ethernet1/1.3200
+ nameif nonprod
+ security-level 50
+ ip address 100.66.16.4 255.255.255.248 standby 100.66.16.6
+ no shutdown
+!
+interface ethernet1/1.3400
+ nameif internet
+ security-level 0
+ ip address 100.66.32.4 255.255.255.248 standby 100.66.32.6
+ no shutdown
+!
+same-security-traffic permit intra-interface
+!
+route prod 10.1.0.0 255.255.255.0 100.66.0.1 1
+route nonprod 10.2.0.0 255.255.255.0 100.66.16.1 1
+route internet 0.0.0.0 0.0.0.0 100.66.32.1 1
+!
+access-list prod-in extended deny ip any 10.2.0.0 255.255.255.0 log
+access-list prod-in extended deny ip any any log
+access-group prod-in in interface prod
+access-list nonprod-in extended deny ip any 10.1.0.0 255.255.255.0 log
+access-list nonprod-in extended deny ip any any log
+access-group nonprod-in in interface nonprod
+!
+!
+! --- Failover (HA) ---
+failover lan unit primary
+failover lan interface FOLINK ethernet1/7
+failover link FOLINK ethernet1/7
+failover interface ip FOLINK 169.254.255.1 255.255.255.252 standby 169.254.255.2
+failover
+!
+end

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Callable, Literal
 
 from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool
@@ -12,6 +13,7 @@ if TYPE_CHECKING:
     import logging
 
 from .helpers import CableTypeDetector, CablingPlanner
+from .helpers.common import save_with_node_not_found_retry
 from .protocols import DcimCable, DcimPhysicalInterface, DcimVirtualInterface, IpamIPAddress
 from .types import CablingOptions, ChainHop
 
@@ -261,6 +263,25 @@ class CablingMixin:
     ) -> list[Any]:
         """Upsert both addresses of a /31 (RFC 3021) or /127 (RFC 6164) P2P prefix.
 
+        The two-address case of upsert_prefix_addresses(): offsets 0 and 1,
+        returned in that order.
+        """
+        by_offset = await self.upsert_prefix_addresses(
+            prefix, offsets=(0, 1), address_length=address_length, description=description, track=track
+        )
+        return list(by_offset.values())
+
+    async def upsert_prefix_addresses(
+        self,
+        prefix: Any,
+        *,
+        offsets: tuple[int, ...],
+        address_length: int | None = None,
+        description: str | None = None,
+        track: bool = True,
+    ) -> dict[int, Any]:
+        """Upsert the addresses at the given host offsets of an allocated prefix; returns offset -> address node.
+
         Queried before created: allocate_next_ip_prefix() is idempotent per
         identifier, but IpamIPAddress's (address, ip_namespace) uniqueness is
         only enforced by an async validator, so two overlapping runs for the
@@ -281,10 +302,10 @@ class CablingMixin:
         network = ipaddress.ip_network(prefix.prefix.value, strict=False)
         length = network.prefixlen if address_length is None else address_length
         ip_namespace = prefix.ip_namespace
-        addresses: list[Any] = []
-        # list(network), not .hosts(): .hosts() yields one address for /31 and /127.
-        for addr in list(network)[:2]:
-            address_value = f"{addr}/{length}"
+        addresses: dict[int, Any] = {}
+        # network[offset], not .hosts(): .hosts() yields one address for /31 and /127.
+        for offset in offsets:
+            address_value = f"{network[offset]}/{length}"
             ip = await self.client.get(
                 kind=IpamIPAddress,
                 address__value=address_value,
@@ -302,7 +323,7 @@ class CablingMixin:
                     },
                 )
             await ip.save(**tracked_save_kwargs(track))
-            addresses.append(ip)
+            addresses[offset] = ip
         return addresses
 
     async def create_chain_cabling(
@@ -403,11 +424,14 @@ class CablingMixin:
         trunk_iface: Any,
         vlan_id_value: int,
         capability_obj: Any,
+        extra_capability_objs: Sequence[Any] = (),
         ip_address_id: str | None = None,
         track: bool = True,
     ) -> Any | None:
         """Upsert a VLAN-tagged DcimVirtualInterface (<trunk>.<vlan_id>) on
-        trunk_iface, linked to capability_obj via interface_capabilities —
+        trunk_iface, linked to capability_obj (and any extra_capability_objs,
+        e.g. the exchanges a firewall-context leg belongs to) via
+        interface_capabilities. Capabilities are only ever added, never removed —
         shared by customer_dc.py/customer_colocation.py's FirewallContext
         sub-interfaces and segment.py's inline VxlanSegment termination.
         Trunk-interface resolution stays with the caller since fallback
@@ -436,9 +460,13 @@ class CablingMixin:
             await sub_iface.save(**tracked_save_kwargs(track))
             iface_capabilities = getattr(sub_iface, "interface_capabilities")
             await iface_capabilities.fetch()
-            if not any(peer.id == capability_obj.id for peer in iface_capabilities.peers):
-                await self._safe_rel_add(iface_capabilities, capability_obj)
-                await sub_iface.save(**tracked_save_kwargs(track))
+            linked = {peer.id for peer in iface_capabilities.peers}
+            missing = [cap for cap in (capability_obj, *extra_capability_objs) if cap.id not in linked]
+            if missing:
+                for cap in missing:
+                    await self._safe_rel_add(iface_capabilities, cap)
+                # The capability may be an exchange another run created a moment ago.
+                await save_with_node_not_found_retry(sub_iface, self.logger, **tracked_save_kwargs(track))
             self.logger.info(f"Upserted sub-interface {sub_iface_name} on {device_name}")
             return sub_iface
         except Exception as exc:

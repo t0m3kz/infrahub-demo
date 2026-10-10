@@ -220,6 +220,13 @@ def get_interfaces(
     for act in activations or []:
         vlan_isolation.setdefault(act.get("vlan_id"), (act.get("segment") or {}).get("isolation_mode") or "normal")
 
+    # Transit VLANs of the exchange legs (get_exchange_transits), per firewall
+    # context: a service port tagged with the context must trunk them.
+    transit_vlans: dict[str, list[int]] = {}
+    for act in activations or []:
+        if act.get("transit_context") and act.get("vlan_id"):
+            transit_vlans.setdefault(act["transit_context"], []).append(act["vlan_id"])
+
     sorted_names = sort_interface_list([iface.get("name") for iface in data if iface.get("name")])
     name_to_interface = {}
     for iface in data:
@@ -254,6 +261,15 @@ def get_interfaces(
         if context_vlan_id is None and iface.get("typename") == "DcimVirtualInterface":
             suffix = name.rpartition(".")[2] if "." in name else ""
             context_vlan_id = int(suffix) if suffix.isdigit() else None
+
+        # A port tagged with a context that has transit legs is a tagged trunk
+        # for those VLANs; its context vlan_id is NOT a sub-interface tag here.
+        port_transit_vlans = sorted(
+            {v for c in by_type.get("ManagedFirewallContext", []) for v in transit_vlans.get(c.get("name"), [])}
+        )
+        if port_transit_vlans:
+            vlans = vlans + [v for v in port_transit_vlans if v not in vlans]
+            context_vlan_id = None
 
         # Extract OSPF interface configuration. Area/network_type/cost live on the
         # peering (ManagedOSPFPeering), reached via the interface's `peering`

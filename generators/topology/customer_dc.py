@@ -3,13 +3,14 @@
 Triggered on TopologyCustomerDC creation (see data/events/99_actions.yml's
 trigger-customer-deployment-dc-on-created rule).
 
-DC customers reach everything over the fabric's own L2 domain, and inter-VRF
-routing (PROD/NON-PROD <-> INTERNET/MANAGEMENT) is 4 fixed bootstrap
-TopologyRoutedExchange objects shared by every deployment (see
-data/bootstrap/23_exchanges.yml, docs/exchange_gateway.md) — nothing
-per-deployment to provision here. So this generator's only job is
-FirewallContext (VDOM/vsys) provisioning on the parent DC's ManagedFirewallHA
-cluster: dedicated (tenant = this deployment)
+DC customers reach everything over the fabric's own L2 domain. Inter-VRF
+routing (PROD/NON-PROD <-> INTERNET, never PROD <-> NON-PROD) is a
+TopologyRoutedExchange per FirewallContext, `{context}-{A}-{Z}`, whose legs
+are the context's member sub-interfaces in the tenant VRF and INTERNET (a /29
+transit per context and VRF; see docs/exchange_gateway.md); there are no
+bootstrap exchanges. So this generator's job is FirewallContext (VDOM/vsys)
+provisioning, plus the context's exchange legs (FirewallContextMixin), on the
+parent DC's ManagedFirewallHA cluster: dedicated (tenant = this deployment)
 if design.dedicated_firewall is true, else ONE shared context per cluster
 (tenant unset) reused by every other customer. Same for an optional
 dedicated load-balancer HA pair (design.dedicated_loadbalancer).
@@ -35,13 +36,14 @@ class CustomerDeploymentDCExchangeGenerator(
     FirewallContextMixin, PoolMixin, DeviceMixin, CablingMixin, CommonGenerator
 ):
     """add_customer_deployment_dc — FirewallContext (+ optional dedicated
-    load-balancer) provisioning for TopologyCustomerDC. No circuit, no
-    exchange gateway — DC customers are fabric-local.
+    load-balancer) provisioning for TopologyCustomerDC, including the
+    context's exchange legs. No circuit — DC customers are fabric-local.
     """
 
     _customer_kind = "TopologyCustomerDC"
     _parent_label = "DC"
     _parent_generators = ("add_dc", "dc_pod_cascade")
+    _transit_legs = True
 
     async def generate(self, data: dict[str, Any]) -> None:
         cleaned = clean_data(data)

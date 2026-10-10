@@ -1,0 +1,61 @@
+set system host-name dc1-fw-01
+#
+#
+# --- Address Books (one per zone) ---
+set security zones security-zone PROD-ZONE address-book address addr-10-1-0-0-24 10.1.0.0/24
+set security zones security-zone PROD-ZONE address-book address addr-10-3-0-0-24 10.3.0.0/24
+set security zones security-zone NONPROD-ZONE address-book address addr-10-2-0-0-24 10.2.0.0/24
+#
+#
+# --- Interfaces, zones and routes in tenant system dc1-fw-acme ---
+set tenants dc1-fw-acme routing-instances ri-dc1-fw-acme instance-type virtual-router
+set interfaces ethernet1/1 vlan-tagging
+set tenants dc1-fw-acme interfaces ethernet1/1 unit 3001 vlan-id 3001
+set tenants dc1-fw-acme interfaces ethernet1/1 unit 3001 family inet address 100.66.0.12/29
+set tenants dc1-fw-acme security zones security-zone PROD-ZONE interfaces ethernet1/1.3001
+set tenants dc1-fw-acme routing-instances ri-dc1-fw-acme interface ethernet1/1.3001
+set tenants dc1-fw-acme interfaces ethernet1/1 unit 3401 vlan-id 3401
+set tenants dc1-fw-acme interfaces ethernet1/1 unit 3401 family inet address 100.66.32.12/29
+set tenants dc1-fw-acme security zones security-zone INTERNET-ZONE interfaces ethernet1/1.3401
+set tenants dc1-fw-acme routing-instances ri-dc1-fw-acme interface ethernet1/1.3401
+set tenants dc1-fw-acme routing-instances ri-dc1-fw-acme routing-options static route 10.3.0.0/24 next-hop 100.66.0.9
+set tenants dc1-fw-acme routing-instances ri-dc1-fw-acme routing-options static route 0.0.0.0/0 next-hop 100.66.32.9
+#
+#
+# --- Interfaces, zones and routes in tenant system dc1-fw-shared ---
+set tenants dc1-fw-shared routing-instances ri-dc1-fw-shared instance-type virtual-router
+set interfaces ethernet1/1 vlan-tagging
+set tenants dc1-fw-shared interfaces ethernet1/1 unit 3000 vlan-id 3000
+set tenants dc1-fw-shared interfaces ethernet1/1 unit 3000 family inet address 100.66.0.4/29
+set tenants dc1-fw-shared security zones security-zone PROD-ZONE interfaces ethernet1/1.3000
+set tenants dc1-fw-shared routing-instances ri-dc1-fw-shared interface ethernet1/1.3000
+set tenants dc1-fw-shared interfaces ethernet1/1 unit 3200 vlan-id 3200
+set tenants dc1-fw-shared interfaces ethernet1/1 unit 3200 family inet address 100.66.16.4/29
+set tenants dc1-fw-shared security zones security-zone NONPROD-ZONE interfaces ethernet1/1.3200
+set tenants dc1-fw-shared routing-instances ri-dc1-fw-shared interface ethernet1/1.3200
+set tenants dc1-fw-shared interfaces ethernet1/1 unit 3400 vlan-id 3400
+set tenants dc1-fw-shared interfaces ethernet1/1 unit 3400 family inet address 100.66.32.4/29
+set tenants dc1-fw-shared security zones security-zone INTERNET-ZONE interfaces ethernet1/1.3400
+set tenants dc1-fw-shared routing-instances ri-dc1-fw-shared interface ethernet1/1.3400
+set tenants dc1-fw-shared routing-instances ri-dc1-fw-shared routing-options static route 10.1.0.0/24 next-hop 100.66.0.1
+set tenants dc1-fw-shared routing-instances ri-dc1-fw-shared routing-options static route 10.2.0.0/24 next-hop 100.66.16.1
+set tenants dc1-fw-shared routing-instances ri-dc1-fw-shared routing-options static route 0.0.0.0/0 next-hop 100.66.32.1
+set tenants dc1-fw-shared security policies from-zone PROD-ZONE to-zone NONPROD-ZONE policy deny-PROD-ZONE-to-NONPROD-ZONE match source-address any
+set tenants dc1-fw-shared security policies from-zone PROD-ZONE to-zone NONPROD-ZONE policy deny-PROD-ZONE-to-NONPROD-ZONE match destination-address any
+set tenants dc1-fw-shared security policies from-zone PROD-ZONE to-zone NONPROD-ZONE policy deny-PROD-ZONE-to-NONPROD-ZONE match application any
+set tenants dc1-fw-shared security policies from-zone PROD-ZONE to-zone NONPROD-ZONE policy deny-PROD-ZONE-to-NONPROD-ZONE then deny
+set tenants dc1-fw-shared security policies from-zone PROD-ZONE to-zone NONPROD-ZONE policy deny-PROD-ZONE-to-NONPROD-ZONE then log session-init
+set tenants dc1-fw-shared security policies from-zone NONPROD-ZONE to-zone PROD-ZONE policy deny-NONPROD-ZONE-to-PROD-ZONE match source-address any
+set tenants dc1-fw-shared security policies from-zone NONPROD-ZONE to-zone PROD-ZONE policy deny-NONPROD-ZONE-to-PROD-ZONE match destination-address any
+set tenants dc1-fw-shared security policies from-zone NONPROD-ZONE to-zone PROD-ZONE policy deny-NONPROD-ZONE-to-PROD-ZONE match application any
+set tenants dc1-fw-shared security policies from-zone NONPROD-ZONE to-zone PROD-ZONE policy deny-NONPROD-ZONE-to-PROD-ZONE then deny
+set tenants dc1-fw-shared security policies from-zone NONPROD-ZONE to-zone PROD-ZONE policy deny-NONPROD-ZONE-to-PROD-ZONE then log session-init
+#
+#
+# --- Chassis Cluster ---
+set chassis cluster reth-count 2
+set chassis cluster redundancy-group 0 node 0 priority 100
+set chassis cluster redundancy-group 1 node 0 priority 100
+set chassis cluster redundancy-group 1 preempt off
+set interfaces ethernet1/7 fabric-options member-interfaces ethernet1/7
+#

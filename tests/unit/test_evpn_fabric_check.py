@@ -281,3 +281,24 @@ class TestEmptyPayloads:
 
         assert check._captured_errors == []
         assert check._captured_infos == []
+
+
+class TestTransitVniBand:
+    """Pool-allocated VNIs must stay out of the derived exchange transit band."""
+
+    def test_l2_vni_inside_transit_band_is_an_error(self) -> None:
+        check = _check()
+        check.validate({"ManagedVxlanSegment": [_l2("seg", "dc1", 64100)], "IpamNamespace": []})
+        assert any("transit VNI band" in e for e in check._captured_errors)
+
+    def test_l3_vni_inside_transit_band_is_an_error(self) -> None:
+        check = _check()
+        check.validate({"IpamNamespace": [{"name": "X", "l3_vni": 64000}]})
+        assert any("transit VNI band" in e for e in check._captured_errors)
+
+    def test_vnis_outside_band_are_fine(self) -> None:
+        check = _check()
+        check.validate(
+            {"ManagedVxlanSegment": [_l2("seg", "dc1", 10001)], "IpamNamespace": [{"name": "X", "l3_vni": 60000}]}
+        )
+        assert not check._captured_errors

@@ -126,7 +126,8 @@ interface Vxlan1
 vrf instance VRF_A
    description Tenant VRF for microsegmentation
    rd 10.0.0.1:50001
-!ip routing vrf VRF_A
+!
+ip routing vrf VRF_A
 !
 !
 ! EVPN Configuration (L2 + L3 VNI)

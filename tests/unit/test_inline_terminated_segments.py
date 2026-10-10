@@ -20,7 +20,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from transforms.common import BaseDeviceTransform
-from transforms.config.border_leaf import BorderLeaf
 from transforms.helpers.segments import (
     _get_segment_gateways,
     _get_segment_namespace,
@@ -185,21 +184,6 @@ class TestPbrAndAclSkip:
         assert [v["vlan_id"] for v in config["vlans"]] == [100, 150]
         assert [m["vni"] for m in config["vxlan"]["l2_vni_mappings"]] == [10100, 10150]
         assert [m["vrf_name"] for m in config["vxlan"]["l3_vni_mappings"]] == ["VRF_A"]
-
-    def test_border_leaf_pbr_skips_inline_segments_of_the_dc(self) -> None:
-        """The border-leaf's DC-wide PBR input excludes terminate_inline segments."""
-        deployment = {
-            "segment_deployments": [
-                {"vni": 10100, "segment": _routed_segment()},
-                {"vni": 10150, "segment": _inline_segment()},
-            ]
-        }
-        border_pbr = MagicMock(return_value=[])
-
-        with patch("transforms.config.border_leaf.get_border_leaf_pbr_rules", border_pbr):
-            _make_transform(BorderLeaf, "border-leaf")._extra_config(_device_data(deployment), "arista_eos")
-
-        assert [a["vni"] for a in border_pbr.call_args.args[0]] == [10100]
 
 
 # ---------------------------------------------------------------------------

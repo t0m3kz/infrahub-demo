@@ -649,3 +649,21 @@ class TestInlineAddresses:
         assert inline_addresses([self._segment(inline_service={"name": "lb-ha"})], self._ha()) == none
         assert inline_addresses([self._segment(terminate_inline=False)], self._ha()) == none
         assert inline_addresses([self._segment()], None) == none
+
+    def test_transit_leg_virtual_ip_and_standby_are_fixed_offsets_of_the_slash_29(self) -> None:
+        """Member A's own .5 gives the .4 VIP and member B's .6 as standby; no capability lookup."""
+        assert inline_addresses(None, self._ha(), "100.66.0.5/29") == {
+            "virtual_ip": "100.66.0.4/29",
+            "standby_ip": "100.66.0.6/29",
+        }
+
+    def test_transit_leg_gives_the_same_pair_addresses_from_member_b(self) -> None:
+        """Both members' config is identical: the VIP and standby do not depend on which one renders."""
+        assert inline_addresses(None, self._ha(), "100.66.0.6/29") == inline_addresses(
+            None, self._ha(), "100.66.0.5/29"
+        )
+
+    def test_transit_leg_without_ha_or_ipv4_has_none(self) -> None:
+        none = {"virtual_ip": None, "standby_ip": None}
+        assert inline_addresses(None, None, "100.66.0.5/29") == none
+        assert inline_addresses(None, self._ha(), "fd00::5/127") == none

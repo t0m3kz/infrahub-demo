@@ -3,19 +3,12 @@
 !
 hostname {{ name }}
 !
-{%- if border_leaf_pbr_rules %}
-system routing tcam security-group-acl
-hardware access-list tcam region pbr 256
-{%- endif %}
 feature ospf
 feature bgp
 feature interface-vlan
 feature lacp
 feature vpc
 feature lldp
-{%- if border_leaf_pbr_rules %}
-feature pbr
-{%- endif %}
 !
 {%- include 'common/cisco_nxos_vpc.j2' %}
 ! VLANs
@@ -92,60 +85,24 @@ route-map RM-CONN-2-BGP permit 10
 route-map RM-VRF-DIRECT-2-EVPN permit 10
 !
 {%- endif %}
+{%- if vrf_routes %}
+{#- Exchange statics (TopologyRoutedExchange, via the firewall context) live
+    inside their `vrf context` (cisco_nxos_vxlan_vrf.j2) and enter EVPN as type-5
+    through cisco_nxos_bgp.j2's `redistribute static`. Exact-match only: a bare
+    prefix-list entry matches that prefix and nothing longer, so the default
+    route is the only 0/0 candidate and a segment prefix never drags in others. #}
+!
+{%- for vrf in vrf_routes | map(attribute='vrf') | unique | list %}
+{%- for prefix in vrf_routes | selectattr('vrf', 'equalto', vrf) | map(attribute='prefix') | unique | list %}
+ip prefix-list PL-VRF-STATIC-{{ vrf }} seq {{ loop.index * 10 }} permit {{ prefix }}
+{%- endfor %}
+route-map RM-VRF-STATIC-2-EVPN-{{ vrf }} permit 10
+  match ip address prefix-list PL-VRF-STATIC-{{ vrf }}
+{%- endfor %}
+!
+{%- endif %}
 {%- include 'common/cisco_nxos_svi.j2' -%}
 !
-{%- if vrf_gateways %}
-!
-! VRF Default Routes — inter-VRF hop on this device (TopologyRoutedExchange)
-!
-{%- for vrf, nexthop in vrf_gateways.items() %}
-ip route 0.0.0.0/0 {{ nexthop }} vrf {{ vrf }}
-{%- endfor %}
-!
-{%- endif %}
-{%- if border_leaf_pbr_rules %}
-!
-! Border-leaf PBR (.dev/scenariusze.txt "CTS PBR + SINGLE VRF") — default-
-! redirect every segment's traffic to its firewall context's nexthop.
-! SGT/security-group travels in-band inside the VXLAN header from the
-! originating leaf; match_by_tag rules use it directly (Cisco<->Cisco
-! transit), everything else falls back to a source-prefix ACL match.
-! Rules are grouped by customer: prefix-fallback members share one ACL
-! (multiple permit lines, one sequence); tag-match members each keep their
-! own sequence but stay adjacent under the same customer comment block.
-!
-{%- for rule in border_leaf_pbr_rules %}
-! Customer: {{ rule.customer_name or 'any' }}/{{ rule.environment or 'any' }}
-{%- if not rule.match_by_tag %}
-ip access-list {{ rule.acl_name }}
-{%- for prefix in rule.source_prefixes %}
-  permit ip {{ prefix }} any
-{%- endfor %}
-!
-{%- endif %}
-route-map RM-BORDER-LEAF-PBR permit {{ loop.index * 10 }}
-{%- if rule.match_by_tag %}
-  match cts sgt {{ rule.sgt }}
-{%- else %}
-  match ip address {{ rule.acl_name }}
-{%- endif %}
-  set ip next-hop {{ rule.fw_nexthop }}
-!
-{%- endfor %}
-! Applied on every uplink (fabric-facing) interface — that's where traffic
-! from any leaf in this DC arrives at the border-leaf. .dev/scenariusze.txt
-! uses a dedicated "INCOMING_FROM_FABRIC_PBR_INTERFACE" physical port
-! because its Shared_VRF/L3-VNI model routes fabric traffic onto one
-! specific port before PBR; this project has no Shared_VRF (per-segment VRF
-! stays on the leaf, see docs/firewall_service_insertion.md), so the closest
-! equivalent is the same uplink port that already carries all fabric-bound
-! traffic today.
-{%- for interface in interfaces if interface.role == 'uplink' %}
-interface {{ interface.name }}
-  ip policy route-map RM-BORDER-LEAF-PBR
-!
-{%- endfor %}
-{%- endif %}
 {%- include 'common/cisco_nxos_management.j2' %}
 !
 ! Management

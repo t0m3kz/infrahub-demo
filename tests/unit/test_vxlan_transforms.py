@@ -1043,7 +1043,7 @@ def _minimal_ctx(**overrides) -> dict:
         "ospf": None,
         "bgp": None,
         "vxlan": {"enabled": False},
-        "vrf_gateways": {},
+        "vrf_routes": [],
         # Management-section variables expected by arista_eos_management.j2
         "ntp": None,
         "syslog": None,

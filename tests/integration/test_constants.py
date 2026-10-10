@@ -2,6 +2,8 @@
 
 from typing import TypedDict
 
+from utils.exchange_transit import EXCHANGE_PEERS, namespace_type_for_environment
+
 # ---------------------------------------------------------------------------
 # Demo data paths  (single source of truth — the same files the demos ship)
 # ---------------------------------------------------------------------------
@@ -91,9 +93,9 @@ ALL_DEMO_EXPECTED_GENERATORS: dict[str, int] = {
     # 06_customer_boarding re-declares three of them as supersets, which
     # upsert, and adds the C008/C010 dev footprints on DC12's shared hosts.
     # add_customer_deployment_cloud/office were removed: their only job was
-    # hub-and-spoke exchange auto-provisioning, now replaced by the 4 fixed
-    # bootstrap TopologyRoutedExchange objects (data/bootstrap/23_exchanges.yml)
-    # — see docs/exchange_gateway.md.
+    # hub-and-spoke exchange auto-provisioning, now replaced by the
+    # per-context TopologyRoutedExchange objects the DC/colocation customer
+    # generators create — see docs/exchange_gateway.md.
     "add_customer_deployment_dc": 9,
     "add_customer_deployment_colocation": 7,
     # trigger-customer-office-sdwan-on-created fires unconditionally for
@@ -417,6 +419,127 @@ ALL_DEMO_DEDICATED_FIREWALL_TENANTS: dict[str, str] = {
     "C009-P-DC11": "XL_DC",
     "C005-P-DC12": "L_DC",
 }
+
+# ---------------------------------------------------------------------------
+# 30_all — inter-VRF exchange legs through the firewall contexts (PR 3)
+#
+# Everything below is DERIVED, not hand-counted. A context's legs are its
+# tenant VRFs plus INTERNET (EXCHANGE_PEERS): a dedicated context serves its one
+# tenant, a shared context serves every customer deployment of its DC that has
+# no dedicated context. A deployment's VRF follows its environment (`p` is
+# PROD, every other value NON-PROD). The deployments are the nine
+# TopologyCustomerDC footprints of 03_dc/new_customers plus the C008/C010 dev
+# footprints that 06_customer_boarding adds on DC12 (the c005/c006 boardings
+# there re-declare footprints that already exist, so they add none).
+# ---------------------------------------------------------------------------
+
+ALL_DEMO_TRANSIT_NAMESPACES = ("PROD", "NON-PROD", "INTERNET")
+_TRANSIT_NAMESPACE_BY_TYPE: dict[str, str] = dict(zip(("prod", "non_prod", "internet"), ALL_DEMO_TRANSIT_NAMESPACES))
+
+# Deployment name ({org}-{environment}-{DC}) of every TopologyCustomerDC, per DC.
+ALL_DEMO_DC_CUSTOMER_DEPLOYMENTS: dict[str, tuple[str, ...]] = {
+    "DC10": ("C005-P-DC10", "C007-P-DC10"),
+    "DC11": ("C006-P-DC11", "C009-P-DC11"),
+    "DC12": ("C005-P-DC12", "C008-P-DC12", "C008-D-DC12", "C010-P-DC12", "C010-D-DC12"),
+}
+
+# The bootstrap exchanges of the removed data/bootstrap/23_exchanges.yml. The
+# gateway is mandatory now, so every exchange is created per context.
+ALL_DEMO_LEGACY_EXCHANGES = ("PROD-INTERNET", "NON-PROD-INTERNET", "PROD-MANAGEMENT", "NON-PROD-MANAGEMENT")
+
+# Resource prefixes of the FW-Transit-<VRF>-IPv4 pools (data/bootstrap/20_dci_pools.yml).
+ALL_DEMO_TRANSIT_RESOURCES: dict[str, str] = {
+    "PROD": "100.66.0.0/20",
+    "NON-PROD": "100.66.16.0/20",
+    "INTERNET": "100.66.32.0/20",
+}
+
+# A firewall cluster is an HA pair: one sub-interface per member per leg.
+ALL_DEMO_FIREWALL_MEMBERS = 2
+
+
+class ExpectedTransitContext(TypedDict):
+    """What one firewall context of a 30_all DC must carry."""
+
+    dc: str
+    #: Tenant deployment of a dedicated context, None for the DC's shared one.
+    tenant: str | None
+    #: Deployments the context serves.
+    deployments: tuple[str, ...]
+    #: Namespace names with a leg, in ALL_DEMO_TRANSIT_NAMESPACES order.
+    namespaces: tuple[str, ...]
+    #: Exchange name suffixes `{A}-{Z}` (the exchange is `{context}-{A}-{Z}`).
+    exchanges: tuple[str, ...]
+
+
+def deployment_environment(deployment: str) -> str:
+    """`C008-D-DC12` -> `d`: the environment segment of a deployment name."""
+    return deployment.split("-")[1].lower()
+
+
+def deployment_namespace(deployment: str) -> str:
+    """The tenant VRF namespace name of a deployment (`p` -> PROD, anything else NON-PROD)."""
+    return _TRANSIT_NAMESPACE_BY_TYPE[namespace_type_for_environment(deployment_environment(deployment))]
+
+
+def transit_namespace_type(namespace_name: str) -> str:
+    """`NON-PROD` -> `non_prod`."""
+    return next(ns_type for ns_type, name in _TRANSIT_NAMESPACE_BY_TYPE.items() if name == namespace_name)
+
+
+def _expected_transit_context(dc: str, tenant: str | None, deployments: tuple[str, ...]) -> ExpectedTransitContext:
+    tenant_types = {namespace_type_for_environment(deployment_environment(d)) for d in deployments}
+    exchanges = [
+        f"{_TRANSIT_NAMESPACE_BY_TYPE[tenant_type]}-{_TRANSIT_NAMESPACE_BY_TYPE[peer]}"
+        for tenant_type in _TRANSIT_NAMESPACE_BY_TYPE
+        if tenant_type in tenant_types
+        for peer in EXCHANGE_PEERS[tenant_type]
+    ]
+    peer_types = {peer for tenant_type in tenant_types for peer in EXCHANGE_PEERS[tenant_type]}
+    namespaces = tuple(
+        name for ns_type, name in _TRANSIT_NAMESPACE_BY_TYPE.items() if ns_type in tenant_types | peer_types
+    )
+    return {
+        "dc": dc,
+        "tenant": tenant,
+        "deployments": deployments,
+        "namespaces": namespaces,
+        "exchanges": tuple(exchanges),
+    }
+
+
+def expected_transit_contexts() -> list[ExpectedTransitContext]:
+    """The shared context of every 30_all DC, then its dedicated ones (ALL_DEMO_DEDICATED_FIREWALL_TENANTS)."""
+    contexts: list[ExpectedTransitContext] = []
+    for dc, deployments in ALL_DEMO_DC_CUSTOMER_DEPLOYMENTS.items():
+        dedicated = tuple(d for d in deployments if d in ALL_DEMO_DEDICATED_FIREWALL_TENANTS)
+        shared = tuple(d for d in deployments if d not in ALL_DEMO_DEDICATED_FIREWALL_TENANTS)
+        contexts.append(_expected_transit_context(dc, None, shared))
+        contexts.extend(_expected_transit_context(dc, tenant, (tenant,)) for tenant in dedicated)
+    return contexts
+
+
+ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS = expected_transit_contexts()
+# Planning estimate, re-derived above: DC10 2+2, DC11 2+2, DC12 3+2 legs.
+ALL_DEMO_TRANSIT_LEGS = sum(len(c["namespaces"]) for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS)
+ALL_DEMO_TRANSIT_EXCHANGES = sum(len(c["exchanges"]) for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS)
+# One /29 per leg, so the /29 count per VRF is the leg count per VRF.
+ALL_DEMO_TRANSIT_PREFIXES: dict[str, int] = {
+    name: sum(name in c["namespaces"] for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS)
+    for name in ALL_DEMO_TRANSIT_NAMESPACES
+}
+ALL_DEMO_TRANSIT_SUBINTERFACES = ALL_DEMO_TRANSIT_LEGS * ALL_DEMO_FIREWALL_MEMBERS
+# Each DC's member uplinks reach 2 border-leaf service ports (dedicated virtual
+# members follow their hosting firewall), and every context of the DC tags both.
+ALL_DEMO_BORDER_FIREWALL_PORTS = len(ALL_DEMO_DC_CUSTOMER_DEPLOYMENTS) * ALL_DEMO_FIREWALL_MEMBERS
+
+# Declared nowhere: the customer boarding generators create them, so the floors
+# join ALL_DEMO_EXPECTED_OBJECTS here. Contexts = the shared ones + one per
+# dedicated tenant; `>=` because the DC6 chain's own boarding merges into main.
+ALL_DEMO_EXPECTED_OBJECTS["ManagedFirewallContext"] = ALL_DEMO_SHARED_FIREWALL_CONTEXTS + len(
+    ALL_DEMO_DEDICATED_FIREWALL_TENANTS
+)
+ALL_DEMO_EXPECTED_OBJECTS["TopologyRoutedExchange"] = ALL_DEMO_TRANSIT_EXCHANGES
 
 # C005's five application segments and the deployments each is activated in.
 # The two dc_pair "stretch" segments carry two DC legs each, and

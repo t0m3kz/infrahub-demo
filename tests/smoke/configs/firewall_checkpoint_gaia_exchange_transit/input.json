@@ -1,0 +1,777 @@
+{
+  "DcimPhysicalDevice": {
+    "edges": [
+      {
+        "node": {
+          "__typename": "DcimPhysicalDevice",
+          "id": "dev-dc1-fw-01",
+          "name": {
+            "value": "dc1-fw-01"
+          },
+          "role": {
+            "value": "firewall"
+          },
+          "platform": {
+            "node": {
+              "id": "plat-checkpoint_gaia",
+              "name": {
+                "value": "checkpoint_gaia"
+              },
+              "netmiko_device_type": {
+                "value": "checkpoint_gaia"
+              },
+              "napalm_driver": {
+                "value": "checkpoint_gaia"
+              },
+              "ansible_network_os": {
+                "value": "checkpoint_gaia"
+              }
+            }
+          },
+          "primary_address": {
+            "node": null
+          },
+          "tags": {
+            "edges": []
+          },
+          "capabilities": {
+            "edges": [
+              {
+                "node": {
+                  "__typename": "ManagedFirewallHA",
+                  "name": {
+                    "value": "dc1-fw-ha"
+                  },
+                  "group_id": {
+                    "value": 1
+                  },
+                  "mode": {
+                    "value": "active-passive"
+                  },
+                  "priority": {
+                    "value": 100
+                  },
+                  "preempt": {
+                    "value": false
+                  },
+                  "ha_timer": {
+                    "value": "aggressive"
+                  },
+                  "capabilities": {
+                    "edges": [
+                      {
+                        "node": {
+                          "name": {
+                            "value": "dc1-fw-01"
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "name": {
+                            "value": "dc1-fw-02"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          "interfaces": {
+            "edges": [
+              {
+                "node": {
+                  "__typename": "DcimVirtualInterface",
+                  "name": {
+                    "value": "ethernet1/1.3000"
+                  },
+                  "description": {
+                    "value": null
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": null
+                  },
+                  "parent_interface": {
+                    "node": {
+                      "name": {
+                        "value": "ethernet1/1"
+                      }
+                    }
+                  },
+                  "ip_address": {
+                    "node": {
+                      "address": {
+                        "value": "100.66.0.5/29"
+                      },
+                      "ip_namespace": {
+                        "node": {
+                          "name": {
+                            "value": "PROD"
+                          },
+                          "namespace_type": {
+                            "value": "prod"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "ha_domain": {
+                    "node": null
+                  },
+                  "interface_capabilities": {
+                    "edges": [
+                      {
+                        "node": {
+                          "__typename": "ManagedFirewallContext",
+                          "id": "ctx-shared",
+                          "name": {
+                            "value": "dc1-fw-shared"
+                          },
+                          "vlan_id": {
+                            "value": 3000
+                          },
+                          "context_id": {
+                            "value": null
+                          },
+                          "tenant": {
+                            "node": null
+                          },
+                          "served_deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "id": "dep-shared",
+                                  "network_segments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "id": "seg-prod",
+                                          "__typename": "ManagedVxlanSegment",
+                                          "name": {
+                                            "value": "seg-prod"
+                                          },
+                                          "gateway": {
+                                            "node": {
+                                              "ip_prefix": {
+                                                "node": {
+                                                  "prefix": {
+                                                    "value": "10.1.0.0/24"
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "node": {
+                                          "id": "seg-nonprod",
+                                          "__typename": "ManagedVxlanSegment",
+                                          "name": {
+                                            "value": "seg-nonprod"
+                                          },
+                                          "gateway": {
+                                            "node": {
+                                              "ip_prefix": {
+                                                "node": {
+                                                  "prefix": {
+                                                    "value": "10.2.0.0/24"
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimVirtualInterface",
+                  "name": {
+                    "value": "ethernet1/1.3200"
+                  },
+                  "description": {
+                    "value": null
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": null
+                  },
+                  "parent_interface": {
+                    "node": {
+                      "name": {
+                        "value": "ethernet1/1"
+                      }
+                    }
+                  },
+                  "ip_address": {
+                    "node": {
+                      "address": {
+                        "value": "100.66.16.5/29"
+                      },
+                      "ip_namespace": {
+                        "node": {
+                          "name": {
+                            "value": "NON-PROD"
+                          },
+                          "namespace_type": {
+                            "value": "non_prod"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "ha_domain": {
+                    "node": null
+                  },
+                  "interface_capabilities": {
+                    "edges": [
+                      {
+                        "node": {
+                          "__typename": "ManagedFirewallContext",
+                          "id": "ctx-shared",
+                          "name": {
+                            "value": "dc1-fw-shared"
+                          },
+                          "vlan_id": {
+                            "value": 3000
+                          },
+                          "context_id": {
+                            "value": null
+                          },
+                          "tenant": {
+                            "node": null
+                          },
+                          "served_deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "id": "dep-shared",
+                                  "network_segments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "id": "seg-prod",
+                                          "__typename": "ManagedVxlanSegment",
+                                          "name": {
+                                            "value": "seg-prod"
+                                          },
+                                          "gateway": {
+                                            "node": {
+                                              "ip_prefix": {
+                                                "node": {
+                                                  "prefix": {
+                                                    "value": "10.1.0.0/24"
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "node": {
+                                          "id": "seg-nonprod",
+                                          "__typename": "ManagedVxlanSegment",
+                                          "name": {
+                                            "value": "seg-nonprod"
+                                          },
+                                          "gateway": {
+                                            "node": {
+                                              "ip_prefix": {
+                                                "node": {
+                                                  "prefix": {
+                                                    "value": "10.2.0.0/24"
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimVirtualInterface",
+                  "name": {
+                    "value": "ethernet1/1.3400"
+                  },
+                  "description": {
+                    "value": null
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": null
+                  },
+                  "parent_interface": {
+                    "node": {
+                      "name": {
+                        "value": "ethernet1/1"
+                      }
+                    }
+                  },
+                  "ip_address": {
+                    "node": {
+                      "address": {
+                        "value": "100.66.32.5/29"
+                      },
+                      "ip_namespace": {
+                        "node": {
+                          "name": {
+                            "value": "INTERNET"
+                          },
+                          "namespace_type": {
+                            "value": "internet"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "ha_domain": {
+                    "node": null
+                  },
+                  "interface_capabilities": {
+                    "edges": [
+                      {
+                        "node": {
+                          "__typename": "ManagedFirewallContext",
+                          "id": "ctx-shared",
+                          "name": {
+                            "value": "dc1-fw-shared"
+                          },
+                          "vlan_id": {
+                            "value": 3000
+                          },
+                          "context_id": {
+                            "value": null
+                          },
+                          "tenant": {
+                            "node": null
+                          },
+                          "served_deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "id": "dep-shared",
+                                  "network_segments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "id": "seg-prod",
+                                          "__typename": "ManagedVxlanSegment",
+                                          "name": {
+                                            "value": "seg-prod"
+                                          },
+                                          "gateway": {
+                                            "node": {
+                                              "ip_prefix": {
+                                                "node": {
+                                                  "prefix": {
+                                                    "value": "10.1.0.0/24"
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "node": {
+                                          "id": "seg-nonprod",
+                                          "__typename": "ManagedVxlanSegment",
+                                          "name": {
+                                            "value": "seg-nonprod"
+                                          },
+                                          "gateway": {
+                                            "node": {
+                                              "ip_prefix": {
+                                                "node": {
+                                                  "prefix": {
+                                                    "value": "10.2.0.0/24"
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimVirtualInterface",
+                  "name": {
+                    "value": "ethernet1/1.3001"
+                  },
+                  "description": {
+                    "value": null
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": null
+                  },
+                  "parent_interface": {
+                    "node": {
+                      "name": {
+                        "value": "ethernet1/1"
+                      }
+                    }
+                  },
+                  "ip_address": {
+                    "node": {
+                      "address": {
+                        "value": "100.66.0.13/29"
+                      },
+                      "ip_namespace": {
+                        "node": {
+                          "name": {
+                            "value": "PROD"
+                          },
+                          "namespace_type": {
+                            "value": "prod"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "ha_domain": {
+                    "node": null
+                  },
+                  "interface_capabilities": {
+                    "edges": [
+                      {
+                        "node": {
+                          "__typename": "ManagedFirewallContext",
+                          "id": "ctx-dedicated",
+                          "name": {
+                            "value": "dc1-fw-acme"
+                          },
+                          "vlan_id": {
+                            "value": 3001
+                          },
+                          "context_id": {
+                            "value": null
+                          },
+                          "tenant": {
+                            "node": {
+                              "name": {
+                                "value": "Acme"
+                              }
+                            }
+                          },
+                          "served_deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "id": "dep-acme",
+                                  "network_segments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "id": "seg-acme",
+                                          "__typename": "ManagedVxlanSegment",
+                                          "name": {
+                                            "value": "seg-acme"
+                                          },
+                                          "gateway": {
+                                            "node": {
+                                              "ip_prefix": {
+                                                "node": {
+                                                  "prefix": {
+                                                    "value": "10.3.0.0/24"
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimVirtualInterface",
+                  "name": {
+                    "value": "ethernet1/1.3401"
+                  },
+                  "description": {
+                    "value": null
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": null
+                  },
+                  "parent_interface": {
+                    "node": {
+                      "name": {
+                        "value": "ethernet1/1"
+                      }
+                    }
+                  },
+                  "ip_address": {
+                    "node": {
+                      "address": {
+                        "value": "100.66.32.13/29"
+                      },
+                      "ip_namespace": {
+                        "node": {
+                          "name": {
+                            "value": "INTERNET"
+                          },
+                          "namespace_type": {
+                            "value": "internet"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "ha_domain": {
+                    "node": null
+                  },
+                  "interface_capabilities": {
+                    "edges": [
+                      {
+                        "node": {
+                          "__typename": "ManagedFirewallContext",
+                          "id": "ctx-dedicated",
+                          "name": {
+                            "value": "dc1-fw-acme"
+                          },
+                          "vlan_id": {
+                            "value": 3001
+                          },
+                          "context_id": {
+                            "value": null
+                          },
+                          "tenant": {
+                            "node": {
+                              "name": {
+                                "value": "Acme"
+                              }
+                            }
+                          },
+                          "served_deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "id": "dep-acme",
+                                  "network_segments": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "id": "seg-acme",
+                                          "__typename": "ManagedVxlanSegment",
+                                          "name": {
+                                            "value": "seg-acme"
+                                          },
+                                          "gateway": {
+                                            "node": {
+                                              "ip_prefix": {
+                                                "node": {
+                                                  "prefix": {
+                                                    "value": "10.3.0.0/24"
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimPhysicalInterface",
+                  "name": {
+                    "value": "ethernet1/7"
+                  },
+                  "description": {
+                    "value": "HA sync"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "ha"
+                  },
+                  "ip_address": {
+                    "node": null
+                  },
+                  "interface_capabilities": {
+                    "edges": []
+                  }
+                }
+              }
+            ]
+          },
+          "deployment": {
+            "node": null
+          }
+        }
+      }
+    ]
+  },
+  "SecurityZone": {
+    "edges": [
+      {
+        "node": {
+          "name": {
+            "value": "PROD-ZONE"
+          },
+          "trust_level": {
+            "value": 50
+          },
+          "description": {
+            "value": ""
+          },
+          "network_segments": {
+            "edges": [
+              {
+                "node": {
+                  "id": "seg-prod",
+                  "__typename": "ManagedVxlanSegment",
+                  "name": {
+                    "value": "seg-prod"
+                  },
+                  "gateway": {
+                    "node": {
+                      "ip_prefix": {
+                        "node": {
+                          "prefix": {
+                            "value": "10.1.0.0/24"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "seg-acme",
+                  "__typename": "ManagedVxlanSegment",
+                  "name": {
+                    "value": "seg-acme"
+                  },
+                  "gateway": {
+                    "node": {
+                      "ip_prefix": {
+                        "node": {
+                          "prefix": {
+                            "value": "10.3.0.0/24"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "node": {
+          "name": {
+            "value": "NONPROD-ZONE"
+          },
+          "trust_level": {
+            "value": 50
+          },
+          "description": {
+            "value": ""
+          },
+          "network_segments": {
+            "edges": [
+              {
+                "node": {
+                  "id": "seg-nonprod",
+                  "__typename": "ManagedVxlanSegment",
+                  "name": {
+                    "value": "seg-nonprod"
+                  },
+                  "gateway": {
+                    "node": {
+                      "ip_prefix": {
+                        "node": {
+                          "prefix": {
+                            "value": "10.2.0.0/24"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

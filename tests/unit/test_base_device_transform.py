@@ -3,7 +3,7 @@
 Covers:
 - transform()  – data routing, platform detection, activation injection
 - _build_config() – base context keys (interfaces, bgp, ospf, capabilities)
-- _extra_config() – vlans/vxlan/acls/vrf_gateways when device_role is set
+- _extra_config() – vlans/vxlan/acls/vrf_routes when device_role is set
 - _filter_segment_deployments() – default pass-through; override semantics
 - ToR class attributes (device_role="tor", template_subdir="leafs")
 """
@@ -64,7 +64,7 @@ class TestCombineLeafPbrRules:
             loopback_name=_loopback_name([], platform),
             acls=[],
             vxlan=None,
-            vrf_gateways={},
+            vrf_routes=[],
             bgp=[],
             ospf=[],
             mlag=None,
@@ -193,7 +193,7 @@ def _render_leaf(platform: str, **overrides: object) -> str:
         "loopback_name": _loopback_name([], platform),
         "acls": [],
         "vxlan": None,
-        "vrf_gateways": {},
+        "vrf_routes": [],
         "bgp": [],
         "ospf": [],
         "mlag": None,
@@ -218,13 +218,12 @@ def test_sonic_templates_render_pure_configdb(role: str, platform: str) -> None:
         interfaces=[],
         acls=[],
         vxlan=None,
-        vrf_gateways={},
+        vrf_routes=[],
         bgp=[],
         ospf=[],
         mlag=None,
         ntp={"servers": [{"address": "192.0.2.1"}]},
         syslog={"servers": [{"address": "192.0.2.2"}]},
-        border_leaf_pbr_rules=[],
     )
     config = json.loads(rendered)
     assert config["NTP_SERVER"] == {"192.0.2.1": {}}
@@ -409,7 +408,7 @@ class TestExtraConfig:
     def test_with_device_role_returns_required_keys(self) -> None:
         t = _make_transform(device_role="leaf")
         result = t._extra_config(_device_data(), "arista_eos")
-        for key in ("vlans", "vxlan", "acls", "vrf_gateways"):
+        for key in ("vlans", "vxlan", "acls", "vrf_routes"):
             assert key in result
 
     def test_no_activations_yields_empty_vlans(self) -> None:
@@ -422,10 +421,10 @@ class TestExtraConfig:
         result = t._extra_config(_device_data(), "arista_eos")
         assert result["acls"] == []
 
-    def test_no_activations_vrf_gateways_empty(self) -> None:
+    def test_no_activations_vrf_routes_empty(self) -> None:
         t = _make_transform(device_role="leaf")
         result = t._extra_config(_device_data(), "arista_eos")
-        assert result["vrf_gateways"] == {}
+        assert result["vrf_routes"] == []
 
 
 # ---------------------------------------------------------------------------

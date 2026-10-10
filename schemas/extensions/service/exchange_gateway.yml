@@ -8,11 +8,17 @@ version: "1.0"
 # Two ways traffic crosses between two IpamNamespace VRFs, modeled as
 # concrete realizations of one generic:
 #
-#   TopologyRoutedExchange   — one device routes between the two VRFs
-#                              (VRF-lite router-on-a-stick or inline FW).
-#                              No leak: each VRF keeps its own routing table,
-#                              default-route/static-route points at the
-#                              other VRF's SVI/sub-interface on that device.
+#   TopologyRoutedExchange   — the hop through ONE firewall CONTEXT
+#                              (`gateway`, a ManagedFirewallContext) between
+#                              two VRFs. Its legs are the context's firewall
+#                              VLAN sub-interfaces, one per VRF, each with an
+#                              address in that VRF's namespace (carried in
+#                              interface_capabilities). No leak: each VRF keeps
+#                              its own routing table and statics point at the
+#                              context's leg VIP in that VRF. Created per
+#                              context by the customer boarding generators,
+#                              named `{context}-{A}-{Z}`; there are no
+#                              bootstrap exchanges.
 #   TopologyRouteLeakExchange — fabric BGP EVPN control-plane leak (extra
 #                              route-target import/export). No inspection —
 #                              traffic stays in the fabric ASIC.
@@ -28,10 +34,10 @@ version: "1.0"
 # interface.ip_address.ip_namespace at render time — not duplicated here
 # as separate interface_a/interface_z fields, so the two can't disagree.
 #
-# TopologyRoutedExchange's interfaces are unconstrained at the schema level
+# TopologyRoutedExchange's interfaces (the legs) are unconstrained at the schema level
 # (min_count/max_count cannot be overridden per-node on a relationship
 # inherited from a generic — see identifier collision if attempted); the
-# "exactly 2, each in the referenced namespace, same device" invariant is
+# "one leg per namespace on the gateway context's devices" invariant is
 # enforced by validate_exchange_gateways() in checks/common.py, not by the schema.
 
 generics:
@@ -80,10 +86,21 @@ nodes:
       - name__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
-      - [namespace_a, namespace_z]
-      # interfaces (many, via ManagedGenericInterfaces) — in practice exactly
-      # 2: the SVIs/sub-interfaces on the one device doing the inter-VRF hop,
-      # one per namespace. Enforced by validate_exchange_gateways() in checks/common.py.
+      - [namespace_a, namespace_z, gateway]
+    relationships:
+      - name: gateway
+        label: "Gateway context"
+        peer: ManagedFirewallContext
+        cardinality: one
+        kind: Attribute
+        optional: false
+        on_delete: no-action
+        identifier: "routed_exchange__gateway"
+        order_weight: 1300
+        description: "Firewall context whose legs (one VLAN sub-interface per namespace) form this exchange"
+      # interfaces (many, via ManagedGenericInterfaces) — the context's leg
+      # sub-interfaces, one per namespace per member. Enforced by
+      # validate_exchange_gateways() in checks/common.py.
 
   - name: RouteLeakExchange
     namespace: Topology

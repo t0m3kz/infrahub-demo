@@ -520,9 +520,9 @@ spec:
     # on-site fabric to provision a FirewallContext on (see
     # generators/topology/customer_dc.py and customer_colocation.py).
     # TopologyCustomerCloud/Office had no fabric of their own — their only job
-    # was hub-and-spoke exchange auto-provisioning, now replaced by the 4 fixed
-    # bootstrap TopologyRoutedExchange objects (data/bootstrap/23_exchanges.yml,
-    # docs/exchange_gateway.md), so those two generators/triggers were removed
+    # was hub-and-spoke exchange auto-provisioning, now replaced by the
+    # per-context TopologyRoutedExchange objects the DC/colocation customer
+    # generators create (docs/exchange_gateway.md), so those two generators/triggers were removed
     # rather than left as no-ops. Regressed in c1b686e7 (removed
     # trigger-exchange-gateway-on-customer-*-created without a replacement,
     # leaving these generators — targets: customer_deployments, a

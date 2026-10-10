@@ -6,6 +6,8 @@ from infrahub_sdk.checks import InfrahubCheck
 
 from transforms.config.firewall import Firewall
 
+from .common import validate_exchange_gateways
+
 
 class CheckFirewall(InfrahubCheck):
     """Validate the rules this firewall gets — the same ones its config renders
@@ -14,12 +16,15 @@ class CheckFirewall(InfrahubCheck):
     so a rule whose source is another segment is an error, as is a rule with
     no destination selector (segment, prefix or IP). A rule's zone is its
     segment's security_zone; a segment without one is reported, since
-    zone-based firewalls then match any zone on that side."""
+    zone-based firewalls then match any zone on that side. Its exchange legs
+    (checks/common.py validate_exchange_gateways) are validated too."""
 
     query = "firewall_config"
 
     def validate(self, data: Any) -> None:
         device, _, _ = Firewall._device_and_platform(data)
+        for error in validate_exchange_gateways(device):
+            self.log_error(message=error)
         # collect_policies only reads class attributes, no client: the check
         # validates exactly what the transform places, not a second copy.
         _, _, root, by_context = Firewall.__new__(Firewall).collect_policies(device)
