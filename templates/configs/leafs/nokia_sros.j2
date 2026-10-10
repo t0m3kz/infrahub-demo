@@ -153,14 +153,4 @@ configure service vprn {{ vlan.get('l3_vni', vni) }} interface "int-vpls-{{ vni 
 {%- endif %}
 {%- endif %}
 
-{%- if vrf_gateways %}
-!
-! VRF Default Routes — firewall gateway per namespace (Option A: FW as inter-VRF router)
-!
-{%- for vrf, nexthop in vrf_gateways.items() %}
-configure service vprn {{ vrf }} static-routes route 0.0.0.0/0 next-hop "{{ nexthop }}" admin-state enable
-{%- endfor %}
-!
-{%- endif %}
-
 {%- include 'common/nokia_sros_management.j2' %}

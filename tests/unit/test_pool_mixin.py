@@ -135,3 +135,43 @@ class TestAllocateResourcePoolsSerializesConcurrentCallers:
             pass
 
         gen.release_resource_lock.assert_awaited_once_with("lock-id")
+
+
+class TestEnsureFirewallContextPools:
+    """The P2P slice is optional: DC contexts need only the VLAN pool."""
+
+    def _gen(self) -> Any:
+        gen = _make_gen()
+        gen.upsert_number_pool = AsyncMock()
+        gen.ensure_sliced_pool = AsyncMock()
+        return gen
+
+    def test_vlan_pool_only_when_no_parent_pool_is_given(self) -> None:
+        gen = self._gen()
+
+        asyncio.run(gen.ensure_firewall_context_pools(name="dc1", vlan_start=3000))
+
+        assert gen.upsert_number_pool.await_args.kwargs["pool_name"] == "dc1-fw-context-vlan-pool"
+        gen.ensure_sliced_pool.assert_not_awaited()
+
+    def test_p2p_slice_is_created_when_a_parent_pool_is_given(self) -> None:
+        gen = self._gen()
+
+        asyncio.run(
+            gen.ensure_firewall_context_pools(
+                name="fr",
+                vlan_start=3000,
+                parent_pool_name="FW-Context-P2P-IPv4",
+                slice_prefix_length=24,
+                default_prefix_length=31,
+            )
+        )
+
+        gen.upsert_number_pool.assert_awaited_once()
+        kwargs = gen.ensure_sliced_pool.await_args.kwargs
+        assert (kwargs["pool_name"], kwargs["parent_pool_name"], kwargs["prefix_length"]) == (
+            "fr-fw-context-p2p-pool",
+            "FW-Context-P2P-IPv4",
+            24,
+        )
+        assert kwargs["default_prefix_length"] == 31

@@ -48,6 +48,8 @@ class CustomerDeploymentColocationExchangeGenerator(
     _customer_kind = "TopologyCustomerColocation"
     _parent_label = "ColocationMetro"
     _parent_generators = ("add_colocation_metro",)
+    # Legacy default-namespace P2P path, deleted in PR 4 with the colocation transit legs.
+    _transit_legs = False
 
     async def generate(self, data: dict[str, Any]) -> None:
         cleaned = clean_data(data)

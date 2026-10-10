@@ -263,15 +263,6 @@ interface Vlan{{ vlan.vlan_id }}
 {%- endif %}
 {%- endif %}
 
-{%- if vrf_gateways %}
-!
-! VRF Default Routes — firewall gateway per namespace (Option A: FW as inter-VRF router)
-!
-{%- for vrf, nexthop in vrf_gateways.items() %}
-ip route vrf {{ vrf }} 0.0.0.0/0 {{ nexthop }}
-{%- endfor %}
-{%- endif %}
-
 {%- if vlans|selectattr('sgt')|list %}
 !
 ! Security Group Tag (SGT) — VXLAN GPO tier enforcement

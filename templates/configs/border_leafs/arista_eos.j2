@@ -70,6 +70,14 @@ interface {{ interface.name }}
 ! Configure route-maps
 route-map RM-CONN-2-BGP permit 10
    match interface {{ loopback_name }}
+{%- if vrf_routes %}
+{#- Exact-match: a prefix-list entry without ge/le matches that prefix only. #}
+{%- for prefix in vrf_routes | map(attribute='prefix') | unique | list %}
+ip prefix-list PL-VRF-STATIC seq {{ loop.index * 10 }} permit {{ prefix }}
+{%- endfor %}
+route-map RM-VRF-STATIC-2-EVPN permit 10
+   match ip address prefix-list PL-VRF-STATIC
+{%- endif %}
 
 {%- if vxlan and vxlan.enabled %}
 !
@@ -159,6 +167,9 @@ router bgp {{ bgp_config.local_as.asn }}
       route-target import evpn {{ rt }}
       {%- endfor %}
       redistribute connected
+{%- if vrf_routes | default([]) | selectattr('vrf', 'equalto', mapping.vrf_name) | list %}
+      redistribute static route-map RM-VRF-STATIC-2-EVPN
+{%- endif %}
 {%- endfor %}
 {%- endif %}
 {% endfor %}
@@ -194,56 +205,12 @@ interface Vlan{{ vlan.vlan_id }}
 {%- endfor %}
 {%- endif %}
 
-{%- if vrf_gateways %}
+{%- if vrf_routes %}
 !
-! VRF Default Routes — inter-VRF hop on this device (TopologyRoutedExchange)
+! Inter-VRF exchange routes (TopologyRoutedExchange, via the firewall context)
 !
-{%- for vrf, nexthop in vrf_gateways.items() %}
-ip route vrf {{ vrf }} 0.0.0.0/0 {{ nexthop }}
-{%- endfor %}
-{%- endif %}
-
-{%- if border_leaf_pbr_rules %}
-!
-! Border-leaf PBR (.dev/scenariusze.txt "ARISTA-BORDER-LEAF") — default-
-! redirect every segment's traffic to its firewall context's nexthop.
-! Security-group (MSS-G) travels in-band from the originating leaf; tagged
-! rules match by group NAME (Arista's own match key), everything else
-! falls back to a source-prefix ACL match.
-!
-network-security
-   hardware macro-segmentation Service-Group
-!
-{%- for rule in border_leaf_pbr_rules if rule.match_by_tag %}
-network-security
-   security-group {{ rule.sgt_name }}
-      id {{ rule.sgt }}
-!
-{%- endfor %}
-{%- for rule in border_leaf_pbr_rules %}
-! Customer: {{ rule.customer_name or 'any' }}/{{ rule.environment or 'any' }}
-{%- if not rule.match_by_tag %}
-ip access-list {{ rule.acl_name }}
-{%- for prefix in rule.source_prefixes %}
-   permit ip {{ prefix }} any
-{%- endfor %}
-!
-{%- endif %}
-route-map RM-BORDER-LEAF-PBR permit {{ loop.index * 10 }}
-{%- if rule.match_by_tag %}
-   match security-group {{ rule.sgt_name }}
-{%- else %}
-   match ip address {{ rule.acl_name }}
-{%- endif %}
-   set ip next-hop {{ rule.fw_nexthop }}
-!
-{%- endfor %}
-! Applied on every uplink (fabric-facing) interface — that's where traffic
-! from any leaf in this DC arrives at the border-leaf.
-{%- for interface in interfaces if interface.role == 'uplink' %}
-interface {{ interface.name }}
-   ip policy route-map RM-BORDER-LEAF-PBR
-!
+{%- for route in vrf_routes %}
+ip route vrf {{ route.vrf }} {{ route.prefix }} {{ route.nexthop }}
 {%- endfor %}
 {%- endif %}
 

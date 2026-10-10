@@ -451,88 +451,36 @@ class TestGenerateDcScopedFabricDevices:
 
 
 class TestEnsureFirewallContextPools:
-    """The P2P pool is a per-DC SLICE from a GLOBAL bootstrap pool
-    (FW-Context-P2P-IPv6/IPv4), not a runtime-created top-level supernet —
-    see _ensure_firewall_context_pools's docstring for why the old approach
-    broke across branches."""
+    """A DC creates only its FirewallContext VLAN pool: the contexts' transit
+    /29s come from the per-VRF FW-Transit-* bootstrap pools, so there is no
+    per-DC P2P slice any more (colocation keeps its own, see test_colocation_generator)."""
 
     def _make_gen(self, *, underlay_protocol: str = "ipv6") -> Any:
         gen = _make_generator()
         gen.data["underlay_protocol"] = underlay_protocol
         gen.upsert_number_pool = AsyncMock()
-        gen._get_parent_pool_with_retry = AsyncMock(return_value=MagicMock(id="parent-pool-id"))
-        gen.client.allocate_next_ip_prefix = AsyncMock(return_value=MagicMock(id="dc-slice-id"))
+        gen._get_parent_pool_with_retry = AsyncMock()
+        gen.client.allocate_next_ip_prefix = AsyncMock()
         return gen
 
     @pytest.mark.asyncio
-    async def test_ipv6_underlay_slices_from_ipv6_parent_pool(self) -> None:
-        gen = self._make_gen(underlay_protocol="ipv6")
+    @pytest.mark.parametrize("underlay_protocol", ["ipv6", "ipv4", "dual_stack"])
+    async def test_creates_the_vlan_pool_and_no_p2p_slice(self, underlay_protocol: str) -> None:
+        gen = self._make_gen(underlay_protocol=underlay_protocol)
 
         await gen._ensure_firewall_context_pools(dc_name="dc1")
 
-        gen._get_parent_pool_with_retry.assert_awaited_once_with("FW-Context-P2P-IPv6")
-        alloc_kwargs = gen.client.allocate_next_ip_prefix.call_args.kwargs
-        assert alloc_kwargs["prefix_length"] == 56
-        create_kwargs = gen.client.create.call_args.kwargs
-        assert create_kwargs["data"]["default_prefix_length"] == 127
-
-    @pytest.mark.asyncio
-    async def test_ipv4_underlay_slices_from_ipv4_parent_pool(self) -> None:
-        gen = self._make_gen(underlay_protocol="ipv4")
-
-        await gen._ensure_firewall_context_pools(dc_name="dc1")
-
-        gen._get_parent_pool_with_retry.assert_awaited_once_with("FW-Context-P2P-IPv4")
-        alloc_kwargs = gen.client.allocate_next_ip_prefix.call_args.kwargs
-        assert alloc_kwargs["prefix_length"] == 24
-        create_kwargs = gen.client.create.call_args.kwargs
-        assert create_kwargs["data"]["default_prefix_length"] == 31
-
-    @pytest.mark.asyncio
-    async def test_dual_stack_underlay_prefers_ipv6_for_p2p(self) -> None:
-        gen = self._make_gen(underlay_protocol="dual_stack")
-
-        await gen._ensure_firewall_context_pools(dc_name="dc1")
-
-        gen._get_parent_pool_with_retry.assert_awaited_once_with("FW-Context-P2P-IPv6")
-
-    @pytest.mark.asyncio
-    async def test_rerun_always_allocates_idempotently_no_existence_short_circuit(self) -> None:
-        """No manual "does the pool already exist" check: allocate_next_ip_prefix's
-        identifier and CoreIPPrefixPool.name's uniqueness + save(allow_upsert=True)
-        already make re-running this idempotent — a prior existence check here was
-        the actual cause of a pool broken by an older code version never healing
-        (see docstring)."""
-        gen = self._make_gen()
-
-        await gen._ensure_firewall_context_pools(dc_name="dc1")
-
-        gen._get_parent_pool_with_retry.assert_awaited_once()
-        gen.client.allocate_next_ip_prefix.assert_awaited_once()
-        gen.client.create.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_slice_allocated_from_global_pool_not_a_fresh_supernet(self) -> None:
-        """Regression: the old implementation created a fresh top-level
-        IpamPrefix supernet at runtime (self.client.create(kind="IpamPrefix",
-        ...)) — only visible on the branch it ran on. Confirm the new
-        implementation never does that; it only slices from the pool
-        returned by _get_parent_pool_with_retry."""
-        gen = self._make_gen()
-
-        await gen._ensure_firewall_context_pools(dc_name="dc1")
-
-        create_calls = gen.client.create.call_args_list
-        ip_prefix_creates = [c for c in create_calls if c.kwargs.get("kind") == "IpamPrefix"]
-        assert ip_prefix_creates == []
-        alloc_kwargs = gen.client.allocate_next_ip_prefix.call_args.kwargs
-        assert alloc_kwargs["resource_pool"].id == "parent-pool-id"
+        gen.upsert_number_pool.assert_awaited_once()
+        assert gen.upsert_number_pool.call_args.kwargs["pool_name"] == "dc1-fw-context-vlan-pool"
+        gen._get_parent_pool_with_retry.assert_not_awaited()
+        gen.client.allocate_next_ip_prefix.assert_not_awaited()
+        gen.client.create.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_serializes_on_a_lock_scoped_to_this_dc(self) -> None:
-        """Two overlapping calls for the SAME dc_name must not both create a
-        CoreIPPrefixPool with the same name — see the method's own docstring
-        for the reproduced collision this guards against."""
+        """Two overlapping calls for the SAME dc_name must not both create the
+        pool — see PoolMixin.ensure_firewall_context_pools for the reproduced
+        collision this guards against."""
         gen = self._make_gen()
         calls: list[str] = []
         gen.acquire_resource_lock = AsyncMock(side_effect=lambda key: calls.append(f"acquire:{key}") or "lock-id")

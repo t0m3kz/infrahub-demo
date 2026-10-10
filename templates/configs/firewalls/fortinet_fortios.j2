@@ -174,8 +174,68 @@ config system vdom
     next
 {%- endfor %}
 end
+{#- Transit legs: one VLAN interface per VRF in the VDOM, which has its own
+    routing table; the HA pair's VIP is the interface address (FGCP config
+    sync gives both members it). #}
 {%- for context in contexts %}
-{%- if context.vlan_id and context.parent_interface.name %}
+{%- if context.legs %}
+config global
+    config system interface
+{%- for leg in context.legs %}
+        edit "{{ leg.parent_interface.name }}.{{ leg.vlan }}"
+            set type vlan
+            set vlanid {{ leg.vlan }}
+            set interface "{{ leg.parent_interface.name }}"
+            set vdom "{{ context.name }}"
+            set ip {{ leg.virtual_ip or leg.own_ip }}
+            set allowaccess ping
+            set status up
+            set alias "{{ leg.zone }}"
+        next
+{%- endfor %}
+    end
+end
+#
+# --- Zones and routes in VDOM {{ context.name }} ---
+config vdom
+    edit "{{ context.name }}"
+        config system zone
+{%- for leg in context.legs %}
+            edit "{{ leg.zone }}"
+                set intrazone allow
+                set interface "{{ leg.parent_interface.name }}.{{ leg.vlan }}"
+            next
+{%- endfor %}
+        end
+        config router static
+{%- for route in context.routes %}
+            edit {{ loop.index }}
+                set dst {{ route.destination }}
+                set gateway {{ route.nexthop }}
+                set device "{{ route.interface }}"
+            next
+{%- endfor %}
+        end
+{%- if context.isolation %}
+        config firewall policy
+{%- for deny in context.isolation %}
+            edit {{ 900000 + loop.index }}
+                set name "deny-{{ deny.src_zone }}-to-{{ deny.dst_zone }}"
+                set srcintf "{{ deny.src_zone }}"
+                set dstintf "{{ deny.dst_zone }}"
+                set srcaddr "all"
+                set dstaddr "all"
+                set action deny
+                set schedule "always"
+                set service "ALL"
+                set logtraffic all
+            next
+{%- endfor %}
+        end
+{%- endif %}
+    next
+end
+{%- elif context.vlan_id and context.parent_interface.name %}
 config global
     config system interface
         edit "{{ context.parent_interface.name }}.{{ context.vlan_id }}"
@@ -202,7 +262,7 @@ end
 {%- endfor %}
 {%- for context in contexts if context.policies %}
 {%- set ctx_cidrs = rule_cidrs(context.policies) %}
-{%- set ctx_intf = (context.parent_interface.name + '.' + context.vlan_id | string) if (context.vlan_id and context.parent_interface.name) else none %}
+{%- set ctx_intf = (context.parent_interface.name + '.' + context.vlan_id | string) if (not context.legs and context.vlan_id and context.parent_interface.name) else none %}
 #
 # --- Security Policies in VDOM {{ context.name }} ---
 config vdom

@@ -212,6 +212,9 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- if vrf_name in _evpn_vrfs %}
       advertise l2vpn evpn
       redistribute direct route-map RM-VRF-DIRECT-2-EVPN
+{%- if vrf_routes | default([]) | selectattr('vrf', 'equalto', vrf_name) | list %}
+      redistribute static route-map RM-VRF-STATIC-2-EVPN
+{%- endif %}
 {%- endif %}
 {%- for session in bgp_config.vrf_sessions.get(vrf_name, []) %}
 {%- set _af = 'ipv6' if 'ipv6' in (session.address_families | default([])) else 'ipv4' %}

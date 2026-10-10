@@ -3,22 +3,21 @@
 Covers:
   - get_firewall_zones()          — zone list from SecurityZone nodes
   - get_firewall_static_routes()  — static routes per zone interface
-  - get_vrf_default_gateways()    — VRF → FW gateway IP map from activations
+  - get_exchange_transits() / get_exchange_routes() — border-leaf transit legs and VRF statics
   - get_zone_policies()           — policy dicts with rules from SecurityPolicy nodes
   - get_customer_pbr_rules()      — default-redirect-to-firewall PBR rules per VLAN
-  - get_border_leaf_pbr_rules()   — same, but SGT/prefix-matched, DC-wide (border-leaf)
   - get_firewall_contexts()       — per-tenant FirewallContext list from this device's interfaces
   - place_policies_in_contexts()  — the rules of the segments a firewall serves, per context
 """
 
 from transforms.helpers.firewall import (
     _flatten_deployment_firewall_contexts,
-    get_border_leaf_pbr_rules,
     get_customer_pbr_rules,
+    get_exchange_routes,
+    get_exchange_transits,
     get_firewall_contexts,
     get_firewall_static_routes,
     get_firewall_zones,
-    get_vrf_default_gateways,
     get_zone_policies,
     place_policies_in_contexts,
 )
@@ -89,7 +88,7 @@ def _make_activation(
     fw_ip: str | None = "10.0.0.1/30",
     zone_name: str | None = "internal",
 ) -> dict:
-    """Build a minimal cleaned SegmentDeployment dict for get_vrf_default_gateways()."""
+    """Build a minimal cleaned SegmentDeployment dict for the firewall static-route helpers."""
     prefix: dict = {}
     if seg_prefix is not None:
         prefix["prefix"] = seg_prefix
@@ -380,104 +379,163 @@ class TestGetFirewallStaticRoutes:
 
 
 # ===========================================================================
-# get_vrf_default_gateways()
+# get_exchange_transits() / get_exchange_routes()
 # ===========================================================================
 
 
-def _make_exchange_leg(*, ip_addr: str, ns_name: str) -> dict:
-    """Build a cleaned interface_capabilities leg (a peer interface on the same device)."""
-    return {"ip_address": {"address": ip_addr, "ip_namespace": {"name": ns_name}}}
+def _ns(name: str, ns_type: str, l3_vni: int) -> dict:
+    return {"name": name, "namespace_type": ns_type, "l3_vni": l3_vni}
 
 
-def _make_routed_exchange_capability(
-    *,
-    exchange_id: str = "exchange-1",
-    legs: list[dict] | None = None,
-) -> dict:
-    """Build a cleaned TopologyRoutedExchange capability, as found in interface.interface_capabilities."""
+_PROD = _ns("PROD", "prod", 50001)
+_INET = _ns("INTERNET", "internet", 50003)
+_NONPROD = _ns("NON-PROD", "non_prod", 50002)
+
+
+def _leg(address: str, namespace: dict, exchanges: list[dict] | None = None, name: str = "eth1.3000") -> dict:
     return {
-        "typename": "TopologyRoutedExchange",
-        "id": exchange_id,
-        "interface_capabilities": legs or [],
+        "name": name,
+        "device": {"name": "dc-fw-1", "role": "firewall"},
+        "ip_address": {"address": address, "ip_namespace": namespace},
+        "interface_capabilities": exchanges or [],
     }
 
 
-class TestGetVrfDefaultGateways:
-    def test_none_returns_empty(self) -> None:
-        assert get_vrf_default_gateways(None) == {}
+def _exchange(a: dict, z: dict, tenant: str | None = None, exchange_id: str = "x1") -> dict:
+    return {
+        "id": exchange_id,
+        "namespace_a": {"name": a["name"], "namespace_type": a["namespace_type"]},
+        "namespace_z": {"name": z["name"], "namespace_type": z["namespace_type"]},
+        "gateway": {"id": "ctx-1", "tenant": {"id": tenant} if tenant else None},
+    }
 
-    def test_empty_list_returns_empty(self) -> None:
-        assert get_vrf_default_gateways([]) == {}
 
-    def test_interface_with_no_capabilities_is_ignored(self) -> None:
-        result = get_vrf_default_gateways([{"name": "Vlan10", "interface_capabilities": []}])
-        assert result == {}
+def _context(legs: list[dict], *, tenant: str | None = None, served: list[str] | None = None, vlan: int = 3001) -> dict:
+    return {
+        "typename": "ManagedFirewallContext",
+        "id": "ctx-1",
+        "name": "dc11-fw-shared",
+        "vlan_id": vlan,
+        "tenant": {"id": tenant} if tenant else None,
+        "served_deployments": [{"id": d} for d in served or []],
+        "interface_capabilities": legs,
+    }
 
-    def test_non_exchange_capability_is_ignored(self) -> None:
-        iface = {"name": "Vlan10", "interface_capabilities": [{"typename": "ManagedVxlanSegment"}]}
-        assert get_vrf_default_gateways([iface]) == {}
 
-    def test_two_legs_produce_reciprocal_gateways(self) -> None:
-        """Leg in VRF-A's nexthop is the leg's IP in VRF-Z, and vice versa."""
-        legs = [
-            _make_exchange_leg(ip_addr="10.1.99.1/30", ns_name="VRF-A"),
-            _make_exchange_leg(ip_addr="10.2.99.1/30", ns_name="VRF-Z"),
-        ]
-        cap = _make_routed_exchange_capability(legs=legs)
-        iface = {"name": "Vlan10", "interface_capabilities": [cap]}
-        result = get_vrf_default_gateways([iface])
-        assert result == {"VRF-A": "10.2.99.1", "VRF-Z": "10.1.99.1"}
+def _bl_port(ctx: dict, role: str = "firewall") -> list[dict]:
+    return [{"name": "Ethernet1/10", "role": role, "interface_capabilities": [ctx]}]
 
-    def test_same_exchange_seen_on_both_legs_counted_once(self) -> None:
-        """The exchange capability appears on both of the device's own interfaces
-        (it's a reverse-read of the same relation) — dedup by exchange id."""
-        legs = [
-            _make_exchange_leg(ip_addr="10.1.99.1/30", ns_name="VRF-A"),
-            _make_exchange_leg(ip_addr="10.2.99.1/30", ns_name="VRF-Z"),
-        ]
-        cap = _make_routed_exchange_capability(exchange_id="exchange-1", legs=legs)
-        ifaces = [
-            {"name": "Vlan10", "interface_capabilities": [cap]},
-            {"name": "Vlan20", "interface_capabilities": [cap]},
-        ]
-        result = get_vrf_default_gateways(ifaces)
-        assert result == {"VRF-A": "10.2.99.1", "VRF-Z": "10.1.99.1"}
 
-    def test_leg_missing_ip_is_skipped(self) -> None:
-        legs = [
-            {"ip_address": None},
-            _make_exchange_leg(ip_addr="10.2.99.1/30", ns_name="VRF-Z"),
-        ]
-        cap = _make_routed_exchange_capability(legs=legs)
-        result = get_vrf_default_gateways([{"name": "Vlan10", "interface_capabilities": [cap]}])
-        assert result == {}
+def _shared_context(*, tenant: str | None = None, served: list[str] | None = None) -> dict:
+    """PROD (/29 100.66.0.0) and INTERNET (/29 100.66.32.0) legs of one context, one exchange."""
+    exchange = _exchange(_PROD, _INET, tenant=tenant)
+    legs = [
+        _leg("100.66.0.5/29", _PROD, [exchange]),
+        _leg("100.66.0.6/29", _PROD, [exchange]),
+        _leg("100.66.32.5/29", _INET, [exchange], name="eth1.3400"),
+        _leg("100.66.32.6/29", _INET, [exchange], name="eth1.3400"),
+    ]
+    return _context(legs, tenant=tenant, served=served)
 
-    def test_multiple_independent_exchanges_on_different_interfaces(self) -> None:
-        cap_a = _make_routed_exchange_capability(
-            exchange_id="exchange-a",
-            legs=[
-                _make_exchange_leg(ip_addr="10.1.0.1/30", ns_name="VRF-A"),
-                _make_exchange_leg(ip_addr="10.1.0.2/30", ns_name="VRF-B"),
-            ],
-        )
-        cap_b = _make_routed_exchange_capability(
-            exchange_id="exchange-b",
-            legs=[
-                _make_exchange_leg(ip_addr="10.2.0.1/30", ns_name="VRF-C"),
-                _make_exchange_leg(ip_addr="10.2.0.2/30", ns_name="VRF-D"),
-            ],
-        )
-        ifaces = [
-            {"name": "Vlan10", "interface_capabilities": [cap_a]},
-            {"name": "Vlan20", "interface_capabilities": [cap_b]},
-        ]
-        result = get_vrf_default_gateways(ifaces)
-        assert result == {
-            "VRF-A": "10.1.0.2",
-            "VRF-B": "10.1.0.1",
-            "VRF-C": "10.2.0.2",
-            "VRF-D": "10.2.0.1",
+
+class TestGetExchangeTransits:
+    def test_no_interfaces_returns_empty(self) -> None:
+        assert get_exchange_transits(None) == []
+
+    def test_port_without_firewall_role_is_ignored(self) -> None:
+        assert get_exchange_transits(_bl_port(_shared_context(), role="uplink")) == []
+
+    def test_one_transit_per_leg_namespace_with_band_vlan_and_vni(self) -> None:
+        transits = get_exchange_transits(_bl_port(_shared_context()))
+        assert [t["vlan_id"] for t in transits] == [3001, 3401]
+        assert [t["vni"] for t in transits] == [64001, 64401]
+        assert all(t["transit_context"] == "dc11-fw-shared" for t in transits)
+
+    def test_gateway_is_the_anycast_offset_of_the_slash29(self) -> None:
+        prod = get_exchange_transits(_bl_port(_shared_context()))[0]["segment"]
+        assert prod["name"] == "XCHG-dc11-fw-shared-PROD"
+        assert prod["gateway"]["address"] == "100.66.0.1/29"
+        assert prod["gateway"]["ip_prefix"] == {
+            "prefix": "100.66.0.0/29",
+            "ip_namespace": {"name": "PROD", "l3_vni": 50001},
         }
+        assert prod["terminate_inline"] is False
+
+    def test_default_namespace_legacy_leg_is_skipped(self) -> None:
+        legacy = _context([_leg("10.65.0.1/30", {"name": "default", "namespace_type": None, "l3_vni": None})])
+        assert get_exchange_transits(_bl_port(legacy)) == []
+
+    def test_same_context_on_two_ports_is_counted_once(self) -> None:
+        ports = _bl_port(_shared_context()) + _bl_port(_shared_context())
+        assert len(get_exchange_transits(ports)) == 2
+
+
+class TestGetExchangeRoutes:
+    @staticmethod
+    def _seg(vni: int, prefix: str, dep: str, ns: str = "PROD") -> dict:
+        activation = _make_dc_activation(vni=vni, seg_id=f"s{vni}", deployment_id=dep, gateway_prefix=prefix)
+        activation["segment"]["gateway"]["ip_prefix"]["ip_namespace"] = {"name": ns}
+        return activation
+
+    def test_shared_context_gets_default_route_in_tenant_vrf_to_its_vip(self) -> None:
+        routes = get_exchange_routes(_bl_port(_shared_context(served=["dep-a"])), [])
+        assert {"vrf": "PROD", "l3_vni": 50001, "prefix": "0.0.0.0/0", "nexthop": "100.66.0.4"} in routes
+
+    def test_dedicated_context_gets_no_default_route(self) -> None:
+        routes = get_exchange_routes(_bl_port(_shared_context(tenant="dep-a", served=["dep-a"])), [])
+        assert [r for r in routes if r["prefix"] == "0.0.0.0/0"] == []
+
+    def test_internet_vrf_returns_served_segment_prefixes_to_internet_vip(self) -> None:
+        context = _shared_context(served=["dep-a"])
+        acts = [self._seg(1, "10.1.0.0/24", "dep-a"), self._seg(2, "10.2.0.0/24", "dep-other")]
+        routes = get_exchange_routes(_bl_port(context), acts)
+        internet = [r for r in routes if r["vrf"] == "INTERNET"]
+        assert internet == [{"vrf": "INTERNET", "l3_vni": 50003, "prefix": "10.1.0.0/24", "nexthop": "100.66.32.4"}]
+
+    def test_no_default_route_in_internet_vrf(self) -> None:
+        routes = get_exchange_routes(
+            _bl_port(_shared_context(served=["dep-a"])), [self._seg(1, "10.1.0.0/24", "dep-a")]
+        )
+        assert [r for r in routes if r["vrf"] == "INTERNET" and r["prefix"] == "0.0.0.0/0"] == []
+
+    def test_segment_in_another_namespace_is_not_returned_via_this_exchange(self) -> None:
+        routes = get_exchange_routes(
+            _bl_port(_shared_context(served=["dep-a"])), [self._seg(1, "10.1.0.0/24", "dep-a", ns="NON-PROD")]
+        )
+        assert [r for r in routes if r["vrf"] == "INTERNET"] == []
+
+    def test_prod_is_never_paired_with_non_prod(self) -> None:
+        exchange = _exchange(_PROD, _NONPROD)
+        legs = [_leg("100.66.0.5/29", _PROD, [exchange]), _leg("100.66.16.5/29", _NONPROD, [exchange])]
+        assert get_exchange_routes(_bl_port(_context(legs)), []) == []
+
+    def test_routes_are_sorted_and_empty_without_interfaces(self) -> None:
+        assert get_exchange_routes(None, None) == []
+        routes = get_exchange_routes(
+            _bl_port(_shared_context(served=["dep-a"])), [self._seg(1, "10.1.0.0/24", "dep-a")]
+        )
+        assert routes == sorted(routes, key=lambda r: (r["vrf"], r["prefix"], r["nexthop"]))
+
+
+class TestLeafPbrNexthopIsContextLegVip:
+    def test_nexthop_is_the_vip_of_the_leg_in_the_segment_namespace(self) -> None:
+        ctx = _shared_context(served=["dep-a"])
+        act = _make_pbr_activation(deployment_id="dep-a", security_policies=[{"enabled": True, "rules": []}])
+        act["segment"]["gateway"] = {"ip_prefix": {"prefix": "10.0.1.0/24", "ip_namespace": {"name": "PROD"}}}
+        rules = get_customer_pbr_rules([act], [ctx])
+        assert rules[0]["fw_nexthop"] == "100.66.0.4"
+
+    def test_segment_without_a_leg_in_its_namespace_gets_no_rule(self) -> None:
+        ctx = _shared_context(served=["dep-a"])
+        act = _make_pbr_activation(deployment_id="dep-a", security_policies=[{"enabled": True, "rules": []}])
+        act["segment"]["gateway"] = {"ip_prefix": {"prefix": "10.0.1.0/24", "ip_namespace": {"name": "NON-PROD"}}}
+        assert get_customer_pbr_rules([act], [ctx]) == []
+
+    def test_legacy_default_namespace_leg_keeps_its_own_address(self) -> None:
+        act = _make_pbr_activation(deployment_id="dep-a", security_policies=[{"enabled": True, "rules": []}])
+        act["segment"]["gateway"] = {"ip_prefix": {"prefix": "10.0.1.0/24", "ip_namespace": {"name": "PROD"}}}
+        rules = get_customer_pbr_rules([act], [_make_context_leg(served=["dep-a"])])
+        assert rules[0]["fw_nexthop"] == "10.65.0.0"
 
 
 # ===========================================================================
@@ -1187,6 +1245,69 @@ class TestGetFirewallContexts:
         assert [c["name"] for c in result] == ["dc10-a-dedicated", "dc10-b-dedicated"]
 
 
+def _leg_iface(ns_type: str, address: str, *, vlan: int = 3000, ns_name: str | None = None) -> dict:
+    """A context sub-interface in a VRF namespace (an exchange transit leg)."""
+    iface = _make_fw_context_interface(iface_name=f"eth1.{vlan}", ip_addr=address, parent_name="eth1", vlan_id=vlan)
+    iface["ip_address"]["ip_namespace"] = {"name": ns_name or ns_type.upper(), "namespace_type": ns_type}
+    return iface
+
+
+_HA = {"name": "fw-ha", "members": ["fw-01", "fw-02"]}
+
+
+class TestGetFirewallContextsLegs:
+    def test_namespaced_sub_interfaces_become_legs_ordered_by_slot(self) -> None:
+        ifaces = [_leg_iface("internet", "100.66.32.5/29"), _leg_iface("prod", "100.66.0.5/29")]
+        legs = get_firewall_contexts(ifaces)[0]["legs"]
+        assert [leg["ns_type"] for leg in legs] == ["prod", "internet"]
+
+    def test_leg_vlan_is_the_transit_vlan_of_the_context_vlan(self) -> None:
+        ifaces = [
+            _leg_iface("prod", "100.66.0.5/29"),
+            _leg_iface("non_prod", "100.66.16.5/29"),
+            _leg_iface("internet", "100.66.32.5/29"),
+        ]
+        legs = get_firewall_contexts(ifaces)[0]["legs"]
+        assert [leg["vlan"] for leg in legs] == [3000, 3200, 3400]
+
+    def test_leg_carries_zone_nameif_vrf_and_anycast(self) -> None:
+        leg = get_firewall_contexts([_leg_iface("non_prod", "100.66.16.5/29", ns_name="NON-PROD")])[0]["legs"][0]
+        assert leg["zone"] == "NONPROD-ZONE"
+        assert leg["nameif"] == "nonprod"
+        assert leg["vrf"] == "NON-PROD"
+        assert leg["anycast"] == "100.66.16.1"
+        assert leg["own_ip"] == "100.66.16.5/29"
+        assert leg["interface"] == "eth1.3000"
+
+    def test_ha_pair_gets_vip_and_standby_address(self) -> None:
+        leg = get_firewall_contexts([_leg_iface("prod", "100.66.0.5/29")], _HA)[0]["legs"][0]
+        assert leg["virtual_ip"] == "100.66.0.4/29"
+        assert leg["standby_ip"] == "100.66.0.6/29"
+
+    def test_standalone_firewall_has_no_vip(self) -> None:
+        leg = get_firewall_contexts([_leg_iface("prod", "100.66.0.5/29")])[0]["legs"][0]
+        assert leg["virtual_ip"] is None
+        assert leg["standby_ip"] is None
+
+    def test_one_context_over_several_interfaces_is_one_context(self) -> None:
+        ifaces = [_leg_iface("prod", "100.66.0.5/29"), _leg_iface("internet", "100.66.32.5/29", vlan=3400)]
+        contexts = get_firewall_contexts(ifaces)
+        assert len(contexts) == 1
+        assert contexts[0]["sub_interface"] == "eth1.3000"
+
+    def test_default_namespace_sub_interface_is_not_a_leg(self) -> None:
+        """The colocation P2P path keeps its legacy single sub-interface."""
+        iface = _make_fw_context_interface()
+        iface["ip_address"]["ip_namespace"] = {"name": "default"}
+        assert get_firewall_contexts([iface])[0]["legs"] == []
+
+    def test_ipv6_sub_interface_is_not_a_leg(self) -> None:
+        assert get_firewall_contexts([_leg_iface("prod", "fd00::5/127")])[0]["legs"] == []
+
+    def test_legacy_context_has_no_legs(self) -> None:
+        assert get_firewall_contexts([_make_fw_context_interface()])[0]["legs"] == []
+
+
 # ===========================================================================
 # place_policies_in_contexts()
 # ===========================================================================
@@ -1330,7 +1451,7 @@ class TestPlacePoliciesInContexts:
 
 
 # ===========================================================================
-# get_border_leaf_pbr_rules()
+# DC-wide segment activations (border leaf, exchange routes)
 # ===========================================================================
 
 
@@ -1455,142 +1576,3 @@ class TestCustomerPbrInspectedFlows:
         result = get_customer_pbr_rules(segment, self._contexts())
         assert result[0]["fw_nexthop"] == "10.66.0.0"
         assert result[0]["bypass_prefixes"] == []
-
-
-class TestGetBorderLeafPbrRules:
-    def test_none_activations_returns_empty(self) -> None:
-        assert get_border_leaf_pbr_rules(None, [_make_context_leg()], "cisco_nxos") == []
-
-    def test_no_firewall_context_returns_empty(self) -> None:
-        activations = [_make_dc_activation()]
-        assert get_border_leaf_pbr_rules(activations, [], "cisco_nxos") == []
-
-    def test_cisco_platform_matches_by_tag_when_sgt_present(self) -> None:
-        activations = [_make_dc_activation(sgt=10)]
-        contexts = [_make_context_leg()]
-        result = get_border_leaf_pbr_rules(activations, contexts, "cisco_nxos")
-        assert len(result) == 1
-        assert result[0]["match_by_tag"] is True
-        assert result[0]["sgt"] == 10
-        assert result[0]["source_prefixes"] == []
-
-    def test_arista_platform_matches_by_tag_when_sgt_present(self) -> None:
-        activations = [_make_dc_activation(sgt=20)]
-        contexts = [_make_context_leg()]
-        result = get_border_leaf_pbr_rules(activations, contexts, "arista_eos")
-        assert result[0]["match_by_tag"] is True
-        assert result[0]["sgt"] == 20
-        assert result[0]["sgt_name"] == "web-tier"
-
-    def test_sgt_name_none_when_not_matching_by_tag(self) -> None:
-        """A platform without hardware tag-matching (or a segment with no
-        SGT at all) must not carry a stale sgt_name through — the template
-        renders match_by_tag as the single source of truth."""
-        activations = [_make_dc_activation(sgt=10)]
-        contexts = [_make_context_leg()]
-        result = get_border_leaf_pbr_rules(activations, contexts, "dell_sonic")
-        assert result[0]["match_by_tag"] is False
-        assert result[0]["sgt_name"] is None
-
-    def test_sonic_platform_never_matches_by_tag_even_with_sgt(self) -> None:
-        """SONiC has no hardware SGT/security-group primitive — always falls
-        back to prefix matching, same as .dev/scenariusze.txt's own
-        SONiC-BORDER-LEAF section."""
-        activations = [_make_dc_activation(sgt=10, gateway_prefix="10.10.1.0/24")]
-        contexts = [_make_context_leg()]
-        result = get_border_leaf_pbr_rules(activations, contexts, "dell_sonic")
-        assert result[0]["match_by_tag"] is False
-        assert result[0]["sgt"] is None
-        assert result[0]["source_prefixes"] == ["10.10.1.0/24"]
-
-    def test_cisco_platform_falls_back_to_prefix_when_no_sgt(self) -> None:
-        activations = [_make_dc_activation(sgt=None, gateway_prefix="10.10.1.0/24")]
-        contexts = [_make_context_leg()]
-        result = get_border_leaf_pbr_rules(activations, contexts, "cisco_nxos")
-        assert result[0]["match_by_tag"] is False
-        assert result[0]["source_prefixes"] == ["10.10.1.0/24"]
-
-    def test_no_tag_and_no_prefix_is_skipped(self) -> None:
-        """Nothing to match this segment's traffic by — must not emit an
-        unreachable rule."""
-        activations = [_make_dc_activation(sgt=None, gateway_prefix=None)]
-        contexts = [_make_context_leg()]
-        assert get_border_leaf_pbr_rules(activations, contexts, "dell_sonic") == []
-
-    def test_dedicated_context_nexthop_preferred_over_shared(self) -> None:
-        activations = [_make_dc_activation(deployment_id="dep-a", sgt=10)]
-        contexts = [
-            _make_context_leg(fw_ip="10.65.0.0/30"),  # shared
-            _make_context_leg(fw_ip="10.66.0.0/30", tenant_id="dep-a"),  # dedicated
-        ]
-        result = get_border_leaf_pbr_rules(activations, contexts, "cisco_nxos")
-        assert result[0]["fw_nexthop"] == "10.66.0.0"
-
-    def test_shared_context_used_when_no_dedicated_tenant_match(self) -> None:
-        activations = [_make_dc_activation(deployment_id="dep-a", sgt=10)]
-        contexts = [_make_context_leg(fw_ip="10.65.0.0/30")]
-        result = get_border_leaf_pbr_rules(activations, contexts, "cisco_nxos")
-        assert result[0]["fw_nexthop"] == "10.65.0.0"
-
-    def test_multiple_segments_different_customers_all_present(self) -> None:
-        activations = [
-            _make_dc_activation(vni=10100, seg_id="seg-1", customer_name="web", sgt=10),
-            _make_dc_activation(vni=10200, seg_id="seg-2", customer_name="db", sgt=20),
-        ]
-        contexts = [_make_context_leg()]
-        result = get_border_leaf_pbr_rules(activations, contexts, "cisco_nxos")
-        assert sorted(r["customer_name"] for r in result) == ["db", "web"]
-
-    def test_duplicate_vni_deduplicated(self) -> None:
-        activations = [_make_dc_activation(vni=10100, sgt=10), _make_dc_activation(vni=10100, sgt=10)]
-        contexts = [_make_context_leg()]
-        result = get_border_leaf_pbr_rules(activations, contexts, "cisco_nxos")
-        assert len(result) == 1
-
-    def test_customer_name_and_environment_passed_through(self) -> None:
-        activations = [_make_dc_activation(sgt=10, environment="production")]
-        contexts = [_make_context_leg()]
-        result = get_border_leaf_pbr_rules(activations, contexts, "cisco_nxos")
-        assert result[0]["customer_name"] == "web"
-        assert result[0]["environment"] == "production"
-
-    def test_same_customer_multiple_segments_grouped_into_one_prefix_rule(self) -> None:
-        """Two segments, same customer, same fw_nexthop, both prefix-fallback
-        — must merge into ONE rule with both prefixes, not two separate rules."""
-        activations = [
-            _make_dc_activation(vni=10100, seg_id="seg-1", customer_name="web", gateway_prefix="10.10.1.0/24"),
-            _make_dc_activation(vni=10200, seg_id="seg-2", customer_name="web", gateway_prefix="10.10.2.0/24"),
-        ]
-        contexts = [_make_context_leg()]
-        result = get_border_leaf_pbr_rules(activations, contexts, "dell_sonic")
-        assert len(result) == 1
-        assert result[0]["source_prefixes"] == ["10.10.1.0/24", "10.10.2.0/24"]
-
-    def test_same_customer_multiple_sgts_get_separate_rules(self) -> None:
-        """Two segments, same customer, both tag-matched but different SGTs
-        — each SGT keeps its own rule (no confirmed multi-value match syntax)."""
-        activations = [
-            _make_dc_activation(vni=10100, seg_id="seg-1", customer_name="web", sgt=10),
-            _make_dc_activation(vni=10200, seg_id="seg-2", customer_name="web", sgt=20),
-        ]
-        contexts = [_make_context_leg()]
-        result = get_border_leaf_pbr_rules(activations, contexts, "cisco_nxos")
-        assert len(result) == 2
-        assert sorted(r["sgt"] for r in result) == [10, 20]
-        assert all(r["customer_name"] == "web" for r in result)
-
-    def test_mixed_tag_and_prefix_same_customer_both_present(self) -> None:
-        """One customer with segments on both a tag-capable leaf and a
-        non-tagging leaf — gets one merged prefix rule AND its own tag rule."""
-        activations = [
-            _make_dc_activation(vni=10100, seg_id="seg-1", customer_name="web", sgt=10),
-            _make_dc_activation(
-                vni=10200, seg_id="seg-2", customer_name="web", sgt=None, gateway_prefix="10.10.2.0/24"
-            ),
-        ]
-        contexts = [_make_context_leg()]
-        result = get_border_leaf_pbr_rules(activations, contexts, "cisco_nxos")
-        assert len(result) == 2
-        by_tag = {r["match_by_tag"]: r for r in result}
-        assert by_tag[True]["sgt"] == 10
-        assert by_tag[False]["source_prefixes"] == ["10.10.2.0/24"]

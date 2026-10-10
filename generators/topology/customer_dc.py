@@ -42,6 +42,7 @@ class CustomerDeploymentDCExchangeGenerator(
     _customer_kind = "TopologyCustomerDC"
     _parent_label = "DC"
     _parent_generators = ("add_dc", "dc_pod_cascade")
+    _transit_legs = True
 
     async def generate(self, data: dict[str, Any]) -> None:
         cleaned = clean_data(data)

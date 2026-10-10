@@ -1,82 +1,31 @@
-"""Unit tests for transforms/config/border_leaf.py and
-_flatten_deployment_segment_activations() (transforms/helpers/segments.py).
+"""Unit tests for the border-leaf transform and _flatten_deployment_segment_activations()
+(transforms/helpers/segments.py).
 
 Covers:
   - _flatten_deployment_segment_activations() — deployment.segment_deployments
-    -> activations shape, used by border-leaf instead of the per-interface
-    traversal a leaf uses (border-leaf has no segment capability on its own
-    interfaces — SGT travels in-band inside the VXLAN header instead).
-    Keyed on `vni` now, not `vlan_id` (local VLAN ID is per-VLAN-domain, not
-    DC-wide — see ManagedVlanDomainSegment).
-  - BorderLeaf._extra_config()      — replaces customer_pbr_rules with
-    border_leaf_pbr_rules, sourced from the DC-wide traversal above.
+    -> activations shape (keyed on `vni`, not `vlan_id`: local VLAN ID is per
+    VLAN domain, not DC-wide — see ManagedVlanDomainSegment).
+  - Exchange transits on a border leaf: a firewall context tagged on a service
+    port brings its legs' VLAN/VNI/VRF/anycast gateway, the trunk allow-list,
+    the VRF statics and their EVPN redistribution; SONiC refuses; no PBR.
 """
 
 from __future__ import annotations
 
+import asyncio
+import copy
 import json
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock
 
-import jinja2
 import pytest
 
 from transforms.config.border_leaf import BorderLeaf
 from transforms.helpers.segments import _flatten_deployment_segment_activations
 
-_TEMPLATES_CONFIGS_DIR = Path(__file__).parent.parent.parent / "templates" / "configs"
-
-
-def _minimal_ctx(**overrides: Any) -> dict[str, Any]:
-    """Minimal rendering context — mirrors test_vxlan_transforms.py's own
-    _minimal_ctx, plus the border-leaf-specific keys BaseDeviceTransform's
-    _extra_config always sets (sgt_rules, customer_pbr_rules replaced by
-    border_leaf_pbr_rules, lb_backend_pbr_rules)."""
-    ctx: dict[str, Any] = {
-        "hostname": "test-border-leaf",
-        "name": "test-border-leaf",
-        "vlans": [],
-        "acls": [],
-        "interfaces": [],
-        "ospf": [],
-        "bgp": [],
-        "vxlan": {"enabled": False},
-        "vrf_gateways": {},
-        "sgt_rules": [],
-        "border_leaf_pbr_rules": [],
-        "lb_backend_pbr_rules": [],
-        "ntp": None,
-        "syslog": None,
-        "snmp": None,
-        "aaa": None,
-        "mlag": None,
-    }
-    ctx.update(overrides)
-    return ctx
-
-
-def _pbr_rule(
-    *,
-    match_by_tag: bool = True,
-    sgt: int | None = 10,
-    sgt_name: str | None = "web-tier",
-    acl_name: str | None = None,
-    source_prefixes: list[str] | None = None,
-    fw_nexthop: str = "10.65.0.0",
-    customer_name: str | None = "web",
-    environment: str | None = None,
-) -> dict[str, Any]:
-    return {
-        "match_by_tag": match_by_tag,
-        "sgt": sgt,
-        "sgt_name": sgt_name if match_by_tag else None,
-        "acl_name": acl_name if not match_by_tag else None,
-        "source_prefixes": source_prefixes or [],
-        "fw_nexthop": fw_nexthop,
-        "customer_name": customer_name,
-        "environment": environment,
-    }
+_ROOT = Path(__file__).parent.parent.parent
+_CONFIGS = _ROOT / "tests" / "smoke" / "configs"
 
 
 # ===========================================================================
@@ -123,273 +72,156 @@ class TestFlattenDeploymentSegmentActivations:
 
 
 # ===========================================================================
-# BorderLeaf._extra_config()
+# Exchange transits on the border leaf
 # ===========================================================================
 
 
-def _minimal_device_data(*, deployment: dict[str, Any] | None = None) -> dict[str, Any]:
+def _v(value: Any) -> dict:
+    return {"value": value}
+
+
+def _node(inner: dict | None) -> dict:
+    return {"node": inner}
+
+
+def _edges(nodes: list[dict]) -> dict:
+    return {"edges": [{"node": n} for n in nodes]}
+
+
+def _ns(name: str, ns_type: str, l3_vni: int) -> dict:
+    return _node({"name": _v(name), "namespace_type": _v(ns_type), "l3_vni": _v(l3_vni)})
+
+
+def _leg(address: str, ns: dict, exchange: dict) -> dict:
     return {
-        "name": "bl-dc10101",
-        "role": "border_leaf",
-        "interfaces": [],
-        "capabilities": [],
-        "deployment": deployment or {},
+        "name": _v("eth1.3001"),
+        "device": _node({"name": _v("dc-fw-1"), "role": _v("firewall")}),
+        "ip_address": _node({"address": _v(address), "ip_namespace": ns}),
+        "interface_capabilities": _edges([exchange]),
     }
 
 
-class TestBorderLeafExtraConfig:
-    def test_customer_pbr_rules_removed_from_base_config(self) -> None:
-        """The base class's customer_pbr_rules (always empty for border-leaf —
-        no segment on its own interfaces) must not leak into the template
-        context; border_leaf_pbr_rules replaces it."""
-        transform = BorderLeaf.__new__(BorderLeaf)
-        config = transform._extra_config(_minimal_device_data(), "cisco_nxos")
-        assert "customer_pbr_rules" not in config
-        assert "border_leaf_pbr_rules" in config
-
-    def test_no_deployment_yields_no_pbr_rules(self) -> None:
-        transform = BorderLeaf.__new__(BorderLeaf)
-        config = transform._extra_config(_minimal_device_data(deployment=None), "cisco_nxos")
-        assert config["border_leaf_pbr_rules"] == []
-
-    @pytest.mark.parametrize("platform", ["sonic", "dell_sonic", "nokia_sros"])
-    def test_unsupported_border_leaf_refuses_pbr(self, platform: str) -> None:
-        """Don't return a policy that cannot be applied as a vendor artifact."""
-        transform = BorderLeaf.__new__(BorderLeaf)
-        with patch(
-            "transforms.config.border_leaf.get_border_leaf_pbr_rules", return_value=[{"fw_nexthop": "10.0.0.2"}]
-        ):
-            with pytest.raises(ValueError, match="cannot render deployable PBR policy"):
-                transform._extra_config(_minimal_device_data(), platform)
-
-    def test_dc_wide_segment_activation_produces_pbr_rule(self) -> None:
-        """Segment activated in this DC (via deployment.segment_deployments),
-        not on this device's own interfaces — the whole point of the
-        border-leaf-specific traversal."""
-        deployment = {
-            "segment_deployments": [
-                {
-                    "vni": 10100,
-                    "segment": {
-                        "id": "seg-1",
-                        "customer_name": "web",
-                        "security_tag": {"name": "web-tier", "group_id": 10},
-                        "customer_deployments": [{"id": "dep-a"}],
-                    },
-                }
-            ],
-            "devices": [
-                {
-                    "capabilities": [
-                        {
-                            "typename": "ManagedFirewallHA",
-                            "contexts": [
-                                {
-                                    "id": "ctx-1",
-                                    "tenant": {"id": "dep-a"},
-                                    "interface_capabilities": [
-                                        {"device": {"role": "firewall"}, "ip_address": {"address": "10.65.0.0/30"}}
-                                    ],
-                                }
-                            ],
-                        }
-                    ]
-                }
-            ],
-        }
-        transform = BorderLeaf.__new__(BorderLeaf)
-        config = transform._extra_config(_minimal_device_data(deployment=deployment), "cisco_nxos")
-        rules = config["border_leaf_pbr_rules"]
-        assert len(rules) == 1
-        assert rules[0]["match_by_tag"] is True
-        assert rules[0]["sgt"] == 10
-        assert rules[0]["fw_nexthop"] == "10.65.0.0"
+def _transit_device_data(platform: str) -> dict:
+    """The golden border leaf of `platform` plus a firewall service port tagged with a
+    shared context (PROD <-> INTERNET exchange) and one served segment in the DC."""
+    data = json.loads((_CONFIGS / f"border_leaf_{platform}_ebgp_ibgp" / "input.json").read_text())
+    node = data["DcimDevice"]["edges"][0]["node"]
+    exchange = {
+        "id": "x1",
+        "namespace_a": _node({"name": _v("PROD"), "namespace_type": _v("prod")}),
+        "namespace_z": _node({"name": _v("INTERNET"), "namespace_type": _v("internet")}),
+        "gateway": _node({"id": "ctx-1", "tenant": _node(None)}),
+    }
+    legs = [
+        _leg("100.66.0.5/29", _ns("PROD", "prod", 50001), exchange),
+        _leg("100.66.32.5/29", _ns("INTERNET", "internet", 50003), exchange),
+    ]
+    context = {
+        "__typename": "ManagedFirewallContext",
+        "id": "ctx-1",
+        "name": _v("dc11-fw-shared"),
+        "vlan_id": _v(3001),
+        "tenant": _node(None),
+        "served_deployments": _edges([{"id": "dep-a"}]),
+        "interface_capabilities": _edges(legs),
+    }
+    port = {
+        "__typename": "DcimPhysicalInterface",
+        "name": _v("Ethernet20"),
+        "description": _v("to dc-fw-1"),
+        "status": _v("active"),
+        "role": _v("firewall"),
+        "interface_type": _v("10gbase-x-sfpp"),
+        "mtu": _v(9000),
+        "ip_address": _node(None),
+        "interface_capabilities": _edges([context]),
+    }
+    node["interfaces"]["edges"].append({"node": port})
+    segment = {
+        "id": "seg-a",
+        "__typename": "ManagedVxlanSegment",
+        "name": _v("seg-a"),
+        "customer_name": _v("Customer-A"),
+        "customer_deployments": _edges([{"id": "dep-a"}]),
+        "gateway": _node(
+            {
+                "address": _v("10.1.0.1/24"),
+                "ip_prefix": _node({"prefix": _v("10.1.0.0/24"), "ip_namespace": _ns("PROD", "prod", 50001)}),
+            }
+        ),
+    }
+    node["deployment"]["node"]["segment_deployments"] = _edges([{"vni": _v(10100), "segment": _node(segment)}])
+    return data
 
 
-# ===========================================================================
-# border_leafs/cisco_nxos.j2 — border_leaf_pbr_rules rendering
-# ===========================================================================
+def _render(platform: str, data: dict) -> str:
+    client = MagicMock()
+    client.clone.return_value = client
+    client.schema.get = AsyncMock(return_value=MagicMock())
+    instance = BorderLeaf(client=client, infrahub_node=MagicMock(), root_directory=str(_ROOT))
+    return asyncio.run(instance.transform(copy.deepcopy(data)))
 
 
-class TestCiscoNxosBorderLeafPbrTemplate:
-    def _env(self) -> jinja2.Environment:
-        return jinja2.Environment(
-            loader=jinja2.FileSystemLoader(str(_TEMPLATES_CONFIGS_DIR)), undefined=jinja2.Undefined
+class TestExchangeTransitRendering:
+    def test_nxos_statics_sit_in_the_vrf_and_redistribute_with_exact_match(self) -> None:
+        out = _render("cisco_nxos", _transit_device_data("cisco_nxos"))
+        prod = out.split("vrf context PROD")[1].split("vrf context")[0]
+        assert "ip route 0.0.0.0/0 100.66.0.4" in prod
+        assert "ip route 0.0.0.0/0 100.66.0.4 vrf" not in out
+        internet = out.split("vrf context INTERNET")[1]
+        assert "ip route 10.1.0.0/24 100.66.32.4" in internet
+        assert "ip route 0.0.0.0/0 100.66.32" not in out
+        assert out.count("redistribute static route-map RM-VRF-STATIC-2-EVPN") == 2
+        assert "ip prefix-list PL-VRF-STATIC seq 20 permit 0.0.0.0/0" in out
+        assert "match ip address prefix-list PL-VRF-STATIC" in out
+
+    def test_nxos_transit_vlans_vnis_and_anycast_gateways(self) -> None:
+        out = _render("cisco_nxos", _transit_device_data("cisco_nxos"))
+        assert "vlan 3001" in out and "vlan 3401" in out
+        assert "vn-segment 64001" in out and "vn-segment 64401" in out
+        assert "ip address 100.66.0.1/29" in out
+        assert "ip address 100.66.32.1/29" in out
+        assert "fabric forwarding mode anycast-gateway" in out
+
+    def test_trunk_to_the_firewall_allows_the_transit_vlans_without_a_dot1q_tag(self) -> None:
+        out = _render("cisco_nxos", _transit_device_data("cisco_nxos"))
+        port = out.split("interface Ethernet20")[1].split("!")[0]
+        assert "switchport trunk allowed vlan 3001,3401" in port
+        assert "encapsulation dot1q" not in port
+
+    def test_eos_statics_and_redistribution(self) -> None:
+        out = _render("arista_eos", _transit_device_data("arista_eos"))
+        assert "ip route vrf PROD 0.0.0.0/0 100.66.0.4" in out
+        assert "ip route vrf INTERNET 10.1.0.0/24 100.66.32.4" in out
+        assert out.count("redistribute static route-map RM-VRF-STATIC-2-EVPN") == 2
+        assert "ip prefix-list PL-VRF-STATIC seq 20 permit 0.0.0.0/0" in out
+        assert "vxlan vlan 3001 vni 64001" in out
+
+    def test_sros_statics_are_keyed_by_l3_vni_and_transit_irb_uses_explicit_vnis(self) -> None:
+        out = _render("nokia_sros", _transit_device_data("nokia_sros"))
+        assert (
+            'configure service vprn 50001 static-routes route 0.0.0.0/0 route-type unicast next-hop "100.66.0.4"' in out
         )
-
-    def test_no_rules_renders_no_pbr_block(self) -> None:
-        ctx = _minimal_ctx(border_leaf_pbr_rules=[])
-        rendered = self._env().get_template("border_leafs/cisco_nxos.j2").render(**ctx, loopback_name="loopback0")
-        assert "feature pbr" not in rendered
-        assert "route-map RM-BORDER-LEAF-PBR" not in rendered
-
-    def test_tag_matched_rule_renders_match_cts_sgt(self) -> None:
-        ctx = _minimal_ctx(
-            border_leaf_pbr_rules=[_pbr_rule(match_by_tag=True, sgt=10, fw_nexthop="10.65.0.0")],
-            interfaces=[{"name": "Ethernet1/1", "role": "uplink", "status": "active", "description": None}],
-        )
-        rendered = self._env().get_template("border_leafs/cisco_nxos.j2").render(**ctx, loopback_name="loopback0")
-        assert "feature pbr" in rendered
-        assert "system routing tcam security-group-acl" in rendered
-        assert "match cts sgt 10" in rendered
-        assert "set ip next-hop 10.65.0.0" in rendered
-        assert "ip access-list" not in rendered
-
-    def test_prefix_matched_rule_renders_acl_and_match_ip_address(self) -> None:
-        ctx = _minimal_ctx(
-            border_leaf_pbr_rules=[
-                _pbr_rule(
-                    match_by_tag=False,
-                    sgt=None,
-                    acl_name="PBR-REDIRECT-web",
-                    source_prefixes=["10.10.1.0/24"],
-                    fw_nexthop="10.65.0.0",
-                )
-            ],
-            interfaces=[{"name": "Ethernet1/1", "role": "uplink", "status": "active", "description": None}],
-        )
-        rendered = self._env().get_template("border_leafs/cisco_nxos.j2").render(**ctx, loopback_name="loopback0")
-        assert "ip access-list PBR-REDIRECT-web" in rendered
-        assert "permit ip 10.10.1.0/24 any" in rendered
-        assert "match ip address PBR-REDIRECT-web" in rendered
-        assert "match cts sgt" not in rendered
-
-    def test_multiple_prefixes_same_rule_render_multiple_permit_lines(self) -> None:
-        """Same-customer segments merged into one rule — one ACL, multiple
-        permit lines, one route-map sequence (TCAM-saving grouping)."""
-        ctx = _minimal_ctx(
-            border_leaf_pbr_rules=[
-                _pbr_rule(
-                    match_by_tag=False,
-                    sgt=None,
-                    acl_name="PBR-REDIRECT-web",
-                    source_prefixes=["10.10.1.0/24", "10.10.2.0/24"],
-                )
-            ],
-            interfaces=[{"name": "Ethernet1/1", "role": "uplink", "status": "active", "description": None}],
-        )
-        rendered = self._env().get_template("border_leafs/cisco_nxos.j2").render(**ctx, loopback_name="loopback0")
-        assert rendered.count("permit ip 10.10.1.0/24 any") == 1
-        assert rendered.count("permit ip 10.10.2.0/24 any") == 1
-        assert rendered.count("route-map RM-BORDER-LEAF-PBR permit") == 1
-
-    def test_route_map_applied_only_on_uplink_interfaces(self) -> None:
-        """The PBR block re-opens 'interface Ethernet1/1' a second time (NX-OS
-        merges repeated interface blocks) to attach the route-map — it must
-        never touch the firewall-role interface's own block."""
-        ctx = _minimal_ctx(
-            border_leaf_pbr_rules=[_pbr_rule()],
-            interfaces=[
-                {"name": "Ethernet1/1", "role": "uplink", "status": "active", "description": None},
-                {"name": "Ethernet1/25", "role": "firewall", "status": "active", "description": None},
-            ],
-        )
-        rendered = self._env().get_template("border_leafs/cisco_nxos.j2").render(**ctx, loopback_name="loopback0")
-        assert rendered.count("interface Ethernet1/1\n") == 2
-        assert rendered.count("interface Ethernet1/25\n") == 1
-        pbr_iface_block = rendered.split("ip policy route-map RM-BORDER-LEAF-PBR")[0].rsplit("interface ", 1)[1]
-        assert pbr_iface_block.startswith("Ethernet1/1")
-
-    def test_multiple_rules_get_increasing_sequence_numbers(self) -> None:
-        ctx = _minimal_ctx(
-            border_leaf_pbr_rules=[
-                _pbr_rule(customer_name="web", sgt=10),
-                _pbr_rule(customer_name="db", sgt=20),
-            ],
-            interfaces=[{"name": "Ethernet1/1", "role": "uplink", "status": "active", "description": None}],
-        )
-        rendered = self._env().get_template("border_leafs/cisco_nxos.j2").render(**ctx, loopback_name="loopback0")
-        assert "route-map RM-BORDER-LEAF-PBR permit 10" in rendered
-        assert "route-map RM-BORDER-LEAF-PBR permit 20" in rendered
-
-
-# ===========================================================================
-# border_leafs/arista_eos.j2 — border_leaf_pbr_rules rendering (MSS-G)
-# ===========================================================================
-
-
-class TestAristaEosBorderLeafPbrTemplate:
-    def _env(self) -> jinja2.Environment:
-        return jinja2.Environment(
-            loader=jinja2.FileSystemLoader(str(_TEMPLATES_CONFIGS_DIR)), undefined=jinja2.Undefined
-        )
-
-    def test_no_rules_renders_no_pbr_block(self) -> None:
-        ctx = _minimal_ctx(border_leaf_pbr_rules=[])
-        rendered = self._env().get_template("border_leafs/arista_eos.j2").render(**ctx, loopback_name="Loopback0")
-        assert "hardware macro-segmentation Service-Group" not in rendered
-        assert "route-map RM-BORDER-LEAF-PBR" not in rendered
-
-    def test_tag_matched_rule_renders_security_group_by_name(self) -> None:
-        ctx = _minimal_ctx(
-            border_leaf_pbr_rules=[_pbr_rule(match_by_tag=True, sgt=10, sgt_name="web-tier", fw_nexthop="10.65.0.0")],
-            interfaces=[{"name": "Ethernet1", "role": "uplink", "status": "active", "description": None}],
-        )
-        rendered = self._env().get_template("border_leafs/arista_eos.j2").render(**ctx, loopback_name="Loopback0")
-        assert "hardware macro-segmentation Service-Group" in rendered
-        assert "security-group web-tier" in rendered
-        assert "id 10" in rendered
-        assert "match security-group web-tier" in rendered
-        assert "set ip next-hop 10.65.0.0" in rendered
-
-    def test_prefix_matched_rule_renders_acl_fallback(self) -> None:
-        ctx = _minimal_ctx(
-            border_leaf_pbr_rules=[
-                _pbr_rule(
-                    match_by_tag=False,
-                    sgt=None,
-                    sgt_name=None,
-                    acl_name="PBR-REDIRECT-web",
-                    source_prefixes=["10.10.1.0/24"],
-                )
-            ],
-            interfaces=[{"name": "Ethernet1", "role": "uplink", "status": "active", "description": None}],
-        )
-        rendered = self._env().get_template("border_leafs/arista_eos.j2").render(**ctx, loopback_name="Loopback0")
-        assert "ip access-list PBR-REDIRECT-web" in rendered
-        assert "permit ip 10.10.1.0/24 any" in rendered
-        assert "match ip address PBR-REDIRECT-web" in rendered
-        assert "match security-group" not in rendered
-
-    def test_route_map_applied_only_on_uplink_interfaces(self) -> None:
-        ctx = _minimal_ctx(
-            border_leaf_pbr_rules=[_pbr_rule()],
-            interfaces=[
-                {"name": "Ethernet1", "role": "uplink", "status": "active", "description": None},
-                {"name": "Ethernet25", "role": "firewall", "status": "active", "description": None},
-            ],
-        )
-        rendered = self._env().get_template("border_leafs/arista_eos.j2").render(**ctx, loopback_name="Loopback0")
-        pbr_iface_block = rendered.split("ip policy route-map RM-BORDER-LEAF-PBR")[0].rsplit("interface ", 1)[1]
-        assert pbr_iface_block.startswith("Ethernet1")
-
-
-# ===========================================================================
-# border_leafs/dell_sonic.j2 — border_leaf_pbr_rules rendering (prefix-only)
-# ===========================================================================
-
-
-class TestDellSonicBorderLeafPbrTemplate:
-    """SONiC artifacts stay ConfigDB JSON; unsupported PBR fails in the transform."""
-
-    def _env(self) -> jinja2.Environment:
-        return jinja2.Environment(
-            loader=jinja2.FileSystemLoader(str(_TEMPLATES_CONFIGS_DIR)), undefined=jinja2.Undefined
-        )
-
-    def test_no_rules_renders_no_pbr_block(self) -> None:
-        ctx = _minimal_ctx(border_leaf_pbr_rules=[])
-        rendered = self._env().get_template("border_leafs/dell_sonic.j2").render(**ctx)
-        assert "route-map RM-BORDER-LEAF-PBR" not in rendered
+        assert "configure service vprn 50003 static-routes route 10.1.0.0/24" in out
+        assert 'configure service vprn 50001 interface "int-vpls-64001"' in out
+        assert 'configure service vprn 50003 interface "int-vpls-64401"' in out
+        assert 'export-policy ["RM-VRF-STATIC-2-EVPN"]' in out
 
     @pytest.mark.parametrize("platform", ["sonic", "dell_sonic"])
-    def test_management_is_pure_configdb(self, platform: str) -> None:
-        """SONiC config artifacts must remain parseable JSON with management data."""
-        ctx = _minimal_ctx(ntp={"servers": [{"address": "192.0.2.1"}]})
-        rendered = self._env().get_template(f"border_leafs/{platform}.j2").render(**ctx)
-        assert json.loads(rendered)["NTP_SERVER"] == {"192.0.2.1": {}}
+    def test_sonic_refuses_transit_legs(self, platform: str) -> None:
+        data = _transit_device_data("cisco_nxos")
+        data["DcimDevice"]["edges"][0]["node"]["platform"]["node"]["netmiko_device_type"] = _v(platform)
+        with pytest.raises(ValueError, match="cannot render the inter-VRF exchange transit legs"):
+            _render(platform, data)
 
-    def test_no_cli_appended_for_management(self) -> None:
-        ctx = _minimal_ctx(syslog={"servers": [{"address": "192.0.2.2"}]})
-        rendered = self._env().get_template("border_leafs/dell_sonic.j2").render(**ctx)
-        assert json.loads(rendered)["SYSLOG_SERVER"] == {"192.0.2.2": {}}
+    @pytest.mark.parametrize("platform", ["cisco_nxos", "arista_eos", "nokia_sros"])
+    def test_no_pbr_is_rendered_on_the_border_leaf(self, platform: str) -> None:
+        out = _render(platform, _transit_device_data(platform))
+        assert "BORDER-LEAF-PBR" not in out
+        assert "feature pbr" not in out
+
+    @pytest.mark.parametrize("platform", ["cisco_nxos", "arista_eos", "nokia_sros"])
+    def test_without_a_context_leg_nothing_is_added(self, platform: str) -> None:
+        data = json.loads((_CONFIGS / f"border_leaf_{platform}_ebgp_ibgp" / "input.json").read_text())
+        out = _render(platform, data)
+        assert "RM-VRF-STATIC-2-EVPN" not in out and "XCHG" not in out

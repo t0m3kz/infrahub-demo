@@ -4,7 +4,7 @@ from ipaddress import ip_interface, ip_network
 from typing import Any
 
 from transforms.helpers.acl import _PROTO_MAP, _port_match
-from transforms.helpers.addressing import host_ip
+from transforms.helpers.ha import inline_addresses
 from transforms.helpers.policy import (
     active_rules,
     enabled_policies,
@@ -14,26 +14,19 @@ from transforms.helpers.policy import (
     segment_policies,
     segment_rule_policies,
 )
-from transforms.helpers.segments import _get_segment_prefix_str, segment_hosting_candidates
-
-# Border-leaf platforms with a native hardware SGT/security-group matching
-# primitive — Cisco CTS ("match cts sgt") is proprietary VXLAN-GBP encoding,
-# Arista MSS-G ("match security-group") is a separate, Arista-only
-# implementation. SONiC/Nokia border-leaf have no equivalent, so they always
-# fall back to prefix-based matching — the same fallback
-# .dev/scenariusze.txt's own SONiC-BORDER-LEAF section uses (ip access-list
-# ACL_KLIENT_A_INTER_CLIENT ... permit ip 10.10.1.0/24 ... instead of
-# match cts sgt / match security-group).
-#
-# Known limitation: this only checks the BORDER-LEAF's own platform. A
-# segment's VLAN can be provisioned on leaf devices of several platforms at
-# once (DC-wide), and this query doesn't track which leaf platform(s) host
-# any given segment — so a Cisco border-leaf tag-matches even if the
-# specific leaf a packet actually came from was a non-tagging SONiC leaf for
-# that VLAN. Precisely tracking per-leaf-platform tag fidelity would need
-# additional data this project doesn't collect today; documented here
-# rather than silently assumed.
-_TAG_CAPABLE_BORDER_LEAF_PLATFORMS = frozenset({"cisco_nxos", "arista_eos"})
+from transforms.helpers.segments import (
+    _get_segment_namespace,
+    _get_segment_prefix_str,
+    segment_hosting_candidates,
+)
+from utils.exchange_transit import (
+    EXCHANGE_PEERS,
+    TRANSIT_SLOT,
+    ZONE_BY_NS_TYPE,
+    transit_addresses,
+    transit_vlan,
+    transit_vni,
+)
 
 
 def get_firewall_zones(zones_data: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
@@ -151,74 +144,181 @@ def get_firewall_static_routes(
     return sorted(routes, key=lambda r: (r["vrf"], r["destination"]))
 
 
-def _iface_ip_and_namespace(iface: dict[str, Any]) -> tuple[str | None, str | None]:
-    """Return (ip_without_prefixlen, namespace_name) for one interface_capabilities leg."""
-    ip_obj = iface.get("ip_address") or {}
-    if not ip_obj.get("address"):
-        return None, None
-    return host_ip(ip_obj["address"]), (ip_obj.get("ip_namespace") or {}).get("name")
+def _firewall_context_caps(interfaces: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    """The ManagedFirewallContext capabilities on this device's firewall-role ports.
 
-
-def get_vrf_default_gateways(
-    interfaces: list[dict[str, Any]] | None,
-) -> dict[str, str]:
-    """Build {vrf_name: nexthop_ip} from TopologyRoutedExchange capabilities on this device.
-
-    RoutedExchange models one device (border-leaf or firewall) routing between two
-    VRFs via two local SVIs/sub-interfaces — no fabric-wide route leak. Both legs
-    are on THIS device, so both are already present in `interfaces`: the exchange
-    capability's own `interface_capabilities` list (a reverse read of the same
-    ManagedGenericInterfaces relation) returns both legs regardless of which one
-    we started from. For each pair, the leg in VRF A becomes the nexthop for VRF
-    Z's default route and vice versa — no second device/query needed.
-
-    Args:
-        interfaces: Device's own interfaces (raw `data["interfaces"]`, each with
-                    interface_capabilities already populated by the query).
-
-    Returns:
-        {vrf_name: nexthop_ip}, one entry per VRF that has a routed exchange leg
-        on this device. Empty if this device has no RoutedExchange capability.
+    On a border leaf these are the service ports facing the HA members; each is
+    tagged with the contexts whose legs the leaf has to carry. De-duplicated by id.
     """
-    if not interfaces:
-        return {}
-
-    gateways: dict[str, str] = {}
-    seen_exchange_ids: set[str] = set()
-    for iface in interfaces:
+    found: dict[str, dict[str, Any]] = {}
+    for iface in interfaces or []:
+        if iface.get("role") != "firewall":
+            continue
         for cap in iface.get("interface_capabilities") or []:
-            if cap.get("typename") != "TopologyRoutedExchange":
+            if cap.get("typename") != "ManagedFirewallContext":
                 continue
-            exchange_id = cap.get("id")
-            if not exchange_id or exchange_id in seen_exchange_ids:
+            key = cap.get("id") or cap.get("name")
+            if key:
+                found.setdefault(key, cap)
+    return list(found.values())
+
+
+def _transit_legs(ctx: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """The context's legs in a non-default VRF namespace, keyed by namespace name.
+
+    Each carries the namespace type/l3_vni, the transit /29 and the transit VLAN
+    (utils.exchange_transit rules). Legacy legs in the default namespace (colocation)
+    are skipped.
+    """
+    legs: dict[str, dict[str, Any]] = {}
+    context_vlan = ctx.get("vlan_id")
+    for leg in ctx.get("interface_capabilities") or []:
+        if (leg.get("device") or {}).get("role") != "firewall":
+            continue
+        address = (leg.get("ip_address") or {}).get("address")
+        namespace = (leg.get("ip_address") or {}).get("ip_namespace") or {}
+        ns_name, ns_type = namespace.get("name"), namespace.get("namespace_type")
+        if not address or not context_vlan or not ns_name or ns_name == "default" or ns_type not in TRANSIT_SLOT:
+            continue
+        network = ip_interface(address).network
+        addresses = transit_addresses(str(network))
+        legs.setdefault(
+            ns_name,
+            {
+                "namespace": ns_name,
+                "ns_type": ns_type,
+                "l3_vni": namespace.get("l3_vni"),
+                "prefix": str(network),
+                "prefixlen": network.prefixlen,
+                "vlan": transit_vlan(context_vlan, ns_type),
+                "anycast": addresses["anycast"],
+                "vip": addresses["vip"],
+            },
+        )
+    return legs
+
+
+def get_exchange_transits(interfaces: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    """Pseudo segment activations for the transit legs of this border leaf's contexts.
+
+    Every leg of a context tagged on one of this device's firewall ports becomes a
+    VLAN + L2 VNI + anycast gateway (.1 of the leg's /29) in the leg's VRF, so the
+    firewall's VLAN sub-interface has something to attach to. Fed ONLY to
+    get_vlans / get_vxlan_config / get_interfaces (never ACL, SGT or PBR input).
+    ``transit_context`` names the context whose trunk ports must allow the VLAN.
+    """
+    transits: dict[int, dict[str, Any]] = {}
+    for ctx in _firewall_context_caps(interfaces):
+        for leg in _transit_legs(ctx).values():
+            name = f"XCHG-{ctx.get('name')}-{leg['namespace']}"
+            transits.setdefault(
+                leg["vlan"],
+                {
+                    "vlan_id": leg["vlan"],
+                    "vni": transit_vni(leg["vlan"]),
+                    "transit_context": ctx.get("name"),
+                    "segment": {
+                        "id": name,
+                        "name": name,
+                        "customer_name": name,
+                        "gateway": {
+                            "address": f"{leg['anycast']}/{leg['prefixlen']}",
+                            "ip_prefix": {
+                                "prefix": leg["prefix"],
+                                "ip_namespace": {"name": leg["namespace"], "l3_vni": leg["l3_vni"]},
+                            },
+                        },
+                        "arp_suppression": True,
+                        "terminate_inline": False,
+                        "stretch_scope": "local",
+                    },
+                },
+            )
+    return [transits[vlan] for vlan in sorted(transits)]
+
+
+def get_exchange_routes(
+    interfaces: list[dict[str, Any]] | None,
+    deployment_activations: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Static routes of the inter-VRF exchange through each firewall context on this device.
+
+    Per exchange (tenant VRF A -> INTERNET Z) of a context tagged on a firewall port:
+
+    - VRF A: ``0.0.0.0/0`` -> the context's A-leg VIP, only when the context is the
+      shared one (no tenant). A dedicated context steers its tenant by leaf PBR.
+    - VRF Z (INTERNET): the gateway prefix of every segment in VRF A that the context
+      serves (its tenant or served_deployments) -> the context's Z-leg VIP.
+      No default route in INTERNET: its upstream is not modelled here.
+
+    ``deployment_activations`` are the DC's segment activations
+    (_flatten_deployment_segment_activations). Returns [{vrf, l3_vni, prefix, nexthop}] sorted.
+    """
+    routes: dict[tuple[str, str, str], dict[str, Any]] = {}
+
+    def _add(leg: dict[str, Any], prefix: str, nexthop: str) -> None:
+        routes[(leg["namespace"], prefix, nexthop)] = {
+            "vrf": leg["namespace"],
+            "l3_vni": leg["l3_vni"],
+            "prefix": prefix,
+            "nexthop": nexthop,
+        }
+
+    for ctx in _firewall_context_caps(interfaces):
+        legs = _transit_legs(ctx)
+        deployments = {
+            d
+            for d in [(ctx.get("tenant") or {}).get("id")] + [x.get("id") for x in ctx.get("served_deployments") or []]
+            if d
+        }
+        exchanges: dict[str, dict[str, Any]] = {}
+        for leg in ctx.get("interface_capabilities") or []:
+            for exchange in leg.get("interface_capabilities") or []:
+                if exchange.get("id") and exchange.get("namespace_a") and exchange.get("namespace_z"):
+                    exchanges.setdefault(exchange["id"], exchange)
+        for exchange in exchanges.values():
+            a_name = exchange["namespace_a"].get("name")
+            z_name = exchange["namespace_z"].get("name")
+            leg_a, leg_z = legs.get(a_name), legs.get(z_name)
+            if leg_a is None or leg_z is None:
                 continue
-            seen_exchange_ids.add(exchange_id)
+            if leg_z["ns_type"] not in EXCHANGE_PEERS.get(leg_a["ns_type"], ()):
+                continue
+            gateway = exchange.get("gateway") or {}
+            if not (gateway.get("tenant") or ctx.get("tenant")):
+                _add(leg_a, "0.0.0.0/0", leg_a["vip"])
+            for act in deployment_activations or []:
+                seg = act.get("segment") or {}
+                prefix = _get_segment_prefix_str(seg)
+                if (
+                    prefix
+                    and not seg.get("terminate_inline")
+                    and _get_segment_namespace(seg).get("name") == a_name
+                    and deployments.intersection(_segment_deployment_ids(seg))
+                ):
+                    _add(leg_z, prefix, leg_z["vip"])
+    return sorted(routes.values(), key=lambda r: (r["vrf"], r["prefix"], r["nexthop"]))
 
-            legs = cap.get("interface_capabilities") or []
-            by_namespace: dict[str, str] = {}
-            for leg in legs:
-                ip_addr, ns_name = _iface_ip_and_namespace(leg)
-                if ip_addr and ns_name:
-                    by_namespace[ns_name] = ip_addr
 
-            for ns_name, ip_addr in by_namespace.items():
-                for other_ns, other_ip in by_namespace.items():
-                    if other_ns != ns_name:
-                        gateways[ns_name] = other_ip
-
-    return gateways
-
-
-def get_firewall_contexts(interfaces: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+def get_firewall_contexts(
+    interfaces: list[dict[str, Any]] | None, ha: dict[str, Any] | None = None
+) -> list[dict[str, Any]]:
     """Build the per-VDOM/vsys/context list from this firewall's own sub-interfaces.
 
     A ManagedFirewallContext shows up as an interface_capabilities entry on
-    whichever DcimVirtualInterface generators/topology/customer_dc.py's
-    _ensure_context_subinterface created for it (always on the cluster's
-    "uplink"-role trunk — see that function's docstring). One context can
-    only have one sub-interface per firewall device, so this is a plain
-    one-pass collection, no cross-interface pairing needed (unlike
-    get_vrf_default_gateways, which pairs two legs of the SAME exchange).
+    the DcimVirtualInterface(s) generators/topology/customer_dc.py created for
+    it on the cluster's "uplink"-role trunk. The context-level fields
+    (sub_interface, ip_address, ...) come from the first one; a context
+    without namespaced legs (colocation, see below) has exactly one.
+
+    ``legs`` are the context's exchange transit legs on this device: the
+    sub-interfaces whose address is in a VRF namespace of a known type
+    (utils/exchange_transit.py ZONE_BY_NS_TYPE), ordered prod, non_prod,
+    internet. A leg is {interface, parent_interface, vlan (the transit VLAN),
+    own_ip, virtual_ip / standby_ip (the HA pair's VIP and standby, None
+    without ``ha``), anycast (the border leaves' gateway in the /29), vrf,
+    ns_type, zone, nameif}. A context holding none keeps the legacy single
+    P2P rendering.
 
     ``segments`` are the segments terminating on the context: every segment
     of a deployment it serves (served_deployments, written by each
@@ -227,8 +327,8 @@ def get_firewall_contexts(interfaces: list[dict[str, Any]] | None) -> list[dict[
     if not interfaces:
         return []
 
-    contexts: list[dict[str, Any]] = []
-    seen_ids: set[str] = set()
+    contexts: dict[str, dict[str, Any]] = {}
+    legs_by_context: dict[str, list[dict[str, Any]]] = {}
     for iface in interfaces:
         ip_obj = iface.get("ip_address") or {}
         parent_iface = iface.get("parent_interface") or {}
@@ -236,17 +336,17 @@ def get_firewall_contexts(interfaces: list[dict[str, Any]] | None) -> list[dict[
             if cap.get("typename") != "ManagedFirewallContext":
                 continue
             context_id = cap.get("id")
-            if not context_id or context_id in seen_ids:
+            if not context_id:
                 continue
-            seen_ids.add(context_id)
-            segments: dict[str, dict[str, Any]] = {}
-            for deployment in cap.get("served_deployments") or []:
-                for segment in deployment.get("network_segments") or []:
-                    if segment.get("id"):
-                        segments.setdefault(segment["id"], segment)
-            tenant = cap.get("tenant") or {}
-            contexts.append(
-                {
+            context = contexts.get(context_id)
+            if context is None:
+                segments: dict[str, dict[str, Any]] = {}
+                for deployment in cap.get("served_deployments") or []:
+                    for segment in deployment.get("network_segments") or []:
+                        if segment.get("id"):
+                            segments.setdefault(segment["id"], segment)
+                tenant = cap.get("tenant") or {}
+                context = contexts[context_id] = {
                     "id": context_id,
                     "name": cap.get("name"),
                     "context_id": cap.get("context_id"),
@@ -256,10 +356,34 @@ def get_firewall_contexts(interfaces: list[dict[str, Any]] | None) -> list[dict[
                     "parent_interface": parent_iface,
                     "ip_address": ip_obj.get("address"),
                     "segments": list(segments.values()),
+                    "legs": legs_by_context.setdefault(context_id, []),
+                }
+            namespace = ip_obj.get("ip_namespace") or {}
+            ns_type = namespace.get("namespace_type")
+            address = ip_obj.get("address")
+            if ns_type not in ZONE_BY_NS_TYPE or not address or not cap.get("vlan_id"):
+                continue
+            network = ip_interface(address).network
+            if network.version != 4:
+                continue
+            zone = ZONE_BY_NS_TYPE[ns_type]
+            legs_by_context[context_id].append(
+                {
+                    "interface": iface.get("name"),
+                    "parent_interface": parent_iface,
+                    "vlan": transit_vlan(cap["vlan_id"], ns_type),
+                    "own_ip": address,
+                    **inline_addresses(None, ha, address),
+                    "anycast": transit_addresses(str(network))["anycast"],
+                    "vrf": namespace.get("name"),
+                    "ns_type": ns_type,
+                    "zone": zone,
+                    "nameif": zone.removesuffix("-ZONE").lower(),
                 }
             )
-    contexts.sort(key=lambda c: c.get("name") or "")
-    return contexts
+    for legs in legs_by_context.values():
+        legs.sort(key=lambda leg: TRANSIT_SLOT[leg["ns_type"]])
+    return sorted(contexts.values(), key=lambda c: c.get("name") or "")
 
 
 def _zone_member_segments(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -356,33 +480,53 @@ def _segment_deployment_ids(segment: dict[str, Any]) -> list[str]:
     return deployment_ids
 
 
-def _context_leg_ip(ctx: dict[str, Any]) -> str | None:
-    """The context's own firewall-leg IP, the PBR nexthop toward it."""
+def _has_firewall_leg(ctx: dict[str, Any]) -> bool:
+    """True when the context has an addressed leg on a firewall member (inline contexts have none)."""
+    return any(
+        (leg.get("device") or {}).get("role") == "firewall" and (leg.get("ip_address") or {}).get("address")
+        for leg in ctx.get("interface_capabilities") or []
+    )
+
+
+def _context_leg_ip(ctx: dict[str, Any], namespace: str | None = None) -> str | None:
+    """The PBR nexthop toward a context: the VIP of its leg in ``namespace``.
+
+    A transit leg (non-default VRF namespace) is a /29 whose firewall VIP sits at a
+    fixed offset (utils.exchange_transit); the members' own addresses are never the
+    nexthop. Without a matching transit leg (colocation's legacy default-namespace
+    P2P, or no ``namespace``) the first firewall leg's own address is used.
+    """
+    legacy: str | None = None
     for leg in ctx.get("interface_capabilities") or []:
-        device = leg.get("device") or {}
-        if device.get("role") != "firewall":
+        if (leg.get("device") or {}).get("role") != "firewall":
             continue
-        address = (leg.get("ip_address") or {}).get("address")
+        ip_obj = leg.get("ip_address") or {}
+        address = ip_obj.get("address")
         if not address:
             continue
         try:
-            return str(ip_interface(address).ip)
+            interface = ip_interface(address)
         except ValueError:
             continue
-    return None
+        ns_name = (ip_obj.get("ip_namespace") or {}).get("name")
+        if namespace and ns_name == namespace and ns_name != "default":
+            return transit_addresses(str(interface.network))["vip"]
+        if legacy is None and (not ns_name or ns_name == "default"):
+            legacy = str(interface.ip)
+    return legacy
 
 
 def _resolve_context_nexthops(
-    firewall_contexts: list[dict[str, Any]] | None,
+    firewall_contexts: list[dict[str, Any]] | None, namespace: str | None = None
 ) -> tuple[dict[str, str], str | None]:
-    """Shared by get_customer_pbr_rules and get_border_leaf_pbr_rules: resolve
-    each FirewallContext's own firewall-leg IP, keyed by dedicated tenant
-    deployment id, plus the one shared (tenant-less) context's nexthop if any.
+    """Resolve each FirewallContext's nexthop in ``namespace`` (_context_leg_ip), keyed
+    by dedicated tenant deployment id, plus the one shared (tenant-less) context's
+    nexthop if any.
     """
     context_nexthop_by_deployment: dict[str, str] = {}
     shared_nexthop: str | None = None
     for ctx in firewall_contexts or []:
-        fw_ip = _context_leg_ip(ctx)
+        fw_ip = _context_leg_ip(ctx, namespace)
         if fw_ip is None:
             continue
         tenant = ctx.get("tenant") or {}
@@ -401,8 +545,10 @@ def _redirect_nexthop(
     return next((nexthop_by_deployment[d] for d in deployment_ids if d in nexthop_by_deployment), shared_nexthop)
 
 
-def _serving_context_nexthops(firewall_contexts: list[dict[str, Any]] | None) -> dict[str, str]:
-    """Deployment id -> nexthop of the context its segments terminate on.
+def _serving_context_nexthops(
+    firewall_contexts: list[dict[str, Any]] | None, namespace: str | None = None
+) -> dict[str, str]:
+    """Deployment id -> nexthop (in ``namespace``) of the context its segments terminate on.
 
     Strict: only a context that names the deployment (its dedicated tenant,
     or one of its served_deployments) counts. Unlike the redirect nexthop
@@ -411,7 +557,7 @@ def _serving_context_nexthops(firewall_contexts: list[dict[str, Any]] | None) ->
     """
     serving: dict[str, str] = {}
     for ctx in firewall_contexts or []:
-        fw_ip = _context_leg_ip(ctx)
+        fw_ip = _context_leg_ip(ctx, namespace)
         if fw_ip is None:
             continue
         tenant_id = (ctx.get("tenant") or {}).get("id")
@@ -485,10 +631,22 @@ def get_customer_pbr_rules(
     if not activations:
         return []
 
-    context_nexthop_by_deployment, shared_nexthop = _resolve_context_nexthops(firewall_contexts)
-    if not context_nexthop_by_deployment and shared_nexthop is None:
+    if not any(_has_firewall_leg(ctx) for ctx in firewall_contexts or []):
         return []
-    serving = _serving_context_nexthops(firewall_contexts)
+
+    # Nexthop maps per VRF namespace: a segment is redirected to the VIP of the
+    # context's leg in the segment's own namespace.
+    nexthops_by_namespace: dict[str | None, tuple[dict[str, str], str | None, dict[str, str]]] = {}
+
+    def _nexthops(namespace: str | None) -> tuple[dict[str, str], str | None, dict[str, str]]:
+        if namespace not in nexthops_by_namespace:
+            by_deployment, shared = _resolve_context_nexthops(firewall_contexts, namespace)
+            nexthops_by_namespace[namespace] = (
+                by_deployment,
+                shared,
+                _serving_context_nexthops(firewall_contexts, namespace),
+            )
+        return nexthops_by_namespace[namespace]
 
     rules: list[dict[str, Any]] = []
     seen_vlans: set[int] = set()
@@ -503,6 +661,7 @@ def get_customer_pbr_rules(
 
         deployment_ids = _segment_deployment_ids(seg)
 
+        context_nexthop_by_deployment, shared_nexthop, serving = _nexthops(_get_segment_namespace(seg).get("name"))
         fw_nexthop = _redirect_nexthop(deployment_ids, context_nexthop_by_deployment, shared_nexthop)
         if fw_nexthop is None:
             continue
@@ -551,125 +710,6 @@ def get_customer_pbr_rules(
         )
 
     rules.sort(key=lambda r: r["vlan_id"])
-    return rules
-
-
-def get_border_leaf_pbr_rules(
-    activations: list[dict[str, Any]] | None,
-    firewall_contexts: list[dict[str, Any]] | None,
-    border_leaf_platform: str,
-) -> list[dict[str, Any]]:
-    """Build border-leaf PBR rules per .dev/scenariusze.txt's border-leaf
-    sections ("CTS PBR + SINGLE VRF"): default-redirect every segment's
-    traffic to its firewall context's nexthop, matched by security tag when
-    the border-leaf platform can hardware-match one (Cisco CTS "match cts
-    sgt N" / Arista MSS-G "match security-group"), else falling back to a
-    source-prefix ACL match — the same fallback scenariusze.txt's own
-    SONiC-BORDER-LEAF section uses.
-
-    Rules are grouped by (customer_name, fw_nexthop) to cut TCAM usage:
-    prefix-fallback members of a group merge into ONE ACL with multiple
-    permit lines and ONE route-map sequence; tag-match members each keep
-    their own sequence (no confirmed multi-value "match cts sgt"/"match
-    security-group" syntax to merge them), but sequences for the same
-    customer are emitted together, adjacent, under one comment block.
-
-    activations here come from _flatten_deployment_segment_activations(),
-    NOT _collect_activations_from_interfaces() — border-leaf has no segment
-    capability on its own interfaces (SGT/tag travels in-band inside the
-    VXLAN header from the originating leaf), so it needs every activation in
-    its own DC instead of a per-interface traversal. Dedup key is `vni` (or
-    the segment's own id as fallback), NOT `vlan_id` — local VLAN ID is
-    per-VLAN-domain now, not DC-wide-unique, so it can't identify a segment
-    across leaves. Same fw_nexthop resolution as get_customer_pbr_rules
-    (dedicated context by deployment id, else the one shared context).
-    """
-    if not activations:
-        return []
-
-    context_nexthop_by_deployment, shared_nexthop = _resolve_context_nexthops(firewall_contexts)
-    if not context_nexthop_by_deployment and shared_nexthop is None:
-        return []
-
-    tag_capable = border_leaf_platform in _TAG_CAPABLE_BORDER_LEAF_PLATFORMS
-
-    groups: dict[tuple[str, str], dict[str, Any]] = {}
-    seen_keys: set[str] = set()
-    for act in activations:
-        seg = act.get("segment") or {}
-        dedup_key = act.get("vni") or seg.get("id")
-        if not dedup_key or dedup_key in seen_keys:
-            continue
-        seen_keys.add(dedup_key)
-
-        deployment_ids = _segment_deployment_ids(seg)
-
-        fw_nexthop = _redirect_nexthop(deployment_ids, context_nexthop_by_deployment, shared_nexthop)
-        if fw_nexthop is None:
-            continue
-
-        tag = seg.get("security_tag") or {}
-        sgt = tag.get("group_id")
-        sgt_name = tag.get("name")
-        source_prefix = _get_segment_prefix_str(seg)
-        match_by_tag = bool(tag_capable and sgt)
-        if not match_by_tag and not source_prefix:
-            # Neither a usable tag nor a resolvable source prefix — nothing
-            # to match this segment's traffic by, skip rather than emit a
-            # rule that can never hit.
-            continue
-
-        customer_name = seg.get("customer_name") or seg.get("name") or f"SEG_{dedup_key}"
-        group_key = (customer_name, fw_nexthop)
-        group = groups.setdefault(
-            group_key,
-            {
-                "customer_name": customer_name,
-                "environment": seg.get("environment"),
-                "fw_nexthop": fw_nexthop,
-                "acl_name": f"PBR-REDIRECT-{customer_name}",
-                "source_prefixes": [],
-                "tag_members": [],
-            },
-        )
-        if match_by_tag:
-            group["tag_members"].append({"sgt": sgt, "sgt_name": sgt_name})
-        else:
-            group["source_prefixes"].append(source_prefix)
-
-    rules: list[dict[str, Any]] = []
-    for group in sorted(groups.values(), key=lambda g: g["customer_name"]):
-        common = {
-            "customer_name": group["customer_name"],
-            "environment": group["environment"],
-            "fw_nexthop": group["fw_nexthop"],
-        }
-        if group["source_prefixes"]:
-            rules.append(
-                {
-                    **common,
-                    "match_by_tag": False,
-                    "sgt": None,
-                    "sgt_name": None,
-                    "acl_name": group["acl_name"],
-                    "source_prefixes": group["source_prefixes"],
-                }
-            )
-        for member in sorted(group["tag_members"], key=lambda m: m["sgt"]):
-            rules.append(
-                {
-                    **common,
-                    "match_by_tag": True,
-                    "sgt": member["sgt"],
-                    # sgt_name is Arista's own match key (MSS-G "match security-group
-                    # <name>" — .dev/scenariusze.txt's ARISTA-BORDER-LEAF section
-                    # matches by group NAME, not the numeric id Cisco CTS uses).
-                    "sgt_name": member["sgt_name"],
-                    "acl_name": None,
-                    "source_prefixes": [],
-                }
-            )
-
     return rules
 
 
