@@ -954,7 +954,7 @@ class DeviceMixin(MLAGWiringMixin):
 
         IEEE 802.1Q VLAN ID has only local significance (within one L2
         domain — an MLAG pair, or a standalone device). Each VLAN domain
-        gets its own independent 100-3899 pool so unrelated domains can
+        gets its own independent 100-2999 pool so unrelated domains can
         reuse the same numeric VLAN ID for different segments; the real
         DC-wide/fabric-wide segment identifier is ManagedSegmentDeployment.vni.
         """

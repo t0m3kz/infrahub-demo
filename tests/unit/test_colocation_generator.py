@@ -22,10 +22,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.helpers.naming import DeviceNameContext, DeviceNamingConfig
-from generators.helpers.pools import CUSTOMER_VLAN_ID_MAX
+from generators.helpers.pools import FW_CONTEXT_VLAN_END, FW_CONTEXT_VLAN_START
 from generators.topology.colocation import (
     _COLO_FW_CONTEXT_P2P_SLICE_LENGTH,
-    _COLO_FW_CONTEXT_VLAN_START,
     _COLO_LOOPBACK_PREFIX_LENGTH,
     _COLO_MANAGEMENT_PREFIX_LENGTH,
     _COLO_SERVICE_ROLES,
@@ -580,7 +579,7 @@ class TestFirewallContextPools:
         assert kwargs["pool_name"] == "fr-fw-context-vlan-pool"
         assert kwargs["node"] == "ManagedFirewallContext"
         assert kwargs["node_attribute"] == "vlan_id"
-        assert (kwargs["start_range"], kwargs["end_range"]) == (_COLO_FW_CONTEXT_VLAN_START, CUSTOMER_VLAN_ID_MAX)
+        assert (kwargs["start_range"], kwargs["end_range"]) == (FW_CONTEXT_VLAN_START, FW_CONTEXT_VLAN_END)
 
     @pytest.mark.asyncio
     async def test_p2p_pool_is_a_slice_handing_out_31s(self) -> None:
