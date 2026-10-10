@@ -182,7 +182,7 @@ def validate_exchange_gateways(data: dict[str, Any]) -> list[str]:
                 errors.append(
                     f"{label}: leg '{iface_name}' is in namespace '{namespace}', which is neither "
                     f"namespace_a ({sides['namespace_a'].get('name')}) nor namespace_z "
-                    f"({sides['namespace_z'].get('name')}). Exchange carries: {sorted(exchange)}."
+                    f"({sides['namespace_z'].get('name')}). Exchange namespaces: a={exchange.get('namespace_a')!r} z={exchange.get('namespace_z')!r}."
                 )
                 continue
             errors.extend(_validate_leg(label, iface_name, address, side, context, exchange))

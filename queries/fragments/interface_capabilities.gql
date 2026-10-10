@@ -31,10 +31,10 @@ fragment OspfInterfaceCapabilityFields on RoutingOSPFInterface {
 }
 
 fragment ExchangeGatewayInterfaceCapabilityFields on TopologyExchangeGateway {
-  namespace_a { node { name { value } l3_vni { value } namespace_type { value } } }
-  namespace_z { node { name { value } l3_vni { value } namespace_type { value } } }
   ... on TopologyRoutedExchange {
     id
+    namespace_a { node { name { value } l3_vni { value } namespace_type { value } } }
+    namespace_z { node { name { value } l3_vni { value } namespace_type { value } } }
     name { value }
     description { value }
     status { value }
