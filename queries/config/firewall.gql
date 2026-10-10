@@ -44,14 +44,14 @@ query firewall_config(
               status { value }
               role { value }
               ... on DcimPhysicalInterface {
-                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+                ip_address { node { address { value } ip_namespace { node { name { value } namespace_type { value } } } } }
               }
               ... on DcimVirtualInterface {
-                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+                ip_address { node { address { value } ip_namespace { node { name { value } namespace_type { value } } } } }
                 parent_interface { node { name { value } } }
               }
               ... on DcimLAGInterface {
-                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+                ip_address { node { address { value } ip_namespace { node { name { value } namespace_type { value } } } } }
               }
               interface_capabilities {
                 edges {
@@ -74,6 +74,7 @@ query firewall_config(
                         }
                       }
                     }
+                    ... on TopologyRoutedExchange { ...ExchangeGatewayInterfaceCapabilityFields }
                     ... on ManagedFirewallContext {
                       id
                       name { value }

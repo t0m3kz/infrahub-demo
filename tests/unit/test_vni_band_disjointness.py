@@ -115,6 +115,23 @@ class TestFixedNamespacesAvoidEveryPool:
                 )
 
 
+class TestTransitVniBand:
+    """Exchange transit VNIs are derived (utils/exchange_transit.py), not pooled."""
+
+    def test_no_pool_or_fixed_namespace_overlaps_the_transit_band(
+        self, fixed_namespace_l3_vnis: dict[str, int], number_pools: list[dict[str, Any]]
+    ) -> None:
+        from utils.exchange_transit import TRANSIT_VNI_MAX, TRANSIT_VNI_MIN
+
+        assert TRANSIT_VNI_MAX <= MAX_ENCODABLE_VNI
+        for pool in _pools_for_attribute(number_pools, "vni") + _pools_for_attribute(number_pools, "l3_vni"):
+            assert pool["end_range"] < TRANSIT_VNI_MIN or pool["start_range"] > TRANSIT_VNI_MAX, (
+                f"pool '{pool['name']}' overlaps the transit VNI band {TRANSIT_VNI_MIN}-{TRANSIT_VNI_MAX}"
+            )
+        for name, vni in fixed_namespace_l3_vnis.items():
+            assert not TRANSIT_VNI_MIN <= vni <= TRANSIT_VNI_MAX, f"{name} L3 VNI {vni} is in the transit band"
+
+
 class TestPoolBandsAreDisjoint:
     def test_l2_and_l3_pool_ranges_never_overlap(self, number_pools: list[dict[str, Any]]) -> None:
         """One flat VNI namespace per device: an L2 pool overlapping an L3 pool

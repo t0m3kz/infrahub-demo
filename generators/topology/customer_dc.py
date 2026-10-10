@@ -3,12 +3,12 @@
 Triggered on TopologyCustomerDC creation (see data/events/99_actions.yml's
 trigger-customer-deployment-dc-on-created rule).
 
-DC customers reach everything over the fabric's own L2 domain, and inter-VRF
-routing (PROD/NON-PROD <-> INTERNET/MANAGEMENT) is 4 fixed bootstrap
-TopologyRoutedExchange objects shared by every deployment (see
-data/bootstrap/23_exchanges.yml, docs/exchange_gateway.md) — nothing
-per-deployment to provision here. So this generator's only job is
-FirewallContext (VDOM/vsys) provisioning on the parent DC's ManagedFirewallHA
+DC customers reach everything over the fabric's own L2 domain. Inter-VRF
+routing (PROD/NON-PROD <-> INTERNET) is a TopologyRoutedExchange per
+FirewallContext, `{context}-{A}-{Z}`, whose legs are the context's VLAN
+sub-interfaces in each VRF (see docs/exchange_gateway.md); there are no
+bootstrap exchanges. So this generator's job is
+FirewallContext (VDOM/vsys) provisioning, and the context's exchange legs, on the parent DC's ManagedFirewallHA
 cluster: dedicated (tenant = this deployment)
 if design.dedicated_firewall is true, else ONE shared context per cluster
 (tenant unset) reused by every other customer. Same for an optional

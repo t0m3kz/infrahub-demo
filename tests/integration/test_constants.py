@@ -91,9 +91,9 @@ ALL_DEMO_EXPECTED_GENERATORS: dict[str, int] = {
     # 06_customer_boarding re-declares three of them as supersets, which
     # upsert, and adds the C008/C010 dev footprints on DC12's shared hosts.
     # add_customer_deployment_cloud/office were removed: their only job was
-    # hub-and-spoke exchange auto-provisioning, now replaced by the 4 fixed
-    # bootstrap TopologyRoutedExchange objects (data/bootstrap/23_exchanges.yml)
-    # — see docs/exchange_gateway.md.
+    # hub-and-spoke exchange auto-provisioning, now replaced by the
+    # per-context TopologyRoutedExchange objects the DC/colocation customer
+    # generators create — see docs/exchange_gateway.md.
     "add_customer_deployment_dc": 9,
     "add_customer_deployment_colocation": 7,
     # trigger-customer-office-sdwan-on-created fires unconditionally for

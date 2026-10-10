@@ -31,33 +31,17 @@ fragment OspfInterfaceCapabilityFields on RoutingOSPFInterface {
 }
 
 fragment ExchangeGatewayInterfaceCapabilityFields on TopologyExchangeGateway {
-  namespace_a { node { name { value } l3_vni { value } } }
-  namespace_z { node { name { value } l3_vni { value } } }
+  namespace_a { node { name { value } l3_vni { value } namespace_type { value } } }
+  namespace_z { node { name { value } l3_vni { value } namespace_type { value } } }
   ... on TopologyRoutedExchange {
     id
     name { value }
     description { value }
     status { value }
-    # Both legs of the inter-VRF hop live on the same device — for a leaf
-    # rendering its own default route, "the other leg" (any interface here
-    # not equal to the one this capability was found on) gives the nexthop
-    # IP and confirms both interfaces belong to this device, purely from
-    # local interface_capabilities traversal, no second query root needed.
-    interface_capabilities {
-      edges {
-        node {
-          id
-          name { value }
-          device { node { name { value } } }
-          ... on DcimPhysicalInterface {
-            ip_address { node { address { value } ip_namespace { node { name { value } } } } }
-          }
-          ... on DcimVirtualInterface {
-            ip_address { node { address { value } ip_namespace { node { name { value } } } } }
-          }
-        }
-      }
-    }
+    # The firewall context the two VRFs are exchanged through. Its legs are
+    # NOT listed here (that grows O(exchanges x interfaces)): a consumer
+    # groups the legs of the context by the exchange id carried on each leg.
+    gateway { node { id tenant { node { id } } } }
   }
   ... on TopologyRouteLeakExchange {
     direction { value }
@@ -77,8 +61,41 @@ fragment InterfaceCapabilitiesFields on DcimInterface {
 }
 
 fragment FirewallContextInterfaceCapabilityFields on ManagedFirewallContext {
+  id
   name { value }
+  vlan_id { value }
   tenant { node { id } }
+  served_deployments { edges { node { id } } }
+  # The context's legs: each member's VLAN sub-interface, in the leg's VRF
+  # namespace, tagged with the context and with the exchange(s) of that leg.
+  interface_capabilities {
+    edges {
+      node {
+        name { value }
+        device { node { name { value } role { value } } }
+        ... on DcimVirtualInterface {
+          ip_address {
+            node {
+              address { value }
+              ip_namespace { node { name { value } l3_vni { value } namespace_type { value } } }
+            }
+          }
+          interface_capabilities {
+            edges {
+              node {
+                ... on TopologyRoutedExchange {
+                  id
+                  namespace_a { node { name { value } namespace_type { value } } }
+                  namespace_z { node { name { value } namespace_type { value } } }
+                  gateway { node { id tenant { node { id } } } }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 fragment InterfaceCapabilitiesWithSegmentFields on DcimInterface {

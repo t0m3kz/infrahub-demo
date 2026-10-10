@@ -32,6 +32,7 @@ from typing import Any
 from infrahub_sdk.checks import InfrahubCheck
 
 from utils.data_cleaning import clean_data
+from utils.exchange_transit import TRANSIT_VNI_MAX, TRANSIT_VNI_MIN
 
 # A type-2 route-target (4-byte admin ASN + 2-byte assigned number) and a type-1
 # route-distinguisher (4-byte IP + 2-byte assigned number) both leave 16 bits for
@@ -170,6 +171,26 @@ class CheckEvpnFabric(InfrahubCheck):
                         f"L3 VNI {vni} is shared by {len(ns_names)} namespaces: {sorted(ns_names)}. "
                         "The L3 VNI is the tenant's transit VNI, so these VRFs would route into "
                         "each other. Reallocate from the GLOBAL-L3VNI pool."
+                    )
+                )
+
+        # Exchange transit VNIs (utils/exchange_transit.py) are derived, not
+        # pooled, so a pool-allocated VNI landing in their band would collide.
+        for dep_name, by_vni in sorted(l2_by_deployment.items()):
+            for vni in sorted(v for v in by_vni if TRANSIT_VNI_MIN <= v <= TRANSIT_VNI_MAX):
+                self.log_error(
+                    message=(
+                        f"L2 VNI {vni} (segments {sorted(by_vni[vni])}, deployment '{dep_name}') sits "
+                        f"in the exchange transit VNI band {TRANSIT_VNI_MIN}-{TRANSIT_VNI_MAX}, which "
+                        "border leaves derive for firewall transit VLANs. Keep L2 VNI pools outside it."
+                    )
+                )
+        for vni, ns_names in sorted(l3_by_vni.items()):
+            if TRANSIT_VNI_MIN <= vni <= TRANSIT_VNI_MAX:
+                self.log_error(
+                    message=(
+                        f"L3 VNI {vni} for namespace(s) {sorted(ns_names)} sits in the exchange transit "
+                        f"VNI band {TRANSIT_VNI_MIN}-{TRANSIT_VNI_MAX}. Keep L3 VNI pools outside it."
                     )
                 )
 
