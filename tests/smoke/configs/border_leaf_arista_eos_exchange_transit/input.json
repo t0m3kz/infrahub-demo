@@ -1181,26 +1181,6 @@
                                       {
                                         "node": {
                                           "id": "xchg-dc1-fw-shared-prod",
-                                          "namespace_a": {
-                                            "node": {
-                                              "name": {
-                                                "value": "PROD"
-                                              },
-                                              "namespace_type": {
-                                                "value": "prod"
-                                              }
-                                            }
-                                          },
-                                          "namespace_z": {
-                                            "node": {
-                                              "name": {
-                                                "value": "INTERNET"
-                                              },
-                                              "namespace_type": {
-                                                "value": "internet"
-                                              }
-                                            }
-                                          },
                                           "gateway": {
                                             "node": {
                                               "id": "ctx-shared",
@@ -1255,26 +1235,6 @@
                                       {
                                         "node": {
                                           "id": "xchg-dc1-fw-shared-prod",
-                                          "namespace_a": {
-                                            "node": {
-                                              "name": {
-                                                "value": "PROD"
-                                              },
-                                              "namespace_type": {
-                                                "value": "prod"
-                                              }
-                                            }
-                                          },
-                                          "namespace_z": {
-                                            "node": {
-                                              "name": {
-                                                "value": "INTERNET"
-                                              },
-                                              "namespace_type": {
-                                                "value": "internet"
-                                              }
-                                            }
-                                          },
                                           "gateway": {
                                             "node": {
                                               "id": "ctx-shared",
@@ -1329,26 +1289,6 @@
                                       {
                                         "node": {
                                           "id": "xchg-dc1-fw-shared-prod",
-                                          "namespace_a": {
-                                            "node": {
-                                              "name": {
-                                                "value": "PROD"
-                                              },
-                                              "namespace_type": {
-                                                "value": "prod"
-                                              }
-                                            }
-                                          },
-                                          "namespace_z": {
-                                            "node": {
-                                              "name": {
-                                                "value": "INTERNET"
-                                              },
-                                              "namespace_type": {
-                                                "value": "internet"
-                                              }
-                                            }
-                                          },
                                           "gateway": {
                                             "node": {
                                               "id": "ctx-shared",
@@ -1403,26 +1343,6 @@
                                       {
                                         "node": {
                                           "id": "xchg-dc1-fw-shared-prod",
-                                          "namespace_a": {
-                                            "node": {
-                                              "name": {
-                                                "value": "PROD"
-                                              },
-                                              "namespace_type": {
-                                                "value": "prod"
-                                              }
-                                            }
-                                          },
-                                          "namespace_z": {
-                                            "node": {
-                                              "name": {
-                                                "value": "INTERNET"
-                                              },
-                                              "namespace_type": {
-                                                "value": "internet"
-                                              }
-                                            }
-                                          },
                                           "gateway": {
                                             "node": {
                                               "id": "ctx-shared",
@@ -1507,26 +1427,6 @@
                                       {
                                         "node": {
                                           "id": "xchg-dc1-fw-acme-prod",
-                                          "namespace_a": {
-                                            "node": {
-                                              "name": {
-                                                "value": "PROD"
-                                              },
-                                              "namespace_type": {
-                                                "value": "prod"
-                                              }
-                                            }
-                                          },
-                                          "namespace_z": {
-                                            "node": {
-                                              "name": {
-                                                "value": "INTERNET"
-                                              },
-                                              "namespace_type": {
-                                                "value": "internet"
-                                              }
-                                            }
-                                          },
                                           "gateway": {
                                             "node": {
                                               "id": "ctx-dedicated",
@@ -1583,26 +1483,6 @@
                                       {
                                         "node": {
                                           "id": "xchg-dc1-fw-acme-prod",
-                                          "namespace_a": {
-                                            "node": {
-                                              "name": {
-                                                "value": "PROD"
-                                              },
-                                              "namespace_type": {
-                                                "value": "prod"
-                                              }
-                                            }
-                                          },
-                                          "namespace_z": {
-                                            "node": {
-                                              "name": {
-                                                "value": "INTERNET"
-                                              },
-                                              "namespace_type": {
-                                                "value": "internet"
-                                              }
-                                            }
-                                          },
                                           "gateway": {
                                             "node": {
                                               "id": "ctx-dedicated",
@@ -1659,26 +1539,6 @@
                                       {
                                         "node": {
                                           "id": "xchg-dc1-fw-acme-prod",
-                                          "namespace_a": {
-                                            "node": {
-                                              "name": {
-                                                "value": "PROD"
-                                              },
-                                              "namespace_type": {
-                                                "value": "prod"
-                                              }
-                                            }
-                                          },
-                                          "namespace_z": {
-                                            "node": {
-                                              "name": {
-                                                "value": "INTERNET"
-                                              },
-                                              "namespace_type": {
-                                                "value": "internet"
-                                              }
-                                            }
-                                          },
                                           "gateway": {
                                             "node": {
                                               "id": "ctx-dedicated",
@@ -1735,26 +1595,6 @@
                                       {
                                         "node": {
                                           "id": "xchg-dc1-fw-acme-prod",
-                                          "namespace_a": {
-                                            "node": {
-                                              "name": {
-                                                "value": "PROD"
-                                              },
-                                              "namespace_type": {
-                                                "value": "prod"
-                                              }
-                                            }
-                                          },
-                                          "namespace_z": {
-                                            "node": {
-                                              "name": {
-                                                "value": "INTERNET"
-                                              },
-                                              "namespace_type": {
-                                                "value": "internet"
-                                              }
-                                            }
-                                          },
                                           "gateway": {
                                             "node": {
                                               "id": "ctx-dedicated",

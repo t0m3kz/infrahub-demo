@@ -271,17 +271,22 @@ def get_exchange_routes(
             for d in [(ctx.get("tenant") or {}).get("id")] + [x.get("id") for x in ctx.get("served_deployments") or []]
             if d
         }
+        # An exchange's sides are the namespaces of the legs carrying it: its own
+        # namespace_a / namespace_z come back null through interface_capabilities.
         exchanges: dict[str, dict[str, Any]] = {}
+        sides: dict[str, set[str]] = {}
         for leg in ctx.get("interface_capabilities") or []:
+            leg_ns = ((leg.get("ip_address") or {}).get("ip_namespace") or {}).get("name")
             for exchange in leg.get("interface_capabilities") or []:
-                if exchange.get("id") and exchange.get("namespace_a") and exchange.get("namespace_z"):
+                if exchange.get("id") and leg_ns in legs:
                     exchanges.setdefault(exchange["id"], exchange)
-        for exchange in exchanges.values():
-            a_name = exchange["namespace_a"].get("name")
-            z_name = exchange["namespace_z"].get("name")
-            leg_a, leg_z = legs.get(a_name), legs.get(z_name)
-            if leg_a is None or leg_z is None:
+                    sides.setdefault(exchange["id"], set()).add(leg_ns)
+        for exchange_id, exchange in exchanges.items():
+            if len(sides[exchange_id]) != 2:
                 continue
+            # the tenant VRF is the side that has EXCHANGE_PEERS
+            a_name, z_name = sorted(sides[exchange_id], key=lambda n: legs[n]["ns_type"] not in EXCHANGE_PEERS)
+            leg_a, leg_z = legs[a_name], legs[z_name]
             if leg_z["ns_type"] not in EXCHANGE_PEERS.get(leg_a["ns_type"], ()):
                 continue
             gateway = exchange.get("gateway") or {}

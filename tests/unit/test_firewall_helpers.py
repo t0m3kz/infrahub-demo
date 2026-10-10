@@ -404,8 +404,6 @@ def _leg(address: str, namespace: dict, exchanges: list[dict] | None = None, nam
 def _exchange(a: dict, z: dict, tenant: str | None = None, exchange_id: str = "x1") -> dict:
     return {
         "id": exchange_id,
-        "namespace_a": {"name": a["name"], "namespace_type": a["namespace_type"]},
-        "namespace_z": {"name": z["name"], "namespace_type": z["namespace_type"]},
         "gateway": {"id": "ctx-1", "tenant": {"id": tenant} if tenant else None},
     }
 

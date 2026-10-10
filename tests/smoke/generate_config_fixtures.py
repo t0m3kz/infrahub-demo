@@ -1388,8 +1388,6 @@ def _xchg_exchange(ctx: dict[str, Any], a_type: str) -> dict:
     """The exchange {context}-{A}-INTERNET of one tenant VRF, gated by ``ctx``."""
     return {
         "id": f"xchg-{ctx['name']}-{a_type}",
-        "namespace_a": _xchg_ns_node(a_type, with_vni=False),
-        "namespace_z": _xchg_ns_node("internet", with_vni=False),
         "gateway": _node({"id": ctx["id"], "tenant": _node({"id": "tenant-acme"}) if ctx["tenant"] else _node(None)}),
     }
 

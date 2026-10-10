@@ -108,8 +108,6 @@ def _transit_device_data(platform: str) -> dict:
     node = data["DcimDevice"]["edges"][0]["node"]
     exchange = {
         "id": "x1",
-        "namespace_a": _node({"name": _v("PROD"), "namespace_type": _v("prod")}),
-        "namespace_z": _node({"name": _v("INTERNET"), "namespace_type": _v("internet")}),
         "gateway": _node({"id": "ctx-1", "tenant": _node(None)}),
     }
     legs = [
