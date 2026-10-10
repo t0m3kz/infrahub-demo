@@ -6,8 +6,8 @@ generators/topology/customer_colocation.py (TopologyCustomerColocation on a
 ColocationMetro) board a customer the same way: a shared or dedicated context
 on the parent's ManagedFirewallHA cluster, a VLAN-tagged sub-interface per
 firewall, a P2P link to the PBR peer in pbr mode, and an optional dedicated
-load-balancer pair. Only the customer kind, the parent's label and the PBR
-peer's role differ, and the host class sets those as class attributes.
+load-balancer pair. Only the customer kind and the parent's label differ, and
+the host class sets those as class attributes.
 """
 
 from __future__ import annotations
@@ -19,7 +19,8 @@ from typing import Any
 
 from infrahub_sdk.protocols import CoreIPPrefixPool, CoreNumberPool
 
-from .connections import tracked_save_kwargs
+from .connections import BORDER_ROLE_FOR_SERVICES, tracked_save_kwargs
+from .far_end import far_end_interface
 from .protocols import (
     DcimPhysicalDevice,
     DcimVirtualDevice,
@@ -42,6 +43,17 @@ def _dev_name(device: Any) -> str:
     return device["name"] if isinstance(device, dict) else device.name.value
 
 
+def _physical_devices(devices: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The parent's physical devices of a role, by name.
+
+    devices(role__value: ...) also returns the virtual instances hosted on
+    them (the customers' dedicated pairs share the parent deployment and the
+    role), so the shared cluster and the dedicated pair's hosts are resolved
+    from the physical ones only, in a stable order.
+    """
+    return sorted((d for d in devices if d.get("kind") == DcimPhysicalDevice.__name__), key=_dev_name)
+
+
 def _customer_short_id(customer: dict[str, Any], customer_id: str) -> str:
     """{org_id}-{environment} (e.g. "C009-p") — used for dedicated device/
     context naming instead of customer["name"] (the full computed
@@ -58,8 +70,7 @@ def _customer_short_id(customer: dict[str, Any], customer_id: str) -> str:
 class FirewallContextMixin:
     """Shared/dedicated FirewallContext and dedicated load-balancer provisioning.
 
-    The host class sets ``_customer_kind``, ``_parent_label`` and
-    ``_pbr_peer_role``, and mixes in PoolMixin (``resource_lock``),
+    The host class sets ``_customer_kind`` and ``_parent_label``, and mixes in PoolMixin (``resource_lock``),
     DeviceMixin (``create_devices``, ``_ensure_ha_pairs``,
     ``link_serving_firewall_context``, ``resolve_virtual_template``) and CablingMixin
     (``find_role_interface``, ``ensure_vlan_subinterface``,
@@ -71,7 +82,6 @@ class FirewallContextMixin:
     # parent's physical ManagedFirewallHA pair (see _resolve_parent_cluster).
     _customer_kind: str
     _parent_label: str
-    _pbr_peer_role: str
     _parent_generators: tuple[str, ...]
 
     # Provided by the host class and its other mixins. Callable attributes,
@@ -102,7 +112,7 @@ class FirewallContextMixin:
 
         # Firewall devices arrive with the deployment's own GraphQL response
         # (customer.parent.firewall_devices) — no separate filters() round-trip.
-        fw_devices: list[Any] = parent.get("firewall_devices") or []
+        fw_devices: list[Any] = _physical_devices(parent.get("firewall_devices") or [])
         if not fw_devices:
             self.logger.info(f"{parent_name} has no firewall devices — skipping FirewallContext provisioning")
             return
@@ -177,14 +187,13 @@ class FirewallContextMixin:
             await self._ensure_context_subinterface(
                 context_obj=context_obj,
                 fw_devices=fw_devices,
-                parent_id=parent_id,
                 parent_name=parent_name,
                 connectivity_mode=connectivity_mode,
                 track=track,
             )
 
     async def _resolve_parent_cluster(self, fw_devices: list[Any], *, parent_id: str, parent_name: str) -> Any | None:
-        """The parent's physical ManagedFirewallHA cluster holding fw_devices[0].
+        """The parent's ManagedFirewallHA cluster holding fw_devices[0], the first physical firewall by name.
 
         Never pairs the firewalls itself. The parent's own generator
         (_parent_generators) is the only owner of that HA pair, its HA
@@ -236,10 +245,8 @@ class FirewallContextMixin:
     ) -> tuple[Any, list[Any]] | None:
         """Provision a dedicated virtual HA pair (firewall or load-balancer)
         for this customer, one virtual instance hosted on each of the shared
-        cluster's physical peers — same host-per-peer pattern as dc.py's
-        _provision_shared_virtual_instances, but scoped to one customer and
-        sourced from the *_CUSTOMER_* template variant (data/bootstrap's
-        09_virtual_device_templates_*.yaml) instead of the shared one.
+        cluster's physical peers, sourced from the *_CUSTOMER_* template
+        variant (data/bootstrap's 09_virtual_device_templates_*.yaml).
 
         tenant_id sets ManagedTenantScoped.tenant on ha_kind — meaningful for
         the load-balancer path (ManagedLoadbalancerHA carries that field);
@@ -337,7 +344,7 @@ class FirewallContextMixin:
         if not parent_id:
             return
 
-        lb_devices: list[Any] = parent.get("loadbalancer_devices") or []
+        lb_devices: list[Any] = _physical_devices(parent.get("loadbalancer_devices") or [])
         if not lb_devices:
             self.logger.info(f"{parent_name} has no load-balancer devices — skipping dedicated LB provisioning")
             return
@@ -383,7 +390,6 @@ class FirewallContextMixin:
         *,
         context_obj: Any,
         fw_devices: list[Any],
-        parent_id: str,
         parent_name: str,
         connectivity_mode: str,
         track: bool = True,
@@ -397,10 +403,11 @@ class FirewallContextMixin:
         chain cabling already puts every packet through the firewall's
         trunk, so the VLAN-tagged sub-interface alone tells contexts apart.
 
-        Every firewall in the HA pair gets its own sub-interface — cabling
-        is index-paired (peer[0]<->fw[0], peer[1]<->fw[1]), never
-        any-to-any, so a single sub-interface would leave the second pair
-        with no context at all.
+        Every firewall in the HA pair gets its own sub-interface, and its
+        peer-side one goes on the border port its uplink is cabled to
+        (_pbr_peer_port), never on a peer picked by position: each firewall
+        is an independent path, and two firewalls on one border device land
+        on two different ports.
 
         track=False (the shared context) writes the VLAN allocation, both
         sub-interfaces and the P2P addresses untracked — see
@@ -433,78 +440,98 @@ class FirewallContextMixin:
                 return
             context_obj = await self.client.get(kind=ManagedFirewallContext, id=context_obj.id)
 
-        peer_role = self._pbr_peer_role
-        pbr_peers: list[Any] = []
-        if connectivity_mode == "pbr":
-            try:
-                pbr_peers = await self.client.filters(
-                    kind=DcimPhysicalDevice, deployment__ids=[parent_id], role__value=peer_role
-                )
-            except Exception as exc:
-                self.logger.error(f"Error looking up {peer_role} devices on {parent_name}: {exc}")
-                return
-            if not pbr_peers:
-                self.logger.error(f"{parent_name}: no {peer_role} device found for context '{context_name}' p2p link")
-                return
-
-        for i, fw_device in enumerate(fw_devices):
+        for fw_device in fw_devices:
+            fw_name = _dev_name(fw_device)
+            fw_trunk = await self._context_trunk(device_id=_dev_id(fw_device), device_name=fw_name, role="uplink")
+            if fw_trunk is None:
+                continue
+            peer_port: Any | None = None
             fw_ip_id: str | None = None
             peer_ip_id: str | None = None
-            if connectivity_mode == "pbr" and pbr_peers:
-                ip_pair = await self._allocate_context_p2p(
-                    f"{context_name}-{_dev_name(fw_device)}", parent_name, track=track
-                )
+            if connectivity_mode == "pbr":
+                peer_port = await self._pbr_peer_port(fw_device, context_name=context_name)
+                if peer_port is None:
+                    continue
+                ip_pair = await self._allocate_context_p2p(f"{context_name}-{fw_name}", parent_name, track=track)
                 if ip_pair is not None:
                     fw_ip_id, peer_ip_id = ip_pair
 
             fw_sub_iface = await self._create_context_subinterface(
                 device_id=_dev_id(fw_device),
-                device_name=_dev_name(fw_device),
-                trunk_role="uplink",
+                device_name=fw_name,
+                trunk_iface=fw_trunk,
                 vlan_id_value=context_obj.vlan_id.value,
                 context_obj=context_obj,
                 ip_address_id=fw_ip_id,
                 track=track,
             )
-            if fw_sub_iface is None or not pbr_peers:
+            if fw_sub_iface is None or peer_port is None:
                 continue
 
-            pbr_peer = pbr_peers[i % len(pbr_peers)]
             await self._create_context_subinterface(
-                device_id=_dev_id(pbr_peer),
-                device_name=_dev_name(pbr_peer),
-                trunk_role="firewall",
+                device_id=peer_port.device.id,
+                device_name=peer_port.device.display_label or peer_port.device.id,
+                trunk_iface=peer_port,
                 vlan_id_value=context_obj.vlan_id.value,
                 context_obj=context_obj,
                 ip_address_id=peer_ip_id,
                 track=track,
             )
 
+    async def _context_trunk(self, *, device_id: str, device_name: str, role: str) -> Any | None:
+        """device_id's role interface, logging an error when it has none."""
+        try:
+            trunk_iface = await self.find_role_interface(device_id=device_id, role=role)
+        except Exception as exc:
+            self.logger.error(f"Error resolving {role} interface on {device_name}: {exc}")
+            return None
+        if trunk_iface is None:
+            self.logger.error(f"{device_name}: no role={role} interface found — cannot create a context sub-interface")
+        return trunk_iface
+
+    async def _pbr_peer_port(self, fw_device: Any, *, context_name: str) -> Any | None:
+        """The PBR peer's service port cabled to fw_device's uplink.
+
+        A virtual instance has no cable of its own: its traffic leaves through
+        the uplink of the physical firewall hosting it, so that cable is the
+        one followed. The far end must be a border service port (role
+        firewall, BORDER_ROLE_FOR_SERVICES) on a border leaf or edge — the one
+        port the context's P2P leg can live on for this firewall, whatever
+        the number of border devices.
+        """
+        fw_name = _dev_name(fw_device)
+        hosting = None if isinstance(fw_device, dict) else getattr(fw_device, "hosting_device", None)
+        cabled_device_id = getattr(hosting, "id", None) or _dev_id(fw_device)
+        uplink = await self._context_trunk(device_id=cabled_device_id, device_name=fw_name, role="uplink")
+        if uplink is None:
+            return None
+        if not getattr(getattr(uplink, "cable", None), "id", None):
+            self.logger.error(f"{fw_name}: uplink {uplink.name.value} is not cabled — no PBR peer for '{context_name}'")
+            return None
+        peer_port = await far_end_interface(self.client, uplink, include=["device"])
+        if peer_port is None or peer_port.role.value != BORDER_ROLE_FOR_SERVICES["firewall"]:
+            self.logger.error(
+                f"{fw_name}: uplink {uplink.name.value} is not cabled to a "
+                f"{BORDER_ROLE_FOR_SERVICES['firewall']} service port — no PBR peer for '{context_name}'"
+            )
+            return None
+        return peer_port
+
     async def _create_context_subinterface(
         self,
         *,
         device_id: str,
         device_name: str,
-        trunk_role: str,
+        trunk_iface: Any,
         vlan_id_value: int | None,
         context_obj: Any,
         ip_address_id: str | None,
         track: bool = True,
     ) -> Any | None:
-        context_name = context_obj.name.value
-        try:
-            trunk_iface = await self.find_role_interface(device_id=device_id, role=trunk_role)
-        except Exception as exc:
-            self.logger.error(f"Error resolving {trunk_role} interface on {device_name}: {exc}")
-            return None
-        if trunk_iface is None:
-            self.logger.error(
-                f"{device_name}: no role={trunk_role} interface found — cannot create sub-interface for "
-                f"FirewallContext '{context_name}'"
-            )
-            return None
         if vlan_id_value is None:
-            self.logger.error(f"{device_name}: no VLAN allocated — cannot create sub-interface for {context_name}")
+            self.logger.error(
+                f"{device_name}: no VLAN allocated — cannot create sub-interface for {context_obj.name.value}"
+            )
             return None
         return await self.ensure_vlan_subinterface(
             device_id=device_id,

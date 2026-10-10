@@ -29,6 +29,7 @@ query customer_colocation($name: String!) {
                 edges {
                   node {
                     id
+                    kind: __typename
                     name { value }
                     ... on DcimPhysicalDevice {
                       platform { node { name { value } } }
@@ -40,6 +41,7 @@ query customer_colocation($name: String!) {
                 edges {
                   node {
                     id
+                    kind: __typename
                     name { value }
                     ... on DcimPhysicalDevice {
                       platform { node { name { value } } }

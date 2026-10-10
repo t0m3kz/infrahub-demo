@@ -27,7 +27,7 @@ Key use cases demonstrated:
 ## Package Manager & Dependencies
 
 - **Package Manager**: Use `uv` for all dependency management.
-- **Python Version**: Supports Python 3.10, 3.11, or 3.12.
+- **Python Version**: Supports Python 3.11 to 3.14.
 - **Key Dependencies**: `infrahub-sdk[all]>=1.7.2,<2.0.0`, `invoke>=2.2.0`.
 
 ### Common `uv` Commands

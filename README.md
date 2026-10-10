@@ -50,7 +50,7 @@ This is application-driven infrastructure: the network exists to serve the appli
 
 ## Requirements
 
-- Python 3.10, 3.11, or 3.12
+- Python 3.11, 3.12, 3.13, or 3.14
 - [uv](https://github.com/astral-sh/uv) for dependency management
 - Docker (for containerlab and some integration tests)
 - **Infrahub 1.5** (or higher) - See note below
@@ -312,6 +312,6 @@ This project is licensed under the MIT License.
 [coverage-link]:
 <https://codecov.io/gh/t0m3kz/infrahub-demo>
 [python-badge]:
-<https://img.shields.io/badge/python-3.10%7C3.11%7C3.12-000000?logo=python>
+<https://img.shields.io/badge/python-3.11%7C3.12%7C3.13%7C3.14-000000?logo=python>
 [python-link]:
 <https://www.python.org>

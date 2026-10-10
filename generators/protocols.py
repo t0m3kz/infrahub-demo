@@ -1384,6 +1384,10 @@ class ManagedVlanSegment(ManagedGeneric, ManagedNetworkSegment, ManagedGenericIn
     inline_service: RelationshipAttribute[ManagedGeneric]
 
 
+class ManagedExternalSegment(ManagedNetworkSegment):
+    pass
+
+
 class ManagedVxlanSegment(ManagedGeneric, ManagedNetworkSegment, ManagedGenericInterfaces):
     arp_suppression: Boolean
     segment_type: Dropdown

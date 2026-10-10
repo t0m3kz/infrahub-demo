@@ -41,7 +41,6 @@ class CustomerDeploymentDCExchangeGenerator(
 
     _customer_kind = "TopologyCustomerDC"
     _parent_label = "DC"
-    _pbr_peer_role = "border-leaf"
     _parent_generators = ("add_dc", "dc_pod_cascade")
 
     async def generate(self, data: dict[str, Any]) -> None:

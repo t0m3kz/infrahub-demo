@@ -9,16 +9,13 @@ from utils.data_cleaning import clean_data
 from ..common import CommonGenerator, DeviceOptions
 from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
 from ..dc_config import host_bits_to_prefix_length, resolve_dc_size_layout
-from ..devices import HA_KIND_BY_ROLE, DeviceMixin
+from ..devices import DeviceMixin
 from ..helpers import name_to_asn_range
-from ..helpers.pairing import pair_device_names
 from ..helpers.routing import RoutingStrategy, p2p_is_ipv6
 from ..helpers.template_interfaces import template_interface_names_by_role
 from ..pod_config import POD_LAYOUTS, templates_by_role
 from ..pools import PoolMixin
 from ..protocols import (
-    DcimPhysicalDevice,
-    DcimVirtualDevice,
     TopologyDataCenter,
     TopologyPod,
 )
@@ -27,9 +24,6 @@ from ..types import CablingOptions, NamingConvention, RoutingOptions, naming_con
 
 _DC_VALID_FABRIC_ROLES = frozenset({"super-spine", "hyper-spine", "border-leaf", "firewall", "load-balancer"})
 
-# environments each physical firewall/load-balancer HA pair gets a shared
-# virtual instance pair for — see _provision_shared_virtual_instances.
-_SHARED_ENVIRONMENTS: tuple[str, ...] = ("production", "non-production")
 
 # Strategies under which dc.py pre-seeds its own DC-scoped tiers' BGP.
 _SEEDED_STRATEGIES = (
@@ -580,10 +574,9 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
         """Create firewall/load-balancer devices for one fabric_templates role,
         DC-wide (deployment_id=dc.id), via the shared HA-paired creation shape
         (DeviceMixin.create_ha_role_devices — also used by pod.py and
-        colocation.py). DC-specific on top of that shared shape: each physical
-        entry also gets its own shared virtual instances provisioned."""
+        colocation.py), flattened to the created names."""
         all_names: list[str] = []
-        for entry, names in await self.create_ha_role_devices(
+        for _, names in await self.create_ha_role_devices(
             role=role,
             entries=entries,
             deployment_id=deployment_id,
@@ -591,81 +584,8 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
             indexes=indexes,
         ):
             all_names.extend(names)
-            await self._provision_shared_virtual_instances(
-                role=role,
-                physical_names=names,
-                physical_template=entry["template"],
-                deployment_id=deployment_id,
-            )
 
         return all_names
-
-    async def _provision_shared_virtual_instances(
-        self,
-        *,
-        role: Literal["firewall", "load-balancer"],
-        physical_names: list[str],
-        physical_template: dict[str, Any],
-        deployment_id: str,
-    ) -> None:
-        """For each physical HA pair just created, provision 2 virtual
-        instances per environment tier (production, non-production) — one
-        hosted on each physical peer — then pair each environment's own 2
-        instances into their own HA domain (any physical peer count works,
-        but this needs exactly a pair to know which 2 physical devices to
-        host onto; an odd leftover physical device is skipped since it has
-        no HA partner to mirror).
-
-        These are shared (not customer-dedicated) instances for future
-        customer boarding — see data/bootstrap's
-        09_virtual_device_templates_*_CUSTOMER_*.yaml for the separate
-        dedicated-per-customer template set this does NOT use.
-        """
-        platform = (physical_template.get("platform") or {}).get("name")
-        if not platform:
-            self.logger.warning(
-                f"{role} template {physical_template.get('id')} has no platform — "
-                "skipping shared virtual instance provisioning."
-            )
-            return
-
-        virtual_template = await self.resolve_virtual_template(
-            platform=platform,
-            role=role,
-            size_suffix=self.data["size"],
-            fallback="skipping shared virtual instance provisioning",
-        )
-        if virtual_template is None:
-            return
-
-        for first, second in pair_device_names(physical_names):
-            physical_pair = await self.client.filters(kind=DcimPhysicalDevice, name__values=[first, second])
-            if len(physical_pair) != 2:
-                self.logger.error(f"Shared virtual instances for {first}/{second}: could not resolve both peers.")
-                continue
-            peer_by_name = {dev.name.value: dev for dev in physical_pair}
-            pair_prefix = f"{first}-{second}"
-
-            for environment in _SHARED_ENVIRONMENTS:
-                instance_names: list[str] = []
-                for peer_index, physical_name in enumerate((first, second), start=1):
-                    instance_name = f"{pair_prefix}-shared-{environment}-{peer_index:02d}"
-                    names = await self.create_devices(
-                        deployment_id=deployment_id,
-                        device_role=role,
-                        quantity=1,
-                        template=virtual_template,
-                        options=DeviceOptions(virtual=True, name_override=instance_name),
-                        hosting_device=peer_by_name[physical_name],
-                    )
-                    instance_names.extend(names)
-
-                await self._ensure_ha_pairs(
-                    instance_names,
-                    ha_kind=HA_KIND_BY_ROLE[role],
-                    role_label=f"{role} ({environment})",
-                    device_kind=DcimVirtualDevice,
-                )
 
     async def _generate_dc_scoped_fabric_devices(self) -> None:
         """Create border-leaf devices and provision the DC's shared service chain.

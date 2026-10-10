@@ -82,18 +82,3 @@ jobs:
           name: Release ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
-  # document:
-  #   if: ${{ github.ref == 'refs/heads/main' }}
-  #   permissions: write-all
-  #   needs: tests
-  #   name: Update documentation
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v7
-  #     - uses: actions/setup-python@v7
-  #       with:
-  #         python-version: "3.11"
-  #     - run: |
-  #         pip install uv
-  #         uv sync
-  #     - run: uv run mkdocs gh-deploy --force
