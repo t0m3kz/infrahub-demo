@@ -115,17 +115,11 @@ GATEWAY_ID = "ctx-1"
 CONTEXT_VLAN = 3005
 
 
-def _namespace(name: str, ns_type: str) -> dict:
-    return {"name": name, "namespace_type": ns_type, "l3_vni": 50001}
-
-
 def _exchange(exchange_id: str = "xchg-1") -> dict:
     return {
         "typename": "TopologyRoutedExchange",
         "id": exchange_id,
         "name": "ctx-1-PROD-INTERNET",
-        "namespace_a": _namespace("PROD", "prod"),
-        "namespace_z": _namespace("INTERNET", "internet"),
         "gateway": {"id": GATEWAY_ID},
     }
 
@@ -134,16 +128,23 @@ def _context(context_id: str = GATEWAY_ID, vlan: int | None = CONTEXT_VLAN) -> d
     return {"typename": "ManagedFirewallContext", "id": context_id, "name": "ctx-1", "vlan_id": vlan}
 
 
+_NS_TYPE = {"PROD": "prod", "NON-PROD": "non_prod", "INTERNET": "internet"}
+
+
 def _fw_leg(
     name: str = "eth1.3005",
     address: str | None = "100.66.0.5/29",
     namespace: str | None = "PROD",
+    ns_type: str | None = None,
     *,
     caps: list[dict] | None = None,
 ) -> dict:
     ip_address = None
     if address and namespace:
-        ip_address = {"address": address, "ip_namespace": {"name": namespace}}
+        ip_address = {
+            "address": address,
+            "ip_namespace": {"name": namespace, "namespace_type": ns_type or _NS_TYPE.get(namespace, "prod")},
+        }
     return {
         "name": name,
         "ip_address": ip_address,
@@ -176,23 +177,26 @@ class TestValidateExchangeGateways:
 
     def test_missing_namespace_z_leg_reports_error(self):
         errors = _validate(_good_legs()[:1])
-        assert errors == [
-            "RoutedExchange 'ctx-1-PROD-INTERNET' on 'dc1-fw-01' has 0 leg(s) in namespace_z 'INTERNET' — exactly 1 is required."
-        ]
+        assert len(errors) == 1
+        assert "legs in 1 namespace(s) ['PROD'] — exactly 2" in errors[0]
 
     def test_two_legs_in_one_namespace_reports_error(self):
         legs = [*_good_legs(), _fw_leg("eth2.3005", "100.66.0.6/29", "PROD")]
         errors = _validate(legs)
         assert len(errors) == 1
-        assert "2 leg(s) in namespace_a 'PROD'" in errors[0]
+        assert "has 2 legs in namespace 'PROD'" in errors[0]
 
     def test_leg_without_address_reports_error(self):
         errors = _validate([*_good_legs()[:1], _fw_leg("eth1.3405", None, None)])
         assert any("no IP address / namespace" in e for e in errors)
 
-    def test_leg_in_foreign_namespace_reports_error(self):
-        errors = _validate([*_good_legs()[:1], _fw_leg("eth1.3405", "100.66.16.6/29", "NON-PROD")])
-        assert any("neither namespace_a (PROD) nor namespace_z (INTERNET)" in e for e in errors)
+    def test_prod_and_non_prod_are_never_exchanged(self):
+        errors = _validate([*_good_legs()[:1], _fw_leg("eth1.3205", "100.66.16.6/29", "NON-PROD")])
+        assert any("not an allowed pair" in e for e in errors)
+
+    def test_three_namespaces_in_one_exchange_report_error(self):
+        errors = _validate([*_good_legs(), _fw_leg("eth1.3205", "100.66.16.6/29", "NON-PROD")])
+        assert any("exactly 2" in e for e in errors)
 
     def test_address_not_a_slash_29_reports_error(self):
         legs = _good_legs()
@@ -240,7 +244,6 @@ class TestValidateExchangeGateways:
     def test_two_exchanges_validated_independently(self):
         other = _exchange("xchg-2")
         other["name"] = "ctx-1-NON-PROD-INTERNET"
-        other["namespace_a"] = _namespace("NON-PROD", "non_prod")
         legs = [
             *_good_legs(),
             _fw_leg("eth1.3205", "100.66.16.5/29", "NON-PROD", caps=[_context(), other]),
@@ -248,7 +251,7 @@ class TestValidateExchangeGateways:
         errors = _validate(legs)
         assert len(errors) == 1
         assert "ctx-1-NON-PROD-INTERNET" in errors[0]
-        assert "0 leg(s) in namespace_z" in errors[0]
+        assert "legs in 1 namespace(s) ['NON-PROD']" in errors[0]
 
     def test_device_name_included_in_error_message(self):
         assert "dc1-fw-01" in _validate(_good_legs()[:1])[0]

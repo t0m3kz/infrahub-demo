@@ -183,7 +183,9 @@ def _leg_interface(name: str, address: str, namespace: str, ns_type: str, exchan
     """A firewall sub-interface in the raw firewall_config shape (leg of one exchange)."""
     return {
         "name": _v(name),
-        "ip_address": _node({"address": _v(address), "ip_namespace": _node({"name": _v(namespace)})}),
+        "ip_address": _node(
+            {"address": _v(address), "ip_namespace": _node({"name": _v(namespace), "namespace_type": _v(ns_type)})}
+        ),
         "interface_capabilities": _edges([context, exchange]),
     }
 
@@ -194,8 +196,10 @@ def _exchange_payload(internet_vlan: str) -> dict[str, Any]:
         "__typename": "TopologyRoutedExchange",
         "id": "xchg-1",
         "name": _v("ctx-1-PROD-INTERNET"),
-        "namespace_a": _node({"name": _v("PROD"), "namespace_type": _v("prod")}),
-        "namespace_z": _node({"name": _v("INTERNET"), "namespace_type": _v("internet")}),
+        # The exchange's own namespace_a / namespace_z come back null through interface_capabilities;
+        # the check reads the namespaces off the legs' addresses instead.
+        "namespace_a": {"node": None},
+        "namespace_z": {"node": None},
         "gateway": _node({"id": "ctx-1"}),
     }
     interfaces = [

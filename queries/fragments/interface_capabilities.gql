@@ -33,8 +33,6 @@ fragment OspfInterfaceCapabilityFields on RoutingOSPFInterface {
 fragment ExchangeGatewayInterfaceCapabilityFields on TopologyExchangeGateway {
   ... on TopologyRoutedExchange {
     id
-    namespace_a { node { name { value } l3_vni { value } namespace_type { value } } }
-    namespace_z { node { name { value } l3_vni { value } namespace_type { value } } }
     name { value }
     description { value }
     status { value }
@@ -85,8 +83,6 @@ fragment FirewallContextInterfaceCapabilityFields on ManagedFirewallContext {
               node {
                 ... on TopologyRoutedExchange {
                   id
-                  namespace_a { node { name { value } namespace_type { value } } }
-                  namespace_z { node { name { value } namespace_type { value } } }
                   gateway { node { id tenant { node { id } } } }
                 }
               }

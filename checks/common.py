@@ -6,6 +6,7 @@ from infrahub_sdk.checks import InfrahubCheck
 
 from utils.data_cleaning import get_data
 from utils.exchange_transit import (
+    EXCHANGE_PEERS,
     OFFSET_MEMBER_A,
     OFFSET_MEMBER_B,
     TRANSIT_SLOT,
@@ -14,6 +15,7 @@ from utils.exchange_transit import (
 )
 
 TRANSIT_PREFIXLEN = 29
+TRANSIT_LEGS_PER_EXCHANGE = 2
 
 __all__ = [
     "BaseDeviceCheck",
@@ -140,7 +142,7 @@ def validate_exchange_gateways(data: dict[str, Any]) -> list[str]:
 
     Per exchange cap on this device's interfaces:
 
-    - exactly one leg in namespace_a and one in namespace_z, none elsewhere;
+    - exactly one leg in each of two namespaces that EXCHANGE_PEERS allows to be exchanged;
     - each leg's address is a member address (.5 / .6) of a /29 in its namespace;
     - the leg is tagged with the exchange's gateway context;
     - the sub-interface VLAN (``<uplink>.<vlan>``) is
@@ -164,35 +166,38 @@ def validate_exchange_gateways(data: dict[str, Any]) -> list[str]:
     for exchange_id, exchange in exchanges.items():
         exchange_name = exchange.get("name", exchange_id)
         label = f"RoutedExchange '{exchange_name}' on '{device_name}'"
-        sides = {"namespace_a": exchange.get("namespace_a") or {}, "namespace_z": exchange.get("namespace_z") or {}}
         by_namespace: dict[str, list[str]] = {}
+        types: dict[str, str | None] = {}
 
         for interface, context in legs[exchange_id]:
             iface_name = interface.get("name", "unknown")
             ip_address = interface.get("ip_address") or {}
             address = ip_address.get("address")
-            namespace = (ip_address.get("ip_namespace") or {}).get("name")
-            if not address or not namespace:
+            namespace = ip_address.get("ip_namespace") or {}
+            namespace_name = namespace.get("name")
+            if not address or not namespace_name:
                 errors.append(f"{label}: leg '{iface_name}' has no IP address / namespace assigned.")
                 continue
-            by_namespace.setdefault(namespace, []).append(iface_name)
+            by_namespace.setdefault(namespace_name, []).append(iface_name)
+            types[namespace_name] = namespace.get("namespace_type")
+            errors.extend(_validate_leg(label, iface_name, address, namespace.get("namespace_type"), context, exchange))
 
-            side = next((s for s in sides.values() if s.get("name") == namespace), None)
-            if side is None:
+        for namespace_name, iface_names in by_namespace.items():
+            if len(iface_names) != 1:
                 errors.append(
-                    f"{label}: leg '{iface_name}' is in namespace '{namespace}', which is neither "
-                    f"namespace_a ({sides['namespace_a'].get('name')}) nor namespace_z "
-                    f"({sides['namespace_z'].get('name')}). Exchange namespaces: a={exchange.get('namespace_a')!r} z={exchange.get('namespace_z')!r}."
+                    f"{label} has {len(iface_names)} legs in namespace '{namespace_name}' "
+                    f"({', '.join(iface_names)}) — exactly 1 is required."
                 )
-                continue
-            errors.extend(_validate_leg(label, iface_name, address, side, context, exchange))
-
-        for side_name, side in sides.items():
-            count = len(by_namespace.get(side.get("name") or "", []))
-            if count != 1:
-                errors.append(
-                    f"{label} has {count} leg(s) in {side_name} '{side.get('name')}' — exactly 1 is required."
-                )
+        if len(by_namespace) != TRANSIT_LEGS_PER_EXCHANGE:
+            errors.append(
+                f"{label} has legs in {len(by_namespace)} namespace(s) {sorted(by_namespace)} — exactly "
+                f"{TRANSIT_LEGS_PER_EXCHANGE} (the tenant VRF and its peer) are required."
+            )
+        elif not _is_allowed_pair(set(types.values())):
+            errors.append(
+                f"{label} joins namespaces {sorted(by_namespace)} of types {sorted(str(t) for t in types.values())}, "
+                "which is not an allowed pair (a tenant VRF is exchanged only with its EXCHANGE_PEERS)."
+            )
 
     return errors
 
@@ -201,7 +206,7 @@ def _validate_leg(
     label: str,
     iface_name: str,
     address: str,
-    side: dict[str, Any],
+    ns_type: str | None,
     context: dict[str, Any] | None,
     exchange: dict[str, Any],
 ) -> list[str]:
@@ -221,7 +226,6 @@ def _validate_leg(
         errors.append(f"{label}: leg '{iface_name}' is not tagged with the exchange's gateway context.")
         return errors
 
-    ns_type = side.get("namespace_type")
     context_vlan = context.get("vlan_id")
     suffix = iface_name.rsplit(".", 1)[-1]
     if ns_type not in TRANSIT_SLOT or not isinstance(context_vlan, int):
@@ -235,3 +239,12 @@ def _validate_leg(
             f"(context VLAN {context_vlan} in a {ns_type} namespace)."
         )
     return errors
+
+
+def _is_allowed_pair(types: set[str | None]) -> bool:
+    """Whether two namespace types are a tenant VRF and one of its EXCHANGE_PEERS."""
+    return any(
+        tenant in types and peer in types and len(types) == TRANSIT_LEGS_PER_EXCHANGE
+        for tenant, peers in EXCHANGE_PEERS.items()
+        for peer in peers
+    )
