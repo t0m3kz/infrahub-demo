@@ -38,51 +38,9 @@ generics:
   - name: ExchangeGateway
     namespace: Topology
     description: "How traffic is exchanged between two IP namespaces (VRFs)"
-    # customer_deployments (below) is the reverse-lookup this generic was
-    # missing: namespace_a/namespace_z point at the IpamNamespace VRFs, but
-    # nothing pointed back at the deployment that namespace belongs to — the
-    # only way to find "which exchange serves this deployment" was to
-    # recompute its namespace name ({org_id}-{environment}) and search by
-    # it. Peer is TopologyDeployment because a hub region's namespace also
-    # participates as a bare namespace_a/namespace_z reference with no
-    # customer_deployments entry of its own — see the reverse extension
-    # below, which is scoped to TopologyCustomer (CustomerDC/Colocation/
-    # Cloud/Office), the only kinds this generator ever links here.
-    # ExchangeGatewayGenerator populates this on every customer deployment it
-    # processes.
     label: "Exchange Gateway"
     icon: "mdi:swap-horizontal"
     include_in_menu: false
-    human_friendly_id:
-      - name__value
-    order_by:
-      - name__value
-    display_label: "{{ name__value }}"
-    attributes:
-      - name: name
-        kind: Text
-        order_weight: 100
-      - name: description
-        kind: Text
-        optional: true
-        order_weight: 200
-      - name: status
-        kind: Dropdown
-        order_weight: 300
-        default_value: active
-        choices:
-          - name: provisioning
-            label: Provisioning
-            description: "Exchange is being configured"
-            color: "#FFFF7F"
-          - name: active
-            label: Active
-            description: "Exchange is live and carrying traffic"
-            color: "#7FBF7F"
-          - name: decommissioned
-            label: Decommissioned
-            description: "Exchange has been removed"
-            color: "#BFBFBF"
     relationships:
       - name: namespace_a
         label: "Namespace A"
@@ -104,81 +62,8 @@ generics:
         identifier: "exchange_gateway__namespace_z"
         order_weight: 1100
         description: "Second VRF/namespace participating in the exchange"
-      - name: customer_deployments
-        label: "Customer Deployments"
-        peer: TopologyDeployment
-        cardinality: many
-        kind: Attribute
-        optional: true
-        identifier: "exchange_gateway__customer_deployments"
-        order_weight: 1200
-        description: "Deployment(s) (customer DC/Colo/Cloud, office, or hub region) this exchange was provisioned for"
-      - name: common_exchange
-        label: "Common Exchange"
-        peer: TopologyCommonExchange
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: "exchange_gateway__common_exchange"
-        order_weight: 1300
-        description: "Provider-owned common exchange domain this customer exchange belongs to"
 
 nodes:
-  - name: CommonExchange
-    namespace: Topology
-    description: "Provider-owned shared exchange domain that can span many topology deployments"
-    label: "Common Exchange"
-    icon: "mdi:swap-vertical-bold"
-    include_in_menu: false
-    human_friendly_id:
-      - name__value
-    order_by:
-      - name__value
-    display_label: "{{ name__value }}"
-    uniqueness_constraints:
-      - [name__value]
-    attributes:
-      - name: name
-        kind: Text
-        order_weight: 100
-      - name: description
-        kind: Text
-        optional: true
-        order_weight: 200
-      - name: is_default
-        kind: Boolean
-        optional: true
-        default_value: false
-        order_weight: 300
-    relationships:
-      - name: namespace
-        label: "Exchange Namespace"
-        peer: IpamNamespace
-        cardinality: one
-        kind: Attribute
-        optional: false
-        identifier: "common_exchange__namespace"
-        order_weight: 1000
-        description: "Shared exchange VRF namespace used as the default provider exchange target"
-      - name: deployments
-        label: "Deployments"
-        peer: TopologyDeployment
-        cardinality: many
-        kind: Attribute
-        optional: true
-        identifier: "common_exchange__deployments"
-        order_weight: 1100
-        description: "Topology deployments where this common exchange is active"
-      - name: exchange_gateways
-        label: "Exchange Gateways"
-        peer: TopologyExchangeGateway
-        cardinality: many
-        kind: Generic
-        optional: true
-        identifier: "exchange_gateway__common_exchange"
-        order_weight: 1200
-        description: "Customer exchange gateways attached to this common exchange"
-
   - name: RoutedExchange
     namespace: Topology
     description: "Inter-VRF routed hop through one device — no fabric-wide route leak"
@@ -254,24 +139,3 @@ nodes:
 # empty: a pure fabric RT-leak has no interface at all. Set only when the
 # leak requires a DCI transport hop (interfaces on the circuit-facing ports
 # at each side).
-
-extensions:
-  nodes:
-    # Reverse lookup lives on TopologyCustomer (not the bare TopologyDeployment
-    # generic): ExchangeGatewayGenerator only ever puts a concrete
-    # TopologyCustomerDC/Colocation/Cloud/Office id in customer_deployments —
-    # never a physical container's (DataCenter/ColocationMetro/CloudRegion),
-    # even when that container is itself a hub side of the exchange (a hub's
-    # namespace_a/namespace_z reference is enough; it needs no reverse link
-    # of its own). TopologyCustomerOffice already gets this via TopologyCustomer.
-    - kind: TopologyCustomer
-      relationships:
-        - name: exchange_gateways
-          label: "Exchange Gateways"
-          peer: TopologyExchangeGateway
-          kind: Generic
-          cardinality: many
-          optional: true
-          identifier: "exchange_gateway__customer_deployments"
-          order_weight: 2200
-          description: "Exchange gateway(s) provisioned for this deployment's namespace"
