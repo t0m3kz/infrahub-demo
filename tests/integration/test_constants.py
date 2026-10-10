@@ -421,6 +421,39 @@ ALL_DEMO_DEDICATED_FIREWALL_TENANTS: dict[str, str] = {
 }
 
 # ---------------------------------------------------------------------------
+# 30_all — internet egress rules (07_zone_policies/05_security_policy.yml)
+#
+# A hand-written permit from a tenant segment to the Internet segment
+# (data/bootstrap/27_external_segments.yml: no prefix, INTERNET-ZONE). The
+# firewall renders it to INTERNET-ZONE with destination any; the source leaf's
+# ACL denies every NON_INTERNET_PREFIXES range before the permit to any.
+# ---------------------------------------------------------------------------
+
+
+class InternetEgressRule(TypedDict):
+    """One permit to the Internet segment."""
+
+    #: DC whose shared firewall context serves `source_segment`.
+    dc: str
+    source_segment: str
+    destination_segment: str
+    destination_zone: str
+    protocol: str
+    port: int
+
+
+ALL_DEMO_INTERNET_EGRESS_RULES: dict[str, InternetEgressRule] = {
+    "nordix-prod-to-internet-https": {
+        "dc": "DC11",
+        "source_segment": "c006-nordix-prod-p",
+        "destination_segment": "internet-internet-p",
+        "destination_zone": "INTERNET-ZONE",
+        "protocol": "tcp",
+        "port": 443,
+    },
+}
+
+# ---------------------------------------------------------------------------
 # 30_all — inter-VRF exchange legs through the firewall contexts (PR 3)
 #
 # Everything below is DERIVED, not hand-counted. A context's legs are its

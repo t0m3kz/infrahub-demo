@@ -111,6 +111,22 @@ class TestFirewallCheck:
         assert len(check._captured_errors) == 1
         assert "has no destination selector" in check._captured_errors[0]
 
+    def test_apply_on_switch_to_a_prefix_less_segment_raises_error(self) -> None:
+        dst = {**_ref("seg-b"), "security_zone": _node({"name": _v("INTERNET-ZONE")})}
+        rule = _rule("rule-1", apply_on_switch=_v(True), destination_segment=_node(dst))
+        check = _validate(_carried("seg-a", _policy([rule])))
+        assert len(check._captured_errors) == 1
+        assert "apply_on_switch to destination segment 'seg-b'" in check._captured_errors[0]
+
+    def test_apply_on_switch_to_a_segment_with_a_prefix_passes(self) -> None:
+        dst = {**_ref("seg-b"), "gateway": _node({"ip_prefix": _node({"prefix": _v("10.2.0.0/24")})})}
+        rule = _rule("rule-1", apply_on_switch=_v(True), destination_segment=_node(dst))
+        assert _validate(_carried("seg-a", _policy([rule])))._captured_errors == []
+
+    def test_permit_to_a_prefix_less_segment_without_apply_on_switch_passes(self) -> None:
+        check = _validate(_carried("seg-a", _policy([_rule("rule-1", apply_on_switch=_v(False))])))
+        assert check._captured_errors == []
+
     def test_prefix_destination_counts_as_selector(self) -> None:
         """A prefix-only destination is a complete selector and needs no zone."""
         rule = _rule(

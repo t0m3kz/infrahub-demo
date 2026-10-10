@@ -58,3 +58,35 @@ spec:
               - ["198.51.100.0/24", "default"]
             log: false
             description: "Nordix web tier to Zscaler cloud security PoP"
+---
+# Internet egress of DC11. C006's "nordix-prod" segment (VLAN 103, DC11's
+# shared PAN-OS firewall context) may open https to the Internet segment
+# (data/bootstrap/27_external_segments.yml): a segment with no prefix, in
+# INTERNET-ZONE. The firewall renders it as zone INTERNET-ZONE, destination
+# any. The leaf ACL cannot say "anything but internal", so it denies every
+# NON_INTERNET_PREFIXES range first and only then permits any
+# (transforms/helpers/acl.py). apply_on_switch stays false: a switch-enforced
+# rule would pull the segment's whole ACL onto the leaf (_leaf_enforces).
+# Index below 100 like the hand-written rules above.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityPolicy
+  data:
+    - name: seg-c006-nordix-prod-p-egress
+      description: "Egress contract of c006-nordix-prod-p, incl. its internet egress"
+      segment: "c006-nordix-prod-p"
+      default_action: deny
+      enabled: true
+      rules:
+        data:
+          - index: 10
+            name: nordix-prod-to-internet-https
+            action: permit
+            protocol: tcp
+            port_start: 443
+            source_segment: "c006-nordix-prod-p"
+            destination_segment: "internet-internet-p"
+            apply_on_switch: false
+            log: false
+            description: "Lumivex ERP tier to the internet over https, through the DC11 firewall"
