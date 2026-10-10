@@ -90,7 +90,7 @@ generics:
         cardinality: one
         kind: Attribute
         optional: false
-        on_delete: cascade
+        on_delete: no-action
         identifier: "exchange_gateway__namespace_a"
         order_weight: 1000
         description: "First VRF/namespace participating in the exchange"
@@ -100,7 +100,7 @@ generics:
         cardinality: one
         kind: Attribute
         optional: false
-        on_delete: cascade
+        on_delete: no-action
         identifier: "exchange_gateway__namespace_z"
         order_weight: 1100
         description: "Second VRF/namespace participating in the exchange"
