@@ -26,7 +26,7 @@ from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool, CoreNumb
 if TYPE_CHECKING:
     import logging
 
-from .helpers.pools import CUSTOMER_VLAN_ID_MAX
+from .helpers.pools import FW_CONTEXT_VLAN_END
 from .logger import GeneratorError
 from .protocols import TopologyPod
 
@@ -278,7 +278,7 @@ class PoolMixin:
         parent_pool_name: str,
         slice_prefix_length: int,
         default_prefix_length: int,
-        vlan_end: int = CUSTOMER_VLAN_ID_MAX,
+        vlan_end: int = FW_CONTEXT_VLAN_END,
     ) -> None:
         """Create a fabric's/metro's FirewallContext VLAN + P2P prefix pools.
 

@@ -66,7 +66,7 @@ from ..common import CommonGenerator, DeviceOptions
 from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
 from ..devices import DeviceMixin
 from ..helpers import get_loopback_name
-from ..helpers.pools import name_to_asn_range
+from ..helpers.pools import FW_CONTEXT_VLAN_START, name_to_asn_range
 from ..pools import PoolMixin
 from ..protocols import DcimVirtualInterface, ManagedBGP, TopologyColocationMetro
 from ..routing import RoutingMixin
@@ -149,9 +149,8 @@ _COLO_VTEP_LOOPBACK_INDEX = 1
 # segments) and the 50001-59999 L3 VNI range.
 _COLO_VNI_RANGE = (10001, 39999)
 # FirewallContext sub-interfaces (see _ensure_firewall_context_pools): the
-# same VLAN range as a DC's, and a /24 slice of FW-Context-P2P-IPv4 cut into
+# same VLAN range as a DC's (FW_CONTEXT_VLAN_START/END), and a /24 slice of FW-Context-P2P-IPv4 cut into
 # /31 links, one per firewall member per context.
-_COLO_FW_CONTEXT_VLAN_START = 3000
 _COLO_FW_CONTEXT_P2P_SLICE_LENGTH = 24
 
 
@@ -448,7 +447,7 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         """
         await self.ensure_firewall_context_pools(
             name=self.fabric_name,
-            vlan_start=_COLO_FW_CONTEXT_VLAN_START,
+            vlan_start=FW_CONTEXT_VLAN_START,
             parent_pool_name="FW-Context-P2P-IPv4",
             slice_prefix_length=_COLO_FW_CONTEXT_P2P_SLICE_LENGTH,
             default_prefix_length=31,

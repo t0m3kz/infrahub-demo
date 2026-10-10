@@ -11,6 +11,7 @@ from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
 from ..dc_config import host_bits_to_prefix_length, resolve_dc_size_layout
 from ..devices import DeviceMixin
 from ..helpers import name_to_asn_range
+from ..helpers.pools import FW_CONTEXT_VLAN_START
 from ..helpers.routing import RoutingStrategy, p2p_is_ipv6
 from ..helpers.template_interfaces import template_interface_names_by_role
 from ..pod_config import POD_LAYOUTS, templates_by_role
@@ -654,7 +655,7 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
         use_ipv6 = p2p_is_ipv6(underlay_protocol)
         await self.ensure_firewall_context_pools(
             name=dc_name,
-            vlan_start=3000,
+            vlan_start=FW_CONTEXT_VLAN_START,
             parent_pool_name="FW-Context-P2P-IPv6" if use_ipv6 else "FW-Context-P2P-IPv4",
             slice_prefix_length=56 if use_ipv6 else 24,
             default_prefix_length=127 if use_ipv6 else 31,

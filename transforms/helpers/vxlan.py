@@ -24,7 +24,7 @@ _log = logging.getLogger(__name__)
 # at all — they bind the VRF to the VNI directly — so this is NX-OS-only.
 #
 # 3900-3967 sits above the customer VLAN ceiling (CUSTOMER_VLAN_ID_MAX in
-# generators/helpers/pools.py, which is capped at 3899 for exactly this reason)
+# generators/helpers/pools.py, which is capped at 2999 so the firewall-context and transit bands fit below)
 # and below NX-OS's own internally-reserved 3968-4094.
 _L3VNI_SVI_VLAN_BASE = 3900
 _L3VNI_SVI_VLAN_MAX = 3967

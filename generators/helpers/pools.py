@@ -19,16 +19,26 @@ DEFAULT_ASN_BASE_START = 4200000000
 #   * 3968-4094 is Cisco NX-OS's default internally-reserved VLAN band
 #     (`system vlan reserve`), and 4094 is the conventional vPC peer-keepalive
 #     VLAN — a segment allocated there is rejected by the device.
+#   * 3000-3899 is not customer space either: 3000-3199 is the FirewallContext
+#     VLAN pool (FW_CONTEXT_VLAN_START/END below), and the firewall's per-VRF
+#     transit VLANs (context VLAN + 200 per namespace slot) fill 3000-3799. A
+#     customer VLAN there would collide on a border leaf's service-port trunk,
+#     where get_vlans silently de-duplicates by VLAN ID.
 #   * 3900-3967 is reserved by this project for the per-VRF L3 VNI SVI that
 #     NX-OS requires to route between VNIs (symmetric IRB). That SVI carries
 #     no hosts and exists only to hang `ip forward` off, but it still consumes
 #     a local VLAN ID, so it must not collide with a customer segment. See
 #     _L3VNI_SVI_VLAN_BASE in transforms/helpers/vxlan.py.
 #
-# 3800 usable customer VLANs per domain is far beyond any real VLAN domain
+# 2900 usable customer VLANs per domain is far beyond any real VLAN domain
 # (an MLAG leaf pair), so the narrower ceiling costs nothing.
 CUSTOMER_VLAN_ID_MIN = 100
-CUSTOMER_VLAN_ID_MAX = 3899
+CUSTOMER_VLAN_ID_MAX = 2999
+
+# FirewallContext VLAN pool of every fabric/metro (one context = one VLAN on the
+# firewall uplink and the border-leaf service port).
+FW_CONTEXT_VLAN_START = 3000
+FW_CONTEXT_VLAN_END = 3199
 
 
 def calculate_fabric_asn_block_size(

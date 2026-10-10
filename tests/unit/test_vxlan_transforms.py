@@ -1885,11 +1885,11 @@ class TestL3VniSviVlanAssignment:
         assert forward == reversed_order
 
     def test_band_is_above_the_customer_vlan_ceiling(self) -> None:
-        """CUSTOMER_VLAN_ID_MAX is 3899 precisely so this band cannot collide
-        with a customer segment's VLAN."""
-        from generators.helpers.pools import CUSTOMER_VLAN_ID_MAX
+        """The customer ceiling sits below the firewall-context and transit
+        bands, which sit below this band, so none can collide."""
+        from generators.helpers.pools import CUSTOMER_VLAN_ID_MAX, FW_CONTEXT_VLAN_END
 
-        assert CUSTOMER_VLAN_ID_MAX < _L3VNI_SVI_VLAN_BASE
+        assert CUSTOMER_VLAN_ID_MAX < FW_CONTEXT_VLAN_END + 600 < _L3VNI_SVI_VLAN_BASE
 
     def test_band_is_below_the_nxos_reserved_range(self) -> None:
         """NX-OS reserves 3968-4094 for its own internal use."""
