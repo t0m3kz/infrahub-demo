@@ -32,6 +32,7 @@ test_constants' environment-driven expectations.
 from __future__ import annotations
 
 import ipaddress
+import json
 import logging
 import re
 from pathlib import Path
@@ -306,6 +307,14 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         passed = await check.run()
 
         errors = [str(entry.get("message") or "") for entry in check.logs if entry.get("level") == "ERROR"]
+        if errors:
+            raw = await async_client_main.query_gql_query(
+                name="firewall_config", branch_name=scenario_branch, variables={"device": member}
+            )
+            exchange_caps = [
+                cap for edge in json.dumps(raw).split('"TopologyRoutedExchange"')[1:2] for cap in [edge[:900]]
+            ]
+            errors.append(f"raw exchange capability (first): {exchange_caps}")
         assert passed and not errors, f"CheckFirewall failed on {dc} member {member}:\n" + "\n".join(
             f"  - {e}" for e in errors
         )
