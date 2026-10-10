@@ -1,0 +1,26 @@
+---
+# Networks outside every customer's control. The internet is a segment so
+# policy rules can name it as a source or destination like any other; it has
+# no prefix, gateway or deployment; its owner is the Internet
+# pseudo-customer, because a segment's name is computed from its owner
+# (generators/segment_firewall.py resolves its zone like any segment's).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: OrganizationCustomer
+  data:
+    - name: "Internet"
+      org_id: "INTERNET"
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedExternalSegment
+  data:
+    - owner: "INTERNET"
+      customer_name: "Internet"
+      description: "The public internet — any address outside the managed namespaces"
+      segment_type: vlan
+      segment_role: dmz
+      pbr_enabled: false
+      security_zone: "INTERNET-ZONE"

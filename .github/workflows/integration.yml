@@ -1,0 +1,50 @@
+---
+name: Integration
+# The integration suite loads schemas, bootstrap data and this repository into
+# a throwaway Infrahub stack (docker compose), so it needs a runner with Docker.
+# Manual only (Actions > Integration > Run workflow); not a PR or release gate yet.
+#   fast     schema + bootstrap + repository sync, ~5 min
+#   all-demo the 30_all demo and every layer it produces, ~25 min
+on:
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: "Integration scope"
+        type: choice
+        options:
+          - fast
+          - all-demo
+        default: fast
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    name: Integration (${{ inputs.scope }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      INFRAHUB_TESTING_LOG_LEVEL: INFO
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          pip install uv
+          uv sync
+      - name: Run integration suite
+        run: |
+          case "${{ inputs.scope }}" in
+            all-demo) uv run invoke test-integration-all-demo ;;
+            *) uv run invoke test-integration-fast ;;
+          esac
+      - name: Remove leftover test containers
+        if: always()
+        run: uv run invoke clean-testcontainers

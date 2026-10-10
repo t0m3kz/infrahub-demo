@@ -54,6 +54,21 @@ nodes:
         identifier: "segment__customer_deployments"
         description: "Customer deployment footprint this VLAN segment is activated in."
 
+  # A network outside every customer's control (the internet): classified into
+  # a zone and matched by policy rules like any segment. It has an owner (the
+  # Internet pseudo-customer) only because the segment name is computed from it;
+  # it is never activated, gatewayed or terminated anywhere.
+  - name: ExternalSegment
+    namespace: Managed
+    description: "Network outside customer control (internet), matched by policy rules"
+    label: External Segment
+    icon: "carbon:cloud"
+    include_in_menu: false
+    inherit_from:
+      - ManagedNetworkSegment
+    uniqueness_constraints:
+      - [owner, environment__value, customer_name__value]
+
   # VXLAN overlay segment with EVPN multi-tenancy.
   # Zero trust: prefix → ip_namespace (VRF+l3_vni+owner) → tenant isolation.
   # For stretched segments, generator behavior is local-pool-first: first

@@ -6,16 +6,15 @@ identical logic — but focuses on what's colocation-specific: the parent is a
 TopologyColocationMetro, not a TopologyDataCenter, and its fabric-tier devices
 carry role=edge, never border-leaf (see _COLO_VALID_FABRIC_ROLES in
 generators/topology/colocation.py). TestEnsureContextSubinterface below is
-the regression test for that role mismatch: before the fix, the PBR-pairing
-lookup filtered on role__value="border-leaf" and always returned empty at a
-colocation metro, silently no-opping the whole customer-segment-to-firewall
-PBR pairing.
+the regression test for that role mismatch: the PBR peer is resolved by
+following the firewall uplink's cable to its edge-side service port, never by
+a border-leaf role filter (which would always be empty at a colocation metro).
 """
 
 from __future__ import annotations
 
 from typing import Any, TypeVar
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -57,7 +56,7 @@ def _colo_payload(*, customer_id: str = "cust-1") -> dict:
 
 
 def _fw_device(*, id: str = "fw-1", name: str = "FR5-METRO-FW1", platform: str = "checkpoint_gaia") -> dict:
-    return {"id": id, "name": name, "platform": {"name": platform}}
+    return {"id": id, "name": name, "kind": "DcimPhysicalDevice", "platform": {"name": platform}}
 
 
 def _colo_payload_with_parent(
@@ -463,11 +462,27 @@ class TestEnsureDedicatedLoadbalancer:
         gen.client.create.assert_not_called()
 
 
+def _uplink(*, id: str, cabled: bool = True) -> MagicMock:
+    """A firewall uplink interface, optionally with a cable attached."""
+    uplink = MagicMock(id=id)
+    uplink.name.value = "Ethernet1/25"
+    uplink.cable.id = f"cable-{id}" if cabled else None
+    return uplink
+
+
+def _edge_port(*, id: str, device_id: str = "edge-1", role: str = "firewall") -> MagicMock:
+    """An edge-side service port with its device."""
+    port = MagicMock(id=id)
+    port.role.value = role
+    port.device.id = device_id
+    port.device.display_label = device_id.upper()
+    return port
+
+
 class TestEnsureContextSubinterface:
-    """Regression coverage for the role__value fix: ColocationMetroGenerator
-    (generators/topology/colocation.py) only ever creates edge/firewall/
-    load-balancer role devices at a metro — never border-leaf, which is a
-    DC-only role. Before the fix this lookup always returned [] here."""
+    """ColocationMetroGenerator only creates edge/firewall/load-balancer role
+    devices at a metro (never border-leaf), so the PBR peer is whichever edge
+    service port (role firewall) the firewall's uplink is cabled to."""
 
     def _make_gen(self) -> Any:
         gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
@@ -476,47 +491,49 @@ class TestEnsureContextSubinterface:
         context_obj.vlan_id.value = 3000
         gen._create_context_subinterface = AsyncMock(side_effect=lambda **kwargs: MagicMock())
         gen._allocate_context_p2p = AsyncMock(return_value=("fw-ip-id", "edge-ip-id"))
+        gen.find_role_interface = AsyncMock(side_effect=lambda device_id, role: _uplink(id=f"up-{device_id}"))
         return gen, context_obj
 
+    @staticmethod
+    def _fw(id: str) -> MagicMock:
+        fw = MagicMock(id=id, hosting_device=None)
+        fw.name.value = id
+        return fw
+
     @pytest.mark.asyncio
-    async def test_pbr_mode_filters_by_edge_role_not_border_leaf(self) -> None:
+    async def test_pbr_mode_peer_is_the_cabled_edge_firewall_port(self) -> None:
+        """The peer sub-interface goes on the edge port at the far end of the uplink cable."""
         gen, context_obj = self._make_gen()
-        fw1 = MagicMock(id="fw-1")
-        fw1.name.value = "fw-1"
-        edge1 = MagicMock(id="edge-1")
-        gen.client.filters = AsyncMock(return_value=[edge1])
+        port = _edge_port(id="edge-port-1")
+        far_end = AsyncMock(return_value=port)
+        with patch("generators.firewall_context.far_end_interface", far_end):
+            await gen._ensure_context_subinterface(
+                context_obj=context_obj,
+                fw_devices=[self._fw("fw-1")],
+                parent_name="FR5-METRO",
+                connectivity_mode="pbr",
+            )
 
-        await gen._ensure_context_subinterface(
-            context_obj=context_obj,
-            fw_devices=[fw1],
-            parent_id="fr5-metro-id",
-            parent_name="FR5-METRO",
-            connectivity_mode="pbr",
-        )
-
-        gen.client.filters.assert_awaited_once()
-        call_kwargs = gen.client.filters.call_args.kwargs
-        assert call_kwargs["deployment__ids"] == ["fr5-metro-id"]
-        assert call_kwargs["role__value"] == "edge"
+        assert far_end.call_args.args[1].id == "up-fw-1"
         assert gen._create_context_subinterface.await_count == 2
+        peer_call = gen._create_context_subinterface.call_args_list[1].kwargs
+        assert peer_call["device_id"] == "edge-1"
+        assert peer_call["trunk_iface"] is port
+        gen.client.filters.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_track_false_reaches_both_sides_and_the_p2p(self) -> None:
         """Shared context: fw-side and edge-side sub-interfaces and the P2P
         allocation all get track=False — every cage reaches them."""
         gen, context_obj = self._make_gen()
-        fw1 = MagicMock(id="fw-1")
-        fw1.name.value = "fw-1"
-        gen.client.filters = AsyncMock(return_value=[MagicMock(id="edge-1")])
-
-        await gen._ensure_context_subinterface(
-            context_obj=context_obj,
-            fw_devices=[fw1],
-            parent_id="fr5-metro-id",
-            parent_name="FR5-METRO",
-            connectivity_mode="pbr",
-            track=False,
-        )
+        with patch("generators.firewall_context.far_end_interface", AsyncMock(return_value=_edge_port(id="ep-1"))):
+            await gen._ensure_context_subinterface(
+                context_obj=context_obj,
+                fw_devices=[self._fw("fw-1")],
+                parent_name="FR5-METRO",
+                connectivity_mode="pbr",
+                track=False,
+            )
 
         assert [c.kwargs["track"] for c in gen._create_context_subinterface.call_args_list] == [False, False]
         assert gen._allocate_context_p2p.call_args.kwargs["track"] is False
@@ -531,13 +548,10 @@ class TestEnsureContextSubinterface:
         refetched = MagicMock(id="ctx-1")
         refetched.vlan_id.value = 3001
         gen.client.get = AsyncMock(side_effect=[MagicMock(id="vlan-pool-1"), refetched])
-        fw1 = MagicMock(id="fw-1")
-        fw1.name.value = "fw-1"
 
         await gen._ensure_context_subinterface(
             context_obj=context_obj,
-            fw_devices=[fw1],
-            parent_id="fr5-metro-id",
+            fw_devices=[self._fw("fw-1")],
             parent_name="FR5-METRO",
             connectivity_mode="inline",
             track=False,
@@ -548,20 +562,18 @@ class TestEnsureContextSubinterface:
 
     @pytest.mark.asyncio
     async def test_pbr_mode_creates_subinterface_pair_per_firewall(self) -> None:
+        """Each firewall gets its own sub-interface plus one on its cabled edge port."""
         gen, context_obj = self._make_gen()
-        fw1, fw2 = MagicMock(id="fw-1"), MagicMock(id="fw-2")
-        fw1.name.value = "fw-1"
-        fw2.name.value = "fw-2"
-        edge1, edge2 = MagicMock(id="edge-1"), MagicMock(id="edge-2")
-        gen.client.filters = AsyncMock(return_value=[edge1, edge2])
-
-        await gen._ensure_context_subinterface(
-            context_obj=context_obj,
-            fw_devices=[fw1, fw2],
-            parent_id="fr5-metro-id",
-            parent_name="FR5-METRO",
-            connectivity_mode="pbr",
-        )
+        ports = {"up-fw-1": _edge_port(id="p1", device_id="edge-1"), "up-fw-2": _edge_port(id="p2", device_id="edge-2")}
+        with patch(
+            "generators.firewall_context.far_end_interface", AsyncMock(side_effect=lambda c, i, include: ports[i.id])
+        ):
+            await gen._ensure_context_subinterface(
+                context_obj=context_obj,
+                fw_devices=[self._fw("fw-1"), self._fw("fw-2")],
+                parent_name="FR5-METRO",
+                connectivity_mode="pbr",
+            )
 
         assert gen._create_context_subinterface.await_count == 4
         device_ids_used = [c.kwargs["device_id"] for c in gen._create_context_subinterface.call_args_list]
@@ -569,19 +581,38 @@ class TestEnsureContextSubinterface:
         assert gen._allocate_context_p2p.await_count == 2
 
     @pytest.mark.asyncio
-    async def test_pbr_mode_no_edge_device_found_is_a_hard_error(self) -> None:
+    async def test_pbr_mode_uncabled_uplink_is_a_hard_error(self) -> None:
+        """An uplink without a cable logs an error, creates nothing and allocates no P2P."""
         gen, context_obj = self._make_gen()
-        fw1 = MagicMock(id="fw-1")
-        fw1.name.value = "fw-1"
-        gen.client.filters = AsyncMock(return_value=[])
-
-        await gen._ensure_context_subinterface(
-            context_obj=context_obj,
-            fw_devices=[fw1],
-            parent_id="fr5-metro-id",
-            parent_name="FR5-METRO",
-            connectivity_mode="pbr",
-        )
+        gen.find_role_interface = AsyncMock(return_value=_uplink(id="up-1", cabled=False))
+        with patch("generators.firewall_context.far_end_interface", AsyncMock()) as far_end:
+            await gen._ensure_context_subinterface(
+                context_obj=context_obj,
+                fw_devices=[self._fw("fw-1")],
+                parent_name="FR5-METRO",
+                connectivity_mode="pbr",
+            )
 
         gen.logger.error.assert_called_once()
         gen._create_context_subinterface.assert_not_called()
+        gen._allocate_context_p2p.assert_not_called()
+        far_end.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_pbr_mode_far_end_not_firewall_port_is_skipped(self) -> None:
+        """A far end whose role is not `firewall` is rejected: error, no sub-interface, no P2P."""
+        gen, context_obj = self._make_gen()
+        with patch(
+            "generators.firewall_context.far_end_interface",
+            AsyncMock(return_value=_edge_port(id="p1", role="transit")),
+        ):
+            await gen._ensure_context_subinterface(
+                context_obj=context_obj,
+                fw_devices=[self._fw("fw-1")],
+                parent_name="FR5-METRO",
+                connectivity_mode="pbr",
+            )
+
+        gen.logger.error.assert_called_once()
+        gen._create_context_subinterface.assert_not_called()
+        gen._allocate_context_p2p.assert_not_called()
