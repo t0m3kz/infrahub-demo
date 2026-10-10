@@ -127,15 +127,18 @@ set cluster sync-interface {{ ha.ha_link }}
 {#- ClusterXL: each member keeps its own interface address; the cluster
     virtual IP of a segment the pair terminates inline is its gateway,
     defined on the cluster object through the management API. -#}
+{%- set cluster_if = namespace(n=0) %}
 {%- for context in contexts %}
 {%- for leg in context.legs if leg.virtual_ip %}
+{%- set cluster_if.n = cluster_if.n + 1 %}
 {%- set leg_name = leg.parent_interface.name + '.' + leg.vlan | string %}
-mgmt_cli set simple-cluster name "{{ ha.name }}" interfaces.add.1.name "{{ leg_name }}" interfaces.add.1.interface-type "cluster" interfaces.add.1.ip-address "{{ leg.virtual_ip.split('/')[0] }}" interfaces.add.1.network-mask "{{ leg.virtual_ip.split('/')[1] | int | cidr_to_netmask }}"
+mgmt_cli set simple-cluster name "{{ ha.name }}" interfaces.add.{{ cluster_if.n }}.name "{{ leg_name }}" interfaces.add.{{ cluster_if.n }}.interface-type "cluster" interfaces.add.{{ cluster_if.n }}.ip-address "{{ leg.virtual_ip.split('/')[0] }}" interfaces.add.{{ cluster_if.n }}.network-mask "{{ leg.virtual_ip.split('/')[1] | int | cidr_to_netmask }}"
 {%- endfor %}
 {%- endfor %}
 {%- for iface in fw_interfaces if iface.virtual_ip %}
+{%- set cluster_if.n = cluster_if.n + 1 %}
 {%- set iface_name = (iface.parent_interface.name + '.' + iface.vlan_id | string) if (iface.vlan_id and iface.parent_interface) else iface.name %}
-mgmt_cli set simple-cluster name "{{ ha.name }}" interfaces.add.1.name "{{ iface_name }}" interfaces.add.1.interface-type "cluster" interfaces.add.1.ip-address "{{ iface.virtual_ip.split('/')[0] }}" interfaces.add.1.network-mask "{{ iface.virtual_ip.split('/')[1] | int | cidr_to_netmask }}"
+mgmt_cli set simple-cluster name "{{ ha.name }}" interfaces.add.{{ cluster_if.n }}.name "{{ iface_name }}" interfaces.add.{{ cluster_if.n }}.interface-type "cluster" interfaces.add.{{ cluster_if.n }}.ip-address "{{ iface.virtual_ip.split('/')[0] }}" interfaces.add.{{ cluster_if.n }}.network-mask "{{ iface.virtual_ip.split('/')[1] | int | cidr_to_netmask }}"
 {%- endfor %}
 !
 {%- endif %}

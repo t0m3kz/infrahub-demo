@@ -77,15 +77,17 @@ configure service vpls "vpls-{{ mapping.vni }}" sap {{ interface.name }}:{{ mapp
 {%- endfor %}
 {%- if vrf_routes %}
 !
-! Exact-match export policy for the exchange statics (RM-VRF-STATIC-2-EVPN)
+! Exact-match export policy for the exchange statics (RM-VRF-STATIC-2-EVPN-<vrf>)
 !
-{%- for prefix in vrf_routes | map(attribute='prefix') | unique | list %}
-configure router "Base" policy-options prefix-list "PL-VRF-STATIC" prefix {{ prefix }} type exact
+{%- for vrf in vrf_routes | map(attribute='vrf') | unique | list %}
+{%- for prefix in vrf_routes | selectattr('vrf', 'equalto', vrf) | map(attribute='prefix') | unique | list %}
+configure router "Base" policy-options prefix-list "PL-VRF-STATIC-{{ vrf }}" prefix {{ prefix }} type exact
 {%- endfor %}
-configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN" entry-type named
-configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN" named-entry "10" from protocol name [static]
-configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN" named-entry "10" from prefix-list ["PL-VRF-STATIC"]
-configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN" named-entry "10" action action-type accept
+configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN-{{ vrf }}" entry-type named
+configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN-{{ vrf }}" named-entry "10" from protocol name [static]
+configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN-{{ vrf }}" named-entry "10" from prefix-list ["PL-VRF-STATIC-{{ vrf }}"]
+configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN-{{ vrf }}" named-entry "10" action action-type accept
+{%- endfor %}
 {%- endif %}
 {%- if vxlan.l3_vni_mappings %}
 !
@@ -112,7 +114,7 @@ configure service vprn {{ l3_mapping.l3_vni }} bgp-evpn vxlan bgp-instance 1 adm
 configure service vprn {{ l3_mapping.l3_vni }} static-routes route {{ route.prefix }} route-type unicast next-hop "{{ route.nexthop }}" admin-state enable
 {%- endfor %}
 {%- if vrf_routes | default([]) | selectattr('vrf', 'equalto', l3_mapping.vrf_name) | list %}
-configure service vprn {{ l3_mapping.l3_vni }} bgp-evpn vxlan export-policy ["RM-VRF-STATIC-2-EVPN"]
+configure service vprn {{ l3_mapping.l3_vni }} bgp-evpn vxlan export-policy ["RM-VRF-STATIC-2-EVPN-{{ l3_mapping.vrf_name }}"]
 {%- endif %}
 {%- endfor %}
 {%- endif %}
@@ -121,17 +123,20 @@ configure service vprn {{ l3_mapping.l3_vni }} bgp-evpn vxlan export-policy ["RM
 ! IRB Interfaces (anycast gateway) — one per bridged VLAN with a gateway
 !
 {%- for vlan in vlans if vlan.gateway_ip or vlan.gateway_ipv6 %}
-{%- set vni = vlan.get('vni', vlan.vlan_id) %}
-configure service vprn {{ vlan.get('l3_vni', vni) }} interface "int-vpls-{{ vni }}" admin-state enable
-configure service vprn {{ vlan.get('l3_vni', vni) }} interface "int-vpls-{{ vni }}" vpls "vpls-{{ vni }}"
+{#- get_vlans() carries no VNIs: the bridged VNI and VRF L3 VNI come from the VXLAN mapping of the same VLAN (transit VLANs set both themselves). -#}
+{%- set _map = (vxlan.l2_vni_mappings | default([]) | selectattr('vlan_id', 'equalto', vlan.vlan_id) | list | first) or {} %}
+{%- set vni = vlan.get('vni') or _map.get('vni') or vlan.vlan_id %}
+{%- set irb_vprn = vlan.get('l3_vni') or _map.get('l3_vni') or vni %}
+configure service vprn {{ irb_vprn }} interface "int-vpls-{{ vni }}" admin-state enable
+configure service vprn {{ irb_vprn }} interface "int-vpls-{{ vni }}" vpls "vpls-{{ vni }}"
 {%- if vxlan.anycast_gateway and vxlan.anycast_gateway.enabled %}
-configure service vprn {{ vlan.get('l3_vni', vni) }} interface "int-vpls-{{ vni }}" mac "{{ vxlan.anycast_gateway.mac }}"
+configure service vprn {{ irb_vprn }} interface "int-vpls-{{ vni }}" mac "{{ vxlan.anycast_gateway.mac }}"
 {%- endif %}
 {%- if vlan.gateway_ip %}
-configure service vprn {{ vlan.get('l3_vni', vni) }} interface "int-vpls-{{ vni }}" ipv4 primary-address "{{ vlan.gateway_ip }}"
+configure service vprn {{ irb_vprn }} interface "int-vpls-{{ vni }}" ipv4 primary-address "{{ vlan.gateway_ip }}"
 {%- endif %}
 {%- if vlan.gateway_ipv6 %}
-configure service vprn {{ vlan.get('l3_vni', vni) }} interface "int-vpls-{{ vni }}" ipv6 primary-address "{{ vlan.gateway_ipv6 }}"
+configure service vprn {{ irb_vprn }} interface "int-vpls-{{ vni }}" ipv6 primary-address "{{ vlan.gateway_ipv6 }}"
 {%- endif %}
 !
 {%- endfor %}

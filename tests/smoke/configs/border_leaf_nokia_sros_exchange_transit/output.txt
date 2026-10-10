@@ -150,15 +150,19 @@ configure service vpls "vpls-64401" sap Ethernet20:3401 admin-state enable
 configure service vpls "vpls-64401" sap Ethernet20:3401 create
 !
 !
-! Exact-match export policy for the exchange statics (RM-VRF-STATIC-2-EVPN)
+! Exact-match export policy for the exchange statics (RM-VRF-STATIC-2-EVPN-<vrf>)
 !
-configure router "Base" policy-options prefix-list "PL-VRF-STATIC" prefix 10.1.0.0/24 type exact
-configure router "Base" policy-options prefix-list "PL-VRF-STATIC" prefix 10.2.0.0/24 type exact
-configure router "Base" policy-options prefix-list "PL-VRF-STATIC" prefix 0.0.0.0/0 type exact
-configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN" entry-type named
-configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN" named-entry "10" from protocol name [static]
-configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN" named-entry "10" from prefix-list ["PL-VRF-STATIC"]
-configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN" named-entry "10" action action-type accept
+configure router "Base" policy-options prefix-list "PL-VRF-STATIC-INTERNET" prefix 10.1.0.0/24 type exact
+configure router "Base" policy-options prefix-list "PL-VRF-STATIC-INTERNET" prefix 10.2.0.0/24 type exact
+configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN-INTERNET" entry-type named
+configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN-INTERNET" named-entry "10" from protocol name [static]
+configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN-INTERNET" named-entry "10" from prefix-list ["PL-VRF-STATIC-INTERNET"]
+configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN-INTERNET" named-entry "10" action action-type accept
+configure router "Base" policy-options prefix-list "PL-VRF-STATIC-PROD" prefix 0.0.0.0/0 type exact
+configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN-PROD" entry-type named
+configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN-PROD" named-entry "10" from protocol name [static]
+configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN-PROD" named-entry "10" from prefix-list ["PL-VRF-STATIC-PROD"]
+configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN-PROD" named-entry "10" action action-type accept
 !
 ! Tenant VRF — one "vprn" per L3 VNI, IRB into each bridged VNI above
 !
@@ -173,7 +177,7 @@ configure service vprn 50003 bgp-evpn vxlan bgp-instance 1 vxlan-instance 1
 configure service vprn 50003 bgp-evpn vxlan bgp-instance 1 admin-state enable
 configure service vprn 50003 static-routes route 10.1.0.0/24 route-type unicast next-hop "100.66.32.4" admin-state enable
 configure service vprn 50003 static-routes route 10.2.0.0/24 route-type unicast next-hop "100.66.32.12" admin-state enable
-configure service vprn 50003 bgp-evpn vxlan export-policy ["RM-VRF-STATIC-2-EVPN"]
+configure service vprn 50003 bgp-evpn vxlan export-policy ["RM-VRF-STATIC-2-EVPN-INTERNET"]
 configure service vprn 50001 admin-state enable
 configure service vprn 50001 customer 1
 configure service vprn 50001 bgp instance 1 route-distinguisher "10.0.0.1:50001"
@@ -184,14 +188,14 @@ configure service vprn 50001 bgp-evpn evi 50001
 configure service vprn 50001 bgp-evpn vxlan bgp-instance 1 vxlan-instance 1
 configure service vprn 50001 bgp-evpn vxlan bgp-instance 1 admin-state enable
 configure service vprn 50001 static-routes route 0.0.0.0/0 route-type unicast next-hop "100.66.0.4" admin-state enable
-configure service vprn 50001 bgp-evpn vxlan export-policy ["RM-VRF-STATIC-2-EVPN"]
+configure service vprn 50001 bgp-evpn vxlan export-policy ["RM-VRF-STATIC-2-EVPN-PROD"]
 !
 ! IRB Interfaces (anycast gateway) — one per bridged VLAN with a gateway
 !
-configure service vprn 100 interface "int-vpls-100" admin-state enable
-configure service vprn 100 interface "int-vpls-100" vpls "vpls-100"
-configure service vprn 100 interface "int-vpls-100" mac "00:1c:73:00:dc:01"
-configure service vprn 100 interface "int-vpls-100" ipv4 primary-address "10.1.0.1/24"
+configure service vprn 50001 interface "int-vpls-10100" admin-state enable
+configure service vprn 50001 interface "int-vpls-10100" vpls "vpls-10100"
+configure service vprn 50001 interface "int-vpls-10100" mac "00:1c:73:00:dc:01"
+configure service vprn 50001 interface "int-vpls-10100" ipv4 primary-address "10.1.0.1/24"
 !
 configure service vprn 50001 interface "int-vpls-64000" admin-state enable
 configure service vprn 50001 interface "int-vpls-64000" vpls "vpls-64000"

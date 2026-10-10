@@ -127,13 +127,13 @@ router bgp 65000
     address-family ipv4 unicast
       advertise l2vpn evpn
       redistribute direct route-map RM-VRF-DIRECT-2-EVPN
-      redistribute static route-map RM-VRF-STATIC-2-EVPN
+      redistribute static route-map RM-VRF-STATIC-2-EVPN-INTERNET
   !
   vrf PROD
     address-family ipv4 unicast
       advertise l2vpn evpn
       redistribute direct route-map RM-VRF-DIRECT-2-EVPN
-      redistribute static route-map RM-VRF-STATIC-2-EVPN
+      redistribute static route-map RM-VRF-STATIC-2-EVPN-PROD
   !
 !
 
@@ -260,11 +260,13 @@ route-map RM-CONN-2-BGP permit 10
 route-map RM-VRF-DIRECT-2-EVPN permit 10
 !
 !
-ip prefix-list PL-VRF-STATIC seq 10 permit 10.1.0.0/24
-ip prefix-list PL-VRF-STATIC seq 20 permit 10.2.0.0/24
-ip prefix-list PL-VRF-STATIC seq 30 permit 0.0.0.0/0
-route-map RM-VRF-STATIC-2-EVPN permit 10
-  match ip address prefix-list PL-VRF-STATIC
+ip prefix-list PL-VRF-STATIC-INTERNET seq 10 permit 10.1.0.0/24
+ip prefix-list PL-VRF-STATIC-INTERNET seq 20 permit 10.2.0.0/24
+route-map RM-VRF-STATIC-2-EVPN-INTERNET permit 10
+  match ip address prefix-list PL-VRF-STATIC-INTERNET
+ip prefix-list PL-VRF-STATIC-PROD seq 10 permit 0.0.0.0/0
+route-map RM-VRF-STATIC-2-EVPN-PROD permit 10
+  match ip address prefix-list PL-VRF-STATIC-PROD
 !
 ! Anycast Gateway — identical MAC on every leaf/border-leaf in the fabric
 fabric forwarding anycast-gateway-mac 001c7300dc01

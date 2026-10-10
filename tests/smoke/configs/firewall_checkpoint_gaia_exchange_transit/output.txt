@@ -52,8 +52,8 @@ set cluster mode HighAvailability
 set interface ethernet1/7 ipv4-address 169.254.255.1 mask-length 30
 set cluster sync-interface ethernet1/7
 mgmt_cli set simple-cluster name "dc1-fw-ha" interfaces.add.1.name "ethernet1/1.3001" interfaces.add.1.interface-type "cluster" interfaces.add.1.ip-address "100.66.0.12" interfaces.add.1.network-mask "255.255.255.248"
-mgmt_cli set simple-cluster name "dc1-fw-ha" interfaces.add.1.name "ethernet1/1.3401" interfaces.add.1.interface-type "cluster" interfaces.add.1.ip-address "100.66.32.12" interfaces.add.1.network-mask "255.255.255.248"
-mgmt_cli set simple-cluster name "dc1-fw-ha" interfaces.add.1.name "ethernet1/1.3000" interfaces.add.1.interface-type "cluster" interfaces.add.1.ip-address "100.66.0.4" interfaces.add.1.network-mask "255.255.255.248"
-mgmt_cli set simple-cluster name "dc1-fw-ha" interfaces.add.1.name "ethernet1/1.3200" interfaces.add.1.interface-type "cluster" interfaces.add.1.ip-address "100.66.16.4" interfaces.add.1.network-mask "255.255.255.248"
-mgmt_cli set simple-cluster name "dc1-fw-ha" interfaces.add.1.name "ethernet1/1.3400" interfaces.add.1.interface-type "cluster" interfaces.add.1.ip-address "100.66.32.4" interfaces.add.1.network-mask "255.255.255.248"
+mgmt_cli set simple-cluster name "dc1-fw-ha" interfaces.add.2.name "ethernet1/1.3401" interfaces.add.2.interface-type "cluster" interfaces.add.2.ip-address "100.66.32.12" interfaces.add.2.network-mask "255.255.255.248"
+mgmt_cli set simple-cluster name "dc1-fw-ha" interfaces.add.3.name "ethernet1/1.3000" interfaces.add.3.interface-type "cluster" interfaces.add.3.ip-address "100.66.0.4" interfaces.add.3.network-mask "255.255.255.248"
+mgmt_cli set simple-cluster name "dc1-fw-ha" interfaces.add.4.name "ethernet1/1.3200" interfaces.add.4.interface-type "cluster" interfaces.add.4.ip-address "100.66.16.4" interfaces.add.4.network-mask "255.255.255.248"
+mgmt_cli set simple-cluster name "dc1-fw-ha" interfaces.add.5.name "ethernet1/1.3400" interfaces.add.5.interface-type "cluster" interfaces.add.5.ip-address "100.66.32.4" interfaces.add.5.network-mask "255.255.255.248"
 !

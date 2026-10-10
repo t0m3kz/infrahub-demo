@@ -171,9 +171,13 @@ class TestExchangeTransitRendering:
         internet = out.split("vrf context INTERNET")[1]
         assert "ip route 10.1.0.0/24 100.66.32.4" in internet
         assert "ip route 0.0.0.0/0 100.66.32" not in out
-        assert out.count("redistribute static route-map RM-VRF-STATIC-2-EVPN") == 2
-        assert "ip prefix-list PL-VRF-STATIC seq 20 permit 0.0.0.0/0" in out
-        assert "match ip address prefix-list PL-VRF-STATIC" in out
+        assert "redistribute static route-map RM-VRF-STATIC-2-EVPN-PROD" in out
+        assert "redistribute static route-map RM-VRF-STATIC-2-EVPN-INTERNET" in out
+        assert "ip prefix-list PL-VRF-STATIC-PROD seq 10 permit 0.0.0.0/0" in out
+        assert "match ip address prefix-list PL-VRF-STATIC-INTERNET" in out
+        # Each VRF's list holds only its own prefixes.
+        assert "PL-VRF-STATIC-PROD seq 10 permit 10.1.0.0/24" not in out
+        assert "PL-VRF-STATIC-INTERNET seq 10 permit 0.0.0.0/0" not in out
 
     def test_nxos_transit_vlans_vnis_and_anycast_gateways(self) -> None:
         out = _render("cisco_nxos", _transit_device_data("cisco_nxos"))
@@ -193,8 +197,9 @@ class TestExchangeTransitRendering:
         out = _render("arista_eos", _transit_device_data("arista_eos"))
         assert "ip route vrf PROD 0.0.0.0/0 100.66.0.4" in out
         assert "ip route vrf INTERNET 10.1.0.0/24 100.66.32.4" in out
-        assert out.count("redistribute static route-map RM-VRF-STATIC-2-EVPN") == 2
-        assert "ip prefix-list PL-VRF-STATIC seq 20 permit 0.0.0.0/0" in out
+        assert "redistribute static route-map RM-VRF-STATIC-2-EVPN-PROD" in out
+        assert "redistribute static route-map RM-VRF-STATIC-2-EVPN-INTERNET" in out
+        assert "ip prefix-list PL-VRF-STATIC-PROD seq 10 permit 0.0.0.0/0" in out
         assert "vxlan vlan 3001 vni 64001" in out
 
     def test_sros_statics_are_keyed_by_l3_vni_and_transit_irb_uses_explicit_vnis(self) -> None:
@@ -205,7 +210,8 @@ class TestExchangeTransitRendering:
         assert "configure service vprn 50003 static-routes route 10.1.0.0/24" in out
         assert 'configure service vprn 50001 interface "int-vpls-64001"' in out
         assert 'configure service vprn 50003 interface "int-vpls-64401"' in out
-        assert 'export-policy ["RM-VRF-STATIC-2-EVPN"]' in out
+        assert 'export-policy ["RM-VRF-STATIC-2-EVPN-PROD"]' in out
+        assert 'export-policy ["RM-VRF-STATIC-2-EVPN-INTERNET"]' in out
 
     @pytest.mark.parametrize("platform", ["sonic", "dell_sonic"])
     def test_sonic_refuses_transit_legs(self, platform: str) -> None:

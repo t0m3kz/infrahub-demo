@@ -92,11 +92,13 @@ route-map RM-VRF-DIRECT-2-EVPN permit 10
     prefix-list entry matches that prefix and nothing longer, so the default
     route is the only 0/0 candidate and a segment prefix never drags in others. #}
 !
-{%- for prefix in vrf_routes | map(attribute='prefix') | unique | list %}
-ip prefix-list PL-VRF-STATIC seq {{ loop.index * 10 }} permit {{ prefix }}
+{%- for vrf in vrf_routes | map(attribute='vrf') | unique | list %}
+{%- for prefix in vrf_routes | selectattr('vrf', 'equalto', vrf) | map(attribute='prefix') | unique | list %}
+ip prefix-list PL-VRF-STATIC-{{ vrf }} seq {{ loop.index * 10 }} permit {{ prefix }}
 {%- endfor %}
-route-map RM-VRF-STATIC-2-EVPN permit 10
-  match ip address prefix-list PL-VRF-STATIC
+route-map RM-VRF-STATIC-2-EVPN-{{ vrf }} permit 10
+  match ip address prefix-list PL-VRF-STATIC-{{ vrf }}
+{%- endfor %}
 !
 {%- endif %}
 {%- include 'common/cisco_nxos_svi.j2' -%}

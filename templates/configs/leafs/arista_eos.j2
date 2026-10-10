@@ -167,11 +167,11 @@ vrf instance {{ mapping.vrf_name }}
    {%- if vxlan.evpn.rd_format %}
    rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.l3_vni | string) }}
    {%- endif %}
-!
 {#- A `vrf instance` on EOS starts with routing DISABLED. Without this the SVIs
     below come up, ARP resolves, and hosts inside one subnet talk — but nothing
     routes between subnets in the VRF and the L3 VNI never forwards, which looks
-    like an EVPN problem and is not one. -#}
+    like an EVPN problem and is not one. #}
+!
 ip routing vrf {{ mapping.vrf_name }}
 !
 {%- endfor %}

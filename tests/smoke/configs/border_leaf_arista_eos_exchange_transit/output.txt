@@ -108,11 +108,13 @@ router bgp 65000
 ! Configure route-maps
 route-map RM-CONN-2-BGP permit 10
    match interface Loopback0
-ip prefix-list PL-VRF-STATIC seq 10 permit 10.1.0.0/24
-ip prefix-list PL-VRF-STATIC seq 20 permit 10.2.0.0/24
-ip prefix-list PL-VRF-STATIC seq 30 permit 0.0.0.0/0
-route-map RM-VRF-STATIC-2-EVPN permit 10
-   match ip address prefix-list PL-VRF-STATIC
+ip prefix-list PL-VRF-STATIC-INTERNET seq 10 permit 10.1.0.0/24
+ip prefix-list PL-VRF-STATIC-INTERNET seq 20 permit 10.2.0.0/24
+route-map RM-VRF-STATIC-2-EVPN-INTERNET permit 10
+   match ip address prefix-list PL-VRF-STATIC-INTERNET
+ip prefix-list PL-VRF-STATIC-PROD seq 10 permit 0.0.0.0/0
+route-map RM-VRF-STATIC-2-EVPN-PROD permit 10
+   match ip address prefix-list PL-VRF-STATIC-PROD
 !
 ! VXLAN Configuration — border-leaf is a VTEP too, terminating customer/shared
 ! VNIs the same as a regular leaf.
@@ -137,12 +139,14 @@ interface Vxlan1
 vrf instance INTERNET
    description Tenant VRF for microsegmentation
    rd 10.0.0.1:50003
-!ip routing vrf INTERNET
+!
+ip routing vrf INTERNET
 !
 vrf instance PROD
    description Tenant VRF for microsegmentation
    rd 10.0.0.1:50001
-!ip routing vrf PROD
+!
+ip routing vrf PROD
 !
 !
 ! EVPN Configuration (L2 + L3 VNI)
@@ -177,13 +181,13 @@ router bgp 65000
       route-target import evpn 65000:50003
       route-target export evpn 65000:50003
       redistribute connected
-      redistribute static route-map RM-VRF-STATIC-2-EVPN
+      redistribute static route-map RM-VRF-STATIC-2-EVPN-INTERNET
    vrf PROD
       rd 10.0.0.1:50001
       route-target import evpn 65000:50001
       route-target export evpn 65000:50001
       redistribute connected
-      redistribute static route-map RM-VRF-STATIC-2-EVPN
+      redistribute static route-map RM-VRF-STATIC-2-EVPN-PROD
 
 !
 ! Anycast Gateway Configuration

@@ -72,11 +72,13 @@ route-map RM-CONN-2-BGP permit 10
    match interface {{ loopback_name }}
 {%- if vrf_routes %}
 {#- Exact-match: a prefix-list entry without ge/le matches that prefix only. #}
-{%- for prefix in vrf_routes | map(attribute='prefix') | unique | list %}
-ip prefix-list PL-VRF-STATIC seq {{ loop.index * 10 }} permit {{ prefix }}
+{%- for vrf in vrf_routes | map(attribute='vrf') | unique | list %}
+{%- for prefix in vrf_routes | selectattr('vrf', 'equalto', vrf) | map(attribute='prefix') | unique | list %}
+ip prefix-list PL-VRF-STATIC-{{ vrf }} seq {{ loop.index * 10 }} permit {{ prefix }}
 {%- endfor %}
-route-map RM-VRF-STATIC-2-EVPN permit 10
-   match ip address prefix-list PL-VRF-STATIC
+route-map RM-VRF-STATIC-2-EVPN-{{ vrf }} permit 10
+   match ip address prefix-list PL-VRF-STATIC-{{ vrf }}
+{%- endfor %}
 {%- endif %}
 
 {%- if vxlan and vxlan.enabled %}
@@ -125,8 +127,8 @@ vrf instance {{ mapping.vrf_name }}
    {%- if vxlan.evpn.rd_format %}
    rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.l3_vni | string) }}
    {%- endif %}
+{#- A `vrf instance` on EOS starts with routing DISABLED — see the leaf template. #}
 !
-{#- A `vrf instance` on EOS starts with routing DISABLED — see the leaf template. -#}
 ip routing vrf {{ mapping.vrf_name }}
 !
 {%- endfor %}
@@ -168,7 +170,7 @@ router bgp {{ bgp_config.local_as.asn }}
       {%- endfor %}
       redistribute connected
 {%- if vrf_routes | default([]) | selectattr('vrf', 'equalto', mapping.vrf_name) | list %}
-      redistribute static route-map RM-VRF-STATIC-2-EVPN
+      redistribute static route-map RM-VRF-STATIC-2-EVPN-{{ mapping.vrf_name }}
 {%- endif %}
 {%- endfor %}
 {%- endif %}
