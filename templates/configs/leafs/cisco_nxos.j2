@@ -88,15 +88,6 @@ route-map RM-VRF-DIRECT-2-EVPN permit 10
 {%- endif %}
 {%- include 'common/cisco_nxos_svi.j2' -%}
 !
-{%- if vrf_gateways %}
-!
-! VRF Default Routes — firewall gateway per namespace (Option A: FW as inter-VRF router)
-!
-{%- for vrf, nexthop in vrf_gateways.items() %}
-ip route 0.0.0.0/0 {{ nexthop }} vrf {{ vrf }}
-{%- endfor %}
-!
-{%- endif %}
 {%- if vlans|selectattr('sgt')|list or sgt_rules %}
 !
 ! CTS Security Group Tags — VXLAN GPO tier enforcement (VLAN-to-SGT mapping —

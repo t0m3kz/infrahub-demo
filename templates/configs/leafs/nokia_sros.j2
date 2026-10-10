@@ -136,31 +136,24 @@ configure service vprn {{ l3_mapping.l3_vni }} bgp-evpn vxlan bgp-instance 1 adm
 ! IRB Interfaces (anycast gateway) — one per bridged VLAN with a gateway
 !
 {%- for vlan in vlans if vlan.gateway_ip or vlan.gateway_ipv6 %}
-{%- set vni = vlan.get('vni', vlan.vlan_id) %}
-configure service vprn {{ vlan.get('l3_vni', vni) }} interface "int-vpls-{{ vni }}" admin-state enable
-configure service vprn {{ vlan.get('l3_vni', vni) }} interface "int-vpls-{{ vni }}" vpls "vpls-{{ vni }}"
+{#- get_vlans() carries no VNIs: the bridged VNI and VRF L3 VNI come from the VXLAN mapping of the same VLAN (transit VLANs set both themselves). -#}
+{%- set _map = (vxlan.l2_vni_mappings | default([]) | selectattr('vlan_id', 'equalto', vlan.vlan_id) | list | first) or {} %}
+{%- set vni = vlan.get('vni') or _map.get('vni') or vlan.vlan_id %}
+{%- set irb_vprn = vlan.get('l3_vni') or _map.get('l3_vni') or vni %}
+configure service vprn {{ irb_vprn }} interface "int-vpls-{{ vni }}" admin-state enable
+configure service vprn {{ irb_vprn }} interface "int-vpls-{{ vni }}" vpls "vpls-{{ vni }}"
 {%- if vxlan.anycast_gateway and vxlan.anycast_gateway.enabled %}
-configure service vprn {{ vlan.get('l3_vni', vni) }} interface "int-vpls-{{ vni }}" mac "{{ vxlan.anycast_gateway.mac }}"
+configure service vprn {{ irb_vprn }} interface "int-vpls-{{ vni }}" mac "{{ vxlan.anycast_gateway.mac }}"
 {%- endif %}
 {%- if vlan.gateway_ip %}
-configure service vprn {{ vlan.get('l3_vni', vni) }} interface "int-vpls-{{ vni }}" ipv4 primary-address "{{ vlan.gateway_ip }}"
+configure service vprn {{ irb_vprn }} interface "int-vpls-{{ vni }}" ipv4 primary-address "{{ vlan.gateway_ip }}"
 {%- endif %}
 {%- if vlan.gateway_ipv6 %}
-configure service vprn {{ vlan.get('l3_vni', vni) }} interface "int-vpls-{{ vni }}" ipv6 primary-address "{{ vlan.gateway_ipv6 }}"
+configure service vprn {{ irb_vprn }} interface "int-vpls-{{ vni }}" ipv6 primary-address "{{ vlan.gateway_ipv6 }}"
 {%- endif %}
 !
 {%- endfor %}
 {%- endif %}
-{%- endif %}
-
-{%- if vrf_gateways %}
-!
-! VRF Default Routes — firewall gateway per namespace (Option A: FW as inter-VRF router)
-!
-{%- for vrf, nexthop in vrf_gateways.items() %}
-configure service vprn {{ vrf }} static-routes route 0.0.0.0/0 next-hop "{{ nexthop }}" admin-state enable
-{%- endfor %}
-!
 {%- endif %}
 
 {%- include 'common/nokia_sros_management.j2' %}

@@ -38,9 +38,10 @@ from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
 from ..connections import CablingMixin
+from ..helpers.common import save_with_node_not_found_retry
 from ..pools import PoolMixin
 from ..protocols import ManagedBGPPeering, RoutingBGPAddressFamily, RoutingPassword, TopologyVirtualCircuit
-from ..routing import _overlay_key_name, _save_peering_with_retry
+from ..routing import _overlay_key_name
 
 PHYSICAL_CIRCUIT_GENERATOR = "add_circuit"
 VIRTUAL_CIRCUIT_GENERATOR = "add_virtual_circuit"
@@ -391,7 +392,7 @@ class PhysicalCircuitGenerator(CablingMixin, _CircuitGenerator):
                 "interface_capabilities": [{"id": first.interface_id}, {"id": second.interface_id}],
             },
         )
-        await _save_peering_with_retry(peering, self.logger)
+        await save_with_node_not_found_retry(peering, self.logger)
 
     async def _update_interface(self, node: Any, *, address_id: str, description: str, status: str) -> None:
         """Address an endpoint interface, untracked, and only if something changed.
@@ -541,7 +542,7 @@ class VirtualCircuitGenerator(_CircuitGenerator):
                 **({"password": {"id": key.id}} if key is not None else {}),
             },
         )
-        await _save_peering_with_retry(peering, self.logger)
+        await save_with_node_not_found_retry(peering, self.logger)
 
     def _log_summary(self, circuit: dict[str, Any], circuit_name: str) -> None:
         """Log the circuit and warn where its transport and underlay disagree."""

@@ -16,6 +16,10 @@
   (transforms/helpers/vxlan.py): each fabric exports its VRF under its own
   evpn_rt_as, so without them the type-5 routes of the remote site never land.
 
+  vrf_routes (transforms/helpers/firewall.py get_exchange_routes) are the
+  statics of the inter-VRF exchange through a firewall context; they sit inside
+  the VRF, not as a global `ip route ... vrf X`.
+
   Included by the leaf/border-leaf NX-OS templates from inside their
   `{% if vxlan and vxlan.enabled %}` guard, so `vxlan` is known non-empty here.
 -#}
@@ -29,6 +33,9 @@ vrf context {{ mapping.vrf_name }}
 {%- if vxlan.evpn.rd_format %}
   rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.l3_vni | string) }}
 {%- endif %}
+{%- for route in vrf_routes | default([]) if route.vrf == mapping.vrf_name %}
+  ip route {{ route.prefix }} {{ route.nexthop }}
+{%- endfor %}
   address-family ipv4 unicast
 {%- if vxlan.evpn.rt_format %}
     route-target both {{ vxlan.evpn.rt_format | replace('{vni}', mapping.l3_vni | string) }}

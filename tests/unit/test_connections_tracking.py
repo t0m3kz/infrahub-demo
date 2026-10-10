@@ -183,3 +183,84 @@ class TestEnsureVlanSubinterfaceTrack:
         await self._run(gen, track=False)
 
         node.save.assert_awaited_once_with(**_UNTRACKED)
+
+
+class TestUpsertPrefixAddresses:
+    """upsert_prefix_addresses() is the offset-addressed core; upsert_p2p_addresses() is its (0, 1) case."""
+
+    @pytest.mark.asyncio
+    async def test_addresses_land_on_the_requested_offsets_with_the_prefix_length(self) -> None:
+        gen = _make_gen()
+        created = {offset: AsyncMock(id=f"ip-{offset}") for offset in (1, 4, 5, 6)}
+        gen.client.create = AsyncMock(side_effect=[created[1], created[4], created[5], created[6]])
+
+        result = await gen.upsert_prefix_addresses(_prefix("100.66.0.8/29"), offsets=(1, 4, 5, 6))
+
+        assert result == created
+        addresses = [c.kwargs["data"]["address"] for c in gen.client.create.call_args_list]
+        assert addresses == ["100.66.0.9/29", "100.66.0.12/29", "100.66.0.13/29", "100.66.0.14/29"]
+        for ip in created.values():
+            ip.save.assert_awaited_once_with(**_TRACKED)
+
+    @pytest.mark.asyncio
+    async def test_found_addresses_are_resaved_with_the_callers_tracking(self) -> None:
+        gen = _make_gen()
+        found = [AsyncMock(id="ip-a"), AsyncMock(id="ip-b")]
+        gen.client.get = AsyncMock(side_effect=found)
+
+        await gen.upsert_prefix_addresses(_prefix("100.66.0.0/29"), offsets=(1, 4), track=False)
+
+        gen.client.create.assert_not_called()
+        for ip in found:
+            ip.save.assert_awaited_once_with(**_UNTRACKED)
+
+    @pytest.mark.asyncio
+    async def test_p2p_wrapper_keeps_its_list_of_two_in_offset_order(self) -> None:
+        gen = _make_gen()
+        first, second = AsyncMock(id="ip-0"), AsyncMock(id="ip-1")
+        gen.client.create = AsyncMock(side_effect=[first, second])
+
+        result = await gen.upsert_p2p_addresses(_prefix("100.65.0.0/31"))
+
+        assert result == [first, second]
+        assert [c.kwargs["data"]["address"] for c in gen.client.create.call_args_list] == [
+            "100.65.0.0/31",
+            "100.65.0.1/31",
+        ]
+
+
+class TestEnsureVlanSubinterfaceExtraCapabilities:
+    """A firewall-context leg carries its context AND the exchange(s) it belongs to."""
+
+    async def _run(self, gen: Any, extras: list[Any]) -> Any:
+        return await gen.ensure_vlan_subinterface(
+            device_id="fw-1",
+            device_name="FW1",
+            trunk_iface=_trunk(),
+            vlan_id_value=3400,
+            capability_obj=MagicMock(id="ctx-1"),
+            extra_capability_objs=extras,
+        )
+
+    @pytest.mark.asyncio
+    async def test_only_missing_capabilities_are_added_in_one_resave(self) -> None:
+        gen = _make_gen()
+        node = _sub_iface(existing_peer_ids=["ctx-1"])
+        gen.client.create = AsyncMock(return_value=node)
+        added: list[str] = []
+        gen._safe_rel_add = AsyncMock(side_effect=lambda rel, obj: added.append(obj.id))
+
+        await self._run(gen, [MagicMock(id="ex-1"), MagicMock(id="ex-2")])
+
+        assert added == ["ex-1", "ex-2"]
+        assert node.save.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_everything_already_linked_saves_once(self) -> None:
+        gen = _make_gen()
+        node = _sub_iface(existing_peer_ids=["ctx-1", "ex-1"])
+        gen.client.create = AsyncMock(return_value=node)
+
+        await self._run(gen, [MagicMock(id="ex-1")])
+
+        node.save.assert_awaited_once_with(**_TRACKED)

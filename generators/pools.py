@@ -275,15 +275,21 @@ class PoolMixin:
         *,
         name: str,
         vlan_start: int,
-        parent_pool_name: str,
-        slice_prefix_length: int,
-        default_prefix_length: int,
+        parent_pool_name: str | None = None,
+        slice_prefix_length: int | None = None,
+        default_prefix_length: int | None = None,
         vlan_end: int = FW_CONTEXT_VLAN_END,
     ) -> None:
-        """Create a fabric's/metro's FirewallContext VLAN + P2P prefix pools.
+        """Create a fabric's/metro's FirewallContext VLAN pool and, when asked, its P2P prefix pool.
 
         Shared by generators/topology/dc.py (per-DC) and generators/topology/
-        colocation.py (per-metro) — same two pools, same race, same fix.
+        colocation.py (per-metro) — same pools, same race, same fix.
+
+        The P2P pool is created only when parent_pool_name (with the two
+        lengths) is given. DC contexts get /29 transit legs from the per-VRF
+        FW-Transit-* bootstrap pools (utils/exchange_transit.py) and need only
+        the VLAN pool; colocation (`_transit_legs = False`) still addresses its
+        legs from the P2P slice, until the legacy path is deleted.
 
         Per-fabric (not global) so each one's context sub-interfaces and
         transit links stay within its own numbering. The P2P pool itself is a
@@ -330,9 +336,9 @@ class PoolMixin:
         name: str,
         vlan_start: int,
         vlan_end: int,
-        parent_pool_name: str,
-        slice_prefix_length: int,
-        default_prefix_length: int,
+        parent_pool_name: str | None,
+        slice_prefix_length: int | None,
+        default_prefix_length: int | None,
     ) -> None:
         """The actual pool-creation body of ensure_firewall_context_pools(),
         run under that method's per-`name` lock."""
@@ -345,6 +351,8 @@ class PoolMixin:
             node_attribute="vlan_id",
         )
 
+        if parent_pool_name is None or slice_prefix_length is None:
+            return
         pool_name = f"{name}-fw-context-p2p-pool"
         await self.ensure_sliced_pool(
             pool_name=pool_name,

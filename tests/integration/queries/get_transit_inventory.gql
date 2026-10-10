@@ -1,0 +1,84 @@
+query GetTransitInventory {
+  ManagedFirewallContext {
+    edges {
+      node {
+        id
+        name { value }
+        vlan_id { value }
+        tenant {
+          node {
+            id
+            ... on TopologyCustomerDC { name { value } }
+          }
+        }
+        cluster {
+          node {
+            name { value }
+            # Member firewalls' deployment: the DC the cluster sits in (empty
+            # for a colocation metro's cluster and for a dedicated cluster of
+            # virtual members).
+            capabilities {
+              edges {
+                node {
+                  ... on DcimPhysicalDevice {
+                    deployment { node { __typename name { value } } }
+                  }
+                }
+              }
+            }
+          }
+        }
+        served_deployments {
+          edges {
+            node {
+              id
+              ... on TopologyCustomer {
+                name { value }
+                environment { value }
+              }
+            }
+          }
+        }
+        # Legs (the members' VLAN sub-interfaces) and the border-leaf service
+        # ports tagged with the context, told apart by __typename.
+        interface_capabilities {
+          edges {
+            node {
+              __typename
+              id
+              name { value }
+              device { node { id name { value } role { value } } }
+              ... on DcimVirtualInterface {
+                ip_address {
+                  node {
+                    address { value }
+                    ip_namespace { node { name { value } namespace_type { value } } }
+                  }
+                }
+                interface_capabilities {
+                  edges {
+                    node {
+                      __typename
+                      ... on TopologyRoutedExchange { id name { value } }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  TopologyRoutedExchange {
+    edges {
+      node {
+        id
+        name { value }
+        namespace_a { node { name { value } namespace_type { value } } }
+        namespace_z { node { name { value } namespace_type { value } } }
+        gateway { node { id name { value } } }
+      }
+    }
+  }
+}

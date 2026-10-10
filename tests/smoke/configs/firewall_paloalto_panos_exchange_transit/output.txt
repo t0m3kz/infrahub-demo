@@ -1,0 +1,94 @@
+set deviceconfig system hostname dc1-fw-01
+#
+#
+# --- Address Objects (one per zone member CIDR) ---
+set address addr-10-1-0-0-24 ip-netmask 10.1.0.0/24
+set address addr-10-1-0-0-24 description "Zone: PROD-ZONE"
+set address addr-10-3-0-0-24 ip-netmask 10.3.0.0/24
+set address addr-10-3-0-0-24 description "Zone: PROD-ZONE"
+set address addr-10-2-0-0-24 ip-netmask 10.2.0.0/24
+set address addr-10-2-0-0-24 description "Zone: NONPROD-ZONE"
+#
+# --- Address Groups (one per zone) ---
+set address-group ag-PROD-ZONE static [ addr-10-1-0-0-24 addr-10-3-0-0-24 ]
+set address-group ag-NONPROD-ZONE static [ addr-10-2-0-0-24 ]
+#
+#
+# --- Firewall Contexts (VDOM/vsys) — one per tenant, per ManagedFirewallContext ---
+#
+set vsys dc1-fw-acme
+set vsys dc1-fw-acme display-name "Acme"
+set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3001 tag 3001
+set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3001 ip 100.66.0.12/29
+set vsys dc1-fw-acme import network interface ethernet1/1.3001
+set vsys dc1-fw-acme zone PROD-ZONE network layer3 ethernet1/1.3001
+set network virtual-router vr-dc1-fw-acme interface ethernet1/1.3001
+set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3401 tag 3401
+set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3401 ip 100.66.32.12/29
+set vsys dc1-fw-acme import network interface ethernet1/1.3401
+set vsys dc1-fw-acme zone INTERNET-ZONE network layer3 ethernet1/1.3401
+set network virtual-router vr-dc1-fw-acme interface ethernet1/1.3401
+set vsys dc1-fw-acme import network virtual-router vr-dc1-fw-acme
+set network virtual-router vr-dc1-fw-acme routing-table ip static-route rt-1 destination 10.3.0.0/24
+set network virtual-router vr-dc1-fw-acme routing-table ip static-route rt-1 nexthop ip-address 100.66.0.9
+set network virtual-router vr-dc1-fw-acme routing-table ip static-route rt-1 interface ethernet1/1.3001
+set network virtual-router vr-dc1-fw-acme routing-table ip static-route rt-2 destination 0.0.0.0/0
+set network virtual-router vr-dc1-fw-acme routing-table ip static-route rt-2 nexthop ip-address 100.66.32.9
+set network virtual-router vr-dc1-fw-acme routing-table ip static-route rt-2 interface ethernet1/1.3401
+set vsys dc1-fw-shared
+set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3000 tag 3000
+set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3000 ip 100.66.0.4/29
+set vsys dc1-fw-shared import network interface ethernet1/1.3000
+set vsys dc1-fw-shared zone PROD-ZONE network layer3 ethernet1/1.3000
+set network virtual-router vr-dc1-fw-shared interface ethernet1/1.3000
+set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3200 tag 3200
+set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3200 ip 100.66.16.4/29
+set vsys dc1-fw-shared import network interface ethernet1/1.3200
+set vsys dc1-fw-shared zone NONPROD-ZONE network layer3 ethernet1/1.3200
+set network virtual-router vr-dc1-fw-shared interface ethernet1/1.3200
+set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3400 tag 3400
+set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3400 ip 100.66.32.4/29
+set vsys dc1-fw-shared import network interface ethernet1/1.3400
+set vsys dc1-fw-shared zone INTERNET-ZONE network layer3 ethernet1/1.3400
+set network virtual-router vr-dc1-fw-shared interface ethernet1/1.3400
+set vsys dc1-fw-shared import network virtual-router vr-dc1-fw-shared
+set network virtual-router vr-dc1-fw-shared routing-table ip static-route rt-1 destination 10.1.0.0/24
+set network virtual-router vr-dc1-fw-shared routing-table ip static-route rt-1 nexthop ip-address 100.66.0.1
+set network virtual-router vr-dc1-fw-shared routing-table ip static-route rt-1 interface ethernet1/1.3000
+set network virtual-router vr-dc1-fw-shared routing-table ip static-route rt-2 destination 10.2.0.0/24
+set network virtual-router vr-dc1-fw-shared routing-table ip static-route rt-2 nexthop ip-address 100.66.16.1
+set network virtual-router vr-dc1-fw-shared routing-table ip static-route rt-2 interface ethernet1/1.3200
+set network virtual-router vr-dc1-fw-shared routing-table ip static-route rt-3 destination 0.0.0.0/0
+set network virtual-router vr-dc1-fw-shared routing-table ip static-route rt-3 nexthop ip-address 100.66.32.1
+set network virtual-router vr-dc1-fw-shared routing-table ip static-route rt-3 interface ethernet1/1.3400
+#
+# --- PROD <-> NON-PROD isolation in vsys dc1-fw-shared ---
+set vsys dc1-fw-shared rulebase security rules deny-PROD-ZONE-to-NONPROD-ZONE from PROD-ZONE
+set vsys dc1-fw-shared rulebase security rules deny-PROD-ZONE-to-NONPROD-ZONE to NONPROD-ZONE
+set vsys dc1-fw-shared rulebase security rules deny-PROD-ZONE-to-NONPROD-ZONE source any
+set vsys dc1-fw-shared rulebase security rules deny-PROD-ZONE-to-NONPROD-ZONE destination any
+set vsys dc1-fw-shared rulebase security rules deny-PROD-ZONE-to-NONPROD-ZONE application any
+set vsys dc1-fw-shared rulebase security rules deny-PROD-ZONE-to-NONPROD-ZONE service any
+set vsys dc1-fw-shared rulebase security rules deny-PROD-ZONE-to-NONPROD-ZONE action deny
+set vsys dc1-fw-shared rulebase security rules deny-PROD-ZONE-to-NONPROD-ZONE log-end yes
+set vsys dc1-fw-shared rulebase security rules deny-NONPROD-ZONE-to-PROD-ZONE from NONPROD-ZONE
+set vsys dc1-fw-shared rulebase security rules deny-NONPROD-ZONE-to-PROD-ZONE to PROD-ZONE
+set vsys dc1-fw-shared rulebase security rules deny-NONPROD-ZONE-to-PROD-ZONE source any
+set vsys dc1-fw-shared rulebase security rules deny-NONPROD-ZONE-to-PROD-ZONE destination any
+set vsys dc1-fw-shared rulebase security rules deny-NONPROD-ZONE-to-PROD-ZONE application any
+set vsys dc1-fw-shared rulebase security rules deny-NONPROD-ZONE-to-PROD-ZONE service any
+set vsys dc1-fw-shared rulebase security rules deny-NONPROD-ZONE-to-PROD-ZONE action deny
+set vsys dc1-fw-shared rulebase security rules deny-NONPROD-ZONE-to-PROD-ZONE log-end yes
+#
+#
+# --- High Availability ---
+set deviceconfig high-availability enabled yes
+set deviceconfig high-availability group 1
+set deviceconfig high-availability group mode active-passive
+set deviceconfig high-availability group election-option priority 100
+set deviceconfig high-availability group election-option preemptive no
+set deviceconfig high-availability group timers aggressive
+set deviceconfig high-availability interface ha1 port ethernet1/7
+set deviceconfig high-availability interface ha1 ip-address 169.254.255.1 netmask 255.255.255.252
+set deviceconfig high-availability group peer-ip 169.254.255.2
+#

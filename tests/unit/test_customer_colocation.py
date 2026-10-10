@@ -295,6 +295,19 @@ class TestFirewallContextProvisioning:
         )
 
     @pytest.mark.asyncio
+    async def test_legacy_path_never_reaches_the_transit_legs(self) -> None:
+        """`_transit_legs = False`: colocation keeps the default-namespace P2P path (deleted in PR 4)."""
+        gen, _, _ = self._make_gen_with_cluster()
+        gen._ensure_transit_legs = AsyncMock()
+        gen._get_or_create_firewall_context = AsyncMock(return_value=MagicMock(id="ctx-1"))
+
+        await gen.generate(_colo_payload_with_parent())
+
+        assert CustomerDeploymentColocationExchangeGenerator._transit_legs is False
+        gen._ensure_transit_legs.assert_not_awaited()
+        gen._ensure_context_subinterface.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_connectivity_mode_is_always_pbr(self) -> None:
         """TopologyColocationMetro has no connectivity_mode attribute at all
         (unlike TopologyDataCenter) — parent.get("connectivity_mode") is

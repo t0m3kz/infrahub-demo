@@ -29,20 +29,40 @@ import logging
 import pytest
 from infrahub_sdk import InfrahubClient
 
+from utils.exchange_transit import EXCHANGE_PEERS, TRANSIT_OFFSETS, transit_vlan
+
 from .conftest import TestInfrahubDockerWithClient
 from .test_constants import (
+    ALL_DEMO_BORDER_FIREWALL_PORTS,
     ALL_DEMO_BRANCH,
     ALL_DEMO_COLOCATION_SERVED,
     ALL_DEMO_DC_NAMES,
     ALL_DEMO_DCI_CIRCUITS,
     ALL_DEMO_DEDICATED_FIREWALL_TENANTS,
+    ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS,
+    ALL_DEMO_FIREWALL_MEMBERS,
     ALL_DEMO_INTERNET_TRANSIT_CIRCUITS,
+    ALL_DEMO_LEGACY_EXCHANGES,
     ALL_DEMO_PHYSICAL_CIRCUIT_TYPES,
     ALL_DEMO_SEGMENT_LEGS,
     ALL_DEMO_SHARED_FIREWALL_CONTEXTS,
+    ALL_DEMO_TRANSIT_EXCHANGES,
+    ALL_DEMO_TRANSIT_LEGS,
+    ALL_DEMO_TRANSIT_PREFIXES,
+    ALL_DEMO_TRANSIT_RESOURCES,
+    ALL_DEMO_TRANSIT_SUBINTERFACES,
     ALL_DEMO_VIRTUAL_CIRCUITS,
+    deployment_environment,
+    deployment_namespace,
+    transit_namespace_type,
 )
-from .test_helpers import fetch_interconnect_inventory, fetch_tenant_services, scope_tenant_services_to_dcs
+from .test_helpers import (
+    fetch_interconnect_inventory,
+    fetch_tenant_services,
+    fetch_transit_inventory,
+    match_transit_contexts,
+    scope_tenant_services_to_dcs,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -113,6 +133,17 @@ query ($names: [String]) {
 """
 # DCI-Technical-IPv6 (data/bootstrap/20_dci_pools.yml) — the DC fabrics run an IPv6 underlay.
 DCI_POOL_NETWORK = ipaddress.IPv6Network("fd00:2200::/40")
+
+
+_TRANSIT_PEER_NAMES = {"internet": "INTERNET"}
+
+
+def _exchange_ends(exchange_name: str, context_name: str) -> tuple[str, ...]:
+    """The namespaces `{context}-{A}-{Z}` joins; namespace names may contain '-' (NON-PROD), so match known ones."""
+    rest = exchange_name.removeprefix(f"{context_name}-")
+    return tuple(
+        ns for ns in ALL_DEMO_TRANSIT_RESOURCES if rest == ns or rest.startswith(f"{ns}-") or rest.endswith(f"-{ns}")
+    )
 
 
 class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
@@ -308,6 +339,213 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         )
 
         logging.info("Firewall contexts verified: %d shared, %d dedicated", len(shared), len(dedicated))
+
+    @pytest.mark.order(397)
+    @pytest.mark.dependency(scope="session", name="all_demo_exchange_transit", depends=["all_demo_tenant_services"])
+    @pytest.mark.asyncio
+    async def test_03b_verify_exchange_transit_legs(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """Verify each DC firewall context's inter-VRF legs, exchanges and border ports.
+
+        A leg is (context, namespace): every firewall member's VLAN
+        sub-interface in that VRF, addressed from a /29 of the VRF's transit
+        pool and tagged with the context and with the leg's exchange(s). The
+        expectations come from the customers' environments and designs
+        (ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS), and the served deployments the
+        graph itself reports must agree with them. The colocation metro keeps
+        its legacy default-namespace link and gets no transit leg.
+        """
+        logging.info("=== %s - Step 3b: Exchange Transit Legs ===", SCENARIO_NAME)
+
+        inventory = await fetch_transit_inventory(client=async_client_main, branch=scenario_branch)
+        by_key, colocation = match_transit_contexts(
+            inventory["contexts"], ALL_DEMO_DC_NAMES, ALL_DEMO_DEDICATED_FIREWALL_TENANTS
+        )
+        exchanges_by_gateway: dict[str, list[dict]] = {}
+        for exchange in inventory["exchanges"]:
+            exchanges_by_gateway.setdefault(str(exchange["gateway_id"]), []).append(exchange)
+
+        errors: list[str] = []
+        leg_count = 0
+        subinterface_count = 0
+        prefixes: dict[str, set[ipaddress.IPv4Network]] = {}
+        exchange_count = 0
+        ports_by_dc: dict[str, dict[str, set[str]]] = {}  # dc -> border port id -> context names
+
+        for expected in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS:
+            label = f"{expected['dc']}/{expected['tenant'] or 'shared'}"
+            context = by_key.get((expected["dc"], expected["tenant"]))
+            if context is None:
+                errors.append(f"{label}: no firewall context")
+                continue
+            context_name = str(context["name"])
+
+            # The graph's own view of who the context serves must give the same VRFs.
+            served_names = sorted(str(d["name"]) for d in context["served"])
+            if served_names != sorted(expected["deployments"]):
+                errors.append(f"{label}: serves {served_names}, expected {sorted(expected['deployments'])}")
+            served_namespaces = {deployment_namespace(name) for name in served_names}
+            served_namespaces |= {
+                _TRANSIT_PEER_NAMES[peer]
+                for name in served_names
+                for peer in EXCHANGE_PEERS[transit_namespace_type(deployment_namespace(name))]
+            }
+            if sorted(served_namespaces) != sorted(expected["namespaces"]):
+                errors.append(
+                    f"{label}: served deployments {served_names} need VRFs {sorted(served_namespaces)}, "
+                    f"expected {sorted(expected['namespaces'])}"
+                )
+            for served in context["served"]:
+                if str(served["environment"]) != deployment_environment(str(served["name"])):
+                    errors.append(f"{label}: {served['name']} has environment '{served['environment']}'")
+
+            # Legs: one sub-interface per member per VRF.
+            context_vlan = context["vlan"]
+            if not context_vlan:
+                errors.append(f"{label}: '{context_name}' has no VLAN")
+                continue
+            legs_by_namespace: dict[str, list[dict]] = {}
+            for leg in context["legs"]:
+                legs_by_namespace.setdefault(str(leg["namespace"]), []).append(leg)
+            if sorted(legs_by_namespace) != sorted(expected["namespaces"]):
+                errors.append(
+                    f"{label}: legs in {sorted(legs_by_namespace)}, expected {sorted(expected['namespaces'])}"
+                )
+            leg_count += len(legs_by_namespace)
+            expected_exchange_names = {f"{context_name}-{suffix}" for suffix in expected["exchanges"]}
+
+            for namespace, legs in sorted(legs_by_namespace.items()):
+                if namespace not in ALL_DEMO_TRANSIT_RESOURCES:
+                    errors.append(f"{label}: leg in unexpected namespace '{namespace}'")
+                    continue
+                ns_type = transit_namespace_type(namespace)
+                subinterface_count += len(legs)
+                if len(legs) != ALL_DEMO_FIREWALL_MEMBERS or len({leg["device_id"] for leg in legs}) != len(legs):
+                    errors.append(f"{label}/{namespace}: {len(legs)} sub-interface(s), one per member expected")
+                networks = set()
+                for leg in legs:
+                    leg_id = f"{label}/{namespace} {leg['device']}:{leg['interface']}"
+                    if not leg["address"]:
+                        errors.append(f"{leg_id}: no address")
+                        continue
+                    address = ipaddress.IPv4Interface(leg["address"])
+                    networks.add(address.network)
+                    if address.network.prefixlen != 29:
+                        errors.append(f"{leg_id}: {leg['address']} is not in a /29")
+                    elif not address.network.subnet_of(ipaddress.IPv4Network(ALL_DEMO_TRANSIT_RESOURCES[namespace])):
+                        errors.append(
+                            f"{leg_id}: {leg['address']} is outside the {namespace} transit pool "
+                            f"{ALL_DEMO_TRANSIT_RESOURCES[namespace]}"
+                        )
+                    elif address.ip not in (address.network[o] for o in TRANSIT_OFFSETS[2:]):
+                        errors.append(f"{leg_id}: {leg['address']} is not a member offset (.5/.6) of its /29")
+                    if leg["namespace_type"] != ns_type:
+                        errors.append(f"{leg_id}: namespace_type '{leg['namespace_type']}', expected '{ns_type}'")
+                    sub_vlan = str(leg["interface"]).rsplit(".", 1)[-1]
+                    if sub_vlan != str(transit_vlan(int(context_vlan), ns_type)):
+                        errors.append(
+                            f"{leg_id}: VLAN {sub_vlan}, expected transit_vlan({context_vlan}, {ns_type}) = "
+                            f"{transit_vlan(int(context_vlan), ns_type)}"
+                        )
+                    wanted = sorted(
+                        name for name in expected_exchange_names if namespace in _exchange_ends(name, context_name)
+                    )
+                    if leg["exchanges"] != wanted:
+                        errors.append(f"{leg_id}: linked to exchange(s) {leg['exchanges']}, expected {wanted}")
+                if len(networks) != 1:
+                    errors.append(f"{label}/{namespace}: members are in {sorted(map(str, networks))}, one /29 expected")
+                prefixes.setdefault(namespace, set()).update(networks)
+
+            # Exchanges: `{context}-{A}-{Z}`, gateway = this context, never PROD <-> NON-PROD.
+            actual_exchanges = exchanges_by_gateway.get(str(context["id"]), [])
+            exchange_count += len(actual_exchanges)
+            if sorted(str(e["name"]) for e in actual_exchanges) != sorted(expected_exchange_names):
+                errors.append(
+                    f"{label}: exchanges {sorted(str(e['name']) for e in actual_exchanges)}, "
+                    f"expected {sorted(expected_exchange_names)}"
+                )
+            for exchange in actual_exchanges:
+                if exchange["name"] != f"{context_name}-{exchange['namespace_a']}-{exchange['namespace_z']}":
+                    errors.append(
+                        f"{exchange['name']}: not named {{context}}-{{A}}-{{Z}} "
+                        f"({context_name}-{exchange['namespace_a']}-{exchange['namespace_z']})"
+                    )
+                if exchange["namespace_z_type"] not in EXCHANGE_PEERS.get(str(exchange["namespace_a_type"]), ()):
+                    errors.append(
+                        f"{exchange['name']}: {exchange['namespace_a_type']} -> {exchange['namespace_z_type']} "
+                        f"is not an allowed pairing {EXCHANGE_PEERS}"
+                    )
+
+            # The border-leaf service ports the members' uplinks are cabled to.
+            if len(context["border_ports"]) != ALL_DEMO_FIREWALL_MEMBERS:
+                errors.append(
+                    f"{label}: '{context_name}' tags {len(context['border_ports'])} border-leaf port(s), "
+                    f"expected {ALL_DEMO_FIREWALL_MEMBERS}"
+                )
+            for port in context["border_ports"]:
+                ports_by_dc.setdefault(expected["dc"], {}).setdefault(str(port["id"]), set()).add(context_name)
+
+        # Exchanges whose gateway is not a context of the 30_all DCs: only the
+        # DC6 chain's own may exist; the legacy bootstrap ones must not.
+        for exchange in inventory["exchanges"]:
+            if not exchange["gateway_id"]:
+                errors.append(f"{exchange['name']}: exchange without a gateway context")
+        legacy = sorted(str(e["name"]) for e in inventory["exchanges"] if e["name"] in ALL_DEMO_LEGACY_EXCHANGES)
+        if legacy:
+            errors.append(f"legacy bootstrap exchange(s) still present: {legacy}")
+
+        # Totals, all derived from the customers' environments in test_constants.
+        if leg_count != ALL_DEMO_TRANSIT_LEGS:
+            errors.append(f"{leg_count} leg(s), expected {ALL_DEMO_TRANSIT_LEGS}")
+        if subinterface_count != ALL_DEMO_TRANSIT_SUBINTERFACES:
+            errors.append(f"{subinterface_count} leg sub-interface(s), expected {ALL_DEMO_TRANSIT_SUBINTERFACES}")
+        if exchange_count != ALL_DEMO_TRANSIT_EXCHANGES:
+            errors.append(f"{exchange_count} exchange(s) on the DC contexts, expected {ALL_DEMO_TRANSIT_EXCHANGES}")
+        for namespace, expected_count in ALL_DEMO_TRANSIT_PREFIXES.items():
+            if len(prefixes.get(namespace, set())) != expected_count:
+                errors.append(
+                    f"{namespace}: {len(prefixes.get(namespace, set()))} transit /29(s), expected {expected_count}"
+                )
+        port_contexts = {port: names for ports in ports_by_dc.values() for port, names in ports.items()}
+        if len(port_contexts) != ALL_DEMO_BORDER_FIREWALL_PORTS:
+            errors.append(f"{len(port_contexts)} tagged border-leaf port(s), expected {ALL_DEMO_BORDER_FIREWALL_PORTS}")
+        for dc, ports in sorted(ports_by_dc.items()):
+            contexts_in_dc = sum(1 for e in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS if e["dc"] == dc)
+            for port, names in sorted(ports.items()):
+                if len(names) != contexts_in_dc:
+                    errors.append(
+                        f"{dc}: border-leaf port {port} carries {sorted(names)}, expected {contexts_in_dc} context(s)"
+                    )
+
+        # Colocation (FR): the legacy default-namespace P2P link, no transit leg.
+        if len(colocation) != 1:
+            errors.append(f"{len(colocation)} colocation firewall context(s), expected the FR metro's one")
+        colocation_ids = {str(c["id"]) for c in colocation}
+        for context in colocation:
+            transit = [leg for leg in context["legs"] if leg["namespace"] in ALL_DEMO_TRANSIT_RESOURCES]
+            if transit:
+                errors.append(
+                    f"colocation '{context['name']}' has transit leg(s) {[leg['interface'] for leg in transit]}"
+                )
+            if not [leg for leg in context["legs"] if leg["namespace"] == "default" and leg["address"]]:
+                errors.append(f"colocation '{context['name']}' lost its legacy default-namespace sub-interface")
+        stray = sorted(str(e["name"]) for e in inventory["exchanges"] if str(e["gateway_id"]) in colocation_ids)
+        if stray:
+            errors.append(f"colocation context is the gateway of exchange(s) {stray}")
+
+        assert not errors, f"30_all exchange transit legs are wrong on branch '{scenario_branch}':\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
+
+        logging.info(
+            "Exchange transit verified: %d leg(s), %d exchange(s), %d border-leaf port(s)",
+            leg_count,
+            exchange_count,
+            len(port_contexts),
+        )
 
     @pytest.mark.order(397)
     @pytest.mark.dependency(scope="session", name="all_demo_segment_legs", depends=["all_demo_tenant_services"])

@@ -6,11 +6,12 @@
 # here is on top of, not a replacement for, the existing PROD-ZONE/NONPROD-ZONE
 # SecurityZone split (see generators/helpers/rules.py's RulesPlanner).
 #
-# PROD and NON-PROD never exchange directly — see 23_exchanges.yml for the
-# 4 fixed TopologyRoutedExchange objects that connect each of them to
-# INTERNET (egress) and MANAGEMENT (core services: DNS/DHCP/NTP/syslog/
-# monitoring), both through an inspected device hop, never a bare
-# RouteLeakExchange.
+# PROD and NON-PROD never exchange directly. Each reaches INTERNET (egress)
+# through a TopologyRoutedExchange that the customer boarding generator creates
+# per firewall context (`{context}-{A}-INTERNET`), an inspected hop through the
+# context's VRF legs, never a bare RouteLeakExchange. The leg /29s come from
+# the FW-Transit-*-IPv4 pools in 23_transit_pools.yml, which need these
+# namespaces to exist first. MANAGEMENT exchanges are not modelled yet.
 #
 # `default` (Infrahub's built-in namespace, not defined here) remains the
 # permanent underlay/global-table namespace for EVPN-VXLAN VTEP loopbacks and
@@ -24,6 +25,8 @@
 #   40000-49999  L2 VNI     GLOBAL-L2VNI    (stretched segments, all sites)
 #   50001-59999  L3 VNI     GLOBAL-L3VNI + dcN-l3vni-pool
 #   60000-60003  L3 VNI     these four, allocated by hand — pool-free on purpose
+#   64000-64799  L2 VNI     exchange transit VLANs (61000 + transit VLAN), derived
+#                           by utils/exchange_transit.py, never pool-allocated
 #
 # These were 30000/30001/40000/40001, which sits INSIDE the L2 pool: the first
 # customer segment to draw VNI 30000 out of a dcN-vni-pool would have shared a

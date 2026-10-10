@@ -1,0 +1,60 @@
+---
+# Per-VRF /29 transit pools for firewall-context legs (see
+# generators/firewall_context.py and utils/exchange_transit.py). Each pool
+# allocates inside its VRF namespace, so the resource prefix itself lives in
+# that namespace. This file sorts after 22_namespaces.yml on purpose: the
+# object loader processes files in name order and the namespaces must exist
+# before a prefix or pool can reference them.
+# RFC 6598: 100.66.48.0/20 is reserved for MANAGEMENT.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CoreIPPrefixPool
+  data:
+    - name: FW-Transit-PROD-IPv4
+      description: "FirewallContext transit /29 legs in the PROD VRF (RFC 6598)"
+      default_prefix_type: IpamPrefix
+      default_prefix_length: 29
+      resources:
+        kind: IpamPrefix
+        data:
+          - prefix: 100.66.0.0/20
+            description: "RFC 6598 transit space, PROD VRF"
+            status: active
+            member_type: prefix
+            is_pool: true
+            role: technical
+            ip_namespace: "PROD"
+      ip_namespace: "PROD"
+
+    - name: FW-Transit-NON-PROD-IPv4
+      description: "FirewallContext transit /29 legs in the NON-PROD VRF (RFC 6598)"
+      default_prefix_type: IpamPrefix
+      default_prefix_length: 29
+      resources:
+        kind: IpamPrefix
+        data:
+          - prefix: 100.66.16.0/20
+            description: "RFC 6598 transit space, NON-PROD VRF"
+            status: active
+            member_type: prefix
+            is_pool: true
+            role: technical
+            ip_namespace: "NON-PROD"
+      ip_namespace: "NON-PROD"
+
+    - name: FW-Transit-INTERNET-IPv4
+      description: "FirewallContext transit /29 legs in the INTERNET VRF (RFC 6598)"
+      default_prefix_type: IpamPrefix
+      default_prefix_length: 29
+      resources:
+        kind: IpamPrefix
+        data:
+          - prefix: 100.66.32.0/20
+            description: "RFC 6598 transit space, INTERNET VRF"
+            status: active
+            member_type: prefix
+            is_pool: true
+            role: technical
+            ip_namespace: "INTERNET"
+      ip_namespace: "INTERNET"

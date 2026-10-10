@@ -11,7 +11,8 @@ from transforms.helpers.bgp import get_bgp_profile
 from transforms.helpers.firewall import (
     _flatten_deployment_firewall_contexts,
     get_customer_pbr_rules,
-    get_vrf_default_gateways,
+    get_exchange_routes,
+    get_exchange_transits,
 )
 from transforms.helpers.ha import _HA_TYPENAMES
 from transforms.helpers.loadbalancer_pbr import _flatten_deployment_lb_vips, get_lb_backend_pbr_rules
@@ -19,7 +20,12 @@ from transforms.helpers.management import get_management_services
 from transforms.helpers.mlag import get_mlag, get_sonic_mlag_config
 from transforms.helpers.ospf import get_ospf
 from transforms.helpers.policy import get_sgt_rules
-from transforms.helpers.segments import get_vlans, routed_activations, segment_hosting_candidates
+from transforms.helpers.segments import (
+    _flatten_deployment_segment_activations,
+    get_vlans,
+    routed_activations,
+    segment_hosting_candidates,
+)
 from transforms.helpers.templates import load_template
 from transforms.helpers.vxlan import get_interfaces, get_vxlan_config
 from utils.data_cleaning import clean_data
@@ -155,6 +161,9 @@ class BaseDeviceTransform(InfrahubTransform):
             )
         if activations:
             device_data["segment_deployments"] = self._filter_segment_deployments(activations)
+        # Transit legs of the firewall contexts tagged on this device's service
+        # ports: VLAN/VNI/VRF/anycast only, never segment policy input.
+        device_data["exchange_transits"] = get_exchange_transits(device_data.get("interfaces"))
 
         config = self._build_config(device_data, platform_name)
         config.update(self._extra_config(device_data, platform_name, extra_roots=extra_roots))
@@ -193,7 +202,7 @@ class BaseDeviceTransform(InfrahubTransform):
         interfaces = data.get("interfaces") or []
         device_capabilities = data.get("capabilities") or []
         device_name = data.get("name", "")
-        activations = data.get("segment_deployments")
+        activations = (data.get("segment_deployments") or []) + (data.get("exchange_transits") or []) or None
         management_services = get_management_services(device_capabilities)
         mlag = get_mlag(device_capabilities, interfaces, device_name=device_name)
         # The MLAG control SVI is rendered by the platform's MLAG include
@@ -231,21 +240,38 @@ class BaseDeviceTransform(InfrahubTransform):
     def _extra_config(self, data: dict, platform_name: str, extra_roots: dict | None = None) -> dict:
         """Return device-specific template variables.
 
-        Default implementation adds VLANs, VXLAN config, ACLs, VRF default
-        gateways, and SGT rules when device_role is set.
+        Default implementation adds VLANs, VXLAN config, ACLs, inter-VRF
+        exchange routes, and SGT rules when device_role is set.
         Override in subclasses for different behavior.
         """
         if not self.device_role:
             return {}
         activations = data.get("segment_deployments")
-        vlans = get_vlans(activations=activations)
         # PBR and the zero-trust ACLs hang off the segment's SVI; a
         # terminate_inline segment has none here (its HA pair routes it).
         routed = routed_activations(activations)
 
-        # VRF default gateways: from TopologyRoutedExchange capabilities on this
-        # device's own interfaces — both legs of the inter-VRF hop live here.
-        vrf_gateways = get_vrf_default_gateways(data.get("interfaces"))
+        # Exchange transits (see transform()): they only add VLANs, VNIs, VRFs and
+        # the anycast gateway; policy (SGT, ACL, PBR) stays on real segments.
+        transits = data.get("exchange_transits") or []
+        if transits and platform_name in {"sonic", "dell_sonic"}:
+            raise ValueError(
+                f"{platform_name} cannot render the inter-VRF exchange transit legs; refusing incomplete config"
+            )
+        vlans = get_vlans(activations=(activations or []) + transits)
+        transit_by_vlan = {act["vlan_id"]: act for act in transits}
+        for vlan in vlans if transits else []:
+            if vlan["vlan_id"] in transit_by_vlan:
+                # Explicit VNI and VRF L3 VNI: SR OS's IRB fallback would use the VLAN id.
+                transit = transit_by_vlan[vlan["vlan_id"]]
+                namespace = transit["segment"]["gateway"]["ip_prefix"]["ip_namespace"]
+                vlan.update(vni=transit["vni"], l3_vni=namespace["l3_vni"])
+
+        # Inter-VRF exchange routes through the firewall context(s) tagged on
+        # this device's service ports (statics in the VRF, redistributed to EVPN).
+        vrf_routes = get_exchange_routes(
+            data.get("interfaces"), _flatten_deployment_segment_activations(data.get("deployment"))
+        )
 
         # Tier-to-tier GPO contracts, derived from the segments' permit rules
         sgt_rules = get_sgt_rules(activations)
@@ -287,12 +313,12 @@ class BaseDeviceTransform(InfrahubTransform):
                 data,
                 platform_name,
                 device_role=self.device_role,
-                activations=activations,
+                activations=(activations or []) + transits,
                 fabric_rt_asn=_fabric_rt_asn(data.get("deployment")),
                 fabric_anycast_mac=_fabric_anycast_mac(data.get("deployment")),
             ),
             "acls": acls,
-            "vrf_gateways": vrf_gateways,
+            "vrf_routes": vrf_routes,
             "sgt_rules": sgt_rules,
             "customer_pbr_rules": customer_pbr_rules,
             "lb_backend_pbr_rules": lb_backend_pbr_rules,

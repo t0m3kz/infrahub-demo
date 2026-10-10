@@ -15,12 +15,11 @@ itself is generators/firewall_context.py's FirewallContextMixin, shared with
 customer_dc.py; the VLAN and P2P pools come from
 generators/topology/colocation.py's _ensure_firewall_context_pools.
 
-Inter-VRF routing (PROD/NON-PROD <-> INTERNET/MANAGEMENT) is no longer
-per-deployment/per-circuit hub detection — with only 4 fixed global
-namespaces, it's 4 fixed TopologyRoutedExchange objects bootstrapped once
-(see data/bootstrap/23_exchanges.yml and docs/exchange_gateway.md), so every
-customer deployment already has a path to INTERNET/MANAGEMENT without this
-generator needing to detect or provision anything per-footprint.
+Inter-VRF routing (PROD/NON-PROD <-> INTERNET) is a TopologyRoutedExchange
+per FirewallContext (see docs/exchange_gateway.md); there are no bootstrap
+exchanges. Colocation keeps the legacy default-namespace P2P path for now
+(`_transit_legs = False`), so no namespaced transit legs or exchanges are
+created here.
 
 Registered as add_customer_deployment_colocation in .infrahub.yml, targeting
 the customer_deployments group and querying customer_colocation.gql.
@@ -49,6 +48,8 @@ class CustomerDeploymentColocationExchangeGenerator(
     _customer_kind = "TopologyCustomerColocation"
     _parent_label = "ColocationMetro"
     _parent_generators = ("add_colocation_metro",)
+    # Legacy default-namespace P2P path, deleted in PR 4 with the colocation transit legs.
+    _transit_legs = False
 
     async def generate(self, data: dict[str, Any]) -> None:
         cleaned = clean_data(data)

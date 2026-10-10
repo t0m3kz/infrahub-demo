@@ -90,7 +90,14 @@ access-group global-in global
 ! mode multiple must already be set on this ASA (system exec space, requires reload) —
 ! not idempotently re-set here.
 {%- for context in contexts %}
-{%- if context.vlan_id and context.parent_interface.name %}
+{%- if context.legs %}
+{%- for leg in context.legs %}
+interface {{ leg.parent_interface.name }}.{{ leg.vlan }}
+ vlan {{ leg.vlan }}
+ no shutdown
+!
+{%- endfor %}
+{%- elif context.vlan_id and context.parent_interface.name %}
 interface {{ context.parent_interface.name }}.{{ context.vlan_id }}
  vlan {{ context.vlan_id }}
  no shutdown
@@ -99,7 +106,11 @@ interface {{ context.parent_interface.name }}.{{ context.vlan_id }}
 {%- endfor %}
 {%- for context in contexts %}
 context {{ context.name }}
-{%- if context.vlan_id and context.parent_interface.name %}
+{%- if context.legs %}
+{%- for leg in context.legs %}
+ allocate-interface {{ leg.parent_interface.name }}.{{ leg.vlan }}
+{%- endfor %}
+{%- elif context.vlan_id and context.parent_interface.name %}
  allocate-interface {{ context.parent_interface.name }}.{{ context.vlan_id }}
 {%- endif %}
  config-url disk0:/{{ context.name }}.cfg
@@ -108,8 +119,43 @@ context {{ context.name }}
 {%- endif %}
 !
 {%- endfor %}
+{#- Transit legs: a nameif per VRF in the context, whose routing table holds
+    the routes. The pair's VIP is the active address, the secondary member's
+    own address the `standby` one. The context's rules guard each tenant leg
+    inbound; the internet leg takes none (return traffic is stateful). -#}
 {%- for context in contexts %}
-{%- if context.vlan_id and context.parent_interface.name and context.ip_address %}
+{%- if context.legs %}
+changeto context {{ context.name }}
+{%- for leg in context.legs %}
+interface {{ leg.parent_interface.name }}.{{ leg.vlan }}
+ nameif {{ leg.nameif }}
+ security-level {{ {'prod': 100, 'non_prod': 50, 'internet': 0}[leg.ns_type] }}
+ ip address {{ asa_ip(leg.virtual_ip or leg.own_ip) }}{{ ' standby ' + leg.standby_ip.split('/')[0] if leg.virtual_ip and leg.standby_ip else '' }}
+ no shutdown
+!
+{%- endfor %}
+{#- PBR sends the redirected traffic back out of the interface it came in on. #}
+same-security-traffic permit intra-interface
+!
+{%- for route in context.routes %}
+{%- set route_leg = context.legs | selectattr('interface', 'equalto', route.interface) | first %}
+route {{ route_leg.nameif }} {{ asa_addr(route.destination) }} {{ route.nexthop }} 1
+{%- endfor %}
+!
+{%- for leg in context.legs if leg.ns_type != 'internet' %}
+{%- for deny in context.isolation if deny.src_zone == leg.zone %}
+{%- for other in context.legs if other.zone == deny.dst_zone %}
+{%- for prefix in other.prefixes %}
+access-list {{ leg.nameif }}-in extended deny ip any {{ asa_addr(prefix) }} log
+{%- endfor %}
+{%- endfor %}
+{%- endfor %}
+{{- access_lists(context.policies or [], leg.nameif + '-in') }}
+access-list {{ leg.nameif }}-in extended deny ip any any log
+access-group {{ leg.nameif }}-in in interface {{ leg.nameif }}
+{%- endfor %}
+!
+{%- elif context.vlan_id and context.parent_interface.name and context.ip_address %}
 changeto context {{ context.name }}
 interface {{ context.parent_interface.name }}.{{ context.vlan_id }}
 {%- if ':' in context.ip_address %}
@@ -126,7 +172,7 @@ same-security-traffic permit intra-interface
 !
 {%- endif %}
 {%- endfor %}
-{%- for context in contexts if context.policies %}
+{%- for context in contexts if context.policies and not context.legs %}
 changeto context {{ context.name }}
 ! --- Access Control Lists in context {{ context.name }} ---
 {{- access_lists(context.policies, 'customer-pbr-in') }}

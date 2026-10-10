@@ -72,7 +72,23 @@ add virtual-system name {{ context.name }}
 {%- if context.tenant_name %}
 set virtual-system {{ context.name }} comments "{{ context.tenant_name }}"
 {%- endif %}
-{%- if context.vlan_id and context.parent_interface.name %}
+{#- Transit legs: one VLAN interface per VRF (security zone) in the virtual
+    system, whose own routing table holds the routes. Each member keeps its
+    own address; the cluster VIP (below, in ClusterXL) is the gateway. #}
+{%- if context.legs %}
+{%- for leg in context.legs %}
+{%- set leg_name = leg.parent_interface.name + '.' + leg.vlan | string %}
+set interface {{ leg_name }} vlan {{ leg.vlan }}
+set interface {{ leg_name }} state on
+set interface {{ leg_name }} ipv4-address {{ leg.own_ip | replace('/', ' mask-length ') }}
+set interface {{ leg_name }} security-zone {{ leg.zone }}
+set virtual-system {{ context.name }} interface {{ leg_name }}
+{%- endfor %}
+set virtual-system {{ context.name }}
+{%- for route in context.routes %}
+set static-route {{ 'default' if route.destination == '0.0.0.0/0' else route.destination }} nexthop gateway address {{ route.nexthop }} on
+{%- endfor %}
+{%- elif context.vlan_id and context.parent_interface.name %}
 {%- set ctx_iface_name = context.parent_interface.name + '.' + context.vlan_id | string %}
 set interface {{ ctx_iface_name }} vlan {{ context.vlan_id }}
 set interface {{ ctx_iface_name }} state on
@@ -83,6 +99,14 @@ set virtual-system {{ context.name }} interface {{ ctx_iface_name }}
 {%- endif %}
 {%- endfor %}
 !
+{%- for context in contexts if context.isolation %}
+! --- PROD <-> NON-PROD isolation in virtual system {{ context.name }} ---
+set virtual-system {{ context.name }}
+{%- for deny in context.isolation %}
+add access-rule layer "Network" position top name "deny-{{ deny.src_zone }}-to-{{ deny.dst_zone }}" action drop source {{ deny.src_zone }} destination {{ deny.dst_zone }} service Any track Log
+{%- endfor %}
+!
+{%- endfor %}
 {%- for context in contexts if context.policies %}
 ! --- Security Policies in virtual system {{ context.name }} ---
 set virtual-system {{ context.name }}
@@ -103,9 +127,18 @@ set cluster sync-interface {{ ha.ha_link }}
 {#- ClusterXL: each member keeps its own interface address; the cluster
     virtual IP of a segment the pair terminates inline is its gateway,
     defined on the cluster object through the management API. -#}
+{%- set cluster_if = namespace(n=0) %}
+{%- for context in contexts %}
+{%- for leg in context.legs if leg.virtual_ip %}
+{%- set cluster_if.n = cluster_if.n + 1 %}
+{%- set leg_name = leg.parent_interface.name + '.' + leg.vlan | string %}
+mgmt_cli set simple-cluster name "{{ ha.name }}" interfaces.add.{{ cluster_if.n }}.name "{{ leg_name }}" interfaces.add.{{ cluster_if.n }}.interface-type "cluster" interfaces.add.{{ cluster_if.n }}.ip-address "{{ leg.virtual_ip.split('/')[0] }}" interfaces.add.{{ cluster_if.n }}.network-mask "{{ leg.virtual_ip.split('/')[1] | int | cidr_to_netmask }}"
+{%- endfor %}
+{%- endfor %}
 {%- for iface in fw_interfaces if iface.virtual_ip %}
+{%- set cluster_if.n = cluster_if.n + 1 %}
 {%- set iface_name = (iface.parent_interface.name + '.' + iface.vlan_id | string) if (iface.vlan_id and iface.parent_interface) else iface.name %}
-mgmt_cli set simple-cluster name "{{ ha.name }}" interfaces.add.1.name "{{ iface_name }}" interfaces.add.1.interface-type "cluster" interfaces.add.1.ip-address "{{ iface.virtual_ip.split('/')[0] }}" interfaces.add.1.network-mask "{{ iface.virtual_ip.split('/')[1] | int | cidr_to_netmask }}"
+mgmt_cli set simple-cluster name "{{ ha.name }}" interfaces.add.{{ cluster_if.n }}.name "{{ iface_name }}" interfaces.add.{{ cluster_if.n }}.interface-type "cluster" interfaces.add.{{ cluster_if.n }}.ip-address "{{ iface.virtual_ip.split('/')[0] }}" interfaces.add.{{ cluster_if.n }}.network-mask "{{ iface.virtual_ip.split('/')[1] | int | cidr_to_netmask }}"
 {%- endfor %}
 !
 {%- endif %}

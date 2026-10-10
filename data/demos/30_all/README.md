@@ -159,8 +159,12 @@ transit circuit on `Ethernet1/14` and an eBGP session in VRF `INTERNET`. The ISP
 DC reaches the internet through these edges, so a flow trace towards the internet ends on an ISP device.
 
 The ISP devices are in no group, so no artifact or check targets them. Their configuration is the carrier's
-business. The `PROD-INTERNET` and `NON-PROD-INTERNET` routed exchanges are not wired to these edges yet and
-stay in `provisioning`: an exchange expects both of its legs on one firewall.
+business. Inter-VRF routing is not wired to these edges yet. The DCs reach `INTERNET` through one
+`TopologyRoutedExchange` per firewall context (`dc11-fw-shared-PROD-INTERNET`, ...), created when a customer is
+boarded: a hop through that context, whose legs are its member sub-interfaces in the tenant VRF and in `INTERNET`
+(a /29 transit per context and VRF). The border leaves carry the `INTERNET` return routes but no default route
+there; the upstream arrives with the internet change. The colocation cages keep the default-namespace P2P path
+until then. `PROD` and `NON-PROD` never exchange directly, and `MANAGEMENT` has no exchange yet.
 
 Generators add more devices, prefixes and segments on top of what the files declare, so read these as
 minimums. To review the whole thing as a change, open a Proposed Change from `all-demo-scenario` into `main`.

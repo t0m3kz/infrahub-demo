@@ -1,0 +1,219 @@
+configure system hostname "dc1-border-leaf-01"
+configure system dns resolver admin-state enable
+configure router "Base" admin-state enable
+configure router "Base" router-id "10.0.0.1"
+
+
+configure port "system" admin-state enable
+configure port "system" mtu 9212
+configure router "Base" interface "system" admin-state enable
+configure router "Base" interface "system" ip-mtu 9000
+configure router "Base" interface "system" ipv4 admin-state enable
+configure router "Base" interface "system" ipv4 primary address "10.0.0.1/32"
+
+
+configure port "Ethernet1" admin-state enable
+configure port "Ethernet1" mtu 9212
+configure router "Base" interface "Ethernet1" admin-state enable
+configure router "Base" interface "Ethernet1" mtu 9000
+configure router "Base" interface "Ethernet1" description "to spine-01"
+configure router "Base" interface "Ethernet1" ipv4 admin-state enable
+configure router "Base" interface "Ethernet1" ipv4 primary address "10.1.0.1/31"
+configure port "Ethernet2" admin-state enable
+configure port "Ethernet2" mtu 9212
+configure router "Base" interface "Ethernet2" admin-state enable
+configure router "Base" interface "Ethernet2" mtu 9000
+configure router "Base" interface "Ethernet2" description "to spine-02"
+configure router "Base" interface "Ethernet2" ipv4 admin-state enable
+configure router "Base" interface "Ethernet2" ipv4 primary address "10.1.0.3/31"
+configure port "Ethernet10" admin-state enable
+configure port "Ethernet10" mtu 9212
+configure port "Ethernet10" ethernet encap-type dot1q
+configure port "Ethernet20" admin-state enable
+configure port "Ethernet20" mtu 9212
+configure port "Ethernet20" ethernet encap-type dot1q
+configure router "Base" bgp 1 admin-state enable
+configure router "Base" bgp 1 router-id "10.0.0.1"
+configure router "Base" bgp 1 local-as 65000
+configure router "Base" bgp 1 ebgp-default-reject-policy import false
+configure router "Base" bgp 1 ebgp-default-reject-policy export false
+configure router "Base" bgp 1 graceful-restart admin-state enable
+configure router "Base" bgp 1 multipath max-paths 64
+configure router "Base" bgp 1 group "EVPN-PEERS" admin-state enable
+configure router "Base" bgp 1 group "EVPN-PEERS" peer-as 65000
+configure router "Base" bgp 1 group "EVPN-PEERS" local-address "10.0.0.1"
+configure router "Base" bgp 1 group "EVPN-PEERS" family evpn
+configure router "Base" bgp 1 group "EVPN-PEERS" send-community standard
+configure router "Base" bgp 1 group "UNDERLAY-PEERS" admin-state enable
+configure router "Base" bgp 1 group "UNDERLAY-PEERS" family ipv4
+configure router "Base" bgp 1 group "UNDERLAY-PEERS" bfd-liveness true
+configure router "Base" bgp 1 group "UNDERLAY-PEERS" send-community standard
+configure router "Base" bgp 1 neighbor "10.1.0.0" admin-state enable
+configure router "Base" bgp 1 neighbor "10.1.0.0" peer-as 65100
+configure router "Base" bgp 1 neighbor "10.1.0.0" local-as as-number 65001
+configure router "Base" bgp 1 neighbor "10.1.0.0" local-as prepend-global-as false
+configure router "Base" bgp 1 neighbor "10.1.0.0" local-as private true
+configure router "Base" bgp 1 neighbor "10.1.0.0" description "spine-01"
+configure router "Base" bgp 1 neighbor "10.1.0.0" group "UNDERLAY-PEERS"
+configure router "Base" bgp 1 neighbor "10.1.0.2" admin-state enable
+configure router "Base" bgp 1 neighbor "10.1.0.2" peer-as 65101
+configure router "Base" bgp 1 neighbor "10.1.0.2" local-as as-number 65001
+configure router "Base" bgp 1 neighbor "10.1.0.2" local-as prepend-global-as false
+configure router "Base" bgp 1 neighbor "10.1.0.2" local-as private true
+configure router "Base" bgp 1 neighbor "10.1.0.2" description "spine-02"
+configure router "Base" bgp 1 neighbor "10.1.0.2" group "UNDERLAY-PEERS"
+configure router "Base" bgp 1 neighbor "10.0.0.100" admin-state enable
+configure router "Base" bgp 1 neighbor "10.0.0.100" peer-as 65000
+configure router "Base" bgp 1 neighbor "10.0.0.100" description "spine-01"
+configure router "Base" bgp 1 neighbor "10.0.0.100" group "EVPN-PEERS"
+configure router "Base" bgp 1 neighbor "10.0.0.101" admin-state enable
+configure router "Base" bgp 1 neighbor "10.0.0.101" peer-as 65000
+configure router "Base" bgp 1 neighbor "10.0.0.101" description "spine-02"
+configure router "Base" bgp 1 neighbor "10.0.0.101" group "EVPN-PEERS"
+configure router "Base" bgp 1 export policy "RM-CONN-2-BGP"
+!
+! VXLAN / EVPN — one "vpls" service per L2 VNI, bridged over the loopback VTEP
+!
+configure service vpls "vpls-10100" admin-state enable
+configure service vpls "vpls-10100" service-id 10100
+configure service vpls "vpls-10100" customer 1
+configure service vpls "vpls-10100" vxlan instance 1 source-address "10.0.0.1"
+configure service vpls "vpls-10100" vxlan instance 1 vni 10100
+configure service vpls "vpls-10100" vxlan instance 1 create
+configure service vpls "vpls-10100" bgp-evpn evi 10100
+configure service vpls "vpls-10100" bgp-evpn vxlan bgp-instance 1 vxlan-instance 1
+configure service vpls "vpls-10100" bgp-evpn vxlan bgp-instance 1 admin-state enable
+configure service vpls "vpls-10100" bgp instance 1 route-distinguisher "10.0.0.1:10100"
+configure service vpls "vpls-10100" bgp instance 1 route-target export "target:65000:10100"
+configure service vpls "vpls-10100" bgp instance 1 route-target import "target:65000:10100"
+configure service vpls "vpls-10100" sap Ethernet10:100 admin-state enable
+configure service vpls "vpls-10100" sap Ethernet10:100 create
+!
+configure service vpls "vpls-64000" admin-state enable
+configure service vpls "vpls-64000" service-id 64000
+configure service vpls "vpls-64000" customer 1
+configure service vpls "vpls-64000" vxlan instance 1 source-address "10.0.0.1"
+configure service vpls "vpls-64000" vxlan instance 1 vni 64000
+configure service vpls "vpls-64000" vxlan instance 1 create
+configure service vpls "vpls-64000" bgp-evpn evi 64000
+configure service vpls "vpls-64000" bgp-evpn vxlan bgp-instance 1 vxlan-instance 1
+configure service vpls "vpls-64000" bgp-evpn vxlan bgp-instance 1 admin-state enable
+configure service vpls "vpls-64000" bgp instance 1 route-distinguisher "10.0.0.1:64000"
+configure service vpls "vpls-64000" bgp instance 1 route-target export "target:65000:64000"
+configure service vpls "vpls-64000" bgp instance 1 route-target import "target:65000:64000"
+configure service vpls "vpls-64000" sap Ethernet20:3000 admin-state enable
+configure service vpls "vpls-64000" sap Ethernet20:3000 create
+!
+configure service vpls "vpls-64001" admin-state enable
+configure service vpls "vpls-64001" service-id 64001
+configure service vpls "vpls-64001" customer 1
+configure service vpls "vpls-64001" vxlan instance 1 source-address "10.0.0.1"
+configure service vpls "vpls-64001" vxlan instance 1 vni 64001
+configure service vpls "vpls-64001" vxlan instance 1 create
+configure service vpls "vpls-64001" bgp-evpn evi 64001
+configure service vpls "vpls-64001" bgp-evpn vxlan bgp-instance 1 vxlan-instance 1
+configure service vpls "vpls-64001" bgp-evpn vxlan bgp-instance 1 admin-state enable
+configure service vpls "vpls-64001" bgp instance 1 route-distinguisher "10.0.0.1:64001"
+configure service vpls "vpls-64001" bgp instance 1 route-target export "target:65000:64001"
+configure service vpls "vpls-64001" bgp instance 1 route-target import "target:65000:64001"
+configure service vpls "vpls-64001" sap Ethernet20:3001 admin-state enable
+configure service vpls "vpls-64001" sap Ethernet20:3001 create
+!
+configure service vpls "vpls-64400" admin-state enable
+configure service vpls "vpls-64400" service-id 64400
+configure service vpls "vpls-64400" customer 1
+configure service vpls "vpls-64400" vxlan instance 1 source-address "10.0.0.1"
+configure service vpls "vpls-64400" vxlan instance 1 vni 64400
+configure service vpls "vpls-64400" vxlan instance 1 create
+configure service vpls "vpls-64400" bgp-evpn evi 64400
+configure service vpls "vpls-64400" bgp-evpn vxlan bgp-instance 1 vxlan-instance 1
+configure service vpls "vpls-64400" bgp-evpn vxlan bgp-instance 1 admin-state enable
+configure service vpls "vpls-64400" bgp instance 1 route-distinguisher "10.0.0.1:64400"
+configure service vpls "vpls-64400" bgp instance 1 route-target export "target:65000:64400"
+configure service vpls "vpls-64400" bgp instance 1 route-target import "target:65000:64400"
+configure service vpls "vpls-64400" sap Ethernet20:3400 admin-state enable
+configure service vpls "vpls-64400" sap Ethernet20:3400 create
+!
+configure service vpls "vpls-64401" admin-state enable
+configure service vpls "vpls-64401" service-id 64401
+configure service vpls "vpls-64401" customer 1
+configure service vpls "vpls-64401" vxlan instance 1 source-address "10.0.0.1"
+configure service vpls "vpls-64401" vxlan instance 1 vni 64401
+configure service vpls "vpls-64401" vxlan instance 1 create
+configure service vpls "vpls-64401" bgp-evpn evi 64401
+configure service vpls "vpls-64401" bgp-evpn vxlan bgp-instance 1 vxlan-instance 1
+configure service vpls "vpls-64401" bgp-evpn vxlan bgp-instance 1 admin-state enable
+configure service vpls "vpls-64401" bgp instance 1 route-distinguisher "10.0.0.1:64401"
+configure service vpls "vpls-64401" bgp instance 1 route-target export "target:65000:64401"
+configure service vpls "vpls-64401" bgp instance 1 route-target import "target:65000:64401"
+configure service vpls "vpls-64401" sap Ethernet20:3401 admin-state enable
+configure service vpls "vpls-64401" sap Ethernet20:3401 create
+!
+!
+! Exact-match export policy for the exchange statics (RM-VRF-STATIC-2-EVPN-<vrf>)
+!
+configure router "Base" policy-options prefix-list "PL-VRF-STATIC-INTERNET" prefix 10.1.0.0/24 type exact
+configure router "Base" policy-options prefix-list "PL-VRF-STATIC-INTERNET" prefix 10.2.0.0/24 type exact
+configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN-INTERNET" entry-type named
+configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN-INTERNET" named-entry "10" from protocol name [static]
+configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN-INTERNET" named-entry "10" from prefix-list ["PL-VRF-STATIC-INTERNET"]
+configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN-INTERNET" named-entry "10" action action-type accept
+configure router "Base" policy-options prefix-list "PL-VRF-STATIC-PROD" prefix 0.0.0.0/0 type exact
+configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN-PROD" entry-type named
+configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN-PROD" named-entry "10" from protocol name [static]
+configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN-PROD" named-entry "10" from prefix-list ["PL-VRF-STATIC-PROD"]
+configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN-PROD" named-entry "10" action action-type accept
+!
+! Tenant VRF — one "vprn" per L3 VNI, IRB into each bridged VNI above
+!
+configure service vprn 50003 admin-state enable
+configure service vprn 50003 customer 1
+configure service vprn 50003 bgp instance 1 route-distinguisher "10.0.0.1:50003"
+configure service vprn 50003 bgp instance 1 route-target export "target:65000:50003"
+configure service vprn 50003 bgp instance 1 route-target import "target:65000:50003"
+
+configure service vprn 50003 bgp-evpn evi 50003
+configure service vprn 50003 bgp-evpn vxlan bgp-instance 1 vxlan-instance 1
+configure service vprn 50003 bgp-evpn vxlan bgp-instance 1 admin-state enable
+configure service vprn 50003 static-routes route 10.1.0.0/24 route-type unicast next-hop "100.66.32.4" admin-state enable
+configure service vprn 50003 static-routes route 10.2.0.0/24 route-type unicast next-hop "100.66.32.12" admin-state enable
+configure service vprn 50003 bgp-evpn vxlan export-policy ["RM-VRF-STATIC-2-EVPN-INTERNET"]
+configure service vprn 50001 admin-state enable
+configure service vprn 50001 customer 1
+configure service vprn 50001 bgp instance 1 route-distinguisher "10.0.0.1:50001"
+configure service vprn 50001 bgp instance 1 route-target export "target:65000:50001"
+configure service vprn 50001 bgp instance 1 route-target import "target:65000:50001"
+
+configure service vprn 50001 bgp-evpn evi 50001
+configure service vprn 50001 bgp-evpn vxlan bgp-instance 1 vxlan-instance 1
+configure service vprn 50001 bgp-evpn vxlan bgp-instance 1 admin-state enable
+configure service vprn 50001 static-routes route 0.0.0.0/0 route-type unicast next-hop "100.66.0.4" admin-state enable
+configure service vprn 50001 bgp-evpn vxlan export-policy ["RM-VRF-STATIC-2-EVPN-PROD"]
+!
+! IRB Interfaces (anycast gateway) — one per bridged VLAN with a gateway
+!
+configure service vprn 50001 interface "int-vpls-10100" admin-state enable
+configure service vprn 50001 interface "int-vpls-10100" vpls "vpls-10100"
+configure service vprn 50001 interface "int-vpls-10100" mac "00:1c:73:00:dc:01"
+configure service vprn 50001 interface "int-vpls-10100" ipv4 primary-address "10.1.0.1/24"
+!
+configure service vprn 50001 interface "int-vpls-64000" admin-state enable
+configure service vprn 50001 interface "int-vpls-64000" vpls "vpls-64000"
+configure service vprn 50001 interface "int-vpls-64000" mac "00:1c:73:00:dc:01"
+configure service vprn 50001 interface "int-vpls-64000" ipv4 primary-address "100.66.0.1/29"
+!
+configure service vprn 50001 interface "int-vpls-64001" admin-state enable
+configure service vprn 50001 interface "int-vpls-64001" vpls "vpls-64001"
+configure service vprn 50001 interface "int-vpls-64001" mac "00:1c:73:00:dc:01"
+configure service vprn 50001 interface "int-vpls-64001" ipv4 primary-address "100.66.0.9/29"
+!
+configure service vprn 50003 interface "int-vpls-64400" admin-state enable
+configure service vprn 50003 interface "int-vpls-64400" vpls "vpls-64400"
+configure service vprn 50003 interface "int-vpls-64400" mac "00:1c:73:00:dc:01"
+configure service vprn 50003 interface "int-vpls-64400" ipv4 primary-address "100.66.32.1/29"
+!
+configure service vprn 50003 interface "int-vpls-64401" admin-state enable
+configure service vprn 50003 interface "int-vpls-64401" vpls "vpls-64401"
+configure service vprn 50003 interface "int-vpls-64401" mac "00:1c:73:00:dc:01"
+configure service vprn 50003 interface "int-vpls-64401" ipv4 primary-address "100.66.32.9/29"
+!

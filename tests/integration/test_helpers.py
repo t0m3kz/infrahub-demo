@@ -175,6 +175,7 @@ QUERY_GET_ENDPOINT_CABLING = _load_query("get_endpoint_cabling.gql")
 QUERY_GET_APPLICATION_GRAPH = _load_query("get_application_graph.gql")
 QUERY_GET_INTERCONNECT_INVENTORY = _load_query("get_interconnect_inventory.gql")
 QUERY_GET_TENANT_SERVICES = _load_query("get_tenant_services.gql")
+QUERY_GET_TRANSIT_INVENTORY = _load_query("get_transit_inventory.gql")
 
 
 def _peering_participants(peering: dict[str, Any]) -> set[tuple[str, str]]:
@@ -1238,3 +1239,152 @@ async def fetch_tenant_services(client: InfrahubClient, branch: str) -> dict[str
         "loadbalancer_ha": loadbalancer_ha,
         "segment_deployments": segment_deployments,
     }
+
+
+def _edge_nodes(connection: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """The nodes of a raw GraphQL `{edges: [{node}]}` connection."""
+    return [edge["node"] for edge in (connection or {}).get("edges", [])]
+
+
+def _rel_node(relationship: dict[str, Any] | None) -> dict[str, Any]:
+    """The node of a raw GraphQL cardinality-one `{node}` relationship, {} when unset."""
+    return (relationship or {}).get("node") or {}
+
+
+def _value(attribute: dict[str, Any] | None) -> Any:
+    """The `value` of a raw GraphQL attribute, None when absent."""
+    return (attribute or {}).get("value")
+
+
+async def fetch_transit_inventory(client: InfrahubClient, branch: str) -> dict[str, list[dict[str, Any]]]:
+    """Fetch every firewall context with its transit legs, plus every routed exchange.
+
+    Returns:
+        {"contexts": [{"id", "name", "vlan", "tenant", "cluster_dcs",
+                       "served": [{"name", "environment"}],
+                       "legs": [{"interface", "device", "device_id", "address",
+                                 "namespace", "namespace_type", "exchanges"}],
+                       "border_ports": [{"id", "interface", "device"}]}],
+         "exchanges": [{"id", "name", "namespace_a", "namespace_a_type",
+                        "namespace_z", "namespace_z_type", "gateway_id",
+                        "gateway_name"}]}
+
+        ``legs`` are the context's DcimVirtualInterface capabilities (the
+        members' sub-interfaces; a colocation context's legacy P2P links are in
+        there too, in the default namespace), ``border_ports`` its
+        DcimPhysicalInterface ones on a border-leaf. ``exchanges`` on a leg are
+        the names of the exchanges it is linked to.
+    """
+    client.default_branch = branch
+    await asyncio.sleep(DATA_PROPAGATION_DELAY)
+    raw = await client.execute_graphql(query=QUERY_GET_TRANSIT_INVENTORY, branch_name=branch)
+
+    contexts: list[dict[str, Any]] = []
+    for node in _edge_nodes(raw["ManagedFirewallContext"]):
+        legs: list[dict[str, Any]] = []
+        border_ports: list[dict[str, Any]] = []
+        for cap in _edge_nodes(node.get("interface_capabilities")):
+            device = _rel_node(cap.get("device"))
+            if cap["__typename"] == "DcimVirtualInterface":
+                address = _rel_node(cap.get("ip_address"))
+                namespace = _rel_node(address.get("ip_namespace"))
+                legs.append(
+                    {
+                        "interface": _value(cap.get("name")),
+                        "device": _value(device.get("name")),
+                        "device_id": device.get("id"),
+                        "address": _value(address.get("address")),
+                        "namespace": _value(namespace.get("name")),
+                        "namespace_type": _value(namespace.get("namespace_type")),
+                        "exchanges": sorted(
+                            _value(exchange.get("name"))
+                            for exchange in _edge_nodes(cap.get("interface_capabilities"))
+                            if exchange.get("__typename") == "TopologyRoutedExchange"
+                        ),
+                    }
+                )
+            elif cap["__typename"] == "DcimPhysicalInterface" and _value(device.get("role")) == "border-leaf":
+                border_ports.append(
+                    {"id": cap["id"], "interface": _value(cap.get("name")), "device": _value(device.get("name"))}
+                )
+        cluster = _rel_node(node.get("cluster"))
+        contexts.append(
+            {
+                "id": node["id"],
+                "name": _value(node.get("name")),
+                "vlan": _value(node.get("vlan_id")),
+                "tenant": _value(_rel_node(node.get("tenant")).get("name")),
+                "cluster_dcs": _deployed_dc_names(
+                    [
+                        {
+                            "deployment": {
+                                "typename": _rel_node(member.get("deployment")).get("__typename"),
+                                "name": _value(_rel_node(member.get("deployment")).get("name")),
+                            }
+                        }
+                        for member in _edge_nodes(cluster.get("capabilities"))
+                    ]
+                ),
+                "served": [
+                    {"name": _value(served.get("name")), "environment": _value(served.get("environment"))}
+                    for served in _edge_nodes(node.get("served_deployments"))
+                ],
+                "legs": legs,
+                "border_ports": border_ports,
+            }
+        )
+
+    exchanges = [
+        {
+            "id": node["id"],
+            "name": _value(node.get("name")),
+            "namespace_a": _value(_rel_node(node.get("namespace_a")).get("name")),
+            "namespace_a_type": _value(_rel_node(node.get("namespace_a")).get("namespace_type")),
+            "namespace_z": _value(_rel_node(node.get("namespace_z")).get("name")),
+            "namespace_z_type": _value(_rel_node(node.get("namespace_z")).get("namespace_type")),
+            "gateway_id": _rel_node(node.get("gateway")).get("id"),
+            "gateway_name": _value(_rel_node(node.get("gateway")).get("name")),
+        }
+        for node in _edge_nodes(raw["TopologyRoutedExchange"])
+    ]
+    logger.info(
+        "Transit inventory on branch '%s': %d firewall context(s), %d routed exchange(s)",
+        branch,
+        len(contexts),
+        len(exchanges),
+    )
+    return {"contexts": contexts, "exchanges": exchanges}
+
+
+def match_transit_contexts(
+    contexts: list[dict[str, Any]],
+    dc_names: Iterable[str],
+    dedicated_tenants: Iterable[str],
+) -> tuple[dict[tuple[str, str | None], dict[str, Any]], list[dict[str, Any]]]:
+    """Split the contexts into the DC ones the suite owns and the colocation ones.
+
+    Returns ({(dc, tenant): context}, [colocation contexts]). A shared context is
+    keyed (dc, None) by the DC its member firewalls are deployed in; a dedicated
+    one (its members are virtual, so carry no deployment) by the tenant's own
+    trailing DC (`C007-P-DC10` -> DC10) and the tenant name. Contexts of a DC
+    outside ``dc_names`` (the DC6 chain's) and dedicated contexts of tenants
+    outside ``dedicated_tenants`` are dropped; a colocation context is one with
+    neither tenant nor DC.
+    """
+    allowed = set(dc_names)
+    tenants = set(dedicated_tenants)
+    by_key: dict[tuple[str, str | None], dict[str, Any]] = {}
+    colocation: list[dict[str, Any]] = []
+    for context in contexts:
+        tenant = context["tenant"]
+        if tenant:
+            dc = str(tenant).rsplit("-", 1)[-1]
+            if tenant in tenants and dc in allowed:
+                by_key[(dc, str(tenant))] = context
+            continue
+        dcs = sorted(set(context["cluster_dcs"]) & allowed)
+        if dcs:
+            by_key[(dcs[0], None)] = context
+        elif not context["cluster_dcs"]:
+            colocation.append(context)
+    return by_key, colocation

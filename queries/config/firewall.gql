@@ -44,14 +44,14 @@ query firewall_config(
               status { value }
               role { value }
               ... on DcimPhysicalInterface {
-                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+                ip_address { node { address { value } ip_namespace { node { name { value } namespace_type { value } } } } }
               }
               ... on DcimVirtualInterface {
-                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+                ip_address { node { address { value } ip_namespace { node { name { value } namespace_type { value } } } } }
                 parent_interface { node { name { value } } }
               }
               ... on DcimLAGInterface {
-                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+                ip_address { node { address { value } ip_namespace { node { name { value } namespace_type { value } } } } }
               }
               interface_capabilities {
                 edges {
@@ -74,6 +74,7 @@ query firewall_config(
                         }
                       }
                     }
+                    ... on TopologyRoutedExchange { ...ExchangeGatewayInterfaceCapabilityFields }
                     ... on ManagedFirewallContext {
                       id
                       name { value }
@@ -94,7 +95,21 @@ query firewall_config(
                           node {
                             id
                             ... on TopologyCustomer {
-                              network_segments { edges { node { id ...SegmentRulesFields } } }
+                              network_segments {
+                                edges {
+                                  node {
+                                    id
+                                    ...SegmentRulesFields
+                                    # Own gateway prefix and zone: the context's
+                                    # routes (apply_context_routes) read these,
+                                    # not the SecurityZone root.
+                                    ... on ManagedNetworkSegment {
+                                      gateway { node { ip_prefix { node { prefix { value } } } } }
+                                      security_zone { node { name { value } } }
+                                    }
+                                  }
+                                }
+                              }
                             }
                           }
                         }
