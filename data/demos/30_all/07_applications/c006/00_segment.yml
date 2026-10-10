@@ -17,4 +17,20 @@ spec:
             customer_name: "nordix-prod"
             environment: "p"
             vlan_id: 103
+            # Routed (anycast SVI in VRF PROD) so its leaf ACL, the DC11 shared
+            # context's routes and the internet egress rule in
+            # ../../08_interconnects/07_zone_policies/05_security_policy.yml have a prefix.
+            gateway:
+              data:
+                address: "10.6.103.1/24"
+                description: "c006-nordix-prod-p anycast gateway"
+                ip_namespace: "PROD"
+                ip_prefix:
+                  kind: IpamPrefix
+                  data:
+                    prefix: "10.6.103.0/24"
+                    description: "c006-nordix-prod-p (C006, DC11)"
+                    status: active
+                    role: customer
+                    ip_namespace: "PROD"
             customer_deployment: "C006-P-DC11"
