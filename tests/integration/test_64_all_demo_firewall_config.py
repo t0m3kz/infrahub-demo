@@ -527,6 +527,8 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
             # --- leaf: the ACL of the source segment's VLAN ---
             topology = await fetch_dc_topology(async_client_main, scenario_branch, dc)
             leaf_classes = {"leaf": Leaf, "access-leaf": AccessLeaf}
+            with_vlan: list[str] = []
+            seen_acls: set[str] = set()
             acls: dict[str, list[dict[str, str]]] = {}
             for device in sorted(topology["devices"], key=lambda d: str(d["name"])):
                 if device.get("role") not in leaf_classes:
@@ -538,13 +540,19 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                     query="leaf_config",
                     transform_cls=leaf_classes[str(device["role"])],
                 )
+                seen_acls.update(re.findall(r"^ip access-list (\S+)", rendered, re.MULTILINE))
+                if re.search(rf"^vlan {vlan_id}$", rendered, re.MULTILINE):
+                    with_vlan.append(str(device["name"]))
                 block = re.search(rf"^ip access-list ACL-VLAN{vlan_id}-IN\n((?:[ \t]+.*\n)*)", rendered, re.MULTILINE)
                 if block is not None:
                     acls[str(device["name"])] = [
                         match.groupdict() for line in block.group(1).splitlines() if (match := _ACL_LINE.match(line))
                     ]
             if not acls:
-                errors.append(f"{dc}: no leaf renders ACL-VLAN{vlan_id}-IN for '{rule['source_segment']}'")
+                errors.append(
+                    f"{dc}: no leaf or access-leaf renders ACL-VLAN{vlan_id}-IN for '{rule['source_segment']}' "
+                    f"(devices carrying vlan {vlan_id}: {with_vlan}; ACL names on the DC11 leafs: {sorted(seen_acls)})"
+                )
             for device, lines in acls.items():
                 denies = [
                     index
