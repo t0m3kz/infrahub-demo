@@ -102,18 +102,19 @@ set tenants {{ context.name }} security policies from-zone {{ deny.src_zone }} t
 set tenants {{ context.name }} security policies from-zone {{ deny.src_zone }} to-zone {{ deny.dst_zone }} policy deny-{{ deny.src_zone }}-to-{{ deny.dst_zone }} then deny
 set tenants {{ context.name }} security policies from-zone {{ deny.src_zone }} to-zone {{ deny.dst_zone }} policy deny-{{ deny.src_zone }}-to-{{ deny.dst_zone }} then log session-init
 {%- endfor %}
-{#- Source NAT: one pool of the context's SNAT address, one rule-set per tenant
-    zone towards INTERNET-ZONE (the pool address must be routed to the cluster
-    by the upstream; no proxy-arp, the INTERNET leg's VIP is the next hop). #}
-{%- if context.nat %}
-set tenants {{ context.name }} security nat source pool SNAT-POOL address {{ context.nat.address }}/32
-{%- for leg in context.nat.tenant_legs %}
-set tenants {{ context.name }} security nat source rule-set SNAT-{{ leg.zone }} from zone {{ leg.zone }}
-set tenants {{ context.name }} security nat source rule-set SNAT-{{ leg.zone }} to zone {{ context.nat.internet.zone }}
-set tenants {{ context.name }} security nat source rule-set SNAT-{{ leg.zone }} rule snat match source-address 0.0.0.0/0
-set tenants {{ context.name }} security nat source rule-set SNAT-{{ leg.zone }} rule snat then source-nat pool SNAT-POOL
+{#- Source NAT: per entry one pool of the translated address, one rule-set per
+    tenant zone towards the egress zone (INTERNET: the pool address must be
+    routed to the cluster by the upstream; no proxy-arp, the INTERNET leg's VIP
+    is the next hop. MANAGEMENT: the pool is that leg's VIP). #}
+{%- for nat in context.nat %}
+set tenants {{ context.name }} security nat source pool SNAT-POOL{{ nat.suffix }} address {{ nat.address }}/32
+{%- for leg in nat.tenant_legs %}
+set tenants {{ context.name }} security nat source rule-set SNAT-{{ leg.zone }}{{ nat.suffix }} from zone {{ leg.zone }}
+set tenants {{ context.name }} security nat source rule-set SNAT-{{ leg.zone }}{{ nat.suffix }} to zone {{ nat.egress.zone }}
+set tenants {{ context.name }} security nat source rule-set SNAT-{{ leg.zone }}{{ nat.suffix }} rule snat match source-address 0.0.0.0/0
+set tenants {{ context.name }} security nat source rule-set SNAT-{{ leg.zone }}{{ nat.suffix }} rule snat then source-nat pool SNAT-POOL{{ nat.suffix }}
 {%- endfor %}
-{%- endif %}
+{%- endfor %}
 #
 {%- endfor %}
 {%- for context in contexts if context.policies %}

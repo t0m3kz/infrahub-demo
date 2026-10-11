@@ -90,3 +90,29 @@ spec:
             apply_on_switch: false
             log: false
             description: "Lumivex ERP tier to the internet over https, through the DC11 firewall"
+
+          # Core services (DNS, NTP) of DC11: the infra segment sits in
+          # MANAGEMENT-ZONE (../../07_applications/infra/00_segment.yml). The
+          # firewall source-NATs these flows behind its MANAGEMENT leg VIP and
+          # nothing in MANAGEMENT-ZONE may initiate towards a tenant.
+          - index: 20
+            name: nordix-prod-to-core-dns
+            action: permit
+            protocol: udp
+            port_start: 53
+            source_segment: "c006-nordix-prod-p"
+            destination_segment: "infra-core-dns-ntp-p"
+            apply_on_switch: false
+            log: false
+            description: "Lumivex ERP tier to the DC11 core DNS, through the DC11 firewall"
+
+          - index: 30
+            name: nordix-prod-to-core-ntp
+            action: permit
+            protocol: udp
+            port_start: 123
+            source_segment: "c006-nordix-prod-p"
+            destination_segment: "infra-core-dns-ntp-p"
+            apply_on_switch: false
+            log: false
+            description: "Lumivex ERP tier to the DC11 core NTP, through the DC11 firewall"

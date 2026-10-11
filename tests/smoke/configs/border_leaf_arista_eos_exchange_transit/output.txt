@@ -32,6 +32,12 @@ vlan 3400
 vlan 3401
    name XCHG-dc1-fw-acme-INTERNET
 
+vlan 3600
+   name XCHG-dc1-fw-shared-MANAGEMENT
+
+vlan 3601
+   name XCHG-dc1-fw-acme-MANAGEMENT
+
 interface Ethernet1
    description to spine-01
    ip address 10.1.0.1/31
@@ -54,7 +60,7 @@ interface Ethernet20
    description to dc1-fw-01
 
    switchport mode trunk
-   switchport trunk allowed vlan 3000,3001,3400,3401
+   switchport trunk allowed vlan 3000,3001,3400,3401,3600,3601
    no shutdown
 
 interface Loopback0
@@ -128,9 +134,12 @@ interface Vxlan1
    vxlan vlan 3001 vni 64001
    vxlan vlan 3400 vni 64400
    vxlan vlan 3401 vni 64401
+   vxlan vlan 3600 vni 64600
+   vxlan vlan 3601 vni 64601
    !
    ! L3 VNI Mappings (VRF segments for microsegmentation)
    vxlan vrf INTERNET vni 50003
+   vxlan vrf MANAGEMENT vni 50004
    vxlan vrf PROD vni 50001
 !
 !
@@ -141,6 +150,12 @@ vrf instance INTERNET
    rd 10.0.0.1:50003
 !
 ip routing vrf INTERNET
+!
+vrf instance MANAGEMENT
+   description Tenant VRF for microsegmentation
+   rd 10.0.0.1:50004
+!
+ip routing vrf MANAGEMENT
 !
 vrf instance PROD
    description Tenant VRF for microsegmentation
@@ -174,6 +189,14 @@ router bgp 65000
       rd 10.0.0.1:64401
       route-target both 65000:64401
       redistribute learned
+   vlan 3600
+      rd 10.0.0.1:64600
+      route-target both 65000:64600
+      redistribute learned
+   vlan 3601
+      rd 10.0.0.1:64601
+      route-target both 65000:64601
+      redistribute learned
    !
    ! L3 EVPN (VRF-based for microsegmentation)
    vrf INTERNET
@@ -182,6 +205,11 @@ router bgp 65000
       route-target export evpn 50003:50003
       redistribute connected
       redistribute static route-map RM-VRF-STATIC-2-EVPN-INTERNET
+   vrf MANAGEMENT
+      rd 10.0.0.1:50004
+      route-target import evpn 65000:50004
+      route-target export evpn 65000:50004
+      redistribute connected
    vrf PROD
       rd 10.0.0.1:50001
       route-target import evpn 65000:50001
@@ -208,6 +236,12 @@ interface Vlan3400
 interface Vlan3401
    vrf INTERNET
    ip address virtual 100.66.32.9/29
+interface Vlan3600
+   vrf MANAGEMENT
+   ip address virtual 100.66.48.1/29
+interface Vlan3601
+   vrf MANAGEMENT
+   ip address virtual 100.66.48.9/29
 !
 ! Inter-VRF exchange routes (TopologyRoutedExchange, via the firewall context)
 !

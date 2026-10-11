@@ -271,9 +271,9 @@ class FirewallContextMixin:
         sub-interface `<uplink>.<transit_vlan>` addressed from a /29 in that
         VRF (utils/exchange_transit.py), linked to the context and to the
         exchange(s) of the leg. The legs of the customer's tenant namespace
-        (from its environment) and of INTERNET are joined by one
-        TopologyRoutedExchange `{context}-{A}-{Z}` per EXCHANGE_PEERS pair, so
-        PROD is never paired with NON-PROD. Legs and exchanges are created
+        (from its environment) and of each of its EXCHANGE_PEERS (INTERNET,
+        MANAGEMENT) are joined by one TopologyRoutedExchange `{context}-{A}-{Z}`
+        per pair, so PROD is never paired with NON-PROD. Legs and exchanges are created
         lazily: a shared context serving PROD and NON-PROD customers grows the
         NON-PROD leg when the first NON-PROD customer boards.
 
@@ -285,7 +285,8 @@ class FirewallContextMixin:
 
         A context with an INTERNET leg also gets ONE public SNAT /32 from
         FW-SNAT-INTERNET-IPv4 (context.snat_address), shared by every tenant
-        VRF the context serves; the completeness check includes it, so a run
+        VRF the context serves; no other peer gets one (MANAGEMENT is
+        translated to its own leg's VIP); the completeness check includes it, so a run
         heals a context that lacks one.
 
         Writes run under the context's lock; the completeness check repeats

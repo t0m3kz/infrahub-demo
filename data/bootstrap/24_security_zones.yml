@@ -1,10 +1,12 @@
 ---
-# The two macro trust zones every segment is classified into
-# (generators/helpers/rules.py RulesPlanner.pick_zone_name, by environment).
+# The macro trust zones: PROD-ZONE / NONPROD-ZONE are what every tenant segment
+# is classified into by environment (generators/helpers/rules.py
+# RulesPlanner.pick_zone_name); INTERNET-ZONE and MANAGEMENT-ZONE are the
+# exchange peers (utils/exchange_transit.py ZONE_BY_NS_TYPE), assigned
+# explicitly to the segments that live there.
 # On main from the start so branches boarding segments in parallel share one
 # node each; a zone created on a branch (segment.py's fallback) collides with
-# every other such branch on merge (unique name). Values mirror
-# RulesPlanner.zone_seed.
+# every other such branch on merge (unique name).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -19,3 +21,6 @@ spec:
     - name: "INTERNET-ZONE"
       description: "Untrusted external networks — the internet"
       trust_level: 0
+    - name: "MANAGEMENT-ZONE"
+      description: "Core services (DNS/NTP/syslog/monitoring), reached by tenants, never initiating towards them"
+      trust_level: 90

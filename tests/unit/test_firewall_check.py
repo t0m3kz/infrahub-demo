@@ -324,7 +324,7 @@ class TestContextRoutesTenantLegsAreExchangeTenants:
         assert mgmt["prefixes"] == []
         assert [r["vrf"] for r in context["routes"]] == ["PROD"]
 
-    def test_segment_in_the_management_zone_is_not_routed_as_a_tenant_prefix(self) -> None:
+    def test_segment_in_the_management_zone_is_routed_to_the_management_leg_not_as_a_tenant_prefix(self) -> None:
         from transforms.config.firewall import apply_context_routes
 
         prod = {"ns_type": "prod", "zone": "PROD-ZONE", "anycast": "100.66.0.1", "interface": "e.3000", "vrf": "PROD"}
@@ -342,5 +342,90 @@ class TestContextRoutesTenantLegsAreExchangeTenants:
         }
         context = {"legs": [prod, mgmt], "segments": [segment]}
         apply_context_routes(context, {})
-        assert mgmt["prefixes"] == []
-        assert context["routes"] == []
+        assert prod["prefixes"] == []
+        assert mgmt["prefixes"] == ["10.9.0.0/24"]
+        assert context["routes"] == [
+            {"destination": "10.9.0.0/24", "nexthop": "100.66.48.1", "interface": "e.3600", "vrf": "MANAGEMENT"}
+        ]
+
+
+def _legs(*ns_types: str) -> list[dict]:
+    zones = {
+        "prod": "PROD-ZONE",
+        "non_prod": "NONPROD-ZONE",
+        "internet": "INTERNET-ZONE",
+        "management": "MANAGEMENT-ZONE",
+    }
+    return [
+        {
+            "ns_type": ns_type,
+            "zone": zones[ns_type],
+            "nameif": zones[ns_type].removesuffix("-ZONE").lower(),
+            "anycast": f"100.66.{i}.1",
+            "vip": f"100.66.{i}.4",
+            "interface": f"e.{3000 + i}",
+            "vrf": ns_type.upper(),
+        }
+        for i, ns_type in enumerate(ns_types)
+    ]
+
+
+class TestManagementPeerRoutesAndIsolation:
+    """The MANAGEMENT peer: zone CIDRs routed to its leg, tenant-initiated only."""
+
+    def test_zone_cidrs_from_the_root_route_to_the_management_anycast_between_tenant_and_default(self) -> None:
+        from transforms.config.firewall import apply_context_routes
+
+        legs = _legs("prod", "internet", "management")
+        segment = {
+            "id": "s1",
+            "gateway": {"ip_prefix": {"prefix": "10.1.0.0/24"}},
+            "security_zone": {"name": "PROD-ZONE"},
+        }
+        context = {"legs": legs, "segments": [segment]}
+        roots = {"infra-b": ("MANAGEMENT-ZONE", "10.251.0.0/24"), "infra-a": ("MANAGEMENT-ZONE", "10.250.0.0/24")}
+        apply_context_routes(context, {**roots, "other": ("PROD-ZONE", "10.77.0.0/24")})
+        assert [(r["destination"], r["nexthop"], r["vrf"]) for r in context["routes"]] == [
+            ("10.1.0.0/24", "100.66.0.1", "PROD"),
+            ("10.250.0.0/24", "100.66.2.1", "MANAGEMENT"),
+            ("10.251.0.0/24", "100.66.2.1", "MANAGEMENT"),
+            ("0.0.0.0/0", "100.66.1.1", "INTERNET"),
+        ]
+        assert legs[2]["prefixes"] == ["10.250.0.0/24", "10.251.0.0/24"]
+
+    def test_no_management_leg_means_no_management_route_and_no_management_deny(self) -> None:
+        from transforms.config.firewall import apply_context_routes
+
+        context = {"legs": _legs("prod", "internet"), "segments": []}
+        apply_context_routes(context, {"infra": ("MANAGEMENT-ZONE", "10.250.0.0/24")})
+        assert [r["destination"] for r in context["routes"]] == ["0.0.0.0/0"]
+        assert context["isolation"] == []
+
+    def test_management_leg_denies_management_towards_every_held_tenant_zone(self) -> None:
+        from transforms.config.firewall import apply_context_routes
+
+        context = {"legs": _legs("prod", "non_prod", "internet", "management"), "segments": []}
+        apply_context_routes(context, {})
+        assert context["isolation"] == [
+            {"src_zone": "PROD-ZONE", "dst_zone": "NONPROD-ZONE"},
+            {"src_zone": "NONPROD-ZONE", "dst_zone": "PROD-ZONE"},
+            {"src_zone": "MANAGEMENT-ZONE", "dst_zone": "PROD-ZONE"},
+            {"src_zone": "MANAGEMENT-ZONE", "dst_zone": "NONPROD-ZONE"},
+        ]
+
+    def test_single_tenant_context_denies_only_management_towards_it(self) -> None:
+        from transforms.config.firewall import apply_context_routes
+
+        context = {"legs": _legs("prod", "internet", "management"), "segments": []}
+        apply_context_routes(context, {})
+        assert context["isolation"] == [{"src_zone": "MANAGEMENT-ZONE", "dst_zone": "PROD-ZONE"}]
+
+    def test_prod_non_prod_pair_is_unchanged_without_a_management_leg(self) -> None:
+        from transforms.config.firewall import apply_context_routes
+
+        context = {"legs": _legs("prod", "non_prod", "internet"), "segments": []}
+        apply_context_routes(context, {})
+        assert context["isolation"] == [
+            {"src_zone": "PROD-ZONE", "dst_zone": "NONPROD-ZONE"},
+            {"src_zone": "NONPROD-ZONE", "dst_zone": "PROD-ZONE"},
+        ]

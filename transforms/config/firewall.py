@@ -10,7 +10,7 @@ from transforms.helpers.firewall import (
 )
 from transforms.helpers.ha import get_ha, inline_addresses
 from transforms.helpers.segments import _get_segment_prefix_str, segment_vlan_ids
-from utils.exchange_transit import EXCHANGE_PEERS, ZONE_BY_NS_TYPE
+from utils.exchange_transit import EXCHANGE_PEERS, INTERNET_TYPE, MANAGEMENT_TYPE, ZONE_BY_NS_TYPE
 
 DEFAULT_ROUTE = "0.0.0.0/0"
 
@@ -88,15 +88,16 @@ def apply_context_routes(context: dict[str, Any], segment_prefixes: dict[str, tu
     routing-instance / PAN-OS per-vsys virtual router): every served tenant
     segment prefix goes to the border leaves' anycast gateway (.1) of the
     tenant leg in its zone's VRF (a segment with no known zone takes the
-    only tenant leg), and 0.0.0.0/0 to the anycast of the INTERNET leg. A
-    context holding both PROD and NON-PROD also gets
-    an explicit PROD<->NONPROD deny (``isolation``), since the two VRFs must
-    never be bridged through it.
+    only tenant leg), the CIDRs of the MANAGEMENT zone to the anycast of the
+    MANAGEMENT leg, and 0.0.0.0/0 to the anycast of the INTERNET leg. A
+    context holding both PROD and NON-PROD also gets an explicit PROD<->NONPROD
+    deny (``isolation``), since the two VRFs must never be bridged through it;
+    one with a MANAGEMENT leg also denies MANAGEMENT-ZONE towards each tenant
+    zone it holds (the services answer, they never initiate).
 
     Sets ``routes`` ([{destination, nexthop, interface, vrf}], tenant
-    prefixes first), ``isolation`` ([{src_zone, dst_zone}]), ``nat`` (the
-    context's SNAT address, its INTERNET leg and tenant legs; None without a
-    SNAT address) and each tenant leg's ``prefixes``. A context without legs
+    prefixes first), ``isolation`` ([{src_zone, dst_zone}]), ``nat`` (see
+    _nat_entries) and each leg's ``prefixes``. A context without legs
     (colocation) is left as is.
     """
     legs = context.get("legs") or []
@@ -121,12 +122,26 @@ def apply_context_routes(context: dict[str, Any], segment_prefixes: dict[str, tu
         if leg and prefix not in leg["prefixes"]:
             leg["prefixes"].append(prefix)
 
+    # An exchange peer (INTERNET, MANAGEMENT) is reached through its own leg:
+    # INTERNET by the default route, any other peer by the CIDRs of the
+    # segments in its zone (the SecurityZone root, plus the served segments).
+    peer_legs = [leg for leg in legs if leg["ns_type"] not in EXCHANGE_PEERS and leg["ns_type"] != INTERNET_TYPE]
+    for leg in peer_legs:
+        zone_prefixes = {prefix for zone, prefix in segment_prefixes.values() if zone == leg["zone"]}
+        zone_prefixes.update(
+            prefix
+            for segment in context.get("segments") or []
+            if (segment.get("security_zone") or {}).get("name") == leg["zone"]
+            and (prefix := _get_segment_prefix_str(segment))
+        )
+        leg["prefixes"] = sorted(zone_prefixes)
+
     routes = [
         {"destination": prefix, "nexthop": leg["anycast"], "interface": leg["interface"], "vrf": leg["vrf"]}
-        for leg in tenant_legs
+        for leg in (*tenant_legs, *peer_legs)
         for prefix in sorted(leg["prefixes"])
     ]
-    internet = next((leg for leg in legs if leg["ns_type"] == "internet"), None)
+    internet = next((leg for leg in legs if leg["ns_type"] == INTERNET_TYPE), None)
     if internet:
         routes.append(
             {
@@ -137,23 +152,60 @@ def apply_context_routes(context: dict[str, Any], segment_prefixes: dict[str, tu
             }
         )
     context["routes"] = routes
-    # Source NAT: the tenant legs' traffic leaves the INTERNET leg as the
-    # context's one public address. No address or no INTERNET leg: no NAT.
-    context["nat"] = (
-        {"address": context["snat"], "internet": internet, "tenant_legs": tenant_legs}
-        if context.get("snat") and internet and tenant_legs
-        else None
-    )
+    context["nat"] = _nat_entries(context, legs, tenant_legs)
 
     held = {leg["ns_type"] for leg in legs}
-    context["isolation"] = (
-        [
-            {"src_zone": ZONE_BY_NS_TYPE[a], "dst_zone": ZONE_BY_NS_TYPE[b]}
-            for a, b in (("prod", "non_prod"), ("non_prod", "prod"))
-        ]
-        if {"prod", "non_prod"} <= held
-        else []
-    )
+    pairs = [("prod", "non_prod"), ("non_prod", "prod")] if {"prod", "non_prod"} <= held else []
+    # Tenant-initiated only: the MANAGEMENT zone never opens a session towards a tenant.
+    if MANAGEMENT_TYPE in held:
+        pairs += [(MANAGEMENT_TYPE, ns_type) for ns_type in EXCHANGE_PEERS if ns_type in held]
+    context["isolation"] = [{"src_zone": ZONE_BY_NS_TYPE[a], "dst_zone": ZONE_BY_NS_TYPE[b]} for a, b in pairs]
+
+
+def _nat_entries(
+    context: dict[str, Any], legs: list[dict[str, Any]], tenant_legs: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """The context's source-NAT entries, one per egress leg; every vendor renders them with one loop.
+
+    The tenant legs' traffic leaves
+
+    - the INTERNET leg as the context's one public SNAT address, which the
+      firewall has to own itself (``own_address``: PAN-OS secondary IP); no
+      address, no entry;
+    - the MANAGEMENT leg as that leg's VIP, which it already owns as its
+      interface address (``own_address`` false), so the services see one
+      source and need no tenant return route.
+
+    ``open_egress`` says every tenant flow towards the egress zone is
+    permitted (the internet is not filtered per service; ASA gives that leg no
+    ACL); a MANAGEMENT flow is permitted only by the context's rules, which
+    then just need translating. Only FortiOS ties NAT to a policy, so only it
+    reads this.
+
+    An entry is {suffix, egress (the leg), address (plain IP), own_address,
+    open_egress, tenant_legs}. ``suffix`` is appended to the vendor's object names so two
+    entries never collide; INTERNET's is empty (its names predate the list).
+    """
+    candidates = [
+        (next((leg for leg in legs if leg["ns_type"] == ns_type), None), ns_type)
+        for ns_type in (INTERNET_TYPE, MANAGEMENT_TYPE)
+    ]
+    entries: list[dict[str, Any]] = []
+    for egress, ns_type in candidates:
+        own_address = ns_type == INTERNET_TYPE
+        address = context.get("snat") if own_address else (egress or {}).get("vip")
+        if egress and address and tenant_legs:
+            entries.append(
+                {
+                    "suffix": "" if own_address else f"-{egress['nameif'].upper()}",
+                    "egress": egress,
+                    "address": address,
+                    "own_address": own_address,
+                    "open_egress": own_address,
+                    "tenant_legs": tenant_legs,
+                }
+            )
+    return entries
 
 
 class Firewall(BaseDeviceTransform):

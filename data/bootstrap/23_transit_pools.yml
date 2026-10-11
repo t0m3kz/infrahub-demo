@@ -5,7 +5,8 @@
 # that namespace. This file sorts after 22_namespaces.yml on purpose: the
 # object loader processes files in name order and the namespaces must exist
 # before a prefix or pool can reference them.
-# RFC 6598: 100.66.48.0/20 is reserved for MANAGEMENT.
+# One pool per fixed VRF namespace, RFC 6598 100.66.0.0/18 split in /20s:
+# PROD .0, NON-PROD .16, INTERNET .32, MANAGEMENT .48.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -83,3 +84,19 @@ spec:
             role: public
             ip_namespace: "INTERNET"
       ip_namespace: "INTERNET"
+
+    - name: FW-Transit-MANAGEMENT-IPv4
+      description: "FirewallContext transit /29 legs in the MANAGEMENT VRF (RFC 6598)"
+      default_prefix_type: IpamPrefix
+      default_prefix_length: 29
+      resources:
+        kind: IpamPrefix
+        data:
+          - prefix: 100.66.48.0/20
+            description: "RFC 6598 transit space, MANAGEMENT VRF"
+            status: active
+            member_type: prefix
+            is_pool: true
+            role: technical
+            ip_namespace: "MANAGEMENT"
+      ip_namespace: "MANAGEMENT"
