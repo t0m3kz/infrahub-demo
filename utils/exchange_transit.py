@@ -91,6 +91,11 @@ def zone_name_for_namespace_type(ns_type: str) -> str:
     return ZONE_BY_NS_TYPE[ns_type]
 
 
+def exchange_peer_zones() -> frozenset[str]:
+    """Zone names of every namespace type a tenant VRF exchanges with (INTERNET-ZONE, MANAGEMENT-ZONE, ...)."""
+    return frozenset(ZONE_BY_NS_TYPE[ns_type] for peers in EXCHANGE_PEERS.values() for ns_type in peers)
+
+
 def transit_vlan(context_vlan: int, ns_type: str) -> int:
     return context_vlan + TRANSIT_VLAN_BAND * TRANSIT_SLOT[ns_type]
 

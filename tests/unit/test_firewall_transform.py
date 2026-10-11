@@ -1237,3 +1237,21 @@ class TestFirewallExchangeLegs:
         assert "set vsys c005-dedicated rulebase security rules smoke-permit-rule" in out
         assert "virtual-router vr-" not in out
         assert "import network interface" not in out
+
+
+class TestAsaLegSecurityLevels:
+    @pytest.mark.parametrize("ns_type,level", [("prod", 100), ("non_prod", 50), ("internet", 0), ("management", 60)])
+    def test_every_exchange_namespace_type_has_a_security_level(self, ns_type: str, level: int) -> None:
+        leg = {
+            "ns_type": ns_type,
+            "nameif": "x",
+            "vlan": 3000,
+            "parent_interface": {"name": "Port-channel1"},
+            "own_ip": "100.66.0.5/29",
+            "virtual_ip": None,
+            "standby_ip": None,
+        }
+        context = {"name": "c1", "legs": [leg], "routes": [], "isolation": [], "policies": []}
+        out = _render_template("cisco_asa", name="fw1", contexts=[context])
+        assert f"security-level {level}" in out
+        assert "access-list x-in" not in out or ns_type in ("prod", "non_prod")

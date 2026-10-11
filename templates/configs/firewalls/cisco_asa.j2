@@ -122,7 +122,7 @@ changeto context {{ context.name }}
 {%- for leg in context.legs %}
 interface {{ leg.parent_interface.name }}.{{ leg.vlan }}
  nameif {{ leg.nameif }}
- security-level {{ {'prod': 100, 'non_prod': 50, 'internet': 0}[leg.ns_type] }}
+ security-level {{ {'prod': 100, 'non_prod': 50, 'internet': 0, 'management': 60}[leg.ns_type] }}
  ip address {{ asa_ip(leg.virtual_ip or leg.own_ip) }}{{ ' standby ' + leg.standby_ip.split('/')[0] if leg.virtual_ip and leg.standby_ip else '' }}
  no shutdown
 !
@@ -135,7 +135,7 @@ same-security-traffic permit intra-interface
 route {{ route_leg.nameif }} {{ asa_addr(route.destination) }} {{ route.nexthop }} 1
 {%- endfor %}
 !
-{%- for leg in context.legs if leg.ns_type != 'internet' %}
+{%- for leg in context.legs if leg.ns_type in ['prod', 'non_prod'] %}
 {%- for deny in context.isolation if deny.src_zone == leg.zone %}
 {%- for other in context.legs if other.zone == deny.dst_zone %}
 {%- for prefix in other.prefixes %}

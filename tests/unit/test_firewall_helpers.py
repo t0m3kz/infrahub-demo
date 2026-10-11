@@ -10,6 +10,8 @@ Covers:
   - place_policies_in_contexts()  — the rules of the segments a firewall serves, per context
 """
 
+from unittest.mock import patch
+
 from transforms.helpers.firewall import (
     _flatten_deployment_firewall_contexts,
     get_customer_pbr_rules,
@@ -21,6 +23,7 @@ from transforms.helpers.firewall import (
     get_zone_policies,
     place_policies_in_contexts,
 )
+from utils.exchange_transit import EXCHANGE_PEERS, ZONE_BY_NS_TYPE, exchange_peer_zones
 
 # ---------------------------------------------------------------------------
 # Helpers — zone data
@@ -509,6 +512,17 @@ class TestGetExchangeRoutes:
         routes = get_exchange_routes(_bl_port(self._with_snat(_shared_context(served=["dep-a"]))))
         assert [r for r in routes if r["vrf"] == "INTERNET" and r["prefix"] == "0.0.0.0/0"] == []
 
+    def test_snat_route_only_for_an_internet_z_leg(self) -> None:
+        """A MANAGEMENT peer (in EXCHANGE_PEERS) is not source-NATed: no /32 in its VRF."""
+        mgmt = _ns("MANAGEMENT", "management", 50004)
+        exchange = _exchange(_PROD, mgmt)
+        legs = [_leg("100.66.0.5/29", _PROD, [exchange]), _leg("100.66.48.5/29", mgmt, [exchange], name="eth1.3600")]
+        context = self._with_snat(_context(legs))
+        with patch.dict(EXCHANGE_PEERS, {"prod": ("internet", "management")}):
+            routes = get_exchange_routes(_bl_port(context))
+        assert [r for r in routes if r["vrf"] == "MANAGEMENT"] == []
+        assert [r["prefix"] for r in routes] == ["0.0.0.0/0"]
+
     def test_prod_is_never_paired_with_non_prod(self) -> None:
         exchange = _exchange(_PROD, _NONPROD)
         legs = [_leg("100.66.0.5/29", _PROD, [exchange]), _leg("100.66.16.5/29", _NONPROD, [exchange])]
@@ -518,6 +532,18 @@ class TestGetExchangeRoutes:
         assert get_exchange_routes(None) == []
         routes = get_exchange_routes(_bl_port(self._with_snat(_shared_context(served=["dep-a"]))))
         assert routes == sorted(routes, key=lambda r: (r["vrf"], r["prefix"], r["nexthop"]))
+
+
+class TestExchangePeerZones:
+    def test_peer_zones_are_the_zones_of_the_exchange_peer_types(self) -> None:
+        assert exchange_peer_zones() == {"INTERNET-ZONE"}
+
+    def test_follows_exchange_peers(self) -> None:
+        with (
+            patch.dict(EXCHANGE_PEERS, {"prod": ("internet", "management")}),
+            patch.dict(ZONE_BY_NS_TYPE, {"management": "MANAGEMENT-ZONE"}),
+        ):
+            assert exchange_peer_zones() == {"INTERNET-ZONE", "MANAGEMENT-ZONE"}
 
 
 class TestLeafPbrNexthopIsContextLegVip:
@@ -1545,6 +1571,34 @@ def _profiled_permit(peer: dict, profile: str | None = "strict") -> dict:
     if profile:
         rule["security_profile"] = {"name": profile}
     return rule
+
+
+class TestCustomerPbrNeverBypassesExchangePeers:
+    @staticmethod
+    def _rules(zone: str | None) -> list[dict]:
+        rule = _make_pbr_rule(dst_prefix="10.0.2.0/24")
+        if zone:
+            rule["destination_segment"]["security_zone"] = {"name": zone}
+        seg_policy = {"enabled": True, "rules": [rule]}
+        activation = _make_pbr_activation(security_policies=[seg_policy])
+        return get_customer_pbr_rules([activation], [_make_context_leg()])
+
+    def test_permit_to_a_tenant_zone_segment_is_still_a_bypass(self) -> None:
+        assert self._rules("PROD-ZONE")[0]["bypass_prefixes"] == ["10.0.2.0/24"]
+
+    def test_permit_to_a_segment_without_zone_is_still_a_bypass(self) -> None:
+        assert self._rules(None)[0]["bypass_prefixes"] == ["10.0.2.0/24"]
+
+    def test_permit_to_an_exchange_peer_zone_segment_is_not_a_bypass(self) -> None:
+        assert self._rules("INTERNET-ZONE")[0]["bypass_prefixes"] == []
+
+    def test_permit_to_the_management_zone_is_not_a_bypass_once_it_is_a_peer(self) -> None:
+        with (
+            patch.dict(EXCHANGE_PEERS, {"prod": ("internet", "management")}),
+            patch.dict(ZONE_BY_NS_TYPE, {"management": "MANAGEMENT-ZONE"}),
+        ):
+            assert self._rules("MANAGEMENT-ZONE")[0]["bypass_prefixes"] == []
+        assert self._rules("MANAGEMENT-ZONE")[0]["bypass_prefixes"] == ["10.0.2.0/24"]
 
 
 class TestCustomerPbrInspectedFlows:
