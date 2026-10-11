@@ -301,3 +301,46 @@ class TestContextRoutesUseSegmentOwnGateway:
         context = self._context(segment)
         apply_context_routes(context, {})
         assert context["legs"][0]["prefixes"] == ["10.1.0.0/24"]
+
+
+class TestContextRoutesTenantLegsAreExchangeTenants:
+    """A MANAGEMENT leg is an exchange peer, never a tenant leg."""
+
+    def test_zoneless_segment_with_a_management_leg_still_takes_the_only_tenant_leg(self) -> None:
+        from transforms.config.firewall import apply_context_routes
+
+        prod = {"ns_type": "prod", "zone": "PROD-ZONE", "anycast": "100.66.0.1", "interface": "e.3000", "vrf": "PROD"}
+        mgmt = {
+            "ns_type": "management",
+            "zone": "MANAGEMENT-ZONE",
+            "anycast": "100.66.48.1",
+            "interface": "e.3600",
+            "vrf": "MANAGEMENT",
+        }
+        segment = {"id": "s1", "gateway": {"ip_prefix": {"prefix": "10.1.0.0/24"}}}
+        context = {"legs": [prod, mgmt], "segments": [segment]}
+        apply_context_routes(context, {})
+        assert prod["prefixes"] == ["10.1.0.0/24"]
+        assert mgmt["prefixes"] == []
+        assert [r["vrf"] for r in context["routes"]] == ["PROD"]
+
+    def test_segment_in_the_management_zone_is_not_routed_as_a_tenant_prefix(self) -> None:
+        from transforms.config.firewall import apply_context_routes
+
+        prod = {"ns_type": "prod", "zone": "PROD-ZONE", "anycast": "100.66.0.1", "interface": "e.3000", "vrf": "PROD"}
+        mgmt = {
+            "ns_type": "management",
+            "zone": "MANAGEMENT-ZONE",
+            "anycast": "100.66.48.1",
+            "interface": "e.3600",
+            "vrf": "MANAGEMENT",
+        }
+        segment = {
+            "id": "s1",
+            "gateway": {"ip_prefix": {"prefix": "10.9.0.0/24"}},
+            "security_zone": {"name": "MANAGEMENT-ZONE"},
+        }
+        context = {"legs": [prod, mgmt], "segments": [segment]}
+        apply_context_routes(context, {})
+        assert mgmt["prefixes"] == []
+        assert context["routes"] == []

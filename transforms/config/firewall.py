@@ -10,7 +10,7 @@ from transforms.helpers.firewall import (
 )
 from transforms.helpers.ha import get_ha, inline_addresses
 from transforms.helpers.segments import _get_segment_prefix_str, segment_vlan_ids
-from utils.exchange_transit import ZONE_BY_NS_TYPE
+from utils.exchange_transit import EXCHANGE_PEERS, ZONE_BY_NS_TYPE
 
 DEFAULT_ROUTE = "0.0.0.0/0"
 
@@ -102,7 +102,9 @@ def apply_context_routes(context: dict[str, Any], segment_prefixes: dict[str, tu
     legs = context.get("legs") or []
     if not legs:
         return
-    tenant_legs = [leg for leg in legs if leg["ns_type"] != "internet"]
+    # Tenant legs are the legs of a tenant VRF (a key of EXCHANGE_PEERS); an
+    # exchange peer (INTERNET, MANAGEMENT) is never taken for one.
+    tenant_legs = [leg for leg in legs if leg["ns_type"] in EXCHANGE_PEERS]
     for leg in legs:
         leg["prefixes"] = []
     for segment in context.get("segments") or []:
