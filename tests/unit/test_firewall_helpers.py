@@ -455,7 +455,7 @@ class TestGetExchangeTransits:
         assert prod["gateway"]["address"] == "100.66.0.1/29"
         assert prod["gateway"]["ip_prefix"] == {
             "prefix": "100.66.0.0/29",
-            "ip_namespace": {"name": "PROD", "l3_vni": 50001},
+            "ip_namespace": {"name": "PROD", "l3_vni": 50001, "namespace_type": "prod"},
         }
         assert prod["terminate_inline"] is False
 

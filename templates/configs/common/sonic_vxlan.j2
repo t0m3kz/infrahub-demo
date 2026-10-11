@@ -51,9 +51,9 @@
     config-DB schema — best-effort guess. -#}
 {%- if vxlan and vxlan.enabled and vxlan.l3_vni_mappings -%}
 {%- for mapping in vxlan.l3_vni_mappings if mapping.import_route_targets -%}
-{%- if vxlan.evpn and vxlan.evpn.rt_format and vxlan.evpn.rt_format != 'auto' -%}
+{%- if mapping.route_target and mapping.route_target != 'auto' -%}
 {%- set _ = bgp_evpn_rt.update({
-  (mapping.vrf_name ~ '|L2VPN_EVPN|' ~ vxlan.evpn.rt_format | replace('{vni}', mapping.l3_vni | string)): {
+  (mapping.vrf_name ~ '|L2VPN_EVPN|' ~ mapping.route_target): {
     'route-target-type': 'both'
   }
 }) -%}

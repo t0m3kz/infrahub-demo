@@ -274,6 +274,33 @@ ALL_DEMO_INTERNET_TRANSIT_CIRCUITS: frozenset[str] = frozenset(
     {"INET-LUMEN-EQXFR2", "INET-COGENT-EQXFR2", "INET-LUMEN-EQXPA4", "INET-COGENT-EQXPA4"}
 )
 
+# INTERNET upstream (PR 4c): the colo edges that are their metro's EVPN
+# Multi-Site border gateway export the ISP default route as an EVPN type-5 route
+# (L3 VNI 60002, one global route-target for the INTERNET namespace). Only the
+# "01" edge of each metro has a dark fibre to a DC (ALL_DEMO_DCI_CIRCUITS).
+ALL_DEMO_INTERNET_BGWS: frozenset[str] = frozenset({"eg-fr01", "eg-pa01"})
+
+# The "02" edges terminate a Cogent session but have no inter-edge link and no
+# DCI: their sessions render and the transit filters apply, but nothing can
+# reach them from a DC (CheckEdge warns) until the metro edge pair lands.
+ALL_DEMO_INTERNET_ISLAND_EDGES: frozenset[str] = frozenset({"eg-fr02", "eg-pa02"})
+
+# DC -> the BGW its DCI lands on, i.e. where that DC learns 0/0 from.
+ALL_DEMO_INTERNET_UPSTREAM_BY_DC: dict[str, str] = {"DC10": "eg-fr01", "DC11": "eg-fr01", "DC12": "eg-pa01"}
+
+# The four eBGP transit sessions in VRF INTERNET (06_internet/05_bgp.yml) -> the colo edge each runs on.
+ALL_DEMO_INTERNET_TRANSIT_PEERINGS: dict[str, str] = {
+    "TRANSIT-LUMEN-EQXFR2": "eg-fr01",
+    "TRANSIT-COGENT-EQXFR2": "eg-fr02",
+    "TRANSIT-LUMEN-EQXPA4": "eg-pa01",
+    "TRANSIT-COGENT-EQXPA4": "eg-pa02",
+}
+
+# The L3 VNI of the INTERNET namespace (data/bootstrap) and its global route-target
+# `{l3_vni}:{l3_vni}`, imported and exported by every VTEP carrying the VRF.
+INTERNET_L3_VNI = 60002
+INTERNET_ROUTE_TARGET = "60002:60002"
+
 
 class VirtualCircuitExpectation(TypedDict):
     """What one TopologyVirtualCircuit in 30_all must look like."""

@@ -44,6 +44,7 @@ from checks.firewall import CheckFirewall
 from generators.protocols import DcimPhysicalDevice
 from transforms.config.access_leaf import AccessLeaf
 from transforms.config.border_leaf import BorderLeaf
+from transforms.config.edge import Edge
 from transforms.config.firewall import Firewall
 from transforms.config.leaf import Leaf
 from utils.exchange_transit import transit_addresses, transit_vlan, transit_vni, zone_name_for_namespace_type
@@ -56,6 +57,10 @@ from .test_constants import (
     ALL_DEMO_DEDICATED_FIREWALL_TENANTS,
     ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS,
     ALL_DEMO_INTERNET_EGRESS_RULES,
+    ALL_DEMO_INTERNET_BGWS,
+    ALL_DEMO_INTERNET_ISLAND_EDGES,
+    INTERNET_L3_VNI,
+    INTERNET_ROUTE_TARGET,
     transit_namespace_type,
 )
 from .test_helpers import fetch_dc_topology, fetch_transit_inventory, match_transit_contexts
@@ -489,6 +494,11 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                     errors.append(f"{device}: no 'vn-segment {vni}' (transit VNI)")
             if "redistribute static route-map RM-VRF-STATIC-2-EVPN-PROD" not in rendered:
                 errors.append(f"{device}: PROD statics are not redistributed into EVPN")
+            internet_block = re.search(r"^vrf context INTERNET\n((?:[ \t]+.*\n)*)", rendered + "\n", re.MULTILINE)
+            if internet_block is None or f"route-target both {INTERNET_ROUTE_TARGET}" not in internet_block.group(1):
+                errors.append(
+                    f"{device}: 'route-target both {INTERNET_ROUTE_TARGET}' is not inside 'vrf context INTERNET'"
+                )
 
         assert not errors, f"{dc} border-leaf config on branch '{scenario_branch}' is wrong:\n" + "\n".join(
             f"  - {e}" for e in errors
@@ -606,6 +616,63 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                     errors.append(f"{device}: unconditional 'permit ... {prefix} any' (no port) in the ACL")
 
         assert not errors, f"internet egress rule on branch '{scenario_branch}' is wrong:\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
+        logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)
+
+    @pytest.mark.order(401)
+    @pytest.mark.dependency(scope="session", depends=["all_demo_border_leaf_transit_render"])
+    @pytest.mark.asyncio
+    async def test_06_edge_config_renders_internet_upstream(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """The metro BGWs export the ISP default route as EVPN type-5; the island edges only filter it.
+
+        eg-fr01 / eg-pa01 (ALL_DEMO_INTERNET_BGWS) carry the INTERNET L3 VNI and
+        the global route-target in `vrf context INTERNET`, advertise it into
+        EVPN under `vrf INTERNET`, and filter the transit session (default-only
+        in, nothing out). eg-fr02 / eg-pa02 (ALL_DEMO_INTERNET_ISLAND_EDGES) are
+        no BGW: same transit filters, no VNI.
+        """
+        logging.info("=== %s - Step 6: Render edge INTERNET upstream ===", SCENARIO_NAME)
+
+        errors: list[str] = []
+        for device in sorted(ALL_DEMO_INTERNET_BGWS | ALL_DEMO_INTERNET_ISLAND_EDGES):
+            rendered = await _render(
+                async_client_main, scenario_branch, device, query="edge_config", transform_cls=Edge
+            )
+            bgw = device in ALL_DEMO_INTERNET_BGWS
+
+            for needle in (
+                "route-map RM-TRANSIT-IN in",
+                "route-map RM-TRANSIT-OUT out",
+                "route-map RM-TRANSIT-OUT deny",
+            ):
+                if needle not in rendered:
+                    errors.append(f"{device}: no '{needle}'")
+            if not re.search(r"ip prefix-list \S+ seq \d+ permit 0\.0\.0\.0/0\n", rendered):
+                errors.append(f"{device}: no default-only prefix-list")
+
+            vrf_context = re.search(r"^vrf context INTERNET\n((?:[ \t]+.*\n)*)", rendered + "\n", re.MULTILINE)
+            bgp_vrf = re.search(r"^[ \t]+vrf INTERNET\n((?:[ \t]{4,}.*\n)*)", rendered + "\n", re.MULTILINE)
+            if vrf_context is None:
+                errors.append(f"{device}: no 'vrf context INTERNET'")
+                continue
+            has_vni = re.search(rf"^[ \t]+vni {INTERNET_L3_VNI}\b", vrf_context.group(1), re.MULTILINE) is not None
+            if not bgw:
+                if re.search(rf"\bvni {INTERNET_L3_VNI}\b", rendered):
+                    errors.append(f"{device}: island edge renders vni {INTERNET_L3_VNI}")
+                continue
+            if not has_vni:
+                errors.append(f"{device}: no 'vni {INTERNET_L3_VNI}' inside 'vrf context INTERNET'")
+            if f"route-target both {INTERNET_ROUTE_TARGET}" not in vrf_context.group(1):
+                errors.append(f"{device}: no 'route-target both {INTERNET_ROUTE_TARGET}' inside 'vrf context INTERNET'")
+            if bgp_vrf is None or "advertise l2vpn evpn" not in bgp_vrf.group(1):
+                errors.append(f"{device}: no 'advertise l2vpn evpn' inside 'vrf INTERNET' of the BGP process")
+
+        assert not errors, f"Edge INTERNET upstream on branch '{scenario_branch}' is wrong:\n" + "\n".join(
             f"  - {e}" for e in errors
         )
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)

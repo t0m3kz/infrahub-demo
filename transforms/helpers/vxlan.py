@@ -36,6 +36,11 @@ _L3VNI_SVI_VLAN_MAX = 3967
 _SERVICE_TRUNK_ROLES = frozenset({"firewall", "load-balancer"})
 
 
+# namespace_type of the INTERNET VRF. It is one VRF for the whole network, so
+# its L3 route-target is global rather than per fabric (_l3_route_target).
+_INTERNET_NAMESPACE_TYPE = "internet"
+
+
 def _collect_l3_vni_from_namespaces(namespaces) -> list[dict[str, Any]]:
     """Collect unique L3 VNI (VRF) mappings from an iterable of namespace dicts.
 
@@ -53,6 +58,8 @@ def _collect_l3_vni_from_namespaces(namespaces) -> list[dict[str, Any]]:
                 "vrf_name": ns_name,
                 "l3_vni": l3_vni,
             }
+            if ns.get("namespace_type") == _INTERNET_NAMESPACE_TYPE:
+                seen[ns_name]["namespace_type"] = _INTERNET_NAMESPACE_TYPE
     mappings = sorted(seen.values(), key=lambda v: v.get("vrf_name", ""))
     for index, mapping in enumerate(mappings):
         svi_vlan_id = _L3VNI_SVI_VLAN_BASE + index
@@ -169,9 +176,54 @@ def _l2_from_activations(activations: list[dict[str, Any]]) -> list[dict[str, An
     return mappings
 
 
-def _l3_from_activations(activations: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Build L3 VNI (VRF) mappings from SegmentDeployment records."""
-    return _collect_l3_vni_from_namespaces(_get_segment_namespace(act.get("segment") or {}) for act in activations)
+def _l3_from_activations(
+    activations: list[dict[str, Any]], extra_namespaces: list[dict[str, Any]] | None = None
+) -> list[dict[str, Any]]:
+    """Build L3 VNI (VRF) mappings from SegmentDeployment records plus extra namespaces."""
+    return _collect_l3_vni_from_namespaces(
+        [*(_get_segment_namespace(act.get("segment") or {}) for act in activations), *(extra_namespaces or [])]
+    )
+
+
+def _is_bgw(data: dict[str, Any], fabric_rt_asn: int | None) -> bool:
+    """True when the device is an EVPN Multi-Site border gateway (see _get_multisite_config)."""
+    return bool(fabric_rt_asn) and any(iface.get("role") == "multisite-vip" for iface in data.get("interfaces") or [])
+
+
+def _internet_session_namespaces(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Internet-type namespaces of this device's own BGP sessions.
+
+    A BGP peering whose local address sits in a namespace_type internet
+    namespace is the upstream transit handoff (bgp.py flags it ``transit``);
+    the VRF needs an L3 VNI on a BGW to export what it learns as EVPN type-5.
+    """
+    device_name = data.get("name")
+    found: dict[str, dict[str, Any]] = {}
+    for cap in data.get("capabilities") or []:
+        if cap.get("typename") != "ManagedBGP":
+            continue
+        for peering in cap.get("peerings") or []:
+            for iface in peering.get("interface_capabilities") or []:
+                if (iface.get("device") or {}).get("name") != device_name:
+                    continue
+                ns = (iface.get("ip_address") or {}).get("ip_namespace") or {}
+                if ns.get("namespace_type") == _INTERNET_NAMESPACE_TYPE and ns.get("name"):
+                    found.setdefault(ns["name"], ns)
+    return list(found.values())
+
+
+def _l3_route_target(mapping: dict[str, Any], rt_asn: int | None) -> str | None:
+    """The route-target a VRF exports and imports; the one place that decides it.
+
+    A tenant VRF uses the fabric's ``{evpn_rt_as}:{l3_vni}``. The INTERNET VRF is
+    global: every VTEP (border leaf, edge) uses ``{l3_vni}:{l3_vni}`` so the
+    upstream default route crosses fabrics without deriving anything from the
+    other site's AS.
+    """
+    vni = mapping["l3_vni"]
+    if mapping.get("namespace_type") == _INTERNET_NAMESPACE_TYPE:
+        return f"{vni}:{vni}"
+    return f"{rt_asn}:{vni}" if rt_asn else None
 
 
 def _circuit_endpoint(service: dict[str, Any]) -> dict[str, Any]:
@@ -648,11 +700,14 @@ def get_vxlan_config(
 
     interfaces = data.get("interfaces", [])
 
-    if not activations:
+    # A BGW with an upstream transit session also needs the INTERNET L3 VNI, with
+    # or without stretched segments (an edge usually has none).
+    internet_namespaces = _internet_session_namespaces(data) if _is_bgw(data, fabric_rt_asn) else []
+    if not activations and not internet_namespaces:
         return None
 
-    l2_vni_mappings = _l2_from_activations(activations)
-    l3_vni_mappings = _l3_from_activations(activations)
+    l2_vni_mappings = _l2_from_activations(activations or [])
+    l3_vni_mappings = _l3_from_activations(activations or [], internet_namespaces)
 
     if not l2_vni_mappings and not l3_vni_mappings:
         return None
@@ -713,8 +768,9 @@ def get_vxlan_config(
 
     # Per-VRF imports of the other sites' L3 route-targets (see
     # _multisite_vrf_site_asns); this fabric's own RT stays rt_format.
-    site_asns_by_vrf = _multisite_vrf_site_asns(activations)
+    site_asns_by_vrf = _multisite_vrf_site_asns(activations or [])
     for mapping in l3_vni_mappings:
+        mapping["route_target"] = _l3_route_target(mapping, rt_asn)
         remote_asns = sorted(site_asns_by_vrf.get(mapping["vrf_name"], set()) - {rt_asn})
         mapping["import_route_targets"] = [f"{asn}:{mapping['l3_vni']}" for asn in remote_asns]
 

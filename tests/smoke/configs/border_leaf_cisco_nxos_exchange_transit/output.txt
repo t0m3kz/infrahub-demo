@@ -156,8 +156,8 @@ vrf context INTERNET
   ip route 10.1.0.0/24 100.66.32.4
   ip route 10.2.0.0/24 100.66.32.12
   address-family ipv4 unicast
-    route-target both 65000:50003
-    route-target both 65000:50003 evpn
+    route-target both 50003:50003
+    route-target both 50003:50003 evpn
 !
 vrf context PROD
   vni 50001

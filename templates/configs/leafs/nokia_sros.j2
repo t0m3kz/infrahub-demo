@@ -121,9 +121,9 @@ configure service vprn {{ l3_mapping.l3_vni }} customer 1
 {%- if vxlan.evpn.rd_format %}
 configure service vprn {{ l3_mapping.l3_vni }} bgp instance 1 route-distinguisher "{{ vxlan.evpn.rd_format | replace('{vni}', l3_mapping.l3_vni | string) }}"
 {%- endif %}
-{%- if vxlan.evpn.rt_format %}
-configure service vprn {{ l3_mapping.l3_vni }} bgp instance 1 route-target export "target:{{ vxlan.evpn.rt_format | replace('{vni}', l3_mapping.l3_vni | string) }}"
-configure service vprn {{ l3_mapping.l3_vni }} bgp instance 1 route-target import "target:{{ vxlan.evpn.rt_format | replace('{vni}', l3_mapping.l3_vni | string) }}"
+{%- if l3_mapping.route_target %}
+configure service vprn {{ l3_mapping.l3_vni }} bgp instance 1 route-target export "target:{{ l3_mapping.route_target }}"
+configure service vprn {{ l3_mapping.l3_vni }} bgp instance 1 route-target import "target:{{ l3_mapping.route_target }}"
 {%- endif %}
 {%- include 'common/nokia_sros_vprn_import.j2' %}
 configure service vprn {{ l3_mapping.l3_vni }} bgp-evpn evi {{ l3_mapping.l3_vni }}

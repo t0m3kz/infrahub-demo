@@ -209,9 +209,14 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- for vrf_name in (_evpn_vrfs + (bgp_config.vrf_sessions | list)) | unique %}
   vrf {{ vrf_name }}
     address-family ipv4 unicast
+{#- A transit VRF (upstream ISP, session.transit) exports only what the ISP
+    sends: its connected /31s are not tenant routes and must not become type-5. -#}
+{%- set _transit_vrf = bgp_config.vrf_sessions.get(vrf_name, []) | selectattr('transit', 'defined') | selectattr('transit') | list %}
 {%- if vrf_name in _evpn_vrfs %}
       advertise l2vpn evpn
+{%- if not _transit_vrf %}
       redistribute direct route-map RM-VRF-DIRECT-2-EVPN
+{%- endif %}
 {%- if vrf_routes | default([]) | selectattr('vrf', 'equalto', vrf_name) | list %}
       redistribute static route-map RM-VRF-STATIC-2-EVPN-{{ vrf_name }}
 {%- endif %}
@@ -238,6 +243,12 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- endif %}
 {%- if session.get('maximum_routes') %}
         maximum-prefix {{ session.maximum_routes }}
+{%- endif %}
+{#- Upstream transit: default route in, nothing out (RM-TRANSIT-* are defined
+    by edges/cisco_nxos.j2, the only template that renders a transit session). -#}
+{%- if session.get('transit') %}
+        route-map RM-TRANSIT-IN in
+        route-map RM-TRANSIT-OUT out
 {%- endif %}
 {%- endfor %}
   !
