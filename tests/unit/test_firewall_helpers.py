@@ -1086,8 +1086,8 @@ class TestGetCustomerPbrRules:
         rule = {"action": "permit", "disabled": False, "destination_segment": {"name": "internet-internet-p"}}
         policies = [{"enabled": True, "rules": [rule]}]
         activations = [_make_pbr_activation(security_policies=policies)]
-        result = get_customer_pbr_rules(activations, [_make_context_leg(fw_ip="10.65.0.0/30")])
-        assert result[0]["fw_nexthop"] == "10.65.0.0"
+        result = get_customer_pbr_rules(activations, [_make_context_leg()])
+        assert result[0]["fw_nexthop"] == "10.65.0.4"  # the VIP of the leg's /29
         assert result[0]["bypass_prefixes"] == []
 
     def test_cross_owner_permit_still_bypasses(self) -> None:
