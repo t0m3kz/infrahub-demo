@@ -15,12 +15,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from generators.logger import GeneratorError
-from generators.topology.circuit import (
-    CircuitEndpoint,
-    endpoint_problem,
-    order_endpoints,
-    physical_circuit_endpoints,
-)
+from generators.topology.circuit import CircuitEndpoint, endpoint_problem, order_endpoints, physical_circuit_endpoints
 from tests.unit.simulators.circuit_fakes import (
     DC_KEY_ID,
     PREFIX_ID,

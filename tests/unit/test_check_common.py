@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from checks.common import (
-    validate_interfaces,
-    validate_routing_password,
-)
+from checks.common import validate_interfaces, validate_routing_password
 
 
 class TestValidateInterfaces:
