@@ -392,19 +392,19 @@ class TestImportRouteTargetRendering:
 
 
 class TestNokiaVprnImport:
-    def _render(self, env: jinja2.Environment, mapping: dict[str, Any], rt_format: str | None) -> str:
+    def _render(self, env: jinja2.Environment, mapping: dict[str, Any], route_target: str | None) -> str:
         return env.get_template("common/nokia_sros_vprn_import.j2").render(
-            l3_mapping=mapping, vxlan={"evpn": {"rt_format": rt_format}}
+            l3_mapping={**mapping, "route_target": route_target}, vxlan={"evpn": {}}
         )
 
     def test_policy_matches_own_and_remote_rts(self, env: jinja2.Environment) -> None:
         """The vrf-import policy replaces route-target import, so it keeps the own RT."""
-        rendered = self._render(env, _l3_mapping(), "65100:{vni}")
+        rendered = self._render(env, _l3_mapping(), "65100:60000")
         assert 'community "VRF-PROD-IMPORT" member "target:65100:60000"' in rendered
         assert 'community "VRF-PROD-IMPORT" member "target:65010:60000"' in rendered
         assert 'configure service vprn 60000 bgp instance 1 vrf-import "VRF-PROD-IMPORT"' in rendered
 
-    def test_auto_rt_format_is_not_a_community_member(self, env: jinja2.Environment) -> None:
+    def test_auto_route_target_is_not_a_community_member(self, env: jinja2.Environment) -> None:
         rendered = self._render(env, _l3_mapping(), "auto")
         assert "target:auto" not in rendered
         assert 'member "target:65010:60000"' in rendered
@@ -412,7 +412,7 @@ class TestNokiaVprnImport:
     def test_no_imports_no_policy(self, env: jinja2.Environment) -> None:
         mapping = _l3_mapping()
         del mapping["import_route_targets"]
-        assert "VRF-PROD-IMPORT" not in self._render(env, mapping, "65100:{vni}")
+        assert "VRF-PROD-IMPORT" not in self._render(env, mapping, "65100:60000")
 
 
 class TestSonicImportRouteTargets:

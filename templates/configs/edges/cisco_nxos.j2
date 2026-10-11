@@ -18,9 +18,12 @@ vlan {{ vlan.vlan_id }}
 !
 {%- endfor %}
 {%- endif %}
-{#- A VRF that only carries eBGP neighbours (e.g. INTERNET towards the transit
-    ISPs) has no L3 VNI, so cisco_nxos_vxlan_vrf.j2 never declares it. NX-OS
-    needs the `vrf context` before `vrf member` can reference it. -#}
+{#- A VRF that only carries eBGP neighbours has no L3 VNI, so
+    cisco_nxos_vxlan_vrf.j2 never declares it and it gets a plain stanza here
+    (NX-OS needs the `vrf context` before `vrf member` can reference it).
+    INTERNET on a border-gateway edge is in _evpn_vrfs (vxlan.py maps its
+    transit session's namespace to an L3 VNI), so it is declared by the shared
+    VXLAN VRF partial instead: vni, RD/RT, `advertise l2vpn evpn`. -#}
 {%- set _evpn_vrfs = (vxlan.l3_vni_mappings | map(attribute='vrf_name') | list) if (vxlan and vxlan.enabled and vxlan.l3_vni_mappings) else [] %}
 {%- set _plain_vrfs = namespace(names=[]) %}
 {%- for bgp_config in bgp or [] %}
@@ -109,6 +112,23 @@ route-map RM-CONN-2-BGP permit 10
 !
 {%- if vxlan and vxlan.l3_vni_mappings %}
 route-map RM-VRF-DIRECT-2-EVPN permit 10
+!
+{%- endif %}
+{#- Upstream transit sessions (session.transit, bgp.py): accept the default
+    route only; announce nothing. RM-TRANSIT-OUT is a plain deny-all for now —
+    the public aggregate permit belongs to the SNAT change, not this one. -#}
+{%- set _transit = namespace(on=false) %}
+{%- for bgp_config in bgp %}
+{%- for sessions in (bgp_config.vrf_sessions or {}).values() %}
+{%- for session in sessions if session.get('transit') %}{% set _transit.on = true %}{% endfor %}
+{%- endfor %}
+{%- endfor %}
+{%- if _transit.on %}
+ip prefix-list PL-TRANSIT-IN-DEFAULT seq 10 permit 0.0.0.0/0
+route-map RM-TRANSIT-IN permit 10
+  match ip address prefix-list PL-TRANSIT-IN-DEFAULT
+!
+route-map RM-TRANSIT-OUT deny 10
 !
 {%- endif %}
 {%- endif %}

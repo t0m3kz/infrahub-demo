@@ -143,10 +143,15 @@ def _build_session_from_peering(
     # peering's own handoff sub-interfaces: a cable or circuit on the parent
     # port would resolve the parent's default-namespace address instead.
     local_ip_obj = local_iface.get("ip_address") or {}
-    vrf = (local_ip_obj.get("ip_namespace") or {}).get("name")
+    local_ns = local_ip_obj.get("ip_namespace") or {}
+    vrf = local_ns.get("name")
 
     if vrf and vrf != "default":
         session["vrf"] = vrf
+        # Upstream transit (namespace_type internet): the session gets the
+        # default-only inbound / deny-all outbound route-maps (edges template).
+        if local_ns.get("namespace_type") == "internet":
+            session["transit"] = True
         session["local_ip"] = local_ip_obj
         # The handoff sub-interface — the VCO payload (transforms/config/
         # controller.py) reads the dot1q tag off its name.

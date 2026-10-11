@@ -224,7 +224,11 @@ def get_exchange_transits(interfaces: list[dict[str, Any]] | None) -> list[dict[
                             "address": f"{leg['anycast']}/{leg['prefixlen']}",
                             "ip_prefix": {
                                 "prefix": leg["prefix"],
-                                "ip_namespace": {"name": leg["namespace"], "l3_vni": leg["l3_vni"]},
+                                "ip_namespace": {
+                                    "name": leg["namespace"],
+                                    "l3_vni": leg["l3_vni"],
+                                    "namespace_type": leg["ns_type"],
+                                },
                             },
                         },
                         "arp_suppression": True,

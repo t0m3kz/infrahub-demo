@@ -7,7 +7,7 @@
     RT as well — otherwise the VRF would stop importing its own fabric. -#}
 {%- if l3_mapping.import_route_targets %}
 {%- set _policy = 'VRF-' ~ l3_mapping.vrf_name ~ '-IMPORT' %}
-{%- set _own_rt = vxlan.evpn.rt_format | replace('{vni}', l3_mapping.l3_vni | string) if vxlan.evpn.rt_format and vxlan.evpn.rt_format != 'auto' else none %}
+{%- set _own_rt = l3_mapping.route_target if l3_mapping.route_target and l3_mapping.route_target != 'auto' else none %}
 {%- for rt in ([_own_rt] if _own_rt else []) + l3_mapping.import_route_targets %}
 configure policy-options community "{{ _policy }}" member "target:{{ rt }}"
 {%- endfor %}

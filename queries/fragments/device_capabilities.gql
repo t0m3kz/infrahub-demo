@@ -35,12 +35,13 @@ fragment ManagedBGPServiceFields on ManagedBGP {
             node {
               name { value }
               # ip_namespace: a peering whose local address sits in a tenant
-              # namespace is a VRF session (transforms/helpers/bgp.py).
+              # namespace is a VRF session (transforms/helpers/bgp.py); l3_vni and
+              # namespace_type mark the internet one (transit filters, INTERNET L3 VNI).
               ... on DcimPhysicalInterface {
-                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+                ip_address { node { address { value } ip_namespace { node { name { value } l3_vni { value } namespace_type { value } } } } }
               }
               ... on DcimVirtualInterface {
-                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+                ip_address { node { address { value } ip_namespace { node { name { value } l3_vni { value } namespace_type { value } } } } }
               }
               device { node { name { value } } }
             }
