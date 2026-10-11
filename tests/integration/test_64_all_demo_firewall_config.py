@@ -84,7 +84,7 @@ query ($segment: String!) {
         customer_deployment {
           node {
             ... on ManagedTenantScoped {
-              serving_firewall_context { node { cluster { node { id } } } }
+              serving_firewall_context { node { name { value } cluster { node { id } } } }
             }
             ... on TopologyCustomerColocation {
               parent {
@@ -180,7 +180,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         scenario_branch: str,
     ) -> dict[str, Any]:
         """The firewall cluster whose context serves the policy's source
-        segment: {"members", "metro_firewalls", "outsider"}, names sorted.
+        segment: {"members", "metro_firewalls", "outsider", "context"}, names sorted.
         outsider is a firewall outside the cluster on the members' platform,
         so its template renders rule names too. Function-scoped: an async
         fixture can't be class-scoped under this suite's function-scoped
@@ -216,7 +216,12 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         outsiders = sorted(
             name for name, platform in platform_by_name.items() if name not in members and platform in member_platforms
         )
-        return {"members": members, "metro_firewalls": metro_firewalls, "outsider": outsiders[0] if outsiders else None}
+        return {
+            "members": members,
+            "metro_firewalls": metro_firewalls,
+            "outsider": outsiders[0] if outsiders else None,
+            "context": str((context.get("name") or {}).get("value") or ""),
+        }
 
     @pytest.mark.order(398)
     @pytest.mark.dependency(scope="session", name="all_demo_firewall_cluster", depends=["all_demo_inventory"])
@@ -281,12 +286,30 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         the generator-populated graph, the firewall_config query, and
         get_zone_policies() into real device config text. A firewall outside
         the cluster on the same platform must not carry the rules: strict
-        placement puts a rule only where its segment is served."""
+        placement puts a rule only where its segment is served.
+
+        The colocation context is policy-only: its vsys renders, but it has no
+        data-plane leg, so the config carries no interface unit, no import of
+        an interface into the vsys and no virtual router for it."""
         logging.info("=== %s - Step 2: Render firewall_config ===", SCENARIO_NAME)
 
+        context = serving_cluster["context"]
+        assert context, "serving context has no name"
         errors: list[str] = []
         for device in serving_cluster["members"]:
             rendered = await _render(async_client_main, scenario_branch, device)
+            if f"set vsys {context}" not in rendered:
+                errors.append(f"{device}: no vsys '{context}' rendered")
+            leg_lines = [
+                line
+                for line in rendered.splitlines()
+                if (f"vsys {context} import network" in line)
+                or (f"vsys {context} zone" in line and "network layer3" in line)
+                or (f"virtual-router vr-{context}" in line)
+                or ("set network interface ethernet" in line and " layer3 units " in line)
+            ]
+            if leg_lines:
+                errors.append(f"{device}: policy-only context '{context}' renders leg line(s) {leg_lines}")
             missing = [name for name in (*EXPECTED_RULE_NAMES, *EXPECTED_DESTINATION_CIDRS) if name not in rendered]
             if missing:
                 errors.append(f"{device}: missing seg-c001-nordix-prod-p-egress rule(s)/CIDR(s) {missing}")

@@ -397,7 +397,8 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
 # One shared (tenant-less) firewall context per firewall cluster: the three
 # DC clusters and the FR colocation metro's pair, which every colocation
 # deployment in the metro shares (a colocation has no design, so never a
-# dedicated context) ...
+# dedicated context). The colocation context is policy-only: it has no VLAN,
+# sub-interface, P2P address or exchange, just the serving link and zone policies ...
 ALL_DEMO_SHARED_FIREWALL_CONTEXTS = 4
 # Every 30_all colocation deployment -> whether its metro has firewalls, and so
 # a serving context. Only FR declares a firewall pair (02_colo/equinix/fr); the

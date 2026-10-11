@@ -646,7 +646,7 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
         contexts' transit /29s come from the per-VRF FW-Transit-* bootstrap
         pools, so there is no per-DC P2P pool.
 
-        generators/topology/customer_dc.py's _ensure_firewall_context
+        generators/topology/customer_dc.py's _resolve_context_target
         allocates from the VLAN pool once a customer boards onto this DC.
 
         See PoolMixin.ensure_firewall_context_pools for the shared

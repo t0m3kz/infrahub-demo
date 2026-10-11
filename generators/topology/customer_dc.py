@@ -43,7 +43,6 @@ class CustomerDeploymentDCExchangeGenerator(
     _customer_kind = "TopologyCustomerDC"
     _parent_label = "DC"
     _parent_generators = ("add_dc", "dc_pod_cascade")
-    _transit_legs = True
 
     async def generate(self, data: dict[str, Any]) -> None:
         cleaned = clean_data(data)
@@ -83,5 +82,7 @@ class CustomerDeploymentDCExchangeGenerator(
         parent = customer.get("parent")
         self.set_controllers_from(parent if isinstance(parent, dict) else {})
 
-        await self._ensure_firewall_context(customer, customer_id)
+        target = await self._resolve_context_target(customer, customer_id)
+        if target is not None:
+            await self._ensure_transit_legs(customer=customer, customer_id=customer_id, target=target)
         await self._ensure_dedicated_loadbalancer(customer, customer_id)

@@ -95,7 +95,7 @@ def apply_context_routes(context: dict[str, Any], segment_prefixes: dict[str, tu
 
     Sets ``routes`` ([{destination, nexthop, interface, vrf}], tenant
     prefixes first), ``isolation`` ([{src_zone, dst_zone}]) and each tenant
-    leg's ``prefixes``. A context without legs is left as the legacy shape.
+    leg's ``prefixes``. A context without legs (colocation) is left as is.
     """
     legs = context.get("legs") or []
     if not legs:
@@ -160,7 +160,13 @@ class Firewall(BaseDeviceTransform):
         interfaces = device.get("interfaces") or []
         activations = self._collect_activations_from_interfaces(interfaces)
         ha = get_ha(device.get("capabilities"), interfaces, device.get("name"))
-        contexts = get_firewall_contexts(interfaces, ha)
+        cluster_contexts = [
+            ctx
+            for cap in device.get("capabilities") or []
+            if cap.get("typename") == "ManagedFirewallHA"
+            for ctx in cap.get("contexts") or []
+        ]
+        contexts = get_firewall_contexts(interfaces, ha, cluster_contexts)
         root, by_context = place_policies_in_contexts(contexts, [act.get("segment") or {} for act in activations])
         return activations, contexts, root, by_context
 

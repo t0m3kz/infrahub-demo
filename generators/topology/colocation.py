@@ -66,7 +66,7 @@ from ..common import CommonGenerator, DeviceOptions
 from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
 from ..devices import DeviceMixin
 from ..helpers import get_loopback_name
-from ..helpers.pools import FW_CONTEXT_VLAN_START, name_to_asn_range
+from ..helpers.pools import name_to_asn_range
 from ..pools import PoolMixin
 from ..protocols import DcimVirtualInterface, ManagedBGP, TopologyColocationMetro
 from ..routing import RoutingMixin
@@ -148,10 +148,6 @@ _COLO_VTEP_LOOPBACK_INDEX = 1
 # ceiling, and disjoint from both GLOBAL-L2VNI (40000-49999, stretched
 # segments) and the 50001-59999 L3 VNI range.
 _COLO_VNI_RANGE = (10001, 39999)
-# FirewallContext sub-interfaces (see _ensure_firewall_context_pools): the
-# same VLAN range as a DC's (FW_CONTEXT_VLAN_START/END), and a /24 slice of FW-Context-P2P-IPv4 cut into
-# /31 links, one per firewall member per context.
-_COLO_FW_CONTEXT_P2P_SLICE_LENGTH = 24
 
 
 class TopologyColocationMetroData(TypedDict, total=False):
@@ -210,8 +206,6 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
 
         await self._ensure_colocation_pools(metro_id=metro_id)
         physical_names_by_role = await self._create_metro_devices(templates=templates, metro_id=metro_id)
-        if physical_names_by_role.get("firewall"):
-            await self._ensure_firewall_context_pools()
         await self._cable_metro_services(physical_names_by_role=physical_names_by_role)
         await self._ensure_metro_evpn(metro_id=metro_id)
 
@@ -345,8 +339,7 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
 
         Each pool is a SLICE of a global bootstrap pool (Loopback-IPv4 etc.,
         data/bootstrap/17_ip_prefix_pools.yml), never a fresh top-level
-        supernet invented at runtime — see dc.py's
-        _ensure_firewall_context_pools for the bug that rule exists to avoid
+        supernet invented at runtime — the bug that rule exists to avoid
         (a runtime-created IpamPrefix only exists on its creating branch, so
         re-running on another branch found the pool by name but could not
         resolve its resource, and every allocation failed with "No more
@@ -428,30 +421,6 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         # Untracked: the metro is this run's target, not its output.
         await node.save(update_group_context=False)
         self.logger.info(f"Metro {metro}: attached loopback/management/technical/ASN/VNI pool references")
-
-    async def _ensure_firewall_context_pools(self) -> None:
-        """Create the metro's FirewallContext VLAN and P2P pools.
-
-        generators/topology/customer_colocation.py gives every deployment in
-        this metro a context on the metro's firewall pair, with a sub-interface
-        on the firewall uplink and on the edge, and takes its VLAN and P2P link
-        from these two pools by name. The P2P slice is IPv4 because the
-        metro's edge legs are (Technical-IPv4).
-
-        Only a metro with physical firewalls gets them: without a firewall no
-        context is ever created here.
-
-        See PoolMixin.ensure_firewall_context_pools for the shared
-        pool-creation mechanism (also used by generators/topology/dc.py for
-        the per-DC equivalent) and its locking rationale.
-        """
-        await self.ensure_firewall_context_pools(
-            name=self.fabric_name,
-            vlan_start=FW_CONTEXT_VLAN_START,
-            parent_pool_name="FW-Context-P2P-IPv4",
-            slice_prefix_length=_COLO_FW_CONTEXT_P2P_SLICE_LENGTH,
-            default_prefix_length=31,
-        )
 
     async def _create_metro_devices(self, *, templates: list[dict[str, Any]], metro_id: str) -> dict[str, list[str]]:
         """Instantiate every fabric_templates entry as this metro's devices.

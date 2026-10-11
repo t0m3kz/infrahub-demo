@@ -12,14 +12,11 @@ parent.firewall_devices), and links the deployment to it as its
 serving_firewall_context so the firewall transform places the deployment's
 policies there. A metro without firewalls gets no context. The provisioning
 itself is generators/firewall_context.py's FirewallContextMixin, shared with
-customer_dc.py; the VLAN and P2P pools come from
-generators/topology/colocation.py's _ensure_firewall_context_pools.
+customer_dc.py.
 
-Inter-VRF routing (PROD/NON-PROD <-> INTERNET) is a TopologyRoutedExchange
-per FirewallContext (see docs/exchange_gateway.md); there are no bootstrap
-exchanges. Colocation keeps the legacy default-namespace P2P path for now
-(`_transit_legs = False`), so no namespaced transit legs or exchanges are
-created here.
+Colocation contexts are policy-only: the context, its serving link and the
+zone policies rendered from it. No sub-interfaces, P2P links, transit legs or
+exchanges are created here (a metro edge pair will carry the data plane).
 
 Registered as add_customer_deployment_colocation in .infrahub.yml, targeting
 the customer_deployments group and querying customer_colocation.gql.
@@ -48,8 +45,6 @@ class CustomerDeploymentColocationExchangeGenerator(
     _customer_kind = "TopologyCustomerColocation"
     _parent_label = "ColocationMetro"
     _parent_generators = ("add_colocation_metro",)
-    # Legacy default-namespace P2P path, deleted in PR 4 with the colocation transit legs.
-    _transit_legs = False
 
     async def generate(self, data: dict[str, Any]) -> None:
         cleaned = clean_data(data)
@@ -89,5 +84,7 @@ class CustomerDeploymentColocationExchangeGenerator(
         # aliases).
         self._all_controllers = []
 
-        await self._ensure_firewall_context(customer, customer_id)
+        target = await self._resolve_context_target(customer, customer_id)
+        if target is not None:
+            await self._ensure_policy_only_context(customer_id, target)
         await self._ensure_dedicated_loadbalancer(customer, customer_id)

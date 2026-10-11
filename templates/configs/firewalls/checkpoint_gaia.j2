@@ -88,14 +88,6 @@ set virtual-system {{ context.name }}
 {%- for route in context.routes %}
 set static-route {{ 'default' if route.destination == '0.0.0.0/0' else route.destination }} nexthop gateway address {{ route.nexthop }} on
 {%- endfor %}
-{%- elif context.vlan_id and context.parent_interface.name %}
-{%- set ctx_iface_name = context.parent_interface.name + '.' + context.vlan_id | string %}
-set interface {{ ctx_iface_name }} vlan {{ context.vlan_id }}
-set interface {{ ctx_iface_name }} state on
-{%- if context.ip_address %}
-set interface {{ ctx_iface_name }} {{ 'ipv6-address' if ':' in context.ip_address else 'ipv4-address' }} {{ context.ip_address | replace('/', ' mask-length ') }}
-{%- endif %}
-set virtual-system {{ context.name }} interface {{ ctx_iface_name }}
 {%- endif %}
 {%- endfor %}
 !

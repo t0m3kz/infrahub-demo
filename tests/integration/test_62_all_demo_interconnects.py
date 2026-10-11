@@ -87,15 +87,7 @@ query {
             vlan_id { value }
             tenant { node { id } }
             cluster { node { ... on ManagedFirewallHA { capabilities { edges { node { id } } } } } }
-            interface_capabilities {
-              edges {
-                node {
-                  name { value }
-                  device { node { id } }
-                  ... on DcimVirtualInterface { ip_address { node { address { value } } } }
-                }
-              }
-            }
+            interface_capabilities { edges { node { name { value } } } }
           }
         }
       }
@@ -355,8 +347,8 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         pool and tagged with the context and with the leg's exchange(s). The
         expectations come from the customers' environments and designs
         (ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS), and the served deployments the
-        graph itself reports must agree with them. The colocation metro keeps
-        its legacy default-namespace link and gets no transit leg.
+        graph itself reports must agree with them. The colocation metro's
+        context is policy-only: no sub-interface of any kind and no exchange.
         """
         logging.info("=== %s - Step 3b: Exchange Transit Legs ===", SCENARIO_NAME)
 
@@ -520,18 +512,19 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                         f"{dc}: border-leaf port {port} carries {sorted(names)}, expected {contexts_in_dc} context(s)"
                     )
 
-        # Colocation (FR): the legacy default-namespace P2P link, no transit leg.
+        # Colocation (FR): policy-only context, no data-plane leg at all (no
+        # sub-interface, so no default-namespace P2P address either).
         if len(colocation) != 1:
             errors.append(f"{len(colocation)} colocation firewall context(s), expected the FR metro's one")
         colocation_ids = {str(c["id"]) for c in colocation}
         for context in colocation:
-            transit = [leg for leg in context["legs"] if leg["namespace"] in ALL_DEMO_TRANSIT_RESOURCES]
-            if transit:
+            if context["legs"]:
                 errors.append(
-                    f"colocation '{context['name']}' has transit leg(s) {[leg['interface'] for leg in transit]}"
+                    f"colocation '{context['name']}' has sub-interface(s) {[leg['interface'] for leg in context['legs']]}, "
+                    "expected none"
                 )
-            if not [leg for leg in context["legs"] if leg["namespace"] == "default" and leg["address"]]:
-                errors.append(f"colocation '{context['name']}' lost its legacy default-namespace sub-interface")
+            if context["border_ports"]:
+                errors.append(f"colocation '{context['name']}' has border-leaf port(s) {context['border_ports']}")
         stray = sorted(str(e["name"]) for e in inventory["exchanges"] if str(e["gateway_id"]) in colocation_ids)
         if stray:
             errors.append(f"colocation context is the gateway of exchange(s) {stray}")
@@ -608,8 +601,8 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         """Verify each colocation deployment is served by its own metro's firewalls.
 
         A deployment in a metro with a firewall pair is served by that pair's
-        shared context, which carries one tagged sub-interface per firewall
-        member and one on the edge it is cabled to, each with a P2P address. A
+        shared context. That context is policy-only: it has no VLAN, no
+        sub-interface on any firewall member or edge, and no P2P address. A
         deployment in an edge-only metro has no context: pointing it at another
         metro's firewalls would hairpin its traffic across the WAN.
         """
@@ -652,22 +645,13 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             if not metro_firewalls or members != metro_firewalls:
                 errors.append(f"{name}: '{context_name}' is on cluster {sorted(members)}, not the metro's firewalls")
 
-            vlan_id = (context.get("vlan_id") or {}).get("value")
-            interfaces = [edge["node"] for edge in (context.get("interface_capabilities") or {}).get("edges", [])]
-            on_firewalls = [i for i in interfaces if ((i.get("device") or {}).get("node") or {}).get("id") in members]
-            if not vlan_id:
-                errors.append(f"{name}: '{context_name}' has no VLAN allocated")
-            if len(interfaces) != 2 * len(members) or len(on_firewalls) != len(members):
-                errors.append(
-                    f"{name}: '{context_name}' has {len(on_firewalls)} firewall and "
-                    f"{len(interfaces) - len(on_firewalls)} edge sub-interface(s), expected {len(members)} of each"
-                )
-            for interface in interfaces:
-                iface = interface["name"]["value"]
-                if not iface.endswith(f".{vlan_id}"):
-                    errors.append(f"{name}: '{context_name}' sub-interface '{iface}' is not tagged {vlan_id}")
-                if not ((interface.get("ip_address") or {}).get("node") or {}).get("address", {}).get("value"):
-                    errors.append(f"{name}: '{context_name}' sub-interface '{iface}' has no P2P address")
+            if (context.get("vlan_id") or {}).get("value"):
+                errors.append(f"{name}: '{context_name}' has a VLAN allocated, expected none (policy-only)")
+            interfaces = [
+                edge["node"]["name"]["value"] for edge in (context.get("interface_capabilities") or {}).get("edges", [])
+            ]
+            if interfaces:
+                errors.append(f"{name}: '{context_name}' has sub-interface(s) {sorted(interfaces)}, expected none")
 
         assert not errors, f"30_all colocation serving contexts are wrong on branch '{scenario_branch}':\n" + "\n".join(
             f"  - {e}" for e in errors

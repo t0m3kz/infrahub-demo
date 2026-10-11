@@ -737,22 +737,6 @@ class TestAddressFamilyAwareRendering:
         "description": None,
         "security_zone": None,
     }
-    _CONTEXT_V6 = {
-        "name": "ctx-shared",
-        "tenant_name": None,
-        "vlan_id": 3000,
-        "parent_interface": {"name": "eth1"},
-        "ip_address": "fd00:2300::/127",
-        "context_id": None,
-    }
-    _CONTEXT_V4 = {
-        "name": "ctx-shared",
-        "tenant_name": None,
-        "vlan_id": 3000,
-        "parent_interface": {"name": "eth1"},
-        "ip_address": "100.65.0.0/31",
-        "context_id": None,
-    }
 
     @pytest.mark.parametrize(
         "platform,v6_marker,v4_marker",
@@ -781,34 +765,6 @@ class TestAddressFamilyAwareRendering:
     )
     def test_fw_interface_v4_uses_v4_command(self, platform: str, v6_marker: str, v4_marker: str) -> None:
         out = _render_template(platform, name="fw1", fw_interfaces=[self._FW_IFACE_V4])
-        assert v4_marker in out
-        assert v6_marker not in out
-
-    @pytest.mark.parametrize(
-        "platform,v6_marker,v4_marker",
-        [
-            ("checkpoint_gaia", "ipv6-address", "ipv4-address"),
-            ("paloalto_panos", "ipv6 addr", "ipv4 addr"),
-            ("fortinet_fortios", "set ip6-address", "set ip "),
-            ("cisco_asa", "ipv6 address", "ip address"),
-        ],
-    )
-    def test_context_v6_uses_v6_command(self, platform: str, v6_marker: str, v4_marker: str) -> None:
-        out = _render_template(platform, name="fw1", contexts=[self._CONTEXT_V6])
-        assert v6_marker in out
-        assert v4_marker not in out
-
-    @pytest.mark.parametrize(
-        "platform,v6_marker,v4_marker",
-        [
-            ("checkpoint_gaia", "ipv6-address", "ipv4-address"),
-            ("paloalto_panos", "ipv6 addr", "ipv4 addr"),
-            ("fortinet_fortios", "set ip6-address", "set ip "),
-            ("cisco_asa", "ipv6 address", "ip address"),
-        ],
-    )
-    def test_context_v4_uses_v4_command(self, platform: str, v6_marker: str, v4_marker: str) -> None:
-        out = _render_template(platform, name="fw1", contexts=[self._CONTEXT_V4])
         assert v4_marker in out
         assert v6_marker not in out
 
@@ -842,9 +798,8 @@ def _policy_context(**extra: Any) -> dict[str, Any]:
         "name": "c005-dedicated",
         "tenant_name": "C005-P-DC12",
         "vlan_id": 3005,
-        "parent_interface": {"name": "eth1"},
-        "ip_address": "100.65.0.4/31",
         "context_id": None,
+        "legs": [],
         "policies": [{"name": "seg-c005-web-egress", "default_action": "deny", "rules": [_CTX_RULE]}],
         **extra,
     }
@@ -873,19 +828,14 @@ class TestPerContextPolicyRendering:
         out = _render_template(platform, name="fw1", contexts=[_policy_context()], zone_policies=[])
         assert rule_marker in out.split(scope_marker, 1)[1]
 
-    def test_fortios_vdom_matches_its_interface_and_defines_its_addresses(self) -> None:
-        """A VDOM's policies match its hairpin interface and name address objects defined in that VDOM."""
+    def test_fortios_vdom_matches_zones_and_defines_its_addresses(self) -> None:
+        """A VDOM's policies match on zones and name address objects defined in that VDOM."""
         out = _render_template("fortinet_fortios", name="fw1", contexts=[_policy_context()], zone_policies=[]).split(
             'config vdom\n    edit "c005-dedicated"', 1
         )[1]
-        assert 'set srcintf "eth1.3005"' in out
-        assert 'set dstintf "eth1.3005"' in out
+        assert 'set srcintf "PROD-ZONE"' in out
+        assert 'set dstintf "PROD-ZONE"' in out
         assert out.index("config firewall address") < out.index("config firewall policy")
-
-    def test_asa_context_permits_the_pbr_hairpin(self) -> None:
-        """PBR returns redirected traffic out of the interface it came in on."""
-        out = _render_template("cisco_asa", name="fw1", contexts=[_policy_context()], zone_policies=[])
-        assert "same-security-traffic permit intra-interface" in out.split("changeto context c005-dedicated", 1)[1]
 
     @pytest.mark.parametrize(
         "platform,root_marker",
@@ -904,19 +854,34 @@ class TestPerContextPolicyRendering:
         if platform in ("paloalto_panos", "juniper_junos"):
             assert root_marker not in out
 
-    def test_asa_binds_the_context_acl_to_its_customer_pbr_interface(self) -> None:
+    def test_asa_context_acl_renders_without_an_interface(self) -> None:
+        """A context without legs has no nameif to bind its ACL to."""
         out = _render_template("cisco_asa", name="fw1", contexts=[_policy_context()])
         assert (
             "access-list customer-pbr-in extended permit tcp 10.5.1.0 255.255.255.0 10.5.2.0 255.255.255.0 eq 8443"
             in out
         )
-        assert "access-group customer-pbr-in in interface customer-pbr" in out
-
-    def test_asa_skips_the_access_group_without_a_context_interface(self) -> None:
-        """No nameif customer-pbr exists to bind to when the sub-interface is not configured."""
-        out = _render_template("cisco_asa", name="fw1", contexts=[_policy_context(ip_address=None)])
-        assert "access-list customer-pbr-in" in out
         assert "access-group customer-pbr-in" not in out
+        assert "interface " not in out.split("changeto context c005-dedicated", 1)[1]
+
+    @pytest.mark.parametrize(
+        "platform,declaration",
+        [
+            ("fortinet_fortios", 'edit "c005-dedicated"'),
+            ("paloalto_panos", "set vsys c005-dedicated\n"),
+            ("checkpoint_gaia", "add virtual-system name c005-dedicated"),
+            ("cisco_asa", "context c005-dedicated\n config-url"),
+        ],
+    )
+    def test_context_without_legs_renders_its_declaration_and_policies_only(
+        self, platform: str, declaration: str
+    ) -> None:
+        """A colocation context has no data-plane legs: no interface, route or isolation, still its rules."""
+        out = _render_template(platform, name="fw1", contexts=[_policy_context()], zone_policies=[])
+        assert declaration in out
+        assert "c005-web-to-api" in out or "customer-pbr-in extended permit" in out
+        assert "eth1" not in out
+        assert "virtual-router" not in out
 
     @pytest.mark.parametrize(
         "platform", ["fortinet_fortios", "paloalto_panos", "juniper_junos", "checkpoint_gaia", "cisco_asa"]
@@ -1251,7 +1216,24 @@ class TestFirewallExchangeLegs:
         assert "standby 100.66" not in out
 
     @pytest.mark.asyncio
-    async def test_context_without_namespaced_legs_keeps_the_legacy_rendering(self) -> None:
-        out = await _make_fw().transform(_make_context_smoke_data("paloalto_panos", serves_segment=True))
+    async def test_cluster_context_without_legs_renders_its_policies(self) -> None:
+        """A colocation context sits on the cluster only (no interface on a member):
+        its vsys and the rules of the segments it serves still render."""
+        data = _make_context_smoke_data("paloalto_panos", serves_segment=True)
+        device = data["DcimPhysicalDevice"]["edges"][0]["node"]
+        context = device["interfaces"]["edges"].pop()["node"]["interface_capabilities"]["edges"][0]["node"]
+        device["capabilities"] = {
+            "edges": [
+                {
+                    "node": {
+                        "__typename": "ManagedFirewallHA",
+                        "name": {"value": "fr-fw-ha"},
+                        "contexts": {"edges": [{"node": context}]},
+                    }
+                }
+            ]
+        }
+        out = await _make_fw().transform(data)
+        assert "set vsys c005-dedicated rulebase security rules smoke-permit-rule" in out
         assert "virtual-router vr-" not in out
-        assert "set vsys c005-dedicated import network interface eth1.3005" in out
+        assert "import network interface" not in out

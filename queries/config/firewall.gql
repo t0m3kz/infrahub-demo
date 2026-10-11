@@ -30,6 +30,9 @@ query firewall_config(
                 ha_protocol { value }
                 ha_timer { value }
                 capabilities { edges { node { name { value } } } }
+                # Hosted contexts: a context without data-plane legs (colocation)
+                # has no interface on a member, only this link to its cluster.
+                contexts { edges { node { ...FirewallContextConfigFields } } }
               }
             }
           }
@@ -74,46 +77,7 @@ query firewall_config(
                       }
                     }
                     ...ExchangeGatewayInterfaceCapabilityFields
-                    ... on ManagedFirewallContext {
-                      id
-                      name { value }
-                      context_id { value }
-                      vlan_id { value }
-                      tenant {
-                        node {
-                          id
-                          ... on TopologyCustomerDC { name { value } }
-                          ... on TopologyCustomerColocation { name { value } }
-                        }
-                      }
-                      # The segments terminating on this context: every
-                      # segment of a deployment it serves. Its rule table is
-                      # their rules and the rules into them.
-                      served_deployments {
-                        edges {
-                          node {
-                            id
-                            ... on TopologyCustomer {
-                              network_segments {
-                                edges {
-                                  node {
-                                    id
-                                    ...SegmentRulesFields
-                                    # Own gateway prefix and zone: the context's
-                                    # routes (apply_context_routes) read these,
-                                    # not the SecurityZone root.
-                                    ... on ManagedNetworkSegment {
-                                      gateway { node { ip_prefix { node { prefix { value } } } } }
-                                      security_zone { node { name { value } } }
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
+                    ...FirewallContextConfigFields
                   }
                 }
               }
