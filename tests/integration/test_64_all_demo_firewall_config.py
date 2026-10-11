@@ -885,7 +885,6 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                 if transit_namespace_type(namespace) in EXCHANGE_PEERS
             ]
             other_zones = {zone_name_for_namespace_type(ns_type) for ns_type in EXCHANGE_PEERS} - set(tenant_zones)
-            has_services = dc == MANAGEMENT_SERVICES_DC
             for device in sorted({str(leg["device"]) for leg in context["legs"]}):
                 platform = platform_by_name.get(device)
                 if platform not in ("panos", "checkpoint_gaia"):
@@ -920,20 +919,22 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                     routes = re.findall(
                         r"static-route (rt-\d+) destination " + re.escape(MANAGEMENT_SERVICES_PREFIX), rendered
                     )
-                    if has_services:
-                        nexthops = {
-                            route
-                            for route in routes
-                            if re.search(
-                                rf"static-route {route} nexthop ip-address {re.escape(addresses['anycast'])}$",
-                                rendered,
-                                re.MULTILINE,
-                            )
-                        }
-                        if not nexthops:
-                            errors.append(
-                                f"{dc}/{device}: no route to {MANAGEMENT_SERVICES_PREFIX} via {addresses['anycast']}"
-                            )
+                    # The zone's CIDRs come from the global SecurityZone root, so every context with a
+                    # MANAGEMENT leg routes the services prefix to its own anycast (inert outside DC11:
+                    # no rule permits it there and the border leaf has no such prefix in its VRF).
+                    nexthops = {
+                        route
+                        for route in routes
+                        if re.search(
+                            rf"static-route {route} nexthop ip-address {re.escape(addresses['anycast'])}$",
+                            rendered,
+                            re.MULTILINE,
+                        )
+                    }
+                    if not nexthops:
+                        errors.append(
+                            f"{dc}/{device}: no route to {MANAGEMENT_SERVICES_PREFIX} via {addresses['anycast']}"
+                        )
                 else:
                     if f"set interface {leg_interface} security-zone {management_zone}" not in rendered:
                         errors.append(f"{dc}/{device}: {leg_interface} is not in {management_zone}")
@@ -959,8 +960,8 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                     route = (
                         f"static-route {MANAGEMENT_SERVICES_PREFIX} nexthop gateway address {addresses['anycast']} on"
                     )
-                    if (route in rendered) != has_services:
-                        errors.append(f"{dc}/{device}: '{route}' {'missing' if has_services else 'present'}")
+                    if route not in rendered:
+                        errors.append(f"{dc}/{device}: '{route}' missing")
                 for zone in other_zones:
                     if f"deny-{management_zone}-to-{zone}" in rendered:
                         errors.append(f"{dc}/{device}: deny towards {zone}, which the context does not hold")
