@@ -270,101 +270,29 @@ class PoolMixin:
             identifier={"name__value": [parent_pool_name]},
         )
 
-    async def ensure_firewall_context_pools(
-        self,
-        *,
-        name: str,
-        vlan_start: int,
-        parent_pool_name: str | None = None,
-        slice_prefix_length: int | None = None,
-        default_prefix_length: int | None = None,
-        vlan_end: int = FW_CONTEXT_VLAN_END,
-    ) -> None:
-        """Create a fabric's/metro's FirewallContext VLAN pool and, when asked, its P2P prefix pool.
+    async def ensure_firewall_context_pools(self, *, name: str, vlan_start: int) -> None:
+        """Create a fabric's FirewallContext VLAN pool.
 
-        Shared by generators/topology/dc.py (per-DC) and generators/topology/
-        colocation.py (per-metro) — same pools, same race, same fix.
+        Read by generators/firewall_context.py's _ensure_context_vlan, which
+        gives each DC context the VLAN its transit legs derive from
+        (utils/exchange_transit.py). Per-fabric (not global) so each DC's
+        context VLANs stay within its own numbering. The legs' addresses come
+        from the per-VRF FW-Transit-* bootstrap pools, not from a fabric pool.
 
-        The P2P pool is created only when parent_pool_name (with the two
-        lengths) is given. DC contexts get /29 transit legs from the per-VRF
-        FW-Transit-* bootstrap pools (utils/exchange_transit.py) and need only
-        the VLAN pool; colocation (`_transit_legs = False`) still addresses its
-        legs from the P2P slice, until the legacy path is deleted.
-
-        Per-fabric (not global) so each one's context sub-interfaces and
-        transit links stay within its own numbering. The P2P pool itself is a
-        per-fabric SLICE allocated from a GLOBAL bootstrap pool
-        (FW-Context-P2P-IPv6/IPv4, data/bootstrap/20_dci_pools.yml) — same
-        idiom as allocate_resource_pools()'s technical/loopback pools — not a
-        fresh top-level supernet invented at runtime, which was a real bug: a
-        runtime-created IpamPrefix only exists on the branch it was created
-        on, so re-running a generator on a DIFFERENT branch (e.g. a fresh
-        scratch branch off main) found the pool object by name (globally
-        visible) but its resource prefix didn't resolve there, and every P2P
-        allocation failed with "No more resources available".
-
-        No "does the pool already exist" short-circuit: allocate_next_ip_
-        prefix's identifier makes the slice allocation idempotent, and
-        CoreIPPrefixPool.name is unique + save(allow_upsert=True) makes the
-        pool itself idempotent too — re-running this always converges on the
-        same pool with the same resource, instead of a manual existence check
-        that can permanently skip healing a pool left broken by a prior code
-        version.
-
-        That "unique + upsert" idempotency only holds for sequential re-runs,
-        though — it does not stop two truly concurrent, overlapping calls for
-        this same `name` from both checking "does a pool named X exist?",
-        both finding nothing yet, and both creating a NEW CoreIPPrefixPool
-        with the same name (a real race reproduced on allocate_resource_
-        pools()'s technical pool — see that method's own lock for the full
-        explanation). Every caller gets the lock for free here instead of
-        each generator needing to remember to add its own.
+        upsert_number_pool is idempotent for sequential re-runs only; two
+        overlapping calls for the same `name` could both create a pool of that
+        name (the race allocate_resource_pools() locks against), so the
+        upsert runs under a per-`name` lock for every caller.
         """
         async with self.resource_lock(f"fw-context-pools-{name}"):
-            await self._ensure_firewall_context_pools_locked(
-                name=name,
-                vlan_start=vlan_start,
-                vlan_end=vlan_end,
-                parent_pool_name=parent_pool_name,
-                slice_prefix_length=slice_prefix_length,
-                default_prefix_length=default_prefix_length,
+            await self.upsert_number_pool(
+                pool_name=f"{name}-fw-context-vlan-pool",
+                description=f"FirewallContext sub-interface VLAN pool for {name.upper()}",
+                start_range=vlan_start,
+                end_range=FW_CONTEXT_VLAN_END,
+                node="ManagedFirewallContext",
+                node_attribute="vlan_id",
             )
-
-    async def _ensure_firewall_context_pools_locked(
-        self,
-        *,
-        name: str,
-        vlan_start: int,
-        vlan_end: int,
-        parent_pool_name: str | None,
-        slice_prefix_length: int | None,
-        default_prefix_length: int | None,
-    ) -> None:
-        """The actual pool-creation body of ensure_firewall_context_pools(),
-        run under that method's per-`name` lock."""
-        await self.upsert_number_pool(
-            pool_name=f"{name}-fw-context-vlan-pool",
-            description=f"FirewallContext sub-interface VLAN pool for {name.upper()}",
-            start_range=vlan_start,
-            end_range=vlan_end,
-            node="ManagedFirewallContext",
-            node_attribute="vlan_id",
-        )
-
-        if parent_pool_name is None or slice_prefix_length is None:
-            return
-        pool_name = f"{name}-fw-context-p2p-pool"
-        await self.ensure_sliced_pool(
-            pool_name=pool_name,
-            parent_pool_name=parent_pool_name,
-            prefix_length=slice_prefix_length,
-            role="technical",
-            kind="prefix",
-            default_prefix_length=default_prefix_length,
-            description=f"P2P pool for border-leaf <-> FirewallContext links on {name.upper()}",
-            identifier=False,
-        )
-        self.logger.info(f"Ensured FirewallContext P2P pool '{pool_name}' from '{parent_pool_name}'")
 
     async def ensure_sliced_pool(
         self,
@@ -374,17 +302,13 @@ class PoolMixin:
         prefix_length: int,
         role: str,
         kind: Literal["address", "prefix"],
-        default_prefix_length: int | None = None,
         namespace: str = "default",
-        description: str | None = None,
-        identifier: bool = True,
     ) -> Any:
         """Slice one prefix out of a bootstrap parent pool and upsert a pool around it.
 
         The slice is keyed by pool_name, so re-runs get the same prefix back.
-        default_prefix_length (what the pool hands out when a caller names no
-        length) defaults to the slice's own length. identifier=True also sets
-        the pool's own identifier to pool_name.
+        The pool hands out the slice's own length unless a caller names one,
+        and its own identifier is pool_name.
         """
         parent_pool = await self._get_parent_pool_with_retry(parent_pool_name)
         allocated_prefix = await self.client.allocate_next_ip_prefix(
@@ -402,11 +326,10 @@ class PoolMixin:
             kind=pool_kind,
             data={
                 "name": pool_name,
-                **({"description": description} if description else {}),
                 **default_type,
-                "default_prefix_length": prefix_length if default_prefix_length is None else default_prefix_length,
+                "default_prefix_length": prefix_length,
                 "ip_namespace": {"hfid": [namespace]},
-                **({"identifier": pool_name} if identifier else {}),
+                "identifier": pool_name,
                 "resources": [allocated_prefix],
             },
         )
