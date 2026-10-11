@@ -44,9 +44,7 @@ fragment LoadbalancerVipsOnDeviceHostingFields on TopologyDeviceHosting {
                   edges {
                     node {
                       __typename
-                      ... on LoadbalancerVIP {
-                        ...LoadbalancerVipFields
-                      }
+                      ...LoadbalancerVipFields
                     }
                   }
                 }
