@@ -167,8 +167,7 @@ def _transit_legs(ctx: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """The context's legs in a non-default VRF namespace, keyed by namespace name.
 
     Each carries the namespace type/l3_vni, the transit /29 and the transit VLAN
-    (utils.exchange_transit rules). Legacy legs in the default namespace (colocation)
-    are skipped.
+    (utils.exchange_transit rules). Legs in the default namespace are skipped.
     """
     legs: dict[str, dict[str, Any]] = {}
     context_vlan = ctx.get("vlan_id")
@@ -305,16 +304,37 @@ def get_exchange_routes(
     return sorted(routes.values(), key=lambda r: (r["vrf"], r["prefix"], r["nexthop"]))
 
 
+def _new_context(cap: dict[str, Any], legs: list[dict[str, Any]]) -> dict[str, Any]:
+    """The template-facing shape of one ManagedFirewallContext capability."""
+    segments: dict[str, dict[str, Any]] = {}
+    for deployment in cap.get("served_deployments") or []:
+        for segment in deployment.get("network_segments") or []:
+            if segment.get("id"):
+                segments.setdefault(segment["id"], segment)
+    return {
+        "id": cap.get("id"),
+        "name": cap.get("name"),
+        "context_id": cap.get("context_id"),
+        "vlan_id": cap.get("vlan_id"),
+        "tenant_name": (cap.get("tenant") or {}).get("name"),
+        "segments": list(segments.values()),
+        "legs": legs,
+    }
+
+
 def get_firewall_contexts(
-    interfaces: list[dict[str, Any]] | None, ha: dict[str, Any] | None = None
+    interfaces: list[dict[str, Any]] | None,
+    ha: dict[str, Any] | None = None,
+    cluster_contexts: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Build the per-VDOM/vsys/context list from this firewall's own sub-interfaces.
 
     A ManagedFirewallContext shows up as an interface_capabilities entry on
     the DcimVirtualInterface(s) generators/topology/customer_dc.py created for
-    it on the cluster's "uplink"-role trunk. The context-level fields
-    (sub_interface, ip_address, ...) come from the first one; a context
-    without namespaced legs (colocation, see below) has exactly one.
+    it on the cluster's "uplink"-role trunk. A colocation context has no
+    legs at all, hence no interface on a member: it comes from
+    ``cluster_contexts`` (the contexts of the device's ManagedFirewallHA) and
+    lists with its policies and no legs.
 
     ``legs`` are the context's exchange transit legs on this device: the
     sub-interfaces whose address is in a VRF namespace of a known type
@@ -322,19 +342,16 @@ def get_firewall_contexts(
     internet. A leg is {interface, parent_interface, vlan (the transit VLAN),
     own_ip, virtual_ip / standby_ip (the HA pair's VIP and standby, None
     without ``ha``), anycast (the border leaves' gateway in the /29), vrf,
-    ns_type, zone, nameif}. A context holding none keeps the legacy single
-    P2P rendering.
+    ns_type, zone, nameif}. A context holding none renders only its
+    policies.
 
     ``segments`` are the segments terminating on the context: every segment
     of a deployment it serves (served_deployments, written by each
     deployment's own boarding run), de-duplicated by id.
     """
-    if not interfaces:
-        return []
-
     contexts: dict[str, dict[str, Any]] = {}
     legs_by_context: dict[str, list[dict[str, Any]]] = {}
-    for iface in interfaces:
+    for iface in interfaces or []:
         ip_obj = iface.get("ip_address") or {}
         parent_iface = iface.get("parent_interface") or {}
         for cap in iface.get("interface_capabilities") or []:
@@ -345,24 +362,7 @@ def get_firewall_contexts(
                 continue
             context = contexts.get(context_id)
             if context is None:
-                segments: dict[str, dict[str, Any]] = {}
-                for deployment in cap.get("served_deployments") or []:
-                    for segment in deployment.get("network_segments") or []:
-                        if segment.get("id"):
-                            segments.setdefault(segment["id"], segment)
-                tenant = cap.get("tenant") or {}
-                context = contexts[context_id] = {
-                    "id": context_id,
-                    "name": cap.get("name"),
-                    "context_id": cap.get("context_id"),
-                    "vlan_id": cap.get("vlan_id"),
-                    "tenant_name": tenant.get("name"),
-                    "sub_interface": iface.get("name"),
-                    "parent_interface": parent_iface,
-                    "ip_address": ip_obj.get("address"),
-                    "segments": list(segments.values()),
-                    "legs": legs_by_context.setdefault(context_id, []),
-                }
+                context = contexts[context_id] = _new_context(cap, legs_by_context.setdefault(context_id, []))
             namespace = ip_obj.get("ip_namespace") or {}
             ns_type = namespace.get("namespace_type")
             address = ip_obj.get("address")
@@ -386,6 +386,9 @@ def get_firewall_contexts(
                     "nameif": zone.removesuffix("-ZONE").lower(),
                 }
             )
+    for cap in cluster_contexts or []:
+        if cap.get("id") and cap["id"] not in contexts:
+            contexts[cap["id"]] = _new_context(cap, [])
     for legs in legs_by_context.values():
         legs.sort(key=lambda leg: TRANSIT_SLOT[leg["ns_type"]])
     return sorted(contexts.values(), key=lambda c: c.get("name") or "")
@@ -498,10 +501,8 @@ def _context_leg_ip(ctx: dict[str, Any], namespace: str | None = None) -> str | 
 
     A transit leg (non-default VRF namespace) is a /29 whose firewall VIP sits at a
     fixed offset (utils.exchange_transit); the members' own addresses are never the
-    nexthop. Without a matching transit leg (colocation's legacy default-namespace
-    P2P, or no ``namespace``) the first firewall leg's own address is used.
+    nexthop. None without a transit leg in ``namespace``.
     """
-    legacy: str | None = None
     for leg in ctx.get("interface_capabilities") or []:
         if (leg.get("device") or {}).get("role") != "firewall":
             continue
@@ -516,9 +517,7 @@ def _context_leg_ip(ctx: dict[str, Any], namespace: str | None = None) -> str | 
         ns_name = (ip_obj.get("ip_namespace") or {}).get("name")
         if namespace and ns_name == namespace and ns_name != "default":
             return transit_addresses(str(interface.network))["vip"]
-        if legacy is None and (not ns_name or ns_name == "default"):
-            legacy = str(interface.ip)
-    return legacy
+    return None
 
 
 def _resolve_context_nexthops(

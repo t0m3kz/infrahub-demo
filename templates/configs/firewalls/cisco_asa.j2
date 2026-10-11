@@ -97,11 +97,6 @@ interface {{ leg.parent_interface.name }}.{{ leg.vlan }}
  no shutdown
 !
 {%- endfor %}
-{%- elif context.vlan_id and context.parent_interface.name %}
-interface {{ context.parent_interface.name }}.{{ context.vlan_id }}
- vlan {{ context.vlan_id }}
- no shutdown
-!
 {%- endif %}
 {%- endfor %}
 {%- for context in contexts %}
@@ -110,8 +105,6 @@ context {{ context.name }}
 {%- for leg in context.legs %}
  allocate-interface {{ leg.parent_interface.name }}.{{ leg.vlan }}
 {%- endfor %}
-{%- elif context.vlan_id and context.parent_interface.name %}
- allocate-interface {{ context.parent_interface.name }}.{{ context.vlan_id }}
 {%- endif %}
  config-url disk0:/{{ context.name }}.cfg
 {%- if context.tenant_name %}
@@ -155,30 +148,12 @@ access-list {{ leg.nameif }}-in extended deny ip any any log
 access-group {{ leg.nameif }}-in in interface {{ leg.nameif }}
 {%- endfor %}
 !
-{%- elif context.vlan_id and context.parent_interface.name and context.ip_address %}
-changeto context {{ context.name }}
-interface {{ context.parent_interface.name }}.{{ context.vlan_id }}
-{%- if ':' in context.ip_address %}
- ipv6 address {{ context.ip_address }}
-{%- else %}
- ip address {{ asa_ip(context.ip_address) }}
-{%- endif %}
- nameif customer-pbr
- security-level 50
- no shutdown
-!
-{#- PBR sends the redirected traffic back out of the interface it came in on. #}
-same-security-traffic permit intra-interface
-!
 {%- endif %}
 {%- endfor %}
 {%- for context in contexts if context.policies and not context.legs %}
 changeto context {{ context.name }}
 ! --- Access Control Lists in context {{ context.name }} ---
 {{- access_lists(context.policies, 'customer-pbr-in') }}
-{%- if context.vlan_id and context.parent_interface.name and context.ip_address %}
-access-group customer-pbr-in in interface customer-pbr
-{%- endif %}
 !
 {%- endfor %}
 {%- endif %}

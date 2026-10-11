@@ -301,8 +301,7 @@ def _sub_names(world: _World) -> dict[tuple[str, str], list[str]]:
     return {key: [peer.id for peer in sub.interface_capabilities.peers] for key, sub in world.sub_interfaces.items()}
 
 
-def test_generator_flags_choose_the_transit_path() -> None:
-    assert CustomerDeploymentDCExchangeGenerator._transit_legs is True
+def test_generator_is_a_common_generator() -> None:
     assert issubclass(CustomerDeploymentDCExchangeGenerator, CommonGenerator)
 
 

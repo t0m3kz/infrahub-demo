@@ -529,12 +529,6 @@ class TestLeafPbrNexthopIsContextLegVip:
         act["segment"]["gateway"] = {"ip_prefix": {"prefix": "10.0.1.0/24", "ip_namespace": {"name": "NON-PROD"}}}
         assert get_customer_pbr_rules([act], [ctx]) == []
 
-    def test_legacy_default_namespace_leg_keeps_its_own_address(self) -> None:
-        act = _make_pbr_activation(deployment_id="dep-a", security_policies=[{"enabled": True, "rules": []}])
-        act["segment"]["gateway"] = {"ip_prefix": {"prefix": "10.0.1.0/24", "ip_namespace": {"name": "PROD"}}}
-        rules = get_customer_pbr_rules([act], [_make_context_leg(served=["dep-a"])])
-        assert rules[0]["fw_nexthop"] == "10.65.0.0"
-
 
 # ===========================================================================
 # get_zone_policies()
@@ -878,6 +872,7 @@ def _make_pbr_activation(
     # The segment's own policy, as a 0/1-item list; None leaves it unqueried.
     if security_policies is not None:
         seg["security_policy"] = security_policies[0] if security_policies else None
+    seg["gateway"] = {"ip_prefix": {"prefix": "10.0.1.0/24", "ip_namespace": {"name": "PROD"}}}
     return {"vlan_id": vlan_id, "segment": seg}
 
 
@@ -889,7 +884,7 @@ def _make_pbr_rule(*, action: str = "permit", dst_prefix: str | None = "10.0.2.0
 
 
 def _make_context_leg(
-    *, fw_ip: str = "10.65.0.0/30", tenant_id: str | None = None, served: list[str] | None = None
+    *, fw_ip: str = "10.65.0.5/29", tenant_id: str | None = None, served: list[str] | None = None
 ) -> dict:
     """A ManagedFirewallContext dict as returned by
     _flatten_deployment_firewall_contexts() — device-scoped (this device's
@@ -898,7 +893,9 @@ def _make_context_leg(
     by filtering interface_capabilities legs to the one on a device with
     role="firewall"."""
     ctx: dict = {
-        "interface_capabilities": [{"device": {"role": "firewall"}, "ip_address": {"address": fw_ip}}],
+        "interface_capabilities": [
+            {"device": {"role": "firewall"}, "ip_address": {"address": fw_ip, "ip_namespace": {"name": "PROD"}}}
+        ],
     }
     if tenant_id:
         ctx["tenant"] = {"id": tenant_id}
@@ -985,27 +982,27 @@ class TestGetCustomerPbrRules:
 
     def test_shared_context_nexthop_used_when_no_tenant(self) -> None:
         activations = [_make_pbr_activation(deployment_id="dep-a", security_policies=[])]
-        contexts = [_make_context_leg(fw_ip="10.65.0.0/30")]
+        contexts = [_make_context_leg(fw_ip="10.65.0.5/29")]
         result = get_customer_pbr_rules(activations, contexts)
         assert len(result) == 1
-        assert result[0]["fw_nexthop"] == "10.65.0.0"
+        assert result[0]["fw_nexthop"] == "10.65.0.4"
         assert result[0]["vlan_id"] == 100
         assert result[0]["bypass_prefixes"] == []
 
     def test_dedicated_context_nexthop_preferred_over_shared(self) -> None:
         activations = [_make_pbr_activation(deployment_id="dep-a", security_policies=[])]
         contexts = [
-            _make_context_leg(fw_ip="10.65.0.0/30"),  # shared
-            _make_context_leg(fw_ip="10.66.0.0/30", tenant_id="dep-a"),  # dedicated
+            _make_context_leg(fw_ip="10.65.0.5/29"),  # shared
+            _make_context_leg(fw_ip="10.66.0.5/29", tenant_id="dep-a"),  # dedicated
         ]
         result = get_customer_pbr_rules(activations, contexts)
-        assert result[0]["fw_nexthop"] == "10.66.0.0"
+        assert result[0]["fw_nexthop"] == "10.66.0.4"
 
     def test_dedicated_context_for_other_tenant_not_used(self) -> None:
         """A dedicated context for a DIFFERENT deployment must not leak as this
         segment's nexthop — falls back to shared (or nothing) instead."""
         activations = [_make_pbr_activation(deployment_id="dep-a", security_policies=[])]
-        contexts = [_make_context_leg(fw_ip="10.66.0.0/30", tenant_id="dep-b")]
+        contexts = [_make_context_leg(fw_ip="10.66.0.5/29", tenant_id="dep-b")]
         assert get_customer_pbr_rules(activations, contexts) == []
 
     def test_stretched_vxlan_segment_matches_by_any_of_its_deployments(self) -> None:
@@ -1021,12 +1018,13 @@ class TestGetCustomerPbrRules:
                     "customer_name": "web",
                     "customer_deployments": [{"id": "dep-a"}, {"id": "dep-b"}],
                     "security_policy": None,
+                    "gateway": {"ip_prefix": {"prefix": "10.0.1.0/24", "ip_namespace": {"name": "PROD"}}},
                 },
             }
         ]
-        contexts = [_make_context_leg(fw_ip="10.66.0.0/30", tenant_id="dep-b")]
+        contexts = [_make_context_leg(fw_ip="10.66.0.5/29", tenant_id="dep-b")]
         result = get_customer_pbr_rules(activations, contexts)
-        assert result[0]["fw_nexthop"] == "10.66.0.0"
+        assert result[0]["fw_nexthop"] == "10.66.0.4"
 
     def test_owner_org_id_never_matches_tenant_deployment_id(self) -> None:
         """Regression: FirewallContext.tenant peers TopologyCustomer (a
@@ -1045,7 +1043,7 @@ class TestGetCustomerPbrRules:
                 },
             }
         ]
-        contexts = [_make_context_leg(fw_ip="10.66.0.0/30", tenant_id="dep-a")]
+        contexts = [_make_context_leg(fw_ip="10.66.0.5/29", tenant_id="dep-a")]
         assert get_customer_pbr_rules(activations, contexts) == []
 
     def test_context_without_firewall_leg_is_skipped(self) -> None:
@@ -1225,10 +1223,8 @@ class TestGetFirewallContexts:
         assert len(result) == 1
         assert result[0]["name"] == "dc10-shared"
         assert result[0]["vlan_id"] == 3000
-        assert result[0]["sub_interface"] == "ethernet1/1.3000"
-        assert result[0]["parent_interface"] == {"name": "ethernet1/1"}
-        assert result[0]["ip_address"] == "10.65.0.1/30"
         assert result[0]["tenant_name"] is None
+        assert result[0]["legs"] == []
 
     def test_dedicated_context_carries_tenant_name(self) -> None:
         result = get_firewall_contexts([_make_fw_context_interface(tenant_name="C005-P-DC10")])
@@ -1240,10 +1236,24 @@ class TestGetFirewallContexts:
         assert result[0]["id"] == "ctx-9"
 
     def test_context_without_ip_still_extracted(self) -> None:
-        """inline connectivity_mode contexts have no dedicated p2p IP."""
+        """inline connectivity_mode contexts have no addressed leg."""
         result = get_firewall_contexts([_make_fw_context_interface(ip_addr=None)])
         assert len(result) == 1
-        assert result[0]["ip_address"] is None
+        assert result[0]["legs"] == []
+
+    def test_cluster_context_without_any_interface_is_listed(self) -> None:
+        """A colocation context has no interface on a member: it comes from the cluster."""
+        served = [{"id": "dep-a", "network_segments": [{"id": "s1"}]}]
+        cluster = [{"id": "ctx-colo", "name": "fr-fw-shared", "served_deployments": served}]
+        result = get_firewall_contexts([], None, cluster)
+        assert [(c["id"], c["name"], c["legs"]) for c in result] == [("ctx-colo", "fr-fw-shared", [])]
+        assert [seg["id"] for seg in result[0]["segments"]] == ["s1"]
+
+    def test_cluster_context_is_not_duplicated_by_its_interface(self) -> None:
+        iface = _make_fw_context_interface(context_id="ctx-1")
+        result = get_firewall_contexts([iface], None, [{"id": "ctx-1", "name": "dup"}])
+        assert len(result) == 1
+        assert result[0]["name"] == "dc10-shared"
 
     def test_duplicate_context_id_deduplicated(self) -> None:
         ifaces = [
@@ -1321,10 +1331,9 @@ class TestGetFirewallContextsLegs:
         ifaces = [_leg_iface("prod", "100.66.0.5/29"), _leg_iface("internet", "100.66.32.5/29", vlan=3400)]
         contexts = get_firewall_contexts(ifaces)
         assert len(contexts) == 1
-        assert contexts[0]["sub_interface"] == "eth1.3000"
+        assert len(contexts[0]["legs"]) == 2
 
     def test_default_namespace_sub_interface_is_not_a_leg(self) -> None:
-        """The colocation P2P path keeps its legacy single sub-interface."""
         iface = _make_fw_context_interface()
         iface["ip_address"]["ip_namespace"] = {"name": "default"}
         assert get_firewall_contexts([iface])[0]["legs"] == []
@@ -1530,8 +1539,8 @@ class TestCustomerPbrInspectedFlows:
     """Option 1: a profiled permit inside one context crosses the firewall
     both ways; every other permit stays on the fabric."""
 
-    SHARED = "10.65.0.0/30"
-    DEDICATED = "10.66.0.0/30"
+    SHARED = "10.65.0.5/29"
+    DEDICATED = "10.66.0.5/29"
 
     def _contexts(self) -> list[dict]:
         return [
@@ -1551,7 +1560,7 @@ class TestCustomerPbrInspectedFlows:
         segment = self._segment([_profiled_permit(_peer("10.0.2.0/24", "dep-b"))])
         result = get_customer_pbr_rules(segment, self._contexts())
         assert result[0]["bypass_prefixes"] == []
-        assert result[0]["fw_nexthop"] == "10.65.0.0"
+        assert result[0]["fw_nexthop"] == "10.65.0.4"
 
     def test_reply_of_an_inspected_inbound_flow_goes_back_through_the_firewall(self) -> None:
         """The destination's leaf keeps the source off its bypass, so the reply meets the session."""
@@ -1602,5 +1611,5 @@ class TestCustomerPbrInspectedFlows:
     def test_dedicated_context_inspects_its_own_tenant_flows(self) -> None:
         segment = self._segment([_profiled_permit(_peer("10.0.5.0/24", "dep-c"))], deployment_id="dep-c")
         result = get_customer_pbr_rules(segment, self._contexts())
-        assert result[0]["fw_nexthop"] == "10.66.0.0"
+        assert result[0]["fw_nexthop"] == "10.66.0.4"
         assert result[0]["bypass_prefixes"] == []

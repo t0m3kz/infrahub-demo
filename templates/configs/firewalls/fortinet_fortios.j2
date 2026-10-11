@@ -1,9 +1,8 @@
 {#- Fortinet FortiOS — zone-based firewall configuration -#}
 {#- An HA pair terminating a segment inline owns its gateway (virtual_ip): config
     sync gives both members that one interface address. -#}
-{#- A VDOM's rules match on its one hairpin interface (intf); the root
-    table's on the zones its interfaces belong to. -#}
-{%- macro security_policies(policies, intf=none) %}
+{#- Rules match on the zones their interfaces belong to. -#}
+{%- macro security_policies(policies) %}
 #
 # --- Service Objects (unique protocol/port combinations referenced below) ---
 config firewall service custom
@@ -34,8 +33,8 @@ config firewall policy
 {%- endif %}
     edit {{ rule.seq }}
         set name "{{ rule.name }}"
-        set srcintf "{{ intf or rule.src_zone or 'any' }}"
-        set dstintf "{{ intf or rule.dst_zone or 'any' }}"
+        set srcintf "{{ rule.src_zone or 'any' }}"
+        set dstintf "{{ rule.dst_zone or 'any' }}"
         set srcaddr "{{ rule.src or 'all' }}"
         set dstaddr "{{ rule.dst or 'all' }}"
         set action {{ 'accept' if rule.action == 'permit' else 'deny' }}
@@ -235,41 +234,17 @@ config vdom
 {%- endif %}
     next
 end
-{%- elif context.vlan_id and context.parent_interface.name %}
-config global
-    config system interface
-        edit "{{ context.parent_interface.name }}.{{ context.vlan_id }}"
-            set type vlan
-            set vlanid {{ context.vlan_id }}
-            set interface "{{ context.parent_interface.name }}"
-            set vdom "{{ context.name }}"
-{%- if context.ip_address %}
-{%- if ':' in context.ip_address %}
-            set ip6-address {{ context.ip_address }}
-{%- else %}
-            set ip {{ context.ip_address }}
-{%- endif %}
-{%- endif %}
-            set allowaccess ping https ssh
-            set status up
-{%- if context.tenant_name %}
-            set description "{{ context.tenant_name }}"
-{%- endif %}
-        next
-    end
-end
 {%- endif %}
 {%- endfor %}
 {%- for context in contexts if context.policies %}
 {%- set ctx_cidrs = rule_cidrs(context.policies) %}
-{%- set ctx_intf = (context.parent_interface.name + '.' + context.vlan_id | string) if (not context.legs and context.vlan_id and context.parent_interface.name) else none %}
 #
 # --- Security Policies in VDOM {{ context.name }} ---
 config vdom
     edit "{{ context.name }}"
 {%- if ctx_cidrs %}{{ address_objects(ctx_cidrs.split(','), 'VDOM ' + context.name) }}
 {%- endif %}
-{{- security_policies(context.policies, ctx_intf) }}
+{{- security_policies(context.policies) }}
     next
 end
 {%- endfor %}

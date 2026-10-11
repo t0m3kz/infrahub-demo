@@ -1270,8 +1270,8 @@ async def fetch_transit_inventory(client: InfrahubClient, branch: str) -> dict[s
                         "gateway_name"}]}
 
         ``legs`` are the context's DcimVirtualInterface capabilities (the
-        members' sub-interfaces; a colocation context's legacy P2P links are in
-        there too, in the default namespace), ``border_ports`` its
+        members' sub-interfaces; a colocation context is policy-only, so has
+        none), ``border_ports`` its
         DcimPhysicalInterface ones on a border-leaf. ``exchanges`` on a leg are
         the names of the exchanges it is linked to.
     """

@@ -289,8 +289,9 @@ class TestFirewallContextProvisioning:
 
         gen._ensure_transit_legs.assert_awaited_once()
         kwargs = gen._ensure_transit_legs.call_args.kwargs
-        assert kwargs["context_name"] == f"{cluster.name.value}-shared"
-        assert (kwargs["cluster_id"], kwargs["tenant_id"], kwargs["track"]) == (cluster.id, None, False)
+        target = kwargs["target"]
+        assert target.context_name == f"{cluster.name.value}-shared"
+        assert (target.cluster_id, target.tenant_id, target.track) == (cluster.id, None, False)
         assert kwargs["customer"]["environment"] == "p"
 
     @pytest.mark.asyncio
@@ -304,10 +305,10 @@ class TestFirewallContextProvisioning:
 
         await gen.generate(_dc_payload_with_parent(customer_id="cust-1", dedicated_firewall=True))
 
-        kwargs = gen._ensure_transit_legs.call_args.kwargs
-        assert kwargs["context_name"] == f"{dedicated_cluster.name.value}-context"
-        assert (kwargs["cluster_id"], kwargs["tenant_id"], kwargs["track"]) == ("dedicated-cluster-1", "cust-1", True)
-        assert kwargs["fw_devices"] == dedicated_fws
+        target = gen._ensure_transit_legs.call_args.kwargs["target"]
+        assert target.context_name == f"{dedicated_cluster.name.value}-context"
+        assert (target.cluster_id, target.tenant_id, target.track) == ("dedicated-cluster-1", "cust-1", True)
+        assert target.fw_devices == dedicated_fws
 
     @pytest.mark.asyncio
     async def test_virtual_instances_on_the_parent_are_ignored(self) -> None:
@@ -339,21 +340,19 @@ class TestFirewallContextProvisioning:
 
         await gen.generate(_dc_payload_with_parent(customer_id="cust-1", dedicated_firewall=True))
 
-        kwargs = gen._ensure_transit_legs.call_args.kwargs
-        assert kwargs["context_name"] == f"{cluster.name.value}-shared"
-        assert (kwargs["tenant_id"], kwargs["track"]) == (None, False)
+        target = gen._ensure_transit_legs.call_args.kwargs["target"]
+        assert target.context_name == f"{cluster.name.value}-shared"
+        assert (target.tenant_id, target.track) == (None, False)
 
     @pytest.mark.asyncio
     async def test_connectivity_mode_does_not_change_the_transit_path(self) -> None:
-        """pbr and inline address the same legs: neither reaches the legacy P2P step."""
+        """pbr and inline address the same legs: both go through the one transit-leg step."""
         for mode in ("pbr", "inline"):
             gen, _, _ = self._make_gen_with_cluster()
-            gen._ensure_context_subinterface = AsyncMock()
 
             await gen.generate(_dc_payload_with_parent(connectivity_mode=mode))
 
             gen._ensure_transit_legs.assert_awaited_once()
-            gen._ensure_context_subinterface.assert_not_awaited()
 
 
 class TestLinkServingFirewallContext:
@@ -589,7 +588,7 @@ class TestEnsureDedicatedLoadbalancer:
     @pytest.mark.asyncio
     async def test_independent_of_firewall_devices(self) -> None:
         """dedicated_loadbalancer must run even when the DC has zero firewall
-        devices — _ensure_firewall_context's own early-return must not gate it."""
+        devices — _resolve_context_target's own early-return must not gate it."""
         gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
         gen._ensure_dedicated_device_pair = AsyncMock()
         lb1 = {"id": "lb-1", "name": "DC10-LB1", "kind": "DcimPhysicalDevice", "platform": {"name": "f5_tmos"}}
@@ -636,59 +635,6 @@ class TestContextTrunk:
 
         assert result is iface
         gen.logger.error.assert_not_called()
-
-
-class TestCreateContextSubinterface:
-    @pytest.mark.asyncio
-    async def test_missing_vlan_id_is_a_hard_error(self) -> None:
-        """vlan_id_value=None logs an error and never reaches ensure_vlan_subinterface."""
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
-        gen.ensure_vlan_subinterface = AsyncMock()
-        context_obj = MagicMock(id="ctx-1")
-        context_obj.name.value = "shared-ctx"
-
-        result = await gen._create_context_subinterface(
-            device_id="fw-1",
-            device_name="fw-1",
-            trunk_iface=MagicMock(id="up-1"),
-            vlan_id_value=None,
-            context_obj=context_obj,
-            ip_address_id=None,
-        )
-
-        assert result is None
-        gen.logger.error.assert_called_once()
-        gen.ensure_vlan_subinterface.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_delegates_to_ensure_vlan_subinterface_with_given_trunk(self) -> None:
-        """The caller-resolved trunk is passed straight through, with the context as capability."""
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
-        sub = MagicMock()
-        gen.ensure_vlan_subinterface = AsyncMock(return_value=sub)
-        context_obj = MagicMock(id="ctx-1")
-        trunk = MagicMock(id="up-1")
-
-        result = await gen._create_context_subinterface(
-            device_id="fw-1",
-            device_name="fw-1",
-            trunk_iface=trunk,
-            vlan_id_value=3000,
-            context_obj=context_obj,
-            ip_address_id="ip-1",
-            track=False,
-        )
-
-        assert result is sub
-        gen.ensure_vlan_subinterface.assert_awaited_once_with(
-            device_id="fw-1",
-            device_name="fw-1",
-            trunk_iface=trunk,
-            vlan_id_value=3000,
-            capability_obj=context_obj,
-            ip_address_id="ip-1",
-            track=False,
-        )
 
 
 class TestGetOrCreateFirewallContext:
