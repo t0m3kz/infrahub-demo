@@ -1627,6 +1627,81 @@ def build_exchange_transit_bl_data(*, device_name: str, platform: str) -> dict:
     return data
 
 
+def build_edge_internet_bgw_data(*, device_name: str, platform: str) -> dict:
+    """A colocation edge that is its site's EVPN Multi-Site BGW and peers an ISP in INTERNET.
+
+    ebgp_ebgp edge plus a multisite-vip loopback (what makes it a BGW) and one
+    upstream transit peering: Ethernet1/14 in namespace INTERNET (namespace_type
+    internet, l3_vni 60002) towards the ISP PE. No stretched segments, so the
+    INTERNET L3 VNI comes from the transit session alone.
+    """
+    data = build_device_data(
+        device_name=device_name, role="edge", platform=platform, scenario="ebgp_ebgp", include_segments=False
+    )
+    device_node = data["DcimDevice"]["edges"][0]["node"]
+    interfaces = device_node["interfaces"]["edges"]
+    interfaces.append(
+        {
+            "node": _make_interface(
+                name="Loopback1",
+                device_name=device_name,
+                description="Multi-Site VIP",
+                role="multisite-vip",
+                ip_address="10.0.0.50/32",
+                typename="DcimVirtualInterface",
+            )
+        }
+    )
+    internet_ns = _node({"name": _v("INTERNET"), "l3_vni": _v(60002), "namespace_type": _v("internet")})
+    interfaces.append(
+        {
+            "node": {
+                **_make_interface(
+                    name="Ethernet1/14",
+                    device_name=device_name,
+                    description="to EXT-LUMEN-FRA1",
+                    role="customer",
+                    ip_address="203.0.113.0/31",
+                ),
+                "ip_address": _node({"address": _v("203.0.113.0/31"), "ip_namespace": internet_ns}),
+            }
+        }
+    )
+    peering = _make_bgp_peering(
+        device_name=device_name,
+        device_ip="203.0.113.0/31",
+        device_asn=65001,
+        remote_name="EXT-LUMEN-FRA1",
+        remote_ip="203.0.113.1/31",
+        remote_asn=3356,
+        session_type="EBGP",
+        ttl=1,
+        local_iface_name="Ethernet1/14",
+        remote_iface_name="Ethernet1/1",
+        maximum_routes=100,
+        password="isp-s3cr3t",
+    )
+    for iface_edge in peering["interface_capabilities"]["edges"]:
+        node = iface_edge["node"]
+        node["ip_address"]["node"]["ip_namespace"] = internet_ns
+    device_node["capabilities"]["edges"].append(
+        {
+            "node": {
+                "__typename": "ManagedBGP",
+                "name": _v("bgp-transit"),
+                "status": _v("active"),
+                "multipath": _v(True),
+                "graceful_restart": _v(True),
+                "confederation_identifier": _v(None),
+                "local_as": _node({"asn": _v(65001)}),
+                "router_id": _node({"address": _v("10.0.0.1/32")}),
+                "peerings": _edges([peering]),
+            }
+        }
+    )
+    return data
+
+
 def build_firewall_exchange_data(*, device_name: str, platform: str) -> dict:
     """An HA pair member (the first) carrying two contexts' transit legs.
 
@@ -2278,6 +2353,15 @@ def main() -> int:
         )
         generated += g
         errors += e
+    # Upstream INTERNET handoff on a BGW edge: L3 VNI 60002, global RT, transit filters.
+    print("\nGenerating INTERNET BGW edge fixture:")
+    g, e = _write_data_fixture(
+        Edge,
+        "edge_cisco_nxos_internet_bgw",
+        build_edge_internet_bgw_data(device_name="dc1-edge-01", platform="cisco_nxos"),
+    )
+    generated += g
+    errors += e
     for platform in [*FIREWALL_PLATFORMS, "juniper_junos"]:
         g, e = _write_data_fixture(
             Firewall,

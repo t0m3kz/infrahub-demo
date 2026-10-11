@@ -41,7 +41,11 @@ from .test_constants import (
     ALL_DEMO_DEDICATED_FIREWALL_TENANTS,
     ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS,
     ALL_DEMO_FIREWALL_MEMBERS,
+    ALL_DEMO_INTERNET_BGWS,
+    ALL_DEMO_INTERNET_ISLAND_EDGES,
     ALL_DEMO_INTERNET_TRANSIT_CIRCUITS,
+    ALL_DEMO_INTERNET_TRANSIT_PEERINGS,
+    ALL_DEMO_INTERNET_UPSTREAM_BY_DC,
     ALL_DEMO_LEGACY_EXCHANGES,
     ALL_DEMO_PHYSICAL_CIRCUIT_TYPES,
     ALL_DEMO_SEGMENT_LEGS,
@@ -115,6 +119,31 @@ query ($names: [String]) {
               name { value }
               device { node { name { value } } }
               ... on DcimPhysicalInterface { ip_address { node { address { value } } } }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
+# The ISP transit sessions: which edge each runs on, and the namespace of its local address.
+TRANSIT_SESSIONS_QUERY = """
+query ($names: [String]) {
+  ManagedBGPPeering(name__values: $names) {
+    edges {
+      node {
+        name { value }
+        session_type { value }
+        interface_capabilities {
+          edges {
+            node {
+              name { value }
+              device { node { name { value } } }
+              ... on DcimPhysicalInterface {
+                ip_address { node { address { value } ip_namespace { node { name { value } namespace_type { value } } } } }
+              }
             }
           }
         }
@@ -738,4 +767,84 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         )
 
         logging.info("DCI sessions verified: %d", len(sessions))
+        logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)
+
+    @pytest.mark.order(410)
+    @pytest.mark.dependency(scope="session", depends=["all_demo_physical_circuits"])
+    @pytest.mark.asyncio
+    async def test_07_verify_internet_upstream(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """Verify the ISP transit sessions and that each DC's DCI lands on its upstream BGW.
+
+        The four TRANSIT-* eBGP sessions run in the INTERNET namespace (an
+        `internet`-type namespace is what makes the edge filter them and
+        export 0/0 as EVPN type-5). The upstream BGW of a DC is the edge its
+        dark fibre ends on; only the BGWs carry a DCI, the island edges do not.
+        """
+        logging.info("=== %s - Step 7: INTERNET upstream ===", SCENARIO_NAME)
+
+        errors: list[str] = []
+        result = await async_client_main.execute_graphql(
+            query=TRANSIT_SESSIONS_QUERY,
+            variables={"names": sorted(ALL_DEMO_INTERNET_TRANSIT_PEERINGS)},
+            branch_name=scenario_branch,
+        )
+        sessions = {edge["node"]["name"]["value"]: edge["node"] for edge in result["ManagedBGPPeering"]["edges"]}
+        if sorted(sessions) != sorted(ALL_DEMO_INTERNET_TRANSIT_PEERINGS):
+            errors.append(f"transit sessions {sorted(sessions)}, expected {sorted(ALL_DEMO_INTERNET_TRANSIT_PEERINGS)}")
+
+        for name, edge_device in sorted(ALL_DEMO_INTERNET_TRANSIT_PEERINGS.items()):
+            session = sessions.get(name)
+            if session is None:
+                continue
+            if session["session_type"]["value"] != "EBGP":
+                errors.append(f"{name}: session type {session['session_type']['value']}, expected EBGP")
+            local = [
+                edge["node"]
+                for edge in session["interface_capabilities"]["edges"]
+                if edge["node"]["device"]["node"]["name"]["value"] == edge_device
+            ]
+            if len(local) != 1:
+                errors.append(f"{name}: {len(local)} interface(s) on {edge_device}, expected 1")
+                continue
+            namespace = (((local[0].get("ip_address") or {}).get("node") or {}).get("ip_namespace") or {}).get(
+                "node"
+            ) or {}
+            if namespace.get("name", {}).get("value") != "INTERNET":
+                errors.append(f"{name}: local address of {edge_device} is not in namespace INTERNET")
+            elif namespace["namespace_type"]["value"] != "internet":
+                errors.append(f"{name}: namespace INTERNET has type {namespace['namespace_type']['value']}")
+
+        transit_edges = set(ALL_DEMO_INTERNET_TRANSIT_PEERINGS.values())
+        if transit_edges != ALL_DEMO_INTERNET_BGWS | ALL_DEMO_INTERNET_ISLAND_EDGES:
+            errors.append(f"transit edges {sorted(transit_edges)} are not the BGWs plus the island edges")
+
+        # Each DC's DCI session lands on the BGW that is its upstream, and on no island edge.
+        dci = await async_client_main.execute_graphql(
+            query=DCI_SESSIONS_QUERY,
+            variables={"names": [f"DCI-{circuit_id}" for circuit_id in ALL_DEMO_DCI_CIRCUITS]},
+            branch_name=scenario_branch,
+        )
+        landing: dict[str, set[str]] = {}
+        for edge in dci["ManagedBGPPeering"]["edges"]:
+            node = edge["node"]
+            circuit_id = node["name"]["value"].removeprefix("DCI-")
+            devices = {i["node"]["device"]["node"]["name"]["value"] for i in node["interface_capabilities"]["edges"]}
+            landing[ALL_DEMO_DCI_CIRCUITS[circuit_id][0]] = devices & transit_edges
+        for dc_name, upstream in sorted(ALL_DEMO_INTERNET_UPSTREAM_BY_DC.items()):
+            if landing.get(dc_name) != {upstream}:
+                errors.append(f"{dc_name}: DCI lands on {sorted(landing.get(dc_name, ()))}, expected [{upstream}]")
+        if set(ALL_DEMO_INTERNET_UPSTREAM_BY_DC.values()) != ALL_DEMO_INTERNET_BGWS:
+            errors.append("the upstream BGWs are not exactly ALL_DEMO_INTERNET_BGWS")
+        if set(ALL_DEMO_INTERNET_UPSTREAM_BY_DC.values()) & ALL_DEMO_INTERNET_ISLAND_EDGES:
+            errors.append("a DC is wired to an island edge")
+
+        assert not errors, f"30_all INTERNET upstream is wrong on branch '{scenario_branch}':\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
+
+        logging.info("INTERNET upstream verified: %s", ALL_DEMO_INTERNET_UPSTREAM_BY_DC)
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)

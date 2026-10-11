@@ -169,8 +169,8 @@ configure router "Base" policy-options policy-statement "RM-VRF-STATIC-2-EVPN-PR
 configure service vprn 50003 admin-state enable
 configure service vprn 50003 customer 1
 configure service vprn 50003 bgp instance 1 route-distinguisher "10.0.0.1:50003"
-configure service vprn 50003 bgp instance 1 route-target export "target:65000:50003"
-configure service vprn 50003 bgp instance 1 route-target import "target:65000:50003"
+configure service vprn 50003 bgp instance 1 route-target export "target:50003:50003"
+configure service vprn 50003 bgp instance 1 route-target import "target:50003:50003"
 
 configure service vprn 50003 bgp-evpn evi 50003
 configure service vprn 50003 bgp-evpn vxlan bgp-instance 1 vxlan-instance 1

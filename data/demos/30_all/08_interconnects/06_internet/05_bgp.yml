@@ -62,6 +62,12 @@ spec:
 #
 # maximum_routes 100: the ISPs send a default route only. A full table (~1M
 # IPv4 routes) would not fit an N9K-C9316D-GX, which holds 512k.
+#
+# Only the "01" edge of each metro (eg-fr01, eg-pa01) reaches a DC over dark
+# fibre and is a Multi-Site BGW: it carries VRF INTERNET as an L3VNI and exports
+# the ISP default into the DC fabric as EVPN type-5. The sessions on eg-fr02 and
+# eg-pa02 (Cogent) render with the same transit filters but are islands: there
+# is no inter-edge link, so no DC can reach them until the metro edge pair.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

@@ -178,8 +178,8 @@ router bgp 65000
    ! L3 EVPN (VRF-based for microsegmentation)
    vrf INTERNET
       rd 10.0.0.1:50003
-      route-target import evpn 65000:50003
-      route-target export evpn 65000:50003
+      route-target import evpn 50003:50003
+      route-target export evpn 50003:50003
       redistribute connected
       redistribute static route-map RM-VRF-STATIC-2-EVPN-INTERNET
    vrf PROD

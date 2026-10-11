@@ -37,9 +37,9 @@ vrf context {{ mapping.vrf_name }}
   ip route {{ route.prefix }} {{ route.nexthop }}
 {%- endfor %}
   address-family ipv4 unicast
-{%- if vxlan.evpn.rt_format %}
-    route-target both {{ vxlan.evpn.rt_format | replace('{vni}', mapping.l3_vni | string) }}
-    route-target both {{ vxlan.evpn.rt_format | replace('{vni}', mapping.l3_vni | string) }} evpn
+{%- if mapping.route_target %}
+    route-target both {{ mapping.route_target }}
+    route-target both {{ mapping.route_target }} evpn
 {%- endif %}
 {%- for rt in mapping.import_route_targets | default([]) %}
     route-target import {{ rt }}
