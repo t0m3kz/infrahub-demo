@@ -27,6 +27,7 @@ _NAMESPACES = {
     "prod": ("PROD", "ns-prod", "100.66.0.0"),
     "non_prod": ("NON-PROD", "ns-nonprod", "100.66.16.0"),
     "internet": ("INTERNET", "ns-internet", "100.66.32.0"),
+    "management": ("MANAGEMENT", "ns-management", "100.66.48.0"),
 }
 
 
@@ -49,7 +50,7 @@ class _World:
     def __init__(
         self,
         *,
-        namespaces: tuple[str, ...] = ("prod", "non_prod", "internet"),
+        namespaces: tuple[str, ...] = ("prod", "non_prod", "internet", "management"),
         pools: bool = True,
         snat_pool: bool = True,
     ) -> None:
@@ -341,7 +342,7 @@ def test_generator_is_a_common_generator() -> None:
 
 class TestFreshSharedBoarding:
     @pytest.mark.asyncio
-    async def test_prod_customer_gets_prod_and_internet_legs_on_both_members(self) -> None:
+    async def test_prod_customer_gets_prod_internet_and_management_legs_on_both_members(self) -> None:
         world = _World()
         gen, events = _make_gen(world)
 
@@ -353,9 +354,10 @@ class TestFreshSharedBoarding:
         assert names == {
             (device, f"Ethernet1/25.{transit_vlan(vlan, ns_type)}")
             for device in ("fw-1", "fw-2")
-            for ns_type in ("prod", "internet")
+            for ns_type in ("prod", "internet", "management")
         }
         assert f"Ethernet1/25.{transit_vlan(vlan, 'internet')}" == "Ethernet1/25.3400"
+        assert f"Ethernet1/25.{transit_vlan(vlan, 'management')}" == "Ethernet1/25.3600"
         gen.logger.error.assert_not_called()
 
     @pytest.mark.asyncio
@@ -368,13 +370,19 @@ class TestFreshSharedBoarding:
         by_namespace: dict[str, list[str]] = {}
         for address, namespace_id in world.addresses:
             by_namespace.setdefault(namespace_id, []).append(address)
-        assert sorted(by_namespace) == ["ns-internet", "ns-prod"]
+        assert sorted(by_namespace) == ["ns-internet", "ns-management", "ns-prod"]
         assert sorted(by_namespace["ns-prod"]) == ["100.66.0.1/29", "100.66.0.4/29", "100.66.0.5/29", "100.66.0.6/29"]
         assert sorted(by_namespace["ns-internet"]) == [
             "100.66.32.1/29",
             "100.66.32.4/29",
             "100.66.32.5/29",
             "100.66.32.6/29",
+        ]
+        assert sorted(by_namespace["ns-management"]) == [
+            "100.66.48.1/29",
+            "100.66.48.4/29",
+            "100.66.48.5/29",
+            "100.66.48.6/29",
         ]
         member_ips = {(device, name): sub.ip_address.id for (device, name), sub in world.sub_interfaces.items()}
         fw1 = world.addresses[("100.66.0.5/29", "ns-prod")].id
@@ -383,20 +391,30 @@ class TestFreshSharedBoarding:
         assert member_ips[("fw-2", "Ethernet1/25.3000")] == fw2
 
     @pytest.mark.asyncio
-    async def test_one_exchange_joins_the_legs_and_names_its_gateway(self) -> None:
+    async def test_one_exchange_per_peer_joins_the_legs_and_names_its_gateway(self) -> None:
         world = _World()
         gen, _ = _make_gen(world)
 
         await _run(gen, world, _payload())
 
-        assert list(world.exchanges) == [f"{_SHARED}-PROD-INTERNET"]
-        exchange = world.exchanges[f"{_SHARED}-PROD-INTERNET"]
+        assert sorted(world.exchanges) == [f"{_SHARED}-PROD-INTERNET", f"{_SHARED}-PROD-MANAGEMENT"]
         context = world.contexts[_SHARED]
-        assert exchange.data["gateway"] == {"id": context.id}
-        assert exchange.data["namespace_a"] == {"id": "ns-prod"}
-        assert exchange.data["namespace_z"] == {"id": "ns-internet"}
-        for caps in _sub_names(world).values():
-            assert sorted(caps) == sorted([context.id, exchange.id])
+        for peer, namespace_id in (("INTERNET", "ns-internet"), ("MANAGEMENT", "ns-management")):
+            exchange = world.exchanges[f"{_SHARED}-PROD-{peer}"]
+            assert exchange.data["gateway"] == {"id": context.id}
+            assert exchange.data["namespace_a"] == {"id": "ns-prod"}
+            assert exchange.data["namespace_z"] == {"id": namespace_id}
+        vlan = context.vlan_id.value
+        for ns_type, expected in (
+            ("prod", {f"{_SHARED}-PROD-INTERNET", f"{_SHARED}-PROD-MANAGEMENT"}),
+            ("internet", {f"{_SHARED}-PROD-INTERNET"}),
+            ("management", {f"{_SHARED}-PROD-MANAGEMENT"}),
+        ):
+            sub = world.sub_interfaces[("fw-1", f"Ethernet1/25.{transit_vlan(vlan, ns_type)}")]
+            assert {peer.id for peer in sub.interface_capabilities.peers} == {
+                context.id,
+                *(world.exchanges[name].id for name in expected),
+            }, ns_type
 
     @pytest.mark.asyncio
     async def test_border_service_ports_are_tagged_with_the_context_additively(self) -> None:
@@ -485,11 +503,18 @@ class TestRerunAndSecondCustomer:
 
         await _run(gen, world, _payload(customer_id="cust-2", environment="d"))
 
-        assert sorted(world.exchanges) == [f"{_SHARED}-NON-PROD-INTERNET", f"{_SHARED}-PROD-INTERNET"]
+        assert sorted(world.exchanges) == [
+            f"{_SHARED}-NON-PROD-INTERNET",
+            f"{_SHARED}-NON-PROD-MANAGEMENT",
+            f"{_SHARED}-PROD-INTERNET",
+            f"{_SHARED}-PROD-MANAGEMENT",
+        ]
         for name, exchange in world.exchanges.items():
             assert {exchange.data["namespace_a"]["id"], exchange.data["namespace_z"]["id"]} in (
                 {"ns-prod", "ns-internet"},
+                {"ns-prod", "ns-management"},
                 {"ns-nonprod", "ns-internet"},
+                {"ns-nonprod", "ns-management"},
             ), name
         vlan = world.contexts[_SHARED].vlan_id.value
         non_prod_sub = world.sub_interfaces[("fw-1", f"Ethernet1/25.{transit_vlan(vlan, 'non_prod')}")]
@@ -501,19 +526,24 @@ class TestRerunAndSecondCustomer:
         assert prod_exchange not in {peer.id for peer in non_prod_sub.interface_capabilities.peers}
         assert {non_prod_exchange, prod_exchange} <= {peer.id for peer in internet_sub.interface_capabilities.peers}
         assert non_prod_exchange not in {peer.id for peer in prod_sub.interface_capabilities.peers}
-        # The INTERNET /29 is the one allocated for the first customer, not a second.
+        # The INTERNET and MANAGEMENT /29s are the ones allocated for the first customer, not a second.
         assert len([k for k in world.allocated if k.endswith("-INTERNET-transit")]) == 1
+        assert len([k for k in world.allocated if k.endswith("-MANAGEMENT-transit")]) == 1
 
     @pytest.mark.asyncio
-    async def test_non_prod_customer_alone_uses_non_prod_and_internet_only(self) -> None:
+    async def test_non_prod_customer_alone_uses_non_prod_and_the_peers_only(self) -> None:
         world = _World()
         gen, _ = _make_gen(world)
 
         await _run(gen, world, _payload(environment="t"))
 
-        assert list(world.exchanges) == [f"{_SHARED}-NON-PROD-INTERNET"]
-        assert {ns for _, ns in world.addresses} == {"ns-nonprod", "ns-internet"}
-        assert {name for _, name in world.sub_interfaces} == {"Ethernet1/25.3200", "Ethernet1/25.3400"}
+        assert sorted(world.exchanges) == [f"{_SHARED}-NON-PROD-INTERNET", f"{_SHARED}-NON-PROD-MANAGEMENT"]
+        assert {ns for _, ns in world.addresses} == {"ns-nonprod", "ns-internet", "ns-management"}
+        assert {name for _, name in world.sub_interfaces} == {
+            "Ethernet1/25.3200",
+            "Ethernet1/25.3400",
+            "Ethernet1/25.3600",
+        }
 
 
 class TestDedicatedContext:
@@ -549,9 +579,12 @@ class TestDedicatedContext:
         # reclaims whatever the run does not save again.
         assert first_run_saves > 0
         assert world.saved("ManagedFirewallContext") == ["DC10-ded-ha-context"]
-        assert len(world.saved("IpamIPAddress")) == 8
-        assert len(world.saved("DcimVirtualInterface")) == 4
-        assert world.saved("TopologyRoutedExchange") == ["DC10-ded-ha-context-PROD-INTERNET"]
+        assert len(world.saved("IpamIPAddress")) == 12
+        assert len(world.saved("DcimVirtualInterface")) == 6
+        assert sorted(world.saved("TopologyRoutedExchange")) == [
+            "DC10-ded-ha-context-PROD-INTERNET",
+            "DC10-ded-ha-context-PROD-MANAGEMENT",
+        ]
         for kind, label, kwargs in world.saves:
             assert kwargs == _TRACKED, (kind, label)
         assert events == ["acquire:fw-context-DC10-ded-ha-context", "release"]
@@ -570,8 +603,8 @@ class TestHealingAndFailures:
 
         await _run(gen, world, _payload())
 
-        assert len(world.sub_interfaces) == 4
-        assert all(len(caps) == 2 for caps in _sub_names(world).values())
+        assert len(world.sub_interfaces) == 6
+        assert all(len(caps) == (3 if name.endswith(".3000") else 2) for (_, name), caps in _sub_names(world).items())
         gen.logger.error.assert_not_called()
         before = world.writes
 

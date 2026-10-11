@@ -115,7 +115,9 @@ context {{ context.name }}
 {#- Transit legs: a nameif per VRF in the context, whose routing table holds
     the routes. The pair's VIP is the active address, the secondary member's
     own address the `standby` one. The context's rules guard each tenant leg
-    inbound; the internet leg takes none (return traffic is stateful). -#}
+    inbound; the internet leg takes none (return traffic is stateful). The
+    management leg takes only the isolation denies and the implicit deny: the
+    services answer, they never initiate. -#}
 {%- for context in contexts %}
 {%- if context.legs %}
 changeto context {{ context.name }}
@@ -135,7 +137,7 @@ same-security-traffic permit intra-interface
 route {{ route_leg.nameif }} {{ asa_addr(route.destination) }} {{ route.nexthop }} 1
 {%- endfor %}
 !
-{%- for leg in context.legs if leg.ns_type in ['prod', 'non_prod'] %}
+{%- for leg in context.legs if leg.ns_type != 'internet' %}
 {%- for deny in context.isolation if deny.src_zone == leg.zone %}
 {%- for other in context.legs if other.zone == deny.dst_zone %}
 {%- for prefix in other.prefixes %}
@@ -143,23 +145,26 @@ access-list {{ leg.nameif }}-in extended deny ip any {{ asa_addr(prefix) }} log
 {%- endfor %}
 {%- endfor %}
 {%- endfor %}
+{%- if leg.ns_type in ['prod', 'non_prod'] %}
 {{- access_lists(context.policies or [], leg.nameif + '-in') }}
+{%- endif %}
 access-list {{ leg.nameif }}-in extended deny ip any any log
 access-group {{ leg.nameif }}-in in interface {{ leg.nameif }}
 {%- endfor %}
-{#- Source NAT: auto-NAT PAT per tenant prefix into the context's one SNAT host
-    (the INTERNET leg has no ACL above, so this is the only INTERNET-side rule). #}
-{%- if context.nat %}
-object network SNAT-{{ context.name }}
- host {{ context.nat.address }}
-{%- for leg in context.nat.tenant_legs %}
+{#- Source NAT: auto-NAT PAT per tenant prefix into each entry's one translated
+    host (the INTERNET leg has no ACL above, so this is the only INTERNET-side
+    rule). #}
+{%- for nat in context.nat %}
+object network SNAT-{{ context.name }}{{ nat.suffix }}
+ host {{ nat.address }}
+{%- for leg in nat.tenant_legs %}
 {%- for prefix in leg.prefixes %}
-object network NAT-{{ leg.nameif }}-{{ prefix | replace('/', '-') | replace('.', '-') }}
+object network NAT-{{ leg.nameif }}-{{ prefix | replace('/', '-') | replace('.', '-') }}{{ nat.suffix }}
  subnet {{ asa_addr(prefix) }}
- nat ({{ leg.nameif }},{{ context.nat.internet.nameif }}) dynamic pat-pool SNAT-{{ context.name }}
+ nat ({{ leg.nameif }},{{ nat.egress.nameif }}) dynamic pat-pool SNAT-{{ context.name }}{{ nat.suffix }}
 {%- endfor %}
 {%- endfor %}
-{%- endif %}
+{%- endfor %}
 !
 {%- endif %}
 {%- endfor %}

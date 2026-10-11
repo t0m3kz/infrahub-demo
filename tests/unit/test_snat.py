@@ -80,40 +80,199 @@ def test_vendor_renders_source_nat_to_the_context_snat_address(vendor: str) -> N
 
 
 @pytest.mark.parametrize("vendor", sorted(_VENDOR_NAT))
-def test_context_without_snat_address_renders_no_nat(vendor: str) -> None:
+def test_context_without_snat_address_renders_no_internet_nat(vendor: str) -> None:
     output = _run(Firewall, _firewall_input(vendor, snat=False))
-    assert not [m for m in _NAT_MARKERS if m in output]
+    internet_nat = [
+        line
+        for line in output.splitlines()
+        if any(m in line for m in _NAT_MARKERS) and ("INTERNET" in line or "internet" in line)
+    ]
+    assert not internet_nat
     assert "192.0.2" not in output
 
 
-def _ctx(snat: str | None, *, internet: bool = True) -> dict[str, Any]:
-    legs = [{"ns_type": "prod", "zone": "PROD-ZONE", "anycast": "100.66.0.1", "interface": "e.3000", "vrf": "PROD"}]
+def _ctx(snat: str | None, *, internet: bool = True, management: bool = False) -> dict[str, Any]:
+    legs = [
+        {
+            "ns_type": "prod",
+            "zone": "PROD-ZONE",
+            "nameif": "prod",
+            "anycast": "100.66.0.1",
+            "interface": "e.3000",
+            "vrf": "P",
+        }
+    ]
     if internet:
         legs.append(
             {
                 "ns_type": "internet",
                 "zone": "INTERNET-ZONE",
+                "nameif": "internet",
                 "anycast": "100.66.32.1",
                 "interface": "e.3400",
                 "vrf": "I",
             }
         )
+    if management:
+        legs.append(
+            {
+                "ns_type": "management",
+                "zone": "MANAGEMENT-ZONE",
+                "nameif": "management",
+                "anycast": "100.66.48.1",
+                "vip": "100.66.48.4",
+                "interface": "e.3600",
+                "vrf": "M",
+            }
+        )
     return {"legs": legs, "segments": [], "snat": snat}
 
 
-def test_nat_is_set_with_snat_and_internet_leg() -> None:
+def test_internet_nat_entry_keeps_the_legacy_shape() -> None:
     context = _ctx("192.0.2.5")
     apply_context_routes(context, {})
-    assert context["nat"]["address"] == "192.0.2.5"
-    assert context["nat"]["internet"]["zone"] == "INTERNET-ZONE"
-    assert [leg["zone"] for leg in context["nat"]["tenant_legs"]] == ["PROD-ZONE"]
+    [entry] = context["nat"]
+    assert entry["address"] == "192.0.2.5"
+    assert entry["egress"]["zone"] == "INTERNET-ZONE"
+    assert entry["suffix"] == ""
+    assert entry["own_address"] is True
+    assert entry["open_egress"] is True
+    assert [leg["zone"] for leg in entry["tenant_legs"]] == ["PROD-ZONE"]
+
+
+def test_management_nat_entry_translates_to_the_leg_vip_and_owns_nothing() -> None:
+    context = _ctx("192.0.2.5", management=True)
+    apply_context_routes(context, {})
+    internet, management = context["nat"]
+    assert internet["address"] == "192.0.2.5"
+    assert management["address"] == "100.66.48.4"
+    assert management["egress"]["zone"] == "MANAGEMENT-ZONE"
+    assert management["suffix"] == "-MANAGEMENT"
+    assert management["own_address"] is False
+    assert management["open_egress"] is False
+    assert [leg["zone"] for leg in management["tenant_legs"]] == ["PROD-ZONE"]
+
+
+def test_management_nat_needs_no_snat_address() -> None:
+    context = _ctx(None, internet=False, management=True)
+    apply_context_routes(context, {})
+    assert [entry["egress"]["zone"] for entry in context["nat"]] == ["MANAGEMENT-ZONE"]
 
 
 @pytest.mark.parametrize("snat, internet", [(None, True), ("192.0.2.5", False)])
-def test_nat_is_none_without_snat_or_internet_leg(snat: str | None, internet: bool) -> None:
+def test_no_nat_entry_without_snat_or_internet_leg(snat: str | None, internet: bool) -> None:
     context = _ctx(snat, internet=internet)
     apply_context_routes(context, {})
-    assert context["nat"] is None
+    assert context["nat"] == []
+
+
+def test_no_nat_entry_without_a_tenant_leg() -> None:
+    context = _ctx("192.0.2.5", management=True)
+    context["legs"] = [leg for leg in context["legs"] if leg["ns_type"] != "prod"]
+    apply_context_routes(context, {})
+    assert context["nat"] == []
+
+
+# --- MANAGEMENT NAT per vendor (golden input: shared PROD+NONPROD, acme PROD) ----
+
+_VENDOR_MANAGEMENT_NAT = {
+    "paloalto_panos": [
+        "rulebase nat rules snat-PROD-ZONE-MANAGEMENT to MANAGEMENT-ZONE",
+        "rulebase nat rules snat-NONPROD-ZONE-MANAGEMENT source-translation dynamic-ip-and-port translated-address 100.66.48.4",
+    ],
+    "fortinet_fortios": [
+        'edit "SNAT-dc1-fw-shared-MANAGEMENT"',
+        "set startip 100.66.48.4",
+    ],
+    "cisco_asa": [
+        " host 100.66.48.4",
+        " nat (prod,management) dynamic pat-pool SNAT-dc1-fw-shared-MANAGEMENT",
+        " nat (nonprod,management) dynamic pat-pool SNAT-dc1-fw-shared-MANAGEMENT",
+    ],
+    "juniper_junos": [
+        "security nat source pool SNAT-POOL-MANAGEMENT address 100.66.48.4/32",
+        "rule-set SNAT-NONPROD-ZONE-MANAGEMENT to zone MANAGEMENT-ZONE",
+    ],
+    "checkpoint_gaia": [
+        'mgmt_cli add host name "SNAT-dc1-fw-shared-MANAGEMENT" ip-address "100.66.48.4"',
+        'original-source "NONPROD-ZONE" original-destination "MANAGEMENT-ZONE" translated-source "SNAT-dc1-fw-shared-MANAGEMENT"',
+    ],
+}
+
+
+@pytest.mark.parametrize("vendor", sorted(_VENDOR_MANAGEMENT_NAT))
+def test_vendor_renders_management_nat_behind_the_leg_vip(vendor: str) -> None:
+    output = _run(Firewall, _firewall_input(vendor, snat=True))
+    for expected in _VENDOR_MANAGEMENT_NAT[vendor]:
+        assert expected in output
+
+
+@pytest.mark.parametrize("vendor", sorted(_VENDOR_MANAGEMENT_NAT))
+def test_management_nat_survives_without_a_snat_address(vendor: str) -> None:
+    output = _run(Firewall, _firewall_input(vendor, snat=False))
+    for expected in _VENDOR_MANAGEMENT_NAT[vendor]:
+        assert expected in output
+    assert "192.0.2" not in output
+
+
+def test_panos_owns_no_secondary_ip_for_the_management_vip() -> None:
+    output = _run(Firewall, _firewall_input("paloalto_panos", snat=True))
+    assert "units ethernet1/1.3400 ip 192.0.2.5/32" in output
+    assert not [line for line in output.splitlines() if line.endswith("ip 100.66.48.4/32")]
+
+
+def test_fortinet_has_no_accept_all_policy_into_management() -> None:
+    """FortiOS ties NAT to a policy: only INTERNET (open egress) gets an accept-all translating policy."""
+    output = _run(Firewall, _firewall_input("fortinet_fortios", snat=True))
+    assert 'set name "snat-PROD-ZONE-to-MANAGEMENT-ZONE"' not in output
+    assert 'set name "snat-PROD-ZONE-to-INTERNET-ZONE"' in output
+
+
+def test_fortinet_permit_into_management_carries_the_pool() -> None:
+    from tests.unit.test_firewall_transform import _render_template
+
+    legs = [
+        {
+            "interface": "e.3600",
+            "parent_interface": {"name": "e"},
+            "vlan": 3600,
+            "own_ip": "100.66.48.5/29",
+            "virtual_ip": None,
+            "zone": "MANAGEMENT-ZONE",
+        }
+    ]
+    egress = {"zone": "MANAGEMENT-ZONE"}
+    nat = [
+        {
+            "suffix": "-MANAGEMENT",
+            "egress": egress,
+            "address": "100.66.48.4",
+            "own_address": False,
+            "open_egress": False,
+            "tenant_legs": [{"zone": "PROD-ZONE"}],
+        }
+    ]
+    rules = [
+        {"seq": 20, "name": "dns", "src_zone": "PROD-ZONE", "dst_zone": "MANAGEMENT-ZONE", "action": "permit"},
+        {"seq": 30, "name": "web", "src_zone": "PROD-ZONE", "dst_zone": "DMZ", "action": "permit"},
+        {"seq": 40, "name": "drop", "src_zone": "PROD-ZONE", "dst_zone": "MANAGEMENT-ZONE", "action": "deny"},
+    ]
+    context = {
+        "name": "c1",
+        "legs": legs,
+        "routes": [],
+        "isolation": [],
+        "nat": nat,
+        "policies": [{"rules": rules}],
+        "tenant_name": None,
+    }
+    out = _render_template("fortinet_fortios", name="fw1", contexts=[context])
+    blocks = out.split("edit ")
+    by_name = {b.split("\n")[0]: b for b in blocks if "set name" in b}
+    assert 'set poolname "SNAT-c1-MANAGEMENT"' in by_name["20"]
+    assert "set poolname" not in by_name["30"]
+    assert "set poolname" not in by_name["40"]
+    assert "910001" not in out  # no accept-all NAT policy towards a non-open egress
 
 
 # --- edge ---------------------------------------------------------------------

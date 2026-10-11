@@ -132,7 +132,7 @@ ALL_DEMO_EXPECTED_OBJECTS: dict[str, int] = {
     "TopologyCustomerCloud": 4,
     "TopologyCustomerOffice": 5,
     "ManagedVxlanSegment": 5,
-    "ManagedVlanSegment": 9,
+    "ManagedVlanSegment": 10,  # incl. the DC11 core-services segment (07_applications/infra)
     "AppApplication": 10,
     "AppComponent": 22,
     # One per tier-to-tier call, plus the access-profile grant that
@@ -485,7 +485,7 @@ ALL_DEMO_INTERNET_EGRESS_RULES: dict[str, InternetEgressRule] = {
 # 30_all — inter-VRF exchange legs through the firewall contexts (PR 3)
 #
 # Everything below is DERIVED, not hand-counted. A context's legs are its
-# tenant VRFs plus INTERNET (EXCHANGE_PEERS): a dedicated context serves its one
+# tenant VRFs plus INTERNET and MANAGEMENT (EXCHANGE_PEERS): a dedicated context serves its one
 # tenant, a shared context serves every customer deployment of its DC that has
 # no dedicated context. A deployment's VRF follows its environment (`p` is
 # PROD, every other value NON-PROD). The deployments are the nine
@@ -494,8 +494,10 @@ ALL_DEMO_INTERNET_EGRESS_RULES: dict[str, InternetEgressRule] = {
 # there re-declare footprints that already exist, so they add none).
 # ---------------------------------------------------------------------------
 
-ALL_DEMO_TRANSIT_NAMESPACES = ("PROD", "NON-PROD", "INTERNET")
-_TRANSIT_NAMESPACE_BY_TYPE: dict[str, str] = dict(zip(("prod", "non_prod", "internet"), ALL_DEMO_TRANSIT_NAMESPACES))
+ALL_DEMO_TRANSIT_NAMESPACES = ("PROD", "NON-PROD", "INTERNET", "MANAGEMENT")
+_TRANSIT_NAMESPACE_BY_TYPE: dict[str, str] = dict(
+    zip(("prod", "non_prod", "internet", "management"), ALL_DEMO_TRANSIT_NAMESPACES)
+)
 
 # Deployment name ({org}-{environment}-{DC}) of every TopologyCustomerDC, per DC.
 ALL_DEMO_DC_CUSTOMER_DEPLOYMENTS: dict[str, tuple[str, ...]] = {
@@ -513,6 +515,24 @@ ALL_DEMO_TRANSIT_RESOURCES: dict[str, str] = {
     "PROD": "100.66.0.0/20",
     "NON-PROD": "100.66.16.0/20",
     "INTERNET": "100.66.32.0/20",
+    "MANAGEMENT": "100.66.48.0/20",
+}
+
+MANAGEMENT_NAMESPACE = "MANAGEMENT"
+# DC11's core-services segment (07_applications/infra/00_segment.yml): INFRA-owned, in VRF MANAGEMENT,
+# pinned to al-dc1111111501 Ethernet1/2, reached by the c006 udp/53 and udp/123 rules (05_security_policy.yml).
+MANAGEMENT_SERVICES_PREFIX = "10.250.0.0/24"
+MANAGEMENT_SERVICES_GATEWAY = "10.250.0.1/24"
+MANAGEMENT_SERVICES_VLAN = 250
+MANAGEMENT_SERVICES_LEAF = "al-dc1111111501"
+MANAGEMENT_SERVICES_DC = "DC11"
+# The c006 segment (VLAN 103, PROD) whose rules reach the services segment.
+MANAGEMENT_CLIENT_SEGMENT_VLAN = 103
+MANAGEMENT_CLIENT_SEGMENT_PREFIX = "10.6.103.0/24"
+# rule name -> (protocol, port), the DC11 permits PROD-ZONE -> MANAGEMENT-ZONE.
+ALL_DEMO_MANAGEMENT_RULES: dict[str, tuple[str, int]] = {
+    "nordix-prod-to-core-dns": ("udp", 53),
+    "nordix-prod-to-core-ntp": ("udp", 123),
 }
 
 # A firewall cluster is an HA pair: one sub-interface per member per leg.
@@ -586,7 +606,7 @@ ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS = expected_transit_contexts()
 # leg, so that is every DC context; the colocation context is policy-only (no legs, no SNAT).
 ALL_DEMO_SNAT_POOL_PREFIX = "192.0.2.0/24"
 ALL_DEMO_SNAT_ADDRESSES = sum("INTERNET" in c["namespaces"] for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS)
-# Planning estimate, re-derived above: DC10 2+2, DC11 2+2, DC12 3+2 legs.
+# Planning estimate, re-derived above: DC10 3+3, DC11 3+3, DC12 4+3 legs.
 ALL_DEMO_TRANSIT_LEGS = sum(len(c["namespaces"]) for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS)
 ALL_DEMO_TRANSIT_EXCHANGES = sum(len(c["exchanges"]) for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS)
 # One /29 per leg, so the /29 count per VRF is the leg count per VRF.

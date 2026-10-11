@@ -13,6 +13,9 @@ config firewall address
     edit "10.2.0.0/24"
         set subnet 10.2.0.0 255.255.255.0
     next
+    edit "10.250.0.0/24"
+        set subnet 10.250.0.0 255.255.255.0
+    next
 end
 #
 # --- Firewall Contexts (VDOMs) — one per tenant, per ManagedFirewallContext ---
@@ -44,6 +47,16 @@ config global
             set status up
             set alias "INTERNET-ZONE"
         next
+        edit "ethernet1/1.3601"
+            set type vlan
+            set vlanid 3601
+            set interface "ethernet1/1"
+            set vdom "dc1-fw-acme"
+            set ip 100.66.48.12/29
+            set allowaccess ping
+            set status up
+            set alias "MANAGEMENT-ZONE"
+        next
     end
 end
 #
@@ -59,6 +72,10 @@ config vdom
                 set intrazone allow
                 set interface "ethernet1/1.3401"
             next
+            edit "MANAGEMENT-ZONE"
+                set intrazone allow
+                set interface "ethernet1/1.3601"
+            next
         end
         config router static
             edit 1
@@ -67,6 +84,11 @@ config vdom
                 set device "ethernet1/1.3001"
             next
             edit 2
+                set dst 10.250.0.0/24
+                set gateway 100.66.48.9
+                set device "ethernet1/1.3601"
+            next
+            edit 3
                 set dst 0.0.0.0/0
                 set gateway 100.66.32.9
                 set device "ethernet1/1.3401"
@@ -77,6 +99,11 @@ config vdom
                 set type overload
                 set startip 192.0.2.6
                 set endip 192.0.2.6
+            next
+            edit "SNAT-dc1-fw-acme-MANAGEMENT"
+                set type overload
+                set startip 100.66.48.12
+                set endip 100.66.48.12
             next
         end
         config firewall policy
@@ -92,6 +119,19 @@ config vdom
                 set nat enable
                 set ippool enable
                 set poolname "SNAT-dc1-fw-acme"
+            next
+        end
+        config firewall policy
+            edit 900001
+                set name "deny-MANAGEMENT-ZONE-to-PROD-ZONE"
+                set srcintf "MANAGEMENT-ZONE"
+                set dstintf "PROD-ZONE"
+                set srcaddr "all"
+                set dstaddr "all"
+                set action deny
+                set schedule "always"
+                set service "ALL"
+                set logtraffic all
             next
         end
     next
@@ -128,6 +168,16 @@ config global
             set status up
             set alias "INTERNET-ZONE"
         next
+        edit "ethernet1/1.3600"
+            set type vlan
+            set vlanid 3600
+            set interface "ethernet1/1"
+            set vdom "dc1-fw-shared"
+            set ip 100.66.48.4/29
+            set allowaccess ping
+            set status up
+            set alias "MANAGEMENT-ZONE"
+        next
     end
 end
 #
@@ -147,6 +197,10 @@ config vdom
                 set intrazone allow
                 set interface "ethernet1/1.3400"
             next
+            edit "MANAGEMENT-ZONE"
+                set intrazone allow
+                set interface "ethernet1/1.3600"
+            next
         end
         config router static
             edit 1
@@ -160,6 +214,11 @@ config vdom
                 set device "ethernet1/1.3200"
             next
             edit 3
+                set dst 10.250.0.0/24
+                set gateway 100.66.48.1
+                set device "ethernet1/1.3600"
+            next
+            edit 4
                 set dst 0.0.0.0/0
                 set gateway 100.66.32.1
                 set device "ethernet1/1.3400"
@@ -170,6 +229,11 @@ config vdom
                 set type overload
                 set startip 192.0.2.5
                 set endip 192.0.2.5
+            next
+            edit "SNAT-dc1-fw-shared-MANAGEMENT"
+                set type overload
+                set startip 100.66.48.4
+                set endip 100.66.48.4
             next
         end
         config firewall policy
@@ -216,6 +280,28 @@ config vdom
                 set name "deny-NONPROD-ZONE-to-PROD-ZONE"
                 set srcintf "NONPROD-ZONE"
                 set dstintf "PROD-ZONE"
+                set srcaddr "all"
+                set dstaddr "all"
+                set action deny
+                set schedule "always"
+                set service "ALL"
+                set logtraffic all
+            next
+            edit 900003
+                set name "deny-MANAGEMENT-ZONE-to-PROD-ZONE"
+                set srcintf "MANAGEMENT-ZONE"
+                set dstintf "PROD-ZONE"
+                set srcaddr "all"
+                set dstaddr "all"
+                set action deny
+                set schedule "always"
+                set service "ALL"
+                set logtraffic all
+            next
+            edit 900004
+                set name "deny-MANAGEMENT-ZONE-to-NONPROD-ZONE"
+                set srcintf "MANAGEMENT-ZONE"
+                set dstintf "NONPROD-ZONE"
                 set srcaddr "all"
                 set dstaddr "all"
                 set action deny

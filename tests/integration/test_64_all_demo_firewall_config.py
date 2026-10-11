@@ -48,6 +48,8 @@ from transforms.config.edge import Edge
 from transforms.config.firewall import Firewall
 from transforms.config.leaf import Leaf
 from utils.exchange_transit import (
+    EXCHANGE_PEERS,
+    MANAGEMENT_TYPE,
     NON_PUBLIC_PREFIXES,
     transit_addresses,
     transit_vlan,
@@ -65,9 +67,18 @@ from .test_constants import (
     ALL_DEMO_INTERNET_BGWS,
     ALL_DEMO_INTERNET_EGRESS_RULES,
     ALL_DEMO_INTERNET_ISLAND_EDGES,
+    ALL_DEMO_MANAGEMENT_RULES,
     ALL_DEMO_SNAT_POOL_PREFIX,
     INTERNET_L3_VNI,
     INTERNET_ROUTE_TARGET,
+    MANAGEMENT_CLIENT_SEGMENT_PREFIX,
+    MANAGEMENT_CLIENT_SEGMENT_VLAN,
+    MANAGEMENT_NAMESPACE,
+    MANAGEMENT_SERVICES_DC,
+    MANAGEMENT_SERVICES_GATEWAY,
+    MANAGEMENT_SERVICES_LEAF,
+    MANAGEMENT_SERVICES_PREFIX,
+    MANAGEMENT_SERVICES_VLAN,
     transit_namespace_type,
 )
 from .test_helpers import fetch_dc_topology, fetch_transit_inventory, match_transit_contexts
@@ -164,6 +175,53 @@ async def _render(
 def _has_ip(rendered: str, ip: str) -> bool:
     """Whether `ip` appears in `rendered` as a whole address (10.0.0.1 is not in 10.0.0.12 / 110.0.0.1)."""
     return re.search(rf"(?<![\d.]){re.escape(ip)}(?![\d])", rendered) is not None
+
+
+def _block(rendered: str, header: str) -> str | None:
+    """The indented lines under the line `header` (an NX-OS `vrf context X` / `interface VlanN` stanza), None if absent."""
+    match = re.search(rf"^{re.escape(header)}\n((?:[ \t]+.*\n)*)", rendered + "\n", re.MULTILINE)
+    return None if match is None else match.group(1)
+
+
+async def _platform_by_name(client: InfrahubClient, branch: str) -> dict[str, str | None]:
+    """Every firewall device name -> its platform name."""
+    firewalls = await client.execute_graphql(query=FIREWALLS_QUERY, branch_name=branch)
+    return {
+        edge["node"]["name"]["value"]: (((edge["node"].get("platform") or {}).get("node") or {}).get("name") or {}).get(
+            "value"
+        )
+        for edge in firewalls["DcimPhysicalDevice"]["edges"]
+    }
+
+
+def _management_border_leaf_errors(device: str, rendered: str, contexts: list[dict[str, Any]]) -> list[str]:
+    """What a border leaf must carry for the MANAGEMENT exchange of `contexts`.
+
+    `vrf context MANAGEMENT` exists, each context's MANAGEMENT transit SVI (VLAN = transit_vlan(ctx VLAN,
+    management), anycast .1 of the leg /29) is in that VRF, and no tenant (non-public) prefix is routed
+    inside the VRF: tenants are source-NATed behind the leg VIP, so the leaf needs no return route.
+    """
+    errors: list[str] = []
+    vrf_block = _block(rendered, f"vrf context {MANAGEMENT_NAMESPACE}")
+    if vrf_block is None:
+        return [f"{device}: no 'vrf context {MANAGEMENT_NAMESPACE}'"]
+    for prefix, nexthop in re.findall(r"^\s+ip route (\S+) (\S+)", vrf_block, re.MULTILINE):
+        if any(ipaddress.IPv4Network(prefix).subnet_of(private) for private in NON_PUBLIC_PREFIXES):
+            errors.append(
+                f"{device}: 'ip route {prefix} {nexthop}' inside 'vrf context {MANAGEMENT_NAMESPACE}' "
+                "(tenants are NATed behind the leg VIP, no return route)"
+            )
+    for context in contexts:
+        vlan = transit_vlan(int(context["vlan"]), MANAGEMENT_TYPE)
+        anycast = transit_addresses(str(_leg_network(context, MANAGEMENT_NAMESPACE)))["anycast"]
+        svi = _block(rendered, f"interface Vlan{vlan}")
+        if svi is None:
+            errors.append(f"{device}: no 'interface Vlan{vlan}' (MANAGEMENT transit of {context['name']})")
+        elif f"vrf member {MANAGEMENT_NAMESPACE}" not in svi or f"ip address {anycast}/29" not in svi:
+            errors.append(
+                f"{device}: Vlan{vlan} is not 'vrf member {MANAGEMENT_NAMESPACE}' with 'ip address {anycast}/29'"
+            )
+    return errors
 
 
 def _dc_contexts(inventory: dict[str, list[dict[str, Any]]]) -> dict[tuple[str, str | None], dict[str, Any]]:
@@ -387,13 +445,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         logging.info("=== %s - Step 4: Render transit legs ===", SCENARIO_NAME)
 
         contexts = _dc_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))
-        firewalls = await async_client_main.execute_graphql(query=FIREWALLS_QUERY, branch_name=scenario_branch)
-        platform_by_name = {
-            edge["node"]["name"]["value"]: (
-                ((edge["node"].get("platform") or {}).get("node") or {}).get("name") or {}
-            ).get("value")
-            for edge in firewalls["DcimPhysicalDevice"]["edges"]
-        }
+        platform_by_name = await _platform_by_name(async_client_main, scenario_branch)
 
         errors: list[str] = []
         rendered_count = 0
@@ -503,6 +555,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                     errors.append(f"{device}: no 'vn-segment {vni}' (transit VNI)")
             if "redistribute static route-map RM-VRF-STATIC-2-EVPN-PROD" not in rendered:
                 errors.append(f"{device}: PROD statics are not redistributed into EVPN")
+            errors.extend(_management_border_leaf_errors(device, rendered, dc_contexts))
             internet_block = re.search(r"^vrf context INTERNET\n((?:[ \t]+.*\n)*)", rendered + "\n", re.MULTILINE)
             if internet_block is None or f"route-target both {INTERNET_ROUTE_TARGET}" not in internet_block.group(1):
                 errors.append(
@@ -662,13 +715,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         logging.info("=== %s - Step 6: Render firewall SNAT ===", SCENARIO_NAME)
 
         contexts = _dc_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))
-        firewalls = await async_client_main.execute_graphql(query=FIREWALLS_QUERY, branch_name=scenario_branch)
-        platform_by_name = {
-            edge["node"]["name"]["value"]: (
-                ((edge["node"].get("platform") or {}).get("node") or {}).get("name") or {}
-            ).get("value")
-            for edge in firewalls["DcimPhysicalDevice"]["edges"]
-        }
+        platform_by_name = await _platform_by_name(async_client_main, scenario_branch)
 
         errors: list[str] = []
         rendered_by_platform: dict[str, int] = {}
@@ -685,7 +732,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
             zones = [
                 zone_name_for_namespace_type(transit_namespace_type(namespace))
                 for namespace in expected["namespaces"]
-                if namespace != "INTERNET"
+                if transit_namespace_type(namespace) in EXCHANGE_PEERS  # tenant VRFs only; INTERNET-only SNAT /32
             ]
             for device in sorted({str(leg["device"]) for leg in context["legs"]}):
                 platform = platform_by_name.get(device)
@@ -796,3 +843,247 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
             f"  - {e}" for e in errors
         )
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)
+
+    @pytest.mark.order(402)
+    @pytest.mark.dependency(scope="session", depends=["all_demo_firewall_transit_render"])
+    @pytest.mark.asyncio
+    async def test_07_firewall_config_renders_management_exchange(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """Every member of each DC's shared context renders the MANAGEMENT exchange.
+
+        The MANAGEMENT-ZONE leg, tenant zones source-NATed to the MANAGEMENT leg VIP (PAN-OS
+        `snat-<zone>-MANAGEMENT`, Check Point `SNAT-<context>-MANAGEMENT`; the VIP already is the
+        interface address, so no secondary IP) and a logged MANAGEMENT-ZONE -> tenant-zone deny per
+        tenant zone held. Only DC11 holds the services segment, so only its context routes
+        10.250.0.0/24 via the MANAGEMENT leg anycast (.1); the other DCs have the leg but no such route.
+        """
+        logging.info("=== %s - Step 7: Render firewall MANAGEMENT exchange ===", SCENARIO_NAME)
+
+        contexts = _dc_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))
+        platform_by_name = await _platform_by_name(async_client_main, scenario_branch)
+        management_zone = zone_name_for_namespace_type(MANAGEMENT_TYPE)
+
+        errors: list[str] = []
+        rendered_by_platform: dict[str, int] = {}
+        for expected in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS:
+            if expected["tenant"] is not None:
+                continue  # a dedicated context's members are virtual: not a firewall_config device
+            dc = expected["dc"]
+            context = contexts.get((dc, None))
+            if context is None:
+                errors.append(f"{dc}: no shared context")
+                continue
+            name = str(context["name"])
+            network = _leg_network(context, MANAGEMENT_NAMESPACE)
+            addresses = transit_addresses(str(network))
+            tenant_zones = [
+                zone_name_for_namespace_type(transit_namespace_type(namespace))
+                for namespace in expected["namespaces"]
+                if transit_namespace_type(namespace) in EXCHANGE_PEERS
+            ]
+            other_zones = {zone_name_for_namespace_type(ns_type) for ns_type in EXCHANGE_PEERS} - set(tenant_zones)
+            for device in sorted({str(leg["device"]) for leg in context["legs"]}):
+                platform = platform_by_name.get(device)
+                if platform not in ("panos", "checkpoint_gaia"):
+                    errors.append(f"{dc}/{device}: platform '{platform}' has no MANAGEMENT assertions in this test")
+                    continue
+                rendered = await _render(async_client_main, scenario_branch, device)
+                rendered_by_platform[str(platform)] = rendered_by_platform.get(str(platform), 0) + 1
+                leg_interface = next(
+                    str(leg["interface"])
+                    for leg in context["legs"]
+                    if leg["device"] == device and leg["namespace"] == MANAGEMENT_NAMESPACE
+                )
+                if platform == "panos":
+                    prefix = f"set vsys {name} rulebase nat rules snat-"
+                    if f"set vsys {name} zone {management_zone} network layer3 {leg_interface}" not in rendered:
+                        errors.append(f"{dc}/{device}: {leg_interface} is not in {management_zone} of vsys {name}")
+                    for zone in tenant_zones:
+                        rule = f"{prefix}{zone}-{MANAGEMENT_NAMESPACE}"
+                        for line in (
+                            f"{rule} from {zone}",
+                            f"{rule} to {management_zone}",
+                            f"{rule} source-translation dynamic-ip-and-port translated-address {addresses['vip']}",
+                        ):
+                            if line not in rendered:
+                                errors.append(f"{dc}/{device}: no '{line}'")
+                        if f"deny-{management_zone}-to-{zone}" not in rendered:
+                            errors.append(f"{dc}/{device}: no deny-{management_zone}-to-{zone}")
+                    if re.search(rf"layer3 units \S+ ip {re.escape(addresses['vip'])}/32$", rendered, re.MULTILINE):
+                        errors.append(
+                            f"{dc}/{device}: leg VIP {addresses['vip']} is also a /32 secondary (not owned twice)"
+                        )
+                    routes = re.findall(
+                        r"static-route (rt-\d+) destination " + re.escape(MANAGEMENT_SERVICES_PREFIX), rendered
+                    )
+                    # The zone's CIDRs come from the global SecurityZone root, so every context with a
+                    # MANAGEMENT leg routes the services prefix to its own anycast (inert outside DC11:
+                    # no rule permits it there and the border leaf has no such prefix in its VRF).
+                    nexthops = {
+                        route
+                        for route in routes
+                        if re.search(
+                            rf"static-route {route} nexthop ip-address {re.escape(addresses['anycast'])}$",
+                            rendered,
+                            re.MULTILINE,
+                        )
+                    }
+                    if not nexthops:
+                        errors.append(
+                            f"{dc}/{device}: no route to {MANAGEMENT_SERVICES_PREFIX} via {addresses['anycast']}"
+                        )
+                else:
+                    if f"set interface {leg_interface} security-zone {management_zone}" not in rendered:
+                        errors.append(f"{dc}/{device}: {leg_interface} is not in {management_zone}")
+                    host = (
+                        f'mgmt_cli add host name "SNAT-{name}-{MANAGEMENT_NAMESPACE}" ip-address "{addresses["vip"]}"'
+                    )
+                    if host not in rendered:
+                        errors.append(f"{dc}/{device}: no '{host}'")
+                    nat_rules = [
+                        line
+                        for line in rendered.splitlines()
+                        if line.startswith("mgmt_cli add nat-rule")
+                        and f'translated-source "SNAT-{name}-{MANAGEMENT_NAMESPACE}"' in line
+                        and f'original-destination "{management_zone}"' in line
+                    ]
+                    if len(nat_rules) != len(tenant_zones):
+                        errors.append(
+                            f"{dc}/{device}: {len(nat_rules)} MANAGEMENT nat-rule line(s), {len(tenant_zones)} expected"
+                        )
+                    for zone in tenant_zones:
+                        if f'name "deny-{management_zone}-to-{zone}"' not in rendered:
+                            errors.append(f"{dc}/{device}: no deny-{management_zone}-to-{zone}")
+                    route = (
+                        f"static-route {MANAGEMENT_SERVICES_PREFIX} nexthop gateway address {addresses['anycast']} on"
+                    )
+                    if route not in rendered:
+                        errors.append(f"{dc}/{device}: '{route}' missing")
+                for zone in other_zones:
+                    if f"deny-{management_zone}-to-{zone}" in rendered:
+                        errors.append(f"{dc}/{device}: deny towards {zone}, which the context does not hold")
+
+        assert {"panos", "checkpoint_gaia"} <= set(rendered_by_platform), (
+            f"MANAGEMENT was rendered on {rendered_by_platform}, expected PAN-OS and Check Point"
+        )
+        assert not errors, f"Firewall MANAGEMENT exchange on branch '{scenario_branch}' is wrong:\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
+        logging.info("Rendered MANAGEMENT exchange on %s", rendered_by_platform)
+
+    @pytest.mark.order(402)
+    @pytest.mark.dependency(scope="session", depends=["all_demo_firewall_transit_render"])
+    @pytest.mark.asyncio
+    async def test_07_management_services_rules_render_on_dc11_firewall(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """DC11 (PAN-OS) permits PROD-ZONE -> MANAGEMENT-ZONE udp/53 and udp/123 from the c006 segment.
+
+        Rules `nordix-prod-to-core-dns` / `nordix-prod-to-core-ntp` (05_security_policy.yml) render in the
+        shared context's vsys on every member: source 10.6.103.0/24, destination 10.250.0.0/24, service
+        svc-udp-<port>, action allow.
+        """
+        logging.info("=== %s - Step 7: Render core DNS/NTP rules ===", SCENARIO_NAME)
+
+        context = _dc_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))[
+            (MANAGEMENT_SERVICES_DC, None)
+        ]
+        members = sorted({str(leg["device"]) for leg in context["legs"]})
+        assert members, f"{MANAGEMENT_SERVICES_DC}: the shared context has no firewall member"
+        errors: list[str] = []
+        for device in members:
+            rendered = await _render(async_client_main, scenario_branch, device)
+            for rule_name, (protocol, port) in ALL_DEMO_MANAGEMENT_RULES.items():
+                base = f"set vsys {context['name']} rulebase security rules {rule_name}"
+                for line in (
+                    f"{base} from {zone_name_for_namespace_type('prod')}",
+                    f"{base} to {zone_name_for_namespace_type(MANAGEMENT_TYPE)}",
+                    f"{base} source {MANAGEMENT_CLIENT_SEGMENT_PREFIX}",
+                    f"{base} destination {MANAGEMENT_SERVICES_PREFIX}",
+                    f"{base} service svc-{protocol}-{port}",
+                    f"{base} action allow",
+                ):
+                    if line not in rendered:
+                        errors.append(f"{device}: no '{line}'")
+
+        assert not errors, f"DC11 core services rules on branch '{scenario_branch}' are wrong:\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
+
+    @pytest.mark.order(402)
+    @pytest.mark.dependency(scope="session", depends=["all_demo_firewall_transit_render"])
+    @pytest.mark.asyncio
+    async def test_07_leaf_config_has_no_pbr_to_the_management_services(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """The services segment is never steered, and nothing bypasses the firewall towards it.
+
+        Leaf/access-leaf of VLAN 103 (c006): the PBR bypass ACL, if rendered, does not permit
+        10.250.0.0/24, so the flow goes to the firewall. The access-leaf pinned to the services segment
+        renders `interface Vlan250` in VRF MANAGEMENT with the anycast gateway 10.250.0.1/24 and no
+        PBR (no `ip policy route-map`, no RM-LEAF-PBR-VLAN250 / PBR-BYPASS-VLAN250).
+        """
+        logging.info("=== %s - Step 7: Leaf PBR and the services SVI ===", SCENARIO_NAME)
+
+        errors: list[str] = []
+        topology = await fetch_dc_topology(async_client_main, scenario_branch, MANAGEMENT_SERVICES_DC)
+        leaf_classes = {"leaf": Leaf, "access-leaf": AccessLeaf}
+        carrying_client_vlan: list[str] = []
+        services_leaf_rendered = False
+        for device in sorted(topology["devices"], key=lambda d: str(d["name"])):
+            if device.get("role") not in leaf_classes:
+                continue
+            name = str(device["name"])
+            rendered = await _render(
+                async_client_main,
+                scenario_branch,
+                name,
+                query="leaf_config",
+                transform_cls=leaf_classes[str(device["role"])],
+            )
+            if re.search(rf"^vlan {MANAGEMENT_CLIENT_SEGMENT_VLAN}$", rendered, re.MULTILINE):
+                carrying_client_vlan.append(name)
+                bypass = _block(rendered, f"ip access-list PBR-BYPASS-VLAN{MANAGEMENT_CLIENT_SEGMENT_VLAN}")
+                if bypass is not None and MANAGEMENT_SERVICES_PREFIX in bypass:
+                    errors.append(
+                        f"{name}: PBR-BYPASS-VLAN{MANAGEMENT_CLIENT_SEGMENT_VLAN} permits {MANAGEMENT_SERVICES_PREFIX}"
+                    )
+            if name != MANAGEMENT_SERVICES_LEAF:
+                continue
+            services_leaf_rendered = True
+            svi = _block(rendered, f"interface Vlan{MANAGEMENT_SERVICES_VLAN}")
+            if svi is None:
+                errors.append(f"{name}: no 'interface Vlan{MANAGEMENT_SERVICES_VLAN}'")
+            else:
+                if f"vrf member {MANAGEMENT_NAMESPACE}" not in svi:
+                    errors.append(f"{name}: Vlan{MANAGEMENT_SERVICES_VLAN} is not in VRF {MANAGEMENT_NAMESPACE}")
+                if f"ip address {MANAGEMENT_SERVICES_GATEWAY}" not in svi:
+                    errors.append(
+                        f"{name}: Vlan{MANAGEMENT_SERVICES_VLAN} lacks 'ip address {MANAGEMENT_SERVICES_GATEWAY}'"
+                    )
+                if "ip policy route-map" in svi:
+                    errors.append(f"{name}: Vlan{MANAGEMENT_SERVICES_VLAN} carries a PBR policy")
+            for pbr_object in (
+                f"RM-LEAF-PBR-VLAN{MANAGEMENT_SERVICES_VLAN}",
+                f"PBR-BYPASS-VLAN{MANAGEMENT_SERVICES_VLAN}",
+            ):
+                if pbr_object in rendered:
+                    errors.append(f"{name}: renders {pbr_object}")
+
+        assert carrying_client_vlan, (
+            f"no leaf of {MANAGEMENT_SERVICES_DC} carries VLAN {MANAGEMENT_CLIENT_SEGMENT_VLAN}"
+        )
+        assert services_leaf_rendered, (
+            f"{MANAGEMENT_SERVICES_LEAF} is not a leaf or access-leaf of {MANAGEMENT_SERVICES_DC}"
+        )
+        assert not errors, (
+            f"Leaf PBR towards the services segment on branch '{scenario_branch}' is wrong:\n"
+            + "\n".join(f"  - {e}" for e in errors)
+        )

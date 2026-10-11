@@ -125,26 +125,30 @@ set network virtual-router {{ vr }} routing-table ip static-route rt-{{ loop.ind
 set network virtual-router {{ vr }} routing-table ip static-route rt-{{ loop.index }} nexthop ip-address {{ route.nexthop }}
 set network virtual-router {{ vr }} routing-table ip static-route rt-{{ loop.index }} interface {{ route.interface }}
 {%- endfor %}
-{#- Source NAT (dynamic-ip-and-port) from the tenant zones to INTERNET-ZONE. The
-    translated address is owned as a secondary IP on the INTERNET leg, so the
-    PA answers ARP for it; the HA pair's VIP is the primary. #}
-{%- if context.nat %}
-{%- set nat_ref = context.nat.internet.parent_interface.name + '.' + context.nat.internet.vlan | string %}
-set network interface ethernet {{ context.nat.internet.parent_interface.name }} layer3 units {{ nat_ref }} ip {{ context.nat.address }}/32
-{%- for leg in context.nat.tenant_legs %}
-set vsys {{ context.name }} rulebase nat rules snat-{{ leg.zone }} from {{ leg.zone }}
-set vsys {{ context.name }} rulebase nat rules snat-{{ leg.zone }} to {{ context.nat.internet.zone }}
-set vsys {{ context.name }} rulebase nat rules snat-{{ leg.zone }} source any
-set vsys {{ context.name }} rulebase nat rules snat-{{ leg.zone }} destination any
-set vsys {{ context.name }} rulebase nat rules snat-{{ leg.zone }} service any
-set vsys {{ context.name }} rulebase nat rules snat-{{ leg.zone }} source-translation dynamic-ip-and-port translated-address {{ context.nat.address }}
-{%- endfor %}
+{#- Source NAT (dynamic-ip-and-port) from the tenant zones to the egress zone of
+    each entry. An address the firewall does not hold yet (INTERNET's public
+    SNAT) is owned as a secondary IP on the egress leg, so the PA answers ARP
+    for it; the HA pair's VIP is the primary. MANAGEMENT translates to that
+    leg's VIP, already its interface address. #}
+{%- for nat in context.nat %}
+{%- if nat.own_address %}
+{%- set nat_ref = nat.egress.parent_interface.name + '.' + nat.egress.vlan | string %}
+set network interface ethernet {{ nat.egress.parent_interface.name }} layer3 units {{ nat_ref }} ip {{ nat.address }}/32
 {%- endif %}
+{%- for leg in nat.tenant_legs %}
+set vsys {{ context.name }} rulebase nat rules snat-{{ leg.zone }}{{ nat.suffix }} from {{ leg.zone }}
+set vsys {{ context.name }} rulebase nat rules snat-{{ leg.zone }}{{ nat.suffix }} to {{ nat.egress.zone }}
+set vsys {{ context.name }} rulebase nat rules snat-{{ leg.zone }}{{ nat.suffix }} source any
+set vsys {{ context.name }} rulebase nat rules snat-{{ leg.zone }}{{ nat.suffix }} destination any
+set vsys {{ context.name }} rulebase nat rules snat-{{ leg.zone }}{{ nat.suffix }} service any
+set vsys {{ context.name }} rulebase nat rules snat-{{ leg.zone }}{{ nat.suffix }} source-translation dynamic-ip-and-port translated-address {{ nat.address }}
+{%- endfor %}
+{%- endfor %}
 {%- endif %}
 {%- endfor %}
 {%- for context in contexts if context.isolation %}
 #
-# --- PROD <-> NON-PROD isolation in vsys {{ context.name }} ---
+# --- Zone isolation (PROD <-> NON-PROD, MANAGEMENT -> tenants) in vsys {{ context.name }} ---
 {%- for deny in context.isolation %}
 set vsys {{ context.name }} rulebase security rules deny-{{ deny.src_zone }}-to-{{ deny.dst_zone }} from {{ deny.src_zone }}
 set vsys {{ context.name }} rulebase security rules deny-{{ deny.src_zone }}-to-{{ deny.dst_zone }} to {{ deny.dst_zone }}

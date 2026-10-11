@@ -27,10 +27,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.topology.application_security import (
-    AppApplicationGenerator,
-    _seg_cidr,
-)
+from generators.topology.application_security import AppApplicationGenerator, _seg_cidr
 
 # ---------------------------------------------------------------------------
 # Shared harness

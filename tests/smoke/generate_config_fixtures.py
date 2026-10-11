@@ -1484,7 +1484,9 @@ _XCHG_NAMESPACES: dict[str, tuple[str, int]] = {
     "prod": ("PROD", 50001),
     "non_prod": ("NON-PROD", 50002),
     "internet": ("INTERNET", 50003),
+    "management": ("MANAGEMENT", 50004),
 }
+_XCHG_VLAN_OFFSET = {"prod": 0, "non_prod": 200, "internet": 400, "management": 600}
 # context -> (context id, name, context vlan, tenant name or None, served deployment id, {ns_type: /29})
 _XCHG_CONTEXTS: dict[str, dict[str, Any]] = {
     "shared": {
@@ -1493,7 +1495,12 @@ _XCHG_CONTEXTS: dict[str, dict[str, Any]] = {
         "vlan": 3000,
         "tenant": None,
         "deployment": "dep-shared",
-        "prefixes": {"prod": "100.66.0.0/29", "non_prod": "100.66.16.0/29", "internet": "100.66.32.0/29"},
+        "prefixes": {
+            "prod": "100.66.0.0/29",
+            "non_prod": "100.66.16.0/29",
+            "internet": "100.66.32.0/29",
+            "management": "100.66.48.0/29",
+        },
         "snat": "192.0.2.5/32",
     },
     "dedicated": {
@@ -1502,7 +1509,7 @@ _XCHG_CONTEXTS: dict[str, dict[str, Any]] = {
         "vlan": 3001,
         "tenant": "Acme",
         "deployment": "dep-acme",
-        "prefixes": {"prod": "100.66.0.8/29", "internet": "100.66.32.8/29"},
+        "prefixes": {"prod": "100.66.0.8/29", "internet": "100.66.32.8/29", "management": "100.66.48.8/29"},
         "snat": "192.0.2.6/32",
     },
 }
@@ -1516,10 +1523,10 @@ def _xchg_ns_node(ns_type: str, *, with_vni: bool = True) -> dict:
     return _node(inner)
 
 
-def _xchg_exchange(ctx: dict[str, Any], a_type: str) -> dict:
-    """The exchange {context}-{A}-INTERNET of one tenant VRF, gated by ``ctx``."""
+def _xchg_exchange(ctx: dict[str, Any], a_type: str, z_type: str) -> dict:
+    """The exchange {context}-{A}-{Z} of one tenant VRF with an exchange peer, gated by ``ctx``."""
     return {
-        "id": f"xchg-{ctx['name']}-{a_type}",
+        "id": f"xchg-{ctx['name']}-{a_type}-{z_type}",
         "gateway": _node({"id": ctx["id"], "tenant": _node({"id": "tenant-acme"}) if ctx["tenant"] else _node(None)}),
     }
 
@@ -1544,9 +1551,11 @@ def _xchg_segment(*, seg_name: str, vlan: int, vni: int, gateway_ip: str, deploy
 def build_exchange_transit_bl_data(*, device_name: str, platform: str) -> dict:
     """A border leaf whose firewall-role port is tagged with two contexts.
 
-    Shared context dc1-fw-shared (no tenant): legs in PROD and INTERNET, so
-    PROD gets 0/0 -> VIP. Dedicated context dc1-fw-acme (tenant Acme): legs in
-    PROD and INTERNET, no 0/0 (its tenant is steered by leaf PBR). Each context
+    Shared context dc1-fw-shared (no tenant): legs in PROD, INTERNET and
+    MANAGEMENT, so PROD gets 0/0 -> VIP. Dedicated context dc1-fw-acme (tenant
+    Acme): the same three legs, no 0/0 (its tenant is steered by leaf PBR).
+    MANAGEMENT only becomes a VLAN, L2 VNI and anycast SVI in its VRF: the
+    tenants are source-NATed behind the leg's VIP, so no return route. Each context
     serves one PROD segment (seg-shared, seg-acme), which becomes a static in
     INTERNET towards the serving context's INTERNET VIP. seg-shared is also
     carried on the customer port, to prove a plain segment and the transit
@@ -1569,16 +1578,14 @@ def build_exchange_transit_bl_data(*, device_name: str, platform: str) -> dict:
         legs = []
         for ns_type, prefix in ctx["prefixes"].items():
             if ns_type == "non_prod":
-                continue  # the border leaf fixture exchanges PROD <-> INTERNET only
+                continue  # the border leaf fixture exchanges PROD with the peers only
             net = ipaddress.ip_network(prefix)
-            # both legs of the PROD <-> INTERNET exchange carry that exchange
-            exchanges = [_xchg_exchange(ctx, "prod")]
+            # each exchange PROD <-> peer is carried by both of its legs
+            exchanges = [_xchg_exchange(ctx, "prod", z) for z in ("internet", "management") if ns_type in ("prod", z)]
             for member, host in (("dc1-fw-01", 5), ("dc1-fw-02", 6)):
                 legs.append(
                     {
-                        "name": _v(
-                            f"ethernet1/1.{ctx['vlan'] + 200 * {'prod': 0, 'non_prod': 1, 'internet': 2}[ns_type]}"
-                        ),
+                        "name": _v(f"ethernet1/1.{ctx['vlan'] + _XCHG_VLAN_OFFSET[ns_type]}"),
                         "device": _node({"name": _v(member), "role": _v("firewall")}),
                         "ip_address": _node(
                             {
@@ -1715,7 +1722,8 @@ def build_firewall_exchange_data(*, device_name: str, platform: str) -> dict:
     dc1-fw-shared holds PROD, NON-PROD and INTERNET (so it renders the explicit
     PROD<->NON-PROD deny); dc1-fw-acme holds PROD and INTERNET. Served segments:
     seg-prod 10.1.0.0/24 and seg-nonprod 10.2.0.0/24 (shared), seg-acme
-    10.3.0.0/24 (dedicated).
+    10.3.0.0/24 (dedicated). The MANAGEMENT-ZONE holds seg-infra 10.250.0.0/24,
+    the services segment: every context routes it to its MANAGEMENT leg.
     """
     data = build_firewall_ha_data(device_name=device_name, platform=platform)
     device = data["DcimPhysicalDevice"]["edges"][0]["node"]
@@ -1731,8 +1739,9 @@ def build_firewall_exchange_data(*, device_name: str, platform: str) -> dict:
     seg_prod = zone_segment("seg-prod", "10.1.0.0/24")
     seg_nonprod = zone_segment("seg-nonprod", "10.2.0.0/24")
     seg_acme = zone_segment("seg-acme", "10.3.0.0/24")
+    seg_infra = zone_segment("seg-infra", "10.250.0.0/24")
     served = {
-        "shared": [seg_prod, seg_nonprod],
+        "shared": [seg_prod, seg_nonprod, seg_infra],
         "dedicated": [seg_acme],
     }
 
@@ -1750,7 +1759,7 @@ def build_firewall_exchange_data(*, device_name: str, platform: str) -> dict:
         }
         for ns_type, prefix in ctx["prefixes"].items():
             ns_name = _XCHG_NAMESPACES[ns_type][0]
-            vlan = ctx["vlan"] + {"prod": 0, "non_prod": 200, "internet": 400}[ns_type]
+            vlan = ctx["vlan"] + _XCHG_VLAN_OFFSET[ns_type]
             net = ipaddress.ip_network(prefix)
             interfaces.append(
                 {
@@ -1782,7 +1791,13 @@ def build_firewall_exchange_data(*, device_name: str, platform: str) -> dict:
             "network_segments": _edges(segments),
         }
 
-    data["SecurityZone"] = _edges([zone("PROD-ZONE", [seg_prod, seg_acme]), zone("NONPROD-ZONE", [seg_nonprod])])
+    data["SecurityZone"] = _edges(
+        [
+            zone("PROD-ZONE", [seg_prod, seg_acme]),
+            zone("NONPROD-ZONE", [seg_nonprod]),
+            zone("MANAGEMENT-ZONE", [seg_infra]),
+        ]
+    )
     return data
 
 

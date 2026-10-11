@@ -1254,4 +1254,43 @@ class TestAsaLegSecurityLevels:
         context = {"name": "c1", "legs": [leg], "routes": [], "isolation": [], "policies": []}
         out = _render_template("cisco_asa", name="fw1", contexts=[context])
         assert f"security-level {level}" in out
-        assert "access-list x-in" not in out or ns_type in ("prod", "non_prod")
+        # the internet leg takes no ACL (stateful return); management takes only denies
+        assert "access-list x-in" not in out or ns_type in ("prod", "non_prod", "management")
+
+    def test_management_leg_acl_is_isolation_denies_then_implicit_deny_without_the_context_rules(self) -> None:
+        legs = [
+            {
+                "ns_type": ns_type,
+                "zone": zone,
+                "nameif": nameif,
+                "vlan": 3000 + i,
+                "parent_interface": {"name": "Port-channel1"},
+                "own_ip": f"100.66.{i}.5/29",
+                "virtual_ip": None,
+                "standby_ip": None,
+                "interface": f"Port-channel1.{3000 + i}",
+                "prefixes": prefixes,
+            }
+            for i, (ns_type, zone, nameif, prefixes) in enumerate(
+                [
+                    ("prod", "PROD-ZONE", "prod", ["10.1.0.0/24"]),
+                    ("management", "MANAGEMENT-ZONE", "management", ["10.250.0.0/24"]),
+                ]
+            )
+        ]
+        rule = {"src_zone": "PROD-ZONE", "action": "permit", "protocol": "udp", "src": None, "dst": "10.250.0.0/24"}
+        context = {
+            "name": "c1",
+            "legs": legs,
+            "routes": [],
+            "isolation": [{"src_zone": "MANAGEMENT-ZONE", "dst_zone": "PROD-ZONE"}],
+            "policies": [{"rules": [{**rule, "dst_port": "eq 53", "log": False}]}],
+        }
+        out = _render_template("cisco_asa", name="fw1", contexts=[context])
+        mgmt_acl = [line for line in out.splitlines() if line.startswith("access-list management-in")]
+        assert mgmt_acl == [
+            "access-list management-in extended deny ip any 10.1.0.0 255.255.255.0 log",
+            "access-list management-in extended deny ip any any log",
+        ]
+        assert "access-group management-in in interface management" in out
+        assert "access-list prod-in extended permit udp any 10.250.0.0 255.255.255.0 eq 53" in out
