@@ -35,11 +35,17 @@ TRANSIT_VLAN_MAX = CONTEXT_VLAN_MAX + TRANSIT_VLAN_BAND * max(TRANSIT_SLOT.value
 TRANSIT_VNI_MIN = TRANSIT_VNI_BASE + TRANSIT_VLAN_MIN
 TRANSIT_VNI_MAX = TRANSIT_VNI_BASE + TRANSIT_VLAN_MAX
 
-EXCHANGE_PEERS: dict[str, tuple[str, ...]] = {"prod": ("internet",), "non_prod": ("internet",)}
-"""Tenant namespace type -> namespace types it exchanges with. Never prod <-> non_prod."""
+EXCHANGE_PEERS: dict[str, tuple[str, ...]] = {
+    "prod": ("internet", "management"),
+    "non_prod": ("internet", "management"),
+}
+"""Tenant namespace type -> namespace types it exchanges with (tenant-initiated only). Never prod <-> non_prod."""
 
 INTERNET_TYPE = "internet"
 """namespace_type of the INTERNET VRF namespace."""
+
+MANAGEMENT_TYPE = "management"
+"""namespace_type of the MANAGEMENT VRF namespace (core infrastructure services, DC-local)."""
 
 NON_PUBLIC_PREFIXES: tuple[ipaddress.IPv4Network, ...] = tuple(
     ipaddress.IPv4Network(prefix)
@@ -60,6 +66,7 @@ ZONE_BY_NS_TYPE: dict[str, str] = {
     "prod": "PROD-ZONE",
     "non_prod": "NONPROD-ZONE",
     "internet": "INTERNET-ZONE",
+    "management": "MANAGEMENT-ZONE",
 }
 
 OFFSET_ANYCAST = 1

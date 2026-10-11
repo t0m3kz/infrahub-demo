@@ -13,6 +13,10 @@ interface ethernet1/1.3401
  vlan 3401
  no shutdown
 !
+interface ethernet1/1.3601
+ vlan 3601
+ no shutdown
+!
 interface ethernet1/1.3000
  vlan 3000
  no shutdown
@@ -25,9 +29,14 @@ interface ethernet1/1.3400
  vlan 3400
  no shutdown
 !
+interface ethernet1/1.3600
+ vlan 3600
+ no shutdown
+!
 context dc1-fw-acme
  allocate-interface ethernet1/1.3001
  allocate-interface ethernet1/1.3401
+ allocate-interface ethernet1/1.3601
  config-url disk0:/dc1-fw-acme.cfg
  description Acme
 !
@@ -35,6 +44,7 @@ context dc1-fw-shared
  allocate-interface ethernet1/1.3000
  allocate-interface ethernet1/1.3200
  allocate-interface ethernet1/1.3400
+ allocate-interface ethernet1/1.3600
  config-url disk0:/dc1-fw-shared.cfg
 !
 changeto context dc1-fw-acme
@@ -50,18 +60,33 @@ interface ethernet1/1.3401
  ip address 100.66.32.12 255.255.255.248 standby 100.66.32.14
  no shutdown
 !
+interface ethernet1/1.3601
+ nameif management
+ security-level 60
+ ip address 100.66.48.12 255.255.255.248 standby 100.66.48.14
+ no shutdown
+!
 same-security-traffic permit intra-interface
 !
 route prod 10.3.0.0 255.255.255.0 100.66.0.9 1
+route management 10.250.0.0 255.255.255.0 100.66.48.9 1
 route internet 0.0.0.0 0.0.0.0 100.66.32.9 1
 !
 access-list prod-in extended deny ip any any log
 access-group prod-in in interface prod
+access-list management-in extended deny ip any 10.3.0.0 255.255.255.0 log
+access-list management-in extended deny ip any any log
+access-group management-in in interface management
 object network SNAT-dc1-fw-acme
  host 192.0.2.6
 object network NAT-prod-10-3-0-0-24
  subnet 10.3.0.0 255.255.255.0
  nat (prod,internet) dynamic pat-pool SNAT-dc1-fw-acme
+object network SNAT-dc1-fw-acme-MANAGEMENT
+ host 100.66.48.12
+object network NAT-prod-10-3-0-0-24-MANAGEMENT
+ subnet 10.3.0.0 255.255.255.0
+ nat (prod,management) dynamic pat-pool SNAT-dc1-fw-acme-MANAGEMENT
 !
 changeto context dc1-fw-shared
 interface ethernet1/1.3000
@@ -82,10 +107,17 @@ interface ethernet1/1.3400
  ip address 100.66.32.4 255.255.255.248 standby 100.66.32.6
  no shutdown
 !
+interface ethernet1/1.3600
+ nameif management
+ security-level 60
+ ip address 100.66.48.4 255.255.255.248 standby 100.66.48.6
+ no shutdown
+!
 same-security-traffic permit intra-interface
 !
 route prod 10.1.0.0 255.255.255.0 100.66.0.1 1
 route nonprod 10.2.0.0 255.255.255.0 100.66.16.1 1
+route management 10.250.0.0 255.255.255.0 100.66.48.1 1
 route internet 0.0.0.0 0.0.0.0 100.66.32.1 1
 !
 access-list prod-in extended deny ip any 10.2.0.0 255.255.255.0 log
@@ -94,6 +126,10 @@ access-group prod-in in interface prod
 access-list nonprod-in extended deny ip any 10.1.0.0 255.255.255.0 log
 access-list nonprod-in extended deny ip any any log
 access-group nonprod-in in interface nonprod
+access-list management-in extended deny ip any 10.1.0.0 255.255.255.0 log
+access-list management-in extended deny ip any 10.2.0.0 255.255.255.0 log
+access-list management-in extended deny ip any any log
+access-group management-in in interface management
 object network SNAT-dc1-fw-shared
  host 192.0.2.5
 object network NAT-prod-10-1-0-0-24
@@ -102,6 +138,14 @@ object network NAT-prod-10-1-0-0-24
 object network NAT-nonprod-10-2-0-0-24
  subnet 10.2.0.0 255.255.255.0
  nat (nonprod,internet) dynamic pat-pool SNAT-dc1-fw-shared
+object network SNAT-dc1-fw-shared-MANAGEMENT
+ host 100.66.48.4
+object network NAT-prod-10-1-0-0-24-MANAGEMENT
+ subnet 10.1.0.0 255.255.255.0
+ nat (prod,management) dynamic pat-pool SNAT-dc1-fw-shared-MANAGEMENT
+object network NAT-nonprod-10-2-0-0-24-MANAGEMENT
+ subnet 10.2.0.0 255.255.255.0
+ nat (nonprod,management) dynamic pat-pool SNAT-dc1-fw-shared-MANAGEMENT
 !
 !
 ! --- Failover (HA) ---

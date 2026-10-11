@@ -1187,7 +1187,20 @@
                                     "edges": [
                                       {
                                         "node": {
-                                          "id": "xchg-dc1-fw-shared-prod",
+                                          "id": "xchg-dc1-fw-shared-prod-internet",
+                                          "gateway": {
+                                            "node": {
+                                              "id": "ctx-shared",
+                                              "tenant": {
+                                                "node": null
+                                              }
+                                            }
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "node": {
+                                          "id": "xchg-dc1-fw-shared-prod-management",
                                           "gateway": {
                                             "node": {
                                               "id": "ctx-shared",
@@ -1241,7 +1254,20 @@
                                     "edges": [
                                       {
                                         "node": {
-                                          "id": "xchg-dc1-fw-shared-prod",
+                                          "id": "xchg-dc1-fw-shared-prod-internet",
+                                          "gateway": {
+                                            "node": {
+                                              "id": "ctx-shared",
+                                              "tenant": {
+                                                "node": null
+                                              }
+                                            }
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "node": {
+                                          "id": "xchg-dc1-fw-shared-prod-management",
                                           "gateway": {
                                             "node": {
                                               "id": "ctx-shared",
@@ -1295,7 +1321,7 @@
                                     "edges": [
                                       {
                                         "node": {
-                                          "id": "xchg-dc1-fw-shared-prod",
+                                          "id": "xchg-dc1-fw-shared-prod-internet",
                                           "gateway": {
                                             "node": {
                                               "id": "ctx-shared",
@@ -1349,7 +1375,115 @@
                                     "edges": [
                                       {
                                         "node": {
-                                          "id": "xchg-dc1-fw-shared-prod",
+                                          "id": "xchg-dc1-fw-shared-prod-internet",
+                                          "gateway": {
+                                            "node": {
+                                              "id": "ctx-shared",
+                                              "tenant": {
+                                                "node": null
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "node": {
+                                  "name": {
+                                    "value": "ethernet1/1.3600"
+                                  },
+                                  "device": {
+                                    "node": {
+                                      "name": {
+                                        "value": "dc1-fw-01"
+                                      },
+                                      "role": {
+                                        "value": "firewall"
+                                      }
+                                    }
+                                  },
+                                  "ip_address": {
+                                    "node": {
+                                      "address": {
+                                        "value": "100.66.48.5/29"
+                                      },
+                                      "ip_namespace": {
+                                        "node": {
+                                          "name": {
+                                            "value": "MANAGEMENT"
+                                          },
+                                          "namespace_type": {
+                                            "value": "management"
+                                          },
+                                          "l3_vni": {
+                                            "value": 50004
+                                          }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "interface_capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "id": "xchg-dc1-fw-shared-prod-management",
+                                          "gateway": {
+                                            "node": {
+                                              "id": "ctx-shared",
+                                              "tenant": {
+                                                "node": null
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "node": {
+                                  "name": {
+                                    "value": "ethernet1/1.3600"
+                                  },
+                                  "device": {
+                                    "node": {
+                                      "name": {
+                                        "value": "dc1-fw-02"
+                                      },
+                                      "role": {
+                                        "value": "firewall"
+                                      }
+                                    }
+                                  },
+                                  "ip_address": {
+                                    "node": {
+                                      "address": {
+                                        "value": "100.66.48.6/29"
+                                      },
+                                      "ip_namespace": {
+                                        "node": {
+                                          "name": {
+                                            "value": "MANAGEMENT"
+                                          },
+                                          "namespace_type": {
+                                            "value": "management"
+                                          },
+                                          "l3_vni": {
+                                            "value": 50004
+                                          }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "interface_capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "id": "xchg-dc1-fw-shared-prod-management",
                                           "gateway": {
                                             "node": {
                                               "id": "ctx-shared",
@@ -1440,7 +1574,22 @@
                                     "edges": [
                                       {
                                         "node": {
-                                          "id": "xchg-dc1-fw-acme-prod",
+                                          "id": "xchg-dc1-fw-acme-prod-internet",
+                                          "gateway": {
+                                            "node": {
+                                              "id": "ctx-dedicated",
+                                              "tenant": {
+                                                "node": {
+                                                  "id": "tenant-acme"
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "node": {
+                                          "id": "xchg-dc1-fw-acme-prod-management",
                                           "gateway": {
                                             "node": {
                                               "id": "ctx-dedicated",
@@ -1496,7 +1645,22 @@
                                     "edges": [
                                       {
                                         "node": {
-                                          "id": "xchg-dc1-fw-acme-prod",
+                                          "id": "xchg-dc1-fw-acme-prod-internet",
+                                          "gateway": {
+                                            "node": {
+                                              "id": "ctx-dedicated",
+                                              "tenant": {
+                                                "node": {
+                                                  "id": "tenant-acme"
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "node": {
+                                          "id": "xchg-dc1-fw-acme-prod-management",
                                           "gateway": {
                                             "node": {
                                               "id": "ctx-dedicated",
@@ -1552,7 +1716,7 @@
                                     "edges": [
                                       {
                                         "node": {
-                                          "id": "xchg-dc1-fw-acme-prod",
+                                          "id": "xchg-dc1-fw-acme-prod-internet",
                                           "gateway": {
                                             "node": {
                                               "id": "ctx-dedicated",
@@ -1608,7 +1772,119 @@
                                     "edges": [
                                       {
                                         "node": {
-                                          "id": "xchg-dc1-fw-acme-prod",
+                                          "id": "xchg-dc1-fw-acme-prod-internet",
+                                          "gateway": {
+                                            "node": {
+                                              "id": "ctx-dedicated",
+                                              "tenant": {
+                                                "node": {
+                                                  "id": "tenant-acme"
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "node": {
+                                  "name": {
+                                    "value": "ethernet1/1.3601"
+                                  },
+                                  "device": {
+                                    "node": {
+                                      "name": {
+                                        "value": "dc1-fw-01"
+                                      },
+                                      "role": {
+                                        "value": "firewall"
+                                      }
+                                    }
+                                  },
+                                  "ip_address": {
+                                    "node": {
+                                      "address": {
+                                        "value": "100.66.48.13/29"
+                                      },
+                                      "ip_namespace": {
+                                        "node": {
+                                          "name": {
+                                            "value": "MANAGEMENT"
+                                          },
+                                          "namespace_type": {
+                                            "value": "management"
+                                          },
+                                          "l3_vni": {
+                                            "value": 50004
+                                          }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "interface_capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "id": "xchg-dc1-fw-acme-prod-management",
+                                          "gateway": {
+                                            "node": {
+                                              "id": "ctx-dedicated",
+                                              "tenant": {
+                                                "node": {
+                                                  "id": "tenant-acme"
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "node": {
+                                  "name": {
+                                    "value": "ethernet1/1.3601"
+                                  },
+                                  "device": {
+                                    "node": {
+                                      "name": {
+                                        "value": "dc1-fw-02"
+                                      },
+                                      "role": {
+                                        "value": "firewall"
+                                      }
+                                    }
+                                  },
+                                  "ip_address": {
+                                    "node": {
+                                      "address": {
+                                        "value": "100.66.48.14/29"
+                                      },
+                                      "ip_namespace": {
+                                        "node": {
+                                          "name": {
+                                            "value": "MANAGEMENT"
+                                          },
+                                          "namespace_type": {
+                                            "value": "management"
+                                          },
+                                          "l3_vni": {
+                                            "value": 50004
+                                          }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "interface_capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "id": "xchg-dc1-fw-acme-prod-management",
                                           "gateway": {
                                             "node": {
                                               "id": "ctx-dedicated",

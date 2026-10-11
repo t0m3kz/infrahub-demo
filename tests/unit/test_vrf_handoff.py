@@ -24,12 +24,7 @@ import jinja2
 import pytest
 
 from transforms.helpers.bgp import _build_peer_groups, _build_session_from_peering, add_template_fields
-from transforms.helpers.vxlan import (
-    _multisite_vrf_site_asns,
-    _platform_vxlan_config,
-    get_interfaces,
-    get_vxlan_config,
-)
+from transforms.helpers.vxlan import _multisite_vrf_site_asns, _platform_vxlan_config, get_interfaces, get_vxlan_config
 
 _TEMPLATES_CONFIGS_DIR = Path(__file__).parents[2] / "templates" / "configs"
 

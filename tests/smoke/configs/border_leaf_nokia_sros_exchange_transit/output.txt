@@ -149,6 +149,36 @@ configure service vpls "vpls-64401" bgp instance 1 route-target import "target:6
 configure service vpls "vpls-64401" sap Ethernet20:3401 admin-state enable
 configure service vpls "vpls-64401" sap Ethernet20:3401 create
 !
+configure service vpls "vpls-64600" admin-state enable
+configure service vpls "vpls-64600" service-id 64600
+configure service vpls "vpls-64600" customer 1
+configure service vpls "vpls-64600" vxlan instance 1 source-address "10.0.0.1"
+configure service vpls "vpls-64600" vxlan instance 1 vni 64600
+configure service vpls "vpls-64600" vxlan instance 1 create
+configure service vpls "vpls-64600" bgp-evpn evi 64600
+configure service vpls "vpls-64600" bgp-evpn vxlan bgp-instance 1 vxlan-instance 1
+configure service vpls "vpls-64600" bgp-evpn vxlan bgp-instance 1 admin-state enable
+configure service vpls "vpls-64600" bgp instance 1 route-distinguisher "10.0.0.1:64600"
+configure service vpls "vpls-64600" bgp instance 1 route-target export "target:65000:64600"
+configure service vpls "vpls-64600" bgp instance 1 route-target import "target:65000:64600"
+configure service vpls "vpls-64600" sap Ethernet20:3600 admin-state enable
+configure service vpls "vpls-64600" sap Ethernet20:3600 create
+!
+configure service vpls "vpls-64601" admin-state enable
+configure service vpls "vpls-64601" service-id 64601
+configure service vpls "vpls-64601" customer 1
+configure service vpls "vpls-64601" vxlan instance 1 source-address "10.0.0.1"
+configure service vpls "vpls-64601" vxlan instance 1 vni 64601
+configure service vpls "vpls-64601" vxlan instance 1 create
+configure service vpls "vpls-64601" bgp-evpn evi 64601
+configure service vpls "vpls-64601" bgp-evpn vxlan bgp-instance 1 vxlan-instance 1
+configure service vpls "vpls-64601" bgp-evpn vxlan bgp-instance 1 admin-state enable
+configure service vpls "vpls-64601" bgp instance 1 route-distinguisher "10.0.0.1:64601"
+configure service vpls "vpls-64601" bgp instance 1 route-target export "target:65000:64601"
+configure service vpls "vpls-64601" bgp instance 1 route-target import "target:65000:64601"
+configure service vpls "vpls-64601" sap Ethernet20:3601 admin-state enable
+configure service vpls "vpls-64601" sap Ethernet20:3601 create
+!
 !
 ! Exact-match export policy for the exchange statics (RM-VRF-STATIC-2-EVPN-<vrf>)
 !
@@ -178,6 +208,15 @@ configure service vprn 50003 bgp-evpn vxlan bgp-instance 1 admin-state enable
 configure service vprn 50003 static-routes route 192.0.2.5/32 route-type unicast next-hop "100.66.32.4" admin-state enable
 configure service vprn 50003 static-routes route 192.0.2.6/32 route-type unicast next-hop "100.66.32.12" admin-state enable
 configure service vprn 50003 bgp-evpn vxlan export-policy ["RM-VRF-STATIC-2-EVPN-INTERNET"]
+configure service vprn 50004 admin-state enable
+configure service vprn 50004 customer 1
+configure service vprn 50004 bgp instance 1 route-distinguisher "10.0.0.1:50004"
+configure service vprn 50004 bgp instance 1 route-target export "target:65000:50004"
+configure service vprn 50004 bgp instance 1 route-target import "target:65000:50004"
+
+configure service vprn 50004 bgp-evpn evi 50004
+configure service vprn 50004 bgp-evpn vxlan bgp-instance 1 vxlan-instance 1
+configure service vprn 50004 bgp-evpn vxlan bgp-instance 1 admin-state enable
 configure service vprn 50001 admin-state enable
 configure service vprn 50001 customer 1
 configure service vprn 50001 bgp instance 1 route-distinguisher "10.0.0.1:50001"
@@ -216,4 +255,14 @@ configure service vprn 50003 interface "int-vpls-64401" admin-state enable
 configure service vprn 50003 interface "int-vpls-64401" vpls "vpls-64401"
 configure service vprn 50003 interface "int-vpls-64401" mac "00:1c:73:00:dc:01"
 configure service vprn 50003 interface "int-vpls-64401" ipv4 primary-address "100.66.32.9/29"
+!
+configure service vprn 50004 interface "int-vpls-64600" admin-state enable
+configure service vprn 50004 interface "int-vpls-64600" vpls "vpls-64600"
+configure service vprn 50004 interface "int-vpls-64600" mac "00:1c:73:00:dc:01"
+configure service vprn 50004 interface "int-vpls-64600" ipv4 primary-address "100.66.48.1/29"
+!
+configure service vprn 50004 interface "int-vpls-64601" admin-state enable
+configure service vprn 50004 interface "int-vpls-64601" vpls "vpls-64601"
+configure service vprn 50004 interface "int-vpls-64601" mac "00:1c:73:00:dc:01"
+configure service vprn 50004 interface "int-vpls-64601" ipv4 primary-address "100.66.48.9/29"
 !

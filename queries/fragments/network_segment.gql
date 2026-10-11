@@ -51,6 +51,7 @@ fragment SegmentGatewayWithNamespaceFields on ManagedNetworkSegment {
             node {
               name { value }
               l3_vni { value }
+              namespace_type { value }
             }
           }
         }
@@ -133,6 +134,7 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
               node {
                 name { value }
                 l3_vni { value }
+                namespace_type { value }
               }
             }
           }

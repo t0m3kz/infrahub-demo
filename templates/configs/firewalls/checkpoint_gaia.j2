@@ -88,21 +88,21 @@ set virtual-system {{ context.name }}
 {%- for route in context.routes %}
 set static-route {{ 'default' if route.destination == '0.0.0.0/0' else route.destination }} nexthop gateway address {{ route.nexthop }} on
 {%- endfor %}
-{#- Source NAT lives in the management server's NAT policy (not Gaia/VSX): a
-    hide-NAT rule per tenant zone behind the context's SNAT host, installed on
-    the cluster like the cluster VIP below. The host object must exist first;
-    both are mgmt_cli lines to run against the SmartCenter. #}
-{%- if context.nat %}
-mgmt_cli add host name "SNAT-{{ context.name }}" ip-address "{{ context.nat.address }}"
-{%- for leg in context.nat.tenant_legs %}
-mgmt_cli add nat-rule package "{{ context.name }}" position "top" original-source "{{ leg.zone }}" original-destination "{{ context.nat.internet.zone }}" translated-source "SNAT-{{ context.name }}" method "hide" install-on "{{ ha.name if ha else context.name }}"
+{#- Source NAT lives in the management server's NAT policy (not Gaia/VSX): per
+    entry a hide-NAT rule per tenant zone behind the entry's SNAT host,
+    installed on the cluster like the cluster VIP below. The host object must
+    exist first; both are mgmt_cli lines to run against the SmartCenter. #}
+{%- for nat in context.nat %}
+mgmt_cli add host name "SNAT-{{ context.name }}{{ nat.suffix }}" ip-address "{{ nat.address }}"
+{%- for leg in nat.tenant_legs %}
+mgmt_cli add nat-rule package "{{ context.name }}" position "top" original-source "{{ leg.zone }}" original-destination "{{ nat.egress.zone }}" translated-source "SNAT-{{ context.name }}{{ nat.suffix }}" method "hide" install-on "{{ ha.name if ha else context.name }}"
 {%- endfor %}
-{%- endif %}
+{%- endfor %}
 {%- endif %}
 {%- endfor %}
 !
 {%- for context in contexts if context.isolation %}
-! --- PROD <-> NON-PROD isolation in virtual system {{ context.name }} ---
+! --- Zone isolation (PROD <-> NON-PROD, MANAGEMENT -> tenants) in virtual system {{ context.name }} ---
 set virtual-system {{ context.name }}
 {%- for deny in context.isolation %}
 add access-rule layer "Network" position top name "deny-{{ deny.src_zone }}-to-{{ deny.dst_zone }}" action drop source {{ deny.src_zone }} destination {{ deny.dst_zone }} service Any track Log

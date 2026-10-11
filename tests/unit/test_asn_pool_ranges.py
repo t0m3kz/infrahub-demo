@@ -12,11 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from generators.helpers.pools import (
-    DEFAULT_ASN_BASE_START,
-    calculate_fabric_asn_block_size,
-    name_to_asn_range,
-)
+from generators.helpers.pools import DEFAULT_ASN_BASE_START, calculate_fabric_asn_block_size, name_to_asn_range
 
 
 def test_block_size_small_fabric() -> None:

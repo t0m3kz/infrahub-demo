@@ -22,6 +22,7 @@ from transforms.helpers.segments import (
 from utils.exchange_transit import (
     EXCHANGE_PEERS,
     INTERNET_TYPE,
+    MANAGEMENT_TYPE,
     TRANSIT_SLOT,
     ZONE_BY_NS_TYPE,
     exchange_peer_zones,
@@ -255,9 +256,10 @@ def get_exchange_routes(interfaces: list[dict[str, Any]] | None) -> list[dict[st
 
     - VRF A: ``0.0.0.0/0`` -> the context's A-leg VIP, only when the context is the
       shared one (no tenant). A dedicated context steers its tenant by leaf PBR.
-    - VRF Z (INTERNET only; other peers such as MANAGEMENT are not source-NATed):
-      the context's SNAT address ``/32`` -> the context's Z-leg VIP,
-      the return path of its translated flows. INTERNET carries only public and
+    - VRF Z (INTERNET only): the context's SNAT address ``/32`` -> the context's
+      Z-leg VIP, the return path of its translated flows. Another peer
+      (MANAGEMENT) is source-NATed to its own leg's VIP, a /29 address the border
+      leaves already connect, so it needs no route and no tenant prefix. INTERNET carries only public and
       transit space, so no tenant prefix goes in; a context without a SNAT address
       emits nothing there. No default route in INTERNET: its upstream is the
       edge's EVPN type-5 default.
@@ -339,10 +341,10 @@ def get_firewall_contexts(
     ``legs`` are the context's exchange transit legs on this device: the
     sub-interfaces whose address is in a VRF namespace of a known type
     (utils/exchange_transit.py ZONE_BY_NS_TYPE), ordered prod, non_prod,
-    internet. A leg is {interface, parent_interface, vlan (the transit VLAN),
-    own_ip, virtual_ip / standby_ip (the HA pair's VIP and standby, None
-    without ``ha``), anycast (the border leaves' gateway in the /29), vrf,
-    ns_type, zone, nameif}. A context holding none renders only its
+    internet, management. A leg is {interface, parent_interface, vlan (the
+    transit VLAN), own_ip, virtual_ip / standby_ip (the HA pair's VIP and
+    standby, None without ``ha``), anycast / vip (the border leaves' gateway
+    and the firewall VIP, plain IPs of the /29), vrf, ns_type, zone, nameif}. A context holding none renders only its
     policies.
 
     ``segments`` are the segments terminating on the context: every segment
@@ -372,6 +374,7 @@ def get_firewall_contexts(
             if network.version != 4:
                 continue
             zone = ZONE_BY_NS_TYPE[ns_type]
+            addresses = transit_addresses(str(network))
             legs_by_context[context_id].append(
                 {
                     "interface": iface.get("name"),
@@ -379,7 +382,8 @@ def get_firewall_contexts(
                     "vlan": transit_vlan(cap["vlan_id"], ns_type),
                     "own_ip": address,
                     **inline_addresses(None, ha, address),
-                    "anycast": transit_addresses(str(network))["anycast"],
+                    "anycast": addresses["anycast"],
+                    "vip": addresses["vip"],
                     "vrf": namespace.get("name"),
                     "ns_type": ns_type,
                     "zone": zone,
@@ -663,6 +667,11 @@ def get_customer_pbr_rules(
         if "security_policy" not in seg:
             continue
         seen_vlans.add(vlan_id)
+
+        # A segment living in the MANAGEMENT VRF is a service network: tenants reach
+        # it through their context, it is never itself redirected to one.
+        if _get_segment_namespace(seg).get("namespace_type") == MANAGEMENT_TYPE:
+            continue
 
         deployment_ids = _segment_deployment_ids(seg)
 

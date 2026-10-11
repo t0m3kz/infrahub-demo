@@ -27,6 +27,12 @@ vlan 3400
 vlan 3401
   name XCHG-dc1-fw-acme-INTERNET
 !
+vlan 3600
+  name XCHG-dc1-fw-shared-MANAGEMENT
+!
+vlan 3601
+  name XCHG-dc1-fw-acme-MANAGEMENT
+!
 !
 ! Interfaces
 interface Ethernet1
@@ -55,7 +61,7 @@ interface Ethernet20
 
   switchport
   switchport mode trunk
-  switchport trunk allowed vlan 3000,3001,3400,3401
+  switchport trunk allowed vlan 3000,3001,3400,3401,3600,3601
 !
 interface Loopback0
   description Router ID
@@ -129,6 +135,11 @@ router bgp 65000
       redistribute direct route-map RM-VRF-DIRECT-2-EVPN
       redistribute static route-map RM-VRF-STATIC-2-EVPN-INTERNET
   !
+  vrf MANAGEMENT
+    address-family ipv4 unicast
+      advertise l2vpn evpn
+      redistribute direct route-map RM-VRF-DIRECT-2-EVPN
+  !
   vrf PROD
     address-family ipv4 unicast
       advertise l2vpn evpn
@@ -159,6 +170,13 @@ vrf context INTERNET
     route-target both 50003:50003
     route-target both 50003:50003 evpn
 !
+vrf context MANAGEMENT
+  vni 50004
+  rd 10.0.0.1:50004
+  address-family ipv4 unicast
+    route-target both 65000:50004
+    route-target both 65000:50004 evpn
+!
 vrf context PROD
   vni 50001
   rd 10.0.0.1:50001
@@ -185,7 +203,14 @@ interface nve1
   member vni 64401
     suppress-arp
     ingress-replication protocol bgp
+  member vni 64600
+    suppress-arp
+    ingress-replication protocol bgp
+  member vni 64601
+    suppress-arp
+    ingress-replication protocol bgp
   member vni 50003 associate-vrf
+  member vni 50004 associate-vrf
   member vni 50001 associate-vrf
   no shutdown
 !
@@ -213,6 +238,14 @@ evpn
     rd 10.0.0.1:64401
     route-target import 65000:64401
     route-target export 65000:64401
+  vni 64600 l2
+    rd 10.0.0.1:64600
+    route-target import 65000:64600
+    route-target export 65000:64600
+  vni 64601 l2
+    rd 10.0.0.1:64601
+    route-target import 65000:64601
+    route-target export 65000:64601
 !
 !
 ! VLAN to VNI mapping
@@ -227,6 +260,10 @@ vlan 3400
   vn-segment 64400
 vlan 3401
   vn-segment 64401
+vlan 3600
+  vn-segment 64600
+vlan 3601
+  vn-segment 64601
 !
 ! L3 VNI Transit SVIs (symmetric IRB — no host addressing, forwarding only)
 !
@@ -242,10 +279,21 @@ interface Vlan3900
   no shutdown
 !
 vlan 3901
+  name L3VNI_MANAGEMENT
+  vn-segment 50004
+!
+interface Vlan3901
+  description L3VNI transit SVI for VRF MANAGEMENT
+  vrf member MANAGEMENT
+  ip forward
+  mtu 9216
+  no shutdown
+!
+vlan 3902
   name L3VNI_PROD
   vn-segment 50001
 !
-interface Vlan3901
+interface Vlan3902
   description L3VNI transit SVI for VRF PROD
   vrf member PROD
   ip forward
@@ -305,6 +353,20 @@ interface Vlan3401
   description XCHG-dc1-fw-acme-INTERNET
   vrf member INTERNET
   ip address 100.66.32.9/29
+  fabric forwarding mode anycast-gateway
+  no shutdown
+!
+interface Vlan3600
+  description XCHG-dc1-fw-shared-MANAGEMENT
+  vrf member MANAGEMENT
+  ip address 100.66.48.1/29
+  fabric forwarding mode anycast-gateway
+  no shutdown
+!
+interface Vlan3601
+  description XCHG-dc1-fw-acme-MANAGEMENT
+  vrf member MANAGEMENT
+  ip address 100.66.48.9/29
   fabric forwarding mode anycast-gateway
   no shutdown
 !

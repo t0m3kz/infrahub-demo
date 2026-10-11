@@ -5,6 +5,7 @@ set system host-name dc1-fw-01
 set security zones security-zone PROD-ZONE address-book address addr-10-1-0-0-24 10.1.0.0/24
 set security zones security-zone PROD-ZONE address-book address addr-10-3-0-0-24 10.3.0.0/24
 set security zones security-zone NONPROD-ZONE address-book address addr-10-2-0-0-24 10.2.0.0/24
+set security zones security-zone MANAGEMENT-ZONE address-book address addr-10-250-0-0-24 10.250.0.0/24
 #
 #
 # --- Interfaces, zones and routes in tenant system dc1-fw-acme ---
@@ -18,13 +19,28 @@ set tenants dc1-fw-acme interfaces ethernet1/1 unit 3401 vlan-id 3401
 set tenants dc1-fw-acme interfaces ethernet1/1 unit 3401 family inet address 100.66.32.12/29
 set tenants dc1-fw-acme security zones security-zone INTERNET-ZONE interfaces ethernet1/1.3401
 set tenants dc1-fw-acme routing-instances ri-dc1-fw-acme interface ethernet1/1.3401
+set tenants dc1-fw-acme interfaces ethernet1/1 unit 3601 vlan-id 3601
+set tenants dc1-fw-acme interfaces ethernet1/1 unit 3601 family inet address 100.66.48.12/29
+set tenants dc1-fw-acme security zones security-zone MANAGEMENT-ZONE interfaces ethernet1/1.3601
+set tenants dc1-fw-acme routing-instances ri-dc1-fw-acme interface ethernet1/1.3601
 set tenants dc1-fw-acme routing-instances ri-dc1-fw-acme routing-options static route 10.3.0.0/24 next-hop 100.66.0.9
+set tenants dc1-fw-acme routing-instances ri-dc1-fw-acme routing-options static route 10.250.0.0/24 next-hop 100.66.48.9
 set tenants dc1-fw-acme routing-instances ri-dc1-fw-acme routing-options static route 0.0.0.0/0 next-hop 100.66.32.9
+set tenants dc1-fw-acme security policies from-zone MANAGEMENT-ZONE to-zone PROD-ZONE policy deny-MANAGEMENT-ZONE-to-PROD-ZONE match source-address any
+set tenants dc1-fw-acme security policies from-zone MANAGEMENT-ZONE to-zone PROD-ZONE policy deny-MANAGEMENT-ZONE-to-PROD-ZONE match destination-address any
+set tenants dc1-fw-acme security policies from-zone MANAGEMENT-ZONE to-zone PROD-ZONE policy deny-MANAGEMENT-ZONE-to-PROD-ZONE match application any
+set tenants dc1-fw-acme security policies from-zone MANAGEMENT-ZONE to-zone PROD-ZONE policy deny-MANAGEMENT-ZONE-to-PROD-ZONE then deny
+set tenants dc1-fw-acme security policies from-zone MANAGEMENT-ZONE to-zone PROD-ZONE policy deny-MANAGEMENT-ZONE-to-PROD-ZONE then log session-init
 set tenants dc1-fw-acme security nat source pool SNAT-POOL address 192.0.2.6/32
 set tenants dc1-fw-acme security nat source rule-set SNAT-PROD-ZONE from zone PROD-ZONE
 set tenants dc1-fw-acme security nat source rule-set SNAT-PROD-ZONE to zone INTERNET-ZONE
 set tenants dc1-fw-acme security nat source rule-set SNAT-PROD-ZONE rule snat match source-address 0.0.0.0/0
 set tenants dc1-fw-acme security nat source rule-set SNAT-PROD-ZONE rule snat then source-nat pool SNAT-POOL
+set tenants dc1-fw-acme security nat source pool SNAT-POOL-MANAGEMENT address 100.66.48.12/32
+set tenants dc1-fw-acme security nat source rule-set SNAT-PROD-ZONE-MANAGEMENT from zone PROD-ZONE
+set tenants dc1-fw-acme security nat source rule-set SNAT-PROD-ZONE-MANAGEMENT to zone MANAGEMENT-ZONE
+set tenants dc1-fw-acme security nat source rule-set SNAT-PROD-ZONE-MANAGEMENT rule snat match source-address 0.0.0.0/0
+set tenants dc1-fw-acme security nat source rule-set SNAT-PROD-ZONE-MANAGEMENT rule snat then source-nat pool SNAT-POOL-MANAGEMENT
 #
 #
 # --- Interfaces, zones and routes in tenant system dc1-fw-shared ---
@@ -42,8 +58,13 @@ set tenants dc1-fw-shared interfaces ethernet1/1 unit 3400 vlan-id 3400
 set tenants dc1-fw-shared interfaces ethernet1/1 unit 3400 family inet address 100.66.32.4/29
 set tenants dc1-fw-shared security zones security-zone INTERNET-ZONE interfaces ethernet1/1.3400
 set tenants dc1-fw-shared routing-instances ri-dc1-fw-shared interface ethernet1/1.3400
+set tenants dc1-fw-shared interfaces ethernet1/1 unit 3600 vlan-id 3600
+set tenants dc1-fw-shared interfaces ethernet1/1 unit 3600 family inet address 100.66.48.4/29
+set tenants dc1-fw-shared security zones security-zone MANAGEMENT-ZONE interfaces ethernet1/1.3600
+set tenants dc1-fw-shared routing-instances ri-dc1-fw-shared interface ethernet1/1.3600
 set tenants dc1-fw-shared routing-instances ri-dc1-fw-shared routing-options static route 10.1.0.0/24 next-hop 100.66.0.1
 set tenants dc1-fw-shared routing-instances ri-dc1-fw-shared routing-options static route 10.2.0.0/24 next-hop 100.66.16.1
+set tenants dc1-fw-shared routing-instances ri-dc1-fw-shared routing-options static route 10.250.0.0/24 next-hop 100.66.48.1
 set tenants dc1-fw-shared routing-instances ri-dc1-fw-shared routing-options static route 0.0.0.0/0 next-hop 100.66.32.1
 set tenants dc1-fw-shared security policies from-zone PROD-ZONE to-zone NONPROD-ZONE policy deny-PROD-ZONE-to-NONPROD-ZONE match source-address any
 set tenants dc1-fw-shared security policies from-zone PROD-ZONE to-zone NONPROD-ZONE policy deny-PROD-ZONE-to-NONPROD-ZONE match destination-address any
@@ -55,6 +76,16 @@ set tenants dc1-fw-shared security policies from-zone NONPROD-ZONE to-zone PROD-
 set tenants dc1-fw-shared security policies from-zone NONPROD-ZONE to-zone PROD-ZONE policy deny-NONPROD-ZONE-to-PROD-ZONE match application any
 set tenants dc1-fw-shared security policies from-zone NONPROD-ZONE to-zone PROD-ZONE policy deny-NONPROD-ZONE-to-PROD-ZONE then deny
 set tenants dc1-fw-shared security policies from-zone NONPROD-ZONE to-zone PROD-ZONE policy deny-NONPROD-ZONE-to-PROD-ZONE then log session-init
+set tenants dc1-fw-shared security policies from-zone MANAGEMENT-ZONE to-zone PROD-ZONE policy deny-MANAGEMENT-ZONE-to-PROD-ZONE match source-address any
+set tenants dc1-fw-shared security policies from-zone MANAGEMENT-ZONE to-zone PROD-ZONE policy deny-MANAGEMENT-ZONE-to-PROD-ZONE match destination-address any
+set tenants dc1-fw-shared security policies from-zone MANAGEMENT-ZONE to-zone PROD-ZONE policy deny-MANAGEMENT-ZONE-to-PROD-ZONE match application any
+set tenants dc1-fw-shared security policies from-zone MANAGEMENT-ZONE to-zone PROD-ZONE policy deny-MANAGEMENT-ZONE-to-PROD-ZONE then deny
+set tenants dc1-fw-shared security policies from-zone MANAGEMENT-ZONE to-zone PROD-ZONE policy deny-MANAGEMENT-ZONE-to-PROD-ZONE then log session-init
+set tenants dc1-fw-shared security policies from-zone MANAGEMENT-ZONE to-zone NONPROD-ZONE policy deny-MANAGEMENT-ZONE-to-NONPROD-ZONE match source-address any
+set tenants dc1-fw-shared security policies from-zone MANAGEMENT-ZONE to-zone NONPROD-ZONE policy deny-MANAGEMENT-ZONE-to-NONPROD-ZONE match destination-address any
+set tenants dc1-fw-shared security policies from-zone MANAGEMENT-ZONE to-zone NONPROD-ZONE policy deny-MANAGEMENT-ZONE-to-NONPROD-ZONE match application any
+set tenants dc1-fw-shared security policies from-zone MANAGEMENT-ZONE to-zone NONPROD-ZONE policy deny-MANAGEMENT-ZONE-to-NONPROD-ZONE then deny
+set tenants dc1-fw-shared security policies from-zone MANAGEMENT-ZONE to-zone NONPROD-ZONE policy deny-MANAGEMENT-ZONE-to-NONPROD-ZONE then log session-init
 set tenants dc1-fw-shared security nat source pool SNAT-POOL address 192.0.2.5/32
 set tenants dc1-fw-shared security nat source rule-set SNAT-PROD-ZONE from zone PROD-ZONE
 set tenants dc1-fw-shared security nat source rule-set SNAT-PROD-ZONE to zone INTERNET-ZONE
@@ -64,6 +95,15 @@ set tenants dc1-fw-shared security nat source rule-set SNAT-NONPROD-ZONE from zo
 set tenants dc1-fw-shared security nat source rule-set SNAT-NONPROD-ZONE to zone INTERNET-ZONE
 set tenants dc1-fw-shared security nat source rule-set SNAT-NONPROD-ZONE rule snat match source-address 0.0.0.0/0
 set tenants dc1-fw-shared security nat source rule-set SNAT-NONPROD-ZONE rule snat then source-nat pool SNAT-POOL
+set tenants dc1-fw-shared security nat source pool SNAT-POOL-MANAGEMENT address 100.66.48.4/32
+set tenants dc1-fw-shared security nat source rule-set SNAT-PROD-ZONE-MANAGEMENT from zone PROD-ZONE
+set tenants dc1-fw-shared security nat source rule-set SNAT-PROD-ZONE-MANAGEMENT to zone MANAGEMENT-ZONE
+set tenants dc1-fw-shared security nat source rule-set SNAT-PROD-ZONE-MANAGEMENT rule snat match source-address 0.0.0.0/0
+set tenants dc1-fw-shared security nat source rule-set SNAT-PROD-ZONE-MANAGEMENT rule snat then source-nat pool SNAT-POOL-MANAGEMENT
+set tenants dc1-fw-shared security nat source rule-set SNAT-NONPROD-ZONE-MANAGEMENT from zone NONPROD-ZONE
+set tenants dc1-fw-shared security nat source rule-set SNAT-NONPROD-ZONE-MANAGEMENT to zone MANAGEMENT-ZONE
+set tenants dc1-fw-shared security nat source rule-set SNAT-NONPROD-ZONE-MANAGEMENT rule snat match source-address 0.0.0.0/0
+set tenants dc1-fw-shared security nat source rule-set SNAT-NONPROD-ZONE-MANAGEMENT rule snat then source-nat pool SNAT-POOL-MANAGEMENT
 #
 #
 # --- Chassis Cluster ---

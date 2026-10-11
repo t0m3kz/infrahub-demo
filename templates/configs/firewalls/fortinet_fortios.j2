@@ -2,7 +2,7 @@
 {#- An HA pair terminating a segment inline owns its gateway (virtual_ip): config
     sync gives both members that one interface address. -#}
 {#- Rules match on the zones their interfaces belong to. -#}
-{%- macro security_policies(policies) %}
+{%- macro security_policies(policies, nat_pools={}) %}
 #
 # --- Service Objects (unique protocol/port combinations referenced below) ---
 config firewall service custom
@@ -40,6 +40,11 @@ config firewall policy
         set action {{ 'accept' if rule.action == 'permit' else 'deny' }}
         set schedule "always"
         set service "{{ svc_name }}"
+{%- if rule.action == 'permit' and rule.dst_zone in nat_pools %}
+        set nat enable
+        set ippool enable
+        set poolname "{{ nat_pools[rule.dst_zone] }}"
+{%- endif %}
 {%- if rule.log %}
         set logtraffic all
 {%- endif %}
@@ -215,22 +220,30 @@ config vdom
             next
 {%- endfor %}
         end
-{#- Source NAT: an IP pool of the context's SNAT address, used by one policy per
-    tenant zone towards the INTERNET zone (ippool pool-name + nat enable). #}
+{#- Source NAT: per entry an IP pool of the translated address. Towards an open
+    egress (INTERNET) one policy per tenant zone accepts and translates
+    everything; towards any other (MANAGEMENT) FortiOS ties the translation to
+    the permitting policy, so the context's own rules into that zone carry it
+    (nat_pools below). #}
 {%- if context.nat %}
         config firewall ippool
-            edit "SNAT-{{ context.name }}"
+{%- for nat in context.nat %}
+            edit "SNAT-{{ context.name }}{{ nat.suffix }}"
                 set type overload
-                set startip {{ context.nat.address }}
-                set endip {{ context.nat.address }}
+                set startip {{ nat.address }}
+                set endip {{ nat.address }}
             next
+{%- endfor %}
         end
+{%- if context.nat | selectattr('open_egress') | list %}
         config firewall policy
-{%- for leg in context.nat.tenant_legs %}
-            edit {{ 910000 + loop.index }}
-                set name "snat-{{ leg.zone }}-to-{{ context.nat.internet.zone }}"
+{%- for nat in context.nat if nat.open_egress %}
+{%- set nat_index = loop.index0 %}
+{%- for leg in nat.tenant_legs %}
+            edit {{ 910000 + 100 * nat_index + loop.index }}
+                set name "snat-{{ leg.zone }}-to-{{ nat.egress.zone }}"
                 set srcintf "{{ leg.zone }}"
-                set dstintf "{{ context.nat.internet.zone }}"
+                set dstintf "{{ nat.egress.zone }}"
                 set srcaddr "all"
                 set dstaddr "all"
                 set action accept
@@ -238,10 +251,12 @@ config vdom
                 set service "ALL"
                 set nat enable
                 set ippool enable
-                set poolname "SNAT-{{ context.name }}"
+                set poolname "SNAT-{{ context.name }}{{ nat.suffix }}"
             next
 {%- endfor %}
+{%- endfor %}
         end
+{%- endif %}
 {%- endif %}
 {%- if context.isolation %}
         config firewall policy
@@ -272,7 +287,11 @@ config vdom
     edit "{{ context.name }}"
 {%- if ctx_cidrs %}{{ address_objects(ctx_cidrs.split(','), 'VDOM ' + context.name) }}
 {%- endif %}
-{{- security_policies(context.policies) }}
+{%- set nat_pools = {} %}
+{%- for nat in context.nat or [] if not nat.open_egress %}
+{%- set _ = nat_pools.update({nat.egress.zone: 'SNAT-' + context.name + nat.suffix}) %}
+{%- endfor %}
+{{- security_policies(context.policies, nat_pools) }}
     next
 end
 {%- endfor %}

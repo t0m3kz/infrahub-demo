@@ -16,11 +16,19 @@ set interface ethernet1/1.3401 state on
 set interface ethernet1/1.3401 ipv4-address 100.66.32.13 mask-length 29
 set interface ethernet1/1.3401 security-zone INTERNET-ZONE
 set virtual-system dc1-fw-acme interface ethernet1/1.3401
+set interface ethernet1/1.3601 vlan 3601
+set interface ethernet1/1.3601 state on
+set interface ethernet1/1.3601 ipv4-address 100.66.48.13 mask-length 29
+set interface ethernet1/1.3601 security-zone MANAGEMENT-ZONE
+set virtual-system dc1-fw-acme interface ethernet1/1.3601
 set virtual-system dc1-fw-acme
 set static-route 10.3.0.0/24 nexthop gateway address 100.66.0.9 on
+set static-route 10.250.0.0/24 nexthop gateway address 100.66.48.9 on
 set static-route default nexthop gateway address 100.66.32.9 on
 mgmt_cli add host name "SNAT-dc1-fw-acme" ip-address "192.0.2.6"
 mgmt_cli add nat-rule package "dc1-fw-acme" position "top" original-source "PROD-ZONE" original-destination "INTERNET-ZONE" translated-source "SNAT-dc1-fw-acme" method "hide" install-on "dc1-fw-ha"
+mgmt_cli add host name "SNAT-dc1-fw-acme-MANAGEMENT" ip-address "100.66.48.12"
+mgmt_cli add nat-rule package "dc1-fw-acme" position "top" original-source "PROD-ZONE" original-destination "MANAGEMENT-ZONE" translated-source "SNAT-dc1-fw-acme-MANAGEMENT" method "hide" install-on "dc1-fw-ha"
 add virtual-system name dc1-fw-shared
 set interface ethernet1/1.3000 vlan 3000
 set interface ethernet1/1.3000 state on
@@ -37,18 +45,33 @@ set interface ethernet1/1.3400 state on
 set interface ethernet1/1.3400 ipv4-address 100.66.32.5 mask-length 29
 set interface ethernet1/1.3400 security-zone INTERNET-ZONE
 set virtual-system dc1-fw-shared interface ethernet1/1.3400
+set interface ethernet1/1.3600 vlan 3600
+set interface ethernet1/1.3600 state on
+set interface ethernet1/1.3600 ipv4-address 100.66.48.5 mask-length 29
+set interface ethernet1/1.3600 security-zone MANAGEMENT-ZONE
+set virtual-system dc1-fw-shared interface ethernet1/1.3600
 set virtual-system dc1-fw-shared
 set static-route 10.1.0.0/24 nexthop gateway address 100.66.0.1 on
 set static-route 10.2.0.0/24 nexthop gateway address 100.66.16.1 on
+set static-route 10.250.0.0/24 nexthop gateway address 100.66.48.1 on
 set static-route default nexthop gateway address 100.66.32.1 on
 mgmt_cli add host name "SNAT-dc1-fw-shared" ip-address "192.0.2.5"
 mgmt_cli add nat-rule package "dc1-fw-shared" position "top" original-source "PROD-ZONE" original-destination "INTERNET-ZONE" translated-source "SNAT-dc1-fw-shared" method "hide" install-on "dc1-fw-ha"
 mgmt_cli add nat-rule package "dc1-fw-shared" position "top" original-source "NONPROD-ZONE" original-destination "INTERNET-ZONE" translated-source "SNAT-dc1-fw-shared" method "hide" install-on "dc1-fw-ha"
+mgmt_cli add host name "SNAT-dc1-fw-shared-MANAGEMENT" ip-address "100.66.48.4"
+mgmt_cli add nat-rule package "dc1-fw-shared" position "top" original-source "PROD-ZONE" original-destination "MANAGEMENT-ZONE" translated-source "SNAT-dc1-fw-shared-MANAGEMENT" method "hide" install-on "dc1-fw-ha"
+mgmt_cli add nat-rule package "dc1-fw-shared" position "top" original-source "NONPROD-ZONE" original-destination "MANAGEMENT-ZONE" translated-source "SNAT-dc1-fw-shared-MANAGEMENT" method "hide" install-on "dc1-fw-ha"
 !
-! --- PROD <-> NON-PROD isolation in virtual system dc1-fw-shared ---
+! --- Zone isolation (PROD <-> NON-PROD, MANAGEMENT -> tenants) in virtual system dc1-fw-acme ---
+set virtual-system dc1-fw-acme
+add access-rule layer "Network" position top name "deny-MANAGEMENT-ZONE-to-PROD-ZONE" action drop source MANAGEMENT-ZONE destination PROD-ZONE service Any track Log
+!
+! --- Zone isolation (PROD <-> NON-PROD, MANAGEMENT -> tenants) in virtual system dc1-fw-shared ---
 set virtual-system dc1-fw-shared
 add access-rule layer "Network" position top name "deny-PROD-ZONE-to-NONPROD-ZONE" action drop source PROD-ZONE destination NONPROD-ZONE service Any track Log
 add access-rule layer "Network" position top name "deny-NONPROD-ZONE-to-PROD-ZONE" action drop source NONPROD-ZONE destination PROD-ZONE service Any track Log
+add access-rule layer "Network" position top name "deny-MANAGEMENT-ZONE-to-PROD-ZONE" action drop source MANAGEMENT-ZONE destination PROD-ZONE service Any track Log
+add access-rule layer "Network" position top name "deny-MANAGEMENT-ZONE-to-NONPROD-ZONE" action drop source MANAGEMENT-ZONE destination NONPROD-ZONE service Any track Log
 !
 !
 ! --- ClusterXL ---
@@ -58,7 +81,9 @@ set interface ethernet1/7 ipv4-address 169.254.255.1 mask-length 30
 set cluster sync-interface ethernet1/7
 mgmt_cli set simple-cluster name "dc1-fw-ha" interfaces.add.1.name "ethernet1/1.3001" interfaces.add.1.interface-type "cluster" interfaces.add.1.ip-address "100.66.0.12" interfaces.add.1.network-mask "255.255.255.248"
 mgmt_cli set simple-cluster name "dc1-fw-ha" interfaces.add.2.name "ethernet1/1.3401" interfaces.add.2.interface-type "cluster" interfaces.add.2.ip-address "100.66.32.12" interfaces.add.2.network-mask "255.255.255.248"
-mgmt_cli set simple-cluster name "dc1-fw-ha" interfaces.add.3.name "ethernet1/1.3000" interfaces.add.3.interface-type "cluster" interfaces.add.3.ip-address "100.66.0.4" interfaces.add.3.network-mask "255.255.255.248"
-mgmt_cli set simple-cluster name "dc1-fw-ha" interfaces.add.4.name "ethernet1/1.3200" interfaces.add.4.interface-type "cluster" interfaces.add.4.ip-address "100.66.16.4" interfaces.add.4.network-mask "255.255.255.248"
-mgmt_cli set simple-cluster name "dc1-fw-ha" interfaces.add.5.name "ethernet1/1.3400" interfaces.add.5.interface-type "cluster" interfaces.add.5.ip-address "100.66.32.4" interfaces.add.5.network-mask "255.255.255.248"
+mgmt_cli set simple-cluster name "dc1-fw-ha" interfaces.add.3.name "ethernet1/1.3601" interfaces.add.3.interface-type "cluster" interfaces.add.3.ip-address "100.66.48.12" interfaces.add.3.network-mask "255.255.255.248"
+mgmt_cli set simple-cluster name "dc1-fw-ha" interfaces.add.4.name "ethernet1/1.3000" interfaces.add.4.interface-type "cluster" interfaces.add.4.ip-address "100.66.0.4" interfaces.add.4.network-mask "255.255.255.248"
+mgmt_cli set simple-cluster name "dc1-fw-ha" interfaces.add.5.name "ethernet1/1.3200" interfaces.add.5.interface-type "cluster" interfaces.add.5.ip-address "100.66.16.4" interfaces.add.5.network-mask "255.255.255.248"
+mgmt_cli set simple-cluster name "dc1-fw-ha" interfaces.add.6.name "ethernet1/1.3400" interfaces.add.6.interface-type "cluster" interfaces.add.6.ip-address "100.66.32.4" interfaces.add.6.network-mask "255.255.255.248"
+mgmt_cli set simple-cluster name "dc1-fw-ha" interfaces.add.7.name "ethernet1/1.3600" interfaces.add.7.interface-type "cluster" interfaces.add.7.ip-address "100.66.48.4" interfaces.add.7.network-mask "255.255.255.248"
 !

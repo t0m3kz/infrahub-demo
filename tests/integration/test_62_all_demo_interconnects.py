@@ -158,7 +158,7 @@ query ($names: [String]) {
 DCI_POOL_NETWORK = ipaddress.IPv6Network("fd00:2200::/40")
 
 
-_TRANSIT_PEER_NAMES = {"internet": "INTERNET"}
+_TRANSIT_PEER_NAMES = {"internet": "INTERNET", "management": "MANAGEMENT"}
 
 
 def _exchange_ends(exchange_name: str, context_name: str) -> tuple[str, ...]:

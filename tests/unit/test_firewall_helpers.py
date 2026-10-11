@@ -23,7 +23,7 @@ from transforms.helpers.firewall import (
     get_zone_policies,
     place_policies_in_contexts,
 )
-from utils.exchange_transit import EXCHANGE_PEERS, ZONE_BY_NS_TYPE, exchange_peer_zones
+from utils.exchange_transit import EXCHANGE_PEERS, exchange_peer_zones
 
 # ---------------------------------------------------------------------------
 # Helpers — zone data
@@ -534,16 +534,76 @@ class TestGetExchangeRoutes:
         assert routes == sorted(routes, key=lambda r: (r["vrf"], r["prefix"], r["nexthop"]))
 
 
+def _three_leg_context(*, tenant: str | None = None, served: list[str] | None = None) -> dict:
+    """PROD carries two exchanges (with INTERNET and with MANAGEMENT); each peer leg carries its own."""
+    mgmt = _ns("MANAGEMENT", "management", 50004)
+    to_internet = _exchange(_PROD, _INET, tenant=tenant, exchange_id="x-inet")
+    to_mgmt = _exchange(_PROD, mgmt, tenant=tenant, exchange_id="x-mgmt")
+    legs = [
+        _leg("100.66.0.5/29", _PROD, [to_internet, to_mgmt]),
+        _leg("100.66.32.5/29", _INET, [to_internet], name="eth1.3400"),
+        _leg("100.66.48.5/29", mgmt, [to_mgmt], name="eth1.3600"),
+    ]
+    return _context(legs, tenant=tenant, served=served)
+
+
+class TestManagementExchangeOnTheBorderLeaf:
+    def test_management_leg_becomes_a_transit_in_its_own_vrf_slot(self) -> None:
+        transits = get_exchange_transits(_bl_port(_three_leg_context()))
+        assert [(t["vlan_id"], t["vni"]) for t in transits] == [(3001, 64001), (3401, 64401), (3601, 64601)]
+        segment = transits[-1]["segment"]
+        assert segment["name"] == "XCHG-dc11-fw-shared-MANAGEMENT"
+        assert segment["gateway"]["address"] == "100.66.48.1/29"
+        assert segment["gateway"]["ip_prefix"]["ip_namespace"] == {
+            "name": "MANAGEMENT",
+            "l3_vni": 50004,
+            "namespace_type": "management",
+        }
+
+    def test_management_needs_no_return_route_and_the_default_route_is_not_duplicated(self) -> None:
+        context = {**_three_leg_context(served=["dep-a"]), "snat_address": {"address": "192.0.2.5/32"}}
+        routes = get_exchange_routes(_bl_port(context))
+        assert [r for r in routes if r["vrf"] == "MANAGEMENT"] == []
+        assert routes == [
+            {"vrf": "INTERNET", "l3_vni": 50003, "prefix": "192.0.2.5/32", "nexthop": "100.66.32.4"},
+            {"vrf": "PROD", "l3_vni": 50001, "prefix": "0.0.0.0/0", "nexthop": "100.66.0.4"},
+        ]
+
+
 class TestExchangePeerZones:
     def test_peer_zones_are_the_zones_of_the_exchange_peer_types(self) -> None:
-        assert exchange_peer_zones() == {"INTERNET-ZONE"}
+        assert exchange_peer_zones() == {"INTERNET-ZONE", "MANAGEMENT-ZONE"}
 
     def test_follows_exchange_peers(self) -> None:
-        with (
-            patch.dict(EXCHANGE_PEERS, {"prod": ("internet", "management")}),
-            patch.dict(ZONE_BY_NS_TYPE, {"management": "MANAGEMENT-ZONE"}),
-        ):
-            assert exchange_peer_zones() == {"INTERNET-ZONE", "MANAGEMENT-ZONE"}
+        with patch.dict(EXCHANGE_PEERS, {"prod": ("internet",), "non_prod": ("internet",)}):
+            assert exchange_peer_zones() == {"INTERNET-ZONE"}
+
+
+class TestLeafPbrSkipsManagementSegments:
+    def _management_activation(self) -> dict:
+        act = _make_pbr_activation(deployment_id="dep-a", security_policies=[{"enabled": True, "rules": []}])
+        act["segment"]["gateway"] = {
+            "ip_prefix": {
+                "prefix": "10.250.0.0/24",
+                "ip_namespace": {"name": "MANAGEMENT", "namespace_type": "management"},
+            }
+        }
+        return act
+
+    def test_segment_in_the_management_namespace_gets_no_redirect(self) -> None:
+        ctx = _shared_context(served=["dep-a"])
+        assert get_customer_pbr_rules([self._management_activation()], [ctx]) == []
+
+    def test_tenant_segment_beside_it_keeps_its_redirect(self) -> None:
+        ctx = _shared_context(served=["dep-a"])
+        tenant = _make_pbr_activation(
+            vlan_id=101, deployment_id="dep-a", security_policies=[{"enabled": True, "rules": []}]
+        )
+        tenant["segment"]["gateway"] = {
+            "ip_prefix": {"prefix": "10.0.1.0/24", "ip_namespace": {"name": "PROD", "namespace_type": "prod"}}
+        }
+        rules = get_customer_pbr_rules([self._management_activation(), tenant], [ctx])
+        assert [r["vlan_id"] for r in rules] == [101]
 
 
 class TestLeafPbrNexthopIsContextLegVip:
@@ -1592,13 +1652,8 @@ class TestCustomerPbrNeverBypassesExchangePeers:
     def test_permit_to_an_exchange_peer_zone_segment_is_not_a_bypass(self) -> None:
         assert self._rules("INTERNET-ZONE")[0]["bypass_prefixes"] == []
 
-    def test_permit_to_the_management_zone_is_not_a_bypass_once_it_is_a_peer(self) -> None:
-        with (
-            patch.dict(EXCHANGE_PEERS, {"prod": ("internet", "management")}),
-            patch.dict(ZONE_BY_NS_TYPE, {"management": "MANAGEMENT-ZONE"}),
-        ):
-            assert self._rules("MANAGEMENT-ZONE")[0]["bypass_prefixes"] == []
-        assert self._rules("MANAGEMENT-ZONE")[0]["bypass_prefixes"] == ["10.0.2.0/24"]
+    def test_permit_to_the_management_zone_is_not_a_bypass(self) -> None:
+        assert self._rules("MANAGEMENT-ZONE")[0]["bypass_prefixes"] == []
 
 
 class TestCustomerPbrInspectedFlows:

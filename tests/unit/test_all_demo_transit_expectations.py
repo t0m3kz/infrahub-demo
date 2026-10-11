@@ -17,22 +17,22 @@ from tests.integration.test_constants import (
 
 
 def test_transit_totals_match_the_planning_estimate() -> None:
-    """DC10 2+2, DC11 2+2, DC12 3+2 legs; 7 exchanges; 26 sub-interfaces; 6 tagged ports."""
+    """DC10 3+3, DC11 3+3, DC12 4+3 legs (tenant VRFs + INTERNET + MANAGEMENT); 14 exchanges; 38 sub-interfaces; 6 tagged ports."""
     legs = {(c["dc"], c["tenant"] is None): len(c["namespaces"]) for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS}
     assert legs == {
-        ("DC10", True): 2,
-        ("DC10", False): 2,
-        ("DC11", True): 2,
-        ("DC11", False): 2,
-        ("DC12", True): 3,
-        ("DC12", False): 2,
+        ("DC10", True): 3,
+        ("DC10", False): 3,
+        ("DC11", True): 3,
+        ("DC11", False): 3,
+        ("DC12", True): 4,
+        ("DC12", False): 3,
     }
-    assert ALL_DEMO_TRANSIT_LEGS == 13
-    assert ALL_DEMO_TRANSIT_EXCHANGES == 7
-    assert ALL_DEMO_TRANSIT_SUBINTERFACES == 26
-    assert ALL_DEMO_TRANSIT_PREFIXES == {"PROD": 6, "NON-PROD": 1, "INTERNET": 6}
+    assert ALL_DEMO_TRANSIT_LEGS == 19
+    assert ALL_DEMO_TRANSIT_EXCHANGES == 14
+    assert ALL_DEMO_TRANSIT_SUBINTERFACES == 38
+    assert ALL_DEMO_TRANSIT_PREFIXES == {"PROD": 6, "NON-PROD": 1, "INTERNET": 6, "MANAGEMENT": 6}
     assert ALL_DEMO_BORDER_FIREWALL_PORTS == 6
-    assert ALL_DEMO_EXPECTED_OBJECTS["TopologyRoutedExchange"] == 7
+    assert ALL_DEMO_EXPECTED_OBJECTS["TopologyRoutedExchange"] == 14
 
 
 def test_environment_maps_to_vrf_namespace() -> None:
@@ -42,5 +42,7 @@ def test_environment_maps_to_vrf_namespace() -> None:
 
 
 def test_no_context_pairs_prod_with_non_prod() -> None:
-    """Every exchange of every context ends in INTERNET."""
-    assert all(x.endswith("-INTERNET") for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS for x in c["exchanges"])
+    """Every exchange of every context ends in INTERNET or MANAGEMENT, never in a tenant VRF."""
+    assert all(
+        x.endswith(("-INTERNET", "-MANAGEMENT")) for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS for x in c["exchanges"]
+    )
