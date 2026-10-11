@@ -58,3 +58,28 @@ spec:
             role: technical
             ip_namespace: "INTERNET"
       ip_namespace: "INTERNET"
+
+---
+# One public SNAT /32 per FirewallContext with an INTERNET leg
+# (generators/firewall_context.py). RFC 5737 TEST-NET-1 stands in for the
+# provider-assigned public block; the edge aggregates it into the ISP sessions.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CoreIPAddressPool
+  data:
+    - name: FW-SNAT-INTERNET-IPv4
+      description: "FirewallContext SNAT addresses in the INTERNET VRF (RFC 5737 TEST-NET-1)"
+      default_address_type: IpamIPAddress
+      default_prefix_length: 32
+      resources:
+        kind: IpamPrefix
+        data:
+          - prefix: 192.0.2.0/24
+            description: "Public SNAT space, INTERNET VRF"
+            status: active
+            member_type: address
+            is_pool: true
+            role: public
+            ip_namespace: "INTERNET"
+      ip_namespace: "INTERNET"

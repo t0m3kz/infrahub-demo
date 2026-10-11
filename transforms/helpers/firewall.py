@@ -240,22 +240,26 @@ def get_exchange_transits(interfaces: list[dict[str, Any]] | None) -> list[dict[
     return [transits[vlan] for vlan in sorted(transits)]
 
 
-def get_exchange_routes(
-    interfaces: list[dict[str, Any]] | None,
-    deployment_activations: list[dict[str, Any]] | None = None,
-) -> list[dict[str, Any]]:
+def _snat_host(cap: dict[str, Any]) -> str | None:
+    """The context's SNAT address without its mask (``snat_address`` is a /32), or None."""
+    address = (cap.get("snat_address") or {}).get("address")
+    return str(ip_interface(address).ip) if address else None
+
+
+def get_exchange_routes(interfaces: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
     """Static routes of the inter-VRF exchange through each firewall context on this device.
 
     Per exchange (tenant VRF A -> INTERNET Z) of a context tagged on a firewall port:
 
     - VRF A: ``0.0.0.0/0`` -> the context's A-leg VIP, only when the context is the
       shared one (no tenant). A dedicated context steers its tenant by leaf PBR.
-    - VRF Z (INTERNET): the gateway prefix of every segment in VRF A that the context
-      serves (its tenant or served_deployments) -> the context's Z-leg VIP.
-      No default route in INTERNET: its upstream is not modelled here.
+    - VRF Z (INTERNET): the context's SNAT address ``/32`` -> the context's Z-leg VIP,
+      the return path of its translated flows. INTERNET carries only public and
+      transit space, so no tenant prefix goes in; a context without a SNAT address
+      emits nothing there. No default route in INTERNET: its upstream is the
+      edge's EVPN type-5 default.
 
-    ``deployment_activations`` are the DC's segment activations
-    (_flatten_deployment_segment_activations). Returns [{vrf, l3_vni, prefix, nexthop}] sorted.
+    Returns [{vrf, l3_vni, prefix, nexthop}] sorted.
     """
     routes: dict[tuple[str, str, str], dict[str, Any]] = {}
 
@@ -269,11 +273,7 @@ def get_exchange_routes(
 
     for ctx in _firewall_context_caps(interfaces):
         legs = _transit_legs(ctx)
-        deployments = {
-            d
-            for d in [(ctx.get("tenant") or {}).get("id")] + [x.get("id") for x in ctx.get("served_deployments") or []]
-            if d
-        }
+        snat = _snat_host(ctx)
         # An exchange's sides are the namespaces of the legs carrying it: its own
         # namespace_a / namespace_z come back null through interface_capabilities.
         exchanges: dict[str, dict[str, Any]] = {}
@@ -295,16 +295,8 @@ def get_exchange_routes(
             gateway = exchange.get("gateway") or {}
             if not (gateway.get("tenant") or ctx.get("tenant")):
                 _add(leg_a, "0.0.0.0/0", leg_a["vip"])
-            for act in deployment_activations or []:
-                seg = act.get("segment") or {}
-                prefix = _get_segment_prefix_str(seg)
-                if (
-                    prefix
-                    and not seg.get("terminate_inline")
-                    and _get_segment_namespace(seg).get("name") == a_name
-                    and deployments.intersection(_segment_deployment_ids(seg))
-                ):
-                    _add(leg_z, prefix, leg_z["vip"])
+            if snat:
+                _add(leg_z, f"{snat}/32", leg_z["vip"])
     return sorted(routes.values(), key=lambda r: (r["vrf"], r["prefix"], r["nexthop"]))
 
 
@@ -322,6 +314,7 @@ def _new_context(cap: dict[str, Any], legs: list[dict[str, Any]]) -> dict[str, A
         "vlan_id": cap.get("vlan_id"),
         "tenant_name": (cap.get("tenant") or {}).get("name"),
         "segments": list(segments.values()),
+        "snat": _snat_host(cap),
         "legs": legs,
     }
 

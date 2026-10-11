@@ -153,8 +153,8 @@ nv overlay evpn
 vrf context INTERNET
   vni 50003
   rd 10.0.0.1:50003
-  ip route 10.1.0.0/24 100.66.32.4
-  ip route 10.2.0.0/24 100.66.32.12
+  ip route 192.0.2.5/32 100.66.32.4
+  ip route 192.0.2.6/32 100.66.32.12
   address-family ipv4 unicast
     route-target both 50003:50003
     route-target both 50003:50003 evpn
@@ -260,8 +260,8 @@ route-map RM-CONN-2-BGP permit 10
 route-map RM-VRF-DIRECT-2-EVPN permit 10
 !
 !
-ip prefix-list PL-VRF-STATIC-INTERNET seq 10 permit 10.1.0.0/24
-ip prefix-list PL-VRF-STATIC-INTERNET seq 20 permit 10.2.0.0/24
+ip prefix-list PL-VRF-STATIC-INTERNET seq 10 permit 192.0.2.5/32
+ip prefix-list PL-VRF-STATIC-INTERNET seq 20 permit 192.0.2.6/32
 route-map RM-VRF-STATIC-2-EVPN-INTERNET permit 10
   match ip address prefix-list PL-VRF-STATIC-INTERNET
 ip prefix-list PL-VRF-STATIC-PROD seq 10 permit 0.0.0.0/0

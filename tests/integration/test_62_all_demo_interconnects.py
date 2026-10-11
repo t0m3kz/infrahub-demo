@@ -50,6 +50,8 @@ from .test_constants import (
     ALL_DEMO_PHYSICAL_CIRCUIT_TYPES,
     ALL_DEMO_SEGMENT_LEGS,
     ALL_DEMO_SHARED_FIREWALL_CONTEXTS,
+    ALL_DEMO_SNAT_ADDRESSES,
+    ALL_DEMO_SNAT_POOL_PREFIX,
     ALL_DEMO_TRANSIT_EXCHANGES,
     ALL_DEMO_TRANSIT_LEGS,
     ALL_DEMO_TRANSIT_PREFIXES,
@@ -568,6 +570,62 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             exchange_count,
             len(port_contexts),
         )
+
+    @pytest.mark.order(397)
+    @pytest.mark.dependency(scope="session", name="all_demo_snat", depends=["all_demo_exchange_transit"])
+    @pytest.mark.asyncio
+    async def test_03c_verify_snat_addresses(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """Each context with an INTERNET leg owns exactly one public SNAT /32.
+
+        The address lives in the INTERNET namespace, inside the FW-SNAT-INTERNET-IPv4
+        block (ALL_DEMO_SNAT_POOL_PREFIX), is a /32 and is distinct per context. The
+        colocation metro's policy-only context has no INTERNET leg, so no SNAT address.
+        """
+        logging.info("=== %s - Step 3c: SNAT addresses ===", SCENARIO_NAME)
+
+        inventory = await fetch_transit_inventory(client=async_client_main, branch=scenario_branch)
+        by_key, colocation = match_transit_contexts(
+            inventory["contexts"], ALL_DEMO_DC_NAMES, ALL_DEMO_DEDICATED_FIREWALL_TENANTS
+        )
+        pool = ipaddress.IPv4Network(ALL_DEMO_SNAT_POOL_PREFIX)
+
+        errors: list[str] = []
+        seen: dict[str, str] = {}
+        for expected in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS:
+            label = f"{expected['dc']}/{expected['tenant'] or 'shared'}"
+            context = by_key.get((expected["dc"], expected["tenant"]))
+            if context is None:
+                errors.append(f"{label}: no firewall context")
+                continue
+            snat = context["snat"]
+            if not snat:
+                errors.append(f"{label}: '{context['name']}' has an INTERNET leg but no snat_address")
+                continue
+            interface = ipaddress.IPv4Interface(str(snat))
+            if interface.network.prefixlen != 32:
+                errors.append(f"{label}: snat_address {snat} is not a /32")
+            if interface.ip not in pool:
+                errors.append(f"{label}: snat_address {snat} is outside {ALL_DEMO_SNAT_POOL_PREFIX}")
+            if context["snat_namespace"] != "INTERNET":
+                errors.append(f"{label}: snat_address {snat} is in namespace '{context['snat_namespace']}'")
+            if str(interface.ip) in seen:
+                errors.append(f"{label}: snat_address {snat} is also the one of {seen[str(interface.ip)]}")
+            seen[str(interface.ip)] = label
+
+        if len(seen) != ALL_DEMO_SNAT_ADDRESSES:
+            errors.append(f"{len(seen)} distinct SNAT address(es), expected {ALL_DEMO_SNAT_ADDRESSES}")
+        for context in colocation:
+            if context["snat"]:
+                errors.append(f"colocation '{context['name']}' has snat_address {context['snat']}, expected none")
+
+        assert not errors, f"30_all SNAT addresses are wrong on branch '{scenario_branch}':\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
+        logging.info("SNAT verified: %d address(es) in %s", len(seen), ALL_DEMO_SNAT_POOL_PREFIX)
 
     @pytest.mark.order(397)
     @pytest.mark.dependency(scope="session", name="all_demo_segment_legs", depends=["all_demo_tenant_services"])

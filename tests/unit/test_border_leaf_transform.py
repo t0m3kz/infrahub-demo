@@ -1,10 +1,6 @@
-"""Unit tests for the border-leaf transform and _flatten_deployment_segment_activations()
-(transforms/helpers/segments.py).
+"""Unit tests for the border-leaf transform.
 
 Covers:
-  - _flatten_deployment_segment_activations() — deployment.segment_deployments
-    -> activations shape (keyed on `vni`, not `vlan_id`: local VLAN ID is per
-    VLAN domain, not DC-wide — see ManagedVlanDomainSegment).
   - Exchange transits on a border leaf: a firewall context tagged on a service
     port brings its legs' VLAN/VNI/VRF/anycast gateway, the trunk allow-list,
     the VRF statics and their EVPN redistribution; SONiC refuses; no PBR.
@@ -22,53 +18,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from transforms.config.border_leaf import BorderLeaf
-from transforms.helpers.segments import _flatten_deployment_segment_activations
 
 _ROOT = Path(__file__).parent.parent.parent
 _CONFIGS = _ROOT / "tests" / "smoke" / "configs"
-
-
-# ===========================================================================
-# _flatten_deployment_segment_activations()
-# ===========================================================================
-
-
-class TestFlattenDeploymentSegmentActivations:
-    def test_none_deployment_returns_empty(self) -> None:
-        assert _flatten_deployment_segment_activations(None) == []
-
-    def test_empty_deployment_returns_empty(self) -> None:
-        assert _flatten_deployment_segment_activations({}) == []
-
-    def test_no_segment_deployments_key_returns_empty(self) -> None:
-        assert _flatten_deployment_segment_activations({"name": "DC10"}) == []
-
-    def test_single_activation_extracted(self) -> None:
-        deployment = {
-            "segment_deployments": [
-                {"vni": 10100, "segment": {"id": "seg-1", "customer_name": "web"}},
-            ]
-        }
-        result = _flatten_deployment_segment_activations(deployment)
-        assert result == [{"vni": 10100, "segment": {"id": "seg-1", "customer_name": "web"}}]
-
-    def test_multiple_activations_all_extracted(self) -> None:
-        deployment = {
-            "segment_deployments": [
-                {"vni": 10100, "segment": {"id": "seg-1"}},
-                {"vni": 10200, "segment": {"id": "seg-2"}},
-            ]
-        }
-        result = _flatten_deployment_segment_activations(deployment)
-        assert [a["vni"] for a in result] == [10100, 10200]
-
-    def test_entry_missing_vni_is_skipped(self) -> None:
-        deployment = {"segment_deployments": [{"vni": None, "segment": {"id": "seg-1"}}]}
-        assert _flatten_deployment_segment_activations(deployment) == []
-
-    def test_entry_missing_segment_is_skipped(self) -> None:
-        deployment = {"segment_deployments": [{"vni": 10100, "segment": None}]}
-        assert _flatten_deployment_segment_activations(deployment) == []
 
 
 # ===========================================================================
@@ -121,6 +73,7 @@ def _transit_device_data(platform: str) -> dict:
         "vlan_id": _v(3001),
         "tenant": _node(None),
         "served_deployments": _edges([{"id": "dep-a"}]),
+        "snat_address": _node({"address": _v("192.0.2.5/32")}),
         "interface_capabilities": _edges(legs),
     }
     port = {
@@ -167,7 +120,8 @@ class TestExchangeTransitRendering:
         assert "ip route 0.0.0.0/0 100.66.0.4" in prod
         assert "ip route 0.0.0.0/0 100.66.0.4 vrf" not in out
         internet = out.split("vrf context INTERNET")[1]
-        assert "ip route 10.1.0.0/24 100.66.32.4" in internet
+        assert "ip route 192.0.2.5/32 100.66.32.4" in internet
+        assert "ip route 10.1.0.0/24" not in internet
         assert "ip route 0.0.0.0/0 100.66.32" not in out
         assert "redistribute static route-map RM-VRF-STATIC-2-EVPN-PROD" in out
         assert "redistribute static route-map RM-VRF-STATIC-2-EVPN-INTERNET" in out
@@ -194,7 +148,8 @@ class TestExchangeTransitRendering:
     def test_eos_statics_and_redistribution(self) -> None:
         out = _render("arista_eos", _transit_device_data("arista_eos"))
         assert "ip route vrf PROD 0.0.0.0/0 100.66.0.4" in out
-        assert "ip route vrf INTERNET 10.1.0.0/24 100.66.32.4" in out
+        assert "ip route vrf INTERNET 192.0.2.5/32 100.66.32.4" in out
+        assert "ip route vrf INTERNET 10.1.0.0/24" not in out
         assert "redistribute static route-map RM-VRF-STATIC-2-EVPN-PROD" in out
         assert "redistribute static route-map RM-VRF-STATIC-2-EVPN-INTERNET" in out
         assert "ip prefix-list PL-VRF-STATIC-PROD seq 10 permit 0.0.0.0/0" in out
@@ -205,7 +160,7 @@ class TestExchangeTransitRendering:
         assert (
             'configure service vprn 50001 static-routes route 0.0.0.0/0 route-type unicast next-hop "100.66.0.4"' in out
         )
-        assert "configure service vprn 50003 static-routes route 10.1.0.0/24" in out
+        assert "configure service vprn 50003 static-routes route 192.0.2.5/32" in out
         assert 'configure service vprn 50001 interface "int-vpls-64001"' in out
         assert 'configure service vprn 50003 interface "int-vpls-64401"' in out
         assert 'export-policy ["RM-VRF-STATIC-2-EVPN-PROD"]' in out

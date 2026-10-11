@@ -1260,7 +1260,7 @@ async def fetch_transit_inventory(client: InfrahubClient, branch: str) -> dict[s
     """Fetch every firewall context with its transit legs, plus every routed exchange.
 
     Returns:
-        {"contexts": [{"id", "name", "vlan", "tenant", "cluster_dcs",
+        {"contexts": [{"id", "name", "vlan", "snat", "snat_namespace", "tenant", "cluster_dcs",
                        "served": [{"name", "environment"}],
                        "legs": [{"interface", "device", "device_id", "address",
                                  "namespace", "namespace_type", "exchanges"}],
@@ -1313,6 +1313,10 @@ async def fetch_transit_inventory(client: InfrahubClient, branch: str) -> dict[s
                 "id": node["id"],
                 "name": _value(node.get("name")),
                 "vlan": _value(node.get("vlan_id")),
+                "snat": _value(_rel_node(node.get("snat_address")).get("address")),
+                "snat_namespace": _value(
+                    _rel_node(_rel_node(node.get("snat_address")).get("ip_namespace")).get("name")
+                ),
                 "tenant": _value(_rel_node(node.get("tenant")).get("name")),
                 "cluster_dcs": _deployed_dc_names(
                     [

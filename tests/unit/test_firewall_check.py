@@ -206,8 +206,14 @@ def _leg_interface(name: str, address: str, namespace: str, ns_type: str, exchan
     }
 
 
-def _exchange_payload(internet_vlan: str) -> dict[str, Any]:
-    context = {"__typename": "ManagedFirewallContext", "id": "ctx-1", "name": _v("ctx-1"), "vlan_id": _v(3005)}
+def _exchange_payload(internet_vlan: str, snat: str | None = "192.0.2.5/32") -> dict[str, Any]:
+    context = {
+        "__typename": "ManagedFirewallContext",
+        "id": "ctx-1",
+        "name": _v("ctx-1"),
+        "vlan_id": _v(3005),
+        "snat_address": _node({"address": _v(snat)}) if snat else {"node": None},
+    }
     exchange = {
         "__typename": "TopologyRoutedExchange",
         "id": "xchg-1",
@@ -236,6 +242,18 @@ class TestFirewallExchangeLegs:
         check.validate(_exchange_payload("3005"))
         assert len(check._captured_errors) == 1
         assert "expected 3405" in check._captured_errors[0]
+
+    def test_internet_leg_without_snat_address_is_logged_as_error(self) -> None:
+        check = _check()
+        check.validate(_exchange_payload("3405", snat=None))
+        assert len(check._captured_errors) == 1
+        assert "no snat_address" in check._captured_errors[0]
+
+    def test_private_snat_address_is_logged_as_error(self) -> None:
+        check = _check()
+        check.validate(_exchange_payload("3405", snat="10.0.0.5/32"))
+        assert len(check._captured_errors) == 1
+        assert "not a public address" in check._captured_errors[0]
 
 
 class TestContextRoutesUseSegmentOwnGateway:

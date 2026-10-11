@@ -72,6 +72,7 @@ fragment FirewallContextConfigFields on ManagedFirewallContext {
   name { value }
   context_id { value }
   vlan_id { value }
+  snat_address { node { address { value } } }
   tenant {
     node {
       id

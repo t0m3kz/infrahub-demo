@@ -7,9 +7,11 @@ from infrahub_sdk.checks import InfrahubCheck
 from utils.data_cleaning import get_data
 from utils.exchange_transit import (
     EXCHANGE_PEERS,
+    INTERNET_TYPE,
     OFFSET_MEMBER_A,
     OFFSET_MEMBER_B,
     TRANSIT_SLOT,
+    is_public_address,
     transit_addresses,
     transit_vlan,
 )
@@ -23,6 +25,7 @@ __all__ = [
     "validate_exchange_gateways",
     "validate_interfaces",
     "validate_routing_password",
+    "validate_snat_addresses",
 ]
 
 
@@ -199,6 +202,36 @@ def validate_exchange_gateways(data: dict[str, Any]) -> list[str]:
                 "which is not an allowed pair (a tenant VRF is exchanged only with its EXCHANGE_PEERS)."
             )
 
+    return errors
+
+
+def validate_snat_addresses(data: dict[str, Any]) -> list[str]:
+    """A firewall context with an INTERNET leg on this device must have a public SNAT address.
+
+    The leg is a sub-interface tagged with the context whose address sits in a
+    namespace of type internet. The context's snat_address (one per context,
+    shared by all its tenant VRFs) must be set and lie outside the non-internet
+    space (utils/exchange_transit.py NON_PUBLIC_PREFIXES): a private SNAT
+    address would be filtered by the edge's RM-TRANSIT-OUT and never return.
+    """
+    errors: list[str] = []
+    device_name = data.get("name", "unknown")
+    contexts: dict[str, dict[str, Any]] = {}
+    for interface in data.get("interfaces") or []:
+        namespace = (interface.get("ip_address") or {}).get("ip_namespace") or {}
+        if namespace.get("namespace_type") != INTERNET_TYPE:
+            continue
+        for cap in interface.get("interface_capabilities") or []:
+            if cap.get("typename") == "ManagedFirewallContext":
+                contexts.setdefault(cap.get("id") or cap.get("name", "unknown"), cap)
+
+    for context in contexts.values():
+        label = f"FirewallContext '{context.get('name', 'unknown')}' on '{device_name}'"
+        address = (context.get("snat_address") or {}).get("address")
+        if not address:
+            errors.append(f"{label} has an INTERNET leg but no snat_address.")
+        elif not is_public_address(address):
+            errors.append(f"{label}: snat_address {address} is not a public address (RFC 1918 / 6598 / reserved).")
     return errors
 
 

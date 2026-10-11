@@ -35,6 +35,13 @@ set network virtual-router vr-dc1-fw-acme routing-table ip static-route rt-1 int
 set network virtual-router vr-dc1-fw-acme routing-table ip static-route rt-2 destination 0.0.0.0/0
 set network virtual-router vr-dc1-fw-acme routing-table ip static-route rt-2 nexthop ip-address 100.66.32.9
 set network virtual-router vr-dc1-fw-acme routing-table ip static-route rt-2 interface ethernet1/1.3401
+set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3401 ip 192.0.2.6/32
+set vsys dc1-fw-acme rulebase nat rules snat-PROD-ZONE from PROD-ZONE
+set vsys dc1-fw-acme rulebase nat rules snat-PROD-ZONE to INTERNET-ZONE
+set vsys dc1-fw-acme rulebase nat rules snat-PROD-ZONE source any
+set vsys dc1-fw-acme rulebase nat rules snat-PROD-ZONE destination any
+set vsys dc1-fw-acme rulebase nat rules snat-PROD-ZONE service any
+set vsys dc1-fw-acme rulebase nat rules snat-PROD-ZONE source-translation dynamic-ip-and-port translated-address 192.0.2.6
 set vsys dc1-fw-shared
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3000 tag 3000
 set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3000 ip 100.66.0.4/29
@@ -61,6 +68,19 @@ set network virtual-router vr-dc1-fw-shared routing-table ip static-route rt-2 i
 set network virtual-router vr-dc1-fw-shared routing-table ip static-route rt-3 destination 0.0.0.0/0
 set network virtual-router vr-dc1-fw-shared routing-table ip static-route rt-3 nexthop ip-address 100.66.32.1
 set network virtual-router vr-dc1-fw-shared routing-table ip static-route rt-3 interface ethernet1/1.3400
+set network interface ethernet ethernet1/1 layer3 units ethernet1/1.3400 ip 192.0.2.5/32
+set vsys dc1-fw-shared rulebase nat rules snat-PROD-ZONE from PROD-ZONE
+set vsys dc1-fw-shared rulebase nat rules snat-PROD-ZONE to INTERNET-ZONE
+set vsys dc1-fw-shared rulebase nat rules snat-PROD-ZONE source any
+set vsys dc1-fw-shared rulebase nat rules snat-PROD-ZONE destination any
+set vsys dc1-fw-shared rulebase nat rules snat-PROD-ZONE service any
+set vsys dc1-fw-shared rulebase nat rules snat-PROD-ZONE source-translation dynamic-ip-and-port translated-address 192.0.2.5
+set vsys dc1-fw-shared rulebase nat rules snat-NONPROD-ZONE from NONPROD-ZONE
+set vsys dc1-fw-shared rulebase nat rules snat-NONPROD-ZONE to INTERNET-ZONE
+set vsys dc1-fw-shared rulebase nat rules snat-NONPROD-ZONE source any
+set vsys dc1-fw-shared rulebase nat rules snat-NONPROD-ZONE destination any
+set vsys dc1-fw-shared rulebase nat rules snat-NONPROD-ZONE service any
+set vsys dc1-fw-shared rulebase nat rules snat-NONPROD-ZONE source-translation dynamic-ip-and-port translated-address 192.0.2.5
 #
 # --- PROD <-> NON-PROD isolation in vsys dc1-fw-shared ---
 set vsys dc1-fw-shared rulebase security rules deny-PROD-ZONE-to-NONPROD-ZONE from PROD-ZONE

@@ -1286,5 +1286,23 @@
         }
       }
     ]
+  },
+  "IpamPrefix": {
+    "edges": [
+      {
+        "node": {
+          "prefix": {
+            "value": "192.0.2.0/24"
+          },
+          "ip_namespace": {
+            "node": {
+              "namespace_type": {
+                "value": "internet"
+              }
+            }
+          }
+        }
+      }
+    ]
   }
 }

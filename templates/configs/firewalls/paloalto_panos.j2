@@ -125,6 +125,21 @@ set network virtual-router {{ vr }} routing-table ip static-route rt-{{ loop.ind
 set network virtual-router {{ vr }} routing-table ip static-route rt-{{ loop.index }} nexthop ip-address {{ route.nexthop }}
 set network virtual-router {{ vr }} routing-table ip static-route rt-{{ loop.index }} interface {{ route.interface }}
 {%- endfor %}
+{#- Source NAT (dynamic-ip-and-port) from the tenant zones to INTERNET-ZONE. The
+    translated address is owned as a secondary IP on the INTERNET leg, so the
+    PA answers ARP for it; the HA pair's VIP is the primary. #}
+{%- if context.nat %}
+{%- set nat_ref = context.nat.internet.parent_interface.name + '.' + context.nat.internet.vlan | string %}
+set network interface ethernet {{ context.nat.internet.parent_interface.name }} layer3 units {{ nat_ref }} ip {{ context.nat.address }}/32
+{%- for leg in context.nat.tenant_legs %}
+set vsys {{ context.name }} rulebase nat rules snat-{{ leg.zone }} from {{ leg.zone }}
+set vsys {{ context.name }} rulebase nat rules snat-{{ leg.zone }} to {{ context.nat.internet.zone }}
+set vsys {{ context.name }} rulebase nat rules snat-{{ leg.zone }} source any
+set vsys {{ context.name }} rulebase nat rules snat-{{ leg.zone }} destination any
+set vsys {{ context.name }} rulebase nat rules snat-{{ leg.zone }} service any
+set vsys {{ context.name }} rulebase nat rules snat-{{ leg.zone }} source-translation dynamic-ip-and-port translated-address {{ context.nat.address }}
+{%- endfor %}
+{%- endif %}
 {%- endif %}
 {%- endfor %}
 {%- for context in contexts if context.isolation %}

@@ -21,7 +21,6 @@ from transforms.helpers.mlag import get_mlag, get_sonic_mlag_config
 from transforms.helpers.ospf import get_ospf
 from transforms.helpers.policy import get_sgt_rules
 from transforms.helpers.segments import (
-    _flatten_deployment_segment_activations,
     get_vlans,
     routed_activations,
     segment_hosting_candidates,
@@ -269,9 +268,7 @@ class BaseDeviceTransform(InfrahubTransform):
 
         # Inter-VRF exchange routes through the firewall context(s) tagged on
         # this device's service ports (statics in the VRF, redistributed to EVPN).
-        vrf_routes = get_exchange_routes(
-            data.get("interfaces"), _flatten_deployment_segment_activations(data.get("deployment"))
-        )
+        vrf_routes = get_exchange_routes(data.get("interfaces"))
 
         # Tier-to-tier GPO contracts, derived from the segments' permit rules
         sgt_rules = get_sgt_rules(activations)

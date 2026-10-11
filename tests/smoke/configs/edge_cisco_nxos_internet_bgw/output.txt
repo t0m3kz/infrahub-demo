@@ -98,6 +98,7 @@ router bgp 65001
   vrf INTERNET
     address-family ipv4 unicast
       advertise l2vpn evpn
+      aggregate-address 192.0.2.0/24 summary-only
     neighbor 203.0.113.1
       remote-as 3356
       description EXT-LUMEN-FRA1
@@ -174,7 +175,10 @@ ip prefix-list PL-TRANSIT-IN-DEFAULT seq 10 permit 0.0.0.0/0
 route-map RM-TRANSIT-IN permit 10
   match ip address prefix-list PL-TRANSIT-IN-DEFAULT
 !
-route-map RM-TRANSIT-OUT deny 10
+ip prefix-list PL-TRANSIT-OUT-PUBLIC seq 10 permit 192.0.2.0/24
+route-map RM-TRANSIT-OUT permit 10
+  match ip address prefix-list PL-TRANSIT-OUT-PUBLIC
+route-map RM-TRANSIT-OUT deny 20
 !
 
 !

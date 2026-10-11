@@ -1494,6 +1494,7 @@ _XCHG_CONTEXTS: dict[str, dict[str, Any]] = {
         "tenant": None,
         "deployment": "dep-shared",
         "prefixes": {"prod": "100.66.0.0/29", "non_prod": "100.66.16.0/29", "internet": "100.66.32.0/29"},
+        "snat": "192.0.2.5/32",
     },
     "dedicated": {
         "id": "ctx-dedicated",
@@ -1502,6 +1503,7 @@ _XCHG_CONTEXTS: dict[str, dict[str, Any]] = {
         "tenant": "Acme",
         "deployment": "dep-acme",
         "prefixes": {"prod": "100.66.0.8/29", "internet": "100.66.32.8/29"},
+        "snat": "192.0.2.6/32",
     },
 }
 
@@ -1595,6 +1597,7 @@ def build_exchange_transit_bl_data(*, device_name: str, platform: str) -> dict:
                 "vlan_id": _v(ctx["vlan"]),
                 "tenant": _node({"id": "tenant-acme"}) if ctx["tenant"] else _node(None),
                 "served_deployments": _edges([{"id": ctx["deployment"]}]),
+                "snat_address": _node({"address": _v(ctx["snat"])}),
                 "interface_capabilities": _edges(legs),
             }
         )
@@ -1684,6 +1687,10 @@ def build_edge_internet_bgw_data(*, device_name: str, platform: str) -> dict:
     for iface_edge in peering["interface_capabilities"]["edges"]:
         node = iface_edge["node"]
         node["ip_address"]["node"]["ip_namespace"] = internet_ns
+    # The INTERNET namespace's public space: aggregate + outbound filter.
+    data["IpamPrefix"] = _edges(
+        [{"prefix": _v("192.0.2.0/24"), "ip_namespace": _node({"namespace_type": _v("internet")})}]
+    )
     device_node["capabilities"]["edges"].append(
         {
             "node": {
@@ -1739,6 +1746,7 @@ def build_firewall_exchange_data(*, device_name: str, platform: str) -> dict:
             "context_id": _v(None),
             "tenant": _node({"name": _v(ctx["tenant"])}) if ctx["tenant"] else _node(None),
             "served_deployments": _edges([{"id": ctx["deployment"], "network_segments": _edges(served[key])}]),
+            "snat_address": _node({"address": _v(ctx["snat"])}),
         }
         for ns_type, prefix in ctx["prefixes"].items():
             ns_name = _XCHG_NAMESPACES[ns_type][0]

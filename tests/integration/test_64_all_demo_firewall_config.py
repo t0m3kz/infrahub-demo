@@ -47,7 +47,13 @@ from transforms.config.border_leaf import BorderLeaf
 from transforms.config.edge import Edge
 from transforms.config.firewall import Firewall
 from transforms.config.leaf import Leaf
-from utils.exchange_transit import transit_addresses, transit_vlan, transit_vni, zone_name_for_namespace_type
+from utils.exchange_transit import (
+    NON_PUBLIC_PREFIXES,
+    transit_addresses,
+    transit_vlan,
+    transit_vni,
+    zone_name_for_namespace_type,
+)
 from utils.internet_space import NON_INTERNET_PREFIXES
 
 from .conftest import TestInfrahubDockerWithClient
@@ -59,6 +65,7 @@ from .test_constants import (
     ALL_DEMO_INTERNET_BGWS,
     ALL_DEMO_INTERNET_EGRESS_RULES,
     ALL_DEMO_INTERNET_ISLAND_EDGES,
+    ALL_DEMO_SNAT_POOL_PREFIX,
     INTERNET_L3_VNI,
     INTERNET_ROUTE_TARGET,
     transit_namespace_type,
@@ -459,7 +466,9 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         The shared context (no tenant) is the default-route owner, so inside
         `vrf context PROD` there must be `ip route 0.0.0.0/0 <PROD leg VIP>`
         (inside the VRF, not a global `nh vrf`), every leg's transit VNI as a
-        `vn-segment`, and the static routes redistributed into EVPN.
+        `vn-segment`, and the static routes redistributed into EVPN. `vrf context
+        INTERNET` routes each context's SNAT /32 to its INTERNET leg VIP and carries
+        no tenant (non-public) prefix.
         """
         logging.info("=== %s - Step 5: Render border-leaf transit routes ===", SCENARIO_NAME)
 
@@ -499,6 +508,20 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                 errors.append(
                     f"{device}: 'route-target both {INTERNET_ROUTE_TARGET}' is not inside 'vrf context INTERNET'"
                 )
+            if internet_block is None:
+                continue
+            # Return path: each served context's SNAT /32 -> its INTERNET leg VIP, and no tenant prefix.
+            internet_routes = re.findall(r"^\s+ip route (\S+) (\S+)", internet_block.group(1), re.MULTILINE)
+            for context in dc_contexts:
+                snat = ipaddress.IPv4Interface(str(context["snat"])).ip
+                vip = transit_addresses(str(_leg_network(context, "INTERNET")))["vip"]
+                if (f"{snat}/32", vip) not in internet_routes:
+                    errors.append(f"{device}: no 'ip route {snat}/32 {vip}' inside 'vrf context INTERNET'")
+            for prefix, _nexthop in internet_routes:
+                if prefix.split("/")[0] != "0.0.0.0" and any(
+                    ipaddress.IPv4Network(prefix).subnet_of(private) for private in NON_PUBLIC_PREFIXES
+                ):
+                    errors.append(f"{device}: tenant (non-public) prefix {prefix} routed inside 'vrf context INTERNET'")
 
         assert not errors, f"{dc} border-leaf config on branch '{scenario_branch}' is wrong:\n" + "\n".join(
             f"  - {e}" for e in errors
@@ -621,6 +644,87 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)
 
     @pytest.mark.order(401)
+    @pytest.mark.dependency(scope="session", depends=["all_demo_firewall_transit_render"])
+    @pytest.mark.asyncio
+    async def test_06_firewall_config_renders_snat(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """Every member of each DC's shared context source-NATs its tenant zones to its SNAT address.
+
+        PAN-OS (DC11): one `rulebase nat rules snat-<zone>` per tenant zone with
+        `source-translation dynamic-ip-and-port translated-address <snat>`, and the
+        SNAT address as secondary IP on the INTERNET unit. Check Point (DC10, DC12):
+        the SNAT host object and a `mgmt_cli add nat-rule ... translated-source
+        "SNAT-<context>"` line per tenant zone.
+        """
+        logging.info("=== %s - Step 6: Render firewall SNAT ===", SCENARIO_NAME)
+
+        contexts = _dc_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))
+        firewalls = await async_client_main.execute_graphql(query=FIREWALLS_QUERY, branch_name=scenario_branch)
+        platform_by_name = {
+            edge["node"]["name"]["value"]: (
+                ((edge["node"].get("platform") or {}).get("node") or {}).get("name") or {}
+            ).get("value")
+            for edge in firewalls["DcimPhysicalDevice"]["edges"]
+        }
+
+        errors: list[str] = []
+        rendered_by_platform: dict[str, int] = {}
+        for expected in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS:
+            if expected["tenant"] is not None:
+                continue  # a dedicated context's members are virtual: not a firewall_config device
+            dc = expected["dc"]
+            context = contexts.get((dc, None))
+            if context is None or not context["snat"]:
+                errors.append(f"{dc}: no shared context with a snat_address")
+                continue
+            name = str(context["name"])
+            snat = str(ipaddress.IPv4Interface(str(context["snat"])).ip)
+            zones = [
+                zone_name_for_namespace_type(transit_namespace_type(namespace))
+                for namespace in expected["namespaces"]
+                if namespace != "INTERNET"
+            ]
+            for device in sorted({str(leg["device"]) for leg in context["legs"]}):
+                platform = platform_by_name.get(device)
+                if platform not in ("panos", "checkpoint_gaia"):
+                    errors.append(f"{dc}/{device}: platform '{platform}' has no SNAT assertions in this test")
+                    continue
+                rendered = await _render(async_client_main, scenario_branch, device)
+                rendered_by_platform[str(platform)] = rendered_by_platform.get(str(platform), 0) + 1
+                if platform == "panos":
+                    for zone in zones:
+                        base = f"set vsys {name} rulebase nat rules snat-{zone}"
+                        if f"{base} source-translation dynamic-ip-and-port translated-address {snat}" not in rendered:
+                            errors.append(f"{dc}/{device}: no PAN-OS SNAT rule for zone {zone} translating to {snat}")
+                        if f"{base} to INTERNET-ZONE" not in rendered:
+                            errors.append(f"{dc}/{device}: SNAT rule for zone {zone} does not go to INTERNET-ZONE")
+                    if not re.search(rf"layer3 units \S+ ip {re.escape(snat)}/32$", rendered, re.MULTILINE):
+                        errors.append(f"{dc}/{device}: {snat}/32 is not a secondary IP on the INTERNET unit")
+                else:
+                    if f'mgmt_cli add host name "SNAT-{name}" ip-address "{snat}"' not in rendered:
+                        errors.append(f"{dc}/{device}: no SNAT host object SNAT-{name} = {snat}")
+                    nat_rules = [
+                        line
+                        for line in rendered.splitlines()
+                        if line.startswith("mgmt_cli add nat-rule") and f'translated-source "SNAT-{name}"' in line
+                    ]
+                    if len(nat_rules) != len(zones):
+                        errors.append(
+                            f"{dc}/{device}: {len(nat_rules)} nat-rule line(s) for SNAT-{name}, {len(zones)} expected"
+                        )
+
+        assert {"panos", "checkpoint_gaia"} <= set(rendered_by_platform), (
+            f"SNAT was rendered on {rendered_by_platform}, expected PAN-OS and Check Point"
+        )
+        assert not errors, f"Firewall SNAT on branch '{scenario_branch}' is wrong:\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
+        logging.info("Rendered SNAT on %s", rendered_by_platform)
+
+    @pytest.mark.order(401)
     @pytest.mark.dependency(scope="session", depends=["all_demo_border_leaf_transit_render"])
     @pytest.mark.asyncio
     async def test_06_edge_config_renders_internet_upstream(
@@ -633,7 +737,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         eg-fr01 / eg-pa01 (ALL_DEMO_INTERNET_BGWS) carry the INTERNET L3 VNI and
         the global route-target in `vrf context INTERNET`, advertise it into
         EVPN under `vrf INTERNET`, and filter the transit session (default-only
-        in, nothing out). eg-fr02 / eg-pa02 (ALL_DEMO_INTERNET_ISLAND_EDGES) are
+        in, only the public SNAT block out, aggregated with summary-only). eg-fr02 / eg-pa02 (ALL_DEMO_INTERNET_ISLAND_EDGES) are
         no BGW: same transit filters, no VNI.
         """
         logging.info("=== %s - Step 6: Render edge INTERNET upstream ===", SCENARIO_NAME)
@@ -655,12 +759,28 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
             if not re.search(r"ip prefix-list \S+ seq \d+ permit 0\.0\.0\.0/0\n", rendered):
                 errors.append(f"{device}: no default-only prefix-list")
 
+            # The public block goes upstream as one summary and nothing else leaves (islands too).
+            if not re.search(
+                rf"ip prefix-list PL-TRANSIT-OUT-PUBLIC seq \d+ permit {re.escape(ALL_DEMO_SNAT_POOL_PREFIX)}\n",
+                rendered,
+            ):
+                errors.append(f"{device}: PL-TRANSIT-OUT-PUBLIC does not permit {ALL_DEMO_SNAT_POOL_PREFIX}")
+            if not re.search(
+                r"route-map RM-TRANSIT-OUT permit \d+\n\s+match ip address prefix-list PL-TRANSIT-OUT-PUBLIC\n",
+                rendered,
+            ):
+                errors.append(f"{device}: RM-TRANSIT-OUT does not permit PL-TRANSIT-OUT-PUBLIC")
+
             vrf_context = re.search(r"^vrf context INTERNET\n((?:[ \t]+.*\n)*)", rendered + "\n", re.MULTILINE)
             bgp_vrf = re.search(r"^[ \t]+vrf INTERNET\n((?:[ \t]{4,}.*\n)*)", rendered + "\n", re.MULTILINE)
             if vrf_context is None:
                 errors.append(f"{device}: no 'vrf context INTERNET'")
                 continue
             has_vni = re.search(rf"^[ \t]+vni {INTERNET_L3_VNI}\b", vrf_context.group(1), re.MULTILINE) is not None
+            if bgp_vrf is None or f"aggregate-address {ALL_DEMO_SNAT_POOL_PREFIX} summary-only" not in bgp_vrf.group(1):
+                errors.append(
+                    f"{device}: no 'aggregate-address {ALL_DEMO_SNAT_POOL_PREFIX} summary-only' inside 'vrf INTERNET'"
+                )
             if not bgw:
                 if re.search(rf"\bvni {INTERNET_L3_VNI}\b", rendered):
                     errors.append(f"{device}: island edge renders vni {INTERNET_L3_VNI}")

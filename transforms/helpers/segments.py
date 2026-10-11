@@ -103,36 +103,6 @@ def segment_vlan_ids(activations: list[dict[str, Any]] | None) -> dict[str, int]
     return vlan_ids
 
 
-def _flatten_deployment_segment_activations(deployment: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """Flatten a TopologyDeployment's own `segment_deployments` (queried via
-    queries/fragments/network_segment.gql's SegmentDeploymentsOnDeploymentFields)
-    into an "activations" shape keyed on `vni` (`{"vni": ..., "segment": {...}}`)
-    — NOT `vlan_id`, which no longer exists on SegmentDeployment (local VLAN
-    ID is per VLAN domain, not DC-wide; see ManagedVlanDomainSegment).
-
-    Border-leaf needs every segment activation in its own DC to route the
-    INTERNET-VRF return prefixes to the context serving each segment
-    (SGT travels in-band inside the VXLAN header end-to-end, so border-leaf
-    never needs its own customer-facing interface_capabilities the way a
-    leaf does) — TopologyDataCenter inherits
-    TopologySegmentHosting directly (schemas/extensions/topology/topology_dc.yml),
-    so `deployment.segment_deployments` already covers the whole DC in one hop.
-    VNI (not vlan_id) is the correct DC-wide/fabric-wide key here — the only
-    caller (transforms/helpers/firewall.py's get_exchange_routes) joins the
-    activations to the serving context by it. There is no border-leaf PBR.
-    """
-    if not deployment:
-        return []
-    activations: list[dict[str, Any]] = []
-    for dep in deployment.get("segment_deployments") or []:
-        vni = dep.get("vni")
-        seg = dep.get("segment") or {}
-        if not vni or not seg:
-            continue
-        activations.append({"vni": vni, "segment": seg})
-    return activations
-
-
 def get_vlans(
     activations: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:

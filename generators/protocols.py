@@ -704,6 +704,7 @@ class ManagedFirewallContext(ManagedGeneric, ManagedGenericInterfaces, ManagedIn
     cluster: RelationshipAttribute[ManagedFirewallHA]
     tenant: RelationshipAttribute[ManagedTenantScoped]
     served_deployments: RelationshipManager[ManagedTenantScoped]
+    snat_address: RelationshipAttribute[IpamIPAddress]
 
 
 class ManagedFirewallHA(ManagedHA, ManagedGeneric, ManagedGenericDevice, ManagedInlineService):

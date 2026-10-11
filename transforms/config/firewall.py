@@ -94,8 +94,10 @@ def apply_context_routes(context: dict[str, Any], segment_prefixes: dict[str, tu
     never be bridged through it.
 
     Sets ``routes`` ([{destination, nexthop, interface, vrf}], tenant
-    prefixes first), ``isolation`` ([{src_zone, dst_zone}]) and each tenant
-    leg's ``prefixes``. A context without legs (colocation) is left as is.
+    prefixes first), ``isolation`` ([{src_zone, dst_zone}]), ``nat`` (the
+    context's SNAT address, its INTERNET leg and tenant legs; None without a
+    SNAT address) and each tenant leg's ``prefixes``. A context without legs
+    (colocation) is left as is.
     """
     legs = context.get("legs") or []
     if not legs:
@@ -133,6 +135,13 @@ def apply_context_routes(context: dict[str, Any], segment_prefixes: dict[str, tu
             }
         )
     context["routes"] = routes
+    # Source NAT: the tenant legs' traffic leaves the INTERNET leg as the
+    # context's one public address. No address or no INTERNET leg: no NAT.
+    context["nat"] = (
+        {"address": context["snat"], "internet": internet, "tenant_legs": tenant_legs}
+        if context.get("snat") and internet and tenant_legs
+        else None
+    )
 
     held = {leg["ns_type"] for leg in legs}
     context["isolation"] = (

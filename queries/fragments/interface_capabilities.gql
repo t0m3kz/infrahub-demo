@@ -64,6 +64,7 @@ fragment FirewallContextInterfaceCapabilityFields on ManagedFirewallContext {
   vlan_id { value }
   tenant { node { id } }
   served_deployments { edges { node { id } } }
+  snat_address { node { address { value } } }
   # The context's legs: each member's VLAN sub-interface, in the leg's VRF
   # namespace, tagged with the context and with the exchange(s) of that leg.
   interface_capabilities {

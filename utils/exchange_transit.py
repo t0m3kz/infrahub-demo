@@ -38,6 +38,24 @@ TRANSIT_VNI_MAX = TRANSIT_VNI_BASE + TRANSIT_VLAN_MAX
 EXCHANGE_PEERS: dict[str, tuple[str, ...]] = {"prod": ("internet",), "non_prod": ("internet",)}
 """Tenant namespace type -> namespace types it exchanges with. Never prod <-> non_prod."""
 
+INTERNET_TYPE = "internet"
+"""namespace_type of the INTERNET VRF namespace."""
+
+NON_PUBLIC_PREFIXES: tuple[ipaddress.IPv4Network, ...] = tuple(
+    ipaddress.IPv4Network(prefix)
+    for prefix in (
+        "0.0.0.0/8",
+        "10.0.0.0/8",
+        "100.64.0.0/10",
+        "127.0.0.0/8",
+        "169.254.0.0/16",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+        "224.0.0.0/3",
+    )
+)
+"""Space that is not internet-routable: RFC 1918, RFC 6598 (covers the FW-Transit pools), loopback, link-local, multicast/reserved."""
+
 ZONE_BY_NS_TYPE: dict[str, str] = {
     "prod": "PROD-ZONE",
     "non_prod": "NONPROD-ZONE",
@@ -50,6 +68,12 @@ OFFSET_MEMBER_A = 5
 OFFSET_MEMBER_B = 6
 TRANSIT_OFFSETS: tuple[int, ...] = (OFFSET_ANYCAST, OFFSET_VIP, OFFSET_MEMBER_A, OFFSET_MEMBER_B)
 """Host offsets that are allocated; .2/.3 stay reserved."""
+
+
+def is_public_address(address: str) -> bool:
+    """Whether an IPv4 address (with or without a mask) lies outside NON_PUBLIC_PREFIXES."""
+    ip = ipaddress.ip_interface(address).ip
+    return ip.version == 4 and not any(ip in prefix for prefix in NON_PUBLIC_PREFIXES)
 
 
 class TransitAddresses(TypedDict):

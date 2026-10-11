@@ -1,8 +1,10 @@
 """Unit tests for checks/common.py's validate_routing_password(), validate_exchange_gateways()
 and checks/border_leaf.py's validate_transit_vlans()."""
 
+import pytest
+
 from checks.border_leaf import validate_transit_vlans
-from checks.common import validate_exchange_gateways, validate_routing_password
+from checks.common import validate_exchange_gateways, validate_routing_password, validate_snat_addresses
 
 
 def _bgp_capability(peerings: list[dict]) -> dict:
@@ -298,3 +300,33 @@ class TestValidateTransitVlans:
         assert "VLAN 3005" in errors[0]
         assert "'web'" in errors[0]
         assert "bl-1" in errors[0]
+
+
+def _snat_leg(snat: str | None, ns_type: str = "internet") -> dict:
+    context = {**_context(), "snat_address": {"address": snat} if snat else None}
+    leg = _fw_leg("eth1.3405", "100.66.32.5/29", "INTERNET", ns_type, caps=[context])
+    return {"name": "dc1-fw-01", "interfaces": [leg]}
+
+
+class TestValidateSnatAddresses:
+    def test_public_snat_passes(self):
+        assert validate_snat_addresses(_snat_leg("192.0.2.5/32")) == []
+
+    def test_missing_snat_reports_error(self):
+        errors = validate_snat_addresses(_snat_leg(None))
+        assert len(errors) == 1
+        assert "no snat_address" in errors[0]
+
+    @pytest.mark.parametrize("address", ["10.1.1.1/32", "100.66.32.9/32", "172.16.0.1/32", "169.254.1.1/32"])
+    def test_non_public_snat_reports_error(self, address: str):
+        errors = validate_snat_addresses(_snat_leg(address))
+        assert len(errors) == 1
+        assert "not a public address" in errors[0]
+
+    def test_context_without_an_internet_leg_needs_no_snat(self):
+        assert validate_snat_addresses(_snat_leg(None, ns_type="prod")) == []
+
+    def test_context_seen_on_two_legs_is_reported_once(self):
+        data = _snat_leg(None)
+        data["interfaces"].append(data["interfaces"][0])
+        assert len(validate_snat_addresses(data)) == 1

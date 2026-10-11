@@ -125,6 +125,7 @@ query {
         vlan_id { value }
         cluster { node { id } }
         served_deployments { edges { node { id } } }
+        snat_address { node { id address { value } } }
         interface_capabilities {
           edges {
             node {
@@ -255,6 +256,9 @@ def _snapshot(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
                 _value(n, "vlan_id"),
                 _peer_id(n, "cluster"),
                 _peer_ids(n, "served_deployments"),
+                # The SNAT /32: same address object and value after every rerun.
+                _peer_id(n, "snat_address"),
+                ((n.get("snat_address") or {}).get("node") or {}).get("address", {}).get("value"),
                 tuple(
                     sorted(
                         (
