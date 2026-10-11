@@ -120,3 +120,55 @@ def test_environment_to_namespace_type_and_zone(environment: str, ns_type: str, 
 def test_internet_zone_name() -> None:
     """The INTERNET namespace maps to INTERNET-ZONE."""
     assert zone_name_for_namespace_type("internet") == "INTERNET-ZONE"
+
+
+@pytest.mark.parametrize(
+    ("address", "public"),
+    [
+        ("192.0.2.5/32", True),
+        ("8.8.8.8", True),
+        ("10.0.0.1/32", False),
+        ("100.66.32.5/29", False),
+        ("127.0.0.1", False),
+        ("169.254.0.1", False),
+        ("172.31.255.1", False),
+        ("192.168.1.1", False),
+        ("239.1.1.1", False),
+    ],
+)
+def test_is_public_address(address: str, public: bool) -> None:
+    """Only addresses outside RFC 1918 / 6598 / loopback / link-local / multicast are public."""
+    from utils.exchange_transit import is_public_address
+
+    assert is_public_address(address) is public
+
+
+def test_snat_pool_and_context_relationship_are_declared(root_dir: Path) -> None:
+    """Bootstrap pool: public TEST-NET-1 prefix in INTERNET; schema: optional cardinality-one IpamIPAddress peer."""
+    docs = list(yaml.safe_load_all((root_dir / "data" / "bootstrap" / "23_transit_pools.yml").read_text()))
+    pool = next(
+        item
+        for doc in docs
+        if doc["spec"]["kind"] == "CoreIPAddressPool"
+        for item in doc["spec"]["data"]
+        if item["name"] == "FW-SNAT-INTERNET-IPv4"
+    )
+    prefix = pool["resources"]["data"][0]
+    assert (prefix["prefix"], prefix["role"], prefix["ip_namespace"], pool["ip_namespace"]) == (
+        "192.0.2.0/24",
+        "public",
+        "INTERNET",
+        "INTERNET",
+    )
+
+    schema = yaml.safe_load((root_dir / "schemas" / "extensions" / "capabilities" / "ha.yml").read_text())
+    node = next(n for n in schema["nodes"] if n["name"] == "FirewallContext")
+    rel = next(r for r in node["relationships"] if r["name"] == "snat_address")
+    assert (rel["peer"], rel["cardinality"], rel["kind"], rel["optional"]) == (
+        "IpamIPAddress",
+        "one",
+        "Attribute",
+        True,
+    )
+    assert rel["identifier"] == "firewall_context__snat_address"
+    assert rel["order_weight"] >= 1000

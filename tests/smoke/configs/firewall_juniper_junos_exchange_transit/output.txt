@@ -20,6 +20,11 @@ set tenants dc1-fw-acme security zones security-zone INTERNET-ZONE interfaces et
 set tenants dc1-fw-acme routing-instances ri-dc1-fw-acme interface ethernet1/1.3401
 set tenants dc1-fw-acme routing-instances ri-dc1-fw-acme routing-options static route 10.3.0.0/24 next-hop 100.66.0.9
 set tenants dc1-fw-acme routing-instances ri-dc1-fw-acme routing-options static route 0.0.0.0/0 next-hop 100.66.32.9
+set tenants dc1-fw-acme security nat source pool SNAT-POOL address 192.0.2.6/32
+set tenants dc1-fw-acme security nat source rule-set SNAT-PROD-ZONE from zone PROD-ZONE
+set tenants dc1-fw-acme security nat source rule-set SNAT-PROD-ZONE to zone INTERNET-ZONE
+set tenants dc1-fw-acme security nat source rule-set SNAT-PROD-ZONE rule snat match source-address 0.0.0.0/0
+set tenants dc1-fw-acme security nat source rule-set SNAT-PROD-ZONE rule snat then source-nat pool SNAT-POOL
 #
 #
 # --- Interfaces, zones and routes in tenant system dc1-fw-shared ---
@@ -50,6 +55,15 @@ set tenants dc1-fw-shared security policies from-zone NONPROD-ZONE to-zone PROD-
 set tenants dc1-fw-shared security policies from-zone NONPROD-ZONE to-zone PROD-ZONE policy deny-NONPROD-ZONE-to-PROD-ZONE match application any
 set tenants dc1-fw-shared security policies from-zone NONPROD-ZONE to-zone PROD-ZONE policy deny-NONPROD-ZONE-to-PROD-ZONE then deny
 set tenants dc1-fw-shared security policies from-zone NONPROD-ZONE to-zone PROD-ZONE policy deny-NONPROD-ZONE-to-PROD-ZONE then log session-init
+set tenants dc1-fw-shared security nat source pool SNAT-POOL address 192.0.2.5/32
+set tenants dc1-fw-shared security nat source rule-set SNAT-PROD-ZONE from zone PROD-ZONE
+set tenants dc1-fw-shared security nat source rule-set SNAT-PROD-ZONE to zone INTERNET-ZONE
+set tenants dc1-fw-shared security nat source rule-set SNAT-PROD-ZONE rule snat match source-address 0.0.0.0/0
+set tenants dc1-fw-shared security nat source rule-set SNAT-PROD-ZONE rule snat then source-nat pool SNAT-POOL
+set tenants dc1-fw-shared security nat source rule-set SNAT-NONPROD-ZONE from zone NONPROD-ZONE
+set tenants dc1-fw-shared security nat source rule-set SNAT-NONPROD-ZONE to zone INTERNET-ZONE
+set tenants dc1-fw-shared security nat source rule-set SNAT-NONPROD-ZONE rule snat match source-address 0.0.0.0/0
+set tenants dc1-fw-shared security nat source rule-set SNAT-NONPROD-ZONE rule snat then source-nat pool SNAT-POOL
 #
 #
 # --- Chassis Cluster ---

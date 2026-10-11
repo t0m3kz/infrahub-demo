@@ -147,6 +147,19 @@ access-list {{ leg.nameif }}-in extended deny ip any {{ asa_addr(prefix) }} log
 access-list {{ leg.nameif }}-in extended deny ip any any log
 access-group {{ leg.nameif }}-in in interface {{ leg.nameif }}
 {%- endfor %}
+{#- Source NAT: auto-NAT PAT per tenant prefix into the context's one SNAT host
+    (the INTERNET leg has no ACL above, so this is the only INTERNET-side rule). #}
+{%- if context.nat %}
+object network SNAT-{{ context.name }}
+ host {{ context.nat.address }}
+{%- for leg in context.nat.tenant_legs %}
+{%- for prefix in leg.prefixes %}
+object network NAT-{{ leg.nameif }}-{{ prefix | replace('/', '-') | replace('.', '-') }}
+ subnet {{ asa_addr(prefix) }}
+ nat ({{ leg.nameif }},{{ context.nat.internet.nameif }}) dynamic pat-pool SNAT-{{ context.name }}
+{%- endfor %}
+{%- endfor %}
+{%- endif %}
 !
 {%- endif %}
 {%- endfor %}

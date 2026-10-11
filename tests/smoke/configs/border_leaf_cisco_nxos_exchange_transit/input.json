@@ -1139,6 +1139,13 @@
                               }
                             ]
                           },
+                          "snat_address": {
+                            "node": {
+                              "address": {
+                                "value": "192.0.2.5/32"
+                              }
+                            }
+                          },
                           "interface_capabilities": {
                             "edges": [
                               {
@@ -1384,6 +1391,13 @@
                                 }
                               }
                             ]
+                          },
+                          "snat_address": {
+                            "node": {
+                              "address": {
+                                "value": "192.0.2.6/32"
+                              }
+                            }
                           },
                           "interface_capabilities": {
                             "edges": [

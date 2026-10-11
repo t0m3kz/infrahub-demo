@@ -57,6 +57,11 @@ route internet 0.0.0.0 0.0.0.0 100.66.32.9 1
 !
 access-list prod-in extended deny ip any any log
 access-group prod-in in interface prod
+object network SNAT-dc1-fw-acme
+ host 192.0.2.6
+object network NAT-prod-10-3-0-0-24
+ subnet 10.3.0.0 255.255.255.0
+ nat (prod,internet) dynamic pat-pool SNAT-dc1-fw-acme
 !
 changeto context dc1-fw-shared
 interface ethernet1/1.3000
@@ -89,6 +94,14 @@ access-group prod-in in interface prod
 access-list nonprod-in extended deny ip any 10.1.0.0 255.255.255.0 log
 access-list nonprod-in extended deny ip any any log
 access-group nonprod-in in interface nonprod
+object network SNAT-dc1-fw-shared
+ host 192.0.2.5
+object network NAT-prod-10-1-0-0-24
+ subnet 10.1.0.0 255.255.255.0
+ nat (prod,internet) dynamic pat-pool SNAT-dc1-fw-shared
+object network NAT-nonprod-10-2-0-0-24
+ subnet 10.2.0.0 255.255.255.0
+ nat (nonprod,internet) dynamic pat-pool SNAT-dc1-fw-shared
 !
 !
 ! --- Failover (HA) ---

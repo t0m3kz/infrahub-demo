@@ -115,8 +115,9 @@ route-map RM-VRF-DIRECT-2-EVPN permit 10
 !
 {%- endif %}
 {#- Upstream transit sessions (session.transit, bgp.py): accept the default
-    route only; announce nothing. RM-TRANSIT-OUT is a plain deny-all for now —
-    the public aggregate permit belongs to the SNAT change, not this one. -#}
+    route only; announce only the INTERNET namespace's public prefixes
+    (internet_prefixes: the aggregate and the SNAT space), nothing when none is
+    known. -#}
 {%- set _transit = namespace(on=false) %}
 {%- for bgp_config in bgp %}
 {%- for sessions in (bgp_config.vrf_sessions or {}).values() %}
@@ -128,7 +129,16 @@ ip prefix-list PL-TRANSIT-IN-DEFAULT seq 10 permit 0.0.0.0/0
 route-map RM-TRANSIT-IN permit 10
   match ip address prefix-list PL-TRANSIT-IN-DEFAULT
 !
+{%- for prefix in internet_prefixes | default([]) %}
+ip prefix-list PL-TRANSIT-OUT-PUBLIC seq {{ loop.index * 10 }} permit {{ prefix }}
+{%- endfor %}
+{%- if internet_prefixes | default([]) %}
+route-map RM-TRANSIT-OUT permit 10
+  match ip address prefix-list PL-TRANSIT-OUT-PUBLIC
+route-map RM-TRANSIT-OUT deny 20
+{%- else %}
 route-map RM-TRANSIT-OUT deny 10
+{%- endif %}
 !
 {%- endif %}
 {%- endif %}
