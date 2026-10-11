@@ -21,8 +21,10 @@ from transforms.helpers.segments import (
 )
 from utils.exchange_transit import (
     EXCHANGE_PEERS,
+    INTERNET_TYPE,
     TRANSIT_SLOT,
     ZONE_BY_NS_TYPE,
+    exchange_peer_zones,
     transit_addresses,
     transit_vlan,
     transit_vni,
@@ -249,11 +251,12 @@ def _snat_host(cap: dict[str, Any]) -> str | None:
 def get_exchange_routes(interfaces: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
     """Static routes of the inter-VRF exchange through each firewall context on this device.
 
-    Per exchange (tenant VRF A -> INTERNET Z) of a context tagged on a firewall port:
+    Per exchange (tenant VRF A -> exchange peer Z) of a context tagged on a firewall port:
 
     - VRF A: ``0.0.0.0/0`` -> the context's A-leg VIP, only when the context is the
       shared one (no tenant). A dedicated context steers its tenant by leaf PBR.
-    - VRF Z (INTERNET): the context's SNAT address ``/32`` -> the context's Z-leg VIP,
+    - VRF Z (INTERNET only; other peers such as MANAGEMENT are not source-NATed):
+      the context's SNAT address ``/32`` -> the context's Z-leg VIP,
       the return path of its translated flows. INTERNET carries only public and
       transit space, so no tenant prefix goes in; a context without a SNAT address
       emits nothing there. No default route in INTERNET: its upstream is the
@@ -295,7 +298,7 @@ def get_exchange_routes(interfaces: list[dict[str, Any]] | None) -> list[dict[st
             gateway = exchange.get("gateway") or {}
             if not (gateway.get("tenant") or ctx.get("tenant")):
                 _add(leg_a, "0.0.0.0/0", leg_a["vip"])
-            if snat:
+            if snat and leg_z["ns_type"] == INTERNET_TYPE:
                 _add(leg_z, f"{snat}/32", leg_z["vip"])
     return sorted(routes.values(), key=lambda r: (r["vrf"], r["prefix"], r["nexthop"]))
 
@@ -649,6 +652,7 @@ def get_customer_pbr_rules(
             )
         return nexthops_by_namespace[namespace]
 
+    peer_zones = exchange_peer_zones()
     rules: list[dict[str, Any]] = []
     seen_vlans: set[int] = set()
     for act in activations:
@@ -681,7 +685,9 @@ def get_customer_pbr_rules(
                 return
             if inspected and _needs_firewall(rule, fw_nexthop, peer, serving):
                 via_firewall.add(prefix)
-            else:
+            elif ((peer or {}).get("security_zone") or {}).get("name") not in peer_zones:
+                # An exchange peer's zone (INTERNET, MANAGEMENT) is never bypassed:
+                # the leaf routes a bypassed prefix in the tenant VRF, where it does not exist.
                 bypass.add(prefix)
 
         for policy in enabled_policies(segment_policies(seg)):
