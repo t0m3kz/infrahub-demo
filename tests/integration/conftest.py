@@ -112,6 +112,11 @@ def infrahub_app(request: pytest.FixtureRequest, infrahub_compose: InfrahubDocke
                     f"Failed to collect container logs during cleanup: {exc}",
                     stacklevel=2,
                 )
+        if os.getenv("INFRAHUB_TESTING_KEEP_STACK"):
+            # Debugging aid: leave the stack up (port 8100, branch all-demo-scenario) to query it by hand.
+            # Remove it with `uv run invoke clean-testcontainers`.
+            warnings.warn("INFRAHUB_TESTING_KEEP_STACK set: leaving the docker compose stack running", stacklevel=2)
+            return
         try:
             infrahub_compose.stop()
         except Exception as exc:  # noqa: BLE001

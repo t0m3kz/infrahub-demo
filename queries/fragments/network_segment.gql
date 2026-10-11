@@ -108,6 +108,12 @@ fragment SegmentSecurityPolicyFields on ManagedNetworkSegment {
 }
 
 fragment NetworkSegmentFields on ManagedNetworkSegment {
+  # Named fragments are spread HERE, not inside the `... on` blocks below:
+  # Infrahub resolves a named fragment nested in an inline fragment to nulls
+  # (security_zone, security_policy, owner, isolation_mode all came back null
+  # on a leaf while the same fields read directly were populated).
+  ...SegmentSecurityZoneFields
+  ...SegmentSecurityPolicyFields
   ... on ManagedVlanSegment {
     id
     name { value }
@@ -133,8 +139,6 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
         }
       }
     }
-    ...SegmentSecurityZoneFields
-    ...SegmentSecurityPolicyFields
   }
   ... on ManagedVxlanSegment {
     id
@@ -185,8 +189,6 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
         }
       }
     }
-    ...SegmentSecurityZoneFields
-    ...SegmentSecurityPolicyFields
   }
 }
 

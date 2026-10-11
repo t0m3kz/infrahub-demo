@@ -1,3 +1,6 @@
+# Spread at the top level, never inside a `... on` block (Infrahub resolves a
+# named fragment nested in an inline fragment to nulls).
+#
 # The interfaces carrying a segment, with their device and own address —
 # on an HA pair terminating the segment inline, the secondary member's
 # address is the ASA `standby` address (transforms/helpers/ha.py).
@@ -16,16 +19,15 @@ fragment InlineSegmentMemberFields on ManagedGenericInterfaces {
 # terminates inline: the flag, the terminating pair, the gateway (the pair's
 # virtual IP) and the members' own addresses.
 fragment InlineTerminationFields on ManagedNetworkSegment {
+  ...InlineSegmentMemberFields
   ... on ManagedVxlanSegment {
     terminate_inline { value }
     inline_service { node { name { value } } }
     gateway { node { address { value } } }
-    ...InlineSegmentMemberFields
   }
   ... on ManagedVlanSegment {
     terminate_inline { value }
     inline_service { node { name { value } } }
     gateway { node { address { value } } }
-    ...InlineSegmentMemberFields
   }
 }

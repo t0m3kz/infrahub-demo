@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -18,7 +19,8 @@ import pytest
 from generators.common import CommonGenerator
 from generators.helpers.rules import RulesPlanner
 from generators.protocols import SecurityPolicy, SecurityPolicyRule
-from generators.segment_firewall import SegmentFirewallMixin
+from generators.segment_firewall import RULE_INDEX_START, SegmentFirewallMixin, _next_free_rule_index
+from transforms.helpers.acl import INTERNET_BAND_SEQ_START, RETURN_LEG_SEQ_START
 
 
 def _make_gen() -> Any:
@@ -480,3 +482,23 @@ class TestReconcileSegmentRuleEarlyExits:
         assert result == (False, True)
         assert segment_policies == {}
         gen._find_rule_by_name.assert_not_awaited()
+
+
+class TestGeneratedRuleIndexesStayBelowTheAclBands:
+    """The leaf ACL numbers its own rules by rule index, then the return legs
+    (5000+) and the internet band (6000+): generated indexes must stay below."""
+
+    def test_bands_are_ordered_above_the_generated_rules(self) -> None:
+        assert RULE_INDEX_START < 4000 < RETURN_LEG_SEQ_START < INTERNET_BAND_SEQ_START
+
+    def test_demo_dependencies_cannot_reach_the_4000_band(self) -> None:
+        """Worst case: every AppDependency of the 30_all demo hits one segment, on 10 ports each."""
+        root = Path(__file__).resolve().parents[2] / "data/demos/30_all/07_applications"
+        dependencies = sum(
+            line.startswith("    - name:")
+            for path in root.glob("*/*dependencies.yml")
+            for line in path.read_text().splitlines()
+        )
+        assert dependencies > 0
+        used = {RULE_INDEX_START + 10 * i for i in range(dependencies * 10)}
+        assert _next_free_rule_index(used) < 4000

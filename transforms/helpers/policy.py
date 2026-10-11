@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from transforms.helpers.segments import _get_segment_prefix_str
+from utils.exchange_transit import zone_name_for_namespace_type
 
 
 def merge_policies(*policy_lists: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
@@ -69,6 +70,20 @@ def rule_endpoint(rule: dict[str, Any], side: str) -> str | None:
     segment = rule.get(f"{side}_segment") or {}
     return (_get_segment_prefix_str(segment) if segment else None) or _first_selector_cidr(
         rule.get(f"{side}_prefixes"), rule.get(f"{side}_ip_addresses")
+    )
+
+
+def is_unresolved_segment_endpoint(rule: dict[str, Any], side: str) -> bool:
+    """Whether `side` ("source"/"destination") names the internet: a segment in
+    the INTERNET-ZONE that resolves to no endpoint (no prefix, no selector).
+    rule_endpoint returns None (any) for it, but unlike a rule with no segment
+    at all it means "outside", not "everything". Keyed on the zone so a cloud
+    segment (addressed by cidr_block, no gateway prefix) is never taken for it.
+    """
+    return (
+        bool(rule.get(f"{side}_segment"))
+        and rule_endpoint(rule, side) is None
+        and rule_zone(rule, side) == zone_name_for_namespace_type("internet")
     )
 
 

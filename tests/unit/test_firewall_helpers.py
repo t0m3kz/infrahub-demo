@@ -565,6 +565,27 @@ class TestGetZonePoliciesDefaultAction:
         assert [rule["name"] for rule in rules] == ["rule-10", "implicit-deny-all"]
 
 
+class TestGetZonePoliciesExternalSegment:
+    def test_permit_to_a_prefix_less_segment_renders_zone_with_destination_any(self) -> None:
+        rule = _make_rule(
+            index=10,
+            name="to-internet",
+            src_zone="PROD-ZONE",
+            dst_segment={"name": "internet-internet-p"},
+            dst_zone="INTERNET-ZONE",
+            src_segment={"gateway": {"ip_prefix": {"prefix": "10.1.0.0/24"}}},
+        )
+        result = get_zone_policies([_make_policy(rules=[rule])])
+        out = result[0]["rules"][0]
+        assert (out["src_zone"], out["dst_zone"], out["dst"], out["src"]) == (
+            "PROD-ZONE",
+            "INTERNET-ZONE",
+            None,
+            "10.1.0.0/24",
+        )
+        assert (out["action"], out["raw_protocol"], out["port_start"]) == ("permit", "tcp", 443)
+
+
 class TestGetZonePolicies:
     def test_none_returns_empty(self) -> None:
         assert get_zone_policies(None) == []
@@ -1060,6 +1081,15 @@ class TestGetCustomerPbrRules:
         activations = [_make_pbr_activation(security_policies=policies)]
         contexts = [_make_context_leg()]
         result = get_customer_pbr_rules(activations, contexts)
+        assert result[0]["bypass_prefixes"] == []
+
+    def test_permit_to_a_prefix_less_external_segment_is_no_bypass(self) -> None:
+        """The internet segment has no prefix: the leaf keeps redirecting to the firewall."""
+        rule = {"action": "permit", "disabled": False, "destination_segment": {"name": "internet-internet-p"}}
+        policies = [{"enabled": True, "rules": [rule]}]
+        activations = [_make_pbr_activation(security_policies=policies)]
+        result = get_customer_pbr_rules(activations, [_make_context_leg(fw_ip="10.65.0.0/30")])
+        assert result[0]["fw_nexthop"] == "10.65.0.0"
         assert result[0]["bypass_prefixes"] == []
 
     def test_cross_owner_permit_still_bypasses(self) -> None:

@@ -9,8 +9,8 @@
 {%- set rule_name = rule.name | replace(' ', '-') %}
 set {{ scope }}rulebase security rules {{ rule_name }} from {{ rule.src_zone or 'any' }}
 set {{ scope }}rulebase security rules {{ rule_name }} to {{ rule.dst_zone or 'any' }}
-set {{ scope }}rulebase security rules {{ rule_name }} source {{ ('ag-' + rule.src_zone) if (rule.src_zone and not rule.src) else (rule.src or 'any') }}
-set {{ scope }}rulebase security rules {{ rule_name }} destination {{ ('ag-' + rule.dst_zone) if (rule.dst_zone and not rule.dst) else (rule.dst or 'any') }}
+set {{ scope }}rulebase security rules {{ rule_name }} source {{ rule.src or 'any' }}
+set {{ scope }}rulebase security rules {{ rule_name }} destination {{ rule.dst or 'any' }}
 set {{ scope }}rulebase security rules {{ rule_name }} application any
 {%- if rule.raw_protocol in ('tcp', 'udp') and rule.port_start %}
 {%- set svc_name = 'svc-' + rule.raw_protocol + '-' + rule.port_start | string + ('-' + rule.port_end | string if rule.port_end and rule.port_end != rule.port_start else '') %}

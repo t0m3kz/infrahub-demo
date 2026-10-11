@@ -5,6 +5,7 @@ from typing import Any
 from infrahub_sdk.checks import InfrahubCheck
 
 from transforms.config.firewall import Firewall
+from transforms.helpers.policy import is_unresolved_segment_endpoint
 
 from .common import validate_exchange_gateways
 
@@ -16,7 +17,8 @@ class CheckFirewall(InfrahubCheck):
     so a rule whose source is another segment is an error, as is a rule with
     no destination selector (segment, prefix or IP). A rule's zone is its
     segment's security_zone; a segment without one is reported, since
-    zone-based firewalls then match any zone on that side. Its exchange legs
+    zone-based firewalls then match any zone on that side. A rule to a
+    segment without a prefix (the internet) must not be apply_on_switch. Its exchange legs
     (checks/common.py validate_exchange_gateways) are validated too."""
 
     query = "firewall_config"
@@ -58,6 +60,15 @@ class CheckFirewall(InfrahubCheck):
             self.log_error(
                 message=(
                     f"Policy '{policy_name}' rule '{rule_name}' has no destination selector (segment, IP, or prefix)"
+                )
+            )
+        if rule.get("apply_on_switch") and is_unresolved_segment_endpoint(rule, "destination"):
+            self.log_error(
+                message=(
+                    f"Policy '{policy_name}' rule '{rule_name}': apply_on_switch to destination segment "
+                    f"'{destination.get('name') or destination.get('id')}', which has no prefix (the internet) — "
+                    "the leaf ACL can only approximate it by denying the internal ranges first, and it would "
+                    "force the whole ACL of a firewalled segment onto the switch"
                 )
             )
         for side, segment in (("source", source), ("destination", destination)):

@@ -1267,6 +1267,136 @@ def build_firewall_data(*, device_name: str, platform: str) -> dict:
     }
 
 
+def _make_internet_segment() -> dict:
+    """The Internet ManagedExternalSegment as a rule end: INTERNET-ZONE, no gateway, no prefix."""
+    return {
+        "id": "seg-internet",
+        "__typename": "ManagedExternalSegment",
+        "name": _v("internet-internet-p"),
+        "security_zone": _node({"name": _v("INTERNET-ZONE")}),
+        "security_tag": _node(None),
+        "gateway": _node(None),
+        "customer_deployment": _node(None),
+    }
+
+
+def build_leaf_internet_permit_data(*, device_name: str, platform: str) -> dict:
+    """The with_acl leaf whose VXLAN segment (10.100.0.0/24) also permits https to the Internet segment.
+
+    Its ACL must deny every NON_INTERNET_PREFIXES range before the `permit tcp ... any eq 443`
+    (a plain permit to any would open every same-VRF destination at the leaf).
+    """
+    data = build_device_data(
+        device_name=device_name,
+        role="leaf",
+        platform=platform,
+        scenario="ebgp_ibgp",
+        include_segments=True,
+        include_acls=True,
+    )
+    source = {
+        "id": "seg-seg-100",
+        "__typename": "ManagedVxlanSegment",
+        "name": _v("seg-100"),
+        "security_zone": _node({"name": _v("PROD-ZONE")}),
+        "gateway": _node({"ip_prefix": _node({"prefix": _v("10.100.0.0/24")})}),
+    }
+    dest = {
+        "id": "seg-seg-200",
+        "__typename": "ManagedVlanSegment",
+        "name": _v("seg-200"),
+        "security_zone": _node({"name": _v("PROD-ZONE")}),
+        "gateway": _node({"ip_prefix": _node({"prefix": _v("10.200.0.0/24")})}),
+    }
+    # An intra-zone permit first, to show it is not shadowed by the band, then the Internet permit.
+    intra = _make_policy_rule(index=10, name="allow-seg-200-ssh", protocol="tcp", port_start=22)
+    intra["source_segment"] = _node(source)
+    intra["destination_segment"] = _node(dest)
+    rule = _make_policy_rule(index=20, name="allow-internet-https", protocol="tcp", port_start=443)
+    rule["source_segment"] = _node(source)
+    rule["destination_segment"] = _node(_make_internet_segment())
+    patched: set[int] = set()
+    stack: list[Any] = [data]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            policy = (node.get("security_policy") or {}).get("node")
+            # The policy dict is shared by reference between the segment copies: patch it once.
+            if isinstance(policy, dict) and policy.get("name") == _v("policy-vxlan-seg") and id(policy) not in patched:
+                policy["rules"] = _edges([intra, rule])
+                patched.add(id(policy))
+            stack.extend(node.values())
+        elif isinstance(node, list):
+            stack.extend(node)
+    assert patched, "policy-vxlan-seg not found in the leaf fixture"
+    return data
+
+
+def build_firewall_internet_data(*, device_name: str, platform: str) -> dict:
+    """A firewall whose internal zone (10.0.1.0/24) permits https to the Internet segment.
+
+    The rule table renders it to INTERNET-ZONE with destination any (the segment has no prefix).
+    """
+    data = build_firewall_data(device_name=device_name, platform=platform)
+    internal = _make_rule_segment(cidr="10.0.1.0/24", zone_name="internal")
+    internet = _make_internet_segment()
+    header = _make_policy_header(name="internal-to-internet", segment=internal)
+    segments = _make_rule_bearing_segments(
+        [internal, internet],
+        [
+            (
+                header,
+                [
+                    _make_segment_rule(
+                        policy="internal-to-internet",
+                        index=10,
+                        name="allow-internet-https",
+                        protocol="tcp",
+                        port_start=443,
+                        src_segment=internal,
+                        dst_segment=internet,
+                        description="Allow HTTPS from Internal to the Internet",
+                    )
+                ],
+            )
+        ],
+    )
+    device = data["DcimPhysicalDevice"]["edges"][0]["node"]
+    device["interfaces"] = _edges(
+        [
+            _make_firewall_interface(
+                name="ethernet1/1.10",
+                ip_address="10.0.1.1/30",
+                zone_name="internal",
+                trust_level=100,
+                description="Internal LAN link",
+                vlan_id=10,
+                parent_interface_name="ethernet1/1",
+                namespace_name="VRF-INTERNAL",
+                zone_members=[segments[internal["id"]]],
+            ),
+            _make_firewall_interface(
+                name="ethernet1/1.30",
+                ip_address="10.0.3.1/30",
+                zone_name="INTERNET-ZONE",
+                trust_level=0,
+                description="Internet link",
+                vlan_id=30,
+                parent_interface_name="ethernet1/1",
+                namespace_name="VRF-EXTERNAL",
+                zone_members=[segments[internet["id"]]],
+            ),
+        ]
+    )
+    data["SecurityZone"] = _edges(
+        [
+            _make_zone(name="internal", trust_level=100, cidrs=["10.0.1.0/24"], namespace_name="VRF-INTERNAL"),
+            _make_zone(name="INTERNET-ZONE", trust_level=0, cidrs=[], namespace_name="VRF-EXTERNAL"),
+        ]
+    )
+    return data
+
+
 def build_firewall_ha_data(*, device_name: str, platform: str) -> dict:
     """Build a firewall GQL response that includes a ManagedHA capability.
 
@@ -2156,6 +2286,24 @@ def main() -> int:
         )
         generated += g
         errors += e
+
+    # A permit to the prefix-less Internet segment: the leaf denies every
+    # internal range before `permit ... any`, the firewall renders INTERNET-ZONE / any.
+    print("\nGenerating internet-permit fixtures (leaf, firewall):")
+    g, e = _write_data_fixture(
+        Leaf,
+        "leaf_cisco_nxos_internet_permit",
+        build_leaf_internet_permit_data(device_name="dc1-leaf-01", platform="cisco_nxos"),
+    )
+    generated += g
+    errors += e
+    g, e = _write_data_fixture(
+        Firewall,
+        "firewall_paloalto_panos_internet_permit",
+        build_firewall_internet_data(device_name="dc1-fw-01", platform="paloalto_panos"),
+    )
+    generated += g
+    errors += e
 
     # Firewall scenarios: zone-based policy per vendor
     print("\nGenerating firewall fixtures:")
