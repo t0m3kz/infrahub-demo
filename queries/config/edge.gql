@@ -124,4 +124,16 @@ query edge_config($device: String!) {
       }
     }
   }
+
+  # Public space of the INTERNET namespace: what the upstream transit session
+  # may be announced (aggregate + RM-TRANSIT-OUT). namespace_type is filtered
+  # in transforms/helpers/bgp.py (get_internet_prefixes).
+  IpamPrefix(role__value: "public") {
+    edges {
+      node {
+        prefix { value }
+        ip_namespace { node { namespace_type { value } } }
+      }
+    }
+  }
 }

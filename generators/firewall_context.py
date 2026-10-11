@@ -21,10 +21,11 @@ from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from typing import Any
 
-from infrahub_sdk.protocols import CoreIPPrefixPool, CoreNumberPool, IpamNamespace
+from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool, CoreNumberPool, IpamNamespace
 
 from utils.exchange_transit import (
     EXCHANGE_PEERS,
+    INTERNET_TYPE,
     OFFSET_MEMBER_A,
     OFFSET_MEMBER_B,
     TRANSIT_OFFSETS,
@@ -51,6 +52,8 @@ from .types import DeviceOptions
 _SHARED_CONTEXT_NAME_SUFFIX = "shared"
 _TRANSIT_PREFIX_LENGTH = 29
 _MEMBER_OFFSETS = (OFFSET_MEMBER_A, OFFSET_MEMBER_B)
+_SNAT_POOL_NAME = "FW-SNAT-INTERNET-IPv4"
+_SNAT_PREFIX_LENGTH = 32
 
 
 @dataclass(frozen=True)
@@ -280,6 +283,11 @@ class FirewallContextMixin:
         context (track=True): the run owns every write and must re-save them
         all, or delete_unused_nodes reclaims what it merely found.
 
+        A context with an INTERNET leg also gets ONE public SNAT /32 from
+        FW-SNAT-INTERNET-IPv4 (context.snat_address), shared by every tenant
+        VRF the context serves; the completeness check includes it, so a run
+        heals a context that lacks one.
+
         Writes run under the context's lock; the completeness check repeats
         inside it, so the run that waited on the lock finds the work done.
         """
@@ -317,6 +325,11 @@ class FirewallContextMixin:
             pools = await self._transit_pools(namespaces)
             if pools is None:
                 return
+            snat_pool = None
+            if INTERNET_TYPE in leg_types:
+                snat_pool = await self._snat_pool()
+                if snat_pool is None:
+                    return
             context_obj = await self._get_or_create_firewall_context(
                 context_name, target.cluster_id, target.tenant_id, track=track
             )
@@ -329,6 +342,8 @@ class FirewallContextMixin:
             if context_obj is None:
                 return
             vlan_id: int = context_obj.vlan_id.value
+            if snat_pool is not None and not await self._ensure_context_snat(context_obj, snat_pool, track=track):
+                return
 
             addresses: dict[str, dict[int, Any]] = {}
             for leg_type in leg_types:
@@ -458,6 +473,8 @@ class FirewallContextMixin:
         incomplete = _TransitState(context=context, complete=False, untagged_port_ids=untagged)
         if untagged or not vlan_id:
             return incomplete
+        if INTERNET_TYPE in leg_types and not getattr(context.snat_address, "id", None):
+            return incomplete
 
         exchange_names = [name for name, _, _ in exchange_specs]
         exchange_ids = {
@@ -494,6 +511,46 @@ class FirewallContextMixin:
         if in_namespace != set(address_namespace):
             return incomplete
         return _TransitState(context=context, complete=True, untagged_port_ids=[])
+
+    async def _snat_pool(self) -> Any | None:
+        """The FW-SNAT-INTERNET-IPv4 address pool (data/bootstrap); None (logged) when missing."""
+        try:
+            return await self.client.get(kind=CoreIPAddressPool, name__value=_SNAT_POOL_NAME)
+        except Exception as exc:
+            self.logger.error(f"SNAT pool '{_SNAT_POOL_NAME}' not found — cannot allocate the SNAT address: {exc}")
+            return None
+
+    async def _ensure_context_snat(self, context_obj: Any, snat_pool: Any, *, track: bool) -> bool:
+        """The context's one public SNAT /32, allocated from snat_pool; False (logged) when that fails.
+
+        The allocation identifier makes the address stable per context, so a
+        context that already has one is left untouched (never re-saved), like
+        its VLAN. The address itself is a pool mutation, never a tracked save;
+        the relationship write follows the context's ownership (track).
+        """
+        snat = getattr(context_obj, "snat_address", None)
+        if snat is not None and getattr(snat, "id", None):
+            return True
+        context_name = context_obj.name.value
+        try:
+            address = await self.client.allocate_next_ip_address(
+                resource_pool=snat_pool,
+                kind=IpamIPAddress,
+                identifier=f"{context_obj.id}-snat",
+                prefix_length=_SNAT_PREFIX_LENGTH,
+                data={"description": f"SNAT address of {context_name}"},
+            )
+            if address is None:
+                self.logger.error(f"SNAT pool '{_SNAT_POOL_NAME}' returned no address for {context_name}")
+                return False
+            node = await self.client.create(
+                kind=ManagedFirewallContext, data={"id": context_obj.id, "snat_address": {"id": address.id}}
+            )
+            await node.save(**tracked_save_kwargs(track))
+        except Exception as exc:
+            self.logger.error(f"Failed to set the SNAT address of FirewallContext '{context_name}': {exc}")
+            return False
+        return True
 
     async def _allocate_transit_addresses(
         self, *, context_obj: Any, namespace: Any, pool: Any, track: bool

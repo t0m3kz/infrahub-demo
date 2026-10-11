@@ -470,48 +470,53 @@ class TestGetExchangeTransits:
 
 class TestGetExchangeRoutes:
     @staticmethod
-    def _seg(vni: int, prefix: str, dep: str, ns: str = "PROD") -> dict:
-        activation = _make_dc_activation(vni=vni, seg_id=f"s{vni}", deployment_id=dep, gateway_prefix=prefix)
-        activation["segment"]["gateway"]["ip_prefix"]["ip_namespace"] = {"name": ns}
-        return activation
+    def _with_snat(ctx: dict, address: str | None = "192.0.2.5/32") -> dict:
+        return {**ctx, "snat_address": {"address": address} if address else None}
 
     def test_shared_context_gets_default_route_in_tenant_vrf_to_its_vip(self) -> None:
-        routes = get_exchange_routes(_bl_port(_shared_context(served=["dep-a"])), [])
+        routes = get_exchange_routes(_bl_port(_shared_context(served=["dep-a"])))
         assert {"vrf": "PROD", "l3_vni": 50001, "prefix": "0.0.0.0/0", "nexthop": "100.66.0.4"} in routes
 
     def test_dedicated_context_gets_no_default_route(self) -> None:
-        routes = get_exchange_routes(_bl_port(_shared_context(tenant="dep-a", served=["dep-a"])), [])
+        routes = get_exchange_routes(_bl_port(_shared_context(tenant="dep-a", served=["dep-a"])))
         assert [r for r in routes if r["prefix"] == "0.0.0.0/0"] == []
 
-    def test_internet_vrf_returns_served_segment_prefixes_to_internet_vip(self) -> None:
-        context = _shared_context(served=["dep-a"])
-        acts = [self._seg(1, "10.1.0.0/24", "dep-a"), self._seg(2, "10.2.0.0/24", "dep-other")]
-        routes = get_exchange_routes(_bl_port(context), acts)
+    def test_internet_vrf_returns_the_snat_host_route_to_internet_vip(self) -> None:
+        context = self._with_snat(_shared_context(served=["dep-a"]))
+        routes = get_exchange_routes(_bl_port(context))
         internet = [r for r in routes if r["vrf"] == "INTERNET"]
-        assert internet == [{"vrf": "INTERNET", "l3_vni": 50003, "prefix": "10.1.0.0/24", "nexthop": "100.66.32.4"}]
+        assert internet == [{"vrf": "INTERNET", "l3_vni": 50003, "prefix": "192.0.2.5/32", "nexthop": "100.66.32.4"}]
+
+    def test_internet_vrf_carries_no_tenant_prefix(self) -> None:
+        context = self._with_snat(_shared_context(served=["dep-a"]))
+        internet = [r for r in get_exchange_routes(_bl_port(context)) if r["vrf"] == "INTERNET"]
+        assert all(r["prefix"].endswith("/32") for r in internet)
+
+    def test_context_without_snat_emits_nothing_in_internet(self) -> None:
+        routes = get_exchange_routes(_bl_port(_shared_context(served=["dep-a"])))
+        assert [r for r in routes if r["vrf"] == "INTERNET"] == []
+
+    def test_each_context_routes_its_own_snat_to_its_own_vip(self) -> None:
+        shared = self._with_snat(_shared_context(served=["dep-a"]), "192.0.2.5/32")
+        other = {**self._with_snat(_shared_context(tenant="dep-b", served=["dep-b"]), "192.0.2.6/32"), "id": "ctx-2"}
+        routes = get_exchange_routes(_bl_port(shared) + _bl_port(other))
+        assert {(r["prefix"], r["nexthop"]) for r in routes if r["vrf"] == "INTERNET"} == {
+            ("192.0.2.5/32", "100.66.32.4"),
+            ("192.0.2.6/32", "100.66.32.4"),
+        }
 
     def test_no_default_route_in_internet_vrf(self) -> None:
-        routes = get_exchange_routes(
-            _bl_port(_shared_context(served=["dep-a"])), [self._seg(1, "10.1.0.0/24", "dep-a")]
-        )
+        routes = get_exchange_routes(_bl_port(self._with_snat(_shared_context(served=["dep-a"]))))
         assert [r for r in routes if r["vrf"] == "INTERNET" and r["prefix"] == "0.0.0.0/0"] == []
-
-    def test_segment_in_another_namespace_is_not_returned_via_this_exchange(self) -> None:
-        routes = get_exchange_routes(
-            _bl_port(_shared_context(served=["dep-a"])), [self._seg(1, "10.1.0.0/24", "dep-a", ns="NON-PROD")]
-        )
-        assert [r for r in routes if r["vrf"] == "INTERNET"] == []
 
     def test_prod_is_never_paired_with_non_prod(self) -> None:
         exchange = _exchange(_PROD, _NONPROD)
         legs = [_leg("100.66.0.5/29", _PROD, [exchange]), _leg("100.66.16.5/29", _NONPROD, [exchange])]
-        assert get_exchange_routes(_bl_port(_context(legs)), []) == []
+        assert get_exchange_routes(_bl_port(self._with_snat(_context(legs)))) == []
 
     def test_routes_are_sorted_and_empty_without_interfaces(self) -> None:
-        assert get_exchange_routes(None, None) == []
-        routes = get_exchange_routes(
-            _bl_port(_shared_context(served=["dep-a"])), [self._seg(1, "10.1.0.0/24", "dep-a")]
-        )
+        assert get_exchange_routes(None) == []
+        routes = get_exchange_routes(_bl_port(self._with_snat(_shared_context(served=["dep-a"]))))
         assert routes == sorted(routes, key=lambda r: (r["vrf"], r["prefix"], r["nexthop"]))
 
 
@@ -1208,6 +1213,13 @@ def _make_fw_context_interface(
 
 
 class TestGetFirewallContexts:
+    def test_snat_is_the_host_ip_or_none(self) -> None:
+        plain = _make_fw_context_interface()
+        assert get_firewall_contexts([plain])[0]["snat"] is None
+        with_snat = _make_fw_context_interface()
+        with_snat["interface_capabilities"][0]["snat_address"] = {"address": "192.0.2.5/32"}
+        assert get_firewall_contexts([with_snat])[0]["snat"] == "192.0.2.5"
+
     def test_none_returns_empty(self) -> None:
         assert get_firewall_contexts(None) == []
 

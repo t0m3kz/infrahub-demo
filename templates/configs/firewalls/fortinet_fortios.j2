@@ -215,6 +215,34 @@ config vdom
             next
 {%- endfor %}
         end
+{#- Source NAT: an IP pool of the context's SNAT address, used by one policy per
+    tenant zone towards the INTERNET zone (ippool pool-name + nat enable). #}
+{%- if context.nat %}
+        config firewall ippool
+            edit "SNAT-{{ context.name }}"
+                set type overload
+                set startip {{ context.nat.address }}
+                set endip {{ context.nat.address }}
+            next
+        end
+        config firewall policy
+{%- for leg in context.nat.tenant_legs %}
+            edit {{ 910000 + loop.index }}
+                set name "snat-{{ leg.zone }}-to-{{ context.nat.internet.zone }}"
+                set srcintf "{{ leg.zone }}"
+                set dstintf "{{ context.nat.internet.zone }}"
+                set srcaddr "all"
+                set dstaddr "all"
+                set action accept
+                set schedule "always"
+                set service "ALL"
+                set nat enable
+                set ippool enable
+                set poolname "SNAT-{{ context.name }}"
+            next
+{%- endfor %}
+        end
+{%- endif %}
 {%- if context.isolation %}
         config firewall policy
 {%- for deny in context.isolation %}

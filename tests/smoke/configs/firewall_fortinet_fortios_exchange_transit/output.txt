@@ -72,6 +72,28 @@ config vdom
                 set device "ethernet1/1.3401"
             next
         end
+        config firewall ippool
+            edit "SNAT-dc1-fw-acme"
+                set type overload
+                set startip 192.0.2.6
+                set endip 192.0.2.6
+            next
+        end
+        config firewall policy
+            edit 910001
+                set name "snat-PROD-ZONE-to-INTERNET-ZONE"
+                set srcintf "PROD-ZONE"
+                set dstintf "INTERNET-ZONE"
+                set srcaddr "all"
+                set dstaddr "all"
+                set action accept
+                set schedule "always"
+                set service "ALL"
+                set nat enable
+                set ippool enable
+                set poolname "SNAT-dc1-fw-acme"
+            next
+        end
     next
 end
 config global
@@ -141,6 +163,41 @@ config vdom
                 set dst 0.0.0.0/0
                 set gateway 100.66.32.1
                 set device "ethernet1/1.3400"
+            next
+        end
+        config firewall ippool
+            edit "SNAT-dc1-fw-shared"
+                set type overload
+                set startip 192.0.2.5
+                set endip 192.0.2.5
+            next
+        end
+        config firewall policy
+            edit 910001
+                set name "snat-PROD-ZONE-to-INTERNET-ZONE"
+                set srcintf "PROD-ZONE"
+                set dstintf "INTERNET-ZONE"
+                set srcaddr "all"
+                set dstaddr "all"
+                set action accept
+                set schedule "always"
+                set service "ALL"
+                set nat enable
+                set ippool enable
+                set poolname "SNAT-dc1-fw-shared"
+            next
+            edit 910002
+                set name "snat-NONPROD-ZONE-to-INTERNET-ZONE"
+                set srcintf "NONPROD-ZONE"
+                set dstintf "INTERNET-ZONE"
+                set srcaddr "all"
+                set dstaddr "all"
+                set action accept
+                set schedule "always"
+                set service "ALL"
+                set nat enable
+                set ippool enable
+                set poolname "SNAT-dc1-fw-shared"
             next
         end
         config firewall policy

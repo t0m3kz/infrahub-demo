@@ -46,7 +46,15 @@ class _Many:
 class _World:
     """A fake Infrahub client holding the objects the transit legs touch."""
 
-    def __init__(self, *, namespaces: tuple[str, ...] = ("prod", "non_prod", "internet"), pools: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        namespaces: tuple[str, ...] = ("prod", "non_prod", "internet"),
+        pools: bool = True,
+        snat_pool: bool = True,
+    ) -> None:
+        self.snat_pool = snat_pool
+        self.snat_allocations: dict[str, Any] = {}
         self.namespaces = {
             ns_type: SimpleNamespace(
                 id=_NAMESPACES[ns_type][1],
@@ -127,6 +135,11 @@ class _World:
             return SimpleNamespace(id="vlan-pool")
         if name == "ManagedFirewallContext":
             return next(ctx for ctx in self.contexts.values() if ctx.id == kwargs["id"])
+        if name == "CoreIPAddressPool":
+            if not self.snat_pool:
+                raise RuntimeError("pool not found")
+            assert kwargs["name__value"] == "FW-SNAT-INTERNET-IPv4"
+            return SimpleNamespace(id="pool-snat")
         if name == "IpamIPAddress":
             return self.addresses.get((kwargs["address__value"], kwargs["ip_namespace__ids"][0]))
         raise AssertionError(f"unexpected get({name})")
@@ -145,10 +158,30 @@ class _World:
             )
         return self.allocated[identifier]
 
+    async def allocate_next_ip_address(
+        self, *, resource_pool: Any, identifier: str, prefix_length: int, **_: Any
+    ) -> Any:
+        self.allocate_calls += 1
+        assert resource_pool.id == "pool-snat"
+        assert prefix_length == 32
+        if identifier not in self.snat_allocations:
+            host = ipaddress.ip_address("192.0.2.0") + 1 + len(self.snat_allocations)
+            self.snat_allocations[identifier] = SimpleNamespace(
+                id=f"snat-{len(self.snat_allocations)}", address=SimpleNamespace(value=f"{host}/32")
+            )
+        return self.snat_allocations[identifier]
+
     # --- writes ----------------------------------------------------------
     async def create(self, *, kind: Any, data: dict[str, Any]) -> Any:
         name = kind.__name__
         if name == "ManagedFirewallContext":
+            if "snat_address" in data:  # the SNAT relationship write on an existing context
+                context = next(ctx for ctx in self.contexts.values() if ctx.id == data["id"])
+                return self._node(
+                    name,
+                    "snat_address",
+                    on_save=lambda: setattr(context, "snat_address", SimpleNamespace(id=data["snat_address"]["id"])),
+                )
             if "vlan_id" in data:  # the VLAN allocation re-save of an existing context
                 context = next(ctx for ctx in self.contexts.values() if ctx.id == data["id"])
                 return self._node(
@@ -198,6 +231,7 @@ class _World:
             name=SimpleNamespace(value=name),
             vlan_id=SimpleNamespace(value=None),
             tenant_id=None,
+            snat_address=SimpleNamespace(id=None),
             add_relationships=None,
         )
 
@@ -606,3 +640,85 @@ class TestHealingAndFailures:
         assert {device for device, _ in world.sub_interfaces} == {"fw-2"}
         fw2_ip = world.sub_interfaces[("fw-2", "Ethernet1/25.3000")].ip_address.id
         assert fw2_ip == world.addresses[("100.66.0.6/29", "ns-prod")].id
+
+
+class TestSnatAddress:
+    """One public SNAT /32 per context with an INTERNET leg (FW-SNAT-INTERNET-IPv4)."""
+
+    @pytest.mark.asyncio
+    async def test_shared_context_gets_one_untracked_snat_shared_by_all_tenant_vrfs(self) -> None:
+        world = _World()
+        gen, _ = _make_gen(world)
+
+        await _run(gen, world, _payload(customer_id="cust-1", environment="p"))
+        await _run(gen, world, _payload(customer_id="cust-2", environment="d"))
+
+        context = world.contexts[_SHARED]
+        assert list(world.snat_allocations) == [f"{context.id}-snat"]
+        assert context.snat_address.id == "snat-0"
+        snat_saves = [kwargs for kind, label, kwargs in world.saves if label == "snat_address"]
+        assert snat_saves == [_UNTRACKED]
+
+    @pytest.mark.asyncio
+    async def test_dedicated_context_snat_write_is_tracked(self) -> None:
+        world = _World()
+        gen, _ = _make_gen(world)
+        TestDedicatedContext()._dedicated(gen)
+
+        await _run(gen, world, _payload(dedicated=True))
+
+        assert [kwargs for _, label, kwargs in world.saves if label == "snat_address"] == [_TRACKED]
+        assert world.contexts["DC10-ded-ha-context"].snat_address.id == "snat-0"
+
+    @pytest.mark.asyncio
+    async def test_rerun_with_snat_set_writes_nothing(self) -> None:
+        world = _World()
+        gen, events = _make_gen(world)
+        await _run(gen, world, _payload())
+        events.clear()
+        before = world.writes
+
+        await _run(gen, world, _payload())
+
+        assert world.writes == before
+        assert events == []
+
+    @pytest.mark.asyncio
+    async def test_missing_snat_is_healed_with_the_same_address(self) -> None:
+        world = _World()
+        gen, _ = _make_gen(world)
+        await _run(gen, world, _payload())
+        context = world.contexts[_SHARED]
+        first = context.snat_address.id
+        context.snat_address = SimpleNamespace(id=None)
+
+        await _run(gen, world, _payload())
+
+        assert context.snat_address.id == first
+        assert len(world.snat_allocations) == 1
+        before = world.writes
+        await _run(gen, world, _payload())
+        assert world.writes == before
+
+    @pytest.mark.asyncio
+    async def test_missing_snat_pool_is_an_error_before_the_context_is_created(self) -> None:
+        world = _World(snat_pool=False)
+        gen, _ = _make_gen(world)
+
+        await _run(gen, world, _payload())
+
+        gen.logger.error.assert_called_once()
+        assert "FW-SNAT-INTERNET-IPv4" in gen.logger.error.call_args.args[0]
+        assert world.contexts == {}
+
+    @pytest.mark.asyncio
+    async def test_context_without_an_internet_leg_gets_no_snat(self) -> None:
+        world = _World(snat_pool=False)  # the pool is never looked up
+        gen, _ = _make_gen(world)
+
+        with patch("generators.firewall_context.EXCHANGE_PEERS", {"prod": ()}):
+            await _run(gen, world, _payload())
+
+        assert world.snat_allocations == {}
+        assert world.contexts[_SHARED].snat_address.id is None
+        gen.logger.error.assert_not_called()

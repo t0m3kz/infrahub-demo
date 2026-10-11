@@ -221,6 +221,11 @@ router bgp {{ bgp_config.local_as.asn }}
       redistribute static route-map RM-VRF-STATIC-2-EVPN-{{ vrf_name }}
 {%- endif %}
 {%- endif %}
+{#- The public space is originated as one summary (it exists once SNAT /32s
+    arrive over EVPN); the more-specifics are suppressed towards the ISP. #}
+{%- for prefix in (internet_prefixes | default([])) if _transit_vrf %}
+      aggregate-address {{ prefix }} summary-only
+{%- endfor %}
 {%- for session in bgp_config.vrf_sessions.get(vrf_name, []) %}
 {%- set _af = 'ipv6' if 'ipv6' in (session.address_families | default([])) else 'ipv4' %}
     neighbor {{ session.neighbor }}
