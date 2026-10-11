@@ -42,9 +42,12 @@ from infrahub_sdk import InfrahubClient
 
 from checks.firewall import CheckFirewall
 from generators.protocols import DcimPhysicalDevice
+from transforms.config.access_leaf import AccessLeaf
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.firewall import Firewall
+from transforms.config.leaf import Leaf
 from utils.exchange_transit import transit_addresses, transit_vlan, transit_vni, zone_name_for_namespace_type
+from utils.internet_space import NON_INTERNET_PREFIXES
 
 from .conftest import TestInfrahubDockerWithClient
 from .test_constants import (
@@ -52,9 +55,10 @@ from .test_constants import (
     ALL_DEMO_DC_NAMES,
     ALL_DEMO_DEDICATED_FIREWALL_TENANTS,
     ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS,
+    ALL_DEMO_INTERNET_EGRESS_RULES,
     transit_namespace_type,
 )
-from .test_helpers import fetch_transit_inventory, match_transit_contexts
+from .test_helpers import fetch_dc_topology, fetch_transit_inventory, match_transit_contexts
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -106,6 +110,23 @@ query {
   }
 }
 """
+
+SEGMENT_QUERY = """
+query ($name: String!) {
+  ManagedNetworkSegment(name__value: $name) {
+    edges {
+      node {
+        ... on ManagedVlanSegment { vlan_id { value } }
+        gateway { node { ip_prefix { node { prefix { value } } } } }
+      }
+    }
+  }
+}
+"""
+
+_ACL_LINE = re.compile(
+    r"^\s+(?P<seq>\d+) (?P<action>permit|deny) (?P<proto>\S+) (?P<src>\S+) (?P<dst>\S+)(?P<rest>.*)$"
+)
 
 _ROOT = str(Path(__file__).parent.parent.parent)
 
@@ -450,4 +471,118 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
             f"  - {e}" for e in errors
         )
         logging.info("Border-leaf transit routes rendered on %s (transit VNIs %s)", border_leafs, transit_vnis)
+
+    @pytest.mark.order(400)
+    @pytest.mark.dependency(scope="session", depends=["all_demo_firewall_transit_render"])
+    @pytest.mark.asyncio
+    async def test_06_internet_egress_rule_renders_on_firewall_and_leaf(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """A permit to the prefix-less Internet segment (ALL_DEMO_INTERNET_EGRESS_RULES).
+
+        Firewall: every member of the DC's shared context renders the rule in
+        that context's vsys from the source's zone to INTERNET-ZONE, source the
+        segment's prefix, destination any. Leaf: the ACL of the source segment's
+        VLAN denies every NON_INTERNET_PREFIXES range from the segment before
+        the `permit ... any`, and has no `permit <proto> <src> any` ahead of
+        the last of those denies.
+        """
+        logging.info("=== %s - Step 6: Internet egress rule ===", SCENARIO_NAME)
+
+        contexts = _dc_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))
+        errors: list[str] = []
+        for rule_name, rule in ALL_DEMO_INTERNET_EGRESS_RULES.items():
+            dc = rule["dc"]
+            segments = (
+                await async_client_main.execute_graphql(
+                    query=SEGMENT_QUERY, variables={"name": rule["source_segment"]}, branch_name=scenario_branch
+                )
+            )["ManagedNetworkSegment"]["edges"]
+            assert segments, f"segment '{rule['source_segment']}' not found on branch '{scenario_branch}'"
+            segment = segments[0]["node"]
+            prefix = segment["gateway"]["node"]["ip_prefix"]["node"]["prefix"]["value"]
+            vlan_id = segment["vlan_id"]["value"]
+
+            # --- firewall: the shared context of the DC ---
+            context = contexts[(dc, None)]
+            members = sorted({str(leg["device"]) for leg in context["legs"]})
+            assert members, f"{dc}: the shared context has no firewall member"
+            base = rf"^set vsys {re.escape(str(context['name']))} rulebase security rules {re.escape(rule_name)}"
+            for device in members:
+                rendered = await _render(async_client_main, scenario_branch, device)
+                expected = {
+                    "to": rf"{base} to {re.escape(rule['destination_zone'])}$",
+                    "from": rf"{base} from \S+$",
+                    "source": rf"{base} source {re.escape(prefix)}$",
+                    "destination": rf"{base} destination any$",
+                    "service": rf"{base} service svc-{rule['protocol']}-{rule['port']}$",
+                    "action": rf"{base} action allow$",
+                }
+                for part, pattern in expected.items():
+                    if re.search(pattern, rendered, re.MULTILINE) is None:
+                        errors.append(f"{dc}/{device}: no rendered '{rule_name}' {part} line matching /{pattern}/")
+
+            # --- leaf: the ACL of the source segment's VLAN ---
+            topology = await fetch_dc_topology(async_client_main, scenario_branch, dc)
+            leaf_classes = {"leaf": Leaf, "access-leaf": AccessLeaf}
+            with_vlan: list[str] = []
+            seen_acls: set[str] = set()
+            acls: dict[str, list[dict[str, str]]] = {}
+            for device in sorted(topology["devices"], key=lambda d: str(d["name"])):
+                if device.get("role") not in leaf_classes:
+                    continue
+                rendered = await _render(
+                    async_client_main,
+                    scenario_branch,
+                    str(device["name"]),
+                    query="leaf_config",
+                    transform_cls=leaf_classes[str(device["role"])],
+                )
+                seen_acls.update(re.findall(r"^ip access-list (\S+)", rendered, re.MULTILINE))
+                if re.search(rf"^vlan {vlan_id}$", rendered, re.MULTILINE):
+                    with_vlan.append(str(device["name"]))
+                block = re.search(rf"^ip access-list ACL-VLAN{vlan_id}-IN\n((?:[ \t]+.*\n)*)", rendered, re.MULTILINE)
+                if block is not None:
+                    acls[str(device["name"])] = [
+                        match.groupdict() for line in block.group(1).splitlines() if (match := _ACL_LINE.match(line))
+                    ]
+            if not acls:
+                errors.append(
+                    f"{dc}: no leaf or access-leaf renders ACL-VLAN{vlan_id}-IN for '{rule['source_segment']}' "
+                    f"(devices carrying vlan {vlan_id}: {with_vlan}; ACL names on the DC11 leafs: {sorted(seen_acls)})"
+                )
+            for device, lines in acls.items():
+                denies = [
+                    index
+                    for index, line in enumerate(lines)
+                    if line["action"] == "deny" and line["src"] == prefix and line["dst"] in NON_INTERNET_PREFIXES
+                ]
+                denied = {lines[index]["dst"] for index in denies}
+                if denied != set(NON_INTERNET_PREFIXES):
+                    errors.append(f"{device}: denies from {prefix} miss {sorted(set(NON_INTERNET_PREFIXES) - denied)}")
+                permits_any = [
+                    index
+                    for index, line in enumerate(lines)
+                    if line["action"] == "permit"
+                    and line["src"] == prefix
+                    and line["dst"] == "any"
+                    and line["rest"].split()[:2] == ["eq", str(rule["port"])]
+                ]
+                if not permits_any:
+                    errors.append(f"{device}: no 'permit {rule['protocol']} {prefix} any eq {rule['port']}' in the ACL")
+                elif denies and min(permits_any) < max(denies):
+                    errors.append(f"{device}: 'permit {prefix} any' precedes a deny of an internal range")
+                unconditional = [
+                    line
+                    for line in lines
+                    if line["action"] == "permit" and line["src"] == prefix and line["dst"] == "any"
+                ]
+                if any(re.search(r"\b(eq|range)\b", line["rest"]) is None for line in unconditional):
+                    errors.append(f"{device}: unconditional 'permit ... {prefix} any' (no port) in the ACL")
+
+        assert not errors, f"internet egress rule on branch '{scenario_branch}' is wrong:\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)
