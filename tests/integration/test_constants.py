@@ -581,6 +581,11 @@ def expected_transit_contexts() -> list[ExpectedTransitContext]:
 
 
 ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS = expected_transit_contexts()
+# PR 4d: every context with an INTERNET leg owns one SNAT /32 (FW-SNAT-INTERNET-IPv4,
+# data/bootstrap/23_transit_pools.yml). EXCHANGE_PEERS gives every tenant VRF an INTERNET
+# leg, so that is every DC context; the colocation context is policy-only (no legs, no SNAT).
+ALL_DEMO_SNAT_POOL_PREFIX = "192.0.2.0/24"
+ALL_DEMO_SNAT_ADDRESSES = sum("INTERNET" in c["namespaces"] for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS)
 # Planning estimate, re-derived above: DC10 2+2, DC11 2+2, DC12 3+2 legs.
 ALL_DEMO_TRANSIT_LEGS = sum(len(c["namespaces"]) for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS)
 ALL_DEMO_TRANSIT_EXCHANGES = sum(len(c["exchanges"]) for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS)

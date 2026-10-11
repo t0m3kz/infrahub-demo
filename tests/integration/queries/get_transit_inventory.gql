@@ -5,6 +5,7 @@ query GetTransitInventory {
         id
         name { value }
         vlan_id { value }
+        snat_address { node { address { value } ip_namespace { node { name { value } } } } }
         tenant {
           node {
             id
