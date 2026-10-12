@@ -94,6 +94,16 @@ def namespace_type_for_environment(environment: str) -> str:
     return "prod" if environment == "p" else "non_prod"
 
 
+def joins_prod_and_nonprod(environment_a: str | None, environment_b: str | None) -> bool:
+    """Whether a flow between two environments would join the prod and non-prod namespaces.
+
+    Fails closed: a missing or empty environment counts as a join, since its namespace type cannot be known.
+    """
+    if not environment_a or not environment_b:
+        return True
+    return namespace_type_for_environment(environment_a) != namespace_type_for_environment(environment_b)
+
+
 def zone_name_for_namespace_type(ns_type: str) -> str:
     return ZONE_BY_NS_TYPE[ns_type]
 
