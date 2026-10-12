@@ -251,7 +251,9 @@ ALL_DEMO_PHYSICAL_CIRCUIT_TYPES: dict[str, int] = {
     # All hand-authored in 08_interconnects/ — the opt-in
     # TopologyInterconnectRequest that used to scaffold 2 extra DC11<->DC12
     # stub circuits was removed along with its generator.
-    "dark_fiber": 3,  # DC10/DC11 -> EQX FR2, DC12 -> EQX PA4
+    # Each DC has one fibre to each of its metro's two border gateways:
+    # DC10/DC11 -> EQX FR2 (01 and 02 edge), DC12 -> EQX PA4 (01 and 02 edge).
+    "dark_fiber": 6,
     "cross_connect": 2,  # EQX FR2 -> AWS eu-central-1, EQX PA4 -> Azure westeurope
     # 5 office underlays (C001/C003/C015 hand-authored + C002/C005 from
     # add_sdwan_edge) + 4 shared transit circuits from 06_internet.
@@ -266,6 +268,9 @@ ALL_DEMO_DCI_CIRCUITS: dict[str, tuple[str, tuple[tuple[str, str], tuple[str, st
     "DF-DC10-EQXFR2": ("DC10", (("bl-dc101101", "Ethernet1/35"), ("eg-fr01", "Ethernet1/10"))),
     "DF-DC11-EQXFR2": ("DC11", (("bl-dc1111101", "Ethernet1/35"), ("eg-fr01", "Ethernet1/11"))),
     "DF-DC12-EQXPA4": ("DC12", (("bl-dc1212101", "Ethernet1/35"), ("eg-pa01", "Ethernet1/10"))),
+    "DF-DC10-EQXFR2-B": ("DC10", (("bl-dc101101", "Ethernet1/36"), ("eg-fr02", "Ethernet1/10"))),
+    "DF-DC11-EQXFR2-B": ("DC11", (("bl-dc1111101", "Ethernet1/36"), ("eg-fr02", "Ethernet1/11"))),
+    "DF-DC12-EQXPA4-B": ("DC12", (("bl-dc1212101", "Ethernet1/36"), ("eg-pa02", "Ethernet1/10"))),
 }
 
 # Shared ISP transit (08_interconnects/06_internet): colo edges -> ISP PEs.
@@ -274,19 +279,52 @@ ALL_DEMO_INTERNET_TRANSIT_CIRCUITS: frozenset[str] = frozenset(
     {"INET-LUMEN-EQXFR2", "INET-COGENT-EQXFR2", "INET-LUMEN-EQXPA4", "INET-COGENT-EQXPA4"}
 )
 
-# INTERNET upstream (PR 4c): the colo edges that are their metro's EVPN
-# Multi-Site border gateway export the ISP default route as an EVPN type-5 route
-# (L3 VNI 60002, one global route-target for the INTERNET namespace). Only the
-# "01" edge of each metro has a dark fibre to a DC (ALL_DEMO_DCI_CIRCUITS).
-ALL_DEMO_INTERNET_BGWS: frozenset[str] = frozenset({"eg-fr01", "eg-pa01"})
+# INTERNET upstream (PR 4c, extended by the metro edge pair): the colo edges are
+# their metro's EVPN Multi-Site border gateways and export the ISP default route
+# as an EVPN type-5 route (L3 VNI 60002, one global route-target for the
+# INTERNET namespace). Both edges of each metro share the site VIP and have their
+# own dark fibre to every DC the metro fronts (ALL_DEMO_DCI_CIRCUITS).
+ALL_DEMO_INTERNET_BGWS: frozenset[str] = frozenset({"eg-fr01", "eg-fr02", "eg-pa01", "eg-pa02"})
 
-# The "02" edges terminate a Cogent session but have no inter-edge link and no
-# DCI: their sessions render and the transit filters apply, but nothing can
-# reach them from a DC (CheckEdge warns) until the metro edge pair lands.
-ALL_DEMO_INTERNET_ISLAND_EDGES: frozenset[str] = frozenset({"eg-fr02", "eg-pa02"})
+# DC -> the BGWs its DCI sessions land on, i.e. where that DC learns 0/0 from:
+# both edges of the metro it fronts.
+ALL_DEMO_INTERNET_UPSTREAM_BY_DC: dict[str, frozenset[str]] = {
+    "DC10": frozenset({"eg-fr01", "eg-fr02"}),
+    "DC11": frozenset({"eg-fr01", "eg-fr02"}),
+    "DC12": frozenset({"eg-pa01", "eg-pa02"}),
+}
 
-# DC -> the BGW its DCI lands on, i.e. where that DC learns 0/0 from.
-ALL_DEMO_INTERNET_UPSTREAM_BY_DC: dict[str, str] = {"DC10": "eg-fr01", "DC11": "eg-fr01", "DC12": "eg-pa01"}
+# Metros with exactly two PHYSICAL edges in 30_all (generators/topology/colocation.py
+# _ensure_edge_pair; virtual edges are ignored). Derived from
+# data/demos/30_all/02_colo/equinix/{fr,pa}/02_topology.yml: FR and PA declare
+# `["2", "edge", "N9K-C9316D-GX_EDGE"]`; AM is virtual, the other Equinix/Megaport/
+# CoreSite metros declare no fabric_templates.
+ALL_DEMO_EDGE_PAIR_METROS: dict[str, tuple[str, str]] = {
+    "fr": ("eg-fr01", "eg-fr02"),
+    "pa": ("eg-pa01", "eg-pa02"),
+}
+
+# The interlink port (N9K-C9316D-GX_EDGE Ethernet1/8, role `interlink`) cabled between the pair.
+ALL_DEMO_EDGE_INTERLINK_INTERFACE = "Ethernet1/8"
+
+# Metro keys are the lowercase metro names the generator uses for its pool and key names.
+# metro -> ((device, interface), (device, interface)) of the one DcimCable per pair.
+ALL_DEMO_EDGE_INTERLINKS: dict[str, tuple[tuple[str, str], tuple[str, str]]] = {
+    metro: ((a, ALL_DEMO_EDGE_INTERLINK_INTERFACE), (b, ALL_DEMO_EDGE_INTERLINK_INTERFACE))
+    for metro, (a, b) in ALL_DEMO_EDGE_PAIR_METROS.items()
+}
+
+# metro -> the one FABRIC-<a>-<b> iBGP session (peering_role fabric) between the pair's overlay processes.
+ALL_DEMO_FABRIC_PEERINGS: dict[str, str] = {
+    metro: f"FABRIC-{a}-{b}" for metro, (a, b) in ALL_DEMO_EDGE_PAIR_METROS.items()
+}
+
+# The metro-owned slice of Technical-IPv6 the interlink /127 comes from: `{metro}-technical-ipv6-pool`.
+ALL_DEMO_EDGE_PAIR_POOL_TEMPLATE = "{metro}-technical-ipv6-pool"
+
+# The shared Multi-Site VIP: both edges of a metro carry ONE /128 on loopback100
+# (data/demos/30_all/08_interconnects/01_colo_onramp/04_multisite_vips.yml).
+ALL_DEMO_METRO_SITE_VIPS: dict[str, str] = {"fr": "fd00:2500:ff::f1/128", "pa": "fd00:2500:ff::f2/128"}
 
 # The four eBGP transit sessions in VRF INTERNET (06_internet/05_bgp.yml) -> the colo edge each runs on.
 ALL_DEMO_INTERNET_TRANSIT_PEERINGS: dict[str, str] = {

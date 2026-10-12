@@ -910,3 +910,147 @@ class TestMetroEvpn:
         await gen._ensure_metro_evpn(metro_id="metro-1")
         gen.logger.error.assert_called_once()
         assert _created(gen, "ManagedBGP") == []
+
+
+def _pair_generator(*, legs: list | None = None) -> Any:
+    """A generator whose pair step runs for real; only the SDK edges are mocked."""
+    gen = _make_generator()
+    pool = MagicMock(id="pool-ipv6")
+    gen.ensure_sliced_pool = AsyncMock(return_value=pool)
+    iface_a, iface_b = MagicMock(id="if-a"), MagicMock(id="if-b")
+    gen.create_chain_cabling = AsyncMock(return_value=[[(iface_a, iface_b)]] if legs is None else legs)
+    gen._ensure_routing_password = AsyncMock(return_value="key-1")
+    gen.ensure_address_family = AsyncMock(side_effect=lambda afi, safi: f"af-{afi}-{safi}")
+    created = MagicMock()
+    created.save = AsyncMock()
+    gen.client.create = AsyncMock(return_value=created)
+    gen._pool = pool
+    return gen
+
+
+_PROCESSES = {"eg-fr01": "bgp-1", "eg-fr02": "bgp-2"}
+
+
+class TestEdgePair:
+    """_ensure_edge_pair: interlink cable + /127 + FABRIC iBGP session."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("edges", [[], ["eg-fr01"], ["eg-fr01", "eg-fr02", "eg-fr03"]])
+    async def test_anything_but_two_physical_edges_gets_no_pair(self, edges: list[str]) -> None:
+        gen = _pair_generator()
+        await gen._ensure_edge_pair(physical_edge_names=edges, overlay_process_ids=_PROCESSES)
+        gen.ensure_sliced_pool.assert_not_awaited()
+        gen.create_chain_cabling.assert_not_awaited()
+        gen.client.create.assert_not_awaited()
+        gen.logger.info.assert_called()
+        gen.logger.error.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_virtual_edges_are_not_counted(self) -> None:
+        """generate() hands over only the physical names: 1 physical + 1 virtual is a single edge."""
+        gen = _make_generator()
+        gen._ensure_colocation_pools = AsyncMock()
+        gen._create_metro_devices = AsyncMock(return_value={"edge": ["eg-fr01"]})
+        gen._cable_metro_services = AsyncMock()
+        gen._ensure_metro_evpn = AsyncMock(return_value=_PROCESSES)
+        gen._ensure_edge_pair = AsyncMock()
+        await gen.generate({"TopologyColocationMetro": [_metro()]})
+        gen._ensure_edge_pair.assert_awaited_once_with(physical_edge_names=["eg-fr01"], overlay_process_ids=_PROCESSES)
+
+    @pytest.mark.asyncio
+    async def test_pair_is_ensured_after_the_metro_evpn_step(self) -> None:
+        gen = _make_generator()
+        calls: list[str] = []
+        gen._ensure_colocation_pools = AsyncMock()
+        gen._create_metro_devices = AsyncMock(return_value={"edge": ["eg-fr01", "eg-fr02"]})
+        gen._cable_metro_services = AsyncMock()
+        gen._ensure_metro_evpn = AsyncMock(side_effect=lambda **_: calls.append("evpn") or _PROCESSES)
+        gen._ensure_edge_pair = AsyncMock(side_effect=lambda **_: calls.append("pair"))
+        await gen.generate({"TopologyColocationMetro": [_metro()]})
+        assert calls == ["evpn", "pair"]
+
+    @pytest.mark.asyncio
+    async def test_ipv6_technical_pool_is_a_metro_owned_slice(self) -> None:
+        gen = _pair_generator()
+        await gen._ensure_edge_pair(physical_edge_names=["eg-fr02", "eg-fr01"], overlay_process_ids=_PROCESSES)
+        kwargs = gen.ensure_sliced_pool.await_args.kwargs
+        assert kwargs["pool_name"] == "fr-technical-ipv6-pool"
+        assert kwargs["parent_pool_name"] == "Technical-IPv6"
+        assert kwargs["kind"] == "prefix"
+        assert kwargs["role"] == "technical"
+
+    @pytest.mark.asyncio
+    async def test_cabled_by_interlink_role_with_a_127_from_that_pool(self) -> None:
+        gen = _pair_generator()
+        await gen._ensure_edge_pair(physical_edge_names=["eg-fr02", "eg-fr01"], overlay_process_ids=_PROCESSES)
+        kwargs = gen.create_chain_cabling.await_args.kwargs
+        assert kwargs["hops"] == [
+            {"devices": ["eg-fr01"], "down_role": "interlink"},
+            {"devices": ["eg-fr02"], "up_role": "interlink"},
+        ]
+        assert kwargs["options"]["pool"] is gen._pool
+        assert kwargs["options"]["p2p_prefix_length"] == 127
+
+    @pytest.mark.asyncio
+    async def test_peering_name_password_roles_and_families(self) -> None:
+        gen = _pair_generator()
+        await gen._ensure_edge_pair(physical_edge_names=["eg-fr02", "eg-fr01"], overlay_process_ids=_PROCESSES)
+        (peering,) = _created(gen, "ManagedBGPPeering")
+        assert peering["name"] == "FABRIC-eg-fr01-eg-fr02"
+        assert peering["session_type"] == "IBGP"
+        assert peering["peering_role"] == "fabric"
+        assert peering["ttl"] == 1
+        assert peering["password"] == {"id": "key-1"}
+        assert peering["address_families"] == [{"id": "af-ipv6-unicast"}, {"id": "af-l2vpn-evpn"}]
+        assert peering["interface_capabilities"] == [{"id": "if-a"}, {"id": "if-b"}]
+        assert gen._ensure_routing_password.await_args.kwargs["name"] == "fr-fabric-key"
+
+    @pytest.mark.asyncio
+    async def test_process_ids_come_from_the_evpn_step_not_a_name_query(self) -> None:
+        gen = _pair_generator()
+        gen.client.get = AsyncMock(side_effect=AssertionError("no lookup by name"))
+        gen.client.filters = AsyncMock(side_effect=AssertionError("no lookup by name"))
+        await gen._ensure_edge_pair(physical_edge_names=["eg-fr01", "eg-fr02"], overlay_process_ids=_PROCESSES)
+        (peering,) = _created(gen, "ManagedBGPPeering")
+        assert peering["bgp_processes"] == [{"id": "bgp-1"}, {"id": "bgp-2"}]
+
+    @pytest.mark.asyncio
+    async def test_missing_overlay_process_skips_the_pair(self) -> None:
+        gen = _pair_generator()
+        await gen._ensure_edge_pair(
+            physical_edge_names=["eg-fr01", "eg-fr02"], overlay_process_ids={"eg-fr01": "bgp-1"}
+        )
+        gen.create_chain_cabling.assert_not_awaited()
+        gen.logger.warning.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_no_interlink_ports_writes_no_peering(self) -> None:
+        gen = _pair_generator(legs=[[]])
+        await gen._ensure_edge_pair(physical_edge_names=["eg-fr01", "eg-fr02"], overlay_process_ids=_PROCESSES)
+        gen.client.create.assert_not_awaited()
+        gen.logger.warning.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_rerun_converges_on_the_same_keys(self) -> None:
+        """Idempotent: a second run issues the same deterministic names and identifiers."""
+        gen = _pair_generator()
+        for _ in range(2):
+            await gen._ensure_edge_pair(physical_edge_names=["eg-fr01", "eg-fr02"], overlay_process_ids=_PROCESSES)
+        first, second = _created(gen, "ManagedBGPPeering")
+        assert first == second
+        assert gen.ensure_sliced_pool.await_count == 2
+        assert {c.kwargs["pool_name"] for c in gen.ensure_sliced_pool.await_args_list} == {"fr-technical-ipv6-pool"}
+        gen.release_resource_lock.assert_awaited()
+
+
+class TestEvpnProcessIds:
+    @pytest.mark.asyncio
+    async def test_overlay_process_ids_are_returned_by_edge_name(self) -> None:
+        gen = _evpn_generator()
+        gen.client.create.return_value.id = "bgp-saved"
+        assert await gen._ensure_metro_evpn(metro_id="metro-1") == {"eg-fr01": "bgp-saved"}
+
+    @pytest.mark.asyncio
+    async def test_no_edges_returns_no_ids(self) -> None:
+        gen = _make_generator()
+        assert await gen._ensure_metro_evpn(metro_id="metro-1") == {}

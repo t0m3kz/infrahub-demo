@@ -1,0 +1,235 @@
+!
+! dc1-edge-01 Configuration
+!
+hostname dc1-edge-01
+!
+feature ospf
+feature bgp
+feature interface-vlan
+feature lacp
+feature vpc
+feature lldp
+!
+! VLANs
+vlan 150
+  name Customer-A
+!
+!
+! Interfaces
+interface Ethernet1
+  no shutdown
+  ip address 10.1.0.1/31
+
+!
+interface Ethernet1/8
+  no shutdown
+  ipv6 address 2001:db8:100:ff::/127
+
+!
+interface Ethernet1/10
+  no shutdown
+  ipv6 address 2001:db8:dc10::/127
+
+!
+interface Ethernet1/11
+  no shutdown
+  ipv6 address 2001:db8:dc11::/127
+
+!
+interface Ethernet1/15
+  no shutdown
+
+  switchport
+  switchport mode access
+  switchport access vlan 150
+!
+interface Ethernet2
+  no shutdown
+  ip address 10.1.0.3/31
+
+!
+interface Loopback0
+  no shutdown
+  ip address 10.0.0.1/32
+
+!
+interface Loopback1
+  no shutdown
+  ipv6 address 2001:db8:100::1/128
+
+!
+interface Loopback100
+  no shutdown
+  ipv6 address 2001:db8:100::f1/128
+
+!
+!
+!
+! BGP Configuration
+
+router bgp 65001
+  router-id 10.0.0.1
+  graceful-restart
+  !
+  template peer-policy DCI-PEERS-POLICY
+    send-community
+  !
+  template peer-session DCI-PEERS-SESSION
+    bfd
+  !
+  !
+  template peer-policy EVPN-OVERLAY-POLICY
+    send-community
+    send-community extended
+  !
+  template peer-session EVPN-OVERLAY-SESSION
+    update-source loopback0
+    ebgp-multihop 255
+  !
+  !
+  template peer-policy FABRIC-PEERS-POLICY
+    send-community
+  !
+  template peer-session FABRIC-PEERS-SESSION
+    bfd
+  !
+  !
+  template peer-policy UNDERLAY-PEERS-POLICY
+    send-community
+  !
+  template peer-session UNDERLAY-PEERS-SESSION
+    bfd
+  !
+  address-family ipv4 unicast
+    redistribute direct route-map RM-CONN-2-BGP
+    maximum-paths 8
+  !
+  address-family ipv6 unicast
+    redistribute direct route-map RM-CONN-2-BGP
+    maximum-paths 8
+  !
+  address-family l2vpn evpn
+  !
+  neighbor 10.1.0.0
+    remote-as 65100
+    description spine-01
+    inherit peer-session UNDERLAY-PEERS-SESSION
+    address-family ipv4 unicast
+      inherit peer-policy UNDERLAY-PEERS-POLICY
+    !
+  neighbor 10.1.0.2
+    remote-as 65101
+    description spine-02
+    inherit peer-session UNDERLAY-PEERS-SESSION
+    address-family ipv4 unicast
+      inherit peer-policy UNDERLAY-PEERS-POLICY
+    !
+  neighbor 2001:db8:100:ff::1
+    remote-as 65001
+    description dc1-edge-02
+    password fabric-s3cr3t
+    inherit peer-session FABRIC-PEERS-SESSION
+    address-family ipv6 unicast
+      inherit peer-policy FABRIC-PEERS-POLICY
+      route-map RM-FABRIC-OUT out
+    !
+    address-family l2vpn evpn
+      inherit peer-policy FABRIC-PEERS-POLICY
+    !
+  neighbor 2001:db8:dc10::1
+    remote-as 65100
+    description dc10-border-leaf-01
+    peer-type fabric-external
+    inherit peer-session DCI-PEERS-SESSION
+    address-family ipv6 unicast
+      inherit peer-policy DCI-PEERS-POLICY
+    !
+    address-family l2vpn evpn
+      inherit peer-policy DCI-PEERS-POLICY
+    !
+  neighbor 2001:db8:dc11::1
+    remote-as 65101
+    description dc11-border-leaf-01
+    peer-type fabric-external
+    inherit peer-session DCI-PEERS-SESSION
+    address-family ipv6 unicast
+      inherit peer-policy DCI-PEERS-POLICY
+    !
+    address-family l2vpn evpn
+      inherit peer-policy DCI-PEERS-POLICY
+    !
+  neighbor 10.0.0.100
+    remote-as 65100
+    description spine-01
+    inherit peer-session EVPN-OVERLAY-SESSION
+    address-family l2vpn evpn
+      inherit peer-policy EVPN-OVERLAY-POLICY
+    !
+  neighbor 10.0.0.101
+    remote-as 65101
+    description spine-02
+    inherit peer-session EVPN-OVERLAY-SESSION
+    address-family l2vpn evpn
+      inherit peer-policy EVPN-OVERLAY-POLICY
+    !
+!
+
+!
+!
+! VXLAN Configuration (netlab-style multivendor)
+!
+feature nv overlay
+feature vn-segment-vlan-based
+feature nve
+nv overlay evpn
+!
+evpn multisite border-gateway 65000
+  delay-restore time 300
+!
+interface nve1
+  source-interface Loopback1
+  host-reachability protocol bgp
+  multisite border-gateway interface Loopback100
+  member vni 10150
+    suppress-arp
+    ingress-replication protocol bgp
+  no shutdown
+!
+interface Ethernet1/10
+  evpn multisite dci-tracking
+!
+interface Ethernet1/11
+  evpn multisite dci-tracking
+!
+interface Ethernet1/8
+  evpn multisite fabric-tracking
+!
+!
+! EVPN Configuration
+!
+evpn
+  vni 10150 l2
+    rd 10.0.0.1:10150
+    route-target import 65000:10150
+    route-target export 65000:10150
+!
+!
+! VLAN to VNI mapping
+!
+vlan 150
+  vn-segment 10150
+
+!
+! Route-maps
+route-map RM-CONN-2-BGP permit 10
+  match interface loopback0 Loopback1 Loopback100
+!
+route-map RM-FABRIC-OUT permit 10
+  match interface loopback0 Loopback1 Loopback100
+!
+
+!
+! Management
+line console
+line vty
+!

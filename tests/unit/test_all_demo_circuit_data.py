@@ -20,7 +20,15 @@ _DEMOS = Path(__file__).parents[2] / "data" / "demos"
 _BOOTSTRAP_GROUPS = Path(__file__).parents[2] / "data" / "bootstrap" / "00_groups.yml"
 _TARGET_GROUPS = {"TopologyPhysicalCircuit": "physical_circuits", "TopologyVirtualCircuit": "virtual_circuits"}
 _ONRAMP = _DEMOS / "30_all" / "08_interconnects" / "01_colo_onramp"
-_DCI_CIRCUITS = {"DF-DC10-EQXFR2", "DF-DC11-EQXFR2", "DF-DC12-EQXPA4"}
+# One fibre per DC to each of the metro's two edges (both are Multi-Site border gateways).
+_DCI_CIRCUITS = {
+    "DF-DC10-EQXFR2",
+    "DF-DC11-EQXFR2",
+    "DF-DC12-EQXPA4",
+    "DF-DC10-EQXFR2-B",
+    "DF-DC11-EQXFR2-B",
+    "DF-DC12-EQXPA4-B",
+}
 
 
 def _objects(root: Path, kind: str) -> list[tuple[Path, dict[str, Any]]]:
@@ -60,7 +68,7 @@ def test_circuit_target_groups_are_generator_groups() -> None:
 
 
 def test_dark_fibres_are_the_dci_circuits() -> None:
-    """peering_role is explicit: exactly the three DC <-> cage fibres are dci."""
+    """peering_role is explicit: exactly the six DC <-> cage fibres are dci."""
     dci = {
         _circuit_name(e)
         for _, e in _objects(_DEMOS / "30_all", "TopologyPhysicalCircuit")
@@ -97,3 +105,33 @@ def test_generated_peering_names_do_not_collide_with_data() -> None:
     generated |= {f"{e['name']}-bgp" for _, e in _objects(_DEMOS, "TopologyVirtualCircuit")}
 
     assert not generated & names
+
+
+def test_every_dci_fibre_lands_on_its_own_free_port() -> None:
+    """No two fibres share a port: each DC border leaf uses Ethernet1/35 and 1/36, each cage edge its dci ports."""
+    ends = [
+        tuple(i)
+        for _, e in _objects(_ONRAMP, "TopologyPhysicalCircuit")
+        for i in (e.get("customer_interfaces") or []) + (e.get("provider_interfaces") or [])
+    ]
+    assert len(ends) == len(set(ends))
+    border_leaf_ports = {port for device, port in ends if device.startswith("bl-dc")}
+    assert border_leaf_ports == {"Ethernet1/35", "Ethernet1/36"}
+
+
+def test_both_edges_of_a_metro_share_one_multisite_vip_address() -> None:
+    """The two edges of a metro are one Multi-Site site: same /128, so the loader upserts one IpamIPAddress."""
+    vips: dict[str, set[str]] = {}
+    for _, entry in _objects(_ONRAMP, "DcimVirtualInterface"):
+        if entry["role"] == "multisite-vip" and entry["device"].startswith("eg-"):
+            vips.setdefault(entry["device"][:-2], set()).add(entry["ip_address"]["data"]["address"])
+    assert vips == {"eg-fr": {"fd00:2500:ff::f1/128"}, "eg-pa": {"fd00:2500:ff::f2/128"}}
+    devices = [e["device"] for _, e in _objects(_ONRAMP, "DcimVirtualInterface") if e["device"].startswith("eg-")]
+    assert sorted(devices) == ["eg-fr01", "eg-fr02", "eg-pa01", "eg-pa02"]
+
+
+def test_generated_fabric_peering_names_do_not_collide_with_data() -> None:
+    """FABRIC-<a>-<b> shares the peering/circuit name space."""
+    names = {e["name"] for _, e in _objects(_DEMOS, "ManagedBGPPeering")}
+    names |= {_circuit_name(e) for kind in _TARGET_GROUPS for _, e in _objects(_DEMOS, kind)}
+    assert not {"FABRIC-eg-fr01-eg-fr02", "FABRIC-eg-pa01-eg-pa02"} & names

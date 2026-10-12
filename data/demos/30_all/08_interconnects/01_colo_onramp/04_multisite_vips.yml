@@ -4,10 +4,16 @@
 # Remote sites address the site, not an individual gateway, through it.
 #
 # Only the devices that terminate a dark fibre are border gateways: one per
-# DC (the border leaf the fibre lands on) and one per metro (the edge the DC
-# fibres land on). The metro's site-id and IPv6 VTEP loopback come from
-# add_colocation_metro (generators/topology/colocation.py _ensure_metro_evpn);
-# a DC's from its evpn_rt_as and Loopback0.
+# DC (the border leaf the fibre lands on) and TWO per metro (both edges: the
+# "01" edge and the "02" edge each get their own fibre to every DC the metro
+# fronts). The two edges of a metro are one site, so they carry the SAME /128:
+# the second declares the same address and the loader upserts onto the one
+# IpamIPAddress (address + namespace are its identity), so both interfaces
+# reference it. The two edges are linked by the interlink (Ethernet1/8) and
+# peer iBGP over it (add_colocation_metro, _ensure_edge_pair). The metro's
+# site-id and IPv6 VTEP loopback come from add_colocation_metro
+# (generators/topology/colocation.py _ensure_metro_evpn); a DC's from its
+# evpn_rt_as and Loopback0.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -47,6 +53,22 @@ spec:
           address: "fd00:2500:ff::f1/128"
     - name: "loopback100"
       device: "eg-pa01"
+      role: multisite-vip
+      status: active
+      description: "EVPN Multi-Site VIP for metro PA"
+      ip_address:
+        data:
+          address: "fd00:2500:ff::f2/128"
+    - name: "loopback100"
+      device: "eg-fr02"
+      role: multisite-vip
+      status: active
+      description: "EVPN Multi-Site VIP for metro FR"
+      ip_address:
+        data:
+          address: "fd00:2500:ff::f1/128"
+    - name: "loopback100"
+      device: "eg-pa02"
       role: multisite-vip
       status: active
       description: "EVPN Multi-Site VIP for metro PA"

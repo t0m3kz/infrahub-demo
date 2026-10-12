@@ -304,6 +304,8 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
     - EVPN-PEERS: iBGP sessions with TTL!=1 (EVPN overlay), shared remote-as from peer group
     - EVPN-OVERLAY: eBGP sessions with TTL!=1 (eBGP EVPN overlay), per-neighbor remote-as
     - DCI-PEERS: peering_role=dci sessions between EVPN Multi-Site border gateways
+    - FABRIC-PEERS: peering_role=fabric sessions, an iBGP session on a directly cabled
+      link between the two border gateways of one site (the metro edge pair)
 
     VRF sessions (``session["vrf"]``) join no group: they are rendered inside
     their VRF, where the global templates' policy does not apply.
@@ -315,8 +317,11 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
     # carries EVPN between sites and the neighbour is in another fabric — it
     # must not inherit UNDERLAY-PEERS' unicast-only policy.
     sessions = [s for s in sessions if not s.get("vrf")]
+    # A fabric session is iBGP over a cabled link (ttl 1): without its own group
+    # it would fall into UNDERLAY-PEERS and render as an eBGP unicast underlay.
     dci = [s for s in sessions if s.get("peering_role") == "dci"]
-    sessions = [s for s in sessions if s.get("peering_role") != "dci"]
+    fabric = [s for s in sessions if s.get("peering_role") == "fabric"]
+    sessions = [s for s in sessions if s.get("peering_role") not in ("dci", "fabric")]
     underlay = [s for s in sessions if s.get("ttl") == 1]
     overlay_ibgp = [s for s in sessions if s.get("ttl") != 1 and str(s.get("session_type", "")).upper() == "IBGP"]
     overlay_ebgp = [
@@ -429,6 +434,29 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
             # NX-OS Multi-Site: the BGW re-originates EVPN routes towards a
             # fabric-external peer with itself (the site VIP) as next-hop.
             session["peer_type"] = "fabric-external"
+
+    if fabric:
+        pg_name = "FABRIC-PEERS"
+        fabric_afs = [
+            af for af in ("ipv4", "ipv6", "evpn") if any(af in (s.get("address_families") or []) for s in fabric)
+        ]
+        peer_groups.append(
+            {
+                "name": pg_name,
+                "type": "fabric",
+                "session_type": "IBGP",
+                **_any_flags(fabric, "bfd_enabled", *_POLICY_FLAGS),
+                "address_families": fabric_afs or ["evpn"],
+            }
+        )
+        for session in fabric:
+            session["peer_group"] = pg_name
+            # Both ends share the site AS (the session is iBGP, so remote_as is
+            # already local_as). No peer-type: NX-OS treats a neighbour as
+            # fabric-internal by default, which is what a BGW sibling is.
+            # D5: announce only this box's own loopbacks (VTEP and site VIP) in
+            # unicast, never what it learned (cisco_nxos_bgp.j2 RM-FABRIC-OUT).
+            session["export_local_only"] = True
 
     peer_groups.sort(key=lambda pg: pg.get("name", ""))
     return peer_groups

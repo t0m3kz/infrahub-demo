@@ -24,8 +24,11 @@ spec:
     # both ends from the DCI-Technical-IPv6 pool (data/bootstrap/20_dci_pools.yml)
     # and builds the EVPN Multi-Site DCI session (DCI-<circuit_id>) between the
     # border leaf's and the cage edge's overlay BGP processes, keyed with the
-    # DC's {fabric}-overlay-key. Ethernet1/35 is the border leaf's first free
-    # uplink, Ethernet1/[10-11] the cage router's `dci` ports.
+    # DC's {fabric}-overlay-key. Ethernet1/35 and Ethernet1/36 are the border
+    # leaf's free uplinks (Ethernet1/[33-34] go to the two super-spines),
+    # Ethernet1/[10-11] the cage router's `dci` ports. Each metro has TWO
+    # border gateways, so each DC lands one fibre on the "01" edge (Ethernet1/35)
+    # and one on the "02" edge (Ethernet1/36) of the metro it fronts.
     - circuit_id: "DF-DC10-EQXFR2"
       member_of_groups: [physical_circuits]
       name: "DF-DC10-EQXFR2"
@@ -76,6 +79,57 @@ spec:
         - ["bl-dc1212101", "Ethernet1/35"]
       provider_interfaces:
         - ["eg-pa01", "Ethernet1/10"]
+
+    - circuit_id: "DF-DC10-EQXFR2-B"
+      member_of_groups: [physical_circuits]
+      name: "DF-DC10-EQXFR2-B"
+      circuit_type: dark_fiber
+      peering_role: dci
+      status: active
+      bandwidth: 100000
+      provider: "P016"
+      description: "DC10 border leaf to Equinix FR2 cage, second 100G dark fibre (second border gateway)"
+      locations:
+        - "DC10"
+        - "FR2"
+      customer_interfaces:
+        - ["bl-dc101101", "Ethernet1/36"]
+      provider_interfaces:
+        - ["eg-fr02", "Ethernet1/10"]
+
+    - circuit_id: "DF-DC11-EQXFR2-B"
+      member_of_groups: [physical_circuits]
+      name: "DF-DC11-EQXFR2-B"
+      circuit_type: dark_fiber
+      peering_role: dci
+      status: active
+      bandwidth: 100000
+      provider: "P016"
+      description: "DC11 border leaf to Equinix FR2 cage, second 100G dark fibre (second border gateway)"
+      locations:
+        - "DC11"
+        - "FR2"
+      customer_interfaces:
+        - ["bl-dc1111101", "Ethernet1/36"]
+      provider_interfaces:
+        - ["eg-fr02", "Ethernet1/11"]
+
+    - circuit_id: "DF-DC12-EQXPA4-B"
+      member_of_groups: [physical_circuits]
+      name: "DF-DC12-EQXPA4-B"
+      circuit_type: dark_fiber
+      peering_role: dci
+      status: active
+      bandwidth: 100000
+      provider: "P016"
+      description: "DC12 border leaf to Equinix PA4 cage, second 100G dark fibre (second border gateway)"
+      locations:
+        - "DC12"
+        - "PA4"
+      customer_interfaces:
+        - ["bl-dc1212101", "Ethernet1/36"]
+      provider_interfaces:
+        - ["eg-pa02", "Ethernet1/10"]
 
     # --- cage <-> cloud region cross-connects --------------------------------
     # The cloud end is the region, not a zone: an AZ is finer than any provider

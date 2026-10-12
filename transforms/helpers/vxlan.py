@@ -616,7 +616,8 @@ def _get_multisite_config(
     (the anycast VIP every BGW of a site shares). site_id is the fabric's
     evpn_rt_as ASN — unique per site and already agreed on by every BGW of it.
     DCI-tracking goes on the local end of every peering_role=dci peering;
-    fabric-tracking on the uplinks of a BGW that sits inside a fabric.
+    fabric-tracking on the uplinks of a BGW that sits inside a fabric and on
+    the interlink (role=interlink) of any BGW.
     """
     interfaces = data.get("interfaces") or []
     vip = next((iface for iface in interfaces if iface.get("role") == "multisite-vip"), None)
@@ -641,17 +642,20 @@ def _get_multisite_config(
             if (iface.get("device") or {}).get("name") == device_name and iface.get("name")
         }
     )
-    fabric_interfaces = (
-        sort_interface_list(
-            [
-                iface["name"]
-                for iface in interfaces
-                if iface.get("role") == "uplink" and iface.get("name") and iface["name"] not in dci_interfaces
-            ]
+    # Uplinks of a BGW inside a fabric, plus the interlink of any BGW: the
+    # direct link to the sibling BGW of a single-box site (the metro edge pair),
+    # which is a fabric-facing port even though an edge's uplinks are not.
+    fabric_names = {
+        iface["name"]
+        for iface in interfaces
+        if iface.get("name")
+        and iface["name"] not in dci_interfaces
+        and (
+            iface.get("role") == "interlink"
+            or (device_role in _BGW_FABRIC_TRACKING_ROLES and iface.get("role") == "uplink")
         )
-        if device_role in _BGW_FABRIC_TRACKING_ROLES
-        else []
-    )
+    }
+    fabric_interfaces = sort_interface_list(list(fabric_names)) if fabric_names else []
     return {
         "enabled": True,
         "site_id": site_id,

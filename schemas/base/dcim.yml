@@ -354,6 +354,10 @@ generics:
             label: DCI
             description: "Dedicated port for data center interconnect on a border-leaf"
             color: "#8B5CF6"
+          - name: interlink
+            label: Interlink
+            description: "Direct link between the two edges of one colocation metro, carrying the iBGP fabric session"
+            color: "#A7F3D0"
           - name: service
             label: Service
             description: "VLAN-tagged sub-interface terminating a tenant-facing service (e.g. FirewallContext, inline FW/LB)"  # yamllint disable-line rule:line-length

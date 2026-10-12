@@ -71,6 +71,9 @@ From that the generator creates, per metro:
   and the sync cable between the members
 - the **cabling** from the edge pair to that service pair, on the edge's `firewall`-role ports
   (`Ethernet1/[15-16]`) and the firewall's `uplink` ports
+- for a metro with exactly two physical edges, the **edge pair link**: a cable on the edge's `interlink`-role port
+  (`Ethernet1/8`) with a /127 from the metro's own `technical-ipv6` pool, and an iBGP `FABRIC-eg-fr01-eg-fr02`
+  session between their overlay processes
 
 The kit is declared on the **metro**, not on a cage, for the same reason a data center declares its border-leafs
 rather than one of its pods doing it: one pair fronts the whole metro, and the other cages reach it over a

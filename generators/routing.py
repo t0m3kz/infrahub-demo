@@ -35,6 +35,15 @@ _SHARED_OBJECT_MAX_RETRIES = 10
 _SHARED_OBJECT_RETRY_DELAY = 3.0
 _SHARED_OBJECT_RETRY_CAP = 20.0
 
+EVPN_AF = ("l2vpn", "evpn")
+# Attributes a missing address family is created with — the same values the
+# bootstrap data file gives them.
+_ADDRESS_FAMILY_DATA: dict[tuple[str, str], dict[str, Any]] = {
+    ("ipv4", "unicast"): {"description": "IPv4 unicast"},
+    ("ipv6", "unicast"): {"description": "IPv6 unicast"},
+    EVPN_AF: {"description": "L2VPN EVPN overlay", "advertise_all_vni": True, "advertise_default_gw": True},
+}
+
 
 # Names/descriptions of the fabric-wide shared routing objects. They are the
 # idempotency keys: the DC generator creates by them and pod/rack generators
@@ -300,7 +309,7 @@ class RoutingMixin:
         # the next regression from being invisible.
         planner = RoutingPlanner(deployment_id=self.deployment_id, logger=self.logger, strict=True)
 
-        evpn_af_id = await self._ensure_evpn_af_node()
+        evpn_af_id = await self.ensure_address_family(*EVPN_AF)
 
         plan = planner.build_routing_plan(
             RoutingPlanInput(
@@ -663,48 +672,71 @@ class RoutingMixin:
         except Exception as exc:
             self.logger.warning(f"Failed to attach evpn_rt_as to deployment {deployment_id}: {exc}")
 
-    async def _ensure_evpn_af_node(self) -> str:
-        """Upsert the L2VPN/EVPN RoutingBGPAddressFamily node and return its ID.
+    async def ensure_address_family(self, afi: str, safi: str) -> str:
+        """Find or create a RoutingBGPAddressFamily and return its id, untracked, under a lock.
 
-        This node must exist before any BGP process or peering can reference it
-        via the address_families relationship. data/bootstrap/
-        15_bgp_address_families.yml provides it on main; creating it here is
-        only a fallback for a branch cut from a main without bootstrap — two
-        such branches each create their own and the second merge fails
-        (uniqueness [afi, safi]).
+        data/bootstrap/15_bgp_address_families.yml provides them on main;
+        creating one here is only a fallback for a branch cut from a main
+        without bootstrap — two such branches each create their own and the
+        second merge fails (uniqueness [afi, safi]).
 
-        Never tracked: it is one global node every fabric run in every DC
-        references, so it belongs to no run — a tracked one is deleted by
-        whichever run stops reaching it.
+        One global node every fabric, circuit and metro run references, so no
+        run may own it (a tracked one is deleted by whichever run stops
+        reaching it). The lock serializes concurrent runs racing to create the
+        same one.
         """
-        try:
-            existing = await self.client.filters(
-                kind=RoutingBGPAddressFamily,
-                afi__value="l2vpn",
-                safi__value="evpn",
-            )
+        async with self.resource_lock(f"bgp-af-{afi}-{safi}"):
+            existing = await self.client.filters(kind=RoutingBGPAddressFamily, afi__value=afi, safi__value=safi)
             if existing:
                 return existing[0].id
-        except Exception as exc:
-            self.logger.debug(f"Could not query RoutingBGPAddressFamily: {exc}")
-
-        try:
-            obj = await self.client.create(
+            family = await self.client.create(
                 kind=RoutingBGPAddressFamily,
-                data={
-                    "afi": "l2vpn",
-                    "safi": "evpn",
-                    "advertise_all_vni": True,
-                    "advertise_default_gw": True,
-                    "description": "L2VPN EVPN overlay",
-                },
+                data={"afi": afi, "safi": safi, **_ADDRESS_FAMILY_DATA.get((afi, safi), {})},
             )
-            await obj.save(allow_upsert=True, update_group_context=False)
-            self.logger.info(f"Upserted RoutingBGPAddressFamily l2vpn/evpn: {obj.id}")
-            return obj.id
-        except Exception as exc:
-            self.logger.warning(f"Could not upsert RoutingBGPAddressFamily l2vpn/evpn: {exc}")
-            return ""
+            await family.save(allow_upsert=True, update_group_context=False)
+            self.logger.info(f"Created RoutingBGPAddressFamily {afi}/{safi}")
+            return family.id
+
+    async def upsert_bgp_peering(
+        self,
+        *,
+        name: str,
+        description: str,
+        status: str,
+        session_type: str,
+        peering_role: str,
+        process_ids: list[str],
+        address_family_ids: list[str],
+        password_id: str,
+        interface_ids: list[str],
+    ) -> None:
+        """Upsert one directly connected (ttl 1, BFD, extended communities) ManagedBGPPeering.
+
+        The shared core of the DCI session (add_circuit) and the metro's edge
+        FABRIC session (add_colocation_metro). Peerings share the
+        ManagedGeneric name space with circuits: callers prefix the name
+        (DCI-<circuit>, FABRIC-<a>-<b>). Processes are passed by id, never
+        looked up by name here (search-index lag on same-run objects).
+        """
+        peering = await self.client.create(
+            kind=ManagedBGPPeering,
+            data={
+                "name": name,
+                "description": description,
+                "status": status,
+                "session_type": session_type,
+                "peering_role": peering_role,
+                "ttl": 1,
+                "bfd_enabled": True,
+                "send_community": True,
+                "send_extended_community": True,
+                "address_families": [{"id": af_id} for af_id in address_family_ids],
+                "bgp_processes": [{"id": process_id} for process_id in process_ids],
+                "password": {"id": password_id},
+                "interface_capabilities": [{"id": interface_id} for interface_id in interface_ids],
+            },
+        )
+        await save_with_node_not_found_retry(peering, self.logger)
 
     async def _resolve_shared_passwords(self) -> tuple[str | None, str | None]:
         """Find the fabric's shared underlay/overlay RoutingPassword IDs, by deterministic name.
