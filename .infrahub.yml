@@ -296,6 +296,9 @@ check_definitions:
   - name: validate_segment_placement
     class_name: CheckSegmentPlacement
     file_path: checks/segment_placement.py
+  - name: validate_segment_security
+    class_name: CheckSegmentSecurity
+    file_path: checks/segment_security.py
   # Targetless like the two above: the invariants are properties of a whole
   # fabric (route-target agreement, VNI uniqueness), so there is no single
   # device to target — every device in the fabric looks correct in isolation.
@@ -622,6 +625,8 @@ queries:
     file_path: queries/validation/capability_guard.gql
   - name: segment_placement
     file_path: queries/validation/segment_placement.gql
+  - name: segment_security
+    file_path: queries/validation/segment_security.gql
   - name: evpn_fabric
     file_path: queries/validation/evpn_fabric.gql
   - name: app_dependency_validation

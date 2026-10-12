@@ -1,0 +1,59 @@
+# Every segment kind (Vlan, Vxlan, External, Cloud) with what the security
+# invariants read: zone, environment, address (gateway prefix or cidr_block),
+# the policy rules that name a segment, and the segment each app component
+# lives in. Read at check time, so gateways allocated asynchronously by the
+# generators are settled.
+query segment_security {
+  ManagedNetworkSegment {
+    edges {
+      node {
+        __typename
+        id
+        name { value }
+        environment { value }
+        security_zone { node { id name { value } } }
+        gateway { node { ip_prefix { node { id prefix { value } } } } }
+        ... on CloudNetworkSegment {
+          cidr_block { value }
+          customer_deployment { node { id name { value } } }
+        }
+      }
+    }
+  }
+
+  SecurityPolicyRule {
+    edges {
+      node {
+        id
+        name { value }
+        disabled { value }
+        policy { node { id name { value } enabled { value } } }
+        source_segment { node { id name { value } } }
+        destination_segment { node { id name { value } } }
+        source_prefixes { edges { node { id } } }
+        destination_prefixes { edges { node { id } } }
+        source_ip_addresses { edges { node { id } } }
+        destination_ip_addresses { edges { node { id } } }
+      }
+    }
+  }
+
+  AppComponent {
+    edges {
+      node {
+        id
+        name { value }
+        network_segment { node { id name { value } environment { value } } }
+        parent {
+          node {
+            ... on AppApplication {
+              id
+              name { value }
+              environment { value }
+            }
+          }
+        }
+      }
+    }
+  }
+}

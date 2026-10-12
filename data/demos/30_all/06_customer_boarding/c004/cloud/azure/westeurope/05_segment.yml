@@ -13,3 +13,4 @@ spec:
       availability_zone: ["westeurope", "westeurope-1"]
       cidr_block: "10.40.1.0/24"
       customer_deployment: "C004-PEAKORA-AZURE-P-WESTEUROPE"
+      security_zone: "PROD-ZONE"

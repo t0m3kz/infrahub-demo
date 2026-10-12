@@ -112,6 +112,7 @@ query {
       node {
         id
         isolation_mode { value }
+        security_zone { node { id } }
         security_policy { node { id } }
         inbound_rules { edges { node { id } } }
       }
@@ -267,6 +268,7 @@ def _snapshot(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
                 _value(n, "isolation_mode"),
                 _peer_id(n, "security_policy"),
                 _peer_ids(n, "inbound_rules"),
+                _peer_id(n, "security_zone"),
             )
             for n in _nodes(result, "ManagedNetworkSegment")
         },

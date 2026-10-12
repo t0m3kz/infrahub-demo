@@ -170,3 +170,21 @@ class TestVlanSegmentDeployment:
 
         assert len(check._captured_errors) == 1
         assert "has no customer_deployment" in check._captured_errors[0]
+
+    def test_cloud_segment_without_customer_deployment_is_an_error(self) -> None:
+        """A cloud segment attached to no deployment is an error, not silently skipped."""
+        check = _check()
+
+        check.validate({"CloudNetworkSegment": [{"name": "c003-subnet-p", "customer_deployment": None}]})
+
+        assert len(check._captured_errors) == 1
+        assert "has no customer_deployment" in check._captured_errors[0]
+
+    def test_cloud_segment_on_cloud_deployment_passes(self) -> None:
+        """A cloud segment on TopologyCustomerCloud raises nothing."""
+        check = _check()
+        deployment = {"typename": "TopologyCustomerCloud", "name": "C003-P"}
+
+        check.validate({"CloudNetworkSegment": [{"name": "c003-subnet-p", "customer_deployment": deployment}]})
+
+        assert check._captured_errors == []

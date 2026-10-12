@@ -18,3 +18,4 @@ spec:
             environment: "p"
             vlan_id: 102
             customer_deployment: "C002-P-PA"
+            security_zone: "PROD-ZONE"

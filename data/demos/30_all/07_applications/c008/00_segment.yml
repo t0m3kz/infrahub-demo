@@ -17,3 +17,4 @@ spec:
             environment: "d"
             vlan_id: 108
             customer_deployment: "C008-D-DC12"
+            security_zone: "NONPROD-ZONE"

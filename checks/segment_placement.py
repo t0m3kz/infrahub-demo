@@ -151,6 +151,9 @@ class CheckSegmentPlacement(InfrahubCheck):
             seg_name = segment.get("name", "<unnamed-cloud-segment>")
             deployment = segment.get("customer_deployment")
             if not isinstance(deployment, dict):
+                self.log_error(
+                    message=f"Cloud segment '{seg_name}' has no customer_deployment. Attach it to its deployment."
+                )
                 continue
 
             dep_kind = deployment.get("typename")
