@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from utils.ports import PortSpec
+from utils.segment_addressing import segment_prefix
 
 from .helpers.rules import RulesPlanner
 from .named_objects import GetOrCreateByNameMixin
@@ -120,11 +121,11 @@ class CloudSecurityRuleMixin(GetOrCreateByNameMixin):
             rule_data["port_end"] = port_end
 
         if cloud_seg_is_dst:
-            src_cidr = planner.seg_cidr(src_seg)
+            src_cidr = segment_prefix(src_seg)
             if src_cidr:
                 rule_data["source_cidr"] = src_cidr
         else:
-            dst_cidr = planner.seg_cidr(dst_seg)
+            dst_cidr = segment_prefix(dst_seg)
             if dst_cidr:
                 rule_data["dest_cidr"] = dst_cidr
 

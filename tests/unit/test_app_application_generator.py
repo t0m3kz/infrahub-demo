@@ -8,7 +8,6 @@ Domain logic has its own test files mirroring the mixins it's split across:
   - test_rules_planner.py           — RulesPlanner (generators/helpers/rules.py)
 
 This file covers only:
-  - _seg_cidr()                        — module-level pure function
   - generate()'s trigger-shape dispatch (AppDependency/AppComponent fan out
     to add_app_application and write nothing)
   - _reconcile_application_rules()'s per-edge dispatch: target_fqdn -> proxy,
@@ -27,7 +26,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.topology.application_security import AppApplicationGenerator, _seg_cidr
+from generators.topology.application_security import AppApplicationGenerator
 
 # ---------------------------------------------------------------------------
 # Shared harness
@@ -51,6 +50,8 @@ def _segment(seg_id: str, typename: str = "ManagedVxlanSegment") -> dict[str, An
         "isolation_mode": "normal",
         "security_zone": {"name": "PROD-ZONE", "trust_level": 70},
     }
+    if typename != "CloudNetworkSegment":
+        seg["gateway"] = {"ip_prefix": {"prefix": "10.60.0.0/24"}}
     if typename == "CloudNetworkSegment":
         seg["virtual_network"] = {"id": "vnet-1", "account": {"id": "acct-1"}}
         seg["cidr_block"] = "10.50.0.0/24"
@@ -104,39 +105,6 @@ def _dep(
 
 def _app(*components: dict[str, Any], profile: str = "internal_standard") -> dict[str, Any]:
     return {"name": "checkout", "security_profile": profile, "children": list(components)}
-
-
-# ===========================================================================
-# TestSegCidr
-# ===========================================================================
-
-
-class TestSegCidr:
-    def test_cloud_segment_returns_cidr_block(self) -> None:
-        seg = {"cidr_block": "10.0.1.0/24"}
-        assert _seg_cidr(seg) == "10.0.1.0/24"
-
-    def test_on_prem_segment_returns_gateway_prefix(self) -> None:
-        seg = {"gateway": {"ip_prefix": {"prefix": "192.168.1.0/24"}}}
-        assert _seg_cidr(seg) == "192.168.1.0/24"
-
-    def test_empty_dict_returns_none(self) -> None:
-        assert _seg_cidr({}) is None
-
-    def test_cidr_block_takes_precedence_over_gateway_prefix(self) -> None:
-        seg = {
-            "cidr_block": "172.16.0.0/12",
-            "gateway": {"ip_prefix": {"prefix": "10.0.0.0/8"}},
-        }
-        assert _seg_cidr(seg) == "172.16.0.0/12"
-
-    def test_empty_cidr_block_falls_through_to_gateway_prefix(self) -> None:
-        seg = {"cidr_block": None, "gateway": {"ip_prefix": {"prefix": "10.0.0.0/8"}}}
-        assert _seg_cidr(seg) == "10.0.0.0/8"
-
-    def test_no_gateway_returns_none(self) -> None:
-        seg = {"gateway": {}}
-        assert _seg_cidr(seg) is None
 
 
 # ===========================================================================

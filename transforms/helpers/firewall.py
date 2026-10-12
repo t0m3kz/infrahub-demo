@@ -16,7 +16,6 @@ from transforms.helpers.policy import (
 )
 from transforms.helpers.segments import (
     _get_segment_namespace,
-    _get_segment_prefix_str,
     segment_hosting_candidates,
 )
 from utils.exchange_transit import (
@@ -30,6 +29,7 @@ from utils.exchange_transit import (
     transit_vlan,
     transit_vni,
 )
+from utils.segment_addressing import segment_prefix
 
 
 def get_firewall_zones(zones_data: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
@@ -59,7 +59,7 @@ def get_firewall_zones(zones_data: list[dict[str, Any]] | None = None) -> list[d
             continue
         member_cidrs: list[str] = []
         for seg in zone.get("network_segments") or []:
-            prefix = _get_segment_prefix_str(seg)
+            prefix = segment_prefix(seg)
             if prefix:
                 member_cidrs.append(prefix)
         zones.append(
@@ -488,8 +488,8 @@ def _flatten_deployment_firewall_contexts(deployment: dict[str, Any] | None) -> 
 
 def _segment_deployment_ids(segment: dict[str, Any]) -> list[str]:
     """TopologyCustomer ids a segment serves: customer_deployment on a
-    VlanSegment, customer_deployments on a VxlanSegment (one relationship,
-    split by cardinality)."""
+    VlanSegment or CloudNetworkSegment, customer_deployments on a VxlanSegment
+    (one relationship, split by cardinality)."""
     deployment_ids: list[str] = []
     single_deployment = segment.get("customer_deployment")
     if single_deployment and single_deployment.get("id"):
@@ -605,7 +605,7 @@ def get_customer_pbr_rules(
 
     All inter-segment traffic defaults to the firewall (stateful inspection);
     a SecurityPolicyRule permit is the only bypass — the SAME rule data
-    get_acls() already reads for its ACL rendering (_get_segment_prefix_str
+    get_acls() already reads for its ACL rendering (segment_prefix
     per rule.destination_segment), just consumed here for a different
     purpose. The bypass is symmetric: a permit A -> B bypasses B on A's
     VLAN and, via B's inbound_rules, A on B's VLAN, so the reply never
@@ -697,7 +697,7 @@ def get_customer_pbr_rules(
         via_firewall: set[str] = set()
 
         def _classify(rule: dict[str, Any], peer: dict[str, Any] | None) -> None:
-            prefix = _get_segment_prefix_str(peer) if peer else None
+            prefix = segment_prefix(peer) if peer else None
             if not prefix:
                 return
             if inspected and _needs_firewall(rule, fw_nexthop, peer, serving):
@@ -838,7 +838,7 @@ def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list
                     "port_end": None,
                     "src_zone": (segment.get("security_zone") or {}).get("name") or None,
                     "dst_zone": None,
-                    "src": _get_segment_prefix_str(segment) if segment else None,
+                    "src": segment_prefix(segment) if segment else None,
                     "dst": None,
                     "dst_port": None,
                     "log": False,
