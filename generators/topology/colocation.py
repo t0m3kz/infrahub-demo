@@ -69,7 +69,8 @@ from ..helpers import get_loopback_name
 from ..helpers.pools import name_to_asn_range
 from ..pools import PoolMixin
 from ..protocols import DcimVirtualInterface, ManagedBGP, TopologyColocationMetro
-from ..routing import RoutingMixin
+from ..routing import EVPN_AF, RoutingMixin
+from ..types import CablingOptions
 
 # Roles a colocation metro can host. Deliberately NOT dc.py's
 # _DC_VALID_FABRIC_ROLES: `edge` is valid here and invalid at DC level (a DC
@@ -149,6 +150,15 @@ _COLO_VTEP_LOOPBACK_INDEX = 1
 # segments) and the 50001-59999 L3 VNI range.
 _COLO_VNI_RANGE = (10001, 39999)
 
+# The two edges of a metro share no fabric: one direct link between them (port
+# role `interlink`, N9K-C9316D-GX_EDGE's Ethernet1/8) carries a /127 and the
+# iBGP FABRIC session (see _ensure_edge_pair). A /124 slice holds eight /127s,
+# far more than the one link needs.
+_COLO_INTERLINK_ROLE = "interlink"
+_COLO_TECHNICAL_IPV6_PREFIX_LENGTH = 124
+_COLO_P2P_IPV6_PREFIX_LENGTH = 127
+_COLO_FABRIC_UNICAST_AF = ("ipv6", "unicast")
+
 
 class TopologyColocationMetroData(TypedDict, total=False):
     """The subset of queries/topology/add/colocation_metro.gql this generator reads."""
@@ -207,7 +217,10 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         await self._ensure_colocation_pools(metro_id=metro_id)
         physical_names_by_role = await self._create_metro_devices(templates=templates, metro_id=metro_id)
         await self._cable_metro_services(physical_names_by_role=physical_names_by_role)
-        await self._ensure_metro_evpn(metro_id=metro_id)
+        overlay_process_ids = await self._ensure_metro_evpn(metro_id=metro_id)
+        await self._ensure_edge_pair(
+            physical_edge_names=physical_names_by_role.get("edge", []), overlay_process_ids=overlay_process_ids
+        )
 
     def _valid_fabric_templates(self) -> list[dict[str, Any]]:
         """Drop entries this generator cannot act on, warning per entry.
@@ -503,7 +516,7 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
 
         return physical_names_by_role
 
-    async def _ensure_metro_evpn(self, *, metro_id: str) -> None:
+    async def _ensure_metro_evpn(self, *, metro_id: str) -> dict[str, str]:
         """Make the metro's edges EVPN Multi-Site border gateways for their site.
 
         A stretched segment reaches a colocation through the edge pair, which
@@ -527,11 +540,16 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         Idempotent: the AS is found by its deterministic description before a
         new one is drawn from the pool (a from_pool on a new node would allocate
         a fresh ASN every run), and every other object upserts by HFID.
+
+        Returns the overlay process id of each edge it saved (edge name -> id),
+        so _ensure_edge_pair references them directly instead of re-querying
+        by name (search-index lag on objects created earlier in this run).
         """
         metro = self.fabric_name
+        process_ids: dict[str, str] = {}
         edge_devices: dict[str, str] = getattr(self, "_edge_devices", {})
         if not edge_devices:
-            return
+            return process_ids
         asn_pool = await self.client.get(
             kind="CoreNumberPool", name__value=f"{metro}-asn-pool", raise_when_missing=False
         )
@@ -540,7 +558,7 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         )
         if site_as_id is None:
             self.logger.error(f"Metro {metro}: no {metro}-asn-pool — cannot create the EVPN site ASN")
-            return
+            return process_ids
         await self._attach_evpn_rt_as(deployment_id=metro_id, as_id=site_as_id)
 
         loopbacks = await self.client.filters(
@@ -595,7 +613,90 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
                 },
             )
             await bgp.save(allow_upsert=True)
+            process_ids[name] = bgp.id
             self.logger.info(f"Metro {metro}: ensured EVPN VTEP + overlay BGP for {name}")
+        return process_ids
+
+    async def _ensure_edge_pair(self, *, physical_edge_names: list[str], overlay_process_ids: dict[str, str]) -> None:
+        """Link a metro's two physical edges and peer them over that link (iBGP FABRIC).
+
+        The edges are single-box sites with no fabric between them, yet they
+        share one Multi-Site site (same AS, same VIP): they need a direct
+        link plus a directly connected iBGP session carrying IPv6 unicast
+        (VTEP /128 reachability) and l2vpn evpn. A loopback EVPN session is
+        impossible — the edges run no IGP.
+
+        Only when EXACTLY two PHYSICAL edges exist: virtual edges (an MCR, a
+        Network Edge) have no port to cable, and a metro with 0 or 1 physical
+        edge has nothing to pair (info log, no pair). More than two is not a
+        pair either.
+
+        Everything it writes is owned by this metro and keyed
+        deterministically: the technical IPv6 slice, the P2P prefix (keyed by
+        the link), the cable, the FABRIC-<a>-<b> peering and the metro's own
+        routing key. One lock for the whole step, so overlapping runs of one
+        metro never both create any of them.
+        """
+        metro = self.fabric_name
+        if len(physical_edge_names) != 2:
+            self.logger.info(
+                f"Metro {metro}: {len(physical_edge_names)} physical edge(s) — an edge pair needs exactly 2, "
+                "no interlink or FABRIC session"
+            )
+            return
+        first, second = sorted(physical_edge_names)
+        processes = [overlay_process_ids.get(first), overlay_process_ids.get(second)]
+        if not all(processes):
+            self.logger.warning(
+                f"Metro {metro}: {first}/{second} have no overlay BGP process from this run — skipping the "
+                "edge pair (see the EVPN step above)"
+            )
+            return
+
+        async with self.resource_lock(f"edge-pair-{metro}"):
+            pool = await self.ensure_sliced_pool(
+                pool_name=f"{metro}-technical-ipv6-pool",
+                parent_pool_name="Technical-IPv6",
+                prefix_length=_COLO_TECHNICAL_IPV6_PREFIX_LENGTH,
+                role="technical",
+                kind="prefix",
+            )
+            legs = await self.create_chain_cabling(
+                hops=[
+                    {"devices": [first], "down_role": _COLO_INTERLINK_ROLE},
+                    {"devices": [second], "up_role": _COLO_INTERLINK_ROLE},
+                ],
+                options=CablingOptions(pool=pool, p2p_prefix_length=_COLO_P2P_IPV6_PREFIX_LENGTH),
+            )
+            pairs = legs[0] if legs else []
+            if not pairs:
+                self.logger.warning(
+                    f"Metro {metro}: no {_COLO_INTERLINK_ROLE}-role port pair on {first}/{second} — no FABRIC session"
+                )
+                return
+            interface_ids = [iface.id for pair in pairs for iface in pair]
+
+            key_id = await self._ensure_routing_password(
+                name=f"{metro}-fabric-key", description=f"iBGP FABRIC session auth key for metro {metro}"
+            )
+            if key_id is None:
+                return
+            address_families = [
+                await self.ensure_address_family(*_COLO_FABRIC_UNICAST_AF),
+                await self.ensure_address_family(*EVPN_AF),
+            ]
+            await self.upsert_bgp_peering(
+                name=f"FABRIC-{first}-{second}",
+                description=f"Metro {metro} edge pair {first} <-> {second}: IPv6 unicast + EVPN over the interlink",
+                status="active",
+                session_type="IBGP",
+                peering_role="fabric",
+                process_ids=[str(process_id) for process_id in processes],
+                address_family_ids=address_families,
+                password_id=key_id,
+                interface_ids=interface_ids,
+            )
+            self.logger.info(f"Metro {metro}: ensured edge pair {first} <-> {second} (interlink + FABRIC session)")
 
     def _register_metro_devices(
         self,

@@ -11,7 +11,8 @@ spec:
         kind: TopologyColocationMetro
         data:
           # Declared on-ramp kit — see the FR note in ../fr/02_topology.yml for
-          # the port roles N9K-C9316D-GX_EDGE brings. Paris fronts DC12.
+          # the port roles N9K-C9316D-GX_EDGE brings. Paris fronts DC12; like
+          # Frankfurt, both edges are border gateways linked by the interlink.
           - name: PA
             location: ["par"]
             member_of_groups:

@@ -16,7 +16,9 @@ asynchronously after the load that triggers them:
 - `03_dc/*/05_servers.yml` puts hosts in compute racks. `add_endpoint` then looks for the access-leaf pair
   in the same row, and those leafs only exist once `add_rack` has run.
 - `08_interconnects/01_colo_onramp/03_physical_circuits.yml` lands the dark fibres on border leafs by name
-  (`bl-dc101101`). `add_dc` creates them, and `add_circuit` then builds each fibre's DCI session.
+  (`bl-dc101101`). `add_dc` creates them, and `add_circuit` then builds each fibre's DCI session. Each DC has
+  two fibres into its metro, one per cage edge (both edges are Multi-Site border gateways, linked by the
+  `interlink` port and peered iBGP by `add_colocation_metro`).
 - `07_applications` references VMs and customer footprints declared in `06_customer_boarding`.
 
 So `infrahubctl object load data/demos/30_all` in one go only works on an instance whose branch already has
@@ -156,7 +158,8 @@ Once stage 4 has settled, the branch should contain at least:
 (`TopologyExternal`) with two ISPs, Lumen and Cogent, each a `TopologyExternalProviders` holding its provider
 edges (`EXT-LUMEN-FRA1`, `EXT-COGENT-PAR1`, ...). Each cage edge (`eg-fr01/02`, `eg-pa01/02`) gets one 10G
 transit circuit on `Ethernet1/14` and an eBGP session in VRF `INTERNET`. The ISPs send a default route only. A
-DC reaches the internet through these edges, so a flow trace towards the internet ends on an ISP device.
+DC reaches the internet through these edges, so a flow trace towards the internet ends on an ISP device. All
+four edges are Multi-Site border gateways (two per metro), so the default from either ISP reaches the DCs.
 
 The ISP devices are in no group, so no artifact or check targets them. Their configuration is the carrier's
 business. Inter-VRF routing is not wired to these edges yet. The DCs reach `INTERNET` through one

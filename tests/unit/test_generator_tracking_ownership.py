@@ -12,6 +12,8 @@ it owned.
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -87,6 +89,12 @@ def _routing_mixin() -> Any:
     m.fabric_name = "dc1"
     m.logger = MagicMock()
     m.client = _client()
+
+    @asynccontextmanager
+    async def _no_lock(key: str) -> AsyncGenerator[None]:
+        yield
+
+    m.resource_lock = _no_lock
     return m
 
 
@@ -98,7 +106,7 @@ class TestSharedRoutingObjects:
         m = _routing_mixin()
         m.client.filters = AsyncMock(return_value=[_node("af-1")])
 
-        assert await m._ensure_evpn_af_node() == "af-1"
+        assert await m.ensure_address_family("l2vpn", "evpn") == "af-1"
         assert m.client.group_context.related_node_ids == []
 
     @pytest.mark.asyncio
@@ -109,7 +117,7 @@ class TestSharedRoutingObjects:
         created = _node("af-new")
         m.client.create = AsyncMock(return_value=created)
 
-        assert await m._ensure_evpn_af_node() == "af-new"
+        assert await m.ensure_address_family("l2vpn", "evpn") == "af-new"
         assert m.client.create.call_args.kwargs["kind"] is RoutingBGPAddressFamily
         created.save.assert_awaited_once_with(**UNTRACKED_UPSERT)
 
