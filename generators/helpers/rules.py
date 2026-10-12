@@ -15,14 +15,6 @@ class RulesPlanner:
         return str(value or fallback).strip().lower().replace(" ", "-")
 
     @staticmethod
-    def seg_cidr(seg: dict[str, Any]) -> str | None:
-        """Extract a CIDR string from a segment dict (on-prem or cloud)."""
-        if seg.get("cidr_block"):
-            return seg["cidr_block"]
-        gateway = seg.get("gateway") or {}
-        return (gateway.get("ip_prefix") or {}).get("prefix")
-
-    @staticmethod
     def resolve_ports(dep: dict[str, Any], target: dict[str, Any] | None = None) -> list[PortSpec]:
         """Ports one AppDependency opens; raises ValueError on a malformed port."""
         return PortProfileHelper.resolve_dependency_ports(dep, target)

@@ -14,11 +14,6 @@ from ..segment_firewall import SegmentFirewallMixin
 from ..ztna import ZtnaMixin
 
 
-def _seg_cidr(seg: dict) -> str | None:
-    """Extract a CIDR string from a segment dict (on-prem or cloud)."""
-    return RulesPlanner.seg_cidr(seg)
-
-
 class AppApplicationGenerator(
     CloudSecurityRuleMixin,
     ZtnaMixin,

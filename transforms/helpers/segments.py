@@ -56,18 +56,6 @@ def _get_segment_gateways(seg: dict) -> tuple[str | None, str | None, str | None
     return gateway_ip, gateway_ipv6, vrf, l3_vni
 
 
-def _get_segment_prefix_str(seg: dict, family: str = "ipv4") -> str | None:
-    """Return the CIDR string for the given address family from the segment's gateway prefix."""
-    p = ((seg.get("gateway") or {}).get("ip_prefix") or {}).get("prefix")
-    if not p:
-        return None
-    if family == "ipv6" and ":" in p:
-        return p
-    if family == "ipv4" and ":" not in p:
-        return p
-    return None
-
-
 def _get_segment_namespace(seg: dict) -> dict:
     """Return the ip_namespace (VRF) the fabric routes the segment in.
 

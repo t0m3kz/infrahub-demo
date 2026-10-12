@@ -192,6 +192,13 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
       }
     }
   }
+  # A cloud segment has no gateway: its address is cidr_block.
+  ... on CloudNetworkSegment {
+    id
+    name { value }
+    cidr_block { value }
+    customer_deployment { node { id } }
+  }
 }
 
 # Border-leaf PBR (.dev/scenariusze.txt's "match cts sgt N" / "match
