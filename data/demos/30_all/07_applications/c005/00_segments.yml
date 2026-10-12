@@ -21,6 +21,19 @@ spec:
             environment: "p"
             stretch_scope: local
             arp_suppression: true
+            gateway:
+              data:
+                address: "10.5.10.1/24"
+                description: "c005-web-frontend-local-dc10-p anycast gateway"
+                ip_namespace: "PROD"
+                ip_prefix:
+                  kind: IpamPrefix
+                  data:
+                    prefix: "10.5.10.0/24"
+                    description: "c005-web-frontend-local-dc10-p (C005, DC10)"
+                    status: active
+                    role: customer
+                    ip_namespace: "PROD"
             customer_deployments:
               - "C005-P-DC10"
             member_of_groups:
@@ -32,6 +45,19 @@ spec:
             environment: "p"
             stretch_scope: dc_pair
             arp_suppression: true
+            gateway:
+              data:
+                address: "10.5.20.1/24"
+                description: "c005-app-backend-stretch-p anycast gateway"
+                ip_namespace: "PROD"
+                ip_prefix:
+                  kind: IpamPrefix
+                  data:
+                    prefix: "10.5.20.0/24"
+                    description: "c005-app-backend-stretch-p (C005, DC10 <-> DC12)"
+                    status: active
+                    role: customer
+                    ip_namespace: "PROD"
             # No explicit isolation_mode: AppApplicationGenerator derives
             # microsegmented for it (see _ensure_segment_isolation_mode) since
             # 01_application.yml's security_profile is fintech_strict. That in
@@ -52,6 +78,19 @@ spec:
             environment: "p"
             stretch_scope: local
             arp_suppression: true
+            gateway:
+              data:
+                address: "10.5.30.1/24"
+                description: "c005-database-local-dc12-p anycast gateway"
+                ip_namespace: "PROD"
+                ip_prefix:
+                  kind: IpamPrefix
+                  data:
+                    prefix: "10.5.30.0/24"
+                    description: "c005-database-local-dc12-p (C005, DC12)"
+                    status: active
+                    role: customer
+                    ip_namespace: "PROD"
             customer_deployments:
               - "C005-P-DC12"
             member_of_groups:
@@ -63,6 +102,19 @@ spec:
             environment: "p"
             stretch_scope: dc_pair
             arp_suppression: true
+            gateway:
+              data:
+                address: "10.5.40.1/24"
+                description: "c005-message-queue-stretch-p anycast gateway"
+                ip_namespace: "PROD"
+                ip_prefix:
+                  kind: IpamPrefix
+                  data:
+                    prefix: "10.5.40.0/24"
+                    description: "c005-message-queue-stretch-p (C005, DC10 <-> DC12)"
+                    status: active
+                    role: customer
+                    ip_namespace: "PROD"
             customer_deployments:
               - "C005-P-DC10"
               - "C005-P-DC12"
