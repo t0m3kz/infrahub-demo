@@ -62,11 +62,12 @@ from .conftest import TestInfrahubDockerWithClient
 from .test_constants import (
     ALL_DEMO_BRANCH,
     ALL_DEMO_DC_NAMES,
+    ALL_DEMO_DCI_CIRCUITS,
     ALL_DEMO_DEDICATED_FIREWALL_TENANTS,
+    ALL_DEMO_EDGE_INTERLINK_INTERFACE,
     ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS,
     ALL_DEMO_INTERNET_BGWS,
     ALL_DEMO_INTERNET_EGRESS_RULES,
-    ALL_DEMO_INTERNET_ISLAND_EDGES,
     ALL_DEMO_MANAGEMENT_RULES,
     ALL_DEMO_SNAT_POOL_PREFIX,
     INTERNET_L3_VNI,
@@ -234,6 +235,57 @@ def _leg_network(context: dict[str, Any], namespace: str) -> ipaddress.IPv4Netwo
     """The /29 of a context's leg in `namespace` (taken from its first member's address)."""
     leg = next(leg for leg in context["legs"] if leg["namespace"] == namespace)
     return ipaddress.IPv4Interface(leg["address"]).network
+
+
+def _fabric_pair_errors(device: str, rendered: str) -> list[str]:
+    """What an edge of a two-edge metro must render for its FABRIC iBGP session and Multi-Site tracking.
+
+    Exactly one neighbour inherits FABRIC-PEERS-SESSION: iBGP (remote-as equal to the
+    process's own AS, the site AS), no peer-type, no update-source, `RM-FABRIC-OUT` out on
+    IPv6 unicast. `fabric-tracking` sits on the interlink port alone; `dci-tracking` on the
+    ports of this edge's dark fibres (ALL_DEMO_DCI_CIRCUITS) and never on the interlink.
+    """
+    errors: list[str] = []
+    local_as = re.search(r"^router bgp (\d+)$", rendered, re.MULTILINE)
+    if "template peer-session FABRIC-PEERS-SESSION" not in rendered:
+        errors.append(f"{device}: no FABRIC-PEERS template")
+    session_template = re.search(r"template peer-session FABRIC-PEERS-SESSION\n((?:\s{4,}.*\n)*)", rendered)
+    if session_template and re.search(r"update-source|peer-type", session_template.group(1)):
+        errors.append(f"{device}: FABRIC-PEERS-SESSION sets update-source/peer-type")
+    neighbours = [
+        (match.group(1), match.group(2))
+        for match in re.finditer(r"^  neighbor (\S+)\n((?:    .*\n)*)", rendered + "\n", re.MULTILINE)
+        if "FABRIC-PEERS-SESSION" in match.group(2)
+    ]
+    if len(neighbours) != 1:
+        errors.append(f"{device}: {len(neighbours)} FABRIC-PEERS neighbour(s), expected 1")
+    else:
+        address, body = neighbours[0]
+        remote_as = re.search(r"remote-as (\d+)", body)
+        if remote_as is None or local_as is None or remote_as.group(1) != local_as.group(1):
+            errors.append(
+                f"{device}: FABRIC neighbour {address} remote-as is not the site AS {local_as and local_as.group(1)}"
+            )
+        if re.search(r"update-source|peer-type", body):
+            errors.append(f"{device}: FABRIC neighbour {address} sets update-source/peer-type")
+        if "route-map RM-FABRIC-OUT out" not in body:
+            errors.append(f"{device}: FABRIC neighbour {address} has no 'route-map RM-FABRIC-OUT out'")
+    tracking: dict[str, set[str]] = {"fabric": set(), "dci": set()}
+    for interface, kind in re.findall(
+        r"^interface (\S+)\n\s+evpn multisite (fabric|dci)-tracking$", rendered, re.MULTILINE
+    ):
+        tracking[kind].add(interface)
+    if tracking["fabric"] != {ALL_DEMO_EDGE_INTERLINK_INTERFACE}:
+        errors.append(f"{device}: fabric-tracking on {sorted(tracking['fabric'])}, expected only the interlink")
+    dci_ports = {
+        interface
+        for _, ends in ALL_DEMO_DCI_CIRCUITS.values()
+        for end_device, interface in ends
+        if end_device == device
+    }
+    if not dci_ports <= tracking["dci"] or ALL_DEMO_EDGE_INTERLINK_INTERFACE in tracking["dci"]:
+        errors.append(f"{device}: dci-tracking on {sorted(tracking['dci'])}, expected at least {sorted(dci_ports)}")
+    return errors
 
 
 class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
@@ -779,22 +831,25 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """The metro BGWs export the ISP default route as EVPN type-5; the island edges only filter it.
+        """All four metro edges are BGWs: INTERNET type-5 upstream, and the FABRIC pair session.
 
-        eg-fr01 / eg-pa01 (ALL_DEMO_INTERNET_BGWS) carry the INTERNET L3 VNI and
-        the global route-target in `vrf context INTERNET`, advertise it into
-        EVPN under `vrf INTERNET`, and filter the transit session (default-only
-        in, only the public SNAT block out, aggregated with summary-only). eg-fr02 / eg-pa02 (ALL_DEMO_INTERNET_ISLAND_EDGES) are
-        no BGW: same transit filters, no VNI.
+        Every edge (ALL_DEMO_INTERNET_BGWS: eg-fr01/02, eg-pa01/02) carries the
+        INTERNET L3 VNI and the global route-target in `vrf context INTERNET`,
+        advertises it into EVPN under `vrf INTERNET`, and filters the transit
+        session (default-only in, only the public SNAT block out, aggregated
+        with summary-only). Each edge also peers its metro partner over the
+        interlink: one `FABRIC-PEERS` neighbour (iBGP, remote-as = the site AS,
+        no peer-type, no update-source, `RM-FABRIC-OUT` out), `evpn multisite
+        fabric-tracking` on the interlink port only and `dci-tracking` on the
+        dark-fibre ports.
         """
         logging.info("=== %s - Step 6: Render edge INTERNET upstream ===", SCENARIO_NAME)
 
         errors: list[str] = []
-        for device in sorted(ALL_DEMO_INTERNET_BGWS | ALL_DEMO_INTERNET_ISLAND_EDGES):
+        for device in sorted(ALL_DEMO_INTERNET_BGWS):
             rendered = await _render(
                 async_client_main, scenario_branch, device, query="edge_config", transform_cls=Edge
             )
-            bgw = device in ALL_DEMO_INTERNET_BGWS
 
             for needle in (
                 "route-map RM-TRANSIT-IN in",
@@ -805,8 +860,9 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                     errors.append(f"{device}: no '{needle}'")
             if not re.search(r"ip prefix-list \S+ seq \d+ permit 0\.0\.0\.0/0\n", rendered):
                 errors.append(f"{device}: no default-only prefix-list")
+            errors += _fabric_pair_errors(device, rendered)
 
-            # The public block goes upstream as one summary and nothing else leaves (islands too).
+            # The public block goes upstream as one summary and nothing else leaves (every edge).
             if not re.search(
                 rf"ip prefix-list PL-TRANSIT-OUT-PUBLIC seq \d+ permit {re.escape(ALL_DEMO_SNAT_POOL_PREFIX)}\n",
                 rendered,
@@ -828,10 +884,6 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                 errors.append(
                     f"{device}: no 'aggregate-address {ALL_DEMO_SNAT_POOL_PREFIX} summary-only' inside 'vrf INTERNET'"
                 )
-            if not bgw:
-                if re.search(rf"\bvni {INTERNET_L3_VNI}\b", rendered):
-                    errors.append(f"{device}: island edge renders vni {INTERNET_L3_VNI}")
-                continue
             if not has_vni:
                 errors.append(f"{device}: no 'vni {INTERNET_L3_VNI}' inside 'vrf context INTERNET'")
             if f"route-target both {INTERNET_ROUTE_TARGET}" not in vrf_context.group(1):

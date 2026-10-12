@@ -39,14 +39,18 @@ from .test_constants import (
     ALL_DEMO_DC_NAMES,
     ALL_DEMO_DCI_CIRCUITS,
     ALL_DEMO_DEDICATED_FIREWALL_TENANTS,
+    ALL_DEMO_EDGE_INTERLINK_INTERFACE,
+    ALL_DEMO_EDGE_INTERLINKS,
+    ALL_DEMO_EDGE_PAIR_POOL_TEMPLATE,
     ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS,
+    ALL_DEMO_FABRIC_PEERINGS,
     ALL_DEMO_FIREWALL_MEMBERS,
     ALL_DEMO_INTERNET_BGWS,
-    ALL_DEMO_INTERNET_ISLAND_EDGES,
     ALL_DEMO_INTERNET_TRANSIT_CIRCUITS,
     ALL_DEMO_INTERNET_TRANSIT_PEERINGS,
     ALL_DEMO_INTERNET_UPSTREAM_BY_DC,
     ALL_DEMO_LEGACY_EXCHANGES,
+    ALL_DEMO_METRO_SITE_VIPS,
     ALL_DEMO_PHYSICAL_CIRCUIT_TYPES,
     ALL_DEMO_SEGMENT_LEGS,
     ALL_DEMO_SHARED_FIREWALL_CONTEXTS,
@@ -124,6 +128,66 @@ query ($names: [String]) {
             }
           }
         }
+      }
+    }
+  }
+}
+"""
+
+# The interlink ports of the metro edge pairs: role and /127 address.
+EDGE_INTERLINK_INTERFACES_QUERY = """
+query ($devices: [String], $name: String) {
+  DcimPhysicalInterface(device__name__values: $devices, name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        role { value }
+        device { node { name { value } } }
+        ip_address { node { address { value } } }
+      }
+    }
+  }
+}
+"""
+
+# Every cable touching the given interfaces.
+EDGE_INTERLINK_CABLES_QUERY = """
+query ($ids: [ID]) {
+  DcimCable(endpoints__ids: $ids) {
+    edges {
+      node {
+        id
+        endpoints { edges { node { id } } }
+      }
+    }
+  }
+}
+"""
+
+# The metro-owned slice of Technical-IPv6 the interlink /127 comes from.
+EDGE_PAIR_POOL_QUERY = """
+query ($name: String) {
+  CoreIPPrefixPool(name__value: $name) {
+    edges {
+      node {
+        name { value }
+        resources { edges { node { ... on BuiltinIPPrefix { prefix { value } } } } }
+      }
+    }
+  }
+}
+"""
+
+# The loopback100 Multi-Site VIP of both edges of a metro: one shared address object.
+EDGE_PAIR_VIP_QUERY = """
+query ($devices: [String]) {
+  DcimVirtualInterface(device__name__values: $devices, name__value: "loopback100") {
+    edges {
+      node {
+        role { value }
+        device { node { name { value } } }
+        ip_address { node { id address { value } } }
       }
     }
   }
@@ -835,12 +899,12 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify the ISP transit sessions and that each DC's DCI lands on its upstream BGW.
+        """Verify the ISP transit sessions and that each DC's DCI lands on both upstream BGWs.
 
         The four TRANSIT-* eBGP sessions run in the INTERNET namespace (an
         `internet`-type namespace is what makes the edge filter them and
         export 0/0 as EVPN type-5). The upstream BGW of a DC is the edge its
-        dark fibre ends on; only the BGWs carry a DCI, the island edges do not.
+        dark fibres end on: both edges of its metro, each a Multi-Site BGW with its own DCI.
         """
         logging.info("=== %s - Step 7: INTERNET upstream ===", SCENARIO_NAME)
 
@@ -877,10 +941,10 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 errors.append(f"{name}: namespace INTERNET has type {namespace['namespace_type']['value']}")
 
         transit_edges = set(ALL_DEMO_INTERNET_TRANSIT_PEERINGS.values())
-        if transit_edges != ALL_DEMO_INTERNET_BGWS | ALL_DEMO_INTERNET_ISLAND_EDGES:
-            errors.append(f"transit edges {sorted(transit_edges)} are not the BGWs plus the island edges")
+        if transit_edges != ALL_DEMO_INTERNET_BGWS:
+            errors.append(f"transit edges {sorted(transit_edges)} are not exactly the BGWs")
 
-        # Each DC's DCI session lands on the BGW that is its upstream, and on no island edge.
+        # Each DC's DCI sessions land on BOTH BGWs of the metro it fronts, and on no other edge.
         dci = await async_client_main.execute_graphql(
             query=DCI_SESSIONS_QUERY,
             variables={"names": [f"DCI-{circuit_id}" for circuit_id in ALL_DEMO_DCI_CIRCUITS]},
@@ -891,18 +955,172 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             node = edge["node"]
             circuit_id = node["name"]["value"].removeprefix("DCI-")
             devices = {i["node"]["device"]["node"]["name"]["value"] for i in node["interface_capabilities"]["edges"]}
-            landing[ALL_DEMO_DCI_CIRCUITS[circuit_id][0]] = devices & transit_edges
+            landing.setdefault(ALL_DEMO_DCI_CIRCUITS[circuit_id][0], set()).update(
+                device for device in devices if device.startswith("eg-")
+            )
         for dc_name, upstream in sorted(ALL_DEMO_INTERNET_UPSTREAM_BY_DC.items()):
-            if landing.get(dc_name) != {upstream}:
-                errors.append(f"{dc_name}: DCI lands on {sorted(landing.get(dc_name, ()))}, expected [{upstream}]")
-        if set(ALL_DEMO_INTERNET_UPSTREAM_BY_DC.values()) != ALL_DEMO_INTERNET_BGWS:
+            if landing.get(dc_name) != set(upstream):
+                errors.append(
+                    f"{dc_name}: DCI lands on {sorted(landing.get(dc_name, ()))}, expected {sorted(upstream)}"
+                )
+        all_upstream = set().union(*ALL_DEMO_INTERNET_UPSTREAM_BY_DC.values())
+        if all_upstream != ALL_DEMO_INTERNET_BGWS:
             errors.append("the upstream BGWs are not exactly ALL_DEMO_INTERNET_BGWS")
-        if set(ALL_DEMO_INTERNET_UPSTREAM_BY_DC.values()) & ALL_DEMO_INTERNET_ISLAND_EDGES:
-            errors.append("a DC is wired to an island edge")
 
         assert not errors, f"30_all INTERNET upstream is wrong on branch '{scenario_branch}':\n" + "\n".join(
             f"  - {e}" for e in errors
         )
 
         logging.info("INTERNET upstream verified: %s", ALL_DEMO_INTERNET_UPSTREAM_BY_DC)
+        logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)
+
+    @pytest.mark.order(411)
+    @pytest.mark.dependency(scope="session", depends=["all_demo_physical_circuits"])
+    @pytest.mark.asyncio
+    async def test_08_verify_metro_edge_pair(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """Verify each metro with exactly two physical edges (FR, PA) links and peers them.
+
+        Per metro: one DcimCable between Ethernet1/8 of both edges, both ports
+        role `interlink` and addressed from one /127 inside the metro slice of
+        Technical-IPv6; exactly one FABRIC-<a>-<b> iBGP session (ttl 1, role
+        fabric, IPv6 unicast + l2vpn evpn) on both overlay processes, keyed
+        with the metro's own key; and one shared Multi-Site VIP (a single
+        IpamIPAddress on loopback100 of both edges).
+        """
+        logging.info("=== %s - Step 8: Metro edge pair ===", SCENARIO_NAME)
+
+        client = async_client_main
+        errors: list[str] = []
+        sessions_result = await client.execute_graphql(
+            query=DCI_SESSIONS_QUERY,
+            variables={"names": sorted(ALL_DEMO_FABRIC_PEERINGS.values())},
+            branch_name=scenario_branch,
+        )
+        sessions = {
+            edge["node"]["name"]["value"]: edge["node"] for edge in sessions_result["ManagedBGPPeering"]["edges"]
+        }
+        all_fabric = await client.execute_graphql(
+            query='query { ManagedBGPPeering(peering_role__value: "fabric") { count } }', branch_name=scenario_branch
+        )
+        fabric_count = all_fabric["ManagedBGPPeering"]["count"]
+        if fabric_count != len(ALL_DEMO_FABRIC_PEERINGS):
+            errors.append(f"{fabric_count} fabric session(s), expected {len(ALL_DEMO_FABRIC_PEERINGS)}")
+
+        for metro, ends in sorted(ALL_DEMO_EDGE_INTERLINKS.items()):
+            devices = [device for device, _ in ends]
+            ports = await client.execute_graphql(
+                query=EDGE_INTERLINK_INTERFACES_QUERY,
+                variables={"devices": devices, "name": ALL_DEMO_EDGE_INTERLINK_INTERFACE},
+                branch_name=scenario_branch,
+            )
+            by_device = {
+                e["node"]["device"]["node"]["name"]["value"]: e["node"] for e in ports["DcimPhysicalInterface"]["edges"]
+            }
+            if sorted(by_device) != sorted(devices):
+                errors.append(
+                    f"{metro}: {ALL_DEMO_EDGE_INTERLINK_INTERFACE} on {sorted(by_device)}, expected {devices}"
+                )
+                continue
+            for device, node in sorted(by_device.items()):
+                if node["role"]["value"] != "interlink":
+                    errors.append(f"{metro}/{device}: {node['name']['value']} has role {node['role']['value']}")
+
+            port_ids = {node["id"] for node in by_device.values()}
+            cable_result = await client.execute_graphql(
+                query=EDGE_INTERLINK_CABLES_QUERY, variables={"ids": sorted(port_ids)}, branch_name=scenario_branch
+            )
+            cables = cable_result["DcimCable"]["edges"]
+            if len(cables) != 1:
+                errors.append(f"{metro}: {len(cables)} cable(s) on the interlink ports, expected exactly 1")
+            elif {e["node"]["id"] for e in cables[0]["node"]["endpoints"]["edges"]} != port_ids:
+                errors.append(f"{metro}: the cable does not join exactly the two interlink ports")
+
+            pool_name = ALL_DEMO_EDGE_PAIR_POOL_TEMPLATE.format(metro=metro)
+            pool = await client.execute_graphql(
+                query=EDGE_PAIR_POOL_QUERY, variables={"name": pool_name}, branch_name=scenario_branch
+            )
+            pool_edges = pool["CoreIPPrefixPool"]["edges"]
+            slices = [
+                ipaddress.IPv6Network(r["node"]["prefix"]["value"])
+                for pool_edge in pool_edges
+                for r in pool_edge["node"]["resources"]["edges"]
+                if r["node"].get("prefix")
+            ]
+            if len(pool_edges) != 1 or not slices:
+                errors.append(f"{metro}: pool {pool_name} missing or without a prefix ({len(pool_edges)} pool(s))")
+            addresses = [
+                ipaddress.IPv6Interface(node["ip_address"]["node"]["address"]["value"])
+                for node in by_device.values()
+                if node.get("ip_address")
+            ]
+            if len(addresses) != 2 or addresses[0].network != addresses[1].network:
+                errors.append(f"{metro}: interlink addresses {addresses} are not one IPv6 P2P")
+            elif addresses[0].network.prefixlen != 127 or not any(addresses[0].network.subnet_of(s) for s in slices):
+                errors.append(f"{metro}: interlink {addresses[0].network} is not a /127 inside {pool_name} {slices}")
+
+            name = ALL_DEMO_FABRIC_PEERINGS[metro]
+            session = sessions.get(name)
+            if session is None:
+                errors.append(f"{metro}: no {name} session")
+            else:
+                if session["peering_role"]["value"] != "fabric" or session["session_type"]["value"] != "IBGP":
+                    errors.append(f"{name}: {session['peering_role']['value']}/{session['session_type']['value']}")
+                if session["ttl"]["value"] != 1:
+                    errors.append(f"{name}: ttl {session['ttl']['value']}, expected 1 (directly connected)")
+                key = ((session.get("password") or {}).get("node") or {}).get("name", {}).get("value")
+                if key != f"{metro}-fabric-key":
+                    errors.append(f"{name}: keyed with '{key}', expected '{metro}-fabric-key'")
+                families = sorted(
+                    (e["node"]["afi"]["value"], e["node"]["safi"]["value"])
+                    for e in session["address_families"]["edges"]
+                )
+                if families != [("ipv6", "unicast"), ("l2vpn", "evpn")]:
+                    errors.append(f"{name}: address families {families}")
+                processes = sorted(
+                    (e["node"]["name"]["value"], e["node"]["process_role"]["value"])
+                    for e in session["bgp_processes"]["edges"]
+                )
+                if processes != sorted((f"{device}-bgp-overlay", "overlay") for device in devices):
+                    errors.append(f"{name}: runs on {processes}")
+                session_ports = sorted(
+                    (e["node"]["device"]["node"]["name"]["value"], e["node"]["name"]["value"])
+                    for e in session["interface_capabilities"]["edges"]
+                )
+                if session_ports != sorted(ends):
+                    errors.append(f"{name}: on interfaces {session_ports}, expected {sorted(ends)}")
+
+            # Shared Multi-Site VIP: one address object, referenced by loopback100 of both edges.
+            vip_result = await client.execute_graphql(
+                query=EDGE_PAIR_VIP_QUERY, variables={"devices": devices}, branch_name=scenario_branch
+            )
+            vips = {
+                e["node"]["device"]["node"]["name"]["value"]: e["node"]
+                for e in vip_result["DcimVirtualInterface"]["edges"]
+            }
+            if sorted(vips) != sorted(devices):
+                errors.append(f"{metro}: loopback100 on {sorted(vips)}, expected {devices}")
+                continue
+            vip_ids = {((node.get("ip_address") or {}).get("node") or {}).get("id") for node in vips.values()}
+            if len(vip_ids) != 1 or None in vip_ids:
+                errors.append(f"{metro}: loopback100 of {devices} reference {len(vip_ids)} address object(s), not 1")
+            if any(node["role"]["value"] != "multisite-vip" for node in vips.values()):
+                errors.append(f"{metro}: loopback100 is not role multisite-vip on every edge")
+            vip_address = ALL_DEMO_METRO_SITE_VIPS[metro]
+            count = await client.execute_graphql(
+                query="query ($a: String) { IpamIPAddress(address__value: $a) { count } }",
+                variables={"a": vip_address},
+                branch_name=scenario_branch,
+            )
+            if count["IpamIPAddress"]["count"] != 1:
+                errors.append(f"{metro}: {count['IpamIPAddress']['count']} IpamIPAddress for {vip_address}, expected 1")
+
+        assert not errors, f"30_all metro edge pairs are wrong on branch '{scenario_branch}':\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
+
+        logging.info("Metro edge pairs verified: %s", sorted(ALL_DEMO_EDGE_INTERLINKS))
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)

@@ -32,7 +32,7 @@ import pytest
 from infrahub_sdk import InfrahubClient
 
 from .conftest import TestInfrahubDockerWithClient
-from .test_constants import ALL_DEMO_BRANCH
+from .test_constants import ALL_DEMO_BRANCH, ALL_DEMO_FABRIC_PEERINGS, ALL_DEMO_METRO_SITE_VIPS
 from .workflow_helpers import run_generator, verify_no_failed_tasks, wait_for_tasks_completion
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -179,6 +179,13 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     "CoreIPAddressPool": "name { value }",
     "RoutingAutonomousSystem": "asn { value }",
     "ManagedBGP": "local_as { node { id } }",
+    # The DCI-* and FABRIC-* sessions: a rerun that rebuilt one (new id) or re-attached it to other
+    # processes, ports or address families is a diff here.
+    "ManagedBGPPeering": (
+        "name { value } peering_role { value } session_type { value } ttl { value } "
+        "bgp_processes { edges { node { id } } } address_families { edges { node { id } } } "
+        "interface_capabilities { edges { node { id } } }"
+    ),
     "ManagedHA": "group_id { value }",
     "ManagedSegmentDeployment": "vni { value } local_vni_override { value }",
     "ManagedVlanDomainSegment": "vlan_id { value }",
@@ -513,6 +520,14 @@ class TestAllDemoIdempotency(TestInfrahubDockerWithClient):
         logging.info("Topology snapshot: %s", {kind: len(objects) for kind, objects in before.items()})
         for kind in ("DcimDevice", "DcimInterface", "DcimCable", "IpamIPAddress"):
             assert before[kind], f"No {kind} on the branch to compare"
+        # The metro edge pairs must be in the snapshot, or a second interlink cable / FABRIC session
+        # / shared-VIP address would go unnoticed (a duplicate is a new id, hence an "added" diff).
+        for peering in ALL_DEMO_FABRIC_PEERINGS.values():
+            held = [node_id for node_id, state in before["ManagedBGPPeering"].items() if repr(peering) in repr(state)]
+            assert len(held) == 1, f"{peering} is {len(held)} ManagedBGPPeering object(s) in the snapshot, not 1"
+        for vip in ALL_DEMO_METRO_SITE_VIPS.values():
+            holders = [node_id for node_id, state in before["IpamIPAddress"].items() if repr(vip) in repr(state)]
+            assert len(holders) == 1, f"the shared metro VIP {vip} is {len(holders)} IpamIPAddress object(s), not 1"
 
         targets = await self._targets(client, scenario_branch, TOPOLOGY_RERUN_GENERATORS, set())
         await self._rerun(client, scenario_branch, "Topology rerun", targets, security_before, before, labels)
