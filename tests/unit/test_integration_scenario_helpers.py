@@ -17,10 +17,12 @@ from tests.integration.test_helpers import (
     compute_role_counts,
     compute_underlay_asn_by_role,
     fetch_tenant_services,
+    fetch_transit_inventory,
     fetch_underlay_asn_drift,
     fetch_vlan_domain_segments,
     find_min_growth_shortfalls,
     find_underlay_asn_drift,
+    match_transit_contexts,
     scope_tenant_services_to_dcs,
     snapshot_dc_device_counts_by_role,
     snapshot_underlay_asn_by_roles,
@@ -495,3 +497,73 @@ async def test_fetch_vlan_domain_segments_filtered_declares_and_uses_variable() 
     assert "GetVlanDomainSegments($segment_id: [ID])" in query
     assert "ManagedVlanDomainSegment(segment__ids: $segment_id)" in query
     assert client.execute_graphql.await_args.kwargs["variables"] == {"segment_id": ["seg-1"]}
+
+
+def _context(name: str, *, tenant: str | None = None, dcs: tuple[str, ...] = (), served: tuple[str, ...] = ()) -> dict:
+    """One inventory context as fetch_transit_inventory returns it (only the keys the matcher reads)."""
+    return {"name": name, "tenant": tenant, "cluster_dcs": list(dcs), "served": [{"name": n} for n in served]}
+
+
+def test_match_transit_contexts_keys_a_served_colocation_context_by_its_metro() -> None:
+    """A tenant-less, DC-less context serving exactly a metro's deployments is keyed (metro, None)."""
+    fr = _context("fw-fr-shared", served=("C001-P-FR", "C005-P-FR"))
+    by_key, colocation = match_transit_contexts(
+        [_context("fw-dc10-shared", dcs=("DC10",)), fr],
+        ("DC10",),
+        (),
+        {"FR": ("C005-P-FR", "C001-P-FR")},
+    )
+
+    assert by_key[("FR", None)] is fr
+    assert ("DC10", None) in by_key
+    assert colocation == []
+
+
+def test_match_transit_contexts_leaves_an_unmatched_colocation_context_in_the_list() -> None:
+    """A colocation context serving other deployments than the metro's (or no metro given) stays unmatched."""
+    other = _context("fw-pa-shared", served=("C002-P-PA",))
+
+    by_key, colocation = match_transit_contexts([other], ("DC10",), (), {"FR": ("C001-P-FR", "C005-P-FR")})
+    assert by_key == {}
+    assert colocation == [other]
+
+    by_key, colocation = match_transit_contexts([other], ("DC10",), ())
+    assert colocation == [other]
+
+
+async def test_fetch_transit_inventory_tags_edge_service_ports_like_border_leaf_ones() -> None:
+    """A context's physical ports on an edge (colocation metro) are border_ports, like a border leaf's."""
+
+    def port(port_id: str, device: str, role: str) -> dict:
+        return {
+            "node": {
+                "__typename": "DcimPhysicalInterface",
+                "id": port_id,
+                "name": {"value": "Ethernet1/15"},
+                "device": {"node": {"id": f"id-{device}", "name": {"value": device}, "role": {"value": role}}},
+            }
+        }
+
+    context = {
+        "id": "ctx",
+        "name": {"value": "fw-fr-shared"},
+        "interface_capabilities": {
+            "edges": [port("p1", "eg-fr01", "edge"), port("p2", "eg-fr02", "edge"), port("p3", "server-1", "server")]
+        },
+        "cluster": {"node": {"capabilities": {"edges": []}}},
+        "served_deployments": {"edges": []},
+    }
+    client = MagicMock()
+    client.execute_graphql = AsyncMock(
+        return_value={
+            "ManagedFirewallContext": {"edges": [{"node": context}]},
+            "TopologyRoutedExchange": {"edges": []},
+        }
+    )
+
+    inventory = await fetch_transit_inventory(client=client, branch="main")
+
+    assert [(p["id"], p["device"]) for p in inventory["contexts"][0]["border_ports"]] == [
+        ("p1", "eg-fr01"),
+        ("p2", "eg-fr02"),
+    ]

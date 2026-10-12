@@ -462,8 +462,9 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
 # One shared (tenant-less) firewall context per firewall cluster: the three
 # DC clusters and the FR colocation metro's pair, which every colocation
 # deployment in the metro shares (a colocation has no design, so never a
-# dedicated context). The colocation context is policy-only: it has no VLAN,
-# sub-interface, P2P address or exchange, just the serving link and zone policies ...
+# dedicated context). The colocation context carries transit legs like a DC
+# one (its legs face the metro's two edges, whose firewall ports are tagged
+# with the context) ...
 ALL_DEMO_SHARED_FIREWALL_CONTEXTS = 4
 # Every 30_all colocation deployment -> whether its metro has firewalls, and so
 # a serving context. Only FR declares a firewall pair (02_colo/equinix/fr); the
@@ -476,6 +477,12 @@ ALL_DEMO_COLOCATION_SERVED = {
     "C012-P-VA": False,
     "C013-P-AMS": False,
     "C014-P-PAR": False,
+}
+# Served colocation metro -> the deployments its shared context serves, derived from
+# ALL_DEMO_COLOCATION_SERVED (a deployment name ends in its metro: `C001-P-FR` -> FR).
+ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS: dict[str, tuple[str, ...]] = {
+    site: tuple(name for name, served in ALL_DEMO_COLOCATION_SERVED.items() if served and name.endswith(f"-{site}"))
+    for site in sorted({name.rsplit("-", 1)[-1] for name, served in ALL_DEMO_COLOCATION_SERVED.items() if served})
 }
 # ... plus one dedicated context per customer whose design blueprint sets
 # dedicated_firewall (data/bootstrap/21_customer_templates.yml: L_DC and
@@ -525,7 +532,8 @@ ALL_DEMO_INTERNET_EGRESS_RULES: dict[str, InternetEgressRule] = {
 # Everything below is DERIVED, not hand-counted. A context's legs are its
 # tenant VRFs plus INTERNET and MANAGEMENT (EXCHANGE_PEERS): a dedicated context serves its one
 # tenant, a shared context serves every customer deployment of its DC that has
-# no dedicated context. A deployment's VRF follows its environment (`p` is
+# no dedicated context. A served colocation metro (ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS,
+# FR) has one shared context serving all its deployments, on the same rules. A deployment's VRF follows its environment (`p` is
 # PROD, every other value NON-PROD). The deployments are the nine
 # TopologyCustomerDC footprints of 03_dc/new_customers plus the C008/C010 dev
 # footprints that 06_customer_boarding adds on DC12 (the c005/c006 boardings
@@ -578,9 +586,10 @@ ALL_DEMO_FIREWALL_MEMBERS = 2
 
 
 class ExpectedTransitContext(TypedDict):
-    """What one firewall context of a 30_all DC must carry."""
+    """What one firewall context of a 30_all site (a DC, or a served colocation metro) must carry."""
 
-    dc: str
+    #: The DC (`DC10`) or the colocation metro (`FR`) the context's firewalls sit in.
+    site: str
     #: Tenant deployment of a dedicated context, None for the DC's shared one.
     tenant: str | None
     #: Deployments the context serves.
@@ -606,7 +615,7 @@ def transit_namespace_type(namespace_name: str) -> str:
     return next(ns_type for ns_type, name in _TRANSIT_NAMESPACE_BY_TYPE.items() if name == namespace_name)
 
 
-def _expected_transit_context(dc: str, tenant: str | None, deployments: tuple[str, ...]) -> ExpectedTransitContext:
+def _expected_transit_context(site: str, tenant: str | None, deployments: tuple[str, ...]) -> ExpectedTransitContext:
     tenant_types = {namespace_type_for_environment(deployment_environment(d)) for d in deployments}
     exchanges = [
         f"{_TRANSIT_NAMESPACE_BY_TYPE[tenant_type]}-{_TRANSIT_NAMESPACE_BY_TYPE[peer]}"
@@ -619,7 +628,7 @@ def _expected_transit_context(dc: str, tenant: str | None, deployments: tuple[st
         name for ns_type, name in _TRANSIT_NAMESPACE_BY_TYPE.items() if ns_type in tenant_types | peer_types
     )
     return {
-        "dc": dc,
+        "site": site,
         "tenant": tenant,
         "deployments": deployments,
         "namespaces": namespaces,
@@ -628,23 +637,26 @@ def _expected_transit_context(dc: str, tenant: str | None, deployments: tuple[st
 
 
 def expected_transit_contexts() -> list[ExpectedTransitContext]:
-    """The shared context of every 30_all DC, then its dedicated ones (ALL_DEMO_DEDICATED_FIREWALL_TENANTS)."""
+    """The shared context of every 30_all DC, then its dedicated ones (ALL_DEMO_DEDICATED_FIREWALL_TENANTS),
+    then the shared context of every served colocation metro (never a dedicated one: no design)."""
     contexts: list[ExpectedTransitContext] = []
     for dc, deployments in ALL_DEMO_DC_CUSTOMER_DEPLOYMENTS.items():
         dedicated = tuple(d for d in deployments if d in ALL_DEMO_DEDICATED_FIREWALL_TENANTS)
         shared = tuple(d for d in deployments if d not in ALL_DEMO_DEDICATED_FIREWALL_TENANTS)
         contexts.append(_expected_transit_context(dc, None, shared))
         contexts.extend(_expected_transit_context(dc, tenant, (tenant,)) for tenant in dedicated)
+    for site, deployments in ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS.items():
+        contexts.append(_expected_transit_context(site, None, deployments))
     return contexts
 
 
 ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS = expected_transit_contexts()
 # PR 4d: every context with an INTERNET leg owns one SNAT /32 (FW-SNAT-INTERNET-IPv4,
 # data/bootstrap/23_transit_pools.yml). EXCHANGE_PEERS gives every tenant VRF an INTERNET
-# leg, so that is every DC context; the colocation context is policy-only (no legs, no SNAT).
+# leg, so that is every context, the colocation metro's included.
 ALL_DEMO_SNAT_POOL_PREFIX = "192.0.2.0/24"
 ALL_DEMO_SNAT_ADDRESSES = sum("INTERNET" in c["namespaces"] for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS)
-# Planning estimate, re-derived above: DC10 3+3, DC11 3+3, DC12 4+3 legs.
+# DC10 3+3, DC11 3+3, DC12 4+3, FR 3 legs.
 ALL_DEMO_TRANSIT_LEGS = sum(len(c["namespaces"]) for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS)
 ALL_DEMO_TRANSIT_EXCHANGES = sum(len(c["exchanges"]) for c in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS)
 # One /29 per leg, so the /29 count per VRF is the leg count per VRF.
@@ -653,9 +665,12 @@ ALL_DEMO_TRANSIT_PREFIXES: dict[str, int] = {
     for name in ALL_DEMO_TRANSIT_NAMESPACES
 }
 ALL_DEMO_TRANSIT_SUBINTERFACES = ALL_DEMO_TRANSIT_LEGS * ALL_DEMO_FIREWALL_MEMBERS
-# Each DC's member uplinks reach 2 border-leaf service ports (dedicated virtual
-# members follow their hosting firewall), and every context of the DC tags both.
-ALL_DEMO_BORDER_FIREWALL_PORTS = len(ALL_DEMO_DC_CUSTOMER_DEPLOYMENTS) * ALL_DEMO_FIREWALL_MEMBERS
+# Each site's member uplinks reach 2 service ports (dedicated virtual members follow
+# their hosting firewall): a DC's border leafs, a colocation metro's two edges
+# (firewall-role ports Ethernet1/15-16). Every context of the site tags both.
+ALL_DEMO_BORDER_FIREWALL_PORTS = (
+    len(ALL_DEMO_DC_CUSTOMER_DEPLOYMENTS) + len(ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS)
+) * ALL_DEMO_FIREWALL_MEMBERS
 
 # Declared nowhere: the customer boarding generators create them, so the floors
 # join ALL_DEMO_EXPECTED_OBJECTS here. Contexts = the shared ones + one per

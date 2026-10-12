@@ -21,11 +21,12 @@ pair), whose rules are in that segment's own policy
 not carry the rules.
 
 The same module then covers the inter-VRF exchange legs the customer boarding
-generators build through each DC's firewall contexts (utils/exchange_transit.py):
-CheckFirewall on a DC10 (Check Point) and DC11 (PAN-OS) member, the rendered
-firewall config of every DC (leg interface, VIP, default route via the INTERNET
-leg, PROD/NON-PROD isolation), and a DC11 border-leaf config carrying the
-transit VRF routes. Everything is derived from the loaded graph and from
+generators build through each firewall context (utils/exchange_transit.py), a
+DC's and the FR colocation metro's alike:
+CheckFirewall on a DC10 (Check Point), DC11 and FR (PAN-OS) member, the rendered
+firewall config of every site (leg interface, VIP, default route via the INTERNET
+leg, PROD/NON-PROD isolation), a DC11 border-leaf config carrying the
+transit VRF routes, and the FR edges' config carrying the metro's transit legs. Everything is derived from the loaded graph and from
 test_constants' environment-driven expectations.
 """
 
@@ -61,6 +62,7 @@ from utils.internet_space import NON_INTERNET_PREFIXES
 from .conftest import TestInfrahubDockerWithClient
 from .test_constants import (
     ALL_DEMO_BRANCH,
+    ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS,
     ALL_DEMO_DC_NAMES,
     ALL_DEMO_DCI_CIRCUITS,
     ALL_DEMO_DEDICATED_FIREWALL_TENANTS,
@@ -80,6 +82,7 @@ from .test_constants import (
     MANAGEMENT_SERVICES_LEAF,
     MANAGEMENT_SERVICES_PREFIX,
     MANAGEMENT_SERVICES_VLAN,
+    ExpectedTransitContext,
     transit_namespace_type,
 )
 from .test_helpers import fetch_dc_topology, fetch_transit_inventory, match_transit_contexts
@@ -225,9 +228,14 @@ def _management_border_leaf_errors(device: str, rendered: str, contexts: list[di
     return errors
 
 
-def _dc_contexts(inventory: dict[str, list[dict[str, Any]]]) -> dict[tuple[str, str | None], dict[str, Any]]:
-    """The 30_all DC firewall contexts keyed (dc, tenant), tenant None for a DC's shared one."""
-    by_key, _ = match_transit_contexts(inventory["contexts"], ALL_DEMO_DC_NAMES, ALL_DEMO_DEDICATED_FIREWALL_TENANTS)
+def _site_contexts(inventory: dict[str, list[dict[str, Any]]]) -> dict[tuple[str, str | None], dict[str, Any]]:
+    """The 30_all firewall contexts keyed (site, tenant): a DC or a served colocation metro (FR), tenant None for the shared one."""
+    by_key, _ = match_transit_contexts(
+        inventory["contexts"],
+        ALL_DEMO_DC_NAMES,
+        ALL_DEMO_DEDICATED_FIREWALL_TENANTS,
+        ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS,
+    )
     return by_key
 
 
@@ -235,6 +243,152 @@ def _leg_network(context: dict[str, Any], namespace: str) -> ipaddress.IPv4Netwo
     """The /29 of a context's leg in `namespace` (taken from its first member's address)."""
     leg = next(leg for leg in context["legs"] if leg["namespace"] == namespace)
     return ipaddress.IPv4Interface(leg["address"]).network
+
+
+def _panos_context_leg_errors(
+    device: str, rendered: str, context: dict[str, Any], expected: ExpectedTransitContext
+) -> list[str]:
+    """What a PAN-OS member must render for the transit legs of `context` (the layer3 half of a shared context).
+
+    Per leg of this member: the sub-interface with its VLAN tag and the HA VIP, its import into the
+    vsys, its zone and its place in the context's own virtual router. Then the vr's default route via
+    the INTERNET leg anycast, a SNAT rule per tenant zone (to INTERNET-ZONE translating to the SNAT
+    /32, to MANAGEMENT-ZONE translating to the MANAGEMENT VIP) and a logged MANAGEMENT-ZONE -> tenant
+    deny per tenant zone. PROD<->NON-PROD isolation only when the context holds both.
+    """
+    errors: list[str] = []
+    name = str(context["name"])
+    vr = f"vr-{name}"
+    for leg in (leg for leg in context["legs"] if leg["device"] == device):
+        interface = str(leg["interface"])
+        parent, _, vlan = interface.rpartition(".")
+        vip = transit_addresses(str(ipaddress.IPv4Interface(leg["address"]).network))["vip"]
+        zone = zone_name_for_namespace_type(transit_namespace_type(str(leg["namespace"])))
+        for line in (
+            f"set network interface ethernet {parent} layer3 units {interface} tag {vlan}",
+            f"set network interface ethernet {parent} layer3 units {interface} ip {vip}",
+            f"set vsys {name} import network interface {interface}",
+            f"set vsys {name} zone {zone} network layer3 {interface}",
+            f"set network virtual-router {vr} interface {interface}",
+        ):
+            if not re.search(rf"^{re.escape(line)}(?:/\d+)?$", rendered, re.MULTILINE):
+                errors.append(f"{device}: no '{line}'")
+    if f"set vsys {name} import network virtual-router {vr}" not in rendered:
+        errors.append(f"{device}: virtual router {vr} is not imported into vsys {name}")
+    internet_anycast = transit_addresses(str(_leg_network(context, "INTERNET")))["anycast"]
+    default_routes = re.findall(
+        rf"set network virtual-router {re.escape(vr)} routing-table ip static-route (\S+) destination 0\.0\.0\.0/0$",
+        rendered,
+        re.MULTILINE,
+    )
+    if not any(
+        f"set network virtual-router {vr} routing-table ip static-route {route} nexthop ip-address {internet_anycast}"
+        in rendered
+        for route in default_routes
+    ):
+        errors.append(f"{device}: no 0.0.0.0/0 in {vr} via the INTERNET leg anycast {internet_anycast}")
+    snat = str(ipaddress.IPv4Interface(str(context["snat"])).ip)
+    management_vip = transit_addresses(str(_leg_network(context, MANAGEMENT_NAMESPACE)))["vip"]
+    management_zone = zone_name_for_namespace_type(MANAGEMENT_TYPE)
+    tenant_zones = [
+        zone_name_for_namespace_type(transit_namespace_type(namespace))
+        for namespace in expected["namespaces"]
+        if transit_namespace_type(namespace) in EXCHANGE_PEERS
+    ]
+    for zone in tenant_zones:
+        for line in (
+            f"set vsys {name} rulebase nat rules snat-{zone} to INTERNET-ZONE",
+            f"set vsys {name} rulebase nat rules snat-{zone} source-translation dynamic-ip-and-port translated-address {snat}",
+            f"set vsys {name} rulebase nat rules snat-{zone}-{MANAGEMENT_NAMESPACE} to {management_zone}",
+            f"set vsys {name} rulebase nat rules snat-{zone}-{MANAGEMENT_NAMESPACE} source-translation "
+            f"dynamic-ip-and-port translated-address {management_vip}",
+            f"set vsys {name} rulebase security rules deny-{management_zone}-to-{zone} action deny",
+        ):
+            if line not in rendered:
+                errors.append(f"{device}: no '{line}'")
+    isolated = {"PROD", "NON-PROD"} <= set(expected["namespaces"])
+    for src, dst in (("prod", "non_prod"), ("non_prod", "prod")):
+        deny = f"deny-{zone_name_for_namespace_type(src)}-to-{zone_name_for_namespace_type(dst)}"
+        if (deny in rendered) != isolated:
+            errors.append(f"{device}: '{deny}' {'missing' if isolated else 'present'}, VRFs {expected['namespaces']}")
+    return errors
+
+
+def _allowed_vlans(port_block: str) -> set[int]:
+    """The VLANs of a `switchport trunk allowed vlan 3000,3400-3402` line, ranges expanded; empty when absent."""
+    match = re.search(r"switchport trunk allowed vlan (\S+)", port_block)
+    vlans: set[int] = set()
+    for part in match.group(1).split(",") if match else []:
+        low, _, high = part.partition("-")
+        vlans.update(range(int(low), int(high or low) + 1))
+    return vlans
+
+
+def _edge_transit_errors(device: str, rendered: str, context: dict[str, Any]) -> list[str]:
+    """What a metro edge must render for the transit legs of its shared firewall context.
+
+    The firewall-role ports tagged with the context are trunks of every transit VLAN; each VLAN has
+    its L2VNI (`vn-segment` of transit_vni) and an `interface Vlan<N>` in the leg's VRF with the
+    anycast .1 of the /29 and the anycast-gateway mode. `vrf context PROD` holds the 0/0 static to the
+    PROD VIP, `vrf context INTERNET` the context's SNAT /32 to the INTERNET VIP. Statics stay local per
+    D3: INTERNET's are redistributed into EVPN through RM-VRF-STATIC-2-EVPN-INTERNET, PROD's 0/0 is not
+    (no `redistribute static` in `vrf PROD`), and every RM-VRF-STATIC-2-EVPN-* referenced is defined.
+    """
+    errors: list[str] = []
+    vlans = {
+        str(leg["namespace"]): transit_vlan(int(context["vlan"]), transit_namespace_type(str(leg["namespace"])))
+        for leg in context["legs"]
+    }
+    ports = [str(port["interface"]) for port in context["border_ports"] if port["device"] == device]
+    if not ports:
+        return [f"{device}: no firewall port tagged with '{context['name']}'"]
+    for port in ports:
+        # An interface stanza may hold blank lines (empty includes), which _block would stop at.
+        match = re.search(rf"^interface {re.escape(port)}\n((?:(?:[ \t]+.*)?\n)*)", rendered + "\n", re.MULTILINE)
+        block = match.group(1) if match else None
+        if block is None or "switchport mode trunk" not in block:
+            errors.append(f"{device}: {port} is not a trunk")
+        elif not set(vlans.values()) <= _allowed_vlans(block):
+            errors.append(f"{device}: {port} trunks {sorted(_allowed_vlans(block))}, expected {sorted(vlans.values())}")
+    for namespace, vlan in sorted(vlans.items()):
+        anycast = transit_addresses(str(_leg_network(context, namespace)))["anycast"]
+        if re.search(rf"^vlan {vlan}\n\s+vn-segment {transit_vni(vlan)}$", rendered, re.MULTILINE) is None:
+            errors.append(f"{device}: no 'vlan {vlan}' with 'vn-segment {transit_vni(vlan)}'")
+        svi = _block(rendered, f"interface Vlan{vlan}")
+        if svi is None:
+            errors.append(f"{device}: no 'interface Vlan{vlan}' ({namespace} transit)")
+            continue
+        for line in (
+            f"vrf member {namespace}",
+            f"ip address {anycast}/29",
+            "fabric forwarding mode anycast-gateway",
+        ):
+            if line not in svi:
+                errors.append(f"{device}: Vlan{vlan} lacks '{line}'")
+    prod_vip = transit_addresses(str(_leg_network(context, "PROD")))["vip"]
+    internet_vip = transit_addresses(str(_leg_network(context, "INTERNET")))["vip"]
+    snat = ipaddress.IPv4Interface(str(context["snat"])).ip
+    for vrf, route in (("PROD", f"ip route 0.0.0.0/0 {prod_vip}"), ("INTERNET", f"ip route {snat}/32 {internet_vip}")):
+        block = _block(rendered, f"vrf context {vrf}")
+        if block is None or route not in block:
+            errors.append(f"{device}: '{route}' is not inside 'vrf context {vrf}'")
+    bgp_vrf = {
+        vrf: re.search(rf"^[ \t]+vrf {vrf}\n((?:[ \t]{{4,}}.*\n)*)", rendered + "\n", re.MULTILINE)
+        for vrf in ("PROD", "INTERNET")
+    }
+    internet_bgp, prod_bgp = bgp_vrf["INTERNET"], bgp_vrf["PROD"]
+    if internet_bgp is None or "redistribute static route-map RM-VRF-STATIC-2-EVPN-INTERNET" not in internet_bgp.group(
+        1
+    ):
+        errors.append(f"{device}: INTERNET statics are not redistributed through RM-VRF-STATIC-2-EVPN-INTERNET")
+    if prod_bgp is None or "redistribute static" in prod_bgp.group(1):
+        errors.append(f"{device}: PROD's 0/0 is exported into EVPN (D3: it must stay a local static)")
+    referenced = set(re.findall(r"^[ \t]+.*\broute-map (RM-VRF-STATIC-2-EVPN-\S+)", rendered, re.MULTILINE))
+    defined = set(re.findall(r"^route-map (RM-VRF-STATIC-2-EVPN-\S+) (?:permit|deny)", rendered, re.MULTILINE))
+    if referenced - defined:
+        errors.append(f"{device}: route-map(s) {sorted(referenced - defined)} referenced but not defined")
+    errors.extend(_management_border_leaf_errors(device, rendered, [context]))
+    return errors
 
 
 def _fabric_pair_errors(device: str, rendered: str) -> list[str]:
@@ -410,28 +564,40 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         the cluster on the same platform must not carry the rules: strict
         placement puts a rule only where its segment is served.
 
-        The colocation context is policy-only: its vsys renders, but it has no
-        data-plane leg, so the config carries no interface unit, no import of
-        an interface into the vsys and no virtual router for it."""
+        The colocation context also carries transit legs, like a DC's: the FR
+        pair is PAN-OS, so each member renders its layer3 sub-interfaces,
+        vsys imports, zones, the vsys's own virtual router with the 0/0 via the
+        INTERNET leg, the SNAT rules and the MANAGEMENT denies
+        (_panos_context_leg_errors, the same wording as the DC11 steps)."""
         logging.info("=== %s - Step 2: Render firewall_config ===", SCENARIO_NAME)
 
         context = serving_cluster["context"]
         assert context, "serving context has no name"
+        site_contexts = _site_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))
+        site, inventory_context = next(
+            (
+                (site, candidate)
+                for (site, tenant), candidate in site_contexts.items()
+                if tenant is None and candidate["name"] == context
+            ),
+            ("", None),
+        )
+        assert inventory_context is not None and site in ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS, (
+            f"serving context '{context}' is not a served colocation metro's shared context"
+        )
+        expected = next(e for e in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS if e["site"] == site and e["tenant"] is None)
+        platform_by_name = await _platform_by_name(async_client_main, scenario_branch)
         errors: list[str] = []
         for device in serving_cluster["members"]:
             rendered = await _render(async_client_main, scenario_branch, device)
             if f"set vsys {context}" not in rendered:
                 errors.append(f"{device}: no vsys '{context}' rendered")
-            leg_lines = [
-                line
-                for line in rendered.splitlines()
-                if (f"vsys {context} import network" in line)
-                or (f"vsys {context} zone" in line and "network layer3" in line)
-                or (f"virtual-router vr-{context}" in line)
-                or ("set network interface ethernet" in line and " layer3 units " in line)
-            ]
-            if leg_lines:
-                errors.append(f"{device}: policy-only context '{context}' renders leg line(s) {leg_lines}")
+            if platform_by_name.get(device) != "panos":
+                errors.append(f"{device}: platform '{platform_by_name.get(device)}', the FR pair is expected PAN-OS")
+                continue
+            if not any(leg["device"] == device for leg in inventory_context["legs"]):
+                errors.append(f"{device}: no transit leg of '{context}' in the graph")
+            errors.extend(_panos_context_leg_errors(device, rendered, inventory_context, expected))
             missing = [name for name in (*EXPECTED_RULE_NAMES, *EXPECTED_DESTINATION_CIDRS) if name not in rendered]
             if missing:
                 errors.append(f"{device}: missing seg-c001-nordix-prod-p-egress rule(s)/CIDR(s) {missing}")
@@ -451,7 +617,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
     @pytest.mark.order(400)
     @pytest.mark.dependency(scope="session", depends=["all_demo_exchange_transit"])
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("dc", ["DC10", "DC11"])
+    @pytest.mark.parametrize("dc", ["DC10", "DC11", "FR"])
     async def test_03_check_firewall_passes_on_transit_dcs(
         self,
         async_client_main: InfrahubClient,
@@ -459,11 +625,12 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         dc: str,
     ) -> None:
         """CheckFirewall (incl. validate_exchange_gateways) passes on a member of
-        DC10's Check Point pair and DC11's PAN-OS pair: one local leg per
-        exchange namespace, in a /29, tagged with the transit VLAN."""
+        DC10's Check Point pair, DC11's PAN-OS pair and the FR metro's PAN-OS
+        pair: one local leg per exchange namespace, in a /29, tagged with the
+        transit VLAN."""
         logging.info("=== %s - Step 3: CheckFirewall (%s transit legs) ===", SCENARIO_NAME, dc)
 
-        shared = _dc_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))[
+        shared = _site_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))[
             (dc, None)
         ]
         member = sorted({str(leg["device"]) for leg in shared["legs"]})[0]
@@ -496,7 +663,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         """
         logging.info("=== %s - Step 4: Render transit legs ===", SCENARIO_NAME)
 
-        contexts = _dc_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))
+        contexts = _site_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))
         platform_by_name = await _platform_by_name(async_client_main, scenario_branch)
 
         errors: list[str] = []
@@ -504,7 +671,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         for expected in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS:
             if expected["tenant"] is not None:
                 continue  # a dedicated context's members are virtual: not a firewall_config device
-            dc = expected["dc"]
+            dc = expected["site"]
             context = contexts.get((dc, None))
             if context is None:
                 errors.append(f"{dc}: no shared context")
@@ -576,7 +743,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         """
         logging.info("=== %s - Step 5: Render border-leaf transit routes ===", SCENARIO_NAME)
 
-        contexts = _dc_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))
+        contexts = _site_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))
         dc = "DC11"
         dc_contexts = [context for (context_dc, _), context in contexts.items() if context_dc == dc]
         shared = contexts[(dc, None)]
@@ -652,7 +819,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         """
         logging.info("=== %s - Step 6: Internet egress rule ===", SCENARIO_NAME)
 
-        contexts = _dc_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))
+        contexts = _site_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))
         errors: list[str] = []
         for rule_name, rule in ALL_DEMO_INTERNET_EGRESS_RULES.items():
             dc = rule["dc"]
@@ -766,7 +933,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         """
         logging.info("=== %s - Step 6: Render firewall SNAT ===", SCENARIO_NAME)
 
-        contexts = _dc_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))
+        contexts = _site_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))
         platform_by_name = await _platform_by_name(async_client_main, scenario_branch)
 
         errors: list[str] = []
@@ -774,7 +941,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         for expected in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS:
             if expected["tenant"] is not None:
                 continue  # a dedicated context's members are virtual: not a firewall_config device
-            dc = expected["dc"]
+            dc = expected["site"]
             context = contexts.get((dc, None))
             if context is None or not context["snat"]:
                 errors.append(f"{dc}: no shared context with a snat_address")
@@ -896,6 +1063,54 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         )
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)
 
+    @pytest.mark.order(401)
+    @pytest.mark.dependency(scope="session", depends=["all_demo_firewall_transit_render"])
+    @pytest.mark.asyncio
+    async def test_06_edge_config_renders_firewall_transit_legs(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """Each FR metro edge renders the shared context's transit legs; the PA edges render none.
+
+        The edges are the border leafs' counterpart for a colocation context (a trunk of the
+        transit VLANs on the firewall-role port, transit L2VNI, anycast SVI per VRF, the 0/0 and SNAT
+        /32 statics inside their `vrf context`); see _edge_transit_errors. The statics stay local:
+        INTERNET's SNAT /32 is redistributed into EVPN, PROD's 0/0 is not. The edges of a metro
+        without a firewall pair carry no transit VLAN, SVI or static-route map.
+        """
+        logging.info("=== %s - Step 6: Render edge firewall transit legs ===", SCENARIO_NAME)
+
+        contexts = _site_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))
+        errors: list[str] = []
+        served_edges: set[str] = set()
+        for site in ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS:
+            context = contexts.get((site, None))
+            assert context is not None, f"{site}: no shared firewall context"
+            edges = sorted({str(port["device"]) for port in context["border_ports"]})
+            assert len(edges) == 2, f"{site}: service ports on {edges}, expected both edges of the metro"
+            served_edges.update(edges)
+            for device in edges:
+                rendered = await _render(
+                    async_client_main, scenario_branch, device, query="edge_config", transform_cls=Edge
+                )
+                errors.extend(_edge_transit_errors(device, rendered, context))
+
+        for device in sorted(set(ALL_DEMO_INTERNET_BGWS) - served_edges):
+            rendered = await _render(
+                async_client_main, scenario_branch, device, query="edge_config", transform_cls=Edge
+            )
+            if re.search(r"^interface Vlan3[0-7]\d{2}$", rendered, re.MULTILINE):
+                errors.append(f"{device}: renders a transit SVI, its metro has no firewall pair")
+            if "switchport trunk allowed vlan" in rendered or "PL-VRF-STATIC" in rendered:
+                errors.append(f"{device}: renders a transit trunk or exchange static, its metro has no firewall pair")
+
+        assert served_edges, "no edge carries a firewall context"
+        assert not errors, f"Edge firewall transit legs on branch '{scenario_branch}' are wrong:\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
+        logging.info("Rendered edge transit legs on %s", sorted(served_edges))
+
     @pytest.mark.order(402)
     @pytest.mark.dependency(scope="session", depends=["all_demo_firewall_transit_render"])
     @pytest.mark.asyncio
@@ -914,7 +1129,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         """
         logging.info("=== %s - Step 7: Render firewall MANAGEMENT exchange ===", SCENARIO_NAME)
 
-        contexts = _dc_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))
+        contexts = _site_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))
         platform_by_name = await _platform_by_name(async_client_main, scenario_branch)
         management_zone = zone_name_for_namespace_type(MANAGEMENT_TYPE)
 
@@ -923,7 +1138,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         for expected in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS:
             if expected["tenant"] is not None:
                 continue  # a dedicated context's members are virtual: not a firewall_config device
-            dc = expected["dc"]
+            dc = expected["site"]
             context = contexts.get((dc, None))
             if context is None:
                 errors.append(f"{dc}: no shared context")
@@ -1042,7 +1257,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         """
         logging.info("=== %s - Step 7: Render core DNS/NTP rules ===", SCENARIO_NAME)
 
-        context = _dc_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))[
+        context = _site_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))[
             (MANAGEMENT_SERVICES_DC, None)
         ]
         members = sorted({str(leg["device"]) for leg in context["legs"]})
