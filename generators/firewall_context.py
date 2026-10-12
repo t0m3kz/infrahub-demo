@@ -7,10 +7,10 @@ ColocationMetro) board a customer the same way: a shared or dedicated context
 on the parent's ManagedFirewallHA cluster, a VLAN-tagged sub-interface per
 firewall, a transit leg per VRF the context serves (utils/exchange_transit.py)
 joined by a TopologyRoutedExchange, and an optional dedicated load-balancer
-pair. Only the DC host calls the leg step (`_ensure_transit_legs`); a colocation
-host calls `_ensure_policy_only_context`, which keeps just the context and its
-serving link. Only the customer kind and the parent's label differ, and the
-host class sets those as class attributes.
+pair. Both hosts call the same leg step (`_ensure_transit_legs`); the legs face
+the border leaf on a DC and the edge on a colocation metro. Only the customer
+kind and the parent's label differ, and the host class sets those as class
+attributes.
 """
 
 from __future__ import annotations
@@ -237,26 +237,6 @@ class FirewallContextMixin:
             fw_devices=fw_devices,
             parent_name=parent_name,
         )
-
-    async def _ensure_policy_only_context(self, customer_id: str, target: _ContextTarget) -> None:
-        """The context and the customer's serving link, nothing else.
-
-        Colocation has no data-plane legs: the context exists so the firewall
-        transform places the deployment's zone policies on it. Every customer
-        boarding onto the metro's cluster provisions the same shared context
-        concurrently, and the query-then-create guard in
-        _get_or_create_firewall_context only holds for sequential runs, so it
-        runs under the per-context lock (same key as _ensure_transit_legs).
-        """
-        async with self.resource_lock(f"fw-context-{target.context_name}"):
-            context_obj = await self._get_or_create_firewall_context(
-                target.context_name, target.cluster_id, target.tenant_id, track=target.track
-            )
-            if context_obj is None:
-                return
-            await self.link_serving_firewall_context(
-                kind=self._customer_kind, customer_id=customer_id, context_id=context_obj.id
-            )
 
     async def _ensure_transit_legs(
         self,

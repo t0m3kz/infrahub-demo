@@ -4,6 +4,8 @@ from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
 
+from transforms.common import BaseDeviceTransform
+from transforms.helpers.firewall import get_exchange_transits
 from utils.data_cleaning import get_data
 from utils.exchange_transit import (
     EXCHANGE_PEERS,
@@ -26,6 +28,7 @@ __all__ = [
     "validate_interfaces",
     "validate_routing_password",
     "validate_snat_addresses",
+    "validate_transit_vlans",
 ]
 
 
@@ -64,6 +67,48 @@ def validate_interfaces(data: dict[str, Any]) -> list[str]:
             errors.append(f"Loopback interface '{interface.get('name', 'unknown')}' has no IP address assigned.")
 
     return errors
+
+
+def validate_transit_vlans(device: dict[str, Any], transform_cls: type[BaseDeviceTransform]) -> list[str]:
+    """No exchange transit VLAN may equal a segment VLAN on this border device.
+
+    The border leaf and the edge hold no legs themselves: each derives one
+    transit VLAN per leg of every firewall context tagged on its service ports
+    (transforms.helpers.firewall.get_exchange_transits) and renders them next to
+    its segment VLANs. get_vlans de-duplicates by VLAN id, so a collision would
+    silently drop one of the two. Segment VLANs are collected the way
+    ``transform_cls`` (the device's own transform) collects its activations.
+    """
+    transits = get_exchange_transits(device.get("interfaces"))
+    if not transits:
+        return []
+
+    transform = transform_cls.__new__(transform_cls)
+    interfaces = device.get("interfaces") or []
+    capabilities = device.get("capabilities") or []
+    activations = transform._collect_activations_from_interfaces(
+        interfaces, device_id=device.get("id"), device_capabilities=capabilities
+    )
+    if any(iface.get("role") == "multisite-vip" for iface in interfaces):
+        activations.extend(
+            transform._collect_border_gateway_activations(
+                device.get("deployment"),
+                device_id=device.get("id"),
+                device_capabilities=capabilities,
+                seen={(act.get("segment") or {}).get("id") for act in activations},
+            )
+        )
+    segment_by_vlan = {
+        act["vlan_id"]: (act.get("segment") or {}).get("name", "<unnamed>") for act in activations if act.get("vlan_id")
+    }
+
+    device_name = device.get("name", "unknown")
+    return [
+        f"Exchange transit VLAN {transit['vlan_id']} ('{transit['segment']['name']}') on '{device_name}' "
+        f"collides with segment '{segment_by_vlan[transit['vlan_id']]}' — the config would silently keep only one."
+        for transit in transits
+        if transit["vlan_id"] in segment_by_vlan
+    ]
 
 
 def validate_appliance(device: dict[str, Any], ha_kind: str, label: str) -> list[str]:

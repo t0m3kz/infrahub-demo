@@ -126,6 +126,8 @@ query {
         cluster { node { id } }
         served_deployments { edges { node { id } } }
         snat_address { node { id address { value } } }
+        # The members' transit sub-interfaces and the physical service ports tagged with the
+        # context (a DC's border-leaf ports, the colocation metro's edge ports).
         interface_capabilities {
           edges {
             node {
@@ -135,6 +137,17 @@ query {
             }
           }
         }
+      }
+    }
+  }
+  TopologyRoutedExchange {
+    edges {
+      node {
+        id
+        name { value }
+        namespace_a { node { id } }
+        namespace_z { node { id } }
+        gateway { node { id } }
       }
     }
   }
@@ -279,6 +292,16 @@ def _snapshot(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
                 ),
             )
             for n in _nodes(result, "ManagedFirewallContext")
+        },
+        # `{context}-{A}-{Z}` per context and tenant VRF, DC and colocation metro alike.
+        "TopologyRoutedExchange": {
+            n["id"]: (
+                _value(n, "name"),
+                _peer_id(n, "namespace_a"),
+                _peer_id(n, "namespace_z"),
+                _peer_id(n, "gateway"),
+            )
+            for n in _nodes(result, "TopologyRoutedExchange")
         },
     }
 

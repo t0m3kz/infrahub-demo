@@ -29,6 +29,7 @@ import logging
 import pytest
 from infrahub_sdk import InfrahubClient
 
+from generators.helpers.pools import FW_CONTEXT_VLAN_END, FW_CONTEXT_VLAN_START
 from utils.exchange_transit import EXCHANGE_PEERS, TRANSIT_OFFSETS, transit_vlan
 
 from .conftest import TestInfrahubDockerWithClient
@@ -36,6 +37,7 @@ from .test_constants import (
     ALL_DEMO_BORDER_FIREWALL_PORTS,
     ALL_DEMO_BRANCH,
     ALL_DEMO_COLOCATION_SERVED,
+    ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS,
     ALL_DEMO_DC_NAMES,
     ALL_DEMO_DCI_CIRCUITS,
     ALL_DEMO_DEDICATED_FIREWALL_TENANTS,
@@ -435,21 +437,26 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify each DC firewall context's inter-VRF legs, exchanges and border ports.
+        """Verify each firewall context's inter-VRF legs, exchanges and service ports.
 
         A leg is (context, namespace): every firewall member's VLAN
         sub-interface in that VRF, addressed from a /29 of the VRF's transit
         pool and tagged with the context and with the leg's exchange(s). The
         expectations come from the customers' environments and designs
         (ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS), and the served deployments the
-        graph itself reports must agree with them. The colocation metro's
-        context is policy-only: no sub-interface of any kind and no exchange.
+        graph itself reports must agree with them. The FR colocation metro's
+        shared context is held to the same rules as a DC's: its legs face the
+        metro's two edges, whose firewall-role ports are tagged with it, and its
+        VLAN comes from the metro's FirewallContext pool (3000-3199).
         """
         logging.info("=== %s - Step 3b: Exchange Transit Legs ===", SCENARIO_NAME)
 
         inventory = await fetch_transit_inventory(client=async_client_main, branch=scenario_branch)
         by_key, colocation = match_transit_contexts(
-            inventory["contexts"], ALL_DEMO_DC_NAMES, ALL_DEMO_DEDICATED_FIREWALL_TENANTS
+            inventory["contexts"],
+            ALL_DEMO_DC_NAMES,
+            ALL_DEMO_DEDICATED_FIREWALL_TENANTS,
+            ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS,
         )
         exchanges_by_gateway: dict[str, list[dict]] = {}
         for exchange in inventory["exchanges"]:
@@ -460,11 +467,12 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         subinterface_count = 0
         prefixes: dict[str, set[ipaddress.IPv4Network]] = {}
         exchange_count = 0
-        ports_by_dc: dict[str, dict[str, set[str]]] = {}  # dc -> border port id -> context names
+        ports_by_site: dict[str, dict[str, set[str]]] = {}  # site -> service port id -> context names
+        port_devices_by_site: dict[str, set[str]] = {}  # site -> devices holding the tagged ports
 
         for expected in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS:
-            label = f"{expected['dc']}/{expected['tenant'] or 'shared'}"
-            context = by_key.get((expected["dc"], expected["tenant"]))
+            label = f"{expected['site']}/{expected['tenant'] or 'shared'}"
+            context = by_key.get((expected["site"], expected["tenant"]))
             if context is None:
                 errors.append(f"{label}: no firewall context")
                 continue
@@ -494,6 +502,12 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             if not context_vlan:
                 errors.append(f"{label}: '{context_name}' has no VLAN")
                 continue
+            if expected["site"] in ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS and not (
+                FW_CONTEXT_VLAN_START <= int(context_vlan) <= FW_CONTEXT_VLAN_END
+            ):
+                errors.append(
+                    f"{label}: VLAN {context_vlan} is outside the metro pool {FW_CONTEXT_VLAN_START}-{FW_CONTEXT_VLAN_END}"
+                )
             legs_by_namespace: dict[str, list[dict]] = {}
             for leg in context["legs"]:
                 legs_by_namespace.setdefault(str(leg["namespace"]), []).append(leg)
@@ -566,14 +580,15 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                         f"is not an allowed pairing {EXCHANGE_PEERS}"
                     )
 
-            # The border-leaf service ports the members' uplinks are cabled to.
+            # The service ports the members' uplinks are cabled to (border leafs of a DC, edges of a metro).
             if len(context["border_ports"]) != ALL_DEMO_FIREWALL_MEMBERS:
                 errors.append(
-                    f"{label}: '{context_name}' tags {len(context['border_ports'])} border-leaf port(s), "
+                    f"{label}: '{context_name}' tags {len(context['border_ports'])} service port(s), "
                     f"expected {ALL_DEMO_FIREWALL_MEMBERS}"
                 )
             for port in context["border_ports"]:
-                ports_by_dc.setdefault(expected["dc"], {}).setdefault(str(port["id"]), set()).add(context_name)
+                ports_by_site.setdefault(expected["site"], {}).setdefault(str(port["id"]), set()).add(context_name)
+                port_devices_by_site.setdefault(expected["site"], set()).add(str(port["device"]))
 
         # Exchanges whose gateway is not a context of the 30_all DCs: only the
         # DC6 chain's own may exist; the legacy bootstrap ones must not.
@@ -590,46 +605,38 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         if subinterface_count != ALL_DEMO_TRANSIT_SUBINTERFACES:
             errors.append(f"{subinterface_count} leg sub-interface(s), expected {ALL_DEMO_TRANSIT_SUBINTERFACES}")
         if exchange_count != ALL_DEMO_TRANSIT_EXCHANGES:
-            errors.append(f"{exchange_count} exchange(s) on the DC contexts, expected {ALL_DEMO_TRANSIT_EXCHANGES}")
+            errors.append(f"{exchange_count} exchange(s) on the contexts, expected {ALL_DEMO_TRANSIT_EXCHANGES}")
         for namespace, expected_count in ALL_DEMO_TRANSIT_PREFIXES.items():
             if len(prefixes.get(namespace, set())) != expected_count:
                 errors.append(
                     f"{namespace}: {len(prefixes.get(namespace, set()))} transit /29(s), expected {expected_count}"
                 )
-        port_contexts = {port: names for ports in ports_by_dc.values() for port, names in ports.items()}
+        port_contexts = {port: names for ports in ports_by_site.values() for port, names in ports.items()}
         if len(port_contexts) != ALL_DEMO_BORDER_FIREWALL_PORTS:
-            errors.append(f"{len(port_contexts)} tagged border-leaf port(s), expected {ALL_DEMO_BORDER_FIREWALL_PORTS}")
-        for dc, ports in sorted(ports_by_dc.items()):
-            contexts_in_dc = sum(1 for e in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS if e["dc"] == dc)
+            errors.append(f"{len(port_contexts)} tagged service port(s), expected {ALL_DEMO_BORDER_FIREWALL_PORTS}")
+        for site, ports in sorted(ports_by_site.items()):
+            contexts_in_site = sum(1 for e in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS if e["site"] == site)
             for port, names in sorted(ports.items()):
-                if len(names) != contexts_in_dc:
+                if len(names) != contexts_in_site:
                     errors.append(
-                        f"{dc}: border-leaf port {port} carries {sorted(names)}, expected {contexts_in_dc} context(s)"
+                        f"{site}: service port {port} carries {sorted(names)}, expected {contexts_in_site} context(s)"
                     )
+        # A metro's two ports sit on its two DIFFERENT edges (one per firewall member), not both on one.
+        for site in ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS:
+            devices = port_devices_by_site.get(site, set())
+            if len(devices) != ALL_DEMO_FIREWALL_MEMBERS:
+                errors.append(f"{site}: service ports tagged on {sorted(devices)}, expected one per edge")
 
-        # Colocation (FR): policy-only context, no data-plane leg at all (no
-        # sub-interface, so no default-namespace P2P address either).
-        if len(colocation) != 1:
-            errors.append(f"{len(colocation)} colocation firewall context(s), expected the FR metro's one")
-        colocation_ids = {str(c["id"]) for c in colocation}
-        for context in colocation:
-            if context["legs"]:
-                errors.append(
-                    f"colocation '{context['name']}' has sub-interface(s) {[leg['interface'] for leg in context['legs']]}, "
-                    "expected none"
-                )
-            if context["border_ports"]:
-                errors.append(f"colocation '{context['name']}' has border-leaf port(s) {context['border_ports']}")
-        stray = sorted(str(e["name"]) for e in inventory["exchanges"] if str(e["gateway_id"]) in colocation_ids)
-        if stray:
-            errors.append(f"colocation context is the gateway of exchange(s) {stray}")
+        # Every colocation context must be a served metro's: no stray one without legs (policy-only) is left.
+        if colocation:
+            errors.append(f"unexpected colocation firewall context(s) {sorted(str(c['name']) for c in colocation)}")
 
         assert not errors, f"30_all exchange transit legs are wrong on branch '{scenario_branch}':\n" + "\n".join(
             f"  - {e}" for e in errors
         )
 
         logging.info(
-            "Exchange transit verified: %d leg(s), %d exchange(s), %d border-leaf port(s)",
+            "Exchange transit verified: %d leg(s), %d exchange(s), %d service port(s)",
             leg_count,
             exchange_count,
             len(port_contexts),
@@ -646,22 +653,25 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         """Each context with an INTERNET leg owns exactly one public SNAT /32.
 
         The address lives in the INTERNET namespace, inside the FW-SNAT-INTERNET-IPv4
-        block (ALL_DEMO_SNAT_POOL_PREFIX), is a /32 and is distinct per context. The
-        colocation metro's policy-only context has no INTERNET leg, so no SNAT address.
+        block (ALL_DEMO_SNAT_POOL_PREFIX), is a /32 and is distinct per context, the
+        FR colocation metro's included (it must not reuse a DC's address).
         """
         logging.info("=== %s - Step 3c: SNAT addresses ===", SCENARIO_NAME)
 
         inventory = await fetch_transit_inventory(client=async_client_main, branch=scenario_branch)
-        by_key, colocation = match_transit_contexts(
-            inventory["contexts"], ALL_DEMO_DC_NAMES, ALL_DEMO_DEDICATED_FIREWALL_TENANTS
+        by_key, _ = match_transit_contexts(
+            inventory["contexts"],
+            ALL_DEMO_DC_NAMES,
+            ALL_DEMO_DEDICATED_FIREWALL_TENANTS,
+            ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS,
         )
         pool = ipaddress.IPv4Network(ALL_DEMO_SNAT_POOL_PREFIX)
 
         errors: list[str] = []
         seen: dict[str, str] = {}
         for expected in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS:
-            label = f"{expected['dc']}/{expected['tenant'] or 'shared'}"
-            context = by_key.get((expected["dc"], expected["tenant"]))
+            label = f"{expected['site']}/{expected['tenant'] or 'shared'}"
+            context = by_key.get((expected["site"], expected["tenant"]))
             if context is None:
                 errors.append(f"{label}: no firewall context")
                 continue
@@ -682,9 +692,6 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
 
         if len(seen) != ALL_DEMO_SNAT_ADDRESSES:
             errors.append(f"{len(seen)} distinct SNAT address(es), expected {ALL_DEMO_SNAT_ADDRESSES}")
-        for context in colocation:
-            if context["snat"]:
-                errors.append(f"colocation '{context['name']}' has snat_address {context['snat']}, expected none")
 
         assert not errors, f"30_all SNAT addresses are wrong on branch '{scenario_branch}':\n" + "\n".join(
             f"  - {e}" for e in errors
@@ -752,10 +759,11 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         """Verify each colocation deployment is served by its own metro's firewalls.
 
         A deployment in a metro with a firewall pair is served by that pair's
-        shared context. That context is policy-only: it has no VLAN, no
-        sub-interface on any firewall member or edge, and no P2P address. A
-        deployment in an edge-only metro has no context: pointing it at another
-        metro's firewalls would hairpin its traffic across the WAN.
+        shared context. That context has a VLAN from the metro's pool and one
+        transit sub-interface per member per VRF leg (ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS;
+        test_03b checks their addresses and exchanges). A deployment in an
+        edge-only metro has no context: pointing it at another metro's firewalls
+        would hairpin its traffic across the WAN.
         """
         logging.info("=== %s - Step 5: Colocation Serving Contexts ===", SCENARIO_NAME)
 
@@ -796,13 +804,30 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             if not metro_firewalls or members != metro_firewalls:
                 errors.append(f"{name}: '{context_name}' is on cluster {sorted(members)}, not the metro's firewalls")
 
-            if (context.get("vlan_id") or {}).get("value"):
-                errors.append(f"{name}: '{context_name}' has a VLAN allocated, expected none (policy-only)")
-            interfaces = [
-                edge["node"]["name"]["value"] for edge in (context.get("interface_capabilities") or {}).get("edges", [])
-            ]
-            if interfaces:
-                errors.append(f"{name}: '{context_name}' has sub-interface(s) {sorted(interfaces)}, expected none")
+            site = name.rsplit("-", 1)[-1]
+            expected = next(
+                (e for e in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS if e["site"] == site and e["tenant"] is None), None
+            )
+            if expected is None:
+                errors.append(f"{name}: no expected transit context for the metro '{site}'")
+                continue
+            vlan = (context.get("vlan_id") or {}).get("value")
+            if not vlan or not FW_CONTEXT_VLAN_START <= int(vlan) <= FW_CONTEXT_VLAN_END:
+                errors.append(f"{name}: '{context_name}' VLAN {vlan}, expected one in the metro pool")
+                continue
+            # Sub-interfaces are `<uplink>.<vlan>`; the tagged edge ports (Ethernet1/15-16) have no dot.
+            sub_vlans = sorted(
+                str(edge["node"]["name"]["value"]).rsplit(".", 1)[-1]
+                for edge in (context.get("interface_capabilities") or {}).get("edges", [])
+                if "." in str(edge["node"]["name"]["value"])
+            )
+            expected_vlans = sorted(
+                str(transit_vlan(int(vlan), transit_namespace_type(namespace)))
+                for namespace in expected["namespaces"]
+                for _ in range(ALL_DEMO_FIREWALL_MEMBERS)
+            )
+            if sub_vlans != expected_vlans:
+                errors.append(f"{name}: '{context_name}' sub-interface VLANs {sub_vlans}, expected {expected_vlans}")
 
         assert not errors, f"30_all colocation serving contexts are wrong on branch '{scenario_branch}':\n" + "\n".join(
             f"  - {e}" for e in errors
