@@ -5,8 +5,8 @@ Mirrors test_customer_dc.py's structure — the two generators share nearly
 identical logic — but focuses on what's colocation-specific: the parent is a
 TopologyColocationMetro, not a TopologyDataCenter, and its fabric-tier devices
 carry role=edge, never border-leaf (see _COLO_VALID_FABRIC_ROLES in
-generators/topology/colocation.py). Colocation contexts are policy-only: the
-context, its serving link, nothing on the data plane.
+generators/topology/colocation.py). Colocation boards through the same leg step
+as a DC; its legs face the edge pair's firewall ports.
 """
 
 from __future__ import annotations
@@ -152,11 +152,11 @@ class TestWaitsForParentMetroGenerator:
         cluster.name.value = "FR5-METRO-FW1-ha"
         cluster.capabilities.peers = [MagicMock(id="fw-1")]
         gen.client.filters = AsyncMock(return_value=[cluster])
-        gen._get_or_create_firewall_context = AsyncMock(return_value=None)
+        gen._ensure_transit_legs = AsyncMock()
 
         await gen.generate(_colo_payload_with_parent(fw_devices=[]))
 
-        gen._get_or_create_firewall_context.assert_awaited_once()
+        gen._ensure_transit_legs.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_refetch_without_the_customer_is_a_hard_error(self) -> None:
@@ -199,7 +199,7 @@ class TestFirewallContextNoFirewallOrCluster:
         cluster.capabilities.peers = [MagicMock(id="fw-1"), MagicMock(id="fw-2")]
         gen.client.filters = AsyncMock(side_effect=[[], [cluster]])
         gen._ensure_ha_pairs = AsyncMock()
-        gen._get_or_create_firewall_context = AsyncMock(return_value=None)
+        gen._ensure_transit_legs = AsyncMock()
 
         await gen.generate(
             _colo_payload_with_parent(
@@ -213,7 +213,7 @@ class TestFirewallContextNoFirewallOrCluster:
             ("add_colocation_metro",),
             "fr5-metro-id",
         )
-        gen._get_or_create_firewall_context.assert_awaited_once()
+        gen._ensure_transit_legs.assert_awaited_once()
         gen.logger.error.assert_not_called()
 
     @pytest.mark.asyncio
@@ -222,13 +222,13 @@ class TestFirewallContextNoFirewallOrCluster:
         gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
         gen.client.filters = AsyncMock(side_effect=[[], []])
         gen._ensure_ha_pairs = AsyncMock()
-        gen._get_or_create_firewall_context = AsyncMock()
+        gen._ensure_transit_legs = AsyncMock()
 
         await gen.generate(_colo_payload_with_parent(fw_devices=[_fw_device()]))
 
         assert gen.client.filters.await_count == 2
         gen._ensure_ha_pairs.assert_not_awaited()
-        gen._get_or_create_firewall_context.assert_not_awaited()
+        gen._ensure_transit_legs.assert_not_awaited()
         gen.client.create.assert_not_called()
         gen.logger.error.assert_called_once()
         assert "add_colocation_metro" in gen.logger.error.call_args.args[0]
@@ -246,24 +246,25 @@ class TestFirewallContextProvisioning:
         return gen, fw_device, cluster
 
     @pytest.mark.asyncio
-    async def test_shared_context_created_when_not_dedicated(self) -> None:
+    async def test_shared_context_target_when_not_dedicated(self) -> None:
         gen, fw_device, cluster = self._make_gen_with_cluster()
-        context_obj = MagicMock(id="ctx-1")
-        context_obj.name.value = f"{cluster.name.value}-shared"
-        gen._get_or_create_firewall_context = AsyncMock(return_value=context_obj)
+        gen._ensure_transit_legs = AsyncMock()
 
         await gen.generate(_colo_payload_with_parent(dedicated_firewall=False, fw_devices=[fw_device]))
 
-        gen._get_or_create_firewall_context.assert_awaited_once_with(
-            f"{cluster.name.value}-shared", cluster.id, None, track=False
+        target = gen._ensure_transit_legs.await_args_list[-1].kwargs["target"]
+        assert (target.context_name, target.cluster_id, target.tenant_id, target.track) == (
+            f"{cluster.name.value}-shared",
+            cluster.id,
+            None,
+            False,
         )
 
     @pytest.mark.asyncio
-    async def test_dedicated_context_created_when_design_requests_it(self) -> None:
+    async def test_dedicated_context_target_when_design_requests_it(self) -> None:
         """A dedicated context on the customer's own dedicated cluster is tracked."""
         gen, _, _ = self._make_gen_with_cluster()
-        context_obj = MagicMock(id="ctx-1")
-        gen._get_or_create_firewall_context = AsyncMock(return_value=context_obj)
+        gen._ensure_transit_legs = AsyncMock()
         dedicated_cluster = MagicMock(id="dedicated-cluster-1")
         dedicated_cluster.name.value = "FR5-METRO-FW1-C005-p-dedicated-ha"
         gen._ensure_dedicated_device_pair = AsyncMock(
@@ -272,84 +273,54 @@ class TestFirewallContextProvisioning:
 
         await gen.generate(_colo_payload_with_parent(customer_id="cust-1", dedicated_firewall=True))
 
-        gen._get_or_create_firewall_context.assert_awaited_once_with(
-            f"{dedicated_cluster.name.value}-context", "dedicated-cluster-1", "cust-1", track=True
+        target = gen._ensure_transit_legs.await_args_list[-1].kwargs["target"]
+        assert (target.context_name, target.cluster_id, target.tenant_id, target.track) == (
+            f"{dedicated_cluster.name.value}-context",
+            "dedicated-cluster-1",
+            "cust-1",
+            True,
         )
 
     @pytest.mark.asyncio
     async def test_dedicated_request_without_dedicated_pair_falls_back_to_shared(self) -> None:
         """No dedicated pair provisioned: the shared context, untracked."""
         gen, _, cluster = self._make_gen_with_cluster()
-        gen._get_or_create_firewall_context = AsyncMock(return_value=MagicMock(id="ctx-1"))
+        gen._ensure_transit_legs = AsyncMock()
         gen._ensure_dedicated_device_pair = AsyncMock(return_value=None)
 
         await gen.generate(_colo_payload_with_parent(customer_id="cust-1", dedicated_firewall=True))
 
-        gen._get_or_create_firewall_context.assert_awaited_once_with(
-            f"{cluster.name.value}-shared", cluster.id, None, track=False
-        )
+        target = gen._ensure_transit_legs.await_args_list[-1].kwargs["target"]
+        assert (target.context_name, target.tenant_id, target.track) == (f"{cluster.name.value}-shared", None, False)
 
     @pytest.mark.asyncio
-    async def test_context_is_policy_only_no_legs_vlans_or_addresses(self) -> None:
-        """Colocation never reaches the transit-leg step and writes no sub-interface, VLAN, P2P or exchange."""
+    async def test_boarding_runs_the_shared_transit_leg_step(self) -> None:
+        """Colocation calls the same leg step as a DC, with the customer and its resolved target."""
         gen, _, _ = self._make_gen_with_cluster()
         gen._ensure_transit_legs = AsyncMock()
-        gen.ensure_vlan_subinterface = AsyncMock()
-        gen._ensure_context_vlan = AsyncMock()
-        gen.client.allocate_next_ip_prefix = AsyncMock()
-        gen._get_or_create_firewall_context = AsyncMock(return_value=MagicMock(id="ctx-1"))
 
-        await gen.generate(_colo_payload_with_parent())
+        await gen.generate(_colo_payload_with_parent(customer_id="cust-1"))
 
-        gen._ensure_transit_legs.assert_not_awaited()
-        gen.ensure_vlan_subinterface.assert_not_awaited()
-        gen._ensure_context_vlan.assert_not_awaited()
-        gen.client.allocate_next_ip_prefix.assert_not_awaited()
-        gen.client.create.assert_not_called()
+        gen._ensure_transit_legs.assert_awaited_once()
+        kwargs = gen._ensure_transit_legs.await_args_list[-1].kwargs
+        assert kwargs["customer_id"] == "cust-1"
+        assert kwargs["customer"]["id"] == "cust-1"
+        assert kwargs["target"].context_name.endswith("-shared")
+        assert not hasattr(gen, "_ensure_policy_only_context")
 
     @pytest.mark.asyncio
-    async def test_context_provisioned_under_per_context_lock(self) -> None:
-        """Every cage in the metro boards onto the same shared context, so
-        concurrent boardings serialize on it — the same lock customer_dc.py
-        takes."""
-        gen, fw_device, cluster = self._make_gen_with_cluster()
-        gen._get_or_create_firewall_context = AsyncMock(return_value=MagicMock(id="ctx-1"))
-        events: list[str] = []
-        gen.acquire_resource_lock.side_effect = lambda key: events.append(f"acquire:{key}") or "lock-id"
-        gen.release_resource_lock.side_effect = lambda lock_id: events.append("release")
-        gen.link_serving_firewall_context.side_effect = lambda **_: events.append("link")
+    async def test_no_target_skips_the_leg_step(self) -> None:
+        """A metro without firewalls gets no context and no legs."""
+        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        gen._ensure_transit_legs = AsyncMock()
 
-        await gen.generate(_colo_payload_with_parent(fw_devices=[fw_device]))
+        await gen.generate(_colo_payload_with_parent(fw_devices=[]))
 
-        assert events == [f"acquire:fw-context-{cluster.name.value}-shared", "link", "release"]
+        gen._ensure_transit_legs.assert_not_awaited()
 
 
 class TestLinkServingFirewallContext:
     """The deployment records the context its segments terminate on."""
-
-    @pytest.mark.asyncio
-    async def test_provisioned_context_is_linked_to_the_deployment(self) -> None:
-        """Shared or dedicated, the context just ensured is the one linked."""
-        gen, _, _ = TestFirewallContextProvisioning()._make_gen_with_cluster()
-        gen._get_or_create_firewall_context = AsyncMock(return_value=MagicMock(id="ctx-1"))
-        gen.link_serving_firewall_context = AsyncMock()
-
-        await gen.generate(_colo_payload_with_parent(customer_id="cust-1"))
-
-        gen.link_serving_firewall_context.assert_awaited_once_with(
-            kind="TopologyCustomerColocation", customer_id="cust-1", context_id="ctx-1"
-        )
-
-    @pytest.mark.asyncio
-    async def test_context_creation_failure_links_nothing(self) -> None:
-        """No context, no link: the deployment keeps whatever it had."""
-        gen, _, _ = TestFirewallContextProvisioning()._make_gen_with_cluster()
-        gen._get_or_create_firewall_context = AsyncMock(return_value=None)
-        gen.link_serving_firewall_context = AsyncMock()
-
-        await gen.generate(_colo_payload_with_parent())
-
-        gen.link_serving_firewall_context.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_link_is_saved_untracked(self) -> None:

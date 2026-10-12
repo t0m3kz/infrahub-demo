@@ -5,18 +5,16 @@ trigger-customer-deployment-colocation-on-created rule).
 
 Colocation shares the same PROD/NON-PROD data-plane VRFs as every other
 customer deployment kind (see data/bootstrap/22_namespaces.yml) — there is
-still no VRF-per-customer. This generator provisions only FirewallContext
+still no VRF-per-customer. This generator provisions the FirewallContext
 (VDOM/vsys) on the parent ColocationMetro's ManagedFirewallHA cluster, the
 pair every cage in the metro shares (customer_colocation.gql reads it as
-parent.firewall_devices), and links the deployment to it as its
+parent.firewall_devices), links the deployment to it as its
 serving_firewall_context so the firewall transform places the deployment's
-policies there. A metro without firewalls gets no context. The provisioning
-itself is generators/firewall_context.py's FirewallContextMixin, shared with
+policies there, and builds the context's transit legs and exchanges facing the
+metro's edge pair (their firewall-role ports play the border leaf's part). A
+metro without firewalls gets no context. The provisioning itself is
+generators/firewall_context.py's FirewallContextMixin, shared with
 customer_dc.py.
-
-Colocation contexts are policy-only: the context, its serving link and the
-zone policies rendered from it. No sub-interfaces, P2P links, transit legs or
-exchanges are created here (a metro edge pair will carry the data plane).
 
 Registered as add_customer_deployment_colocation in .infrahub.yml, targeting
 the customer_deployments group and querying customer_colocation.gql.
@@ -38,8 +36,8 @@ from ..pools import PoolMixin
 class CustomerDeploymentColocationExchangeGenerator(
     FirewallContextMixin, PoolMixin, DeviceMixin, CablingMixin, CommonGenerator
 ):
-    """add_customer_deployment_colocation — FirewallContext on the parent
-    metro's firewall pair for TopologyCustomerColocation.
+    """add_customer_deployment_colocation — FirewallContext and transit legs on
+    the parent metro's firewall pair for TopologyCustomerColocation.
     """
 
     _customer_kind = "TopologyCustomerColocation"
@@ -86,5 +84,5 @@ class CustomerDeploymentColocationExchangeGenerator(
 
         target = await self._resolve_context_target(customer, customer_id)
         if target is not None:
-            await self._ensure_policy_only_context(customer_id, target)
+            await self._ensure_transit_legs(customer=customer, customer_id=customer_id, target=target)
         await self._ensure_dedicated_loadbalancer(customer, customer_id)

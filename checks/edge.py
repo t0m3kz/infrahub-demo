@@ -1,12 +1,14 @@
 """Validate edge."""
 
+from functools import partial
 from typing import Any
 
 from transforms.common import _fabric_rt_asn
+from transforms.config.edge import Edge
 from transforms.helpers.vxlan import _internet_session_namespaces, _is_bgw
 from utils.data_cleaning import get_data
 
-from .common import BaseDeviceCheck, validate_interfaces, validate_routing_password
+from .common import BaseDeviceCheck, validate_interfaces, validate_routing_password, validate_transit_vlans
 
 
 def warn_transit_without_internet_bgw(device: dict[str, Any]) -> list[str]:
@@ -46,7 +48,7 @@ class CheckEdge(BaseDeviceCheck):
     """Check Edge."""
 
     query = "edge_config"
-    validators = [validate_interfaces, validate_routing_password]
+    validators = [validate_interfaces, validate_routing_password, partial(validate_transit_vlans, transform_cls=Edge)]
 
     def validate(self, data: Any) -> None:
         super().validate(data)
