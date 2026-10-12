@@ -3,8 +3,8 @@
 from collections.abc import Iterable
 from typing import Any
 
-from transforms.helpers.segments import _get_segment_prefix_str
 from utils.exchange_transit import zone_name_for_namespace_type
+from utils.segment_addressing import segment_prefix
 
 
 def merge_policies(*policy_lists: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
@@ -68,7 +68,7 @@ def rule_endpoint(rule: dict[str, Any], side: str) -> str | None:
     resolver behind the leaf ACL and the firewall rule table, so a rule to an
     external prefix (no destination segment) renders the same on both."""
     segment = rule.get(f"{side}_segment") or {}
-    return (_get_segment_prefix_str(segment) if segment else None) or _first_selector_cidr(
+    return (segment_prefix(segment) if segment else None) or _first_selector_cidr(
         rule.get(f"{side}_prefixes"), rule.get(f"{side}_ip_addresses")
     )
 

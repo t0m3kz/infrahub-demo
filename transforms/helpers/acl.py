@@ -11,8 +11,8 @@ from transforms.helpers.policy import (
     rule_zone,
     segment_policies,
 )
-from transforms.helpers.segments import _get_segment_prefix_str
 from utils.internet_space import NON_INTERNET_PREFIXES
+from utils.segment_addressing import segment_prefix
 
 _PROTO_MAP = {"any": "ip", "tcp": "tcp", "udp": "udp", "icmp": "icmp"}
 
@@ -280,7 +280,7 @@ def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, 
                     rules.append(_build_acl_rule(rule))
 
         # Return legs of the permits into this segment
-        own_prefix = _get_segment_prefix_str(seg)
+        own_prefix = segment_prefix(seg)
         own_max_seq = max((r["seq"] or 0 for r in rules), default=0)
         seq = max(own_max_seq + 10, RETURN_LEG_SEQ_START)
         seen_returns: set[tuple[Any, ...]] = set()

@@ -9,8 +9,9 @@ from transforms.helpers.firewall import (
     place_policies_in_contexts,
 )
 from transforms.helpers.ha import get_ha, inline_addresses
-from transforms.helpers.segments import _get_segment_prefix_str, segment_vlan_ids
+from transforms.helpers.segments import segment_vlan_ids
 from utils.exchange_transit import EXCHANGE_PEERS, INTERNET_TYPE, MANAGEMENT_TYPE, ZONE_BY_NS_TYPE
+from utils.segment_addressing import segment_prefix
 
 DEFAULT_ROUTE = "0.0.0.0/0"
 
@@ -75,7 +76,7 @@ def _segment_prefixes(zones_data: list[dict[str, Any]] | None) -> dict[str, tupl
     prefixes: dict[str, tuple[str | None, str]] = {}
     for zone in zones_data or []:
         for segment in zone.get("network_segments") or []:
-            prefix = _get_segment_prefix_str(segment)
+            prefix = segment_prefix(segment)
             if segment.get("id") and prefix:
                 prefixes[segment["id"]] = (zone.get("name"), prefix)
     return prefixes
@@ -112,7 +113,7 @@ def apply_context_routes(context: dict[str, Any], segment_prefixes: dict[str, tu
         root_zone, root_prefix = segment_prefixes.get(segment.get("id"), (None, None))
         # The segment's own gateway prefix and zone win; the SecurityZone root
         # only fills what the segment did not carry.
-        prefix = _get_segment_prefix_str(segment) or root_prefix
+        prefix = segment_prefix(segment) or root_prefix
         zone = (segment.get("security_zone") or {}).get("name") or root_zone
         if not prefix:
             continue
@@ -131,8 +132,7 @@ def apply_context_routes(context: dict[str, Any], segment_prefixes: dict[str, tu
         zone_prefixes.update(
             prefix
             for segment in context.get("segments") or []
-            if (segment.get("security_zone") or {}).get("name") == leg["zone"]
-            and (prefix := _get_segment_prefix_str(segment))
+            if (segment.get("security_zone") or {}).get("name") == leg["zone"] and (prefix := segment_prefix(segment))
         )
         leg["prefixes"] = sorted(zone_prefixes)
 
