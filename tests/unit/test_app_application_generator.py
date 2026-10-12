@@ -48,6 +48,7 @@ def _segment(seg_id: str, typename: str = "ManagedVxlanSegment") -> dict[str, An
         "name": f"{seg_id}-name",
         "typename": typename,
         "isolation_mode": "normal",
+        "environment": "p",
         "security_zone": {"name": "PROD-ZONE", "trust_level": 70},
     }
     if typename != "CloudNetworkSegment":
@@ -698,3 +699,33 @@ class TestReconcileApplicationRulesPerPort:
 
         gen._create_or_update_policy_rule.assert_not_awaited()
         assert any("is not authorized" in call.args[0] for call in gen.logger.warning.call_args_list)
+
+
+class TestReconcileApplicationRulesSegmentEnvironmentGuard:
+    """The prod/non-prod guard reads each segment's environment, so a flow onto a non-prod segment makes no rule."""
+
+    @staticmethod
+    def _run(dst_env: str | None) -> Any:
+        gen = _make_gen()
+        gen._reconcile_private_access_components = AsyncMock(return_value=(0, 0))
+        gen._ensure_segment_isolation_mode = AsyncMock()
+        gen._reconcile_segment_rule = AsyncMock(return_value=(1, 0))
+        backend = _backend(ports=["tcp/8443"])
+        if dst_env is None:
+            backend["network_segment"].pop("environment")
+        else:
+            backend["network_segment"]["environment"] = dst_env
+        asyncio.run(gen._reconcile_application_rules(_app(_frontend(_dep(target=backend)))))
+        return gen
+
+    def test_prod_to_non_prod_segment_creates_no_rule(self) -> None:
+        """A prod source segment and a non-prod destination segment are never joined."""
+        self._run("s")._reconcile_segment_rule.assert_not_awaited()
+
+    def test_destination_segment_without_environment_creates_no_rule(self) -> None:
+        """An unknown segment environment fails closed."""
+        self._run(None)._reconcile_segment_rule.assert_not_awaited()
+
+    def test_prod_to_prod_segment_creates_the_rule(self) -> None:
+        """Two prod segments still get their rule."""
+        self._run("p")._reconcile_segment_rule.assert_awaited_once()

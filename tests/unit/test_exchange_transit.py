@@ -18,6 +18,7 @@ from utils.exchange_transit import (
     TRANSIT_VNI_MAX,
     TRANSIT_VNI_MIN,
     ZONE_BY_NS_TYPE,
+    joins_prod_and_nonprod,
     namespace_type_for_environment,
     transit_addresses,
     transit_vlan,
@@ -101,6 +102,36 @@ def test_exchange_peers_never_pair_prod_with_non_prod() -> None:
         assert peers == ("internet", "management")
     assert "non_prod" not in EXCHANGE_PEERS["prod"]
     assert "prod" not in EXCHANGE_PEERS["non_prod"]
+
+
+def test_exchange_peers_never_join_prod_and_non_prod() -> None:
+    """Property: no tenant type is paired with a peer of the other tenant side, nor with itself."""
+    tenant_types = set(EXCHANGE_PEERS)
+    for tenant, peers in EXCHANGE_PEERS.items():
+        for peer in peers:
+            assert peer not in tenant_types
+        other = tenant_types - {tenant}
+        assert not other & set(peers)
+    assert {t for t in tenant_types if t == "prod"} and {t for t in tenant_types if t == "non_prod"}
+
+
+@pytest.mark.parametrize(
+    ("env_a", "env_b", "joins"),
+    [
+        ("p", "p", False),
+        ("s", "d", False),
+        ("n", "t", False),
+        ("p", "s", True),
+        ("d", "p", True),
+        ("p", "", True),
+        (None, "p", True),
+        (None, None, True),
+        ("", "s", True),
+    ],
+)
+def test_joins_prod_and_nonprod(env_a: str | None, env_b: str | None, joins: bool) -> None:
+    """Prod vs non-prod joins; a missing environment fails closed."""
+    assert joins_prod_and_nonprod(env_a, env_b) is joins
 
 
 @pytest.mark.parametrize(

@@ -3,7 +3,12 @@ from __future__ import annotations
 from typing import Any
 
 from utils.dependency_access import dependency_access_status
-from utils.exchange_transit import namespace_type_for_environment, zone_name_for_namespace_type
+from utils.exchange_transit import (
+    exchange_peer_zones,
+    joins_prod_and_nonprod,
+    namespace_type_for_environment,
+    zone_name_for_namespace_type,
+)
 from utils.ports import PortProfileHelper, PortSpec
 
 
@@ -86,10 +91,9 @@ class RulesPlanner:
         return owner_name or None
 
     @staticmethod
-    def app_environment_from_component(component: dict[str, Any]) -> str | None:
-        app = component.get("parent") or {}
-        environment = str(app.get("environment") or "").strip().lower()
-        return environment or None
+    def _is_exchange_segment(segment: dict[str, Any]) -> bool:
+        """Whether the segment sits in an exchange zone (INTERNET-ZONE, MANAGEMENT-ZONE)."""
+        return (segment.get("security_zone") or {}).get("name") in exchange_peer_zones()
 
     @classmethod
     def dependency_is_authorized(
@@ -103,11 +107,22 @@ class RulesPlanner:
             return False, "explicitly denied"
 
         # Prod and non-prod are never connected, so no approval opens that
-        # flow.
-        src_env = cls.app_environment_from_component(src_comp)
-        dst_env = cls.app_environment_from_component(dst_comp)
-        if src_env and dst_env and src_env != dst_env and "p" in (src_env, dst_env):
-            return False, f"cross-environment flow {src_env}->{dst_env} joins prod and non-prod and is never allowed"
+        # flow. The decision is made from each segment's own environment (the
+        # namespace it lives in), not the application's, which is governance
+        # input only. A flow without two segments (proxy to an FQDN) has
+        # nothing to join, and an exchange-zone segment (INTERNET/MANAGEMENT)
+        # is governed by EXCHANGE_PEERS instead.
+        src_seg = src_comp.get("network_segment") or {}
+        dst_seg = dst_comp.get("network_segment") or {}
+        if src_seg and dst_seg and not cls._is_exchange_segment(src_seg) and not cls._is_exchange_segment(dst_seg):
+            src_env = src_seg.get("environment")
+            dst_env = dst_seg.get("environment")
+            if joins_prod_and_nonprod(src_env, dst_env):
+                return (
+                    False,
+                    f"cross-environment flow {src_env or '?'}->{dst_env or '?'} joins prod and non-prod "
+                    "(or a segment environment is unknown) and is never allowed",
+                )
 
         # Inside one owner every flow is auto-approved, across applications
         # and non-prod environments too. Another owner's endpoint opens only

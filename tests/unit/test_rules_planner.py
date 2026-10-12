@@ -125,11 +125,25 @@ class TestRuleDescription:
 # ===========================================================================
 
 
-def _comp(app: str, owner: str, environment: str | None = None) -> dict:
+def _comp(app: str, owner: str, environment: str | None = None, *, segment: dict | None = None) -> dict:
+    """A component of `app`; `environment` is the application's, `segment` its network segment."""
     parent: dict = {"name": app, "owner": {"org_id": owner}}
     if environment:
         parent["environment"] = environment
-    return {"parent": parent}
+    comp: dict = {"parent": parent}
+    if segment is not None:
+        comp["network_segment"] = segment
+    return comp
+
+
+def _seg(environment: str | None, zone: str | None = None) -> dict:
+    """A network segment in `environment`, optionally a member of security zone `zone`."""
+    seg: dict = {"name": f"seg-{environment}"}
+    if environment is not None:
+        seg["environment"] = environment
+    if zone:
+        seg["security_zone"] = {"name": zone}
+    return seg
 
 
 class TestOwnerAuthorization:
@@ -190,8 +204,8 @@ class TestOwnerAuthorization:
 
 
 class TestCrossEnvironmentAuthorization:
-    """Prod and non-prod are never joined; the environment is read from each
-    component's own parent application."""
+    """Prod and non-prod are never joined; the decision is made from each
+    component's own segment, the application environment is governance only."""
 
     @pytest.mark.parametrize(
         ("src_owner", "dst_owner", "src_app", "dst_app"),
@@ -203,12 +217,12 @@ class TestCrossEnvironmentAuthorization:
         ids=["same-app", "cross-app", "cross-owner"],
     )
     @pytest.mark.parametrize(("src_env", "dst_env"), [("p", "s"), ("d", "p")], ids=["p-to-s", "d-to-p"])
-    def test_prod_and_non_prod_are_never_joined_even_when_approved(
+    def test_prod_and_non_prod_segments_are_never_joined_even_when_approved(
         self, src_owner: str, dst_owner: str, src_app: str, dst_app: str, src_env: str, dst_env: str
     ) -> None:
-        """An approval opens a cross-owner flow, never prod <-> non-prod."""
-        src_comp = _comp(src_app, src_owner, src_env)
-        dst_comp = _comp(dst_app, dst_owner, dst_env)
+        """An approval opens a cross-owner flow, never prod <-> non-prod segments."""
+        src_comp = _comp(src_app, src_owner, src_env, segment=_seg(src_env))
+        dst_comp = _comp(dst_app, dst_owner, dst_env, segment=_seg(dst_env))
         dep = {"access_status": "approved"}
 
         allowed, reason = RulesPlanner.dependency_is_authorized(src_comp=src_comp, dst_comp=dst_comp, dep=dep)
@@ -217,25 +231,77 @@ class TestCrossEnvironmentAuthorization:
         assert reason is not None
         assert "joins prod and non-prod" in reason
 
-    def test_same_environment_is_auto_authorized(self):
-        src_comp = {"parent": {"name": "checkout", "environment": "p", "owner": {"org_id": "C001"}}}
-        dst_comp = {"parent": {"name": "checkout", "environment": "p", "owner": {"org_id": "C001"}}}
-        dep = {"access_status": "auto"}
+    def test_prod_app_on_non_prod_segment_is_blocked(self) -> None:
+        """Both applications say prod, but a segment is non-prod: the segment decides."""
+        src_comp = _comp("checkout", "C001", "p", segment=_seg("p"))
+        dst_comp = _comp("checkout", "C001", "p", segment=_seg("s"))
 
-        allowed, reason = RulesPlanner.dependency_is_authorized(src_comp=src_comp, dst_comp=dst_comp, dep=dep)
+        allowed, reason = RulesPlanner.dependency_is_authorized(
+            src_comp=src_comp, dst_comp=dst_comp, dep={"access_status": "auto"}
+        )
+
+        assert allowed is False
+        assert reason is not None
+
+    def test_differing_app_environments_on_same_namespace_type_segments_are_allowed(self) -> None:
+        """The application environment is governance input only: two non-prod segments connect."""
+        src_comp = _comp("checkout", "C001", "p", segment=_seg("s"))
+        dst_comp = _comp("checkout", "C001", "d", segment=_seg("d"))
+
+        allowed, reason = RulesPlanner.dependency_is_authorized(
+            src_comp=src_comp, dst_comp=dst_comp, dep={"access_status": "auto"}
+        )
 
         assert allowed is True
         assert reason is None
 
-    def test_missing_environment_on_either_side_is_not_compared(self):
-        """Missing data must not silently deny traffic that was working before
-        the query started fetching environment — same fail-open posture as
-        the existing owner/application checks above."""
-        src_comp = {"parent": {"name": "checkout", "owner": {"org_id": "C001"}}}
-        dst_comp = {"parent": {"name": "checkout", "environment": "p", "owner": {"org_id": "C001"}}}
-        dep = {"access_status": "auto"}
+    def test_same_environment_is_auto_authorized(self) -> None:
+        """Two prod segments connect."""
+        src_comp = _comp("checkout", "C001", "p", segment=_seg("p"))
+        dst_comp = _comp("checkout", "C001", "p", segment=_seg("p"))
 
-        allowed, reason = RulesPlanner.dependency_is_authorized(src_comp=src_comp, dst_comp=dst_comp, dep=dep)
+        allowed, reason = RulesPlanner.dependency_is_authorized(
+            src_comp=src_comp, dst_comp=dst_comp, dep={"access_status": "auto"}
+        )
+
+        assert allowed is True
+        assert reason is None
+
+    @pytest.mark.parametrize("missing_side", ["src", "dst"])
+    def test_segment_without_environment_fails_closed(self, missing_side: str) -> None:
+        """An unknown segment environment is never assumed to be safe."""
+        src_comp = _comp("checkout", "C001", segment=_seg(None if missing_side == "src" else "p"))
+        dst_comp = _comp("checkout", "C001", segment=_seg(None if missing_side == "dst" else "p"))
+
+        allowed, reason = RulesPlanner.dependency_is_authorized(
+            src_comp=src_comp, dst_comp=dst_comp, dep={"access_status": "auto"}
+        )
+
+        assert allowed is False
+        assert reason is not None
+        assert "unknown" in reason
+
+    @pytest.mark.parametrize("zone", ["INTERNET-ZONE", "MANAGEMENT-ZONE"])
+    def test_exchange_zone_segment_is_exempt(self, zone: str) -> None:
+        """An INTERNET/MANAGEMENT segment is governed by EXCHANGE_PEERS, not by its environment."""
+        src_comp = _comp("checkout", "C001", "p", segment=_seg("p"))
+        dst_comp = _comp("checkout", "C001", "p", segment=_seg("s", zone))
+
+        allowed, reason = RulesPlanner.dependency_is_authorized(
+            src_comp=src_comp, dst_comp=dst_comp, dep={"access_status": "auto"}
+        )
+
+        assert allowed is True
+        assert reason is None
+
+    def test_flow_without_segments_is_not_compared(self) -> None:
+        """A flow with no segment on a side (proxy to an FQDN) has no namespaces to join."""
+        src_comp = _comp("checkout", "C001", "p", segment=_seg("p"))
+        dst_comp = _comp("checkout", "C001", "s")
+
+        allowed, reason = RulesPlanner.dependency_is_authorized(
+            src_comp=src_comp, dst_comp=dst_comp, dep={"access_status": "auto"}
+        )
 
         assert allowed is True
         assert reason is None
