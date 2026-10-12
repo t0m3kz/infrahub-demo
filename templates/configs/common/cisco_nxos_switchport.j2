@@ -1,0 +1,10 @@
+{#- Expects `interface` in scope. Trunk when interface.mode == 'trunk', else access on the first VLAN. -#}
+{%- if interface.mode == 'trunk' %}
+  switchport
+  switchport mode trunk
+  switchport trunk allowed vlan {{ interface.vlans|join(',') }}
+{%- elif interface.vlans %}
+  switchport
+  switchport mode access
+  switchport access vlan {{ interface.vlans[0] }}
+{%- endif -%}
