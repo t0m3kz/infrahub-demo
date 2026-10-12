@@ -1716,6 +1716,152 @@ def build_edge_internet_bgw_data(*, device_name: str, platform: str) -> dict:
     return data
 
 
+def _af_edges(*pairs: tuple[str, str]) -> dict:
+    """RoutingBGPAddressFamily edges as the peering query returns them."""
+    return _edges([{"afi": _v(afi), "safi": _v(safi)} for afi, safi in pairs])
+
+
+def build_edge_bgw_pair_data(*, device_name: str, platform: str) -> dict:
+    """A colocation metro edge that is one of two BGWs sharing a site VIP.
+
+    BGW edge (Loopback1 IPv6 VTEP, Loopback100 multisite-vip) with two DCI dark
+    fibres (Ethernet1/10 and 1/11, peering_role dci) and an interlink
+    (Ethernet1/8, role interlink) cabled to its sibling edge, with a FABRIC iBGP
+    session (ttl 1, ipv6 unicast + l2vpn evpn) in the shared site AS on that /127.
+    Ethernet1/13 and 1/14 (uplinks to an ISP / cross-connect) carry nothing.
+    """
+    data = build_device_data(
+        device_name=device_name, role="edge", platform=platform, scenario="ebgp_ebgp", include_segments=False
+    )
+    device_node = data["DcimDevice"]["edges"][0]["node"]
+    interfaces = device_node["interfaces"]["edges"]
+    # The colocation edge's VTEP is a dedicated IPv6 loopback.
+    interfaces.append(
+        {
+            "node": _make_interface(
+                name="Loopback1",
+                device_name=device_name,
+                description="VTEP",
+                role="loopback-vtep",
+                ip_address="2001:db8:100::1/128",
+                typename="DcimVirtualInterface",
+            )
+        }
+    )
+    interfaces.append(
+        {
+            "node": _make_interface(
+                name="Loopback100",
+                device_name=device_name,
+                description="Multi-Site VIP",
+                role="multisite-vip",
+                ip_address="2001:db8:100::f1/128",
+                typename="DcimVirtualInterface",
+            )
+        }
+    )
+    # One segment on a firewall-role port gives the BGW its VXLAN block (an edge
+    # without a stretched segment or an INTERNET session renders none).
+    seg = _make_inline_segment_node(vlan_domain_id=device_node["id"])
+    interfaces.append(
+        {
+            "node": _make_interface(
+                name="Ethernet1/15",
+                device_name=device_name,
+                description="to dc1-fw-01",
+                role="firewall",
+                segments=[seg],
+            )
+        }
+    )
+    device_node["deployment"]["node"]["segment_deployments"] = _edges(
+        [{"vni": _v(_INLINE_SEGMENT_KWARGS["vni"]), "status": _v("active"), "segment": _node(seg)}]
+    )
+    sibling = "dc1-edge-02"
+    interfaces.append(
+        {
+            "node": _make_interface(
+                name="Ethernet1/8",
+                device_name=device_name,
+                description=f"to {sibling} Ethernet1/8",
+                role="interlink",
+                ip_address="2001:db8:100:ff::/127",
+                remote_name="Ethernet1/8",
+                remote_ip="2001:db8:100:ff::1/127",
+                remote_device=sibling,
+            )
+        }
+    )
+    dci_peerings = []
+    for index, (port, remote_ip, local_ip) in enumerate(
+        [
+            ("Ethernet1/10", "2001:db8:dc10::1/127", "2001:db8:dc10::/127"),
+            ("Ethernet1/11", "2001:db8:dc11::1/127", "2001:db8:dc11::/127"),
+        ]
+    ):
+        remote = f"dc{10 + index}-border-leaf-01"
+        interfaces.append(
+            {
+                "node": _make_interface(
+                    name=port,
+                    device_name=device_name,
+                    description=f"to {remote}",
+                    role="dci",
+                    ip_address=local_ip,
+                    remote_name="Ethernet1/35",
+                    remote_ip=remote_ip,
+                    remote_device=remote,
+                )
+            }
+        )
+        dci = _make_bgp_peering(
+            device_name=device_name,
+            device_ip=local_ip,
+            device_asn=65001,
+            remote_name=remote,
+            remote_ip=remote_ip,
+            remote_asn=65100 + index,
+            session_type="EBGP",
+            ttl=1,
+            local_iface_name=port,
+            remote_iface_name="Ethernet1/35",
+        )
+        dci["peering_role"] = _v("dci")
+        dci["address_families"] = _af_edges(("ipv6", "unicast"), ("l2vpn", "evpn"))
+        dci_peerings.append(dci)
+    fabric = _make_bgp_peering(
+        device_name=device_name,
+        device_ip="2001:db8:100:ff::/127",
+        device_asn=65001,
+        remote_name=sibling,
+        remote_ip="2001:db8:100:ff::1/127",
+        remote_asn=65001,
+        session_type="IBGP",
+        ttl=1,
+        local_iface_name="Ethernet1/8",
+        remote_iface_name="Ethernet1/8",
+        password="fabric-s3cr3t",
+    )
+    fabric["peering_role"] = _v("fabric")
+    fabric["address_families"] = _af_edges(("ipv6", "unicast"), ("l2vpn", "evpn"))
+    device_node["capabilities"]["edges"].append(
+        {
+            "node": {
+                "__typename": "ManagedBGP",
+                "name": _v("bgp-overlay"),
+                "status": _v("active"),
+                "multipath": _v(True),
+                "graceful_restart": _v(True),
+                "confederation_identifier": _v(None),
+                "local_as": _node({"asn": _v(65001)}),
+                "router_id": _node({"address": _v("10.0.0.1/32")}),
+                "peerings": _edges([*dci_peerings, fabric]),
+            }
+        }
+    )
+    return data
+
+
 def build_firewall_exchange_data(*, device_name: str, platform: str) -> dict:
     """An HA pair member (the first) carrying two contexts' transit legs.
 
@@ -2382,6 +2528,15 @@ def main() -> int:
         Edge,
         "edge_cisco_nxos_internet_bgw",
         build_edge_internet_bgw_data(device_name="dc1-edge-01", platform="cisco_nxos"),
+    )
+    generated += g
+    errors += e
+    # Metro edge pair: fabric-tracking on the interlink, FABRIC-PEERS iBGP session.
+    print("\nGenerating metro edge pair BGW fixture:")
+    g, e = _write_data_fixture(
+        Edge,
+        "edge_cisco_nxos_bgw_pair",
+        build_edge_bgw_pair_data(device_name="dc1-edge-01", platform="cisco_nxos"),
     )
     generated += g
     errors += e

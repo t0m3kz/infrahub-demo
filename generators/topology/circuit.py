@@ -40,8 +40,8 @@ from ..common import CommonGenerator
 from ..connections import CablingMixin
 from ..helpers.common import save_with_node_not_found_retry
 from ..pools import PoolMixin
-from ..protocols import ManagedBGPPeering, RoutingBGPAddressFamily, RoutingPassword, TopologyVirtualCircuit
-from ..routing import _overlay_key_name
+from ..protocols import ManagedBGPPeering, RoutingPassword, TopologyVirtualCircuit
+from ..routing import EVPN_AF, RoutingMixin, _overlay_key_name
 
 PHYSICAL_CIRCUIT_GENERATOR = "add_circuit"
 VIRTUAL_CIRCUIT_GENERATOR = "add_virtual_circuit"
@@ -71,14 +71,6 @@ _PHYSICAL_BACKED_LINK_TYPES = frozenset(
 # VTEPs share one, so the DCI follows the fabric's underlay_protocol.
 _DCI_POOLS: dict[int, tuple[str, int]] = {4: ("DCI-Technical-IPv4", 31), 6: ("DCI-Technical-IPv6", 127)}
 _DCI_UNICAST_AF: dict[int, tuple[str, str]] = {4: ("ipv4", "unicast"), 6: ("ipv6", "unicast")}
-_EVPN_AF = ("l2vpn", "evpn")
-# Attributes a missing address family is created with — the same values the
-# data files (and generators/routing.py for l2vpn/evpn) give them.
-_ADDRESS_FAMILY_DATA: dict[tuple[str, str], dict[str, Any]] = {
-    ("ipv4", "unicast"): {"description": "IPv4 unicast"},
-    ("ipv6", "unicast"): {"description": "IPv6 unicast"},
-    ("l2vpn", "evpn"): {"description": "L2VPN EVPN overlay", "advertise_all_vni": True, "advertise_default_gw": True},
-}
 
 # Circuit status -> the status of the interfaces it lands on (templates render
 # a non-active interface shut). A decommissioned circuit builds nothing.
@@ -191,7 +183,7 @@ def order_endpoints(endpoints: list[CircuitEndpoint]) -> tuple[CircuitEndpoint, 
     return first, second
 
 
-class _CircuitGenerator(PoolMixin, CommonGenerator):
+class _CircuitGenerator(PoolMixin, RoutingMixin, CommonGenerator):
     """Shared plumbing: one circuit per run, its fabric key, address families."""
 
     graphql_root_key = ""
@@ -224,25 +216,6 @@ class _CircuitGenerator(PoolMixin, CommonGenerator):
             )
             return None
         return key
-
-    async def _ensure_address_family(self, afi: str, safi: str) -> str:
-        """Find or create a RoutingBGPAddressFamily, untracked, under a lock.
-
-        One global node every session references, so no run may own it (a
-        tracked one is deleted by whichever run stops reaching it). The lock
-        serializes concurrent circuit runs racing to create the same one.
-        """
-        async with self.resource_lock(f"bgp-af-{afi}-{safi}"):
-            existing = await self.client.filters(kind=RoutingBGPAddressFamily, afi__value=afi, safi__value=safi)
-            if existing:
-                return existing[0].id
-            family = await self.client.create(
-                kind=RoutingBGPAddressFamily,
-                data={"afi": afi, "safi": safi, **_ADDRESS_FAMILY_DATA.get((afi, safi), {})},
-            )
-            await family.save(allow_upsert=True, update_group_context=False)
-            self.logger.info(f"  Created RoutingBGPAddressFamily {afi}/{safi}")
-            return family.id
 
 
 class PhysicalCircuitGenerator(CablingMixin, _CircuitGenerator):
@@ -337,8 +310,8 @@ class PhysicalCircuitGenerator(CablingMixin, _CircuitGenerator):
 
         # Every precondition holds — the writes start here.
         address_families = [
-            await self._ensure_address_family(*_DCI_UNICAST_AF[family]),
-            await self._ensure_address_family(*_EVPN_AF),
+            await self.ensure_address_family(*_DCI_UNICAST_AF[family]),
+            await self.ensure_address_family(*EVPN_AF),
         ]
         prefix = await self.client.allocate_next_ip_prefix(
             resource_pool=pool,
@@ -369,30 +342,22 @@ class PhysicalCircuitGenerator(CablingMixin, _CircuitGenerator):
             )
             self.logger.info(f"  {endpoint.label} = {address.address.value}")
 
-        peering = await self.client.create(
-            kind=ManagedBGPPeering,
-            data={
-                # DCI-<circuit>, never the circuit's own name: peerings and
-                # circuits share one name space.
-                "name": f"DCI-{circuit_name}",
-                "description": f"EVPN Multi-Site DCI {first.device_name} <-> {second.device_name} over {circuit_name}",
-                "status": "active" if status == "active" else "provisioning",
-                "session_type": "EBGP",
-                # dci keeps the session out of the underlay peer group (ttl 1
-                # otherwise reads as underlay) and marks its local interface
-                # for `evpn multisite dci-tracking` (transforms/helpers/).
-                "peering_role": "dci",
-                "ttl": 1,
-                "bfd_enabled": True,
-                "send_community": True,
-                "send_extended_community": True,
-                "address_families": [{"id": af_id} for af_id in address_families],
-                "bgp_processes": [{"id": process_id} for process_id in processes],
-                "password": {"id": key.id},
-                "interface_capabilities": [{"id": first.interface_id}, {"id": second.interface_id}],
-            },
+        await self.upsert_bgp_peering(
+            # DCI-<circuit>, never the circuit's own name: peerings and
+            # circuits share one name space.
+            name=f"DCI-{circuit_name}",
+            description=f"EVPN Multi-Site DCI {first.device_name} <-> {second.device_name} over {circuit_name}",
+            status="active" if status == "active" else "provisioning",
+            session_type="EBGP",
+            # dci keeps the session out of the underlay peer group (ttl 1
+            # otherwise reads as underlay) and marks its local interface
+            # for `evpn multisite dci-tracking` (transforms/helpers/).
+            peering_role="dci",
+            process_ids=processes,
+            address_family_ids=address_families,
+            password_id=key.id,
+            interface_ids=[first.interface_id, second.interface_id],
         )
-        await save_with_node_not_found_retry(peering, self.logger)
 
     async def _update_interface(self, node: Any, *, address_id: str, description: str, status: str) -> None:
         """Address an endpoint interface, untracked, and only if something changed.

@@ -17,9 +17,13 @@ spec:
           # DC declares its border-leafs rather than a pod doing it — one pair
           # fronts the whole metro, and FR6 reaches it over a cross-connect.
           # N9K-C9316D-GX_EDGE carries the port roles this leg needs —
-          # Ethernet1/[1-8] `customer`, Ethernet1/[9-12] `dci` (facing the DC
-          # border leafs), Ethernet1/[13-14] `uplink` (facing the cloud fabric)
-          # and Ethernet1/[15-16] `firewall`. Frankfurt fronts DC10 and DC11.
+          # Ethernet1/[1-7] `customer`, Ethernet1/8 `interlink` (the direct link
+          # to the metro's other edge), Ethernet1/[9-12] `dci` (facing the DC
+          # border leafs), Ethernet1/[13-14] `uplink` (facing the cloud fabric
+          # and the ISPs) and Ethernet1/[15-16] `firewall`. Frankfurt fronts
+          # DC10 and DC11; both edges are Multi-Site border gateways, each with
+          # its own dark fibre to every DC, and peer iBGP over the interlink
+          # (add_colocation_metro: FABRIC-eg-fr01-eg-fr02).
           #
           # The firewall pair is the on-ramp's perimeter, declared exactly the
           # way a DC declares its own: quantity 2 of a template carrying a

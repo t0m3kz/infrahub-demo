@@ -17,9 +17,9 @@ def warn_transit_without_internet_bgw(device: dict[str, Any]) -> list[str]:
     transforms/helpers/bgp.py). Its default route only reaches the DCs as an
     EVPN type-5 route when the edge is its metro's border gateway (a
     ``multisite-vip`` interface and a fabric ``evpn_rt_as``) and the INTERNET
-    namespace has an L3 VNI. These are warnings, not errors: the second edge of
-    each metro (eg-fr02, eg-pa02) is an island with no link to a DC, so its
-    sessions render but cannot be reached until the metro edge pair lands.
+    namespace has an L3 VNI. These are warnings, not errors: a guard for an edge
+    whose session renders but whose default cannot be reached from any DC (it
+    has no site VIP, or the fabric has no evpn_rt_as).
     """
     namespaces = _internet_session_namespaces(device)
     if not namespaces:

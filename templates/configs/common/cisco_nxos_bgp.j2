@@ -130,6 +130,9 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- if session.get('med') %}
       route-map {{ session.name }}-MED-OUT out
 {%- endif %}
+{%- if session.get('export_local_only') %}
+      route-map RM-FABRIC-OUT out
+{%- endif %}
     !
 {%- endif %}
 {%- if 'ipv4' in _afs %}
@@ -155,6 +158,9 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- endif %}
 {%- if session.get('med') %}
       route-map {{ session.name }}-MED-OUT out
+{%- endif %}
+{%- if session.get('export_local_only') %}
+      route-map RM-FABRIC-OUT out
 {%- endif %}
     !
 {%- endif %}

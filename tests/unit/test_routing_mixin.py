@@ -441,7 +441,7 @@ class TestGroupContextProtection:
             return []
 
         m.client.filters = AsyncMock(side_effect=_filters_side_effect)
-        m._ensure_evpn_af_node = AsyncMock(return_value="evpn-af-1")
+        m.ensure_address_family = AsyncMock(return_value="evpn-af-1")
 
         await m.create_routing(
             bottom_devices=["leaf-01"],
@@ -483,6 +483,7 @@ class TestGroupContextProtection:
         m._resolve_shared_objects = AsyncMock(return_value=("as-overlay-99", None))
         # Stub the 4 parallel routing data queries to return empty lists
         m.client.filters = AsyncMock(return_value=[])
+        m.ensure_address_family = AsyncMock(return_value="evpn-af-1")
 
         await m.create_routing(
             bottom_devices=["leaf-01"],
@@ -529,7 +530,7 @@ class TestGroupContextProtection:
         monkeypatch.setattr("generators.routing.RoutingPlanner", _CapturingPlanner)
         monkeypatch.setattr("generators.routing.asyncio.sleep", AsyncMock())
         m.client.filters = AsyncMock(return_value=[])
-        m._ensure_evpn_af_node = AsyncMock(return_value="evpn-af-1")
+        m.ensure_address_family = AsyncMock(return_value="evpn-af-1")
 
         await m.create_routing(
             bottom_devices=["leaf-01"],
@@ -557,6 +558,7 @@ class TestGroupContextProtection:
         monkeypatch.setattr("generators.routing.asyncio.sleep", AsyncMock())
         m._resolve_shared_passwords = AsyncMock(return_value=("pw-underlay-1", "pw-overlay-1"))
         m.client.filters = AsyncMock(return_value=[])
+        m.ensure_address_family = AsyncMock(return_value="evpn-af-1")
 
         await m.create_routing(
             bottom_devices=["leaf-01"],
@@ -586,6 +588,7 @@ class TestGroupContextProtection:
         monkeypatch.setattr("generators.routing.asyncio.sleep", AsyncMock())
         m._resolve_shared_passwords = AsyncMock(return_value=(None, None))
         m.client.filters = AsyncMock(return_value=[])
+        m.ensure_address_family = AsyncMock(return_value="evpn-af-1")
 
         await m.create_routing(
             bottom_devices=["leaf-01"],

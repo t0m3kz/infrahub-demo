@@ -22,7 +22,7 @@ import jinja2
 import pytest
 
 from transforms.common import BaseDeviceTransform
-from transforms.helpers.bgp import _build_peer_groups, add_template_fields
+from transforms.helpers.bgp import _build_peer_groups, _build_session_from_peering, add_template_fields
 from transforms.helpers.vxlan import (
     _get_multisite_config,
     _is_multisite_segment,
@@ -142,6 +142,80 @@ class TestDciPeerGroup:
         assert "peer_type" not in underlay
 
 
+def _fabric_session(name: str = "fabric-1") -> dict[str, Any]:
+    return {
+        "name": name,
+        "session_type": "IBGP",
+        "ttl": 1,
+        "peering_role": "fabric",
+        "bfd_enabled": True,
+        "send_community": True,
+        "address_families": ["ipv6", "evpn"],
+        "remote_as": {"asn": 65001},
+    }
+
+
+class TestFabricPeerGroup:
+    def test_fabric_session_gets_own_group_not_underlay(self) -> None:
+        """An iBGP ttl-1 session must not fall into UNDERLAY-PEERS (eBGP unicast)."""
+        underlay = {"name": "u", "session_type": "EBGP", "ttl": 1, "address_families": ["ipv4"]}
+        fabric = _fabric_session()
+        groups = {pg["name"]: pg for pg in _build_peer_groups([underlay, fabric])}
+        assert set(groups) == {"UNDERLAY-PEERS", "FABRIC-PEERS"}
+        assert fabric["peer_group"] == "FABRIC-PEERS"
+        assert groups["UNDERLAY-PEERS"]["address_families"] == ["ipv4"]
+
+    def test_fabric_group_is_ibgp_with_bfd_and_no_peer_type(self) -> None:
+        fabric = _fabric_session()
+        (group,) = _build_peer_groups([fabric])
+        assert group["type"] == "fabric"
+        assert group["session_type"] == "IBGP"
+        assert group["address_families"] == ["ipv6", "evpn"]
+        assert group["bfd_enabled"] is True
+        assert "peer_type" not in fabric
+        assert fabric["export_local_only"] is True
+
+    def test_other_groups_do_not_export_local_only(self) -> None:
+        dci = _dci_session()
+        underlay = {"name": "u", "session_type": "EBGP", "ttl": 1}
+        _build_peer_groups([dci, underlay])
+        assert "export_local_only" not in dci
+        assert "export_local_only" not in underlay
+
+    def test_cabled_ibgp_ttl1_session_resolves_remote_as_and_ip(self) -> None:
+        """A fabric peering on a cabled interlink resolves both ends and the site AS."""
+        local = {"asn": 65001}
+        peering = {
+            "name": "FABRIC-eg-fr01-eg-fr02",
+            "session_type": "IBGP",
+            "ttl": 1,
+            "peering_role": "fabric",
+            "address_families": [{"afi": "ipv6", "safi": "unicast"}, {"afi": "l2vpn", "safi": "evpn"}],
+            "interface_capabilities": [
+                {"name": "Ethernet1/8", "device": {"name": "eg-fr01"}, "ip_address": {"address": "fd00:ff::/127"}},
+                {"name": "Ethernet1/8", "device": {"name": "eg-fr02"}, "ip_address": {"address": "fd00:ff::1/127"}},
+            ],
+        }
+        interfaces = [
+            {
+                "name": "Ethernet1/8",
+                "ip_address": {"address": "fd00:ff::/127"},
+                "cable": {
+                    "endpoints": [
+                        {"device": {"name": "eg-fr02"}, "ip_address": {"address": "fd00:ff::1/127"}},
+                    ]
+                },
+            }
+        ]
+        session = _build_session_from_peering(peering, "eg-fr01", local, interfaces)
+        assert session is not None
+        assert session["remote_as"] == local
+        assert session["remote_ip"] == {"address": "fd00:ff::1/127"}
+        assert session["address_families"] == ["ipv6", "evpn"]
+        (group,) = _build_peer_groups([session])
+        assert group["name"] == "FABRIC-PEERS"
+
+
 # ---------------------------------------------------------------------------
 # Stretched segment RT anchor / multisite flag
 # ---------------------------------------------------------------------------
@@ -224,6 +298,21 @@ class TestGetMultisiteConfig:
             "fabric_interfaces": [],
             "advertise_interfaces": ["loopback1", "loopback100"],
         }
+
+    def test_edge_bgw_tracks_fabric_on_interlink_only(self) -> None:
+        device = _bgw_device()
+        device["interfaces"].append({"name": "Ethernet1/8", "role": "interlink"})
+        config = _get_multisite_config(device, "edge", 65100, vtep_source="loopback1")
+        assert config is not None
+        assert config["dci_interfaces"] == ["Ethernet1/49"]
+        assert config["fabric_interfaces"] == ["Ethernet1/8"]
+
+    def test_border_leaf_tracks_uplinks_and_interlink(self) -> None:
+        device = _bgw_device()
+        device["interfaces"].append({"name": "Ethernet1/8", "role": "interlink"})
+        config = _get_multisite_config(device, "border-leaf", 65010)
+        assert config is not None
+        assert config["fabric_interfaces"] == ["Ethernet1/1", "Ethernet1/8"]
 
     def test_border_leaf_bgw_tracks_fabric_uplinks_except_dci(self) -> None:
         config = _get_multisite_config(_bgw_device(), "border-leaf", 65010)
