@@ -66,7 +66,7 @@ from ..common import CommonGenerator, DeviceOptions
 from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
 from ..devices import DeviceMixin
 from ..helpers import get_loopback_name
-from ..helpers.pools import name_to_asn_range
+from ..helpers.pools import FW_CONTEXT_VLAN_START, name_to_asn_range
 from ..pools import PoolMixin
 from ..protocols import DcimVirtualInterface, ManagedBGP, TopologyColocationMetro
 from ..routing import EVPN_AF, RoutingMixin
@@ -216,6 +216,8 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
 
         await self._ensure_colocation_pools(metro_id=metro_id)
         physical_names_by_role = await self._create_metro_devices(templates=templates, metro_id=metro_id)
+        if physical_names_by_role.get("firewall"):
+            await self._ensure_firewall_context_pools()
         await self._cable_metro_services(physical_names_by_role=physical_names_by_role)
         overlay_process_ids = await self._ensure_metro_evpn(metro_id=metro_id)
         await self._ensure_edge_pair(
@@ -434,6 +436,21 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         # Untracked: the metro is this run's target, not its output.
         await node.save(update_group_context=False)
         self.logger.info(f"Metro {metro}: attached loopback/management/technical/ASN/VNI pool references")
+
+    async def _ensure_firewall_context_pools(self) -> None:
+        """Create the metro's FirewallContext VLAN pool.
+
+        generators/topology/customer_colocation.py gives every deployment in
+        this metro a context on the metro's firewall pair and takes the
+        context's transit VLAN from this pool by name; the legs' addresses come
+        from the per-VRF FW-Transit-* bootstrap pools. Only a metro with
+        physical firewalls gets it: without one no context is ever created.
+
+        See PoolMixin.ensure_firewall_context_pools for the shared
+        pool-creation mechanism (also used by generators/topology/dc.py for
+        the per-DC equivalent) and its locking rationale.
+        """
+        await self.ensure_firewall_context_pools(name=self.fabric_name, vlan_start=FW_CONTEXT_VLAN_START)
 
     async def _create_metro_devices(self, *, templates: list[dict[str, Any]], metro_id: str) -> dict[str, list[str]]:
         """Instantiate every fabric_templates entry as this metro's devices.

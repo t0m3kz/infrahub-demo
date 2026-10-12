@@ -40,8 +40,8 @@ interface Ethernet1/15
   no shutdown
 
   switchport
-  switchport mode access
-  switchport access vlan 150
+  switchport mode trunk
+  switchport trunk allowed vlan 150
 !
 interface Ethernet2
   no shutdown

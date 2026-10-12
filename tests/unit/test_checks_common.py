@@ -1,10 +1,20 @@
 """Unit tests for checks/common.py's validate_routing_password(), validate_exchange_gateways()
-and checks/border_leaf.py's validate_transit_vlans()."""
+and validate_transit_vlans() for both the border leaf and the edge."""
+
+from functools import partial
 
 import pytest
 
-from checks.border_leaf import validate_transit_vlans
-from checks.common import validate_exchange_gateways, validate_routing_password, validate_snat_addresses
+from checks.border_leaf import CheckBorderLeaf
+from checks.common import (
+    validate_exchange_gateways,
+    validate_routing_password,
+    validate_snat_addresses,
+)
+from checks.common import validate_transit_vlans as _validate_transit_vlans
+from checks.edge import CheckEdge
+from transforms.config.border_leaf import BorderLeaf
+from transforms.config.edge import Edge
 
 
 def _bgp_capability(peerings: list[dict]) -> dict:
@@ -285,21 +295,34 @@ def _service_port() -> dict:
     return {"name": "Ethernet49", "role": "firewall", "interface_capabilities": [context]}
 
 
+@pytest.fixture(params=[BorderLeaf, Edge], ids=["border-leaf", "edge"])
+def validate_transit_vlans(request: pytest.FixtureRequest):
+    """validate_transit_vlans bound to each border device's own transform class."""
+    return lambda device: _validate_transit_vlans(device, transform_cls=request.param)
+
+
 class TestValidateTransitVlans:
-    def test_no_transits_returns_no_errors(self):
+    def test_no_transits_returns_no_errors(self, validate_transit_vlans):
         assert validate_transit_vlans({"name": "bl-1", "interfaces": [_segment_port(3005)]}) == []
 
-    def test_distinct_vlans_pass(self):
+    def test_distinct_vlans_pass(self, validate_transit_vlans):
         device = {"name": "bl-1", "interfaces": [_segment_port(100), _service_port()]}
         assert validate_transit_vlans(device) == []
 
-    def test_collision_with_segment_vlan_reports_error(self):
+    def test_collision_with_segment_vlan_reports_error(self, validate_transit_vlans):
         device = {"name": "bl-1", "interfaces": [_segment_port(3005), _service_port()]}
         errors = validate_transit_vlans(device)
         assert len(errors) == 1
         assert "VLAN 3005" in errors[0]
         assert "'web'" in errors[0]
         assert "bl-1" in errors[0]
+
+    def test_both_checks_run_the_validator(self):
+        """CheckBorderLeaf and CheckEdge both carry a transit-VLAN validator bound to their transform."""
+        for check, transform_cls in ((CheckBorderLeaf, BorderLeaf), (CheckEdge, Edge)):
+            bound = [v for v in check.validators if isinstance(v, partial) and v.func is _validate_transit_vlans]
+            assert len(bound) == 1
+            assert bound[0].keywords == {"transform_cls": transform_cls}
 
 
 def _snat_leg(snat: str | None, ns_type: str = "internet") -> dict:

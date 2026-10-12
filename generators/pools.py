@@ -274,8 +274,8 @@ class PoolMixin:
         """Create a fabric's FirewallContext VLAN pool.
 
         Read by generators/firewall_context.py's _ensure_context_vlan, which
-        gives each DC context the VLAN its transit legs derive from
-        (utils/exchange_transit.py). Per-fabric (not global) so each DC's
+        gives each DC and colocation-metro context the VLAN its transit legs derive from
+        (utils/exchange_transit.py). Per-fabric (not global) so each DC's or metro's
         context VLANs stay within its own numbering. The legs' addresses come
         from the per-VRF FW-Transit-* bootstrap pools, not from a fabric pool.
 

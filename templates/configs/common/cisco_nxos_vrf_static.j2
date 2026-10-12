@@ -1,14 +1,15 @@
 {#- Per-VRF exact-match prefix-list + route-map for exchange statics; referenced by
     cisco_nxos_bgp.j2's `redistribute static route-map RM-VRF-STATIC-2-EVPN-<vrf>`. -#}
-{%- if vrf_routes %}
+{%- set _exported = vrf_routes | default([]) | rejectattr('local_only') | list %}
+{%- if _exported %}
 {#- Exchange statics (TopologyRoutedExchange, via the firewall context) live
     inside their `vrf context` (cisco_nxos_vxlan_vrf.j2) and enter EVPN as type-5
     through cisco_nxos_bgp.j2's `redistribute static`. Exact-match only: a bare
     prefix-list entry matches that prefix and nothing longer, so the default
     route is the only 0/0 candidate and a segment prefix never drags in others. #}
 !
-{%- for vrf in vrf_routes | map(attribute='vrf') | unique | list %}
-{%- for prefix in vrf_routes | selectattr('vrf', 'equalto', vrf) | map(attribute='prefix') | unique | list %}
+{%- for vrf in _exported | map(attribute='vrf') | unique | list %}
+{%- for prefix in _exported | selectattr('vrf', 'equalto', vrf) | map(attribute='prefix') | unique | list %}
 ip prefix-list PL-VRF-STATIC-{{ vrf }} seq {{ loop.index * 10 }} permit {{ prefix }}
 {%- endfor %}
 route-map RM-VRF-STATIC-2-EVPN-{{ vrf }} permit 10

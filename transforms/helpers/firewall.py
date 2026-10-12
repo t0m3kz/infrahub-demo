@@ -249,7 +249,9 @@ def _snat_host(cap: dict[str, Any]) -> str | None:
     return str(ip_interface(address).ip) if address else None
 
 
-def get_exchange_routes(interfaces: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+def get_exchange_routes(
+    interfaces: list[dict[str, Any]] | None, *, export_tenant_default: bool = True
+) -> list[dict[str, Any]]:
     """Static routes of the inter-VRF exchange through each firewall context on this device.
 
     Per exchange (tenant VRF A -> exchange peer Z) of a context tagged on a firewall port:
@@ -264,16 +266,22 @@ def get_exchange_routes(interfaces: list[dict[str, Any]] | None) -> list[dict[st
       emits nothing there. No default route in INTERNET: its upstream is the
       edge's EVPN type-5 default.
 
-    Returns [{vrf, l3_vni, prefix, nexthop}] sorted.
+    With ``export_tenant_default=False`` the tenant-VRF default route is marked
+    ``local_only``: it stays a static inside the VRF but is not redistributed
+    into EVPN (a colocation edge resolves the VIP over its own transit L2VNI;
+    exporting would make a DC import another site's PROD default).
+
+    Returns [{vrf, l3_vni, prefix, nexthop}] sorted (+ ``local_only: True`` when not exported).
     """
     routes: dict[tuple[str, str, str], dict[str, Any]] = {}
 
-    def _add(leg: dict[str, Any], prefix: str, nexthop: str) -> None:
+    def _add(leg: dict[str, Any], prefix: str, nexthop: str, *, local_only: bool = False) -> None:
         routes[(leg["namespace"], prefix, nexthop)] = {
             "vrf": leg["namespace"],
             "l3_vni": leg["l3_vni"],
             "prefix": prefix,
             "nexthop": nexthop,
+            **({"local_only": True} if local_only else {}),
         }
 
     for ctx in _firewall_context_caps(interfaces):
@@ -299,7 +307,7 @@ def get_exchange_routes(interfaces: list[dict[str, Any]] | None) -> list[dict[st
                 continue
             gateway = exchange.get("gateway") or {}
             if not (gateway.get("tenant") or ctx.get("tenant")):
-                _add(leg_a, "0.0.0.0/0", leg_a["vip"])
+                _add(leg_a, "0.0.0.0/0", leg_a["vip"], local_only=not export_tenant_default)
             if snat and leg_z["ns_type"] == INTERNET_TYPE:
                 _add(leg_z, f"{snat}/32", leg_z["vip"])
     return sorted(routes.values(), key=lambda r: (r["vrf"], r["prefix"], r["nexthop"]))

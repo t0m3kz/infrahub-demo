@@ -1,13 +1,13 @@
 """Addressing plan for inter-VRF exchange transits through a firewall context.
 
 One implementation shared by generators, transforms and checks: the generator
-allocates a /29 per (context, namespace) leg and tags VLANs, the border-leaf
-transform re-derives the VLAN/VNI/addresses from the same rules, so the two can
+allocates a /29 per (context, namespace) leg and tags VLANs, the border-leaf and edge
+transforms re-derive the VLAN/VNI/addresses from the same rules, so the two can
 never drift apart.
 
 Per leg (a context's VLAN sub-interface in one VRF):
 
-    .1 border-leaf anycast gateway (shared by both border leaves)
+    .1 border-leaf / edge anycast gateway (shared by both border devices)
     .2/.3 reserved, never allocated
     .4 firewall VIP
     .5 / .6 firewall member A / B (members sorted by name)

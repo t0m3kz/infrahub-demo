@@ -12,7 +12,7 @@ import asyncio
 import logging
 import re
 import time
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any, TypeVar
 
@@ -1256,6 +1256,10 @@ def _value(attribute: dict[str, Any] | None) -> Any:
     return (attribute or {}).get("value")
 
 
+#: Device roles whose firewall-facing ports a context is tagged on: a DC's border leaf, a colocation metro's edge.
+_SERVICE_PORT_DEVICE_ROLES = frozenset({"border-leaf", "edge"})
+
+
 async def fetch_transit_inventory(client: InfrahubClient, branch: str) -> dict[str, list[dict[str, Any]]]:
     """Fetch every firewall context with its transit legs, plus every routed exchange.
 
@@ -1270,9 +1274,9 @@ async def fetch_transit_inventory(client: InfrahubClient, branch: str) -> dict[s
                         "gateway_name"}]}
 
         ``legs`` are the context's DcimVirtualInterface capabilities (the
-        members' sub-interfaces; a colocation context is policy-only, so has
-        none), ``border_ports`` its
-        DcimPhysicalInterface ones on a border-leaf. ``exchanges`` on a leg are
+        members' sub-interfaces), ``border_ports`` its DcimPhysicalInterface
+        ones on a border-leaf (DC) or an edge (colocation metro).
+        ``exchanges`` on a leg are
         the names of the exchanges it is linked to.
     """
     client.default_branch = branch
@@ -1303,7 +1307,10 @@ async def fetch_transit_inventory(client: InfrahubClient, branch: str) -> dict[s
                         ),
                     }
                 )
-            elif cap["__typename"] == "DcimPhysicalInterface" and _value(device.get("role")) == "border-leaf":
+            elif (
+                cap["__typename"] == "DcimPhysicalInterface"
+                and _value(device.get("role")) in _SERVICE_PORT_DEVICE_ROLES
+            ):
                 border_ports.append(
                     {"id": cap["id"], "interface": _value(cap.get("name")), "device": _value(device.get("name"))}
                 )
@@ -1364,19 +1371,23 @@ def match_transit_contexts(
     contexts: list[dict[str, Any]],
     dc_names: Iterable[str],
     dedicated_tenants: Iterable[str],
+    colocation_sites: Mapping[str, Iterable[str]] | None = None,
 ) -> tuple[dict[tuple[str, str | None], dict[str, Any]], list[dict[str, Any]]]:
-    """Split the contexts into the DC ones the suite owns and the colocation ones.
+    """Split the contexts into the ones the suite owns, keyed by site, and the other colocation ones.
 
-    Returns ({(dc, tenant): context}, [colocation contexts]). A shared context is
-    keyed (dc, None) by the DC its member firewalls are deployed in; a dedicated
-    one (its members are virtual, so carry no deployment) by the tenant's own
-    trailing DC (`C007-P-DC10` -> DC10) and the tenant name. Contexts of a DC
-    outside ``dc_names`` (the DC6 chain's) and dedicated contexts of tenants
-    outside ``dedicated_tenants`` are dropped; a colocation context is one with
-    neither tenant nor DC.
+    Returns ({(site, tenant): context}, [unmatched colocation contexts]). A shared
+    context is keyed (dc, None) by the DC its member firewalls are deployed in; a
+    dedicated one (its members are virtual, so carry no deployment) by the tenant's
+    own trailing DC (`C007-P-DC10` -> DC10) and the tenant name. Contexts of a DC
+    outside ``dc_names`` (the DC6 chain's) and dedicated contexts of tenants outside
+    ``dedicated_tenants`` are dropped. A colocation context is one with neither
+    tenant nor DC: when its served deployments are exactly those of a metro in
+    ``colocation_sites`` (metro -> deployment names) it is keyed (metro, None),
+    otherwise it is returned in the list.
     """
     allowed = set(dc_names)
     tenants = set(dedicated_tenants)
+    sites = {site: frozenset(names) for site, names in (colocation_sites or {}).items()}
     by_key: dict[tuple[str, str | None], dict[str, Any]] = {}
     colocation: list[dict[str, Any]] = []
     for context in contexts:
@@ -1390,5 +1401,10 @@ def match_transit_contexts(
         if dcs:
             by_key[(dcs[0], None)] = context
         elif not context["cluster_dcs"]:
-            colocation.append(context)
+            served = frozenset(str(d["name"]) for d in context.get("served", []))
+            site = next((name for name, deployments in sites.items() if deployments == served), None)
+            if site is None:
+                colocation.append(context)
+            else:
+                by_key[(site, None)] = context
     return by_key, colocation

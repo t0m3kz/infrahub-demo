@@ -22,6 +22,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.helpers.naming import DeviceNameContext, DeviceNamingConfig
+from generators.helpers.pools import FW_CONTEXT_VLAN_START
 from generators.topology.colocation import (
     _COLO_LOOPBACK_PREFIX_LENGTH,
     _COLO_MANAGEMENT_PREFIX_LENGTH,
@@ -368,6 +369,33 @@ class TestGenerateEntry:
         await gen.generate({"TopologyColocationMetro": [_metro()]})
 
         assert calls == ["devices", "cabling"]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("physical_names_by_role", "expected"),
+        [
+            ({"edge": ["eg-fr01", "eg-fr02"], "firewall": ["fw-fr01", "fw-fr02"]}, True),
+            ({"edge": ["eg-fr01", "eg-fr02"]}, False),  # no firewalls, or only virtual ones (never registered)
+        ],
+    )
+    async def test_vlan_pool_only_for_a_metro_with_physical_firewalls(
+        self, physical_names_by_role: dict[str, list[str]], expected: bool
+    ) -> None:
+        """The FirewallContext VLAN pool exists only where a context can be created."""
+        gen = _make_generator()
+        gen._ensure_colocation_pools = AsyncMock()
+        gen._create_metro_devices = AsyncMock(return_value=physical_names_by_role)
+        gen._cable_metro_services = AsyncMock()
+        gen._ensure_metro_evpn = AsyncMock(return_value=_PROCESSES)
+        gen._ensure_edge_pair = AsyncMock()
+        gen.ensure_firewall_context_pools = AsyncMock()
+
+        await gen.generate({"TopologyColocationMetro": [_metro()]})
+
+        if expected:
+            gen.ensure_firewall_context_pools.assert_awaited_once_with(name="fr", vlan_start=FW_CONTEXT_VLAN_START)
+        else:
+            gen.ensure_firewall_context_pools.assert_not_awaited()
 
 
 class TestPools:

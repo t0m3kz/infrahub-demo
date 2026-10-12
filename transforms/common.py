@@ -133,6 +133,9 @@ class BaseDeviceTransform(InfrahubTransform):
 
     template_subdir: str = ""
     device_role: str = ""
+    # Whether the shared firewall context's tenant-VRF 0/0 -> VIP static is
+    # redistributed into EVPN (see get_exchange_routes); Edge turns it off.
+    export_tenant_default_to_evpn: bool = True
     # Comment character of the "no platform" stub config.
     comment_char: str = "!"
     # Resolve a VxlanSegment's local VLAN through this device's own VLAN domain.
@@ -268,7 +271,9 @@ class BaseDeviceTransform(InfrahubTransform):
 
         # Inter-VRF exchange routes through the firewall context(s) tagged on
         # this device's service ports (statics in the VRF, redistributed to EVPN).
-        vrf_routes = get_exchange_routes(data.get("interfaces"))
+        vrf_routes = get_exchange_routes(
+            data.get("interfaces"), export_tenant_default=self.export_tenant_default_to_evpn
+        )
 
         # Tier-to-tier GPO contracts, derived from the segments' permit rules
         sgt_rules = get_sgt_rules(activations)

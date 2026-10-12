@@ -1548,7 +1548,9 @@ def _xchg_segment(*, seg_name: str, vlan: int, vni: int, gateway_ip: str, deploy
     return seg
 
 
-def build_exchange_transit_bl_data(*, device_name: str, platform: str) -> dict:
+def build_exchange_transit_bl_data(
+    *, device_name: str, platform: str, role: str = "border-leaf", with_customer_port: bool = True
+) -> dict:
     """A border leaf whose firewall-role port is tagged with two contexts.
 
     Shared context dc1-fw-shared (no tenant): legs in PROD, INTERNET and
@@ -1560,9 +1562,16 @@ def build_exchange_transit_bl_data(*, device_name: str, platform: str) -> dict:
     INTERNET towards the serving context's INTERNET VIP. seg-shared is also
     carried on the customer port, to prove a plain segment and the transit
     legs share the PROD VRF.
+
+    `role="edge"` (build_edge_exchange_transit_data) is the same wiring on a
+    colocation edge, minus the customer port.
     """
     data = build_device_data(
-        device_name=device_name, role="border-leaf", platform=platform, scenario="ebgp_ibgp", include_segments=False
+        device_name=device_name,
+        role=role,
+        platform=platform,
+        scenario="ebgp_ebgp" if role == "edge" else "ebgp_ibgp",
+        include_segments=False,
     )
     device_node = data["DcimDevice"]["edges"][0]["node"]
     domain = device_node["id"]
@@ -1626,14 +1635,47 @@ def build_exchange_transit_bl_data(*, device_name: str, platform: str) -> dict:
             }
         }
     )
-    customer_port = next(e["node"] for e in interfaces if e["node"]["name"]["value"] == "Ethernet10")
-    customer_port["interface_capabilities"] = _edges([shared])
+    if with_customer_port:
+        customer_port = next(e["node"] for e in interfaces if e["node"]["name"]["value"] == "Ethernet10")
+        customer_port["interface_capabilities"] = _edges([shared])
     device_node["deployment"]["node"]["segment_deployments"] = _edges(
         [
             {"vni": _v(10100), "status": _v("active"), "segment": _node(shared)},
             {"vni": _v(10110), "status": _v("active"), "segment": _node(acme)},
         ]
     )
+    return data
+
+
+def build_edge_exchange_transit_data(*, device_name: str, platform: str) -> dict:
+    """A colocation edge BGW whose firewall port is tagged with the shared and a dedicated context.
+
+    The border-leaf exchange-transit wiring on an edge: the firewall port is a
+    trunk of the transit VLANs, each transit leg is a VLAN + L2VNI + anycast SVI
+    in its VRF, the statics sit inside their `vrf context`, and the SNAT /32 in
+    INTERNET is redistributed to EVPN while the shared context's PROD 0/0 stays
+    local to the edge. The edge is a BGW (IPv6 VTEP loopback + multisite VIP).
+    """
+    data = build_exchange_transit_bl_data(
+        device_name=device_name, platform=platform, role="edge", with_customer_port=False
+    )
+    interfaces = data["DcimDevice"]["edges"][0]["node"]["interfaces"]["edges"]
+    for name, desc, role, address in (
+        ("Loopback1", "VTEP", "loopback-vtep", "2001:db8:100::1/128"),
+        ("Loopback100", "Multi-Site VIP", "multisite-vip", "2001:db8:100::f1/128"),
+    ):
+        interfaces.append(
+            {
+                "node": _make_interface(
+                    name=name,
+                    device_name=device_name,
+                    description=desc,
+                    role=role,
+                    ip_address=address,
+                    typename="DcimVirtualInterface",
+                )
+            }
+        )
     return data
 
 
@@ -2522,6 +2564,14 @@ def main() -> int:
         )
         generated += g
         errors += e
+    print("\nGenerating edge exchange-transit fixture:")
+    g, e = _write_data_fixture(
+        Edge,
+        "edge_cisco_nxos_exchange_transit",
+        build_edge_exchange_transit_data(device_name="dc1-edge-01", platform="cisco_nxos"),
+    )
+    generated += g
+    errors += e
     # Upstream INTERNET handoff on a BGW edge: L3 VNI 60002, global RT, transit filters.
     print("\nGenerating INTERNET BGW edge fixture:")
     g, e = _write_data_fixture(
