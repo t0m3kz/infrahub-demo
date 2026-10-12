@@ -136,13 +136,13 @@ class TestFirewallCheck:
         assert check._captured_errors == []
         assert check._captured_infos == []
 
-    def test_segment_without_zone_emits_info(self) -> None:
-        """A segment with no security_zone is reported: zone-based firewalls match any zone there."""
+    def test_segment_without_zone_is_an_error(self) -> None:
+        """A segment with no security_zone is an error: zone-based firewalls match any zone there."""
         rule = {**_rule("rule-1"), "source_segment": _node(_ref("seg-a", zone=None))}
         check = _validate(_carried("seg-a", _policy([rule])))
-        assert check._captured_errors == []
-        assert len(check._captured_infos) == 1
-        assert "source_segment 'seg-a' has no security_zone" in check._captured_infos[0]
+        assert check._captured_infos == []
+        assert len(check._captured_errors) == 1
+        assert "source_segment 'seg-a' has no security_zone" in check._captured_errors[0]
 
     def test_disabled_policy_and_rule_are_skipped(self) -> None:
         bad = _rule("bad", src="seg-x", dst=None)

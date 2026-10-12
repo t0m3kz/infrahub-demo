@@ -13,3 +13,4 @@ spec:
       availability_zone: ["eu-central-1", "eu-central-1b"]
       cidr_block: "10.150.1.0/24"
       customer_deployment: ["C015", "p"]
+      security_zone: "PROD-ZONE"

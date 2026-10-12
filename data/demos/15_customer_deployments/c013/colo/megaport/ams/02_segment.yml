@@ -10,3 +10,4 @@ spec:
       environment: "p"
       vlan_id: 113
       customer_deployment: ["C013", "p"]
+      security_zone: "PROD-ZONE"

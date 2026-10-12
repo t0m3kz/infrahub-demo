@@ -16,7 +16,7 @@ class CheckFirewall(InfrahubCheck):
     into them, per context). Every rule lives in its source segment's policy,
     so a rule whose source is another segment is an error, as is a rule with
     no destination selector (segment, prefix or IP). A rule's zone is its
-    segment's security_zone; a segment without one is reported, since
+    segment's security_zone; a segment without one is an error, since
     zone-based firewalls then match any zone on that side. A rule to a
     segment without a prefix (the internet) must not be apply_on_switch. Its exchange legs
     (checks/common.py validate_exchange_gateways) and SNAT addresses
@@ -74,7 +74,7 @@ class CheckFirewall(InfrahubCheck):
             )
         for side, segment in (("source", source), ("destination", destination)):
             if segment.get("id") and not segment.get("security_zone"):
-                self.log_info(
+                self.log_error(
                     message=(
                         f"Policy '{policy_name}' rule '{rule_name}': {side}_segment "
                         f"'{segment.get('name', segment.get('id'))}' has no security_zone — zone-based "
