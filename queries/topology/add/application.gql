@@ -1,5 +1,6 @@
 fragment SegmentSecurityFields on ManagedNetworkSegment {
   name { value }
+  environment { value }
   isolation_mode { value }
   security_zone { node { name { value } trust_level { value } } }
   security_tag { node { id name { value } } }
