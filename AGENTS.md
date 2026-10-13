@@ -572,6 +572,24 @@ uv run pytest tests/integration/
 uv run pytest --cov=.
 ```
 
+### Which integration run a change needs
+
+Integration runs go through `uv run invoke test-integration` (see the `infrahub-running-integration-tests` skill), one
+stack at a time. The full 30_all subset is `test_01, 02, 59, 60, 61, 62, 64, 65`; `test_65` (idempotency) is the last
+~20 of its ~55 minutes. Match the run to the change:
+
+| Change touches | Run |
+| --- | --- |
+| Generators (including their helpers), schema, `data/`, or queries used by generators | Full subset **including `test_65`** |
+| Templates, transforms, checks and their validation queries | Subset `01, 02, 59–64` (no `test_65`) plus the smoke golden diff |
+| Docs, tests only | Unit + smoke |
+
+Always, after any run that registers a new check or transform query: run that query against the settled stack
+(`KEEP_STACK`) and simulate the check or transform on the real data. Unit tests with canned responses do not catch
+schema-invalid queries or false positives on real data. Run `test_65` once on `main` before every release. Clean the
+previous stack (`uv run invoke clean-testcontainers`) before starting a run, and confirm a merged PR's `state` is
+`MERGED` before relying on it.
+
 ### Fixtures and Mocking
 
 - Use fixtures for shared resources (`root_dir`, `infrahub_client`, etc.).
