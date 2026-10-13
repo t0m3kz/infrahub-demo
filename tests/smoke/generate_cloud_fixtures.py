@@ -12,6 +12,7 @@ Scenarios:
     cloud_terraform_aws_multi_region   — two AWS VPCs in different regions
     cloud_terraform_azure              — Azure VNet
     cloud_terraform_gcp                — GCP network
+    cloud_terraform_aws_policy_rules   — AWS VPC whose segments carry SecurityPolicyRules
 """
 
 from __future__ import annotations
@@ -614,6 +615,96 @@ def build_aws_multi_region() -> dict:
     }
 
 
+def _make_rule_end(name: str, *, cidr: str | None = None, gateway: str | None = None, zone: str = "") -> dict:
+    """A rule's source/destination segment as PolicyRuleSegmentFields returns it."""
+    end: dict = {
+        "id": f"seg-{name}",
+        "name": _v(name),
+        "security_zone": _node({"name": _v(zone)}) if zone else _node(None),
+    }
+    end["gateway"] = _node({"ip_prefix": _node({"prefix": _v(gateway)})}) if gateway else _node(None)
+    if cidr:
+        end["cidr_block"] = _v(cidr)
+    return end
+
+
+def _make_policy_rule(
+    *,
+    index: int,
+    name: str,
+    source: dict,
+    destination: dict | None,
+    port: int | None = 443,
+    protocol: str = "tcp",
+    disabled: bool = False,
+) -> dict:
+    """A SecurityPolicyRule as SecurityPolicyRuleFields returns it."""
+    return {
+        "id": f"rule-{name}",
+        "index": _v(index),
+        "name": _v(name),
+        "action": _v("permit"),
+        "protocol": _v(protocol),
+        "port_start": _v(port),
+        "port_end": _v(port),
+        "log": _v(False),
+        "disabled": _v(disabled),
+        "source_segment": _node(source),
+        "destination_segment": _node(destination),
+        "source_prefixes": _edges([]),
+        "destination_prefixes": _edges([]),
+        "source_ip_addresses": _edges([]),
+        "destination_ip_addresses": _edges([]),
+    }
+
+
+def _with_policy(subnet: dict, *, own: list[dict], inbound: list[dict]) -> dict:
+    """The subnet plus its security_policy (own egress rules) and inbound_rules."""
+    policy = {
+        "id": f"pol-{subnet['name']['value']}",
+        "name": _v(f"seg-{subnet['name']['value']}-egress"),
+        "enabled": _v(True),
+    }
+    subnet["security_policy"] = _node({**policy, "default_action": _v("deny"), "rules": _edges(own)})
+    subnet["inbound_rules"] = _edges(
+        [{**r, "policy": _node({**policy, "default_action": _v("deny")})} for r in inbound]
+    )
+    return subnet
+
+
+def build_aws_policy_rules() -> dict:
+    """AWS VPC with an app and a db subnet whose security groups render from policy rules.
+
+    The app subnet permits tcp/5432 out to the db subnet (also the db subnet's
+    inbound rule), tcp/443 in from an on-prem segment (gateway prefix), a
+    disabled rule, and an egress rule to an internet segment with no address,
+    which must be skipped, never rendered as 0.0.0.0/0.
+    """
+    data = build_aws_single_region()
+    app_end = _make_rule_end("prod-subnet-1a", cidr="10.0.1.0/24", zone="CLOUD-ZONE")
+    db_end = _make_rule_end("db-subnet", cidr="10.0.2.0/24", zone="CLOUD-ZONE")
+    onprem_end = _make_rule_end("onprem-web", gateway="172.16.10.1/24", zone="DMZ-ZONE")
+    internet_end = _make_rule_end("internet", zone="INTERNET-ZONE")
+    to_db = _make_policy_rule(index=10, name="app-to-db", source=app_end, destination=db_end, port=5432)
+    disabled = _make_policy_rule(
+        index=20, name="app-to-db-old", source=app_end, destination=db_end, port=3306, disabled=True
+    )
+    to_internet = _make_policy_rule(index=30, name="app-to-internet", source=app_end, destination=internet_end)
+    from_onprem = _make_policy_rule(index=10, name="onprem-to-app", source=onprem_end, destination=app_end)
+
+    vpc = data["CloudVirtualNetwork"]["edges"][0]["node"]
+    app = vpc["network_segments"]["edges"][0]["node"]
+    db = _make_subnet(sub_id="sub-2", name="db-subnet", cidr="10.0.2.0/24", az="eu-central-1b")
+    _with_policy(app, own=[to_db, disabled, to_internet], inbound=[from_onprem])
+    _with_policy(db, own=[], inbound=[to_db])
+    vpc["network_segments"] = _edges([app, db])
+    instance = data["CloudInstance"]["edges"][0]["node"]
+    instance["network_segment"] = _node(
+        {"name": _v("prod-subnet-1a"), "virtual_network": _node({"name": _v("prod-vpc")})}
+    )
+    return data
+
+
 def build_azure() -> dict:
     """Azure VNet with a single subnet."""
     account = _make_account(
@@ -785,6 +876,7 @@ SCENARIOS: list[tuple[type, str, Any]] = [
     (CloudVpcTerraform, "cloud_terraform_aws_multi_region", build_aws_multi_region),
     (CloudVpcTerraform, "cloud_terraform_azure", build_azure),
     (CloudVpcTerraform, "cloud_terraform_gcp", build_gcp),
+    (CloudVpcTerraform, "cloud_terraform_aws_policy_rules", build_aws_policy_rules),
 ]
 
 

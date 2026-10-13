@@ -1,11 +1,14 @@
 """Transform: CloudAccount → native HCL Terraform configuration (all VPCs in account)."""
 
+import logging
 from typing import Any
 
 from infrahub_sdk.transforms import InfrahubTransform
 
 from transforms.helpers.cloud import prepare_cloud_data
 from utils.data_cleaning import clean_data
+
+_log = logging.getLogger(__name__)
 
 
 def _tf_id(name: str) -> str:
@@ -187,7 +190,8 @@ def _vpc_blocks_aws(vpc: dict, ctx: dict, provider_attr: str = "") -> list[str]:
             elif direction == "egress" and rule.get("dest_cidr"):
                 attrs.append(f'cidr_ipv4 = "{rule["dest_cidr"]}"')
             else:
-                attrs.append('cidr_ipv4 = "0.0.0.0/0"')
+                _log.warning("Skipping %s rule %r of %s: no peer CIDR", direction, rule_name, sg_name)
+                continue
             lines += _res(res_type, rule_id, attrs, provider_attr)
 
     for inst in ctx["inst_by_vpc"].get(vpc_name) or []:
@@ -579,6 +583,16 @@ def _vpc_blocks_azure(vpc: dict, ctx: dict, rg_ref: str, location: str) -> list[
                 "}",
                 "",
             ]
+        if sg.get("policy_derived") and sg.get("segment"):
+            # The group guards its segment: Azure binds an NSG to the subnet.
+            seg_id = _tf_id(sg["segment"])
+            lines += [
+                f'resource "azurerm_subnet_network_security_group_association" "{seg_id}_sg_{sg_id}" {{',
+                f"  subnet_id                 = azurerm_subnet.{seg_id}.id",
+                f"  network_security_group_id = azurerm_network_security_group.{sg_id}.id",
+                "}",
+                "",
+            ]
 
     for inst in ctx["inst_by_vpc"].get(vpc_name) or []:
         inst_name = inst.get("name", "")
@@ -901,17 +915,34 @@ def _vpc_blocks_gcp(vpc: dict, ctx: dict, region: str) -> list[str]:
         ingress_rules = [r for r in active_rules if r.get("direction", "ingress") == "ingress"]
         egress_rules = [r for r in active_rules if r.get("direction", "ingress") == "egress"]
 
+        # A policy-derived rule has its own peer range, so it gets its own firewall,
+        # targeted at the instances of its segment by tag.
+        policy_derived = bool(sg.get("policy_derived"))
+        firewalls: list[tuple[str, list[dict]]] = []
         for direction, dir_rules in [("ingress", ingress_rules), ("egress", egress_rules)]:
-            if not dir_rules:
-                continue
-            fw_id = f"{sg_id}_{direction}"
-            fw_name = f"{sg_name}-{direction}"
+            if policy_derived:
+                firewalls += [(direction, [rule]) for rule in dir_rules]
+            elif dir_rules:
+                firewalls.append((direction, dir_rules))
+
+        for n, (direction, dir_rules) in enumerate(firewalls):
+            fw_id = f"{sg_id}_{direction}" if not policy_derived else f"{sg_id}_{n}_{direction}"
+            fw_name = fw_id.replace("_", "-") if policy_derived else f"{sg_name}-{direction}"
             lines += [f'resource "google_compute_firewall" "{fw_id}" {{']
             lines += [
                 f'  name      = "{fw_name}"',
                 f"  network   = google_compute_network.{vpc_id}.name",
                 f'  direction = "{direction.upper()}"',
             ]
+            if policy_derived:
+                peer_key, ranges_key = (
+                    ("source_cidr", "source_ranges") if direction == "ingress" else ("dest_cidr", "destination_ranges")
+                )
+                lines += [
+                    f"  priority  = {dir_rules[0].get('priority') or 1000}",
+                    f'  {ranges_key} = ["{dir_rules[0].get(peer_key)}"]',
+                    f'  target_tags = ["{sg_id}"]',
+                ]
             for rule in dir_rules:
                 proto = rule.get("protocol", "tcp")
                 gcp_proto = "all" if proto == "any" else proto
@@ -954,6 +985,13 @@ def _vpc_blocks_gcp(vpc: dict, ctx: dict, region: str) -> list[str]:
             "  network_interface {",
             f"    subnetwork = {subnetwork_ref}",
             "  }",
+        ]
+        policy_sgs = {sg["name"] for sg in ctx["sgs_by_vpc"].get(vpc_name) or [] if sg.get("policy_derived")}
+        tags = [_tf_id(sg["name"]) for sg in inst.get("security_groups") or [] if sg.get("name") in policy_sgs]
+        if tags:
+            quoted = ", ".join(f'"{tag}"' for tag in tags)
+            lines.append(f"  tags = [{quoted}]")
+        lines += [
             f'  labels = {{ name = "{_tf_id(inst_name)}", managed_by = "infrahub" }}',
             "}",
             "",

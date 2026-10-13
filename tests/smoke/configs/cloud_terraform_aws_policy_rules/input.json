@@ -1,0 +1,866 @@
+{
+  "CloudVirtualNetwork": {
+    "edges": [
+      {
+        "node": {
+          "id": "vpc-1",
+          "name": {
+            "value": "prod-vpc"
+          },
+          "is_default": {
+            "value": false
+          },
+          "dns_support": {
+            "value": true
+          },
+          "dns_hostnames": {
+            "value": true
+          },
+          "account": {
+            "node": {
+              "name": {
+                "value": "test-aws-account"
+              },
+              "account_id": {
+                "value": "123456789012"
+              },
+              "environment": {
+                "value": "production"
+              },
+              "provider": {
+                "node": {
+                  "name": {
+                    "value": "AWS"
+                  }
+                }
+              }
+            }
+          },
+          "region": {
+            "node": {
+              "name": {
+                "value": "eu-central-1"
+              }
+            }
+          },
+          "cidr_blocks": {
+            "edges": [
+              {
+                "node": {
+                  "prefix": {
+                    "value": "10.0.0.0/16"
+                  }
+                }
+              }
+            ]
+          },
+          "network_segments": {
+            "edges": [
+              {
+                "node": {
+                  "id": "sub-1",
+                  "name": {
+                    "value": "prod-subnet-1a"
+                  },
+                  "is_public": {
+                    "value": false
+                  },
+                  "auto_assign_public_ip": {
+                    "value": false
+                  },
+                  "segment_type": {
+                    "value": "aws_vpc_subnet"
+                  },
+                  "cidr_block": {
+                    "value": "10.0.1.0/24"
+                  },
+                  "availability_zone": {
+                    "node": {
+                      "name": {
+                        "value": "eu-central-1a"
+                      }
+                    }
+                  },
+                  "security_policy": {
+                    "node": {
+                      "id": "pol-prod-subnet-1a",
+                      "name": {
+                        "value": "seg-prod-subnet-1a-egress"
+                      },
+                      "enabled": {
+                        "value": true
+                      },
+                      "default_action": {
+                        "value": "deny"
+                      },
+                      "rules": {
+                        "edges": [
+                          {
+                            "node": {
+                              "id": "rule-app-to-db",
+                              "index": {
+                                "value": 10
+                              },
+                              "name": {
+                                "value": "app-to-db"
+                              },
+                              "action": {
+                                "value": "permit"
+                              },
+                              "protocol": {
+                                "value": "tcp"
+                              },
+                              "port_start": {
+                                "value": 5432
+                              },
+                              "port_end": {
+                                "value": 5432
+                              },
+                              "log": {
+                                "value": false
+                              },
+                              "disabled": {
+                                "value": false
+                              },
+                              "source_segment": {
+                                "node": {
+                                  "id": "seg-prod-subnet-1a",
+                                  "name": {
+                                    "value": "prod-subnet-1a"
+                                  },
+                                  "security_zone": {
+                                    "node": {
+                                      "name": {
+                                        "value": "CLOUD-ZONE"
+                                      }
+                                    }
+                                  },
+                                  "gateway": {
+                                    "node": null
+                                  },
+                                  "cidr_block": {
+                                    "value": "10.0.1.0/24"
+                                  }
+                                }
+                              },
+                              "destination_segment": {
+                                "node": {
+                                  "id": "seg-db-subnet",
+                                  "name": {
+                                    "value": "db-subnet"
+                                  },
+                                  "security_zone": {
+                                    "node": {
+                                      "name": {
+                                        "value": "CLOUD-ZONE"
+                                      }
+                                    }
+                                  },
+                                  "gateway": {
+                                    "node": null
+                                  },
+                                  "cidr_block": {
+                                    "value": "10.0.2.0/24"
+                                  }
+                                }
+                              },
+                              "source_prefixes": {
+                                "edges": []
+                              },
+                              "destination_prefixes": {
+                                "edges": []
+                              },
+                              "source_ip_addresses": {
+                                "edges": []
+                              },
+                              "destination_ip_addresses": {
+                                "edges": []
+                              }
+                            }
+                          },
+                          {
+                            "node": {
+                              "id": "rule-app-to-db-old",
+                              "index": {
+                                "value": 20
+                              },
+                              "name": {
+                                "value": "app-to-db-old"
+                              },
+                              "action": {
+                                "value": "permit"
+                              },
+                              "protocol": {
+                                "value": "tcp"
+                              },
+                              "port_start": {
+                                "value": 3306
+                              },
+                              "port_end": {
+                                "value": 3306
+                              },
+                              "log": {
+                                "value": false
+                              },
+                              "disabled": {
+                                "value": true
+                              },
+                              "source_segment": {
+                                "node": {
+                                  "id": "seg-prod-subnet-1a",
+                                  "name": {
+                                    "value": "prod-subnet-1a"
+                                  },
+                                  "security_zone": {
+                                    "node": {
+                                      "name": {
+                                        "value": "CLOUD-ZONE"
+                                      }
+                                    }
+                                  },
+                                  "gateway": {
+                                    "node": null
+                                  },
+                                  "cidr_block": {
+                                    "value": "10.0.1.0/24"
+                                  }
+                                }
+                              },
+                              "destination_segment": {
+                                "node": {
+                                  "id": "seg-db-subnet",
+                                  "name": {
+                                    "value": "db-subnet"
+                                  },
+                                  "security_zone": {
+                                    "node": {
+                                      "name": {
+                                        "value": "CLOUD-ZONE"
+                                      }
+                                    }
+                                  },
+                                  "gateway": {
+                                    "node": null
+                                  },
+                                  "cidr_block": {
+                                    "value": "10.0.2.0/24"
+                                  }
+                                }
+                              },
+                              "source_prefixes": {
+                                "edges": []
+                              },
+                              "destination_prefixes": {
+                                "edges": []
+                              },
+                              "source_ip_addresses": {
+                                "edges": []
+                              },
+                              "destination_ip_addresses": {
+                                "edges": []
+                              }
+                            }
+                          },
+                          {
+                            "node": {
+                              "id": "rule-app-to-internet",
+                              "index": {
+                                "value": 30
+                              },
+                              "name": {
+                                "value": "app-to-internet"
+                              },
+                              "action": {
+                                "value": "permit"
+                              },
+                              "protocol": {
+                                "value": "tcp"
+                              },
+                              "port_start": {
+                                "value": 443
+                              },
+                              "port_end": {
+                                "value": 443
+                              },
+                              "log": {
+                                "value": false
+                              },
+                              "disabled": {
+                                "value": false
+                              },
+                              "source_segment": {
+                                "node": {
+                                  "id": "seg-prod-subnet-1a",
+                                  "name": {
+                                    "value": "prod-subnet-1a"
+                                  },
+                                  "security_zone": {
+                                    "node": {
+                                      "name": {
+                                        "value": "CLOUD-ZONE"
+                                      }
+                                    }
+                                  },
+                                  "gateway": {
+                                    "node": null
+                                  },
+                                  "cidr_block": {
+                                    "value": "10.0.1.0/24"
+                                  }
+                                }
+                              },
+                              "destination_segment": {
+                                "node": {
+                                  "id": "seg-internet",
+                                  "name": {
+                                    "value": "internet"
+                                  },
+                                  "security_zone": {
+                                    "node": {
+                                      "name": {
+                                        "value": "INTERNET-ZONE"
+                                      }
+                                    }
+                                  },
+                                  "gateway": {
+                                    "node": null
+                                  }
+                                }
+                              },
+                              "source_prefixes": {
+                                "edges": []
+                              },
+                              "destination_prefixes": {
+                                "edges": []
+                              },
+                              "source_ip_addresses": {
+                                "edges": []
+                              },
+                              "destination_ip_addresses": {
+                                "edges": []
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "inbound_rules": {
+                    "edges": [
+                      {
+                        "node": {
+                          "id": "rule-onprem-to-app",
+                          "index": {
+                            "value": 10
+                          },
+                          "name": {
+                            "value": "onprem-to-app"
+                          },
+                          "action": {
+                            "value": "permit"
+                          },
+                          "protocol": {
+                            "value": "tcp"
+                          },
+                          "port_start": {
+                            "value": 443
+                          },
+                          "port_end": {
+                            "value": 443
+                          },
+                          "log": {
+                            "value": false
+                          },
+                          "disabled": {
+                            "value": false
+                          },
+                          "source_segment": {
+                            "node": {
+                              "id": "seg-onprem-web",
+                              "name": {
+                                "value": "onprem-web"
+                              },
+                              "security_zone": {
+                                "node": {
+                                  "name": {
+                                    "value": "DMZ-ZONE"
+                                  }
+                                }
+                              },
+                              "gateway": {
+                                "node": {
+                                  "ip_prefix": {
+                                    "node": {
+                                      "prefix": {
+                                        "value": "172.16.10.1/24"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "destination_segment": {
+                            "node": {
+                              "id": "seg-prod-subnet-1a",
+                              "name": {
+                                "value": "prod-subnet-1a"
+                              },
+                              "security_zone": {
+                                "node": {
+                                  "name": {
+                                    "value": "CLOUD-ZONE"
+                                  }
+                                }
+                              },
+                              "gateway": {
+                                "node": null
+                              },
+                              "cidr_block": {
+                                "value": "10.0.1.0/24"
+                              }
+                            }
+                          },
+                          "source_prefixes": {
+                            "edges": []
+                          },
+                          "destination_prefixes": {
+                            "edges": []
+                          },
+                          "source_ip_addresses": {
+                            "edges": []
+                          },
+                          "destination_ip_addresses": {
+                            "edges": []
+                          },
+                          "policy": {
+                            "node": {
+                              "id": "pol-prod-subnet-1a",
+                              "name": {
+                                "value": "seg-prod-subnet-1a-egress"
+                              },
+                              "enabled": {
+                                "value": true
+                              },
+                              "default_action": {
+                                "value": "deny"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "sub-2",
+                  "name": {
+                    "value": "db-subnet"
+                  },
+                  "is_public": {
+                    "value": false
+                  },
+                  "auto_assign_public_ip": {
+                    "value": false
+                  },
+                  "segment_type": {
+                    "value": "aws_vpc_subnet"
+                  },
+                  "cidr_block": {
+                    "value": "10.0.2.0/24"
+                  },
+                  "availability_zone": {
+                    "node": {
+                      "name": {
+                        "value": "eu-central-1b"
+                      }
+                    }
+                  },
+                  "security_policy": {
+                    "node": {
+                      "id": "pol-db-subnet",
+                      "name": {
+                        "value": "seg-db-subnet-egress"
+                      },
+                      "enabled": {
+                        "value": true
+                      },
+                      "default_action": {
+                        "value": "deny"
+                      },
+                      "rules": {
+                        "edges": []
+                      }
+                    }
+                  },
+                  "inbound_rules": {
+                    "edges": [
+                      {
+                        "node": {
+                          "id": "rule-app-to-db",
+                          "index": {
+                            "value": 10
+                          },
+                          "name": {
+                            "value": "app-to-db"
+                          },
+                          "action": {
+                            "value": "permit"
+                          },
+                          "protocol": {
+                            "value": "tcp"
+                          },
+                          "port_start": {
+                            "value": 5432
+                          },
+                          "port_end": {
+                            "value": 5432
+                          },
+                          "log": {
+                            "value": false
+                          },
+                          "disabled": {
+                            "value": false
+                          },
+                          "source_segment": {
+                            "node": {
+                              "id": "seg-prod-subnet-1a",
+                              "name": {
+                                "value": "prod-subnet-1a"
+                              },
+                              "security_zone": {
+                                "node": {
+                                  "name": {
+                                    "value": "CLOUD-ZONE"
+                                  }
+                                }
+                              },
+                              "gateway": {
+                                "node": null
+                              },
+                              "cidr_block": {
+                                "value": "10.0.1.0/24"
+                              }
+                            }
+                          },
+                          "destination_segment": {
+                            "node": {
+                              "id": "seg-db-subnet",
+                              "name": {
+                                "value": "db-subnet"
+                              },
+                              "security_zone": {
+                                "node": {
+                                  "name": {
+                                    "value": "CLOUD-ZONE"
+                                  }
+                                }
+                              },
+                              "gateway": {
+                                "node": null
+                              },
+                              "cidr_block": {
+                                "value": "10.0.2.0/24"
+                              }
+                            }
+                          },
+                          "source_prefixes": {
+                            "edges": []
+                          },
+                          "destination_prefixes": {
+                            "edges": []
+                          },
+                          "source_ip_addresses": {
+                            "edges": []
+                          },
+                          "destination_ip_addresses": {
+                            "edges": []
+                          },
+                          "policy": {
+                            "node": {
+                              "id": "pol-db-subnet",
+                              "name": {
+                                "value": "seg-db-subnet-egress"
+                              },
+                              "enabled": {
+                                "value": true
+                              },
+                              "default_action": {
+                                "value": "deny"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "CloudSecurityGroup": {
+    "edges": [
+      {
+        "node": {
+          "id": "sg-1",
+          "name": {
+            "value": "prod-sg"
+          },
+          "virtual_network": {
+            "node": {
+              "name": {
+                "value": "prod-vpc"
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "CloudInstance": {
+    "edges": [
+      {
+        "node": {
+          "id": "i-1",
+          "name": {
+            "value": "prod-instance-1"
+          },
+          "cloud_id": {
+            "value": "i-abc123"
+          },
+          "instance_type": {
+            "value": "t3.micro"
+          },
+          "image": {
+            "value": "ami-12345678"
+          },
+          "os_type": {
+            "value": "linux"
+          },
+          "private_ip": {
+            "value": "10.0.1.10"
+          },
+          "public_ip": {
+            "value": null
+          },
+          "network_segment": {
+            "node": {
+              "name": {
+                "value": "prod-subnet-1a"
+              },
+              "virtual_network": {
+                "node": {
+                  "name": {
+                    "value": "prod-vpc"
+                  }
+                }
+              }
+            }
+          },
+          "availability_zone": {
+            "node": {
+              "name": {
+                "value": "eu-central-1a"
+              }
+            }
+          },
+          "security_groups": {
+            "edges": [
+              {
+                "node": {
+                  "name": {
+                    "value": "prod-sg"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "CloudInternetGateway": {
+    "edges": [
+      {
+        "node": {
+          "id": "igw-1",
+          "name": {
+            "value": "prod-igw"
+          },
+          "virtual_network": {
+            "node": {
+              "name": {
+                "value": "prod-vpc"
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "CloudNATGateway": {
+    "edges": [
+      {
+        "node": {
+          "id": "nat-1",
+          "name": {
+            "value": "prod-nat"
+          },
+          "public_ip": {
+            "value": "1.2.3.4"
+          },
+          "virtual_network": {
+            "node": {
+              "name": {
+                "value": "prod-vpc"
+              }
+            }
+          },
+          "network_segments": {
+            "edges": [
+              {
+                "node": {
+                  "name": {
+                    "value": "prod-subnet-1a"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "CloudRouteTable": {
+    "edges": [
+      {
+        "node": {
+          "id": "rt-1",
+          "name": {
+            "value": "prod-rt"
+          },
+          "is_main": {
+            "value": true
+          },
+          "virtual_network": {
+            "node": {
+              "name": {
+                "value": "prod-vpc"
+              }
+            }
+          },
+          "network_segments": {
+            "edges": [
+              {
+                "node": {
+                  "name": {
+                    "value": "prod-subnet-1a"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "CloudRoute": {
+    "edges": [
+      {
+        "node": {
+          "id": "route-1",
+          "name": {
+            "value": "route-igw"
+          },
+          "route_table": {
+            "node": {
+              "name": {
+                "value": "prod-rt"
+              }
+            }
+          },
+          "destination": {
+            "node": {
+              "prefix": {
+                "value": "0.0.0.0/0"
+              }
+            }
+          },
+          "internet_gateway": {
+            "node": {
+              "name": {
+                "value": "prod-igw"
+              }
+            }
+          },
+          "nat_gateway": {
+            "node": null
+          },
+          "instance": {
+            "node": null
+          },
+          "network_interface": {
+            "node": null
+          }
+        }
+      }
+    ]
+  },
+  "CloudPublicIP": {
+    "edges": []
+  },
+  "CloudNetworkACL": {
+    "edges": [
+      {
+        "node": {
+          "id": "nacl-1",
+          "name": {
+            "value": "prod-nacl"
+          },
+          "virtual_network": {
+            "node": {
+              "name": {
+                "value": "prod-vpc"
+              }
+            }
+          },
+          "network_segments": {
+            "edges": [
+              {
+                "node": {
+                  "name": {
+                    "value": "prod-subnet-1a"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "CloudTransitGateway": {
+    "edges": []
+  },
+  "CloudVPNGateway": {
+    "edges": []
+  },
+  "CloudCustomerGateway": {
+    "edges": []
+  },
+  "CloudVirtualNetworkPeering": {
+    "edges": []
+  },
+  "CloudDirectConnect": {
+    "edges": []
+  },
+  "CloudVirtualInterface": {
+    "edges": []
+  }
+}
