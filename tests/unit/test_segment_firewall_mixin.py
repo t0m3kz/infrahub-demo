@@ -136,11 +136,20 @@ class TestEnsureSegmentIsolationMode:
     def test_save_failure_is_logged_not_raised(self):
         gen = _make_gen()
         gen.client.create = AsyncMock(side_effect=Exception("boom"))
-        segment = {"id": "seg-1", "name": "seg-1"}
+        segment = {"id": "seg-1", "name": "seg-1", "typename": "ManagedVxlanSegment"}
 
         asyncio.run(gen._ensure_segment_isolation_mode(segment, "fintech_strict"))
 
         gen.logger.warning.assert_called_once()
+
+    def test_skips_segment_without_typename_instead_of_assuming_a_kind(self) -> None:
+        """No typename, no write: the kind is never guessed."""
+        gen = _make_gen()
+        gen.client.create = AsyncMock()
+
+        asyncio.run(gen._ensure_segment_isolation_mode({"id": "seg-1", "name": "seg-1"}, "fintech_strict"))
+
+        gen.client.create.assert_not_awaited()
 
 
 # ===========================================================================
@@ -426,6 +435,237 @@ class TestMicrosegmentedRuleHasNoReturnRule:
         rule_data = gen._create_or_update_policy_rule.call_args.kwargs["rule_data"]
         assert rule_data["port_start"] == 6379
         assert "port_end" not in rule_data
+
+
+class TestExistingRuleReconciliation:
+    """A rule made before its segments were zoned carries a stale profile/log/
+    apply_on_switch: it is brought to what the planner derives now, and only
+    when it differs, so a second pass leaves the rule's data untouched."""
+
+    @staticmethod
+    def _rule(*, log: bool, apply_on_switch: bool = False, profile_id: str | None = None) -> Any:
+        rule = MagicMock()
+        rule.index.value = 100
+        rule.expires_at.value = None
+        rule.disabled.value = False
+        rule.log.value = log
+        rule.apply_on_switch.value = apply_on_switch
+        rule.security_profile.initialized = profile_id is not None
+        rule.security_profile.id = profile_id
+        rule.save = AsyncMock()
+        return rule
+
+    @staticmethod
+    def _run(rule: Any, *, same_zone: bool, profile_id: str | None) -> Any:
+        gen = _make_gen()
+        policy = MagicMock()
+        policy.id = "policy-src"
+        gen._segment_policy = AsyncMock(return_value=policy)
+        gen._find_rule_by_name = AsyncMock(return_value=rule)
+        gen._create_or_update_policy_rule = AsyncMock()
+        gen._get_profile = AsyncMock(return_value=MagicMock(id=profile_id) if profile_id else None)
+        planner = MagicMock(wraps=RulesPlanner())
+        dst_zone = "PROD-ZONE" if same_zone else "NONPROD-ZONE"
+        planner.zone_context = MagicMock(return_value=("PROD-ZONE", dst_zone, not same_zone))
+        result = asyncio.run(
+            gen._reconcile_segment_rule(
+                app_name="checkout",
+                app_security_profile="internal_standard",
+                src_comp={"name": "frontend"},
+                dst_comp={"name": "backend"},
+                dep={"name": "frontend-to-backend", "ports": []},
+                src_seg={"id": "seg-src", "name": "seg-src"},
+                dst_seg={"id": "seg-dst", "name": "seg-dst"},
+                planner=planner,
+                segment_policies={},
+                rule_indexes={},
+                port=("tcp", 8443, None),
+            )
+        )
+        assert result == (False, True)
+        gen._create_or_update_policy_rule.assert_not_awaited()
+        return gen
+
+    def test_stale_rule_gains_the_cross_zone_profile_and_log(self) -> None:
+        rule = self._rule(log=False)
+
+        self._run(rule, same_zone=False, profile_id="profile-standard")
+
+        assert rule.log.value is True
+        assert rule.security_profile == {"id": "profile-standard"}
+        rule.save.assert_awaited_once_with(allow_upsert=True)
+
+    def test_rule_in_the_desired_state_is_not_modified(self) -> None:
+        """Second pass: nothing is assigned, the save only re-registers the rule."""
+        rule = self._rule(log=True, profile_id="profile-standard")
+        profile_before = rule.security_profile
+
+        gen = self._run(rule, same_zone=False, profile_id="profile-standard")
+
+        assert rule.log.value is True
+        assert rule.security_profile is profile_before
+        rule.save.assert_awaited_once_with(allow_upsert=True)
+        assert not any("updated" in str(call) for call in gen.logger.info.call_args_list)
+
+    def test_rule_that_became_same_zone_loses_profile_and_log(self) -> None:
+        rule = self._rule(log=True, profile_id="profile-standard")
+
+        self._run(rule, same_zone=True, profile_id=None)
+
+        assert rule.log.value is False
+        assert rule.security_profile is None
+
+    def test_profile_missing_from_the_database_leaves_the_current_one(self) -> None:
+        """A named profile that does not exist is not a reason to strip the rule's own."""
+        rule = self._rule(log=True, profile_id="profile-old")
+        profile_before = rule.security_profile
+        gen = _make_gen()
+        gen._get_profile = AsyncMock(return_value=None)
+        policy = MagicMock(id="policy-src")
+        gen._segment_policy = AsyncMock(return_value=policy)
+        gen._find_rule_by_name = AsyncMock(return_value=rule)
+        planner = MagicMock(wraps=RulesPlanner())
+        planner.zone_context = MagicMock(return_value=("PROD-ZONE", "NONPROD-ZONE", True))
+
+        asyncio.run(
+            gen._reconcile_segment_rule(
+                app_name="checkout",
+                app_security_profile="internal_standard",
+                src_comp={"name": "frontend"},
+                dst_comp={"name": "backend"},
+                dep={"name": "frontend-to-backend", "ports": []},
+                src_seg={"id": "seg-src", "name": "seg-src"},
+                dst_seg={"id": "seg-dst", "name": "seg-dst"},
+                planner=planner,
+                segment_policies={},
+                rule_indexes={},
+                port=("tcp", 8443, None),
+            )
+        )
+
+        assert rule.security_profile is profile_before
+
+    def test_apply_on_switch_follows_the_segments_isolation_mode(self) -> None:
+        rule = self._rule(log=False, apply_on_switch=False)
+        gen = _make_gen()
+        gen._segment_policy = AsyncMock(return_value=MagicMock(id="policy-src"))
+        gen._find_rule_by_name = AsyncMock(return_value=rule)
+        gen._get_profile = AsyncMock(return_value=None)
+        planner = MagicMock(wraps=RulesPlanner())
+        planner.zone_context = MagicMock(return_value=("PROD-ZONE", "PROD-ZONE", False))
+
+        asyncio.run(
+            gen._reconcile_segment_rule(
+                app_name="checkout",
+                app_security_profile="internal_standard",
+                src_comp={"name": "frontend"},
+                dst_comp={"name": "backend"},
+                dep={"name": "frontend-to-backend", "ports": []},
+                src_seg={"id": "seg-src", "name": "seg-src", "isolation_mode": "microsegmented"},
+                dst_seg={"id": "seg-dst", "name": "seg-dst"},
+                planner=planner,
+                segment_policies={},
+                rule_indexes={},
+                port=("tcp", 8443, None),
+            )
+        )
+
+        assert rule.apply_on_switch.value is True
+
+
+class TestRuleCreationFailure:
+    """A failed create is no longer swallowed into (False, False)."""
+
+    def test_create_error_propagates_to_the_caller(self) -> None:
+        gen = _make_gen()
+        gen._segment_policy = AsyncMock(return_value=MagicMock(id="policy-src"))
+        gen._find_rule_by_name = AsyncMock(return_value=None)
+        gen._get_profile = AsyncMock(return_value=None)
+        gen._create_or_update_policy_rule = AsyncMock(side_effect=RuntimeError("boom"))
+
+        with pytest.raises(RuntimeError, match="boom"):
+            asyncio.run(
+                gen._reconcile_segment_rule(
+                    app_name="checkout",
+                    app_security_profile="internal_standard",
+                    src_comp={"name": "frontend"},
+                    dst_comp={"name": "backend"},
+                    dep={"name": "frontend-to-backend", "ports": []},
+                    src_seg={"id": "seg-src", "name": "seg-src"},
+                    dst_seg={"id": "seg-dst", "name": "seg-dst"},
+                    planner=RulesPlanner(),
+                    segment_policies={},
+                    rule_indexes={},
+                    port=("tcp", 8443, None),
+                )
+            )
+
+
+class TestEnsureSegmentZones:
+    """Zones are set on every kind and recorded in the dict before rules are planned."""
+
+    @staticmethod
+    def _segment(typename: str = "ManagedVlanSegment", **extra: Any) -> dict[str, Any]:
+        return {"id": "seg-1", "name": "seg-1", "typename": typename, "environment": "p", **extra}
+
+    @staticmethod
+    def _gen() -> Any:
+        gen = _make_gen()
+        gen.client = MagicMock()
+        gen.client.filters = AsyncMock(return_value=[MagicMock(id="zone-1")])
+        obj = MagicMock()
+        obj.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=obj)
+        return gen
+
+    def test_zone_is_recorded_in_the_segment_dict(self) -> None:
+        """The first run sees the zone it just wrote, so same-zone flows are not cross-zone."""
+        gen = self._gen()
+        segment = self._segment()
+
+        asyncio.run(gen._ensure_segment_zones([segment]))
+
+        assert segment["security_zone"]["name"] == "PROD-ZONE"
+        assert RulesPlanner.zone_context(segment, dict(segment), {})[2] is False
+        assert gen.client.create.call_args.kwargs["kind"] == "ManagedVlanSegment"
+
+    def test_cloud_segment_is_zoned_with_its_own_kind(self) -> None:
+        gen = self._gen()
+
+        asyncio.run(gen._ensure_segment_zones([self._segment("CloudNetworkSegment")]))
+
+        assert gen.client.create.call_args.kwargs["kind"] == "CloudNetworkSegment"
+
+    def test_external_segment_is_left_alone(self) -> None:
+        gen = self._gen()
+        segment = self._segment("ManagedExternalSegment", security_zone={"name": "INTERNET-ZONE"})
+
+        asyncio.run(gen._ensure_segment_zones([segment]))
+
+        assert segment["security_zone"] == {"name": "INTERNET-ZONE"}
+        gen.client.create.assert_not_awaited()
+
+    def test_second_pass_writes_nothing(self) -> None:
+        gen = self._gen()
+        segments = [self._segment()]
+
+        asyncio.run(gen._ensure_segment_zones(segments))
+        asyncio.run(gen._ensure_segment_zones([self._segment(security_zone={"name": "PROD-ZONE"})]))
+
+        assert gen.client.create.await_count == 1
+
+    def test_component_without_a_segment_is_skipped(self) -> None:
+        gen = self._gen()
+
+        asyncio.run(gen._ensure_segment_zones([{}]))
+
+        gen.client.create.assert_not_awaited()
+
+    def test_segment_without_typename_fails_instead_of_guessing_a_kind(self) -> None:
+        gen = self._gen()
+
+        with pytest.raises(ValueError, match="typename"):
+            asyncio.run(gen._ensure_segment_zones([{"id": "seg-1", "environment": "p"}]))
 
 
 class TestReconcileSegmentRuleEarlyExits:

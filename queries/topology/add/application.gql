@@ -1,4 +1,5 @@
 fragment SegmentSecurityFields on ManagedNetworkSegment {
+  __typename
   name { value }
   environment { value }
   isolation_mode { value }

@@ -157,14 +157,20 @@ class AppApplicationGenerator(
             self.logger.warning("Application %s has no components - nothing to do", app_name)
             return
 
+        edges = self._dependency_edges_from_components(components)
+
         # Runs unconditionally per component (not gated on having a
         # dependency edge below) so every segment this app uses gets
-        # classified, the same unconditional guarantee VxlanSegmentGenerator
-        # gives security_zone.
+        # its zone and isolation mode. The zone is set first and recorded on
+        # the segment dicts, so the rules below are planned against it; each
+        # edge target is zoned too, as it may belong to an application that
+        # has not run yet.
+        await self._ensure_segment_zones(
+            [component.get("network_segment") or {} for component in components]
+            + [dst.get("network_segment") or {} for _src, _dep, dst in edges]
+        )
         for component in components:
             await self._ensure_segment_isolation_mode(component.get("network_segment") or {}, app_security_profile)
-
-        edges = self._dependency_edges_from_components(components)
 
         # Access-profile grants hang off the target component, not a source
         # component, so they are published whether or not the app has edges.
@@ -180,6 +186,7 @@ class AppApplicationGenerator(
         rule_indexes: dict[str, set[int]] = {}
         proxy_policies: dict[str, Any] = {}
 
+        rules_failed = 0
         for src_comp, dep, dst_comp in edges:
             dep_ref = dep.get("name", dep.get("id", "?"))
             authorized, auth_reason = planner.dependency_is_authorized(src_comp=src_comp, dst_comp=dst_comp, dep=dep)
@@ -247,28 +254,36 @@ class AppApplicationGenerator(
                 continue
 
             for port in ports:
-                created, skipped = await self._reconcile_segment_rule(
-                    app_name=app_name,
-                    app_security_profile=app_security_profile,
-                    src_comp=src_comp,
-                    dst_comp=dst_comp,
-                    dep=dep,
-                    src_seg=src_seg,
-                    dst_seg=dst_seg,
-                    planner=planner,
-                    segment_policies=segment_policies,
-                    rule_indexes=rule_indexes,
-                    port=port,
-                )
+                try:
+                    created, skipped = await self._reconcile_segment_rule(
+                        app_name=app_name,
+                        app_security_profile=app_security_profile,
+                        src_comp=src_comp,
+                        dst_comp=dst_comp,
+                        dep=dep,
+                        src_seg=src_seg,
+                        dst_seg=dst_seg,
+                        planner=planner,
+                        segment_policies=segment_policies,
+                        rule_indexes=rule_indexes,
+                        port=port,
+                    )
+                except Exception as exc:
+                    rules_failed += 1
+                    self.logger.error("  Dependency '%s' %s: rule failed: %s", dep_ref, port, exc)
+                    continue
                 rules_created += int(created)
                 rules_skipped += int(skipped)
 
         self.logger.info(
-            "Application %s: %d rule(s) created, %d already existed",
+            "Application %s: %d rule(s) created, %d already existed, %d failed",
             app_name,
             rules_created,
             rules_skipped,
+            rules_failed,
         )
+        if rules_failed:
+            raise RuntimeError(f"Application {app_name}: {rules_failed} rule(s) failed")
 
     @staticmethod
     def _calling_application_ids(component: dict[str, Any]) -> list[str]:
