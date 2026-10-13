@@ -71,6 +71,28 @@ class TestSegmentPolicy:
         assert data["segment"] == {"id": "seg-1"}
         policy.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
 
+    def test_cloud_segment_gets_its_egress_policy_through_the_same_path(self) -> None:
+        """A cloud source segment gets a vnet-qualified policy bound to it via the segment relationship."""
+        gen = _make_gen()
+        gen.client.filters = AsyncMock(return_value=[])
+        policy = MagicMock(id="pol-cloud")
+        policy.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=policy)
+        segment = {
+            "id": "seg-cloud",
+            "name": "acme-prod",
+            "typename": "CloudNetworkSegment",
+            "virtual_network": {"id": "vn-1", "name": "vnet-a"},
+        }
+
+        result = asyncio.run(gen._segment_policy(segment, RulesPlanner.segment_policy_name(segment)))
+
+        assert result is policy
+        data = gen.client.create.call_args.kwargs["data"]
+        assert data["name"] == "seg-acme-prod-vnet-a-egress"
+        assert data["segment"] == {"id": "seg-cloud"}
+        assert data["default_action"] == "deny"
+
 
 # ===========================================================================
 # TestEnsureSegmentIsolationMode
@@ -165,6 +187,26 @@ class TestSegmentPolicyName:
     def test_segment_policy_name_falls_back_to_id(self) -> None:
         """A segment without a name falls back to its id."""
         assert RulesPlanner.segment_policy_name({"id": "seg-123"}) == "seg-seg-123-egress"
+
+    def test_segment_policy_name_appends_the_virtual_network_of_a_cloud_segment(self) -> None:
+        """A cloud segment's policy is qualified by its virtual network."""
+        segment = {"name": "acme-prod", "virtual_network": {"id": "vn-1", "name": "vnet-a"}}
+        assert RulesPlanner.segment_policy_name(segment) == "seg-acme-prod-vnet-a-egress"
+
+    def test_same_segment_name_in_two_virtual_networks_gets_two_policy_names(self) -> None:
+        """The computed segment name may repeat across networks; the policy names must not."""
+        first = {"name": "acme-prod", "virtual_network": {"name": "vnet-a"}}
+        second = {"name": "acme-prod", "virtual_network": {"name": "vnet-b"}}
+        assert RulesPlanner.segment_policy_name(first) != RulesPlanner.segment_policy_name(second)
+
+    def test_segment_without_a_parent_network_name_is_not_qualified(self) -> None:
+        """A missing parent (or one without a name) leaves the on-prem name untouched."""
+        assert RulesPlanner.segment_policy_name({"name": "web", "virtual_network": None}) == "seg-web-egress"
+        assert RulesPlanner.segment_policy_name({"name": "web", "virtual_network": {"id": "vn-1"}}) == "seg-web-egress"
+
+    def test_cloud_dependency_dispatch_is_gone(self) -> None:
+        """Cloud flows are ordinary rules: the planner has no cloud-specific dispatch."""
+        assert not hasattr(RulesPlanner, "is_cloud_dependency")
 
 
 # ===========================================================================
