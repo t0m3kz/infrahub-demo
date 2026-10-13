@@ -77,12 +77,34 @@ class TestCombineLeafPbrRules:
         rendered = self._render_pbr("cisco_nxos", _combine_leaf_pbr_rules([customer], [backend]))
 
         assert rendered.count("ip policy route-map RM-LEAF-PBR-VLAN100") == 1
-        assert rendered.index("RM-LEAF-PBR-VLAN100 permit 10") < rendered.index("RM-LEAF-PBR-VLAN100 permit 20")
-        assert rendered.index("RM-LEAF-PBR-VLAN100 permit 20") < rendered.index("RM-LEAF-PBR-VLAN100 permit 30")
+        assert rendered.index("RM-LEAF-PBR-VLAN100 permit 10") < rendered.index("RM-LEAF-PBR-VLAN100 deny 20")
+        assert rendered.index("RM-LEAF-PBR-VLAN100 deny 20") < rendered.index("RM-LEAF-PBR-VLAN100 permit 30")
         assert "set ip next-hop 10.0.0.3" in rendered
         assert "set ip next-hop 10.0.0.2" in rendered
         assert rendered.index("feature pbr") < rendered.index("route-map RM-LEAF-PBR-VLAN100")
         assert "TODO(lab): TCAM carving for PBR" in rendered
+
+    def test_nxos_bypass_acl_is_permit_only_and_sequence_is_deny(self) -> None:
+        """NX-OS: PBR ACLs hold no deny entries; bypass traffic skips PBR via a route-map deny sequence."""
+        customer = {"vlan_id": 100, "bypass_prefixes": ["10.0.2.0/24"], "fw_nexthop": "10.0.0.2"}
+
+        rendered = self._render_pbr("cisco_nxos", _combine_leaf_pbr_rules([customer], []))
+
+        assert "deny ip" not in rendered
+        assert "permit ip any 10.0.2.0/24" in rendered
+        assert "route-map RM-LEAF-PBR-VLAN100 permit 20" not in rendered
+        assert "route-map RM-LEAF-PBR-VLAN100 deny 20\n  match ip address PBR-BYPASS-VLAN100" in rendered
+        assert "documented-not-lab-verified for VXLAN-routed traffic" in rendered
+
+    def test_nxos_without_bypass_prefixes_renders_no_bypass_acl_or_deny_sequence(self) -> None:
+        """NX-OS: an empty bypass list must not render an empty ACL or a deny sequence."""
+        customer = {"vlan_id": 200, "bypass_prefixes": [], "fw_nexthop": "10.0.0.2"}
+
+        rendered = self._render_pbr("cisco_nxos", _combine_leaf_pbr_rules([customer], []))
+
+        assert "PBR-BYPASS-VLAN200" not in rendered
+        assert "RM-LEAF-PBR-VLAN200 deny" not in rendered
+        assert "RM-LEAF-PBR-VLAN200 permit 30" in rendered
 
     def test_nxos_template_without_pbr_has_no_pbr_feature_or_removed_stanzas(self) -> None:
         """No PBR rule: no `feature pbr`; the unsupported tcam/CTS lines are gone either way."""
