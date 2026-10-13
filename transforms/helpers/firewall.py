@@ -8,10 +8,9 @@ from transforms.helpers.ha import inline_addresses
 from transforms.helpers.policy import (
     active_rules,
     enabled_policies,
-    inbound_permits,
     rule_endpoint,
     rule_zone,
-    segment_policies,
+    segment_flows,
     segment_rule_policies,
 )
 from transforms.helpers.segments import (
@@ -707,15 +706,15 @@ def get_customer_pbr_rules(
                 # the leaf routes a bypassed prefix in the tenant VRF, where it does not exist.
                 bypass.add(prefix)
 
-        for policy in enabled_policies(segment_policies(seg)):
-            for rule in active_rules(policy):
-                if rule.get("action") == "permit":
-                    _classify(rule, rule.get("destination_segment"))
+        egress, ingress = segment_flows(seg)
+        for rule in egress["rules"]:
+            if rule.get("action") == "permit":
+                _classify(rule, rule.get("destination_segment"))
         # Reply leg of every permit INTO this segment: a forward packet that
         # bypassed the firewall on the source's leaf must be answered past it
         # too, or the firewall drops the reply with no session. The return
         # ACL (get_acls) still restricts it to the rule's port.
-        for rule in inbound_permits(seg):
+        for rule in ingress:
             _classify(rule, rule.get("source_segment"))
 
         # The bypass is per prefix: one inspected flow to a peer sends all

@@ -3,13 +3,10 @@
 from typing import Any
 
 from transforms.helpers.policy import (
-    active_rules,
-    enabled_policies,
-    inbound_permits,
     is_unresolved_segment_endpoint,
     rule_endpoint,
     rule_zone,
-    segment_policies,
+    segment_flows,
 )
 from utils.internet_space import NON_INTERNET_PREFIXES
 from utils.segment_addressing import segment_prefix
@@ -144,7 +141,7 @@ def _inbound_permits(seg: dict[str, Any]) -> list[dict[str, Any]]:
     seg_id = seg.get("id")
     permits = [
         rule
-        for rule in inbound_permits(seg)
+        for rule in segment_flows(seg)[1]
         if (rule.get("source_segment") or {}).get("id") != seg_id
         # A reply leg towards "the internet" would be `permit ... any`; inbound
         # from outside is DNAT, which is out of scope.
@@ -173,11 +170,7 @@ def _leaf_enforces(seg: dict[str, Any]) -> bool:
     inline = seg.get("inline_service") or {}
     if not (inline.get("id") or inline.get("name")) or seg.get("isolation_mode") == "microsegmented":
         return True
-    return any(
-        rule.get("apply_on_switch")
-        for policy in enabled_policies(segment_policies(seg))
-        for rule in active_rules(policy)
-    )
+    return any(rule.get("apply_on_switch") for rule in segment_flows(seg)[0]["rules"])
 
 
 def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
@@ -261,23 +254,22 @@ def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, 
             continue
         segment_name = seg.get("customer_name") or seg.get("name") or f"VLAN_{vlan_id}"
         segment_environment = seg.get("environment")
-        policies = segment_policies(seg)
+        egress, _ = segment_flows(seg)
 
         rules: list[dict[str, Any]] = []
 
-        default_permit = any(policy.get("default_action") == "permit" for policy in enabled_policies(policies))
+        default_permit = egress["default_action"] == "permit"
 
         # Own policies. A permit to a prefix-less external segment is held back
         # for the band after the return legs; under a default permit it adds
         # nothing, and the denies of its band would close the internal space.
         outside_permits: list[dict[str, Any]] = []
-        for policy in enabled_policies(policies):
-            for rule in active_rules(policy):
-                if rule.get("action") == "permit" and is_unresolved_segment_endpoint(rule, "destination"):
-                    if not default_permit:
-                        outside_permits.append(rule)
-                else:
-                    rules.append(_build_acl_rule(rule))
+        for rule in egress["rules"]:
+            if rule.get("action") == "permit" and is_unresolved_segment_endpoint(rule, "destination"):
+                if not default_permit:
+                    outside_permits.append(rule)
+            else:
+                rules.append(_build_acl_rule(rule))
 
         # Return legs of the permits into this segment
         own_prefix = segment_prefix(seg)
