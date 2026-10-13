@@ -1,0 +1,37 @@
+# Every segment with what decides whether its routed SVI is protected: the
+# namespace (VRF) of its gateway, its zone, its security policy (rules and
+# default action), an inline firewall and the customer deployments it serves,
+# plus the firewall contexts those deployments are redirected to (PBR).
+query tenant_svi_protection {
+  ManagedNetworkSegment {
+    edges {
+      node {
+        __typename
+        id
+        name { value }
+        security_zone { node { name { value } } }
+        gateway { node { ip_prefix { node { prefix { value } ip_namespace { node { name { value } namespace_type { value } } } } } } }
+        security_policy {
+          node {
+            id
+            enabled { value }
+            default_action { value }
+            rules { count }
+          }
+        }
+        ... on ManagedVlanSegment { inline_service { node { id } } customer_deployment { node { id } } }
+        ... on ManagedVxlanSegment { inline_service { node { id } } customer_deployments { edges { node { id } } } }
+      }
+    }
+  }
+
+  ManagedFirewallContext {
+    edges {
+      node {
+        id
+        tenant { node { id } }
+        served_deployments { edges { node { id } } }
+      }
+    }
+  }
+}

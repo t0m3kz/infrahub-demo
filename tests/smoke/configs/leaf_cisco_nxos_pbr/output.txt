@@ -1,0 +1,248 @@
+!
+! dc1-leaf-01 Configuration
+!
+hostname dc1-leaf-01
+!
+!
+feature ospf
+feature bgp
+feature interface-vlan
+feature lacp
+feature vpc
+feature lldp
+feature pbr
+!
+
+! VLANs
+vlan 100
+  name Customer-A
+!
+vlan 200
+  name Customer-A
+!
+!
+! Zero-Trust ACLs (one per segment VLAN — inbound on SVI)
+!
+ip access-list ACL-VLAN100-IN
+  remark Zone: PROD-ZONE -> PROD-ZONE
+  10 permit tcp 10.100.0.0/24 10.200.0.0/24 eq 22 ! allow-seg-200-ssh
+  6000 deny ip 10.100.0.0/24 0.0.0.0/8 ! allow-internet-https-not-internet
+  6010 deny ip 10.100.0.0/24 10.0.0.0/8 ! allow-internet-https-not-internet
+  6020 deny ip 10.100.0.0/24 100.64.0.0/10 ! allow-internet-https-not-internet
+  6030 deny ip 10.100.0.0/24 127.0.0.0/8 ! allow-internet-https-not-internet
+  6040 deny ip 10.100.0.0/24 169.254.0.0/16 ! allow-internet-https-not-internet
+  6050 deny ip 10.100.0.0/24 172.16.0.0/12 ! allow-internet-https-not-internet
+  6060 deny ip 10.100.0.0/24 192.0.0.0/24 ! allow-internet-https-not-internet
+  6070 deny ip 10.100.0.0/24 192.168.0.0/16 ! allow-internet-https-not-internet
+  6080 deny ip 10.100.0.0/24 198.18.0.0/15 ! allow-internet-https-not-internet
+  6090 deny ip 10.100.0.0/24 224.0.0.0/4 ! allow-internet-https-not-internet
+  6100 deny ip 10.100.0.0/24 240.0.0.0/4 ! allow-internet-https-not-internet
+  remark Zone: PROD-ZONE -> INTERNET-ZONE
+  6110 permit tcp 10.100.0.0/24 any eq 443 ! allow-internet-https
+  9990 deny ip any any log ! implicit-deny-all
+!
+ip access-list ACL-VLAN200-IN
+  10 permit tcp any any eq 22 ! allow-ssh
+  9990 deny ip any any log ! implicit-deny-all
+!
+!
+! Interfaces
+interface Ethernet1
+  no shutdown
+  ip address 10.1.0.1/31
+
+!
+interface Ethernet2
+  no shutdown
+  ip address 10.1.0.3/31
+
+!
+interface Ethernet10
+  no shutdown
+
+  switchport
+  switchport mode access
+  switchport access vlan 100
+!
+interface Loopback0
+  no shutdown
+  ip address 10.0.0.1/32
+
+!
+!
+! OSPF Configuration
+
+
+!
+! BGP Configuration
+
+router bgp 65000
+  router-id 10.0.0.1
+  graceful-restart
+  !
+  template peer-policy EVPN-PEERS-POLICY
+    send-community
+  !
+  template peer-session EVPN-PEERS-SESSION
+    update-source loopback0
+  !
+  !
+  template peer-policy UNDERLAY-PEERS-POLICY
+    send-community
+  !
+  template peer-session UNDERLAY-PEERS-SESSION
+    bfd
+  !
+  address-family ipv4 unicast
+    redistribute direct route-map RM-CONN-2-BGP
+    maximum-paths 8
+  !
+  address-family l2vpn evpn
+  !
+  neighbor 10.1.0.0
+    remote-as 65100
+    local-as 65001 no-prepend replace-as
+    description spine-01
+    inherit peer-session UNDERLAY-PEERS-SESSION
+    address-family ipv4 unicast
+      inherit peer-policy UNDERLAY-PEERS-POLICY
+    !
+  neighbor 10.1.0.2
+    remote-as 65101
+    local-as 65001 no-prepend replace-as
+    description spine-02
+    inherit peer-session UNDERLAY-PEERS-SESSION
+    address-family ipv4 unicast
+      inherit peer-policy UNDERLAY-PEERS-POLICY
+    !
+  neighbor 10.0.0.100
+    remote-as 65000
+    description spine-01
+    inherit peer-session EVPN-PEERS-SESSION
+    address-family l2vpn evpn
+      inherit peer-policy EVPN-PEERS-POLICY
+    !
+  neighbor 10.0.0.101
+    remote-as 65000
+    description spine-02
+    inherit peer-session EVPN-PEERS-SESSION
+    address-family l2vpn evpn
+      inherit peer-policy EVPN-PEERS-POLICY
+    !
+  vrf VRF_A
+    address-family ipv4 unicast
+      advertise l2vpn evpn
+      redistribute direct route-map RM-VRF-DIRECT-2-EVPN
+  !
+!
+
+!
+!
+! VXLAN Configuration (netlab-style multivendor)
+!
+feature nv overlay
+feature vn-segment-vlan-based
+feature nve
+feature fabric forwarding
+nv overlay evpn
+!
+!
+! VRF Contexts (symmetric IRB — one L3 VNI per tenant)
+!
+vrf context VRF_A
+  vni 50001
+  rd 10.0.0.1:50001
+  address-family ipv4 unicast
+    route-target both 65000:50001
+    route-target both 65000:50001 evpn
+!
+interface nve1
+  source-interface Loopback0
+  host-reachability protocol bgp
+  member vni 10100
+    suppress-arp
+    ingress-replication protocol bgp
+  member vni 50001 associate-vrf
+  no shutdown
+!
+!
+! EVPN Configuration
+!
+evpn
+  vni 10100 l2
+    rd 10.0.0.1:10100
+    route-target import 65000:10100
+    route-target export 65000:10100
+!
+!
+! VLAN to VNI mapping
+!
+vlan 100
+  vn-segment 10100
+!
+! L3 VNI Transit SVIs (symmetric IRB — no host addressing, forwarding only)
+!
+vlan 3900
+  name L3VNI_VRF_A
+  vn-segment 50001
+!
+interface Vlan3900
+  description L3VNI transit SVI for VRF VRF_A
+  vrf member VRF_A
+  ip forward
+  mtu 9216
+  no shutdown
+!
+!
+! Route-maps
+route-map RM-CONN-2-BGP permit 10
+  match interface loopback0
+!
+route-map RM-VRF-DIRECT-2-EVPN permit 10
+!
+! Anycast Gateway — identical MAC on every leaf/border-leaf in the fabric
+fabric forwarding anycast-gateway-mac 001c7300dc01
+!
+! VLAN SVI Configuration
+!
+interface Vlan100
+  description Customer-A
+  vrf member VRF_A
+  ip address 10.100.0.1/24
+  fabric forwarding mode anycast-gateway
+  no shutdown
+  ip access-group ACL-VLAN100-IN in
+!
+interface Vlan200
+  description Customer-A
+  ip address 10.200.0.1/24
+  fabric forwarding mode anycast-gateway
+  no shutdown
+  ip access-group ACL-VLAN200-IN in
+!
+!
+!
+! Leaf PBR — LB return path first, then permitted firewall bypass,
+! otherwise redirect to the firewall when a context is present.
+! TODO(lab): TCAM carving for PBR (ing-sup / ifacl region) is platform-dependent
+!
+! Customer: Customer-A/any
+ip access-list PBR-BYPASS-VLAN100
+  permit ip any 10.200.0.0/24
+  deny ip any any
+!
+route-map RM-LEAF-PBR-VLAN100 permit 20
+  match ip address PBR-BYPASS-VLAN100
+!
+route-map RM-LEAF-PBR-VLAN100 permit 30
+  set ip next-hop 100.66.0.4
+!
+interface Vlan100
+  ip policy route-map RM-LEAF-PBR-VLAN100
+!
+
+!
+! Management
+line console
+line vty
+!

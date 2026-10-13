@@ -1332,6 +1332,40 @@ def build_leaf_internet_permit_data(*, device_name: str, platform: str) -> dict:
     return data
 
 
+def build_leaf_pbr_data(*, device_name: str, platform: str) -> dict:
+    """The internet-permit leaf plus a shared firewall context with a leg in the segment's VRF.
+
+    seg-100 (VRF_A) permits ssh to seg-200 (bypassed: normal routing) and https to the Internet
+    (never bypassed), so its PBR is: bypass 10.200.0.0/24, everything else to the context's VIP
+    (the /29 leg 100.66.0.0/29 -> .4). seg-200 is in the default VRF and gets no PBR.
+    """
+    data = build_leaf_internet_permit_data(device_name=device_name, platform=platform)
+    net = ipaddress.ip_network("100.66.0.0/29")
+    legs = [
+        {
+            "name": _v("ethernet1/1.3000"),
+            "device": _node({"name": _v(member), "role": _v("firewall")}),
+            "ip_address": _node(
+                {"address": _v(f"{net[host]}/{net.prefixlen}"), "ip_namespace": _node({"name": _v("VRF_A")})}
+            ),
+        }
+        for member, host in (("dc1-fw-01", 5), ("dc1-fw-02", 6))
+    ]
+    context = {
+        "id": "ctx-shared",
+        "tenant": _node(None),
+        "served_deployments": _edges([]),
+        "interface_capabilities": _edges(legs),
+    }
+    firewall = {
+        "node": {
+            "capabilities": _edges([{"__typename": "ManagedFirewallHA", "contexts": _edges([context])}]),
+        }
+    }
+    data["DcimDevice"]["edges"][0]["node"]["deployment"]["node"]["devices"] = {"edges": [firewall]}
+    return data
+
+
 def build_firewall_internet_data(*, device_name: str, platform: str) -> dict:
     """A firewall whose internal zone (10.0.1.0/24) permits https to the Internet segment.
 
@@ -2616,6 +2650,17 @@ def main() -> int:
     )
     generated += g
     errors += e
+
+    # Leaf PBR (default-redirect to the context VIP, bypass for permits): NX-OS route-map, EOS policy-map type pbr
+    print("\nGenerating leaf PBR fixtures:")
+    for platform in ("cisco_nxos", "arista_eos"):
+        g, e = _write_data_fixture(
+            Leaf,
+            f"leaf_{platform}_pbr",
+            build_leaf_pbr_data(device_name="dc1-leaf-01", platform=platform),
+        )
+        generated += g
+        errors += e
 
     # Firewall scenarios: zone-based policy per vendor
     print("\nGenerating firewall fixtures:")

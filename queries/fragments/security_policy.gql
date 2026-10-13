@@ -1,5 +1,5 @@
-# A segment's security rules, as every consumer reads them: the leaf ACL,
-# PBR bypass and SGT contracts (transforms/helpers/acl.py, firewall.py,
+# A segment's security rules, as every consumer reads them: the leaf ACL
+# and PBR bypass (transforms/helpers/acl.py, firewall.py,
 # policy.py) and the firewall rule tables (transforms/helpers/firewall.py
 # place_policies_in_contexts / get_zone_policies). Every rule lives in its
 # source segment's one policy, so a segment's own rules are its
@@ -49,10 +49,10 @@ fragment SecurityPolicyRuleFields on SecurityPolicyRule {
   security_profile { node { name { value } } }
   source_segment { node { ...PolicyRuleSegmentFields } }
   destination_segment { node { ...PolicyRuleSegmentFields } }
-  source_prefixes { edges { node { id prefix { value } } } }
-  destination_prefixes { edges { node { id prefix { value } } } }
-  source_ip_addresses { edges { node { id address { value } } } }
-  destination_ip_addresses { edges { node { id address { value } } } }
+  source_prefixes { edges { node { id prefix { value } ip_namespace { node { name { value } } } } } }
+  destination_prefixes { edges { node { id prefix { value } ip_namespace { node { name { value } } } } } }
+  source_ip_addresses { edges { node { id address { value } ip_namespace { node { name { value } } } } } }
+  destination_ip_addresses { edges { node { id address { value } ip_namespace { node { name { value } } } } } }
 }
 
 fragment SegmentRulesFields on ManagedNetworkSegment {

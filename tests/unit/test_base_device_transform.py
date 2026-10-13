@@ -47,16 +47,14 @@ class TestCombineLeafPbrRules:
             {**customer, "backend_ips": [], "lb_nexthop": None},
         ]
 
-    @pytest.mark.parametrize("platform", ["arista_eos", "cisco_nxos"])
-    def test_template_attaches_one_ordered_policy_per_vlan(self, platform: str) -> None:
-        customer = {"vlan_id": 100, "bypass_prefixes": ["10.0.2.0/24"], "fw_nexthop": "10.0.0.2"}
-        backend = {"vlan_id": 100, "backend_ips": ["10.0.1.10"], "lb_nexthop": "10.0.0.3"}
+    @staticmethod
+    def _render_pbr(platform: str, rules: list[dict]) -> str:
+        """Render the leaf template of ``platform`` with only PBR rules."""
         template_dir = Path(__file__).parents[2] / "templates" / "configs"
         template = jinja2.Environment(loader=jinja2.FileSystemLoader(str(template_dir))).get_template(
             f"leafs/{platform}.j2"
         )
-
-        rendered = template.render(
+        return template.render(
             hostname="test-leaf",
             name="test-leaf",
             vlans=[],
@@ -68,15 +66,61 @@ class TestCombineLeafPbrRules:
             bgp=[],
             ospf=[],
             mlag=None,
-            sgt_rules=[],
-            leaf_pbr_rules=_combine_leaf_pbr_rules([customer], [backend]),
+            leaf_pbr_rules=rules,
         )
+
+    def test_nxos_template_attaches_one_ordered_policy_per_vlan(self) -> None:
+        """NX-OS: LB return, then bypass, then the firewall redirect, on one SVI, behind `feature pbr`."""
+        customer = {"vlan_id": 100, "bypass_prefixes": ["10.0.2.0/24"], "fw_nexthop": "10.0.0.2"}
+        backend = {"vlan_id": 100, "backend_ips": ["10.0.1.10"], "lb_nexthop": "10.0.0.3"}
+
+        rendered = self._render_pbr("cisco_nxos", _combine_leaf_pbr_rules([customer], [backend]))
 
         assert rendered.count("ip policy route-map RM-LEAF-PBR-VLAN100") == 1
         assert rendered.index("RM-LEAF-PBR-VLAN100 permit 10") < rendered.index("RM-LEAF-PBR-VLAN100 permit 20")
         assert rendered.index("RM-LEAF-PBR-VLAN100 permit 20") < rendered.index("RM-LEAF-PBR-VLAN100 permit 30")
         assert "set ip next-hop 10.0.0.3" in rendered
         assert "set ip next-hop 10.0.0.2" in rendered
+        assert rendered.index("feature pbr") < rendered.index("route-map RM-LEAF-PBR-VLAN100")
+        assert "TODO(lab): TCAM carving for PBR" in rendered
+
+    def test_nxos_template_without_pbr_has_no_pbr_feature_or_removed_stanzas(self) -> None:
+        """No PBR rule: no `feature pbr`; the unsupported tcam/CTS lines are gone either way."""
+        rendered = self._render_pbr("cisco_nxos", [])
+
+        assert "feature pbr" not in rendered
+        assert "tcam" not in rendered
+        assert "cts" not in rendered
+
+    def test_eos_template_uses_policy_map_type_pbr(self) -> None:
+        """EOS: class-map/policy-map type pbr in LB, bypass, firewall order, attached with service-policy."""
+        customer = {"vlan_id": 100, "bypass_prefixes": ["10.0.2.0/24"], "fw_nexthop": "10.0.0.2"}
+        backend = {"vlan_id": 100, "backend_ips": ["10.0.1.10"], "lb_nexthop": "10.0.0.3"}
+
+        rendered = self._render_pbr("arista_eos", _combine_leaf_pbr_rules([customer], [backend]))
+
+        assert rendered.count("service-policy type pbr input PM-LEAF-PBR-VLAN100") == 1
+        assert "route-map RM-LEAF-PBR" not in rendered
+        assert "ip policy route-map" not in rendered
+        assert "mac security" not in rendered
+        lb, bypass, firewall = (
+            rendered.index("class CM-LB-BACKEND-VLAN100"),
+            rendered.index("class CM-PBR-BYPASS-VLAN100"),
+            rendered.index("class CM-PBR-ALL-VLAN100"),
+        )
+        assert lb < bypass < firewall
+        assert "class class-default" not in rendered
+        assert "deny ip any any" not in rendered
+        assert "set nexthop 10.0.0.3" in rendered
+        assert "set nexthop 10.0.0.2" in rendered
+        assert "documented-not-lab-verified" in rendered
+
+    def test_eos_template_without_pbr_renders_no_policy_map(self) -> None:
+        """No PBR rule: EOS renders neither PBR nor the removed MACsec stanzas."""
+        rendered = self._render_pbr("arista_eos", [])
+
+        assert "policy-map type pbr" not in rendered
+        assert "mac security" not in rendered
 
     def test_unsupported_leaf_refuses_firewall_only_pbr(self) -> None:
         """An SR OS leaf must not silently omit a firewall redirect when no LB exists."""
@@ -84,7 +128,7 @@ class TestCombineLeafPbrRules:
         transform = _make_transform("leaf")
 
         with patch("transforms.common.get_customer_pbr_rules", return_value=[customer]):
-            with pytest.raises(ValueError, match="cannot render GPO or PBR policy"):
+            with pytest.raises(ValueError, match="cannot render PBR policy"):
                 transform._extra_config(_device_data(), "nokia_sros")
 
     @pytest.mark.parametrize("role", ["leaf", "tor", "access-leaf"])
@@ -99,21 +143,42 @@ class TestCombineLeafPbrRules:
 
         assert config["leaf_pbr_rules"] == [{**customer, "backend_ips": [], "lb_nexthop": None}]
 
-    @pytest.mark.parametrize(
-        ("platform", "message"),
-        [
-            ("sonic", "cannot render GPO policy"),
-            ("dell_sonic", "cannot render GPO policy"),
-            ("nokia_sros", "cannot render GPO or PBR policy"),
-        ],
-    )
-    def test_unsupported_leaf_refuses_tag_without_contracts(self, platform: str, message: str) -> None:
-        """A tag alone still requests GPO classification on the segment."""
-        transform = _make_transform("leaf")
+    @pytest.mark.parametrize("platform", ["cisco_nxos", "arista_eos", "sonic", "dell_sonic", "nokia_sros"])
+    def test_border_leaf_refuses_tenant_svi_with_pbr(self, platform: str) -> None:
+        """No border-leaf template renders PBR: a tenant SVI that needs it must not ship unprotected."""
+        customer = {"vlan_id": 100, "bypass_prefixes": [], "fw_nexthop": "10.0.0.2"}
+        transform = _make_transform("border-leaf")
 
-        with patch("transforms.common.get_vlans", return_value=[{"sgt": 20}]):
-            with pytest.raises(ValueError, match=message):
+        with patch("transforms.common.get_customer_pbr_rules", return_value=[customer]):
+            with pytest.raises(ValueError, match=r"border-leaf cannot render PBR policy for VLANs \[100\]"):
                 transform._extra_config(_device_data(), platform)
+
+    @pytest.mark.parametrize("platform", ["sonic", "dell_sonic", "nokia_sros"])
+    def test_border_leaf_refuses_tenant_svi_acl_it_cannot_render(self, platform: str) -> None:
+        """SONiC and SR OS border-leaf templates render no SVI ACL: refuse rather than drop it."""
+        transform = _make_transform("border-leaf")
+
+        with patch("transforms.common.get_acls", return_value=[{"vlan_id": 100, "name": "ACL-100"}]):
+            with pytest.raises(ValueError, match=r"border-leaf cannot render the SVI ACL for VLANs \[100\]"):
+                transform._extra_config(_device_data(), platform)
+
+    @pytest.mark.parametrize("platform", ["cisco_nxos", "arista_eos"])
+    def test_border_leaf_renders_tenant_svi_acl_on_acl_platforms(self, platform: str) -> None:
+        """NX-OS and EOS border-leaf templates render the SVI ACL, so the ACL alone is no reason to refuse."""
+        transform = _make_transform("border-leaf")
+
+        with patch("transforms.common.get_acls", return_value=[{"vlan_id": 100, "name": "ACL-100"}]):
+            config = transform._extra_config(_device_data(), platform)
+
+        assert config["acls"] == [{"vlan_id": 100, "name": "ACL-100"}]
+
+    @pytest.mark.parametrize("platform", ["cisco_nxos", "sonic", "nokia_sros"])
+    def test_border_leaf_without_tenant_policy_renders(self, platform: str) -> None:
+        """A border leaf with no ACL/PBR need (transit legs only) is not refused."""
+        config = _make_transform("border-leaf")._extra_config(_device_data(), platform)
+
+        assert config["acls"] == []
+        assert config["leaf_pbr_rules"] == []
 
     @pytest.mark.parametrize("platform", ["sonic", "dell_sonic"])
     def test_sonic_template_renders_ordered_pbr_table_per_vlan(self, platform: str) -> None:
