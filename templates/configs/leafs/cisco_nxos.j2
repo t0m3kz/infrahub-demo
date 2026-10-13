@@ -110,15 +110,17 @@ route-map RM-LEAF-PBR-VLAN{{ rule.vlan_id }} permit 10
 !
 {%- endif %}
 {%- if rule.fw_nexthop %}
+{%- if rule.bypass_prefixes %}
 ip access-list PBR-BYPASS-VLAN{{ rule.vlan_id }}
 {%- for prefix in rule.bypass_prefixes %}
   permit ip any {{ prefix }}
 {%- endfor %}
-  deny ip any any
 !
-route-map RM-LEAF-PBR-VLAN{{ rule.vlan_id }} permit 20
+! documented: deny sequence = forward by normal route lookup (NX-OS PBR); documented-not-lab-verified for VXLAN-routed traffic
+route-map RM-LEAF-PBR-VLAN{{ rule.vlan_id }} deny 20
   match ip address PBR-BYPASS-VLAN{{ rule.vlan_id }}
 !
+{%- endif %}
 route-map RM-LEAF-PBR-VLAN{{ rule.vlan_id }} permit 30
   set ip next-hop {{ rule.fw_nexthop }}
 !
