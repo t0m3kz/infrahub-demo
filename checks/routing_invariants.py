@@ -1,0 +1,224 @@
+"""Validate the routing invariants that hold between topologies.
+
+PROD and NON-PROD never meet, and the INTERNET VRF carries both environments'
+SNAT /32s, so it must stay transit-only. None of these is visible in a
+rendered config; each is a property of data that spans topologies.
+
+1. Route-target joins. A RouteLeakExchange (the only route-target import
+   between namespaces) may join namespaces of one namespace_type only, and an
+   explicit route_target must not name the L3 VNI of a namespace of another
+   type. Two namespaces of different types sharing an l3_vni would also share
+   a route-target, an implicit import.
+2. The INTERNET VRF has no host-facing interface: no segment gateway and no
+   address on a host, a customer port or any device other than a transit
+   edge, a provider or a firewall.
+3. A cloud Transit Gateway route table is environment-pure: every attachment
+   associated with or propagating into it resolves to one namespace type. A
+   VPC attachment resolves through its account's environment; a hybrid
+   attachment through the namespaces its VIF circuits terminate in (falling
+   back to its owner account's environment while no circuit is addressed).
+4. Every circuit on a cloud virtual interface resolves to one namespace type,
+   and to its private VIF's virtual network when it has one.
+
+A missing evpn_rt_as on an eBGP-overlay fabric is checked by CheckEvpnFabric.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from infrahub_sdk.checks import InfrahubCheck
+
+from utils.data_cleaning import clean_data
+from utils.exchange_transit import INTERNET_TYPE, namespace_type_for_environment
+
+# Devices that may legitimately hold an address in the INTERNET VRF: the transit
+# edge, the ISP side, and firewall legs.
+_INTERNET_DEVICE_ROLES = frozenset(
+    {"edge", "core", "border-leaf", "provider", "firewall", "firewall-active", "firewall-passive"}
+)
+
+_INTERNET_INTERFACE_KEYS = ("InternetPhysicalInterfaces", "InternetVirtualInterfaces", "InternetLagInterfaces")
+
+
+def _type_for_environment(environment: str | None) -> str | None:
+    return namespace_type_for_environment(environment) if environment else None
+
+
+class CheckRoutingInvariants(InfrahubCheck):
+    """Namespace-type invariants across route-target joins, the INTERNET VRF and cloud routing domains."""
+
+    query = "routing_invariants"
+
+    def validate(self, data: Any) -> None:
+        cleaned = clean_data(data)
+        namespaces = cleaned.get("IpamNamespace") or []
+        self._validate_route_target_joins(namespaces, cleaned.get("TopologyRouteLeakExchange") or [])
+        self._validate_internet_vrf(
+            segments=cleaned.get("ManagedNetworkSegment") or [],
+            interfaces=[iface for key in _INTERNET_INTERFACE_KEYS for iface in cleaned.get(key) or []],
+        )
+        vif_types = self._validate_vif_circuits(cleaned.get("CloudVirtualInterface") or [])
+        self._validate_tgw_route_tables(cleaned.get("CloudTransitGatewayAttachment") or [], vif_types)
+
+    # ------------------------------------------------------------------
+    # 1. Route-target joins
+    # ------------------------------------------------------------------
+
+    def _validate_route_target_joins(self, namespaces: list[dict[str, Any]], leaks: list[dict[str, Any]]) -> None:
+        by_vni: dict[int, list[dict[str, Any]]] = {}
+        for namespace in namespaces:
+            if isinstance(namespace.get("l3_vni"), int):
+                by_vni.setdefault(namespace["l3_vni"], []).append(namespace)
+        for vni, sharing in sorted(by_vni.items()):
+            types = {ns.get("namespace_type") for ns in sharing}
+            if len(types) > 1:
+                self.log_error(
+                    message=(
+                        f"L3 VNI {vni} is used by namespaces of different types "
+                        f"({sorted(ns.get('name', '') + '=' + str(ns.get('namespace_type')) for ns in sharing)}): "
+                        "they share a route-target and so import each other's routes"
+                    )
+                )
+
+        for leak in leaks:
+            name = leak.get("name", "<unnamed-route-leak>")
+            ns_a, ns_z = leak.get("namespace_a") or {}, leak.get("namespace_z") or {}
+            type_a, type_z = ns_a.get("namespace_type"), ns_z.get("namespace_type")
+            if not type_a or not type_z or type_a != type_z:
+                self.log_error(
+                    message=(
+                        f"Route leak '{name}' joins '{ns_a.get('name')}' ({type_a}) and '{ns_z.get('name')}' "
+                        f"({type_z}): route-target imports may only join namespaces of the same type"
+                    )
+                )
+                continue
+            vni = _route_target_vni(leak.get("route_target"))
+            for target in by_vni.get(vni, []) if vni is not None else []:
+                if target.get("namespace_type") != type_a:
+                    self.log_error(
+                        message=(
+                            f"Route leak '{name}' route_target {leak['route_target']} names the L3 VNI of "
+                            f"'{target.get('name')}' ({target.get('namespace_type')}), not a {type_a} namespace"
+                        )
+                    )
+
+    # ------------------------------------------------------------------
+    # 2. INTERNET VRF is transit-only
+    # ------------------------------------------------------------------
+
+    def _validate_internet_vrf(self, segments: list[dict[str, Any]], interfaces: list[dict[str, Any]]) -> None:
+        for segment in segments:
+            namespace = ((segment.get("gateway") or {}).get("ip_prefix") or {}).get("ip_namespace") or {}
+            if namespace.get("namespace_type") == INTERNET_TYPE:
+                self.log_error(
+                    message=(
+                        f"{segment.get('typename')} '{segment.get('name')}' has its gateway in the INTERNET "
+                        f"namespace '{namespace.get('name')}': segments are host-facing, the INTERNET VRF is transit-only"
+                    )
+                )
+        for iface in interfaces:
+            namespace = (iface.get("ip_address") or {}).get("ip_namespace") or {}
+            if namespace.get("namespace_type") != INTERNET_TYPE:
+                continue
+            device = iface.get("device") or {}
+            device_role = device.get("role")
+            if device_role not in _INTERNET_DEVICE_ROLES:
+                self.log_error(
+                    message=(
+                        f"Interface '{device.get('name')}:{iface.get('name')}' (device role {device_role}, "
+                        f"interface role {iface.get('role')}) holds an address in the INTERNET namespace "
+                        f"'{namespace.get('name')}': only transit, provider and firewall-leg interfaces may"
+                    )
+                )
+
+    # ------------------------------------------------------------------
+    # 3. Cloud virtual interfaces
+    # ------------------------------------------------------------------
+
+    def _validate_vif_circuits(self, vifs: list[dict[str, Any]]) -> dict[str, str]:
+        """Check each VIF's circuits; return VIF id -> its namespace type (circuit-resolved)."""
+        resolved: dict[str, str] = {}
+        for vif in vifs:
+            name = vif.get("name", "<unnamed-vif>")
+            expected = _type_for_environment(_account_environment(vif.get("virtual_network")))
+            per_circuit: dict[str, set[str]] = {}
+            for circuit in vif.get("virtual_circuits") or []:
+                types = {
+                    ((iface.get("ip_address") or {}).get("ip_namespace") or {}).get("namespace_type")
+                    for iface in circuit.get("interface_capabilities") or []
+                }
+                per_circuit[circuit.get("name", "<unnamed-circuit>")] = {t for t in types if t}
+            all_types = set().union(*per_circuit.values()) if per_circuit else set()
+            if len(all_types) > 1:
+                self.log_error(
+                    message=(
+                        f"VIF '{name}' carries circuits of different namespace types "
+                        f"{ {c: sorted(t) for c, t in sorted(per_circuit.items())} }: never mix environments on one VIF"
+                    )
+                )
+            elif expected and all_types and all_types != {expected}:
+                self.log_error(
+                    message=(
+                        f"VIF '{name}' belongs to a {expected} virtual network but its circuits terminate in "
+                        f"{sorted(all_types)} namespaces"
+                    )
+                )
+            if len(all_types) == 1 and vif.get("id"):
+                resolved[vif["id"]] = next(iter(all_types))
+        return resolved
+
+    # ------------------------------------------------------------------
+    # 4. TGW route-table environment purity
+    # ------------------------------------------------------------------
+
+    def _validate_tgw_route_tables(self, attachments: list[dict[str, Any]], vif_types: dict[str, str]) -> None:
+        members: dict[str, dict[str, Any]] = {}
+        for att in attachments:
+            att_name = att.get("name", "<unnamed-attachment>")
+            att_type = self._attachment_type(att, vif_types)
+            tables = [att.get("associated_route_table"), *(att.get("propagates_to_route_tables") or [])]
+            for table in tables:
+                if not isinstance(table, dict) or not table.get("id"):
+                    continue
+                entry = members.setdefault(table["id"], {"name": table.get("name"), "types": {}})
+                if att_type is None:
+                    self.log_info(
+                        message=(
+                            f"WARNING: attachment '{att_name}' in route table '{table.get('name')}' resolves to no "
+                            "namespace type (account has no environment): environment purity cannot be verified"
+                        )
+                    )
+                    continue
+                entry["types"].setdefault(att_type, set()).add(att_name)
+        for entry in members.values():
+            if len(entry["types"]) > 1:
+                self.log_error(
+                    message=(
+                        f"TGW route table '{entry['name']}' mixes environments: "
+                        f"{ {t: sorted(n) for t, n in sorted(entry['types'].items())} }"
+                    )
+                )
+
+    @staticmethod
+    def _attachment_type(att: dict[str, Any], vif_types: dict[str, str]) -> str | None:
+        """vpc -> its account's environment; hybrid -> its VIF's circuits, else the owner account's environment."""
+        if att.get("attachment_type") == "vpc":
+            environment = _account_environment(att.get("virtual_network")) or (att.get("owner_account") or {}).get(
+                "environment"
+            )
+            return _type_for_environment(environment)
+        endpoint = att.get("hybrid_endpoint") or {}
+        if endpoint.get("id") in vif_types:
+            return vif_types[endpoint["id"]]
+        return _type_for_environment((att.get("owner_account") or {}).get("environment"))
+
+
+def _account_environment(virtual_network: dict[str, Any] | None) -> str | None:
+    return (((virtual_network or {}).get("account")) or {}).get("environment")
+
+
+def _route_target_vni(route_target: str | None) -> int | None:
+    """The assigned-number half of an `asn:vni` route-target, or None when it does not parse."""
+    _, _, assigned = (route_target or "").rpartition(":")
+    return int(assigned) if assigned.isdigit() else None

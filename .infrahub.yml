@@ -299,6 +299,11 @@ check_definitions:
   - name: validate_segment_security
     class_name: CheckSegmentSecurity
     file_path: checks/segment_security.py
+  # Targetless: the invariants span topologies (namespaces, the INTERNET VRF,
+  # cloud Transit Gateways and virtual interfaces), not one device.
+  - name: validate_routing_invariants
+    class_name: CheckRoutingInvariants
+    file_path: checks/routing_invariants.py
   # Targetless like the two above: the invariants are properties of a whole
   # fabric (route-target agreement, VNI uniqueness), so there is no single
   # device to target — every device in the fabric looks correct in isolation.
@@ -627,6 +632,8 @@ queries:
     file_path: queries/validation/segment_placement.gql
   - name: segment_security
     file_path: queries/validation/segment_security.gql
+  - name: routing_invariants
+    file_path: queries/validation/routing_invariants.gql
   - name: evpn_fabric
     file_path: queries/validation/evpn_fabric.gql
   - name: app_dependency_validation
