@@ -58,9 +58,7 @@ query {
     }
   }
   SecurityPolicyRule { edges { node { name { value } protocol { value } port_start { value } port_end { value } } } }
-  CloudSecurityGroupRule {
-    edges { node { name { value } protocol { value } port_start { value } port_end { value } } }
-  }
+  CloudSecurityGroup { edges { node { name { value } } } }
   ProxyPolicyRule { edges { node { name { value } destination { value } ports { value } } } }
 }
 """
@@ -276,8 +274,9 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
         loaded after its application still ends up enforced. A grant publishes
         its target component (publish-{fqdn}); a target_fqdn dependency gets one
         proxy rule named after itself carrying its ports; every other dependency
-        gets one firewall or security-group rule per port it opens, named
-        {dependency}-{protocol}-{port}.
+        gets one SecurityPolicyRule per port it opens (cloud endpoints included),
+        named {dependency}-{protocol}-{port}. No generated sg-{app}
+        CloudSecurityGroup exists any more.
         """
         logging.info("=== %s - Step 7: Every Dependency Has Its Rule ===", SCENARIO_NAME)
 
@@ -291,13 +290,19 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
 
         port_rules = {
             value(rule, "name"): (value(rule, "protocol"), value(rule, "port_start"), value(rule, "port_end"))
-            for kind in ("SecurityPolicyRule", "CloudSecurityGroupRule")
-            for rule in edges(kind)
+            for rule in edges("SecurityPolicyRule")
         }
         proxy_rules = {
             value(rule, "name"): (value(rule, "destination"), value(rule, "ports") or [])
             for rule in edges("ProxyPolicyRule")
         }
+
+        generated_groups = [
+            value(group, "name") for group in edges("CloudSecurityGroup") if value(group, "name").startswith("sg-")
+        ]
+        assert not generated_groups, (
+            f"Cloud flows are SecurityPolicyRules; no sg-{{app}} group may remain: {generated_groups}"
+        )
 
         dependencies = edges("AppDependency")
         assert dependencies, "No AppDependency on the branch"

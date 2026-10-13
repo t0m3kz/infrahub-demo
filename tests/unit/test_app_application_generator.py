@@ -2,7 +2,6 @@
 (generators/topology/application_security.py).
 
 Domain logic has its own test files mirroring the mixins it's split across:
-  - test_cloud_security_mixin.py   — CloudSecurityRuleMixin
   - test_ztna_mixin.py              — ZtnaMixin
   - test_segment_firewall_mixin.py  — SegmentFirewallMixin
   - test_rules_planner.py           — RulesPlanner (generators/helpers/rules.py)
@@ -11,7 +10,7 @@ This file covers only:
   - generate()'s trigger-shape dispatch (AppDependency/AppComponent fan out
     to add_app_application and write nothing)
   - _reconcile_application_rules()'s per-edge dispatch: target_fqdn -> proxy,
-    cloud -> one cloud rule per port, on-prem -> one segment rule per port,
+    every segment edge (on-prem or cloud endpoint) -> one segment rule per port,
     and skipping of malformed/portless/targetless dependencies
   - _reconcile_application_rules()'s unconditional per-component
     isolation-mode derivation (SegmentFirewallMixin._ensure_segment_isolation_mode)
@@ -57,7 +56,7 @@ def _segment(seg_id: str, typename: str = "ManagedVxlanSegment") -> dict[str, An
     if typename != "CloudNetworkSegment":
         seg["gateway"] = {"ip_prefix": {"prefix": "10.60.0.0/24"}}
     if typename == "CloudNetworkSegment":
-        seg["virtual_network"] = {"id": "vnet-1", "account": {"id": "acct-1"}}
+        seg["virtual_network"] = {"id": "vnet-1", "name": "vnet-prod", "account": {"id": "acct-1"}}
         seg["cidr_block"] = "10.50.0.0/24"
     return seg
 
@@ -454,23 +453,25 @@ class TestReconcileApplicationRulesSegmentIsolationMode:
 
 
 # ===========================================================================
-# TestReconcileApplicationRulesCloudDispatch
+# TestReconcileApplicationRulesCloudEndpoints
 # ===========================================================================
 
 
-class TestReconcileApplicationRulesCloudDispatch:
-    """A dependency where either segment is a CloudNetworkSegment used to
-    fall straight into the on-prem SecurityPolicy/SecurityPolicyRule path
-    regardless — RulesPlanner.is_cloud_dependency() already existed but
-    nothing in _reconcile_application_rules ever called it."""
+class TestReconcileApplicationRulesCloudEndpoints:
+    """A dependency with a CloudNetworkSegment on either side goes through the
+    same SecurityPolicyRule path as an on-prem one: the cloud flow is a rule,
+    never a CloudSecurityGroupRule."""
 
     def _make_gen_ready(self) -> Any:
         gen = _make_gen()
         gen._reconcile_private_access_components = AsyncMock(return_value=(0, 0))
-        gen._create_cloud_rule = AsyncMock(return_value=True)
-        gen._segment_policy = AsyncMock()
+        policy = MagicMock()
+        policy.id = "policy-src"
+        gen._segment_policy = AsyncMock(return_value=policy)
         gen._ensure_segment_isolation_mode = AsyncMock()
         gen._find_rule_by_name = AsyncMock(return_value=None)
+        gen._create_or_update_policy_rule = AsyncMock(return_value=(MagicMock(), 100))
+        gen._get_profile = AsyncMock(return_value=None)
         return gen
 
     @staticmethod
@@ -478,15 +479,34 @@ class TestReconcileApplicationRulesCloudDispatch:
         backend = _backend(ports=["tcp/8443"], typename=dst_typename)
         return _app(_frontend(_dep(target=backend), typename=src_typename))
 
-    def test_cloud_destination_segment_dispatches_to_create_cloud_rule(self) -> None:
+    @pytest.mark.parametrize(
+        ("src_typename", "dst_typename"),
+        [
+            ("ManagedVxlanSegment", "CloudNetworkSegment"),
+            ("CloudNetworkSegment", "ManagedVxlanSegment"),
+            ("CloudNetworkSegment", "CloudNetworkSegment"),
+            ("ManagedVxlanSegment", "ManagedVxlanSegment"),
+        ],
+    )
+    def test_every_endpoint_kind_creates_a_security_policy_rule(self, src_typename: str, dst_typename: str) -> None:
+        """Cloud or on-prem on either side: one rule through the one path, no extra writes."""
         gen = self._make_gen_ready()
 
-        asyncio.run(gen._reconcile_application_rules(self._single_port_app(dst_typename="CloudNetworkSegment")))
+        asyncio.run(
+            gen._reconcile_application_rules(
+                self._single_port_app(dst_typename=dst_typename, src_typename=src_typename)
+            )
+        )
 
-        gen._create_cloud_rule.assert_awaited_once()
-        gen._segment_policy.assert_not_awaited()
+        gen._segment_policy.assert_awaited_once()
+        gen._create_or_update_policy_rule.assert_awaited_once()
+        data = gen._create_or_update_policy_rule.await_args.kwargs["rule_data"]
+        assert data["source_segment"] == {"id": "seg-src"}
+        assert data["destination_segment"] == {"id": "seg-dst"}
+        gen.client.create.assert_not_awaited()
 
-    def test_cloud_source_segment_also_dispatches_to_create_cloud_rule(self) -> None:
+    def test_cloud_source_segment_policy_is_qualified_by_its_virtual_network(self) -> None:
+        """The egress policy of a cloud source segment is named with its virtual network."""
         gen = self._make_gen_ready()
 
         asyncio.run(
@@ -495,16 +515,26 @@ class TestReconcileApplicationRulesCloudDispatch:
             )
         )
 
-        gen._create_cloud_rule.assert_awaited_once()
-        gen._segment_policy.assert_not_awaited()
+        assert gen._segment_policy.await_args.args[1] == "seg-seg-src-name-vnet-prod-egress"
 
-    def test_both_on_prem_segments_use_the_on_prem_path_not_cloud(self) -> None:
+    def test_on_prem_source_segment_policy_name_is_unchanged(self) -> None:
+        """An on-prem source segment (no virtual network) keeps seg-<name>-egress."""
         gen = self._make_gen_ready()
 
-        asyncio.run(gen._reconcile_application_rules(self._single_port_app(dst_typename="ManagedVxlanSegment")))
+        asyncio.run(gen._reconcile_application_rules(self._single_port_app(dst_typename="CloudNetworkSegment")))
 
-        gen._create_cloud_rule.assert_not_awaited()
-        gen._segment_policy.assert_awaited_once()
+        assert gen._segment_policy.await_args.args[1] == "seg-seg-src-name-egress"
+
+    def test_cloud_to_other_environment_is_refused_not_ruled(self) -> None:
+        """The prod/non-prod guard still applies to a cloud endpoint: no rule is written."""
+        gen = self._make_gen_ready()
+        app = self._single_port_app(dst_typename="CloudNetworkSegment")
+        app["children"][0]["depends_on"][0]["target"]["network_segment"]["environment"] = "n"
+
+        asyncio.run(gen._reconcile_application_rules(app))
+
+        gen._create_or_update_policy_rule.assert_not_awaited()
+        gen._segment_policy.assert_not_awaited()
 
 
 # ===========================================================================
@@ -531,14 +561,6 @@ class TestReconcileApplicationRulesPerPort:
         gen._find_rule_by_name = AsyncMock(return_value=None)
         gen._create_or_update_policy_rule = AsyncMock(return_value=(MagicMock(), 100))
         gen._get_profile = AsyncMock(return_value=None)
-        # CloudSecurityRuleMixin boundaries
-        sg = MagicMock()
-        sg.id = "sg-1"
-        gen._get_or_create_sg = AsyncMock(return_value=sg)
-        gen.client.filters = AsyncMock(return_value=[])
-        rule = MagicMock()
-        rule.save = AsyncMock()
-        gen.client.create = AsyncMock(return_value=rule)
         return gen
 
     @staticmethod
@@ -589,25 +611,23 @@ class TestReconcileApplicationRulesPerPort:
 
         assert [name for name, _ in self._segment_rule_calls(gen)] == ["frontend-to-backend-tcp-8443"]
 
-    def test_cloud_dependency_creates_one_cloud_rule_per_port(self) -> None:
-        """The cloud path writes one CloudSecurityGroupRule per port, never a segment rule."""
+    def test_cloud_dependency_creates_one_segment_rule_per_port(self) -> None:
+        """A cloud target gets a SecurityPolicyRule per port, and no cloud security group object."""
         gen = self._make_gen_ready()
         app = _app(_frontend(_dep(target=_backend(typename="CloudNetworkSegment"))))
 
         asyncio.run(gen._reconcile_application_rules(app))
 
-        created = [call.kwargs["data"] for call in gen.client.create.await_args_list]
-        assert [data["name"] for data in created] == [
+        calls = self._segment_rule_calls(gen)
+        assert [name for name, _ in calls] == [
             "frontend-to-backend-tcp-8443",
             "frontend-to-backend-udp-30000-30010",
         ]
-        assert [(d["protocol"], d["port_start"], d.get("port_end")) for d in created] == [
+        assert [(d["protocol"], d["port_start"], d.get("port_end")) for _, d in calls] == [
             ("tcp", 8443, None),
             ("udp", 30000, 30010),
         ]
-        assert all(data["direction"] == "ingress" for data in created)
-        gen._create_or_update_policy_rule.assert_not_awaited()
-        gen._segment_policy.assert_not_awaited()
+        gen.client.create.assert_not_awaited()
 
     def test_target_fqdn_dependency_goes_to_the_proxy_path(self) -> None:
         """An external fqdn is one proxy rule; no firewall or cloud rule is attempted."""

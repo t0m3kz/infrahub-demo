@@ -25,13 +25,6 @@ class RulesPlanner:
         return PortProfileHelper.resolve_dependency_ports(dep, target)
 
     @staticmethod
-    def is_cloud_dependency(src_seg: dict[str, Any], dst_seg: dict[str, Any]) -> bool:
-        """Return True when either side of dependency uses a cloud segment."""
-        return (
-            src_seg.get("typename", "") == "CloudNetworkSegment" or dst_seg.get("typename", "") == "CloudNetworkSegment"
-        )
-
-    @staticmethod
     def rule_name(
         app_name: str,
         src: dict[str, Any],
@@ -72,8 +65,16 @@ class RulesPlanner:
 
     @staticmethod
     def segment_policy_name(segment: dict[str, Any]) -> str:
-        """Deterministic egress policy name for a source segment."""
+        """Deterministic egress policy name for a source segment.
+
+        A segment with a parent virtual network (cloud) is qualified by it: the
+        computed segment name is only unique within one network, so two
+        networks may hold the same one. On-prem names carry no qualifier.
+        """
         seg_name = segment.get("name") or segment.get("id") or "unknown-segment"
+        vnet_name = (segment.get("virtual_network") or {}).get("name")
+        if vnet_name:
+            return f"seg-{seg_name}-{vnet_name}-egress"
         return f"seg-{seg_name}-egress"
 
     @staticmethod

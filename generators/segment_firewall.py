@@ -1,4 +1,4 @@
-"""Mixin for on-prem segment-to-segment firewall rules (SecurityPolicy/SecurityPolicyRule)."""
+"""Mixin for segment-to-segment firewall rules (SecurityPolicy/SecurityPolicyRule), any segment kind."""
 
 from __future__ import annotations
 
@@ -53,10 +53,10 @@ def _next_free_rule_index(used: set[int]) -> int:
 
 
 class SegmentFirewallMixin(GetOrCreateByNameMixin):
-    """On-prem segment-to-segment dependency rules — the SecurityPolicy/
+    """Segment-to-segment dependency rules — the SecurityPolicy/
     SecurityPolicyRule path dispatched from _reconcile_application_rules for
-    every AppDependency edge that isn't cloud-side (CloudSecurityRuleMixin)
-    or external (target_fqdn, ZtnaMixin's egress path). Also owns
+    every AppDependency edge to a segment (on-prem or cloud endpoint), as
+    opposed to an external one (target_fqdn, ZtnaMixin's egress path). Also owns
     threat-profile lookups. The return leg of a rule is not a rule of its
     own: the destination segment's leaf ACL builds it from inbound_rules
     (transforms/helpers/acl.py).
@@ -83,7 +83,7 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
         rule_indexes: dict[str, set[int]],
         port: PortSpec,
     ) -> tuple[bool, bool]:
-        """On-prem segment-to-segment dependency rule for one edge and port.
+        """Segment-to-segment dependency rule for one edge and port.
 
         ``segment_policies`` (source segment id -> policy) and ``rule_indexes``
         (policy id -> used rule indexes) are the caller's per-run caches.

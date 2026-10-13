@@ -6,7 +6,6 @@ from typing import Any
 
 from utils.data_cleaning import clean_data
 
-from ..cloud_security import CloudSecurityRuleMixin
 from ..common import CommonGenerator
 from ..helpers.rules import RulesPlanner
 from ..named_objects import GetOrCreateByNameMixin
@@ -15,7 +14,6 @@ from ..ztna import ZtnaMixin
 
 
 class AppApplicationGenerator(
-    CloudSecurityRuleMixin,
     ZtnaMixin,
     SegmentFirewallMixin,
     GetOrCreateByNameMixin,
@@ -24,11 +22,13 @@ class AppApplicationGenerator(
     """Generate segment-scoped security rules from app dependencies.
 
     Orchestration only — domain logic lives in the mixins above, one per
-    dependency-edge shape: CloudSecurityRuleMixin (either side is a
-    CloudNetworkSegment), ZtnaMixin (target_fqdn egress and private-access
-    publishing for access-profile grants),
-    SegmentFirewallMixin (on-prem segment-to-segment SecurityPolicyRule, plus
-    zone/tag handling).
+    dependency-edge shape: ZtnaMixin (target_fqdn egress and private-access
+    publishing for access-profile grants), SegmentFirewallMixin (every
+    segment-to-segment SecurityPolicyRule, on-prem or cloud endpoint, plus
+    zone/tag handling). A cloud flow is a SecurityPolicyRule like any other;
+    the former sg-{app} CloudSecurityGroup objects are no longer generated and
+    are deleted by this application's tracking group on its next run (they
+    were created tracked, and the run saves its rules as other members).
     """
 
     async def run(self, identifier: str, data: dict[str, Any] | None = None) -> None:
@@ -231,27 +231,6 @@ class AppApplicationGenerator(
 
             src_seg = src_comp.get("network_segment") or {}
             dst_seg = dst_comp.get("network_segment") or {}
-
-            if planner.is_cloud_dependency(src_seg, dst_seg):
-                # At least one side is a CloudNetworkSegment: route to the
-                # cloud-security-group path instead of the on-prem
-                # SecurityPolicy/SecurityPolicyRule one below. Previously
-                # nothing dispatched here at all, so an on-prem<->cloud
-                # dependency silently got an on-prem-shaped rule referencing
-                # a segment id that rule couldn't actually enforce against.
-                for port in ports:
-                    if await self._create_cloud_rule(
-                        app_name=app_name,
-                        src_comp=src_comp,
-                        dst_comp=dst_comp,
-                        dep=dep,
-                        rule_name=planner.rule_name(app_name, src_comp, dst_comp, dep, port),
-                        port=port,
-                    ):
-                        rules_created += 1
-                    else:
-                        rules_skipped += 1
-                continue
 
             for port in ports:
                 try:
