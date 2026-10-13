@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, Callable
 from utils.ports import PortSpec
 
 from .helpers.rules import RulesPlanner
+from .helpers.security_zone import ensure_security_zone
 from .named_objects import GetOrCreateByNameMixin
 from .protocols import SecurityPolicy, SecurityPolicyRule, SecuritySecurityProfile
 
@@ -123,27 +124,6 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
                 dst_zone or "<missing>",
             )
 
-        existing_rule = await self._find_rule_by_name(SecurityPolicyRule, policy_id, rule_name)
-        if existing_rule is not None:
-            existing_index = existing_rule.index.value
-            if existing_index is not None and int(existing_index) < RULE_INDEX_START:
-                # A hand-written rule of the segment (index < 100) with this
-                # name: never adopt it into this application's group, whose
-                # cleanup would then delete it.
-                self.logger.error(
-                    "  Rule '%s' is a hand-written rule (index %s) of policy %s — rename one of them",
-                    rule_name,
-                    existing_index,
-                    policy_id,
-                )
-                return False, True
-            self.logger.info("  Rule '%s' already exists - registering with tracker", rule_name)
-            if _is_expired(existing_rule.expires_at.value) and not existing_rule.disabled.value:
-                existing_rule.disabled.value = True
-                self.logger.info("  Rule '%s' expired — disabling it", rule_name)
-            await existing_rule.save(allow_upsert=True)
-            return False, True
-
         rule_data = planner.build_rule_payload(
             policy_id=policy_id,
             rule_name=rule_name,
@@ -159,31 +139,99 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
         )
 
         profile_name = planner.pick_profile_name(app_security_profile, cross_zone)
-        if profile_name:
-            profile = await self._get_profile(profile_name)
-            if profile:
-                rule_data["security_profile"] = {"id": profile.id}
+        profile = await self._get_profile(profile_name) if profile_name else None
+        if profile:
+            rule_data["security_profile"] = {"id": profile.id}
 
-        try:
-            _rule, assigned_index = await self._create_or_update_policy_rule(
-                policy_id=policy_id,
-                rule_name=rule_name,
-                rule_data=rule_data,
-                rule_indexes=rule_indexes,
+        existing_rule = await self._find_rule_by_name(SecurityPolicyRule, policy_id, rule_name)
+        if existing_rule is not None:
+            existing_index = existing_rule.index.value
+            if existing_index is not None and int(existing_index) < RULE_INDEX_START:
+                # A hand-written rule of the segment (index < 100) with this
+                # name: never adopt it into this application's group, whose
+                # cleanup would then delete it.
+                self.logger.error(
+                    "  Rule '%s' is a hand-written rule (index %s) of policy %s — rename one of them",
+                    rule_name,
+                    existing_index,
+                    policy_id,
+                )
+                return False, True
+            self.logger.info("  Rule '%s' already exists - registering with tracker", rule_name)
+            # A profile that is named but not in the database is left as it is.
+            changed = self._reconcile_rule_payload(
+                existing_rule, rule_data, keep_profile=bool(profile_name) and profile is None
             )
-            self.logger.info(
-                "  Created rule [%d] '%s' (%s -> %s, %s/%s)",
-                assigned_index,
-                rule_name,
-                src_seg.get("name", src_seg_id),
-                dst_seg.get("name", dst_seg_id),
-                protocol,
-                port_start or "any",
+            if changed:
+                self.logger.info("  Rule '%s' updated: %s", rule_name, ", ".join(changed))
+            if _is_expired(existing_rule.expires_at.value) and not existing_rule.disabled.value:
+                existing_rule.disabled.value = True
+                self.logger.info("  Rule '%s' expired — disabling it", rule_name)
+            # Saved every run to keep the rule in this application's group; the
+            # fields above only change when they differ, so a second pass
+            # leaves the data untouched.
+            await existing_rule.save(allow_upsert=True)
+            return False, True
+
+        # A failure propagates: the caller counts it and fails the run after the loop.
+        _rule, assigned_index = await self._create_or_update_policy_rule(
+            policy_id=policy_id,
+            rule_name=rule_name,
+            rule_data=rule_data,
+            rule_indexes=rule_indexes,
+        )
+        self.logger.info(
+            "  Created rule [%d] '%s' (%s -> %s, %s/%s)",
+            assigned_index,
+            rule_name,
+            src_seg.get("name", src_seg_id),
+            dst_seg.get("name", dst_seg_id),
+            protocol,
+            port_start or "any",
+        )
+        return True, False
+
+    @staticmethod
+    def _reconcile_rule_payload(rule: Any, rule_data: dict[str, Any], *, keep_profile: bool) -> list[str]:
+        """Set the zone-dependent fields (log, apply_on_switch, security_profile) of an
+        existing rule to what the planner now derives; return the names that changed.
+
+        Compares before assigning, so a rule already in the desired state is not modified.
+        """
+        changed: list[str] = []
+        for field in ("log", "apply_on_switch"):
+            attribute = getattr(rule, field)
+            if attribute.value != rule_data[field]:
+                attribute.value = rule_data[field]
+                changed.append(field)
+        if not keep_profile:
+            wanted = (rule_data.get("security_profile") or {}).get("id")
+            current = rule.security_profile.id if rule.security_profile.initialized else None
+            if current != wanted:
+                rule.security_profile = {"id": wanted} if wanted else None
+                changed.append("security_profile")
+        return changed
+
+    async def _ensure_segment_zones(self, segments: list[dict[str, Any]]) -> None:
+        """Zone each segment from its own environment and record it in the dict.
+
+        The in-memory ``security_zone`` is updated here, before any rule is
+        planned: otherwise the first run reads a stale missing zone and treats
+        every flow as cross-zone. External segments are skipped (their zone is
+        data); a segment without an id is skipped (a component with no segment).
+        """
+        for segment in segments:
+            if not segment.get("id"):
+                continue
+            zone_name = await ensure_security_zone(
+                self.client,
+                kind=segment.get("typename"),
+                segment_id=segment["id"],
+                environment=segment.get("environment"),
+                current_zone=(segment.get("security_zone") or {}).get("name"),
             )
-            return True, False
-        except Exception as exc:
-            self.logger.error("  Failed to create rule '%s': %s", rule_name, exc)
-            return False, False
+            if zone_name:
+                segment["security_zone"] = {**(segment.get("security_zone") or {}), "name": zone_name}
 
     async def _segment_policy(self, segment: dict[str, Any], policy_name: str) -> Any | None:
         """The source segment's one SecurityPolicy: the one it already has
@@ -294,11 +342,13 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
         security_profile, unless the author already set something other than
         the schema default ("normal") — isolated/microsegmented are never a
         silent default, so either one signals a deliberate explicit choice to
-        respect. Cloud segments have no isolation_mode (Managed*Segment only).
+        respect. Cloud segments are skipped on purpose: they carry the field
+        (they inherit ManagedNetworkSegment) but their isolation is the cloud
+        security group, which nothing here renders from isolation_mode.
         """
         seg_id = segment.get("id")
-        seg_typename = segment.get("typename", "ManagedVxlanSegment")
-        if not seg_id or seg_typename == "CloudNetworkSegment":
+        seg_typename = segment.get("typename")
+        if not seg_id or not seg_typename or seg_typename == "CloudNetworkSegment":
             return
 
         current = segment.get("isolation_mode")

@@ -3,8 +3,10 @@ query vxlan_segment_data($name: String!) {
     edges {
       node {
         id
+        __typename
         name { value }
         environment { value }
+        security_zone { node { name { value } } }
         stretch_scope { value }
         arp_suppression { value }
         terminate_inline { value }

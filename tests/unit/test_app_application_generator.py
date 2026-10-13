@@ -38,6 +38,9 @@ def _make_gen() -> Any:
     gen.client = AsyncMock()
     gen._init_client = AsyncMock()
     gen.logger = MagicMock()
+    # Zone assignment has its own tests (test_segment_firewall_mixin.py,
+    # test_security_zone_helper.py) - stubbed at the boundary here.
+    gen._ensure_segment_zones = AsyncMock()
     return gen
 
 
@@ -729,3 +732,59 @@ class TestReconcileApplicationRulesSegmentEnvironmentGuard:
     def test_prod_to_prod_segment_creates_the_rule(self) -> None:
         """Two prod segments still get their rule."""
         self._run("p")._reconcile_segment_rule.assert_awaited_once()
+
+
+# ===========================================================================
+# TestReconcileApplicationRulesZonesAndFailures
+# ===========================================================================
+
+
+class TestReconcileApplicationRulesZonesAndFailures:
+    """Zones are set before any rule is planned, and a failed rule fails the run."""
+
+    def _make_gen_ready(self) -> Any:
+        gen = _make_gen()
+        gen._ensure_segment_isolation_mode = AsyncMock()
+        gen._reconcile_private_access_components = AsyncMock(return_value=(0, 0))
+        return gen
+
+    def test_zones_are_set_for_component_and_edge_target_segments_before_rules(self) -> None:
+        gen = self._make_gen_ready()
+        order: list[str] = []
+        gen._ensure_segment_zones = AsyncMock(side_effect=lambda segments: order.append("zones"))
+        gen._reconcile_segment_rule = AsyncMock(side_effect=lambda **kw: order.append("rule") or (True, False))
+        app = _app(_frontend(_dep(target=_backend(ports=["tcp/8443"]))))
+
+        asyncio.run(gen._reconcile_application_rules(app))
+
+        assert order == ["zones", "rule"]
+        zoned_ids = [seg["id"] for seg in gen._ensure_segment_zones.call_args.args[0]]
+        assert zoned_ids == ["seg-src", "seg-dst"]
+
+    def test_zone_failure_stops_the_application(self) -> None:
+        gen = self._make_gen_ready()
+        gen._ensure_segment_zones = AsyncMock(side_effect=LookupError("zone missing"))
+        gen._reconcile_segment_rule = AsyncMock()
+
+        with pytest.raises(LookupError):
+            asyncio.run(gen._reconcile_application_rules(_app(_frontend(_dep(target=_backend())))))
+
+        gen._reconcile_segment_rule.assert_not_awaited()
+
+    def test_failed_rules_are_counted_all_ports_tried_then_the_run_fails(self) -> None:
+        gen = self._make_gen_ready()
+        gen._reconcile_segment_rule = AsyncMock(side_effect=[RuntimeError("boom"), (True, False)])
+        app = _app(_frontend(_dep(target=_backend())))
+
+        with pytest.raises(RuntimeError, match="1 rule"):
+            asyncio.run(gen._reconcile_application_rules(app))
+
+        assert gen._reconcile_segment_rule.await_count == 2
+        summary = gen.logger.info.call_args_list[-1].args
+        assert summary[1:] == ("checkout", 1, 0, 1)
+
+    def test_no_failure_does_not_raise(self) -> None:
+        gen = self._make_gen_ready()
+        gen._reconcile_segment_rule = AsyncMock(return_value=(False, True))
+
+        asyncio.run(gen._reconcile_application_rules(_app(_frontend(_dep(target=_backend(ports=["tcp/8443"]))))))
