@@ -70,6 +70,10 @@ query cloud_vpc_config($account: String!) {
               cidr_block {
                 value
               }
+              # The segment's policy rules (own egress + inbound), rendered as
+              # its security group. Top-level spread only: a named spread
+              # inside an inline fragment would not resolve.
+              ...SegmentRulesFields
               availability_zone {
                 node {
                   name {
