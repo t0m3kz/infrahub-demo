@@ -1,4 +1,20 @@
-"""Policy/rule selection shared by the ACL, firewall and proxy helpers."""
+"""Policy/rule selection shared by the ACL, firewall and proxy helpers.
+
+Each rule is stored once, in its source segment's policy (``security_policy``,
+which also holds the segment's egress ``default_action``). ``inbound_rules`` is
+only the schema reverse index of ``destination_segment``. ``segment_flows``
+is the one view of both; every consumer builds on it according to whether its
+enforcement point tracks sessions:
+
+| Consumer | Egress view (own rules) | Ingress view (rules into the segment) |
+| -------- | ----------------------- | ------------------------------------- |
+| Stateful: firewall rule table (``segment_rule_policies``), cloud SG | Own rules as written | Inbound rules as plain rules, no reply legs (the session carries the reply) |
+| Stateless: leaf ACL (``acl.py``), PBR bypass (``firewall.py``); later cloud NACL / edge VIF ACL | Own rules + ``default_action`` | Reply legs only. Leaf: seq >= 5000, tcp ``established``, excluding self-sourced and internet-sourced rules. A NACL would need ephemeral 1024-65535 |
+
+Known limit: stateless reply legs for udp/any/icmp are plain reverse matches,
+and port-agnostic ``established`` lets ACK scans through; firewall inspection
+is the answer for sensitive flows.
+"""
 
 from collections.abc import Iterable
 from typing import Any
@@ -87,15 +103,28 @@ def is_unresolved_segment_endpoint(rule: dict[str, Any], side: str) -> bool:
     )
 
 
-def inbound_permits(segment: dict[str, Any]) -> list[dict[str, Any]]:
-    """Active permit rules of enabled policies targeting `segment` (its inbound_rules)."""
-    return [
+def segment_flows(segment: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """The segment's rule view: ``(egress, ingress)``.
+
+    ``egress`` is ``{"rules": [...], "default_action": "permit" | "deny"}``: the
+    active rules of the segment's own enabled policies in index order, and the
+    closing action (permit if any enabled policy says so). ``ingress`` is the
+    active permit rules of enabled policies targeting the segment (its
+    ``inbound_rules``).
+    """
+    policies = enabled_policies(segment_policies(segment))
+    egress = {
+        "rules": [rule for policy in policies for rule in active_rules(policy)],
+        "default_action": "permit" if any(policy.get("default_action") == "permit" for policy in policies) else "deny",
+    }
+    ingress = [
         rule
         for rule in segment.get("inbound_rules") or []
         if rule.get("action") == "permit"
         and not rule.get("disabled")
         and (rule.get("policy") or {}).get("enabled", True)
     ]
+    return egress, ingress
 
 
 def _rule_key(policy_key: str, rule: dict[str, Any]) -> str:
@@ -151,8 +180,8 @@ def get_sgt_rules(activations: list[dict[str, Any]] | None) -> list[dict[str, An
     contracts: dict[tuple[int, int], dict[str, Any]] = {}
     for act in activations or []:
         segment = act.get("segment") or {}
-        rules = [rule for policy in enabled_policies(segment_policies(segment)) for rule in active_rules(policy)]
-        for rule in [*rules, *inbound_permits(segment)]:
+        egress, ingress = segment_flows(segment)
+        for rule in [*egress["rules"], *ingress]:
             if rule.get("action") != "permit":
                 continue
             src = rule.get("source_segment") or {}
