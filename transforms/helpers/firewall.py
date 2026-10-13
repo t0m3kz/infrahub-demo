@@ -9,6 +9,7 @@ from transforms.helpers.policy import (
     active_rules,
     enabled_policies,
     rule_endpoint,
+    rule_selector,
     rule_zone,
     segment_flows,
     segment_rule_policies,
@@ -608,13 +609,16 @@ def get_customer_pbr_rules(
     per rule.destination_segment), just consumed here for a different
     purpose. The bypass is symmetric: a permit A -> B bypasses B on A's
     VLAN and, via B's inbound_rules, A on B's VLAN, so the reply never
-    reaches a firewall that saw no forward packet.
+    reaches a firewall that saw no forward packet. A permit to a pure prefix
+    selector in the segment's own VRF bypasses that CIDR too; one in another
+    VRF (or with no namespace) is redirected, and so is its reply.
 
     The one exception is an inspected flow: a permit with a security
     profile between two segments served by the SAME context is not
     bypassed on either side, so both directions cross that context
-    (_needs_firewall). Between contexts every permit stays on the fabric. Not filtered by owner: a cross-owner permit bypasses PBR the
-    same as a same-owner one, since intra- and inter-customer traffic use
+    (_needs_firewall). Between contexts every permit stays on the fabric. Not
+    filtered by owner: a cross-owner permit bypasses PBR the same as a
+    same-owner one, since intra- and inter-customer traffic use
     one unified default-redirect model.
 
     fw_nexthop resolution: `firewall_contexts` comes from
@@ -626,9 +630,9 @@ def get_customer_pbr_rules(
     model puts every leaf, not just the border-leaf, in a position to make
     the PBR redirect decision, and no leaf ever owns a FirewallContext
     interface itself (only the firewall and, in pbr connectivity_mode, the
-    border-leaf do). The nexthop is the FIREWALL's OWN leg IP on the /30 —
-    reachable from any leaf via normal fabric underlay routing, since the
-    border-leaf already redistributes that directly-connected subnet.
+    border-leaf do). The nexthop is the context's /29 leg VIP inside the
+    segment's own tenant VRF — reachable from any leaf as an EVPN route, since
+    the border-leaf redistributes that directly-connected /29 into the VRF.
     inline connectivity_mode never allocates that IP (see
     generators/topology/customer_dc.py's _ensure_context_subinterface),
     so contexts without one are skipped — no PBR rule for them, since the
@@ -695,10 +699,19 @@ def get_customer_pbr_rules(
         bypass: set[str] = set()
         via_firewall: set[str] = set()
 
-        def _classify(rule: dict[str, Any], peer: dict[str, Any] | None) -> None:
+        own_namespace = _get_segment_namespace(seg).get("name")
+
+        def _classify(rule: dict[str, Any], side: str) -> None:
+            peer = rule.get(f"{side}_segment")
             prefix = segment_prefix(peer) if peer else None
             if not prefix:
-                return
+                # A pure selector (cloud/partner CIDR): bypassed only when it lives in
+                # this segment's own VRF, where the leaf can route it. Without a
+                # namespace, or in another one, it stays on the firewall default.
+                selector = rule_selector(rule, side)
+                if not selector or selector[1] != own_namespace:
+                    return
+                prefix = selector[0]
             if inspected and _needs_firewall(rule, fw_nexthop, peer, serving):
                 via_firewall.add(prefix)
             elif ((peer or {}).get("security_zone") or {}).get("name") not in peer_zones:
@@ -709,13 +722,13 @@ def get_customer_pbr_rules(
         egress, ingress = segment_flows(seg)
         for rule in egress["rules"]:
             if rule.get("action") == "permit":
-                _classify(rule, rule.get("destination_segment"))
+                _classify(rule, "destination")
         # Reply leg of every permit INTO this segment: a forward packet that
         # bypassed the firewall on the source's leaf must be answered past it
         # too, or the firewall drops the reply with no session. The return
         # ACL (get_acls) still restricts it to the rule's port.
         for rule in ingress:
-            _classify(rule, rule.get("source_segment"))
+            _classify(rule, "source")
 
         # The bypass is per prefix: one inspected flow to a peer sends all
         # traffic to it through the firewall, the same on both leaves.

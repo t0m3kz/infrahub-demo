@@ -19,7 +19,6 @@ from transforms.helpers.loadbalancer_pbr import _flatten_deployment_lb_vips, get
 from transforms.helpers.management import get_management_services
 from transforms.helpers.mlag import get_mlag, get_sonic_mlag_config
 from transforms.helpers.ospf import get_ospf
-from transforms.helpers.policy import get_sgt_rules
 from transforms.helpers.segments import (
     get_vlans,
     routed_activations,
@@ -242,8 +241,8 @@ class BaseDeviceTransform(InfrahubTransform):
     def _extra_config(self, data: dict, platform_name: str, extra_roots: dict | None = None) -> dict:
         """Return device-specific template variables.
 
-        Default implementation adds VLANs, VXLAN config, ACLs, inter-VRF
-        exchange routes, and SGT rules when device_role is set.
+        Default implementation adds VLANs, VXLAN config, ACLs, PBR rules and
+        inter-VRF exchange routes when device_role is set.
         Override in subclasses for different behavior.
         """
         if not self.device_role:
@@ -254,7 +253,7 @@ class BaseDeviceTransform(InfrahubTransform):
         routed = routed_activations(activations)
 
         # Exchange transits (see transform()): they only add VLANs, VNIs, VRFs and
-        # the anycast gateway; policy (SGT, ACL, PBR) stays on real segments.
+        # the anycast gateway; policy (ACL, PBR) stays on real segments.
         transits = data.get("exchange_transits") or []
         if transits and platform_name in {"sonic", "dell_sonic"}:
             raise ValueError(
@@ -275,9 +274,6 @@ class BaseDeviceTransform(InfrahubTransform):
             data.get("interfaces"), export_tenant_default=self.export_tenant_default_to_evpn
         )
 
-        # Tier-to-tier GPO contracts, derived from the segments' permit rules
-        sgt_rules = get_sgt_rules(activations)
-
         # Customer PBR: default-redirect to the firewall context serving this
         # segment's owner; a SecurityPolicyRule permit is the only bypass.
         # ManagedFirewallContext is reached via a device-scoped traversal —
@@ -295,19 +291,18 @@ class BaseDeviceTransform(InfrahubTransform):
         lb_backend_pbr_rules = get_lb_backend_pbr_rules(routed, lb_vips)
         leaf_pbr_rules = _combine_leaf_pbr_rules(customer_pbr_rules, lb_backend_pbr_rules)
         if self.device_role in {"leaf", "tor", "access-leaf"}:
-            # SONiC renders PBR (ConfigDB PBR ACL table) but has no GPO;
-            # SR OS leafs render neither. Refuse rather than ship a VLAN
-            # whose firewall steering or segmentation silently vanished.
-            wants_gpo = bool(sgt_rules) or any(vlan.get("sgt") for vlan in vlans)
-            if platform_name in {"sonic", "dell_sonic"} and wants_gpo:
-                raise ValueError(f"{platform_name} leaf cannot render GPO policy; refusing unprotected config")
-            if platform_name == "nokia_sros" and (wants_gpo or leaf_pbr_rules):
-                raise ValueError(f"{platform_name} leaf cannot render GPO or PBR policy; refusing unprotected config")
+            # SONiC renders PBR (ConfigDB PBR ACL table); SR OS leafs do not.
+            # Refuse rather than ship a VLAN whose firewall steering silently vanished.
+            if platform_name == "nokia_sros" and leaf_pbr_rules:
+                raise ValueError(f"{platform_name} leaf cannot render PBR policy; refusing unprotected config")
 
         acls = get_acls(activations=routed)
         acl_names = {acl["vlan_id"]: acl["name"] for acl in acls}
         for vlan in vlans:
             vlan["acl_name"] = acl_names.get(vlan["vlan_id"])
+
+        if self.device_role == "border-leaf":
+            self._refuse_unprotected_tenant_svis(platform_name, acls, leaf_pbr_rules)
 
         return {
             "vlans": vlans,
@@ -321,11 +316,33 @@ class BaseDeviceTransform(InfrahubTransform):
             ),
             "acls": acls,
             "vrf_routes": vrf_routes,
-            "sgt_rules": sgt_rules,
             "customer_pbr_rules": customer_pbr_rules,
             "lb_backend_pbr_rules": lb_backend_pbr_rules,
             "leaf_pbr_rules": leaf_pbr_rules,
         }
+
+    # Border-leaf templates render the SVI ACL on these platforms only, and never PBR.
+    _BORDER_LEAF_ACL_PLATFORMS = frozenset({"cisco_nxos", "arista_eos"})
+
+    @classmethod
+    def _refuse_unprotected_tenant_svis(
+        cls, platform_name: str, acls: list[dict[str, Any]], leaf_pbr_rules: list[dict[str, Any]]
+    ) -> None:
+        """Raise when a border leaf hosts a routed tenant SVI it cannot protect.
+
+        The segments' ACL (and PBR) would otherwise silently vanish and leave an
+        any-to-any SVI inside the shared tenant VRF.
+        """
+        if leaf_pbr_rules:
+            raise ValueError(
+                f"{platform_name} border-leaf cannot render PBR policy for VLANs "
+                f"{sorted(rule['vlan_id'] for rule in leaf_pbr_rules)}; refusing unprotected config"
+            )
+        if acls and platform_name not in cls._BORDER_LEAF_ACL_PLATFORMS:
+            raise ValueError(
+                f"{platform_name} border-leaf cannot render the SVI ACL for VLANs "
+                f"{sorted(acl['vlan_id'] for acl in acls)}; refusing unprotected config"
+            )
 
     _ACTIVE_STATUSES = ("active", "provisioning")
 

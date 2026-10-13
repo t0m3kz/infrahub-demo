@@ -154,7 +154,6 @@ def _l2_from_activations(activations: list[dict[str, Any]]) -> list[dict[str, An
             continue
         seg = act.get("segment") or {}
         gateway_ip, gateway_ipv6, vrf, l3_vni = _get_segment_gateways(seg)
-        sgt = seg.get("security_tag") or {}
         mappings.append(
             {
                 "vlan_id": vlan_id,
@@ -165,8 +164,6 @@ def _l2_from_activations(activations: list[dict[str, Any]]) -> list[dict[str, An
                 "arp_suppression": seg.get("arp_suppression", True),
                 "vrf": vrf,
                 "l3_vni": l3_vni,
-                "sgt": sgt.get("group_id"),
-                "sgt_name": sgt.get("name"),
                 "multisite": _is_multisite_segment(seg),
                 "rt_anchor_asn": _stretch_rt_anchor(seg),
             }
