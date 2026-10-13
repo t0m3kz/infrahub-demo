@@ -121,6 +121,17 @@ interface {{ interface.name }}
 ! Configure route-maps
 route-map RM-CONN-2-BGP permit 10
    match interface {{ loopback_name }}
+{%- if leaf_transit_prefixes %}
+!
+! The firewall transit /29s this leaf holds locally for PBR are originated by the borders only
+! documented-not-lab-verified: a deny entry keeps the leaf's connected transit /29 out of the EVPN type-5 table
+{%- for prefix in leaf_transit_prefixes %}
+ip prefix-list PL-XCHG-TRANSIT seq {{ loop.index * 10 }} permit {{ prefix }}
+{%- endfor %}
+route-map RM-VRF-CONN-2-EVPN deny 5
+   match ip address prefix-list PL-XCHG-TRANSIT
+route-map RM-VRF-CONN-2-EVPN permit 10
+{%- endif %}
 
 {%- if vxlan and vxlan.enabled %}
 !
@@ -228,7 +239,7 @@ router bgp {{ bgp_config.local_as.asn }}
       {%- for rt in mapping.import_route_targets | default([]) %}
       route-target import evpn {{ rt }}
       {%- endfor %}
-      redistribute connected
+      redistribute connected{% if leaf_transit_prefixes %} route-map RM-VRF-CONN-2-EVPN{% endif %}
 {%- endfor %}
 {%- endif %}
 {% endfor %}
@@ -270,6 +281,7 @@ interface Vlan{{ vlan.vlan_id }}
 ! documented-not-lab-verified: policy-map type pbr / class-map type pbr / service-policy type pbr
 ! documented-not-lab-verified: a class without a set action (bypass) forwards by the normal route lookup
 ! NOTE: EOS 'set nexthop' has no VRF option: the firewall next hop must be reachable in the SVI's own VRF
+! documented-not-lab-verified: the next hop is the VIP of the local transit leg (connected virtual-router SVI over the L2VNI), no 'recursive' needed
 ! (an ACL used by PBR must not contain deny entries - the bypass ACL relies on the implicit end of the list)
 !
 {%- for rule in leaf_pbr_rules %}

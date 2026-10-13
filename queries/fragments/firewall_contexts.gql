@@ -1,5 +1,10 @@
 fragment FirewallContextLegFields on ManagedFirewallContext {
   id
+  # Name and VLAN derive the context's transit VLAN; the namespace l3_vni is
+  # the VRF's L3 VNI. A leaf renders the transit leg locally from these
+  # (get_leaf_firewall_transits), border leaves/edges from their own ports.
+  name { value }
+  vlan_id { value }
   tenant { node { id } }
   # Deployments whose segments terminate here: a leaf sends a flow through
   # the firewall only when both its segments are served by one context.
@@ -13,7 +18,7 @@ fragment FirewallContextLegFields on ManagedFirewallContext {
           ip_address {
             node {
               address { value }
-              ip_namespace { node { name { value } namespace_type { value } } }
+              ip_namespace { node { name { value } namespace_type { value } l3_vni { value } } }
             }
           }
         }

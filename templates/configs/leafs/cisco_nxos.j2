@@ -85,6 +85,15 @@ route-map RM-CONN-2-BGP permit 10
 {#- Permit-all, deliberately unqualified: inside a tenant VRF everything that is
     directly connected (the anycast-gateway SVIs) is exactly what should become an
     EVPN type-5 route. Referenced from cisco_nxos_bgp.j2's per-VRF block. #}
+{%- if leaf_transit_prefixes %}
+! The firewall transit /29s this leaf holds locally for PBR are originated by the borders only
+! documented-not-lab-verified: deny sequence keeps the leaf's connected transit /29 out of the type-5 table
+{%- for prefix in leaf_transit_prefixes %}
+ip prefix-list PL-XCHG-TRANSIT seq {{ loop.index * 10 }} permit {{ prefix }}
+{%- endfor %}
+route-map RM-VRF-DIRECT-2-EVPN deny 5
+  match ip address prefix-list PL-XCHG-TRANSIT
+{%- endif %}
 route-map RM-VRF-DIRECT-2-EVPN permit 10
 !
 {%- endif %}
@@ -121,6 +130,8 @@ route-map RM-LEAF-PBR-VLAN{{ rule.vlan_id }} deny 20
   match ip address PBR-BYPASS-VLAN{{ rule.vlan_id }}
 !
 {%- endif %}
+! documented-not-lab-verified: the next hop is the VIP of the local transit leg (connected anycast SVI, resolved over the L2VNI);
+! PBR falls back to normal routing when it is unresolved (fail-open), tracking over VXLAN needs lab validation
 route-map RM-LEAF-PBR-VLAN{{ rule.vlan_id }} permit 30
   set ip next-hop {{ rule.fw_nexthop }}
 !
