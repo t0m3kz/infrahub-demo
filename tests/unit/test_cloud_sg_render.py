@@ -203,7 +203,7 @@ async def test_aws_hand_managed_rule_without_peer_is_skipped_not_opened(caplog: 
             "rules": [{"name": "open", "direction": "ingress", "protocol": "tcp", "port_start": 22}],
         }
     ]
-    with caplog.at_level(logging.WARNING, logger="transforms.cloud.vpc_terraform"):
+    with caplog.at_level(logging.WARNING, logger="transforms.cloud.aws"):
         out = await _render(cleaned)
     assert 'resource "aws_security_group" "hand"' in out
     assert "0.0.0.0/0" not in out
