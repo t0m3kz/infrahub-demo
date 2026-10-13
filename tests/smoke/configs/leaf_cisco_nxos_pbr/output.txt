@@ -229,9 +229,9 @@ interface Vlan200
 ! Customer: Customer-A/any
 ip access-list PBR-BYPASS-VLAN100
   permit ip any 10.200.0.0/24
-  deny ip any any
 !
-route-map RM-LEAF-PBR-VLAN100 permit 20
+! documented: deny sequence = forward by normal route lookup (NX-OS PBR); documented-not-lab-verified for VXLAN-routed traffic
+route-map RM-LEAF-PBR-VLAN100 deny 20
   match ip address PBR-BYPASS-VLAN100
 !
 route-map RM-LEAF-PBR-VLAN100 permit 30
