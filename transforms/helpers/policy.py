@@ -57,25 +57,31 @@ def rule_zone(rule: dict[str, Any], side: str) -> str | None:
     return zone.get("name") or None
 
 
-def _first_selector_cidr(
+def _first_selector(
     prefixes: list[dict[str, Any]] | None, ip_addresses: list[dict[str, Any]] | None
-) -> str | None:
-    """First explicit *_prefixes or *_ip_addresses selector, as a CIDR/address
-    string. Every rendered src/dst is a single scalar (ACL lines, firewall
-    templates), so a multi-value selector list can only ever render its first
-    entry — a documented limitation, not an address-group/fanout
-    implementation. Prefixes are checked before IP addresses since a
-    prefix-based rule is the common case for the cloud/partner/SaaS CIDR
-    this selector shape was added for."""
+) -> tuple[str, str | None] | None:
+    """First explicit *_prefixes or *_ip_addresses selector, as a
+    ``(CIDR/address string, namespace name)`` pair. Every rendered src/dst is a
+    single scalar (ACL lines, firewall templates), so a multi-value selector
+    list can only ever render its first entry — a documented limitation, not an
+    address-group/fanout implementation. Prefixes are checked before IP
+    addresses since a prefix-based rule is the common case for the
+    cloud/partner/SaaS CIDR this selector shape was added for."""
     for prefix in prefixes or []:
         cidr = prefix.get("prefix")
         if cidr:
-            return cidr
+            return cidr, (prefix.get("ip_namespace") or {}).get("name")
     for ip in ip_addresses or []:
         address = ip.get("address")
         if address:
-            return address
+            return address, (ip.get("ip_namespace") or {}).get("name")
     return None
+
+
+def rule_selector(rule: dict[str, Any], side: str) -> tuple[str, str | None] | None:
+    """The rule's explicit selector on `side` ("source"/"destination") as
+    ``(CIDR, namespace name)``, or None."""
+    return _first_selector(rule.get(f"{side}_prefixes"), rule.get(f"{side}_ip_addresses"))
 
 
 def rule_endpoint(rule: dict[str, Any], side: str) -> str | None:
@@ -84,9 +90,8 @@ def rule_endpoint(rule: dict[str, Any], side: str) -> str | None:
     resolver behind the leaf ACL and the firewall rule table, so a rule to an
     external prefix (no destination segment) renders the same on both."""
     segment = rule.get(f"{side}_segment") or {}
-    return (segment_prefix(segment) if segment else None) or _first_selector_cidr(
-        rule.get(f"{side}_prefixes"), rule.get(f"{side}_ip_addresses")
-    )
+    selector = rule_selector(rule, side)
+    return (segment_prefix(segment) if segment else None) or (selector[0] if selector else None)
 
 
 def is_unresolved_segment_endpoint(rule: dict[str, Any], side: str) -> bool:
@@ -166,39 +171,3 @@ def segment_rule_policies(segments: Iterable[dict[str, Any]], exclude: set[str] 
         for rule in segment.get("inbound_rules") or []:
             _add(rule.get("policy") or {}, [rule])
     return [policies[key] for key in sorted(policies) if policies[key]["rules"] or key not in offered]
-
-
-def get_sgt_rules(activations: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
-    """Tier-to-tier VXLAN GPO contracts derived from the device's segment rules.
-
-    Every active permit of an enabled policy, among the device's segments' own
-    rules and the rules into them, whose two segments both carry a security
-    tag is one source tag -> destination tag contract, de-duplicated by tag
-    pair (a contract has no port or protocol). Both ends need it: the egress
-    VTEP enforces it, and a leaf carries either end.
-    """
-    contracts: dict[tuple[int, int], dict[str, Any]] = {}
-    for act in activations or []:
-        segment = act.get("segment") or {}
-        egress, ingress = segment_flows(segment)
-        for rule in [*egress["rules"], *ingress]:
-            if rule.get("action") != "permit":
-                continue
-            src = rule.get("source_segment") or {}
-            dst = rule.get("destination_segment") or {}
-            src_tag = src.get("security_tag") or {}
-            dst_tag = dst.get("security_tag") or {}
-            src_sgt, dst_sgt = src_tag.get("group_id"), dst_tag.get("group_id")
-            if not src_sgt or not dst_sgt or (src_sgt, dst_sgt) in contracts:
-                continue
-            contracts[(src_sgt, dst_sgt)] = {
-                "src_name": src_tag.get("name"),
-                "src_sgt": src_sgt,
-                "dst_name": dst_tag.get("name"),
-                "dst_sgt": dst_sgt,
-                "action": "permit",
-                "log": bool(rule.get("log")),
-                "src_customer": src.get("customer_name"),
-                "src_environment": src.get("environment"),
-            }
-    return [contracts[key] for key in sorted(contracts)]

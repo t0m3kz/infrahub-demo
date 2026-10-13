@@ -299,6 +299,10 @@ check_definitions:
   - name: validate_segment_security
     class_name: CheckSegmentSecurity
     file_path: checks/segment_security.py
+  # Targetless: reads every segment and the firewall contexts PBR redirects to.
+  - name: validate_tenant_svi_protection
+    class_name: CheckTenantSviProtection
+    file_path: checks/tenant_svi_protection.py
   # Targetless: the invariants span topologies (namespaces, the INTERNET VRF,
   # cloud Transit Gateways and virtual interfaces), not one device.
   - name: validate_routing_invariants
@@ -632,6 +636,8 @@ queries:
     file_path: queries/validation/segment_placement.gql
   - name: segment_security
     file_path: queries/validation/segment_security.gql
+  - name: tenant_svi_protection
+    file_path: queries/validation/tenant_svi_protection.gql
   - name: routing_invariants
     file_path: queries/validation/routing_invariants.gql
   - name: evpn_fabric

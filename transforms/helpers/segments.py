@@ -110,7 +110,6 @@ def _vlans_from_activations(activations: list[dict[str, Any]]) -> list[dict[str,
             continue
         seg = act["segment"]
         gateway_ip, gateway_ipv6, vrf, _ = _get_segment_gateways(seg)
-        sgt = seg.get("security_tag") or {}
         vlans.append(
             {
                 "vlan_id": vlan_id,
@@ -123,8 +122,6 @@ def _vlans_from_activations(activations: list[dict[str, Any]]) -> list[dict[str,
                 # Pure L2 on the fabric: no SVI of any kind (SONiC's
                 # VLAN_INTERFACE is emitted even for gateway-less VLANs).
                 "terminate_inline": is_inline_terminated(seg),
-                "sgt": sgt.get("group_id"),
-                "sgt_name": sgt.get("name"),
             }
         )
         seen.add(vlan_id)

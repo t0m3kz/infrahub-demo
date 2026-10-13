@@ -1656,6 +1656,54 @@ class TestCustomerPbrNeverBypassesExchangePeers:
         assert self._rules("MANAGEMENT-ZONE")[0]["bypass_prefixes"] == []
 
 
+class TestCustomerPbrPrefixSelectorBypass:
+    """A permit to a pure prefix selector (no peer segment) is bypassed symmetrically in the segment's own VRF."""
+
+    @staticmethod
+    def _bypass(selector: dict | None, *, inbound: bool = False) -> list[str]:
+        """The bypass prefixes of a PROD segment whose only rule carries ``selector``."""
+        activation = _make_pbr_activation(security_policies=[{"enabled": True, "rules": []}])
+        if inbound:
+            activation["segment"]["inbound_rules"] = [
+                {"action": "permit", "disabled": False, "policy": {"enabled": True}, "source_prefixes": [selector]}
+            ]
+        else:
+            rule = {"action": "permit", "disabled": False, "destination_prefixes": [selector] if selector else []}
+            activation["segment"]["security_policy"]["rules"] = [rule]
+        return get_customer_pbr_rules([activation], [_make_context_leg()])[0]["bypass_prefixes"]
+
+    def test_selector_in_the_segments_own_vrf_is_bypassed(self) -> None:
+        """Forward and reply both stay on the fabric: the firewall never sees half a session."""
+        selector = {"prefix": "10.40.0.0/16", "ip_namespace": {"name": "PROD"}}
+        assert self._bypass(selector) == ["10.40.0.0/16"]
+
+    def test_reply_leg_of_a_selector_source_is_bypassed(self) -> None:
+        """An inbound permit from a selector in the same VRF is answered past the firewall too."""
+        selector = {"prefix": "10.40.0.0/16", "ip_namespace": {"name": "PROD"}}
+        assert self._bypass(selector, inbound=True) == ["10.40.0.0/16"]
+
+    def test_selector_in_another_vrf_stays_on_the_firewall(self) -> None:
+        """A prefix the tenant VRF cannot route is redirected, as before."""
+        selector = {"prefix": "198.51.100.0/24", "ip_namespace": {"name": "INTERNET"}}
+        assert self._bypass(selector) == []
+
+    def test_selector_without_namespace_stays_on_the_firewall(self) -> None:
+        """Unknown VRF: fail towards inspection, not towards a blackholing bypass."""
+        assert self._bypass({"prefix": "10.40.0.0/16"}) == []
+
+    def test_ip_address_selector_in_the_own_vrf_is_bypassed(self) -> None:
+        """A host selector is a /32-style CIDR and follows the same rule."""
+        activation = _make_pbr_activation(security_policies=[{"enabled": True, "rules": []}])
+        activation["segment"]["security_policy"]["rules"] = [
+            {
+                "action": "permit",
+                "disabled": False,
+                "destination_ip_addresses": [{"address": "10.40.0.9/32", "ip_namespace": {"name": "PROD"}}],
+            }
+        ]
+        assert get_customer_pbr_rules([activation], [_make_context_leg()])[0]["bypass_prefixes"] == ["10.40.0.9/32"]
+
+
 class TestCustomerPbrInspectedFlows:
     """Option 1: a profiled permit inside one context crosses the firewall
     both ways; every other permit stays on the fabric."""
