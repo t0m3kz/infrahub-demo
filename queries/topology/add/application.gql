@@ -79,6 +79,24 @@ fragment AppComponentSecurityFields on AppComponent {
                   id
                   name { value }
                   ...SegmentSecurityFields
+                  # A cloud segment is addressed by its cidr_block and qualified
+                  # by its virtual network. Plain fields: a named spread inside
+                  # an inline fragment would not resolve.
+                  ... on CloudNetworkSegment {
+                    cidr_block { value }
+                    virtual_network {
+                      node {
+                        id
+                        name { value }
+                        account {
+                          node {
+                            id
+                            name { value }
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               }
               parent {
