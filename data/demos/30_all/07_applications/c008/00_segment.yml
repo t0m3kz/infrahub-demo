@@ -16,5 +16,18 @@ spec:
             customer_name: "krafven-dev"
             environment: "d"
             vlan_id: 108
+            gateway:
+              data:
+                address: "10.8.108.1/24"
+                description: "c008-krafven-dev-d anycast gateway"
+                ip_namespace: "NON-PROD"
+                ip_prefix:
+                  kind: IpamPrefix
+                  data:
+                    prefix: "10.8.108.0/24"
+                    description: "c008-krafven-dev-d (C008, DC12)"
+                    status: active
+                    role: customer
+                    ip_namespace: "NON-PROD"
             customer_deployment: "C008-D-DC12"
             security_zone: "NONPROD-ZONE"

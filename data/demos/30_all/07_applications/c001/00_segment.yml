@@ -17,5 +17,18 @@ spec:
             customer_name: "nordix-prod"
             environment: "p"
             vlan_id: 101
+            gateway:
+              data:
+                address: "10.1.101.1/24"
+                description: "c001-nordix-prod-p anycast gateway"
+                ip_namespace: "PROD"
+                ip_prefix:
+                  kind: IpamPrefix
+                  data:
+                    prefix: "10.1.101.0/24"
+                    description: "c001-nordix-prod-p (C001, FR)"
+                    status: active
+                    role: customer
+                    ip_namespace: "PROD"
             customer_deployment: "C001-P-FR"
             security_zone: "PROD-ZONE"
