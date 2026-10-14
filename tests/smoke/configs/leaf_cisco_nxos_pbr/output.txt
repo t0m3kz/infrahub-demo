@@ -20,6 +20,9 @@ vlan 100
 vlan 200
   name Customer-A
 !
+vlan 3000
+  name XCHG-dc1-fw-shared-VRF_A
+!
 !
 ! Zero-Trust ACLs (one per segment VLAN — inbound on SVI)
 !
@@ -162,6 +165,9 @@ interface nve1
   member vni 10100
     suppress-arp
     ingress-replication protocol bgp
+  member vni 64000
+    suppress-arp
+    ingress-replication protocol bgp
   member vni 50001 associate-vrf
   no shutdown
 !
@@ -173,12 +179,18 @@ evpn
     rd 10.0.0.1:10100
     route-target import 65000:10100
     route-target export 65000:10100
+  vni 64000 l2
+    rd 10.0.0.1:64000
+    route-target import 65000:64000
+    route-target export 65000:64000
 !
 !
 ! VLAN to VNI mapping
 !
 vlan 100
   vn-segment 10100
+vlan 3000
+  vn-segment 64000
 !
 ! L3 VNI Transit SVIs (symmetric IRB — no host addressing, forwarding only)
 !
@@ -198,6 +210,11 @@ interface Vlan3900
 route-map RM-CONN-2-BGP permit 10
   match interface loopback0
 !
+! The firewall transit /29s this leaf holds locally for PBR are originated by the borders only
+! documented-not-lab-verified: deny sequence keeps the leaf's connected transit /29 out of the type-5 table
+ip prefix-list PL-XCHG-TRANSIT seq 10 permit 100.66.0.0/29
+route-map RM-VRF-DIRECT-2-EVPN deny 5
+  match ip address prefix-list PL-XCHG-TRANSIT
 route-map RM-VRF-DIRECT-2-EVPN permit 10
 !
 ! Anycast Gateway — identical MAC on every leaf/border-leaf in the fabric
@@ -220,6 +237,13 @@ interface Vlan200
   no shutdown
   ip access-group ACL-VLAN200-IN in
 !
+interface Vlan3000
+  description XCHG-dc1-fw-shared-VRF_A
+  vrf member VRF_A
+  ip address 100.66.0.1/29
+  fabric forwarding mode anycast-gateway
+  no shutdown
+!
 !
 !
 ! Leaf PBR — LB return path first, then permitted firewall bypass,
@@ -234,6 +258,8 @@ ip access-list PBR-BYPASS-VLAN100
 route-map RM-LEAF-PBR-VLAN100 deny 20
   match ip address PBR-BYPASS-VLAN100
 !
+! documented-not-lab-verified: the next hop is the VIP of the local transit leg (connected anycast SVI, resolved over the L2VNI);
+! PBR falls back to normal routing when it is unresolved (fail-open), tracking over VXLAN needs lab validation
 route-map RM-LEAF-PBR-VLAN100 permit 30
   set ip next-hop 100.66.0.4
 !

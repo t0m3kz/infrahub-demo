@@ -9,10 +9,12 @@ from netutils.utils import jinja2_convenience_function
 from transforms.helpers.acl import get_acls
 from transforms.helpers.bgp import get_bgp_profile
 from transforms.helpers.firewall import (
+    _firewall_context_caps,
     _flatten_deployment_firewall_contexts,
     get_customer_pbr_rules,
     get_exchange_routes,
     get_exchange_transits,
+    get_leaf_firewall_transits,
 )
 from transforms.helpers.ha import _HA_TYPENAMES
 from transforms.helpers.loadbalancer_pbr import _flatten_deployment_lb_vips, get_lb_backend_pbr_rules
@@ -164,7 +166,7 @@ class BaseDeviceTransform(InfrahubTransform):
             device_data["segment_deployments"] = self._filter_segment_deployments(activations)
         # Transit legs of the firewall contexts tagged on this device's service
         # ports: VLAN/VNI/VRF/anycast only, never segment policy input.
-        device_data["exchange_transits"] = get_exchange_transits(device_data.get("interfaces"))
+        device_data["exchange_transits"] = get_exchange_transits(_firewall_context_caps(device_data.get("interfaces")))
 
         config = self._build_config(device_data, platform_name)
         config.update(self._extra_config(device_data, platform_name, extra_roots=extra_roots))
@@ -252,9 +254,33 @@ class BaseDeviceTransform(InfrahubTransform):
         # terminate_inline segment has none here (its HA pair routes it).
         routed = routed_activations(activations)
 
-        # Exchange transits (see transform()): they only add VLANs, VNIs, VRFs and
-        # the anycast gateway; policy (ACL, PBR) stays on real segments.
-        transits = data.get("exchange_transits") or []
+        # Customer PBR: default-redirect to the firewall context serving this
+        # segment's owner; a SecurityPolicyRule permit is the only bypass.
+        # ManagedFirewallContext is reached via a device-scoped traversal —
+        # this device's own `deployment` (queries/fragments/firewall_contexts.gql's
+        # FirewallContextsOnDeploymentFields), not a global query root — no
+        # leaf ever owns a FirewallContext interface itself, only the
+        # firewall/border-leaf do. Computed before the VLANs: a leaf's PBR next
+        # hops decide which transit legs it holds locally.
+        customer_pbr_rules, leaf_transits = self._firewall_pbr(data, routed)
+
+        # LB backend no-SNAT return-path PBR: same device-scoped deployment
+        # traversal as firewall_contexts above, leaf-only in practice since
+        # border-leaf never hosts pool members (no activations there).
+        lb_vips = _flatten_deployment_lb_vips(data.get("deployment"))
+        lb_backend_pbr_rules = get_lb_backend_pbr_rules(routed, lb_vips)
+        leaf_pbr_rules = _combine_leaf_pbr_rules(customer_pbr_rules, lb_backend_pbr_rules)
+        if self.device_role in self._LEAF_ROLES:
+            # SONiC renders PBR (ConfigDB PBR ACL table); SR OS leafs do not.
+            # Refuse rather than ship a VLAN whose firewall steering silently vanished.
+            if platform_name == "nokia_sros" and leaf_pbr_rules:
+                raise ValueError(f"{platform_name} leaf cannot render PBR policy; refusing unprotected config")
+
+        # Exchange transits (see transform()) and the leaf's local transit legs: they
+        # only add VLANs, VNIs, VRFs and the anycast gateway; policy (ACL, PBR) stays
+        # on real segments. They are not bound to any host port (get_interfaces only
+        # binds a transit VLAN to a port carrying the context).
+        transits = (data.get("exchange_transits") or []) + leaf_transits
         if transits and platform_name in {"sonic", "dell_sonic"}:
             raise ValueError(
                 f"{platform_name} cannot render the inter-VRF exchange transit legs; refusing incomplete config"
@@ -273,28 +299,6 @@ class BaseDeviceTransform(InfrahubTransform):
         vrf_routes = get_exchange_routes(
             data.get("interfaces"), export_tenant_default=self.export_tenant_default_to_evpn
         )
-
-        # Customer PBR: default-redirect to the firewall context serving this
-        # segment's owner; a SecurityPolicyRule permit is the only bypass.
-        # ManagedFirewallContext is reached via a device-scoped traversal —
-        # this device's own `deployment` (queries/fragments/firewall_contexts.gql's
-        # FirewallContextsOnDeploymentFields), not a global query root — no
-        # leaf ever owns a FirewallContext interface itself, only the
-        # firewall/border-leaf do.
-        firewall_contexts = _flatten_deployment_firewall_contexts(data.get("deployment"))
-        customer_pbr_rules = get_customer_pbr_rules(routed, firewall_contexts)
-
-        # LB backend no-SNAT return-path PBR: same device-scoped deployment
-        # traversal as firewall_contexts above, leaf-only in practice since
-        # border-leaf never hosts pool members (no activations there).
-        lb_vips = _flatten_deployment_lb_vips(data.get("deployment"))
-        lb_backend_pbr_rules = get_lb_backend_pbr_rules(routed, lb_vips)
-        leaf_pbr_rules = _combine_leaf_pbr_rules(customer_pbr_rules, lb_backend_pbr_rules)
-        if self.device_role in {"leaf", "tor", "access-leaf"}:
-            # SONiC renders PBR (ConfigDB PBR ACL table); SR OS leafs do not.
-            # Refuse rather than ship a VLAN whose firewall steering silently vanished.
-            if platform_name == "nokia_sros" and leaf_pbr_rules:
-                raise ValueError(f"{platform_name} leaf cannot render PBR policy; refusing unprotected config")
 
         acls = get_acls(activations=routed)
         acl_names = {acl["vlan_id"]: acl["name"] for acl in acls}
@@ -319,7 +323,26 @@ class BaseDeviceTransform(InfrahubTransform):
             "customer_pbr_rules": customer_pbr_rules,
             "lb_backend_pbr_rules": lb_backend_pbr_rules,
             "leaf_pbr_rules": leaf_pbr_rules,
+            # The leaf's own transit /29s: kept out of the direct-to-EVPN redistribution
+            # so only the borders originate them as type-5 routes.
+            "leaf_transit_prefixes": sorted({t["segment"]["gateway"]["ip_prefix"]["prefix"] for t in leaf_transits}),
         }
+
+    _LEAF_ROLES = frozenset({"leaf", "tor", "access-leaf"})
+
+    def _firewall_pbr(
+        self, data: dict, routed: list[dict[str, Any]]
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """Firewall PBR rules for the routed activations, plus the leaf's local transit legs.
+
+        Only a leaf role holds transit legs (get_leaf_firewall_transits raises when a
+        next hop has none); every other role gets no leaf transits.
+        """
+        firewall_contexts = _flatten_deployment_firewall_contexts(data.get("deployment"))
+        rules = get_customer_pbr_rules(routed, firewall_contexts)
+        if self.device_role not in self._LEAF_ROLES:
+            return rules, []
+        return rules, get_leaf_firewall_transits(rules, firewall_contexts, device_name=data.get("name", ""))
 
     # Border-leaf templates render the SVI ACL on these platforms only, and never PBR.
     _BORDER_LEAF_ACL_PLATFORMS = frozenset({"cisco_nxos", "arista_eos"})

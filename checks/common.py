@@ -5,7 +5,8 @@ from typing import Any
 from infrahub_sdk.checks import InfrahubCheck
 
 from transforms.common import BaseDeviceTransform
-from transforms.helpers.firewall import get_exchange_transits
+from transforms.helpers.firewall import _firewall_context_caps, get_exchange_transits
+from transforms.helpers.segments import routed_activations
 from utils.data_cleaning import get_data
 from utils.exchange_transit import (
     EXCHANGE_PEERS,
@@ -70,19 +71,17 @@ def validate_interfaces(data: dict[str, Any]) -> list[str]:
 
 
 def validate_transit_vlans(device: dict[str, Any], transform_cls: type[BaseDeviceTransform]) -> list[str]:
-    """No exchange transit VLAN may equal a segment VLAN on this border device.
+    """No transit VLAN may equal a segment VLAN on this device.
 
-    The border leaf and the edge hold no legs themselves: each derives one
-    transit VLAN per leg of every firewall context tagged on its service ports
-    (transforms.helpers.firewall.get_exchange_transits) and renders them next to
-    its segment VLANs. get_vlans de-duplicates by VLAN id, so a collision would
-    silently drop one of the two. Segment VLANs are collected the way
-    ``transform_cls`` (the device's own transform) collects its activations.
+    A border leaf and an edge derive one transit VLAN per leg of every firewall
+    context tagged on their service ports; a leaf derives the legs of the contexts
+    its firewall PBR redirects to (BaseDeviceTransform._firewall_pbr, the transform's
+    own derivation). Either renders them next to its segment VLANs.
+    get_vlans de-duplicates by VLAN id, so a collision would silently drop one of
+    the two. Segment VLANs are collected the way ``transform_cls`` (the device's own
+    transform) collects its activations. A leaf whose redirect has no derivable
+    transit leg is reported with the transform's own message.
     """
-    transits = get_exchange_transits(device.get("interfaces"))
-    if not transits:
-        return []
-
     transform = transform_cls.__new__(transform_cls)
     interfaces = device.get("interfaces") or []
     capabilities = device.get("capabilities") or []
@@ -98,6 +97,17 @@ def validate_transit_vlans(device: dict[str, Any], transform_cls: type[BaseDevic
                 seen={(act.get("segment") or {}).get("id") for act in activations},
             )
         )
+    if transform.device_role in BaseDeviceTransform._LEAF_ROLES:
+        activations = transform._filter_segment_deployments(activations)
+        try:
+            transits = transform._firewall_pbr(device, routed_activations(activations))[1]
+        except ValueError as exc:
+            return [str(exc)]
+    else:
+        transits = get_exchange_transits(_firewall_context_caps(interfaces))
+    if not transits:
+        return []
+
     segment_by_vlan = {
         act["vlan_id"]: (act.get("segment") or {}).get("name", "<unnamed>") for act in activations if act.get("vlan_id")
     }

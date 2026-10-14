@@ -13,6 +13,7 @@ Covers:
 from unittest.mock import patch
 
 from transforms.helpers.firewall import (
+    _firewall_context_caps,
     _flatten_deployment_firewall_contexts,
     get_customer_pbr_rules,
     get_exchange_routes,
@@ -439,21 +440,26 @@ def _shared_context(*, tenant: str | None = None, served: list[str] | None = Non
     return _context(legs, tenant=tenant, served=served)
 
 
+def _border_transits(interfaces: list[dict] | None) -> list[dict]:
+    """The transits a border device derives from the contexts on its firewall-role ports."""
+    return get_exchange_transits(_firewall_context_caps(interfaces))
+
+
 class TestGetExchangeTransits:
     def test_no_interfaces_returns_empty(self) -> None:
-        assert get_exchange_transits(None) == []
+        assert _border_transits(None) == []
 
     def test_port_without_firewall_role_is_ignored(self) -> None:
-        assert get_exchange_transits(_bl_port(_shared_context(), role="uplink")) == []
+        assert _border_transits(_bl_port(_shared_context(), role="uplink")) == []
 
     def test_one_transit_per_leg_namespace_with_band_vlan_and_vni(self) -> None:
-        transits = get_exchange_transits(_bl_port(_shared_context()))
+        transits = _border_transits(_bl_port(_shared_context()))
         assert [t["vlan_id"] for t in transits] == [3001, 3401]
         assert [t["vni"] for t in transits] == [64001, 64401]
         assert all(t["transit_context"] == "dc11-fw-shared" for t in transits)
 
     def test_gateway_is_the_anycast_offset_of_the_slash29(self) -> None:
-        prod = get_exchange_transits(_bl_port(_shared_context()))[0]["segment"]
+        prod = _border_transits(_bl_port(_shared_context()))[0]["segment"]
         assert prod["name"] == "XCHG-dc11-fw-shared-PROD"
         assert prod["gateway"]["address"] == "100.66.0.1/29"
         assert prod["gateway"]["ip_prefix"] == {
@@ -464,11 +470,11 @@ class TestGetExchangeTransits:
 
     def test_default_namespace_legacy_leg_is_skipped(self) -> None:
         legacy = _context([_leg("10.65.0.1/30", {"name": "default", "namespace_type": None, "l3_vni": None})])
-        assert get_exchange_transits(_bl_port(legacy)) == []
+        assert _border_transits(_bl_port(legacy)) == []
 
     def test_same_context_on_two_ports_is_counted_once(self) -> None:
         ports = _bl_port(_shared_context()) + _bl_port(_shared_context())
-        assert len(get_exchange_transits(ports)) == 2
+        assert len(_border_transits(ports)) == 2
 
 
 class TestGetExchangeRoutes:
@@ -549,7 +555,7 @@ def _three_leg_context(*, tenant: str | None = None, served: list[str] | None = 
 
 class TestManagementExchangeOnTheBorderLeaf:
     def test_management_leg_becomes_a_transit_in_its_own_vrf_slot(self) -> None:
-        transits = get_exchange_transits(_bl_port(_three_leg_context()))
+        transits = _border_transits(_bl_port(_three_leg_context()))
         assert [(t["vlan_id"], t["vni"]) for t in transits] == [(3001, 64001), (3401, 64401), (3601, 64601)]
         segment = transits[-1]["segment"]
         assert segment["name"] == "XCHG-dc11-fw-shared-MANAGEMENT"

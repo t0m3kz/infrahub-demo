@@ -200,18 +200,26 @@ def _transit_legs(ctx: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return legs
 
 
-def get_exchange_transits(interfaces: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
-    """Pseudo segment activations for the transit legs of this border leaf's contexts.
+def get_exchange_transits(
+    contexts: list[dict[str, Any]], *, legs: set[tuple[str, str]] | None = None
+) -> list[dict[str, Any]]:
+    """Pseudo segment activations for the transit legs of ``contexts``.
 
-    Every leg of a context tagged on one of this device's firewall ports becomes a
-    VLAN + L2 VNI + anycast gateway (.1 of the leg's /29) in the leg's VRF, so the
-    firewall's VLAN sub-interface has something to attach to. Fed ONLY to
+    Every leg of a context becomes a VLAN + L2 VNI + anycast gateway (.1 of the
+    leg's /29) in the leg's VRF, so a VLAN sub-interface of the firewall (border
+    leaf, edge) or a PBR next hop (leaf) has something to attach to. Fed ONLY to
     get_vlans / get_vxlan_config / get_interfaces (never ACL, SGT or PBR input).
     ``transit_context`` names the context whose trunk ports must allow the VLAN.
+
+    ``legs`` restricts the result to the (namespace, VIP) pairs a leaf redirects
+    to (the key of _context_leg_ip); None keeps every leg, as a border device does
+    for the contexts tagged on its firewall ports.
     """
     transits: dict[int, dict[str, Any]] = {}
-    for ctx in _firewall_context_caps(interfaces):
+    for ctx in contexts:
         for leg in _transit_legs(ctx).values():
+            if legs is not None and (leg["namespace"], leg["vip"]) not in legs:
+                continue
             name = f"XCHG-{ctx.get('name')}-{leg['namespace']}"
             transits.setdefault(
                 leg["vlan"],
@@ -241,6 +249,49 @@ def get_exchange_transits(interfaces: list[dict[str, Any]] | None) -> list[dict[
                 },
             )
     return [transits[vlan] for vlan in sorted(transits)]
+
+
+def get_leaf_firewall_transits(
+    pbr_rules: list[dict[str, Any]], firewall_contexts: list[dict[str, Any]] | None, *, device_name: str
+) -> list[dict[str, Any]]:
+    """The transit legs a leaf must hold locally for its firewall PBR next hops.
+
+    A PBR next hop is a context's leg VIP in the segment's own VRF; the leaf bridges
+    to it over the transit L2VNI, so the VIP has to be a connected next hop. Only
+    the (context, VRF) legs a rule redirects to are rendered (get_exchange_transits).
+    Raises when a next hop has no derivable leg (a missing context name, vlan_id or
+    namespace l3_vni): the leaf would otherwise redirect into a VIP it cannot reach
+    and the firewall would be bypassed silently.
+    """
+    wanted = {
+        (rule["fw_namespace"], rule["fw_nexthop"])
+        for rule in pbr_rules
+        if rule.get("fw_nexthop") and rule.get("fw_namespace")
+    }
+    transits = get_exchange_transits(firewall_contexts or [], legs=wanted)
+    held = {
+        (ns["name"], transit_addresses(t["segment"]["gateway"]["ip_prefix"]["prefix"])["vip"])
+        for t in transits
+        for ns in [t["segment"]["gateway"]["ip_prefix"]["ip_namespace"]]
+        if t["transit_context"] and ns["l3_vni"]
+    }
+    for rule in pbr_rules:
+        nexthop = rule.get("fw_nexthop")
+        if nexthop and (rule.get("fw_namespace"), nexthop) not in held:
+            context = next(
+                (
+                    ctx.get("name")
+                    for ctx in firewall_contexts or []
+                    if _context_leg_ip(ctx, rule.get("fw_namespace")) == nexthop
+                ),
+                None,
+            )
+            raise ValueError(
+                f"leaf '{device_name}' has no local transit leg for firewall next hop {nexthop} "
+                f"(segment '{rule.get('segment_name')}', context '{context}', VRF '{rule.get('fw_namespace')}'): "
+                "the context needs a name, a vlan_id and a namespace l3_vni; refusing config that would bypass the firewall"
+            )
+    return transits
 
 
 def _snat_host(cap: dict[str, Any]) -> str | None:
@@ -631,8 +682,11 @@ def get_customer_pbr_rules(
     the PBR redirect decision, and no leaf ever owns a FirewallContext
     interface itself (only the firewall and, in pbr connectivity_mode, the
     border-leaf do). The nexthop is the context's /29 leg VIP inside the
-    segment's own tenant VRF — reachable from any leaf as an EVPN route, since
-    the border-leaf redistributes that directly-connected /29 into the VRF.
+    segment's own tenant VRF, a connected next hop: every leaf that redirects
+    holds that transit leg locally (get_leaf_firewall_transits), bridges to the
+    VIP over the transit L2VNI and never relies on a remote EVPN route to it
+    (which would be routed in the L3VNI and bypass the firewall after the
+    border decapsulates). ``fw_namespace`` names the leg used.
     inline connectivity_mode never allocates that IP (see
     generators/topology/customer_dc.py's _ensure_context_subinterface),
     so contexts without one are skipped — no PBR rule for them, since the
@@ -740,6 +794,7 @@ def get_customer_pbr_rules(
                 "segment_name": seg.get("customer_name") or seg.get("name") or f"VLAN_{vlan_id}",
                 "bypass_prefixes": sorted(bypass_prefixes),
                 "fw_nexthop": fw_nexthop,
+                "fw_namespace": own_namespace,
                 "customer_name": seg.get("customer_name"),
                 "environment": seg.get("environment"),
             }

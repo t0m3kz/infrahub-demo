@@ -23,6 +23,9 @@ vlan 100
 vlan 200
    name Customer-A
 
+vlan 3000
+   name XCHG-dc1-fw-shared-VRF_A
+
 !
 ! Zero-Trust ACLs (one per segment VLAN — inbound on SVI)
 !
@@ -118,6 +121,13 @@ router bgp 65000
 route-map RM-CONN-2-BGP permit 10
    match interface Loopback0
 !
+! The firewall transit /29s this leaf holds locally for PBR are originated by the borders only
+! documented-not-lab-verified: a deny entry keeps the leaf's connected transit /29 out of the EVPN type-5 table
+ip prefix-list PL-XCHG-TRANSIT seq 10 permit 100.66.0.0/29
+route-map RM-VRF-CONN-2-EVPN deny 5
+   match ip address prefix-list PL-XCHG-TRANSIT
+route-map RM-VRF-CONN-2-EVPN permit 10
+!
 ! VXLAN Configuration with Microsegmentation (VRF-aware VNIs)
 !
 ! Microsegmentation enabled: 1 VRF(s) for tenant isolation
@@ -127,6 +137,7 @@ interface Vxlan1
    !
    ! L2 VNI Mappings (VLAN segments)
    vxlan vlan 100 vni 10100
+   vxlan vlan 3000 vni 64000
    !
    ! L3 VNI Mappings (VRF segments for microsegmentation)
    vxlan vrf VRF_A vni 50001
@@ -151,13 +162,18 @@ router bgp 65000
       route-target both 65000:10100
       redistribute learned
       arp proxy
+   vlan 3000
+      rd 10.0.0.1:64000
+      route-target both 65000:64000
+      redistribute learned
+      arp proxy
    !
    ! L3 EVPN (VRF-based for microsegmentation)
    vrf VRF_A
       rd 10.0.0.1:50001
       route-target import evpn 65000:50001
       route-target export evpn 65000:50001
-      redistribute connected
+      redistribute connected route-map RM-VRF-CONN-2-EVPN
 
 !
 ! Anycast Gateway Configuration
@@ -170,12 +186,16 @@ interface Vlan100
 interface Vlan200
    ip address virtual 10.200.0.1/24
    ip access-group ACL-VLAN200-IN in
+interface Vlan3000
+   vrf VRF_A
+   ip address virtual 100.66.0.1/29
 !
 ! Leaf PBR — LB return path first, then permitted firewall bypass,
 ! otherwise redirect to the firewall when a context is present.
 ! documented-not-lab-verified: policy-map type pbr / class-map type pbr / service-policy type pbr
 ! documented-not-lab-verified: a class without a set action (bypass) forwards by the normal route lookup
 ! NOTE: EOS 'set nexthop' has no VRF option: the firewall next hop must be reachable in the SVI's own VRF
+! documented-not-lab-verified: the next hop is the VIP of the local transit leg (connected virtual-router SVI over the L2VNI), no 'recursive' needed
 ! (an ACL used by PBR must not contain deny entries - the bypass ACL relies on the implicit end of the list)
 !
 ! Customer: Customer-A/any
