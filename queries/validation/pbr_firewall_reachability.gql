@@ -1,0 +1,62 @@
+# What decides whether a PBR leaf can reach its firewall context: each context
+# with the deployments it serves and its legs (their VRF namespace type), and
+# the firewall-role ports (the ports facing the HA members) with the device
+# they sit on and the contexts tagged on them. The check keeps the border and
+# edge devices and matches the contexts in Python (no nested relationship
+# filters).
+query pbr_firewall_reachability {
+  ManagedFirewallContext {
+    edges {
+      node {
+        id
+        name { value }
+        tenant { node { id display_label } }
+        served_deployments { edges { node { id display_label } } }
+        interface_capabilities {
+          edges {
+            node {
+              device { node { role { value } } }
+              ... on DcimVirtualInterface {
+                ip_address { node { ip_namespace { node { name { value } namespace_type { value } } } } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  FirewallPhysicalPorts: DcimPhysicalInterface(role__value: "firewall") {
+    edges {
+      node {
+        id
+        device { node { name { value } role { value } } }
+        interface_capabilities {
+          edges {
+            node {
+              __typename
+              ... on ManagedFirewallContext { id }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  FirewallVirtualPorts: DcimVirtualInterface(role__value: "firewall") {
+    edges {
+      node {
+        id
+        device { node { name { value } role { value } } }
+        interface_capabilities {
+          edges {
+            node {
+              __typename
+              ... on ManagedFirewallContext { id }
+            }
+          }
+        }
+      }
+    }
+  }
+}
