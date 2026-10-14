@@ -6,6 +6,7 @@ hostname dc1-leaf-01
 !
 feature ospf
 feature bgp
+feature bfd
 feature interface-vlan
 feature lacp
 feature vpc

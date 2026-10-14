@@ -5,6 +5,7 @@ hostname dc1-spine-01
 !
 feature ospf
 feature bgp
+feature bfd
 feature interface-vlan
 feature lacp
 feature vpc

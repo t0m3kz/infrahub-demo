@@ -1,0 +1,13 @@
+{#- NX-OS rejects `bfd` under a BGP neighbor or peer-session template unless
+    `feature bfd` is on. Mirrors where cisco_nxos_bgp.j2 renders `bfd`: every
+    peer group, and a session that is in a VRF or has no peer group. -#}
+{%- set bfd_ns = namespace(used=false) %}
+{%- if capabilities is not defined or capabilities.bgp_enabled is not defined or capabilities.bgp_enabled %}
+{%- for bgp_config in bgp %}
+{%- for pg in bgp_config.peer_groups | default([]) if pg.get('bfd_enabled') %}{% set bfd_ns.used = true %}{% endfor %}
+{%- for session in bgp_config.sessions if session.get('bfd_enabled') and (session.get('vrf') or session.peer_group is not defined) %}{% set bfd_ns.used = true %}{% endfor %}
+{%- endfor %}
+{%- endif %}
+{%- if bfd_ns.used %}
+feature bfd
+{%- endif -%}
