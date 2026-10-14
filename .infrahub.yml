@@ -303,6 +303,10 @@ check_definitions:
   - name: validate_tenant_svi_protection
     class_name: CheckTenantSviProtection
     file_path: checks/tenant_svi_protection.py
+  # Targetless: a context's carrier is a border or edge port, not the leaf.
+  - name: validate_pbr_firewall_reachability
+    class_name: CheckPbrFirewallReachability
+    file_path: checks/pbr_firewall_reachability.py
   # Targetless: the invariants span topologies (namespaces, the INTERNET VRF,
   # cloud Transit Gateways and virtual interfaces), not one device.
   - name: validate_routing_invariants
@@ -638,6 +642,8 @@ queries:
     file_path: queries/validation/segment_security.gql
   - name: tenant_svi_protection
     file_path: queries/validation/tenant_svi_protection.gql
+  - name: pbr_firewall_reachability
+    file_path: queries/validation/pbr_firewall_reachability.gql
   - name: routing_invariants
     file_path: queries/validation/routing_invariants.gql
   - name: evpn_fabric
