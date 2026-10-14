@@ -3,7 +3,8 @@
 # the INTERNET namespace, and the cloud Transit Gateway attachments, route
 # tables and virtual interfaces (with the namespaces their circuits terminate
 # in), plus the cloud VPC aggregates (cidr_blocks) with the namespace each is
-# registered in, and the cloud subnets that must lie inside them. Filters on
+# registered in, the cloud subnets that must lie inside them, and the office
+# footprints' LAN prefixes with their namespace and environment. Filters on
 # the *Interface queries narrow the response to the INTERNET namespace; the
 # check re-tests the type itself.
 query routing_invariants {
@@ -79,6 +80,27 @@ query routing_invariants {
         name { value }
         account { node { id name { value } environment { value } } }
         cidr_blocks {
+          edges {
+            node {
+              id
+              prefix { value }
+              ip_namespace { node { id name { value } l3_vni { value } namespace_type { value } } }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  # Office LANs: held to the VPC aggregate rules (namespace type of the
+  # footprint's environment, no overlap inside one namespace).
+  TopologyCustomerOffice {
+    edges {
+      node {
+        id
+        name { value }
+        environment { value }
+        lan_prefixes {
           edges {
             node {
               id

@@ -486,6 +486,20 @@ nodes:
         identifier: "topology_customer_office__namespace"
         order_weight: 1100
         description: "IPAM namespace (= VRF) for this environment's footprint"
+      # On the per-tenant footprint, not on LocationOffice: the footprint knows
+      # its environment (which decides the shared namespace a prefix lives in)
+      # and its tenant (parent OfficeCustomer), while one building can host
+      # several tenants and environments. The SD-WAN VRF handoff's inbound
+      # prefix-list is built from these.
+      - name: lan_prefixes
+        peer: IpamPrefix
+        label: "LAN Prefixes"
+        description: "Office LAN prefixes this footprint owns, registered in its environment's namespace"
+        cardinality: many
+        kind: Attribute
+        optional: true
+        identifier: "customer_office__lan_prefixes"
+        order_weight: 1150
       - name: sdwan_gateway
         peer: DcimDevice
         label: "SD-WAN Gateway"
