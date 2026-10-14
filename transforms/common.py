@@ -308,16 +308,20 @@ class BaseDeviceTransform(InfrahubTransform):
         if self.device_role == "border-leaf":
             self._refuse_unprotected_tenant_svis(platform_name, acls, leaf_pbr_rules)
 
+        vxlan = get_vxlan_config(
+            data,
+            platform_name,
+            device_role=self.device_role,
+            activations=(activations or []) + transits,
+            fabric_rt_asn=_fabric_rt_asn(data.get("deployment")),
+            fabric_anycast_mac=_fabric_anycast_mac(data.get("deployment")),
+        )
+        if self.device_role in self._LEAF_ROLES:
+            self._refuse_unbindable_sros_acls(platform_name, acls, vxlan)
+
         return {
             "vlans": vlans,
-            "vxlan": get_vxlan_config(
-                data,
-                platform_name,
-                device_role=self.device_role,
-                activations=(activations or []) + transits,
-                fabric_rt_asn=_fabric_rt_asn(data.get("deployment")),
-                fabric_anycast_mac=_fabric_anycast_mac(data.get("deployment")),
-            ),
+            "vxlan": vxlan,
             "acls": acls,
             "vrf_routes": vrf_routes,
             "customer_pbr_rules": customer_pbr_rules,
@@ -365,6 +369,26 @@ class BaseDeviceTransform(InfrahubTransform):
             raise ValueError(
                 f"{platform_name} border-leaf cannot render the SVI ACL for VLANs "
                 f"{sorted(acl['vlan_id'] for acl in acls)}; refusing unprotected config"
+            )
+
+    @staticmethod
+    def _refuse_unbindable_sros_acls(
+        platform_name: str, acls: list[dict[str, Any]], vxlan: dict[str, Any] | None
+    ) -> None:
+        """Raise when an SR OS leaf holds a segment ACL for a VLAN it renders no service for.
+
+        The SR OS leaf binds each ip-filter as a SAP ingress filter inside the vpls
+        of the segment's L2 VNI. A VLAN-only segment (no VNI) has no vpls, and the
+        template models no local L2 service, so its filter would stay unbound.
+        """
+        if platform_name != "nokia_sros" or not acls:
+            return
+        bound = {m["vlan_id"] for m in (vxlan or {}).get("l2_vni_mappings", [])}
+        unbound = sorted(acl["vlan_id"] for acl in acls if acl["vlan_id"] not in bound)
+        if unbound:
+            raise ValueError(
+                f"{platform_name} leaf cannot bind the segment ACL for VLANs {unbound} (no L2 VNI service "
+                "to attach the SAP filter to); refusing unprotected config"
             )
 
     _ACTIVE_STATUSES = ("active", "provisioning")
