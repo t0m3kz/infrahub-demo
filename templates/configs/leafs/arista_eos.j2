@@ -90,14 +90,13 @@ interface {{ interface.name }}
    description {{ interface.description }}
 {%- endif %}
 {%- include 'common/arista_eos_interface_ip.j2' %}
-{%- if interface.vlans %}
-{%- if interface.vlans|length == 1 %}
+{%- if interface.mode == 'trunk' %}
+   switchport mode trunk
+   switchport trunk allowed vlan {{ interface.vlans|join(',') }}
+{%- elif interface.vlans %}
    switchport access vlan {{ interface.vlans[0] }}
 {%- if interface.access_isolation_mode == 'isolated' %}
    switchport protected
-{%- endif %}
-{%- else %}
-   switchport trunk allowed vlan {{ interface.vlans|join(',') }}
 {%- endif %}
 {%- endif %}
 {%- if interface.get('ospf') %}

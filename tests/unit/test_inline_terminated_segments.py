@@ -221,3 +221,41 @@ class TestTrunkMode:
 
         assert iface["mode"] is None
         assert iface["vlans"] == [150]
+
+    def test_host_port_with_two_segments_is_trunk_of_both(self) -> None:
+        """A server-facing port in two segments trunks exactly those VLANs (not access on the first)."""
+        activations = [
+            {"vlan_id": 150, "vni": 10150, "segment": _inline_segment()},
+            {"vlan_id": 100, "vni": 10100, "segment": _routed_segment()},
+        ]
+
+        (iface,) = get_interfaces(
+            [_interface("Ethernet10", "server", [_inline_segment(), _routed_segment()])], activations=activations
+        )
+
+        assert iface["mode"] == "trunk"
+        assert iface["vlans"] == [100, 150]
+
+    def test_trunk_vlan_order_does_not_depend_on_segment_order(self) -> None:
+        """The same two segments in either query order give the same trunk list (no churn between leaves)."""
+        activations = [
+            {"vlan_id": 150, "vni": 10150, "segment": _inline_segment()},
+            {"vlan_id": 100, "vni": 10100, "segment": _routed_segment()},
+        ]
+        forward = [_inline_segment(), _routed_segment()]
+
+        (a,) = get_interfaces([_interface("Ethernet10", "server", forward)], activations=activations)
+        (b,) = get_interfaces([_interface("Ethernet10", "server", forward[::-1])], activations=activations)
+
+        assert a["vlans"] == b["vlans"] == [100, 150]
+
+    def test_host_port_with_unactivated_second_segment_stays_access(self) -> None:
+        """A second segment with no activation on this device adds no VLAN, so the port stays access."""
+        activations = [{"vlan_id": 150, "vni": 10150, "segment": _inline_segment()}]
+
+        (iface,) = get_interfaces(
+            [_interface("Ethernet10", "server", [_inline_segment(), _routed_segment()])], activations=activations
+        )
+
+        assert iface["mode"] is None
+        assert iface["vlans"] == [150]

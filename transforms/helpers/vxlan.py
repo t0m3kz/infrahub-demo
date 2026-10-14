@@ -388,12 +388,17 @@ def get_interfaces(
 
         iface_dict = {
             "name": name,
-            "vlans": vlans,
+            # Sorted when the port carries several VLANs: the list order comes
+            # from the query and differs between leaves, which would churn the
+            # rendered `trunk allowed vlan` list between otherwise equal ports.
+            "vlans": sorted(vlans) if len(vlans) > 1 else vlans,
             # A border-leaf service port facing an HA pair member carries the
             # VLANs of the terminate_inline segments that pair gateways, tagged
             # (one <member-port>.<vlan> sub-interface per segment on the HA
-            # side). Every other port keeps its access/legacy rendering (None).
-            "mode": "trunk" if vlans and iface.get("role") in _SERVICE_TRUNK_ROLES else None,
+            # side). Any other port carrying more than one VLAN (e.g. a host
+            # port in two segments) is a trunk of exactly those VLANs; a
+            # single-VLAN port keeps its access rendering (None).
+            "mode": "trunk" if vlans and (len(vlans) > 1 or iface.get("role") in _SERVICE_TRUNK_ROLES) else None,
             # Isolation mode of the port's access (first) VLAN.
             "access_isolation_mode": vlan_isolation.get(vlans[0], "normal") if vlans else None,
             "description": iface.get("description"),
