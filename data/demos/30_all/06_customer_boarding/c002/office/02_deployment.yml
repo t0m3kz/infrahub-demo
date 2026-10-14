@@ -1,4 +1,18 @@
 ---
+# The Marseille Branch LAN, registered in the PROD VRF because the footprint
+# below is environment p (10.210.<customer>.0/24, see
+# ../../c005/office/02_deployment.yml). Created first: the footprint references
+# it by its [prefix, namespace] hfid.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "10.210.2.0/24"
+      ip_namespace: "PROD"
+      status: active
+      description: "C002 Marseille Branch office LAN"
+---
 # name is computed ({parent_owner_org_id}-{environment}) — read-only.
 #
 # sdwan_gateway/branch_to_branch are NOT set here even though this office is
@@ -24,5 +38,7 @@ spec:
             environment: "p"
             locations:
               - "mar-branch"
+            lan_prefixes:
+              - ["10.210.2.0/24", "PROD"]
             member_of_groups:
               - customer_deployments_office

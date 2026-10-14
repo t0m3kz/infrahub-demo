@@ -587,6 +587,7 @@ class TopologyCustomerOffice(
 ):
     name: StringOptional
     locations: RelationshipManager[LocationFacility]
+    lan_prefixes: RelationshipManager[IpamPrefix]
 
 
 class TopologyCustomerTemplateCloud(TopologyCustomerTemplate):
