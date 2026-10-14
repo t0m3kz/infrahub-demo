@@ -6,6 +6,7 @@ hostname {{ name }}
 !
 feature ospf
 feature bgp
+{%- include 'common/cisco_nxos_feature_bfd.j2' %}
 feature interface-vlan
 feature lacp
 feature vpc
