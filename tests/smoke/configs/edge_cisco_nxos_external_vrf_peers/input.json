@@ -2152,5 +2152,135 @@
         }
       }
     ]
+  },
+  "TopologyCustomerOffice": {
+    "edges": [
+      {
+        "node": {
+          "sdwan_gateway": {
+            "node": {
+              "name": {
+                "value": "EQX-FR2-SDWAN-GW1"
+              }
+            }
+          },
+          "lan_prefixes": {
+            "edges": [
+              {
+                "node": {
+                  "prefix": {
+                    "value": "10.210.5.0/24"
+                  },
+                  "ip_namespace": {
+                    "node": {
+                      "name": {
+                        "value": "PROD"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "node": {
+          "sdwan_gateway": {
+            "node": {
+              "name": {
+                "value": "EQX-FR2-SDWAN-GW1"
+              }
+            }
+          },
+          "lan_prefixes": {
+            "edges": [
+              {
+                "node": {
+                  "prefix": {
+                    "value": "10.210.2.0/24"
+                  },
+                  "ip_namespace": {
+                    "node": {
+                      "name": {
+                        "value": "PROD"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "prefix": {
+                    "value": "10.211.2.0/24"
+                  },
+                  "ip_namespace": {
+                    "node": {
+                      "name": {
+                        "value": "NON-PROD"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "node": {
+          "sdwan_gateway": {
+            "node": {
+              "name": {
+                "value": "EQX-AM5-SDWAN-GW1"
+              }
+            }
+          },
+          "lan_prefixes": {
+            "edges": [
+              {
+                "node": {
+                  "prefix": {
+                    "value": "10.210.9.0/24"
+                  },
+                  "ip_namespace": {
+                    "node": {
+                      "name": {
+                        "value": "PROD"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "node": {
+          "sdwan_gateway": {
+            "node": null
+          },
+          "lan_prefixes": {
+            "edges": [
+              {
+                "node": {
+                  "prefix": {
+                    "value": "10.210.15.0/24"
+                  },
+                  "ip_namespace": {
+                    "node": {
+                      "name": {
+                        "value": "PROD"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
   }
 }

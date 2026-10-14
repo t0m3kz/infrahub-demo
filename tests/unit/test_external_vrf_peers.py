@@ -3,9 +3,12 @@
 Covers:
   - _build_session_from_peering()  — ``external`` flag: peering_role regular in a prod/non_prod VRF
   - get_external_peer_prefixes()   — the far end's registered prefixes, per handoff sub-interface
+                                     (a cloud VIF's reachable VPC blocks, the LANs of the offices
+                                     behind an SD-WAN gateway)
   - get_onprem_prefixes()          — per-VRF on-prem segment prefixes announced to those peers
   - Edge transform                 — RM-<peer>-IN / RM-<VRF>-EXTERNAL-OUT on edges/cisco_nxos.j2
-  - 30_all data                    — the cloud VIF and SD-WAN handoffs are wired for that mode
+  - 30_all data                    — the cloud VIF and SD-WAN handoffs are wired for that mode; every
+                                     hub VPC is reachable from on-prem; GW1's offices register PROD LANs
 """
 
 from __future__ import annotations
@@ -92,6 +95,35 @@ def _vpc_attachment(tables: list[str], *blocks: tuple[str, str]) -> dict[str, An
 
 def _subif(name: str, namespace: str | None) -> dict[str, Any]:
     return {"name": name, "ip_address": {"address": "10.255.5.5/30", "ip_namespace": {"name": namespace}}}
+
+
+_GW1 = "EQX-FR2-SDWAN-GW1"
+_NO_SDWAN: dict[str, Any] = {"device_capabilities": None, "offices": None}
+
+
+def _bgp_facing(*ends: tuple[str, str]) -> list[dict[str, Any]]:
+    """Cleaned device capabilities: one ManagedBGP whose peerings run eg-fr01 (local iface) -> remote device."""
+    return [
+        {"typename": "ManagedNTP", "name": "ntp"},
+        {
+            "typename": "ManagedBGP",
+            "peerings": [
+                {
+                    "name": f"peering-{local}-{remote}",
+                    "interface_capabilities": [
+                        {"name": local, "device": {"name": "eg-fr01"}},
+                        {"name": "eth0.1900", "device": {"name": remote}},
+                    ],
+                }
+                for local, remote in ends
+            ],
+        },
+    ]
+
+
+def _office(gateway: str | None, *lans: tuple[str, str]) -> dict[str, Any]:
+    """A cleaned TopologyCustomerOffice root entry: its SD-WAN gateway and (prefix, namespace) LANs."""
+    return {"sdwan_gateway": {"name": gateway} if gateway else None, "lan_prefixes": _blocks(*lans)}
 
 
 def _segment(prefix: str, namespace: dict[str, Any], member_type: str = "address") -> dict[str, Any]:
@@ -199,7 +231,7 @@ class TestExternalPeerPrefixes:
                 {"attachment_type": "hybrid", "propagates_to_route_tables": [{"id": "rt-shared"}]},
             ]
         )
-        found = get_external_peer_prefixes([_subif("Ethernet1/13.1000", "PROD")], [vif], "eg-fr01")
+        found = get_external_peer_prefixes([_subif("Ethernet1/13.1000", "PROD")], [vif], "eg-fr01", **_NO_SDWAN)
         assert found == {"Ethernet1/13.1000": ["10.30.0.0/16"]}
 
     def test_private_vif_accepts_its_own_vpc_blocks_in_its_namespace(self) -> None:
@@ -210,7 +242,7 @@ class TestExternalPeerPrefixes:
             "direct_connect": {"physical_devices": [{"name": "eg-fr01"}]},
             "virtual_network": {"cidr_blocks": _blocks(("10.60.0.0/16", "NON-PROD"), ("10.31.0.0/16", "PROD"))},
         }
-        found = get_external_peer_prefixes([_subif("Ethernet1/13.1001", "NON-PROD")], [vif], "eg-fr01")
+        found = get_external_peer_prefixes([_subif("Ethernet1/13.1001", "NON-PROD")], [vif], "eg-fr01", **_NO_SDWAN)
         assert found == {"Ethernet1/13.1001": ["10.60.0.0/16"]}
 
     def test_default_route_and_ipv6_are_never_accepted(self) -> None:
@@ -222,7 +254,7 @@ class TestExternalPeerPrefixes:
                 )
             ]
         )
-        found = get_external_peer_prefixes([_subif("Ethernet1/13.1000", "PROD")], [vif], "eg-fr01")
+        found = get_external_peer_prefixes([_subif("Ethernet1/13.1000", "PROD")], [vif], "eg-fr01", **_NO_SDWAN)
         assert found == {"Ethernet1/13.1000": ["10.30.0.0/16"]}
 
     def test_vif_on_another_device_or_vlan_is_ignored(self) -> None:
@@ -232,7 +264,7 @@ class TestExternalPeerPrefixes:
             _transit_vif(vlan=1002, attachments=[_vpc_attachment(["rt-shared"], ("10.40.0.0/16", "PROD"))]),
         ]
         interfaces = [_subif("Ethernet1/13.1000", "PROD"), _subif("Ethernet1/13", "PROD"), _subif("Loopback0", None)]
-        assert get_external_peer_prefixes(interfaces, vifs, "eg-fr01") == {}
+        assert get_external_peer_prefixes(interfaces, vifs, "eg-fr01", **_NO_SDWAN) == {}
 
     def test_two_vifs_on_one_vlan_accept_nothing(self, caplog: pytest.LogCaptureFixture) -> None:
         """Ambiguous VLAN on one device: fail closed and say so."""
@@ -241,7 +273,7 @@ class TestExternalPeerPrefixes:
             {**_transit_vif(attachments=[]), "name": "vif-other"},
         ]
         with caplog.at_level(logging.WARNING):
-            found = get_external_peer_prefixes([_subif("Ethernet1/13.1000", "PROD")], vifs, "eg-fr01")
+            found = get_external_peer_prefixes([_subif("Ethernet1/13.1000", "PROD")], vifs, "eg-fr01", **_NO_SDWAN)
         assert found == {}
         assert "accepts nothing" in caplog.text
 
@@ -249,12 +281,135 @@ class TestExternalPeerPrefixes:
         """No associated route table: nothing is reachable over the VIF."""
         vif = _transit_vif(attachments=[_vpc_attachment(["rt-shared"], ("10.30.0.0/16", "PROD"))])
         vif["transit_gateway_attachment"]["associated_route_table"] = None
-        found = get_external_peer_prefixes([_subif("Ethernet1/13.1000", "PROD")], [vif], "eg-fr01")
+        found = get_external_peer_prefixes([_subif("Ethernet1/13.1000", "PROD")], [vif], "eg-fr01", **_NO_SDWAN)
         assert found == {"Ethernet1/13.1000": []}
 
     def test_no_virtual_interfaces_is_empty(self) -> None:
-        """The SD-WAN handoff has no VIF behind it."""
-        assert get_external_peer_prefixes([_subif("Ethernet1/13.1900", "PROD")], None, "eg-fr01") == {}
+        """A sub-interface with neither a VIF nor an SD-WAN gateway behind it is absent."""
+        assert get_external_peer_prefixes([_subif("Ethernet1/13.1900", "PROD")], None, "eg-fr01", **_NO_SDWAN) == {}
+
+
+class TestSdwanGatewayPrefixes:
+    """The SD-WAN handoff accepts the LANs of the offices behind the gateway it faces."""
+
+    def test_offices_behind_the_gateway_are_accepted_sorted(self) -> None:
+        """The union of every GW1 office's PROD LAN, in address order, deduplicated."""
+        offices = [
+            _office(_GW1, ("10.210.5.0/24", "PROD")),
+            _office(_GW1, ("10.210.2.0/24", "PROD"), ("10.210.5.0/24", "PROD")),
+        ]
+        found = get_external_peer_prefixes(
+            [_subif("Ethernet1/13.1900", "PROD")],
+            None,
+            "eg-fr01",
+            device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
+            offices=offices,
+        )
+        assert found == {"Ethernet1/13.1900": ["10.210.2.0/24", "10.210.5.0/24"]}
+
+    def test_offices_of_another_gateway_or_none_are_excluded(self) -> None:
+        """Only offices whose sdwan_gateway is the far end of this handoff count."""
+        offices = [
+            _office(_GW1, ("10.210.5.0/24", "PROD")),
+            _office("EQX-AM5-SDWAN-GW1", ("10.210.9.0/24", "PROD")),
+            _office(None, ("10.210.15.0/24", "PROD")),
+        ]
+        found = get_external_peer_prefixes(
+            [_subif("Ethernet1/13.1900", "PROD")],
+            None,
+            "eg-fr01",
+            device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
+            offices=offices,
+        )
+        assert found == {"Ethernet1/13.1900": ["10.210.5.0/24"]}
+
+    def test_wrong_namespace_default_and_ipv6_lans_are_excluded(self) -> None:
+        """A LAN registered in another namespace, a 0/0 or an IPv6 LAN never reaches the PROD filter."""
+        offices = [
+            _office(
+                _GW1,
+                ("10.210.5.0/24", "PROD"),
+                ("10.211.5.0/24", "NON-PROD"),
+                ("0.0.0.0/0", "PROD"),
+                ("2001:db8:210::/64", "PROD"),
+            )
+        ]
+        found = get_external_peer_prefixes(
+            [_subif("Ethernet1/13.1900", "PROD")],
+            None,
+            "eg-fr01",
+            device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
+            offices=offices,
+        )
+        assert found == {"Ethernet1/13.1900": ["10.210.5.0/24"]}
+
+    def test_non_prod_session_never_gets_prod_lans(self) -> None:
+        """A NON-PROD handoff to the same gateway accepts only NON-PROD LANs (here: none)."""
+        found = get_external_peer_prefixes(
+            [_subif("Ethernet1/13.1901", "NON-PROD")],
+            None,
+            "eg-fr01",
+            device_capabilities=_bgp_facing(("Ethernet1/13.1901", _GW1)),
+            offices=[_office(_GW1, ("10.210.5.0/24", "PROD"), ("10.210.2.0/24", "PROD"))],
+        )
+        assert found == {"Ethernet1/13.1901": []}
+
+    def test_gateway_whose_offices_register_no_lan_accepts_nothing(self) -> None:
+        """A known gateway with no registered LAN maps to [] (deny), not to a VIF guess."""
+        found = get_external_peer_prefixes(
+            [_subif("Ethernet1/13.1900", "PROD")],
+            None,
+            "eg-fr01",
+            device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
+            offices=[_office(_GW1)],
+        )
+        assert found == {"Ethernet1/13.1900": []}
+
+    def test_no_offices_leaves_the_handoff_absent(self) -> None:
+        """No office footprint at all: the gateway is not known, so the handoff accepts nothing."""
+        found = get_external_peer_prefixes(
+            [_subif("Ethernet1/13.1900", "PROD")],
+            None,
+            "eg-fr01",
+            device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
+            offices=[],
+        )
+        assert found == {}
+
+    def test_handoff_facing_a_non_gateway_device_gets_no_office_lans(self) -> None:
+        """Office LANs go only to the session whose far end is their gateway, not to any PROD handoff."""
+        found = get_external_peer_prefixes(
+            [_subif("Ethernet1/13.1900", "PROD"), _subif("Ethernet1/14.1900", "PROD")],
+            None,
+            "eg-fr01",
+            device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1), ("Ethernet1/14.1900", "EXT-PARTNER-01")),
+            offices=[_office(_GW1, ("10.210.5.0/24", "PROD"))],
+        )
+        assert found == {"Ethernet1/13.1900": ["10.210.5.0/24"]}
+
+    def test_handoff_with_several_far_ends_is_not_resolved_to_a_gateway(self) -> None:
+        """Ambiguous far end on one sub-interface: fail closed rather than trust one of them."""
+        found = get_external_peer_prefixes(
+            [_subif("Ethernet1/13.1900", "PROD")],
+            None,
+            "eg-fr01",
+            device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1), ("Ethernet1/13.1900", "EXT-PARTNER-01")),
+            offices=[_office(_GW1, ("10.210.5.0/24", "PROD"))],
+        )
+        assert found == {}
+
+    def test_malformed_peering_raises(self) -> None:
+        """A peering without exactly two ends is refused, as when the session itself is built."""
+        capabilities = _bgp_facing(("Ethernet1/13.1900", _GW1))
+        capabilities[1]["peerings"][0]["interface_capabilities"].pop()
+        with pytest.raises(ValueError, match="expected 2 interface_capabilities"):
+            get_external_peer_prefixes(
+                [_subif("Ethernet1/13.1900", "PROD")],
+                None,
+                "eg-fr01",
+                device_capabilities=capabilities,
+                offices=[_office(_GW1, ("10.210.5.0/24", "PROD"))],
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -325,14 +480,28 @@ class TestEdgeRender:
         )
         assert "0.0.0.0/0" not in _run_edge(data)
 
-    def test_peer_without_registered_prefixes_is_accepted_nothing(self) -> None:
-        """The SD-WAN handoff: no office prefix is registered, so its inbound map denies everything."""
+    def test_sdwan_peer_accepts_the_lans_of_the_offices_behind_its_gateway(self) -> None:
+        """The SD-WAN handoff permits exactly GW1's PROD office LANs, never another gateway's or NON-PROD."""
         output = _run_edge(_fixture())
-        assert "route-map RM-VRF-PROD-EQXFR2-SDWAN-IN deny 10\n" in output
-        assert "PL-VRF-PROD-EQXFR2-SDWAN-IN" not in output
+        assert re.findall(r"^ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN .*$", output, re.M) == [
+            "ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN seq 10 permit 10.210.2.0/24",
+            "ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN seq 20 permit 10.210.5.0/24",
+        ]
+        assert "route-map RM-VRF-PROD-EQXFR2-SDWAN-IN permit 10\n" in output
+        for excluded in ("10.211.2.0/24", "10.210.9.0/24", "10.210.15.0/24"):
+            assert excluded not in output
         block = _neighbor_block(output, "10.255.5.1")
         assert "        route-map RM-VRF-PROD-EQXFR2-SDWAN-IN in\n" in block
         assert "        maximum-prefix 100\n" in block
+
+    def test_peer_without_registered_prefixes_is_accepted_nothing(self) -> None:
+        """No office footprint registered: the SD-WAN inbound map denies everything."""
+        data = _fixture()
+        data["TopologyCustomerOffice"] = {"edges": []}
+        output = _run_edge(data)
+        assert "route-map RM-VRF-PROD-EQXFR2-SDWAN-IN deny 10\n" in output
+        assert "PL-VRF-PROD-EQXFR2-SDWAN-IN" not in output
+        assert "        route-map RM-VRF-PROD-EQXFR2-SDWAN-IN in\n" in _neighbor_block(output, "10.255.5.1")
 
     def test_outbound_is_per_vrf_and_never_mixes_environments(self) -> None:
         """PROD announces only PROD's segment prefixes, NON-PROD only its own."""
@@ -417,3 +586,42 @@ class TestAllDemoData:
         }
         attachments = _objects(_INTERCONNECTS / "02_cloud_hub", "CloudTransitGatewayAttachment")
         assert {accounts[a["owner_account"]] for a in attachments} == {"p"}
+
+    def test_every_hub_vpc_propagates_into_the_hybrid_attachments_table(self) -> None:
+        """On-prem traffic is looked up in the hybrid attachment's table, so every VPC must propagate there.
+
+        This is what makes novantis (associated with rt-hub-isolated) reachable from on-prem, and its
+        10.150.0.0/16 accepted on the colo edge's transit VIF session.
+        """
+        attachments = _objects(_INTERCONNECTS / "02_cloud_hub", "CloudTransitGatewayAttachment")
+        (hybrid,) = [a for a in attachments if a["attachment_type"] == "hybrid"]
+        vpcs = [a for a in attachments if a["attachment_type"] == "vpc"]
+        assert vpcs
+        missing = [a["name"] for a in vpcs if hybrid["associated_route_table"] not in a["propagates_to_route_tables"]]
+        assert missing == []
+
+    def test_offices_behind_the_sdwan_handoff_gateway_register_lans_in_its_namespace(self) -> None:
+        """The SD-WAN handoff's far end has offices, and each of their LANs is in the handoff's namespace.
+
+        Office footprints are created in 06_customer_boarding (with lan_prefixes) and opted into the
+        gateway in 08_interconnects (sdwan_gateway), keyed by (customer, environment).
+        """
+        lans: dict[tuple[str, str], list[list[str]]] = {}
+        for customer in _objects(
+            _ROOT / "data" / "demos" / "30_all" / "06_customer_boarding", "TopologyOfficeCustomer"
+        ):
+            for child in customer.get("children") or []:
+                if isinstance(child, dict) and child.get("kind") == "TopologyCustomerOffice":
+                    entries = child["data"]
+                    for office in entries if isinstance(entries, list) else [entries]:
+                        lans[(customer["owner"], office["environment"])] = office.get("lan_prefixes") or []
+        (peering,) = [p for p in _external_handoffs() if p["name"] == "VRF-PROD-EQXFR2-SDWAN"]
+        (gateway,) = [device for device, _ in peering["interface_capabilities"] if not device.startswith("eg-")]
+        behind = [
+            lans.get((office["parent"], office["environment"]), [])
+            for office in _objects(_INTERCONNECTS, "TopologyCustomerOffice")
+            if office.get("sdwan_gateway") == gateway
+        ]
+        registered = [prefix for office_lans in behind for prefix in office_lans]
+        assert behind and registered
+        assert {namespace for _, namespace in registered} == set(peering["namespaces"])

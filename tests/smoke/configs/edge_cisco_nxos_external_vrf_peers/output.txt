@@ -5,6 +5,7 @@ hostname dc1-edge-01
 !
 feature ospf
 feature bgp
+feature bfd
 feature interface-vlan
 feature lacp
 feature vpc
@@ -157,7 +158,10 @@ router bgp 65001
 route-map RM-CONN-2-BGP permit 10
   match interface loopback0
 !
-route-map RM-VRF-PROD-EQXFR2-SDWAN-IN deny 10
+ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN seq 10 permit 10.210.2.0/24
+ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN seq 20 permit 10.210.5.0/24
+route-map RM-VRF-PROD-EQXFR2-SDWAN-IN permit 10
+  match ip address prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN
 !
 ip prefix-list PL-VRF-PROD-EQXFR2-AWS-EUC1-IN seq 10 permit 10.30.0.0/16
 route-map RM-VRF-PROD-EQXFR2-AWS-EUC1-IN permit 10

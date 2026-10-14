@@ -87,9 +87,11 @@ spec:
 # every peer group. peering_role regular there makes it an external tenant-VRF
 # peer, filtered like the cloud VIF (../05_cloud_endpoints/03_vif_handoff.yml):
 # RM-<name>-IN accepts only the far end's registered prefixes and
-# RM-PROD-EXTERNAL-OUT announces only PROD's on-prem segment prefixes. No office
-# LAN prefix is registered anywhere yet, so the inbound filter accepts nothing
-# until one is.
+# RM-PROD-EXTERNAL-OUT announces only PROD's on-prem segment prefixes. The far
+# end here is EQX-FR2-SDWAN-GW1, so the registered prefixes are the PROD
+# lan_prefixes of every TopologyCustomerOffice whose sdwan_gateway is GW1 (C002
+# 10.210.2.0/24, C005 10.210.5.0/24; get_external_peer_prefixes in
+# transforms/helpers/bgp.py). An office without a registered LAN adds nothing.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

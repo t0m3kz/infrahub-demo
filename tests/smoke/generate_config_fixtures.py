@@ -1809,7 +1809,7 @@ def _af_edges(*pairs: tuple[str, str]) -> dict:
 
 
 def _cidr_blocks(*blocks: tuple[str, str]) -> dict:
-    """CloudVirtualNetwork.cidr_blocks edges: (prefix, namespace name) pairs."""
+    """IpamPrefix edges from (prefix, namespace name) pairs: VPC cidr_blocks, office lan_prefixes."""
     return _edges([{"prefix": _v(prefix), "ip_namespace": _node({"name": _v(ns)})} for prefix, ns in blocks])
 
 
@@ -1823,8 +1823,10 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
         10.150.0.0/16 propagates to rt-isolated only and is not.
       - .1001 NON-PROD: a private VIF whose VPC lists a NON-PROD and a PROD block;
         only the NON-PROD one is accepted.
-      - .1900 PROD: the SD-WAN gateway handoff; no registered office prefixes,
-        so it is accepted nothing.
+      - .1900 PROD: the SD-WAN gateway handoff. It accepts the PROD lan_prefixes
+        of the offices behind EQX-FR2-SDWAN-GW1 (10.210.2.0/24, 10.210.5.0/24);
+        a NON-PROD LAN of one of them, an office behind another gateway and an
+        office without a gateway are not accepted.
     Out: per VRF, the prefixes behind its segment gateways (a PROD container,
     a MANAGEMENT segment and a cloud subnet are not on-prem tenant space). A VIF
     on another device with the same VLAN is ignored.
@@ -1984,6 +1986,21 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
                 "virtual_network": _node({"cidr_blocks": _cidr_blocks(("10.99.0.0/16", "PROD"))}),
                 "transit_gateway_attachment": _node(None),
             },
+        ]
+    )
+
+    def office(gateway: str | None, *lans: tuple[str, str]) -> dict:
+        return {
+            "sdwan_gateway": _node({"name": _v(gateway)} if gateway else None),
+            "lan_prefixes": _cidr_blocks(*lans),
+        }
+
+    data["TopologyCustomerOffice"] = _edges(
+        [
+            office("EQX-FR2-SDWAN-GW1", ("10.210.5.0/24", "PROD")),
+            office("EQX-FR2-SDWAN-GW1", ("10.210.2.0/24", "PROD"), ("10.211.2.0/24", "NON-PROD")),
+            office("EQX-AM5-SDWAN-GW1", ("10.210.9.0/24", "PROD")),
+            office(None, ("10.210.15.0/24", "PROD")),
         ]
     )
     return data

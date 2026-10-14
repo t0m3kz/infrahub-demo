@@ -24,7 +24,11 @@ class Edge(BaseDeviceTransform):
         # External tenant-VRF peers (session.external): what each may send in
         # (by handoff sub-interface) and what its VRF announces out.
         config["external_peer_prefixes"] = get_external_peer_prefixes(
-            data.get("interfaces"), roots.get("CloudVirtualInterface"), data.get("name") or ""
+            data.get("interfaces"),
+            roots.get("CloudVirtualInterface"),
+            data.get("name") or "",
+            device_capabilities=data.get("capabilities"),
+            offices=roots.get("TopologyCustomerOffice"),
         )
         config["onprem_prefixes"] = get_onprem_prefixes(roots.get("ManagedNetworkSegment"))
         return config
