@@ -136,4 +136,79 @@ query edge_config($device: String!) {
       }
     }
   }
+
+  # On-prem routed space per tenant VRF: what an external tenant-VRF peer (a
+  # cloud VIF, the SD-WAN gateway) may be announced. Grouped by namespace in
+  # transforms/helpers/bgp.py (get_onprem_prefixes).
+  ManagedNetworkSegment {
+    edges {
+      node {
+        gateway {
+          node {
+            ip_prefix {
+              node {
+                prefix { value }
+                member_type { value }
+                ip_namespace { node { name { value } namespace_type { value } } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  # Cloud virtual interfaces and the VPC aggregates each can reach: what the
+  # session on the edge's <port>.<vlan_id> sub-interface may accept. Matched to
+  # this device through the Direct Connect's physical_devices in
+  # transforms/helpers/bgp.py (get_external_peer_prefixes).
+  CloudVirtualInterface {
+    edges {
+      node {
+        name { value }
+        vlan_id { value }
+        direct_connect { node { physical_devices { edges { node { name { value } } } } } }
+        virtual_network {
+          node {
+            cidr_blocks { edges { node { prefix { value } ip_namespace { node { name { value } } } } } }
+          }
+        }
+        transit_gateway_attachment {
+          node {
+            associated_route_table { node { id } }
+            transit_gateway {
+              node {
+                attachments {
+                  edges {
+                    node {
+                      attachment_type { value }
+                      propagates_to_route_tables { edges { node { id } } }
+                      virtual_network {
+                        node {
+                          cidr_blocks { edges { node { prefix { value } ip_namespace { node { name { value } } } } } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  # Office footprints and the SD-WAN gateway each sits behind: what the session
+  # facing that gateway may accept (the union of its offices' lan_prefixes).
+  # Matched to the handoff through the BGP peering's far-end device in
+  # transforms/helpers/bgp.py (get_external_peer_prefixes).
+  TopologyCustomerOffice {
+    edges {
+      node {
+        sdwan_gateway { node { name { value } } }
+        lan_prefixes { edges { node { prefix { value } ip_namespace { node { name { value } } } } } }
+      }
+    }
+  }
 }

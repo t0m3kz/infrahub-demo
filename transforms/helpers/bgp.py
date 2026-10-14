@@ -5,6 +5,7 @@ from ipaddress import ip_address
 from typing import Any, cast
 
 from transforms.helpers.addressing import host_ip
+from utils.exchange_transit import EXCHANGE_PEERS, INTERNET_TYPE
 
 _log = logging.getLogger(__name__)
 
@@ -77,6 +78,35 @@ def _extract_remote_asn_from_peering(peering_node: dict, remote_device_name: str
     return None
 
 
+def _peering_ends(peering_node: dict[str, Any], device_name: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The peering's (local, remote) interface_capabilities entries, split by device name.
+
+    Raises:
+        ValueError: When the peering does not have exactly two ends, one on ``device_name``.
+    """
+    peering_ifaces = peering_node.get("interface_capabilities", [])
+    if not isinstance(peering_ifaces, list) or len(peering_ifaces) != 2:
+        raise ValueError(
+            f"Overlay peering '{peering_node.get('name')}' expected 2 interface_capabilities, "
+            f"got {len(peering_ifaces) if isinstance(peering_ifaces, list) else 'invalid'}"
+        )
+
+    local_iface = None
+    remote_iface = None
+    for iface in peering_ifaces:
+        iface_device = iface.get("device", {}).get("name", "")
+        if iface_device == device_name:
+            local_iface = iface
+        else:
+            remote_iface = iface
+
+    if not local_iface or not remote_iface:
+        raise ValueError(
+            f"Overlay peering '{peering_node.get('name')}' missing local/remote interface mapping for {device_name}"
+        )
+    return local_iface, remote_iface
+
+
 def _build_session_from_peering(
     peering_node: dict[str, Any],
     device_name: str,
@@ -93,28 +123,7 @@ def _build_session_from_peering(
     Raises:
         ValueError: When peering data shape is malformed.
     """
-    # Get interfaces (2 entries: local + remote)
-    peering_ifaces = peering_node.get("interface_capabilities", [])
-    if not isinstance(peering_ifaces, list) or len(peering_ifaces) != 2:
-        raise ValueError(
-            f"Overlay peering '{peering_node.get('name')}' expected 2 interface_capabilities, "
-            f"got {len(peering_ifaces) if isinstance(peering_ifaces, list) else 'invalid'}"
-        )
-
-    # Determine local vs remote interface by device name
-    local_iface = None
-    remote_iface = None
-    for iface in peering_ifaces:
-        iface_device = iface.get("device", {}).get("name", "")
-        if iface_device == device_name:
-            local_iface = iface
-        else:
-            remote_iface = iface
-
-    if not local_iface or not remote_iface:
-        raise ValueError(
-            f"Overlay peering '{peering_node.get('name')}' missing local/remote interface mapping for {device_name}"
-        )
+    local_iface, remote_iface = _peering_ends(peering_node, device_name)
 
     password_rel = peering_node.get("password") or {}
     session: dict[str, Any] = {
@@ -150,8 +159,15 @@ def _build_session_from_peering(
         session["vrf"] = vrf
         # Upstream transit (namespace_type internet): the session gets the
         # default-only inbound / deny-all outbound route-maps (edges template).
-        if local_ns.get("namespace_type") == "internet":
+        ns_type = local_ns.get("namespace_type")
+        if ns_type == INTERNET_TYPE:
             session["transit"] = True
+        # A peer outside our administration (peering_role regular: a cloud
+        # VIF, the SD-WAN gateway) inside a tenant VRF: only the far end's
+        # registered prefixes in, only the VRF's on-prem prefixes out
+        # (external_peer_prefixes / onprem_prefixes, edges template).
+        elif ns_type in EXCHANGE_PEERS and peering_node.get("peering_role") == "regular":
+            session["external"] = True
         session["local_ip"] = local_ip_obj
         # The handoff sub-interface — the VCO payload (transforms/config/
         # controller.py) reads the dot1q tag off its name.
@@ -288,7 +304,161 @@ def get_internet_prefixes(prefixes: list[dict[str, Any]] | None) -> list[str]:
         and ":" not in p["prefix"]
         and (p.get("ip_namespace") or {}).get("namespace_type") == "internet"
     }
-    return sorted(found, key=lambda p: (ip_address(p.split("/")[0]), int(p.split("/")[1])))
+    return _sorted_prefixes(found)
+
+
+def _sorted_prefixes(prefixes: set[str]) -> list[str]:
+    """Prefixes in address order, then by length."""
+    return sorted(prefixes, key=lambda p: (ip_address(p.split("/")[0]), int(p.split("/")[1])))
+
+
+def _routable_ipv4(prefix: str | None) -> bool:
+    """An IPv4 prefix other than the default route: what an external tenant-VRF filter may list."""
+    return bool(prefix) and ":" not in str(prefix) and str(prefix).split("/")[0] != "0.0.0.0"
+
+
+def get_onprem_prefixes(segments: list[dict[str, Any]] | None) -> dict[str, list[str]]:
+    """Tenant VRF name -> the IPv4 prefixes behind its on-prem segment gateways, sorted.
+
+    ``segments`` is the cleaned ManagedNetworkSegment query root. A prefix behind
+    a segment gateway is the on-prem routed space (the same definition
+    checks/routing_invariants.py uses for the VPC overlap gate); a container
+    (member_type prefix) is skipped. Only prod/non_prod namespaces qualify, each
+    keeps its own list, so an external peer in PROD is never offered a
+    NON-PROD prefix. What an external tenant-VRF peer is announced
+    (RM-<VRF>-EXTERNAL-OUT).
+    """
+    by_vrf: dict[str, set[str]] = {}
+    for segment in segments or []:
+        prefix = ((segment.get("gateway") or {}).get("ip_prefix")) or {}
+        namespace = prefix.get("ip_namespace") or {}
+        if (
+            namespace.get("namespace_type") in EXCHANGE_PEERS
+            and namespace.get("name")
+            and prefix.get("member_type") != "prefix"
+            and _routable_ipv4(prefix.get("prefix"))
+        ):
+            by_vrf.setdefault(namespace["name"], set()).add(prefix["prefix"])
+    return {vrf: _sorted_prefixes(found) for vrf, found in sorted(by_vrf.items())}
+
+
+def _vif_registered_blocks(vif: dict[str, Any]) -> list[dict[str, Any]]:
+    """The VPC aggregates (cidr_blocks) a cloud virtual interface can reach.
+
+    A private VIF: its own virtual network's blocks. A transit VIF: the blocks of
+    every VPC attachment propagating into the route table its hybrid attachment
+    is associated with, the table the Transit Gateway looks traffic from the VIF
+    up in. A VPC propagating only elsewhere is unreachable over this VIF.
+    """
+    if vif.get("virtual_network"):
+        return list((vif["virtual_network"] or {}).get("cidr_blocks") or [])
+    hybrid = vif.get("transit_gateway_attachment") or {}
+    table_id = (hybrid.get("associated_route_table") or {}).get("id")
+    if not table_id:
+        return []
+    return [
+        block
+        for attachment in ((hybrid.get("transit_gateway") or {}).get("attachments")) or []
+        if attachment.get("attachment_type") == "vpc"
+        and table_id in {table.get("id") for table in attachment.get("propagates_to_route_tables") or []}
+        for block in ((attachment.get("virtual_network") or {}).get("cidr_blocks")) or []
+    ]
+
+
+def _far_end_devices(device_capabilities: list[dict[str, Any]] | None, device_name: str) -> dict[str, set[str]]:
+    """Local interface name -> the devices at the far end of this device's BGP peerings on it."""
+    far: dict[str, set[str]] = {}
+    for service in device_capabilities or []:
+        if service.get("typename") != "ManagedBGP":
+            continue
+        for peering in service.get("peerings") or []:
+            local_iface, remote_iface = _peering_ends(peering, device_name)
+            remote = (remote_iface.get("device") or {}).get("name")
+            if local_iface.get("name") and remote:
+                far.setdefault(local_iface["name"], set()).add(remote)
+    return far
+
+
+def _office_lans_by_gateway(offices: list[dict[str, Any]] | None) -> dict[str, list[dict[str, Any]]]:
+    """SD-WAN gateway name -> the lan_prefixes of every office footprint attached to it.
+
+    ``offices`` is the cleaned TopologyCustomerOffice query root. A gateway with
+    offices but no registered LAN is present with an empty list.
+    """
+    lans: dict[str, list[dict[str, Any]]] = {}
+    for office in offices or []:
+        gateway = (office.get("sdwan_gateway") or {}).get("name")
+        if gateway:
+            lans.setdefault(gateway, []).extend(office.get("lan_prefixes") or [])
+    return lans
+
+
+def get_external_peer_prefixes(
+    interfaces: list[dict[str, Any]] | None,
+    virtual_interfaces: list[dict[str, Any]] | None,
+    device_name: str,
+    *,
+    device_capabilities: list[dict[str, Any]] | None,
+    offices: list[dict[str, Any]] | None,
+) -> dict[str, list[str]]:
+    """Handoff sub-interface name -> the far end's registered IPv4 prefixes, sorted.
+
+    Two kinds of far end are known, each with its registered prefixes:
+
+    - The SD-WAN gateway: a handoff whose only BGP far end
+      (``device_capabilities`` peerings) is the ``sdwan_gateway`` of some
+      office footprint accepts the ``lan_prefixes`` of every office behind that
+      gateway.
+    - A cloud VIF: it lands on the device through its Direct Connect
+      (``physical_devices``) as the sub-interface ``<port>.<vif.vlan_id>`` and
+      accepts its reachable VPC blocks (_vif_registered_blocks). Two VIFs of
+      this device on one VLAN are ambiguous and accept nothing.
+
+    Either way only prefixes registered in the sub-interface's own namespace
+    are kept, so a PROD session never accepts a NON-PROD prefix, and never the
+    default route or IPv6. A sub-interface with neither far end is absent, and
+    a known far end with nothing registered maps to ``[]``: both accept nothing.
+    """
+    by_vlan: dict[int, list[dict[str, Any]]] = {}
+    for vif in virtual_interfaces or []:
+        devices = ((vif.get("direct_connect") or {}).get("physical_devices")) or []
+        if device_name in {device.get("name") for device in devices} and isinstance(vif.get("vlan_id"), int):
+            by_vlan.setdefault(vif["vlan_id"], []).append(vif)
+    lans_by_gateway = _office_lans_by_gateway(offices)
+    far_ends = _far_end_devices(device_capabilities, device_name)
+
+    found: dict[str, list[str]] = {}
+    for iface in interfaces or []:
+        name = iface.get("name") or ""
+        far = far_ends.get(name) or set()
+        if len(far) == 1 and next(iter(far)) in lans_by_gateway:
+            registered = lans_by_gateway[next(iter(far))]
+        else:
+            _, dot, tag = name.rpartition(".")
+            vifs = by_vlan.get(int(tag)) if dot and tag.isdigit() else None
+            if not vifs:
+                continue
+            if len(vifs) > 1:
+                _log.warning(
+                    "%s: VLAN %s is used by several cloud virtual interfaces (%s); %s accepts nothing",
+                    device_name,
+                    tag,
+                    ", ".join(sorted(str(vif.get("name")) for vif in vifs)),
+                    name,
+                )
+                continue
+            registered = _vif_registered_blocks(vifs[0])
+        namespace = ((iface.get("ip_address") or {}).get("ip_namespace") or {}).get("name")
+        found[name] = _sorted_prefixes(
+            {
+                prefix["prefix"]
+                for prefix in registered
+                if namespace
+                and (prefix.get("ip_namespace") or {}).get("name") == namespace
+                and _routable_ipv4(prefix.get("prefix"))
+            }
+        )
+    return found
 
 
 def _any_flags(sessions: list[dict[str, Any]], *flags: str) -> dict[str, bool]:

@@ -1808,6 +1808,204 @@ def _af_edges(*pairs: tuple[str, str]) -> dict:
     return _edges([{"afi": _v(afi), "safi": _v(safi)} for afi, safi in pairs])
 
 
+def _cidr_blocks(*blocks: tuple[str, str]) -> dict:
+    """IpamPrefix edges from (prefix, namespace name) pairs: VPC cidr_blocks, office lan_prefixes."""
+    return _edges([{"prefix": _v(prefix), "ip_namespace": _node({"name": _v(ns)})} for prefix, ns in blocks])
+
+
+def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> dict:
+    """A colocation edge with external eBGP peers inside the tenant VRFs.
+
+    ebgp_ebgp edge (no VTEP) plus three peering_role regular sessions on
+    Ethernet1/13 sub-interfaces:
+      - .1000 PROD: the AWS transit VIF (vlan 1000). Its hybrid attachment sits on
+        rt-shared, so only the VPC propagating there (10.30.0.0/16) is accepted;
+        10.150.0.0/16 propagates to rt-isolated only and is not.
+      - .1001 NON-PROD: a private VIF whose VPC lists a NON-PROD and a PROD block;
+        only the NON-PROD one is accepted.
+      - .1900 PROD: the SD-WAN gateway handoff. It accepts the PROD lan_prefixes
+        of the offices behind EQX-FR2-SDWAN-GW1 (10.210.2.0/24, 10.210.5.0/24);
+        a NON-PROD LAN of one of them, an office behind another gateway and an
+        office without a gateway are not accepted.
+    Out: per VRF, the prefixes behind its segment gateways (a PROD container,
+    a MANAGEMENT segment and a cloud subnet are not on-prem tenant space). A VIF
+    on another device with the same VLAN is ignored.
+    """
+    data = build_device_data(
+        device_name=device_name, role="edge", platform=platform, scenario="ebgp_ebgp", include_segments=False
+    )
+    device_node = data["DcimDevice"]["edges"][0]["node"]
+    interfaces = device_node["interfaces"]["edges"]
+    namespaces = {
+        "PROD": _node({"name": _v("PROD"), "l3_vni": _v(60000), "namespace_type": _v("prod")}),
+        "NON-PROD": _node({"name": _v("NON-PROD"), "l3_vni": _v(60001), "namespace_type": _v("non_prod")}),
+    }
+    handoffs = [
+        # (sub-interface, namespace, local ip, remote ip, remote device, remote iface, remote asn, peering, bfd)
+        ("Ethernet1/13.1000", "PROD", "10.255.5.5/30", "10.255.5.6/30", "EXT-AWS-DX-FR2", "et-0/0/0.1000", 64512,
+         "VRF-PROD-EQXFR2-AWS-EUC1", True),
+        ("Ethernet1/13.1001", "NON-PROD", "10.255.6.5/30", "10.255.6.6/30", "EXT-AWS-DX-FR2", "et-0/0/0.1001", 64512,
+         "VRF-NONPROD-EQXFR2-AWS-EUC1", True),
+        ("Ethernet1/13.1900", "PROD", "10.255.5.0/31", "10.255.5.1/31", "EQX-FR2-SDWAN-GW1", "eth0.1900", 65028,
+         "VRF-PROD-EQXFR2-SDWAN", False),
+    ]  # fmt: skip
+    peerings = []
+    for iface, ns, local_ip, remote_ip, remote, remote_iface, remote_asn, name, bfd in handoffs:
+        interfaces.append(
+            {
+                "node": {
+                    **_make_interface(
+                        name=iface,
+                        device_name=device_name,
+                        description=f"{ns} handoff to {remote}",
+                        role="uplink",
+                        ip_address=local_ip,
+                        typename="DcimVirtualInterface",
+                    ),
+                    "ip_address": _node({"address": _v(local_ip), "ip_namespace": namespaces[ns]}),
+                }
+            }
+        )
+        peering = _make_bgp_peering(
+            device_name=device_name,
+            device_ip=local_ip,
+            device_asn=65001,
+            remote_name=remote,
+            remote_ip=remote_ip,
+            remote_asn=remote_asn,
+            session_type="EBGP",
+            ttl=1,
+            bfd=bfd,
+            local_iface_name=iface,
+            remote_iface_name=remote_iface,
+            maximum_routes=100,
+            password=f"{name.lower()}-key",
+        )
+        peering["name"] = _v(name)
+        peering["peering_role"] = _v("regular")
+        peering["address_families"] = _af_edges(("ipv4", "unicast"))
+        for iface_edge in peering["interface_capabilities"]["edges"]:
+            iface_edge["node"]["ip_address"]["node"]["ip_namespace"] = namespaces[ns]
+        peerings.append(peering)
+    device_node["capabilities"]["edges"].append(
+        {
+            "node": {
+                "__typename": "ManagedBGP",
+                "name": _v("bgp-overlay"),
+                "status": _v("active"),
+                "multipath": _v(True),
+                "graceful_restart": _v(True),
+                "confederation_identifier": _v(None),
+                "local_as": _node({"asn": _v(65001)}),
+                "router_id": _node({"address": _v("10.0.0.1/32")}),
+                "peerings": _edges(peerings),
+            }
+        }
+    )
+
+    def segment_prefix(prefix: str, ns_name: str, ns_type: str, member_type: str = "address") -> dict:
+        return {
+            "gateway": _node(
+                {
+                    "ip_prefix": _node(
+                        {
+                            "prefix": _v(prefix),
+                            "member_type": _v(member_type),
+                            "ip_namespace": _node({"name": _v(ns_name), "namespace_type": _v(ns_type)}),
+                        }
+                    )
+                }
+            )
+        }
+
+    data["IpamPrefix"] = _edges([])
+    data["ManagedNetworkSegment"] = _edges(
+        [
+            segment_prefix("10.5.20.0/24", "PROD", "prod"),
+            segment_prefix("10.5.10.0/24", "PROD", "prod"),
+            segment_prefix("10.5.0.0/16", "PROD", "prod", member_type="prefix"),
+            segment_prefix("10.6.10.0/24", "NON-PROD", "non_prod"),
+            segment_prefix("10.250.0.0/24", "MANAGEMENT", "management"),
+            {"gateway": _node(None)},
+        ]
+    )
+    on_this_edge = _node({"physical_devices": _edges([{"name": _v(device_name)}])})
+    data["CloudVirtualInterface"] = _edges(
+        [
+            {
+                "name": _v("vif-transit-hub-euc1"),
+                "vlan_id": _v(1000),
+                "direct_connect": on_this_edge,
+                "virtual_network": _node(None),
+                "transit_gateway_attachment": _node(
+                    {
+                        "associated_route_table": _node({"id": "rt-shared"}),
+                        "transit_gateway": _node(
+                            {
+                                "attachments": _edges(
+                                    [
+                                        {
+                                            "attachment_type": _v("hybrid"),
+                                            "propagates_to_route_tables": _edges([{"id": "rt-shared"}]),
+                                            "virtual_network": _node(None),
+                                        },
+                                        {
+                                            "attachment_type": _v("vpc"),
+                                            "propagates_to_route_tables": _edges([{"id": "rt-shared"}]),
+                                            "virtual_network": _node(
+                                                {"cidr_blocks": _cidr_blocks(("10.30.0.0/16", "PROD"))}
+                                            ),
+                                        },
+                                        {
+                                            "attachment_type": _v("vpc"),
+                                            "propagates_to_route_tables": _edges([{"id": "rt-isolated"}]),
+                                            "virtual_network": _node(
+                                                {"cidr_blocks": _cidr_blocks(("10.150.0.0/16", "PROD"))}
+                                            ),
+                                        },
+                                    ]
+                                )
+                            }
+                        ),
+                    }
+                ),
+            },
+            {
+                "name": _v("vif-private-dev-euc1"),
+                "vlan_id": _v(1001),
+                "direct_connect": on_this_edge,
+                "virtual_network": _node(
+                    {"cidr_blocks": _cidr_blocks(("10.60.0.0/16", "NON-PROD"), ("10.31.0.0/16", "PROD"))}
+                ),
+                "transit_gateway_attachment": _node(None),
+            },
+            {
+                "name": _v("vif-elsewhere"),
+                "vlan_id": _v(1000),
+                "direct_connect": _node({"physical_devices": _edges([{"name": _v("dc1-edge-02")}])}),
+                "virtual_network": _node({"cidr_blocks": _cidr_blocks(("10.99.0.0/16", "PROD"))}),
+                "transit_gateway_attachment": _node(None),
+            },
+        ]
+    )
+
+    def office(gateway: str | None, *lans: tuple[str, str]) -> dict:
+        return {
+            "sdwan_gateway": _node({"name": _v(gateway)} if gateway else None),
+            "lan_prefixes": _cidr_blocks(*lans),
+        }
+
+    data["TopologyCustomerOffice"] = _edges(
+        [
+            office("EQX-FR2-SDWAN-GW1", ("10.210.5.0/24", "PROD")),
+            office("EQX-FR2-SDWAN-GW1", ("10.210.2.0/24", "PROD"), ("10.211.2.0/24", "NON-PROD")),
+            office("EQX-AM5-SDWAN-GW1", ("10.210.9.0/24", "PROD")),
+            office(None, ("10.210.15.0/24", "PROD")),
+        ]
+    )
+    return data
+
+
 def build_edge_bgw_pair_data(*, device_name: str, platform: str) -> dict:
     """A colocation metro edge that is one of two BGWs sharing a site VIP.
 
@@ -2623,6 +2821,16 @@ def main() -> int:
         Edge,
         "edge_cisco_nxos_internet_bgw",
         build_edge_internet_bgw_data(device_name="dc1-edge-01", platform="cisco_nxos"),
+    )
+    generated += g
+    errors += e
+    # External eBGP peers in the tenant VRFs (cloud VIFs, SD-WAN gateway): per-peer
+    # inbound prefix-list of the far end's registered prefixes, per-VRF on-prem outbound.
+    print("\nGenerating external tenant-VRF peers edge fixture:")
+    g, e = _write_data_fixture(
+        Edge,
+        "edge_cisco_nxos_external_vrf_peers",
+        build_edge_external_vrf_peers_data(device_name="dc1-edge-01", platform="cisco_nxos"),
     )
     generated += g
     errors += e
