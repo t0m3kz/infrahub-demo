@@ -11,3 +11,5 @@ spec:
       is_default: false
       dns_support: true
       dns_hostnames: true
+      cidr_blocks:
+        - ["10.40.0.0/16", "PROD"]

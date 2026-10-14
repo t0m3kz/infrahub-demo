@@ -318,3 +318,198 @@ class TestVifCircuits:
         """Circuits on unaddressed (underlay) ports resolve to no type and raise nothing."""
         check = _run(CloudVirtualInterface=[_vif("vif-1", {"c1": [None]})])
         assert check._captured_errors == []
+
+
+def _block(prefix: str, ns_name: str = "PROD", ns_type: str = "prod", block_id: str | None = None) -> dict[str, Any]:
+    """A VPC cidr_blocks entry (an IpamPrefix) in the raw query shape."""
+    return {
+        "id": block_id or f"pfx-{ns_name}-{prefix}",
+        "prefix": _v(prefix),
+        "ip_namespace": {"node": {**_ns(ns_name, ns_type), "id": f"ns-{ns_name}"}},
+    }
+
+
+def _vpc(name: str, env: str | None, *blocks: dict[str, Any]) -> dict[str, Any]:
+    """A CloudVirtualNetwork with its account environment and aggregate blocks."""
+    return {
+        "id": f"vpc-{name}",
+        "name": _v(name),
+        "account": {"node": {"id": f"acc-{name}", "name": _v("acc"), "environment": _v(env)}},
+        "cidr_blocks": {"edges": [{"node": block} for block in blocks]},
+    }
+
+
+def _subnet(name: str, cidr: str | None, vpc: str) -> dict[str, Any]:
+    """A CloudNetworkSegment (a subnet) of the named VPC."""
+    return {
+        "id": f"sub-{name}",
+        "name": _v(name),
+        "cidr_block": _v(cidr),
+        "virtual_network": {"node": {"id": f"vpc-{vpc}", "name": _v(vpc)}},
+    }
+
+
+def _onprem(
+    name: str, prefix: str, ns_name: str = "PROD", ns_type: str = "prod", member_type: str = "address", pid: str = "p"
+) -> dict[str, Any]:
+    """An on-prem segment whose gateway sits in the given prefix."""
+    return {
+        "__typename": "ManagedVlanSegment",
+        "id": f"seg-{name}",
+        "name": _v(name),
+        "gateway": {
+            "node": {
+                "ip_prefix": {
+                    "node": {
+                        "id": pid,
+                        "prefix": _v(prefix),
+                        "member_type": _v(member_type),
+                        "ip_namespace": {"node": {**_ns(ns_name, ns_type), "id": f"ns-{ns_name}"}},
+                    }
+                }
+            }
+        },
+    }
+
+
+class TestVpcNamespaces:
+    """A VPC block lives in the namespace type of its account's environment."""
+
+    def test_prod_account_in_prod_passes(self) -> None:
+        """Environment p with a PROD block passes."""
+        assert _run(CloudVirtualNetwork=[_vpc("a", "p", _block("10.30.0.0/16"))])._captured_errors == []
+
+    def test_non_prod_account_in_non_prod_passes(self) -> None:
+        """Any non-p environment maps to the NON-PROD namespace."""
+        block = _block("10.31.0.0/16", "NON-PROD", "non_prod")
+        assert _run(CloudVirtualNetwork=[_vpc("a", "d", block)])._captured_errors == []
+
+    def test_block_in_wrong_namespace_type_fails(self) -> None:
+        """A prod account whose block sits in the default (or NON-PROD) namespace is an error."""
+        check = _run(CloudVirtualNetwork=[_vpc("a", "p", _block("10.30.0.0/16", "NON-PROD", "non_prod"))])
+        assert len(check._captured_errors) == 1
+        assert "prod network" in check._captured_errors[0]
+
+    def test_account_without_environment_is_not_judged(self) -> None:
+        """No environment, nothing to compare against."""
+        assert _run(CloudVirtualNetwork=[_vpc("a", None, _block("10.30.0.0/16"))])._captured_errors == []
+
+
+class TestSubnetsInVpc:
+    """Every subnet cidr_block lies inside one of its VPC's blocks."""
+
+    def test_subnet_inside_block_passes(self) -> None:
+        """A /24 inside the VPC /16 passes."""
+        check = _run(
+            CloudVirtualNetwork=[_vpc("a", "p", _block("10.30.0.0/16"))],
+            CloudNetworkSegment=[_subnet("s", "10.30.1.0/24", "a")],
+        )
+        assert check._captured_errors == []
+
+    def test_subnet_outside_block_fails(self) -> None:
+        """A subnet outside every block is an error naming the VPC."""
+        check = _run(
+            CloudVirtualNetwork=[_vpc("a", "p", _block("10.30.0.0/16"))],
+            CloudNetworkSegment=[_subnet("s", "10.99.1.0/24", "a")],
+        )
+        assert len(check._captured_errors) == 1
+        assert "outside every cidr_blocks" in check._captured_errors[0]
+
+    def test_vpc_without_blocks_fails(self) -> None:
+        """A VPC with no aggregate cannot contain its subnet."""
+        check = _run(CloudVirtualNetwork=[_vpc("a", "p")], CloudNetworkSegment=[_subnet("s", "10.30.1.0/24", "a")])
+        assert len(check._captured_errors) == 1
+        assert "none registered" in check._captured_errors[0]
+
+    def test_second_block_may_contain_subnet(self) -> None:
+        """Containment in any one block suffices."""
+        check = _run(
+            CloudVirtualNetwork=[_vpc("a", "p", _block("10.30.0.0/16"), _block("10.31.0.0/16"))],
+            CloudNetworkSegment=[_subnet("s", "10.31.4.0/24", "a")],
+        )
+        assert check._captured_errors == []
+
+    def test_invalid_cidr_fails(self) -> None:
+        """An unparsable cidr_block is reported, not raised."""
+        check = _run(
+            CloudVirtualNetwork=[_vpc("a", "p", _block("10.30.0.0/16"))],
+            CloudNetworkSegment=[_subnet("s", "not-a-cidr", "a")],
+        )
+        assert len(check._captured_errors) == 1
+
+
+class TestVpcOverlaps:
+    """B2: no overlap inside one namespace between VPC blocks or with on-prem prefixes."""
+
+    def test_disjoint_vpcs_and_onprem_pass(self) -> None:
+        """Disjoint blocks and on-prem prefixes in one namespace pass."""
+        check = _run(
+            CloudVirtualNetwork=[
+                _vpc("a", "p", _block("10.30.0.0/16")),
+                _vpc("b", "p", _block("10.40.0.0/16")),
+            ],
+            ManagedNetworkSegment=[_onprem("web", "10.0.5.0/24")],
+        )
+        assert check._captured_errors == []
+
+    def test_vpc_vs_vpc_overlap_fails(self) -> None:
+        """A /24 inside another VPC's /16 in the same namespace is an error."""
+        check = _run(
+            CloudVirtualNetwork=[
+                _vpc("a", "p", _block("10.30.0.0/16")),
+                _vpc("b", "p", _block("10.30.4.0/24")),
+            ]
+        )
+        assert len(check._captured_errors) == 1
+        assert "overlaps VPC" in check._captured_errors[0]
+
+    def test_vpc_overlap_in_different_namespaces_passes(self) -> None:
+        """The same CIDR in PROD and NON-PROD is two VRFs, not an overlap."""
+        check = _run(
+            CloudVirtualNetwork=[
+                _vpc("a", "p", _block("10.30.0.0/16")),
+                _vpc("b", "d", _block("10.30.0.0/16", "NON-PROD", "non_prod")),
+            ]
+        )
+        assert check._captured_errors == []
+
+    def test_vpc_vs_onprem_overlap_fails(self) -> None:
+        """A VPC block covering an on-prem segment prefix in the same namespace is an error."""
+        check = _run(
+            CloudVirtualNetwork=[_vpc("a", "p", _block("10.0.0.0/16"))],
+            ManagedNetworkSegment=[_onprem("web", "10.0.5.0/24")],
+        )
+        assert len(check._captured_errors) == 1
+        assert "on-prem prefix" in check._captured_errors[0]
+
+    def test_vpc_vs_onprem_in_other_namespace_passes(self) -> None:
+        """An on-prem prefix in another VRF does not overlap."""
+        check = _run(
+            CloudVirtualNetwork=[_vpc("a", "p", _block("10.0.0.0/16"))],
+            ManagedNetworkSegment=[_onprem("web", "10.0.5.0/24", "NON-PROD", "non_prod")],
+        )
+        assert check._captured_errors == []
+
+    def test_container_prefix_is_ignored(self) -> None:
+        """A container prefix behind a gateway is a supernet, not a routed subnet."""
+        check = _run(
+            CloudVirtualNetwork=[_vpc("a", "p", _block("10.30.0.0/16"))],
+            ManagedNetworkSegment=[_onprem("web", "10.0.0.0/8", member_type="prefix")],
+        )
+        assert check._captured_errors == []
+
+    def test_shared_prefix_object_fails(self) -> None:
+        """One prefix object referenced by a VPC and an on-prem segment is flagged once."""
+        check = _run(
+            CloudVirtualNetwork=[_vpc("a", "p", _block("10.30.0.0/16", block_id="shared"))],
+            ManagedNetworkSegment=[_onprem("web", "10.30.0.0/16", pid="shared")],
+        )
+        assert len(check._captured_errors) == 1
+        assert "adopted an on-prem prefix" in check._captured_errors[0]
+
+    def test_cloud_segment_is_not_onprem(self) -> None:
+        """CloudNetworkSegment inherits the managed segment query but is not an on-prem prefix."""
+        cloud = _onprem("sub", "10.30.1.0/24")
+        cloud["__typename"] = "CloudNetworkSegment"
+        check = _run(CloudVirtualNetwork=[_vpc("a", "p", _block("10.30.0.0/16"))], ManagedNetworkSegment=[cloud])
+        assert check._captured_errors == []
