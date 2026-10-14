@@ -28,6 +28,11 @@ rendered config; each is a property of data that spans topologies.
    prefix (a non-container prefix behind a segment gateway). A prefix object
    referenced by both a VPC and an on-prem segment is flagged on its own: an
    object-file upsert of an identical CIDR silently adopts the on-prem object.
+6. Office LAN prefixes. Each `TopologyCustomerOffice.lan_prefixes` prefix is
+   registered in the namespace whose type matches the footprint's environment,
+   and is held to the same overlap rule as a VPC block: inside one namespace it
+   overlaps no VPC block, no other office's LAN and no on-prem prefix. These
+   are the routes an office may announce into its VRF over SD-WAN.
 
 A missing evpn_rt_as on an eBGP-overlay fabric is checked by CheckEvpnFabric.
 """
@@ -35,7 +40,7 @@ A missing evpn_rt_as on an eBGP-overlay fabric is checked by CheckEvpnFabric.
 from __future__ import annotations
 
 import ipaddress
-from typing import Any
+from typing import Any, NamedTuple
 
 from infrahub_sdk.checks import InfrahubCheck
 
@@ -55,6 +60,16 @@ def _type_for_environment(environment: str | None) -> str | None:
     return namespace_type_for_environment(environment) if environment else None
 
 
+class _Aggregate(NamedTuple):
+    """A routed prefix a VPC or an office owns, with the namespace type its owner's environment implies."""
+
+    owner: str  # "VPC 'name'" / "office 'name'"
+    noun: str  # what the prefix is to its owner: "block" / "LAN prefix"
+    origin: str  # where the expected type comes from, for messages
+    expected: str | None
+    prefix: dict[str, Any]
+
+
 class CheckRoutingInvariants(InfrahubCheck):
     """Namespace-type invariants across route-target joins, the INTERNET VRF and cloud routing domains."""
 
@@ -71,9 +86,10 @@ class CheckRoutingInvariants(InfrahubCheck):
         vif_types = self._validate_vif_circuits(cleaned.get("CloudVirtualInterface") or [])
         self._validate_tgw_route_tables(cleaned.get("CloudTransitGatewayAttachment") or [], vif_types)
         networks = cleaned.get("CloudVirtualNetwork") or []
-        self._validate_vpc_namespaces(networks)
+        aggregates = _vpc_aggregates(networks) + _office_aggregates(cleaned.get("TopologyCustomerOffice") or [])
+        self._validate_aggregate_namespaces(aggregates)
         self._validate_subnets_in_vpc(networks, cleaned.get("CloudNetworkSegment") or [])
-        self._validate_vpc_overlaps(networks, cleaned.get("ManagedNetworkSegment") or [])
+        self._validate_aggregate_overlaps(aggregates, cleaned.get("ManagedNetworkSegment") or [])
 
     # ------------------------------------------------------------------
     # 1. Route-target joins
@@ -228,23 +244,21 @@ class CheckRoutingInvariants(InfrahubCheck):
         return _type_for_environment((att.get("owner_account") or {}).get("environment"))
 
     # ------------------------------------------------------------------
-    # 5. Cloud VPC aggregates
+    # 5-6. VPC and office aggregates
     # ------------------------------------------------------------------
 
-    def _validate_vpc_namespaces(self, networks: list[dict[str, Any]]) -> None:
-        for network in networks:
-            expected = _type_for_environment((network.get("account") or {}).get("environment"))
-            for block in network.get("cidr_blocks") or []:
-                namespace = block.get("ip_namespace") or {}
-                actual = namespace.get("namespace_type")
-                if expected and actual != expected:
-                    self.log_error(
-                        message=(
-                            f"VPC '{network.get('name')}' block {block.get('prefix')} is registered in namespace "
-                            f"'{namespace.get('name')}' ({actual}), but its account's environment makes it a "
-                            f"{expected} network"
-                        )
+    def _validate_aggregate_namespaces(self, aggregates: list[_Aggregate]) -> None:
+        for agg in aggregates:
+            namespace = agg.prefix.get("ip_namespace") or {}
+            actual = namespace.get("namespace_type")
+            if agg.expected and actual != agg.expected:
+                self.log_error(
+                    message=(
+                        f"{agg.owner} {agg.noun} {agg.prefix.get('prefix')} is registered in namespace "
+                        f"'{namespace.get('name')}' ({actual}), but {agg.origin} makes it a "
+                        f"{agg.expected} network"
                     )
+                )
 
     def _validate_subnets_in_vpc(self, networks: list[dict[str, Any]], subnets: list[dict[str, Any]]) -> None:
         blocks_by_vpc = {
@@ -268,13 +282,9 @@ class CheckRoutingInvariants(InfrahubCheck):
                     )
                 )
 
-    def _validate_vpc_overlaps(self, networks: list[dict[str, Any]], segments: list[dict[str, Any]]) -> None:
-        """Within one namespace a VPC block overlaps neither another VPC's block nor an on-prem prefix."""
-        vpc_blocks: list[tuple[str, dict[str, Any], ipaddress.IPv4Network | ipaddress.IPv6Network]] = []
-        for network in networks:
-            for block in network.get("cidr_blocks") or []:
-                if net := _network(block.get("prefix")):
-                    vpc_blocks.append((str(network.get("name")), block, net))
+    def _validate_aggregate_overlaps(self, aggregates: list[_Aggregate], segments: list[dict[str, Any]]) -> None:
+        """Within one namespace an aggregate overlaps neither another aggregate nor an on-prem prefix."""
+        routed = [(agg, net) for agg in aggregates if (net := _network(agg.prefix.get("prefix")))]
 
         onprem: list[tuple[str, dict[str, Any], ipaddress.IPv4Network | ipaddress.IPv6Network]] = []
         for segment in segments:
@@ -286,33 +296,64 @@ class CheckRoutingInvariants(InfrahubCheck):
             if net := _network(prefix.get("prefix")):
                 onprem.append((str(segment.get("name")), prefix, net))
 
-        for index, (vpc, block, net) in enumerate(vpc_blocks):
-            namespace = _namespace_key(block)
-            for other_vpc, other, other_net in vpc_blocks[index + 1 :]:
-                if _namespace_key(other) == namespace and _overlap(net, other_net):
+        for index, (agg, net) in enumerate(routed):
+            namespace = _namespace_key(agg.prefix)
+            namespace_name = (agg.prefix.get("ip_namespace") or {}).get("name")
+            for other, other_net in routed[index + 1 :]:
+                if _namespace_key(other.prefix) == namespace and _overlap(net, other_net):
                     self.log_error(
                         message=(
-                            f"VPC '{vpc}' block {net} overlaps VPC '{other_vpc}' block {other_net} in namespace "
-                            f"'{(block.get('ip_namespace') or {}).get('name')}'"
+                            f"{agg.owner} {agg.noun} {net} overlaps {other.owner} {other.noun} {other_net} in "
+                            f"namespace '{namespace_name}'"
                         )
                     )
             for segment_name, prefix, prefix_net in onprem:
                 if _namespace_key(prefix) != namespace:
                     continue
-                if block.get("id") and block.get("id") == prefix.get("id"):
+                if agg.prefix.get("id") and agg.prefix.get("id") == prefix.get("id"):
                     self.log_error(
                         message=(
-                            f"Prefix {net} is referenced by VPC '{vpc}' and by on-prem segment '{segment_name}': "
-                            "the VPC block adopted an on-prem prefix object"
+                            f"Prefix {net} is referenced by {agg.owner} and by on-prem segment '{segment_name}': "
+                            f"the {agg.noun} adopted an on-prem prefix object"
                         )
                     )
                 elif _overlap(net, prefix_net):
                     self.log_error(
                         message=(
-                            f"VPC '{vpc}' block {net} overlaps on-prem prefix {prefix_net} (segment "
-                            f"'{segment_name}') in namespace '{(block.get('ip_namespace') or {}).get('name')}'"
+                            f"{agg.owner} {agg.noun} {net} overlaps on-prem prefix {prefix_net} (segment "
+                            f"'{segment_name}') in namespace '{namespace_name}'"
                         )
                     )
+
+
+def _vpc_aggregates(networks: list[dict[str, Any]]) -> list[_Aggregate]:
+    """Each VPC cidr_blocks entry, expected in its account's environment namespace."""
+    return [
+        _Aggregate(
+            owner=f"VPC '{network.get('name')}'",
+            noun="block",
+            origin="its account's environment",
+            expected=_type_for_environment((network.get("account") or {}).get("environment")),
+            prefix=block,
+        )
+        for network in networks
+        for block in network.get("cidr_blocks") or []
+    ]
+
+
+def _office_aggregates(offices: list[dict[str, Any]]) -> list[_Aggregate]:
+    """Each office footprint's lan_prefixes entry, expected in its own environment's namespace."""
+    return [
+        _Aggregate(
+            owner=f"office '{office.get('name')}'",
+            noun="LAN prefix",
+            origin="its environment",
+            expected=_type_for_environment(office.get("environment")),
+            prefix=prefix,
+        )
+        for office in offices
+        for prefix in office.get("lan_prefixes") or []
+    ]
 
 
 def _network(prefix: str | None) -> ipaddress.IPv4Network | ipaddress.IPv6Network | None:

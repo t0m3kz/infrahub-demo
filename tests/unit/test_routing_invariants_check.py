@@ -513,3 +513,90 @@ class TestVpcOverlaps:
         cloud["__typename"] = "CloudNetworkSegment"
         check = _run(CloudVirtualNetwork=[_vpc("a", "p", _block("10.30.0.0/16"))], ManagedNetworkSegment=[cloud])
         assert check._captured_errors == []
+
+
+def _office(name: str, env: str | None, *prefixes: dict[str, Any]) -> dict[str, Any]:
+    """A TopologyCustomerOffice footprint with its environment and LAN prefixes."""
+    return {
+        "id": f"office-{name}",
+        "name": _v(name),
+        "environment": _v(env),
+        "lan_prefixes": {"edges": [{"node": prefix} for prefix in prefixes]},
+    }
+
+
+class TestOfficeLanPrefixes:
+    """An office LAN lives in its environment's namespace type and overlaps nothing routed there."""
+
+    def test_prod_office_in_prod_disjoint_passes(self) -> None:
+        """A prod office LAN in PROD next to disjoint VPC and on-prem prefixes passes."""
+        check = _run(
+            TopologyCustomerOffice=[_office("C005-P", "p", _block("10.210.5.0/24"))],
+            CloudVirtualNetwork=[_vpc("a", "p", _block("10.150.0.0/16"))],
+            ManagedNetworkSegment=[_onprem("web", "10.5.10.0/24")],
+        )
+        assert check._captured_errors == []
+
+    def test_non_prod_office_in_non_prod_passes(self) -> None:
+        """A staging office LAN maps to the NON-PROD namespace type."""
+        office = _office("C005-S", "s", _block("10.210.5.0/24", "NON-PROD", "non_prod"))
+        assert _run(TopologyCustomerOffice=[office])._captured_errors == []
+
+    def test_office_lan_in_wrong_namespace_type_fails(self) -> None:
+        """A prod office LAN registered in NON-PROD is an error naming the office."""
+        office = _office("C005-P", "p", _block("10.210.5.0/24", "NON-PROD", "non_prod"))
+        check = _run(TopologyCustomerOffice=[office])
+        assert len(check._captured_errors) == 1
+        assert "office 'C005-P' LAN prefix" in check._captured_errors[0]
+        assert "prod network" in check._captured_errors[0]
+
+    def test_office_without_environment_is_not_judged(self) -> None:
+        """No environment, nothing to compare the namespace type against."""
+        office = _office("C005", None, _block("10.210.5.0/24", "NON-PROD", "non_prod"))
+        assert _run(TopologyCustomerOffice=[office])._captured_errors == []
+
+    def test_office_lan_overlapping_onprem_fails(self) -> None:
+        """An office LAN covering an on-prem segment prefix in one namespace is an error."""
+        check = _run(
+            TopologyCustomerOffice=[_office("C005-P", "p", _block("10.5.0.0/16"))],
+            ManagedNetworkSegment=[_onprem("web", "10.5.10.0/24")],
+        )
+        assert len(check._captured_errors) == 1
+        assert "office 'C005-P' LAN prefix 10.5.0.0/16 overlaps on-prem prefix" in check._captured_errors[0]
+
+    def test_office_lan_overlapping_vpc_fails(self) -> None:
+        """An office LAN inside a VPC block in one namespace is an error."""
+        check = _run(
+            TopologyCustomerOffice=[_office("C005-P", "p", _block("10.150.5.0/24"))],
+            CloudVirtualNetwork=[_vpc("a", "p", _block("10.150.0.0/16"))],
+        )
+        assert len(check._captured_errors) == 1
+        assert "overlaps office 'C005-P' LAN prefix 10.150.5.0/24" in check._captured_errors[0]
+
+    def test_office_lans_overlapping_each_other_fail(self) -> None:
+        """Two offices announcing overlapping LANs into one namespace is an error."""
+        check = _run(
+            TopologyCustomerOffice=[
+                _office("C002-P", "p", _block("10.210.0.0/16")),
+                _office("C005-P", "p", _block("10.210.5.0/24")),
+            ]
+        )
+        assert len(check._captured_errors) == 1
+        assert "office 'C002-P'" in check._captured_errors[0]
+
+    def test_office_lan_overlap_in_other_namespace_passes(self) -> None:
+        """The same CIDR on a non-prod office and a prod segment sits in two VRFs."""
+        check = _run(
+            TopologyCustomerOffice=[_office("C005-D", "d", _block("10.5.10.0/24", "NON-PROD", "non_prod"))],
+            ManagedNetworkSegment=[_onprem("web", "10.5.10.0/24")],
+        )
+        assert check._captured_errors == []
+
+    def test_office_lan_adopting_onprem_prefix_object_fails(self) -> None:
+        """One prefix object referenced as an office LAN and by an on-prem segment is flagged once."""
+        check = _run(
+            TopologyCustomerOffice=[_office("C005-P", "p", _block("10.5.10.0/24", block_id="shared"))],
+            ManagedNetworkSegment=[_onprem("web", "10.5.10.0/24", pid="shared")],
+        )
+        assert len(check._captured_errors) == 1
+        assert "the LAN prefix adopted an on-prem prefix" in check._captured_errors[0]
