@@ -47,16 +47,6 @@ configure filter ip-filter 100 entry 9990 admin-state enable
 configure filter ip-filter 100 entry 9990 action drop
 configure filter ip-filter 100 entry 9990 action log
 !
-configure filter ip-filter 200 admin-state enable
-configure filter ip-filter 200 description "ACL-VLAN200-IN"
-configure filter ip-filter 200 entry 10 admin-state enable
-configure filter ip-filter 200 entry 10 action accept
-configure filter ip-filter 200 entry 10 match protocol tcp
-configure filter ip-filter 200 entry 10 match dst-port port 22
-configure filter ip-filter 200 entry 9990 admin-state enable
-configure filter ip-filter 200 entry 9990 action drop
-configure filter ip-filter 200 entry 9990 action log
-!
 configure router "Base" bgp 1 admin-state enable
 configure router "Base" bgp 1 router-id "10.0.0.1"
 configure router "Base" bgp 1 local-as 65000
@@ -134,9 +124,4 @@ configure service vprn 50001 interface "int-vpls-10100" admin-state enable
 configure service vprn 50001 interface "int-vpls-10100" vpls "vpls-10100"
 configure service vprn 50001 interface "int-vpls-10100" mac "00:1c:73:00:dc:01"
 configure service vprn 50001 interface "int-vpls-10100" ipv4 primary-address "10.100.0.1/24"
-!
-configure service vprn 200 interface "int-vpls-200" admin-state enable
-configure service vprn 200 interface "int-vpls-200" vpls "vpls-200"
-configure service vprn 200 interface "int-vpls-200" mac "00:1c:73:00:dc:01"
-configure service vprn 200 interface "int-vpls-200" ipv4 primary-address "10.200.0.1/24"
 !

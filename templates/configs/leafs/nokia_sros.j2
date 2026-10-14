@@ -102,7 +102,8 @@ configure service vpls "vpls-{{ mapping.vni }}" bgp instance 1 route-distinguish
 configure service vpls "vpls-{{ mapping.vni }}" bgp instance 1 route-target export "target:{{ mapping.route_target }}"
 configure service vpls "vpls-{{ mapping.vni }}" bgp instance 1 route-target import "target:{{ mapping.route_target }}"
 {%- endif %}
-{%- for interface in interfaces if interface.vlans and interface.vlans[0] == mapping.vlan_id %}
+{#- One SAP per tagged VLAN of every port carrying it (access or trunk), each with its segment ACL as ingress filter. -#}
+{%- for interface in interfaces if mapping.vlan_id in (interface.vlans or []) %}
 configure service vpls "vpls-{{ mapping.vni }}" sap {{ interface.name }}:{{ mapping.vlan_id }} admin-state enable
 configure service vpls "vpls-{{ mapping.vni }}" sap {{ interface.name }}:{{ mapping.vlan_id }} create
 {%- for acl in acls if acl.vlan_id == mapping.vlan_id %}
@@ -142,6 +143,8 @@ configure service vprn {{ l3_mapping.l3_vni }} bgp-evpn vxlan bgp-instance 1 adm
 {%- set irb_vprn = vlan.get('l3_vni') or _map.get('l3_vni') or vni %}
 configure service vprn {{ irb_vprn }} interface "int-vpls-{{ vni }}" admin-state enable
 configure service vprn {{ irb_vprn }} interface "int-vpls-{{ vni }}" vpls "vpls-{{ vni }}"
+{#- NOTE: identical "interface mac" on every leaf is NOT the documented SR OS anycast pattern
+    (L2 Services & EVPN Guide 26.7.R1 §6.3.6.1 uses "vrrp N passive"); documented, not lab-verified. -#}
 {%- if vxlan.anycast_gateway and vxlan.anycast_gateway.enabled %}
 configure service vprn {{ irb_vprn }} interface "int-vpls-{{ vni }}" mac "{{ vxlan.anycast_gateway.mac }}"
 {%- endif %}

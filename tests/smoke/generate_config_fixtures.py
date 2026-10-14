@@ -808,17 +808,22 @@ def build_device_data(
                 "vlan_domain_id": vlan_domain_id,
             }
         )
-        segment_kwargs.append(
-            {
-                "vlan_id": 200,
-                "seg_name": "seg-200",
-                "seg_type": "ManagedVlanSegment",
-                "gateway_ip": "10.200.0.1/24",
-                "security_policy": policy_vlan,
-                "isolation_mode": isolation_mode,
-                "num_deployments": 1,
-            }
-        )
+        # SR OS binds a segment ACL only inside the vpls of an L2 VNI and models no
+        # VLAN-only service, so the transform refuses this ACL-bearing VLAN-only
+        # segment (tests/unit/test_base_device_transform.py); the fixture omits it.
+        sros_acl_leaf = platform == "nokia_sros" and (include_acls or isolation_mode not in (None, "normal"))
+        if not sros_acl_leaf:
+            segment_kwargs.append(
+                {
+                    "vlan_id": 200,
+                    "seg_name": "seg-200",
+                    "seg_type": "ManagedVlanSegment",
+                    "gateway_ip": "10.200.0.1/24",
+                    "security_policy": policy_vlan,
+                    "isolation_mode": isolation_mode,
+                    "num_deployments": 1,
+                }
+            )
 
     # VXLAN/EVPN is rendered ONLY from interface_capabilities, so the
     # customer-facing port must carry the segments. Attaching them solely to
