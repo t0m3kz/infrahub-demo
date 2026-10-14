@@ -895,3 +895,87 @@ class TestToRClassAttributes:
         activations = [{"id": "seg-1"}, {"id": "seg-2"}]
         result = t._filter_segment_deployments(activations)
         assert result == activations
+
+
+# ---------------------------------------------------------------------------
+# SR OS: segment ACL binding (SAP ingress filter per VLAN of every port)
+# ---------------------------------------------------------------------------
+
+
+def _sros_vxlan(vlan_ids: list[int]) -> dict:
+    """A minimal VXLAN context with one L2 VNI mapping (vni = 10000 + vlan) per VLAN."""
+    return {
+        "enabled": True,
+        "vtep": {"ipv4": "10.0.0.1"},
+        "evpn": {"enabled": True, "rd_format": None},
+        "anycast_gateway": None,
+        "l3_vni_mappings": [],
+        "l2_vni_mappings": [{"vlan_id": v, "vni": 10000 + v, "route_target": None} for v in vlan_ids],
+    }
+
+
+class TestSrosAclBinding:
+    def test_trunk_port_gets_a_sap_and_filter_for_every_vlan(self) -> None:
+        """A trunk carrying two VLANs binds each VLAN's ip-filter on its own SAP."""
+        rendered = _render_leaf(
+            "nokia_sros",
+            interfaces=[{"name": "1/1/10", "role": "server", "vlans": [100, 200]}],
+            acls=[{"vlan_id": 100, "name": "ACL-100", "rules": []}, {"vlan_id": 200, "name": "ACL-200", "rules": []}],
+            vxlan=_sros_vxlan([100, 200]),
+        )
+
+        assert 'vpls "vpls-10100" sap 1/1/10:100 ingress ip-filter "100"' in rendered
+        assert 'vpls "vpls-10200" sap 1/1/10:200 ingress ip-filter "200"' in rendered
+
+    def test_vlan_without_acl_still_gets_a_sap_without_filter(self) -> None:
+        """A non-first VLAN of a trunk is bridged even when no ACL protects it."""
+        rendered = _render_leaf(
+            "nokia_sros",
+            interfaces=[{"name": "1/1/10", "role": "server", "vlans": [100, 200]}],
+            vxlan=_sros_vxlan([100, 200]),
+        )
+
+        assert 'vpls "vpls-10200" sap 1/1/10:200 create' in rendered
+        assert "ingress ip-filter" not in rendered
+
+    def test_port_only_joins_the_vpls_of_its_own_vlans(self) -> None:
+        """A port that does not carry the VLAN gets no SAP in that VLAN's service."""
+        rendered = _render_leaf(
+            "nokia_sros",
+            interfaces=[{"name": "1/1/10", "role": "server", "vlans": [100]}],
+            vxlan=_sros_vxlan([100, 200]),
+        )
+
+        assert "sap 1/1/10:100 create" in rendered
+        assert "sap 1/1/10:200" not in rendered
+
+    @pytest.mark.parametrize("role", ["leaf", "tor", "access-leaf"])
+    def test_leaf_refuses_acl_for_vlan_without_l2_vni_service(self, role: str) -> None:
+        """A VLAN-only segment ACL has no vpls to attach to: refuse instead of leaving it unbound."""
+        transform = _make_transform(role)
+
+        with patch("transforms.common.get_acls", return_value=[{"vlan_id": 200, "name": "ACL-200"}]):
+            with pytest.raises(ValueError, match=r"cannot bind the segment ACL for VLANs \[200\]"):
+                transform._extra_config(_device_data(), "nokia_sros")
+
+    def test_leaf_accepts_acl_for_vlan_with_l2_vni_service(self) -> None:
+        """An ACL whose VLAN has an L2 VNI mapping is bound by the template, so no refusal."""
+        transform = _make_transform("leaf")
+
+        with (
+            patch("transforms.common.get_acls", return_value=[{"vlan_id": 100, "name": "ACL-100"}]),
+            patch("transforms.common.get_vxlan_config", return_value=_sros_vxlan([100])),
+        ):
+            config = transform._extra_config(_device_data(), "nokia_sros")
+
+        assert config["acls"] == [{"vlan_id": 100, "name": "ACL-100"}]
+
+    @pytest.mark.parametrize("platform", ["cisco_nxos", "arista_eos"])
+    def test_other_platforms_accept_vlan_only_acl(self, platform: str) -> None:
+        """Only the SR OS template binds ACLs through VNI services; other leaf templates are unaffected."""
+        transform = _make_transform("leaf")
+
+        with patch("transforms.common.get_acls", return_value=[{"vlan_id": 200, "name": "ACL-200"}]):
+            config = transform._extra_config(_device_data(), platform)
+
+        assert config["acls"] == [{"vlan_id": 200, "name": "ACL-200"}]
