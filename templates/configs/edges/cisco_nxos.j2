@@ -151,6 +151,44 @@ route-map RM-TRANSIT-OUT deny 10
 {%- endif %}
 !
 {%- endif %}
+{#- External peers in a tenant VRF (session.external, bgp.py): a cloud VIF or
+    the SD-WAN gateway. In: exactly the far end's registered prefixes
+    (external_peer_prefixes, by handoff sub-interface), never a default; a peer
+    with none registered is accepted nothing. Out, per VRF: its on-prem segment
+    prefixes (onprem_prefixes), nothing when none is known. -#}
+{%- set _external = namespace(vrfs=[]) %}
+{%- for bgp_config in bgp %}
+{%- for vrf_name, sessions in (bgp_config.vrf_sessions or {}).items() %}
+{%- for session in sessions if session.get('external') %}
+{%- set _in = (external_peer_prefixes | default({})).get(session.local_interface, []) %}
+{%- for prefix in _in %}
+ip prefix-list PL-{{ session.name }}-IN seq {{ loop.index * 10 }} permit {{ prefix }}
+{%- endfor %}
+{%- if _in %}
+route-map RM-{{ session.name }}-IN permit 10
+  match ip address prefix-list PL-{{ session.name }}-IN
+{%- else %}
+route-map RM-{{ session.name }}-IN deny 10
+{%- endif %}
+!
+{%- if vrf_name not in _external.vrfs %}{% set _external.vrfs = _external.vrfs + [vrf_name] %}{% endif %}
+{%- endfor %}
+{%- endfor %}
+{%- endfor %}
+{%- for vrf_name in _external.vrfs %}
+{%- set _out = (onprem_prefixes | default({})).get(vrf_name, []) %}
+{%- for prefix in _out %}
+ip prefix-list PL-{{ vrf_name }}-ONPREM seq {{ loop.index * 10 }} permit {{ prefix }}
+{%- endfor %}
+{%- if _out %}
+route-map RM-{{ vrf_name }}-EXTERNAL-OUT permit 10
+  match ip address prefix-list PL-{{ vrf_name }}-ONPREM
+route-map RM-{{ vrf_name }}-EXTERNAL-OUT deny 20
+{%- else %}
+route-map RM-{{ vrf_name }}-EXTERNAL-OUT deny 10
+{%- endif %}
+!
+{%- endfor %}
 {%- endif %}
 {%- include 'common/cisco_nxos_management.j2' %}
 !

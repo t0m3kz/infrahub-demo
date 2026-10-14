@@ -1,0 +1,116 @@
+---
+# L3 handoff for the transit VIF vif-transit-hub-euc1 (01_transit_vif.yml), in
+# VRF PROD on eg-fr01, the edge holding the Direct Connect port (Ethernet1/13,
+# XC-EQXFR2-AWS-EUC1; dx-eqx-fr2-euc1 lists eg-fr01 as its physical device).
+# One eBGP session per (Direct Connect, namespace): the VIF is the PROD one,
+# because every account behind the hub is environment p. A NON-PROD account
+# would get its own VIF, sub-interface and session in NON-PROD, never this one.
+#
+# The sub-interface is <port>.<vif.vlan_id>: that VLAN is how
+# transforms/helpers/bgp.py (get_external_peer_prefixes) finds the VIF behind
+# the session and so the VPC blocks it may accept (those propagating into the
+# hybrid attachment's route table, registered in PROD). Same shape as the
+# SD-WAN handoff (../04_sdwan/06_vrf_handoff.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "10.255.5.4/30"
+      description: "eg-fr01 <-> EXT-AWS-DX-FR2 PROD transit VIF (vif-transit-hub-euc1, VLAN 1000)"
+      status: active
+      ip_namespace: "PROD"
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: "Ethernet1/13.1000"
+      device: "eg-fr01"
+      role: uplink
+      status: active
+      description: "PROD transit VIF to AWS (vif-transit-hub-euc1)"
+      parent_interface: ["eg-fr01", "Ethernet1/13"]
+      ip_address:
+        data:
+          address: "10.255.5.5/30"
+          ip_namespace: "PROD"
+    - name: "et-0/0/0.1000"
+      device: "EXT-AWS-DX-FR2"
+      role: uplink
+      status: active
+      description: "PROD transit VIF to eg-fr01 (vif-transit-hub-euc1)"
+      parent_interface: ["EXT-AWS-DX-FR2", "et-0/0/0"]
+      ip_address:
+        data:
+          address: "10.255.5.6/30"
+          ip_namespace: "PROD"
+---
+# 64512 is the default Amazon-side ASN of a Direct Connect gateway / Transit
+# Gateway. The 2-byte private range is unused by the fabrics here (their ASNs
+# are 4-byte, 42xxxxxxxx).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingAutonomousSystem
+  data:
+    - asn: 64512
+      owner: "P004"
+      description: "AWS Amazon-side ASN (tgw-30all-euc1 via dx-eqx-fr2-euc1)"
+---
+# The AWS side's BGP process. AWS configures it, not a transform here: it
+# exists so the peering below has a remote AS and a second endpoint.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGP
+  data:
+    - name: "EXT-AWS-DX-FR2-bgp"
+      status: active
+      local_as: "AS64512"
+      router_id: ["10.255.5.6/30", "PROD"]
+      capabilities:
+        - "EXT-AWS-DX-FR2"
+---
+# The VIF's BGP auth key. Demo-only secret, like the API token in the README.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingPassword
+  data:
+    - name: "eqx-fr2-aws-vif-key"
+      description: "BGP auth key for the eg-fr01 <-> EXT-AWS-DX-FR2 PROD transit VIF"
+      password: "demo-eqx-fr2-aws-vif"
+---
+# peering_role regular in a PROD address: an external tenant-VRF peer. On
+# eg-fr01 it renders under `vrf PROD` with RM-<name>-IN (only the reachable
+# PROD VPC blocks, never a default) and RM-PROD-EXTERNAL-OUT (only PROD's
+# on-prem segment prefixes). The learned VPC blocks reach the DCs as EVPN
+# type-5 under PROD's own route-target, like any other PROD route.
+#
+# maximum_routes 100: the hub carries a handful of VPC aggregates. BFD as on
+# the internet transit sessions (AWS runs asynchronous BFD on a VIF).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGPPeering
+  data:
+    - name: "VRF-PROD-EQXFR2-AWS-EUC1"
+      description: "PROD transit VIF eg-fr01 <-> EXT-AWS-DX-FR2 (vif-transit-hub-euc1, AS64512)"
+      session_type: EBGP
+      peering_role: regular
+      ttl: 1
+      bfd_enabled: true
+      send_community: true
+      send_extended_community: false
+      maximum_routes: 100
+      address_families:
+        - ["ipv4", "unicast"]
+      bgp_processes:
+        - "eg-fr01-bgp-overlay"
+        - "EXT-AWS-DX-FR2-bgp"
+      password: "eqx-fr2-aws-vif-key"
+      interface_capabilities:
+        - ["eg-fr01", "Ethernet1/13.1000"]
+        - ["EXT-AWS-DX-FR2", "et-0/0/0.1000"]

@@ -202,7 +202,11 @@ class TestEdgeTemplate:
         assert "vni 60002" not in rendered
         assert "route-map RM-TRANSIT-IN in" in rendered
 
-    def test_vrf_session_without_transit_renders_no_filters(self, env: jinja2.Environment) -> None:
+    def test_vrf_session_without_transit_renders_no_transit_filters(self, env: jinja2.Environment) -> None:
+        """A regular peer in PROD is an external tenant-VRF peer (tests/unit/test_external_vrf_peers.py), not transit."""
         rendered = self._render(env, {"name": "PROD", "namespace_type": "prod"}, None)
-        assert "TRANSIT" not in rendered
+        assert "RM-TRANSIT-IN" not in rendered
+        assert "RM-TRANSIT-OUT" not in rendered
+        assert "PL-TRANSIT" not in rendered
+        assert "route-map RM-PROD-EXTERNAL-OUT out" in rendered
         assert "vrf context PROD" in rendered

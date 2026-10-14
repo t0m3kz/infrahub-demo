@@ -2,10 +2,11 @@
 # Office footprint for C015 (Novantis), the isolated-route-table counterpart to
 # c003/office/.
 #
-# C015's TGW attachment sits on rt-hub-isolated, so its office reaches on-prem
-# and AWS but no other tenant. Two spokes with deliberately different route-table
-# placement is what makes an edit to rt-hub-shared reach wider than one to
-# rt-hub-isolated.
+# C015's TGW attachment is associated with rt-hub-isolated, so its own traffic
+# reaches on-prem and AWS but no other tenant. It also propagates into
+# rt-hub-shared so on-prem can reach it, which lets C003 (vaultex) route to it
+# too: see ../../../08_interconnects/02_cloud_hub/05_attachments.yml for that
+# consequence and the second-hybrid-attachment follow-up.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

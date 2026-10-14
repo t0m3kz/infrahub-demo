@@ -84,7 +84,14 @@ spec:
 ---
 # The local interface's address being in PROD (not `default`) is what makes
 # transforms/helpers/bgp.py render this under `vrf PROD` on eg-fr01, outside
-# every peer group.
+# every peer group. peering_role regular there makes it an external tenant-VRF
+# peer, filtered like the cloud VIF (../05_cloud_endpoints/03_vif_handoff.yml):
+# RM-<name>-IN accepts only the far end's registered prefixes and
+# RM-PROD-EXTERNAL-OUT announces only PROD's on-prem segment prefixes. The far
+# end here is EQX-FR2-SDWAN-GW1, so the registered prefixes are the PROD
+# lan_prefixes of every TopologyCustomerOffice whose sdwan_gateway is GW1 (C002
+# 10.210.2.0/24, C005 10.210.5.0/24; get_external_peer_prefixes in
+# transforms/helpers/bgp.py). An office without a registered LAN adds nothing.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -98,6 +105,7 @@ spec:
       bfd_enabled: false
       send_community: true
       send_extended_community: true
+      maximum_routes: 100
       address_families:
         - ["ipv4", "unicast"]
       bgp_processes:

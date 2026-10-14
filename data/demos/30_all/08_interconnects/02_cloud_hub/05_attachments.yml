@@ -5,11 +5,30 @@
 # net-hub-aws-prod — that asymmetry *is* the cross-account attachment, and it is
 # the edge that lets the traversal cross an account boundary at all.
 #
-# Route-table placement is the interesting part for risk scoring:
-#   vaultex (C003)  -> rt-hub-shared    can reach on-prem and other shared tenants
-#   novantis (C015) -> rt-hub-isolated  reaches on-prem only
-# so an edit to rt-hub-shared has a strictly larger blast radius than one to
-# rt-hub-isolated, and the check can show that difference rather than assert it.
+# Route-table placement (association = the table an attachment's traffic is
+# looked up in; propagation = the tables that learn its CIDRs):
+#   vaultex (C003)   associated rt-hub-shared,   propagates to rt-hub-shared
+#   novantis (C015)  associated rt-hub-isolated, propagates to rt-hub-isolated
+#                    and rt-hub-shared
+#   hybrid (on-prem) associated rt-hub-shared,   propagates to both
+#
+# Novantis must reach on-prem. Traffic arriving from on-prem over the transit
+# VIF is looked up in the hybrid attachment's table, rt-hub-shared, so without
+# novantis propagating there on-prem has no route to 10.150.0.0/16 (and the
+# colo edge's inbound filter, which mirrors that table through
+# transforms/helpers/bgp.py _vif_registered_blocks, does not accept it).
+#
+# Consequence: novantis is no longer isolated from vaultex. vaultex is
+# associated with rt-hub-shared as well, so it now learns 10.150.0.0/16 and its
+# traffic to novantis is delivered. Only the return leg is missing today
+# (rt-hub-isolated holds no vaultex route), which keeps two-way flows from
+# working but is one propagation or static away from full reachability: it is
+# not route-table separation. An AWS Transit Gateway attachment has exactly one
+# association, so the single hybrid attachment cannot sit on both tables.
+# Follow-up (not modelled here): true isolation between the two tenants while
+# both reach on-prem needs a second hybrid attachment (its own transit VIF)
+# associated with rt-hub-isolated, so novantis propagates only into
+# rt-hub-isolated again.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -48,12 +67,14 @@ spec:
 
     - name: "tgwa-vpc-novantis"
       cloud_id: "tgw-attach-0novantisvpc"
-      description: "Novantis (C015) production VPC, isolated from other tenants"
+      description: "Novantis (C015) production VPC; propagates into rt-hub-shared so on-prem can reach it"
       status: active
       attachment_type: vpc
       transit_gateway: "tgw-30all-euc1"
       owner_account: "novantis-aws-prod"
       virtual_network: "novantis-vpc-prod"
       associated_route_table: "rt-hub-isolated"
+      # rt-hub-shared: the hybrid attachment's table, see the header.
       propagates_to_route_tables:
         - "rt-hub-isolated"
+        - "rt-hub-shared"
