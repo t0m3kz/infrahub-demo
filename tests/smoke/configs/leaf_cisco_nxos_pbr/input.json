@@ -1793,6 +1793,12 @@
                                   {
                                     "node": {
                                       "id": "ctx-shared",
+                                      "name": {
+                                        "value": "dc1-fw-shared"
+                                      },
+                                      "vlan_id": {
+                                        "value": 3000
+                                      },
                                       "tenant": {
                                         "node": null
                                       },
@@ -1825,6 +1831,12 @@
                                                     "node": {
                                                       "name": {
                                                         "value": "VRF_A"
+                                                      },
+                                                      "namespace_type": {
+                                                        "value": "prod"
+                                                      },
+                                                      "l3_vni": {
+                                                        "value": 50001
                                                       }
                                                     }
                                                   }
@@ -1856,6 +1868,12 @@
                                                     "node": {
                                                       "name": {
                                                         "value": "VRF_A"
+                                                      },
+                                                      "namespace_type": {
+                                                        "value": "prod"
+                                                      },
+                                                      "l3_vni": {
+                                                        "value": 50001
                                                       }
                                                     }
                                                   }

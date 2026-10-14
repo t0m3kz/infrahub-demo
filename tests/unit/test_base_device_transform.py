@@ -149,21 +149,24 @@ class TestCombineLeafPbrRules:
         customer = {"vlan_id": 100, "bypass_prefixes": ["10.0.2.0/24"], "fw_nexthop": "10.0.0.2"}
         transform = _make_transform("leaf")
 
-        with patch("transforms.common.get_customer_pbr_rules", return_value=[customer]):
+        with (
+            patch("transforms.common.get_customer_pbr_rules", return_value=[customer]),
+            patch("transforms.common.get_leaf_firewall_transits", return_value=[]),
+        ):
             with pytest.raises(ValueError, match="cannot render PBR policy"):
                 transform._extra_config(_device_data(), "nokia_sros")
 
     @pytest.mark.parametrize("role", ["leaf", "tor", "access-leaf"])
     @pytest.mark.parametrize("platform", ["sonic", "dell_sonic"])
-    def test_sonic_leaf_accepts_pbr(self, platform: str, role: str) -> None:
-        """SONiC renders leaf PBR, so the rules reach the template instead of raising."""
-        customer = {"vlan_id": 100, "bypass_prefixes": ["10.0.2.0/24"], "fw_nexthop": "10.0.0.2"}
+    def test_sonic_leaf_accepts_lb_only_pbr(self, platform: str, role: str) -> None:
+        """SONiC renders LB return-path PBR (no firewall leg needed), so the rules reach the template."""
+        backend = {"vlan_id": 100, "backend_ips": ["10.0.1.10"], "lb_nexthop": "10.0.0.3"}
         transform = _make_transform(role)
 
-        with patch("transforms.common.get_customer_pbr_rules", return_value=[customer]):
+        with patch("transforms.common.get_lb_backend_pbr_rules", return_value=[backend]):
             config = transform._extra_config(_device_data(), platform)
 
-        assert config["leaf_pbr_rules"] == [{**customer, "backend_ips": [], "lb_nexthop": None}]
+        assert config["leaf_pbr_rules"] == [{**backend, "bypass_prefixes": [], "fw_nexthop": None}]
 
     @pytest.mark.parametrize("platform", ["cisco_nxos", "arista_eos", "sonic", "dell_sonic", "nokia_sros"])
     def test_border_leaf_refuses_tenant_svi_with_pbr(self, platform: str) -> None:

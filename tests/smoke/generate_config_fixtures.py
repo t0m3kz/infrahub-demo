@@ -1337,7 +1337,8 @@ def build_leaf_pbr_data(*, device_name: str, platform: str) -> dict:
 
     seg-100 (VRF_A) permits ssh to seg-200 (bypassed: normal routing) and https to the Internet
     (never bypassed), so its PBR is: bypass 10.200.0.0/24, everything else to the context's VIP
-    (the /29 leg 100.66.0.0/29 -> .4). seg-200 is in the default VRF and gets no PBR.
+    (the /29 leg 100.66.0.0/29 -> .4), which the leaf holds as a local transit leg
+    (VLAN 3000, VNI 64000). seg-200 is in the default VRF and gets no PBR.
     """
     data = build_leaf_internet_permit_data(device_name=device_name, platform=platform)
     net = ipaddress.ip_network("100.66.0.0/29")
@@ -1346,13 +1347,18 @@ def build_leaf_pbr_data(*, device_name: str, platform: str) -> dict:
             "name": _v("ethernet1/1.3000"),
             "device": _node({"name": _v(member), "role": _v("firewall")}),
             "ip_address": _node(
-                {"address": _v(f"{net[host]}/{net.prefixlen}"), "ip_namespace": _node({"name": _v("VRF_A")})}
+                {
+                    "address": _v(f"{net[host]}/{net.prefixlen}"),
+                    "ip_namespace": _node({"name": _v("VRF_A"), "namespace_type": _v("prod"), "l3_vni": _v(50001)}),
+                }
             ),
         }
         for member, host in (("dc1-fw-01", 5), ("dc1-fw-02", 6))
     ]
     context = {
         "id": "ctx-shared",
+        "name": _v("dc1-fw-shared"),
+        "vlan_id": _v(3000),
         "tenant": _node(None),
         "served_deployments": _edges([]),
         "interface_capabilities": _edges(legs),
