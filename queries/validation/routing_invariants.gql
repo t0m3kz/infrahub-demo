@@ -2,8 +2,10 @@
 # type, the RouteLeakExchange route-target joins, interfaces/segments living in
 # the INTERNET namespace, and the cloud Transit Gateway attachments, route
 # tables and virtual interfaces (with the namespaces their circuits terminate
-# in). Filters on the *Interface queries narrow the response to the INTERNET
-# namespace; the check re-tests the type itself.
+# in), plus the cloud VPC aggregates (cidr_blocks) with the namespace each is
+# registered in, and the cloud subnets that must lie inside them. Filters on
+# the *Interface queries narrow the response to the INTERNET namespace; the
+# check re-tests the type itself.
 query routing_invariants {
   IpamNamespace {
     edges {
@@ -63,7 +65,39 @@ query routing_invariants {
         __typename
         id
         name { value }
-        gateway { node { ip_prefix { node { prefix { value } ip_namespace { node { id name { value } l3_vni { value } namespace_type { value } } } } } } }
+        gateway { node { ip_prefix { node { id prefix { value } member_type { value } ip_namespace { node { id name { value } l3_vni { value } namespace_type { value } } } } } } }
+      }
+    }
+  }
+
+  # VPC aggregates: each block is an IpamPrefix registered in the namespace of
+  # the account's environment; the subnets (Text cidr_block) must sit inside.
+  CloudVirtualNetwork {
+    edges {
+      node {
+        id
+        name { value }
+        account { node { id name { value } environment { value } } }
+        cidr_blocks {
+          edges {
+            node {
+              id
+              prefix { value }
+              ip_namespace { node { id name { value } l3_vni { value } namespace_type { value } } }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  CloudNetworkSegment {
+    edges {
+      node {
+        id
+        name { value }
+        cidr_block { value }
+        virtual_network { node { id name { value } } }
       }
     }
   }
