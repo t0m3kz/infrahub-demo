@@ -32,6 +32,7 @@ interface Ethernet2
 interface Ethernet10
    description to server-01
 
+   switchport mode trunk
    switchport trunk allowed vlan 100,200
    no shutdown
 

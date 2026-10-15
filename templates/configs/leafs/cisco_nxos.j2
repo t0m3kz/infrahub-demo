@@ -57,10 +57,8 @@ interface {{ interface.name }}
 {%- endif %}
 {%- include 'common/cisco_nxos_interface_ip.j2' %}
 {%- if interface.vlans %}
-  switchport
-  switchport mode access
-  switchport access vlan {{ interface.vlans[0] }}
-{%- if interface.access_isolation_mode == 'isolated' %}
+{%- include 'common/cisco_nxos_switchport.j2' %}
+{%- if interface.mode != 'trunk' and interface.access_isolation_mode == 'isolated' %}
   ! TODO: configure port-isolation group X (NX-OS port isolation requires interface-level group assignment)
 {%- endif %}
 {%- endif %}
