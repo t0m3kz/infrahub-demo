@@ -2,7 +2,9 @@
 # changed. Resolves each instance to the physical device it is actually
 # cabled through (itself if physical, hosting_device if virtual) so
 # AppInstanceSegmentGenerator can tag the exact switch interface it lands
-# on — see generators/topology/app_instance_segment.py.
+# on — see generators/topology/app_instance_segment.py. The segment's
+# __typename picks the reconcile: a VXLAN segment's tags and VLAN domain
+# activations, a VLAN segment's tags only, nothing for a cloud segment.
 query app_component_segment($fqdn: String!) {
   AppComponent(fqdn__value: $fqdn) {
     edges {
@@ -12,6 +14,7 @@ query app_component_segment($fqdn: String!) {
         network_segment {
           node {
             id
+            __typename
             name { value }
           }
         }

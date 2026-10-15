@@ -17,7 +17,6 @@ spec:
   data:
     - owner: "C012"
       environment: "p"
-      status: active
       parent: "VA"
       member_of_groups:
         - customer_deployments_colocation

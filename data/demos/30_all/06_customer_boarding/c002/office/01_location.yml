@@ -1,10 +1,8 @@
 ---
 # Office footprint for C002 (SwiftGo GmbH), mirroring c001/office/ and
-# c003/office/ — the difference is what 02_deployment.yml adds:
-# sdwan_gateway/branch_to_branch, opting this office into
-# generators/topology/sdwan_edge.py's automated SD-WAN edge provisioning
-# instead of the other three offices' hand-authored
-# ../../../08_interconnects/04_sdwan/ data.
+# c003/office/. Like every office it opts into generators/topology/
+# sdwan_edge.py's SD-WAN edge provisioning in 02_deployment.yml; it also
+# registers its LAN and asks for a full branch-to-branch mesh.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

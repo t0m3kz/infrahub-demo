@@ -27,36 +27,30 @@ spec:
   data:
     - name: c005-web-frontend-dc10-1
       object_template: LINUX-SVC
-      status: active
       hosting_device: dc10-pod1-server-1
       deployment: "C005-P-DC10"
 
     - name: c005-web-frontend-dc10-2
       object_template: LINUX-SVC
-      status: active
       hosting_device: dc10-pod1-server-2
       deployment: "C005-P-DC10"
 
     - name: c005-app-backend-dc10-1
       object_template: LINUX-SVC
-      status: active
       hosting_device: dc10-pod1-server-1
       deployment: "C005-P-DC10"
 
     - name: c005-event-bus-dc10-1
       object_template: LINUX-SVC
-      status: active
       hosting_device: dc10-pod1-server-2
       deployment: "C005-P-DC10"
 
     - name: c005-session-store-dc10-1
       object_template: LINUX-SVC
-      status: active
       hosting_device: dc10-pod1-server-3
       deployment: "C005-P-DC10"
 
     - name: c005-session-store-dc10-2
       object_template: LINUX-SVC
-      status: active
       hosting_device: dc10-pod1-server-4
       deployment: "C005-P-DC10"

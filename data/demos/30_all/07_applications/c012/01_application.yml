@@ -8,9 +8,7 @@ spec:
     - label: payment-edge
       environment: p
       criticality: high
-      security_profile: internal_standard
       fqdn: payment-edge.c012.demo.local
-      ingress_mode: frontend
       owner: C012
       member_of_groups:
         - app_applications

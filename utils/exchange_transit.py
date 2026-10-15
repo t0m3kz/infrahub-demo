@@ -47,6 +47,9 @@ TENANT_NAMESPACE_TYPES = frozenset(EXCHANGE_PEERS)
 ROUTED_SEGMENT_KINDS = frozenset({"ManagedVlanSegment", "ManagedVxlanSegment"})
 """Segment kinds the fabric routes with an anycast SVI (an External or Cloud segment never is)."""
 
+EXTERNAL_SEGMENT_KIND = "ManagedExternalSegment"
+"""Segment kind whose zone is authoritative data (always an exchange zone), never derived from an environment."""
+
 INTERNET_TYPE = "internet"
 """namespace_type of the INTERNET VRF namespace."""
 
@@ -119,6 +122,18 @@ def exchange_peer_zones() -> frozenset[str]:
     return frozenset(ZONE_BY_NS_TYPE[ns_type] for peers in EXCHANGE_PEERS.values() for ns_type in peers)
 
 
+def is_exchange_zone(zone: str | None) -> bool:
+    """Whether ``zone`` is an exchange zone (INTERNET-ZONE, MANAGEMENT-ZONE).
+
+    The one exchange-zone predicate. A segment in an exchange zone is a shared
+    service by design (e.g. the DC-local MANAGEMENT services), so its zone is
+    authored data, not f(environment): ensure_security_zone keeps it, the
+    segment_security check exempts it from the environment rules, RulesPlanner
+    governs its flows by EXCHANGE_PEERS, and it is never a routed tenant segment.
+    """
+    return zone in exchange_peer_zones()
+
+
 def is_routed_tenant_segment(segment: dict[str, Any]) -> bool:
     """A VLAN/VXLAN segment with a gateway in a PROD/NON-PROD namespace, outside the exchange zones.
 
@@ -133,7 +148,7 @@ def is_routed_tenant_segment(segment: dict[str, Any]) -> bool:
     prefix = (segment.get("gateway") or {}).get("ip_prefix") or {}
     namespace_type = (prefix.get("ip_namespace") or {}).get("namespace_type")
     zone = (segment.get("security_zone") or {}).get("name")
-    return namespace_type in TENANT_NAMESPACE_TYPES and zone not in exchange_peer_zones()
+    return namespace_type in TENANT_NAMESPACE_TYPES and not is_exchange_zone(zone)
 
 
 def transit_vlan(context_vlan: int, ns_type: str) -> int:

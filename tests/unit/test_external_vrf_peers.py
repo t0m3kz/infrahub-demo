@@ -603,10 +603,12 @@ class TestAllDemoData:
     def test_offices_behind_the_sdwan_handoff_gateway_register_lans_in_its_namespace(self) -> None:
         """The SD-WAN handoff's far end has offices, and each of their LANs is in the handoff's namespace.
 
-        Office footprints are created in 06_customer_boarding (with lan_prefixes) and opted into the
-        gateway in 08_interconnects (sdwan_gateway), keyed by (customer, environment).
+        Office footprints are created in 06_customer_boarding with lan_prefixes and sdwan_gateway set
+        inline (the gateway loads with the foundation stage). An office without a LAN adds nothing.
         """
-        lans: dict[tuple[str, str], list[list[str]]] = {}
+        (peering,) = [p for p in _external_handoffs() if p["name"] == "VRF-PROD-EQXFR2-SDWAN"]
+        (gateway,) = [device for device, _ in peering["interface_capabilities"] if not device.startswith("eg-")]
+        behind: list[list[list[str]]] = []
         for customer in _objects(
             _ROOT / "data" / "demos" / "30_all" / "06_customer_boarding", "TopologyOfficeCustomer"
         ):
@@ -614,14 +616,8 @@ class TestAllDemoData:
                 if isinstance(child, dict) and child.get("kind") == "TopologyCustomerOffice":
                     entries = child["data"]
                     for office in entries if isinstance(entries, list) else [entries]:
-                        lans[(customer["owner"], office["environment"])] = office.get("lan_prefixes") or []
-        (peering,) = [p for p in _external_handoffs() if p["name"] == "VRF-PROD-EQXFR2-SDWAN"]
-        (gateway,) = [device for device, _ in peering["interface_capabilities"] if not device.startswith("eg-")]
-        behind = [
-            lans.get((office["parent"], office["environment"]), [])
-            for office in _objects(_INTERCONNECTS, "TopologyCustomerOffice")
-            if office.get("sdwan_gateway") == gateway
-        ]
+                        if office.get("sdwan_gateway") == gateway:
+                            behind.append(office.get("lan_prefixes") or [])
         registered = [prefix for office_lans in behind for prefix in office_lans]
         assert behind and registered
         assert {namespace for _, namespace in registered} == set(peering["namespaces"])

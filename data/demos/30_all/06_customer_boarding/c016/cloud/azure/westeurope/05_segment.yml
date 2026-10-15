@@ -13,4 +13,3 @@ spec:
       availability_zone: ["westeurope", "westeurope-2"]
       cidr_block: "10.160.1.0/24"
       customer_deployment: "C016-DATHREX-AZURE-P-WESTEUROPE"
-      security_zone: "PROD-ZONE"

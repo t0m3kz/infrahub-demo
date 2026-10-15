@@ -19,7 +19,6 @@ spec:
     - owner: "C016"
       customer_name: "dathrex-azure"
       environment: "p"
-      status: active
       infrastructure_orchestrator: argocd
       parent: "westeurope"
       member_of_groups:

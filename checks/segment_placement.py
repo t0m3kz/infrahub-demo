@@ -7,13 +7,24 @@ from typing import Any
 from infrahub_sdk.checks import InfrahubCheck
 
 from utils.data_cleaning import clean_data
+from utils.exchange_transit import is_exchange_zone
 
 
 class CheckSegmentPlacement(InfrahubCheck):
-    """Validate deployment-type compatibility and VXLAN stretch constraints."""
+    """Validate deployment-type compatibility and VXLAN stretch constraints.
+
+    A tenant segment inside a data center is a VXLAN segment: only
+    add_vxlan_segment derives its VNI, local VLANs, leaf ports and address,
+    while a VLAN segment there would be a second, generator-less kind whose
+    ports and VLAN are typed by hand. So a VLAN segment on a
+    TopologyCustomerDC is an error unless it sits in an exchange zone (the
+    DC-local MANAGEMENT services, authored infra data), the exemption
+    checks/segment_security.py makes with the same predicate.
+    """
 
     query = "segment_placement"
 
+    # A VLAN segment on a TopologyCustomerDC must also be in an exchange zone.
     _VLAN_ALLOWED_DEPLOYMENTS = {
         "TopologyCustomerDC",
         "TopologyCustomerColocation",
@@ -89,6 +100,16 @@ class CheckSegmentPlacement(InfrahubCheck):
                         f"VLAN segment '{seg_name}' is attached to unsupported deployment type "
                         f"'{dep_kind}' ({dep_name}). Allowed: "
                         f"{sorted(self._VLAN_ALLOWED_DEPLOYMENTS)}"
+                    )
+                )
+            elif dep_kind == "TopologyCustomerDC" and not is_exchange_zone(
+                (segment.get("security_zone") or {}).get("name")
+            ):
+                self.log_error(
+                    message=(
+                        f"VLAN segment '{seg_name}' is a tenant segment in data center footprint '{dep_name}': "
+                        "a tenant segment inside a DC is a ManagedVxlanSegment (its VNI, VLANs, ports and "
+                        "address are derived); only an exchange-zone service segment may be a VLAN segment there"
                     )
                 )
 

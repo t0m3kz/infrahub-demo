@@ -1,5 +1,7 @@
 # validate_app_dependency: every dependency names exactly one source and one
-# target, and opens ports that parse and that its target actually listens on.
+# target, and opens ports that parse and that its target actually listens on;
+# an approved dependency between two owners' components lists its ports and
+# its decision_reason (each side's owner is its application's).
 query app_dependency_validation {
   AppComponent {
     edges {
@@ -15,6 +17,8 @@ query app_dependency_validation {
         name { value }
         ports { value }
         target_fqdn { value }
+        access_status { value }
+        decision_reason { value }
         source_profile {
           node {
             id
@@ -27,10 +31,12 @@ query app_dependency_validation {
               fqdn { value }
               parent {
                 node {
+                  __typename
                   ... on AppApplication {
                     owner {
                       node {
                         name { value }
+                        org_id { value }
                         egress_service {
                           node {
                             id
@@ -50,6 +56,14 @@ query app_dependency_validation {
             ... on AppComponent {
               fqdn { value }
               ports { value }
+              parent {
+                node {
+                  __typename
+                  ... on AppApplication {
+                    owner { node { name { value } org_id { value } } }
+                  }
+                }
+              }
             }
           }
         }

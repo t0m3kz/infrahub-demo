@@ -42,8 +42,6 @@ spec:
       description: All edge devices
     - name: endpoints
       description: All endpoint devices (servers)
-    - name: provisioning_circuits
-      description: Provisioning Circuits
     - name: topologies_dc
       description: Data Center
     - name: topologies_pod
@@ -56,16 +54,8 @@ spec:
       description: Containerlab Topologies
     - name: equinix_pop
       description: Equinix POPs
-    - name: topologies_server
-      description: Group for servers in topologies
-    - name: virtual_fabrics
-      description: Virtual Fabric Customer Deployments
     - name: vxlan_segments
       description: VXLAN Segments (EVPN overlay)
-    - name: vrf_namespaces
-      description: VRF Namespaces (EVPN L3VNI allocation)
-    - name: dci_peering_services
-      description: DCI Peering Services (inter-DC BGP peerings)
     - name: cloud_accounts
       description: Cloud accounts (AWS/Azure/GCP) — one Terraform/Pulumi artifact per account
     - name: saas_proxies

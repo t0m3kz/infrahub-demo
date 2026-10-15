@@ -10,7 +10,10 @@ from transforms.helpers.group_policy import get_vrf_contracts, rule_groups, segm
 from transforms.helpers.policy import segment_flows
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import (
+    EXTERNAL_SEGMENT_KIND,
+    ROUTED_SEGMENT_KINDS,
     exchange_peer_zones,
+    is_exchange_zone,
     namespace_type_for_environment,
     zone_name_for_namespace_type,
 )
@@ -18,7 +21,6 @@ from utils.group_policy import RESERVED_GROUPS, tag_pool
 from utils.segment_addressing import segment_prefix
 
 INTERNET_ZONE = zone_name_for_namespace_type("internet")
-EXTERNAL_KIND = "ManagedExternalSegment"
 CLOUD_KIND = "CloudNetworkSegment"
 
 
@@ -31,6 +33,9 @@ class CheckSegmentSecurity(InfrahubCheck):
     - every segment has a security_zone;
     - a tenant segment's zone follows its environment (p -> PROD-ZONE, else
       NONPROD-ZONE); an External segment sits in an exchange zone;
+    - a routed (VLAN/VXLAN) tenant segment's gateway prefix sits in a
+      namespace of its environment's type (p -> prod, else non_prod);
+      exchange-zone segments are exempt from both environment rules;
     - computed segment names are unique across kinds;
     - a rule endpoint segment resolves to a prefix (or the rule has an explicit
       selector), unless it is the internet: otherwise it would render as any
@@ -60,6 +65,7 @@ class CheckSegmentSecurity(InfrahubCheck):
         tags = cleaned.get("SecurityTag") or []
         for segment in segments:
             self._validate_zone(segment)
+            self._validate_gateway_namespace(segment)
         self._validate_unique_names(segments)
         self._validate_rule_endpoints(segments, rules)
         self._warn_component_environment(components)
@@ -78,8 +84,8 @@ class CheckSegmentSecurity(InfrahubCheck):
                 message=(f"{kind} '{seg_name}' has no security_zone — zone-based firewalls match any zone on that side")
             )
             return
-        if kind == EXTERNAL_KIND:
-            if zone not in exchange_peer_zones():
+        if kind == EXTERNAL_SEGMENT_KIND:
+            if not is_exchange_zone(zone):
                 self.log_error(
                     message=(
                         f"External segment '{seg_name}' is in zone '{zone}', which is not an exchange zone. "
@@ -87,8 +93,9 @@ class CheckSegmentSecurity(InfrahubCheck):
                     )
                 )
             return
-        if zone in exchange_peer_zones():
-            # A shared service segment (e.g. the DC-local MANAGEMENT services) sits in an exchange zone by design.
+        if is_exchange_zone(zone):
+            # A shared service segment (e.g. the DC-local MANAGEMENT services) sits in an exchange zone by
+            # design; ensure_security_zone keeps that zone too (one predicate, so the two never disagree).
             return
         environment = segment.get("environment")
         if not environment:
@@ -99,6 +106,35 @@ class CheckSegmentSecurity(InfrahubCheck):
             self.log_error(
                 message=(
                     f"{kind} '{seg_name}' (environment '{environment}') is in zone '{zone}', expected '{expected}'"
+                )
+            )
+
+    def _validate_gateway_namespace(self, segment: dict[str, Any]) -> None:
+        """A routed tenant segment's gateway prefix is in a namespace of its environment's type.
+
+        The zone rule above reads the environment; this one reads where the
+        address actually lives, so a production segment addressed in NON-PROD
+        (or in a namespace with no type, such as ``default``) cannot pass as
+        PROD-ZONE. An L2-only segment (no gateway) has nothing to check; a
+        missing environment is reported by the zone rule.
+        """
+        if segment.get("typename") not in ROUTED_SEGMENT_KINDS:
+            return
+        if is_exchange_zone((segment.get("security_zone") or {}).get("name")):
+            return
+        prefix = (segment.get("gateway") or {}).get("ip_prefix") or {}
+        environment = segment.get("environment")
+        if not prefix or not environment:
+            return
+        namespace = prefix.get("ip_namespace") or {}
+        expected = namespace_type_for_environment(environment)
+        if namespace.get("namespace_type") != expected:
+            self.log_error(
+                message=(
+                    f"{segment.get('typename')} '{segment.get('name', '<unnamed-segment>')}' "
+                    f"(environment '{environment}') has its gateway prefix {prefix.get('prefix')} in namespace "
+                    f"'{namespace.get('name')}' (type '{namespace.get('namespace_type')}'), "
+                    f"expected a '{expected}' namespace"
                 )
             )
 

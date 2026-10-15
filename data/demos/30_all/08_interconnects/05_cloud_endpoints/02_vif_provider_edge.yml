@@ -16,6 +16,5 @@ spec:
   data:
     - name: "EXT-AWS-DX-FR2"
       object_template: MX204_ISP_PE
-      status: active
       owner: "P004"
       description: "AWS Direct Connect router at Equinix FR2 (far end of dx-eqx-fr2-euc1)"

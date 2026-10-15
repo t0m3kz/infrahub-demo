@@ -10,8 +10,6 @@ spec:
   data:
     - label: inventory-sync
       environment: d
-      criticality: medium
-      security_profile: internal_standard
       fqdn: inventory-sync.c008.demo.local
       ingress_mode: dns
       application_orchestrator: github_actions
@@ -48,7 +46,6 @@ spec:
     - label: trade-portal
       environment: p
       criticality: high
-      security_profile: internal_standard
       fqdn: trade-portal.c008.demo.local
       ingress_mode: dns
       application_orchestrator: github_actions

@@ -7,24 +7,20 @@ spec:
   data:
     - name: c013-scoring-api-ams-1
       object_template: LINUX-SVC
-      status: active
       hosting_device: mcr-ams1-server-1
       deployment: "C013-P-AMS"
 
     - name: c013-scoring-api-ams-2
       object_template: LINUX-SVC
-      status: active
       hosting_device: mcr-ams1-server-2
       deployment: "C013-P-AMS"
 
     - name: c013-feature-cache-ams-1
       object_template: LINUX-SVC
-      status: active
       hosting_device: mcr-ams1-server-1
       deployment: "C013-P-AMS"
 
     - name: c013-feature-cache-ams-2
       object_template: LINUX-SVC
-      status: active
       hosting_device: mcr-ams1-server-2
       deployment: "C013-P-AMS"

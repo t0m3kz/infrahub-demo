@@ -10,7 +10,6 @@ spec:
       criticality: critical
       security_profile: fintech_strict
       fqdn: fraud-detection.c013.demo.local
-      ingress_mode: frontend
       owner: C013
       member_of_groups:
         - app_applications

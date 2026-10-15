@@ -11,36 +11,30 @@ spec:
   data:
     - name: c006-web-ui-dc11-1
       object_template: LINUX-SVC
-      status: active
       hosting_device: dc11-pod1-server-1
       deployment: "C006-P-DC11"
 
     - name: c006-web-ui-dc11-2
       object_template: LINUX-SVC
-      status: active
       hosting_device: dc11-pod1-server-2
       deployment: "C006-P-DC11"
 
     - name: c006-erp-backend-dc11-1
       object_template: LINUX-SVC
-      status: active
       hosting_device: dc11-pod1-server-1
       deployment: "C006-P-DC11"
 
     - name: c006-erp-backend-dc11-2
       object_template: LINUX-SVC
-      status: active
       hosting_device: dc11-pod1-server-2
       deployment: "C006-P-DC11"
 
     - name: c006-erp-db-dc11-1
       object_template: LINUX-SVC
-      status: active
       hosting_device: dc11-pod1-server-1
       deployment: "C006-P-DC11"
 
     - name: c006-erp-db-dc11-2
       object_template: LINUX-SVC
-      status: active
       hosting_device: dc11-pod1-server-2
       deployment: "C006-P-DC11"

@@ -35,6 +35,7 @@ from __future__ import annotations
 import ipaddress
 import logging
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -74,8 +75,7 @@ from .test_constants import (
     ALL_DEMO_SNAT_POOL_PREFIX,
     INTERNET_L3_VNI,
     INTERNET_ROUTE_TARGET,
-    MANAGEMENT_CLIENT_SEGMENT_PREFIX,
-    MANAGEMENT_CLIENT_SEGMENT_VLAN,
+    MANAGEMENT_CLIENT_SEGMENT,
     MANAGEMENT_NAMESPACE,
     MANAGEMENT_SERVICES_DC,
     MANAGEMENT_SERVICES_GATEWAY,
@@ -138,12 +138,28 @@ query {
 }
 """
 
+# A segment's prefix and its VLAN on each switch. A VLAN segment has one
+# vlan_id everywhere; a VXLAN segment's VLAN is local to each VLAN domain (an
+# MLAG pair or a standalone switch, the domain's capabilities are its members),
+# and its prefix is allocated by add_vxlan_segment, so neither is typed here.
 SEGMENT_QUERY = """
 query ($name: String!) {
   ManagedNetworkSegment(name__value: $name) {
     edges {
       node {
         ... on ManagedVlanSegment { vlan_id { value } }
+        ... on ManagedVxlanSegment {
+          vlan_domain_segments {
+            edges {
+              node {
+                vlan_id { value }
+                vlan_domain {
+                  node { ... on ManagedGenericDevice { capabilities { edges { node { name { value } } } } } }
+                }
+              }
+            }
+          }
+        }
         gateway { node { ip_prefix { node { prefix { value } } } } }
       }
     }
@@ -174,6 +190,44 @@ async def _render(
     rendered = await transform.transform(data)
     assert isinstance(rendered, str) and rendered, f"{query} transform produced no output for device {device}"
     return rendered
+
+
+@dataclass(frozen=True)
+class _SegmentOnSwitches:
+    """A segment's gateway prefix and the VLAN it has on each switch, read from the graph."""
+
+    prefix: str
+    #: A VLAN segment's one VLAN, on every switch; None for a VXLAN segment.
+    vlan_id: int | None
+    #: A VXLAN segment's VLAN per switch, from its VLAN domain realizations.
+    vlans_by_device: dict[str, int]
+
+    def vlan_on(self, device: str) -> int | None:
+        """The segment's VLAN on ``device``; None when the switch has no VLAN for it."""
+        return self.vlans_by_device.get(device, self.vlan_id)
+
+
+async def _segment_on_switches(client: InfrahubClient, branch: str, segment_name: str) -> _SegmentOnSwitches:
+    """Read ``segment_name``'s prefix and its VLAN on every switch (SEGMENT_QUERY)."""
+    segments = (
+        await client.execute_graphql(query=SEGMENT_QUERY, variables={"name": segment_name}, branch_name=branch)
+    )["ManagedNetworkSegment"]["edges"]
+    assert segments, f"segment '{segment_name}' not found on branch '{branch}'"
+    segment = segments[0]["node"]
+    gateway = (segment.get("gateway") or {}).get("node")
+    assert gateway, f"segment '{segment_name}' has no gateway on branch '{branch}'"
+    vlans_by_device: dict[str, int] = {}
+    for edge in (segment.get("vlan_domain_segments") or {}).get("edges") or []:
+        realization = edge["node"]
+        domain = (realization.get("vlan_domain") or {}).get("node") or {}
+        for member in (domain.get("capabilities") or {}).get("edges") or []:
+            vlans_by_device[member["node"]["name"]["value"]] = int(realization["vlan_id"]["value"])
+    vlan_id = (segment.get("vlan_id") or {}).get("value")
+    return _SegmentOnSwitches(
+        prefix=gateway["ip_prefix"]["node"]["prefix"]["value"],
+        vlan_id=int(vlan_id) if vlan_id is not None else None,
+        vlans_by_device=vlans_by_device,
+    )
 
 
 def _has_ip(rendered: str, ip: str) -> bool:
@@ -823,15 +877,8 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         errors: list[str] = []
         for rule_name, rule in ALL_DEMO_INTERNET_EGRESS_RULES.items():
             dc = rule["dc"]
-            segments = (
-                await async_client_main.execute_graphql(
-                    query=SEGMENT_QUERY, variables={"name": rule["source_segment"]}, branch_name=scenario_branch
-                )
-            )["ManagedNetworkSegment"]["edges"]
-            assert segments, f"segment '{rule['source_segment']}' not found on branch '{scenario_branch}'"
-            segment = segments[0]["node"]
-            prefix = segment["gateway"]["node"]["ip_prefix"]["node"]["prefix"]["value"]
-            vlan_id = segment["vlan_id"]["value"]
+            source = await _segment_on_switches(async_client_main, scenario_branch, rule["source_segment"])
+            prefix = source.prefix
 
             # --- firewall: the shared context of the DC ---
             context = contexts[(dc, None)]
@@ -855,31 +902,37 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
             # --- leaf: the ACL of the source segment's VLAN ---
             topology = await fetch_dc_topology(async_client_main, scenario_branch, dc)
             leaf_classes = {"leaf": Leaf, "access-leaf": AccessLeaf}
+            # The ACL is named after the segment's VLAN on each switch (ACL-VLAN<id>-IN).
             with_vlan: list[str] = []
             seen_acls: set[str] = set()
             acls: dict[str, list[dict[str, str]]] = {}
             for device in sorted(topology["devices"], key=lambda d: str(d["name"])):
                 if device.get("role") not in leaf_classes:
                     continue
+                device_name = str(device["name"])
                 rendered = await _render(
                     async_client_main,
                     scenario_branch,
-                    str(device["name"]),
+                    device_name,
                     query="leaf_config",
                     transform_cls=leaf_classes[str(device["role"])],
                 )
                 seen_acls.update(re.findall(r"^ip access-list (\S+)", rendered, re.MULTILINE))
+                vlan_id = source.vlan_on(device_name)
+                if vlan_id is None:
+                    continue
                 if re.search(rf"^vlan {vlan_id}$", rendered, re.MULTILINE):
-                    with_vlan.append(str(device["name"]))
+                    with_vlan.append(f"{device_name} (vlan {vlan_id})")
                 block = re.search(rf"^ip access-list ACL-VLAN{vlan_id}-IN\n((?:[ \t]+.*\n)*)", rendered, re.MULTILINE)
                 if block is not None:
-                    acls[str(device["name"])] = [
+                    acls[device_name] = [
                         match.groupdict() for line in block.group(1).splitlines() if (match := _ACL_LINE.match(line))
                     ]
             if not acls:
                 errors.append(
-                    f"{dc}: no leaf or access-leaf renders ACL-VLAN{vlan_id}-IN for '{rule['source_segment']}' "
-                    f"(devices carrying vlan {vlan_id}: {with_vlan}; ACL names on the DC11 leafs: {sorted(seen_acls)})"
+                    f"{dc}: no leaf or access-leaf renders the ACL of '{rule['source_segment']}' "
+                    f"(its VLAN per switch: {source.vlans_by_device or source.vlan_id}; devices carrying it: "
+                    f"{with_vlan}; ACL names on the {dc} leafs: {sorted(seen_acls)})"
                 )
             for device, lines in acls.items():
                 denies = [
@@ -1252,11 +1305,15 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         """DC11 (PAN-OS) permits PROD-ZONE -> MANAGEMENT-ZONE udp/53 and udp/123 from the c006 segment.
 
         Rules `nordix-prod-to-core-dns` / `nordix-prod-to-core-ntp` (05_security_policy.yml) render in the
-        shared context's vsys on every member: source 10.6.103.0/24, destination 10.250.0.0/24, service
-        svc-udp-<port>, action allow.
+        shared context's vsys on every member: source the client segment's prefix (allocated by
+        add_vxlan_segment, read from the graph), destination 10.250.0.0/24, service svc-udp-<port>,
+        action allow.
         """
         logging.info("=== %s - Step 7: Render core DNS/NTP rules ===", SCENARIO_NAME)
 
+        client_prefix = (
+            await _segment_on_switches(async_client_main, scenario_branch, MANAGEMENT_CLIENT_SEGMENT)
+        ).prefix
         context = _site_contexts(await fetch_transit_inventory(client=async_client_main, branch=scenario_branch))[
             (MANAGEMENT_SERVICES_DC, None)
         ]
@@ -1270,7 +1327,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                 for line in (
                     f"{base} from {zone_name_for_namespace_type('prod')}",
                     f"{base} to {zone_name_for_namespace_type(MANAGEMENT_TYPE)}",
-                    f"{base} source {MANAGEMENT_CLIENT_SEGMENT_PREFIX}",
+                    f"{base} source {client_prefix}",
                     f"{base} destination {MANAGEMENT_SERVICES_PREFIX}",
                     f"{base} service svc-{protocol}-{port}",
                     f"{base} action allow",
@@ -1292,14 +1349,15 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
     ) -> None:
         """The services segment is never steered, and nothing bypasses the firewall towards it.
 
-        Leaf/access-leaf of VLAN 103 (c006): the PBR bypass ACL, if rendered, does not permit
-        10.250.0.0/24, so the flow goes to the firewall. The access-leaf pinned to the services segment
+        Leaf/access-leaf carrying the c006 segment (its VLAN on that switch, read from the graph): the PBR
+        bypass ACL, if rendered, does not permit 10.250.0.0/24, so the flow goes to the firewall. The access-leaf pinned to the services segment
         renders `interface Vlan250` in VRF MANAGEMENT with the anycast gateway 10.250.0.1/24 and no
         PBR (no `ip policy route-map`, no RM-LEAF-PBR-VLAN250 / PBR-BYPASS-VLAN250).
         """
         logging.info("=== %s - Step 7: Leaf PBR and the services SVI ===", SCENARIO_NAME)
 
         errors: list[str] = []
+        client = await _segment_on_switches(async_client_main, scenario_branch, MANAGEMENT_CLIENT_SEGMENT)
         topology = await fetch_dc_topology(async_client_main, scenario_branch, MANAGEMENT_SERVICES_DC)
         leaf_classes = {"leaf": Leaf, "access-leaf": AccessLeaf}
         carrying_client_vlan: list[str] = []
@@ -1315,13 +1373,12 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                 query="leaf_config",
                 transform_cls=leaf_classes[str(device["role"])],
             )
-            if re.search(rf"^vlan {MANAGEMENT_CLIENT_SEGMENT_VLAN}$", rendered, re.MULTILINE):
+            client_vlan = client.vlan_on(name)
+            if client_vlan is not None and re.search(rf"^vlan {client_vlan}$", rendered, re.MULTILINE):
                 carrying_client_vlan.append(name)
-                bypass = _block(rendered, f"ip access-list PBR-BYPASS-VLAN{MANAGEMENT_CLIENT_SEGMENT_VLAN}")
+                bypass = _block(rendered, f"ip access-list PBR-BYPASS-VLAN{client_vlan}")
                 if bypass is not None and MANAGEMENT_SERVICES_PREFIX in bypass:
-                    errors.append(
-                        f"{name}: PBR-BYPASS-VLAN{MANAGEMENT_CLIENT_SEGMENT_VLAN} permits {MANAGEMENT_SERVICES_PREFIX}"
-                    )
+                    errors.append(f"{name}: PBR-BYPASS-VLAN{client_vlan} permits {MANAGEMENT_SERVICES_PREFIX}")
             if name != MANAGEMENT_SERVICES_LEAF:
                 continue
             services_leaf_rendered = True
@@ -1345,7 +1402,8 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                     errors.append(f"{name}: renders {pbr_object}")
 
         assert carrying_client_vlan, (
-            f"no leaf of {MANAGEMENT_SERVICES_DC} carries VLAN {MANAGEMENT_CLIENT_SEGMENT_VLAN}"
+            f"no leaf of {MANAGEMENT_SERVICES_DC} carries {MANAGEMENT_CLIENT_SEGMENT} "
+            f"(its VLAN per switch: {client.vlans_by_device or client.vlan_id})"
         )
         assert services_leaf_rendered, (
             f"{MANAGEMENT_SERVICES_LEAF} is not a leaf or access-leaf of {MANAGEMENT_SERVICES_DC}"

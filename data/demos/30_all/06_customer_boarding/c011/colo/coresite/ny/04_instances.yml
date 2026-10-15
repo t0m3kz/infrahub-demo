@@ -7,24 +7,20 @@ spec:
   data:
     - name: c011-edge-ingress-ny1-1
       object_template: LINUX-SVC
-      status: active
       hosting_device: cs-ny1-server-1
       deployment: "C011-P-NY"
 
     - name: c011-edge-ingress-ny1-2
       object_template: LINUX-SVC
-      status: active
       hosting_device: cs-ny1-server-2
       deployment: "C011-P-NY"
 
     - name: c011-stream-worker-ny1-1
       object_template: LINUX-SVC
-      status: active
       hosting_device: cs-ny1-server-1
       deployment: "C011-P-NY"
 
     - name: c011-stream-worker-ny1-2
       object_template: LINUX-SVC
-      status: active
       hosting_device: cs-ny1-server-2
       deployment: "C011-P-NY"

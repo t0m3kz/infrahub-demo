@@ -339,6 +339,11 @@ check_definitions:
   - name: validate_app_dependency
     class_name: CheckAppDependency
     file_path: checks/app_dependency.py
+  # Targetless: the rule is per hypervisor, and a host's VMs belong to many
+  # customers' footprints.
+  - name: validate_hypervisor_environment
+    class_name: CheckHypervisorEnvironment
+    file_path: checks/hypervisor_environment.py
 
 python_transforms:
   - name: topology_cabling
@@ -677,6 +682,8 @@ queries:
     file_path: queries/validation/evpn_fabric.gql
   - name: app_dependency_validation
     file_path: queries/validation/app_dependency.gql
+  - name: hypervisor_environment
+    file_path: queries/validation/hypervisor_environment.gql
   - name: loadbalancer_validation
     file_path: queries/validation/lb.gql
   - name: proxy_validation

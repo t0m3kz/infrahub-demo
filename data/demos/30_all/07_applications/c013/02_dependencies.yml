@@ -10,7 +10,6 @@ spec:
     - name: c013-fraud-detection-scoring-api-to-feature-cache
       source: scoring.fraud-detection.c013.demo.local
       target: cache.fraud-detection.c013.demo.local
-      access_status: auto
       description: "Scoring API reads features from the cache"
       member_of_groups:
         - app_dependencies

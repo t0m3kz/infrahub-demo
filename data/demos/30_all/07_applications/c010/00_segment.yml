@@ -1,8 +1,9 @@
 ---
-# Dev VLAN segment in C010's DC12 development footprint. Loaded before
-# 01_application.yml since components there reference it by human_friendly_id.
-# Nested under OrganizationCustomer (owner) via the network_segments reverse
-# relationship — owner is set automatically from the parent.
+# Dev segment of C010's DC12 development footprint. Loaded before
+# 01_application.yml, whose components reference it by human_friendly_id;
+# owner comes from the enclosing OrganizationCustomer. Prefix, gateway, VNI,
+# VLANs, zone, tag and leaf ports are all derived (add_vxlan_segment,
+# add_app_component_segment).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -11,23 +12,11 @@ spec:
     - name: "Zindra Corp."
       org_id: "C010"
       network_segments:
-        - kind: ManagedVlanSegment
+        - kind: ManagedVxlanSegment
           data:
             customer_name: "zindra-dev"
             environment: "d"
-            vlan_id: 109
-            gateway:
-              data:
-                address: "10.10.109.1/24"
-                description: "c010-zindra-dev-d anycast gateway"
-                ip_namespace: "NON-PROD"
-                ip_prefix:
-                  kind: IpamPrefix
-                  data:
-                    prefix: "10.10.109.0/24"
-                    description: "c010-zindra-dev-d (C010, DC12)"
-                    status: active
-                    role: customer
-                    ip_namespace: "NON-PROD"
-            customer_deployment: "C010-D-DC12"
-            security_zone: "NONPROD-ZONE"
+            customer_deployments:
+              - "C010-D-DC12"
+            member_of_groups:
+              - vxlan_segments

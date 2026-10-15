@@ -4,6 +4,8 @@ from typing import TypedDict
 
 from utils.exchange_transit import EXCHANGE_PEERS, namespace_type_for_environment
 
+from .demo_data import ROOT, Declared, created_dispatches, declared, distinct, name, render
+
 # ---------------------------------------------------------------------------
 # Demo data paths  (single source of truth — the same files the demos ship)
 # ---------------------------------------------------------------------------
@@ -64,87 +66,80 @@ from tasks import (  # noqa: E402,F401 - re-exported for the test modules
     ALL_DEMO_STAGE_STABLE_ZERO,
 )
 
+# What 30_all declares, read from its YAML (tests/integration/demo_data.py),
+# so that boarding a customer needs no edit here.
+_ALL_DEMO_ROOT = ROOT / ALL_DEMO_DATA
+
+
+def _all_demo(kind: str) -> list[Declared]:
+    """The distinct objects of ``kind`` 30_all declares (a re-declaration that updates one counts once)."""
+    return distinct(declared(kind, _ALL_DEMO_ROOT))
+
+
 # Generators the 30_all load must dispatch by itself, mapped to the minimum
 # number of runs each must have. These are the event-driven runs Infrahub
 # fires from data/events/99_actions.yml — not something the suite invokes —
 # so a zero here means a trigger rule regressed, which is silent otherwise:
-# the objects simply never get generated and no task fails.
+# the objects simply never get generated and no task fails. Each floor is one
+# run per declared object its created-trigger watches that is in its target
+# group (demo_data.created_dispatches): e.g. add_rack counts the colocation
+# cage racks too (they are in topologies_rack and add_rack no-ops on them),
+# add_colocation_metro every metro, though only FR and PA carry
+# fabric_templates, and add_sdwan_edge every office, though the generator
+# no-ops on those without sdwan_gateway; updated-triggers only add runs.
+# add_customer_deployment_cloud/office were removed: their only job was
+# hub-and-spoke exchange auto-provisioning, now replaced by the per-context
+# TopologyRoutedExchange objects the DC/colocation customer generators
+# create — see docs/exchange_gateway.md.
 ALL_DEMO_EXPECTED_GENERATORS: dict[str, int] = {
-    "add_dc": 3,  # DC10, DC11, DC12
-    "add_pod": 6,  # two pods per DC
-    # 12 DC racks (four in each DC's POD-1) plus 13 colocation cage racks —
-    # those are in topologies_rack too, so they dispatch add_rack and it
-    # no-ops on them (LocationRack.pod is a colocation zone, not a pod).
-    "add_rack": 25,
-    # One run per declared metro (3 CoreSite + 3 Equinix + 3 Megaport). Only FR
-    # and PA carry fabric_templates and actually build anything; the other 7 are
-    # members of colocation_metros (required — a trigger firing for a non-member
-    # node raises, see the endpoint note in data/events/99_actions.yml) and the
-    # generator no-ops on them, same as add_rack does on the colocation cage
-    # racks.
-    "add_colocation_metro": 9,
-    "add_endpoint": 16,  # 10 DC hosts (DC10 six, DC11/DC12 two each) + 6 colocation cage hosts
-    "add_vxlan_segment": 6,  # C005's five application segments and C008's DC10 one
-    "add_app_application": 10,  # one per declared AppApplication
-    # One per declared AppDependency: it loads after its application in the
-    # same stage, so its own trigger is what puts its rule in place.
-    "add_app_dependency": 16,
-    # 10 distinct footprints: 03_dc/new_customers declares seven and
-    # 06_customer_boarding re-declares three of them as supersets, which
-    # upsert, and adds the C008/C010 dev footprints on DC12's shared hosts and
-    # C008's production one in DC10.
-    # add_customer_deployment_cloud/office were removed: their only job was
-    # hub-and-spoke exchange auto-provisioning, now replaced by the
-    # per-context TopologyRoutedExchange objects the DC/colocation customer
-    # generators create — see docs/exchange_gateway.md.
-    "add_customer_deployment_dc": 10,
-    "add_customer_deployment_colocation": 7,
-    # trigger-customer-office-sdwan-on-created fires unconditionally for
-    # every TopologyCustomerOffice (5: C001/C003/C015/C002/C005) — the
-    # generator itself no-ops on those without sdwan_gateway set. C002 and
-    # C005 additionally dispatch a run each via the updated-relationship
-    # trigger when 08_interconnects/04_sdwan/01_gateway.yml sets their
-    # sdwan_gateway; 5 is the safe floor.
-    "add_sdwan_edge": 5,
-    # Same AppApplication created event as add_app_application.
-    "add_application_orchestrator_routing": 10,
-    # One created-trigger run per declared AppComponent; add_endpoint's
-    # fan-out only adds runs (components load after their servers are cabled,
-    # so in 30_all it finds none).
-    "add_app_component_segment": 24,
-    # One created-trigger run per footprint kind, same floors as the
-    # per-kind generators above (cloud/office: ALL_DEMO_EXPECTED_OBJECTS).
-    "add_customer_dc_orchestrator_routing": 10,
-    "add_customer_colocation_orchestrator_routing": 7,
-    "add_customer_cloud_orchestrator_routing": 4,
-    "add_customer_office_orchestrator_routing": 5,
+    generator: created_dispatches(generator, _ALL_DEMO_ROOT)
+    for generator in (
+        "add_dc",
+        "add_pod",
+        "add_rack",
+        "add_colocation_metro",
+        "add_endpoint",
+        "add_vxlan_segment",
+        "add_app_application",
+        "add_app_dependency",
+        "add_customer_deployment_dc",
+        "add_customer_deployment_colocation",
+        "add_sdwan_edge",
+        "add_application_orchestrator_routing",
+        "add_app_component_segment",
+        "add_customer_dc_orchestrator_routing",
+        "add_customer_colocation_orchestrator_routing",
+        "add_customer_cloud_orchestrator_routing",
+        "add_customer_office_orchestrator_routing",
+    )
 }
 
-# Declared-object inventory of data/demos/30_all, measured from the YAML.
-# Counted with `>=` because generators legitimately add more of several of
+# Declared-object inventory of data/demos/30_all, counted from the YAML.
+# Compared with `>=` because generators legitimately add more of several of
 # these kinds (racks stay declared-only, but devices, prefixes and segments
 # do not) — the point is that every declared object landed.
 ALL_DEMO_EXPECTED_OBJECTS: dict[str, int] = {
-    "TopologyDataCenter": 3,
-    "TopologyPod": 6,
-    "LocationRack": 25,
-    "TopologyCustomerDC": 10,
-    "TopologyCustomerColocation": 7,
-    "TopologyCustomerCloud": 4,
-    "TopologyCustomerOffice": 5,
-    "ManagedVxlanSegment": 6,
-    "ManagedVlanSegment": 10,  # incl. the DC11 core-services segment (07_applications/infra)
-    "AppApplication": 11,
-    "AppComponent": 24,
-    # One per tier-to-tier call, plus the access-profile grant that
-    # publishes c001's checkout frontend; ports live on the components.
-    "AppDependency": 16,
-    "SecurityAccessProfile": 1,
-    "DcimVirtualDevice": 38,
-    "TopologyPhysicalCircuit": 8,
-    "TopologyVirtualCircuit": 8,
-    "CloudInstance": 8,
-    "ManagedCloudProxy": 2,
+    kind: len(_all_demo(kind))
+    for kind in (
+        "TopologyDataCenter",
+        "TopologyPod",
+        "LocationRack",
+        "TopologyCustomerDC",
+        "TopologyCustomerColocation",
+        "TopologyCustomerCloud",
+        "TopologyCustomerOffice",
+        "ManagedVxlanSegment",
+        "ManagedVlanSegment",
+        "AppApplication",
+        "AppComponent",
+        "AppDependency",
+        "SecurityAccessProfile",
+        "DcimVirtualDevice",
+        "TopologyPhysicalCircuit",
+        "TopologyVirtualCircuit",
+        "CloudInstance",
+        "ManagedCloudProxy",
+    )
 }
 
 
@@ -152,7 +147,7 @@ ALL_DEMO_EXPECTED_OBJECTS: dict[str, int] = {
 # 30_all — compute layer expectations (test_61)
 # ---------------------------------------------------------------------------
 
-ALL_DEMO_DC_NAMES = ("DC10", "DC11", "DC12")
+ALL_DEMO_DC_NAMES: tuple[str, ...] = tuple(sorted(name(dc) for dc in _all_demo("TopologyDataCenter")))
 
 # The three fabrics are declared with identical shapes (size L, ebgp-ebgp,
 # ipv6 underlay, pbr), so one expected role map covers all of them:
@@ -181,7 +176,8 @@ ALL_DEMO_DC_UNDERLAY_ROLES = ("super-spine", "spine", "leaf", "access-leaf", "bo
 ALL_DEMO_DC_OVERLAY_ROLES = ("super-spine", "spine", "border-leaf")
 
 # Application hosts in row pairs, one host of a pair per compute-rack row
-# (DC10 has three pairs: C005's payment-core, its session store, C008). The
+# (DC10 has three pairs: C005's payment-core, its session store, C008; DC12
+# two: the shared P027 non-prod pair and C005's own prod pair). The
 # row matters: add_endpoint
 # cables a host to the access-leaf pair of the network rack sharing its row,
 # so row-1 and row-2 hosts must land on *disjoint* access-leaf pairs. That
@@ -198,6 +194,8 @@ ALL_DEMO_DC_HOST_ROWS: dict[str, int] = {
     "dc11-pod1-server-2": 2,
     "dc12-pod1-server-1": 1,
     "dc12-pod1-server-2": 2,
+    "dc12-pod1-server-3": 1,
+    "dc12-pod1-server-4": 2,
 }
 
 # DC name -> how many application hosts (role endpoint) it has, from ALL_DEMO_DC_HOST_ROWS.
@@ -221,31 +219,44 @@ ALL_DEMO_COLO_HOST_SWITCHES: dict[str, str] = {
 # Every host is dual-homed, DC or cage.
 ALL_DEMO_HOST_LINK_COUNT = 2
 
-# name -> (criticality, component count).
+
+def _components(app: Declared) -> list[Declared]:
+    """The AppComponents declared under an application."""
+    return [obj for obj in declared("AppComponent", _ALL_DEMO_ROOT) if obj.enclosing is app]
+
+
+def _instances(app: Declared) -> set[str]:
+    """The names of the instances an application's components run on."""
+    return {instance for component in _components(app) for instance in component.item.get("instances") or []}
+
+
+_ALL_DEMO_APPLICATIONS = _all_demo("AppApplication")
+_ALL_DEMO_CLOUD_INSTANCES = {name(instance) for instance in _all_demo("CloudInstance")}
+
+# Applications with no compute footprint: no component has an instance (e.g.
+# c001-checkout-p, a private-access-only frontend published through an
+# access-profile dependency). test_61's switch-port-to-application chain does
+# not cover them, so they are not in ALL_DEMO_EXPECTED_APPLICATIONS.
+ALL_DEMO_NO_COMPUTE_APPLICATIONS: tuple[str, ...] = tuple(
+    sorted(name(app) for app in _ALL_DEMO_APPLICATIONS if not _instances(app))
+)
+
+# name -> (criticality, component count), criticality defaulting like the schema.
 ALL_DEMO_EXPECTED_APPLICATIONS: dict[str, tuple[str, int]] = {
-    "c003-custody-api-p": ("high", 2),
-    "c005-payment-core-p": ("critical", 5),
-    "c006-erp-core-p": ("critical", 3),
-    "c011-edge-analytics-p": ("medium", 2),
-    "c012-payment-edge-p": ("high", 2),
-    "c013-fraud-detection-p": ("critical", 2),
-    "c016-billing-cloud-p": ("medium", 2),
-    "c008-inventory-sync-d": ("medium", 2),
-    "c008-trade-portal-p": ("high", 1),
-    "c010-reporting-portal-d": ("low", 2),
+    name(app): (str(app.value("criticality")), len(_components(app)))
+    for app in _ALL_DEMO_APPLICATIONS
+    if _instances(app)
 }
 
 # Cloud-native applications: their instances are CloudInstance nodes with no
 # hosting_device. Every other application's instances are DcimVirtualDevice
 # nodes that MUST name the physical host they run on — that edge is what ties
 # a switch port to a customer application.
-ALL_DEMO_CLOUD_APPLICATIONS = ("c003-custody-api-p", "c016-billing-cloud-p")
-
-# c001-checkout-p is a private-access-only frontend (published through an
-# access-profile dependency, no instances or network_segment declared) — it
-# has no compute footprint, so it is out of scope for test_61's switch-port-to-application chain and is not
-# listed in ALL_DEMO_EXPECTED_APPLICATIONS.
-ALL_DEMO_NO_COMPUTE_APPLICATIONS = ("c001-checkout-p",)
+ALL_DEMO_CLOUD_APPLICATIONS: tuple[str, ...] = tuple(
+    sorted(
+        name(app) for app in _ALL_DEMO_APPLICATIONS if _instances(app) and _instances(app) <= _ALL_DEMO_CLOUD_INSTANCES
+    )
+)
 
 # Applications on the branch that test_61's application-graph check does not
 # cover: the no-compute ones above, and test_20's DC6 probe application, which
@@ -260,17 +271,26 @@ ALL_DEMO_COMPONENT_INSTANCE_COUNT = 2
 # 30_all — interconnect and tenant-service expectations (test_62)
 # ---------------------------------------------------------------------------
 
+# The offices that opt into add_sdwan_edge (generators/topology/sdwan_edge.py)
+# by naming a gateway in sdwan_gateway. Each gets an `INET-<office>` internet
+# underlay and an `<office>-SDWAN-<gateway zone>` tunnel from the generator;
+# none of that is declared.
+_SDWAN_OFFICES: list[Declared] = [
+    office for office in _all_demo("TopologyCustomerOffice") if office.item.get("sdwan_gateway")
+]
+
 ALL_DEMO_PHYSICAL_CIRCUIT_TYPES: dict[str, int] = {
-    # All hand-authored in 08_interconnects/ — the opt-in
-    # TopologyInterconnectRequest that used to scaffold 2 extra DC11<->DC12
-    # stub circuits was removed along with its generator.
+    # The dark fibres and cross-connects are hand-authored in 08_interconnects/
+    # — the opt-in TopologyInterconnectRequest that used to scaffold 2 extra
+    # DC11<->DC12 stub circuits was removed along with its generator.
     # Each DC has one fibre to each of its metro's two border gateways:
     # DC10/DC11 -> EQX FR2 (01 and 02 edge), DC12 -> EQX PA4 (01 and 02 edge).
     "dark_fiber": 6,
     "cross_connect": 2,  # EQX FR2 -> AWS eu-central-1, EQX PA4 -> Azure westeurope
-    # 5 office underlays (C001/C003/C015 hand-authored + C002/C005 from
-    # add_sdwan_edge) + 4 shared transit circuits from 06_internet.
-    "internet": 9,
+    # The declared ones (the shared transit circuits of 06_internet) plus one
+    # generated underlay per SD-WAN office.
+    "internet": len([c for c in _all_demo("TopologyPhysicalCircuit") if c.value("circuit_type") == "internet"])
+    + len(_SDWAN_OFFICES),
 }
 
 # The peering_role=dci dark fibres (08_interconnects/01_colo_onramp/
@@ -365,6 +385,33 @@ class VirtualCircuitExpectation(TypedDict):
     cloud_endpoints: tuple[str, ...]
 
 
+_CUSTOMER_NAMES: dict[str, str] = {
+    str(org.value("org_id")): str(org.value("name")) for org in _all_demo("OrganizationCustomer")
+}
+_DEVICE_DEPLOYMENTS: dict[str, str] = {
+    name(device): str(device.value("deployment")) for device in _all_demo("DcimPhysicalDevice")
+}
+
+
+def _sdwan_tunnel(office: Declared) -> tuple[str, VirtualCircuitExpectation]:
+    """The tunnel add_sdwan_edge builds for one opted-in office, named as the generator names it.
+
+    `<office>-SDWAN-<the gateway's zone>`, owned by the office's customer, riding
+    `INET-<office>` and terminating on the edge uplink and the gateway's
+    `eth0.<tunnel_id>` sub-interface.
+    """
+    office_name = name(office)
+    zone = _DEVICE_DEPLOYMENTS[str(office.item["sdwan_gateway"])]
+    return f"{office_name}-SDWAN-{zone}", {
+        "link_type": "sd_wan",
+        "transport_mode": "internet_backed",
+        "owner": _CUSTOMER_NAMES[render(office, "{{ parent__owner__org_id__value }}")],
+        "physical_circuits": (f"INET-{office_name}",),
+        "interfaces": 2,
+        "cloud_endpoints": (),
+    }
+
+
 # The full virtual-circuit fabric. `physical_circuits` is the underlay mapping
 # and `interfaces` the minimum number of terminating DcimInterfaces reached
 # through interface_capabilities — the one uniform "what is this port doing"
@@ -414,51 +461,9 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
         "interfaces": 2,
         "cloud_endpoints": ("vif-transit-hub-euc1",),
     },
-    "C001-SDWAN-FR2": {
-        "link_type": "sd_wan",
-        "transport_mode": "internet_backed",
-        "owner": "Nordix Ltd.",
-        "physical_circuits": ("INET-C001-WAW-FR2",),
-        "interfaces": 2,
-        "cloud_endpoints": (),
-    },
-    "C003-SDWAN-FR2": {
-        "link_type": "sd_wan",
-        "transport_mode": "internet_backed",
-        "owner": "Vaultex Inc.",
-        "physical_circuits": ("INET-C003-MUC-FR2",),
-        "interfaces": 2,
-        "cloud_endpoints": (),
-    },
-    "C015-SDWAN-FR2": {
-        "link_type": "sd_wan",
-        "transport_mode": "internet_backed",
-        "owner": "Novantis GmbH",
-        "physical_circuits": ("INET-C015-PAR-FR2",),
-        "interfaces": 2,
-        "cloud_endpoints": (),
-    },
-    # Entirely generator-produced (add_sdwan_edge), unlike its hand-authored
-    # siblings above — proves the automated per-office SD-WAN path end-to-end.
-    "C002-P-SDWAN-FR2": {
-        "link_type": "sd_wan",
-        "transport_mode": "internet_backed",
-        "owner": "SwiftGo GmbH",
-        "physical_circuits": ("INET-C002-P",),
-        "interfaces": 2,
-        "cloud_endpoints": (),
-    },
-    # Same generator path as C002; C005's office additionally routes into
-    # colo-services-stretch over 08_interconnects/04_sdwan/06_vrf_handoff.yml.
-    "C005-P-SDWAN-FR2": {
-        "link_type": "sd_wan",
-        "transport_mode": "internet_backed",
-        "owner": "Drentec BV",
-        "physical_circuits": ("INET-C005-P",),
-        "interfaces": 2,
-        "cloud_endpoints": (),
-    },
-    # Second tunnel riding the same internet underlay as C001-SDWAN-FR2, on a
+    # One generated tunnel per SD-WAN office (_sdwan_tunnel).
+    **dict(_sdwan_tunnel(office) for office in _SDWAN_OFFICES),
+    # Second tunnel riding the same internet underlay as C001-P-SDWAN-FR2, on a
     # different gateway sub-interface — see 08_interconnects/07_zone_policies/
     # 01_partner_virtual_circuit.yml for why this is an overlay, not a new
     # dedicated physical cross-connect.
@@ -466,44 +471,58 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
         "link_type": "vpn_ipsec",
         "transport_mode": "internet_backed",
         "owner": "Nordix Ltd.",
-        "physical_circuits": ("INET-C001-WAW-FR2",),
+        "physical_circuits": ("INET-C001-P",),
         "interfaces": 2,
         "cloud_endpoints": (),
     },
 }
 
-# One shared (tenant-less) firewall context per firewall cluster: the three
-# DC clusters and the FR colocation metro's pair, which every colocation
-# deployment in the metro shares (a colocation has no design, so never a
-# dedicated context). The colocation context carries transit legs like a DC
-# one (its legs face the metro's two edges, whose firewall ports are tagged
-# with the context) ...
-ALL_DEMO_SHARED_FIREWALL_CONTEXTS = 4
+
+def _site(deployment: Declared) -> str:
+    """The DC or colocation metro a customer footprint sits in (its parent): `C001-P-FR` -> FR."""
+    return str(deployment.value("parent"))
+
+
+def _metro_has_firewalls(metro: Declared) -> bool:
+    """Whether a colocation metro declares a firewall pair in its fabric_templates."""
+    return any(template[1] == "firewall" for template in metro.item.get("fabric_templates") or [])
+
+
+_FIREWALL_METROS = {name(metro) for metro in _all_demo("TopologyColocationMetro") if _metro_has_firewalls(metro)}
+
 # Every 30_all colocation deployment -> whether its metro has firewalls, and so
-# a serving context. Only FR declares a firewall pair (02_colo/equinix/fr); the
-# rest are edge-only metros whose deployments must stay unserved.
-ALL_DEMO_COLOCATION_SERVED = {
-    "C001-P-FR": True,
-    "C005-P-FR": True,
-    "C002-P-PA": False,
-    "C011-P-NY": False,
-    "C012-P-VA": False,
-    "C013-P-AMS": False,
-    "C014-P-PAR": False,
+# a serving context. Only metros declaring a firewall pair (FR,
+# 02_colo/equinix/fr) serve; the rest are edge-only metros whose deployments
+# must stay unserved.
+ALL_DEMO_COLOCATION_SERVED: dict[str, bool] = {
+    name(deployment): _site(deployment) in _FIREWALL_METROS for deployment in _all_demo("TopologyCustomerColocation")
 }
 # Served colocation metro -> the deployments its shared context serves, derived from
 # ALL_DEMO_COLOCATION_SERVED (a deployment name ends in its metro: `C001-P-FR` -> FR).
 ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS: dict[str, tuple[str, ...]] = {
-    site: tuple(name for name, served in ALL_DEMO_COLOCATION_SERVED.items() if served and name.endswith(f"-{site}"))
-    for site in sorted({name.rsplit("-", 1)[-1] for name, served in ALL_DEMO_COLOCATION_SERVED.items() if served})
+    site: tuple(dep for dep, served in ALL_DEMO_COLOCATION_SERVED.items() if served and dep.endswith(f"-{site}"))
+    for site in sorted({dep.rsplit("-", 1)[-1] for dep, served in ALL_DEMO_COLOCATION_SERVED.items() if served})
 }
+# One shared (tenant-less) firewall context per firewall cluster: one per DC
+# and one per served colocation metro, whose pair every colocation deployment
+# in the metro shares (a colocation has no design, so never a dedicated
+# context). The colocation context carries transit legs like a DC one (its
+# legs face the metro's two edges, whose firewall ports are tagged with the
+# context) ...
+ALL_DEMO_SHARED_FIREWALL_CONTEXTS = len(ALL_DEMO_DC_NAMES) + len(ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS)
+
 # ... plus one dedicated context per customer whose design blueprint sets
 # dedicated_firewall (data/bootstrap/21_customer_templates.yml: L_DC and
 # XL_DC do, S_DC and M_DC do not). Maps tenant deployment -> design.
+_DEDICATED_FIREWALL_DESIGNS = {
+    name(design)
+    for design in declared("TopologyCustomerTemplateDC", ROOT / "data" / "bootstrap")
+    if design.value("dedicated_firewall")
+}
 ALL_DEMO_DEDICATED_FIREWALL_TENANTS: dict[str, str] = {
-    "C007-P-DC10": "L_DC",
-    "C009-P-DC11": "XL_DC",
-    "C005-P-DC12": "L_DC",
+    name(deployment): str(deployment.item["design"])
+    for deployment in _all_demo("TopologyCustomerDC")
+    if deployment.item.get("design") in _DEDICATED_FIREWALL_DESIGNS
 }
 
 # ---------------------------------------------------------------------------
@@ -545,12 +564,12 @@ ALL_DEMO_INTERNET_EGRESS_RULES: dict[str, InternetEgressRule] = {
 # Everything below is DERIVED, not hand-counted. A context's legs are its
 # tenant VRFs plus INTERNET and MANAGEMENT (EXCHANGE_PEERS): a dedicated context serves its one
 # tenant, a shared context serves every customer deployment of its DC that has
-# no dedicated context. A served colocation metro (ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS,
-# FR) has one shared context serving all its deployments, on the same rules. A deployment's VRF follows its environment (`p` is
-# PROD, every other value NON-PROD). The deployments are the nine
-# TopologyCustomerDC footprints of 03_dc/new_customers plus the C008/C010 dev
-# footprints that 06_customer_boarding adds on DC12 (the c005/c006 boardings
-# there re-declare footprints that already exist, so they add none).
+# no dedicated context. A served colocation metro
+# (ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS, FR) has one shared context serving
+# all its deployments, on the same rules. A deployment's VRF follows its
+# environment (`p` is PROD, every other value NON-PROD). The deployments are
+# the TopologyCustomerDC footprints 30_all declares (03_dc/new_customers and
+# 06_customer_boarding).
 # ---------------------------------------------------------------------------
 
 ALL_DEMO_TRANSIT_NAMESPACES = ("PROD", "NON-PROD", "INTERNET", "MANAGEMENT")
@@ -560,9 +579,7 @@ _TRANSIT_NAMESPACE_BY_TYPE: dict[str, str] = dict(
 
 # Deployment name ({org}-{environment}-{DC}) of every TopologyCustomerDC, per DC.
 ALL_DEMO_DC_CUSTOMER_DEPLOYMENTS: dict[str, tuple[str, ...]] = {
-    "DC10": ("C005-P-DC10", "C007-P-DC10", "C008-P-DC10"),
-    "DC11": ("C006-P-DC11", "C009-P-DC11"),
-    "DC12": ("C005-P-DC12", "C008-P-DC12", "C008-D-DC12", "C010-P-DC12", "C010-D-DC12"),
+    dc: tuple(sorted(name(d) for d in _all_demo("TopologyCustomerDC") if _site(d) == dc)) for dc in ALL_DEMO_DC_NAMES
 }
 
 # The bootstrap exchanges of the removed data/bootstrap/23_exchanges.yml. The
@@ -585,14 +602,23 @@ MANAGEMENT_SERVICES_GATEWAY = "10.250.0.1/24"
 MANAGEMENT_SERVICES_VLAN = 250
 MANAGEMENT_SERVICES_LEAF = "al-dc1111111501"
 MANAGEMENT_SERVICES_DC = "DC11"
-# The c006 segment (VLAN 103, PROD) whose rules reach the services segment.
-MANAGEMENT_CLIENT_SEGMENT_VLAN = 103
-MANAGEMENT_CLIENT_SEGMENT_PREFIX = "10.6.103.0/24"
 # rule name -> (protocol, port), the DC11 permits PROD-ZONE -> MANAGEMENT-ZONE.
 ALL_DEMO_MANAGEMENT_RULES: dict[str, tuple[str, int]] = {
     "nordix-prod-to-core-dns": ("udp", 53),
     "nordix-prod-to-core-ntp": ("udp", 123),
 }
+# The tenant segment those rules start from, read from 05_security_policy.yml.
+# Its prefix and its local VLAN on each switch are derived (add_vxlan_segment:
+# a /24 from its environment's tenant pool, one VLAN per VLAN domain), so
+# test_64 reads both from the graph.
+# Exactly one (the unpacking raises otherwise).
+(MANAGEMENT_CLIENT_SEGMENT,) = sorted(
+    {
+        str(rule.item["source_segment"])
+        for rule in declared("SecurityPolicyRule", _ALL_DEMO_ROOT)
+        if rule.item.get("name") in ALL_DEMO_MANAGEMENT_RULES
+    }
+)
 
 # A firewall cluster is an HA pair: one sub-interface per member per leg.
 ALL_DEMO_FIREWALL_MEMBERS = 2
@@ -693,19 +719,19 @@ ALL_DEMO_EXPECTED_OBJECTS["ManagedFirewallContext"] = ALL_DEMO_SHARED_FIREWALL_C
 )
 ALL_DEMO_EXPECTED_OBJECTS["TopologyRoutedExchange"] = ALL_DEMO_TRANSIT_EXCHANGES
 
-# C005's five application segments, C008's DC10 one, and the deployments each
-# is activated in.
-# The two dc_pair "stretch" segments carry two DC legs each, and
-# colo-services-stretch one DC leg plus one colocation-metro leg (FR, reached
-# over DF-DC10-EQXFR2 through the EVPN Multi-Site border gateways) — eight
-# ManagedSegmentDeployment records for C005, nine in total.
+# Every VXLAN segment -> the sites (DC or colocation metro) of the
+# deployments it is activated in: one ManagedSegmentDeployment record each
+# (a dc_pair "stretch" segment has two DC legs; C005's colo-services-stretch
+# one DC leg plus one colocation-metro leg, FR, reached over DF-DC10-EQXFR2
+# through the EVPN Multi-Site border gateways).
+_FOOTPRINT_SITES = {
+    name(deployment): _site(deployment)
+    for kind in ("TopologyCustomerDC", "TopologyCustomerColocation")
+    for deployment in _all_demo(kind)
+}
 ALL_DEMO_SEGMENT_LEGS: dict[str, tuple[str, ...]] = {
-    "c005-web-frontend-local-dc10-p": ("DC10",),
-    "c005-app-backend-stretch-p": ("DC10", "DC12"),
-    "c005-database-local-dc12-p": ("DC12",),
-    "c005-message-queue-stretch-p": ("DC10", "DC12"),
-    "c005-colo-services-stretch-p": ("DC10", "FR"),
-    "c008-trade-portal-local-dc10-p": ("DC10",),
+    name(segment): tuple(_FOOTPRINT_SITES[deployment] for deployment in segment.item.get("customer_deployments") or [])
+    for segment in _all_demo("ManagedVxlanSegment")
 }
 
 # Timeout and polling constants

@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from checks.segment_security import CheckSegmentSecurity
 from generators.helpers.security_zone import ensure_security_zone
 from generators.protocols import SecurityZone
+from utils.exchange_transit import ZONE_BY_NS_TYPE
 
 
 def _client(zone_id: str = "zone-1") -> Any:
@@ -105,6 +107,36 @@ class TestEnsureSecurityZone:
 
         client.filters.assert_not_awaited()
         client.create.assert_not_awaited()
+
+    @pytest.mark.parametrize("zone", ["MANAGEMENT-ZONE", "INTERNET-ZONE"])
+    @pytest.mark.parametrize("environment", ["p", "d", None])
+    def test_segment_in_an_exchange_zone_keeps_it(self, zone: str, environment: str | None) -> None:
+        """A shared service segment (MANAGEMENT services) is not re-zoned to its environment's zone.
+
+        The same exemption the segment_security check makes: an app with a
+        component on the infra segment used to move it to PROD-ZONE.
+        """
+        client = _client()
+
+        assert _run(client, current_zone=zone, environment=environment) == zone
+
+        client.filters.assert_not_awaited()
+        client.create.assert_not_awaited()
+
+    @pytest.mark.parametrize("zone", sorted(ZONE_BY_NS_TYPE.values()))
+    def test_helper_keeps_exactly_the_zones_the_check_accepts(self, zone: str) -> None:
+        """For a dev segment found in ``zone``, the helper leaves the zone as it is if and
+        only if the segment_security check accepts it (one predicate, no disagreement)."""
+        check = cast(Any, CheckSegmentSecurity.__new__(CheckSegmentSecurity))
+        errors: list[str] = []
+        check.log_error = lambda message: errors.append(message)
+        check._validate_zone(
+            {"typename": "ManagedVlanSegment", "name": "s", "environment": "d", "security_zone": {"name": zone}}
+        )
+
+        kept = _run(_client(), current_zone=zone, environment="d") == zone
+
+        assert kept == (not errors)
 
     @pytest.mark.parametrize("kind", [None, ""])
     def test_missing_kind_is_an_error_not_a_default(self, kind: str | None) -> None:

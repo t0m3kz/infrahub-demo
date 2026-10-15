@@ -7,10 +7,7 @@ spec:
   data:
     - label: edge-analytics
       environment: p
-      criticality: medium
-      security_profile: internal_standard
       fqdn: edge-analytics.c011.demo.local
-      ingress_mode: frontend
       application_orchestrator: github_actions
       owner: C011
       member_of_groups:

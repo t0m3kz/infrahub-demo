@@ -61,7 +61,12 @@ deployed for the chain, so `DC_DEPLOYMENT_TEST_DCS=dc6` cuts `test_10` down to t
 
 #### Other Files
 
-- `test_constants.py` - Timeout and delay constants
+- `test_constants.py` - Timeout and delay constants, and the 30_all expectations: what echoes the data
+  (generator floors, object counts, footprints, applications, segment legs) is computed from the YAML through
+  `demo_data.py`, so boarding a customer needs no constant edit; design pins (DCI ports, MANAGEMENT_*, host rows)
+  stay typed
+- `demo_data.py` - Reads the objects the demo files declare (nested ones included), renders computed names and
+  counts the runs a load must dispatch; also used by the unit tests
 - `conftest.py` - Pytest fixtures and base test class
 - `git_repo.py` - Git repository utilities (deprecated - use `infrahub_sdk.testing.repository.GitRepo`)
 

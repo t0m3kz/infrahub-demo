@@ -1,0 +1,50 @@
+---
+# Per-VRF tenant segment pools: add_vxlan_segment (generators/topology/segment.py)
+# allocates every gateway-less VXLAN tenant segment one /24 from the pool of
+# its environment's namespace (`p` -> PROD, every other value -> NON-PROD),
+# keyed by the segment name, and puts the anycast gateway on .1. A segment
+# whose gateway is authored keeps it.
+#
+# Same shape as 23_transit_pools.yml: each pool allocates inside its VRF
+# namespace, so the resource prefix itself lives in that namespace, and this
+# file sorts after 22_namespaces.yml so the namespaces exist first. One kind
+# per document.
+#
+# Two disjoint /13s, so a tenant prefix is unique across both VRFs as well as
+# within one: 10.176.0.0/13 PROD, 10.184.0.0/13 NON-PROD (2048 /24s each).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CoreIPPrefixPool
+  data:
+    - name: Tenant-PROD-IPv4
+      description: "Tenant segment /24s in the PROD VRF"
+      default_prefix_type: IpamPrefix
+      default_prefix_length: 24
+      resources:
+        kind: IpamPrefix
+        data:
+          - prefix: 10.176.0.0/13
+            description: "Tenant segment space, PROD VRF"
+            status: active
+            member_type: prefix
+            is_pool: true
+            role: customer
+            ip_namespace: "PROD"
+      ip_namespace: "PROD"
+
+    - name: Tenant-NON-PROD-IPv4
+      description: "Tenant segment /24s in the NON-PROD VRF"
+      default_prefix_type: IpamPrefix
+      default_prefix_length: 24
+      resources:
+        kind: IpamPrefix
+        data:
+          - prefix: 10.184.0.0/13
+            description: "Tenant segment space, NON-PROD VRF"
+            status: active
+            member_type: prefix
+            is_pool: true
+            role: customer
+            ip_namespace: "NON-PROD"
+      ip_namespace: "NON-PROD"

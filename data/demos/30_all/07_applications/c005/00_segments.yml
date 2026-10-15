@@ -7,6 +7,10 @@
 # TopologyCustomerDC footprints from 06_customer_boarding/c005/dc/ by their
 # computed name (C005-P-DC10 and C005-P-DC12; every segment here is prod, like
 # payment-core, so each sits only on prod footprints).
+#
+# No gateway is typed: add_vxlan_segment allocates each segment's /24 and its
+# anycast gateway (.1) from Tenant-PROD-IPv4 (data/bootstrap/23b_tenant_pools.yml),
+# keyed by the segment name, once.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -19,21 +23,6 @@ spec:
           data:
             customer_name: "web-frontend-local-dc10"
             environment: "p"
-            stretch_scope: local
-            arp_suppression: true
-            gateway:
-              data:
-                address: "10.5.10.1/24"
-                description: "c005-web-frontend-local-dc10-p anycast gateway"
-                ip_namespace: "PROD"
-                ip_prefix:
-                  kind: IpamPrefix
-                  data:
-                    prefix: "10.5.10.0/24"
-                    description: "c005-web-frontend-local-dc10-p (C005, DC10)"
-                    status: active
-                    role: customer
-                    ip_namespace: "PROD"
             customer_deployments:
               - "C005-P-DC10"
             member_of_groups:
@@ -44,20 +33,6 @@ spec:
             customer_name: "app-backend-stretch"
             environment: "p"
             stretch_scope: dc_pair
-            arp_suppression: true
-            gateway:
-              data:
-                address: "10.5.20.1/24"
-                description: "c005-app-backend-stretch-p anycast gateway"
-                ip_namespace: "PROD"
-                ip_prefix:
-                  kind: IpamPrefix
-                  data:
-                    prefix: "10.5.20.0/24"
-                    description: "c005-app-backend-stretch-p (C005, DC10 <-> DC12)"
-                    status: active
-                    role: customer
-                    ip_namespace: "PROD"
             # No explicit isolation_mode: AppApplicationGenerator derives
             # microsegmented for it (see _ensure_segment_isolation_mode) since
             # 01_application.yml's security_profile is fintech_strict. That in
@@ -76,21 +51,6 @@ spec:
           data:
             customer_name: "database-local-dc12"
             environment: "p"
-            stretch_scope: local
-            arp_suppression: true
-            gateway:
-              data:
-                address: "10.5.30.1/24"
-                description: "c005-database-local-dc12-p anycast gateway"
-                ip_namespace: "PROD"
-                ip_prefix:
-                  kind: IpamPrefix
-                  data:
-                    prefix: "10.5.30.0/24"
-                    description: "c005-database-local-dc12-p (C005, DC12)"
-                    status: active
-                    role: customer
-                    ip_namespace: "PROD"
             customer_deployments:
               - "C005-P-DC12"
             member_of_groups:
@@ -101,20 +61,6 @@ spec:
             customer_name: "message-queue-stretch"
             environment: "p"
             stretch_scope: dc_pair
-            arp_suppression: true
-            gateway:
-              data:
-                address: "10.5.40.1/24"
-                description: "c005-message-queue-stretch-p anycast gateway"
-                ip_namespace: "PROD"
-                ip_prefix:
-                  kind: IpamPrefix
-                  data:
-                    prefix: "10.5.40.0/24"
-                    description: "c005-message-queue-stretch-p (C005, DC10 <-> DC12)"
-                    status: active
-                    role: customer
-                    ip_namespace: "PROD"
             customer_deployments:
               - "C005-P-DC10"
               - "C005-P-DC12"
@@ -126,7 +72,7 @@ spec:
         # DF-DC10-EQXFR2). `global` because it crosses from a DC into a
         # different metro, not between two DCs of one pair.
         #
-        # The PROD gateway makes it routable as well: every VTEP carrying it
+        # Its PROD gateway makes it routable as well: every VTEP carrying it
         # (DC10 leafs/BLs and eg-fr01) gets an anycast SVI in VRF PROD, and
         # the C005 office reaches it over the SD-WAN gateway's PROD handoff
         # into eg-fr01 (../../08_interconnects/04_sdwan/06_vrf_handoff.yml).
@@ -135,20 +81,6 @@ spec:
             customer_name: "colo-services-stretch"
             environment: "p"
             stretch_scope: global
-            arp_suppression: true
-            gateway:
-              data:
-                address: "10.5.50.1/24"
-                description: "colo-services-stretch anycast gateway"
-                ip_namespace: "PROD"
-                ip_prefix:
-                  kind: IpamPrefix
-                  data:
-                    prefix: "10.5.50.0/24"
-                    description: "colo-services-stretch (C005, DC10 <-> Equinix FR)"
-                    status: active
-                    role: customer
-                    ip_namespace: "PROD"
             customer_deployments:
               - "C005-P-DC10"
               - "C005-P-FR"
