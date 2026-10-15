@@ -139,3 +139,19 @@ def test_segments_no_generator_touches_keep_their_zone() -> None:
         and not obj.item.get("security_zone")
     ]
     assert not missing, "\n".join(missing)
+
+
+def test_no_tenant_vlan_segment_sits_in_a_data_center_footprint() -> None:
+    """Inside a DC every tenant segment is VXLAN (checks/segment_placement.py): only an exchange-zone
+    service segment (the MANAGEMENT services) may be a VLAN segment on a TopologyCustomerDC."""
+    dc_footprints = {name(obj) for obj in declared("TopologyCustomerDC", _ALL_DEMO)}
+    vlan_segments = declared("ManagedVlanSegment", _ALL_DEMO)
+    assert any(obj.item.get("customer_deployment") in dc_footprints for obj in vlan_segments), (
+        "the scan found no VLAN segment in a DC footprint (the MANAGEMENT services segment is one)"
+    )
+    offenders = [
+        f"{obj.path.relative_to(ROOT)}: {name(obj)} on {obj.item['customer_deployment']}"
+        for obj in vlan_segments
+        if obj.item.get("customer_deployment") in dc_footprints and not is_exchange_zone(obj.item.get("security_zone"))
+    ]
+    assert not offenders, "tenant VLAN segments in a DC footprint:\n" + "\n".join(offenders)

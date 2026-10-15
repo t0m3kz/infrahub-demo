@@ -176,7 +176,8 @@ ALL_DEMO_DC_UNDERLAY_ROLES = ("super-spine", "spine", "leaf", "access-leaf", "bo
 ALL_DEMO_DC_OVERLAY_ROLES = ("super-spine", "spine", "border-leaf")
 
 # Application hosts in row pairs, one host of a pair per compute-rack row
-# (DC10 has three pairs: C005's payment-core, its session store, C008). The
+# (DC10 has three pairs: C005's payment-core, its session store, C008; DC12
+# two: the shared P027 non-prod pair and C005's own prod pair). The
 # row matters: add_endpoint
 # cables a host to the access-leaf pair of the network rack sharing its row,
 # so row-1 and row-2 hosts must land on *disjoint* access-leaf pairs. That
@@ -193,6 +194,8 @@ ALL_DEMO_DC_HOST_ROWS: dict[str, int] = {
     "dc11-pod1-server-2": 2,
     "dc12-pod1-server-1": 1,
     "dc12-pod1-server-2": 2,
+    "dc12-pod1-server-3": 1,
+    "dc12-pod1-server-4": 2,
 }
 
 # DC name -> how many application hosts (role endpoint) it has, from ALL_DEMO_DC_HOST_ROWS.
@@ -605,14 +608,23 @@ MANAGEMENT_SERVICES_GATEWAY = "10.250.0.1/24"
 MANAGEMENT_SERVICES_VLAN = 250
 MANAGEMENT_SERVICES_LEAF = "al-dc1111111501"
 MANAGEMENT_SERVICES_DC = "DC11"
-# The c006 segment (VLAN 103, PROD) whose rules reach the services segment.
-MANAGEMENT_CLIENT_SEGMENT_VLAN = 103
-MANAGEMENT_CLIENT_SEGMENT_PREFIX = "10.6.103.0/24"
 # rule name -> (protocol, port), the DC11 permits PROD-ZONE -> MANAGEMENT-ZONE.
 ALL_DEMO_MANAGEMENT_RULES: dict[str, tuple[str, int]] = {
     "nordix-prod-to-core-dns": ("udp", 53),
     "nordix-prod-to-core-ntp": ("udp", 123),
 }
+# The tenant segment those rules start from, read from 05_security_policy.yml.
+# Its prefix and its local VLAN on each switch are derived (add_vxlan_segment:
+# a /24 from its environment's tenant pool, one VLAN per VLAN domain), so
+# test_64 reads both from the graph.
+# Exactly one (the unpacking raises otherwise).
+(MANAGEMENT_CLIENT_SEGMENT,) = sorted(
+    {
+        str(rule.item["source_segment"])
+        for rule in declared("SecurityPolicyRule", _ALL_DEMO_ROOT)
+        if rule.item.get("name") in ALL_DEMO_MANAGEMENT_RULES
+    }
+)
 
 # A firewall cluster is an HA pair: one sub-interface per member per leg.
 ALL_DEMO_FIREWALL_MEMBERS = 2

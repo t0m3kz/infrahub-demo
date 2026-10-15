@@ -59,8 +59,8 @@ spec:
             log: false
             description: "Nordix web tier to Zscaler cloud security PoP"
 ---
-# Internet egress of DC11. C006's "nordix-prod" segment (VLAN 103, DC11's
-# shared PAN-OS firewall context) may open https to the Internet segment
+# Internet egress of DC11. C006's "nordix-prod" segment (a VXLAN segment in
+# DC11's shared PAN-OS firewall context) may open https to the Internet segment
 # (data/bootstrap/27_external_segments.yml): a segment with no prefix, in
 # INTERNET-ZONE. The firewall renders it as zone INTERNET-ZONE, destination
 # any. The leaf ACL cannot say "anything but internal", so it denies every

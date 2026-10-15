@@ -4,6 +4,8 @@ query segment_placement {
       node {
         id
         name { value }
+        # An exchange-zone VLAN segment may sit on a TopologyCustomerDC; a tenant one may not.
+        security_zone { node { name { value } } }
         terminate_inline { value }
         inline_service { node { id __typename name { value } } }
         customer_deployment {

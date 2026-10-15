@@ -674,8 +674,10 @@ class TestContracts:
 
 
 def test_all_demo_gateways_sit_in_their_environment_namespace() -> None:
-    """The gateway-namespace rule run on the 30_all segments (zones as declared; a missing one is derived
-    from the environment by the generators, so only a declared exchange zone exempts a segment)."""
+    """The gateway-namespace rule run on the 30_all segments with an authored gateway (zones as declared; a
+    missing one is derived from the environment by the generators, so only a declared exchange zone exempts a
+    segment). A VXLAN tenant segment declares none: add_vxlan_segment allocates it from the pool of its
+    environment's namespace (tests/unit/test_tenant_segment_addressing.py holds that pool choice)."""
     from tests.integration.demo_data import ROOT, declared, declared_in, name
 
     namespace_types = {
@@ -707,5 +709,5 @@ def test_all_demo_gateways_sit_in_their_environment_namespace() -> None:
                 },
             }
         )
-    assert checked >= 10
+    assert checked, "the scan found no authored gateway (colocation VLAN segments, the MANAGEMENT services)"
     assert check._captured_errors == []

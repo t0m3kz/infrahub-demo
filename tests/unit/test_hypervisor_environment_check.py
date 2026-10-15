@@ -135,14 +135,6 @@ def test_the_scan_finds_the_all_demo_vms() -> None:
     assert all(vm["node"]["deployment"]["node"]["environment"]["value"] for vm in vms)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Owner decision pending: C005-P-DC12's four prod VMs run on dc12-pod1-server-1/2, the P027 shared "
-        "non-prod hosts that also carry C008-D-DC12 and C010-D-DC12 (03_dc/dc12/05_servers.yml says prod never "
-        "lands there). Remove this marker once the placement is fixed."
-    ),
-)
 def test_all_demo_placement_passes_the_check() -> None:
     """The check run on the 30_all data: no hypervisor mixes prod and non-prod VMs."""
     assert _run(_all_demo_vms()) == []

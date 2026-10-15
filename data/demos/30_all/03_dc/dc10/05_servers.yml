@@ -13,8 +13,10 @@
 #
 # Each host is owned by the customer whose VMs run on it
 # (06_customer_boarding/<customer>/dc/<dc>/02_instances.yml), so ownership
-# follows the workload rather than whoever racked the box. DC12's hosts are
-# the exception: shared non-prod hosts owned by the technology partner (P027).
+# follows the workload rather than whoever racked the box. DC12's server-1/2
+# are the exception: shared non-prod hosts owned by the technology partner
+# (P027), next to C005's own prod pair server-3/4. Prod and non-prod never
+# share a hypervisor (checks/hypervisor_environment.py).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
