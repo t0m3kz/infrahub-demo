@@ -4,7 +4,7 @@ from typing import TypedDict
 
 from utils.exchange_transit import EXCHANGE_PEERS, namespace_type_for_environment
 
-from .demo_data import ROOT, Declared, created_dispatches, declared, distinct, name
+from .demo_data import ROOT, Declared, created_dispatches, declared, distinct, name, render
 
 # ---------------------------------------------------------------------------
 # Demo data paths  (single source of truth — the same files the demos ship)
@@ -271,17 +271,26 @@ ALL_DEMO_COMPONENT_INSTANCE_COUNT = 2
 # 30_all — interconnect and tenant-service expectations (test_62)
 # ---------------------------------------------------------------------------
 
+# The offices that opt into add_sdwan_edge (generators/topology/sdwan_edge.py)
+# by naming a gateway in sdwan_gateway. Each gets an `INET-<office>` internet
+# underlay and an `<office>-SDWAN-<gateway zone>` tunnel from the generator;
+# none of that is declared.
+_SDWAN_OFFICES: list[Declared] = [
+    office for office in _all_demo("TopologyCustomerOffice") if office.item.get("sdwan_gateway")
+]
+
 ALL_DEMO_PHYSICAL_CIRCUIT_TYPES: dict[str, int] = {
-    # All hand-authored in 08_interconnects/ — the opt-in
-    # TopologyInterconnectRequest that used to scaffold 2 extra DC11<->DC12
-    # stub circuits was removed along with its generator.
+    # The dark fibres and cross-connects are hand-authored in 08_interconnects/
+    # — the opt-in TopologyInterconnectRequest that used to scaffold 2 extra
+    # DC11<->DC12 stub circuits was removed along with its generator.
     # Each DC has one fibre to each of its metro's two border gateways:
     # DC10/DC11 -> EQX FR2 (01 and 02 edge), DC12 -> EQX PA4 (01 and 02 edge).
     "dark_fiber": 6,
     "cross_connect": 2,  # EQX FR2 -> AWS eu-central-1, EQX PA4 -> Azure westeurope
-    # 5 office underlays (C001/C003/C015 hand-authored + C002/C005 from
-    # add_sdwan_edge) + 4 shared transit circuits from 06_internet.
-    "internet": 9,
+    # The declared ones (the shared transit circuits of 06_internet) plus one
+    # generated underlay per SD-WAN office.
+    "internet": len([c for c in _all_demo("TopologyPhysicalCircuit") if c.value("circuit_type") == "internet"])
+    + len(_SDWAN_OFFICES),
 }
 
 # The peering_role=dci dark fibres (08_interconnects/01_colo_onramp/
@@ -376,6 +385,33 @@ class VirtualCircuitExpectation(TypedDict):
     cloud_endpoints: tuple[str, ...]
 
 
+_CUSTOMER_NAMES: dict[str, str] = {
+    str(org.value("org_id")): str(org.value("name")) for org in _all_demo("OrganizationCustomer")
+}
+_DEVICE_DEPLOYMENTS: dict[str, str] = {
+    name(device): str(device.value("deployment")) for device in _all_demo("DcimPhysicalDevice")
+}
+
+
+def _sdwan_tunnel(office: Declared) -> tuple[str, VirtualCircuitExpectation]:
+    """The tunnel add_sdwan_edge builds for one opted-in office, named as the generator names it.
+
+    `<office>-SDWAN-<the gateway's zone>`, owned by the office's customer, riding
+    `INET-<office>` and terminating on the edge uplink and the gateway's
+    `eth0.<tunnel_id>` sub-interface.
+    """
+    office_name = name(office)
+    zone = _DEVICE_DEPLOYMENTS[str(office.item["sdwan_gateway"])]
+    return f"{office_name}-SDWAN-{zone}", {
+        "link_type": "sd_wan",
+        "transport_mode": "internet_backed",
+        "owner": _CUSTOMER_NAMES[render(office, "{{ parent__owner__org_id__value }}")],
+        "physical_circuits": (f"INET-{office_name}",),
+        "interfaces": 2,
+        "cloud_endpoints": (),
+    }
+
+
 # The full virtual-circuit fabric. `physical_circuits` is the underlay mapping
 # and `interfaces` the minimum number of terminating DcimInterfaces reached
 # through interface_capabilities — the one uniform "what is this port doing"
@@ -425,51 +461,9 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
         "interfaces": 2,
         "cloud_endpoints": ("vif-transit-hub-euc1",),
     },
-    "C001-SDWAN-FR2": {
-        "link_type": "sd_wan",
-        "transport_mode": "internet_backed",
-        "owner": "Nordix Ltd.",
-        "physical_circuits": ("INET-C001-WAW-FR2",),
-        "interfaces": 2,
-        "cloud_endpoints": (),
-    },
-    "C003-SDWAN-FR2": {
-        "link_type": "sd_wan",
-        "transport_mode": "internet_backed",
-        "owner": "Vaultex Inc.",
-        "physical_circuits": ("INET-C003-MUC-FR2",),
-        "interfaces": 2,
-        "cloud_endpoints": (),
-    },
-    "C015-SDWAN-FR2": {
-        "link_type": "sd_wan",
-        "transport_mode": "internet_backed",
-        "owner": "Novantis GmbH",
-        "physical_circuits": ("INET-C015-PAR-FR2",),
-        "interfaces": 2,
-        "cloud_endpoints": (),
-    },
-    # Entirely generator-produced (add_sdwan_edge), unlike its hand-authored
-    # siblings above — proves the automated per-office SD-WAN path end-to-end.
-    "C002-P-SDWAN-FR2": {
-        "link_type": "sd_wan",
-        "transport_mode": "internet_backed",
-        "owner": "SwiftGo GmbH",
-        "physical_circuits": ("INET-C002-P",),
-        "interfaces": 2,
-        "cloud_endpoints": (),
-    },
-    # Same generator path as C002; C005's office additionally routes into
-    # colo-services-stretch over 08_interconnects/04_sdwan/06_vrf_handoff.yml.
-    "C005-P-SDWAN-FR2": {
-        "link_type": "sd_wan",
-        "transport_mode": "internet_backed",
-        "owner": "Drentec BV",
-        "physical_circuits": ("INET-C005-P",),
-        "interfaces": 2,
-        "cloud_endpoints": (),
-    },
-    # Second tunnel riding the same internet underlay as C001-SDWAN-FR2, on a
+    # One generated tunnel per SD-WAN office (_sdwan_tunnel).
+    **dict(_sdwan_tunnel(office) for office in _SDWAN_OFFICES),
+    # Second tunnel riding the same internet underlay as C001-P-SDWAN-FR2, on a
     # different gateway sub-interface — see 08_interconnects/07_zone_policies/
     # 01_partner_virtual_circuit.yml for why this is an overlay, not a new
     # dedicated physical cross-connect.
@@ -477,7 +471,7 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
         "link_type": "vpn_ipsec",
         "transport_mode": "internet_backed",
         "owner": "Nordix Ltd.",
-        "physical_circuits": ("INET-C001-WAW-FR2",),
+        "physical_circuits": ("INET-C001-P",),
         "interfaces": 2,
         "cloud_endpoints": (),
     },

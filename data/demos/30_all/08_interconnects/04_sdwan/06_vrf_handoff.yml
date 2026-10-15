@@ -7,8 +7,8 @@
 #
 # Rides the same physical path as VC-SDWAN-FR2-AWS-EUC1 (GW1 eth0 <->
 # eg-fr01 Ethernet1/13, see 05_overlays.yml) as a dot1q sub-interface on each
-# side. VLAN 1900 sits outside the SD-WAN tunnel-id pool (2000-9999) and the
-# per-tenant eth0.10xx terminations, so it never collides with a generated one.
+# side. VLAN 1900 sits outside the SD-WAN tunnel-id pool (2000-9999) the
+# generated eth0.<tunnel_id> terminations draw from, so it never collides with one.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -91,7 +91,8 @@ spec:
 # end here is EQX-FR2-SDWAN-GW1, so the registered prefixes are the PROD
 # lan_prefixes of every TopologyCustomerOffice whose sdwan_gateway is GW1 (C002
 # 10.210.2.0/24, C005 10.210.5.0/24; get_external_peer_prefixes in
-# transforms/helpers/bgp.py). An office without a registered LAN adds nothing.
+# transforms/helpers/bgp.py). An office without a registered LAN adds nothing:
+# C001, C003 and C015 are behind GW1 too but register none.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

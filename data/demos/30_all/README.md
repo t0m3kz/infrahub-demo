@@ -83,10 +83,10 @@ Load the stages **in this order**. After each one, wait until no generator task 
 
 | # | Stage | What it loads | Generators it fires |
 | --- | --- | --- | --- |
-| 1 | foundation | Customers, cloud, colocation, SaaS, offices, and the three DC sites with their fabrics and controllers | `add_colocation_metro` (×9), `add_dc` → `add_pod` → `add_rack` (longest stage) |
+| 1 | foundation | Customers, cloud, colocation (with the shared SD-WAN gateway and orchestrator), SaaS, offices, and the three DC sites with their fabrics and controllers | `add_colocation_metro` (×9), `add_dc` → `add_pod` → `add_rack` (longest stage) |
 | 2 | compute_and_customers | Application hosts, DC-only customers' footprints, and the boarding set: DC/colocation/cloud/office footprints, cage kit, VMs | `add_endpoint`, `add_customer_deployment_*`, `add_sdwan_edge` |
 | 3 | applications | Segments, applications, deployment-request catalogue | `add_vxlan_segment`, `add_app_application` |
-| 4 | interconnects | Colo on-ramp, cloud hub, virtual circuits, SD-WAN, cloud endpoints, internet transit | — (data only) |
+| 4 | interconnects | Colo on-ramp, cloud hub, virtual circuits, SD-WAN backhaul and handoff, cloud endpoints, internet transit | — (data only) |
 
 ```bash
 D=data/demos/30_all
