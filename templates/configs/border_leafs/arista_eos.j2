@@ -43,11 +43,7 @@ interface {{ interface.name }}
    switchport mode trunk
    switchport trunk allowed vlan {{ interface.vlans|join(',') }}
 {%- elif interface.vlans %}
-{%- if interface.vlans|length == 1 %}
    switchport access vlan {{ interface.vlans[0] }}
-{%- else %}
-   switchport trunk allowed vlan {{ interface.vlans|join(',') }}
-{%- endif %}
 {%- endif %}
 {%- if interface.get('ospf') %}
    ip ospf area {{ interface.ospf.area }}

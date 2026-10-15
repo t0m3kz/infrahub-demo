@@ -25,12 +25,11 @@ interface {{ interface.name }}
    description {{ interface.display_description }}
 {%- endif %}
 {%- include 'common/arista_eos_interface_ip.j2' %}
-{%- if interface.vlans %}
-{%- if interface.vlans|length == 1 %}
-   switchport access vlan {{ interface.vlans[0] }}
-{%- else %}
+{%- if interface.mode == 'trunk' %}
+   switchport mode trunk
    switchport trunk allowed vlan {{ interface.vlans|join(',') }}
-{%- endif %}
+{%- elif interface.vlans %}
+   switchport access vlan {{ interface.vlans[0] }}
 {%- endif %}
 {%- if interface.get('ospf') %}
    ip ospf area {{ interface.ospf.area }}

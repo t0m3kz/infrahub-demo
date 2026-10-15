@@ -29,9 +29,7 @@ interface {{ interface.name }}
 {%- endif %}
 {%- include 'common/cisco_nxos_interface_ip.j2' %}
 {%- if interface.vlans %}
-  switchport
-  switchport mode access
-  switchport access vlan {{ interface.vlans[0] }}
+{%- include 'common/cisco_nxos_switchport.j2' %}
 {%- endif %}
 {%- if interface.get('ospf') %}
   ip ospf area {{ interface.ospf.area }}
