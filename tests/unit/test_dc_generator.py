@@ -613,7 +613,7 @@ class TestCreateSharedRoutingObjects:
         source at all, which is why it is now unconditional.
         """
         gen = self._make_generator_for_shared_routing()
-        gen.data = MagicMock(routing_strategy="ebgp-ebgp")
+        gen.data = {"routing_strategy": "ebgp-ebgp"}
         gen.client.filters = AsyncMock(return_value=[])
         fabric_as = MagicMock(id="fabric-as-1")
         fabric_as.asn.value = 65100
@@ -632,7 +632,7 @@ class TestCreateSharedRoutingObjects:
     @pytest.mark.asyncio
     async def test_ebgp_ibgp_creates_new_overlay_as(self) -> None:
         gen = self._make_generator_for_shared_routing()
-        gen.data = MagicMock(routing_strategy="ebgp-ibgp")
+        gen.data = {"routing_strategy": "ebgp-ibgp"}
         gen.client.filters = AsyncMock(return_value=[])
         new_as = MagicMock(id="as-new-1")
         new_as.asn.value = 65100
@@ -652,7 +652,7 @@ class TestCreateSharedRoutingObjects:
         """An existing shared overlay AS is updated in place, not duplicated —
         matched by description, not name, since AS.name is a computed field."""
         gen = self._make_generator_for_shared_routing()
-        gen.data = MagicMock(routing_strategy="ebgp-ibgp")
+        gen.data = {"routing_strategy": "ebgp-ibgp"}
         existing_as = MagicMock(id="as-existing-1")
         existing_as.asn = MagicMock(value=1)
         existing_as.save = AsyncMock()
@@ -672,7 +672,7 @@ class TestCreateSharedRoutingObjects:
         that skipped the shared AS would not re-track it, and its cleanup
         would delete the AS every pod's BGP uses."""
         gen = self._make_generator_for_shared_routing()
-        gen.data = MagicMock(routing_strategy="ebgp-ibgp")
+        gen.data = {"routing_strategy": "ebgp-ibgp"}
         gen.client.filters = AsyncMock(side_effect=Exception("db down"))
 
         await gen._create_shared_routing_objects(overlay_asn=65100)
@@ -685,7 +685,7 @@ class TestCreateSharedRoutingObjects:
     @pytest.mark.asyncio
     async def test_ospf_ibgp_creates_overlay_as_and_ospf_area(self) -> None:
         gen = self._make_generator_for_shared_routing()
-        gen.data = MagicMock(routing_strategy="ospf-ibgp")
+        gen.data = {"routing_strategy": "ospf-ibgp"}
         gen.client.filters = AsyncMock(return_value=[])
         gen.client.get = AsyncMock(return_value=None)
         as_obj = MagicMock(id="as-1")
@@ -708,7 +708,7 @@ class TestCreateSharedRoutingObjects:
     async def test_ospf_area_creation_exception_fails_the_run(self) -> None:
         """Same as the overlay AS: an error, never a swallowed warning."""
         gen = self._make_generator_for_shared_routing()
-        gen.data = MagicMock(routing_strategy="ospf-ibgp")
+        gen.data = {"routing_strategy": "ospf-ibgp"}
         gen.client.filters = AsyncMock(return_value=[])
         as_obj = MagicMock(id="as-1")
         as_obj.asn.value = 65100
@@ -727,7 +727,7 @@ class TestCreateSharedRoutingObjects:
         fabric route-target AS. The OSPF area stays strategy-gated.
         """
         gen = self._make_generator_for_shared_routing()
-        gen.data = MagicMock(routing_strategy=RoutingStrategy.EBGP_EBGP.value)
+        gen.data = {"routing_strategy": RoutingStrategy.EBGP_EBGP.value}
         gen.client.filters = AsyncMock(return_value=[])
         fabric_as = MagicMock(id="fabric-as-1")
         fabric_as.asn.value = 65100
@@ -749,7 +749,7 @@ class TestCreateSharedRoutingObjects:
     @pytest.mark.asyncio
     async def test_ebgp_ebgp_creates_new_super_spine_as_when_pool_given(self) -> None:
         gen = self._make_generator_for_shared_routing()
-        gen.data = MagicMock(routing_strategy=RoutingStrategy.EBGP_EBGP.value)
+        gen.data = {"routing_strategy": RoutingStrategy.EBGP_EBGP.value}
         gen.client.filters = AsyncMock(return_value=[])
         as_obj = MagicMock(id="ss-as-1")
         as_obj.asn.value = 65001
@@ -770,7 +770,7 @@ class TestCreateSharedRoutingObjects:
     @pytest.mark.asyncio
     async def test_ebgp_ebgp_reuses_existing_super_spine_as(self) -> None:
         gen = self._make_generator_for_shared_routing()
-        gen.data = MagicMock(routing_strategy=RoutingStrategy.EBGP_EBGP.value)
+        gen.data = {"routing_strategy": RoutingStrategy.EBGP_EBGP.value}
         existing_as = MagicMock(id="ss-as-existing")
         existing_as.asn.value = 65001
         gen.client.filters = AsyncMock(return_value=[existing_as])
@@ -787,7 +787,7 @@ class TestCreateSharedRoutingObjects:
         at all (super-spine's own routing skips underlay entirely for this
         strategy, see dc.py's skip_underlay branch)."""
         gen = self._make_generator_for_shared_routing()
-        gen.data = MagicMock(routing_strategy="ospf-ibgp")
+        gen.data = {"routing_strategy": "ospf-ibgp"}
         gen.client.filters = AsyncMock(return_value=[])
         gen.client.get = AsyncMock(return_value=None)
         as_obj = MagicMock(id="as-1")

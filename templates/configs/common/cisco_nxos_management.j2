@@ -2,7 +2,9 @@
 !
 ! NTP
 !
+{%- if not ios_dialect %}
 clock timezone {{ ntp.timezone }} 0 0
+{%- endif %}
 {%- for s in ntp.servers %}
 ntp server {{ s.address }}{% if s.prefer %} prefer{% endif %}
 
@@ -13,8 +15,12 @@ ntp server {{ s.address }}{% if s.prefer %} prefer{% endif %}
 ! Syslog
 !
 {%- for s in syslog.servers %}
+{%- if ios_dialect %}
+logging host {{ s.address }}
+{%- else %}
 logging server {{ s.address }}{% if s.port and s.port != 514 %} port {{ s.port }}{% endif %} {{ s.severity | default('informational') }}
 
+{%- endif %}
 {%- endfor %}
 {%- endif %}
 {%- if snmp %}
@@ -41,7 +47,9 @@ snmp-server host {{ t.address }}{% if t.community %} {{ t.community }}{% endif %
 !
 ! AAA
 !
+{%- if not ios_dialect %}
 feature tacacs+
+{%- endif %}
 {%- for s in aaa.servers %}
 {%- if s.protocol == 'tacacs' %}
 tacacs-server host {{ s.address }}{% if s.port %} port {{ s.port }}{% endif %}{% if s.timeout %} timeout {{ s.timeout }}{% endif %}
@@ -59,9 +67,9 @@ aaa authentication login default group radius local
 aaa authentication login default local
 {%- endif %}
 {%- if aaa.authorization_commands %}
-aaa authorization commands default group tacacs+ local
+aaa authorization commands {{ 'all ' if ios_dialect }}default group tacacs+ local
 {%- endif %}
 {%- if aaa.accounting_enabled %}
-aaa accounting default group tacacs+
+aaa accounting {{ 'exec default start-stop' if ios_dialect else 'default' }} group tacacs+
 {%- endif %}
 {%- endif %}

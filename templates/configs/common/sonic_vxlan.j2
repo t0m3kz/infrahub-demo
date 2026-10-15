@@ -67,17 +67,6 @@
 {%- endfor -%}
 {%- endfor -%}
 {%- endif -%}
-{%- if vxlan and vxlan.enabled and vxlan.vrf_loopbacks -%}
-{%- for loopback in vxlan.vrf_loopbacks -%}
-{%- set key = loopback.name + '|' + loopback.ip + '/32' -%}
-{%- set _ = vrf_loopback_interfaces.update({
-  key: {
-    'vrf_name': loopback.vrf
-  }
-}) -%}
-{%- endfor -%}
-{%- set _ = loopback_interfaces.update(vrf_loopback_interfaces) -%}
-{%- endif -%}
 {%- if vxlan and vxlan.enabled and vxlan.evpn and vxlan.evpn.enabled -%}
 {%- set _ = evpn_nvo.update({
   'nvo1': {

@@ -41,7 +41,7 @@ from ..connections import CablingMixin
 from ..helpers.common import save_with_node_not_found_retry
 from ..pools import PoolMixin
 from ..protocols import ManagedBGPPeering, RoutingPassword, TopologyVirtualCircuit
-from ..routing import EVPN_AF, RoutingMixin, _overlay_key_name
+from ..routing import EVPN_AF, IPV4_UNICAST_AF, IPV6_UNICAST_AF, RoutingMixin, _overlay_key_name
 
 PHYSICAL_CIRCUIT_GENERATOR = "add_circuit"
 VIRTUAL_CIRCUIT_GENERATOR = "add_virtual_circuit"
@@ -70,7 +70,7 @@ _PHYSICAL_BACKED_LINK_TYPES = frozenset(
 # family: an EVPN Multi-Site tunnel only forms between border gateways whose
 # VTEPs share one, so the DCI follows the fabric's underlay_protocol.
 _DCI_POOLS: dict[int, tuple[str, int]] = {4: ("DCI-Technical-IPv4", 31), 6: ("DCI-Technical-IPv6", 127)}
-_DCI_UNICAST_AF: dict[int, tuple[str, str]] = {4: ("ipv4", "unicast"), 6: ("ipv6", "unicast")}
+_DCI_UNICAST_AF: dict[int, tuple[str, str]] = {4: IPV4_UNICAST_AF, 6: IPV6_UNICAST_AF}
 
 # Circuit status -> the status of the interfaces it lands on (templates render
 # a non-active interface shut). A decommissioned circuit builds nothing.

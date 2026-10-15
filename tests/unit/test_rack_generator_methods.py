@@ -94,8 +94,7 @@ class TestRackGeneratorMethods:
         gen = _build_gen()
         assert gen._has_role_templates([]) is False
         assert gen._has_role_templates(gen.data["leafs"]) is True
-        assert gen._has_tor_like_templates() is True
-        assert gen._has_any_switch_templates() is True
+        assert gen._present_roles() == {"leaf", "tor"}
 
     def test_planned_previous_row_rack_slots_uses_layout_capacity(self) -> None:
         gen = _build_gen()

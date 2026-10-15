@@ -13,7 +13,7 @@ version: "1.0"
 # data/bootstrap/22_namespaces.yml — never per-customer/per-deployment):
 #   - PROD:       data-plane VRF for every segment/customer/app with environment=p
 #   - NON-PROD:   data-plane VRF for every other environment value (n/s/d/t all
-#                 collapse here — same collapsing rule RulesPlanner.pick_zone_name
+#                 collapse here — same collapsing rule utils.exchange_transit.zone_name_for_namespace_type
 #                 already uses for the PROD-ZONE/NONPROD-ZONE SecurityZone split;
 #                 environment p -> PROD, everything else -> NON-PROD)
 #   - INTERNET:   internet-edge VRF

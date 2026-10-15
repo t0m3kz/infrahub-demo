@@ -991,7 +991,7 @@ class TestBuildPeerGroups:
         assert len(pgs) == 1
         assert pgs[0]["name"] == "EVPN-OVERLAY"
 
-    @pytest.mark.parametrize("role", ["spine", "super-spine", "super_spine", "hyper-spine", "border-spine"])
+    @pytest.mark.parametrize("role", ["spine", "super-spine", "hyper-spine", "border-spine"])
     def test_ebgp_overlay_relay_sets_next_hop_unchanged(self, role: str) -> None:
         """A relaying tier must not rewrite the EVPN next-hop.
 

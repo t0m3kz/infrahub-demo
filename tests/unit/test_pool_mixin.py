@@ -149,7 +149,7 @@ class TestEnsureFirewallContextPools:
     def test_creates_only_the_vlan_pool(self) -> None:
         gen = self._gen()
 
-        asyncio.run(gen.ensure_firewall_context_pools(name="dc1", vlan_start=3000))
+        asyncio.run(gen.ensure_firewall_context_pools(name="dc1"))
 
         assert gen.upsert_number_pool.await_args.kwargs["pool_name"] == "dc1-fw-context-vlan-pool"
         gen.ensure_sliced_pool.assert_not_awaited()

@@ -2,7 +2,7 @@
 {%- set device_metadata = {
   'localhost': {
     'hostname': hostname,
-    'type': 'LeafRouter'
+    'type': sonic_device_type | default('LeafRouter')
   }
 } -%}
 {%- if bgp %}
@@ -25,14 +25,15 @@
 {%- set vxlan_tunnel_map = {} -%}
 {%- set vrf_config = {} -%}
 {%- set bgp_evpn_rt = {} -%}
-{%- set vrf_loopback_interfaces = {} -%}
 {%- set evpn_nvo = {} -%}
 {%- include 'common/sonic_vxlan.j2' %}
 
 {%- set acl_table = {} -%}
 {%- set acl_rule = {} -%}
+{%- if not sonic_border %}
 {%- include 'common/sonic_acl.j2' %}
 {%- include 'common/sonic_pbr.j2' %}
+{%- endif %}
 
 {%- set static_route_table = {} -%}
 {%- set ntp_servers = {} -%}
@@ -56,12 +57,27 @@
   'VRF': vrf_config,
   'BGP_GLOBALS_EVPN_RT': bgp_evpn_rt,
   'EVPN_NVO': evpn_nvo,
-  'ACL_TABLE': acl_table,
-  'ACL_RULE': acl_rule,
   'STATIC_ROUTE': static_route_table,
   'NTP_SERVER': ntp_servers,
   'SYSLOG_SERVER': syslog_servers
 } -%}
+{%- if not sonic_border -%}
+{%- set _ = configdb.update({'ACL_TABLE': acl_table, 'ACL_RULE': acl_rule}) -%}
+{%- endif -%}
+{%- if sonic_border %}
+{#- HA-facing service ports (interface.mode == 'trunk') carry their
+    terminate_inline segments' VLANs tagged. Only added when present, so
+    border-leafs without one keep their table set. -#}
+{%- set vlan_members = {} -%}
+{%- for interface in interfaces if interface.mode == 'trunk' -%}
+{%- for vlan_id in interface.vlans -%}
+{%- set _ = vlan_members.update({'Vlan' ~ vlan_id ~ '|' ~ interface.name: {'tagging_mode': 'tagged'}}) -%}
+{%- endfor -%}
+{%- endfor -%}
+{%- if vlan_members -%}
+{%- set _ = configdb.update({'VLAN_MEMBER': vlan_members}) -%}
+{%- endif -%}
+{%- endif %}
 {#- Per-table merge: MC-LAG contributes VLAN/VLAN_MEMBER/VLAN_INTERFACE
     entries that must not replace the tables built above. #}
 {%- for table, entries in (sonic_mlag | default({})).items() %}

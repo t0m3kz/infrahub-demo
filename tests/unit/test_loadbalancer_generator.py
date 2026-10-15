@@ -147,14 +147,17 @@ class TestGenerateHappyPath:
     def test_backend_ip_identifier_is_per_vip_prefix_and_device(self) -> None:
         """The /32 reservation is the VIP's own and follows a moved backend prefix."""
         gen = _gen()
+        data = {"LoadbalancerVIP": [_vip(devices=[{"id": "lb-01", "name": "lb-01"}])]}
         pool_obj = MagicMock(id="pool-1")
+        pool_obj.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=pool_obj)
+        gen.client.get = AsyncMock(return_value=MagicMock(id="vip-1"))
         gen.client.allocate_next_ip_address = AsyncMock(return_value=MagicMock(id="ip-1"))
+        gen.find_role_interface = AsyncMock(return_value=MagicMock())
+        gen.ensure_vlan_subinterface = AsyncMock(return_value=MagicMock())
 
-        result = asyncio.run(
-            gen._allocate_backend_ip(pool=pool_obj, vip_id="vip-1", segment_prefix_id="prefix-1", device_name="lb-01")
-        )
+        asyncio.run(gen.generate(data))
 
-        assert result == "ip-1"
         kwargs = gen.client.allocate_next_ip_address.call_args.kwargs
         assert kwargs["identifier"] == "vip-1-prefix-1-lb-01-lb-backend"
         assert kwargs["resource_pool"] is pool_obj
@@ -211,7 +214,15 @@ class TestGenerateHappyPath:
         gen.ensure_vlan_subinterface.assert_not_called()
 
 
-class TestEnsureBackendPool:
+def _run_generate_to_pool(gen: Any, *, vip_id: str = "vip-1", prefix_id: str = "prefix-1") -> None:
+    """Run generate() for a no-SNAT VIP up to its backend pool; the device has no downlink, so it stops there."""
+    data = {"LoadbalancerVIP": [_vip(vip_id=vip_id, backend_segment=_vlan_segment(gateway_prefix_id=prefix_id))]}
+    gen.client.get = AsyncMock(return_value=MagicMock(id=vip_id))
+    gen.find_role_interface = AsyncMock(return_value=None)
+    asyncio.run(gen.generate(data))
+
+
+class TestBackendPool:
     """One pool per VIP, owned and tracked by that VIP's run."""
 
     def test_pool_is_named_from_the_vip_and_upserted_tracked(self) -> None:
@@ -222,9 +233,8 @@ class TestEnsureBackendPool:
         pool.save = AsyncMock()
         gen.client.create = AsyncMock(return_value=pool)
 
-        result = asyncio.run(gen._ensure_backend_pool(vip_id="vip-1", vip_hostname="x", segment_prefix_id="prefix-1"))
+        _run_generate_to_pool(gen)
 
-        assert result is pool
         data = gen.client.create.call_args.kwargs["data"]
         assert data["name"] == "lb-backend-vip-1-pool"
         assert data["identifier"] == "lb-backend-vip-1-pool"
@@ -238,7 +248,7 @@ class TestEnsureBackendPool:
         gen.client.create = AsyncMock(side_effect=lambda **_: MagicMock(save=AsyncMock()))
 
         for vip_id in ("vip-1", "vip-2"):
-            asyncio.run(gen._ensure_backend_pool(vip_id=vip_id, vip_hostname=vip_id, segment_prefix_id="prefix-1"))
+            _run_generate_to_pool(gen, vip_id=vip_id)
 
         names = [call.kwargs["data"]["name"] for call in gen.client.create.call_args_list]
         assert names == ["lb-backend-vip-1-pool", "lb-backend-vip-2-pool"]
@@ -248,18 +258,17 @@ class TestEnsureBackendPool:
         gen = _gen()
         gen.client.create = AsyncMock(return_value=MagicMock(save=AsyncMock()))
 
-        asyncio.run(gen._ensure_backend_pool(vip_id="vip-1", vip_hostname="x", segment_prefix_id="prefix-2"))
+        _run_generate_to_pool(gen, prefix_id="prefix-2")
 
         data = gen.client.create.call_args.kwargs["data"]
         assert (data["name"], data["resources"]) == ("lb-backend-vip-1-pool", ["prefix-2"])
 
-    def test_pool_creation_failure_returns_none(self) -> None:
+    def test_pool_creation_failure_logs_and_wires_without_an_address(self) -> None:
         gen = _gen()
         gen.client.create = AsyncMock(side_effect=RuntimeError("boom"))
 
-        result = asyncio.run(gen._ensure_backend_pool(vip_id="vip-1", vip_hostname="x", segment_prefix_id="prefix-1"))
+        _run_generate_to_pool(gen)
 
-        assert result is None
         gen.logger.error.assert_called()
 
 

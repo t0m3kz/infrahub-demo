@@ -32,15 +32,12 @@ from typing import Any
 from infrahub_sdk.checks import InfrahubCheck
 
 from utils.data_cleaning import clean_data
-from utils.exchange_transit import TRANSIT_VNI_MAX, TRANSIT_VNI_MIN
+from utils.exchange_transit import MAX_ENCODABLE_VNI, TRANSIT_VNI_MAX, TRANSIT_VNI_MIN
 
 # A type-2 route-target (4-byte admin ASN + 2-byte assigned number) and a type-1
 # route-distinguisher (4-byte IP + 2-byte assigned number) both leave 16 bits for
 # the VNI. Every ASN this project allocates is from the 4-byte private range, so
-# there is no 2-byte-admin variant available to widen it. Mirrors
-# transforms/helpers/vxlan.py's _MAX_ENCODABLE_VNI — kept as its own constant
-# rather than imported so a check never depends on a transform.
-_MAX_ENCODABLE_VNI = 65535
+# there is no 2-byte-admin variant available to widen it.
 
 # Strategies whose OVERLAY ASN is per-device rather than fabric-wide. Only for
 # these does a missing evpn_rt_as actually break forwarding.
@@ -210,12 +207,12 @@ class CheckEvpnFabric(InfrahubCheck):
                 )
 
     def _check_encodable(self, vni: int, what: str) -> None:
-        if vni > _MAX_ENCODABLE_VNI:
+        if vni > MAX_ENCODABLE_VNI:
             self.log_error(
                 message=(
-                    f"{what} is {vni}, above {_MAX_ENCODABLE_VNI}. Every ASN in this project is "
+                    f"{what} is {vni}, above {MAX_ENCODABLE_VNI}. Every ASN in this project is "
                     "4-byte, and both the type-1 route-distinguisher and the type-2 route-target "
                     "leave only 16 bits for the assigned field, so this VNI cannot be encoded in "
-                    f"them. Keep VNI pool ranges at or below {_MAX_ENCODABLE_VNI}."
+                    f"them. Keep VNI pool ranges at or below {MAX_ENCODABLE_VNI}."
                 )
             )

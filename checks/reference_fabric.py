@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from infrahub_sdk.checks import InfrahubCheck
-
 from transforms.helpers.vxlan import _is_multisite_segment
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import is_routed_tenant_segment
@@ -19,12 +17,14 @@ from utils.group_policy import (
     vteps_by_data_center,
 )
 
+from .base import WarningCheck
+
 VXLAN_KIND = "ManagedVxlanSegment"
 NOT_A_DATA_CENTER = "not a data center"
 """The reason of a segment's site that is no TopologyDataCenter (never a reference fabric)."""
 
 
-class CheckReferenceFabric(InfrahubCheck):
+class CheckReferenceFabric(WarningCheck):
     """Report each data center against the reference fabric profile, and fail the segments that need it.
 
     Targetless: the profile rows, a segment's sites and a site's VTEPs span the fleet.
@@ -123,9 +123,9 @@ class CheckReferenceFabric(InfrahubCheck):
         """A segment that needs group policy: VLAN-only warns, VXLAN must be single-site on a reference fabric."""
         name = segment.get("name", segment.get("id"))
         if segment.get("typename") != VXLAN_KIND:
-            self.log_info(
+            self.log_warning(
                 message=(
-                    f"WARNING: segment '{name}' needs group policy (two or more tagged components) but is "
+                    f"segment '{name}' needs group policy (two or more tagged components) but is "
                     "VLAN-only: its intra-segment flows are not network-enforceable (host-enforced)"
                 )
             )
@@ -154,9 +154,9 @@ class CheckReferenceFabric(InfrahubCheck):
         reference = [site_name for site_id, site_name in sites if reasons.get(site_id, NOT_A_DATA_CENTER) is None]
         other = [site_name for site_id, site_name in sites if reasons.get(site_id, NOT_A_DATA_CENTER) is not None]
         if reference and other:
-            self.log_info(
+            self.log_warning(
                 message=(
-                    f"WARNING: segment '{segment.get('name', segment.get('id'))}' is stretched between reference "
+                    f"segment '{segment.get('name', segment.get('id'))}' is stretched between reference "
                     f"fabric {', '.join(reference)} and non-reference {', '.join(other)}: group policy is enforced "
                     "on the reference side only"
                 )

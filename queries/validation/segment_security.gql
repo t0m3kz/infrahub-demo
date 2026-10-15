@@ -12,24 +12,12 @@ query segment_security {
   ManagedNetworkSegment {
     edges {
       node {
+        # The fragment already selects the id, name, isolation mode, zone name
+        # and gateway prefix; only what it lacks is added here.
         ...SegmentGroupPolicyFields
-        __typename
-        id
-        name { value }
         environment { value }
-        isolation_mode { value }
-        security_zone { node { id name { value } } }
-        gateway {
-          node {
-            ip_prefix {
-              node {
-                id
-                prefix { value }
-                ip_namespace { node { name { value } namespace_type { value } } }
-              }
-            }
-          }
-        }
+        security_zone { node { id } }
+        gateway { node { ip_prefix { node { id } } } }
         ... on CloudNetworkSegment {
           cidr_block { value }
           customer_deployment { node { id name { value } } }

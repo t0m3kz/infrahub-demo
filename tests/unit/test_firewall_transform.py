@@ -707,7 +707,7 @@ class TestFirewallTransformSmoke:
 # ===========================================================================
 #
 # FW-context P2P links default to IPv6 (/127, generators/topology/dc.py's
-# _ensure_firewall_context_pools) — templates must branch on address family
+# FirewallContext legs) — templates must branch on address family
 # rather than hardcoding an IPv4-only command (e.g. PAN-OS "ipv4 addr" for
 # an actual IPv6 address is simply wrong syntax). Renders templates directly
 # (not through Firewall.transform()) since only the address-family branching

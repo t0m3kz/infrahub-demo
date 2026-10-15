@@ -6,9 +6,8 @@ from utils.dependency_access import component_owner_org_id, crosses_owners, depe
 from utils.exchange_transit import (
     is_exchange_zone,
     joins_prod_and_nonprod,
-    namespace_type_for_environment,
-    zone_name_for_namespace_type,
 )
+from utils.group_policy import MICROSEGMENTED, is_microsegmented
 from utils.ports import PortProfileHelper, PortSpec
 
 
@@ -18,11 +17,6 @@ class RulesPlanner:
     @staticmethod
     def _name_part(value: Any, fallback: str) -> str:
         return str(value or fallback).strip().lower().replace(" ", "-")
-
-    @staticmethod
-    def resolve_ports(dep: dict[str, Any], target: dict[str, Any] | None = None) -> list[PortSpec]:
-        """Ports one AppDependency opens; raises ValueError on a malformed port."""
-        return PortProfileHelper.resolve_dependency_ports(dep, target)
 
     @staticmethod
     def rule_name(
@@ -141,9 +135,7 @@ class RulesPlanner:
         return f" [governance: status={status}; source_owner={src_owner}; destination_owner={dst_owner}{reason_suffix}]"
 
     @staticmethod
-    def zone_context(
-        src_seg: dict[str, Any], dst_seg: dict[str, Any], dep: dict[str, Any]
-    ) -> tuple[str | None, str | None, bool]:
+    def zone_context(src_seg: dict[str, Any], dst_seg: dict[str, Any]) -> tuple[str | None, str | None, bool]:
         src_zone = (src_seg.get("security_zone") or {}).get("name")
         dst_zone = (dst_seg.get("security_zone") or {}).get("name")
         if src_zone and dst_zone:
@@ -171,18 +163,13 @@ class RulesPlanner:
         return mapping.get(app_security_profile, "standard")
 
     @staticmethod
-    def pick_zone_name(environment: str) -> str:
-        """Macro trust zone for a segment, derived from its own `environment`."""
-        return zone_name_for_namespace_type(namespace_type_for_environment(environment))
-
-    @staticmethod
     def pick_isolation_mode(app_security_profile: str) -> str:
         """Intra-segment enforcement for a segment, derived from the
         security_profile of the application using it. fintech_strict is a
         data-sensitivity/compliance requirement (per-flow ACL enforcement
         even between hosts in the same segment) independent of network
         topology; every other profile stays at the schema default."""
-        return "microsegmented" if app_security_profile == "fintech_strict" else "normal"
+        return MICROSEGMENTED if app_security_profile == "fintech_strict" else "normal"
 
     @classmethod
     def build_rule_payload(
@@ -209,7 +196,7 @@ class RulesPlanner:
             "disabled": False,
             "source_segment": {"id": src_seg.get("id")},
             "destination_segment": {"id": dst_seg.get("id")},
-            "apply_on_switch": "microsegmented" in (src_seg.get("isolation_mode"), dst_seg.get("isolation_mode")),
+            "apply_on_switch": MICROSEGMENTED in (src_seg.get("isolation_mode"), dst_seg.get("isolation_mode")),
             "description": f"{cls.rule_description(dep, src_comp, dst_comp)}{cls.governance_suffix(src_comp, dst_comp, dep)}",
         }
         if port_start is not None:
@@ -246,6 +233,6 @@ class RulesPlanner:
             f"{side}_security_tag": {"id": tag_id}
             for side, component, segment in (("source", src_comp, src_seg), ("destination", dst_comp, dst_seg))
             if segment.get("id")
-            and segment.get("isolation_mode") == "microsegmented"
+            and is_microsegmented(segment)
             and (tag_id := (component.get("security_tag") or {}).get("id"))
         }

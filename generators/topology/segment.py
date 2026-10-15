@@ -167,13 +167,14 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGene
         ]
         if missing_pool_ids:
             for dep_id in missing_pool_ids:
-                for parent_generator in ("add_dc", "dc_pod_cascade", "add_colocation_metro"):
-                    refreshed = await self.wait_for_parent_generator_and_refetch(parent_generator, dep_id)
-                    if refreshed is not None:
-                        cleaned = clean_data(refreshed)
-                        refreshed_list = cleaned.get(self.graphql_root_key, [])
-                        if refreshed_list:
-                            segment = refreshed_list[0]
+                refreshed = await self.wait_for_parent_generator_and_refetch(
+                    ("add_dc", "dc_pod_cascade", "add_colocation_metro"), dep_id
+                )
+                if refreshed is not None:
+                    cleaned = clean_data(refreshed)
+                    refreshed_list = cleaned.get(self.graphql_root_key, [])
+                    if refreshed_list:
+                        segment = refreshed_list[0]
             target_deployments = self._resolve_target_deployments(segment, segment_name)
 
         stretch_scope = segment.get("stretch_scope") or "local"

@@ -21,19 +21,16 @@ customer_deployments group and querying customer_dc.gql.
 
 from __future__ import annotations
 
-from typing import Any
-
-from utils.data_cleaning import clean_data
-
 from ..common import CommonGenerator
 from ..connections import CablingMixin
 from ..devices import DeviceMixin
-from ..firewall_context import FirewallContextMixin
 from ..pools import PoolMixin
+from .customer_facility import CustomerFacilityMixin
+from .fabric_shared import DC_GENERATORS
 
 
 class CustomerDeploymentDCExchangeGenerator(
-    FirewallContextMixin, PoolMixin, DeviceMixin, CablingMixin, CommonGenerator
+    CustomerFacilityMixin, PoolMixin, DeviceMixin, CablingMixin, CommonGenerator
 ):
     """add_customer_deployment_dc — FirewallContext (+ optional dedicated
     load-balancer) provisioning for TopologyCustomerDC, including the
@@ -42,47 +39,4 @@ class CustomerDeploymentDCExchangeGenerator(
 
     _customer_kind = "TopologyCustomerDC"
     _parent_label = "DC"
-    _parent_generators = ("add_dc", "dc_pod_cascade")
-
-    async def generate(self, data: dict[str, Any]) -> None:
-        cleaned = clean_data(data)
-
-        entries = cleaned.get("TopologyCustomerDC", [])
-        if not entries:
-            self.logger.info("No TopologyCustomerDC data in GraphQL response — not this generator's kind")
-            return
-        customer = entries[0]
-
-        customer_id: str = customer.get("id", "")
-        if not customer_id:
-            self.logger.error("Deployment missing id — cannot proceed")
-            return
-
-        self.logger.info(f"Processing DC deployment {customer.get('name', customer_id)}")
-
-        # This reads DC-level data (firewall_devices, loadbalancer_devices)
-        # written by add_dc/dc_pod_cascade. A customer can board concurrently
-        # with (or immediately after) its parent DC's own creation — e.g. a
-        # bulk DC+customer-boarding load — so wait for an in-flight parent
-        # generator and re-parse rather than risk provisioning against a
-        # parent that has no firewall/LB devices yet (see pod.py's identical
-        # wait for the same reason).
-        dc_id = (customer.get("parent") or {}).get("id")
-        if dc_id:
-            refreshed = await self.wait_for_parent_generator_and_refetch(self._parent_generators, dc_id)
-            if refreshed is not None:
-                entries = clean_data(refreshed).get("TopologyCustomerDC", [])
-                if not entries:
-                    self.logger.error("No TopologyCustomerDC data in GraphQL response")
-                    return
-                customer = entries[0]
-
-        # Read synchronously by create_devices() — see
-        # generators/devices.py's _resolve_role_controller.
-        parent = customer.get("parent")
-        self.set_controllers_from(parent if isinstance(parent, dict) else {})
-
-        target = await self._resolve_context_target(customer, customer_id)
-        if target is not None:
-            await self._ensure_transit_legs(customer=customer, customer_id=customer_id, target=target)
-        await self._ensure_dedicated_loadbalancer(customer, customer_id)
+    _parent_generators = DC_GENERATORS

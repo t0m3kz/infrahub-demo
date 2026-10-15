@@ -4,9 +4,10 @@
 # tables and virtual interfaces (with the namespaces their circuits terminate
 # in), plus the cloud VPC aggregates (cidr_blocks) with the namespace each is
 # registered in, the cloud subnets that must lie inside them, and the office
-# footprints' LAN prefixes with their namespace and environment. Filters on
-# the *Interface queries narrow the response to the INTERNET namespace; the
-# check re-tests the type itself.
+# footprints' LAN prefixes with their namespace and environment. The
+# *Interface queries read every interface of the fleet (a relationship cannot
+# be filtered by a nested namespace type); the check keeps the ones in the
+# INTERNET namespace.
 query routing_invariants {
   IpamNamespace {
     edges {

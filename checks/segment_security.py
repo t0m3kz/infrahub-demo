@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from infrahub_sdk.checks import InfrahubCheck
-
 from transforms.helpers.group_policy import get_vrf_contracts, rule_groups, segment_groups
 from transforms.helpers.policy import segment_flows
 from utils.data_cleaning import clean_data
@@ -17,14 +15,15 @@ from utils.exchange_transit import (
     namespace_type_for_environment,
     zone_name_for_namespace_type,
 )
-from utils.group_policy import RESERVED_GROUPS, tag_pool
+from utils.group_policy import MICROSEGMENTED, RESERVED_GROUPS, tag_pool
 from utils.segment_addressing import segment_prefix
 
+from .base import WarningCheck
+
 INTERNET_ZONE = zone_name_for_namespace_type("internet")
-CLOUD_KIND = "CloudNetworkSegment"
 
 
-class CheckSegmentSecurity(InfrahubCheck):
+class CheckSegmentSecurity(WarningCheck):
     """Validate zone, address and identity of every ManagedNetworkSegment kind.
 
     Runs on settled data (gateways are allocated asynchronously, so a generator
@@ -163,24 +162,24 @@ class CheckSegmentSecurity(InfrahubCheck):
                 zone = (segment.get("security_zone") or {}).get("name")
                 if zone == INTERNET_ZONE or segment_prefix(segment):
                     continue
-                self.log_info(
+                self.log_warning(
                     message=(
-                        f"WARNING: rule '{rule.get('name', rule.get('id'))}': {side} segment "
+                        f"rule '{rule.get('name', rule.get('id'))}': {side} segment "
                         f"'{segment.get('name', endpoint['id'])}' resolves to no prefix and is not in "
                         f"{INTERNET_ZONE} — it would render as any"
                     )
                 )
 
     def _warn_component_environment(self, components: list[dict[str, Any]]) -> None:
-        """An app component in a segment of another environment (log_info: InfrahubCheck has no warning level)."""
+        """An app component in a segment of another environment (a warning, not an error)."""
         for component in components:
             segment = component.get("network_segment") or {}
             app = component.get("parent") or {}
             app_env, seg_env = app.get("environment"), segment.get("environment")
             if app_env and seg_env and app_env != seg_env:
-                self.log_info(
+                self.log_warning(
                     message=(
-                        f"WARNING: component '{component.get('name')}' of app '{app.get('name')}' "
+                        f"component '{component.get('name')}' of app '{app.get('name')}' "
                         f"(environment '{app_env}') lives in segment '{segment.get('name')}' "
                         f"(environment '{seg_env}')"
                     )
@@ -191,7 +190,7 @@ class CheckSegmentSecurity(InfrahubCheck):
         modes = {segment["id"]: segment.get("isolation_mode") for segment in segments if segment.get("id")}
         for component in components:
             segment = component.get("network_segment") or {}
-            if modes.get(segment.get("id")) == "microsegmented" and not component.get("security_tag"):
+            if modes.get(segment.get("id")) == MICROSEGMENTED and not component.get("security_tag"):
                 self.log_error(
                     message=(
                         f"Component '{component.get('fqdn') or component.get('name')}' in microsegmented segment "
@@ -221,7 +220,7 @@ class CheckSegmentSecurity(InfrahubCheck):
             if fqdns and segments:
                 self.log_error(message=f"Security tag '{name}' groups both components {fqdns} and segments {segments}")
             elif not fqdns and not segments:
-                self.log_info(message=f"WARNING: security tag '{name}' groups no component and no segment (orphan)")
+                self.log_warning(message=f"security tag '{name}' groups no component and no segment (orphan)")
             for kind, holders in (("components", fqdns), ("segments", segments)):
                 if len(holders) > 1:
                     self.log_error(message=f"Security tag '{name}' is shared by {len(holders)} {kind}: {holders}")
@@ -259,7 +258,7 @@ class CheckSegmentSecurity(InfrahubCheck):
                     continue
                 segment = rule.get(f"{side}_segment") or {}
                 segment_name = segment.get("name", segment.get("id"))
-                if modes.get(segment.get("id")) != "microsegmented":
+                if modes.get(segment.get("id")) != MICROSEGMENTED:
                     self.log_error(
                         message=(
                             f"Rule '{rule_name}' carries a {side} group tag but its {side} segment "
@@ -289,9 +288,9 @@ class CheckSegmentSecurity(InfrahubCheck):
                 src = rule_groups(rule, "source", src_id, by_segment, by_tag)
                 dst = rule_groups(rule, "destination", dst_id, by_segment, by_tag)
                 if len(dst) > 1:
-                    self.log_info(
+                    self.log_warning(
                         message=(
-                            f"WARNING: rule '{name}' into microsegmented segment '{dst[0].segment}' names no "
+                            f"rule '{name}' into microsegmented segment '{dst[0].segment}' names no "
                             f"component: it opens all {len(dst)} groups of the segment"
                         )
                     )
