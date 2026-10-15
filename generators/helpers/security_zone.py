@@ -5,12 +5,14 @@ from __future__ import annotations
 from typing import Any
 from weakref import WeakKeyDictionary
 
-from utils.exchange_transit import namespace_type_for_environment, zone_name_for_namespace_type
+from utils.exchange_transit import (
+    EXTERNAL_SEGMENT_KIND,
+    is_exchange_zone,
+    namespace_type_for_environment,
+    zone_name_for_namespace_type,
+)
 
 from ..protocols import SecurityZone
-
-# A segment whose zone is authoritative data (an exchange zone): never written here.
-EXTERNAL_SEGMENT_KIND = "ManagedExternalSegment"
 
 # Per-run memo, keyed by the run's client (a tracking client lives for one run):
 # zone name -> zone id, and segment id -> zone name already in place.
@@ -38,7 +40,12 @@ async def ensure_security_zone(
     run's own TARGET, so a tracked save would put it in the run's group and a
     later run that skips the save would delete the segment. ``current_zone`` (the
     zone name the caller read from the segment) makes a second pass write
-    nothing. An External segment is never touched (returns None).
+    nothing. An External segment is never touched (returns None), and neither
+    is a segment already in an exchange zone (returns that zone): a shared
+    service segment such as the DC-local MANAGEMENT services sits there by
+    design, the same exemption checks/segment_security.py makes
+    (utils.exchange_transit.is_exchange_zone), so an application with a
+    component on it does not re-zone it to its environment's zone.
     """
     if not kind:
         raise ValueError("ensure_security_zone needs the segment's typename (no default kind)")
@@ -46,6 +53,8 @@ async def ensure_security_zone(
         raise ValueError("ensure_security_zone needs the segment id")
     if kind == EXTERNAL_SEGMENT_KIND:
         return None
+    if is_exchange_zone(current_zone):
+        return current_zone
     if not environment:
         raise ValueError(f"Segment {segment_id} has no environment: its security zone cannot be derived")
 

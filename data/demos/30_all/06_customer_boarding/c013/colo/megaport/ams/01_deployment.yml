@@ -17,7 +17,6 @@ spec:
   data:
     - owner: "C013"
       environment: "p"
-      status: active
       parent: "AMS"
       member_of_groups:
         - customer_deployments_colocation

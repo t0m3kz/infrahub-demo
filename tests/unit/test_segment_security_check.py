@@ -7,6 +7,9 @@ from typing import Any, cast
 import pytest
 
 from checks.segment_security import CheckSegmentSecurity
+from utils.exchange_transit import namespace_type_for_environment
+
+_UNSET = object()
 
 
 def _v(value: Any) -> dict[str, Any]:
@@ -32,11 +35,21 @@ def _segment(
     zone: str | None = "PROD-ZONE",
     prefix: str | None = "10.0.0.0/24",
     name: str | None = None,
+    namespace_type: Any = _UNSET,
     **extra: Any,
 ) -> dict[str, Any]:
-    """One ManagedNetworkSegment edge in the raw query shape."""
+    """One ManagedNetworkSegment edge in the raw query shape.
+
+    The gateway prefix sits in a namespace of the environment's type unless
+    ``namespace_type`` says otherwise (None: a namespace without a type).
+    """
+    if namespace_type is _UNSET:
+        namespace_type = namespace_type_for_environment(env) if env else None
+    namespace = {"node": {"name": _v(f"ns-{namespace_type}"), "namespace_type": _v(namespace_type)}}
     gateway = (
-        {"node": {"ip_prefix": {"node": {"id": f"pfx-{seg_id}", "prefix": _v(prefix)}}}} if prefix else {"node": None}
+        {"node": {"ip_prefix": {"node": {"id": f"pfx-{seg_id}", "prefix": _v(prefix), "ip_namespace": namespace}}}}
+        if prefix
+        else {"node": None}
     )
     return {
         "node": {
@@ -134,6 +147,55 @@ class TestZone:
         """An External segment in PROD-ZONE is not in an exchange zone."""
         check = _run([_segment("net", "ManagedExternalSegment", env=None, zone="PROD-ZONE", prefix=None)])
         assert "not an exchange zone" in check._captured_errors[0]
+
+
+class TestGatewayNamespace:
+    """A routed tenant segment's gateway prefix is in a namespace of its environment's type."""
+
+    @pytest.mark.parametrize("kind", ["ManagedVlanSegment", "ManagedVxlanSegment"])
+    @pytest.mark.parametrize(("env", "zone"), [("p", "PROD-ZONE"), ("d", "NONPROD-ZONE"), ("n", "NONPROD-ZONE")])
+    def test_gateway_in_the_environments_namespace_passes(self, kind: str, env: str, zone: str) -> None:
+        """PROD for p, NON-PROD for every other environment."""
+        assert _run([_segment("a", kind, env=env, zone=zone)])._captured_errors == []
+
+    @pytest.mark.parametrize("kind", ["ManagedVlanSegment", "ManagedVxlanSegment"])
+    def test_prod_segment_addressed_in_non_prod_is_an_error(self, kind: str) -> None:
+        """A p segment with a NON-PROD gateway is flagged, though its zone is right."""
+        check = _run([_segment("a", kind, env="p", namespace_type="non_prod")])
+        assert len(check._captured_errors) == 1
+        assert "gateway prefix 10.0.0.0/24 in namespace 'ns-non_prod'" in check._captured_errors[0]
+        assert "expected a 'prod' namespace" in check._captured_errors[0]
+
+    def test_non_prod_segment_addressed_in_prod_is_an_error(self) -> None:
+        """A dev segment with a PROD gateway is flagged."""
+        check = _run([_segment("a", env="d", zone="NONPROD-ZONE", namespace_type="prod")])
+        assert "expected a 'non_prod' namespace" in check._captured_errors[0]
+
+    def test_gateway_in_an_untyped_namespace_is_an_error(self) -> None:
+        """A tenant gateway in a namespace with no namespace_type (e.g. default) is flagged."""
+        check = _run([_segment("a", namespace_type=None)])
+        assert "(type 'None')" in check._captured_errors[0]
+
+    def test_exchange_zone_segment_is_exempt(self) -> None:
+        """The MANAGEMENT services segment is environment p and addressed in MANAGEMENT, by design."""
+        check = _run(
+            [_segment("svc", "ManagedVlanSegment", env="p", zone="MANAGEMENT-ZONE", namespace_type="management")]
+        )
+        assert check._captured_errors == []
+
+    def test_l2_only_segment_has_nothing_to_check(self) -> None:
+        """No gateway, no namespace to compare."""
+        assert _run([_segment("a", prefix=None)])._captured_errors == []
+
+    def test_cloud_segment_is_not_checked(self) -> None:
+        """A cloud segment is addressed by its cidr_block, not a fabric gateway."""
+        assert _run([_segment("c", "CloudNetworkSegment", namespace_type="non_prod")])._captured_errors == []
+
+    def test_missing_environment_is_reported_once(self) -> None:
+        """The zone rule reports a missing environment; the namespace rule adds nothing."""
+        check = _run([_segment("a", env=None, namespace_type="prod")])
+        assert len(check._captured_errors) == 1
+        assert "has no environment" in check._captured_errors[0]
 
 
 class TestUniqueNames:
@@ -609,3 +671,41 @@ class TestContracts:
             "Rule 'web-to-session' between groups k-web.example -> k-session.example has no group contract row",
             "Rule 'c8-to-c5' between groups t8-name -> t5-name has no group contract row",
         ]
+
+
+def test_all_demo_gateways_sit_in_their_environment_namespace() -> None:
+    """The gateway-namespace rule run on the 30_all segments (zones as declared; a missing one is derived
+    from the environment by the generators, so only a declared exchange zone exempts a segment)."""
+    from tests.integration.demo_data import ROOT, declared, declared_in, name
+
+    namespace_types = {
+        namespace.item["name"]: namespace.item.get("namespace_type")
+        for namespace in declared("IpamNamespace", ROOT / "data" / "bootstrap")
+    }
+    check = _check()
+    checked = 0
+    for obj in declared_in(ROOT / "data" / "demos" / "30_all"):
+        gateway = (obj.item.get("gateway") or {}).get("data") or {}
+        if obj.kind not in {"ManagedVlanSegment", "ManagedVxlanSegment"} or not gateway:
+            continue
+        prefix = (gateway.get("ip_prefix") or {}).get("data") or {}
+        checked += 1
+        check._validate_gateway_namespace(
+            {
+                "typename": obj.kind,
+                "name": name(obj),
+                "environment": obj.value("environment"),
+                "security_zone": {"name": obj.item.get("security_zone")},
+                "gateway": {
+                    "ip_prefix": {
+                        "prefix": prefix.get("prefix"),
+                        "ip_namespace": {
+                            "name": prefix.get("ip_namespace"),
+                            "namespace_type": namespace_types.get(prefix.get("ip_namespace")),
+                        },
+                    }
+                },
+            }
+        )
+    assert checked >= 10
+    assert check._captured_errors == []

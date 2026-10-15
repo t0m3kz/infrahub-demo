@@ -1,4 +1,4 @@
-"""Validate AppDependency source/target shape and ports."""
+"""Validate AppDependency source/target shape, ports, and cross-owner approvals."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from typing import Any
 from infrahub_sdk.checks import InfrahubCheck
 
 from utils.data_cleaning import clean_data
+from utils.dependency_access import component_owner_org_id, crosses_owners, dependency_access_status
 from utils.ports import PortProfileHelper, PortSpec
 
 
@@ -16,6 +17,12 @@ class CheckAppDependency(InfrahubCheck):
     A dependency the generator cannot turn into a rule is skipped there with
     only a log line; reporting it here makes the missing flow visible on the
     proposed change instead.
+
+    An approved dependency between two owners' components opens a hole in the
+    target owner's segment, so it must say exactly what it opens (``ports``;
+    without them it would open every port the target lists, including any
+    added later) and why (``decision_reason``). RulesPlanner keeps it closed
+    until it is approved (utils.dependency_access.crosses_owners).
     """
 
     query = "app_dependency_validation"
@@ -58,6 +65,15 @@ class CheckAppDependency(InfrahubCheck):
                         )
                     )
             return
+
+        if crosses_owners(source, target) and dependency_access_status(dep) == "approved":
+            flow = f"{component_owner_org_id(source)} -> {component_owner_org_id(target)}"
+            if not ports:
+                self.log_error(message=f"{label} is an approved cross-owner flow ({flow}) and must list its ports.")
+            if not str(dep.get("decision_reason") or "").strip():
+                self.log_error(
+                    message=f"{label} is an approved cross-owner flow ({flow}) and must record its decision_reason."
+                )
 
         # The component loop already reported a target port that does not parse.
         target_ports = self._parse_ports(target.get("ports"), "", report=False)

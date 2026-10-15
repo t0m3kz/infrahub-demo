@@ -11,12 +11,10 @@ spec:
   data:
     - name: c008-portal-api-dc10-1
       object_template: LINUX-SVC
-      status: active
       hosting_device: dc10-pod1-server-5
       deployment: "C008-P-DC10"
 
     - name: c008-portal-api-dc10-2
       object_template: LINUX-SVC
-      status: active
       hosting_device: dc10-pod1-server-6
       deployment: "C008-P-DC10"

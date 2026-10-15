@@ -58,11 +58,12 @@ generics:
         read_only: true
         optional: false
 
+      # Required with no default: `p` silently means the PROD namespace,
+      # PROD-ZONE and the PROD firewall leg, so every footprint states it.
       - name: environment
         kind: Dropdown
         description: "Environment this customer deployment footprint represents"
-        optional: true
-        default_value: p
+        optional: false
         order_weight: 200
         choices:
           - name: p
@@ -168,29 +169,6 @@ generics:
         optional: true
         order_weight: 150
 
-      - name: default_environment
-        kind: Dropdown
-        description: "Environment applied to deployments created from this template"
-        optional: true
-        default_value: p
-        order_weight: 200
-        choices:
-          - name: p
-            label: Production
-            color: "#A9CCE3"
-          - name: n
-            label: Non-Production
-            color: "#A9DFBF"
-          - name: s
-            label: Staging
-            color: "#FFA500"
-          - name: d
-            label: Development
-            color: "#7f7fff"
-          - name: t
-            label: Testing
-            color: "#D2B4DE"
-
       - name: size
         kind: Dropdown
         label: "Size"
@@ -231,24 +209,6 @@ generics:
         optional: true
         default_value: false
         order_weight: 310
-
-      - name: dedicated_proxy
-        kind: Boolean
-        label: "Dedicated Proxy"
-        description: "Per-customer dedicated proxy instead of shared proxy capacity"
-        optional: true
-        default_value: false
-        order_weight: 320
-
-      - name: network_segment_count
-        kind: Number
-        label: "Network Segments"
-        description: "Number of network segments to provision for this customer deployment"
-        optional: true
-        default_value: 1
-        order_weight: 330
-        parameters:
-          min_value: 1
 
 nodes:
   - name: CustomerDC
@@ -361,11 +321,12 @@ nodes:
           jinja2_template: "{{ parent__name__value|upper }}-{{ environment__value|upper }}"  # yamllint disable-line rule:line-length
         read_only: true
         optional: false
+      # Required with no default: `p` silently means the PROD namespace,
+      # PROD-ZONE and the PROD firewall leg, so every footprint states it.
       - name: environment
         kind: Dropdown
         description: "Environment this customer deployment footprint represents"
-        optional: true
-        default_value: p
+        optional: false
         order_weight: 200
         choices:
           - name: p
@@ -625,43 +586,6 @@ nodes:
     display_label: "{{ name__value }}"
     uniqueness_constraints:
       - [name__value]
-    attributes:
-      - name: uplink_10g_count
-        kind: Number
-        label: "10G Uplinks"
-        description: "Number of 10 Gbps uplink ports to provision"
-        optional: true
-        default_value: 0
-        order_weight: 400
-        parameters:
-          min_value: 0
-      - name: uplink_40g_count
-        kind: Number
-        label: "40G Uplinks"
-        description: "Number of 40 Gbps uplink ports to provision"
-        optional: true
-        default_value: 0
-        order_weight: 410
-        parameters:
-          min_value: 0
-      - name: uplink_100g_count
-        kind: Number
-        label: "100G Uplinks"
-        description: "Number of 100 Gbps uplink ports to provision"
-        optional: true
-        default_value: 0
-        order_weight: 420
-        parameters:
-          min_value: 0
-      - name: uplink_400g_count
-        kind: Number
-        label: "400G Uplinks"
-        description: "Number of 400 Gbps uplink ports to provision"
-        optional: true
-        default_value: 0
-        order_weight: 430
-        parameters:
-          min_value: 0
 
   - name: CustomerTemplateColo
     namespace: Topology
@@ -678,43 +602,6 @@ nodes:
     display_label: "{{ name__value }}"
     uniqueness_constraints:
       - [name__value]
-    attributes:
-      - name: uplink_10g_count
-        kind: Number
-        label: "10G Uplinks"
-        description: "Number of 10 Gbps cross-connect ports to provision"
-        optional: true
-        default_value: 0
-        order_weight: 400
-        parameters:
-          min_value: 0
-      - name: uplink_40g_count
-        kind: Number
-        label: "40G Uplinks"
-        description: "Number of 40 Gbps cross-connect ports to provision"
-        optional: true
-        default_value: 0
-        order_weight: 410
-        parameters:
-          min_value: 0
-      - name: uplink_100g_count
-        kind: Number
-        label: "100G Uplinks"
-        description: "Number of 100 Gbps cross-connect ports to provision"
-        optional: true
-        default_value: 0
-        order_weight: 420
-        parameters:
-          min_value: 0
-      - name: uplink_400g_count
-        kind: Number
-        label: "400G Uplinks"
-        description: "Number of 400 Gbps cross-connect ports to provision"
-        optional: true
-        default_value: 0
-        order_weight: 430
-        parameters:
-          min_value: 0
 
   - name: CustomerTemplateCloud
     namespace: Topology

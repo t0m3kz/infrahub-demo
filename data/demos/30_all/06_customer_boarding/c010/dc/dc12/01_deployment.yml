@@ -14,7 +14,6 @@ spec:
   data:
     - owner: "C010"
       environment: "d"
-      status: active
       parent: "DC12"
       design: "M_DC"
       member_of_groups:

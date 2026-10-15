@@ -53,7 +53,6 @@ spec:
   data:
     - name: "EQX-FR2-SDWAN-VCO1"
       object_template: VCO-VA_ORCHESTRATOR
-      status: active
       owner: "P028"
       description: "Shared SD-WAN orchestrator managing the FR2 gateway and every office edge"
       deployment: "FR2"

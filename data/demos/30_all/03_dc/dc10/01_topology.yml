@@ -8,10 +8,6 @@ spec:
       parent: "DC"
       index: 1
       size: L
-      routing_strategy: ebgp-ebgp
-      underlay_protocol: ipv6
-      naming_convention: standard
-      connectivity_mode: pbr
       fabric_templates:
         - ["2", "super-spine", "N9K-C9336C-FX2_SUPER_SPINE"]
         - ["2", "border-leaf", "N9K-C9336C-FX2_BORDER_LEAF"]
@@ -63,13 +59,11 @@ spec:
                 - index: 1
                   row_index: 1
                   shortname: fra-1-s-1-r-1-1
-                  rack_type: compute
                   parent: fra-1-s-1
                   member_of_groups: [topologies_rack]
                 - index: 1
                   row_index: 2
                   shortname: fra-1-s-1-r-2-1
-                  rack_type: compute
                   parent: fra-1-s-1
                   member_of_groups: [topologies_rack]
           - index: 2

@@ -30,4 +30,3 @@ spec:
                     role: customer
                     ip_namespace: "NON-PROD"
             customer_deployment: "C010-D-DC12"
-            security_zone: "NONPROD-ZONE"

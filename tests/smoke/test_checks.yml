@@ -64,3 +64,10 @@ infrahub_tests:
       - name: syntax_check
         spec:
           kind: check-smoke
+
+  - resource: Check
+    resource_name: validate_hypervisor_environment
+    tests:
+      - name: syntax_check
+        spec:
+          kind: check-smoke

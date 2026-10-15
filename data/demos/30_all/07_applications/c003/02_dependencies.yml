@@ -12,7 +12,6 @@ spec:
     - name: c003-custody-api-frontend-to-backend
       source: frontend.custody-api.c003.demo.local
       target: backend.custody-api.c003.demo.local
-      access_status: auto
       description: "Custody API frontend calls the internal backend API"
       member_of_groups:
         - app_dependencies

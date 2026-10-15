@@ -382,3 +382,76 @@ class TestComponentTarget:
         assert len(errors) == 2
         assert errors[0].startswith("Dependency 'first' opens tcp/1")
         assert errors[1].startswith("Dependency 'second' targets api.stripe.com")
+
+
+# ===========================================================================
+# Approved cross-owner dependencies: ports and decision_reason
+# ===========================================================================
+
+
+def _owned(fqdn: str, org_id: str, ports: list[str] | None = None) -> dict[str, Any]:
+    """A component node whose application belongs to ``org_id``."""
+    owner = {"name": {"value": f"{org_id}-customer"}, "org_id": {"value": org_id}, "egress_service": {"node": None}}
+    return {
+        "id": f"id-{fqdn}",
+        "fqdn": {"value": fqdn},
+        "ports": {"value": ports},
+        "parent": {"node": {"__typename": "AppApplication", "owner": {"node": owner}}},
+    }
+
+
+PORTAL = _owned("api.portal.c008.example", "C008")
+PAYMENT = _owned("api.payment.c005.example", "C005", ["tcp/443"])
+
+
+def _cross(
+    *, ports: list[str] | None = None, status: str | None = "approved", reason: str | None = "C005 publishes it"
+) -> dict[str, Any]:
+    """The C008 portal -> C005 payment API dependency."""
+    dep = _dependency("c008-to-c005", ports=ports, source=PORTAL, target=PAYMENT)
+    dep["access_status"] = {"value": status}
+    dep["decision_reason"] = {"value": reason}
+    return dep
+
+
+class TestCrossOwnerApproval:
+    def test_approved_cross_owner_flow_with_ports_and_reason_is_valid(self) -> None:
+        """The c008 -> c005 shape in 30_all: approved, tcp/443, with its reason."""
+        assert _errors(_cross(ports=["tcp/443"])) == []
+
+    def test_approved_cross_owner_flow_without_ports_is_reported(self) -> None:
+        """Without ports it would open every port the target lists, today's and tomorrow's."""
+        errors = _errors(_cross())
+
+        assert errors == [
+            "Dependency 'c008-to-c005' is an approved cross-owner flow (C008 -> C005) and must list its ports."
+        ]
+
+    @pytest.mark.parametrize("reason", [None, "", "   "])
+    def test_approved_cross_owner_flow_without_a_reason_is_reported(self, reason: str | None) -> None:
+        """The approval records why the target owner opened its segment."""
+        errors = _errors(_cross(ports=["tcp/443"], reason=reason))
+
+        assert len(errors) == 1
+        assert "must record its decision_reason" in errors[0]
+
+    def test_both_missing_are_both_reported(self) -> None:
+        """Ports and reason are independent requirements."""
+        assert len(_errors(_cross(reason=None))) == 2
+
+    @pytest.mark.parametrize("status", ["auto", "pending", "denied", None])
+    def test_unapproved_cross_owner_flow_is_not_required_to_list_them(self, status: str | None) -> None:
+        """A flow that is not approved opens nothing (RulesPlanner keeps it closed)."""
+        assert _errors(_cross(status=status, reason=None)) == []
+
+    def test_same_owner_approved_flow_may_omit_ports(self) -> None:
+        """Inside one owner the target's ports are the default."""
+        dep = _dependency("own", source=_owned("a.c005.example", "c005"), target=PAYMENT)
+        dep["access_status"] = {"value": "approved"}
+        assert _errors(dep) == []
+
+    def test_unknown_owner_is_not_a_cross_owner_flow(self) -> None:
+        """A side without an owner org_id cannot be compared (the default source has none)."""
+        dep = _dependency("unknown", target=PAYMENT)
+        dep["access_status"] = {"value": "approved"}
+        assert _errors(dep) == []

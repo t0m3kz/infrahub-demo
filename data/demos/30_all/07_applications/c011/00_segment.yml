@@ -40,7 +40,6 @@ spec:
                     role: customer
                     ip_namespace: "PROD"
             customer_deployment: "C011-P-NY"
-            security_zone: "PROD-ZONE"
             interface_capabilities:
               - ["CS-NY1-SW1", "Ethernet1/1/1"]
               - ["CS-NY1-SW1", "Ethernet1/1/2"]

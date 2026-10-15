@@ -40,7 +40,6 @@ spec:
                     role: customer
                     ip_namespace: "PROD"
             customer_deployment: "C013-P-AMS"
-            security_zone: "PROD-ZONE"
             interface_capabilities:
               - ["MCR-AMS1-SW1", "Ethernet1/1/1"]
               - ["MCR-AMS1-SW1", "Ethernet1/1/2"]

@@ -34,7 +34,6 @@ spec:
                     role: customer
                     ip_namespace: "PROD"
             customer_deployment: "C006-P-DC11"
-            security_zone: "PROD-ZONE"
             # ManagedVlanSegment has no generator, so the access-leaf ports the
             # DC11 hosts (dc11-pod1-server-1/2, both NICs) are cabled to are
             # pinned by hand, as in ../c011/00_segment.yml; without them VLAN 103

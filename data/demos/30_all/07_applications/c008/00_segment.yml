@@ -32,7 +32,6 @@ spec:
                     role: customer
                     ip_namespace: "NON-PROD"
             customer_deployment: "C008-D-DC12"
-            security_zone: "NONPROD-ZONE"
 
         # Production, local to DC10. A routed tenant segment in PROD, so it
         # gets its own group tag (c008-trade-portal-local-dc10-p) from the
@@ -42,8 +41,6 @@ spec:
           data:
             customer_name: "trade-portal-local-dc10"
             environment: "p"
-            stretch_scope: local
-            arp_suppression: true
             gateway:
               data:
                 address: "10.8.10.1/24"

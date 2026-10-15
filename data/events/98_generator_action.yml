@@ -25,7 +25,6 @@ spec:
     - name: run-decommission-pod
       description: Decommission all devices within a pod
       generator: decommission_pod
-    # VRF generator runs via group membership only — no action needed
     - name: run-vxlan-segment-generator
       description: Run VXLAN Segment Generator
       generator: add_vxlan_segment

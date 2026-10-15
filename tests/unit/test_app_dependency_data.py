@@ -292,3 +292,31 @@ def test_applications_and_components_are_generator_targets(directory: Path) -> N
         assert "app_applications" in (app.get("member_of_groups") or []), app["label"]
     for component in _components(directory):
         assert "app_components" in (component.raw.get("member_of_groups") or []), component.identity
+
+
+def _approved_cross_owner(directory: Path) -> list[dict[str, Any]]:
+    """The approved component-to-component dependencies in directory whose two sides have different owners."""
+    components = _catalogue(directory)
+    return [
+        dep
+        for dep in _entries(directory, "AppDependency")
+        if "source" in dep
+        and "target" in dep
+        and str(dep.get("access_status")) == "approved"
+        and components[dep["source"]].owner.upper() != components[dep["target"]].owner.upper()
+    ]
+
+
+def test_the_scan_finds_the_approved_cross_owner_flow() -> None:
+    """30_all has one: C008's trade portal into C005's payment API."""
+    names = [dep["name"] for dep in _approved_cross_owner(_APP_DATA_DIRS[0])]
+    assert names == ["c008-trade-portal-to-c005-payment-api"]
+
+
+@pytest.mark.parametrize("directory", _APP_DATA_DIRS, ids=lambda d: d.name)
+def test_approved_cross_owner_flow_lists_ports_and_reason(directory: Path) -> None:
+    """checks/app_dependency.py: an approved flow into another owner's component says
+    exactly what it opens and why."""
+    for dep in _approved_cross_owner(directory):
+        assert dep.get("ports"), dep["name"]
+        assert str(dep.get("decision_reason") or "").strip(), dep["name"]

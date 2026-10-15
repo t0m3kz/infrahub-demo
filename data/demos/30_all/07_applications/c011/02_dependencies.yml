@@ -10,7 +10,6 @@ spec:
     - name: c011-edge-analytics-edge-ingress-to-stream-worker
       source: ingress.edge-analytics.c011.demo.local
       target: stream.edge-analytics.c011.demo.local
-      access_status: auto
       description: "Edge ingress feeds events to the stream worker"
       member_of_groups:
         - app_dependencies
