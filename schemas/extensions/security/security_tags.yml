@@ -1,23 +1,32 @@
 ---
-# Security Tags — one group tag per AppComponent of a microsegmented segment
+# Security Tags — one group tag per routed tenant segment, and one per
+# AppComponent of a microsegmented segment
 #
-# SecurityTag: the component's group (name = the component's fqdn) and its
-#              fabric-wide group_id, drawn from the tag pool of the
-#              DcimGroupPolicyProfile rows (SGT-POOL, 16-4095) by
-#              AppApplicationGenerator (generators/helpers/security_tag.py).
-#              Nothing assigns a tag by hand and no segment carries one.
+# SecurityTag: a group and its fabric-wide group_id, drawn from the tag pool
+#              of the DcimGroupPolicyProfile rows (SGT-POOL, 16-4095)
+#              (generators/helpers/security_tag.py). Nothing assigns a tag by
+#              hand. What a tag groups is the relationship that holds it:
+#              - network_segments: the segment tag, named after the segment.
+#                Every routed tenant segment (VLAN/VXLAN, gateway in a
+#                PROD/NON-PROD namespace) gets one, from VxlanSegmentGenerator
+#                and AppApplicationGenerator;
+#              - components: the component tag, named after the fqdn, from
+#                AppApplicationGenerator while the segment is microsegmented.
 #
-# Contracts between the tags of one segment are derived from that segment's
-# own SecurityPolicyRules (source_security_tag / destination_security_tag, in
-# security.yml) by transforms/helpers/group_policy.py. They only matter for
-# intra-segment (bridged) traffic: everything routed leaves through the
-# segment's SVI and meets its ACL (isolation_mode: microsegmented).
+# Contracts are derived, never stored (transforms/helpers/group_policy.py):
+# every permit SecurityPolicyRule between two tagged segments is a contract
+# between their tags, narrowed to the component tag a rule carries on a
+# microsegmented side (an intra-segment rule, or a component dependency into
+# or out of a microsegmented segment), and everything else is denied (default deny):
+# the per-segment egress policies are already default deny, so the contracts
+# are the rules, 1:1. Two customers' segments with no rule between them have
+# no contract: customer isolation needs no customer tag.
 version: "1.0"
 
 nodes:
   - name: Tag
     namespace: Security
-    description: "Group tag of one application component in a microsegmented segment (VXLAN group policy ID)"
+    description: "Group tag of one routed tenant segment or of one component of a microsegmented segment"
     label: Security Tag
     icon: "mdi:tag-outline"
     include_in_menu: false
@@ -36,7 +45,7 @@ nodes:
         optional: false
         unique: true
         order_weight: 100
-        description: "The fqdn of the component the tag was created for; a frozen label, never renamed"
+        description: "The segment name or component fqdn the tag was created for; a frozen label, never renamed"
       - name: description
         kind: Text
         label: Description
@@ -70,7 +79,18 @@ nodes:
         optional: true
         order_weight: 1000
         identifier: app_component__security_tag
-        description: "The component this tag groups (exactly one)"
+        description: "The component this tag groups (exactly one, or none for a segment tag)"
+      # Reverse side of ManagedNetworkSegment.security_tag (same identifier),
+      # many for the same reason as components.
+      - name: network_segments
+        peer: ManagedNetworkSegment
+        label: Network Segments
+        cardinality: many
+        kind: Generic
+        optional: true
+        order_weight: 1100
+        identifier: network_segment__security_tag
+        description: "The segment this tag groups (exactly one, or none for a component tag)"
 
 extensions:
   nodes:
@@ -85,3 +105,14 @@ extensions:
           order_weight: 770
           identifier: app_component__security_tag
           description: "Group tag, set by the application generator while the component's segment is microsegmented"
+    - kind: ManagedNetworkSegment
+      relationships:
+        - name: security_tag
+          peer: SecurityTag
+          label: Security Tag
+          cardinality: one
+          kind: Attribute
+          optional: true
+          order_weight: 890
+          identifier: network_segment__security_tag
+          description: "Group tag, set by the segment and application generators on every routed tenant segment"

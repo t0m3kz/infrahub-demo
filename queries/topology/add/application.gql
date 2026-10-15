@@ -4,7 +4,20 @@ fragment SegmentSecurityFields on ManagedNetworkSegment {
   environment { value }
   isolation_mode { value }
   security_zone { node { name { value } trust_level { value } } }
-  gateway { node { ip_prefix { node { prefix { value } } } } }
+  # The namespace type decides whether it is a routed tenant segment, which
+  # gets its group tag here; present means nothing is written
+  # (generators/helpers/security_tag.py).
+  gateway {
+    node {
+      ip_prefix {
+        node {
+          prefix { value }
+          ip_namespace { node { name { value } namespace_type { value } } }
+        }
+      }
+    }
+  }
+  security_tag { node { id } }
   # The segment's one egress policy, whoever created it (this generator or a
   # hand-written data file): its rules are added there, never to a second one.
   security_policy { node { id name { value } } }
@@ -48,6 +61,9 @@ fragment AppComponentSecurityFields on AppComponent {
         name { value }
         ports { value }
         access_status { value }
+        # The calling application, re-reconciled when this component is first
+        # tagged: its rule into it names the tag (generators/helpers/rules.py).
+        source { node { id ... on AppComponent { parent { node { id __typename } } } } }
         source_profile {
           node {
             id

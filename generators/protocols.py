@@ -237,6 +237,7 @@ class ManagedNetworkSegment(CoreNode):
     inbound_rules: RelationshipManager[SecurityPolicyRule]
     owner: RelationshipAttribute[OrganizationCustomer]
     security_policy: RelationshipAttribute[SecurityPolicy]
+    security_tag: RelationshipAttribute[SecurityTag]
 
 
 class ManagedPeering(CoreNode):
@@ -672,6 +673,8 @@ class DcimGroupPolicyProfile(CoreNode):
     min_memory_gb: IntegerOptional
     min_release: String
     name: String
+    unaware_group_id: IntegerOptional
+    unclassified_group_id: IntegerOptional
     device_types: RelationshipManager[DcimDeviceType]
     platform: RelationshipAttribute[DcimPlatform]
     tag_pool: RelationshipAttribute[CoreNumberPool]
@@ -1266,6 +1269,7 @@ class SecurityTag(CoreNode):
     group_id: Integer
     name: String
     components: RelationshipManager[AppComponent]
+    network_segments: RelationshipManager[ManagedNetworkSegment]
 
 
 class CloudTransitGateway(CloudResource):

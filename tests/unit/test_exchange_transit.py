@@ -13,11 +13,13 @@ from utils.exchange_transit import (
     CONTEXT_VLAN_MIN,
     EXCHANGE_PEERS,
     MANAGEMENT_TYPE,
+    TENANT_NAMESPACE_TYPES,
     TRANSIT_SLOT,
     TRANSIT_VLAN_BAND,
     TRANSIT_VNI_MAX,
     TRANSIT_VNI_MIN,
     ZONE_BY_NS_TYPE,
+    is_routed_tenant_segment,
     joins_prod_and_nonprod,
     namespace_type_for_environment,
     transit_addresses,
@@ -274,3 +276,33 @@ def test_snat_pool_and_context_relationship_are_declared(root_dir: Path) -> None
     )
     assert rel["identifier"] == "firewall_context__snat_address"
     assert rel["order_weight"] >= 1000
+
+
+def _segment(kind: str, namespace_type: str | None, zone: str | None) -> dict:
+    """A cleaned segment with its gateway namespace type and zone."""
+    gateway = {"ip_prefix": {"ip_namespace": {"namespace_type": namespace_type}}} if namespace_type else None
+    return {"typename": kind, "gateway": gateway, "security_zone": {"name": zone} if zone else None}
+
+
+@pytest.mark.parametrize(
+    ("segment", "tenant"),
+    [
+        (_segment("ManagedVxlanSegment", "prod", "PROD-ZONE"), True),
+        (_segment("ManagedVlanSegment", "non_prod", None), True),
+        (_segment("ManagedVlanSegment", "management", "MANAGEMENT-ZONE"), False),
+        (_segment("ManagedVxlanSegment", "internet", "INTERNET-ZONE"), False),
+        (_segment("ManagedVxlanSegment", "prod", "MANAGEMENT-ZONE"), False),
+        (_segment("ManagedVxlanSegment", None, "PROD-ZONE"), False),
+        (_segment("ManagedExternalSegment", "prod", "PROD-ZONE"), False),
+        (_segment("CloudNetworkSegment", "prod", "PROD-ZONE"), False),
+    ],
+    ids=["vxlan-prod", "vlan-nonprod", "management", "internet", "exchange-zone", "no-gateway", "external", "cloud"],
+)
+def test_routed_tenant_segment(segment: dict, tenant: bool) -> None:
+    """The one tenant-SVI test of L0 and the group tags: VLAN/VXLAN, PROD/NON-PROD gateway, no exchange zone."""
+    assert is_routed_tenant_segment(segment) is tenant
+
+
+def test_tenant_namespace_types_are_the_exchange_peers_tenants() -> None:
+    """One source: the tenant VRFs are the namespace types that exchange with others."""
+    assert TENANT_NAMESPACE_TYPES == frozenset({"prod", "non_prod"}) == frozenset(EXCHANGE_PEERS)

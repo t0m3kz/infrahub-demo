@@ -3,7 +3,9 @@
 # app-backend publishes to the event bus on AMQP (TCP/5672) and keeps its
 # orders in the DC12 database on PostgreSQL (TCP/5432). Each pair of
 # components sits on different network segments, so the application generator
-# must create a SecurityPolicyRule for each dependency. The ports are those
+# must create a SecurityPolicyRule for each dependency. web-frontend keeps its
+# sessions in the session store on Redis (TCP/6379), inside the one
+# microsegmented segment: that rule carries both components' group tags. The ports are those
 # the target component lists in 01_application.yml; source and target are
 # component fqdns.
 apiVersion: infrahub.app/v1
@@ -30,5 +32,12 @@ spec:
       target: orders-db.payment-core.c005.demo.local
       access_status: auto
       description: "Payment backend reads and writes orders in the DC12 database"
+      member_of_groups:
+        - app_dependencies
+    - name: c005-payment-web-to-session-store
+      source: api.payment-core.c005.demo.local
+      target: sessions.payment-core.c005.demo.local
+      access_status: auto
+      description: "Payment web frontend keeps its sessions in the session store"
       member_of_groups:
         - app_dependencies

@@ -8,9 +8,10 @@ from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
 from ..helpers.rules import RulesPlanner
-from ..helpers.security_tag import clear_component_tag, ensure_component_tag
+from ..helpers.security_tag import clear_component_tag, ensure_security_tag, ensure_segment_tag
 from ..named_objects import GetOrCreateByNameMixin
 from ..pools import PoolMixin
+from ..protocols import AppComponent
 from ..segment_firewall import SegmentFirewallMixin
 from ..ztna import ZtnaMixin
 
@@ -30,8 +31,11 @@ class AppApplicationGenerator(
     dependency-edge shape: ZtnaMixin (target_fqdn egress and private-access
     publishing for access-profile grants), SegmentFirewallMixin (every
     segment-to-segment SecurityPolicyRule, on-prem or cloud endpoint, plus
-    zone handling). Each component of a microsegmented segment gets its group
-    tag here (_ensure_component_tags; PoolMixin for the lock). A cloud flow is
+    zone handling). Every routed tenant segment it touches gets its segment
+    group tag, and each component of a microsegmented segment its component
+    tag (_ensure_component_tags; PoolMixin for the lock): this is the one
+    generator that sees a VLAN segment, which has no generator of its own. A
+    cloud flow is
     a SecurityPolicyRule like any other;
     the former sg-{app} CloudSecurityGroup objects are no longer generated and
     are deleted by this application's tracking group on its next run (they
@@ -172,12 +176,27 @@ class AppApplicationGenerator(
         # the segment dicts, so the rules below are planned against it; each
         # edge target is zoned too, as it may belong to an application that
         # has not run yet.
-        await self._ensure_segment_zones(
-            [component.get("network_segment") or {} for component in components]
-            + [dst.get("network_segment") or {} for _src, _dep, dst in edges]
-        )
+        segments = [component.get("network_segment") or {} for component in components] + [
+            dst.get("network_segment") or {} for _src, _dep, dst in edges
+        ]
+        await self._ensure_segment_zones(segments)
+        # After the zones (the tenant test reads them); a VLAN segment is
+        # tagged only here. A segment without an id is a component without one.
+        for segment in segments:
+            if segment.get("id"):
+                await ensure_segment_tag(self.client, self.resource_lock, segment=segment)
         for component in components:
             await self._ensure_segment_isolation_mode(component.get("network_segment") or {}, app_security_profile)
+        # An edge target on one of those segments is a second dict of it:
+        # the rules below read its mode (apply_on_switch, the rule tags).
+        modes = {
+            segment["id"]: segment.get("isolation_mode")
+            for component in components
+            if (segment := component.get("network_segment") or {}).get("id")
+        }
+        for segment in segments:
+            if segment.get("id") in modes:
+                segment["isolation_mode"] = modes[segment["id"]]
         # After the isolation modes (recorded on the segment dicts) and before
         # the rules, which carry the tags of an intra-segment flow's components.
         await self._ensure_component_tags(components, edges)
@@ -287,6 +306,8 @@ class AppApplicationGenerator(
         belong to an application that has not run yet, and the intra-segment
         rule to it needs both tags now. A target and the same component as a
         child are two dicts, so the tag id is written into every dict of it.
+        The other applications calling a component tagged in this run are
+        reconciled again: their rules into it name its tag.
         """
         microsegmented = {
             segment["id"]
@@ -297,12 +318,18 @@ class AppApplicationGenerator(
         targets = [dst for _src, _dep, dst in edges if dst.get("id")]
         own = {id(component) for component in components}
         tag_ids: dict[str, str] = {}
+        callers: set[str] = set()
         for component in [*components, *targets]:
             component_id = component.get("id")
             if not component_id or component_id in tag_ids:
                 continue
             if (component.get("network_segment") or {}).get("id") in microsegmented:
-                tag_ids[component_id] = await ensure_component_tag(self.client, self.resource_lock, component=component)
+                untagged = not (component.get("security_tag") or {}).get("id")
+                tag_ids[component_id] = await ensure_security_tag(
+                    self.client, self.resource_lock, kind=AppComponent, node=component, name=component.get("fqdn")
+                )
+                if untagged and id(component) in own:
+                    callers.update(self._calling_application_ids(component))
             elif id(component) in own and (component.get("security_tag") or {}).get("id"):
                 await clear_component_tag(self.client, component_id=component_id)
                 component["security_tag"] = None
@@ -310,6 +337,13 @@ class AppApplicationGenerator(
         for component in [*components, *targets]:
             if component.get("id") in tag_ids:
                 component["security_tag"] = {"id": tag_ids[component["id"]]}
+        # A rule another application wrote into a component carries the
+        # component's tag (RulesPlanner.rule_tags). A component tagged only now
+        # had none when that application ran, so it runs again; a later run of
+        # this application tags nothing new, so this fans out once.
+        if callers:
+            self.logger.info("  Re-reconciling %d calling application(s) of newly tagged components", len(callers))
+            await self._fan_out(sorted(callers))
 
     @staticmethod
     def _calling_application_ids(component: dict[str, Any]) -> list[str]:

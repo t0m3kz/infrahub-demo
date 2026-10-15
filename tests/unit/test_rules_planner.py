@@ -351,7 +351,7 @@ class TestBuildRulePayload:
 
 
 class TestRuleTags:
-    """Only an intra-segment rule of a microsegmented segment carries its components' group tags."""
+    """A rule carries its component's group tag on every side whose segment is microsegmented."""
 
     _SEG = {"id": "seg-m", "isolation_mode": "microsegmented"}
     _SRC = {"name": "scoring-api", "security_tag": {"id": "tag-a"}}
@@ -367,10 +367,26 @@ class TestRuleTags:
         )
         assert tags == {"source_security_tag": {"id": "tag-a"}}
 
-    def test_cross_segment_rule_carries_no_tag(self) -> None:
-        """A routed flow meets the SVI ACL; it is no group contract."""
+    def test_cross_segment_rule_tags_each_microsegmented_side(self) -> None:
+        """Both segments microsegmented: the contract is narrowed to the two components."""
         other = {"id": "seg-o", "isolation_mode": "microsegmented"}
-        assert RulesPlanner.rule_tags(src_comp=self._SRC, dst_comp=self._DST, src_seg=self._SEG, dst_seg=other) == {}
+        tags = RulesPlanner.rule_tags(src_comp=self._SRC, dst_comp=self._DST, src_seg=self._SEG, dst_seg=other)
+        assert tags == {"source_security_tag": {"id": "tag-a"}, "destination_security_tag": {"id": "tag-b"}}
+
+    def test_cross_segment_rule_into_a_microsegmented_segment_tags_only_the_target(self) -> None:
+        """C008 (normal) -> C005 web (microsegmented): the dependency opens the target component only."""
+        normal = {"id": "seg-n", "isolation_mode": "normal"}
+        tags = RulesPlanner.rule_tags(src_comp=self._SRC, dst_comp=self._DST, src_seg=normal, dst_seg=self._SEG)
+        assert tags == {"destination_security_tag": {"id": "tag-b"}}
+
+    def test_cross_segment_rule_out_of_a_microsegmented_segment_tags_only_the_source(self) -> None:
+        normal = {"id": "seg-n", "isolation_mode": "normal"}
+        tags = RulesPlanner.rule_tags(src_comp=self._SRC, dst_comp=self._DST, src_seg=self._SEG, dst_seg=normal)
+        assert tags == {"source_security_tag": {"id": "tag-a"}}
+
+    def test_side_without_a_segment_carries_no_tag(self) -> None:
+        """A proxy/selector side has no segment, so no group to narrow to."""
+        assert RulesPlanner.rule_tags(src_comp=self._SRC, dst_comp=self._DST, src_seg={}, dst_seg={}) == {}
 
     def test_segment_that_is_not_microsegmented_carries_no_tag(self) -> None:
         """A stale tag read from a component on a normal segment is never written to a rule."""

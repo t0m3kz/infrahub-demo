@@ -410,6 +410,41 @@ class TestVxlanSegmentGeneratorGenerate:
 
         gen._activate_segment_in_deployment.assert_not_awaited()
 
+    def test_segment_tag_helper_gets_the_segment_before_any_activation(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The group tag is ensured once per run, with the run's lock, before a deployment is activated."""
+        order: list[str] = []
+        ensure_tag = AsyncMock(side_effect=lambda client, lock, *, segment: order.append(f"tag {segment['id']}"))
+        monkeypatch.setattr("generators.topology.segment.ensure_segment_tag", ensure_tag)
+        gen = _make_gen()
+        gen._activate_segment_in_deployment = AsyncMock(side_effect=lambda **kw: order.append("activate"))
+        gen._create_inline_sub_interfaces = AsyncMock()
+
+        asyncio.run(gen.generate(_seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1])))
+
+        assert order == ["tag seg-1", "activate"]
+        (call,) = ensure_tag.await_args_list
+        assert call.args == (gen.client, gen.resource_lock)
+        assert call.kwargs["segment"]["typename"] == "ManagedVxlanSegment"
+
+    def test_segment_tag_failure_stops_the_run(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A tag that cannot be drawn is not logged away: no deployment is activated."""
+        monkeypatch.setattr(
+            "generators.topology.segment.ensure_segment_tag", AsyncMock(side_effect=LookupError("No group tag pool"))
+        )
+        gen = _make_gen()
+        gen._activate_segment_in_deployment = AsyncMock()
+
+        with pytest.raises(LookupError, match="No group tag pool"):
+            asyncio.run(gen.generate(_seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1])))
+
+        gen._activate_segment_in_deployment.assert_not_awaited()
+
+    def test_query_selects_the_tenant_test_and_the_segment_tag(self, root_dir: Path) -> None:
+        """The fast path (tag present) and the routed-tenant test (namespace type) come from the query."""
+        query = (root_dir / "queries/topology/add/vxlan_segment.gql").read_text()
+        assert "security_tag { node { id } }" in query
+        assert "namespace_type { value }" in query
+
     def test_zone_runs_even_when_no_deployments_resolved(self, ensure_zone: AsyncMock) -> None:
         """Zone classification is a property of the segment itself, not of
         whether its hosting parent could be resolved."""

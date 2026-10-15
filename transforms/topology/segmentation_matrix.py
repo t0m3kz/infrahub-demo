@@ -1,4 +1,4 @@
-"""Per data center segmentation matrix: component group tags, their contracts and the reference fabric verdict."""
+"""Per data center segmentation matrix: group tags, their classification and contracts, and the reference fabric verdict."""
 
 from __future__ import annotations
 
@@ -7,17 +7,30 @@ from typing import Any
 from infrahub_sdk.transforms import InfrahubTransform
 
 from transforms.helpers.acl import _leaf_enforces
-from transforms.helpers.group_policy import get_group_contracts
+from transforms.helpers.group_policy import (
+    DEFAULT_ACTION,
+    REPLIES,
+    Group,
+    get_vrf_contracts,
+    segment_groups,
+    segment_security_view,
+    segment_vrf,
+    vxlan_gpo_view,
+)
 from utils.data_cleaning import clean_data
+from utils.exchange_transit import is_routed_tenant_segment
 from utils.group_policy import (
     fabric_reason,
     gbp_required,
     profiles_by_platform,
+    reserved_groups,
+    segment_sites,
     site_kind,
     site_reason,
-    site_vteps,
     tags_by_segment,
+    vteps_by_data_center,
 )
+from utils.segment_addressing import segment_prefix
 
 
 class SegmentationMatrix(InfrahubTransform):
@@ -27,12 +40,23 @@ class SegmentationMatrix(InfrahubTransform):
       group-policy kind of its VTEPs (utils/group_policy.site_reason /
       site_kind), each VTEP with why it is outside its platform's profile row
       (fabric_reason; null: in it);
-    - ``tags``: the component group tags of the DC's segments;
-    - ``segments``: every segment deployed in the DC, whether it needs group
-      policy and whether its leaf SVI carries its ACL (_leaf_enforces, the L0
-      decision, not re-derived);
-    - ``contracts``: the forward contract rows of the segments that need group
-      policy (transforms/helpers/group_policy.py).
+    - ``segments``: every segment active in the DC, with its group, customer
+      (the segment owner: a label, not a tag), VRF, whether it needs
+      component group policy and whether its leaf SVI carries its ACL
+      (_leaf_enforces, the L0 decision, not re-derived);
+    - ``groups``: the segment and component groups of those segments;
+    - ``classification``: how a segment group's hosts are matched (VLAN ID
+      of a VLAN segment, VNI of a VXLAN segment, gateway prefix), and the
+      routed tenant segments with no tag yet (unclassified: the
+      reference_fabric check fails such a segment on a reference fabric);
+    - ``contracts``: the fabric's permit rows with at least one of those
+      groups (transforms/helpers/group_policy.get_vrf_contracts), deny by
+      default;
+    - ``kinds``: the same contracts per group-policy kind the profile rows
+      name (vxlan_gpo: group IDs, reserved groups, the policy-unaware rule;
+      segment_security: segments by prefix and policies), as this DC would
+      enforce them once it is a reference fabric, with every other site as
+      its VTEPs are.
 
     Nothing here is rendered on a device. Sorted and id-free, so a re-render
     of unchanged data is byte-identical.
@@ -42,59 +66,111 @@ class SegmentationMatrix(InfrahubTransform):
 
     async def transform(self, data: dict[str, Any]) -> dict[str, Any]:
         cleaned = clean_data(data)
-        data_centers = cleaned.get("TopologyDataCenter") or []
-        if not data_centers:
+        targets = cleaned.get("target") or []
+        if not targets:
             raise ValueError("segmentation_matrix: the query returned no TopologyDataCenter")
-        data_center = data_centers[0]
+        data_center = targets[0]
+        dc_id = str(data_center.get("id"))
 
         profiles, _problems = profiles_by_platform(cleaned.get("DcimGroupPolicyProfile") or [])
-        vteps = site_vteps(
-            [
-                *(data_center.get("devices") or []),
-                *(device for pod in cleaned.get("TopologyPod") or [] for device in pod.get("devices") or []),
-            ]
-        )
+        vteps_of = vteps_by_data_center(cleaned.get("TopologyDataCenter") or [], cleaned.get("TopologyPod") or [])
+        vteps = vteps_of.get(dc_id, [])
         reason = site_reason(vteps, profiles)
+        reference_sites = {site for site, found in vteps_of.items() if site_reason(found, profiles) is None} | {dc_id}
 
-        segments = self._segments(data_center)
-        tags_of = tags_by_segment(cleaned.get("SecurityTag") or [])
+        all_segments = cleaned.get("ManagedNetworkSegment") or []
+        tags = cleaned.get("SecurityTag") or []
+        by_segment, _by_tag = segment_groups(all_segments, tags)
+        all_groups = [group for groups in by_segment.values() for group in groups]
+        segments = sorted(
+            (segment for segment in all_segments if dc_id in segment_sites(segment)),
+            key=lambda segment: str(segment.get("name")),
+        )
+        local = [group for segment in segments for group in by_segment.get(str(segment.get("id")), [])]
+        local_names = {group.name for group in local}
+        rows = get_vrf_contracts(all_segments, tags, local=local_names)
+        components_of = tags_by_segment(tags)
+
+        views = {
+            "segment_security": segment_security_view(
+                all_groups,
+                rows,
+                {str(segment.get("name")): segment_prefix(segment) for segment in all_segments},
+                local=local_names,
+            ),
+            "vxlan_gpo": vxlan_gpo_view(
+                all_groups,
+                rows,
+                reserved=reserved_groups(profiles, "vxlan_gpo"),
+                reference_sites=reference_sites,
+                local=local_names,
+            ),
+        }
+        kinds = sorted({str(profile["group_policy_kind"]) for profile in profiles.values()} & set(views))
 
         return {
             "deployment": data_center.get("name"),
             "site": {"reference": reason is None, "kind": site_kind(vteps, profiles), "reason": reason},
             "vteps": [self._vtep(device, profiles) for device in vteps],
-            "tags": [
-                self._tag(tag, segment)
-                for segment in segments
-                for tag in sorted(tags_of.get(segment["id"], []), key=lambda item: item.get("group_id") or 0)
-            ],
             "segments": [
-                {
-                    "name": segment.get("name"),
-                    "isolation_mode": segment.get("isolation_mode"),
-                    "gbp_required": gbp_required(segment, len(tags_of.get(segment["id"], []))),
-                    "leaf_svi_acl": _leaf_enforces(segment),
-                    "inline_firewall": (segment.get("inline_service") or {}).get("name"),
-                }
+                self._segment(segment, by_segment, len(components_of.get(str(segment.get("id")), [])))
                 for segment in segments
             ],
-            "contracts": [
-                row
-                for segment in segments
-                if gbp_required(segment, len(tags_of.get(segment["id"], [])))
-                for row in get_group_contracts(segment, tags_of[segment["id"]])
-            ],
+            "groups": [group.as_dict() for group in local],
+            "classification": self._classification(segments, by_segment, dc_id),
+            "contracts": {"default_action": DEFAULT_ACTION, "replies": REPLIES, "rows": rows},
+            "kinds": {kind: views[kind] for kind in kinds},
         }
 
     @staticmethod
-    def _segments(data_center: dict[str, Any]) -> list[dict[str, Any]]:
-        """The DC's deployed segments, once each, by name."""
-        by_id: dict[str, dict[str, Any]] = {}
-        for deployment in data_center.get("segment_deployments") or []:
-            segment = deployment.get("segment") or {}
-            if segment.get("id"):
-                by_id.setdefault(segment["id"], segment)
-        return sorted(by_id.values(), key=lambda segment: str(segment.get("name")))
+    def _segment(segment: dict[str, Any], by_segment: dict[str, list[Group]], tag_count: int) -> dict[str, Any]:
+        groups = by_segment.get(str(segment.get("id"))) or []
+        return {
+            "name": segment.get("name"),
+            "group": groups[0].name if groups else None,
+            "customer": (segment.get("owner") or {}).get("org_id"),
+            "vrf": segment_vrf(segment),
+            "isolation_mode": segment.get("isolation_mode"),
+            "gbp_required": gbp_required(segment, tag_count),
+            "leaf_svi_acl": _leaf_enforces(segment),
+            "inline_firewall": (segment.get("inline_service") or {}).get("name"),
+        }
+
+    @staticmethod
+    def _classification(
+        segments: list[dict[str, Any]], by_segment: dict[str, list[Group]], dc_id: str
+    ) -> dict[str, Any]:
+        """Each segment group's selector here, and the routed tenant segments with no group."""
+        selectors = []
+        for segment in segments:
+            groups = by_segment.get(str(segment.get("id")))
+            if not groups:
+                continue
+            vnis = sorted(
+                {
+                    activation.get("vni")
+                    for activation in segment.get("segment_deployments") or []
+                    if (activation.get("deployment") or {}).get("id") == dc_id and activation.get("vni")
+                }
+            )
+            selectors.append(
+                {
+                    "group": groups[0].name,
+                    "segment": segment.get("name"),
+                    "vrf": groups[0].vrf,
+                    "vlan_id": segment.get("vlan_id"),
+                    "vni": vnis[0] if vnis else None,
+                    "prefix": segment_prefix(segment),
+                }
+            )
+        return {
+            "selectors": selectors,
+            "unclassified": [
+                segment.get("name")
+                for segment in segments
+                if is_routed_tenant_segment(segment) and str(segment.get("id")) not in by_segment
+            ],
+        }
 
     @staticmethod
     def _vtep(device: dict[str, Any], profiles: dict[str, dict[str, Any]]) -> dict[str, Any]:
@@ -104,15 +180,4 @@ class SegmentationMatrix(InfrahubTransform):
             "device_type": (device.get("device_type") or {}).get("name"),
             "release": (device.get("software_image") or {}).get("version"),
             "reason": fabric_reason(device, profiles),
-        }
-
-    @staticmethod
-    def _tag(tag: dict[str, Any], segment: dict[str, Any]) -> dict[str, Any]:
-        prefix = (segment.get("gateway") or {}).get("ip_prefix") or {}
-        return {
-            "name": tag.get("name"),
-            "group_id": tag.get("group_id"),
-            "component": ", ".join(sorted(str(item.get("fqdn")) for item in tag.get("components") or [])),
-            "segment": segment.get("name"),
-            "vrf": (prefix.get("ip_namespace") or {}).get("name"),
         }

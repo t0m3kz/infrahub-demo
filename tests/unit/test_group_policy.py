@@ -15,11 +15,14 @@ from utils.group_policy import (
     gbp_required,
     profiles_by_platform,
     release_key,
+    reserved_groups,
+    segment_sites,
     site_kind,
     site_reason,
     site_vteps,
     tag_pool,
     tags_by_segment,
+    vteps_by_data_center,
 )
 
 NXOS = {
@@ -387,3 +390,63 @@ class TestQueries:
         text = (root_dir / "queries/fragments/group_policy.gql").read_text()
         assert "memory_gb { value }" in text
         assert "group_policy_kind { value }" in text
+
+
+class TestReservedGroups:
+    """The reserved group IDs of one kind come from its profile rows, never from code."""
+
+    def test_the_nxos_row_names_its_reserved_groups(self) -> None:
+        profiles = {"cisco_nxos": {**NXOS, "unclassified_group_id": 0, "unaware_group_id": 15}, "arista_eos": EOS}
+        assert reserved_groups(profiles, "vxlan_gpo") == {"unclassified": 0, "unaware": 15}
+
+    def test_a_kind_whose_rows_name_none_has_none(self) -> None:
+        """EOS MSS-G classifies every source by prefix: no reserved group."""
+        assert reserved_groups({"arista_eos": EOS}, "segment_security") == {"unclassified": None, "unaware": None}
+
+    def test_rows_of_one_kind_that_disagree_fail_closed(self) -> None:
+        """Two platforms of one kind naming different values: no single ID to render."""
+        profiles = {
+            "cisco_nxos": {**NXOS, "unaware_group_id": 15},
+            "other": {**NXOS, "name": "other", "unaware_group_id": 14},
+        }
+        assert reserved_groups(profiles, "vxlan_gpo")["unaware"] is None
+
+    def test_bootstrap_profile_names_the_nxos_reserved_groups_outside_the_pool(self, root_dir: Path) -> None:
+        """Data, not code: 0 and 15 on the NX-OS row, both below the SGT-POOL band."""
+        rows = yaml.safe_load((root_dir / "data/bootstrap/19b_group_policy_profile.yml").read_text())["spec"]["data"]
+        nxos = next(row for row in rows if row["platform"] == "cisco_nxos")
+        pool = yaml.safe_load((root_dir / "data/bootstrap/19_sgt_pool.yml").read_text())["spec"]["data"][0]
+        assert (nxos["unclassified_group_id"], nxos["unaware_group_id"]) == (0, 15)
+        assert all(not pool["start_range"] <= value <= pool["end_range"] for value in (0, 15))
+        eos = next(row for row in rows if row["platform"] == "arista_eos")
+        assert "unaware_group_id" not in eos and "unclassified_group_id" not in eos
+
+
+class TestSites:
+    """Which data center a VTEP belongs to, and where a segment is active."""
+
+    def test_vteps_of_a_data_center_include_its_pods(self) -> None:
+        data_centers = [{"id": "dc10", "devices": [_device("bl-1", role="border-leaf")]}, {"id": "dc11", "devices": []}]
+        pods = [
+            {"parent": {"id": "dc10"}, "devices": [_device("lf-1"), _device("sp-1", role="spine")]},
+            {"parent": None, "devices": [_device("lf-x")]},
+        ]
+        vteps = vteps_by_data_center(data_centers, pods)
+        assert {site: [device["name"] for device in found] for site, found in vteps.items()} == {
+            "dc10": ["bl-1", "lf-1"],
+            "dc11": [],
+        }
+
+    def test_vxlan_segment_is_active_in_its_deployments(self) -> None:
+        segment = {"segment_deployments": [{"deployment": {"id": "dc10"}}, {"deployment": {"id": "fr"}}, {}]}
+        assert segment_sites(segment) == {"dc10", "fr"}
+
+    def test_vlan_segment_is_active_in_its_footprints_data_center(self) -> None:
+        assert segment_sites({"customer_deployment": {"id": "fp-1", "parent": {"id": "dc11"}}}) == {"dc11"}
+
+    def test_vlan_segment_of_another_footprint_kind_is_active_in_the_footprint(self) -> None:
+        """An office or colocation footprint is its own site: never a data center."""
+        assert segment_sites({"customer_deployment": {"id": "fp-office"}}) == {"fp-office"}
+
+    def test_segment_active_nowhere(self) -> None:
+        assert segment_sites({}) == set()

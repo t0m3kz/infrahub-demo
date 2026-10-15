@@ -125,8 +125,9 @@ artifact_definitions:
     parameters:
       id: id
 
-  # Vendor-neutral: the DC's component group tags, their contracts and whether
-  # its VTEPs could enforce them, every claim with its evidence.
+  # Vendor-neutral: the DC's segment and component group tags, their
+  # classification and deny-by-default contracts (with a section per
+  # group-policy kind), and whether its VTEPs could enforce them.
   - name: Segmentation matrix for DC
     artifact_name: segmentation-matrix
     content_type: application/json

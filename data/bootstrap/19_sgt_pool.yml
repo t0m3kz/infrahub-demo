@@ -1,8 +1,10 @@
 ---
-# SGT Pool — fabric-wide group policy IDs of the component tags
-# (SecurityTag.group_id), allocated by AppApplicationGenerator for every
-# AppComponent of a microsegmented segment. The group-policy profile names it
-# as its tag_pool (19b_group_policy_profile.yml); code never uses the name.
+# SGT Pool — fabric-wide group policy IDs (SecurityTag.group_id) of the
+# segment tags (every routed tenant segment, VxlanSegmentGenerator and
+# AppApplicationGenerator) and the component tags (every AppComponent of a
+# microsegmented segment, AppApplicationGenerator). The group-policy profile
+# names it as its tag_pool (19b_group_policy_profile.yml); code never uses the
+# name.
 #
 # 16-4095 skips the IDs NX-OS reserves (0 unknown, 1 any, 15 the tag of routes
 # from policy-unaware sites) and sits inside the NX-OS 16-bit group ID. One
@@ -14,7 +16,7 @@ spec:
   kind: CoreNumberPool
   data:
     - name: SGT-POOL
-      description: "Component group policy IDs (SecurityTag.group_id)"
+      description: "Segment and component group policy IDs (SecurityTag.group_id)"
       node: SecurityTag
       node_attribute: group_id
       start_range: 16

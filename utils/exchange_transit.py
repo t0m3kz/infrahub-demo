@@ -16,7 +16,7 @@ Per leg (a context's VLAN sub-interface in one VRF):
 from __future__ import annotations
 
 import ipaddress
-from typing import TypedDict
+from typing import Any, TypedDict
 
 TRANSIT_SLOT: dict[str, int] = {"prod": 0, "non_prod": 1, "internet": 2, "management": 3}
 """Namespace type -> VLAN slot; one slot per fixed VRF namespace."""
@@ -40,6 +40,12 @@ EXCHANGE_PEERS: dict[str, tuple[str, ...]] = {
     "non_prod": ("internet", "management"),
 }
 """Tenant namespace type -> namespace types it exchanges with (tenant-initiated only). Never prod <-> non_prod."""
+
+TENANT_NAMESPACE_TYPES = frozenset(EXCHANGE_PEERS)
+"""namespace_type of the shared tenant VRFs (PROD, NON-PROD): the namespaces customers' segments live in."""
+
+ROUTED_SEGMENT_KINDS = frozenset({"ManagedVlanSegment", "ManagedVxlanSegment"})
+"""Segment kinds the fabric routes with an anycast SVI (an External or Cloud segment never is)."""
 
 INTERNET_TYPE = "internet"
 """namespace_type of the INTERNET VRF namespace."""
@@ -111,6 +117,23 @@ def zone_name_for_namespace_type(ns_type: str) -> str:
 def exchange_peer_zones() -> frozenset[str]:
     """Zone names of every namespace type a tenant VRF exchanges with (INTERNET-ZONE, MANAGEMENT-ZONE, ...)."""
     return frozenset(ZONE_BY_NS_TYPE[ns_type] for peers in EXCHANGE_PEERS.values() for ns_type in peers)
+
+
+def is_routed_tenant_segment(segment: dict[str, Any]) -> bool:
+    """A VLAN/VXLAN segment with a gateway in a PROD/NON-PROD namespace, outside the exchange zones.
+
+    The one definition of a tenant SVI in a shared VRF: the L0 SVI protection
+    check and the segment group tags (generators/helpers/security_tag.py,
+    transforms/helpers/group_policy.py) read it. ``segment`` is cleaned query
+    data with ``typename``, ``gateway.ip_prefix.ip_namespace.namespace_type``
+    and ``security_zone.name``.
+    """
+    if segment.get("typename") not in ROUTED_SEGMENT_KINDS:
+        return False
+    prefix = (segment.get("gateway") or {}).get("ip_prefix") or {}
+    namespace_type = (prefix.get("ip_namespace") or {}).get("namespace_type")
+    zone = (segment.get("security_zone") or {}).get("name")
+    return namespace_type in TENANT_NAMESPACE_TYPES and zone not in exchange_peer_zones()
 
 
 def transit_vlan(context_vlan: int, ns_type: str) -> int:

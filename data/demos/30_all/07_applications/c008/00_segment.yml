@@ -1,6 +1,8 @@
 ---
-# Dev VLAN segment in C008's DC12 development footprint. Loaded before
-# 01_application.yml since components there reference it by human_friendly_id.
+# C008's segments: the dev VLAN segment of its DC12 development footprint, and
+# the production VXLAN segment of its DC10 footprint
+# (../../06_customer_boarding/c008/dc/dc10/). Loaded before 01_application.yml
+# since components there reference them by human_friendly_id.
 # Nested under OrganizationCustomer (owner) via the network_segments reverse
 # relationship — owner is set automatically from the parent.
 apiVersion: infrahub.app/v1
@@ -31,3 +33,31 @@ spec:
                     ip_namespace: "NON-PROD"
             customer_deployment: "C008-D-DC12"
             security_zone: "NONPROD-ZONE"
+
+        # Production, local to DC10. A routed tenant segment in PROD, so it
+        # gets its own group tag (c008-trade-portal-local-dc10-p) from the
+        # segment generator; its only contract with C005 is the approved
+        # trade-portal -> payment API rule (02_dependencies.yml).
+        - kind: ManagedVxlanSegment
+          data:
+            customer_name: "trade-portal-local-dc10"
+            environment: "p"
+            stretch_scope: local
+            arp_suppression: true
+            gateway:
+              data:
+                address: "10.8.10.1/24"
+                description: "c008-trade-portal-local-dc10-p anycast gateway"
+                ip_namespace: "PROD"
+                ip_prefix:
+                  kind: IpamPrefix
+                  data:
+                    prefix: "10.8.10.0/24"
+                    description: "c008-trade-portal-local-dc10-p (C008, DC10)"
+                    status: active
+                    role: customer
+                    ip_namespace: "PROD"
+            customer_deployments:
+              - "C008-P-DC10"
+            member_of_groups:
+              - vxlan_segments
