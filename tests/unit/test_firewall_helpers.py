@@ -1602,7 +1602,6 @@ def _make_dc_activation(
     seg_id: str = "seg-1",
     customer_name: str = "web",
     deployment_id: str | None = "dep-a",
-    sgt: int | None = None,
     gateway_prefix: str | None = "10.10.1.0/24",
     environment: str | None = None,
 ) -> dict:
@@ -1616,8 +1615,6 @@ def _make_dc_activation(
         "customer_name": customer_name,
         "customer_deployments": [{"id": deployment_id}] if deployment_id else [],
     }
-    if sgt is not None:
-        seg["security_tag"] = {"name": "web-tier", "group_id": sgt}
     if gateway_prefix is not None:
         seg["gateway"] = {"ip_prefix": {"prefix": gateway_prefix}}
     if environment is not None:

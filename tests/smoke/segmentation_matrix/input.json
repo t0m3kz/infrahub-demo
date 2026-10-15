@@ -1,0 +1,686 @@
+{
+  "data": {
+    "TopologyDataCenter": {
+      "edges": [
+        {
+          "node": {
+            "id": "dc10",
+            "name": {
+              "value": "DC10"
+            },
+            "devices": {
+              "edges": [
+                {
+                  "node": {
+                    "name": {
+                      "value": "bl-dc10-01"
+                    },
+                    "role": {
+                      "value": "border-leaf"
+                    },
+                    "platform": {
+                      "node": {
+                        "name": {
+                          "value": "cisco_nxos"
+                        }
+                      }
+                    },
+                    "device_type": {
+                      "node": {
+                        "name": {
+                          "value": "N9K-C9336C-FX2"
+                        },
+                        "memory_gb": {
+                          "value": 32
+                        }
+                      }
+                    },
+                    "software_image": {
+                      "node": {
+                        "version": {
+                          "value": "10.3(3)"
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "segment_deployments": {
+              "edges": [
+                {
+                  "node": {
+                    "vni": {
+                      "value": 10000
+                    },
+                    "segment": {
+                      "node": {
+                        "id": "seg-web",
+                        "__typename": "ManagedVxlanSegment",
+                        "name": {
+                          "value": "c005-web-frontend-local-dc10-p"
+                        },
+                        "isolation_mode": {
+                          "value": "microsegmented"
+                        },
+                        "gateway": {
+                          "node": {
+                            "ip_prefix": {
+                              "node": {
+                                "ip_namespace": {
+                                  "node": {
+                                    "name": {
+                                      "value": "PROD"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "inline_service": {
+                          "node": null
+                        },
+                        "security_policy": {
+                          "node": {
+                            "name": {
+                              "value": "seg-c005-web-frontend-local-dc10-p-egress"
+                            },
+                            "enabled": {
+                              "value": true
+                            },
+                            "default_action": {
+                              "value": "deny"
+                            },
+                            "rules": {
+                              "edges": [
+                                {
+                                  "node": {
+                                    "id": "rule-web-frontend-to-session-store-tcp-6379",
+                                    "index": {
+                                      "value": 100
+                                    },
+                                    "name": {
+                                      "value": "web-frontend-to-session-store-tcp-6379"
+                                    },
+                                    "action": {
+                                      "value": "permit"
+                                    },
+                                    "protocol": {
+                                      "value": "tcp"
+                                    },
+                                    "port_start": {
+                                      "value": 6379
+                                    },
+                                    "port_end": {
+                                      "value": null
+                                    },
+                                    "disabled": {
+                                      "value": false
+                                    },
+                                    "apply_on_switch": {
+                                      "value": true
+                                    },
+                                    "destination_segment": {
+                                      "node": {
+                                        "id": "seg-web"
+                                      }
+                                    },
+                                    "source_security_tag": {
+                                      "node": {
+                                        "id": "tag-web"
+                                      }
+                                    },
+                                    "destination_security_tag": {
+                                      "node": {
+                                        "id": "tag-session"
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "node": {
+                                    "id": "rule-web-frontend-to-session-store-tcp-6380",
+                                    "index": {
+                                      "value": 110
+                                    },
+                                    "name": {
+                                      "value": "web-frontend-to-session-store-tcp-6380"
+                                    },
+                                    "action": {
+                                      "value": "permit"
+                                    },
+                                    "protocol": {
+                                      "value": "tcp"
+                                    },
+                                    "port_start": {
+                                      "value": 6380
+                                    },
+                                    "port_end": {
+                                      "value": null
+                                    },
+                                    "disabled": {
+                                      "value": true
+                                    },
+                                    "apply_on_switch": {
+                                      "value": true
+                                    },
+                                    "destination_segment": {
+                                      "node": {
+                                        "id": "seg-web"
+                                      }
+                                    },
+                                    "source_security_tag": {
+                                      "node": {
+                                        "id": "tag-web"
+                                      }
+                                    },
+                                    "destination_security_tag": {
+                                      "node": {
+                                        "id": "tag-session"
+                                      }
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "node": {
+                    "vni": {
+                      "value": 10001
+                    },
+                    "segment": {
+                      "node": {
+                        "id": "seg-backend",
+                        "__typename": "ManagedVxlanSegment",
+                        "name": {
+                          "value": "c005-app-backend-stretch-p"
+                        },
+                        "isolation_mode": {
+                          "value": "microsegmented"
+                        },
+                        "gateway": {
+                          "node": {
+                            "ip_prefix": {
+                              "node": {
+                                "ip_namespace": {
+                                  "node": {
+                                    "name": {
+                                      "value": "PROD"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "inline_service": {
+                          "node": null
+                        },
+                        "security_policy": {
+                          "node": {
+                            "name": {
+                              "value": "seg-c005-app-backend-stretch-p-egress"
+                            },
+                            "enabled": {
+                              "value": true
+                            },
+                            "default_action": {
+                              "value": "deny"
+                            },
+                            "rules": {
+                              "edges": []
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "node": {
+                    "vni": {
+                      "value": 10002
+                    },
+                    "segment": {
+                      "node": {
+                        "id": "seg-shop",
+                        "__typename": "ManagedVxlanSegment",
+                        "name": {
+                          "value": "c006-shop-p"
+                        },
+                        "isolation_mode": {
+                          "value": "normal"
+                        },
+                        "gateway": {
+                          "node": {
+                            "ip_prefix": {
+                              "node": {
+                                "ip_namespace": {
+                                  "node": {
+                                    "name": {
+                                      "value": "PROD"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "inline_service": {
+                          "node": {
+                            "id": "svc-DC10-FW-CTX-C006",
+                            "name": {
+                              "value": "DC10-FW-CTX-C006"
+                            }
+                          }
+                        },
+                        "security_policy": {
+                          "node": {
+                            "name": {
+                              "value": "seg-c006-shop-p-egress"
+                            },
+                            "enabled": {
+                              "value": true
+                            },
+                            "default_action": {
+                              "value": "deny"
+                            },
+                            "rules": {
+                              "edges": []
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "TopologyPod": {
+      "edges": [
+        {
+          "node": {
+            "devices": {
+              "edges": [
+                {
+                  "node": {
+                    "name": {
+                      "value": "lf-dc10-01"
+                    },
+                    "role": {
+                      "value": "leaf"
+                    },
+                    "platform": {
+                      "node": {
+                        "name": {
+                          "value": "cisco_nxos"
+                        }
+                      }
+                    },
+                    "device_type": {
+                      "node": {
+                        "name": {
+                          "value": "N9K-C9336C-FX2"
+                        },
+                        "memory_gb": {
+                          "value": 32
+                        }
+                      }
+                    },
+                    "software_image": {
+                      "node": {
+                        "version": {
+                          "value": "10.3(3)"
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "node": {
+                    "name": {
+                      "value": "al-dc10-01"
+                    },
+                    "role": {
+                      "value": "access-leaf"
+                    },
+                    "platform": {
+                      "node": {
+                        "name": {
+                          "value": "cisco_nxos"
+                        }
+                      }
+                    },
+                    "device_type": {
+                      "node": {
+                        "name": {
+                          "value": "N9K-C93180YC-EX"
+                        },
+                        "memory_gb": {
+                          "value": 24
+                        }
+                      }
+                    },
+                    "software_image": {
+                      "node": {
+                        "version": {
+                          "value": "10.3(3)"
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "node": {
+                    "name": {
+                      "value": "sp-dc10-01"
+                    },
+                    "role": {
+                      "value": "spine"
+                    },
+                    "platform": {
+                      "node": {
+                        "name": {
+                          "value": "cisco_nxos"
+                        }
+                      }
+                    },
+                    "device_type": {
+                      "node": {
+                        "name": {
+                          "value": "N9K-C9336C-FX2"
+                        },
+                        "memory_gb": {
+                          "value": 32
+                        }
+                      }
+                    },
+                    "software_image": {
+                      "node": {
+                        "version": {
+                          "value": "10.3(3)"
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "DcimGroupPolicyProfile": {
+      "edges": [
+        {
+          "node": {
+            "name": {
+              "value": "reference-cisco-nxos"
+            },
+            "group_policy_kind": {
+              "value": "vxlan_gpo"
+            },
+            "min_release": {
+              "value": "10.6(1)F"
+            },
+            "min_memory_gb": {
+              "value": 24
+            },
+            "platform": {
+              "node": {
+                "name": {
+                  "value": "cisco_nxos"
+                }
+              }
+            },
+            "device_types": {
+              "edges": [
+                {
+                  "node": {
+                    "name": {
+                      "value": "N9K-C93108TC-FX3"
+                    }
+                  }
+                },
+                {
+                  "node": {
+                    "name": {
+                      "value": "N9K-C93180YC-FX3"
+                    }
+                  }
+                },
+                {
+                  "node": {
+                    "name": {
+                      "value": "N9K-C9348GC-FX3"
+                    }
+                  }
+                },
+                {
+                  "node": {
+                    "name": {
+                      "value": "N9K-C93600CD-GX"
+                    }
+                  }
+                },
+                {
+                  "node": {
+                    "name": {
+                      "value": "N9K-C9316D-GX"
+                    }
+                  }
+                },
+                {
+                  "node": {
+                    "name": {
+                      "value": "N9K-C9364C-GX"
+                    }
+                  }
+                },
+                {
+                  "node": {
+                    "name": {
+                      "value": "N9K-C9332D-GX2B"
+                    }
+                  }
+                },
+                {
+                  "node": {
+                    "name": {
+                      "value": "N9K-C9348D-GX2A"
+                    }
+                  }
+                },
+                {
+                  "node": {
+                    "name": {
+                      "value": "N9K-C9364D-GX2A"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "node": {
+            "name": {
+              "value": "reference-arista-eos"
+            },
+            "group_policy_kind": {
+              "value": "segment_security"
+            },
+            "min_release": {
+              "value": "4.36.2F"
+            },
+            "min_memory_gb": {
+              "value": null
+            },
+            "platform": {
+              "node": {
+                "name": {
+                  "value": "arista_eos"
+                }
+              }
+            },
+            "device_types": {
+              "edges": [
+                {
+                  "node": {
+                    "name": {
+                      "value": "DCS-7280CR3-32P4"
+                    }
+                  }
+                },
+                {
+                  "node": {
+                    "name": {
+                      "value": "DCS-7280SR3-48YC8"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "SecurityTag": {
+      "edges": [
+        {
+          "node": {
+            "id": "tag-web",
+            "name": {
+              "value": "api.payment-core.c005.demo.local"
+            },
+            "group_id": {
+              "value": 16
+            },
+            "components": {
+              "edges": [
+                {
+                  "node": {
+                    "fqdn": {
+                      "value": "api.payment-core.c005.demo.local"
+                    },
+                    "network_segment": {
+                      "node": {
+                        "id": "seg-web"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "tag-session",
+            "name": {
+              "value": "sessions.payment-core.c005.demo.local"
+            },
+            "group_id": {
+              "value": 20
+            },
+            "components": {
+              "edges": [
+                {
+                  "node": {
+                    "fqdn": {
+                      "value": "sessions.payment-core.c005.demo.local"
+                    },
+                    "network_segment": {
+                      "node": {
+                        "id": "seg-web"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "tag-audit",
+            "name": {
+              "value": "audit.payment-core.c005.demo.local"
+            },
+            "group_id": {
+              "value": 21
+            },
+            "components": {
+              "edges": [
+                {
+                  "node": {
+                    "fqdn": {
+                      "value": "audit.payment-core.c005.demo.local"
+                    },
+                    "network_segment": {
+                      "node": {
+                        "id": "seg-web"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "tag-backend",
+            "name": {
+              "value": "backend.payment-core.c005.demo.local"
+            },
+            "group_id": {
+              "value": 17
+            },
+            "components": {
+              "edges": [
+                {
+                  "node": {
+                    "fqdn": {
+                      "value": "backend.payment-core.c005.demo.local"
+                    },
+                    "network_segment": {
+                      "node": {
+                        "id": "seg-backend"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "tag-orphan",
+            "name": {
+              "value": "tag-orphan.retired"
+            },
+            "group_id": {
+              "value": 30
+            },
+            "components": {
+              "edges": []
+            }
+          }
+        }
+      ]
+    }
+  }
+}

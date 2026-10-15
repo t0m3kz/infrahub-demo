@@ -1,0 +1,121 @@
+{
+  "contracts": [
+    {
+      "action": "permit",
+      "dst_tag": 20,
+      "entries": [
+        {
+          "port_end": 6379,
+          "port_start": 6379,
+          "protocol": "tcp"
+        }
+      ],
+      "replies": "bidir (I/LS)",
+      "rules": [
+        "web-frontend-to-session-store-tcp-6379"
+      ],
+      "segment": "c005-web-frontend-local-dc10-p",
+      "src_tag": 16
+    },
+    {
+      "action": "deny",
+      "dst_tag": 21,
+      "entries": [],
+      "replies": "bidir (I/LS)",
+      "rules": [],
+      "segment": "c005-web-frontend-local-dc10-p",
+      "src_tag": 16
+    },
+    {
+      "action": "deny",
+      "dst_tag": 21,
+      "entries": [],
+      "replies": "bidir (I/LS)",
+      "rules": [],
+      "segment": "c005-web-frontend-local-dc10-p",
+      "src_tag": 20
+    }
+  ],
+  "deployment": "DC10",
+  "segments": [
+    {
+      "gbp_required": false,
+      "inline_firewall": null,
+      "isolation_mode": "microsegmented",
+      "leaf_svi_acl": true,
+      "name": "c005-app-backend-stretch-p"
+    },
+    {
+      "gbp_required": true,
+      "inline_firewall": null,
+      "isolation_mode": "microsegmented",
+      "leaf_svi_acl": true,
+      "name": "c005-web-frontend-local-dc10-p"
+    },
+    {
+      "gbp_required": false,
+      "inline_firewall": "DC10-FW-CTX-C006",
+      "isolation_mode": "normal",
+      "leaf_svi_acl": false,
+      "name": "c006-shop-p"
+    }
+  ],
+  "site": {
+    "kind": "vxlan_gpo",
+    "reason": "access-leaf al-dc10-01 N9K-C93180YC-EX: device type not in profile reference-cisco-nxos (and 2 more)",
+    "reference": false
+  },
+  "tags": [
+    {
+      "component": "backend.payment-core.c005.demo.local",
+      "group_id": 17,
+      "name": "backend.payment-core.c005.demo.local",
+      "segment": "c005-app-backend-stretch-p",
+      "vrf": "PROD"
+    },
+    {
+      "component": "api.payment-core.c005.demo.local",
+      "group_id": 16,
+      "name": "api.payment-core.c005.demo.local",
+      "segment": "c005-web-frontend-local-dc10-p",
+      "vrf": "PROD"
+    },
+    {
+      "component": "sessions.payment-core.c005.demo.local",
+      "group_id": 20,
+      "name": "sessions.payment-core.c005.demo.local",
+      "segment": "c005-web-frontend-local-dc10-p",
+      "vrf": "PROD"
+    },
+    {
+      "component": "audit.payment-core.c005.demo.local",
+      "group_id": 21,
+      "name": "audit.payment-core.c005.demo.local",
+      "segment": "c005-web-frontend-local-dc10-p",
+      "vrf": "PROD"
+    }
+  ],
+  "vteps": [
+    {
+      "device_type": "N9K-C93180YC-EX",
+      "name": "al-dc10-01",
+      "reason": "device type not in profile reference-cisco-nxos",
+      "release": "10.3(3)",
+      "role": "access-leaf"
+    },
+    {
+      "device_type": "N9K-C9336C-FX2",
+      "name": "bl-dc10-01",
+      "reason": "device type not in profile reference-cisco-nxos",
+      "release": "10.3(3)",
+      "role": "border-leaf"
+    },
+    {
+      "device_type": "N9K-C9336C-FX2",
+      "name": "lf-dc10-01",
+      "reason": "device type not in profile reference-cisco-nxos",
+      "release": "10.3(3)",
+      "role": "leaf"
+    }
+  ]
+}

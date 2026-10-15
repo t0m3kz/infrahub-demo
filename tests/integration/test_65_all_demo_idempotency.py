@@ -102,9 +102,15 @@ query {
         source_segment { node { id } }
         destination_segment { node { id } }
         security_profile { node { id } }
+        source_security_tag { node { id } }
+        destination_security_tag { node { id } }
       }
     }
   }
+  # Component group tags: the SGT-POOL allocation (group_id) of each, and the
+  # component it groups. A rerun that drew a new number or a second tag is a diff.
+  SecurityTag { edges { node { id name { value } group_id { value } components { edges { node { id } } } } } }
+  AppComponent { edges { node { id security_tag { node { id } } } } }
   CloudSecurityGroup { edges { node { id name { value } } } }
   CloudSecurityGroupRule { edges { node { id name { value } } } }
   ProxyPolicyRule { edges { node { id name { value } } } }
@@ -259,9 +265,16 @@ def _snapshot(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
                 _peer_id(n, "source_segment"),
                 _peer_id(n, "destination_segment"),
                 _peer_id(n, "security_profile"),
+                _peer_id(n, "source_security_tag"),
+                _peer_id(n, "destination_security_tag"),
             )
             for n in _nodes(result, "SecurityPolicyRule")
         },
+        "SecurityTag": {
+            n["id"]: (_value(n, "name"), _value(n, "group_id"), _peer_ids(n, "components"))
+            for n in _nodes(result, "SecurityTag")
+        },
+        "AppComponent": {n["id"]: _peer_id(n, "security_tag") for n in _nodes(result, "AppComponent")},
         "CloudSecurityGroup": {n["id"]: _value(n, "name") for n in _nodes(result, "CloudSecurityGroup")},
         "CloudSecurityGroupRule": {n["id"]: _value(n, "name") for n in _nodes(result, "CloudSecurityGroupRule")},
         "ProxyPolicyRule": {n["id"]: _value(n, "name") for n in _nodes(result, "ProxyPolicyRule")},

@@ -8,15 +8,20 @@ from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
 from ..helpers.rules import RulesPlanner
+from ..helpers.security_tag import clear_component_tag, ensure_component_tag
 from ..named_objects import GetOrCreateByNameMixin
+from ..pools import PoolMixin
 from ..segment_firewall import SegmentFirewallMixin
 from ..ztna import ZtnaMixin
+
+MICROSEGMENTED = "microsegmented"
 
 
 class AppApplicationGenerator(
     ZtnaMixin,
     SegmentFirewallMixin,
     GetOrCreateByNameMixin,
+    PoolMixin,
     CommonGenerator,
 ):
     """Generate segment-scoped security rules from app dependencies.
@@ -25,7 +30,9 @@ class AppApplicationGenerator(
     dependency-edge shape: ZtnaMixin (target_fqdn egress and private-access
     publishing for access-profile grants), SegmentFirewallMixin (every
     segment-to-segment SecurityPolicyRule, on-prem or cloud endpoint, plus
-    zone/tag handling). A cloud flow is a SecurityPolicyRule like any other;
+    zone handling). Each component of a microsegmented segment gets its group
+    tag here (_ensure_component_tags; PoolMixin for the lock). A cloud flow is
+    a SecurityPolicyRule like any other;
     the former sg-{app} CloudSecurityGroup objects are no longer generated and
     are deleted by this application's tracking group on its next run (they
     were created tracked, and the run saves its rules as other members).
@@ -171,6 +178,9 @@ class AppApplicationGenerator(
         )
         for component in components:
             await self._ensure_segment_isolation_mode(component.get("network_segment") or {}, app_security_profile)
+        # After the isolation modes (recorded on the segment dicts) and before
+        # the rules, which carry the tags of an intra-segment flow's components.
+        await self._ensure_component_tags(components, edges)
 
         # Access-profile grants hang off the target component, not a source
         # component, so they are published whether or not the app has edges.
@@ -263,6 +273,43 @@ class AppApplicationGenerator(
         )
         if rules_failed:
             raise RuntimeError(f"Application {app_name}: {rules_failed} rule(s) failed")
+
+    async def _ensure_component_tags(
+        self,
+        components: list[dict[str, Any]],
+        edges: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]],
+    ) -> None:
+        """Tag every component of a microsegmented segment and record the tag on the dicts.
+
+        The application's own components on a microsegmented segment get their
+        tag; one that has a tag on any other segment loses it (it left the
+        segment). An edge target on one of those segments is tagged too: it can
+        belong to an application that has not run yet, and the intra-segment
+        rule to it needs both tags now. A target and the same component as a
+        child are two dicts, so the tag id is written into every dict of it.
+        """
+        microsegmented = {
+            segment["id"]
+            for component in components
+            if (segment := component.get("network_segment") or {}).get("id")
+            and segment.get("isolation_mode") == MICROSEGMENTED
+        }
+        targets = [dst for _src, _dep, dst in edges if dst.get("id")]
+        own = {id(component) for component in components}
+        tag_ids: dict[str, str] = {}
+        for component in [*components, *targets]:
+            component_id = component.get("id")
+            if not component_id or component_id in tag_ids:
+                continue
+            if (component.get("network_segment") or {}).get("id") in microsegmented:
+                tag_ids[component_id] = await ensure_component_tag(self.client, self.resource_lock, component=component)
+            elif id(component) in own and (component.get("security_tag") or {}).get("id"):
+                await clear_component_tag(self.client, component_id=component_id)
+                component["security_tag"] = None
+                self.logger.info("  Component %s left its microsegmented segment - tag detached", component_id)
+        for component in [*components, *targets]:
+            if component.get("id") in tag_ids:
+                component["security_tag"] = {"id": tag_ids[component["id"]]}
 
     @staticmethod
     def _calling_application_ids(component: dict[str, Any]) -> list[str]:

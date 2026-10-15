@@ -228,3 +228,179 @@ class TestComponentEnvironment:
         assert check._captured_errors == []
         assert len(check._captured_infos) == 1
         assert check._captured_infos[0].startswith("WARNING:")
+
+
+# ---------------------------------------------------------------------------
+# Component group tags
+# ---------------------------------------------------------------------------
+
+
+def _tag(tag_id: str, group_id: int, *components: tuple[str, str]) -> dict[str, Any]:
+    """One SecurityTag edge; ``components`` are (fqdn, segment id) pairs."""
+    return {
+        "node": {
+            "id": tag_id,
+            "name": _v(f"{tag_id}.example"),
+            "group_id": _v(group_id),
+            "components": {
+                "edges": [
+                    {"node": {"id": f"comp-{fqdn}", "fqdn": _v(fqdn), "network_segment": {"node": {"id": seg}}}}
+                    for fqdn, seg in components
+                ]
+            },
+        }
+    }
+
+
+def _tagged_component(fqdn: str, seg: str, tag_id: str | None) -> dict[str, Any]:
+    """One AppComponent edge with its segment and (optional) tag."""
+    return {
+        "node": {
+            "id": f"comp-{fqdn}",
+            "name": _v(fqdn),
+            "fqdn": _v(fqdn),
+            "network_segment": {"node": {"id": seg, "name": _v(seg), "environment": _v("p")}},
+            "security_tag": {"node": {"id": tag_id, "name": _v(tag_id)} if tag_id else None},
+            "parent": {"node": {"id": "app", "name": _v("app"), "environment": _v("p")}},
+        }
+    }
+
+
+def _profile(name: str, pool_id: str | None = "pool-sgt", pool_name: str = "SGT-POOL") -> dict[str, Any]:
+    """One DcimGroupPolicyProfile edge naming a tag pool with the 16-4095 band (or none)."""
+    pool = (
+        {"node": {"id": pool_id, "name": _v(pool_name), "start_range": _v(16), "end_range": _v(4095)}}
+        if pool_id
+        else {"node": None}
+    )
+    return {"node": {"name": _v(name), "tag_pool": pool}}
+
+
+_PROFILES = {"edges": [_profile("reference-cisco-nxos"), _profile("reference-arista-eos", pool_id=None)]}
+
+
+def _run_tags(
+    *,
+    segments: list[dict[str, Any]] | None = None,
+    components: list[dict[str, Any]] | None = None,
+    tags: list[dict[str, Any]] | None = None,
+    rules: list[dict[str, Any]] | None = None,
+    profiles: dict[str, Any] | None = None,
+) -> Any:
+    """Run the check over a microsegmented segment "m" (plus ``segments``) and the given tags."""
+    check = _check()
+    check.validate(
+        {
+            "ManagedNetworkSegment": {"edges": [_segment("m", isolation_mode=_v("microsegmented")), *(segments or [])]},
+            "SecurityPolicyRule": {"edges": rules or []},
+            "AppComponent": {"edges": components or []},
+            "SecurityTag": {"edges": tags or []},
+            "DcimGroupPolicyProfile": _PROFILES if profiles is None else profiles,
+        }
+    )
+    return check
+
+
+def _tag_ref(tag_id: str) -> dict[str, Any]:
+    return {"node": {"id": tag_id, "name": _v(tag_id)}}
+
+
+class TestComponentTags:
+    """Every component of a microsegmented segment has exactly one group tag of its own, in the pool band."""
+
+    def test_tagged_components_in_band_pass(self) -> None:
+        """Two components, one tag each, inside 16-4095: no error, no warning."""
+        check = _run_tags(
+            components=[_tagged_component("a", "m", "t1"), _tagged_component("b", "m", "t2")],
+            tags=[_tag("t1", 16, ("a", "m")), _tag("t2", 4095, ("b", "m"))],
+        )
+        assert check._captured_errors == []
+        assert check._captured_infos == []
+
+    def test_untagged_component_of_a_microsegmented_segment_is_an_error(self) -> None:
+        check = _run_tags(components=[_tagged_component("a", "m", None)])
+        assert check._captured_errors == ["Component 'a' in microsegmented segment 'm' has no security_tag"]
+
+    def test_untagged_component_of_a_normal_segment_is_fine(self) -> None:
+        """Only a microsegmented segment needs tags."""
+        check = _run_tags(segments=[_segment("n")], components=[_tagged_component("a", "n", None)])
+        assert check._captured_errors == []
+
+    def test_tag_shared_by_two_components_is_an_error(self) -> None:
+        """A shared tag would merge two groups (two tenants' components, possibly)."""
+        check = _run_tags(
+            components=[_tagged_component("a", "m", "t1"), _tagged_component("b", "m", "t1")],
+            tags=[_tag("t1", 20, ("a", "m"), ("b", "m"))],
+        )
+        assert check._captured_errors == ["Security tag 't1.example' is shared by 2 components: ['a', 'b']"]
+
+    def test_orphan_tag_is_a_warning(self) -> None:
+        check = _run_tags(tags=[_tag("t1", 20)])
+        assert check._captured_errors == []
+        assert check._captured_infos == ["WARNING: security tag 't1.example' groups no component (orphan)"]
+
+    @pytest.mark.parametrize("group_id", [15, 4096, 65000])
+    def test_group_id_outside_the_pool_band_is_an_error(self, group_id: int) -> None:
+        """The band is the one of the pool the profile rows name, read from data."""
+        check = _run_tags(components=[_tagged_component("a", "m", "t1")], tags=[_tag("t1", group_id, ("a", "m"))])
+        assert check._captured_errors == [f"Security tag 't1.example' group_id {group_id} is outside SGT-POOL 16-4095"]
+
+    def test_missing_pool_is_an_error_when_tags_exist(self) -> None:
+        """The band cannot be checked without a profile row naming the pool: fail closed."""
+        check = _run_tags(
+            components=[_tagged_component("a", "m", "t1")],
+            tags=[_tag("t1", 20, ("a", "m"))],
+            profiles={"edges": []},
+        )
+        assert check._captured_errors == [
+            "No group tag pool (the group-policy profiles name 0 tag pools [], expected one): "
+            "the band of 1 group tag(s) cannot be checked"
+        ]
+
+    def test_profiles_naming_two_pools_is_an_error_when_tags_exist(self) -> None:
+        """Group IDs are fabric-wide: two pools would let one number mean two groups."""
+        check = _run_tags(
+            components=[_tagged_component("a", "m", "t1")],
+            tags=[_tag("t1", 20, ("a", "m"))],
+            profiles={"edges": [_profile("a"), _profile("b", pool_id="pool-other", pool_name="OTHER-POOL")]},
+        )
+        assert check._captured_errors == [
+            "No group tag pool (the group-policy profiles name 2 tag pools ['OTHER-POOL', 'SGT-POOL'], expected one): "
+            "the band of 1 group tag(s) cannot be checked"
+        ]
+
+
+class TestRuleTags:
+    """A rule's tags are the tags of components in the rule's own segment, on intra-segment rules only."""
+
+    _TAGS = [_tag("t1", 20, ("a", "m")), _tag("t2", 21, ("b", "m")), _tag("t9", 29, ("z", "other"))]
+    _COMPONENTS = [_tagged_component("a", "m", "t1"), _tagged_component("b", "m", "t2")]
+
+    def test_intra_segment_rule_with_its_components_tags_passes(self) -> None:
+        rule = _rule("a-to-b", "m", "m", source_security_tag=_tag_ref("t1"), destination_security_tag=_tag_ref("t2"))
+        check = _run_tags(components=self._COMPONENTS, tags=self._TAGS, rules=[rule])
+        assert check._captured_errors == []
+
+    def test_untagged_rule_is_ignored(self) -> None:
+        check = _run_tags(components=self._COMPONENTS, tags=self._TAGS, rules=[_rule("a-to-b", "m", "m")])
+        assert check._captured_errors == []
+
+    def test_tag_of_another_segment_is_an_error(self) -> None:
+        rule = _rule("a-to-z", "m", "m", source_security_tag=_tag_ref("t1"), destination_security_tag=_tag_ref("t9"))
+        check = _run_tags(components=self._COMPONENTS, tags=self._TAGS, rules=[rule])
+        assert check._captured_errors == [
+            "Rule 'a-to-z': destination tag 't9' groups no component of the rule's segment"
+        ]
+
+    def test_tag_that_groups_nothing_is_an_error(self) -> None:
+        """A contract between tags that do not exist as groups."""
+        rule = _rule("a-to-x", "m", "m", source_security_tag=_tag_ref("t1"), destination_security_tag=_tag_ref("tx"))
+        check = _run_tags(components=self._COMPONENTS, tags=self._TAGS, rules=[rule])
+        assert check._captured_errors == [
+            "Rule 'a-to-x': destination tag 'tx' groups no component of the rule's segment"
+        ]
+
+    def test_tagged_cross_segment_rule_is_an_error(self) -> None:
+        rule = _rule("a-to-n", "m", "n", source_security_tag=_tag_ref("t1"))
+        check = _run_tags(segments=[_segment("n")], components=self._COMPONENTS, tags=self._TAGS, rules=[rule])
+        assert check._captured_errors == ["Rule 'a-to-n' carries group tags but is not an intra-segment rule"]
