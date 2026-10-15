@@ -253,7 +253,7 @@ def validate_snat_addresses(data: dict[str, Any]) -> list[str]:
     The leg is a sub-interface tagged with the context whose address sits in a
     namespace of type internet. The context's snat_address (one per context,
     shared by all its tenant VRFs) must be set and lie outside the non-internet
-    space (utils/exchange_transit.py NON_PUBLIC_PREFIXES): a private SNAT
+    space (utils/internet_space.py NON_INTERNET_PREFIXES): a private SNAT
     address would be filtered by the edge's RM-TRANSIT-OUT and never return.
     """
     errors: list[str] = []
@@ -273,7 +273,9 @@ def validate_snat_addresses(data: dict[str, Any]) -> list[str]:
         if not address:
             errors.append(f"{label} has an INTERNET leg but no snat_address.")
         elif not is_public_address(address):
-            errors.append(f"{label}: snat_address {address} is not a public address (RFC 1918 / 6598 / reserved).")
+            errors.append(
+                f"{label}: snat_address {address} is not a public address (RFC 1918 / 6598 / 2544 / reserved)."
+            )
     return errors
 
 

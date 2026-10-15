@@ -16,6 +16,7 @@
 {%- set bgp_peer_groups = {} -%}
 {%- set bgp_globals_af = {} -%}
 {%- set ospf_router = {} -%}
+{%- set vlan_members = {} -%}
 {%- include 'common/sonic_common.j2' %}
 {%- set ntp_servers = {} -%}
 {%- set syslog_servers = {} -%}
@@ -30,6 +31,10 @@
   'NTP_SERVER': ntp_servers,
   'SYSLOG_SERVER': syslog_servers
 } -%}
+{#- Only added when a host port carries a VLAN, so a switch without one keeps its table set. -#}
+{%- if vlan_members -%}
+{%- set _ = configdb.update({'VLAN_MEMBER': vlan_members}) -%}
+{%- endif %}
 {#- Per-table merge: MC-LAG contributes VLAN/VLAN_MEMBER/VLAN_INTERFACE
     entries that must not replace the tables built above. #}
 {%- for table, entries in (sonic_mlag | default({})).items() %}

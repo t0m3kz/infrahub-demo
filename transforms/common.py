@@ -29,6 +29,7 @@ from transforms.helpers.segments import (
 from transforms.helpers.templates import load_template
 from transforms.helpers.vxlan import get_interfaces, get_vxlan_config
 from utils.data_cleaning import clean_data
+from utils.fabric_roles import BORDER_ROLES
 
 
 def _fabric_rt_asn(deployment: Any) -> int | None:
@@ -310,8 +311,8 @@ class BaseDeviceTransform(InfrahubTransform):
         for vlan in vlans:
             vlan["acl_name"] = acl_names.get(vlan["vlan_id"])
 
-        if self.device_role == "border-leaf":
-            self._refuse_unprotected_tenant_svis(platform_name, acls, leaf_pbr_rules)
+        if self.device_role in BORDER_ROLES:
+            self._refuse_unprotected_tenant_svis(self.device_role, platform_name, acls, leaf_pbr_rules)
 
         vxlan = get_vxlan_config(
             data,
@@ -351,26 +352,26 @@ class BaseDeviceTransform(InfrahubTransform):
             return rules, []
         return rules, get_leaf_firewall_transits(rules, firewall_contexts, device_name=data.get("name", ""))
 
-    # Border-leaf templates render the SVI ACL on these platforms only, and never PBR.
+    # The border_leafs/* templates (border-leaf and border-spine) render the SVI ACL on these platforms only, and never PBR.
     _BORDER_LEAF_ACL_PLATFORMS = frozenset({"cisco_nxos", "arista_eos"})
 
     @classmethod
     def _refuse_unprotected_tenant_svis(
-        cls, platform_name: str, acls: list[dict[str, Any]], leaf_pbr_rules: list[dict[str, Any]]
+        cls, role: str, platform_name: str, acls: list[dict[str, Any]], leaf_pbr_rules: list[dict[str, Any]]
     ) -> None:
-        """Raise when a border leaf hosts a routed tenant SVI it cannot protect.
+        """Raise when a border leaf or border spine (``role``) hosts a routed tenant SVI it cannot protect.
 
         The segments' ACL (and PBR) would otherwise silently vanish and leave an
         any-to-any SVI inside the shared tenant VRF.
         """
         if leaf_pbr_rules:
             raise ValueError(
-                f"{platform_name} border-leaf cannot render PBR policy for VLANs "
+                f"{platform_name} {role} cannot render PBR policy for VLANs "
                 f"{sorted(rule['vlan_id'] for rule in leaf_pbr_rules)}; refusing unprotected config"
             )
         if acls and platform_name not in cls._BORDER_LEAF_ACL_PLATFORMS:
             raise ValueError(
-                f"{platform_name} border-leaf cannot render the SVI ACL for VLANs "
+                f"{platform_name} {role} cannot render the SVI ACL for VLANs "
                 f"{sorted(acl['vlan_id'] for acl in acls)}; refusing unprotected config"
             )
 

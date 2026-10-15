@@ -11,7 +11,7 @@ from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
 from ..dc_config import host_bits_to_prefix_length, resolve_dc_size_layout
 from ..devices import DeviceMixin
 from ..helpers import name_to_asn_range
-from ..helpers.routing import RoutingStrategy
+from ..helpers.routing import RoutingStrategy, loopback_prefix_length, p2p_prefix_length, underlay_pool_is_ipv6
 from ..helpers.template_interfaces import template_interface_names_by_role
 from ..pod_config import POD_LAYOUTS, templates_by_role
 from ..pools import PoolMixin
@@ -21,7 +21,7 @@ from ..protocols import (
 )
 from ..routing import RoutingMixin
 from ..types import CablingOptions, RoutingOptions, naming_convention_of
-from .fabric_shared import ServiceDevicesMixin, loopback_prefix_length, p2p_prefix_length
+from .fabric_shared import ServiceDevicesMixin
 
 _DC_VALID_FABRIC_ROLES = frozenset({"super-spine", "hyper-spine", "border-leaf", "firewall", "load-balancer"})
 
@@ -117,14 +117,19 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
             )
 
         underlay_protocol = self.data.get("underlay_protocol", "ipv6")
-        is_ipv6 = underlay_protocol == "ipv6"
-        is_dual_stack = underlay_protocol == "dual_stack"
 
-        # Prefix lengths come from the design; the DC instance can override by pre-attaching pools.
-        # Values must already match the underlay_protocol (IPv4 or IPv6) — no conversion needed.
-        # Management is always IPv4.
-        technical_prefix = dc_design["technical_prefix_length"]
-        loopback_prefix = dc_design["loopback_prefix_length"]
+        # The design table stores the technical/loopback pool sizes as IPv6
+        # prefix lengths; each is converted to the address family its pool is
+        # actually sliced from (underlay_pool_is_ipv6 — also what decides the
+        # parent pool in allocate_resource_pools), so an IPv4 or dual-stack DC
+        # never requests a /117 from an IPv4 parent. Management is always IPv4
+        # and stored as such.
+        technical_prefix = host_bits_to_prefix_length(
+            128 - dc_design["technical_prefix_length"], ipv6=underlay_pool_is_ipv6(underlay_protocol, "technical")
+        )
+        loopback_prefix = host_bits_to_prefix_length(
+            128 - dc_design["loopback_prefix_length"], ipv6=underlay_pool_is_ipv6(underlay_protocol, "loopback")
+        )
         management_prefix = dc_design["management_prefix_length"]
 
         # Always (re-)allocate every DC pool on every run — never skip an object just
@@ -158,7 +163,7 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
         # for overlay BGP just like they would under a super-spine design.
         if max_super_spines_cap > 0 or max_border_leafs_cap > 0 or max_hyper_spines_cap > 0:
             pools_to_allocate["dc-fabric-loopback"] = host_bits_to_prefix_length(
-                dc_design["dc_fabric_loopback_host_bits"], ipv6=is_ipv6
+                dc_design["dc_fabric_loopback_host_bits"], ipv6=underlay_pool_is_ipv6(underlay_protocol, "loopback")
             )
 
         self.logger.info(f"Allocating DC pools: {list(pools_to_allocate.keys())}")
@@ -167,8 +172,7 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
             id=dc_id,
             strategy="fabric",
             pools=pools_to_allocate,
-            ipv6=is_ipv6,
-            dual_stack=is_dual_stack,
+            underlay_protocol=underlay_protocol,
         )
 
         # Derive deterministic ASN range from DC name (unique per site).
@@ -244,29 +248,21 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
             node_attribute="vni",
         )
 
-        # Attach every pool reference to the DC with one fetch and one save,
-        # every run — the pools above are the same upserted objects whether
-        # just created or already there, so this is idempotent. Plain save():
-        # dc is a known-existing node (just fetched) — allow_upsert=True would
-        # route through create()'s Upsert mutation, which sends every
-        # attribute/relationship (even unmodified ones), spuriously re-firing
-        # unrelated `updated` triggers (fabric_templates/connectivity_mode/status)
-        # on every pool attach and double-firing dc_pod_cascade. Untracked: the
-        # DC is this run's target, not its output.
-        dc = await self.client.get(kind=TopologyDataCenter, id=dc_id)
-        if dc:
-            pool_attr_map: dict[str, str] = {
-                "loopback": "loopback_pool",
-                "management": "management_pool",
-                "technical": "technical_pool",
-            }
-            for pool_name, pool_obj in dc_pools.items():
-                if pool_name in pool_attr_map:
-                    setattr(dc, pool_attr_map[pool_name], {"id": pool_obj.id})
-            if fabric_asn_pool_id:
-                dc.fabric_asn_pool = {"id": fabric_asn_pool_id}
-            dc.vni_pool = {"id": vni_pool.id}
-            await dc.save(update_group_context=False)
+        # Attach every pool reference to the DC (one fetch, one save, every run —
+        # the pools above are the same upserted objects whether just created or
+        # already there, so this is idempotent). See PoolMixin.attach_refs for
+        # why the save is plain and untracked.
+        await self.attach_refs(
+            kind=TopologyDataCenter,
+            node_id=dc_id,
+            refs={
+                "loopback_pool": dc_pools["loopback"].id,
+                "management_pool": dc_pools["management"].id,
+                "technical_pool": dc_pools["technical"].id,
+                "fabric_asn_pool": fabric_asn_pool_id,
+                "vni_pool": vni_pool.id,
+            },
+        )
 
         super_spine_names: list[str] = []
         if design_mode == "back-to-back":
@@ -276,7 +272,11 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
             )
         elif super_spine_entries:
             super_spine_names = await self._create_dc_tier_devices(
-                "super-spine", super_spine_entries, indexes=[dc_index], dc_pools=dc_pools, is_ipv6=is_ipv6
+                "super-spine",
+                super_spine_entries,
+                indexes=[dc_index],
+                dc_pools=dc_pools,
+                underlay_protocol=underlay_protocol,
             )
 
         # Hyper-spine: a 4th tier above super-spine, only present in XL fabrics
@@ -294,7 +294,11 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
             )
 
         hyper_spine_names = await self._create_dc_tier_devices(
-            "hyper-spine", hyper_spine_entries, indexes=[dc_index], dc_pools=dc_pools, is_ipv6=is_ipv6
+            "hyper-spine",
+            hyper_spine_entries,
+            indexes=[dc_index],
+            dc_pools=dc_pools,
+            underlay_protocol=underlay_protocol,
         )
 
         # Create shared routing objects (overlay AS, OSPF area, and — for eBGP
@@ -372,7 +376,7 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
                         strategy="pod",
                         options=CablingOptions(
                             pool=dc_pools.get("technical"),
-                            p2p_prefix_length=p2p_prefix_length(is_ipv6),
+                            p2p_prefix_length=p2p_prefix_length(underlay_protocol),
                         ),
                     )
                 await self.create_routing(
@@ -401,7 +405,7 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
         # This also makes incremental single-pod-add work correctly with no DC-level
         # orchestration, since add_pod alone (no add_dc) is a supported entry point.
 
-        self._is_ipv6 = is_ipv6
+        self._underlay_protocol = underlay_protocol
         dc_fabric_loopback_pool = dc_pools.get("dc-fabric-loopback")
         self._dc_fabric_loopback_pool_id = dc_fabric_loopback_pool.id if dc_fabric_loopback_pool else None
         await self._generate_dc_scoped_fabric_devices()
@@ -413,7 +417,7 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
         *,
         indexes: list[int],
         dc_pools: dict[str, Any],
-        is_ipv6: bool,
+        underlay_protocol: str,
     ) -> list[str]:
         """Create one DC-scoped fabric tier (super-spine/hyper-spine), one
         create_devices() call per fabric_templates entry, looped back from
@@ -431,7 +435,7 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
                         indexes=indexes,
                         allocate_loopback=True,
                         loopback_pool=dc_pools.get("dc-fabric-loopback"),
-                        loopback_prefix_length=loopback_prefix_length(is_ipv6),
+                        loopback_prefix_length=loopback_prefix_length(underlay_protocol),
                         management_pool=dc_pools.get("management"),
                     ),
                 )
@@ -533,7 +537,7 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
                     indexes=[self.data["index"], pod.index.value],
                     allocate_loopback=True,
                     loopback_pool=self._dc_fabric_loopback_pool_id,
-                    loopback_prefix_length=loopback_prefix_length(self._is_ipv6),
+                    loopback_prefix_length=loopback_prefix_length(self._underlay_protocol),
                 )
                 names = await self.create_devices(
                     deployment_id=self.data["id"],

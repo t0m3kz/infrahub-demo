@@ -115,7 +115,8 @@ def physical_payload(
 
 
 def sdwan_edge(**kwargs: Any) -> dict[str, Any]:
-    return interface("if-edge", "GE1", "C001-EDGE1", address="10.99.1.2/30", roles=("underlay",), **kwargs)
+    kwargs.setdefault("address", "10.99.1.2/30")
+    return interface("if-edge", "GE1", "C001-EDGE1", roles=("underlay",), **kwargs)
 
 
 def sdwan_gateway(**kwargs: Any) -> dict[str, Any]:

@@ -111,7 +111,7 @@ class RackRolesHelper:
         )
         if allocate_loopback:
             options["loopback_pool"] = self.ctx._loopback_pool_id
-            options["loopback_prefix_length"] = 128 if self.ctx._is_ipv6 else 32
+            options["loopback_prefix_length"] = self.ctx._loopback_prefix_length
         if group_name:
             options["group_name"] = group_name
         if mlag:

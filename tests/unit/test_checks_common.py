@@ -6,6 +6,7 @@ from functools import partial
 import pytest
 
 from checks.border_leaf import CheckBorderLeaf
+from checks.border_spine import CheckBorderSpine
 from checks.common import (
     validate_exchange_gateways,
     validate_routing_password,
@@ -14,6 +15,7 @@ from checks.common import (
 from checks.common import validate_transit_vlans as _validate_transit_vlans
 from checks.edge import CheckEdge
 from transforms.config.border_leaf import BorderLeaf
+from transforms.config.border_spine import BorderSpine
 from transforms.config.edge import Edge
 
 
@@ -295,7 +297,7 @@ def _service_port() -> dict:
     return {"name": "Ethernet49", "role": "firewall", "interface_capabilities": [context]}
 
 
-@pytest.fixture(params=[BorderLeaf, Edge], ids=["border-leaf", "edge"])
+@pytest.fixture(params=[BorderLeaf, BorderSpine, Edge], ids=["border-leaf", "border-spine", "edge"])
 def validate_transit_vlans(request: pytest.FixtureRequest):
     """validate_transit_vlans bound to each border device's own transform class."""
     return lambda device: _validate_transit_vlans(device, transform_cls=request.param)
@@ -318,8 +320,8 @@ class TestValidateTransitVlans:
         assert "bl-1" in errors[0]
 
     def test_both_checks_run_the_validator(self):
-        """CheckBorderLeaf and CheckEdge both carry a transit-VLAN validator bound to their transform."""
-        for check, transform_cls in ((CheckBorderLeaf, BorderLeaf), (CheckEdge, Edge)):
+        """CheckBorderLeaf, CheckBorderSpine and CheckEdge carry a transit-VLAN validator bound to their transform."""
+        for check, transform_cls in ((CheckBorderLeaf, BorderLeaf), (CheckBorderSpine, BorderSpine), (CheckEdge, Edge)):
             bound = [v for v in check.validators if isinstance(v, partial) and v.func is _validate_transit_vlans]
             assert len(bound) == 1
             assert bound[0].keywords == {"transform_cls": transform_cls}
@@ -340,7 +342,18 @@ class TestValidateSnatAddresses:
         assert len(errors) == 1
         assert "no snat_address" in errors[0]
 
-    @pytest.mark.parametrize("address", ["10.1.1.1/32", "100.66.32.9/32", "172.16.0.1/32", "169.254.1.1/32"])
+    @pytest.mark.parametrize(
+        "address",
+        [
+            "10.1.1.1/32",
+            "100.66.32.9/32",
+            "100.64.0.1/32",
+            "198.18.0.1/32",
+            "198.19.255.1/32",
+            "172.16.0.1/32",
+            "169.254.1.1/32",
+        ],
+    )
     def test_non_public_snat_reports_error(self, address: str):
         errors = validate_snat_addresses(_snat_leg(address))
         assert len(errors) == 1

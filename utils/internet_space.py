@@ -1,9 +1,10 @@
 """Address space that is never reachable on the public internet.
 
-One list shared by every reader that has to tell "internet" from "internal":
+The one list shared by every reader that has to tell "internet" from "internal":
 the leaf ACL (a permit to a prefix-less external segment is preceded by a
-deny for each of these, transforms/helpers/acl.py) and the edge transit
-filters. Documentation ranges (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24)
+deny for each of these, transforms/helpers/acl.py), the SNAT-address check
+(utils/exchange_transit.py is_public_address: a firewall context's SNAT address
+must lie outside this space) and the edge transit filters. Documentation ranges (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24)
 are deliberately absent: the demo uses them as stand-in public space.
 """
 

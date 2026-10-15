@@ -12,6 +12,7 @@ from transforms.helpers.bgp import (
     _extract_remote_asn_from_peering,
     get_bgp_profile,
 )
+from utils.fabric_roles import RR_ROLES
 
 # ============================================================================
 # Helpers to build test data matching GraphQL response structure
@@ -1042,6 +1043,43 @@ class TestBuildPeerGroups:
         pgs = _build_peer_groups(sessions, device_role="spine")
         assert len(pgs) == 1
         assert pgs[0]["route_reflector_client"] is True
+
+    @pytest.mark.parametrize("role", sorted(RR_ROLES))
+    def test_every_rr_role_with_rr_flagged_sessions_is_a_route_reflector(self, role: str) -> None:
+        """One definition (utils/fabric_roles.RR_ROLES) decides which roles reflect, hyper-spine included."""
+        sessions = [
+            _session(session_type="IBGP", ttl=255, remote_as={"asn": 65000}, rr_client=True, name="o1"),
+            _session(session_type="IBGP", ttl=255, remote_as={"asn": 65000}, rr_client=True, name="o2"),
+        ]
+        pgs = _build_peer_groups(sessions, device_role=role)
+        assert pgs[0]["route_reflector_client"] is True
+        assert pgs[0]["next_hop_unchanged"] is True
+
+    def test_hyper_spine_profile_gets_rr_peer_group_and_cluster_id(self) -> None:
+        """get_bgp_profile for a hyper-spine yields the same RR peer group a super-spine gets."""
+        peerings = [
+            _make_peering(
+                name=f"overlay-{i}",
+                session_type="IBGP",
+                ttl=255,
+                local_device="hs-01",
+                remote_device=f"leaf-0{i}",
+                local_ip="10.0.0.200/32",
+                remote_ip=f"10.0.0.{i}/32",
+                local_iface_type="DcimVirtualInterface",
+                remote_iface_type="DcimVirtualInterface",
+                route_reflector_client=True,
+            )
+            for i in (1, 2)
+        ]
+        service = TestGetBgpProfile()._make_service(peerings, local_asn=65000, router_id="10.0.0.200/32")
+        bgp = get_bgp_profile([service], device_name="hs-01", device_role="hyper-spine")[0]
+        assert bgp["peer_groups"][0]["route_reflector_client"] is True
+        assert bgp["cluster_id"] == "10.0.0.200"
+
+    def test_rr_client_not_on_non_rr_role(self):
+        sessions = [_session(session_type="IBGP", ttl=255, remote_as={"asn": 65000}, rr_client=True, name="o1")]
+        assert _build_peer_groups(sessions, device_role="l2-leaf")[0]["route_reflector_client"] is False
 
     def test_rr_client_on_super_spine(self):
         sessions = [

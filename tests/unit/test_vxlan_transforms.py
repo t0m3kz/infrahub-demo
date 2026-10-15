@@ -595,6 +595,8 @@ class TestGetAclsInternetBand:
         assert all(
             r["action"] == "deny" and r["protocol"] == "ip" and r["src"] == "10.1.0.0/24" for r in rules[:permit_at]
         )
+        denied = {r["dst"] for r in rules[:permit_at]}
+        assert {"198.18.0.0/15", "100.64.0.0/10"} <= denied
         permit = rules[permit_at]
         assert (permit["protocol"], permit["src"], permit["dst"], permit["dst_port"]) == (
             "tcp",

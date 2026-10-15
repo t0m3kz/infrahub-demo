@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock
 
@@ -34,8 +36,23 @@ class _DummyBatch:
             yield node, None
 
 
+def _recording_lock(events: list[str]) -> Any:
+    """A resource_lock stand-in that records acquire/release in `events`."""
+
+    @asynccontextmanager
+    async def _lock(key: str) -> AsyncGenerator[None]:
+        events.append(f"acquire:{key}")
+        try:
+            yield
+        finally:
+            events.append(f"release:{key}")
+
+    return _lock
+
+
 def _make_generator() -> Any:
     gen = DeviceMixin.__new__(DeviceMixin)
+    gen.resource_lock = _recording_lock([])
     gen.fabric_name = "dc1"
     gen.pod_name = None
     gen.logger = MagicMock()
@@ -284,7 +301,7 @@ class TestEnsureHaPairs:
     load-balancer roles via DeviceOptions.ha_kind."""
 
     def _gen(self) -> Any:
-        gen = DeviceMixin.__new__(DeviceMixin)
+        gen: Any = DeviceMixin.__new__(DeviceMixin)
         gen.logger = MagicMock()
         gen.client = MagicMock()
         gen.client.group_context = MagicMock()
@@ -292,11 +309,52 @@ class TestEnsureHaPairs:
         gen.client.create = AsyncMock()
         gen.client.filters = AsyncMock(return_value=[])
         gen.client.get = AsyncMock()
+        gen.lock_events = []
+        gen.resource_lock = _recording_lock(gen.lock_events)
         # _ensure_ha_interfaces (HA sync interface/cable creation) is covered
         # by its own TestEnsureHaInterfaces below — stub it here so these
         # tests only exercise _ensure_ha_pairs's own domain create/lookup.
         gen._ensure_ha_interfaces = AsyncMock()
         return gen
+
+    @pytest.mark.asyncio
+    async def test_lookup_and_create_run_inside_the_per_pair_lock(self) -> None:
+        """Two overlapping runs would each find no domain and each create one."""
+        gen = self._gen()
+        gen.client.get = AsyncMock(return_value=_mock_group())
+        ha_obj = MagicMock(id="ha-1", save=AsyncMock())
+        gen.client.create = AsyncMock(return_value=ha_obj)
+        events = gen.lock_events
+
+        async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
+            events.append(f"query:{kind}")
+            return [_mock_device("fw-01"), _mock_device("fw-02")] if kind is DcimPhysicalDevice else []
+
+        async def _save(**kwargs: Any) -> None:
+            events.append("create-save")
+
+        ha_obj.save = AsyncMock(side_effect=_save)
+        gen.client.filters = AsyncMock(side_effect=_filters)
+
+        await gen._ensure_ha_pairs(["fw-02", "fw-01"], ha_kind="ManagedFirewallHA", role_label="firewall")
+
+        assert events == [
+            "acquire:ha-domain-fw-01-fw-02-ha",
+            "query:ManagedFirewallHA",
+            f"query:{DcimPhysicalDevice}",
+            "create-save",
+            "release:ha-domain-fw-01-fw-02-ha",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_each_pair_gets_its_own_lock_and_it_is_released_on_a_failed_lookup(self) -> None:
+        gen = self._gen()
+        gen.client.filters = AsyncMock(side_effect=[[], [_mock_device("fw-01")]])  # unresolvable first pair
+
+        await gen._ensure_ha_pairs(["fw-01", "fw-02"], ha_kind="ManagedFirewallHA", role_label="firewall")
+
+        assert gen.lock_events == ["acquire:ha-domain-fw-01-fw-02-ha", "release:ha-domain-fw-01-fw-02-ha"]
+        gen.client.create.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_single_device_is_a_noop(self) -> None:
