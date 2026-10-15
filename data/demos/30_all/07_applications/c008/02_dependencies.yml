@@ -1,7 +1,10 @@
 ---
-# Who calls whom inside inventory-sync. Source and target are component fqdns;
-# without ports a dependency opens every port its target component lists in
-# 01_application.yml.
+# Who calls whom: inside inventory-sync, and the one cross-customer flow of
+# DC10, trade-portal -> C005's payment API (../c005/01_application.yml). A
+# cross-owner flow opens only once its target's owner approves it
+# (generators/helpers/rules.py), so access_status is approved. Source and
+# target are component fqdns; without ports a dependency opens every port its
+# target component lists.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -12,5 +15,13 @@ spec:
       target: db.inventory-sync.c008.demo.local
       access_status: auto
       description: "Sync API stores inventory state in its database"
+      member_of_groups:
+        - app_dependencies
+    - name: c008-trade-portal-to-c005-payment-api
+      source: api.trade-portal.c008.demo.local
+      target: api.payment-core.c005.demo.local
+      access_status: approved
+      decision_reason: "C005 publishes its payment API to C008's trade portal"
+      description: "Trade portal settles orders through C005's payment API"
       member_of_groups:
         - app_dependencies

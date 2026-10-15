@@ -83,20 +83,21 @@ ALL_DEMO_EXPECTED_GENERATORS: dict[str, int] = {
     # generator no-ops on them, same as add_rack does on the colocation cage
     # racks.
     "add_colocation_metro": 9,
-    "add_endpoint": 12,  # 6 DC hosts + 6 colocation cage hosts
-    "add_vxlan_segment": 5,  # C005's five application segments
-    "add_app_application": 9,  # one per declared AppApplication
+    "add_endpoint": 16,  # 10 DC hosts (DC10 six, DC11/DC12 two each) + 6 colocation cage hosts
+    "add_vxlan_segment": 6,  # C005's five application segments and C008's DC10 one
+    "add_app_application": 10,  # one per declared AppApplication
     # One per declared AppDependency: it loads after its application in the
     # same stage, so its own trigger is what puts its rule in place.
-    "add_app_dependency": 14,
-    # 9 distinct footprints: 03_dc/new_customers declares seven and
+    "add_app_dependency": 16,
+    # 10 distinct footprints: 03_dc/new_customers declares seven and
     # 06_customer_boarding re-declares three of them as supersets, which
-    # upsert, and adds the C008/C010 dev footprints on DC12's shared hosts.
+    # upsert, and adds the C008/C010 dev footprints on DC12's shared hosts and
+    # C008's production one in DC10.
     # add_customer_deployment_cloud/office were removed: their only job was
     # hub-and-spoke exchange auto-provisioning, now replaced by the
     # per-context TopologyRoutedExchange objects the DC/colocation customer
     # generators create — see docs/exchange_gateway.md.
-    "add_customer_deployment_dc": 9,
+    "add_customer_deployment_dc": 10,
     "add_customer_deployment_colocation": 7,
     # trigger-customer-office-sdwan-on-created fires unconditionally for
     # every TopologyCustomerOffice (5: C001/C003/C015/C002/C005) — the
@@ -106,14 +107,14 @@ ALL_DEMO_EXPECTED_GENERATORS: dict[str, int] = {
     # sdwan_gateway; 5 is the safe floor.
     "add_sdwan_edge": 5,
     # Same AppApplication created event as add_app_application.
-    "add_application_orchestrator_routing": 9,
+    "add_application_orchestrator_routing": 10,
     # One created-trigger run per declared AppComponent; add_endpoint's
     # fan-out only adds runs (components load after their servers are cabled,
     # so in 30_all it finds none).
-    "add_app_component_segment": 22,
+    "add_app_component_segment": 24,
     # One created-trigger run per footprint kind, same floors as the
     # per-kind generators above (cloud/office: ALL_DEMO_EXPECTED_OBJECTS).
-    "add_customer_dc_orchestrator_routing": 9,
+    "add_customer_dc_orchestrator_routing": 10,
     "add_customer_colocation_orchestrator_routing": 7,
     "add_customer_cloud_orchestrator_routing": 4,
     "add_customer_office_orchestrator_routing": 5,
@@ -127,19 +128,19 @@ ALL_DEMO_EXPECTED_OBJECTS: dict[str, int] = {
     "TopologyDataCenter": 3,
     "TopologyPod": 6,
     "LocationRack": 25,
-    "TopologyCustomerDC": 9,
+    "TopologyCustomerDC": 10,
     "TopologyCustomerColocation": 7,
     "TopologyCustomerCloud": 4,
     "TopologyCustomerOffice": 5,
-    "ManagedVxlanSegment": 5,
+    "ManagedVxlanSegment": 6,
     "ManagedVlanSegment": 10,  # incl. the DC11 core-services segment (07_applications/infra)
-    "AppApplication": 10,
-    "AppComponent": 22,
+    "AppApplication": 11,
+    "AppComponent": 24,
     # One per tier-to-tier call, plus the access-profile grant that
     # publishes c001's checkout frontend; ports live on the components.
-    "AppDependency": 14,
+    "AppDependency": 16,
     "SecurityAccessProfile": 1,
-    "DcimVirtualDevice": 34,
+    "DcimVirtualDevice": 38,
     "TopologyPhysicalCircuit": 8,
     "TopologyVirtualCircuit": 8,
     "CloudInstance": 8,
@@ -161,7 +162,8 @@ ALL_DEMO_DC_NAMES = ("DC10", "DC11", "DC12")
 #              dedicated (see ALL_DEMO_DEDICATED_FIREWALL_TENANTS)
 #   POD level: 2 spines each, two pods
 #   Racks    : two network racks x (2 leaf + 2 access-leaf)
-#   Compute  : one application host per row (see ALL_DEMO_DC_HOST_ROWS)
+#   Compute  : the DC's application hosts (ALL_DEMO_DC_ENDPOINTS), the one
+#              role whose count differs between the DCs
 ALL_DEMO_DC_ROLE_COUNTS: dict[str, int] = {
     "super-spine": 2,
     "border-leaf": 2,
@@ -170,7 +172,6 @@ ALL_DEMO_DC_ROLE_COUNTS: dict[str, int] = {
     "access-leaf": 4,
     "firewall": 4,
     "load-balancer": 4,
-    "endpoint": 2,
 }
 
 # Every fabric device routes the underlay; only the tiers above the VTEP layer
@@ -179,7 +180,9 @@ ALL_DEMO_DC_ROLE_COUNTS: dict[str, int] = {
 ALL_DEMO_DC_UNDERLAY_ROLES = ("super-spine", "spine", "leaf", "access-leaf", "border-leaf")
 ALL_DEMO_DC_OVERLAY_ROLES = ("super-spine", "spine", "border-leaf")
 
-# One application host per compute-rack row. The row matters: add_endpoint
+# Application hosts in row pairs, one host of a pair per compute-rack row
+# (DC10 has three pairs: C005's payment-core, its session store, C008). The
+# row matters: add_endpoint
 # cables a host to the access-leaf pair of the network rack sharing its row,
 # so row-1 and row-2 hosts must land on *disjoint* access-leaf pairs. That
 # disjointness is the whole point of putting them in different rows, and it is
@@ -187,10 +190,19 @@ ALL_DEMO_DC_OVERLAY_ROLES = ("super-spine", "spine", "border-leaf")
 ALL_DEMO_DC_HOST_ROWS: dict[str, int] = {
     "dc10-pod1-server-1": 1,
     "dc10-pod1-server-2": 2,
+    "dc10-pod1-server-3": 1,
+    "dc10-pod1-server-4": 2,
+    "dc10-pod1-server-5": 1,
+    "dc10-pod1-server-6": 2,
     "dc11-pod1-server-1": 1,
     "dc11-pod1-server-2": 2,
     "dc12-pod1-server-1": 1,
     "dc12-pod1-server-2": 2,
+}
+
+# DC name -> how many application hosts (role endpoint) it has, from ALL_DEMO_DC_HOST_ROWS.
+ALL_DEMO_DC_ENDPOINTS: dict[str, int] = {
+    dc: sum(host.startswith(f"{dc.lower()}-") for host in ALL_DEMO_DC_HOST_ROWS) for dc in ALL_DEMO_DC_NAMES
 }
 
 # The colocation cages are the deliberate counter-example: both NICs of each
@@ -212,13 +224,14 @@ ALL_DEMO_HOST_LINK_COUNT = 2
 # name -> (criticality, component count).
 ALL_DEMO_EXPECTED_APPLICATIONS: dict[str, tuple[str, int]] = {
     "c003-custody-api-p": ("high", 2),
-    "c005-payment-core-p": ("critical", 4),
+    "c005-payment-core-p": ("critical", 5),
     "c006-erp-core-p": ("critical", 3),
     "c011-edge-analytics-p": ("medium", 2),
     "c012-payment-edge-p": ("high", 2),
     "c013-fraud-detection-p": ("critical", 2),
     "c016-billing-cloud-p": ("medium", 2),
     "c008-inventory-sync-d": ("medium", 2),
+    "c008-trade-portal-p": ("high", 1),
     "c010-reporting-portal-d": ("low", 2),
 }
 
@@ -547,7 +560,7 @@ _TRANSIT_NAMESPACE_BY_TYPE: dict[str, str] = dict(
 
 # Deployment name ({org}-{environment}-{DC}) of every TopologyCustomerDC, per DC.
 ALL_DEMO_DC_CUSTOMER_DEPLOYMENTS: dict[str, tuple[str, ...]] = {
-    "DC10": ("C005-P-DC10", "C007-P-DC10"),
+    "DC10": ("C005-P-DC10", "C007-P-DC10", "C008-P-DC10"),
     "DC11": ("C006-P-DC11", "C009-P-DC11"),
     "DC12": ("C005-P-DC12", "C008-P-DC12", "C008-D-DC12", "C010-P-DC12", "C010-D-DC12"),
 }
@@ -680,17 +693,19 @@ ALL_DEMO_EXPECTED_OBJECTS["ManagedFirewallContext"] = ALL_DEMO_SHARED_FIREWALL_C
 )
 ALL_DEMO_EXPECTED_OBJECTS["TopologyRoutedExchange"] = ALL_DEMO_TRANSIT_EXCHANGES
 
-# C005's five application segments and the deployments each is activated in.
+# C005's five application segments, C008's DC10 one, and the deployments each
+# is activated in.
 # The two dc_pair "stretch" segments carry two DC legs each, and
 # colo-services-stretch one DC leg plus one colocation-metro leg (FR, reached
 # over DF-DC10-EQXFR2 through the EVPN Multi-Site border gateways) — eight
-# ManagedSegmentDeployment records in total.
+# ManagedSegmentDeployment records for C005, nine in total.
 ALL_DEMO_SEGMENT_LEGS: dict[str, tuple[str, ...]] = {
     "c005-web-frontend-local-dc10-p": ("DC10",),
     "c005-app-backend-stretch-p": ("DC10", "DC12"),
     "c005-database-local-dc12-p": ("DC12",),
     "c005-message-queue-stretch-p": ("DC10", "DC12"),
     "c005-colo-services-stretch-p": ("DC10", "FR"),
+    "c008-trade-portal-local-dc10-p": ("DC10",),
 }
 
 # Timeout and polling constants

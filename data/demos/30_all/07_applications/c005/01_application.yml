@@ -37,6 +37,23 @@ spec:
             member_of_groups:
               - app_components
 
+          # Second component of the microsegmented web-frontend segment: the
+          # web-frontend -> session-store rule (03_dependencies.yml) is an
+          # intra-segment flow, so it is a contract between their component
+          # groups, and nothing else between them is permitted. On its own
+          # hosts (server-3/4): no host port carries both components.
+          - name: session-store
+            fqdn: sessions.payment-core.c005.demo.local
+            component_type: cache
+            ports:
+              - tcp/6379
+            network_segment: c005-web-frontend-local-dc10-p
+            instances:
+              - c005-session-store-dc10-1
+              - c005-session-store-dc10-2
+            member_of_groups:
+              - app_components
+
           - name: app-backend
             fqdn: backend.payment-core.c005.demo.local
             component_type: backend

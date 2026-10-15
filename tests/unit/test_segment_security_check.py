@@ -266,14 +266,28 @@ def _tagged_component(fqdn: str, seg: str, tag_id: str | None) -> dict[str, Any]
     }
 
 
-def _profile(name: str, pool_id: str | None = "pool-sgt", pool_name: str = "SGT-POOL") -> dict[str, Any]:
-    """One DcimGroupPolicyProfile edge naming a tag pool with the 16-4095 band (or none)."""
+def _profile(
+    name: str,
+    pool_id: str | None = "pool-sgt",
+    pool_name: str = "SGT-POOL",
+    *,
+    unclassified: int | None = None,
+    unaware: int | None = None,
+) -> dict[str, Any]:
+    """One DcimGroupPolicyProfile edge naming a tag pool with the 16-4095 band (or none), and its reserved groups."""
     pool = (
         {"node": {"id": pool_id, "name": _v(pool_name), "start_range": _v(16), "end_range": _v(4095)}}
         if pool_id
         else {"node": None}
     )
-    return {"node": {"name": _v(name), "tag_pool": pool}}
+    return {
+        "node": {
+            "name": _v(name),
+            "unclassified_group_id": _v(unclassified),
+            "unaware_group_id": _v(unaware),
+            "tag_pool": pool,
+        }
+    }
 
 
 _PROFILES = {"edges": [_profile("reference-cisco-nxos"), _profile("reference-arista-eos", pool_id=None)]}
@@ -337,7 +351,9 @@ class TestComponentTags:
     def test_orphan_tag_is_a_warning(self) -> None:
         check = _run_tags(tags=[_tag("t1", 20)])
         assert check._captured_errors == []
-        assert check._captured_infos == ["WARNING: security tag 't1.example' groups no component (orphan)"]
+        assert check._captured_infos == [
+            "WARNING: security tag 't1.example' groups no component and no segment (orphan)"
+        ]
 
     @pytest.mark.parametrize("group_id", [15, 4096, 65000])
     def test_group_id_outside_the_pool_band_is_an_error(self, group_id: int) -> None:
@@ -371,7 +387,7 @@ class TestComponentTags:
 
 
 class TestRuleTags:
-    """A rule's tags are the tags of components in the rule's own segment, on intra-segment rules only."""
+    """A rule side's tag is a component of that side's segment, and only where that segment is microsegmented."""
 
     _TAGS = [_tag("t1", 20, ("a", "m")), _tag("t2", 21, ("b", "m")), _tag("t9", 29, ("z", "other"))]
     _COMPONENTS = [_tagged_component("a", "m", "t1"), _tagged_component("b", "m", "t2")]
@@ -389,7 +405,7 @@ class TestRuleTags:
         rule = _rule("a-to-z", "m", "m", source_security_tag=_tag_ref("t1"), destination_security_tag=_tag_ref("t9"))
         check = _run_tags(components=self._COMPONENTS, tags=self._TAGS, rules=[rule])
         assert check._captured_errors == [
-            "Rule 'a-to-z': destination tag 't9' groups no component of the rule's segment"
+            "Rule 'a-to-z': destination tag 't9' groups no component of its destination segment 'm'"
         ]
 
     def test_tag_that_groups_nothing_is_an_error(self) -> None:
@@ -397,10 +413,199 @@ class TestRuleTags:
         rule = _rule("a-to-x", "m", "m", source_security_tag=_tag_ref("t1"), destination_security_tag=_tag_ref("tx"))
         check = _run_tags(components=self._COMPONENTS, tags=self._TAGS, rules=[rule])
         assert check._captured_errors == [
-            "Rule 'a-to-x': destination tag 'tx' groups no component of the rule's segment"
+            "Rule 'a-to-x': destination tag 'tx' groups no component of its destination segment 'm'"
         ]
 
-    def test_tagged_cross_segment_rule_is_an_error(self) -> None:
-        rule = _rule("a-to-n", "m", "n", source_security_tag=_tag_ref("t1"))
+    def test_cross_segment_rule_tagged_on_its_microsegmented_side_passes(self) -> None:
+        """A component dependency into a microsegmented segment names the target component."""
+        rule = _rule("n-to-a", "n", "m", destination_security_tag=_tag_ref("t1"))
         check = _run_tags(segments=[_segment("n")], components=self._COMPONENTS, tags=self._TAGS, rules=[rule])
-        assert check._captured_errors == ["Rule 'a-to-n' carries group tags but is not an intra-segment rule"]
+        assert check._captured_errors == []
+
+    def test_tag_on_a_side_that_is_not_microsegmented_is_an_error(self) -> None:
+        """A normal segment's hosts are all its segment group: a component tag there classifies nothing."""
+        rule = _rule("a-to-n", "m", "n", source_security_tag=_tag_ref("t1"), destination_security_tag=_tag_ref("t2"))
+        check = _run_tags(segments=[_segment("n")], components=self._COMPONENTS, tags=self._TAGS, rules=[rule])
+        assert check._captured_errors == [
+            "Rule 'a-to-n' carries a destination group tag but its destination segment 'n' is not microsegmented"
+        ]
+
+
+# ---------------------------------------------------------------------------
+# Segment group tags and the contract builder consistency
+# ---------------------------------------------------------------------------
+
+
+def _segment_tag(tag_id: str, group_id: int, *segments: str, components: tuple[tuple[str, str], ...] = ()) -> dict:
+    """One SecurityTag edge grouping ``segments`` (and, wrongly, ``components``: (fqdn, segment id))."""
+    edge = _tag(tag_id, group_id, *components)
+    edge["node"]["network_segments"] = {"edges": [{"node": {"id": seg, "name": _v(seg)}} for seg in segments]}
+    return edge
+
+
+def _policy_rule(name: str, dst: str | None, **extra: Any) -> dict[str, Any]:
+    """One rule of a segment's own policy, as SegmentGroupPolicyFields selects it."""
+    return {
+        "node": {
+            "id": f"rule-{name}",
+            "index": _v(100),
+            "name": _v(name),
+            "action": _v("permit"),
+            "protocol": _v("tcp"),
+            "port_start": _v(443),
+            "port_end": _v(None),
+            "disabled": _v(False),
+            "apply_on_switch": _v(False),
+            "destination_segment": {"node": {"id": dst} if dst else None},
+            **extra,
+        }
+    }
+
+
+def _tenant(seg_id: str, tag_id: str | None, *rules: dict[str, Any], isolation: str = "normal") -> dict[str, Any]:
+    """A routed PROD tenant segment with its group tag and its own rules (SegmentGroupPolicyFields)."""
+    edge = _segment(seg_id, isolation_mode=_v(isolation))
+    edge["node"]["gateway"]["node"]["ip_prefix"]["node"]["ip_namespace"] = {
+        "node": {"name": _v("PROD"), "namespace_type": _v("prod")}
+    }
+    edge["node"]["owner"] = {"node": {"org_id": _v(seg_id.split("-")[0].upper())}}
+    edge["node"]["security_tag"] = (
+        {"node": {"id": tag_id, "name": _v(f"{tag_id}-name"), "group_id": _v(100)}} if tag_id else {"node": None}
+    )
+    edge["node"]["security_policy"] = {
+        "node": {"name": _v(f"seg-{seg_id}-egress"), "enabled": _v(True), "rules": {"edges": list(rules)}}
+    }
+    return edge
+
+
+class TestSegmentTags:
+    """A segment tag groups exactly one segment, never components too."""
+
+    def test_tag_of_one_segment_passes(self) -> None:
+        check = _run_tags(segments=[_tenant("c1-a", "ta")], tags=[_segment_tag("ta", 30, "c1-a")])
+        assert check._captured_errors == []
+        assert check._captured_infos == []
+
+    def test_tag_shared_by_two_segments_is_an_error(self) -> None:
+        """One number for two segments would merge their groups: every contract of one opens the other."""
+        check = _run_tags(
+            segments=[_tenant("c1-a", "ta"), _tenant("c2-b", "ta")], tags=[_segment_tag("ta", 30, "c1-a", "c2-b")]
+        )
+        assert check._captured_errors == ["Security tag 'ta.example' is shared by 2 segments: ['c1-a', 'c2-b']"]
+
+    def test_tag_of_a_segment_and_a_component_is_an_error(self) -> None:
+        """What a tag groups is the relationship that holds it: never both."""
+        check = _run_tags(
+            components=[_tagged_component("a", "m", "ta")],
+            segments=[_tenant("c1-a", "ta")],
+            tags=[_segment_tag("ta", 30, "c1-a", components=(("a", "m"),))],
+        )
+        assert check._captured_errors == [
+            "Security tag 'ta.example' groups both components ['a'] and segments ['c1-a']"
+        ]
+
+
+class TestReservedGroups:
+    """A profile's reserved groups must sit outside the pool band a tag is drawn from."""
+
+    def test_reserved_groups_outside_the_band_pass(self) -> None:
+        profiles = {"edges": [_profile("reference-cisco-nxos", unclassified=0, unaware=15)]}
+        check = _run_tags(tags=[_segment_tag("ta", 30, "c1-a")], profiles=profiles)
+        assert check._captured_errors == []
+
+    @pytest.mark.parametrize(
+        ("reserved", "value", "profile"),
+        [
+            ("unclassified", 16, _profile("reference-cisco-nxos", unclassified=16)),
+            ("unaware", 4095, _profile("reference-cisco-nxos", unaware=4095)),
+        ],
+    )
+    def test_reserved_group_inside_the_band_is_an_error(self, reserved: str, value: int, profile: dict) -> None:
+        """A drawn tag could then mean the reserved group on the wire."""
+        profiles = {"edges": [profile]}
+        check = _run_tags(tags=[_segment_tag("ta", 30, "c1-a")], profiles=profiles)
+        assert check._captured_errors == [
+            f"Group-policy profile 'reference-cisco-nxos' {reserved} group {value} is inside SGT-POOL 16-4095: "
+            "a drawn tag could mean it"
+        ]
+
+
+class TestContracts:
+    """Every rule between two groups is a row of the one contract builder."""
+
+    _SEGMENTS = [
+        _tenant("c8-portal", "t8", _policy_rule("c8-to-c5", "c5-web"), _policy_rule("c8-to-net", None)),
+        _tenant(
+            "c5-web",
+            "t5",
+            _policy_rule(
+                "web-to-session",
+                "c5-web",
+                source_security_tag=_tag_ref("k-web"),
+                destination_security_tag=_tag_ref("k-session"),
+            ),
+            isolation="microsegmented",
+        ),
+        _tenant("c9-other", None, _policy_rule("c9-to-c5", "c5-web")),
+    ]
+    _TAGS = [
+        _segment_tag("t8", 30, "c8-portal"),
+        _segment_tag("t5", 31, "c5-web"),
+        _tag("k-web", 32, ("web", "c5-web")),
+        _tag("k-session", 33, ("session", "c5-web")),
+    ]
+    _COMPONENTS = [_tagged_component("web", "c5-web", "k-web"), _tagged_component("session", "c5-web", "k-session")]
+
+    def test_rules_between_groups_are_contract_rows(self) -> None:
+        """The cross-customer rule and the intra-segment component rule are rows; untagged ends need none."""
+        check = _run_tags(segments=self._SEGMENTS, tags=self._TAGS, components=self._COMPONENTS)
+        assert check._captured_errors == []
+
+    def test_hand_written_rule_into_a_microsegmented_segment_warns(self) -> None:
+        """No component named: it opens the segment group and both components."""
+        check = _run_tags(segments=self._SEGMENTS, tags=self._TAGS, components=self._COMPONENTS)
+        assert [info for info in check._captured_infos if "into microsegmented" in info] == [
+            "WARNING: rule 'c8-to-c5' into microsegmented segment 'c5-web' names no component: "
+            "it opens all 3 groups of the segment",
+            "WARNING: rule 'c9-to-c5' into microsegmented segment 'c5-web' names no component: "
+            "it opens all 3 groups of the segment",
+        ]
+
+    def test_component_dependency_into_a_microsegmented_segment_is_a_row_without_warning(self) -> None:
+        """The generator's rule names the target component: the row is to that component only."""
+        segments = [
+            _tenant(
+                "c8-portal",
+                "t8",
+                _policy_rule("c8-to-c5-web", "c5-web", destination_security_tag=_tag_ref("k-web")),
+            ),
+            self._SEGMENTS[1],
+        ]
+        check = _run_tags(segments=segments, tags=self._TAGS, components=self._COMPONENTS)
+        assert check._captured_errors == []
+        assert not any("into microsegmented" in info for info in check._captured_infos)
+
+    def test_a_component_row_the_builder_dropped_is_an_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The narrowed row is checked too: to the target component, not to the segment group."""
+        monkeypatch.setattr("checks.segment_security.get_vrf_contracts", lambda segments, tags: [])
+        segments = [
+            _tenant(
+                "c8-portal",
+                "t8",
+                _policy_rule("c8-to-c5-web", "c5-web", destination_security_tag=_tag_ref("k-web")),
+            ),
+            _tenant("c5-web", "t5", isolation="microsegmented"),
+        ]
+        check = _run_tags(segments=segments, tags=self._TAGS, components=self._COMPONENTS)
+        assert check._captured_errors == [
+            "Rule 'c8-to-c5-web' between groups t8-name -> k-web.example has no group contract row"
+        ]
+
+    def test_a_rule_the_builder_dropped_is_an_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Builder drift: group policy would deny what L0 permits."""
+        monkeypatch.setattr("checks.segment_security.get_vrf_contracts", lambda segments, tags: [])
+        check = _run_tags(segments=self._SEGMENTS, tags=self._TAGS, components=self._COMPONENTS)
+        assert check._captured_errors == [
+            "Rule 'web-to-session' between groups k-web.example -> k-session.example has no group contract row",
+            "Rule 'c8-to-c5' between groups t8-name -> t5-name has no group contract row",
+        ]

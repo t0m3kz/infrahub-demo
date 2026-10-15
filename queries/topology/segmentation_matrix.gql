@@ -1,10 +1,21 @@
-# One data center's segmentation matrix (transforms/topology/segmentation_matrix.py):
-# its segment deployments with their own rules (and the component tags those
-# rules carry), its devices (the DC's own and its pods'; the transform keeps
-# the VTEPs, utils/group_policy.site_vteps) against the reference fabric
-# profile rows, and every component group tag with the segment of the
-# component it groups.
+# One data center's segmentation matrix (transforms/topology/segmentation_matrix.py).
+# Group IDs and contracts are fabric-wide, so most of it is the fleet: the
+# reference fabric profile rows, every data center's devices (its own and
+# its pods'; the transform keeps the VTEPs, utils/group_policy.site_vteps)
+# for the policy-aware verdict of every site, every segment with its own
+# rules and group tag (the contracts' source: every rule lives in its source
+# segment's policy), and every component group tag with its component's
+# segment. ``target`` is the data center the artifact is for.
 query segmentation_matrix($id: ID) {
+  target: TopologyDataCenter(ids: [$id]) {
+    edges {
+      node {
+        id
+        name { value }
+      }
+    }
+  }
+
   DcimGroupPolicyProfile {
     edges {
       node {
@@ -13,57 +24,14 @@ query segmentation_matrix($id: ID) {
     }
   }
 
-  TopologyDataCenter(ids: [$id]) {
+  TopologyDataCenter {
     edges {
       node {
         id
-        name { value }
         devices {
           edges {
             node {
               ...DeviceGroupPolicyFields
-            }
-          }
-        }
-        segment_deployments(status__values: ["active", "provisioning"]) {
-          edges {
-            node {
-              segment {
-                node {
-                  id
-                  __typename
-                  name { value }
-                  isolation_mode { value }
-                  gateway { node { ip_prefix { node { ip_namespace { node { name { value } } } } } } }
-                  ... on ManagedVlanSegment { inline_service { node { id name { value } } } }
-                  ... on ManagedVxlanSegment { inline_service { node { id name { value } } } }
-                  security_policy {
-                    node {
-                      name { value }
-                      enabled { value }
-                      default_action { value }
-                      rules {
-                        edges {
-                          node {
-                            id
-                            index { value }
-                            name { value }
-                            action { value }
-                            protocol { value }
-                            port_start { value }
-                            port_end { value }
-                            disabled { value }
-                            apply_on_switch { value }
-                            destination_segment { node { id } }
-                            source_security_tag { node { id } }
-                            destination_security_tag { node { id } }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
             }
           }
         }
@@ -71,9 +39,10 @@ query segmentation_matrix($id: ID) {
     }
   }
 
-  TopologyPod(parent__ids: [$id]) {
+  TopologyPod {
     edges {
       node {
+        parent { node { id __typename } }
         devices {
           edges {
             node {
@@ -81,6 +50,14 @@ query segmentation_matrix($id: ID) {
             }
           }
         }
+      }
+    }
+  }
+
+  ManagedNetworkSegment {
+    edges {
+      node {
+        ...SegmentGroupPolicyFields
       }
     }
   }

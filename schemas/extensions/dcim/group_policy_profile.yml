@@ -14,10 +14,14 @@ version: "1.0"
 # fails closed: its fabrics are not reference fabrics and the
 # reference_fabric check reports it. tag_pool is the number pool every
 # SecurityTag.group_id is drawn from; the rows naming one must all name the
-# same (generators/helpers/security_tag.py).
+# same (generators/helpers/security_tag.py). unclassified_group_id and
+# unaware_group_id are the platform's reserved groups a deny-by-default
+# contract set needs rows for (transforms/helpers/group_policy.py): kept here,
+# per platform, so no reserved number lives in code; both must sit outside
+# the tag pool band (checks/segment_security.py).
 #
 # Read by checks/reference_fabric.py, checks/segment_security.py, the
-# segmentation_matrix artifact and the component tag generator helper.
+# segmentation_matrix artifact and the group tag generator helper.
 # ============================================================================
 
 nodes:
@@ -71,6 +75,24 @@ nodes:
         optional: true
         order_weight: 600
         description: "Lowest DcimDeviceType.memory_gb a VTEP may have; empty when the vendor documents none"
+      - name: unclassified_group_id
+        kind: Number
+        label: "Unclassified Group ID"
+        optional: true
+        order_weight: 700
+        description: "Group ID of traffic no selector classifies (transit and service legs, external routes); empty when the platform has none"  # yamllint disable-line rule:line-length
+        parameters:
+          min_value: 0
+          max_value: 65535
+      - name: unaware_group_id
+        kind: Number
+        label: "Policy-Unaware Group ID"
+        optional: true
+        order_weight: 800
+        description: "Group ID of traffic from a policy-unaware VTEP or site; empty when the platform classifies remote sources itself"  # yamllint disable-line rule:line-length
+        parameters:
+          min_value: 0
+          max_value: 65535
     relationships:
       - name: platform
         peer: DcimPlatform

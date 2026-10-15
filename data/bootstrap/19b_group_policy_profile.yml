@@ -11,6 +11,12 @@
 #   GX2 types of 06_device_types.yml, by exact name. Not listed: FX2 and FX
 #   (owner decision), EX (not supported), and the undocumented FX3P / FX3PH /
 #   FX3S / FXP variants.
+#   Reserved groups (transforms/helpers/group_policy.py, deny by default):
+#   unaware_group_id 15 (D: Multi-Site installs routes from policy-unaware
+#   sites with reserved tag 15, and contracts with tag 15 are needed);
+#   unclassified_group_id 0 (I: the guide names 0 "unknown" but does not say
+#   which tag unclassified endpoints, transit legs and external routes get in a
+#   policy-aware site: U, lab-sensitive).
 #
 # arista_eos: EOS 4.36.2F user manual, "Segment Security" (MSS-G, D for the CLI
 #   and semantics); the manual names no platform. Device types: the 7280R3
@@ -20,7 +26,9 @@
 #   is their line-card generation, which a chassis device type cannot express:
 #   U) and the 7050X3 / 7050X4 (Trident) types the demos use (U). No memory
 #   floor is documented. MSS-G is name-based: no group ID on the wire, so no
-#   tag pool.
+#   tag pool and no reserved groups (it classifies every source, local or
+#   remote, by its prefix; a source in no segment meets the destination
+#   segment's fallback policy, AVD: R3 only).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -34,6 +42,8 @@ spec:
       platform: cisco_nxos
       min_release: "10.6(1)F"
       min_memory_gb: 24
+      unclassified_group_id: 0
+      unaware_group_id: 15
       device_types:
         # FX3
         - N9K-C93108TC-FX3

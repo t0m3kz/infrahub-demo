@@ -238,20 +238,23 @@ class RulesPlanner:
         src_seg: dict[str, Any],
         dst_seg: dict[str, Any],
     ) -> dict[str, Any]:
-        """The component group tags an intra-segment rule of a microsegmented segment carries.
+        """The component group tags a rule carries: one per side whose segment is microsegmented.
 
-        Only a flow inside one segment is bridged past the SVI ACL, so only its
-        rule is a group contract (transforms/helpers/group_policy.py); every
-        other rule gets no tag. Each side carries its component's tag id (in
-        memory, from AppApplicationGenerator._ensure_component_tags); a side
-        left out is cleared on an existing rule (_reconcile_rule_payload).
+        A side's tag is its component's (in memory, from
+        AppApplicationGenerator._ensure_component_tags). Inside a
+        microsegmented segment it is the intra-segment contract between two
+        components; on a side of a cross-segment rule it narrows the
+        contract to that component, instead of every group of its segment
+        (transforms/helpers/group_policy.rule_groups): a dependency on one
+        component opens that component, not its neighbours. A side whose
+        segment is not microsegmented carries no tag (the segment tag is the
+        group there), and a side left out is cleared on an existing rule
+        (_reconcile_rule_payload).
         """
-        if not src_seg.get("id") or src_seg.get("id") != dst_seg.get("id"):
-            return {}
-        if src_seg.get("isolation_mode") != "microsegmented":
-            return {}
         return {
             f"{side}_security_tag": {"id": tag_id}
-            for side, component in (("source", src_comp), ("destination", dst_comp))
-            if (tag_id := (component.get("security_tag") or {}).get("id"))
+            for side, component, segment in (("source", src_comp, src_seg), ("destination", dst_comp, dst_seg))
+            if segment.get("id")
+            and segment.get("isolation_mode") == "microsegmented"
+            and (tag_id := (component.get("security_tag") or {}).get("id"))
         }

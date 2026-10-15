@@ -1,9 +1,12 @@
 ---
 # DC10 POD-1 application hosts.
 #
-# One host per row, so the two rows' access-leaf pairs are genuinely
-# independent failure domains: a component with an instance on each host
-# survives losing either pair. PowerEdge-R640_SERVER brings two 25G uplink
+# Hosts come in row pairs, so the two rows' access-leaf pairs are genuinely
+# independent failure domains: a component with an instance on each host of a
+# pair survives losing either pair. server-1/2 carry C005's payment-core,
+# server-3/4 its session store (a second component of the microsegmented
+# web-frontend segment, on its own host ports: one port and VLAN never carry
+# two component groups), server-5/6 C008's trade portal. PowerEdge-R640_SERVER brings two 25G uplink
 # NICs (eno1/eno2); add_endpoint dual-homes them across the access-leaf pair
 # in the network rack that shares the host's row, and sets the host's
 # deployment to POD-1 on the way.
@@ -36,5 +39,49 @@ spec:
       position: 10
       platform: linux
       description: "DC10 POD-1 row 2 application host"
+      member_of_groups:
+        - endpoints
+
+    - name: dc10-pod1-server-3
+      object_template: PowerEdge-R640_SERVER
+      owner: "C005"
+      rack: fra-1-s-1-r-1-1
+      status: active
+      position: 11
+      platform: linux
+      description: "DC10 POD-1 row 1 application host (C005 session store)"
+      member_of_groups:
+        - endpoints
+
+    - name: dc10-pod1-server-4
+      object_template: PowerEdge-R640_SERVER
+      owner: "C005"
+      rack: fra-1-s-1-r-2-1
+      status: active
+      position: 11
+      platform: linux
+      description: "DC10 POD-1 row 2 application host (C005 session store)"
+      member_of_groups:
+        - endpoints
+
+    - name: dc10-pod1-server-5
+      object_template: PowerEdge-R640_SERVER
+      owner: "C008"
+      rack: fra-1-s-1-r-1-1
+      status: active
+      position: 12
+      platform: linux
+      description: "DC10 POD-1 row 1 application host (C008)"
+      member_of_groups:
+        - endpoints
+
+    - name: dc10-pod1-server-6
+      object_template: PowerEdge-R640_SERVER
+      owner: "C008"
+      rack: fra-1-s-1-r-2-1
+      status: active
+      position: 12
+      platform: linux
+      description: "DC10 POD-1 row 2 application host (C008)"
       member_of_groups:
         - endpoints
