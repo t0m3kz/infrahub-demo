@@ -1,8 +1,9 @@
 # What utils/group_policy.py reads to decide whether a VTEP is in its
 # platform's reference profile (fabric_reason / site_reason / site_kind): the
 # device's role, platform, device type with its memory, and software image;
-# and the DcimGroupPolicyProfile rows it is compared with. Read by the
-# reference_fabric check and the segmentation_matrix artifact.
+# and the DcimGroupPolicyProfile rows it is compared with, with the reserved
+# groups the platform views render (transforms/helpers/group_policy.py). Read
+# by the reference_fabric check and the segmentation_matrix artifact.
 
 fragment DeviceGroupPolicyFields on DcimDevice {
   name { value }
@@ -17,6 +18,84 @@ fragment GroupPolicyProfileFields on DcimGroupPolicyProfile {
   group_policy_kind { value }
   min_release { value }
   min_memory_gb { value }
+  unclassified_group_id { value }
+  unaware_group_id { value }
   platform { node { name { value } } }
   device_types { edges { node { name { value } } } }
+}
+
+# One segment as the group contract builder reads it
+# (transforms/helpers/group_policy.py): whether it is a routed tenant segment
+# (kind, gateway namespace type, zone) and its group tag, its owner (the
+# customer label), where it is active (utils/group_policy.segment_sites: the
+# VXLAN deployments, the VLAN footprint's data center), its classification
+# (VLAN ID, prefix) and its own rules with the component tags they carry
+# (every rule lives in its source segment's policy). Inline fragments only
+# below: a named fragment nested in an inline fragment resolves to nulls.
+fragment SegmentGroupPolicyFields on ManagedNetworkSegment {
+  id
+  __typename
+  name { value }
+  isolation_mode { value }
+  owner { node { org_id { value } } }
+  security_zone { node { name { value } } }
+  security_tag { node { id name { value } group_id { value } } }
+  gateway {
+    node {
+      ip_prefix {
+        node {
+          prefix { value }
+          ip_namespace { node { name { value } namespace_type { value } } }
+        }
+      }
+    }
+  }
+  security_policy {
+    node {
+      name { value }
+      enabled { value }
+      default_action { value }
+      rules {
+        edges {
+          node {
+            id
+            index { value }
+            name { value }
+            action { value }
+            protocol { value }
+            port_start { value }
+            port_end { value }
+            disabled { value }
+            apply_on_switch { value }
+            source_segment { node { id } }
+            destination_segment { node { id } }
+            source_security_tag { node { id } }
+            destination_security_tag { node { id } }
+          }
+        }
+      }
+    }
+  }
+  ... on ManagedVlanSegment {
+    vlan_id { value }
+    inline_service { node { id name { value } } }
+    customer_deployment {
+      node {
+        id
+        ... on TopologyCustomerDC { parent { node { id __typename } } }
+      }
+    }
+  }
+  ... on ManagedVxlanSegment {
+    stretch_scope { value }
+    inline_service { node { id name { value } } }
+    segment_deployments(status__values: ["active", "provisioning"]) {
+      edges {
+        node {
+          vni { value }
+          deployment { node { id name { value } } }
+        }
+      }
+    }
+  }
 }

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, cast
+
+import pytest
 
 from checks.reference_fabric import CheckReferenceFabric
 
@@ -284,6 +287,92 @@ class TestSegments:
         segment = _segment("s", sites=("dc10", "dc12"), stretch="dc_pair")
         check = _run({"dc10": ([], REFERENCE), "dc12": ([], LEGACY)}, segments=[segment])
         assert _warnings(check) == []
+
+
+def _tenant_segment(
+    seg_id: str,
+    kind: str = "ManagedVxlanSegment",
+    *,
+    sites: tuple[str, ...] = ("dc10",),
+    tag: str | None = None,
+    namespace_type: str = "prod",
+) -> dict[str, Any]:
+    """One routed tenant segment edge (gateway in a ``namespace_type`` namespace), tagged or not.
+
+    A VXLAN segment is active in ``sites`` through its segment deployments; a
+    VLAN segment in the data center of its footprint (the first site).
+    """
+    node: dict[str, Any] = {
+        "__typename": kind,
+        "id": seg_id,
+        "name": _v(seg_id),
+        "isolation_mode": _v("normal"),
+        "security_zone": {"node": {"name": _v("PROD-ZONE")}},
+        "gateway": {
+            "node": {
+                "ip_prefix": {
+                    "node": {"ip_namespace": {"node": {"name": _v("PROD"), "namespace_type": _v(namespace_type)}}}
+                }
+            }
+        },
+        "security_tag": {"node": {"id": tag, "name": _v(tag), "group_id": _v(100)}} if tag else {"node": None},
+    }
+    if kind == "ManagedVxlanSegment":
+        node["stretch_scope"] = _v("local" if len(sites) < 2 else "dc_pair")
+        node["segment_deployments"] = {
+            "edges": [{"node": {"deployment": {"node": {"id": site, "name": _v(site.upper())}}}} for site in sites]
+        }
+    else:
+        node["customer_deployment"] = {
+            "node": {"id": f"fp-{seg_id}", "parent": {"node": {"id": sites[0], "__typename": "TopologyDataCenter"}}}
+        }
+    return {"node": node}
+
+
+class TestSegmentTags:
+    """A routed tenant segment on a reference fabric carries its group tag; a stretched tagged one warns."""
+
+    @pytest.mark.parametrize("kind", ["ManagedVxlanSegment", "ManagedVlanSegment"])
+    def test_untagged_tenant_segment_on_a_reference_fabric_is_an_error(self, kind: str) -> None:
+        """Its hosts would be unclassified, outside every contract (a VLAN segment sits in its footprint's DC)."""
+        check = _run({"dc10": ([], REFERENCE)}, segments=[_tenant_segment("c008-portal-p", kind)])
+        assert check._captured_errors == [
+            "Segment 'c008-portal-p' is a routed tenant segment on reference fabric DC10 without a group tag: "
+            "its hosts would be unclassified"
+        ]
+
+    def test_tagged_tenant_segment_on_a_reference_fabric_passes(self) -> None:
+        check = _run({"dc10": ([], REFERENCE)}, segments=[_tenant_segment("c008-portal-p", tag="c008-portal-p")])
+        assert check._captured_errors == []
+        assert _warnings(check) == []
+
+    def test_untagged_tenant_segment_off_the_reference_fabrics_is_silent(self) -> None:
+        """30_all today: no reference fabric, so an untagged segment is nobody's problem yet."""
+        check = _run({"dc10": ([], LEGACY)}, segments=[_tenant_segment("c008-portal-p")])
+        assert check._captured_errors == []
+
+    def test_untagged_management_segment_on_a_reference_fabric_is_never_required(self) -> None:
+        """The INFRA services segment (MANAGEMENT VRF) is not a tenant segment: no tag, no error."""
+        segment = _tenant_segment("infra-core-dns-ntp-p", "ManagedVlanSegment", namespace_type="management")
+        check = _run({"dc10": ([], REFERENCE)}, segments=[segment])
+        assert check._captured_errors == []
+
+    def test_segment_tag_stretched_onto_a_non_reference_site_warns(self) -> None:
+        """Its DC12 half arrives as the policy-unaware group."""
+        segment = _tenant_segment("c005-message-queue-stretch-p", sites=("dc10", "dc12"), tag="t-mq")
+        check = _run({"dc10": ([], REFERENCE), "dc12": ([], LEGACY)}, segments=[segment])
+        assert check._captured_errors == []
+        assert _warnings(check) == [
+            "WARNING: segment 'c005-message-queue-stretch-p' is stretched between reference fabric DC10 and "
+            "non-reference DC12: group policy is enforced on the reference side only"
+        ]
+
+    def test_query_reads_every_segment_with_its_tag_and_sites(self, root_dir: Path) -> None:
+        """No isolation filter: every routed tenant segment, through the builder's one fragment."""
+        text = (root_dir / "queries/validation/reference_fabric.gql").read_text()
+        assert "ManagedNetworkSegment {" in text
+        assert "...SegmentGroupPolicyFields" in text
+        assert "isolation_mode__value" not in text
 
 
 def test_query_selects_pod_parent_typename() -> None:

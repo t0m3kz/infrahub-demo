@@ -654,7 +654,14 @@ class TestExistingRuleGroupTags:
     _SEG = {"id": "seg-1", "name": "seg-1", "isolation_mode": "microsegmented"}
 
     @staticmethod
-    def _run(rule: Any, *, src_comp: dict[str, Any], dst_comp: dict[str, Any]) -> Any:
+    def _run(
+        rule: Any,
+        *,
+        src_comp: dict[str, Any],
+        dst_comp: dict[str, Any],
+        src_seg: dict[str, Any] | None = None,
+        dst_seg: dict[str, Any] | None = None,
+    ) -> Any:
         gen = _make_gen()
         gen._segment_policy = AsyncMock(return_value=MagicMock(id="policy-src"))
         gen._find_rule_by_name = AsyncMock(return_value=rule)
@@ -669,8 +676,8 @@ class TestExistingRuleGroupTags:
                 src_comp=src_comp,
                 dst_comp=dst_comp,
                 dep={"name": "scoring-to-cache", "ports": []},
-                src_seg=dict(TestExistingRuleGroupTags._SEG),
-                dst_seg=dict(TestExistingRuleGroupTags._SEG),
+                src_seg=dict(src_seg or TestExistingRuleGroupTags._SEG),
+                dst_seg=dict(dst_seg or TestExistingRuleGroupTags._SEG),
                 planner=planner,
                 segment_policies={},
                 rule_indexes={},
@@ -722,6 +729,40 @@ class TestExistingRuleGroupTags:
         )
 
         assert rule.destination_security_tag is None
+
+    _NORMAL = {"id": "seg-2", "name": "seg-2", "isolation_mode": "normal"}
+
+    def test_cross_segment_rule_into_a_microsegmented_segment_gains_the_target_tag(self) -> None:
+        """C008 -> C005's api component: only the microsegmented side is tagged, so only that component opens."""
+        rule = TestExistingRuleReconciliation._rule(log=False, apply_on_switch=True, profile_id="profile-strict")
+        untagged_source = rule.source_security_tag
+
+        self._run(
+            rule,
+            src_comp={"name": "portal-api", "security_tag": {"id": "tag-stale"}},
+            dst_comp={"name": "web-frontend", "security_tag": {"id": "tag-web"}},
+            src_seg=self._NORMAL,
+        )
+
+        assert rule.destination_security_tag == {"id": "tag-web"}
+        assert rule.source_security_tag is untagged_source
+
+    def test_cross_segment_rule_tag_second_pass_writes_nothing(self) -> None:
+        """The rule already carries the target's tag: nothing is assigned or logged as updated."""
+        rule = TestExistingRuleReconciliation._rule(
+            log=False, apply_on_switch=True, profile_id="profile-strict", dst_tag="tag-web"
+        )
+        before = (rule.source_security_tag, rule.destination_security_tag)
+
+        gen = self._run(
+            rule,
+            src_comp={"name": "portal-api"},
+            dst_comp={"name": "web-frontend", "security_tag": {"id": "tag-web"}},
+            src_seg=self._NORMAL,
+        )
+
+        assert (rule.source_security_tag, rule.destination_security_tag) == before
+        assert not any("updated" in str(call) for call in gen.logger.info.call_args_list)
 
 
 class TestRuleCreationFailure:

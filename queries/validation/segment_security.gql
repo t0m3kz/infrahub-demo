@@ -2,13 +2,16 @@
 # invariants read: zone, environment, address (gateway prefix or cidr_block),
 # isolation mode, the policy rules that name a segment (with their component
 # group tags), the segment and tag of each app component, every group tag
-# with the components it groups, and the band of the tag pool the
-# group-policy profile rows name (the tags are drawn from it). Read at check time, so gateways allocated asynchronously by the
-# generators are settled.
+# with the components and segments it groups, the band of the tag pool the
+# group-policy profile rows name (the tags are drawn from it) and their
+# reserved groups, and what the group contract builder reads of each segment
+# (SegmentGroupPolicyFields: its group tag and its own rules). Read at check
+# time, so gateways allocated asynchronously by the generators are settled.
 query segment_security {
   ManagedNetworkSegment {
     edges {
       node {
+        ...SegmentGroupPolicyFields
         __typename
         id
         name { value }
@@ -71,6 +74,7 @@ query segment_security {
         name { value }
         group_id { value }
         components { edges { node { id fqdn { value } network_segment { node { id } } } } }
+        network_segments { edges { node { id name { value } } } }
       }
     }
   }
@@ -79,6 +83,8 @@ query segment_security {
     edges {
       node {
         name { value }
+        unclassified_group_id { value }
+        unaware_group_id { value }
         tag_pool { node { id name { value } start_range { value } end_range { value } } }
       }
     }

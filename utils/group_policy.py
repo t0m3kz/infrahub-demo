@@ -1,19 +1,24 @@
 """Group policy: VTEPs and data centers against the reference profile, and which segments need group policy.
 
 One implementation each, shared by checks/reference_fabric.py, checks/segment_security.py,
-the segmentation_matrix artifact (transforms/topology/segmentation_matrix.py) and the
-component tag helper (generators/helpers/security_tag.py):
+the segmentation_matrix artifact (transforms/topology/segmentation_matrix.py), the
+group tag helper (generators/helpers/security_tag.py) and the contract builder
+(transforms/helpers/group_policy.py):
 
 - ``profiles_by_platform``: platform -> its one usable DcimGroupPolicyProfile row,
   and why the other rows cannot be used;
 - ``tag_pool``: the one number pool the rows draw group IDs from;
+- ``reserved_groups``: the reserved group IDs of one group-policy kind;
 - ``fabric_reason``: why one VTEP is outside its platform's row (None: in it);
 - ``site_reason`` / ``site_kind``: why a data center is not a reference fabric
   (None: it is), and the one group-policy kind of its VTEPs. A site is one only
   when every VTEP is in its row and all rows share one kind (NX-OS: "GPO is not
   supported on a site that has policy-aware and policy-unaware nodes");
-- ``site_vteps``: the devices of a data center that are VTEPs;
-- ``gbp_required``: whether a segment needs group policy at all.
+- ``site_vteps`` / ``vteps_by_data_center``: the devices of a data center that
+  are VTEPs (its own and its pods');
+- ``segment_sites``: the sites (data center, colocation metro, footprint) a
+  segment is active in;
+- ``gbp_required``: whether a segment needs component group policy.
 
 The profile is data (data/bootstrap/19b_group_policy_profile.yml): nothing here
 knows a platform, device type, memory size, release, kind or pool name. Everything
@@ -104,12 +109,65 @@ def tag_pool(rows: Iterable[dict[str, Any]]) -> tuple[dict[str, Any] | None, str
     return next(iter(pools.values())), None
 
 
+RESERVED_GROUPS = ("unclassified", "unaware")
+"""The reserved groups a profile row may name (``<name>_group_id``), read by transforms/helpers/group_policy.py."""
+
+
+def reserved_groups(profiles: Profiles, kind: str) -> dict[str, int | None]:
+    """Reserved group -> its ID in the usable rows of ``kind``, None unless they all name the same one."""
+    rows = [row for row in profiles.values() if row.get("group_policy_kind") == kind]
+    reserved: dict[str, int | None] = {}
+    for name in RESERVED_GROUPS:
+        values = {row.get(f"{name}_group_id") for row in rows}
+        reserved[name] = values.pop() if len(values) == 1 else None
+    return reserved
+
+
 def site_vteps(devices: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     """The data-center VTEPs among ``devices`` (utils/fabric_roles.DC_VTEP_ROLES), by name."""
     return sorted(
         (device for device in devices if device.get("role") in DC_VTEP_ROLES),
         key=lambda device: str(device.get("name")),
     )
+
+
+def vteps_by_data_center(
+    data_centers: Iterable[dict[str, Any]], pods: Iterable[dict[str, Any]]
+) -> dict[str, list[dict[str, Any]]]:
+    """Data center id -> its VTEPs (site_vteps): its own devices and those of its pods.
+
+    ``pods`` carry ``parent.id``; a pod's devices belong to its data center.
+    """
+    pod_devices: dict[str, list[dict[str, Any]]] = {}
+    for pod in pods:
+        if parent := (pod.get("parent") or {}).get("id"):
+            pod_devices.setdefault(str(parent), []).extend(pod.get("devices") or [])
+    return {
+        str(data_center["id"]): site_vteps(
+            [*(data_center.get("devices") or []), *pod_devices.get(str(data_center["id"]), [])]
+        )
+        for data_center in data_centers
+        if data_center.get("id")
+    }
+
+
+def segment_sites(segment: dict[str, Any]) -> set[str]:
+    """Ids of the sites a segment is active in.
+
+    A VXLAN segment: the deployments of its active/provisioning segment
+    deployments (data centers, colocation metros). A VLAN segment: the parent
+    of its footprint (the data center of a TopologyCustomerDC), else the
+    footprint itself, which is never a data center.
+    """
+    sites = {
+        str(deployment["id"])
+        for activation in segment.get("segment_deployments") or []
+        if (deployment := activation.get("deployment") or {}).get("id")
+    }
+    footprint = segment.get("customer_deployment") or {}
+    if site := (footprint.get("parent") or {}).get("id") or footprint.get("id"):
+        sites.add(str(site))
+    return sites
 
 
 def _profile(device: dict[str, Any], profiles: Profiles) -> dict[str, Any] | None:

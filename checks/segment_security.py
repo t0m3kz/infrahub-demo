@@ -6,13 +6,15 @@ from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
 
+from transforms.helpers.group_policy import get_vrf_contracts, rule_groups, segment_groups
+from transforms.helpers.policy import segment_flows
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import (
     exchange_peer_zones,
     namespace_type_for_environment,
     zone_name_for_namespace_type,
 )
-from utils.group_policy import tag_pool
+from utils.group_policy import RESERVED_GROUPS, tag_pool
 from utils.segment_addressing import segment_prefix
 
 INTERNET_ZONE = zone_name_for_namespace_type("internet")
@@ -35,9 +37,17 @@ class CheckSegmentSecurity(InfrahubCheck):
       (a warning: L2-only segments have no gateway by design);
     - an app component's environment should match its segment's (warning);
     - every component of a microsegmented segment has a group tag; a tag groups
-      exactly one component (an orphan is a warning) and its group_id is in the
-      band of the tag pool the group-policy profiles name; a rule's tags are those of components in the rule's own
-      segment, and only an intra-segment rule carries tags.
+      exactly one component or exactly one segment, never both (an orphan is
+      a warning); its group_id is in the band of the tag pool the
+      group-policy profiles name, and no reserved group of a profile is;
+    - a rule side carries a component tag only where its segment is
+      microsegmented: inside it, or on a component dependency into or out of
+      it;
+    - every permit rule between two groups is a contract row of the group
+      contract builder (transforms/helpers/group_policy.py): a rule the
+      builder dropped would be denied by group policy while L0 permits it; a
+      rule into a microsegmented segment that names no component (hand-written)
+      opens every group of it (warning).
     """
 
     query = "segment_security"
@@ -55,7 +65,8 @@ class CheckSegmentSecurity(InfrahubCheck):
         self._warn_component_environment(components)
         self._validate_component_tags(segments, components)
         self._validate_tags(tags, cleaned.get("DcimGroupPolicyProfile") or [])
-        self._validate_rule_tags(rules, tags)
+        self._validate_rule_tags(rules, tags, segments)
+        self._validate_contracts(segments, tags)
 
     def _validate_zone(self, segment: dict[str, Any]) -> None:
         """Zone present; tenant zone == f(environment); External in an exchange zone."""
@@ -153,49 +164,107 @@ class CheckSegmentSecurity(InfrahubCheck):
                 )
 
     def _validate_tags(self, tags: list[dict[str, Any]], profiles: list[dict[str, Any]]) -> None:
-        """One component per tag (a shared tag merges two groups; none is an orphan), group_id in the pool band."""
+        """A tag groups one component or one segment (a shared tag merges two groups; none is an orphan),
+        its group_id is in the pool band, and no profile's reserved group is in that band."""
         pool, problem = tag_pool(profiles)
-        band = (pool.get("start_range"), pool.get("end_range")) if pool else None
+        low, high = (pool.get("start_range"), pool.get("end_range")) if pool else (None, None)
         pool_name = (pool or {}).get("name")
-        if tags and band is None:
+        if tags and pool is None:
             self.log_error(
                 message=f"No group tag pool ({problem}): the band of {len(tags)} group tag(s) cannot be checked"
             )
+
+        def _in_band(value: int) -> bool | None:
+            """Whether ``value`` is in the pool band; None when the band is unknown."""
+            return None if low is None or high is None else low <= value <= high
+
         for tag in sorted(tags, key=lambda item: str(item.get("name"))):
             name = tag.get("name", tag.get("id"))
             fqdns = sorted(str(component.get("fqdn")) for component in tag.get("components") or [])
-            if not fqdns:
-                self.log_info(message=f"WARNING: security tag '{name}' groups no component (orphan)")
-            elif len(fqdns) > 1:
-                self.log_error(message=f"Security tag '{name}' is shared by {len(fqdns)} components: {fqdns}")
+            segments = sorted(str(segment.get("name")) for segment in tag.get("network_segments") or [])
+            if fqdns and segments:
+                self.log_error(message=f"Security tag '{name}' groups both components {fqdns} and segments {segments}")
+            elif not fqdns and not segments:
+                self.log_info(message=f"WARNING: security tag '{name}' groups no component and no segment (orphan)")
+            for kind, holders in (("components", fqdns), ("segments", segments)):
+                if len(holders) > 1:
+                    self.log_error(message=f"Security tag '{name}' is shared by {len(holders)} {kind}: {holders}")
             group_id = tag.get("group_id")
-            if band and band[0] is not None and band[1] is not None and not band[0] <= (group_id or 0) <= band[1]:
-                self.log_error(
-                    message=f"Security tag '{name}' group_id {group_id} is outside {pool_name} {band[0]}-{band[1]}"
-                )
+            if _in_band(group_id or 0) is False:
+                self.log_error(message=f"Security tag '{name}' group_id {group_id} is outside {pool_name} {low}-{high}")
+        for profile in sorted(profiles, key=lambda item: str(item.get("name"))):
+            for reserved in RESERVED_GROUPS:
+                value = profile.get(f"{reserved}_group_id")
+                if value is not None and _in_band(value):
+                    self.log_error(
+                        message=(
+                            f"Group-policy profile '{profile.get('name')}' {reserved} group {value} is inside "
+                            f"{pool_name} {low}-{high}: a drawn tag could mean it"
+                        )
+                    )
 
-    def _validate_rule_tags(self, rules: list[dict[str, Any]], tags: list[dict[str, Any]]) -> None:
-        """A rule's group tags belong to components of the rule's own segment, and only inside one segment."""
+    def _validate_rule_tags(
+        self, rules: list[dict[str, Any]], tags: list[dict[str, Any]], segments: list[dict[str, Any]]
+    ) -> None:
+        """A rule side carries a group tag only where its segment is microsegmented, and the tag
+        is of a component of that side's segment (an intra-segment rule, or a component
+        dependency into or out of a microsegmented segment)."""
         tag_segments = {
             tag["id"]: {(component.get("network_segment") or {}).get("id") for component in tag.get("components") or []}
             for tag in tags
             if tag.get("id")
         }
+        modes = {segment["id"]: segment.get("isolation_mode") for segment in segments if segment.get("id")}
         for rule in rules:
-            sides = [side for side in ("source", "destination") if rule.get(f"{side}_security_tag")]
-            if not sides:
-                continue
             rule_name = rule.get("name", rule.get("id"))
-            src_seg = (rule.get("source_segment") or {}).get("id")
-            if src_seg != (rule.get("destination_segment") or {}).get("id"):
-                self.log_error(message=f"Rule '{rule_name}' carries group tags but is not an intra-segment rule")
-                continue
-            for side in sides:
-                tag = rule[f"{side}_security_tag"]
-                if src_seg not in tag_segments.get(tag.get("id"), set()):
+            for side in ("source", "destination"):
+                tag = rule.get(f"{side}_security_tag")
+                if not tag:
+                    continue
+                segment = rule.get(f"{side}_segment") or {}
+                segment_name = segment.get("name", segment.get("id"))
+                if modes.get(segment.get("id")) != "microsegmented":
+                    self.log_error(
+                        message=(
+                            f"Rule '{rule_name}' carries a {side} group tag but its {side} segment "
+                            f"'{segment_name}' is not microsegmented"
+                        )
+                    )
+                elif segment.get("id") not in tag_segments.get(tag.get("id"), set()):
                     self.log_error(
                         message=(
                             f"Rule '{rule_name}': {side} tag '{tag.get('name', tag.get('id'))}' "
-                            "groups no component of the rule's segment"
+                            f"groups no component of its {side} segment '{segment_name}'"
                         )
+                    )
+
+    def _validate_contracts(self, segments: list[dict[str, Any]], tags: list[dict[str, Any]]) -> None:
+        """Every rule between two groups is a row of the contract builder, with that rule's name;
+        a rule into a microsegmented segment without its component's tag opens every group of it (warning)."""
+        by_segment, by_tag = segment_groups(segments, tags)
+        rows = {(row["src"], row["dst"]): set(row["rules"]) for row in get_vrf_contracts(segments, tags)}
+        for segment in sorted(segments, key=lambda item: str(item.get("name"))):
+            for rule in segment_flows(segment)[0]["rules"]:
+                if rule.get("action") != "permit":
+                    continue
+                name = str(rule.get("name") or rule.get("id"))
+                src_id = str((rule.get("source_segment") or {}).get("id") or segment.get("id"))
+                dst_id = str((rule.get("destination_segment") or {}).get("id"))
+                src = rule_groups(rule, "source", src_id, by_segment, by_tag)
+                dst = rule_groups(rule, "destination", dst_id, by_segment, by_tag)
+                if len(dst) > 1:
+                    self.log_info(
+                        message=(
+                            f"WARNING: rule '{name}' into microsegmented segment '{dst[0].segment}' names no "
+                            f"component: it opens all {len(dst)} groups of the segment"
+                        )
+                    )
+                if not src or not dst or src[0].vrf != dst[0].vrf:
+                    continue
+                pair = (src[0].name, dst[0].name)
+                if pair[0] == pair[1] and src[0].intra_group == "permit":
+                    continue
+                if name not in rows.get(pair, set()):
+                    self.log_error(
+                        message=f"Rule '{name}' between groups {pair[0]} -> {pair[1]} has no group contract row"
                     )

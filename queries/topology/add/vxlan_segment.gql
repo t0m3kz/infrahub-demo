@@ -7,6 +7,10 @@ query vxlan_segment_data($name: String!) {
         name { value }
         environment { value }
         security_zone { node { name { value } } }
+        # Whether it is a routed tenant segment, and its group tag: present
+        # means nothing is written (generators/helpers/security_tag.py).
+        gateway { node { ip_prefix { node { ip_namespace { node { name { value } namespace_type { value } } } } } } }
+        security_tag { node { id } }
         stretch_scope { value }
         arp_suppression { value }
         terminate_inline { value }

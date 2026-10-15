@@ -1,6 +1,8 @@
 ---
-# C008 dev application on the shared DC12 hosts (P027). The instances are the
-# VMs from ../../06_customer_boarding/c008/dc/dc12/02_instances.yml.
+# C008 applications: inventory-sync (dev, on the shared DC12 hosts of P027,
+# VMs from ../../06_customer_boarding/c008/dc/dc12/02_instances.yml) and
+# trade-portal (prod, on C008's DC10 hosts, VMs from
+# ../../06_customer_boarding/c008/dc/dc10/02_instances.yml).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -40,5 +42,30 @@ spec:
             instances:
               - c008-sync-db-dc12-1
               - c008-sync-db-dc12-2
+            member_of_groups:
+              - app_components
+
+    - label: trade-portal
+      environment: p
+      criticality: high
+      security_profile: internal_standard
+      fqdn: trade-portal.c008.demo.local
+      ingress_mode: dns
+      application_orchestrator: github_actions
+      owner: C008
+      member_of_groups:
+        - app_applications
+      children:
+        kind: AppComponent
+        data:
+          - name: portal-api
+            fqdn: api.trade-portal.c008.demo.local
+            component_type: backend
+            ports:
+              - tcp/8443
+            network_segment: c008-trade-portal-local-dc10-p
+            instances:
+              - c008-portal-api-dc10-1
+              - c008-portal-api-dc10-2
             member_of_groups:
               - app_components

@@ -107,9 +107,20 @@ query {
       }
     }
   }
-  # Component group tags: the SGT-POOL allocation (group_id) of each, and the
-  # component it groups. A rerun that drew a new number or a second tag is a diff.
-  SecurityTag { edges { node { id name { value } group_id { value } components { edges { node { id } } } } } }
+  # Segment and component group tags: the SGT-POOL allocation (group_id) of
+  # each, and the segment or component it groups. A rerun that drew a new
+  # number or a second tag is a diff.
+  SecurityTag {
+    edges {
+      node {
+        id
+        name { value }
+        group_id { value }
+        components { edges { node { id } } }
+        network_segments { edges { node { id } } }
+      }
+    }
+  }
   AppComponent { edges { node { id security_tag { node { id } } } } }
   CloudSecurityGroup { edges { node { id name { value } } } }
   CloudSecurityGroupRule { edges { node { id name { value } } } }
@@ -121,6 +132,7 @@ query {
         isolation_mode { value }
         security_zone { node { id } }
         security_policy { node { id } }
+        security_tag { node { id } }
         inbound_rules { edges { node { id } } }
       }
     }
@@ -271,7 +283,12 @@ def _snapshot(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
             for n in _nodes(result, "SecurityPolicyRule")
         },
         "SecurityTag": {
-            n["id"]: (_value(n, "name"), _value(n, "group_id"), _peer_ids(n, "components"))
+            n["id"]: (
+                _value(n, "name"),
+                _value(n, "group_id"),
+                _peer_ids(n, "components"),
+                _peer_ids(n, "network_segments"),
+            )
             for n in _nodes(result, "SecurityTag")
         },
         "AppComponent": {n["id"]: _peer_id(n, "security_tag") for n in _nodes(result, "AppComponent")},
@@ -284,6 +301,7 @@ def _snapshot(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
                 _peer_id(n, "security_policy"),
                 _peer_ids(n, "inbound_rules"),
                 _peer_id(n, "security_zone"),
+                _peer_id(n, "security_tag"),
             )
             for n in _nodes(result, "ManagedNetworkSegment")
         },

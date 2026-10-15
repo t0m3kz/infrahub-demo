@@ -1,13 +1,22 @@
 {
   "data": {
-    "TopologyDataCenter": {
+    "target": {
       "edges": [
         {
           "node": {
             "id": "dc10",
             "name": {
               "value": "DC10"
-            },
+            }
+          }
+        }
+      ]
+    },
+    "TopologyDataCenter": {
+      "edges": [
+        {
+          "node": {
+            "id": "dc10",
             "devices": {
               "edges": [
                 {
@@ -45,257 +54,43 @@
                   }
                 }
               ]
-            },
-            "segment_deployments": {
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "dc12",
+            "devices": {
               "edges": [
                 {
                   "node": {
-                    "vni": {
-                      "value": 10000
+                    "name": {
+                      "value": "bl-dc12-01"
                     },
-                    "segment": {
+                    "role": {
+                      "value": "border-leaf"
+                    },
+                    "platform": {
                       "node": {
-                        "id": "seg-web",
-                        "__typename": "ManagedVxlanSegment",
                         "name": {
-                          "value": "c005-web-frontend-local-dc10-p"
-                        },
-                        "isolation_mode": {
-                          "value": "microsegmented"
-                        },
-                        "gateway": {
-                          "node": {
-                            "ip_prefix": {
-                              "node": {
-                                "ip_namespace": {
-                                  "node": {
-                                    "name": {
-                                      "value": "PROD"
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        },
-                        "inline_service": {
-                          "node": null
-                        },
-                        "security_policy": {
-                          "node": {
-                            "name": {
-                              "value": "seg-c005-web-frontend-local-dc10-p-egress"
-                            },
-                            "enabled": {
-                              "value": true
-                            },
-                            "default_action": {
-                              "value": "deny"
-                            },
-                            "rules": {
-                              "edges": [
-                                {
-                                  "node": {
-                                    "id": "rule-web-frontend-to-session-store-tcp-6379",
-                                    "index": {
-                                      "value": 100
-                                    },
-                                    "name": {
-                                      "value": "web-frontend-to-session-store-tcp-6379"
-                                    },
-                                    "action": {
-                                      "value": "permit"
-                                    },
-                                    "protocol": {
-                                      "value": "tcp"
-                                    },
-                                    "port_start": {
-                                      "value": 6379
-                                    },
-                                    "port_end": {
-                                      "value": null
-                                    },
-                                    "disabled": {
-                                      "value": false
-                                    },
-                                    "apply_on_switch": {
-                                      "value": true
-                                    },
-                                    "destination_segment": {
-                                      "node": {
-                                        "id": "seg-web"
-                                      }
-                                    },
-                                    "source_security_tag": {
-                                      "node": {
-                                        "id": "tag-web"
-                                      }
-                                    },
-                                    "destination_security_tag": {
-                                      "node": {
-                                        "id": "tag-session"
-                                      }
-                                    }
-                                  }
-                                },
-                                {
-                                  "node": {
-                                    "id": "rule-web-frontend-to-session-store-tcp-6380",
-                                    "index": {
-                                      "value": 110
-                                    },
-                                    "name": {
-                                      "value": "web-frontend-to-session-store-tcp-6380"
-                                    },
-                                    "action": {
-                                      "value": "permit"
-                                    },
-                                    "protocol": {
-                                      "value": "tcp"
-                                    },
-                                    "port_start": {
-                                      "value": 6380
-                                    },
-                                    "port_end": {
-                                      "value": null
-                                    },
-                                    "disabled": {
-                                      "value": true
-                                    },
-                                    "apply_on_switch": {
-                                      "value": true
-                                    },
-                                    "destination_segment": {
-                                      "node": {
-                                        "id": "seg-web"
-                                      }
-                                    },
-                                    "source_security_tag": {
-                                      "node": {
-                                        "id": "tag-web"
-                                      }
-                                    },
-                                    "destination_security_tag": {
-                                      "node": {
-                                        "id": "tag-session"
-                                      }
-                                    }
-                                  }
-                                }
-                              ]
-                            }
-                          }
+                          "value": "cisco_nxos"
                         }
                       }
-                    }
-                  }
-                },
-                {
-                  "node": {
-                    "vni": {
-                      "value": 10001
                     },
-                    "segment": {
+                    "device_type": {
                       "node": {
-                        "id": "seg-backend",
-                        "__typename": "ManagedVxlanSegment",
                         "name": {
-                          "value": "c005-app-backend-stretch-p"
+                          "value": "N9K-C9336C-FX2"
                         },
-                        "isolation_mode": {
-                          "value": "microsegmented"
-                        },
-                        "gateway": {
-                          "node": {
-                            "ip_prefix": {
-                              "node": {
-                                "ip_namespace": {
-                                  "node": {
-                                    "name": {
-                                      "value": "PROD"
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        },
-                        "inline_service": {
-                          "node": null
-                        },
-                        "security_policy": {
-                          "node": {
-                            "name": {
-                              "value": "seg-c005-app-backend-stretch-p-egress"
-                            },
-                            "enabled": {
-                              "value": true
-                            },
-                            "default_action": {
-                              "value": "deny"
-                            },
-                            "rules": {
-                              "edges": []
-                            }
-                          }
+                        "memory_gb": {
+                          "value": 32
                         }
                       }
-                    }
-                  }
-                },
-                {
-                  "node": {
-                    "vni": {
-                      "value": 10002
                     },
-                    "segment": {
+                    "software_image": {
                       "node": {
-                        "id": "seg-shop",
-                        "__typename": "ManagedVxlanSegment",
-                        "name": {
-                          "value": "c006-shop-p"
-                        },
-                        "isolation_mode": {
-                          "value": "normal"
-                        },
-                        "gateway": {
-                          "node": {
-                            "ip_prefix": {
-                              "node": {
-                                "ip_namespace": {
-                                  "node": {
-                                    "name": {
-                                      "value": "PROD"
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        },
-                        "inline_service": {
-                          "node": {
-                            "id": "svc-DC10-FW-CTX-C006",
-                            "name": {
-                              "value": "DC10-FW-CTX-C006"
-                            }
-                          }
-                        },
-                        "security_policy": {
-                          "node": {
-                            "name": {
-                              "value": "seg-c006-shop-p-egress"
-                            },
-                            "enabled": {
-                              "value": true
-                            },
-                            "default_action": {
-                              "value": "deny"
-                            },
-                            "rules": {
-                              "edges": []
-                            }
-                          }
+                        "version": {
+                          "value": "10.3(3)"
                         }
                       }
                     }
@@ -311,6 +106,12 @@
       "edges": [
         {
           "node": {
+            "parent": {
+              "node": {
+                "id": "dc10",
+                "__typename": "TopologyDataCenter"
+              }
+            },
             "devices": {
               "edges": [
                 {
@@ -437,6 +238,12 @@
             "min_memory_gb": {
               "value": 24
             },
+            "unclassified_group_id": {
+              "value": 0
+            },
+            "unaware_group_id": {
+              "value": 15
+            },
             "platform": {
               "node": {
                 "name": {
@@ -527,6 +334,12 @@
             "min_memory_gb": {
               "value": null
             },
+            "unclassified_group_id": {
+              "value": null
+            },
+            "unaware_group_id": {
+              "value": null
+            },
             "platform": {
               "node": {
                 "name": {
@@ -551,6 +364,1023 @@
                   }
                 }
               ]
+            }
+          }
+        }
+      ]
+    },
+    "ManagedNetworkSegment": {
+      "edges": [
+        {
+          "node": {
+            "id": "seg-portal",
+            "__typename": "ManagedVxlanSegment",
+            "name": {
+              "value": "c008-trade-portal-local-dc10-p"
+            },
+            "isolation_mode": {
+              "value": "normal"
+            },
+            "owner": {
+              "node": {
+                "org_id": {
+                  "value": "C008"
+                }
+              }
+            },
+            "security_zone": {
+              "node": {
+                "name": {
+                  "value": "PROD-ZONE"
+                }
+              }
+            },
+            "security_tag": {
+              "node": {
+                "id": "tag-seg-portal",
+                "name": {
+                  "value": "c008-trade-portal-local-dc10-p"
+                },
+                "group_id": {
+                  "value": 40
+                }
+              }
+            },
+            "gateway": {
+              "node": {
+                "ip_prefix": {
+                  "node": {
+                    "prefix": {
+                      "value": "10.8.10.0/24"
+                    },
+                    "ip_namespace": {
+                      "node": {
+                        "name": {
+                          "value": "PROD"
+                        },
+                        "namespace_type": {
+                          "value": "prod"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "security_policy": {
+              "node": {
+                "name": {
+                  "value": "seg-c008-trade-portal-local-dc10-p-egress"
+                },
+                "enabled": {
+                  "value": true
+                },
+                "default_action": {
+                  "value": "deny"
+                },
+                "rules": {
+                  "edges": [
+                    {
+                      "node": {
+                        "id": "rule-c008-trade-portal-to-c005-payment-api-tcp-443",
+                        "index": {
+                          "value": 100
+                        },
+                        "name": {
+                          "value": "c008-trade-portal-to-c005-payment-api-tcp-443"
+                        },
+                        "action": {
+                          "value": "permit"
+                        },
+                        "protocol": {
+                          "value": "tcp"
+                        },
+                        "port_start": {
+                          "value": 443
+                        },
+                        "port_end": {
+                          "value": null
+                        },
+                        "disabled": {
+                          "value": false
+                        },
+                        "apply_on_switch": {
+                          "value": true
+                        },
+                        "source_segment": {
+                          "node": null
+                        },
+                        "destination_segment": {
+                          "node": {
+                            "id": "seg-web"
+                          }
+                        },
+                        "source_security_tag": {
+                          "node": null
+                        },
+                        "destination_security_tag": {
+                          "node": {
+                            "id": "tag-web"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "stretch_scope": {
+              "value": "local"
+            },
+            "inline_service": {
+              "node": null
+            },
+            "segment_deployments": {
+              "edges": [
+                {
+                  "node": {
+                    "vni": {
+                      "value": 10000
+                    },
+                    "deployment": {
+                      "node": {
+                        "id": "dc10",
+                        "name": {
+                          "value": "DC10"
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "seg-web",
+            "__typename": "ManagedVxlanSegment",
+            "name": {
+              "value": "c005-web-frontend-local-dc10-p"
+            },
+            "isolation_mode": {
+              "value": "microsegmented"
+            },
+            "owner": {
+              "node": {
+                "org_id": {
+                  "value": "C005"
+                }
+              }
+            },
+            "security_zone": {
+              "node": {
+                "name": {
+                  "value": "PROD-ZONE"
+                }
+              }
+            },
+            "security_tag": {
+              "node": {
+                "id": "tag-seg-web",
+                "name": {
+                  "value": "c005-web-frontend-local-dc10-p"
+                },
+                "group_id": {
+                  "value": 41
+                }
+              }
+            },
+            "gateway": {
+              "node": {
+                "ip_prefix": {
+                  "node": {
+                    "prefix": {
+                      "value": "10.5.10.0/24"
+                    },
+                    "ip_namespace": {
+                      "node": {
+                        "name": {
+                          "value": "PROD"
+                        },
+                        "namespace_type": {
+                          "value": "prod"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "security_policy": {
+              "node": {
+                "name": {
+                  "value": "seg-c005-web-frontend-local-dc10-p-egress"
+                },
+                "enabled": {
+                  "value": true
+                },
+                "default_action": {
+                  "value": "deny"
+                },
+                "rules": {
+                  "edges": [
+                    {
+                      "node": {
+                        "id": "rule-web-frontend-to-session-store-tcp-6379",
+                        "index": {
+                          "value": 100
+                        },
+                        "name": {
+                          "value": "web-frontend-to-session-store-tcp-6379"
+                        },
+                        "action": {
+                          "value": "permit"
+                        },
+                        "protocol": {
+                          "value": "tcp"
+                        },
+                        "port_start": {
+                          "value": 6379
+                        },
+                        "port_end": {
+                          "value": null
+                        },
+                        "disabled": {
+                          "value": false
+                        },
+                        "apply_on_switch": {
+                          "value": true
+                        },
+                        "source_segment": {
+                          "node": null
+                        },
+                        "destination_segment": {
+                          "node": {
+                            "id": "seg-web"
+                          }
+                        },
+                        "source_security_tag": {
+                          "node": {
+                            "id": "tag-web"
+                          }
+                        },
+                        "destination_security_tag": {
+                          "node": {
+                            "id": "tag-session"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "node": {
+                        "id": "rule-web-frontend-to-session-store-tcp-6380",
+                        "index": {
+                          "value": 110
+                        },
+                        "name": {
+                          "value": "web-frontend-to-session-store-tcp-6380"
+                        },
+                        "action": {
+                          "value": "permit"
+                        },
+                        "protocol": {
+                          "value": "tcp"
+                        },
+                        "port_start": {
+                          "value": 6380
+                        },
+                        "port_end": {
+                          "value": null
+                        },
+                        "disabled": {
+                          "value": true
+                        },
+                        "apply_on_switch": {
+                          "value": true
+                        },
+                        "source_segment": {
+                          "node": null
+                        },
+                        "destination_segment": {
+                          "node": {
+                            "id": "seg-web"
+                          }
+                        },
+                        "source_security_tag": {
+                          "node": {
+                            "id": "tag-web"
+                          }
+                        },
+                        "destination_security_tag": {
+                          "node": {
+                            "id": "tag-session"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "node": {
+                        "id": "rule-c005-payment-web-to-backend-tcp-8443",
+                        "index": {
+                          "value": 120
+                        },
+                        "name": {
+                          "value": "c005-payment-web-to-backend-tcp-8443"
+                        },
+                        "action": {
+                          "value": "permit"
+                        },
+                        "protocol": {
+                          "value": "tcp"
+                        },
+                        "port_start": {
+                          "value": 8443
+                        },
+                        "port_end": {
+                          "value": null
+                        },
+                        "disabled": {
+                          "value": false
+                        },
+                        "apply_on_switch": {
+                          "value": true
+                        },
+                        "source_segment": {
+                          "node": null
+                        },
+                        "destination_segment": {
+                          "node": {
+                            "id": "seg-backend"
+                          }
+                        },
+                        "source_security_tag": {
+                          "node": {
+                            "id": "tag-web"
+                          }
+                        },
+                        "destination_security_tag": {
+                          "node": {
+                            "id": "tag-backend"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "stretch_scope": {
+              "value": "local"
+            },
+            "inline_service": {
+              "node": null
+            },
+            "segment_deployments": {
+              "edges": [
+                {
+                  "node": {
+                    "vni": {
+                      "value": 10000
+                    },
+                    "deployment": {
+                      "node": {
+                        "id": "dc10",
+                        "name": {
+                          "value": "DC10"
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "seg-backend",
+            "__typename": "ManagedVxlanSegment",
+            "name": {
+              "value": "c005-app-backend-stretch-p"
+            },
+            "isolation_mode": {
+              "value": "microsegmented"
+            },
+            "owner": {
+              "node": {
+                "org_id": {
+                  "value": "C005"
+                }
+              }
+            },
+            "security_zone": {
+              "node": {
+                "name": {
+                  "value": "PROD-ZONE"
+                }
+              }
+            },
+            "security_tag": {
+              "node": {
+                "id": "tag-seg-backend",
+                "name": {
+                  "value": "c005-app-backend-stretch-p"
+                },
+                "group_id": {
+                  "value": 42
+                }
+              }
+            },
+            "gateway": {
+              "node": {
+                "ip_prefix": {
+                  "node": {
+                    "prefix": {
+                      "value": "10.5.20.0/24"
+                    },
+                    "ip_namespace": {
+                      "node": {
+                        "name": {
+                          "value": "PROD"
+                        },
+                        "namespace_type": {
+                          "value": "prod"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "security_policy": {
+              "node": {
+                "name": {
+                  "value": "seg-c005-app-backend-stretch-p-egress"
+                },
+                "enabled": {
+                  "value": true
+                },
+                "default_action": {
+                  "value": "deny"
+                },
+                "rules": {
+                  "edges": []
+                }
+              }
+            },
+            "stretch_scope": {
+              "value": "dc_pair"
+            },
+            "inline_service": {
+              "node": null
+            },
+            "segment_deployments": {
+              "edges": [
+                {
+                  "node": {
+                    "vni": {
+                      "value": 10000
+                    },
+                    "deployment": {
+                      "node": {
+                        "id": "dc10",
+                        "name": {
+                          "value": "DC10"
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "node": {
+                    "vni": {
+                      "value": 10001
+                    },
+                    "deployment": {
+                      "node": {
+                        "id": "dc12",
+                        "name": {
+                          "value": "DC12"
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "seg-shop",
+            "__typename": "ManagedVxlanSegment",
+            "name": {
+              "value": "c006-shop-p"
+            },
+            "isolation_mode": {
+              "value": "normal"
+            },
+            "owner": {
+              "node": {
+                "org_id": {
+                  "value": "C006"
+                }
+              }
+            },
+            "security_zone": {
+              "node": {
+                "name": {
+                  "value": "PROD-ZONE"
+                }
+              }
+            },
+            "security_tag": {
+              "node": {
+                "id": "tag-seg-shop",
+                "name": {
+                  "value": "c006-shop-p"
+                },
+                "group_id": {
+                  "value": 43
+                }
+              }
+            },
+            "gateway": {
+              "node": {
+                "ip_prefix": {
+                  "node": {
+                    "prefix": {
+                      "value": "10.6.10.0/24"
+                    },
+                    "ip_namespace": {
+                      "node": {
+                        "name": {
+                          "value": "PROD"
+                        },
+                        "namespace_type": {
+                          "value": "prod"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "security_policy": {
+              "node": {
+                "name": {
+                  "value": "seg-c006-shop-p-egress"
+                },
+                "enabled": {
+                  "value": true
+                },
+                "default_action": {
+                  "value": "deny"
+                },
+                "rules": {
+                  "edges": [
+                    {
+                      "node": {
+                        "id": "rule-shop-to-internet-https",
+                        "index": {
+                          "value": 100
+                        },
+                        "name": {
+                          "value": "shop-to-internet-https"
+                        },
+                        "action": {
+                          "value": "permit"
+                        },
+                        "protocol": {
+                          "value": "tcp"
+                        },
+                        "port_start": {
+                          "value": 443
+                        },
+                        "port_end": {
+                          "value": null
+                        },
+                        "disabled": {
+                          "value": false
+                        },
+                        "apply_on_switch": {
+                          "value": false
+                        },
+                        "source_segment": {
+                          "node": null
+                        },
+                        "destination_segment": {
+                          "node": {
+                            "id": "seg-internet"
+                          }
+                        },
+                        "source_security_tag": {
+                          "node": null
+                        },
+                        "destination_security_tag": {
+                          "node": null
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "stretch_scope": {
+              "value": "local"
+            },
+            "inline_service": {
+              "node": {
+                "id": "svc-DC10-FW-CTX-C006",
+                "name": {
+                  "value": "DC10-FW-CTX-C006"
+                }
+              }
+            },
+            "segment_deployments": {
+              "edges": [
+                {
+                  "node": {
+                    "vni": {
+                      "value": 10000
+                    },
+                    "deployment": {
+                      "node": {
+                        "id": "dc10",
+                        "name": {
+                          "value": "DC10"
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "seg-db",
+            "__typename": "ManagedVxlanSegment",
+            "name": {
+              "value": "c005-database-local-dc12-p"
+            },
+            "isolation_mode": {
+              "value": "microsegmented"
+            },
+            "owner": {
+              "node": {
+                "org_id": {
+                  "value": "C005"
+                }
+              }
+            },
+            "security_zone": {
+              "node": {
+                "name": {
+                  "value": "PROD-ZONE"
+                }
+              }
+            },
+            "security_tag": {
+              "node": {
+                "id": "tag-seg-db",
+                "name": {
+                  "value": "c005-database-local-dc12-p"
+                },
+                "group_id": {
+                  "value": 44
+                }
+              }
+            },
+            "gateway": {
+              "node": {
+                "ip_prefix": {
+                  "node": {
+                    "prefix": {
+                      "value": "10.5.30.0/24"
+                    },
+                    "ip_namespace": {
+                      "node": {
+                        "name": {
+                          "value": "PROD"
+                        },
+                        "namespace_type": {
+                          "value": "prod"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "security_policy": {
+              "node": {
+                "name": {
+                  "value": "seg-c005-database-local-dc12-p-egress"
+                },
+                "enabled": {
+                  "value": true
+                },
+                "default_action": {
+                  "value": "deny"
+                },
+                "rules": {
+                  "edges": [
+                    {
+                      "node": {
+                        "id": "rule-db-replication",
+                        "index": {
+                          "value": 100
+                        },
+                        "name": {
+                          "value": "db-replication"
+                        },
+                        "action": {
+                          "value": "permit"
+                        },
+                        "protocol": {
+                          "value": "tcp"
+                        },
+                        "port_start": {
+                          "value": 5432
+                        },
+                        "port_end": {
+                          "value": null
+                        },
+                        "disabled": {
+                          "value": false
+                        },
+                        "apply_on_switch": {
+                          "value": true
+                        },
+                        "source_segment": {
+                          "node": null
+                        },
+                        "destination_segment": {
+                          "node": {
+                            "id": "seg-db"
+                          }
+                        },
+                        "source_security_tag": {
+                          "node": null
+                        },
+                        "destination_security_tag": {
+                          "node": null
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "stretch_scope": {
+              "value": "local"
+            },
+            "inline_service": {
+              "node": null
+            },
+            "segment_deployments": {
+              "edges": [
+                {
+                  "node": {
+                    "vni": {
+                      "value": 10000
+                    },
+                    "deployment": {
+                      "node": {
+                        "id": "dc12",
+                        "name": {
+                          "value": "DC12"
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "seg-c007",
+            "__typename": "ManagedVxlanSegment",
+            "name": {
+              "value": "c007-untagged-p"
+            },
+            "isolation_mode": {
+              "value": "normal"
+            },
+            "owner": {
+              "node": {
+                "org_id": {
+                  "value": "C007"
+                }
+              }
+            },
+            "security_zone": {
+              "node": {
+                "name": {
+                  "value": "PROD-ZONE"
+                }
+              }
+            },
+            "security_tag": {
+              "node": null
+            },
+            "gateway": {
+              "node": {
+                "ip_prefix": {
+                  "node": {
+                    "prefix": {
+                      "value": "10.7.10.0/24"
+                    },
+                    "ip_namespace": {
+                      "node": {
+                        "name": {
+                          "value": "PROD"
+                        },
+                        "namespace_type": {
+                          "value": "prod"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "security_policy": {
+              "node": {
+                "name": {
+                  "value": "seg-c007-untagged-p-egress"
+                },
+                "enabled": {
+                  "value": true
+                },
+                "default_action": {
+                  "value": "deny"
+                },
+                "rules": {
+                  "edges": []
+                }
+              }
+            },
+            "stretch_scope": {
+              "value": "local"
+            },
+            "inline_service": {
+              "node": null
+            },
+            "segment_deployments": {
+              "edges": [
+                {
+                  "node": {
+                    "vni": {
+                      "value": 10000
+                    },
+                    "deployment": {
+                      "node": {
+                        "id": "dc10",
+                        "name": {
+                          "value": "DC10"
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "seg-infra",
+            "__typename": "ManagedVlanSegment",
+            "name": {
+              "value": "infra-core-dns-ntp-p"
+            },
+            "isolation_mode": {
+              "value": "normal"
+            },
+            "owner": {
+              "node": {
+                "org_id": {
+                  "value": "INFRA"
+                }
+              }
+            },
+            "security_zone": {
+              "node": {
+                "name": {
+                  "value": "MANAGEMENT-ZONE"
+                }
+              }
+            },
+            "security_tag": {
+              "node": null
+            },
+            "gateway": {
+              "node": {
+                "ip_prefix": {
+                  "node": {
+                    "prefix": {
+                      "value": "10.250.0.0/24"
+                    },
+                    "ip_namespace": {
+                      "node": {
+                        "name": {
+                          "value": "MANAGEMENT"
+                        },
+                        "namespace_type": {
+                          "value": "management"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "security_policy": {
+              "node": {
+                "name": {
+                  "value": "seg-infra-core-dns-ntp-p-egress"
+                },
+                "enabled": {
+                  "value": true
+                },
+                "default_action": {
+                  "value": "deny"
+                },
+                "rules": {
+                  "edges": []
+                }
+              }
+            },
+            "vlan_id": {
+              "value": 250
+            },
+            "inline_service": {
+              "node": null
+            },
+            "customer_deployment": {
+              "node": {
+                "id": "fp-seg-infra",
+                "parent": {
+                  "node": {
+                    "id": "dc10",
+                    "__typename": "TopologyDataCenter"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "node": {
+            "id": "seg-internet",
+            "__typename": "ManagedExternalSegment",
+            "name": {
+              "value": "internet-internet-p"
+            },
+            "isolation_mode": {
+              "value": "normal"
+            },
+            "owner": {
+              "node": {
+                "org_id": {
+                  "value": "INTERNET"
+                }
+              }
+            },
+            "security_zone": {
+              "node": {
+                "name": {
+                  "value": "INTERNET-ZONE"
+                }
+              }
+            },
+            "security_tag": {
+              "node": null
+            },
+            "gateway": {
+              "node": null
+            },
+            "security_policy": {
+              "node": {
+                "name": {
+                  "value": "seg-internet-internet-p-egress"
+                },
+                "enabled": {
+                  "value": true
+                },
+                "default_action": {
+                  "value": "deny"
+                },
+                "rules": {
+                  "edges": []
+                }
+              }
             }
           }
         }

@@ -7,8 +7,8 @@ from typing import Any
 from infrahub_sdk.checks import InfrahubCheck
 
 from utils.data_cleaning import clean_data
+from utils.exchange_transit import TENANT_NAMESPACE_TYPES
 
-TENANT_NAMESPACE_TYPES = frozenset({"prod", "non_prod"})
 # Devices that terminate the firewall transit legs (get_exchange_transits). A
 # collapsed border-spine carries them like a border-leaf.
 CARRIER_ROLES = frozenset({"border-leaf", "border-spine", "edge"})

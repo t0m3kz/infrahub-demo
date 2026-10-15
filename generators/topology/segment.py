@@ -53,6 +53,7 @@ from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
 from ..connections import CablingMixin
+from ..helpers.security_tag import ensure_segment_tag
 from ..helpers.security_zone import ensure_security_zone
 from ..pools import PoolMixin
 from ..protocols import (
@@ -130,6 +131,9 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGene
             environment=segment.get("environment"),
             current_zone=(segment.get("security_zone") or {}).get("name"),
         )
+        # The segment's group tag (a routed tenant segment only), before any
+        # segment lock is taken: the helper takes its own.
+        await ensure_segment_tag(self.client, self.resource_lock, segment=segment)
 
         target_deployments = self._resolve_target_deployments(segment, segment_name)
         if not target_deployments:

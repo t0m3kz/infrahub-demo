@@ -1,63 +1,605 @@
 {
-  "contracts": [
+  "classification": {
+    "selectors": [
+      {
+        "group": "c005-app-backend-stretch-p",
+        "prefix": "10.5.20.0/24",
+        "segment": "c005-app-backend-stretch-p",
+        "vlan_id": null,
+        "vni": 10000,
+        "vrf": "PROD"
+      },
+      {
+        "group": "c005-web-frontend-local-dc10-p",
+        "prefix": "10.5.10.0/24",
+        "segment": "c005-web-frontend-local-dc10-p",
+        "vlan_id": null,
+        "vni": 10000,
+        "vrf": "PROD"
+      },
+      {
+        "group": "c006-shop-p",
+        "prefix": "10.6.10.0/24",
+        "segment": "c006-shop-p",
+        "vlan_id": null,
+        "vni": 10000,
+        "vrf": "PROD"
+      },
+      {
+        "group": "c008-trade-portal-local-dc10-p",
+        "prefix": "10.8.10.0/24",
+        "segment": "c008-trade-portal-local-dc10-p",
+        "vlan_id": null,
+        "vni": 10000,
+        "vrf": "PROD"
+      }
+    ],
+    "unclassified": [
+      "c007-untagged-p"
+    ]
+  },
+  "contracts": {
+    "default_action": "deny",
+    "replies": "bidir (I/LS)",
+    "rows": [
+      {
+        "cross_customer": false,
+        "dst": "backend.payment-core.c005.demo.local",
+        "entries": [
+          {
+            "port_end": 8443,
+            "port_start": 8443,
+            "protocol": "tcp"
+          }
+        ],
+        "rules": [
+          "c005-payment-web-to-backend-tcp-8443"
+        ],
+        "src": "api.payment-core.c005.demo.local",
+        "vrf": "PROD"
+      },
+      {
+        "cross_customer": false,
+        "dst": "sessions.payment-core.c005.demo.local",
+        "entries": [
+          {
+            "port_end": 6379,
+            "port_start": 6379,
+            "protocol": "tcp"
+          }
+        ],
+        "rules": [
+          "web-frontend-to-session-store-tcp-6379"
+        ],
+        "src": "api.payment-core.c005.demo.local",
+        "vrf": "PROD"
+      },
+      {
+        "cross_customer": false,
+        "dst": "unclassified",
+        "entries": [
+          {
+            "port_end": 8443,
+            "port_start": 8443,
+            "protocol": "tcp"
+          }
+        ],
+        "rules": [
+          "c005-payment-web-to-backend-tcp-8443"
+        ],
+        "src": "api.payment-core.c005.demo.local",
+        "vrf": "PROD"
+      },
+      {
+        "cross_customer": false,
+        "dst": "unclassified",
+        "entries": [
+          {
+            "port_end": 443,
+            "port_start": 443,
+            "protocol": "tcp"
+          }
+        ],
+        "rules": [
+          "shop-to-internet-https"
+        ],
+        "src": "c006-shop-p",
+        "vrf": "PROD"
+      },
+      {
+        "cross_customer": true,
+        "dst": "api.payment-core.c005.demo.local",
+        "entries": [
+          {
+            "port_end": 443,
+            "port_start": 443,
+            "protocol": "tcp"
+          }
+        ],
+        "rules": [
+          "c008-trade-portal-to-c005-payment-api-tcp-443"
+        ],
+        "src": "c008-trade-portal-local-dc10-p",
+        "vrf": "PROD"
+      },
+      {
+        "cross_customer": false,
+        "dst": "unclassified",
+        "entries": [
+          {
+            "port_end": 443,
+            "port_start": 443,
+            "protocol": "tcp"
+          }
+        ],
+        "rules": [
+          "c008-trade-portal-to-c005-payment-api-tcp-443"
+        ],
+        "src": "c008-trade-portal-local-dc10-p",
+        "vrf": "PROD"
+      },
+      {
+        "cross_customer": false,
+        "dst": "api.payment-core.c005.demo.local",
+        "entries": [
+          {
+            "port_end": 443,
+            "port_start": 443,
+            "protocol": "tcp"
+          }
+        ],
+        "rules": [
+          "c008-trade-portal-to-c005-payment-api-tcp-443"
+        ],
+        "src": "unclassified",
+        "vrf": "PROD"
+      },
+      {
+        "cross_customer": false,
+        "dst": "backend.payment-core.c005.demo.local",
+        "entries": [
+          {
+            "port_end": 8443,
+            "port_start": 8443,
+            "protocol": "tcp"
+          }
+        ],
+        "rules": [
+          "c005-payment-web-to-backend-tcp-8443"
+        ],
+        "src": "unclassified",
+        "vrf": "PROD"
+      }
+    ]
+  },
+  "deployment": "DC10",
+  "groups": [
     {
-      "action": "permit",
-      "dst_tag": 20,
-      "entries": [
-        {
-          "port_end": 6379,
-          "port_start": 6379,
-          "protocol": "tcp"
-        }
-      ],
-      "replies": "bidir (I/LS)",
-      "rules": [
-        "web-frontend-to-session-store-tcp-6379"
-      ],
-      "segment": "c005-web-frontend-local-dc10-p",
-      "src_tag": 16
+      "customer": "C005",
+      "group_id": 42,
+      "intra_group": "deny",
+      "kind": "segment",
+      "name": "c005-app-backend-stretch-p",
+      "segment": "c005-app-backend-stretch-p",
+      "vrf": "PROD"
     },
     {
-      "action": "deny",
-      "dst_tag": 21,
-      "entries": [],
-      "replies": "bidir (I/LS)",
-      "rules": [],
-      "segment": "c005-web-frontend-local-dc10-p",
-      "src_tag": 16
+      "customer": "C005",
+      "group_id": 17,
+      "intra_group": "permit",
+      "kind": "component",
+      "name": "backend.payment-core.c005.demo.local",
+      "segment": "c005-app-backend-stretch-p",
+      "vrf": "PROD"
     },
     {
-      "action": "deny",
-      "dst_tag": 21,
-      "entries": [],
-      "replies": "bidir (I/LS)",
-      "rules": [],
+      "customer": "C005",
+      "group_id": 41,
+      "intra_group": "deny",
+      "kind": "segment",
+      "name": "c005-web-frontend-local-dc10-p",
       "segment": "c005-web-frontend-local-dc10-p",
-      "src_tag": 20
+      "vrf": "PROD"
+    },
+    {
+      "customer": "C005",
+      "group_id": 16,
+      "intra_group": "permit",
+      "kind": "component",
+      "name": "api.payment-core.c005.demo.local",
+      "segment": "c005-web-frontend-local-dc10-p",
+      "vrf": "PROD"
+    },
+    {
+      "customer": "C005",
+      "group_id": 21,
+      "intra_group": "permit",
+      "kind": "component",
+      "name": "audit.payment-core.c005.demo.local",
+      "segment": "c005-web-frontend-local-dc10-p",
+      "vrf": "PROD"
+    },
+    {
+      "customer": "C005",
+      "group_id": 20,
+      "intra_group": "permit",
+      "kind": "component",
+      "name": "sessions.payment-core.c005.demo.local",
+      "segment": "c005-web-frontend-local-dc10-p",
+      "vrf": "PROD"
+    },
+    {
+      "customer": "C006",
+      "group_id": 43,
+      "intra_group": "permit",
+      "kind": "segment",
+      "name": "c006-shop-p",
+      "segment": "c006-shop-p",
+      "vrf": "PROD"
+    },
+    {
+      "customer": "C008",
+      "group_id": 40,
+      "intra_group": "permit",
+      "kind": "segment",
+      "name": "c008-trade-portal-local-dc10-p",
+      "segment": "c008-trade-portal-local-dc10-p",
+      "vrf": "PROD"
     }
   ],
-  "deployment": "DC10",
+  "kinds": {
+    "segment_security": {
+      "default_action": "deny",
+      "replies": "stateless (AVD): a reply needs its own policy at the source segment (I/LS)",
+      "segments": [
+        {
+          "fallback": {
+            "entries": [
+              {
+                "port_end": 8443,
+                "port_start": 8443,
+                "protocol": "tcp"
+              }
+            ],
+            "rules": [
+              "c005-payment-web-to-backend-tcp-8443"
+            ]
+          },
+          "intra_segment": "deny",
+          "name": "c005-app-backend-stretch-p",
+          "policies": [
+            {
+              "entries": [
+                {
+                  "port_end": 8443,
+                  "port_start": 8443,
+                  "protocol": "tcp"
+                }
+              ],
+              "from": "c005-web-frontend-local-dc10-p",
+              "rules": [
+                "c005-payment-web-to-backend-tcp-8443"
+              ]
+            }
+          ],
+          "prefix": "10.5.20.0/24",
+          "vrf": "PROD"
+        },
+        {
+          "fallback": {
+            "entries": [
+              {
+                "port_end": 443,
+                "port_start": 443,
+                "protocol": "tcp"
+              }
+            ],
+            "rules": [
+              "c008-trade-portal-to-c005-payment-api-tcp-443"
+            ]
+          },
+          "intra_segment": "deny",
+          "name": "c005-web-frontend-local-dc10-p",
+          "policies": [
+            {
+              "entries": [
+                {
+                  "port_end": 443,
+                  "port_start": 443,
+                  "protocol": "tcp"
+                }
+              ],
+              "from": "c008-trade-portal-local-dc10-p",
+              "rules": [
+                "c008-trade-portal-to-c005-payment-api-tcp-443"
+              ]
+            }
+          ],
+          "prefix": "10.5.10.0/24",
+          "vrf": "PROD"
+        },
+        {
+          "fallback": null,
+          "intra_segment": "permit",
+          "name": "c006-shop-p",
+          "policies": [],
+          "prefix": "10.6.10.0/24",
+          "vrf": "PROD"
+        },
+        {
+          "fallback": null,
+          "intra_segment": "permit",
+          "name": "c008-trade-portal-local-dc10-p",
+          "policies": [],
+          "prefix": "10.8.10.0/24",
+          "vrf": "PROD"
+        }
+      ],
+      "unsupported": [
+        {
+          "dst": "sessions.payment-core.c005.demo.local",
+          "reason": "component groups inside one segment are not expressible by prefix",
+          "rules": [
+            "web-frontend-to-session-store-tcp-6379"
+          ],
+          "src": "api.payment-core.c005.demo.local"
+        }
+      ]
+    },
+    "vxlan_gpo": {
+      "contracts": [
+        {
+          "dst": "backend.payment-core.c005.demo.local",
+          "dst_group_id": 17,
+          "entries": [
+            {
+              "port_end": 8443,
+              "port_start": 8443,
+              "protocol": "tcp"
+            }
+          ],
+          "rules": [
+            "c005-payment-web-to-backend-tcp-8443"
+          ],
+          "src": "api.payment-core.c005.demo.local",
+          "src_group_id": 16,
+          "vrf": "PROD"
+        },
+        {
+          "dst": "sessions.payment-core.c005.demo.local",
+          "dst_group_id": 20,
+          "entries": [
+            {
+              "port_end": 6379,
+              "port_start": 6379,
+              "protocol": "tcp"
+            }
+          ],
+          "rules": [
+            "web-frontend-to-session-store-tcp-6379"
+          ],
+          "src": "api.payment-core.c005.demo.local",
+          "src_group_id": 16,
+          "vrf": "PROD"
+        },
+        {
+          "dst": "unaware",
+          "dst_group_id": 15,
+          "entries": [
+            {
+              "port_end": 8443,
+              "port_start": 8443,
+              "protocol": "tcp"
+            }
+          ],
+          "rules": [
+            "c005-payment-web-to-backend-tcp-8443"
+          ],
+          "src": "api.payment-core.c005.demo.local",
+          "src_group_id": 16,
+          "vrf": "PROD"
+        },
+        {
+          "dst": "unclassified",
+          "dst_group_id": 0,
+          "entries": [
+            {
+              "port_end": 8443,
+              "port_start": 8443,
+              "protocol": "tcp"
+            }
+          ],
+          "rules": [
+            "c005-payment-web-to-backend-tcp-8443"
+          ],
+          "src": "api.payment-core.c005.demo.local",
+          "src_group_id": 16,
+          "vrf": "PROD"
+        },
+        {
+          "dst": "unaware",
+          "dst_group_id": 15,
+          "entries": [
+            {
+              "port_end": null,
+              "port_start": null,
+              "protocol": "any"
+            }
+          ],
+          "rules": [],
+          "src": "backend.payment-core.c005.demo.local",
+          "src_group_id": 17,
+          "vrf": "PROD"
+        },
+        {
+          "dst": "unclassified",
+          "dst_group_id": 0,
+          "entries": [
+            {
+              "port_end": 443,
+              "port_start": 443,
+              "protocol": "tcp"
+            }
+          ],
+          "rules": [
+            "shop-to-internet-https"
+          ],
+          "src": "c006-shop-p",
+          "src_group_id": 43,
+          "vrf": "PROD"
+        },
+        {
+          "dst": "api.payment-core.c005.demo.local",
+          "dst_group_id": 16,
+          "entries": [
+            {
+              "port_end": 443,
+              "port_start": 443,
+              "protocol": "tcp"
+            }
+          ],
+          "rules": [
+            "c008-trade-portal-to-c005-payment-api-tcp-443"
+          ],
+          "src": "c008-trade-portal-local-dc10-p",
+          "src_group_id": 40,
+          "vrf": "PROD"
+        },
+        {
+          "dst": "unclassified",
+          "dst_group_id": 0,
+          "entries": [
+            {
+              "port_end": 443,
+              "port_start": 443,
+              "protocol": "tcp"
+            }
+          ],
+          "rules": [
+            "c008-trade-portal-to-c005-payment-api-tcp-443"
+          ],
+          "src": "c008-trade-portal-local-dc10-p",
+          "src_group_id": 40,
+          "vrf": "PROD"
+        },
+        {
+          "dst": "backend.payment-core.c005.demo.local",
+          "dst_group_id": 17,
+          "entries": [
+            {
+              "port_end": null,
+              "port_start": null,
+              "protocol": "any"
+            }
+          ],
+          "rules": [],
+          "src": "unaware",
+          "src_group_id": 15,
+          "vrf": "PROD"
+        },
+        {
+          "dst": "api.payment-core.c005.demo.local",
+          "dst_group_id": 16,
+          "entries": [
+            {
+              "port_end": 443,
+              "port_start": 443,
+              "protocol": "tcp"
+            }
+          ],
+          "rules": [
+            "c008-trade-portal-to-c005-payment-api-tcp-443"
+          ],
+          "src": "unclassified",
+          "src_group_id": 0,
+          "vrf": "PROD"
+        },
+        {
+          "dst": "backend.payment-core.c005.demo.local",
+          "dst_group_id": 17,
+          "entries": [
+            {
+              "port_end": 8443,
+              "port_start": 8443,
+              "protocol": "tcp"
+            }
+          ],
+          "rules": [
+            "c005-payment-web-to-backend-tcp-8443"
+          ],
+          "src": "unclassified",
+          "src_group_id": 0,
+          "vrf": "PROD"
+        }
+      ],
+      "default_action": "deny",
+      "replies": "bidir (I/LS)",
+      "reserved": {
+        "unaware": 15,
+        "unclassified": 0
+      }
+    }
+  },
   "segments": [
     {
+      "customer": "C005",
       "gbp_required": false,
+      "group": "c005-app-backend-stretch-p",
       "inline_firewall": null,
       "isolation_mode": "microsegmented",
       "leaf_svi_acl": true,
-      "name": "c005-app-backend-stretch-p"
+      "name": "c005-app-backend-stretch-p",
+      "vrf": "PROD"
     },
     {
+      "customer": "C005",
       "gbp_required": true,
+      "group": "c005-web-frontend-local-dc10-p",
       "inline_firewall": null,
       "isolation_mode": "microsegmented",
       "leaf_svi_acl": true,
-      "name": "c005-web-frontend-local-dc10-p"
+      "name": "c005-web-frontend-local-dc10-p",
+      "vrf": "PROD"
     },
     {
+      "customer": "C006",
       "gbp_required": false,
+      "group": "c006-shop-p",
       "inline_firewall": "DC10-FW-CTX-C006",
       "isolation_mode": "normal",
       "leaf_svi_acl": false,
-      "name": "c006-shop-p"
+      "name": "c006-shop-p",
+      "vrf": "PROD"
+    },
+    {
+      "customer": "C007",
+      "gbp_required": false,
+      "group": null,
+      "inline_firewall": null,
+      "isolation_mode": "normal",
+      "leaf_svi_acl": true,
+      "name": "c007-untagged-p",
+      "vrf": "PROD"
+    },
+    {
+      "customer": "C008",
+      "gbp_required": false,
+      "group": "c008-trade-portal-local-dc10-p",
+      "inline_firewall": null,
+      "isolation_mode": "normal",
+      "leaf_svi_acl": true,
+      "name": "c008-trade-portal-local-dc10-p",
+      "vrf": "PROD"
+    },
+    {
+      "customer": "INFRA",
+      "gbp_required": false,
+      "group": null,
+      "inline_firewall": null,
+      "isolation_mode": "normal",
+      "leaf_svi_acl": true,
+      "name": "infra-core-dns-ntp-p",
+      "vrf": "MANAGEMENT"
     }
   ],
   "site": {
@@ -65,36 +607,6 @@
     "reason": "access-leaf al-dc10-01 N9K-C93180YC-EX: device type not in profile reference-cisco-nxos (and 2 more)",
     "reference": false
   },
-  "tags": [
-    {
-      "component": "backend.payment-core.c005.demo.local",
-      "group_id": 17,
-      "name": "backend.payment-core.c005.demo.local",
-      "segment": "c005-app-backend-stretch-p",
-      "vrf": "PROD"
-    },
-    {
-      "component": "api.payment-core.c005.demo.local",
-      "group_id": 16,
-      "name": "api.payment-core.c005.demo.local",
-      "segment": "c005-web-frontend-local-dc10-p",
-      "vrf": "PROD"
-    },
-    {
-      "component": "sessions.payment-core.c005.demo.local",
-      "group_id": 20,
-      "name": "sessions.payment-core.c005.demo.local",
-      "segment": "c005-web-frontend-local-dc10-p",
-      "vrf": "PROD"
-    },
-    {
-      "component": "audit.payment-core.c005.demo.local",
-      "group_id": 21,
-      "name": "audit.payment-core.c005.demo.local",
-      "segment": "c005-web-frontend-local-dc10-p",
-      "vrf": "PROD"
-    }
-  ],
   "vteps": [
     {
       "device_type": "N9K-C93180YC-EX",

@@ -10,7 +10,7 @@ enforcement point tracks sessions:
 | -------- | ----------------------- | ------------------------------------- |
 | Stateful: firewall rule table (``segment_rule_policies``), cloud SG | Own rules as written | Inbound rules as plain rules, no reply legs (the session carries the reply) |
 | Stateless: leaf ACL (``acl.py``), PBR bypass (``firewall.py``); later cloud NACL / edge VIF ACL | Own rules + ``default_action`` | Reply legs only. Leaf: seq >= 5000, tcp ``established``, excluding self-sourced and internet-sourced rules. A NACL would need ephemeral 1024-65535 |
-| Stateless: group contracts (``group_policy.py``) | Own permit rules into the segment itself, between two component tags, + deny-all for un-ruled tag pairs | None: forward rows only, replies are the renderer's (NX-OS ``bidir``) |
+| Stateless: group contracts (``group_policy.py``) | Own permit rules: segment tag to segment tag, component tag to component tag inside one segment, and the same entries on the unclassified service legs; deny by default | None: forward rows only, replies are the renderer's (NX-OS ``bidir``) |
 
 Known limit: stateless reply legs for udp/any/icmp are plain reverse matches,
 and port-agnostic ``established`` lets ACK scans through; firewall inspection

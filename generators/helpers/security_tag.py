@@ -1,4 +1,11 @@
-"""One group-tag assignment for every component of a microsegmented segment."""
+"""One group-tag assignment for every node that carries a group: a routed tenant segment or a component.
+
+``ensure_security_tag`` is the one flow (lookup under a lock, draw the group
+ID from the profile's tag pool once, attach by id, untracked); a segment tag
+(``ensure_segment_tag``) and a component tag (AppApplicationGenerator) both
+go through it. What a tag groups is the relationship that holds it
+(SecurityTag.network_segments / components), never a flag on the tag.
+"""
 
 from __future__ import annotations
 
@@ -9,13 +16,17 @@ from weakref import WeakKeyDictionary
 
 from infrahub_sdk.exceptions import GraphQLError
 
+from utils.exchange_transit import is_routed_tenant_segment
 from utils.group_policy import tag_pool
 
 from ..protocols import AppComponent, DcimGroupPolicyProfile, SecurityTag
 
 # Per-run memo, keyed by the run's client (a tracking client lives for one run):
-# the tag pool (id, name), looked up once and only when a tag has to be drawn.
+# the tag pool (id, name), looked up once and only when a tag has to be drawn,
+# and consumer node id -> tag id attached in this run (a node read as two
+# dicts, e.g. a component's segment and an edge target's, is written once).
 _POOLS: WeakKeyDictionary[Any, tuple[str, str]] = WeakKeyDictionary()
+_ATTACHED: WeakKeyDictionary[Any, dict[str, str]] = WeakKeyDictionary()
 
 Lock = Callable[[str], AbstractAsyncContextManager[None]]
 
@@ -40,50 +51,79 @@ async def _tag_pool(client: Any) -> tuple[str, str]:
     return _POOLS[client]
 
 
-async def ensure_component_tag(client: Any, lock: Lock, *, component: dict[str, Any]) -> str:
-    """Give a component its group tag; return the tag id.
+async def _find_tag(client: Any, name: str) -> str | None:
+    """Id of the tag named ``name``, or None."""
+    existing = await client.filters(kind=SecurityTag, name__value=name)
+    return str(existing[0].id) if existing else None
 
-    ``component`` is the cleaned AppComponent (``id``, ``fqdn``, ``security_tag``).
-    A component that already has its tag returns it and writes nothing. Otherwise,
-    under ``lock(f"sgt-{fqdn}")`` (two applications can reach the same component
-    through an intra-segment dependency), the tag named after the fqdn is looked
-    up again and only created when still missing, with its group_id drawn from
-    the profile's tag pool. A number pool hands the same value back for the same node, so a
-    tag is created once and keeps its number; the lookup is what makes the
-    second run reuse the node. The tag and the component are saved untracked:
-    no application run owns either, so no run's cleanup ever deletes them.
-    Attached by id, never by HFID (a tag created in this run may not be
-    indexed yet). Errors propagate; a failed allocation names the pool.
+
+async def _find_or_create_tag(client: Any, name: str) -> str:
+    """Id of the tag named ``name``, created with a group_id from the pool when missing.
+
+    A failed create is looked up once more before it is raised: under the
+    lock another run cannot create it, but a replica that has not seen this
+    run's lookup yet can (the uniqueness error then names an existing tag).
     """
-    current = (component.get("security_tag") or {}).get("id")
+    if tag_id := await _find_tag(client, name):
+        return tag_id
+    pool_id, pool_name = await _tag_pool(client)
+    tag = await client.create(kind=SecurityTag, data={"name": name, "group_id": {"from_pool": {"id": pool_id}}})
+    try:
+        await tag.save(allow_upsert=True, update_group_context=False)
+    except GraphQLError as exc:
+        if tag_id := await _find_tag(client, name):
+            return tag_id
+        raise RuntimeError(f"{pool_name}: no group_id allocated for {name}: {exc}") from exc
+    return str(tag.id)
+
+
+async def ensure_security_tag(client: Any, lock: Lock, *, kind: Any, node: dict[str, Any], name: str | None) -> str:
+    """Give ``node`` (of ``kind``) the group tag named ``name``; return the tag id and record it on the dict.
+
+    ``node`` is cleaned query data with ``id`` and ``security_tag``. A node
+    that already has its tag returns it and writes nothing (the query is the
+    fast path), and so does one this run already tagged. Otherwise, under
+    ``lock(f"sgt-{name}")`` (two runs can reach the same node: two
+    applications through an intra-segment dependency, the segment generator
+    and an application), the tag is looked up by name and only created when
+    still missing, its group_id drawn from the profile's tag pool. A number
+    pool hands the same value back for the same node, so a tag is created once
+    and keeps its number; the lookup is what makes the next run reuse it.
+    The tag and the node are saved untracked: no run owns either (the node is
+    the run's own target, or another application's), so no run's cleanup ever
+    deletes them. Attached by id, never by HFID (a tag created in this run may
+    not be indexed yet). Errors propagate; a failed allocation names the pool.
+    """
+    current = (node.get("security_tag") or {}).get("id")
     if current:
         return str(current)
-    component_id = component.get("id")
-    fqdn = component.get("fqdn")
-    if not component_id or not fqdn:
-        raise ValueError(f"Component {component_id or fqdn or '?'} needs an id and an fqdn to be tagged")
+    node_id = node.get("id")
+    if not node_id or not name:
+        raise ValueError(f"{kind} {node_id or name or '?'} needs an id and a name to be tagged")
+    attached = _ATTACHED.setdefault(client, {})
+    if node_id not in attached:
+        async with lock(f"sgt-{name}"):
+            tag_id = await _find_or_create_tag(client, name)
+            consumer = await client.create(kind=kind, data={"id": node_id, "security_tag": {"id": tag_id}})
+            await consumer.save(allow_upsert=True, update_group_context=False)
+        attached[node_id] = tag_id
+    node["security_tag"] = {"id": attached[node_id]}
+    return attached[node_id]
 
-    async with lock(f"sgt-{fqdn}"):
-        existing = await client.filters(kind=SecurityTag, name__value=fqdn)
-        if existing:
-            tag_id = str(existing[0].id)
-        else:
-            pool_id, pool_name = await _tag_pool(client)
-            tag = await client.create(
-                kind=SecurityTag,
-                data={"name": fqdn, "group_id": {"from_pool": {"id": pool_id}}},
-            )
-            try:
-                await tag.save(allow_upsert=True, update_group_context=False)
-            except GraphQLError as exc:
-                raise RuntimeError(f"{pool_name}: no group_id allocated for {fqdn}: {exc}") from exc
-            tag_id = str(tag.id)
 
-        component_obj = await client.create(
-            kind=AppComponent, data={"id": component_id, "security_tag": {"id": tag_id}}
-        )
-        await component_obj.save(allow_upsert=True, update_group_context=False)
-    return tag_id
+async def ensure_segment_tag(client: Any, lock: Lock, *, segment: dict[str, Any]) -> str | None:
+    """Tag a routed tenant segment with the group named after it; None (nothing written) for any other.
+
+    Every VLAN/VXLAN segment with a gateway in a PROD/NON-PROD namespace
+    (utils/exchange_transit.is_routed_tenant_segment) is one group: the
+    contracts between segment tags are its rules (transforms/helpers/
+    group_policy.py). MANAGEMENT/INTERNET, External, Cloud and gateway-less
+    segments are never tagged. Must not run under a segment lock
+    (generators/vlan_domain.segment_lock_key): it takes its own.
+    """
+    if not is_routed_tenant_segment(segment):
+        return None
+    return await ensure_security_tag(client, lock, kind=segment.get("typename"), node=segment, name=segment.get("name"))
 
 
 async def clear_component_tag(client: Any, *, component_id: str) -> None:

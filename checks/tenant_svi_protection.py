@@ -7,10 +7,7 @@ from typing import Any
 from infrahub_sdk.checks import InfrahubCheck
 
 from utils.data_cleaning import clean_data
-from utils.exchange_transit import exchange_peer_zones
-
-TENANT_NAMESPACE_TYPES = frozenset({"prod", "non_prod"})
-ROUTED_KINDS = frozenset({"ManagedVlanSegment", "ManagedVxlanSegment"})
+from utils.exchange_transit import is_routed_tenant_segment
 
 
 class CheckTenantSviProtection(InfrahubCheck):
@@ -36,7 +33,7 @@ class CheckTenantSviProtection(InfrahubCheck):
         tenants = {ctx["tenant"]["id"] for ctx in contexts if ctx.get("tenant")}
         has_shared_context = any(not ctx.get("tenant") for ctx in contexts)
         for segment in cleaned.get("ManagedNetworkSegment") or []:
-            if not self._is_routed_tenant_svi(segment) or self._has_acl(segment) or segment.get("inline_service"):
+            if not is_routed_tenant_segment(segment) or self._has_acl(segment) or segment.get("inline_service"):
                 continue
             if has_shared_context or (self._deployment_ids(segment) & (served | tenants)):
                 continue
@@ -47,16 +44,6 @@ class CheckTenantSviProtection(InfrahubCheck):
                     "context: it is any-to-any inside the VRF"
                 )
             )
-
-    @staticmethod
-    def _is_routed_tenant_svi(segment: dict[str, Any]) -> bool:
-        """A VLAN/VXLAN segment with a gateway in a PROD/NON-PROD namespace, outside the exchange zones."""
-        if segment.get("typename") not in ROUTED_KINDS:
-            return False
-        prefix = (segment.get("gateway") or {}).get("ip_prefix") or {}
-        namespace_type = (prefix.get("ip_namespace") or {}).get("namespace_type")
-        zone = (segment.get("security_zone") or {}).get("name")
-        return namespace_type in TENANT_NAMESPACE_TYPES and zone not in exchange_peer_zones()
 
     @staticmethod
     def _has_acl(segment: dict[str, Any]) -> bool:

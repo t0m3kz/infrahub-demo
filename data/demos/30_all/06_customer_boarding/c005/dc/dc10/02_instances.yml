@@ -16,6 +16,9 @@
 #
 # Placement mirrors each segment's stretch_scope:
 #   - web-frontend (local dc10) -> both DC10 hosts
+#   - session-store (local dc10, same segment) -> server-3/4, never a
+#     web-frontend host: a port selector cannot split two component groups
+#     that share a host port and VLAN
 #   - app-backend / event-bus (dc_pair stretch) -> one host here, one in DC12
 apiVersion: infrahub.app/v1
 kind: Object
@@ -44,4 +47,16 @@ spec:
       object_template: LINUX-SVC
       status: active
       hosting_device: dc10-pod1-server-2
+      deployment: "C005-P-DC10"
+
+    - name: c005-session-store-dc10-1
+      object_template: LINUX-SVC
+      status: active
+      hosting_device: dc10-pod1-server-3
+      deployment: "C005-P-DC10"
+
+    - name: c005-session-store-dc10-2
+      object_template: LINUX-SVC
+      status: active
+      hosting_device: dc10-pod1-server-4
       deployment: "C005-P-DC10"

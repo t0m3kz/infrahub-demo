@@ -27,6 +27,7 @@ from .test_constants import (
     ALL_DEMO_CLOUD_APPLICATIONS,
     ALL_DEMO_COLO_HOST_SWITCHES,
     ALL_DEMO_COMPONENT_INSTANCE_COUNT,
+    ALL_DEMO_DC_ENDPOINTS,
     ALL_DEMO_DC_HOST_ROWS,
     ALL_DEMO_DC_NAMES,
     ALL_DEMO_DC_OVERLAY_ROLES,
@@ -73,7 +74,8 @@ class TestAllDemoCompute(TestInfrahubDockerWithClient):
         The three topology files are deliberately identical in shape, so any
         divergence between DC10, DC11 and DC12 is a generator bug rather than a
         data difference — which makes an exact role count the right assertion
-        here, not a lower bound.
+        here, not a lower bound. Only the application hosts differ, by data
+        (ALL_DEMO_DC_ENDPOINTS).
         """
         logging.info("=== %s - Step 1: DC Topologies ===", SCENARIO_NAME)
 
@@ -82,12 +84,13 @@ class TestAllDemoCompute(TestInfrahubDockerWithClient):
             topology = await fetch_dc_topology(client=async_client_main, branch=scenario_branch, dc_name=dc_name)
             role_counts = compute_role_counts(topology["devices"])
 
-            for role, expected in sorted(ALL_DEMO_DC_ROLE_COUNTS.items()):
+            expected_roles = {**ALL_DEMO_DC_ROLE_COUNTS, "endpoint": ALL_DEMO_DC_ENDPOINTS[dc_name]}
+            for role, expected in sorted(expected_roles.items()):
                 actual = role_counts.get(role, 0)
                 if actual != expected:
                     errors.append(f"{dc_name} role '{role}': expected exactly {expected}, got {actual}")
 
-            unexpected = sorted(set(role_counts) - set(ALL_DEMO_DC_ROLE_COUNTS))
+            unexpected = sorted(set(role_counts) - set(expected_roles))
             if unexpected:
                 errors.append(f"{dc_name} has devices in unexpected role(s): {unexpected}")
 

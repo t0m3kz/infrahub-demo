@@ -2615,52 +2615,99 @@ def build_lb_inline_data(*, device_name: str, platform: str) -> dict:
 # ============================================================================
 
 
-def _gp_device(name: str, role: str, device_type: str, version: str | None, memory_gb: dict[str, int]) -> dict:
+def _gp_device(
+    name: str, role: str, device_type: str, version: str | None, memory_gb: dict[str, int], platform: str = "cisco_nxos"
+) -> dict:
     """A DeviceGroupPolicyFields device; ``memory_gb`` is device type -> memory (06_device_types.yml)."""
     return {
         "name": _v(name),
         "role": _v(role),
-        "platform": _node({"name": _v("cisco_nxos")}),
+        "platform": _node({"name": _v(platform)}),
         "device_type": _node({"name": _v(device_type), "memory_gb": _v(memory_gb[device_type])}),
         "software_image": _node({"version": _v(version)} if version else None),
     }
 
 
-def _gp_rule(index: int, name: str, src_tag: str, dst_tag: str, seg_id: str, **kwargs: Any) -> dict:
-    """A rule of the segment's own policy, as the segmentation_matrix query selects it."""
+def _gp_rule(name: str, dst_segment: str | None, port: int | None, **kwargs: Any) -> dict:
+    """A rule of a segment's own policy, as SegmentGroupPolicyFields selects it."""
     return {
         "id": f"rule-{name}",
-        "index": _v(index),
+        "index": _v(kwargs.get("index", 100)),
         "name": _v(name),
         "action": _v(kwargs.get("action", "permit")),
         "protocol": _v(kwargs.get("protocol", "tcp")),
-        "port_start": _v(kwargs.get("port_start")),
+        "port_start": _v(port),
         "port_end": _v(kwargs.get("port_end")),
         "disabled": _v(kwargs.get("disabled", False)),
-        "apply_on_switch": _v(True),
-        "destination_segment": _node({"id": seg_id}),
-        "source_security_tag": _node({"id": src_tag}),
-        "destination_security_tag": _node({"id": dst_tag}),
+        "apply_on_switch": _v(kwargs.get("apply_on_switch", True)),
+        "source_segment": _node(None),
+        "destination_segment": _node({"id": dst_segment} if dst_segment else None),
+        "source_security_tag": _node({"id": kwargs["src_tag"]} if kwargs.get("src_tag") else None),
+        "destination_security_tag": _node({"id": kwargs["dst_tag"]} if kwargs.get("dst_tag") else None),
     }
 
 
-def _gp_segment(seg_id: str, name: str, *, isolation_mode: str, rules: list[dict], inline: str | None = None) -> dict:
-    return {
+def _gp_segment(
+    seg_id: str,
+    name: str,
+    owner: str,
+    *,
+    prefix: str | None,
+    namespace: tuple[str, str] = ("PROD", "prod"),
+    zone: str = "PROD-ZONE",
+    isolation_mode: str = "normal",
+    rules: list[dict] | None = None,
+    tag: tuple[str, int] | None = None,
+    sites: tuple[str, ...] = ("dc10",),
+    kind: str = "ManagedVxlanSegment",
+    inline: str | None = None,
+) -> dict:
+    """One SegmentGroupPolicyFields segment; a VXLAN one is active in ``sites``, a VLAN one in its footprint's DC."""
+    segment: dict[str, Any] = {
         "id": seg_id,
-        "__typename": "ManagedVxlanSegment",
+        "__typename": kind,
         "name": _v(name),
         "isolation_mode": _v(isolation_mode),
-        "gateway": _node({"ip_prefix": _node({"ip_namespace": _node({"name": _v("PROD")})})}),
-        "inline_service": _node({"id": f"svc-{inline}", "name": _v(inline)} if inline else None),
+        "owner": _node({"org_id": _v(owner)}),
+        "security_zone": _node({"name": _v(zone)}),
+        "security_tag": _node({"id": f"tag-{seg_id}", "name": _v(tag[0]), "group_id": _v(tag[1])} if tag else None),
+        "gateway": _node(
+            {
+                "ip_prefix": _node(
+                    {
+                        "prefix": _v(prefix),
+                        "ip_namespace": _node({"name": _v(namespace[0]), "namespace_type": _v(namespace[1])}),
+                    }
+                )
+            }
+            if prefix
+            else None
+        ),
         "security_policy": _node(
             {
                 "name": _v(f"seg-{name}-egress"),
                 "enabled": _v(True),
                 "default_action": _v("deny"),
-                "rules": _edges(rules),
+                "rules": _edges(rules or []),
             }
         ),
     }
+    if kind == "ManagedVxlanSegment":
+        segment["stretch_scope"] = _v("local" if len(sites) == 1 else "dc_pair")
+        segment["inline_service"] = _node({"id": f"svc-{inline}", "name": _v(inline)} if inline else None)
+        segment["segment_deployments"] = _edges(
+            [
+                {"vni": _v(10000 + n), "deployment": _node({"id": site, "name": _v(site.upper())})}
+                for n, site in enumerate(sites)
+            ]
+        )
+    elif kind == "ManagedVlanSegment":
+        segment["vlan_id"] = _v(250)
+        segment["inline_service"] = _node(None)
+        segment["customer_deployment"] = _node(
+            {"id": f"fp-{seg_id}", "parent": _node({"id": sites[0], "__typename": "TopologyDataCenter"})}
+        )
+    return segment
 
 
 def _gp_tag(tag_id: str, group_id: int, fqdn: str | None, seg_id: str | None) -> dict:
@@ -2674,10 +2721,16 @@ def _gp_tag(tag_id: str, group_id: int, fqdn: str | None, seg_id: str | None) ->
 
 
 def build_segmentation_matrix_data() -> dict:
-    """DC10 as it is today, not a reference fabric: FX2 leafs and border leaf on 10.3(3) next to
-    an EX access leaf (and a spine, no VTEP), against the bootstrap profile rows. Segment c005-web-frontend has three tagged components (one permit rule,
-    one disabled rule, two un-ruled pairs), app-backend one, a third segment is normal behind
-    an inline firewall; one tag is an orphan."""
+    """DC10 as it is today, not a reference fabric (FX2 leafs and border leaf on 10.3(3) next to an EX
+    access leaf, and a spine, no VTEP), next to DC12 (legacy), against the bootstrap profile rows.
+
+    The 30_all shape: C008's trade portal calls the web component of C005's microsegmented web segment
+    (the one cross-customer rule, narrowed to that component's tag); the web segment has three tagged
+    components (one permit rule, one disabled rule, two un-ruled pairs) and its web component calls
+    the backend component of the segment stretched to DC12; C006's shop sits behind
+    an inline firewall and reaches the internet; the INFRA MANAGEMENT VLAN segment and an untagged
+    C007 segment are never classified; a DC12-only rule is out of scope; one tag is an orphan.
+    """
     device_types = yaml.safe_load((PROJECT_ROOT / "data/bootstrap/06_device_types.yml").read_text())["spec"]["data"]
     memory_gb = {item["name"]: item.get("memory_gb") for item in device_types}
     profile_rows = yaml.safe_load((PROJECT_ROOT / "data/bootstrap/19b_group_policy_profile.yml").read_text())["spec"][
@@ -2689,6 +2742,8 @@ def build_segmentation_matrix_data() -> dict:
             "group_policy_kind": _v(row["group_policy_kind"]),
             "min_release": _v(row["min_release"]),
             "min_memory_gb": _v(row.get("min_memory_gb")),
+            "unclassified_group_id": _v(row.get("unclassified_group_id")),
+            "unaware_group_id": _v(row.get("unaware_group_id")),
             "platform": _node({"name": _v(row["platform"])}),
             "device_types": _edges([{"name": _v(name)} for name in row["device_types"]]),
         }
@@ -2697,43 +2752,119 @@ def build_segmentation_matrix_data() -> dict:
     web = "seg-web"
     segments = [
         _gp_segment(
+            "seg-portal",
+            "c008-trade-portal-local-dc10-p",
+            "C008",
+            prefix="10.8.10.0/24",
+            # The dependency targets the web component: the generator writes its tag on the
+            # microsegmented destination side (RulesPlanner.rule_tags).
+            rules=[_gp_rule("c008-trade-portal-to-c005-payment-api-tcp-443", web, 443, dst_tag="tag-web")],
+            tag=("c008-trade-portal-local-dc10-p", 40),
+        ),
+        _gp_segment(
             web,
             "c005-web-frontend-local-dc10-p",
+            "C005",
+            prefix="10.5.10.0/24",
             isolation_mode="microsegmented",
             rules=[
-                _gp_rule(100, "web-frontend-to-session-store-tcp-6379", "tag-web", "tag-session", web, port_start=6379),
+                _gp_rule("web-frontend-to-session-store-tcp-6379", web, 6379, src_tag="tag-web", dst_tag="tag-session"),
                 _gp_rule(
-                    110,
                     "web-frontend-to-session-store-tcp-6380",
-                    "tag-web",
-                    "tag-session",
                     web,
-                    port_start=6380,
+                    6380,
+                    index=110,
                     disabled=True,
+                    src_tag="tag-web",
+                    dst_tag="tag-session",
+                ),
+                _gp_rule(
+                    "c005-payment-web-to-backend-tcp-8443",
+                    "seg-backend",
+                    8443,
+                    index=120,
+                    src_tag="tag-web",
+                    dst_tag="tag-backend",
                 ),
             ],
+            tag=("c005-web-frontend-local-dc10-p", 41),
         ),
-        _gp_segment("seg-backend", "c005-app-backend-stretch-p", isolation_mode="microsegmented", rules=[]),
-        _gp_segment("seg-shop", "c006-shop-p", isolation_mode="normal", rules=[], inline="DC10-FW-CTX-C006"),
+        _gp_segment(
+            "seg-backend",
+            "c005-app-backend-stretch-p",
+            "C005",
+            prefix="10.5.20.0/24",
+            isolation_mode="microsegmented",
+            sites=("dc10", "dc12"),
+            tag=("c005-app-backend-stretch-p", 42),
+        ),
+        _gp_segment(
+            "seg-shop",
+            "c006-shop-p",
+            "C006",
+            prefix="10.6.10.0/24",
+            rules=[_gp_rule("shop-to-internet-https", "seg-internet", 443, apply_on_switch=False)],
+            tag=("c006-shop-p", 43),
+            inline="DC10-FW-CTX-C006",
+        ),
+        _gp_segment(
+            "seg-db",
+            "c005-database-local-dc12-p",
+            "C005",
+            prefix="10.5.30.0/24",
+            isolation_mode="microsegmented",
+            rules=[_gp_rule("db-replication", "seg-db", 5432)],
+            sites=("dc12",),
+            tag=("c005-database-local-dc12-p", 44),
+        ),
+        _gp_segment(
+            "seg-c007",
+            "c007-untagged-p",
+            "C007",
+            prefix="10.7.10.0/24",
+        ),
+        _gp_segment(
+            "seg-infra",
+            "infra-core-dns-ntp-p",
+            "INFRA",
+            prefix="10.250.0.0/24",
+            namespace=("MANAGEMENT", "management"),
+            zone="MANAGEMENT-ZONE",
+            kind="ManagedVlanSegment",
+        ),
+        _gp_segment(
+            "seg-internet",
+            "internet-internet-p",
+            "INTERNET",
+            prefix=None,
+            zone="INTERNET-ZONE",
+            kind="ManagedExternalSegment",
+            sites=(),
+        ),
     ]
-    deployments = [{"vni": _v(10000 + n), "segment": _node(segment)} for n, segment in enumerate(segments)]
     return {
         "data": {
+            "target": _edges([{"id": "dc10", "name": _v("DC10")}]),
             "TopologyDataCenter": _edges(
                 [
                     {
                         "id": "dc10",
-                        "name": _v("DC10"),
                         "devices": _edges(
                             [_gp_device("bl-dc10-01", "border-leaf", "N9K-C9336C-FX2", "10.3(3)", memory_gb)]
                         ),
-                        "segment_deployments": _edges(deployments),
-                    }
+                    },
+                    {
+                        "id": "dc12",
+                        "devices": _edges(
+                            [_gp_device("bl-dc12-01", "border-leaf", "N9K-C9336C-FX2", "10.3(3)", memory_gb)]
+                        ),
+                    },
                 ]
             ),
             "TopologyPod": _edges(
                 [
                     {
+                        "parent": _node({"id": "dc10", "__typename": "TopologyDataCenter"}),
                         "devices": _edges(
                             [
                                 _gp_device("lf-dc10-01", "leaf", "N9K-C9336C-FX2", "10.3(3)", memory_gb),
@@ -2741,11 +2872,12 @@ def build_segmentation_matrix_data() -> dict:
                                 # Not a VTEP: the query returns every device, the transform keeps the VTEPs.
                                 _gp_device("sp-dc10-01", "spine", "N9K-C9336C-FX2", "10.3(3)", memory_gb),
                             ]
-                        )
+                        ),
                     }
                 ]
             ),
             "DcimGroupPolicyProfile": _edges(profiles),
+            "ManagedNetworkSegment": _edges(segments),
             "SecurityTag": _edges(
                 [
                     _gp_tag("tag-web", 16, "api.payment-core.c005.demo.local", web),

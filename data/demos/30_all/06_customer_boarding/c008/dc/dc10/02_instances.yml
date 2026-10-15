@@ -1,0 +1,22 @@
+---
+# C008 trade-portal instances in DC10, on C008's own hosts
+# (../../../../03_dc/dc10/05_servers.yml: dc10-pod1-server-5 in row 1,
+# dc10-pod1-server-6 in row 2), so the HA pair spans both access-leaf pairs.
+# See ../../../c005/dc/dc10/02_instances.yml for why the VMs are filed next to
+# their deployment.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualDevice
+  data:
+    - name: c008-portal-api-dc10-1
+      object_template: LINUX-SVC
+      status: active
+      hosting_device: dc10-pod1-server-5
+      deployment: "C008-P-DC10"
+
+    - name: c008-portal-api-dc10-2
+      object_template: LINUX-SVC
+      status: active
+      hosting_device: dc10-pod1-server-6
+      deployment: "C008-P-DC10"
