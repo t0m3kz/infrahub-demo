@@ -14,6 +14,7 @@ Features:
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from typing import Any, Literal, cast
 
 from infrahub_sdk.protocols import CoreGroup
@@ -109,6 +110,12 @@ class EndpointDeviceData(TypedDict, total=False):
     interfaces: list[EndpointInterfaceData]
 
 
+def _endpoint_device_name(intf: Any) -> str | None:
+    """The interface's device name (queried with ``include=["device"]``), or None without a device peer."""
+    device = intf.device.peer
+    return str(device.name.value) if device else None
+
+
 class EndpointConnectivityGenerator(EndpointUplinkMixin, PoolMixin, CablingMixin, CommonGenerator):
     """Generate connectivity for endpoint devices based on deployment patterns.
 
@@ -129,11 +136,8 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, PoolMixin, CablingMixin
 
     data: EndpointDeviceData
 
-    @staticmethod
-    def _extract_device_name(intf: Any) -> str | None:
-        """The interface's device name (queried with ``include=["device"]``), or None without a device peer."""
-        device = intf.device.peer
-        return str(device.name.value) if device else None
+    # Same Callable-attribute type the mixin declares (a plain def there would shadow this one in the MRO).
+    _extract_device_name: Callable[[Any], str | None] = staticmethod(_endpoint_device_name)
 
     def _extract_cabled_switch_names(self, interfaces: list[DcimPhysicalInterface]) -> set[str]:
         """Far-end switch names of this endpoint's already-cabled interfaces."""

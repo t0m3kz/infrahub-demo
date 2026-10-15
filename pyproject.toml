@@ -111,3 +111,12 @@ MPL-2.0 AND (Apache-2.0 OR MIT);
 Artistic License; GNU General Public License (GPL); GNU General Public License v2 or later (GPLv2+);
 GPL-3.0-or-later
 '''
+
+# generators/protocols.py mirrors the Infrahub schema, which narrows and widens attributes between a generic
+# and its nodes (e.g. a computed `name`, a required `segment_type` under an optional one). ty 0.0.87 reports
+# those child redeclarations as invalid overrides, but dropping them would lose the schema's own types.
+[[tool.ty.overrides]]
+include = ["generators/protocols.py"]
+
+[tool.ty.overrides.rules]
+invalid-attribute-override = "ignore"
