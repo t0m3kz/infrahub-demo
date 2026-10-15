@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from utils.dependency_access import dependency_access_status
+from utils.dependency_access import component_owner_org_id, crosses_owners, dependency_access_status
 from utils.exchange_transit import (
-    exchange_peer_zones,
+    is_exchange_zone,
     joins_prod_and_nonprod,
     namespace_type_for_environment,
     zone_name_for_namespace_type,
@@ -78,13 +78,6 @@ class RulesPlanner:
         return f"seg-{seg_name}-egress"
 
     @staticmethod
-    def owner_org_id_from_component(component: dict[str, Any]) -> str | None:
-        app = component.get("parent") or {}
-        owner = app.get("owner") or {}
-        owner_org_id = str(owner.get("org_id") or "").strip().upper()
-        return owner_org_id or None
-
-    @staticmethod
     def owner_name_from_component(component: dict[str, Any]) -> str | None:
         app = component.get("parent") or {}
         owner = app.get("owner") or {}
@@ -94,7 +87,7 @@ class RulesPlanner:
     @staticmethod
     def _is_exchange_segment(segment: dict[str, Any]) -> bool:
         """Whether the segment sits in an exchange zone (INTERNET-ZONE, MANAGEMENT-ZONE)."""
-        return (segment.get("security_zone") or {}).get("name") in exchange_peer_zones()
+        return is_exchange_zone((segment.get("security_zone") or {}).get("name"))
 
     @classmethod
     def dependency_is_authorized(
@@ -129,21 +122,19 @@ class RulesPlanner:
         # and non-prod environments too. Another owner's endpoint opens only
         # once its owner approves; the dependency-updated trigger then
         # reconciles the calling application, which creates the rule.
-        src_owner_org_id = cls.owner_org_id_from_component(src_comp)
-        dst_owner_org_id = cls.owner_org_id_from_component(dst_comp)
-        if src_owner_org_id and dst_owner_org_id and src_owner_org_id != dst_owner_org_id and status != "approved":
-            return False, f"cross-owner flow {src_owner_org_id}->{dst_owner_org_id} requires access_status=approved"
+        if crosses_owners(src_comp, dst_comp) and status != "approved":
+            return (
+                False,
+                f"cross-owner flow {component_owner_org_id(src_comp)}->{component_owner_org_id(dst_comp)} "
+                "requires access_status=approved",
+            )
 
         return True, None
 
     @classmethod
     def governance_suffix(cls, src_comp: dict[str, Any], dst_comp: dict[str, Any], dep: dict[str, Any]) -> str:
-        src_owner = (
-            cls.owner_org_id_from_component(src_comp) or cls.owner_name_from_component(src_comp) or "unknown-src-owner"
-        )
-        dst_owner = (
-            cls.owner_org_id_from_component(dst_comp) or cls.owner_name_from_component(dst_comp) or "unknown-dst-owner"
-        )
+        src_owner = component_owner_org_id(src_comp) or cls.owner_name_from_component(src_comp) or "unknown-src-owner"
+        dst_owner = component_owner_org_id(dst_comp) or cls.owner_name_from_component(dst_comp) or "unknown-dst-owner"
         status = dependency_access_status(dep)
         reason = str(dep.get("decision_reason") or "").strip()
         reason_suffix = f"; reason={reason}" if reason else ""

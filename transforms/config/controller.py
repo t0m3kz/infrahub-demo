@@ -136,7 +136,7 @@ def _build_velocloud_vco(controller: dict[str, Any]) -> dict[str, Any]:
     """VCO payload — the Gateway plus every office Edge it manages
     (generators/topology/sdwan_edge.py's SdwanEdgeGenerator appends Edges to
     managed_devices; the Gateway itself is added by hand, see
-    data/demos/30_all/08_interconnects/04_sdwan/01_gateway.yml).
+    data/demos/30_all/02_colo/equinix/fr/04_sdwan_gateway.yml).
 
     branch_to_branch is read per-edge from its own office
     (TopologyCustomerOffice.branch_to_branch, schemas/extensions/topology/

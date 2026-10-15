@@ -1,12 +1,13 @@
 # Every segment kind (Vlan, Vxlan, External, Cloud) with what the security
-# invariants read: zone, environment, address (gateway prefix or cidr_block),
-# isolation mode, the policy rules that name a segment (with their component
-# group tags), the segment and tag of each app component, every group tag
-# with the components and segments it groups, the band of the tag pool the
-# group-policy profile rows name (the tags are drawn from it) and their
-# reserved groups, and what the group contract builder reads of each segment
-# (SegmentGroupPolicyFields: its group tag and its own rules). Read at check
-# time, so gateways allocated asynchronously by the generators are settled.
+# invariants read: zone, environment, address (gateway prefix with its
+# namespace, or cidr_block), isolation mode, the policy rules that name a
+# segment (with their component group tags), the segment and tag of each app
+# component, every group tag with the components and segments it groups, the
+# band of the tag pool the group-policy profile rows name (the tags are drawn
+# from it) and their reserved groups, and what the group contract builder
+# reads of each segment (SegmentGroupPolicyFields: its group tag and its own
+# rules). Read at check time, so gateways allocated asynchronously by the
+# generators are settled.
 query segment_security {
   ManagedNetworkSegment {
     edges {
@@ -18,7 +19,17 @@ query segment_security {
         environment { value }
         isolation_mode { value }
         security_zone { node { id name { value } } }
-        gateway { node { ip_prefix { node { id prefix { value } } } } }
+        gateway {
+          node {
+            ip_prefix {
+              node {
+                id
+                prefix { value }
+                ip_namespace { node { name { value } namespace_type { value } } }
+              }
+            }
+          }
+        }
         ... on CloudNetworkSegment {
           cidr_block { value }
           customer_deployment { node { id name { value } } }

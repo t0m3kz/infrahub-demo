@@ -9,9 +9,7 @@ spec:
     - label: reporting-portal
       environment: d
       criticality: low
-      security_profile: internal_standard
       fqdn: reporting-portal.c010.demo.local
-      ingress_mode: frontend
       application_orchestrator: github_actions
       owner: C010
       member_of_groups:

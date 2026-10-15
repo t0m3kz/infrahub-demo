@@ -427,8 +427,10 @@ ALL_DEMO_BRANCH = "all-demo-scenario"
 ALL_DEMO_LOAD_STAGES: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
         # Everything that depends only on bootstrap data: customers, cloud
-        # regions/zones, colocation metros/cages and racks, SaaS, office
-        # buildings, and the three DC sites with their fabrics and controllers.
+        # regions/zones, colocation metros/cages and racks (and the shared
+        # SD-WAN gateway and orchestrator in the FR2 cage, so an office opts in
+        # when it is boarded), SaaS, office buildings, and the three DC sites
+        # with their fabrics and controllers.
         # One load, so add_colocation_metro (one run per metro) and
         # add_dc -> add_pod -> add_rack (per DC) generate in parallel. The
         # loader sorts files by path, so each DC's 00_location.yml lands before
@@ -479,7 +481,8 @@ ALL_DEMO_LOAD_STAGES: tuple[tuple[str, tuple[str, ...]], ...] = (
         ("07_applications",),
     ),
     (
-        # Colo on-ramp, cloud hub, virtual circuits, SD-WAN, cloud endpoints.
+        # Colo on-ramp, cloud hub, virtual circuits, the SD-WAN gateway's
+        # backhaul and PROD handoff, cloud endpoints.
         # Data plus the circuit generators it dispatches (add_circuit builds
         # the dark fibres' DCI sessions) — every generator those need has
         # already run.

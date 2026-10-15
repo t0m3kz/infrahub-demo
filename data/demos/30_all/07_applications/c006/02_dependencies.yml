@@ -10,14 +10,12 @@ spec:
     - name: c006-erp-core-web-ui-to-erp-backend
       source: ui.erp-core.c006.demo.local
       target: backend.erp-core.c006.demo.local
-      access_status: auto
       description: "ERP web UI calls the backend API"
       member_of_groups:
         - app_dependencies
     - name: c006-erp-core-erp-backend-to-erp-db
       source: backend.erp-core.c006.demo.local
       target: db.erp-core.c006.demo.local
-      access_status: auto
       description: "ERP backend reads and writes the ERP database"
       member_of_groups:
         - app_dependencies

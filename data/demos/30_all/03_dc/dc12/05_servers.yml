@@ -1,8 +1,12 @@
 ---
 # DC12 POD-1 application hosts — see ../dc10/05_servers.yml for the pattern.
-# Owned by P027 (Technology Partner): shared non-prod hosts that several
-# customers' dev VMs run on (C005, C008, C010), unlike the DC10/DC11 hosts that
-# belong to one customer. Prod workloads never land here.
+#
+# server-1/2 are owned by P027 (Technology Partner): shared non-prod hosts that
+# several customers' dev VMs run on (C008, C010), unlike the DC10/DC11 hosts
+# that belong to one customer. server-3/4 are C005's own hosts for its DC12
+# prod tier (06_customer_boarding/c005/dc/dc12/02_instances.yml), one per row
+# like every other pair. Prod and non-prod never share a hypervisor:
+# checks/hypervisor_environment.py holds that rule on the placement.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -27,5 +31,27 @@ spec:
       position: 10
       platform: linux
       description: "DC12 POD-1 row 2 application host"
+      member_of_groups:
+        - endpoints
+
+    - name: dc12-pod1-server-3
+      object_template: PowerEdge-R640_SERVER
+      owner: "C005"
+      rack: mil-1-s-1-r-1-1
+      status: active
+      position: 11
+      platform: linux
+      description: "DC12 POD-1 row 1 application host (C005 prod)"
+      member_of_groups:
+        - endpoints
+
+    - name: dc12-pod1-server-4
+      object_template: PowerEdge-R640_SERVER
+      owner: "C005"
+      rack: mil-1-s-1-r-2-1
+      status: active
+      position: 11
+      platform: linux
+      description: "DC12 POD-1 row 2 application host (C005 prod)"
       member_of_groups:
         - endpoints

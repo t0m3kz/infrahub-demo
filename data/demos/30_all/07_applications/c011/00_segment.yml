@@ -5,14 +5,10 @@
 # relationship — owner is set automatically from the parent, no need to
 # repeat it on the segment itself.
 #
-# interface_capabilities pins the segment to the cage switch ports the
-# customer's hosts are cabled to (see that cage's 02_compute.yml) — the
-# same ManagedGenericInterfaces mechanism the VXLAN segment generator uses
-# in the DCs (generators/topology/segment.py), hand-written here because
-# ManagedVlanSegment has no generator. It lives with the segment rather
-# than next to the cables so the segment has exactly one definition: a
-# second document upserting it by its uniqueness constraint would have to
-# guess whether vlan_id was already set.
+# No switch ports here: add_app_component_segment
+# (generators/topology/app_instance_segment.py) tags the cage switch ports the
+# components' instances' hosts are cabled to (../../06_customer_boarding/
+# c011/colo/*/*/03_cabling.yml), as it does a DC segment's leaf ports.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -40,9 +36,3 @@ spec:
                     role: customer
                     ip_namespace: "PROD"
             customer_deployment: "C011-P-NY"
-            security_zone: "PROD-ZONE"
-            interface_capabilities:
-              - ["CS-NY1-SW1", "Ethernet1/1/1"]
-              - ["CS-NY1-SW1", "Ethernet1/1/2"]
-              - ["CS-NY1-SW1", "Ethernet1/1/3"]
-              - ["CS-NY1-SW1", "Ethernet1/1/4"]

@@ -10,7 +10,6 @@ spec:
     - name: c010-reporting-portal-portal-ui-to-report-worker
       source: ui.reporting-portal.c010.demo.local
       target: worker.reporting-portal.c010.demo.local
-      access_status: auto
       description: "Portal UI queues report jobs on the worker"
       member_of_groups:
         - app_dependencies

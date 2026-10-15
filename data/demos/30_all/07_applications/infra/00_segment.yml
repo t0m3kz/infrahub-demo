@@ -1,3 +1,4 @@
+---
 # Core infrastructure services (DNS/NTP) of DC11, an ordinary routed VLAN
 # segment in the MANAGEMENT VRF, owned by the Infrastructure Services
 # pseudo-customer (the pattern of the Internet segment in
@@ -8,15 +9,17 @@
 # to the leg VIP (nothing here initiates towards a tenant); the rules that name
 # it live in ../../08_interconnects/07_zone_policies/05_security_policy.yml.
 #
-# customer_deployment is C006-P-DC11: segment_placement requires a
-# TopologyCustomerDC for a VLAN segment, and INFRA has no footprint of its own.
-# Reusing DC11's existing one adds no context and no leg; the footprint only
-# says which DC's fabric carries the segment. It gets no tenant PBR redirect:
-# its gateway namespace is of type management (get_customer_pbr_rules).
+# customer_deployment is C006-P-DC11: a VLAN segment needs a deployment, and
+# INFRA has no footprint of its own. Reusing DC11's existing one adds no
+# context and no leg; the footprint only says which DC's fabric carries the
+# segment. It gets no tenant PBR redirect: its gateway namespace is of type
+# management (get_customer_pbr_rules). It is the one VLAN segment in a DC:
+# segment_placement allows a VLAN segment on a TopologyCustomerDC only in an
+# exchange zone (MANAGEMENT-ZONE here); every tenant segment there is VXLAN.
 #
-# ManagedVlanSegment has no generator, so the access-leaf port is pinned by
-# hand, as in ../c006/00_segment.yml: Ethernet1/2 of al-dc1111111501 (the
-# dc11-pod1 hosts use Ethernet1/1). Its anycast SVI in VRF MANAGEMENT
+# ManagedVlanSegment has no generator, so its address, VLAN, zone and
+# access-leaf port are authored infra data: Ethernet1/2 of al-dc1111111501
+# (the dc11-pod1 hosts use Ethernet1/1). Its anycast SVI in VRF MANAGEMENT
 # advertises 10.250.0.0/24 to the border leaves as an EVPN type-5 route.
 apiVersion: infrahub.app/v1
 kind: Object

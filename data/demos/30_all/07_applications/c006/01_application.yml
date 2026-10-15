@@ -1,5 +1,5 @@
 ---
-# C006 on-prem sample application on customer VLAN segment in DC11.
+# C006 on-prem sample application on its customer VXLAN segment in DC11.
 #
 # instances are the VMs from ../../06_customer_boarding/c006/dc/dc11/02_instances.yml — every tier
 # runs on both POD-1 hosts, one per row, so neither access-leaf pair is a
@@ -12,9 +12,7 @@ spec:
     - label: erp-core
       environment: p
       criticality: critical
-      security_profile: internal_standard
       fqdn: erp-core.c006.demo.local
-      ingress_mode: frontend
       application_orchestrator: github_actions
       owner: C006
       member_of_groups:

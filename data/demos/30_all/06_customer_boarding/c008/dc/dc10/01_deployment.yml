@@ -19,7 +19,6 @@ spec:
   data:
     - owner: "C008"
       environment: "p"
-      status: active
       infrastructure_orchestrator: github_actions
       parent: "DC10"
       design: "M_DC"

@@ -73,6 +73,8 @@ def _make_gen() -> Any:
     # VLAN domain activation reconciliation has its own tests
     # (tests/unit/test_vlan_domain_reconcile.py) — stubbed at the boundary.
     gen.reconcile_segment_vlan_domains = AsyncMock()
+    # Tenant addressing has its own test class (TestEnsureSegmentAddressing).
+    gen.ensure_segment_addressing = AsyncMock()
     return gen
 
 

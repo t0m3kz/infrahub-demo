@@ -10,7 +10,6 @@ spec:
     - name: c012-payment-edge-payment-ui-to-payment-engine
       source: ui.payment-edge.c012.demo.local
       target: engine.payment-edge.c012.demo.local
-      access_status: auto
       description: "Payment UI calls the payment engine API"
       member_of_groups:
         - app_dependencies

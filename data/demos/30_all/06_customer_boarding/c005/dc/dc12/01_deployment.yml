@@ -1,14 +1,10 @@
 ---
-# Customer C005 deployment footprint inside an existing data center from
-# data/demos/01_data_center/. TopologyCustomerDC's parent is the data center
-# (TopologyDataCenter) itself, not a pod — the customer's presence spans the
-# whole fabric.
+# Customer C005 production footprint in DC12 (data/demos/30_all/03_dc/dc12/).
+# TopologyCustomerDC's parent is the data center itself, not a pod: the
+# customer's presence spans the whole fabric.
 #
-# Requires the corresponding DC to already exist:
-#   - DC2  <- data/demos/01_data_center/dc2/
-#
-# design links to one of the M_DC/S_DC/L_DC/XL_DC boarding blueprints from
-# data/bootstrap/21_customer_templates.yml (loaded at bootstrap time).
+# design links to one of the S_DC/M_DC/L_DC/XL_DC boarding blueprints of
+# data/bootstrap/21_customer_templates.yml.
 #
 # name is a computed attribute ({owner_org_id}-{environment}-{parent}) —
 # read-only, do not set it explicitly.
@@ -20,7 +16,6 @@ spec:
   data:
     - owner: "C005"
       environment: "p"
-      status: active
       infrastructure_orchestrator: ansible_automation_platform
       parent: "DC12"
       design: "L_DC"

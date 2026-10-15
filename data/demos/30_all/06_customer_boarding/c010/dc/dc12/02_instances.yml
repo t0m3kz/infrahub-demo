@@ -10,24 +10,20 @@ spec:
   data:
     - name: c010-portal-ui-dc12-1
       object_template: LINUX-SVC
-      status: active
       hosting_device: dc12-pod1-server-1
       deployment: "C010-D-DC12"
 
     - name: c010-portal-ui-dc12-2
       object_template: LINUX-SVC
-      status: active
       hosting_device: dc12-pod1-server-2
       deployment: "C010-D-DC12"
 
     - name: c010-report-worker-dc12-1
       object_template: LINUX-SVC
-      status: active
       hosting_device: dc12-pod1-server-1
       deployment: "C010-D-DC12"
 
     - name: c010-report-worker-dc12-2
       object_template: LINUX-SVC
-      status: active
       hosting_device: dc12-pod1-server-2
       deployment: "C010-D-DC12"

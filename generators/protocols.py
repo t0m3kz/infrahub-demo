@@ -85,11 +85,8 @@ class TopologyCustomer(CoreNode):
 class TopologyCustomerTemplate(CoreNode):
     dedicated_firewall: Boolean
     dedicated_loadbalancer: Boolean
-    dedicated_proxy: Boolean
-    default_environment: Dropdown
     description: StringOptional
     name: String
-    network_segment_count: Integer
     size: Dropdown
 
 
@@ -597,17 +594,11 @@ class TopologyCustomerTemplateCloud(TopologyCustomerTemplate):
 
 
 class TopologyCustomerTemplateColo(TopologyCustomerTemplate):
-    uplink_100g_count: Integer
-    uplink_10g_count: Integer
-    uplink_400g_count: Integer
-    uplink_40g_count: Integer
+    pass
 
 
 class TopologyCustomerTemplateDC(TopologyCustomerTemplate):
-    uplink_100g_count: Integer
-    uplink_10g_count: Integer
-    uplink_400g_count: Integer
-    uplink_40g_count: Integer
+    pass
 
 
 class TopologyDataCenter(

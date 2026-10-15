@@ -7,9 +7,11 @@
 # tunnel kinds would make "which kind of tunnel is number 4021" unanswerable
 # without also checking link_type.
 #
-# Range starts above the three offices' hand-picked values (1001/1003/1015,
-# data/demos/30_all/08_interconnects/04_sdwan/05_overlays.yml) so a
-# generator-provisioned office never collides with one of those.
+# Range starts above the hand-assigned ids the gateway's trunk already carries
+# in data/demos/30_all/08_interconnects/ (the partner IPsec tunnel 1002 in
+# 07_zone_policies/01_partner_virtual_circuit.yml, the PROD handoff VLAN 1900 in
+# 04_sdwan/06_vrf_handoff.yml), so a generated eth0.<tunnel_id> never collides
+# with one of those.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

@@ -1,4 +1,4 @@
-"""Generator assigning a VXLAN segment to the exact switch interface an
+"""Generator assigning a segment to the exact switch interface an
 AppComponent's instance is cabled to.
 
 A DC-wide sweep used to tag every leaf/tor customer port in a segment's
@@ -28,6 +28,14 @@ so that is what gets tagged, not the raw member port.
 A segment with no AppComponent at all referencing it gets no customer-port
 assignment — there is intentionally no DC-wide fallback (see
 generators/topology/segment.py's module docstring).
+
+Both on-prem segment kinds are reconciled the same way; they differ only
+after the tags. A ManagedVxlanSegment then has its VLAN domain activations
+reconciled (its local VLAN is per switch). A ManagedVlanSegment has none: its
+vlan_id is the segment's own, so tagging its ports is the whole job — which is
+how a colocation cage's VLAN segment gets its switch ports from the cage's
+cabling instead of hand-typed pins. Any other segment (a cloud segment) has no
+on-prem port to tag.
 
 Reconciled per SEGMENT, not per component: the triggering component only
 names the segment. The desired tags are the union over every AppComponent
@@ -60,9 +68,10 @@ from ..pools import PoolMixin
 from ..protocols import (
     DcimLAGInterface,
     DcimPhysicalInterface,
+    ManagedVlanSegment,
     ManagedVxlanSegment,
 )
-from ..vlan_domain import VlanDomainMixin, segment_lock_key
+from ..vlan_domain import TAGGABLE_INTERFACE_KINDS, VlanDomainMixin, segment_lock_key
 
 # AppInstance kinds that ARE a physical device/controller — used directly.
 _PHYSICAL_INSTANCE_TYPES = frozenset({"DcimPhysicalDevice", "ManagedControllerPhysical"})
@@ -75,9 +84,9 @@ _SEGMENT_COMPONENTS_QUERY_PATH = Path(__file__).resolve().parents[2] / "queries/
 
 class AppInstanceSegmentGenerator(PoolMixin, VlanDomainMixin, CommonGenerator):
     """Reconciles a segment's customer-facing switch-port tags from the
-    instances of every AppComponent on it, then the segment's LOCAL VLAN ID
-    activations on the VLAN domains (MLAG pair or standalone) of the switches
-    those ports belong to.
+    instances of every AppComponent on it, then, for a VXLAN segment, the
+    segment's LOCAL VLAN ID activations on the VLAN domains (MLAG pair or
+    standalone) of the switches those ports belong to.
 
     Ownership: a tagged switch port belongs to the device's generator and an
     activation is shared by every component on the segment and by
@@ -102,19 +111,31 @@ class AppInstanceSegmentGenerator(PoolMixin, VlanDomainMixin, CommonGenerator):
         segment = component.get("network_segment") or {}
         segment_id: str = segment.get("id", "")
         segment_name: str = segment.get("name", "")
+        segment_kind: str = segment.get("typename", "")
 
         if not segment_id:
             self.logger.info(f"Component {fqdn}: no network_segment set — nothing to assign")
+            return
+        if segment_kind not in (ManagedVxlanSegment.__name__, ManagedVlanSegment.__name__):
+            self.logger.info(
+                f"Component {fqdn}: segment '{segment_name}' is a {segment_kind}, not on-prem — nothing to assign"
+            )
             return
         if not component.get("instances"):
             # Still reconciled: the instances this component used to have
             # leave their switch ports tagged until the segment is.
             self.logger.info(f"Component {fqdn}: no instances set — reconciling segment '{segment_name}' anyway")
 
+        if segment_kind == ManagedVlanSegment.__name__:
+            added, removed = await self._reconcile_vlan_segment(segment_id, segment_name)
+            self.logger.info(
+                f"Component {fqdn}: VLAN segment '{segment_name}' reconciled — tagged {added}, untagged {removed} "
+                "interface(s)"
+            )
+            return
+
         segment_obj = await self.client.get(kind=ManagedVxlanSegment, id=segment_id, raise_when_missing=False)
         if not segment_obj:
-            # A ManagedVlanSegment's ports are hand-assigned in its data
-            # file and it has no VLAN domain activations: nothing to do.
             self.logger.info(f"Component {fqdn}: segment {segment_id} is not a VXLAN segment — nothing to assign")
             return
 
@@ -136,6 +157,38 @@ class AppInstanceSegmentGenerator(PoolMixin, VlanDomainMixin, CommonGenerator):
         self.logger.info(
             f"Component {fqdn}: segment '{segment_name}' reconciled — tagged {added}, untagged {removed} interface(s)"
         )
+
+    async def _reconcile_vlan_segment(self, segment_id: str, segment_name: str) -> tuple[int, int]:
+        """Reconcile a VLAN segment's switch-port tags, under the same
+        per-segment lock as a VXLAN segment's. Its current tags are read
+        inside the lock (one get with the relationship included), so two
+        components on the segment never reconcile from a stale view. No VLAN
+        domain step: a VLAN segment's vlan_id is its own, not per switch.
+
+        Returns (interfaces tagged, interfaces untagged); (0, 0) when the
+        segment is gone.
+        """
+        async with self.resource_lock(segment_lock_key(segment_id)):
+            segment_obj = await self.client.get(
+                kind=ManagedVlanSegment,
+                id=segment_id,
+                include=["interface_capabilities"],
+                raise_when_missing=False,
+            )
+            if not segment_obj:
+                self.logger.info(f"VLAN segment {segment_id} not found — nothing to assign")
+                return 0, 0
+            current_ids = {
+                peer.id
+                for peer in getattr(segment_obj, "interface_capabilities").peers
+                if peer.typename in TAGGABLE_INTERFACE_KINDS
+            }
+            return await self._reconcile_segment_interface_tags(
+                segment_id=segment_id,
+                segment_name=segment_name,
+                segment_obj=segment_obj,
+                current_ids=current_ids,
+            )
 
     async def _segment_components(self, segment_id: str) -> list[dict[str, Any]]:
         """Every AppComponent on the segment, with its instances (segment_components.gql)."""

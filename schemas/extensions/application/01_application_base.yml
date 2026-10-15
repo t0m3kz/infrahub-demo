@@ -48,11 +48,12 @@ nodes:
         order_weight: 110
         description: "Short application identifier (e.g. ecommerce, auth-platform)"  # yamllint disable-line rule:line-length
         optional: false
+      # Required with no default, like a footprint's: `p` silently means
+      # production.
       - name: environment
         kind: Dropdown
-        optional: true
+        optional: false
         order_weight: 500
-        default_value: p
         choices:
           - name: p
             label: "Production"

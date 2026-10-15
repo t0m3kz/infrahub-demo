@@ -19,7 +19,6 @@ spec:
     - owner: "C004"
       customer_name: "peakora-azure"
       environment: "p"
-      status: active
       parent: "westeurope"
       member_of_groups:
         - customer_deployments_cloud

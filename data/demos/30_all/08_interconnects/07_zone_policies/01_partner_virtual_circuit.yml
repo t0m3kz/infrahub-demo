@@ -1,7 +1,8 @@
 ---
 # Partner-acme B2B extranet, modelled as a second IPsec tunnel riding C001's
-# existing internet underlay (../04_sdwan/04_internet_underlay.yml's
-# INET-C001-WAW-FR2) rather than a new dedicated physical cross-connect.
+# existing internet underlay (INET-C001-P, which add_sdwan_edge built for the
+# C001-P office together with its C001-P-EDGE1 edge) rather than a new dedicated
+# physical cross-connect.
 #
 # A dedicated 1:1 cross-connect was tried first and rejected:
 # TopologyPhysicalCircuit's cross_connect/dark_fiber types are a hard,
@@ -10,15 +11,31 @@
 # test_62_all_demo_interconnects.py::test_01_verify_physical_circuits) — a
 # partner has no TopologyConnectableLocation of its own, and a
 # customer-owned single-ended cross_connect violates both rules. Riding the
-# existing internet-type underlay as a second overlay (same pattern as
-# ../04_sdwan/05_overlays.yml's SD-WAN tunnels) needs no new physical circuit
-# at all, and is realistic: most B2B partner integrations really are IPsec
-# over internet, not a private cross-connect.
+# existing internet-type underlay as a second overlay (same pattern as the
+# office's own SD-WAN tunnel) needs no new physical circuit at all, and is
+# realistic: most B2B partner integrations really are IPsec over internet, not
+# a private cross-connect.
 #
-# Terminates on the same shared SD-WAN gateway as C001-SDWAN-FR2, on a
-# different sub-interface (eth0.1002 vs eth0.1001) — one gateway trunk can
-# carry several tunnels, the same way ../04_sdwan/05_overlays.yml's gateway
-# already carries three tenant tunnels off one eth0 trunk.
+# Terminates on the same shared SD-WAN gateway as C001-P-SDWAN-FR2, on its own
+# sub-interface: one gateway trunk carries several tunnels. Its tunnel id 1002
+# is hand-assigned, below the SD-WAN tunnel-id pool (2000-9999) the generated
+# office tunnels draw from, so the two never collide.
+#
+# Loaded with the interconnects, after the compute_and_customers stage whose
+# add_sdwan_edge runs created INET-C001-P and C001-P-EDGE1 (a later loader run,
+# so these references are not same-run HFID lookups).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: "eth0.1002"
+      device: "EQX-FR2-SDWAN-GW1"
+      role: uplink
+      status: active
+      description: "C001 partner-acme IPsec tunnel termination"
+      parent_interface: ["EQX-FR2-SDWAN-GW1", "eth0"]
+---
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -39,7 +56,7 @@ spec:
         - "C001-P"
         - "FR2"
       physical_circuits:
-        - "INET-C001-WAW-FR2"
+        - "INET-C001-P"
       interface_capabilities:
-        - ["C001-EDGE1", "GE1"]
+        - ["C001-P-EDGE1", "GE1"]
         - ["EQX-FR2-SDWAN-GW1", "eth0.1002"]

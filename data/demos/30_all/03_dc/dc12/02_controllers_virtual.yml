@@ -10,9 +10,7 @@ spec:
   data:
     - name: "DC12-CPSMS1"
       object_template: CP-SMS_MANAGER
-      status: active
       member_of_groups: [managed_controllers]
     - name: "DC12-BIGIQ1"
       object_template: BIG-IQ_MANAGER
-      status: active
       member_of_groups: [managed_controllers]

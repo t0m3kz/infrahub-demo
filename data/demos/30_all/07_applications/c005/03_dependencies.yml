@@ -16,28 +16,24 @@ spec:
     - name: c005-payment-web-to-backend
       source: api.payment-core.c005.demo.local
       target: backend.payment-core.c005.demo.local
-      access_status: auto
       description: "Payment web frontend calls the internal backend API"
       member_of_groups:
         - app_dependencies
     - name: c005-payment-backend-to-event-bus
       source: backend.payment-core.c005.demo.local
       target: events.payment-core.c005.demo.local
-      access_status: auto
       description: "Payment backend publishes order events to the event bus"
       member_of_groups:
         - app_dependencies
     - name: c005-payment-backend-to-order-db
       source: backend.payment-core.c005.demo.local
       target: orders-db.payment-core.c005.demo.local
-      access_status: auto
       description: "Payment backend reads and writes orders in the DC12 database"
       member_of_groups:
         - app_dependencies
     - name: c005-payment-web-to-session-store
       source: api.payment-core.c005.demo.local
       target: sessions.payment-core.c005.demo.local
-      access_status: auto
       description: "Payment web frontend keeps its sessions in the session store"
       member_of_groups:
         - app_dependencies

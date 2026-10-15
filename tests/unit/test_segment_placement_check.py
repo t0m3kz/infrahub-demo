@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, cast
 
 from checks.segment_placement import CheckSegmentPlacement
@@ -126,7 +127,7 @@ class TestInlineTermination:
             "ManagedVlanSegment": [
                 {
                     "name": "seg-web",
-                    "customer_deployment": {"typename": "TopologyCustomerDC", "name": "C001-P-DC1"},
+                    "customer_deployment": {"typename": "TopologyCustomerColocation", "name": "C001-P-FR"},
                     "terminate_inline": terminate_inline,
                     "inline_service": inline_service,
                 }
@@ -188,3 +189,61 @@ class TestVlanSegmentDeployment:
         check.validate({"CloudNetworkSegment": [{"name": "c003-subnet-p", "customer_deployment": deployment}]})
 
         assert check._captured_errors == []
+
+
+class TestTenantVlanSegmentInDataCenter:
+    """A tenant segment inside a DC is VXLAN; only an exchange-zone service segment may be a VLAN there."""
+
+    @staticmethod
+    def _vlan_segment(deployment_kind: str, zone: str | None) -> dict[str, Any]:
+        """One VLAN segment on a footprint of ``deployment_kind``, in ``zone`` (None: unzoned)."""
+        return {
+            "ManagedVlanSegment": [
+                {
+                    "name": "c006-nordix-prod-p",
+                    "customer_deployment": {"typename": deployment_kind, "name": "C006-P-DC11"},
+                    "security_zone": {"name": zone} if zone else None,
+                }
+            ]
+        }
+
+    def test_tenant_vlan_segment_on_a_dc_footprint_is_an_error(self) -> None:
+        """A PROD-ZONE VLAN segment on a TopologyCustomerDC is a tenant segment of the wrong kind."""
+        check = _check()
+
+        check.validate(self._vlan_segment("TopologyCustomerDC", "PROD-ZONE"))
+
+        assert len(check._captured_errors) == 1
+        assert "is a ManagedVxlanSegment" in check._captured_errors[0]
+        assert "C006-P-DC11" in check._captured_errors[0]
+
+    def test_unzoned_vlan_segment_on_a_dc_footprint_is_an_error(self) -> None:
+        """No zone is no exemption: the rule fails closed."""
+        check = _check()
+
+        check.validate(self._vlan_segment("TopologyCustomerDC", None))
+
+        assert len(check._captured_errors) == 1
+
+    def test_exchange_zone_vlan_segment_on_a_dc_footprint_passes(self) -> None:
+        """The DC-local MANAGEMENT services segment is authored infra data in an exchange zone."""
+        check = _check()
+
+        check.validate(self._vlan_segment("TopologyCustomerDC", "MANAGEMENT-ZONE"))
+
+        assert check._captured_errors == []
+
+    def test_tenant_vlan_segment_on_a_colocation_footprint_passes(self) -> None:
+        """Cages and colocation metros keep their tenant VLAN segments."""
+        check = _check()
+
+        check.validate(self._vlan_segment("TopologyCustomerColocation", "PROD-ZONE"))
+
+        assert check._captured_errors == []
+
+    def test_query_selects_the_vlan_segment_zone(self) -> None:
+        """The exemption reads security_zone.name, so the check's query must select it on VLAN segments."""
+        query = (Path(__file__).parents[2] / "queries" / "validation" / "segment_placement.gql").read_text()
+        vlan_block = query[query.index("ManagedVlanSegment") : query.index("ManagedVxlanSegment")]
+
+        assert "security_zone { node { name { value } } }" in vlan_block

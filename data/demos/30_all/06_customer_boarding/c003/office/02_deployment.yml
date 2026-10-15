@@ -15,3 +15,6 @@ spec:
               - "muc-hq"
             member_of_groups:
               - customer_deployments_office
+            # Opts into add_sdwan_edge (generators/topology/sdwan_edge.py), which
+            # builds this office's edge, internet underlay and tunnel to GW1.
+            sdwan_gateway: "EQX-FR2-SDWAN-GW1"

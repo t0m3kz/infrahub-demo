@@ -309,6 +309,14 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: hypervisor_environment
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/hypervisor_environment.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: loadbalancer_validation
     tests:
       - name: syntax_check

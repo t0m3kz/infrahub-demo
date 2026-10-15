@@ -16,6 +16,8 @@ from ..segment_firewall import SegmentFirewallMixin
 from ..ztna import ZtnaMixin
 
 MICROSEGMENTED = "microsegmented"
+# The segment kind add_vxlan_segment addresses (generators/topology/segment.py).
+VXLAN_SEGMENT_KIND = "ManagedVxlanSegment"
 
 
 class AppApplicationGenerator(
@@ -107,7 +109,33 @@ class AppApplicationGenerator(
         if not app_list:
             self.logger.error("No AppApplication/AppDependency/AppComponent data in GraphQL response")
             return
-        await self._reconcile_application_rules(app_list[0])
+        await self._reconcile_application_rules(await self._await_segment_addressing(app_list[0]))
+
+    async def _await_segment_addressing(self, app: dict[str, Any]) -> dict[str, Any]:
+        """The application, re-read after add_vxlan_segment addressed the gateway-less VXLAN segments it uses.
+
+        add_vxlan_segment gives such a segment its gateway, and the group tag
+        and the rules here read it (a routed tenant segment). Both are
+        triggered by the same load, so this run can start first: for each such
+        segment (a component's own or an edge target's) with an add_vxlan_segment
+        run in flight, wait for it and re-read the application. The segment
+        generator never waits on this one, so it cannot deadlock. No run in
+        flight leaves the application as read: the segment generator tags its
+        segment itself once it has a gateway.
+        """
+        components: list[dict[str, Any]] = app.get("children") or []
+        pending = sorted(
+            {
+                str(segment["id"])
+                for segment in self._used_segments(components, self._dependency_edges_from_components(components))
+                if segment.get("id") and segment.get("typename") == VXLAN_SEGMENT_KIND and not segment.get("gateway")
+            }
+        )
+        for segment_id in pending:
+            refreshed = await self.wait_for_parent_generator_and_refetch(("add_vxlan_segment",), segment_id)
+            if refreshed is not None:
+                app = (clean_data(refreshed).get("AppApplication") or [app])[0]
+        return app
 
     async def _fan_out(self, app_ids: list[str]) -> None:
         """Trigger add_app_application for ``app_ids`` without waiting; no-op when empty."""
@@ -176,9 +204,7 @@ class AppApplicationGenerator(
         # the segment dicts, so the rules below are planned against it; each
         # edge target is zoned too, as it may belong to an application that
         # has not run yet.
-        segments = [component.get("network_segment") or {} for component in components] + [
-            dst.get("network_segment") or {} for _src, _dep, dst in edges
-        ]
+        segments = self._used_segments(components, edges)
         await self._ensure_segment_zones(segments)
         # After the zones (the tenant test reads them); a VLAN segment is
         # tagged only here. A segment without an id is a component without one.
@@ -357,6 +383,16 @@ class AppApplicationGenerator(
             if caller_app_id and caller_app_id != own_app_id:
                 callers.add(str(caller_app_id))
         return sorted(callers)
+
+    @staticmethod
+    def _used_segments(
+        components: list[dict[str, Any]],
+        edges: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]],
+    ) -> list[dict[str, Any]]:
+        """The segment dict of every component, then of every edge target ({} where there is none)."""
+        return [component.get("network_segment") or {} for component in components] + [
+            dst.get("network_segment") or {} for _src, _dep, dst in edges
+        ]
 
     @staticmethod
     def _dependency_edges_from_components(
