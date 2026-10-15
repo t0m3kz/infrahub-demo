@@ -344,6 +344,28 @@ nodes:
         optional: true
         order_weight: 2500
         description: "Threat prevention profile for matched traffic"
+      # Group tags of the two components of an intra-segment rule (source and
+      # destination segment are the same), written by the application
+      # generator; transforms/helpers/group_policy.py builds the segment's
+      # group contracts from them.
+      - name: source_security_tag
+        peer: SecurityTag
+        label: Source Security Tag
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 2600
+        identifier: policy_rule__source_security_tag
+        description: "Group tag of the source component (intra-segment rules only)"
+      - name: destination_security_tag
+        peer: SecurityTag
+        label: Destination Security Tag
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 2610
+        identifier: policy_rule__destination_security_tag
+        description: "Group tag of the destination component (intra-segment rules only)"
 
 extensions:
   nodes:

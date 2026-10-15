@@ -7,6 +7,7 @@ from netutils.interface import sort_interface_list
 
 from transforms.helpers.addressing import host_ip
 from transforms.helpers.segments import _get_segment_gateways, _get_segment_namespace, segment_vlan_ids
+from utils.fabric_roles import VTEP_ROLES
 
 _log = logging.getLogger(__name__)
 
@@ -448,22 +449,6 @@ def get_interfaces(
 # Following netlab's approach: single implementation, platform-agnostic data model
 
 
-# Roles that terminate VXLAN. Sourced from the role dropdown descriptions in
-# schemas/base/dcim.yml: `l2-leaf` is explicitly "no VXLAN/overlay BGP" (it trunks
-# VLANs up to a leaf), while `access-leaf` is a "routed VTEP ... full VXLAN/overlay
-# BGP". `border-spine` is a collapsed spine+border-leaf for micro-fabrics, so it
-# does terminate VXLAN. Spine/super-spine/hyper-spine are underlay + EVPN route
-# reflectors only.
-#
-# NOTE: do not add role spellings with underscores here. The schema uses hyphens
-# (`border-leaf`); accepting both silently hides drift between layers.
-#
-# `edge` is a VTEP only where it is its site's EVPN Multi-Site border gateway
-# (a colocation metro edge stretching DC segments into the cage); every other
-# edge has no stretched segment, so no activations, so get_vxlan_config still
-# returns None for it.
-_VTEP_ROLES = frozenset({"leaf", "border-leaf", "tor", "access-leaf", "border-spine", "edge"})
-
 # Roles whose uplinks are intra-site fabric links when the device is a BGW.
 # An edge is a single-box site: its uplinks face the cage, not a fabric.
 _BGW_FABRIC_TRACKING_ROLES = frozenset({"border-leaf", "border-spine"})
@@ -701,7 +686,7 @@ def get_vxlan_config(
     # never VTEPs, never terminate VXLAN. Gated here (not just by callers'
     # query shape or generator wiring) so this function is self-defending
     # regardless of what data happens to reach it.
-    if device_role not in _VTEP_ROLES:
+    if device_role not in VTEP_ROLES:
         return None
 
     interfaces = data.get("interfaces", [])

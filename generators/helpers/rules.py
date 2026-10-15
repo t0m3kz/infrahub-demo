@@ -227,4 +227,31 @@ class RulesPlanner:
             payload["port_end"] = port_end
         if dep.get("access_expires_at"):
             payload["expires_at"] = dep["access_expires_at"]
+        payload.update(cls.rule_tags(src_comp=src_comp, dst_comp=dst_comp, src_seg=src_seg, dst_seg=dst_seg))
         return payload
+
+    @staticmethod
+    def rule_tags(
+        *,
+        src_comp: dict[str, Any],
+        dst_comp: dict[str, Any],
+        src_seg: dict[str, Any],
+        dst_seg: dict[str, Any],
+    ) -> dict[str, Any]:
+        """The component group tags an intra-segment rule of a microsegmented segment carries.
+
+        Only a flow inside one segment is bridged past the SVI ACL, so only its
+        rule is a group contract (transforms/helpers/group_policy.py); every
+        other rule gets no tag. Each side carries its component's tag id (in
+        memory, from AppApplicationGenerator._ensure_component_tags); a side
+        left out is cleared on an existing rule (_reconcile_rule_payload).
+        """
+        if not src_seg.get("id") or src_seg.get("id") != dst_seg.get("id"):
+            return {}
+        if src_seg.get("isolation_mode") != "microsegmented":
+            return {}
+        return {
+            f"{side}_security_tag": {"id": tag_id}
+            for side, component in (("source", src_comp), ("destination", dst_comp))
+            if (tag_id := (component.get("security_tag") or {}).get("id"))
+        }

@@ -193,10 +193,13 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
 
     @staticmethod
     def _reconcile_rule_payload(rule: Any, rule_data: dict[str, Any], *, keep_profile: bool) -> list[str]:
-        """Set the zone-dependent fields (log, apply_on_switch, security_profile) of an
-        existing rule to what the planner now derives; return the names that changed.
+        """Set the derived fields (log, apply_on_switch, security_profile and the
+        tags) of an existing rule to what the planner now derives; return the
+        names that changed.
 
-        Compares before assigning, so a rule already in the desired state is not modified.
+        The component group tags of an intra-segment rule are relationships of
+        the same kind. Compares before assigning, so a rule already in the
+        desired state is not modified.
         """
         changed: list[str] = []
         for field in ("log", "apply_on_switch"):
@@ -204,12 +207,14 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
             if attribute.value != rule_data[field]:
                 attribute.value = rule_data[field]
                 changed.append(field)
-        if not keep_profile:
-            wanted = (rule_data.get("security_profile") or {}).get("id")
-            current = rule.security_profile.id if rule.security_profile.initialized else None
+        relationships = ("source_security_tag", "destination_security_tag")
+        for field in relationships if keep_profile else ("security_profile", *relationships):
+            wanted = (rule_data.get(field) or {}).get("id")
+            peer = getattr(rule, field)
+            current = peer.id if peer.initialized else None
             if current != wanted:
-                rule.security_profile = {"id": wanted} if wanted else None
-                changed.append("security_profile")
+                setattr(rule, field, {"id": wanted} if wanted else None)
+                changed.append(field)
         return changed
 
     async def _ensure_segment_zones(self, segments: list[dict[str, Any]]) -> None:
@@ -364,3 +369,7 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
             self.logger.info("  Derived isolation_mode '%s' for segment %s", derived, segment.get("name", seg_id))
         except Exception as exc:
             self.logger.warning("  Could not set isolation_mode on segment %s: %s", segment.get("name", seg_id), exc)
+            return
+        # Recorded like the zone: the component tags and rules of this same run
+        # are planned against the mode just written, not the one read.
+        segment["isolation_mode"] = derived

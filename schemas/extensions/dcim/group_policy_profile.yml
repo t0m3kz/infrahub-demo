@@ -1,0 +1,100 @@
+---
+version: "1.0"
+
+# ============================================================================
+# DcimGroupPolicyProfile — what a platform's VTEPs need before group policy
+# (component group tags) is rendered on them: the reference fabric profile,
+# one row per platform (data/bootstrap/19b_group_policy_profile.yml).
+#
+# A VTEP is in its platform's row when its device type is listed, its device
+# type has at least min_memory_gb (when the row sets one) and its software
+# image is at least min_release. A data center is a reference fabric when
+# every VTEP is in its row and all rows share one group_policy_kind
+# (utils/group_policy.py). A platform without a row, or with more than one,
+# fails closed: its fabrics are not reference fabrics and the
+# reference_fabric check reports it. tag_pool is the number pool every
+# SecurityTag.group_id is drawn from; the rows naming one must all name the
+# same (generators/helpers/security_tag.py).
+#
+# Read by checks/reference_fabric.py, checks/segment_security.py, the
+# segmentation_matrix artifact and the component tag generator helper.
+# ============================================================================
+
+nodes:
+  - name: GroupPolicyProfile
+    namespace: Dcim
+    description: "Device types, release and memory a platform's VTEPs need for group policy, and how they enforce it"
+    label: "Group Policy Profile"
+    icon: "mdi:shield-half-full"
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [name__value]
+    attributes:
+      - name: name
+        kind: Text
+        optional: false
+        unique: true
+        order_weight: 100
+        description: "reference-{platform}, e.g. reference-cisco-nxos"
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 200
+        description: "The vendor documents the values are taken from, with their evidence"
+      - name: group_policy_kind
+        kind: Dropdown
+        label: "Group Policy Kind"
+        optional: false
+        order_weight: 300
+        description: "How the platform enforces group policy; the VTEPs of a reference fabric share one"
+        choices:
+          - name: vxlan_gpo
+            label: "VXLAN GPO"
+            description: "Group ID per VLAN/interface selector in VXLAN and EVPN, contracts per VRF (NX-OS)"
+          - name: segment_security
+            label: "Segment Security"
+            description: "Prefix segments per VRF with segment-to-segment policies, local lookup (EOS MSS-G)"
+      - name: min_release
+        kind: Text
+        label: "Minimum Release"
+        optional: false
+        order_weight: 500
+        description: "Lowest software image version a VTEP may run, e.g. 10.6(1)F (compared number by number)"
+      - name: min_memory_gb
+        kind: Number
+        label: "Minimum Memory (GB)"
+        optional: true
+        order_weight: 600
+        description: "Lowest DcimDeviceType.memory_gb a VTEP may have; empty when the vendor documents none"
+    relationships:
+      - name: platform
+        peer: DcimPlatform
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 1000
+        identifier: group_policy_profile__platform
+        description: "The OS platform the row describes (one row per platform)"
+      - name: device_types
+        peer: DcimDeviceType
+        label: "Device Types"
+        cardinality: many
+        kind: Attribute
+        optional: false
+        order_weight: 1100
+        identifier: group_policy_profile__device_types
+        description: "The exact device types a VTEP of the platform may be"
+      - name: tag_pool
+        peer: CoreNumberPool
+        label: "Tag Pool"
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 1200
+        identifier: group_policy_profile__tag_pool
+        description: "The number pool every SecurityTag.group_id is drawn from; every row that names one names the same"

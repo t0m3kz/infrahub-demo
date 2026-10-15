@@ -1,0 +1,22 @@
+# What utils/group_policy.py reads to decide whether a VTEP is in its
+# platform's reference profile (fabric_reason / site_reason / site_kind): the
+# device's role, platform, device type with its memory, and software image;
+# and the DcimGroupPolicyProfile rows it is compared with. Read by the
+# reference_fabric check and the segmentation_matrix artifact.
+
+fragment DeviceGroupPolicyFields on DcimDevice {
+  name { value }
+  role { value }
+  platform { node { name { value } } }
+  device_type { node { name { value } memory_gb { value } } }
+  software_image { node { version { value } } }
+}
+
+fragment GroupPolicyProfileFields on DcimGroupPolicyProfile {
+  name { value }
+  group_policy_kind { value }
+  min_release { value }
+  min_memory_gb { value }
+  platform { node { name { value } } }
+  device_types { edges { node { name { value } } } }
+}

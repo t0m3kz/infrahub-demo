@@ -185,6 +185,13 @@ spec:
                   kind: DcimSoftwareImage
                   icon: "mdi:package-variant"
                   description: "Versioned OS and firmware images"
+
+                - namespace: Dcim
+                  name: GroupPolicyProfile
+                  label: Group Policy Profiles
+                  kind: DcimGroupPolicyProfile
+                  icon: "mdi:shield-half-full"
+                  description: "Reference fabric profile per platform: device types, release, memory, group-tag pool"
           # ── Circuits ───────────────────────────────────────────────────────
           - namespace: Topology
             name: CircuitsMenu

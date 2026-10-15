@@ -147,7 +147,7 @@ generics:
             color: "#F39C12"
           - name: microsegmented
             label: Microsegmented
-            description: "Per-rule intra-segment enforcement; ACL rendered on leaf SVI even when firewall is present"
+            description: "Routed traffic always meets the leaf SVI ACL (even with a firewall); traffic inside the segment only through component group policy"  # yamllint disable-line rule:line-length
             color: "#9B59B6"
       - name: status
         kind: Dropdown

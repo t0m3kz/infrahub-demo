@@ -1,0 +1,105 @@
+# One data center's segmentation matrix (transforms/topology/segmentation_matrix.py):
+# its segment deployments with their own rules (and the component tags those
+# rules carry), its devices (the DC's own and its pods'; the transform keeps
+# the VTEPs, utils/group_policy.site_vteps) against the reference fabric
+# profile rows, and every component group tag with the segment of the
+# component it groups.
+query segmentation_matrix($id: ID) {
+  DcimGroupPolicyProfile {
+    edges {
+      node {
+        ...GroupPolicyProfileFields
+      }
+    }
+  }
+
+  TopologyDataCenter(ids: [$id]) {
+    edges {
+      node {
+        id
+        name { value }
+        devices {
+          edges {
+            node {
+              ...DeviceGroupPolicyFields
+            }
+          }
+        }
+        segment_deployments(status__values: ["active", "provisioning"]) {
+          edges {
+            node {
+              segment {
+                node {
+                  id
+                  __typename
+                  name { value }
+                  isolation_mode { value }
+                  gateway { node { ip_prefix { node { ip_namespace { node { name { value } } } } } } }
+                  ... on ManagedVlanSegment { inline_service { node { id name { value } } } }
+                  ... on ManagedVxlanSegment { inline_service { node { id name { value } } } }
+                  security_policy {
+                    node {
+                      name { value }
+                      enabled { value }
+                      default_action { value }
+                      rules {
+                        edges {
+                          node {
+                            id
+                            index { value }
+                            name { value }
+                            action { value }
+                            protocol { value }
+                            port_start { value }
+                            port_end { value }
+                            disabled { value }
+                            apply_on_switch { value }
+                            destination_segment { node { id } }
+                            source_security_tag { node { id } }
+                            destination_security_tag { node { id } }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  TopologyPod(parent__ids: [$id]) {
+    edges {
+      node {
+        devices {
+          edges {
+            node {
+              ...DeviceGroupPolicyFields
+            }
+          }
+        }
+      }
+    }
+  }
+
+  SecurityTag {
+    edges {
+      node {
+        id
+        name { value }
+        group_id { value }
+        components {
+          edges {
+            node {
+              fqdn { value }
+              network_segment { node { id } }
+            }
+          }
+        }
+      }
+    }
+  }
+}
