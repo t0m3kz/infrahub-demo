@@ -493,18 +493,12 @@ def build_device_data(
             ttl=1,
             local_iface_name="Ethernet1",
             remote_iface_name="Ethernet1/1",
-            **(
-                {
-                    "maximum_routes": 1000,
-                    "local_pref": 200,
-                    "med": 50,
-                    "send_extended_community": True,
-                    "remove_private_as": True,
-                    "password": "underlay-s3cr3t",
-                }
-                if security_fields
-                else {}
-            ),
+            maximum_routes=1000 if security_fields else None,
+            local_pref=200 if security_fields else None,
+            med=50 if security_fields else None,
+            send_extended_community=security_fields,
+            remove_private_as=security_fields,
+            password="underlay-s3cr3t" if security_fields else None,
         )
         underlay_peering_2 = _make_bgp_peering(
             device_name=device_name,
@@ -590,18 +584,12 @@ def build_device_data(
             ttl=1,
             local_iface_name="Ethernet1",
             remote_iface_name="Ethernet1/1",
-            **(
-                {
-                    "maximum_routes": 1000,
-                    "local_pref": 200,
-                    "med": 50,
-                    "send_extended_community": True,
-                    "remove_private_as": True,
-                    "password": "underlay-s3cr3t",
-                }
-                if security_fields
-                else {}
-            ),
+            maximum_routes=1000 if security_fields else None,
+            local_pref=200 if security_fields else None,
+            med=50 if security_fields else None,
+            send_extended_community=security_fields,
+            remove_private_as=security_fields,
+            password="underlay-s3cr3t" if security_fields else None,
         )
         underlay_peering_2 = _make_bgp_peering(
             device_name=device_name,
