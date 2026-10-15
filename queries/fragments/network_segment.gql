@@ -95,12 +95,6 @@ fragment SegmentSecurityPolicyFields on ManagedNetworkSegment {
       org_id { value }
     }
   }
-  security_tag {
-    node {
-      name { value }
-      group_id { value }
-    }
-  }
   # The segment's own rules (its security_policy) and the rules into it
   # (inbound_rules): a leaf carrying only the destination answers those
   # flows from them (return ACL and PBR bypass, transforms/helpers/acl.py
@@ -201,21 +195,17 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
   }
 }
 
-# Border-leaf PBR (.dev/scenariusze.txt's "match cts sgt N" / "match
-# security-group" / SONiC prefix-ACL fallback): SGT travels in-band inside
-# the VXLAN header (GBP/MSS-G) end-to-end, so border-leaf never needs its
-# OWN customer-facing interface_capabilities the way a leaf does — it just
-# needs every segment activation IN ITS OWN DC, reached via
-# TopologySegmentHosting.segment_deployments (see
-# schemas/extensions/service/segment.yml — TopologyDataCenter inherits
+# Every segment activation IN A DC, for the DC-level tiers (border-leaf,
+# BGW edge) that have no customer-facing interface_capabilities of their own
+# the way a leaf does: reached via TopologySegmentHosting.segment_deployments
+# (see schemas/extensions/service/segment.yml — TopologyDataCenter inherits
 # TopologySegmentHosting directly). vni is the dedup/naming key here (NOT
 # vlan_id — local VLAN ID is per VLAN domain, not DC-wide, so the same
-# segment can have a different vlan_id on every leaf; VNI is the only
-# value that's genuinely DC-wide/fabric-wide unique). security_tag.group_id
-# is the tag border-leaf matches on for same-platform (Cisco->Cisco,
-# Arista->Arista) leaf<->border-leaf paths; gateway.ip_prefix.prefix is the
-# source-prefix fallback for everything else (SONiC leaf, or mixed-vendor
-# paths where the tag can't be trusted to survive transit).
+# segment can have a different vlan_id on every leaf; VNI is the only value
+# that's genuinely DC-wide/fabric-wide unique). gateway.ip_prefix.prefix is
+# what a segment is matched on here. A segment carries no group tag: component
+# tags group the components inside one segment
+# (schemas/extensions/security/security_tags.yml).
 fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
   segment_deployments(status__values: ["active", "provisioning"]) {
     edges {
@@ -229,7 +219,6 @@ fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
               environment { value }
               # terminate_inline: routed by its HA pair, so no border-leaf PBR.
               terminate_inline { value }
-              security_tag { node { name { value } group_id { value } } }
               gateway { node { ip_prefix { node { prefix { value } } } } }
               customer_deployment { node { id } }
               security_policy {
@@ -285,7 +274,6 @@ fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
                   }
                 }
               }
-              security_tag { node { name { value } group_id { value } } }
               # address + ip_namespace: a BGW routes the stretched segment too
               # (anycast SVI in the segment's VRF, transforms/helpers/segments.py).
               gateway {

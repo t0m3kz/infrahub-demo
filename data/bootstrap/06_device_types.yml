@@ -45,6 +45,17 @@ spec:
       max_routes: 128000
       tcam_entries: 128000
       unit_price: 17800
+    # 7280R3 (Jericho2): the arista_eos reference fabric types
+    # (19b_group_policy_profile.yml). Depth, memory, routes and price are
+    # not recorded: no source for them was read.
+    - name: DCS-7280CR3-32P4
+      part_number: DCS-7280CR3-32P4
+      height: 1
+      manufacturer: Arista
+    - name: DCS-7280SR3-48YC8
+      part_number: DCS-7280SR3-48YC8
+      height: 1
+      manufacturer: Arista
     # CheckPoint
     - name: CloudGuard
       part_number: CloudGuard-Network-Security

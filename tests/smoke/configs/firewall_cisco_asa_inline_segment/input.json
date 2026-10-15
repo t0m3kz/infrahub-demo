@@ -231,9 +231,6 @@
                                                           }
                                                         }
                                                       },
-                                                      "security_tag": {
-                                                        "node": null
-                                                      },
                                                       "gateway": {
                                                         "node": {
                                                           "ip_prefix": {
@@ -263,9 +260,6 @@
                                                             "value": "dmz"
                                                           }
                                                         }
-                                                      },
-                                                      "security_tag": {
-                                                        "node": null
                                                       },
                                                       "gateway": {
                                                         "node": {
@@ -353,9 +347,6 @@
                                                       }
                                                     }
                                                   },
-                                                  "security_tag": {
-                                                    "node": null
-                                                  },
                                                   "gateway": {
                                                     "node": {
                                                       "ip_prefix": {
@@ -385,9 +376,6 @@
                                                         "value": "internal"
                                                       }
                                                     }
-                                                  },
-                                                  "security_tag": {
-                                                    "node": null
                                                   },
                                                   "gateway": {
                                                     "node": {
@@ -495,9 +483,6 @@
                                                       }
                                                     }
                                                   },
-                                                  "security_tag": {
-                                                    "node": null
-                                                  },
                                                   "gateway": {
                                                     "node": {
                                                       "ip_prefix": {
@@ -527,9 +512,6 @@
                                                         "value": "internal"
                                                       }
                                                     }
-                                                  },
-                                                  "security_tag": {
-                                                    "node": null
                                                   },
                                                   "gateway": {
                                                     "node": {
@@ -791,9 +773,6 @@
                                                           }
                                                         }
                                                       },
-                                                      "security_tag": {
-                                                        "node": null
-                                                      },
                                                       "gateway": {
                                                         "node": {
                                                           "ip_prefix": {
@@ -823,9 +802,6 @@
                                                             "value": "internal"
                                                           }
                                                         }
-                                                      },
-                                                      "security_tag": {
-                                                        "node": null
                                                       },
                                                       "gateway": {
                                                         "node": {
@@ -911,9 +887,6 @@
                                                           }
                                                         }
                                                       },
-                                                      "security_tag": {
-                                                        "node": null
-                                                      },
                                                       "gateway": {
                                                         "node": {
                                                           "ip_prefix": {
@@ -943,9 +916,6 @@
                                                             "value": "internal"
                                                           }
                                                         }
-                                                      },
-                                                      "security_tag": {
-                                                        "node": null
                                                       },
                                                       "gateway": {
                                                         "node": {
@@ -1033,9 +1003,6 @@
                                                       }
                                                     }
                                                   },
-                                                  "security_tag": {
-                                                    "node": null
-                                                  },
                                                   "gateway": {
                                                     "node": {
                                                       "ip_prefix": {
@@ -1065,9 +1032,6 @@
                                                         "value": "dmz"
                                                       }
                                                     }
-                                                  },
-                                                  "security_tag": {
-                                                    "node": null
                                                   },
                                                   "gateway": {
                                                     "node": {

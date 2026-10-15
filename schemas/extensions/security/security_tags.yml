@@ -1,21 +1,23 @@
 ---
-# Security Tags — global tier classification for VXLAN GPO enforcement
+# Security Tags — one group tag per AppComponent of a microsegmented segment
 #
-# SecurityTag:     global tier label + globally-unique group_id (SGT on Cisco,
-#                  security-group on Arista). Allocated from SGT-POOL.
-# Tier-to-tier contracts are derived from the segments' SecurityPolicyRules
-# (permit rules between tagged segments) wherever they are rendered.
+# SecurityTag: the component's group (name = the component's fqdn) and its
+#              fabric-wide group_id, drawn from the tag pool of the
+#              DcimGroupPolicyProfile rows (SGT-POOL, 16-4095) by
+#              AppApplicationGenerator (generators/helpers/security_tag.py).
+#              Nothing assigns a tag by hand and no segment carries one.
 #
-# Enforcement layers (additive — both must permit):
-#   1. VTEP hardware  — VXLAN GPO / SGT contract (derived from the rules)
-#   2. Leaf SVI ACL   — isolation_mode: microsegmented (SecurityPolicyRule)
-#   3. Firewall       — stateful inspection (SecurityPolicyRule)
+# Contracts between the tags of one segment are derived from that segment's
+# own SecurityPolicyRules (source_security_tag / destination_security_tag, in
+# security.yml) by transforms/helpers/group_policy.py. They only matter for
+# intra-segment (bridged) traffic: everything routed leaves through the
+# segment's SVI and meets its ACL (isolation_mode: microsegmented).
 version: "1.0"
 
 nodes:
   - name: Tag
     namespace: Security
-    description: "Global security tier tag — maps to VXLAN SGT / security-group ID for hardware enforcement"
+    description: "Group tag of one application component in a microsegmented segment (VXLAN group policy ID)"
     label: Security Tag
     icon: "mdi:tag-outline"
     include_in_menu: false
@@ -34,7 +36,7 @@ nodes:
         optional: false
         unique: true
         order_weight: 100
-        description: "Tier name — e.g. web-tier, app-tier, database, dmz"
+        description: "The fqdn of the component the tag was created for; a frozen label, never renamed"
       - name: description
         kind: Text
         label: Description
@@ -44,8 +46,9 @@ nodes:
         kind: Number
         label: Group ID
         optional: false
+        unique: true
         order_weight: 300
-        description: "Globally unique ID — rendered as SGT (Cisco TrustSec) or security-group (Arista). Allocated from SGT-POOL."  # yamllint disable-line rule:line-length
+        description: "Fabric-wide group policy ID, allocated from the group-policy profile's tag pool"
         parameters:
           min_value: 2
           max_value: 65535
@@ -55,10 +58,23 @@ nodes:
         optional: true
         order_weight: 400
         description: "Display color for UI (hex, e.g. #3498DB)"
+    relationships:
+      # Reverse side of AppComponent.security_tag (same identifier). Many, so
+      # a tag shared by two components or left without one is visible to
+      # checks/segment_security.py instead of being hidden by cardinality.
+      - name: components
+        peer: AppComponent
+        label: Components
+        cardinality: many
+        kind: Generic
+        optional: true
+        order_weight: 1000
+        identifier: app_component__security_tag
+        description: "The component this tag groups (exactly one)"
 
 extensions:
   nodes:
-    - kind: ManagedNetworkSegment
+    - kind: AppComponent
       relationships:
         - name: security_tag
           peer: SecurityTag
@@ -66,6 +82,6 @@ extensions:
           cardinality: one
           kind: Attribute
           optional: true
-          order_weight: 890
-          identifier: network_segment__security_tag
-          description: "Security tier — maps to VXLAN GPO group_id for hardware enforcement"
+          order_weight: 770
+          identifier: app_component__security_tag
+          description: "Group tag, set by the application generator while the component's segment is microsegmented"

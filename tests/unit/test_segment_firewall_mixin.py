@@ -120,6 +120,26 @@ class TestEnsureSegmentIsolationMode:
         )
         seg_obj.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
 
+    def test_derived_mode_is_recorded_on_the_segment_dict(self) -> None:
+        """The tags and rules of the same run are planned against the mode just written."""
+        gen = _make_gen()
+        gen.client.create = AsyncMock(return_value=MagicMock(save=AsyncMock()))
+        segment = {"id": "seg-1", "name": "seg-1", "typename": "ManagedVlanSegment", "isolation_mode": "normal"}
+
+        asyncio.run(gen._ensure_segment_isolation_mode(segment, "fintech_strict"))
+
+        assert segment["isolation_mode"] == "microsegmented"
+
+    def test_failed_save_leaves_the_segment_dict_as_read(self) -> None:
+        """A mode that was not written is not recorded either."""
+        gen = _make_gen()
+        gen.client.create = AsyncMock(side_effect=Exception("boom"))
+        segment = {"id": "seg-1", "name": "seg-1", "typename": "ManagedVlanSegment", "isolation_mode": "normal"}
+
+        asyncio.run(gen._ensure_segment_isolation_mode(segment, "fintech_strict"))
+
+        assert segment["isolation_mode"] == "normal"
+
     def test_no_op_for_internal_standard_with_default_normal(self):
         gen = _make_gen()
         gen.client.create = AsyncMock()
@@ -485,15 +505,27 @@ class TestExistingRuleReconciliation:
     when it differs, so a second pass leaves the rule's data untouched."""
 
     @staticmethod
-    def _rule(*, log: bool, apply_on_switch: bool = False, profile_id: str | None = None) -> Any:
+    def _rule(
+        *,
+        log: bool,
+        apply_on_switch: bool = False,
+        profile_id: str | None = None,
+        src_tag: str | None = None,
+        dst_tag: str | None = None,
+    ) -> Any:
         rule = MagicMock()
         rule.index.value = 100
         rule.expires_at.value = None
         rule.disabled.value = False
         rule.log.value = log
         rule.apply_on_switch.value = apply_on_switch
-        rule.security_profile.initialized = profile_id is not None
-        rule.security_profile.id = profile_id
+        for field, peer_id in (
+            ("security_profile", profile_id),
+            ("source_security_tag", src_tag),
+            ("destination_security_tag", dst_tag),
+        ):
+            getattr(rule, field).initialized = peer_id is not None
+            getattr(rule, field).id = peer_id
         rule.save = AsyncMock()
         return rule
 
@@ -613,6 +645,83 @@ class TestExistingRuleReconciliation:
         )
 
         assert rule.apply_on_switch.value is True
+
+
+class TestExistingRuleGroupTags:
+    """The component group tags of an intra-segment rule are reconciled like the profile:
+    set when missing, cleared when no longer derived, untouched when already right."""
+
+    _SEG = {"id": "seg-1", "name": "seg-1", "isolation_mode": "microsegmented"}
+
+    @staticmethod
+    def _run(rule: Any, *, src_comp: dict[str, Any], dst_comp: dict[str, Any]) -> Any:
+        gen = _make_gen()
+        gen._segment_policy = AsyncMock(return_value=MagicMock(id="policy-src"))
+        gen._find_rule_by_name = AsyncMock(return_value=rule)
+        gen._create_or_update_policy_rule = AsyncMock()
+        gen._get_profile = AsyncMock(return_value=MagicMock(id="profile-strict"))
+        planner = MagicMock(wraps=RulesPlanner())
+        planner.zone_context = MagicMock(return_value=("PROD-ZONE", "PROD-ZONE", False))
+        asyncio.run(
+            gen._reconcile_segment_rule(
+                app_name="fraud-detection",
+                app_security_profile="fintech_strict",
+                src_comp=src_comp,
+                dst_comp=dst_comp,
+                dep={"name": "scoring-to-cache", "ports": []},
+                src_seg=dict(TestExistingRuleGroupTags._SEG),
+                dst_seg=dict(TestExistingRuleGroupTags._SEG),
+                planner=planner,
+                segment_policies={},
+                rule_indexes={},
+                port=("tcp", 6379, None),
+            )
+        )
+        gen._create_or_update_policy_rule.assert_not_awaited()
+        return gen
+
+    def test_untagged_existing_rule_gains_both_tags(self) -> None:
+        """A rule made before its components were tagged is given their tags."""
+        rule = TestExistingRuleReconciliation._rule(log=False, apply_on_switch=True, profile_id="profile-strict")
+
+        self._run(
+            rule,
+            src_comp={"name": "scoring-api", "security_tag": {"id": "tag-a"}},
+            dst_comp={"name": "feature-cache", "security_tag": {"id": "tag-b"}},
+        )
+
+        assert rule.source_security_tag == {"id": "tag-a"}
+        assert rule.destination_security_tag == {"id": "tag-b"}
+
+    def test_tagged_rule_in_the_desired_state_is_not_modified(self) -> None:
+        """Second pass: the tags already match, nothing is assigned or logged as updated."""
+        rule = TestExistingRuleReconciliation._rule(
+            log=False, apply_on_switch=True, profile_id="profile-strict", src_tag="tag-a", dst_tag="tag-b"
+        )
+        before = (rule.source_security_tag, rule.destination_security_tag)
+
+        gen = self._run(
+            rule,
+            src_comp={"name": "scoring-api", "security_tag": {"id": "tag-a"}},
+            dst_comp={"name": "feature-cache", "security_tag": {"id": "tag-b"}},
+        )
+
+        assert (rule.source_security_tag, rule.destination_security_tag) == before
+        assert not any("updated" in str(call) for call in gen.logger.info.call_args_list)
+
+    def test_tag_of_an_untagged_component_is_cleared(self) -> None:
+        """A side whose component has no tag any more loses it on the rule."""
+        rule = TestExistingRuleReconciliation._rule(
+            log=False, apply_on_switch=True, profile_id="profile-strict", src_tag="tag-a", dst_tag="tag-b"
+        )
+
+        self._run(
+            rule,
+            src_comp={"name": "scoring-api", "security_tag": {"id": "tag-a"}},
+            dst_comp={"name": "feature-cache"},
+        )
+
+        assert rule.destination_security_tag is None
 
 
 class TestRuleCreationFailure:

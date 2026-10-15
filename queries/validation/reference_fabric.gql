@@ -1,0 +1,75 @@
+# The reference fabric profile rows, every data center with its devices (its
+# own and its pods': a pod's devices belong to the pod's data center; the
+# check keeps the VTEPs, utils/group_policy.site_vteps), the microsegmented
+# segments with the sites they are deployed in, and every group tag with the
+# segment of the component it groups (which segments need group policy).
+query reference_fabric {
+  DcimGroupPolicyProfile {
+    edges {
+      node {
+        ...GroupPolicyProfileFields
+      }
+    }
+  }
+
+  TopologyDataCenter {
+    edges {
+      node {
+        id
+        name { value }
+        devices {
+          edges {
+            node {
+              ...DeviceGroupPolicyFields
+            }
+          }
+        }
+      }
+    }
+  }
+
+  TopologyPod {
+    edges {
+      node {
+        parent { node { id __typename } }
+        devices {
+          edges {
+            node {
+              ...DeviceGroupPolicyFields
+            }
+          }
+        }
+      }
+    }
+  }
+
+  ManagedNetworkSegment(isolation_mode__value: "microsegmented") {
+    edges {
+      node {
+        __typename
+        id
+        name { value }
+        isolation_mode { value }
+        ... on ManagedVxlanSegment {
+          stretch_scope { value }
+          segment_deployments(status__values: ["active", "provisioning"]) {
+            edges {
+              node {
+                deployment { node { id name { value } } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  SecurityTag {
+    edges {
+      node {
+        id
+        components { edges { node { id network_segment { node { id } } } } }
+      }
+    }
+  }
+}

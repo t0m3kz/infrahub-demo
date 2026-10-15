@@ -1642,7 +1642,7 @@ class TestGetVxlanConfigEvpn:
 
 
 # ===========================================================================
-# _VTEP_ROLES — role spellings must match the schema
+# VTEP_ROLES (utils/fabric_roles.py) — role spellings must match the schema
 # ===========================================================================
 
 

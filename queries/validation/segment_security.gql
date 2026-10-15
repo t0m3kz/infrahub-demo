@@ -1,7 +1,9 @@
 # Every segment kind (Vlan, Vxlan, External, Cloud) with what the security
 # invariants read: zone, environment, address (gateway prefix or cidr_block),
-# the policy rules that name a segment, and the segment each app component
-# lives in. Read at check time, so gateways allocated asynchronously by the
+# isolation mode, the policy rules that name a segment (with their component
+# group tags), the segment and tag of each app component, every group tag
+# with the components it groups, and the band of the tag pool the
+# group-policy profile rows name (the tags are drawn from it). Read at check time, so gateways allocated asynchronously by the
 # generators are settled.
 query segment_security {
   ManagedNetworkSegment {
@@ -11,6 +13,7 @@ query segment_security {
         id
         name { value }
         environment { value }
+        isolation_mode { value }
         security_zone { node { id name { value } } }
         gateway { node { ip_prefix { node { id prefix { value } } } } }
         ... on CloudNetworkSegment {
@@ -34,6 +37,8 @@ query segment_security {
         destination_prefixes { edges { node { id } } }
         source_ip_addresses { edges { node { id } } }
         destination_ip_addresses { edges { node { id } } }
+        source_security_tag { node { id name { value } } }
+        destination_security_tag { node { id name { value } } }
       }
     }
   }
@@ -43,7 +48,9 @@ query segment_security {
       node {
         id
         name { value }
+        fqdn { value }
         network_segment { node { id name { value } environment { value } } }
+        security_tag { node { id } }
         parent {
           node {
             ... on AppApplication {
@@ -53,6 +60,26 @@ query segment_security {
             }
           }
         }
+      }
+    }
+  }
+
+  SecurityTag {
+    edges {
+      node {
+        id
+        name { value }
+        group_id { value }
+        components { edges { node { id fqdn { value } network_segment { node { id } } } } }
+      }
+    }
+  }
+
+  DcimGroupPolicyProfile {
+    edges {
+      node {
+        name { value }
+        tag_pool { node { id name { value } start_range { value } end_range { value } } }
       }
     }
   }

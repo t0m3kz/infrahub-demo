@@ -350,6 +350,51 @@ class TestBuildRulePayload:
         assert "governance:" in payload["description"]
 
 
+class TestRuleTags:
+    """Only an intra-segment rule of a microsegmented segment carries its components' group tags."""
+
+    _SEG = {"id": "seg-m", "isolation_mode": "microsegmented"}
+    _SRC = {"name": "scoring-api", "security_tag": {"id": "tag-a"}}
+    _DST = {"name": "feature-cache", "security_tag": {"id": "tag-b"}}
+
+    def test_intra_segment_rule_carries_both_tags(self) -> None:
+        tags = RulesPlanner.rule_tags(src_comp=self._SRC, dst_comp=self._DST, src_seg=self._SEG, dst_seg=self._SEG)
+        assert tags == {"source_security_tag": {"id": "tag-a"}, "destination_security_tag": {"id": "tag-b"}}
+
+    def test_untagged_side_is_left_out(self) -> None:
+        tags = RulesPlanner.rule_tags(
+            src_comp=self._SRC, dst_comp={"name": "feature-cache"}, src_seg=self._SEG, dst_seg=self._SEG
+        )
+        assert tags == {"source_security_tag": {"id": "tag-a"}}
+
+    def test_cross_segment_rule_carries_no_tag(self) -> None:
+        """A routed flow meets the SVI ACL; it is no group contract."""
+        other = {"id": "seg-o", "isolation_mode": "microsegmented"}
+        assert RulesPlanner.rule_tags(src_comp=self._SRC, dst_comp=self._DST, src_seg=self._SEG, dst_seg=other) == {}
+
+    def test_segment_that_is_not_microsegmented_carries_no_tag(self) -> None:
+        """A stale tag read from a component on a normal segment is never written to a rule."""
+        seg = {"id": "seg-n", "isolation_mode": "normal"}
+        assert RulesPlanner.rule_tags(src_comp=self._SRC, dst_comp=self._DST, src_seg=seg, dst_seg=seg) == {}
+
+    def test_payload_of_an_intra_segment_rule_includes_the_tags(self) -> None:
+        payload = RulesPlanner.build_rule_payload(
+            policy_id="policy-1",
+            rule_name="scoring-to-cache-tcp-6379",
+            dep={"description": None, "access_status": "auto"},
+            src_comp=self._SRC,
+            dst_comp=self._DST,
+            src_seg=self._SEG,
+            dst_seg=self._SEG,
+            protocol="tcp",
+            port_start=6379,
+            port_end=None,
+            cross_zone=False,
+        )
+        assert payload["source_security_tag"] == {"id": "tag-a"}
+        assert payload["destination_security_tag"] == {"id": "tag-b"}
+
+
 class TestZoneContext:
     def test_planner_zone_context_handles_missing_zone_as_cross_zone(self):
         src_seg = {"security_zone": {"name": "internal"}}

@@ -1,16 +1,21 @@
 ---
-# SGT Pool — globally unique Security Group Tag IDs
-# Range 2-65535 (0=unknown, 1=any reserved by Cisco TrustSec)
-# Allocated to SecurityTag.group_id
-
+# SGT Pool — fabric-wide group policy IDs of the component tags
+# (SecurityTag.group_id), allocated by AppApplicationGenerator for every
+# AppComponent of a microsegmented segment. The group-policy profile names it
+# as its tag_pool (19b_group_policy_profile.yml); code never uses the name.
+#
+# 16-4095 skips the IDs NX-OS reserves (0 unknown, 1 any, 15 the tag of routes
+# from policy-unaware sites) and sits inside the NX-OS 16-bit group ID. One
+# fabric-wide band keeps a group's ID identical on every VTEP. Never shrink it
+# once tags are allocated.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: CoreNumberPool
   data:
     - name: SGT-POOL
-      description: "Global Security Group Tag ID pool — Cisco SGT / Arista security-group"
+      description: "Component group policy IDs (SecurityTag.group_id)"
       node: SecurityTag
       node_attribute: group_id
-      start_range: 2
-      end_range: 65535
+      start_range: 16
+      end_range: 4095

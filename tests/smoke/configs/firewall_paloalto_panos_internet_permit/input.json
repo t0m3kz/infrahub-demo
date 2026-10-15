@@ -189,9 +189,6 @@
                                                           }
                                                         }
                                                       },
-                                                      "security_tag": {
-                                                        "node": null
-                                                      },
                                                       "gateway": {
                                                         "node": {
                                                           "ip_prefix": {
@@ -221,9 +218,6 @@
                                                             "value": "INTERNET-ZONE"
                                                           }
                                                         }
-                                                      },
-                                                      "security_tag": {
-                                                        "node": null
                                                       },
                                                       "gateway": {
                                                         "node": null
@@ -432,9 +426,6 @@
                                                       }
                                                     }
                                                   },
-                                                  "security_tag": {
-                                                    "node": null
-                                                  },
                                                   "gateway": {
                                                     "node": {
                                                       "ip_prefix": {
@@ -464,9 +455,6 @@
                                                         "value": "INTERNET-ZONE"
                                                       }
                                                     }
-                                                  },
-                                                  "security_tag": {
-                                                    "node": null
                                                   },
                                                   "gateway": {
                                                     "node": null

@@ -6,15 +6,14 @@
 # security_policy's, and the rules into it are its inbound_rules (from
 # whichever segment's policy holds them, so they carry that policy).
 
-# One end of a rule: what it matches on (gateway prefix), its zone, its tier
-# tag and the customer deployments a firewall context / PBR resolves it by.
+# One end of a rule: what it matches on (gateway prefix), its zone and the
+# customer deployments a firewall context / PBR resolves it by.
 fragment PolicyRuleSegmentFields on ManagedNetworkSegment {
   id
   name { value }
   customer_name { value }
   environment { value }
   security_zone { node { name { value } } }
-  security_tag { node { id name { value } group_id { value } } }
   gateway { node { ip_prefix { node { prefix { value } } } } }
   ... on ManagedVlanSegment { customer_deployment { node { id } } }
   ... on ManagedVxlanSegment { customer_deployments { edges { node { id } } } }

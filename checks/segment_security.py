@@ -12,6 +12,7 @@ from utils.exchange_transit import (
     namespace_type_for_environment,
     zone_name_for_namespace_type,
 )
+from utils.group_policy import tag_pool
 from utils.segment_addressing import segment_prefix
 
 INTERNET_ZONE = zone_name_for_namespace_type("internet")
@@ -32,7 +33,11 @@ class CheckSegmentSecurity(InfrahubCheck):
     - a rule endpoint segment resolves to a prefix (or the rule has an explicit
       selector), unless it is the internet: otherwise it would render as any
       (a warning: L2-only segments have no gateway by design);
-    - an app component's environment should match its segment's (warning).
+    - an app component's environment should match its segment's (warning);
+    - every component of a microsegmented segment has a group tag; a tag groups
+      exactly one component (an orphan is a warning) and its group_id is in the
+      band of the tag pool the group-policy profiles name; a rule's tags are those of components in the rule's own
+      segment, and only an intra-segment rule carries tags.
     """
 
     query = "segment_security"
@@ -40,11 +45,17 @@ class CheckSegmentSecurity(InfrahubCheck):
     def validate(self, data: Any) -> None:
         cleaned = clean_data(data)
         segments = cleaned.get("ManagedNetworkSegment") or []
+        rules = cleaned.get("SecurityPolicyRule") or []
+        components = cleaned.get("AppComponent") or []
+        tags = cleaned.get("SecurityTag") or []
         for segment in segments:
             self._validate_zone(segment)
         self._validate_unique_names(segments)
-        self._validate_rule_endpoints(segments, cleaned.get("SecurityPolicyRule") or [])
-        self._warn_component_environment(cleaned.get("AppComponent") or [])
+        self._validate_rule_endpoints(segments, rules)
+        self._warn_component_environment(components)
+        self._validate_component_tags(segments, components)
+        self._validate_tags(tags, cleaned.get("DcimGroupPolicyProfile") or [])
+        self._validate_rule_tags(rules, tags)
 
     def _validate_zone(self, segment: dict[str, Any]) -> None:
         """Zone present; tenant zone == f(environment); External in an exchange zone."""
@@ -127,3 +138,64 @@ class CheckSegmentSecurity(InfrahubCheck):
                         f"(environment '{seg_env}')"
                     )
                 )
+
+    def _validate_component_tags(self, segments: list[dict[str, Any]], components: list[dict[str, Any]]) -> None:
+        """A component of a microsegmented segment without a group tag has no group to be contracted by."""
+        modes = {segment["id"]: segment.get("isolation_mode") for segment in segments if segment.get("id")}
+        for component in components:
+            segment = component.get("network_segment") or {}
+            if modes.get(segment.get("id")) == "microsegmented" and not component.get("security_tag"):
+                self.log_error(
+                    message=(
+                        f"Component '{component.get('fqdn') or component.get('name')}' in microsegmented segment "
+                        f"'{segment.get('name', segment.get('id'))}' has no security_tag"
+                    )
+                )
+
+    def _validate_tags(self, tags: list[dict[str, Any]], profiles: list[dict[str, Any]]) -> None:
+        """One component per tag (a shared tag merges two groups; none is an orphan), group_id in the pool band."""
+        pool, problem = tag_pool(profiles)
+        band = (pool.get("start_range"), pool.get("end_range")) if pool else None
+        pool_name = (pool or {}).get("name")
+        if tags and band is None:
+            self.log_error(
+                message=f"No group tag pool ({problem}): the band of {len(tags)} group tag(s) cannot be checked"
+            )
+        for tag in sorted(tags, key=lambda item: str(item.get("name"))):
+            name = tag.get("name", tag.get("id"))
+            fqdns = sorted(str(component.get("fqdn")) for component in tag.get("components") or [])
+            if not fqdns:
+                self.log_info(message=f"WARNING: security tag '{name}' groups no component (orphan)")
+            elif len(fqdns) > 1:
+                self.log_error(message=f"Security tag '{name}' is shared by {len(fqdns)} components: {fqdns}")
+            group_id = tag.get("group_id")
+            if band and band[0] is not None and band[1] is not None and not band[0] <= (group_id or 0) <= band[1]:
+                self.log_error(
+                    message=f"Security tag '{name}' group_id {group_id} is outside {pool_name} {band[0]}-{band[1]}"
+                )
+
+    def _validate_rule_tags(self, rules: list[dict[str, Any]], tags: list[dict[str, Any]]) -> None:
+        """A rule's group tags belong to components of the rule's own segment, and only inside one segment."""
+        tag_segments = {
+            tag["id"]: {(component.get("network_segment") or {}).get("id") for component in tag.get("components") or []}
+            for tag in tags
+            if tag.get("id")
+        }
+        for rule in rules:
+            sides = [side for side in ("source", "destination") if rule.get(f"{side}_security_tag")]
+            if not sides:
+                continue
+            rule_name = rule.get("name", rule.get("id"))
+            src_seg = (rule.get("source_segment") or {}).get("id")
+            if src_seg != (rule.get("destination_segment") or {}).get("id"):
+                self.log_error(message=f"Rule '{rule_name}' carries group tags but is not an intra-segment rule")
+                continue
+            for side in sides:
+                tag = rule[f"{side}_security_tag"]
+                if src_seg not in tag_segments.get(tag.get("id"), set()):
+                    self.log_error(
+                        message=(
+                            f"Rule '{rule_name}': {side} tag '{tag.get('name', tag.get('id'))}' "
+                            "groups no component of the rule's segment"
+                        )
+                    )

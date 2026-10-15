@@ -516,6 +516,7 @@ class AppComponent(AppGeneric):
     health_checks: RelationshipManager[LoadbalancerHealthCheck]
     instances: RelationshipManager[AppInstance]
     network_segment: RelationshipAttribute[ManagedNetworkSegment]
+    security_tag: RelationshipAttribute[SecurityTag]
 
 
 class ManagedConferencingService(ManagedSaasService):
@@ -663,6 +664,17 @@ class DcimDeviceType(CoreNode):
     manufacturer: RelationshipAttribute[OrganizationManufacturer]
     platform: RelationshipAttribute[DcimPlatform]
     tags: RelationshipManager[BuiltinTag]
+
+
+class DcimGroupPolicyProfile(CoreNode):
+    description: StringOptional
+    group_policy_kind: Dropdown
+    min_memory_gb: IntegerOptional
+    min_release: String
+    name: String
+    device_types: RelationshipManager[DcimDeviceType]
+    platform: RelationshipAttribute[DcimPlatform]
+    tag_pool: RelationshipAttribute[CoreNumberPool]
 
 
 class CloudDirectConnect(CloudResource):
@@ -1031,11 +1043,13 @@ class SecurityPolicyRule(CoreNode):
     protocol: Dropdown
     destination_ip_addresses: RelationshipManager[IpamIPAddress]
     destination_prefixes: RelationshipManager[IpamPrefix]
+    destination_security_tag: RelationshipAttribute[SecurityTag]
     destination_segment: RelationshipAttribute[ManagedNetworkSegment]
     policy: RelationshipAttribute[SecurityPolicy]
     security_profile: RelationshipAttribute[SecuritySecurityProfile]
     source_ip_addresses: RelationshipManager[IpamIPAddress]
     source_prefixes: RelationshipManager[IpamPrefix]
+    source_security_tag: RelationshipAttribute[SecurityTag]
     source_segment: RelationshipAttribute[ManagedNetworkSegment]
 
 
@@ -1251,6 +1265,7 @@ class SecurityTag(CoreNode):
     description: StringOptional
     group_id: Integer
     name: String
+    components: RelationshipManager[AppComponent]
 
 
 class CloudTransitGateway(CloudResource):

@@ -1,0 +1,62 @@
+---
+# The reference fabric profile: one DcimGroupPolicyProfile row per platform
+# (schemas/extensions/dcim/group_policy_profile.yml). Loaded after
+# 05_platforms.yml, 06_device_types.yml and 19_sgt_pool.yml (all referenced
+# by name). Evidence: D documented (vendor text), I inferred, U unknown;
+# nothing here is lab-tested.
+#
+# cisco_nxos (D): NX-OS 10.6(x) VXLAN configuration guide, GPO chapter.
+#   10.6(1)F is the first release with the VLAN + interface selector component
+#   tags need; GPO needs at least 24 GB. Device types: the documented FX3 / GX /
+#   GX2 types of 06_device_types.yml, by exact name. Not listed: FX2 and FX
+#   (owner decision), EX (not supported), and the undocumented FX3P / FX3PH /
+#   FX3S / FXP variants.
+#
+# arista_eos: EOS 4.36.2F user manual, "Segment Security" (MSS-G, D for the CLI
+#   and semantics); the manual names no platform. Device types: the 7280R3
+#   fixed systems (I: AVD's router_segment_security model says the fallback
+#   policy is "only supported on the R3 series platforms", and the MSS-G TOI is
+#   tied to Jericho2/R3). Not listed: the 7500R3 / 7800R3 modular systems (R3
+#   is their line-card generation, which a chassis device type cannot express:
+#   U) and the 7050X3 / 7050X4 (Trident) types the demos use (U). No memory
+#   floor is documented. MSS-G is name-based: no group ID on the wire, so no
+#   tag pool.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimGroupPolicyProfile
+  data:
+    - name: reference-cisco-nxos
+      description: >-
+        NX-OS VXLAN EVPN GPO (security groups), NX-OS 10.6(x) VXLAN configuration guide, GPO chapter (D). A site
+        must not mix policy-aware and policy-unaware nodes.
+      group_policy_kind: vxlan_gpo
+      platform: cisco_nxos
+      min_release: "10.6(1)F"
+      min_memory_gb: 24
+      device_types:
+        # FX3
+        - N9K-C93108TC-FX3
+        - N9K-C93180YC-FX3
+        - N9K-C9348GC-FX3
+        # GX
+        - N9K-C93600CD-GX
+        - N9K-C9316D-GX
+        - N9K-C9364C-GX
+        # GX2
+        - N9K-C9332D-GX2B
+        - N9K-C9348D-GX2A
+        - N9K-C9364D-GX2A
+      tag_pool: SGT-POOL
+
+    - name: reference-arista-eos
+      description: >-
+        EOS Segment Security (MSS-G, router segment-security), EOS 4.36.2F user manual (D); platforms R3 only (I,
+        AVD router_segment_security). At most 60 segments across all VRFs; enabling it halves the LPM table.
+      group_policy_kind: segment_security
+      platform: arista_eos
+      min_release: "4.36.2F"
+      device_types:
+        # 7280R3 (I)
+        - DCS-7280CR3-32P4
+        - DCS-7280SR3-48YC8

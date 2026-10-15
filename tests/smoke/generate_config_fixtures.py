@@ -21,6 +21,8 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+import yaml
+
 from transforms.config.access_leaf import AccessLeaf
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.border_spine import BorderSpine
@@ -33,9 +35,11 @@ from transforms.config.proxy import Proxy
 from transforms.config.spine import Spine
 from transforms.config.super_spine import SuperSpine
 from transforms.config.tor import ToR
+from transforms.topology.segmentation_matrix import SegmentationMatrix
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SMOKE_DIR = Path(__file__).resolve().parent / "configs"
+SEGMENTATION_MATRIX_DIR = Path(__file__).resolve().parent / "segmentation_matrix"
 
 # ============================================================================
 # GraphQL response builders (raw format, before clean_data)
@@ -418,7 +422,7 @@ def _make_segment_deployment(**kwargs: Any) -> dict:
 # Scenario builders
 # ============================================================================
 # Roles that terminate customer segments, so their fixtures need segments attached.
-# Mirrors transforms/helpers/vxlan.py's _VTEP_ROLES plus l2-leaf (pure L2, no VNI).
+# Mirrors utils/fabric_roles.py's VTEP_ROLES (without edge) plus l2-leaf (pure L2, no VNI).
 SEGMENT_ROLES = ("leaf", "border-leaf", "border-spine", "tor", "l2-leaf", "access-leaf")
 
 # Fabric-wide EVPN route-target administrative ASN
@@ -1035,7 +1039,6 @@ def _make_rule_segment(*, cidr: str, zone_name: str) -> dict:
         "__typename": "ManagedVlanSegment",
         "name": _v(f"seg-{cidr.replace('/', '-').replace('.', '-')}"),
         "security_zone": _node({"name": _v(zone_name)}),
-        "security_tag": _node(None),
         "gateway": _node({"ip_prefix": _node({"prefix": _v(cidr)})}),
         "customer_deployment": _node(None),
     }
@@ -1267,7 +1270,6 @@ def _make_internet_segment() -> dict:
         "__typename": "ManagedExternalSegment",
         "name": _v("internet-internet-p"),
         "security_zone": _node({"name": _v("INTERNET-ZONE")}),
-        "security_tag": _node(None),
         "gateway": _node(None),
         "customer_deployment": _node(None),
     }
@@ -2608,6 +2610,174 @@ def build_lb_inline_data(*, device_name: str, platform: str) -> dict:
     return {"DcimPhysicalDevice": _edges([device_node])}
 
 
+# ============================================================================
+# segmentation_matrix artifact (one data center, queries/topology/segmentation_matrix.gql)
+# ============================================================================
+
+
+def _gp_device(name: str, role: str, device_type: str, version: str | None, memory_gb: dict[str, int]) -> dict:
+    """A DeviceGroupPolicyFields device; ``memory_gb`` is device type -> memory (06_device_types.yml)."""
+    return {
+        "name": _v(name),
+        "role": _v(role),
+        "platform": _node({"name": _v("cisco_nxos")}),
+        "device_type": _node({"name": _v(device_type), "memory_gb": _v(memory_gb[device_type])}),
+        "software_image": _node({"version": _v(version)} if version else None),
+    }
+
+
+def _gp_rule(index: int, name: str, src_tag: str, dst_tag: str, seg_id: str, **kwargs: Any) -> dict:
+    """A rule of the segment's own policy, as the segmentation_matrix query selects it."""
+    return {
+        "id": f"rule-{name}",
+        "index": _v(index),
+        "name": _v(name),
+        "action": _v(kwargs.get("action", "permit")),
+        "protocol": _v(kwargs.get("protocol", "tcp")),
+        "port_start": _v(kwargs.get("port_start")),
+        "port_end": _v(kwargs.get("port_end")),
+        "disabled": _v(kwargs.get("disabled", False)),
+        "apply_on_switch": _v(True),
+        "destination_segment": _node({"id": seg_id}),
+        "source_security_tag": _node({"id": src_tag}),
+        "destination_security_tag": _node({"id": dst_tag}),
+    }
+
+
+def _gp_segment(seg_id: str, name: str, *, isolation_mode: str, rules: list[dict], inline: str | None = None) -> dict:
+    return {
+        "id": seg_id,
+        "__typename": "ManagedVxlanSegment",
+        "name": _v(name),
+        "isolation_mode": _v(isolation_mode),
+        "gateway": _node({"ip_prefix": _node({"ip_namespace": _node({"name": _v("PROD")})})}),
+        "inline_service": _node({"id": f"svc-{inline}", "name": _v(inline)} if inline else None),
+        "security_policy": _node(
+            {
+                "name": _v(f"seg-{name}-egress"),
+                "enabled": _v(True),
+                "default_action": _v("deny"),
+                "rules": _edges(rules),
+            }
+        ),
+    }
+
+
+def _gp_tag(tag_id: str, group_id: int, fqdn: str | None, seg_id: str | None) -> dict:
+    components = [{"fqdn": _v(fqdn), "network_segment": _node({"id": seg_id})}] if fqdn else []
+    return {
+        "id": tag_id,
+        "name": _v(fqdn or f"{tag_id}.retired"),
+        "group_id": _v(group_id),
+        "components": _edges(components),
+    }
+
+
+def build_segmentation_matrix_data() -> dict:
+    """DC10 as it is today, not a reference fabric: FX2 leafs and border leaf on 10.3(3) next to
+    an EX access leaf (and a spine, no VTEP), against the bootstrap profile rows. Segment c005-web-frontend has three tagged components (one permit rule,
+    one disabled rule, two un-ruled pairs), app-backend one, a third segment is normal behind
+    an inline firewall; one tag is an orphan."""
+    device_types = yaml.safe_load((PROJECT_ROOT / "data/bootstrap/06_device_types.yml").read_text())["spec"]["data"]
+    memory_gb = {item["name"]: item.get("memory_gb") for item in device_types}
+    profile_rows = yaml.safe_load((PROJECT_ROOT / "data/bootstrap/19b_group_policy_profile.yml").read_text())["spec"][
+        "data"
+    ]
+    profiles = [
+        {
+            "name": _v(row["name"]),
+            "group_policy_kind": _v(row["group_policy_kind"]),
+            "min_release": _v(row["min_release"]),
+            "min_memory_gb": _v(row.get("min_memory_gb")),
+            "platform": _node({"name": _v(row["platform"])}),
+            "device_types": _edges([{"name": _v(name)} for name in row["device_types"]]),
+        }
+        for row in profile_rows
+    ]
+    web = "seg-web"
+    segments = [
+        _gp_segment(
+            web,
+            "c005-web-frontend-local-dc10-p",
+            isolation_mode="microsegmented",
+            rules=[
+                _gp_rule(100, "web-frontend-to-session-store-tcp-6379", "tag-web", "tag-session", web, port_start=6379),
+                _gp_rule(
+                    110,
+                    "web-frontend-to-session-store-tcp-6380",
+                    "tag-web",
+                    "tag-session",
+                    web,
+                    port_start=6380,
+                    disabled=True,
+                ),
+            ],
+        ),
+        _gp_segment("seg-backend", "c005-app-backend-stretch-p", isolation_mode="microsegmented", rules=[]),
+        _gp_segment("seg-shop", "c006-shop-p", isolation_mode="normal", rules=[], inline="DC10-FW-CTX-C006"),
+    ]
+    deployments = [{"vni": _v(10000 + n), "segment": _node(segment)} for n, segment in enumerate(segments)]
+    return {
+        "data": {
+            "TopologyDataCenter": _edges(
+                [
+                    {
+                        "id": "dc10",
+                        "name": _v("DC10"),
+                        "devices": _edges(
+                            [_gp_device("bl-dc10-01", "border-leaf", "N9K-C9336C-FX2", "10.3(3)", memory_gb)]
+                        ),
+                        "segment_deployments": _edges(deployments),
+                    }
+                ]
+            ),
+            "TopologyPod": _edges(
+                [
+                    {
+                        "devices": _edges(
+                            [
+                                _gp_device("lf-dc10-01", "leaf", "N9K-C9336C-FX2", "10.3(3)", memory_gb),
+                                _gp_device("al-dc10-01", "access-leaf", "N9K-C93180YC-EX", "10.3(3)", memory_gb),
+                                # Not a VTEP: the query returns every device, the transform keeps the VTEPs.
+                                _gp_device("sp-dc10-01", "spine", "N9K-C9336C-FX2", "10.3(3)", memory_gb),
+                            ]
+                        )
+                    }
+                ]
+            ),
+            "DcimGroupPolicyProfile": _edges(profiles),
+            "SecurityTag": _edges(
+                [
+                    _gp_tag("tag-web", 16, "api.payment-core.c005.demo.local", web),
+                    _gp_tag("tag-session", 20, "sessions.payment-core.c005.demo.local", web),
+                    _gp_tag("tag-audit", 21, "audit.payment-core.c005.demo.local", web),
+                    _gp_tag("tag-backend", 17, "backend.payment-core.c005.demo.local", "seg-backend"),
+                    _gp_tag("tag-orphan", 30, None, None),
+                ]
+            ),
+        }
+    }
+
+
+def write_segmentation_matrix_fixture() -> tuple[int, int]:
+    """Write tests/smoke/segmentation_matrix/{input,output}.json (test_segmentation_matrix.yml)."""
+    data = build_segmentation_matrix_data()
+    SEGMENTATION_MATRIX_DIR.mkdir(parents=True, exist_ok=True)
+    with open(SEGMENTATION_MATRIX_DIR / "input.json", "w") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
+    try:
+        output = run_transform(SegmentationMatrix, data["data"])
+    except Exception as e:
+        print(f"  ✗ segmentation_matrix: {e}")
+        return 0, 1
+    with open(SEGMENTATION_MATRIX_DIR / "output.json", "w") as f:
+        json.dump(output, f, indent=2, sort_keys=True)
+        f.write("\n")
+    print("  ✓ segmentation_matrix")
+    return 1, 0
+
+
 def run_transform(transform_cls: type, data: dict) -> str:
     mock_client = MagicMock()
     mock_client.clone.return_value = mock_client  # SDK clones client in __init__
@@ -3053,6 +3223,11 @@ def main() -> int:
         )
         generated += g
         errors += e
+
+    print("\nGenerating the segmentation_matrix artifact fixture:")
+    g, e = write_segmentation_matrix_fixture()
+    generated += g
+    errors += e
 
     print(f"\nDone: {generated} generated, {errors} errors")
     # A fixture that fails to render writes no file, so it leaves no diff for the

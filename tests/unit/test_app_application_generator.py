@@ -21,7 +21,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -808,3 +808,139 @@ class TestReconcileApplicationRulesZonesAndFailures:
         gen._reconcile_segment_rule = AsyncMock(return_value=(False, True))
 
         asyncio.run(gen._reconcile_application_rules(_app(_frontend(_dep(target=_backend(ports=["tcp/8443"]))))))
+
+
+# ===========================================================================
+# TestComponentTags
+# ===========================================================================
+
+
+def _micro_segment(seg_id: str = "seg-m") -> dict[str, Any]:
+    return {**_segment(seg_id, "ManagedVlanSegment"), "isolation_mode": "microsegmented"}
+
+
+def _c013_app(*, tagged: bool = False) -> dict[str, Any]:
+    """fraud-detection: scoring-api -> feature-cache on one microsegmented VLAN segment."""
+    cache = {
+        "id": "comp-cache",
+        "name": "feature-cache",
+        "fqdn": "cache.fraud-detection.c013.demo.local",
+        "ports": ["tcp/6379"],
+        "component_type": "cache",
+        "network_segment": _micro_segment(),
+        "security_tag": {"id": "tag-cache"} if tagged else None,
+    }
+    scoring = {
+        "id": "comp-scoring",
+        "name": "scoring-api",
+        "fqdn": "scoring.fraud-detection.c013.demo.local",
+        "ports": ["tcp/8443"],
+        "component_type": "backend",
+        "network_segment": _micro_segment(),
+        "security_tag": {"id": "tag-scoring"} if tagged else None,
+        # The target is a second dict of the cache component, as application.gql returns it.
+        "depends_on": [_dep("scoring-to-cache", target={**cache, "network_segment": _micro_segment()})],
+    }
+    return _app(scoring, cache, profile="fintech_strict")
+
+
+class TestComponentTags:
+    """Every component of a microsegmented segment gets its tag before the rules are planned."""
+
+    @staticmethod
+    def _gen() -> Any:
+        gen = _make_gen()
+        gen._ensure_segment_isolation_mode = AsyncMock()
+        gen._reconcile_private_access_components = AsyncMock(return_value=(0, 0))
+        gen._reconcile_segment_rule = AsyncMock(return_value=(True, False))
+        gen.resource_lock = MagicMock()
+        return gen
+
+    def test_components_and_edge_target_dicts_get_the_tag_ids(self) -> None:
+        """The child and the edge-target dict of the same component carry the same tag id."""
+        gen = self._gen()
+        app = _c013_app()
+        ensure = AsyncMock(side_effect=lambda client, lock, *, component: f"tag-{component['id']}")
+
+        with patch("generators.topology.application_security.ensure_component_tag", ensure):
+            asyncio.run(gen._reconcile_application_rules(app))
+
+        assert sorted(call.kwargs["component"]["id"] for call in ensure.await_args_list) == [
+            "comp-cache",
+            "comp-scoring",
+        ]
+        scoring, cache = app["children"]
+        assert scoring["security_tag"] == {"id": "tag-comp-scoring"}
+        assert cache["security_tag"] == {"id": "tag-comp-cache"}
+        assert scoring["depends_on"][0]["target"]["security_tag"] == {"id": "tag-comp-cache"}
+        rule_call = gen._reconcile_segment_rule.await_args
+        assert rule_call.kwargs["dst_comp"]["security_tag"] == {"id": "tag-comp-cache"}
+
+    def test_components_of_a_normal_segment_get_no_tag(self) -> None:
+        gen = self._gen()
+        ensure = AsyncMock()
+
+        with patch("generators.topology.application_security.ensure_component_tag", ensure):
+            asyncio.run(gen._reconcile_application_rules(_app(_frontend(_dep(target=_backend())))))
+
+        ensure.assert_not_awaited()
+
+    def test_component_that_left_its_microsegmented_segment_loses_its_tag(self) -> None:
+        gen = self._gen()
+        component = {"id": "comp-1", "network_segment": _segment("seg-n"), "security_tag": {"id": "tag-old"}}
+        clear = AsyncMock()
+
+        with patch("generators.topology.application_security.clear_component_tag", clear):
+            asyncio.run(gen._ensure_component_tags([component], []))
+
+        clear.assert_awaited_once_with(gen.client, component_id="comp-1")
+        assert component["security_tag"] is None
+
+    def test_target_on_another_segment_is_not_tagged_here(self) -> None:
+        """A target outside this application's microsegmented segments is its own application's to tag."""
+        gen = self._gen()
+        child = {"id": "comp-1", "network_segment": _micro_segment("seg-m")}
+        target = {"id": "comp-x", "network_segment": _micro_segment("seg-other")}
+        ensure = AsyncMock(return_value="tag-1")
+
+        with patch("generators.topology.application_security.ensure_component_tag", ensure):
+            asyncio.run(gen._ensure_component_tags([child], [(child, {}, target)]))
+
+        assert [call.kwargs["component"]["id"] for call in ensure.await_args_list] == ["comp-1"]
+        assert "security_tag" not in target
+
+    def test_tag_failure_stops_the_application_before_any_rule(self) -> None:
+        """Errors propagate: no rule is planned without its tags."""
+        gen = self._gen()
+        ensure = AsyncMock(side_effect=RuntimeError("SGT-POOL: no group_id allocated"))
+
+        with (
+            patch("generators.topology.application_security.ensure_component_tag", ensure),
+            pytest.raises(RuntimeError, match="SGT-POOL"),
+        ):
+            asyncio.run(gen._reconcile_application_rules(_c013_app()))
+
+        gen._reconcile_segment_rule.assert_not_awaited()
+
+    def test_second_run_over_tagged_components_writes_no_tag(self) -> None:
+        """AC1: with the real helper, components that carry their tags cause no lookup, lock or write."""
+        gen = self._gen()
+        gen.client = MagicMock()
+        gen.client.create = AsyncMock()
+        gen.client.filters = AsyncMock()
+
+        asyncio.run(gen._reconcile_application_rules(_c013_app(tagged=True)))
+
+        gen.client.create.assert_not_awaited()
+        gen.client.filters.assert_not_awaited()
+        gen.resource_lock.assert_not_called()
+        rule_kwargs = gen._reconcile_segment_rule.await_args.kwargs
+        assert rule_kwargs["src_comp"]["security_tag"] == {"id": "tag-scoring"}
+        assert rule_kwargs["dst_comp"]["security_tag"] == {"id": "tag-cache"}
+
+    def test_application_query_reads_the_tag_of_components_and_edge_targets(self, root_dir: Path) -> None:
+        """The fast path needs the tag of every child and of every dependency target, and no segment tag."""
+        query = (root_dir / "queries/topology/add/application.gql").read_text()
+        assert query.count("security_tag { node { id } }") == 2
+        fragment = query.split("fragment AppComponentSecurityFields")[0]
+        assert "security_tag" not in fragment
