@@ -8,6 +8,8 @@ from typing import Any
 
 import pytest
 import yaml
+from graphql import parse, print_ast
+from graphql.language import FieldNode, OperationDefinitionNode
 
 from utils.fabric_roles import DC_VTEP_ROLES, VTEP_ROLES
 from utils.group_policy import (
@@ -386,9 +388,14 @@ class TestQueries:
         assert "role__values" not in text
 
     @staticmethod
-    def _strip(text: str) -> str:
-        """The query text without comments, whitespace-normalised."""
-        return " ".join(" ".join(line.split("#")[0] for line in text.splitlines()).split())
+    def _roots(text: str) -> dict[str, str]:
+        """Response key -> printed selection of every top-level root of the query operation."""
+        operation = next(item for item in parse(text).definitions if isinstance(item, OperationDefinitionNode))
+        return {
+            (field.alias or field.name).value: print_ast(field)
+            for field in operation.selection_set.selections
+            if isinstance(field, FieldNode)
+        }
 
     @pytest.mark.parametrize(
         "query", ["queries/config/leaf.gql", "queries/config/border_leaf.gql", "queries/config/border_spine.gql"]
@@ -396,14 +403,13 @@ class TestQueries:
     def test_device_queries_carry_the_fleet_roots_of_the_matrix_after_the_device_root(
         self, root_dir: Path, query: str
     ) -> None:
-        """The NX-OS GPO block reads the matrix's roots (minus ``target``); DcimDevice stays the first root."""
-        matrix = (root_dir / "queries/topology/segmentation_matrix.gql").read_text()
-        device = (root_dir / query).read_text()
-        fleet = self._strip(matrix[matrix.index("  DcimGroupPolicyProfile {") :])
-        text = self._strip(device)
-        assert fleet in text
-        assert text.index("DcimDevice(") < text.index("DcimGroupPolicyProfile")
-        assert "target" not in text
+        """The NX-OS GPO block reads the matrix's roots (minus ``target``) as top-level roots; DcimDevice stays first."""
+        matrix = self._roots((root_dir / "queries/topology/segmentation_matrix.gql").read_text())
+        device = self._roots((root_dir / query).read_text())
+        fleet = {key: root for key, root in matrix.items() if key != "target"}
+        assert list(device)[0] == "DcimDevice"
+        assert list(device)[1:] == list(fleet)
+        assert {key: device[key] for key in fleet} == fleet
 
     @pytest.mark.parametrize(
         "query",

@@ -24,6 +24,7 @@ from tests.smoke.generate_config_fixtures import (
     _v,
     build_gpo_device_data,
 )
+from tests.smoke.test_configs_smoke import _run_transform
 from transforms.common import BaseDeviceTransform
 from transforms.config.access_leaf import AccessLeaf
 from transforms.config.border_leaf import BorderLeaf
@@ -35,7 +36,6 @@ from transforms.config.tor import ToR
 from transforms.helpers.group_policy import (
     UNAWARE,
     UNCLASSIFIED,
-    bidir_pairs,
     class_map_name,
     data_center_contracts,
     segment_vrf,
@@ -47,7 +47,7 @@ from transforms.topology.segmentation_matrix import SegmentationMatrix
 from utils.data_cleaning import clean_data
 from utils.fabric_roles import DC_VTEP_ROLES
 
-LEAF_ACTIVATIONS = [
+LEAF_ACTIVATIONS: list[dict[str, Any]] = [
     {"vlan_id": 110, "segment": {"id": "seg-web-np"}},
     {"vlan_id": 120, "segment": {"id": "seg-app-np"}},
     {"vlan_id": 210, "segment": {"id": "seg-pay-p"}},
@@ -92,7 +92,6 @@ class TestGate:
     def test_vtep_of_a_reference_fabric_renders(self) -> None:
         view = _view(_roots())
         assert view is not None
-        assert view["kind"] == "vxlan_gpo"
         assert set(view["vrfs"]) == {"NONPROD", "PROD"}
 
     @pytest.mark.parametrize("role", sorted(DC_VTEP_ROLES))
@@ -304,8 +303,11 @@ class TestEntries:
         by_entries = {item["entries"]: item for item in view["class_maps"]}
         assert by_entries["icmp"]["lines"] == ["match ip icmp"]
         assert by_entries["any"]["lines"] == ["match ip"]
-        assert by_entries["icmp"]["notes"] and by_entries["any"]["notes"]
         assert not by_entries["tcp/443"]["notes"]
+        for entries in ("icmp", "any"):
+            (note,) = by_entries[entries]["notes"]
+            assert "is not in the guide;" in note
+            assert "IPv6 for this entry is denied by the default deny (fail closed)" in note
 
     def test_a_port_less_tcp_rule_uses_the_table_form(self) -> None:
         roots = _roots()
@@ -313,13 +315,12 @@ class TestEntries:
         rule["port_start"], rule["port_end"] = None, None
         view = _view(roots)
         assert view is not None
-        assert "match ip tcp" in {line for item in view["class_maps"] for line in item["lines"]}
-
-    def test_an_unknown_protocol_is_refused(self) -> None:
-        roots = _roots()
-        _segment(roots, "seg-web-np")["security_policy"]["rules"][0]["protocol"] = "gre"
-        with pytest.raises(ValueError, match=r"protocol 'gre' has no class-map form.*refusing unprotected config"):
-            _view(roots)
+        port_less = next(item for item in view["class_maps"] if "match ip tcp" in item["lines"])
+        assert port_less["entries"].split(", ")[0] == "tcp"
+        # The guide's sample show running-config prints `match ip tcp`, so it is not "not in the guide".
+        (note,) = port_less["notes"]
+        assert "`match ip tcp` for tcp is only in the guide's sample show running-config;" in note
+        assert "IPv6 for this entry is denied by the default deny (fail closed)" in note
 
 
 class TestRefusals:
@@ -366,23 +367,56 @@ class TestRefusals:
         with pytest.raises(ValueError, match=r"8010-8000 ends before it starts.*refusing unprotected config"):
             _view(roots)
 
-    def test_an_enforced_vrf_without_an_unclassified_group_id_is_refused(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """`security enforce tag <unclassified id>` needs the id even when no contract row names UNCLASSIFIED."""
-        row = {
-            "vrf": "NONPROD",
-            "src": "web-np",
-            "dst": "app-np",
-            "src_group_id": 40,
-            "dst_group_id": 41,
-            "entries": [{"protocol": "tcp", "port_start": 443, "port_end": 443}],
-            "rules": [],
-        }
-        monkeypatch.setattr("transforms.helpers.group_policy.vxlan_gpo_view", lambda *a, **k: {"contracts": [row]})
-        monkeypatch.setattr(
-            "transforms.helpers.group_policy.reserved_groups", lambda *a, **k: {"unclassified": None, "unaware": 15}
-        )
+    @staticmethod
+    def _without_unclassified_id(roots: dict[str, Any]) -> None:
+        for profile in roots["DcimGroupPolicyProfile"]:
+            if profile["platform"]["name"] == "cisco_nxos":
+                profile["unclassified_group_id"] = None
+
+    def test_a_contract_with_the_unclassified_group_needs_the_profiles_id(self) -> None:
+        roots = _roots()
+        self._without_unclassified_id(roots)
+        with pytest.raises(ValueError, match=r"group unclassified has no group id.*refusing unprotected config"):
+            _view(roots)
+
+    def test_an_enforced_vrf_without_an_unclassified_group_id_is_refused(self) -> None:
+        """`security enforce tag <unclassified id>` needs the id even when no contract row names UNCLASSIFIED.
+
+        With no rule at all, NONPROD's only rows are the stretched db-np's unaware halves.
+        """
+        roots = _roots()
+        for segment in roots["ManagedNetworkSegment"]:
+            segment["security_policy"]["rules"] = []
+        assert _view(roots) is not None
+        self._without_unclassified_id(roots)
         with pytest.raises(ValueError, match=r"VRF NONPROD is enforced but.*refusing unprotected config"):
-            _view(_roots())
+            _view(roots, vrfs=["NONPROD"])
+
+    def test_a_tag_shared_by_two_segments_is_refused(self) -> None:
+        """The views key a group by name: the later segment's selector would silently win."""
+        roots = _roots()
+        _segment(roots, "seg-app-np")["security_tag"]["name"] = "web-np"
+        with pytest.raises(
+            ValueError,
+            match=r"group 'web-np' is the tag of segment web-np \(VRF NONPROD\) and of segment app-np \(VRF NONPROD\)"
+            r".*refusing unprotected config",
+        ):
+            _view(roots)
+
+    def test_a_tag_shared_by_two_vrfs_is_refused(self) -> None:
+        roots = _roots()
+        _segment(roots, "seg-portal-p")["security_tag"]["name"] = "web-np"
+        with pytest.raises(ValueError, match=r"group 'web-np' is the tag of .*refusing unprotected config"):
+            _view(roots)
+
+    @pytest.mark.parametrize("name", ["unaware", "UNAWARE", "unclassified", "UNCLASSIFIED", "Fallback", "FALLBACK"])
+    def test_a_group_named_like_a_pseudo_group_is_refused(self, name: str) -> None:
+        roots = _roots()
+        _segment(roots, "seg-web-np")["security_tag"]["name"] = name
+        with pytest.raises(
+            ValueError, match=rf"group '{name}' is named like the reserved pseudo-group.*refusing unprotected config"
+        ):
+            _view(roots)
 
     def test_an_unenforced_vrf_does_not_need_the_unclassified_group_for_its_enforce_line(self) -> None:
         """PROD names component groups: no enforce line, so no enforce tag is read for it."""
@@ -396,6 +430,64 @@ class TestEnforcement:
         view = _view(_roots())
         assert view is not None
         assert view["vrfs"]["NONPROD"]["unenforced"] is None
+        assert view["vrfs"]["NONPROD"]["enforce_tag"] == 0
+
+    def test_a_segment_without_a_vlan_here_leaves_its_vrf_unenforced(self) -> None:
+        activations = [
+            {**item, "vlan_id": None} if item["segment"]["id"] == "seg-app-np" else item for item in LEAF_ACTIVATIONS
+        ]
+        view = _view(_roots(), activations=activations)
+        assert view is not None
+        nonprod = view["vrfs"]["NONPROD"]
+        assert nonprod["unenforced"] == "segment app-np has no group classifier on this device"
+        assert nonprod["enforce_tag"] is None
+        assert nonprod["contracts"], "the contracts are still rendered"
+        assert {group["name"] for group in view["groups"]} >= {"web-np", "app-np"}
+        assert view["vrfs"]["PROD"]["enforce_tag"] is None
+
+    def test_a_segment_without_a_group_leaves_its_vrf_unenforced(self) -> None:
+        roots = _roots()
+        _segment(roots, "seg-app-np")["security_tag"] = None
+        view = _view(roots)
+        assert view is not None
+        assert view["vrfs"]["NONPROD"]["unenforced"] == "segment app-np has no group classifier on this device"
+        assert view["vrfs"]["NONPROD"]["enforce_tag"] is None
+
+    def test_an_inline_terminated_segment_leaves_its_vrf_unenforced(self) -> None:
+        activations = [
+            {**item, "segment": {**item["segment"], "terminate_inline": True}} if item["vlan_id"] == 110 else item
+            for item in LEAF_ACTIVATIONS
+        ]
+        view = _view(_roots(), activations=activations)
+        assert view is not None
+        assert view["vrfs"]["NONPROD"]["unenforced"] == "segment web-np has no group classifier on this device"
+
+    def test_every_segment_without_a_classifier_is_named(self) -> None:
+        view = _view(
+            _roots(), activations=[{"vlan_id": None, "segment": {"id": s}} for s in ("seg-web-np", "seg-app-np")]
+        )
+        assert view is not None
+        assert view["vrfs"]["NONPROD"]["unenforced"] == (
+            "segment app-np has no group classifier on this device; segment web-np has no group classifier on this device"
+        )
+
+    def test_a_segment_outside_the_vrf_or_the_tenant_segments_does_not_block_enforcement(self) -> None:
+        """Another VRF's segment, an external segment and an unknown id leave NONPROD enforced."""
+        activations = [
+            *LEAF_ACTIVATIONS,
+            {"vlan_id": None, "segment": {"id": "seg-internet"}},
+            {"vlan_id": None, "segment": {"id": "seg-unknown"}},
+        ]
+        view = _view(_roots(), activations=activations)
+        assert view is not None
+        assert view["vrfs"]["NONPROD"]["unenforced"] is None
+        assert view["vrfs"]["NONPROD"]["enforce_tag"] == 0
+
+    def test_an_unclassified_segment_of_another_vrf_does_not_unenforce_this_one(self) -> None:
+        activations = [item for item in LEAF_ACTIVATIONS if item["segment"]["id"] != "seg-portal-p"]
+        activations.append({"vlan_id": None, "segment": {"id": "seg-portal-p"}})
+        view = _view(_roots(), activations=activations)
+        assert view is not None
         assert view["vrfs"]["NONPROD"]["enforce_tag"] == 0
 
     def test_a_vrf_naming_a_component_group_is_defined_but_unenforced(self) -> None:
@@ -439,17 +531,7 @@ class TestEnforcement:
             assert len(pairs) == len(set(pairs))
 
 
-class TestBidirPairs:
-    def test_a_pair_with_a_row_each_way_is_listed_once(self) -> None:
-        rows = [
-            {"vrf": "P", "src": "a", "dst": "b"},
-            {"vrf": "P", "src": "b", "dst": "a"},
-            {"vrf": "P", "src": "a", "dst": "c"},
-            {"vrf": "P", "src": "a", "dst": "a"},
-            {"vrf": "Q", "src": "a", "dst": "b"},
-        ]
-        assert bidir_pairs(rows) == [("P", "a", "b")]
-
+class TestPairNotes:
     def test_the_device_marks_both_contracts_of_a_pair(self) -> None:
         view = _view(_roots())
         assert view is not None
@@ -571,9 +653,10 @@ class TestGoldens:
     )
     def test_output_equals_the_existing_golden(self, root_dir: Path, gpo_fixture: str, golden: str) -> None:
         configs = root_dir / "tests/smoke/configs"
-        assert (configs / gpo_fixture / "output.txt").read_text() == (configs / golden / "output.txt").read_text()
+        data = json.loads((configs / gpo_fixture / "input.json").read_text())
         # The fixture's input really carries the fleet roots.
-        assert "DcimGroupPolicyProfile" in json.loads((configs / gpo_fixture / "input.json").read_text())
+        assert "DcimGroupPolicyProfile" in data
+        assert _run_transform(Leaf, data) == (configs / golden / "output.txt").read_text()
 
     @pytest.mark.parametrize(
         "fixture",

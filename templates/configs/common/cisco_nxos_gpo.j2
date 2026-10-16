@@ -28,6 +28,7 @@ policy-map type security {{ class_map.name }}
 !
 ! Security groups: the VLAN selector is this device's own VLAN of the segment; a group without one is
 ! classified on the VTEPs that carry its segment (the group ID travels in the VXLAN header)
+! documented-not-lab-verified: the guide gives no range for the group ids and no rules for the group names (a tag name is rewritten to [A-Za-z0-9_-])
 {%- for group in group_policy.groups %}
 {%- for note in group.notes %}
 ! {{ note }}

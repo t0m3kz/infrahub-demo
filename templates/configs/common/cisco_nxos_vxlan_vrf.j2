@@ -42,7 +42,8 @@ vrf context {{ mapping.vrf_name }}
 {%- for route in vrf_routes | default([]) if route.vrf == mapping.vrf_name %}
   ip route {{ route.prefix }} {{ route.nexthop }}
 {%- endfor %}
-{%- set gpo = (group_policy | default({}) or {}).get('vrfs', {}).get(mapping.vrf_name) %}
+{%- if group_policy %}
+{%- set gpo = group_policy.vrfs.get(mapping.vrf_name) %}
 {%- if gpo %}
 {%- for contract in gpo.contracts %}
   ! {{ contract.src_name }} -> {{ contract.dst_name }}
@@ -56,6 +57,7 @@ vrf context {{ mapping.vrf_name }}
 {%- else %}
   ! documented-not-lab-verified: the guide gives no range or meaning for the enforce tag; the unclassified group id is used
   security enforce tag {{ gpo.enforce_tag }} default deny
+{%- endif %}
 {%- endif %}
 {%- endif %}
   address-family ipv4 unicast

@@ -73,8 +73,10 @@ own data center, cut to the VRFs the device carries. Every VTEP of the data
 center renders the same text for a VRF (class-maps, policy-maps, contracts);
 only the ``match vlan`` selectors differ, since a VLAN ID is per VLAN domain.
 It renders nothing (None) unless the data center is a reference fabric of a
-kind with a renderer, and refuses a row it cannot number
-(``... refusing unprotected config``).
+kind with a renderer, and refuses a row it cannot number, a tag shared by two
+segments and a group named like a pseudo-group (``... refusing unprotected
+config``). A VRF is left unenforced, with the reason as a comment, while a group
+it names or a tenant segment it holds on the device has no classifier.
 """
 
 from __future__ import annotations
@@ -82,6 +84,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
 from itertools import product
@@ -484,10 +487,20 @@ class DataCenterContracts:
     rows: list[Any]
 
 
-def data_center_contracts(roots: dict[str, Any], dc_id: str) -> DataCenterContracts:
-    """The groups and contract rows of one data center (``roots``: cleaned query data)."""
+def data_center_contracts(
+    roots: dict[str, Any], dc_id: str, *, fleet: dict[str, list[dict[str, Any]]] | None = None
+) -> DataCenterContracts:
+    """The groups and contract rows of one data center (``roots``: cleaned query data).
+
+    ``fleet`` is the fleet's VTEPs by data center (``vteps_by_data_center``) when the caller has
+    already derived it from ``roots``.
+    """
     profiles, _problems = profiles_by_platform(roots.get("DcimGroupPolicyProfile") or [])
-    vteps_of = vteps_by_data_center(roots.get("TopologyDataCenter") or [], roots.get("TopologyPod") or [])
+    vteps_of = (
+        fleet
+        if fleet is not None
+        else vteps_by_data_center(roots.get("TopologyDataCenter") or [], roots.get("TopologyPod") or [])
+    )
     vteps = vteps_of.get(dc_id, [])
     all_segments = roots.get("ManagedNetworkSegment") or []
     tags = roots.get("SecurityTag") or []
@@ -518,6 +531,10 @@ def data_center_contracts(roots: dict[str, Any], dc_id: str) -> DataCenterContra
 # Device view (NX-OS VTEP configs)
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Device view (NX-OS VTEP configs)
+# ---------------------------------------------------------------------------
+
 GPO_RENDERERS: dict[str, frozenset[str]] = {"vxlan_gpo": frozenset({"cisco_nxos"})}
 """Group-policy kind -> the netmiko platforms whose device templates render it (like
 BaseDeviceTransform._BORDER_LEAF_ACL_PLATFORMS). A reference site of a kind with no
@@ -525,17 +542,19 @@ renderer here (EOS segment_security) renders nothing on its devices."""
 
 _UNVERIFIED = "documented-not-lab-verified"
 _RESERVED_LABELS = {UNCLASSIFIED: "UNCLASSIFIED", UNAWARE: "UNAWARE"}
+_RESERVED_NAMES = frozenset({UNCLASSIFIED, UNAWARE, FALLBACK})
 
-# Class-map match lines per (protocol, has ports), from ONE table. A tcp/udp entry
-# with a port is D (the guide's `match ipv4|ipv6 tcp dport N [to M]`, the lines are
-# built in _entry_lines); the rest is the guide's silence (spec 4.3/4.12: the sample
-# `show run` prints `match ip tcp` / `match ip udp`; icmp and a permit-all class
-# are not documented), so every use is marked and carries the reason.
-_UNVERIFIED_CLASS_LINES: dict[str, str] = {
-    "tcp": "match ip tcp",
-    "udp": "match ip udp",
-    "icmp": "match ip icmp",
-    "any": "match ip",
+# Class-map match line per protocol of an entry without ports, from ONE table, with why it
+# is not verified. A tcp/udp entry with a port is D (the guide's `match ipv4|ipv6 tcp dport N
+# [to M]`, built in _class_map); the rest is the guide's silence (spec 4.1/4.3/4.12): the
+# sample `show run` prints `match ip tcp` / `match ip udp` without saying how to configure
+# them, and icmp and a permit-all class are not documented at all. None of these forms has
+# an ipv6 variant, so IPv6 for such an entry is denied by the VRF's default deny.
+_UNVERIFIED_CLASS_LINES: dict[str, tuple[str, str]] = {
+    "tcp": ("match ip tcp", "only in the guide's sample show running-config"),
+    "udp": ("match ip udp", "only in the guide's sample show running-config"),
+    "icmp": ("match ip icmp", "not in the guide"),
+    "any": ("match ip", "not in the guide"),
 }
 _FAMILIES = ("ipv4", "ipv6")
 
@@ -548,12 +567,15 @@ def _refuse(who: str, why: str) -> ValueError:
     return ValueError(f"{who}: {why}; refusing unprotected config")
 
 
+def _port_span(start: int, end: int | None, separator: str) -> str:
+    """``443`` for a single port, ``8000<separator>8010`` for a range."""
+    return f"{start}" if end in (None, start) else f"{start}{separator}{end}"
+
+
 def _entry_text(entry: dict[str, Any]) -> str:
     """``tcp/443``, ``udp/5000-5010``, ``tcp`` (port-less), ``any``."""
-    protocol, start, end = entry["protocol"], entry["port_start"], entry["port_end"]
-    if start is None:
-        return protocol
-    return f"{protocol}/{start}" if end in (None, start) else f"{protocol}/{start}-{end}"
+    protocol, start = entry["protocol"], entry["port_start"]
+    return protocol if start is None else f"{protocol}/{_port_span(start, entry['port_end'], '-')}"
 
 
 def class_map_name(entries: Iterable[dict[str, Any]]) -> str:
@@ -571,16 +593,17 @@ def _class_map(who: str, entries: list[dict[str, Any]]) -> dict[str, Any]:
     notes: list[str] = []
     for entry in sorted(entries, key=_entry_key):
         protocol, start, end = entry["protocol"], entry["port_start"], entry["port_end"]
-        if protocol not in _UNVERIFIED_CLASS_LINES:
-            raise _refuse(who, f"protocol {protocol!r} has no class-map form")
         if protocol in ("tcp", "udp") and start is not None:
             if end is not None and end < start:
                 raise _refuse(who, f"{protocol} port range {start}-{end} ends before it starts")
-            ports = f"{start}" if end in (None, start) else f"{start} to {end}"
-            lines.extend(f"match {family} {protocol} dport {ports}" for family in _FAMILIES)
+            lines.extend(f"match {family} {protocol} dport {_port_span(start, end, ' to ')}" for family in _FAMILIES)
         else:
-            lines.append(_UNVERIFIED_CLASS_LINES[protocol])
-            notes.append(f"`{_UNVERIFIED_CLASS_LINES[protocol]}` for {_entry_text(entry)} is not in the guide's syntax")
+            line, why = _UNVERIFIED_CLASS_LINES[protocol]
+            lines.append(line)
+            notes.append(
+                f"`{line}` for {_entry_text(entry)} is {why}; it has no ipv6 form here, "
+                "so IPv6 for this entry is denied by the default deny (fail closed)"
+            )
     return {
         "name": class_map_name(entries),
         "entries": ", ".join(_entry_text(entry) for entry in sorted(entries, key=_entry_key)),
@@ -589,34 +612,157 @@ def _class_map(who: str, entries: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def bidir_pairs(rows: Iterable[dict[str, Any]]) -> list[tuple[str | None, str, str]]:
-    """(vrf, a, b) of every pair with a row each way, a < b: two ``bidir`` contracts on one pair."""
-    found = {(row["vrf"], row["src"], row["dst"]) for row in rows}
-    return sorted((vrf, src, dst) for vrf, src, dst in found if src < dst and (vrf, dst, src) in found)
-
-
-def _data_center_of(roots: dict[str, Any], device_name: str) -> str | None:
-    """The one data center whose VTEPs (its own and its pods') include the device, else None."""
-    vteps_of = vteps_by_data_center(roots.get("TopologyDataCenter") or [], roots.get("TopologyPod") or [])
-    found = [dc_id for dc_id, vteps in vteps_of.items() if any(vtep.get("name") == device_name for vtep in vteps)]
-    return found[0] if len(found) == 1 else None
-
-
-def _reference_dc(roots: dict[str, Any], device_name: str, platform: str) -> tuple[str, str] | None:
-    """(data center id, kind) when the device sits in a reference fabric whose kind this platform renders."""
-    profiles, _problems = profiles_by_platform(roots.get("DcimGroupPolicyProfile") or [])
-    if not profiles or not (dc_id := _data_center_of(roots, device_name)):
-        return None
-    vteps = vteps_by_data_center(roots.get("TopologyDataCenter") or [], roots.get("TopologyPod") or [])[dc_id]
-    kind = site_kind(vteps, profiles)
-    if site_reason(vteps, profiles) is not None or kind is None or platform not in GPO_RENDERERS.get(kind, ()):
-        return None
-    return dc_id, kind
-
-
 def _cli_name(name: str) -> str:
     """A SecurityTag name as a CLI-safe group name: ``[A-Za-z0-9_-]`` (the guide's examples; its rules are U)."""
     return re.sub(r"[^A-Za-z0-9_-]", "_", name)
+
+
+def _label(name: str) -> str:
+    return _RESERVED_LABELS.get(name) or _cli_name(name)
+
+
+def _gpo_data_center(
+    roots: dict[str, Any], device_name: str, platform: str
+) -> tuple[str, str, dict[str, list[dict[str, Any]]]] | None:
+    """(data center id, group-policy kind, the fleet's VTEPs by data center) of a device that sits in a reference fabric
+    whose kind this platform renders, else None.
+
+    The cheap gate, before the contracts are built: a fleet of old fixtures has no profile rows, and most
+    data centers are no reference fabric. The device must be a VTEP of exactly one data center.
+    """
+    profiles, _problems = profiles_by_platform(roots.get("DcimGroupPolicyProfile") or [])
+    if not profiles:
+        return None
+    fleet = vteps_by_data_center(roots.get("TopologyDataCenter") or [], roots.get("TopologyPod") or [])
+    found = [dc_id for dc_id, vteps in fleet.items() if any(vtep.get("name") == device_name for vtep in vteps)]
+    if len(found) != 1:
+        return None
+    vteps = fleet[found[0]]
+    kind = site_kind(vteps, profiles)
+    if site_reason(vteps, profiles) is not None or kind is None or platform not in GPO_RENDERERS.get(kind, ()):
+        return None
+    return found[0], kind, fleet
+
+
+def _refuse_ambiguous_groups(who: str, groups: Iterable[Group]) -> None:
+    """A tag shared by two segments or named like a pseudo-group would collapse into one entry of the views."""
+    first: dict[str, Group] = {}
+    for group in groups:
+        if group.name.lower() in _RESERVED_NAMES:
+            raise _refuse(who, f"group {group.name!r} is named like the reserved pseudo-group {group.name.upper()}")
+        other = first.setdefault(group.name, group)
+        if (other.segment, other.vrf) != (group.segment, group.vrf):
+            raise _refuse(
+                who,
+                f"group {group.name!r} is the tag of segment {other.segment} (VRF {other.vrf}) "
+                f"and of segment {group.segment} (VRF {group.vrf})",
+            )
+
+
+def _validate_group_ids(
+    who: str, rows: list[dict[str, Any]], defined: set[str], by_name: dict[str, Group]
+) -> dict[str, int]:
+    """Group name -> its ID for every group the rows name or the VRFs define; refuses what cannot be numbered.
+
+    A group without an ID (tag or profile reserved group not allocated), two groups on one ID and two groups
+    with one CLI name are refused. A row end carries the ID the view gave it (a reserved group's, a stretched
+    group's unaware half).
+    """
+    named_ids: dict[str, int | None] = {name: by_name[name].group_id for name in defined}
+    for row in rows:
+        named_ids[row["src"]], named_ids[row["dst"]] = row["src_group_id"], row["dst_group_id"]
+    group_ids: dict[str, int] = {}
+    for name, group_id in sorted(named_ids.items()):
+        if group_id is None:
+            raise _refuse(who, f"group {name} has no group id (tag or profile reserved group not allocated)")
+        group_ids[name] = group_id
+    by_id: dict[int, set[str]] = {}
+    for name, group_id in group_ids.items():
+        by_id.setdefault(group_id, set()).add(name)
+    for group_id, names in sorted(by_id.items()):
+        if len(names) > 1:
+            raise _refuse(who, f"groups {sorted(names)} share group id {group_id}")
+    safe: dict[str, str] = {}
+    for name in sorted(defined):
+        if safe.setdefault(_cli_name(name), name) != name:
+            raise _refuse(
+                who, f"groups {safe[_cli_name(name)]!r} and {name!r} share the group name {_cli_name(name)!r}"
+            )
+    return group_ids
+
+
+def _selectors(
+    contracts: DataCenterContracts, activations: Iterable[dict[str, Any]]
+) -> tuple[dict[str, int], dict[str, set[str]]]:
+    """(group name -> this device's VLAN of its segment, VRF -> segments with no such classifier).
+
+    A routed tenant segment activated on the device is classified by ``match vlan`` only when it has a
+    group and a VLAN here and is not inline-terminated (pure L2 on a fabric switch).
+    """
+    segments = {str(segment.get("id")): segment for segment in contracts.all_segments}
+    selectors: dict[str, int] = {}
+    unclassified: dict[str, set[str]] = {}
+    for activation in activations:
+        segment = activation.get("segment") or {}
+        groups = contracts.by_segment.get(str(segment.get("id")))
+        if groups and activation.get("vlan_id") and not is_inline_terminated(segment):
+            selectors[groups[0].name] = int(activation["vlan_id"])
+        elif (found := segments.get(str(segment.get("id")))) is not None and is_routed_tenant_segment(found):
+            unclassified.setdefault(segment_vrf(found) or "", set()).add(str(found.get("name")))
+    return selectors, unclassified
+
+
+def _vrf_view(
+    who: str,
+    vrf: str,
+    vrf_rows: list[dict[str, Any]],
+    *,
+    by_name: dict[str, Group],
+    group_ids: dict[str, int],
+    unclassified_id: int | None,
+    no_classifier: set[str],
+) -> dict[str, Any]:
+    """The contracts and the enforcement of one VRF (``vxlan_gpo_device_view``)."""
+    vrf_rows = sorted(vrf_rows, key=lambda row: (row["src_group_id"], row["dst_group_id"]))
+    forward = {(row["src"], row["dst"]) for row in vrf_rows}
+    contract_views = []
+    for row in vrf_rows:
+        notes = []
+        for end, label in ((row["src"], "source"), (row["dst"], "destination")):
+            if end == UNCLASSIFIED:
+                notes.append(
+                    f"{_UNVERIFIED}: reserved group {group_ids[end]} (UNCLASSIFIED) as the {label} of a contract; "
+                    "the guide does not define it"
+                )
+        if row["src"] != row["dst"] and (row["dst"], row["src"]) in forward:
+            notes.append(f"{_UNVERIFIED}: two bidir contracts on one pair")
+        contract_views.append(
+            {
+                "src": row["src_group_id"],
+                "dst": row["dst_group_id"],
+                "src_name": _label(row["src"]),
+                "dst_name": _label(row["dst"]),
+                "policy": class_map_name(row["entries"]),
+                "notes": notes,
+            }
+        )
+    components = sorted(
+        {
+            _label(end)
+            for row in vrf_rows
+            for end in (row["src"], row["dst"])
+            if end in by_name and by_name[end].kind == "component"
+        }
+    )
+    reasons = [f"component groups {', '.join(components)} have no classifier until D2"] if components else []
+    reasons += [f"segment {name} has no group classifier on this device" for name in sorted(no_classifier)]
+    if not reasons and unclassified_id is None:
+        raise _refuse(who, f"VRF {vrf} is enforced but the profile names no unclassified group id")
+    return {
+        "contracts": contract_views,
+        "unenforced": "; ".join(reasons) or None,
+        "enforce_tag": None if reasons else unclassified_id,
+    }
 
 
 def vxlan_gpo_device_view(
@@ -639,16 +785,20 @@ def vxlan_gpo_device_view(
     None unless the role is a data-center VTEP, the device sits in exactly one
     data center, that data center is a reference fabric (utils/group_policy)
     and its kind has a renderer for the platform (``GPO_RENDERERS``).
-    A VRF is enforced (``security enforce``, deny by default) only when its
-    contracts name segment groups alone, which a ``match vlan`` classifies; a
-    component group has no classifier until the component selectors exist (D2),
-    so a VRF naming one gets its groups and contracts but is left unenforced.
+    A VRF is enforced (``security enforce``, deny by default) only when every
+    group its contracts name and every routed tenant segment it holds on this
+    device is classified: a component group has no classifier until the
+    component selectors exist (D2), and a segment activated here without a
+    group or a VLAN has none either. Such a VRF gets its groups and contracts
+    but is left unenforced, with the reason.
     """
-    if role not in DC_VTEP_ROLES or not (found := _reference_dc(roots, device_name, platform)):
+    found = _gpo_data_center(roots, device_name, platform) if role in DC_VTEP_ROLES else None
+    if found is None:
         return None
-    dc_id, kind = found
+    dc_id, kind, fleet = found
     who = f"{platform} {role} {device_name}"
-    contracts = data_center_contracts(roots, dc_id)
+    contracts = data_center_contracts(roots, dc_id, fleet=fleet)
+    _refuse_ambiguous_groups(who, contracts.all_groups)
     reserved = reserved_groups(contracts.profiles, kind)
     view = vxlan_gpo_view(
         contracts.all_groups,
@@ -658,53 +808,28 @@ def vxlan_gpo_device_view(
         local=contracts.local_names,
     )
     on_device = set(vrfs)
-    rows = [row for row in view["contracts"] if row["vrf"] in on_device]
+    rows_by_vrf: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in view["contracts"]:
+        if row["vrf"] in on_device:
+            rows_by_vrf[row["vrf"]].append(row)
+    if not rows_by_vrf:
+        return None
+    rows = [row for vrf_rows in rows_by_vrf.values() for row in vrf_rows]
     by_name = {group.name: group for group in contracts.all_groups}
-    rendered_vrfs = {row["vrf"] for row in rows}
 
     # Every group the VRFs hold on this data center must be defined: an enforced
     # VRF denies what no selector classified, so a rule-less segment would lose
     # its own intra-group traffic.
     defined = {row[end] for row in rows for end in ("src", "dst") if row[end] in by_name}
-    defined |= {group.name for group in contracts.local if group.vrf in rendered_vrfs}
-    named_ids: dict[str, int | None] = {name: by_name[name].group_id for name in defined}
-    for row in rows:
-        named_ids[row["src"]], named_ids[row["dst"]] = row["src_group_id"], row["dst_group_id"]
-    group_ids: dict[str, int] = {}
-    for name, group_id in sorted(named_ids.items()):
-        if group_id is None:
-            raise _refuse(who, f"group {name} has no group id (tag or profile reserved group not allocated)")
-        group_ids[name] = group_id
-    by_id: dict[int, set[str]] = {}
-    for name, group_id in group_ids.items():
-        by_id.setdefault(group_id, set()).add(name)
-    for group_id, names in sorted(by_id.items()):
-        if len(names) > 1:
-            raise _refuse(who, f"groups {sorted(names)} share group id {group_id}")
-    safe: dict[str, str] = {}
-    for name in sorted(defined):
-        if safe.setdefault(_cli_name(name), name) != name:
-            raise _refuse(
-                who, f"groups {safe[_cli_name(name)]!r} and {name!r} share the group name {_cli_name(name)!r}"
-            )
-
-    def _label(name: str) -> str:
-        return _RESERVED_LABELS.get(name) or _cli_name(name)
+    defined |= {group.name for group in contracts.local if group.vrf in rows_by_vrf}
+    group_ids = _validate_group_ids(who, rows, defined, by_name)
 
     class_maps: dict[str, dict[str, Any]] = {}
-    row_policy: dict[tuple[str, str, str], str] = {}
     for row in rows:
         class_map = _class_map(who, row["entries"])
         class_maps.setdefault(class_map["name"], class_map)
-        row_policy[(row["vrf"], row["src"], row["dst"])] = class_map["name"]
 
-    selectors: dict[str, int] = {}
-    for activation in activations:
-        segment = activation.get("segment") or {}
-        groups = contracts.by_segment.get(str(segment.get("id")))
-        if groups and activation.get("vlan_id") and not is_inline_terminated(segment):
-            selectors[groups[0].name] = int(activation["vlan_id"])
-
+    selectors, unclassified = _selectors(contracts, activations)
     group_defs = []
     for name in sorted(defined, key=lambda item: group_ids[item]):
         group = by_name[name]
@@ -718,56 +843,19 @@ def vxlan_gpo_device_view(
             )
         group_defs.append({"id": group_ids[name], "name": _label(name), "vlan_id": selectors.get(name), "notes": notes})
 
-    pairs = {(vrf, src, dst) for vrf, a, b in bidir_pairs(rows) for src, dst in ((a, b), (b, a))}
-    vrf_views: dict[str, dict[str, Any]] = {}
-    for vrf in sorted(rendered_vrfs):
-        vrf_rows = sorted(
-            (row for row in rows if row["vrf"] == vrf), key=lambda row: (row["src_group_id"], row["dst_group_id"])
-        )
-        contract_views = []
-        for row in vrf_rows:
-            notes = []
-            for end, label in ((row["src"], "source"), (row["dst"], "destination")):
-                if end == UNCLASSIFIED:
-                    notes.append(
-                        f"{_UNVERIFIED}: reserved group {group_ids[end]} (UNCLASSIFIED) as the {label} of a contract; "
-                        "the guide does not define it"
-                    )
-            if (vrf, row["src"], row["dst"]) in pairs:
-                notes.append(f"{_UNVERIFIED}: two bidir contracts on one pair")
-            contract_views.append(
-                {
-                    "src": row["src_group_id"],
-                    "dst": row["dst_group_id"],
-                    "src_name": _label(row["src"]),
-                    "dst_name": _label(row["dst"]),
-                    "policy": row_policy[(vrf, row["src"], row["dst"])],
-                    "notes": notes,
-                }
-            )
-        components = sorted(
-            {
-                _label(end)
-                for row in vrf_rows
-                for end in (row["src"], row["dst"])
-                if end in by_name and by_name[end].kind == "component"
-            }
-        )
-        if not components and reserved["unclassified"] is None:
-            raise _refuse(who, f"VRF {vrf} is enforced but the profile names no unclassified group id")
-        vrf_views[vrf] = {
-            "contracts": contract_views,
-            "unenforced": f"component groups {', '.join(components)} have no classifier until D2"
-            if components
-            else None,
-            "enforce_tag": None if components else reserved["unclassified"],
-        }
-
-    if not vrf_views:
-        return None
     return {
-        "kind": kind,
         "class_maps": [class_maps[name] for name in sorted(class_maps)],
         "groups": group_defs,
-        "vrfs": vrf_views,
+        "vrfs": {
+            vrf: _vrf_view(
+                who,
+                vrf,
+                vrf_rows,
+                by_name=by_name,
+                group_ids=group_ids,
+                unclassified_id=reserved["unclassified"],
+                no_classifier=unclassified.get(vrf, set()),
+            )
+            for vrf, vrf_rows in sorted(rows_by_vrf.items())
+        },
     }

@@ -38,14 +38,14 @@ vlan 220
 !
 ! Group policy (VXLAN GPO): one class-map and policy-map per distinct entry set, then the security groups
 ! GPO-0816a4dbb8: icmp
-! documented-not-lab-verified: `match ip icmp` for icmp is not in the guide's syntax
+! documented-not-lab-verified: `match ip icmp` for icmp is not in the guide; it has no ipv6 form here, so IPv6 for this entry is denied by the default deny (fail closed)
 class-map type security match-any GPO-0816a4dbb8
   match ip icmp
 policy-map type security GPO-0816a4dbb8
   class GPO-0816a4dbb8
     permit
 ! GPO-43fde9701f: any
-! documented-not-lab-verified: `match ip` for any is not in the guide's syntax
+! documented-not-lab-verified: `match ip` for any is not in the guide; it has no ipv6 form here, so IPv6 for this entry is denied by the default deny (fail closed)
 class-map type security match-any GPO-43fde9701f
   match ip
 policy-map type security GPO-43fde9701f
@@ -59,7 +59,7 @@ policy-map type security GPO-478bae982c
   class GPO-478bae982c
     permit
 ! GPO-5310646ef0: icmp, udp/5000
-! documented-not-lab-verified: `match ip icmp` for icmp is not in the guide's syntax
+! documented-not-lab-verified: `match ip icmp` for icmp is not in the guide; it has no ipv6 form here, so IPv6 for this entry is denied by the default deny (fail closed)
 class-map type security match-any GPO-5310646ef0
   match ip icmp
   match ipv4 udp dport 5000
@@ -102,6 +102,7 @@ policy-map type security GPO-f2f210dd03
 !
 ! Security groups: the VLAN selector is this device's own VLAN of the segment; a group without one is
 ! classified on the VTEPs that carry its segment (the group ID travels in the VXLAN header)
+! documented-not-lab-verified: the guide gives no range for the group ids and no rules for the group names (a tag name is rewritten to [A-Za-z0-9_-])
 security-group 40 name web-np
   match vlan 110
 security-group 41 name app-np

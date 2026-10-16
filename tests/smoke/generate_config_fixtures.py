@@ -2,7 +2,7 @@
 """Generate smoke test fixtures (input.json + output.txt) for all config transforms.
 
 Usage:
-    python tests/smoke/generate_config_fixtures.py
+    PYTHONPATH=. uv run python tests/smoke/generate_config_fixtures.py
 
 Creates directories under tests/smoke/configs/ with input.json and output.txt
 for each device-type × platform × scenario combination.
@@ -3122,6 +3122,20 @@ def build_gpo_device_data(
     return {**data, **_gpo_fleet_roots(fleet=fleet, version=version, leaf_type=leaf_type)}
 
 
+def _gpo_golden_leaf_data(*, fleet: dict[str, str], version: str, leaf_type: str | None = None) -> dict:
+    """The leaf of an existing golden config (``ebgp_ibgp``), with the GPO fleet roots appended."""
+    return {
+        **build_device_data(
+            device_name="dc1-leaf-01",
+            role="leaf",
+            platform=fleet["platform"],
+            scenario="ebgp_ibgp",
+            include_segments=True,
+        ),
+        **_gpo_fleet_roots(fleet=fleet, version=version, leaf_type=leaf_type),
+    }
+
+
 GPO_FIXTURES: list[tuple[type, str, Any]] = [
     (
         Leaf,
@@ -3151,32 +3165,14 @@ GPO_FIXTURES: list[tuple[type, str, Any]] = [
     (
         Leaf,
         "leaf_cisco_nxos_gpo_non_reference",
-        lambda: {
-            **build_device_data(
-                device_name="dc1-leaf-01",
-                role="leaf",
-                platform="cisco_nxos",
-                scenario="ebgp_ibgp",
-                include_segments=True,
-            ),
-            **_gpo_fleet_roots(fleet=_GPO_NXOS, version="10.6(3)F", leaf_type="N9K-C9336C-FX2"),
-        },
+        lambda: _gpo_golden_leaf_data(fleet=_GPO_NXOS, version="10.6(3)F", leaf_type="N9K-C9336C-FX2"),
     ),
     # A reference site of another kind (EOS segment_security): no NX-OS renderer applies, and the
     # EOS leaf renders exactly the leaf_arista_eos_ebgp_ibgp config.
     (
         Leaf,
         "leaf_arista_eos_gpo_reference_site",
-        lambda: {
-            **build_device_data(
-                device_name="dc1-leaf-01",
-                role="leaf",
-                platform="arista_eos",
-                scenario="ebgp_ibgp",
-                include_segments=True,
-            ),
-            **_gpo_fleet_roots(fleet=_GPO_EOS, version="4.36.2F"),
-        },
+        lambda: _gpo_golden_leaf_data(fleet=_GPO_EOS, version="4.36.2F"),
     ),
 ]
 

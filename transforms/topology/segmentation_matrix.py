@@ -68,46 +68,43 @@ class SegmentationMatrix(InfrahubTransform):
         dc_id = str(data_center.get("id"))
 
         contracts = data_center_contracts(cleaned, dc_id)
-        profiles, vteps, reason, segments = contracts.profiles, contracts.vteps, contracts.reason, contracts.segments
-        all_segments, tags, all_groups = contracts.all_segments, contracts.tags, contracts.all_groups
-        by_segment, local, local_names, rows = (
-            contracts.by_segment,
-            contracts.local,
-            contracts.local_names,
-            contracts.rows,
-        )
+        profiles, vteps = contracts.profiles, contracts.vteps
         # As this data center would enforce once it is a reference fabric.
         reference_sites = contracts.reference_sites | {dc_id}
-        components_of = tags_by_segment(tags)
+        components_of = tags_by_segment(contracts.tags)
 
         views = {
             "segment_security": segment_security_view(
-                all_groups,
-                rows,
-                {str(segment.get("name")): segment_prefix(segment) for segment in all_segments},
-                local=local_names,
+                contracts.all_groups,
+                contracts.rows,
+                {str(segment.get("name")): segment_prefix(segment) for segment in contracts.all_segments},
+                local=contracts.local_names,
             ),
             "vxlan_gpo": vxlan_gpo_view(
-                all_groups,
-                rows,
+                contracts.all_groups,
+                contracts.rows,
                 reserved=reserved_groups(profiles, "vxlan_gpo"),
                 reference_sites=reference_sites,
-                local=local_names,
+                local=contracts.local_names,
             ),
         }
         kinds = sorted({str(profile["group_policy_kind"]) for profile in profiles.values()} & set(views))
 
         return {
             "deployment": data_center.get("name"),
-            "site": {"reference": reason is None, "kind": site_kind(vteps, profiles), "reason": reason},
+            "site": {
+                "reference": contracts.reason is None,
+                "kind": site_kind(vteps, profiles),
+                "reason": contracts.reason,
+            },
             "vteps": [self._vtep(device, profiles) for device in vteps],
             "segments": [
-                self._segment(segment, by_segment, len(components_of.get(str(segment.get("id")), [])))
-                for segment in segments
+                self._segment(segment, contracts.by_segment, len(components_of.get(str(segment.get("id")), [])))
+                for segment in contracts.segments
             ],
-            "groups": [group.as_dict() for group in local],
-            "classification": self._classification(segments, by_segment, dc_id),
-            "contracts": {"default_action": DEFAULT_ACTION, "replies": REPLIES, "rows": rows},
+            "groups": [group.as_dict() for group in contracts.local],
+            "classification": self._classification(contracts.segments, contracts.by_segment, dc_id),
+            "contracts": {"default_action": DEFAULT_ACTION, "replies": REPLIES, "rows": contracts.rows},
             "kinds": {kind: views[kind] for kind in kinds},
         }
 
