@@ -852,7 +852,6 @@ class TestGoldens:
         ("gpo_fixture", "golden"),
         [
             ("leaf_cisco_nxos_gpo_non_reference", "leaf_cisco_nxos_ebgp_ibgp"),
-            ("leaf_arista_eos_gpo_reference_site", "leaf_arista_eos_ebgp_ibgp"),
         ],
     )
     def test_output_equals_the_existing_golden(self, root_dir: Path, gpo_fixture: str, golden: str) -> None:

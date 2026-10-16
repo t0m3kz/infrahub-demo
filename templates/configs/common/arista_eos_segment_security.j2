@@ -1,0 +1,94 @@
+{#- EOS Segment Security (MSS-G, `router segment-security`): match-lists, field-sets, applications, the feature.
+
+    `segment_security` (transforms/helpers/group_policy.py segment_security_device_view) is set only on a
+    VTEP of a reference fabric that has a VRF with a segment to define; every block here is guarded by it, so
+    a device without one renders exactly as before. Order (spec): global match-lists (one per segment, the
+    segment's gateway prefix), field-sets and application traffic recognition (custom policies only), then
+    `router segment-security`: the feature switch, the policies, and per VRF the segments with their
+    definition and `from <source segment> policy <policy>` lines under the DESTINATION segment.
+    Evidence: D is the EOS 4.36.2F manual (match-lists, segments, built-in policies, no shutdown); the custom
+    policies, application l4, field-set l4-port, fallback policy come from Arista's AVD only, the rest is
+    inferred; every such line says documented-not-lab-verified.
+    Never rendered: `no segment policy policy-drop-all default` (removes deny by default for the whole box),
+    redirect, log, `match interface`, uRPF. The anycast-gateway SVI ACL and PBR stay as they are. -#}
+{%- if segment_security and (segment_security.vrfs or segment_security.skipped) %}
+!
+! Segment security (Arista MSS-G): segments by prefix, policies under the destination segment, deny by default
+{%- if segment_security.staged %}
+! {{ segment_security.staged }}
+{%- endif %}
+! documented-not-lab-verified: whether the lookup sees the inner IP of VXLAN-decapsulated traffic (spec 1.14, 5.1)
+! documented-not-lab-verified: ordering against the SVI ACL and PBR (spec 1.15) and for bridged traffic inside a VLAN (spec 4.3)
+! documented-not-lab-verified: no TCAM profile or reload is configured (spec 1.10, 1.12); enabling halves the LPM table
+! documented-not-lab-verified: the manual calls the configuration non-atomic and disruptive (spec 1.8): push in a maintenance window
+{%- for skipped in segment_security.skipped %}
+! VRF {{ skipped.vrf }} is not rendered: {{ skipped.reason }}
+{%- endfor %}
+{%- for text in segment_security.unsupported %}
+! not expressible (left closed): {{ text }}
+{%- endfor %}
+{%- if segment_security.vrfs %}
+{%- for match_list in segment_security.match_lists %}
+match-list input prefix-{{ match_list.family }} {{ match_list.name }}
+   match prefix-{{ match_list.family }} {{ match_list.prefix }}
+{%- endfor %}
+{%- for field_set in segment_security.field_sets %}
+! documented-not-lab-verified: field-set l4-port is documented in AVD only
+field-set l4-port {{ field_set.name }}
+   {{ field_set.ports }}
+{%- endfor %}
+{%- if segment_security.applications %}
+! documented-not-lab-verified: application traffic recognition is documented in AVD only
+application traffic recognition
+{%- for application in segment_security.applications %}
+   application l4 {{ application.name }}
+{%- if application.field_set %}
+      protocol {{ application.protocol }} {{ application.port_side }} port field-set {{ application.field_set }}
+{%- else %}
+      protocol {{ application.protocol }}
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+!
+router segment-security
+{%- if segment_security.enforce %}
+   no shutdown
+{%- else %}
+   shutdown
+{%- endif %}
+{%- for policy in segment_security.policies %}
+{%- if loop.first %}
+   ! documented-not-lab-verified: custom policies are AVD's model (the 4.36.2F manual lists only policy-forward-all and policy-drop-all); the final drop of each is inferred
+{%- endif %}
+   ! {{ policy.name }}: {{ policy.text }}
+   policy {{ policy.name }}
+{%- for line in policy.lines %}
+      {{ line.seq }} application {{ line.application }} action {{ line.action }}
+{%- endfor %}
+{%- endfor %}
+{%- for vrf in segment_security.vrfs %}
+   vrf {{ vrf.name }}
+{%- for segment in vrf.segments %}
+{%- if segment.remote %}
+      ! documented-not-lab-verified: defined only because a policy of this device names it (a remote segment, spec 5.2)
+{%- endif %}
+      segment {{ segment.name }}
+         definition
+            match prefix-{{ segment.family }} {{ segment.match_list }}
+{%- if segment.froms or segment.fallback %}
+         policies
+{%- for note in segment.notes %}
+            ! {{ note }}
+{%- endfor %}
+{%- for entry in segment.froms %}
+            from {{ entry.source }} policy {{ entry.policy }}
+{%- endfor %}
+{%- if segment.fallback %}
+            fallback policy {{ segment.fallback }}
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+{%- endfor %}
+{%- endif %}
+!
+{%- endif -%}

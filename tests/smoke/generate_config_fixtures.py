@@ -3329,12 +3329,54 @@ GPO_FIXTURES: list[tuple[type, str, Any]] = [
         "leaf_cisco_nxos_gpo_non_reference",
         lambda: _gpo_golden_leaf_data(fleet=_GPO_NXOS, version="10.6(3)F", leaf_type="N9K-C9336C-FX2"),
     ),
-    # A reference site of another kind (EOS segment_security): no NX-OS renderer applies, and the
-    # EOS leaf renders exactly the leaf_arista_eos_ebgp_ibgp config.
+    # A reference site of the EOS kind (segment_security, MSS-G): the same fleet as the NX-OS ones, on 7280R3
+    # VTEPs at 4.36.2F. The leaf renders the MSS-G block (enforcing), a staged DC10 renders it shut down.
     (
         Leaf,
         "leaf_arista_eos_gpo_reference_site",
-        lambda: _gpo_golden_leaf_data(fleet=_GPO_EOS, version="4.36.2F"),
+        lambda: build_gpo_device_data(
+            device_name="dc1-leaf-01",
+            role="leaf",
+            segments=("web-np", "app-np", "pay-p", "portal-p"),
+            host_ports={"Ethernet11": _GPO_PAY_DB_TAGS},
+            fleet=_GPO_EOS,
+            version="4.36.2F",
+        ),
+    ),
+    (
+        Leaf,
+        "leaf_arista_eos_gpo_reference_staged",
+        lambda: build_gpo_device_data(
+            device_name="dc1-leaf-01",
+            role="leaf",
+            segments=("web-np", "app-np", "pay-p", "portal-p"),
+            host_ports={"Ethernet11": _GPO_PAY_DB_TAGS},
+            fleet=_GPO_EOS,
+            version="4.36.2F",
+            enforce=False,
+        ),
+    ),
+    (
+        AccessLeaf,
+        "access_leaf_arista_eos_gpo_reference",
+        lambda: build_gpo_device_data(
+            device_name="dc1-access-leaf-01",
+            role="access-leaf",
+            segments=("app-np", "db-np", "portal-p"),
+            fleet=_GPO_EOS,
+            version="4.36.2F",
+        ),
+    ),
+    (
+        BorderLeaf,
+        "border_leaf_arista_eos_gpo_reference",
+        lambda: build_gpo_device_data(
+            device_name="dc1-border-leaf-01",
+            role="border-leaf",
+            segments=tuple(name for name, *_rest in _GPO_SEGMENTS),
+            fleet=_GPO_EOS,
+            version="4.36.2F",
+        ),
     ),
 ]
 
@@ -3800,7 +3842,7 @@ def main() -> int:
     errors += e
 
     # NX-OS VXLAN GPO: a reference fabric's VTEPs render the group policy, any other device nothing.
-    print("\nGenerating the NX-OS GPO device fixtures:")
+    print("\nGenerating the NX-OS and EOS group policy device fixtures:")
     for transform_cls, dir_name, build in GPO_FIXTURES:
         g, e = _write_data_fixture(transform_cls, dir_name, build())
         generated += g

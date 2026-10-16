@@ -16,7 +16,7 @@ from transforms.helpers.firewall import (
     get_exchange_transits,
     get_leaf_firewall_transits,
 )
-from transforms.helpers.group_policy import vxlan_gpo_device_view
+from transforms.helpers.group_policy import GPO_CONFIG_KEYS, group_policy_device_view
 from transforms.helpers.ha import _HA_TYPENAMES
 from transforms.helpers.loadbalancer_pbr import _flatten_deployment_lb_vips, get_lb_backend_pbr_rules
 from transforms.helpers.management import get_management_services
@@ -380,10 +380,10 @@ class BaseDeviceTransform(InfrahubTransform):
             # so only the borders originate them as type-5 routes.
             "leaf_transit_prefixes": sorted({t["segment"]["gateway"]["ip_prefix"]["prefix"] for t in leaf_transits}),
         }
-        # Group policy (NX-OS VXLAN GPO) of a VTEP in a reference fabric, from the
-        # fleet roots of the device query; absent for every other device, so its
-        # templates render exactly as before.
-        group_policy = vxlan_gpo_device_view(
+        # Group policy of a VTEP in a reference fabric, from the fleet roots of the device query:
+        # NX-OS VXLAN GPO as `group_policy`, EOS MSS-G as `segment_security`. Absent for every other
+        # device, so its templates render exactly as before.
+        found = group_policy_device_view(
             extra_roots or {},
             device_name=data.get("name") or "",
             role=self.device_role,
@@ -392,8 +392,9 @@ class BaseDeviceTransform(InfrahubTransform):
             vrfs=[mapping["vrf_name"] for mapping in (vxlan or {}).get("l3_vni_mappings", [])],
             interfaces=data.get("interfaces") or [],
         )
-        if group_policy is not None:
-            config["group_policy"] = group_policy
+        if found is not None:
+            kind, view = found
+            config[GPO_CONFIG_KEYS[kind]] = view
         return config
 
     _LEAF_ROLES = frozenset({"leaf", "tor", "access-leaf"})

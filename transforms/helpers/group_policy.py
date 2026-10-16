@@ -60,15 +60,22 @@ Platform views map the neutral rows onto one enforcement model:
 - ``segment_security_view`` (EOS MSS-G): segments by prefix, policies under
   the destination segment (``from <source>``), UNCLASSIFIED as the
   destination's fallback policy. MSS-G classifies remote sources by prefix
-  too, so it needs no unaware group; it only enforces traffic to a segment, so
-  rows to UNCLASSIFIED are dropped; component groups inside one segment are
-  not expressible by prefix and are listed as unsupported.
+  too, so it needs no unaware group, but every segment a ``from`` line names
+  must be defined, so the view lists the local segments and every segment a
+  listed row names. It only enforces traffic to a segment, so a row to
+  UNCLASSIFIED is no policy; it is kept per source segment as ``to_unclassified``
+  because MSS-G is stateless and the reply of such a flow is traffic from
+  UNCLASSIFIED to that segment. A prefix cannot tell a component from its
+  segment, so a row that names a component group on either side is
+  ``unsupported`` (never widened to the whole segment: that would be fail-open).
 
 Rows are forward only: replies are the renderer's (``REPLIES``). Sorted,
 de-duplicated and id-free.
 
-``vxlan_gpo_device_view`` is the device renderers' reader of the same contracts
-(NX-OS VTEP configs, ``GPO_RENDERERS``): the ``vxlan_gpo_view`` of the device's
+The device renderers read the same contracts through one dispatcher, ``group_policy_device_view``
+(the gate, the data center's contracts once, then the builder of the data center's kind, ``GPO_RENDERERS``):
+``vxlan_gpo_device_view`` for NX-OS and ``segment_security_device_view`` for EOS MSS-G (their
+docstrings say how). ``vxlan_gpo_device_view`` is the NX-OS VTEP configs' reader: the ``vxlan_gpo_view`` of the device's
 own data center, cut to the VRFs the device carries (a VTEP with none of them still
 enables GPO, with no groups or contracts). Every VTEP of the data
 center renders the same class-maps, policy-maps and contracts for a VRF; only the
@@ -106,6 +113,7 @@ import re
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
+from ipaddress import ip_network
 from itertools import product
 from typing import Any
 
@@ -127,6 +135,7 @@ from utils.group_policy import (
     tags_by_segment,
     vteps_by_data_center,
 )
+from utils.segment_addressing import segment_prefix
 
 UNCLASSIFIED = "unclassified"
 """Pseudo-group of every endpoint no selector classifies (service and transit legs, outside the VRF's segments)."""
@@ -425,25 +434,36 @@ def segment_security_view(
     """The contract set as MSS-G segments by prefix, policies under the destination (module docstring).
 
     ``groups`` are every group the rows name, ``local`` the segment groups to
-    list (None: all); ``prefixes``: segment name -> its gateway prefix (the
-    segment's definition). A component group counts as its segment (its hosts
-    are in the segment's prefix).
+    list (None: all) besides every segment a row names (a ``from`` line needs its
+    source defined); ``prefixes``: segment name -> its gateway prefix (the
+    segment's definition). A row that names a component group is unsupported.
     """
     by_name = {group.name: group for group in groups}
     segment_group = {group.segment: group.name for group in by_name.values() if group.kind == "segment"}
     policies: dict[tuple[str, str], tuple[set[Entry], set[str]]] = {}
+    outbound: dict[str, tuple[set[Entry], set[str]]] = {}
     unsupported: list[dict[str, Any]] = []
     for row in rows:
         dst, src = by_name.get(row["dst"]), by_name.get(row["src"])
         if dst is None:
+            # A row to UNCLASSIFIED: no MSS-G hook, but its reply is a fallback of the source segment.
+            if src is not None and src.kind == "segment":
+                entries, rules = outbound.setdefault(src.name, (set(), set()))
+                entries.update((item["protocol"], item["port_start"], item["port_end"]) for item in row["entries"])
+                rules.update(row["rules"])
             continue
-        if src is not None and src.segment == dst.segment and "component" in (src.kind, dst.kind):
+        if "component" in (dst.kind, src.kind if src else None):
+            same_segment = src is not None and src.segment == dst.segment
             unsupported.append(
                 {
                     "src": row["src"],
                     "dst": row["dst"],
                     "rules": row["rules"],
-                    "reason": "component groups inside one segment are not expressible by prefix",
+                    "reason": (
+                        "component groups inside one segment are not expressible by prefix"
+                        if same_segment
+                        else "a component group is not expressible by prefix (the row is not widened to its segment)"
+                    ),
                 }
             )
             continue
@@ -463,8 +483,17 @@ def segment_security_view(
         found = policies.get((segment, FALLBACK))
         return {"entries": _entries(found[0]), "rules": sorted(found[1])} if found else None
 
+    def _to_unclassified(segment: str) -> dict[str, Any] | None:
+        found = outbound.get(segment)
+        return {"entries": _entries(found[0]), "rules": sorted(found[1])} if found else None
+
+    named = {name for pair in policies for name in pair} | set(outbound)
     listed = sorted(
-        (group for group in by_name.values() if group.kind == "segment" and (local is None or group.name in local)),
+        (
+            group
+            for group in by_name.values()
+            if group.kind == "segment" and (local is None or group.name in local or group.name in named)
+        ),
         key=lambda group: group.name,
     )
     return {
@@ -478,6 +507,7 @@ def segment_security_view(
                 "intra_segment": group.intra_group,
                 "policies": _policies(group.name),
                 "fallback": _fallback(group.name),
+                "to_unclassified": _to_unclassified(group.name),
             }
             for group in listed
         ],
@@ -561,17 +591,19 @@ def data_center_contracts(
 
 
 # ---------------------------------------------------------------------------
-# Device view (NX-OS VTEP configs)
+# Device views (VTEP configs): one dispatcher, one builder per group-policy kind
 # ---------------------------------------------------------------------------
 
-# ---------------------------------------------------------------------------
-# Device view (NX-OS VTEP configs)
-# ---------------------------------------------------------------------------
-
-GPO_RENDERERS: dict[str, frozenset[str]] = {"vxlan_gpo": frozenset({"cisco_nxos"})}
+GPO_RENDERERS: dict[str, frozenset[str]] = {
+    "vxlan_gpo": frozenset({"cisco_nxos"}),
+    "segment_security": frozenset({"arista_eos"}),
+}
 """Group-policy kind -> the netmiko platforms whose device templates render it (like
 BaseDeviceTransform._BORDER_LEAF_ACL_PLATFORMS). A reference site of a kind with no
-renderer here (EOS segment_security) renders nothing on its devices."""
+renderer for the device's platform renders nothing on its devices."""
+
+GPO_CONFIG_KEYS: dict[str, str] = {"vxlan_gpo": "group_policy", "segment_security": "segment_security"}
+"""Group-policy kind -> the template context key of its device view (the NX-OS key predates the second kind)."""
 
 _UNVERIFIED = "documented-not-lab-verified"
 _RESERVED_LABELS = {UNCLASSIFIED: "UNCLASSIFIED", UNAWARE: "UNAWARE"}
@@ -1039,49 +1071,26 @@ def _vrf_view(
     }
 
 
-def vxlan_gpo_device_view(
-    roots: dict[str, Any],
-    *,
-    device_name: str,
-    role: str,
-    platform: str,
-    activations: Iterable[dict[str, Any]],
-    vrfs: Iterable[str],
-    interfaces: Iterable[dict[str, Any]] = (),
-) -> dict[str, Any] | None:
-    """The group policy one VTEP renders, or None when it renders none (module docstring).
+@dataclass(frozen=True)
+class _DeviceScope:
+    """What a device builder reads: the device, its data center's contracts and what the device carries."""
 
-    A VTEP of a reference fabric always gets it: with no contract row for the VRFs it
-    carries the view is enablement only (empty ``class_maps``, ``groups`` and ``vrfs``).
+    who: str
+    kind: str
+    dc_id: str
+    fleet: dict[str, list[dict[str, Any]]]
+    contracts: DataCenterContracts
+    device_name: str
+    activations: list[dict[str, Any]]
+    vrfs: frozenset[str]
+    interfaces: list[dict[str, Any]]
 
-    ``roots`` are the cleaned fleet roots of the device query, ``activations``
-    the device's segment activations (``vlan_id`` and ``segment.id``: the VLAN
-    ID of a group's segment here, which is per VLAN domain), ``vrfs`` the
-    VRFs it carries (``vxlan.l3_vni_mappings``): a segment's VRF is its
-    gateway namespace, the ``vrf_name`` of its L3 VNI mapping, and ``interfaces``
-    its own cleaned interfaces (the host ports a component selector names must be
-    among them, tagged with the segment).
 
-    None unless the role is a data-center VTEP, the device sits in exactly one
-    data center, that data center is a reference fabric (utils/group_policy)
-    and its kind has a renderer for the platform (``GPO_RENDERERS``).
-    Each group dict carries ``vlan_id`` (its segment's VLAN here, segment groups)
-    and ``interfaces`` (``{vlan_id, name}`` of the host ports of this device that
-    classify it, component groups).
-    A VRF is enforced (``security enforce``, deny by default) only when every
-    component group its contracts name can be classified (no coverage blocker)
-    and every routed tenant segment it holds on this device is classified: a
-    segment activated here without a group or a VLAN has no classifier. Such a
-    VRF gets its groups and contracts but is left unenforced, with the reasons. So does every VRF of a
-    data center that does not enforce (``group_policy_enforce`` false, A6): that reason comes first.
-    """
-    found = _gpo_data_center(roots, device_name, platform) if role in DC_VTEP_ROLES else None
-    if found is None:
-        return None
-    dc_id, kind, fleet = found
-    who = f"{platform} {role} {device_name}"
-    contracts = data_center_contracts(roots, dc_id, fleet=fleet)
-    reserved = reserved_groups(contracts.profiles, kind)
+def _vxlan_gpo_build(scope: _DeviceScope) -> dict[str, Any]:
+    """The NX-OS group policy of one VTEP (``vxlan_gpo_device_view``)."""
+    who, dc_id, fleet, contracts = scope.who, scope.dc_id, scope.fleet, scope.contracts
+    device_name, activations, interfaces = scope.device_name, scope.activations, scope.interfaces
+    reserved = reserved_groups(contracts.profiles, scope.kind)
     view = vxlan_gpo_view(
         contracts.all_groups,
         contracts.rows,
@@ -1089,7 +1098,7 @@ def vxlan_gpo_device_view(
         reference_sites=contracts.reference_sites,
         local=contracts.local_names,
     )
-    on_device = set(vrfs)
+    on_device = scope.vrfs
     rows_by_vrf: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in view["contracts"]:
         if row["vrf"] in on_device:
@@ -1175,3 +1184,405 @@ def vxlan_gpo_device_view(
             for vrf, vrf_rows in sorted(rows_by_vrf.items())
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# EOS MSS-G (segment_security)
+# ---------------------------------------------------------------------------
+
+MSSG_MAX_SEGMENTS = 60
+"""Segments one device can define across all VRFs (spec 1.4, D: the manual's limit)."""
+
+_MSSG_FORWARD_ALL = "policy-forward-all"
+_MSSG_DROP_ALL = "policy-drop-all"
+_MSSG_ANY_APPLICATION = "app-match-all"
+_MSSG_PROTOCOLS = frozenset({"tcp", "udp", "icmp"})
+"""The rule protocols an application renders: the schema's choices but ``any`` (a built-in policy)."""
+
+
+def _mssg_prefix(segment: dict[str, Any]) -> str | None:
+    """The one prefix a segment is classified by: its IPv4 gateway prefix, else its IPv6 one (one gateway per segment)."""
+    return segment_prefix(segment, "ipv4") or segment_prefix(segment, "ipv6")
+
+
+def _mssg_hash(*parts: Any) -> str:
+    """The first 10 hex of the sha256 of the canonical JSON of ``parts`` (never hash()): the content name of an object."""
+    return hashlib.sha256(json.dumps(parts, separators=(",", ":")).encode()).hexdigest()[:10]
+
+
+class _MssgCatalog:
+    """The global objects the custom policies of one device name: field-sets, applications and policies.
+
+    Every name is the hash of its content, so equal content is one object on every device of a data center and
+    a re-render is byte-identical. A policy is the entries a source may send to the destination (``forward``,
+    matched on the destination port) and the replies of the entries the destination may send to the source
+    (``reply``, matched on the source port: MSS-G is stateless, spec 3.7), ended by a drop of everything else
+    (documented-not-lab-verified, spec 3.9).
+    """
+
+    def __init__(self, who: str) -> None:
+        self.who = who
+        self.field_sets: dict[str, dict[str, Any]] = {}
+        self.applications: dict[str, dict[str, Any]] = {}
+        self.policies: dict[str, dict[str, Any]] = {}
+
+    def policy(self, forward: set[Entry], reply: set[Entry]) -> str:
+        """The policy name for the entry sets: a built-in when either allows any protocol, else a custom one."""
+        if any(entry[0] == "any" for entry in (*forward, *reply)):
+            return _MSSG_FORWARD_ALL
+        found = {
+            application["name"]: application
+            for application in (*self._applications("destination", forward), *self._applications("source", reply))
+        }
+        applications = sorted(
+            found.values(), key=lambda item: (item["protocol"], item["ports"] or [], item["direction"])
+        )
+        names = [item["name"] for item in applications]
+        name = "MSSG-POL-" + _mssg_hash(names)
+        if name not in self.policies:
+            lines = [
+                {"seq": 10 * (index + 1), "application": app_name, "action": "forward stateless"}
+                for index, app_name in enumerate(names)
+            ]
+            lines.append(
+                {"seq": 10 * (len(names) + 1), "application": _MSSG_ANY_APPLICATION, "action": "drop stateless"}
+            )
+            self.policies[name] = {
+                "name": name,
+                "text": "; ".join(item["text"] for item in applications),
+                "lines": lines,
+            }
+        return name
+
+    def _applications(self, direction: str, entries: set[Entry]) -> list[dict[str, Any]]:
+        """One application per protocol of ``entries``: all its ports (a field-set) or, port-less, the protocol."""
+        ports: dict[str, list[tuple[int, int]]] = defaultdict(list)
+        whole: set[str] = set()
+        for protocol, start, end in entries:
+            if protocol not in _MSSG_PROTOCOLS:
+                raise _refuse(self.who, f"protocol {protocol!r} has no segment security application")
+            if start is None or protocol == "icmp":
+                whole.add(protocol)
+            elif end is not None and end < start:
+                raise _refuse(self.who, f"{protocol} port range {start}-{end} ends before it starts")
+            else:
+                ports[protocol].append((start, end or start))
+        found = []
+        for protocol in sorted(whole):
+            found.append(self._application(protocol, direction, None))
+        for protocol in sorted(set(ports) - whole):
+            found.append(self._application(protocol, direction, sorted(set(ports[protocol]))))
+        return found
+
+    def _application(self, protocol: str, direction: str, ports: list[tuple[int, int]] | None) -> dict[str, Any]:
+        field_set = None
+        if ports is not None:
+            spans = [f"{start}" if end == start else f"{start}-{end}" for start, end in ports]
+            field_set = "MSSG-FS-" + _mssg_hash(spans)
+            self.field_sets.setdefault(field_set, {"name": field_set, "ports": ", ".join(spans)})
+            name = "MSSG-APP-" + _mssg_hash(protocol, direction, spans)
+            text = ("reply " if direction == "source" else "") + f"{protocol}/{','.join(spans)}"
+        else:
+            name = "MSSG-APP-" + _mssg_hash(protocol)
+            text = protocol
+        self.applications.setdefault(
+            name,
+            {
+                "name": name,
+                "protocol": protocol,
+                "port_side": direction if ports is not None else None,
+                "field_set": field_set,
+            },
+        )
+        return {
+            "name": name,
+            "protocol": protocol,
+            "ports": [list(span) for span in ports] if ports is not None else None,
+            "direction": direction,
+            "text": text,
+        }
+
+
+def _entry_set(items: list[dict[str, Any]] | None) -> set[Entry]:
+    return {(item["protocol"], item["port_start"], item["port_end"]) for item in items or []}
+
+
+def _segment_security_build(scope: _DeviceScope) -> dict[str, Any] | None:
+    """The MSS-G view of one VTEP (``segment_security_device_view``)."""
+    who, contracts = scope.who, scope.contracts
+    prefixes = {str(segment.get("name")): _mssg_prefix(segment) for segment in contracts.all_segments}
+    view = segment_security_view(contracts.all_groups, contracts.rows, prefixes, local=contracts.local_names)
+    listed = {item["name"]: item for item in view["segments"] if item["vrf"] in scope.vrfs}
+    if not listed:
+        return None
+    _refuse_ambiguous_groups(who, contracts.all_groups)
+    by_name = {group.name: group for group in contracts.all_groups}
+
+    # A destination's fallback also catches a source in a segment this device does not define (spec 3.14),
+    # so a VRF with a fallback defines every segment of the VRF, to drop the ones with no row.
+    fallback_vrfs = {item["vrf"] for item in listed.values() if item["fallback"] or item["to_unclassified"]}
+    for group in contracts.all_groups:
+        if group.kind == "segment" and group.vrf in fallback_vrfs and group.name not in listed:
+            listed[group.name] = {
+                "name": group.name,
+                "vrf": group.vrf,
+                "prefix": prefixes.get(group.segment),
+                "intra_segment": group.intra_group,
+                "policies": [],
+                "fallback": None,
+                "to_unclassified": None,
+            }
+
+    by_vrf: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for name in sorted(listed):
+        by_vrf[listed[name]["vrf"]].append(listed[name])
+    skipped = {
+        vrf: sorted(item["name"] for item in items if not item["prefix"])
+        for vrf, items in by_vrf.items()
+        if any(not item["prefix"] for item in items)
+    }
+    rendered = {vrf: items for vrf, items in sorted(by_vrf.items()) if vrf not in skipped}
+    count = sum(len(items) for items in rendered.values())
+    if count > MSSG_MAX_SEGMENTS:
+        raise _refuse(
+            who,
+            f"{count} segments to define exceed the {MSSG_MAX_SEGMENTS} an EOS device holds across all VRFs "
+            "(a VRF with a fallback defines every segment of the VRF)",
+        )
+
+    safe: dict[str, str] = {}
+    for name in sorted(item["name"] for items in rendered.values() for item in items):
+        if safe.setdefault(_cli_name(name), name) != name:
+            raise _refuse(who, f"segments {safe[_cli_name(name)]!r} and {name!r} share the name {_cli_name(name)!r}")
+    for vrf, items in rendered.items():
+        owners: dict[Any, str] = {}
+        for item in items:
+            try:
+                network = ip_network(item["prefix"], strict=False)
+            except ValueError as error:
+                raise _refuse(who, f"segment {item['name']!r} has the prefix {item['prefix']!r}: {error}") from error
+            if owners.setdefault(network, item["name"]) != item["name"]:
+                raise _refuse(
+                    who,
+                    f"segments {owners[network]!r} and {item['name']!r} share the prefix {network} in VRF {vrf} "
+                    "(a prefix can be in one segment per VRF)",
+                )
+
+    catalog = _MssgCatalog(who)
+    match_lists = []
+    vrf_views = []
+    for vrf, items in rendered.items():
+        entries_to = {
+            (item["name"], policy["from"]): _entry_set(policy["entries"])
+            for item in items
+            for policy in item["policies"]
+        }
+        segment_views = []
+        for item in items:
+            name = item["name"]
+            family = "ipv6" if ":" in item["prefix"] else "ipv4"
+            match_lists.append({"name": _cli_name(name), "family": family, "prefix": item["prefix"]})
+            froms: dict[str, str] = {}
+            if item["intra_segment"] == "permit":
+                froms[name] = _MSSG_FORWARD_ALL
+            for other in items:
+                forward, reply = entries_to.get((name, other["name"])), entries_to.get((other["name"], name))
+                if (forward or reply) and other["name"] != name:
+                    froms[other["name"]] = catalog.policy(forward or set(), reply or set())
+            fallback = None
+            notes = []
+            if item["fallback"] or item["to_unclassified"]:
+                fallback = catalog.policy(
+                    _entry_set((item["fallback"] or {}).get("entries")),
+                    _entry_set((item["to_unclassified"] or {}).get("entries")),
+                )
+                dropped = [other["name"] for other in items if other["name"] not in froms]
+                froms.update({name: _MSSG_DROP_ALL for name in dropped})
+                notes = [f"{_UNVERIFIED}: fallback policy is documented by AVD only (R3 series)"]
+                if dropped:
+                    notes.append(
+                        f"{_UNVERIFIED}: the fallback also catches a source in a segment without a from line, "
+                        "so each of those gets an explicit policy-drop-all (expected to win over the fallback)"
+                    )
+            segment_views.append(
+                {
+                    "name": _cli_name(name),
+                    "match_list": _cli_name(name),
+                    "family": family,
+                    "prefix": item["prefix"],
+                    "remote": name not in contracts.local_names,
+                    "froms": [
+                        {"source": _cli_name(source), "policy": froms[source]}
+                        for source in sorted(froms, key=_cli_name)
+                    ],
+                    "fallback": fallback,
+                    "notes": notes,
+                }
+            )
+        vrf_views.append({"name": vrf, "segments": segment_views})
+
+    unsupported = [
+        _one_line(f"{_label(row['src'])} -> {_label(row['dst'])}: {row['reason']} (rules: {', '.join(row['rules'])})")
+        for row in view["unsupported"]
+        if by_name[row["dst"]].vrf in rendered
+    ]
+    staged = (
+        None
+        if contracts.enforce
+        else (
+            f"data center {contracts.name or scope.dc_id} stages group policy (group_policy_enforce is false): "
+            "segments and policies are configured, segment security is shut down"
+        )
+    )
+    return {
+        "enforce": contracts.enforce,
+        "staged": staged,
+        "match_lists": sorted(match_lists, key=lambda item: (item["name"], item["family"])),
+        "field_sets": [catalog.field_sets[name] for name in sorted(catalog.field_sets)],
+        "applications": [catalog.applications[name] for name in sorted(catalog.applications)],
+        "policies": [catalog.policies[name] for name in sorted(catalog.policies)],
+        "vrfs": vrf_views,
+        "skipped": [
+            {
+                "vrf": vrf,
+                "reason": _one_line(
+                    f"segment(s) {', '.join(names)} have no gateway prefix to classify by, and segment security is "
+                    "enforced box-wide, so the VRF is left out"
+                ),
+            }
+            for vrf, names in sorted(skipped.items())
+        ],
+        "unsupported": unsupported,
+    }
+
+
+# ---------------------------------------------------------------------------
+# The dispatcher
+# ---------------------------------------------------------------------------
+
+_BUILDERS = {"vxlan_gpo": _vxlan_gpo_build, "segment_security": _segment_security_build}
+
+
+def group_policy_device_view(
+    roots: dict[str, Any],
+    *,
+    device_name: str,
+    role: str,
+    platform: str,
+    activations: Iterable[dict[str, Any]],
+    vrfs: Iterable[str],
+    interfaces: Iterable[dict[str, Any]] = (),
+) -> tuple[str, dict[str, Any]] | None:
+    """(group-policy kind, its device view) of a VTEP that renders group policy, else None.
+
+    The one gate of every renderer: the role is a data-center VTEP, the device sits in exactly one data
+    center, that data center is a reference fabric (utils/group_policy) and its kind has a renderer for the
+    platform (``GPO_RENDERERS``). Then the data center's contracts are built once and the kind's builder
+    cuts them to this device: ``vxlan_gpo_device_view`` (NX-OS) or ``segment_security_device_view`` (EOS).
+    A refusal (``... refusing unprotected config``) can only come from a device that does render.
+    """
+    found = _gpo_data_center(roots, device_name, platform) if role in DC_VTEP_ROLES else None
+    if found is None:
+        return None
+    dc_id, kind, fleet = found
+    scope = _DeviceScope(
+        who=f"{platform} {role} {device_name}",
+        kind=kind,
+        dc_id=dc_id,
+        fleet=fleet,
+        contracts=data_center_contracts(roots, dc_id, fleet=fleet),
+        device_name=device_name,
+        activations=list(activations),
+        vrfs=frozenset(vrfs),
+        interfaces=list(interfaces),
+    )
+    view = _BUILDERS[kind](scope)
+    return None if view is None else (kind, view)
+
+
+def vxlan_gpo_device_view(
+    roots: dict[str, Any],
+    *,
+    device_name: str,
+    role: str,
+    platform: str,
+    activations: Iterable[dict[str, Any]],
+    vrfs: Iterable[str],
+    interfaces: Iterable[dict[str, Any]] = (),
+) -> dict[str, Any] | None:
+    """The NX-OS group policy one VTEP renders, or None when it renders none (module docstring).
+
+    ``group_policy_device_view`` restricted to the ``vxlan_gpo`` kind. A VTEP of a reference fabric
+    always gets it: with no contract row for the VRFs it carries the view is enablement only (empty
+    ``class_maps``, ``groups`` and ``vrfs``).
+
+    ``roots`` are the cleaned fleet roots of the device query, ``activations``
+    the device's segment activations (``vlan_id`` and ``segment.id``: the VLAN
+    ID of a group's segment here, which is per VLAN domain), ``vrfs`` the
+    VRFs it carries (``vxlan.l3_vni_mappings``): a segment's VRF is its
+    gateway namespace, the ``vrf_name`` of its L3 VNI mapping, and ``interfaces``
+    its own cleaned interfaces (the host ports a component selector names must be
+    among them, tagged with the segment).
+
+    Each group dict carries ``vlan_id`` (its segment's VLAN here, segment groups)
+    and ``interfaces`` (``{vlan_id, name}`` of the host ports of this device that
+    classify it, component groups).
+    A VRF is enforced (``security enforce``, deny by default) only when every
+    component group its contracts name can be classified (no coverage blocker)
+    and every routed tenant segment it holds on this device is classified: a
+    segment activated here without a group or a VLAN has no classifier. Such a
+    VRF gets its groups and contracts but is left unenforced, with the reasons. So does every VRF of a
+    data center that does not enforce (``group_policy_enforce`` false, A6): that reason comes first.
+    """
+    found = group_policy_device_view(
+        roots,
+        device_name=device_name,
+        role=role,
+        platform=platform,
+        activations=activations,
+        vrfs=vrfs,
+        interfaces=interfaces,
+    )
+    return found[1] if found is not None and found[0] == "vxlan_gpo" else None
+
+
+def segment_security_device_view(
+    roots: dict[str, Any],
+    *,
+    device_name: str,
+    role: str,
+    platform: str,
+    activations: Iterable[dict[str, Any]] = (),
+    vrfs: Iterable[str],
+    interfaces: Iterable[dict[str, Any]] = (),
+) -> dict[str, Any] | None:
+    """The EOS MSS-G view one VTEP renders, or None when it renders none.
+
+    ``group_policy_device_view`` restricted to the ``segment_security`` kind; ``vrfs`` as for
+    ``vxlan_gpo_device_view``. The view is the data center's ``segment_security_view`` cut to the
+    VRFs the device carries, with:
+
+    - every segment named by a ``from`` line defined, remote ones included, and, in a VRF with a
+      fallback, every segment of the VRF (a fallback also catches a source in a segment without a
+      ``from`` line, so those get an explicit ``policy-drop-all``); at most ``MSSG_MAX_SEGMENTS``;
+    - a VRF holding a segment with no gateway prefix not rendered at all (``skipped``): enforcement is
+      box-wide, so a segment that cannot be classified would be dropped to, or from, wholesale;
+    - the reply of every permitted flow as a mirrored policy on the source port (MSS-G is stateless),
+      the built-in ``policy-forward-all`` for a permit-all entry, a content-hashed custom policy
+      (AVD's model; documented-not-lab-verified) for the rest;
+    - ``enforce`` False when the data center stages group policy (``shutdown`` instead of
+      ``no shutdown``). Never rendered: ``no segment policy policy-drop-all default``, redirect,
+      log, ``match interface`` (spec 3.5, 3.4, 2.7).
+
+    None when the device has no VRF with a segment to define.
+    """
+    found = group_policy_device_view(
+        roots,
+        device_name=device_name,
+        role=role,
+        platform=platform,
+        activations=activations,
+        vrfs=vrfs,
+        interfaces=interfaces,
+    )
+    return found[1] if found is not None and found[0] == "segment_security" else None
