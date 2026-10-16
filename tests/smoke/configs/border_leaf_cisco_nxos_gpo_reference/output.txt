@@ -304,6 +304,7 @@ vrf context PROD
   ! web_pay_demo_local -> db_pay_demo_local
   security contract source 50 destination 51 policy GPO-d77ed0702f bidir
   ! documented-not-lab-verified: the guide gives no range or meaning for the enforce tag; the unclassified group id is used
+  ! documented-not-lab-verified: enforcing this VRF relies on native-VLAN frames being classified by match vlan N interface P and on vPC peer-link behaviour (NX-OS 10.6(1)F guide); ports: dc1-leaf-01 Ethernet10, dc1-leaf-01 Ethernet11
   security enforce tag 0 default deny
   address-family ipv4 unicast
     route-target both 65000:50012

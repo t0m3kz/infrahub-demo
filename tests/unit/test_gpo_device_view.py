@@ -18,7 +18,16 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from graphql import parse
+from graphql.language import (
+    FieldNode,
+    FragmentDefinitionNode,
+    FragmentSpreadNode,
+    InlineFragmentNode,
+    SelectionNode,
+)
 
+from generators.topology.endpoint import ENDPOINT_NIC_ROLES
 from tests.smoke.generate_config_fixtures import (
     _GPO_EOS,
     _GPO_NXOS,
@@ -29,6 +38,8 @@ from tests.smoke.generate_config_fixtures import (
     _gp_memory_gb,
     _gp_nic,
     _gp_tag,
+    _gpo_segment_nodes,
+    _make_interface,
     _node,
     _v,
     build_gpo_device_data,
@@ -749,6 +760,7 @@ class TestGoldens:
         assert not [line for line in code if "mac-segmentation" in line or "isolation" in line or "vacl" in line]
         assert not [line for line in code if line.startswith("security contract") and " any " in f"{line} "]
         assert "feature security-group" in code
+        assert "vlan dot1q tag native" not in "\n".join(lines), "the global native tag is never used"
 
 
 # ---------------------------------------------------------------------------
@@ -849,12 +861,68 @@ class TestComponentCoverage:
             WEB: ["srv-web eno1 reaches dc1-leaf-01 Ethernet20, a LAG member with no port-channel"]
         }
 
-    def test_a_port_that_does_not_carry_the_segment_is_not_claimed_and_does_not_block(self) -> None:
-        """No VLAN of the segment on that port: no traffic of the component to classify there."""
+    def test_a_port_that_does_not_carry_the_segment_is_not_claimed_and_blocks(self) -> None:
+        """The NIC is cabled to a VTEP of this data center, but the port lacks the segment: the component's traffic
+        enters unclassified there, so the group must not be enforced (it used to be silently placed)."""
         web = [_server("srv-web", _nic("srv-web", "eno1", "dc1-leaf-01", "Ethernet20", ("web-np",)))]
-        coverage = _coverage(_placed_roots(web=web))
+        roots = _placed_roots(web=web)
+        coverage = _coverage(roots)
         assert not [claim for claim in coverage.claims if claim.group == WEB]
+        assert coverage.blockers == {
+            WEB: ["srv-web eno1 reaches dc1-leaf-01 Ethernet20, which is not tagged with the segment"]
+        }
+        assert _prod_reason(_view(roots)) == (
+            "component group web_pay_demo_local: srv-web eno1 reaches dc1-leaf-01 Ethernet20, "
+            "which is not tagged with the segment"
+        )
+
+    def test_a_port_channel_that_does_not_carry_the_segment_blocks_and_names_the_port_channel(self) -> None:
+        """A LAG member: the port-channel is what must carry the segment, whatever the member port is tagged with."""
+        member = _nic("srv-web", "eno1", "dc1-leaf-01", "Ethernet20", lag="port-channel20")
+        far = member["cable"]["node"]["endpoints"]["edges"][1]["node"]
+        far["interface_capabilities"] = _edges([{"id": "seg-pay-p"}])  # the member port is tagged, not the channel
+        far["lag"]["node"]["interface_capabilities"] = _edges([{"id": "seg-web-np"}])
+        roots = _placed_roots(web=[_server("srv-web", member)])
+        coverage = _coverage(roots)
+        assert not [claim for claim in coverage.claims if claim.group == WEB]
+        assert coverage.blockers == {
+            WEB: ["srv-web eno1 reaches dc1-leaf-01 port-channel20, which is not tagged with the segment"]
+        }
+        assert _prod_reason(_view(roots)) is not None
+
+    def test_a_far_end_that_is_a_vtep_of_another_data_center_is_ignored_even_without_the_segment(self) -> None:
+        """Another data center classifies its own ports: only a VTEP of THIS one is checked for the tag."""
+        web = [_server("srv-web", _nic("srv-web", "eno1", "bl-dc12-01", "Ethernet5", ("web-np",)))]
+        assert _coverage(_placed_roots(web=web)).blockers == {}
+
+    def test_a_cable_with_only_the_near_end_blocks(self) -> None:
+        nic = _nic("srv-web", "eno1", "dc1-leaf-01", "Ethernet20")
+        nic["cable"]["node"]["endpoints"]["edges"].pop()
+        assert _coverage(_placed_roots(web=[_server("srv-web", nic)])).blockers == {
+            WEB: ["srv-web eno1: cable has 0 far ends"]
+        }
+
+    def test_a_cable_with_more_than_one_far_end_blocks_instead_of_taking_the_first(self) -> None:
+        nic = _nic("srv-web", "eno1", "dc1-leaf-01", "Ethernet10")
+        second = _nic("srv-web", "eno1", "dc1-access-leaf-01", "Ethernet2")["cable"]["node"]["endpoints"]["edges"][1]
+        nic["cable"]["node"]["endpoints"]["edges"].append(second)
+        coverage = _coverage(_placed_roots(web=[_server("srv-web", nic)]))
+        assert not [claim for claim in coverage.claims if claim.group == WEB]
+        assert coverage.blockers == {WEB: ["srv-web eno1: cable has 2 far ends"]}
+
+    def test_an_endpoint_without_an_id_is_no_far_end(self) -> None:
+        """An endpoint the query's inline fragment did not match comes back empty: it is neither a far end nor
+        a reason to ignore the real one."""
+        nic = _nic("srv-web", "eno1", "dc1-leaf-01", "Ethernet10")
+        nic["cable"]["node"]["endpoints"]["edges"].append({"node": {}})
+        coverage = _coverage(_placed_roots(web=[_server("srv-web", nic)]))
+        assert _claim(WEB, "dc1-leaf-01", "Ethernet10") in coverage.claims
         assert coverage.blockers == {}
+        lonely = _nic("srv-web", "eno1", "dc1-leaf-01", "Ethernet10")
+        lonely["cable"]["node"]["endpoints"]["edges"][1] = {"node": {}}
+        assert _coverage(_placed_roots(web=[_server("srv-web", lonely)])).blockers == {
+            WEB: ["srv-web eno1: cable has 0 far ends"]
+        }
 
     def test_an_instance_only_on_another_data_center_is_not_this_ones(self) -> None:
         web = [_server("srv-web", _nic("srv-web", "eno1", "bl-dc12-01", "Ethernet5"))]
@@ -1181,6 +1249,62 @@ class TestComponentGate:
         assert len(reasons) == 1
         assert reasons != {None}
 
+    def test_a_claimed_port_this_device_lacks_unenforces_it_here_while_its_vpc_peer_enforces(self) -> None:
+        """The coverage part of the verdict is the data center's, the per-device part is not: the peer that lacks
+        a claimed port is left unenforced, the one that has all of its own ports enforces (module docstring)."""
+        web = [
+            _server(
+                "srv-web",
+                _nic("srv-web", "eno1", "dc1-leaf-01", "Ethernet10"),
+                _nic("srv-web", "eno2", "dc1-access-leaf-01", "Ethernet12"),
+            )
+        ]
+        roots = _placed_roots(web=web)
+        assert _coverage(roots).blockers == {}
+        peer = _device_inputs("dc1-access-leaf-01", "access-leaf", ("pay-p",))  # no Ethernet12
+        assert _prod_reason(_view(roots)) is None
+        assert _prod_reason(_view(roots, **peer)) == (
+            "component group web_pay_demo_local: port Ethernet12 is not an interface of dc1-access-leaf-01 "
+            "tagged with the segment"
+        )
+
+    def test_an_enforced_vrf_relying_on_component_ports_lists_them_on_every_vtep(self) -> None:
+        roots = _roots()
+        views = [
+            _view(roots),
+            _view(roots, **_device_inputs("dc1-access-leaf-01", "access-leaf", ("pay-p",))),
+            _view(roots, device_name="dc1-border-leaf-01", role="border-leaf", interfaces=[]),
+        ]
+        for view in views:
+            assert view is not None
+            assert view["vrfs"]["PROD"]["unenforced"] is None
+            assert view["vrfs"]["PROD"]["classified_ports"] == "dc1-leaf-01 Ethernet10, dc1-leaf-01 Ethernet11"
+            assert view["vrfs"]["NONPROD"]["classified_ports"] is None, "no component group, nothing to disclose"
+
+    def test_the_listed_ports_are_sorted_naturally_and_bounded(self) -> None:
+        nics = [_nic("srv-web", f"eno{n}", "dc1-leaf-01", f"Ethernet{n}") for n in range(1, 11)]
+        view = _view(_placed_roots(web=[_server("srv-web", *nics)]))
+        assert view is not None
+        listed = view["vrfs"]["PROD"]["classified_ports"]
+        assert listed == ", ".join(f"dc1-leaf-01 Ethernet{n}" for n in range(1, 9)) + " and 3 more"
+
+    def test_the_rendered_enforce_line_says_what_it_relies_on_and_an_unenforced_vrf_does_not(self) -> None:
+        rendered = _run_transform(Leaf, _raw())
+        lines = rendered.splitlines()
+        enforce = [i for i, line in enumerate(lines) if "security enforce tag" in line][-1]  # PROD, after NONPROD
+        assert lines[enforce - 1].strip() == (
+            "! documented-not-lab-verified: enforcing this VRF relies on native-VLAN frames being classified by "
+            "match vlan N interface P and on vPC peer-link behaviour (NX-OS 10.6(1)F guide); "
+            "ports: dc1-leaf-01 Ethernet10, dc1-leaf-01 Ethernet11"
+        )
+        assert rendered.count("relies on native-VLAN frames") == 1, "NONPROD names no component group"
+        raw = _raw()
+        web_tag = next(edge["node"] for edge in raw["SecurityTag"]["edges"] if edge["node"]["id"] == "tag-pay-web")
+        web_tag["components"]["edges"][0]["node"]["instances"] = _edges([_server("srv-lost")])
+        blocked = _run_transform(Leaf, raw)
+        assert "! unenforced: component group web_pay_demo_local" in blocked
+        assert "relies on native-VLAN frames" not in blocked
+
     def test_a_name_with_a_newline_cannot_leave_the_comment(self) -> None:
         """The reason is rendered as one `! unenforced:` comment line: whitespace in a name collapses."""
         reason = _prod_reason(_view(_placed_roots(web=[_server("srv\nlost")])))
@@ -1250,6 +1374,37 @@ class TestHostTrunks:
         assert "  match vlan 210 interface Ethernet11" in rendered
         assert "  match vlan 210 interface Ethernet10" in rendered
 
+    def test_a_claimed_port_channel_renders_as_an_edge_trunk_with_a_native_vlan(self) -> None:
+        """A bonded host: the port-channel (tagged with the segment) is the selector's interface and the trunk."""
+        raw = _raw()
+        node = raw["DcimDevice"]["edges"][0]["node"]
+        node["interfaces"]["edges"].append(
+            {
+                "node": _make_interface(
+                    name="port-channel30",
+                    device_name="dc1-leaf-01",
+                    role="server",
+                    typename="DcimLAGInterface",
+                    segments=_gpo_segment_nodes("dc1-leaf-01", PAY_P),
+                )
+            }
+        )
+        web_tag = next(edge["node"] for edge in raw["SecurityTag"]["edges"] if edge["node"]["id"] == "tag-pay-web")
+        member = _nic("srv-web", "eno1", "dc1-leaf-01", "Ethernet30", lag="port-channel30")
+        web_tag["components"]["edges"][0]["node"]["instances"] = _edges([_server("srv-web", member)])
+        rendered = _run_transform(Leaf, raw)
+        assert "  match vlan 210 interface port-channel30" in rendered
+        assert "  match vlan 210 interface Ethernet30" not in rendered
+        stanza = rendered.split("\ninterface port-channel30\n")[1].split("\n!\n")[0].splitlines()
+        assert [line.strip() for line in stanza if line.strip() and not line.strip().startswith("!")] == [
+            "no shutdown",
+            "switchport",
+            "switchport mode trunk",
+            "switchport trunk native vlan 210",
+            "switchport trunk allowed vlan 210",
+            "spanning-tree port type edge trunk",
+        ]
+
     def test_the_existing_trunk_gets_no_native_vlan_and_nothing_renders_the_global_native_tag(self) -> None:
         rendered = _run_transform(Leaf, _raw())
         trunk = rendered.split("\ninterface Ethernet10\n")[1].split("\n!\n")[0]
@@ -1297,3 +1452,155 @@ class TestHostTrunks:
         rendered = _run_transform(Leaf, raw)
         assert "native vlan" not in rendered and "security-group" not in rendered
         assert "switchport mode access" in rendered
+
+
+# ---------------------------------------------------------------------------
+# The query fragment is what component_coverage reads
+# ---------------------------------------------------------------------------
+
+
+class _Spy(dict):
+    """Cleaned query data that records the path of every key read from it, and from the dicts below it."""
+
+    def __init__(self, data: dict, path: tuple[str, ...], log: set[tuple[str, ...]]) -> None:
+        super().__init__(data)
+        self._path, self._log = path, log
+
+    def get(self, key: Any, default: Any = None, /) -> Any:
+        self._log.add((*self._path, key))
+        return self._wrap(key, super().get(key, default))
+
+    def __getitem__(self, key: Any) -> Any:
+        self._log.add((*self._path, key))
+        return self._wrap(key, super().__getitem__(key))
+
+    def _wrap(self, key: str, value: Any) -> Any:
+        return _spied(value, (*self._path, key), self._log)
+
+
+def _spied(value: Any, path: tuple[str, ...], log: set[tuple[str, ...]]) -> Any:
+    if isinstance(value, dict):
+        return _Spy(value, path, log)
+    if isinstance(value, list):
+        return [_spied(item, path, log) for item in value]
+    return value
+
+
+class TestPlacementFragment:
+    """queries/fragments/group_policy.gql SecurityTagPlacementFields is tied to the code that reads its data."""
+
+    # clean_data collapses ``edges { node }``, ``node`` and ``{ value }``, and renames ``__typename`` to ``typename``.
+    COLLAPSED = frozenset({"edges", "node", "value"})
+    # AppInstance kind -> the inline fragment of the placement fragment that must select its host's NICs.
+    HOST_FRAGMENT = {
+        "DcimPhysicalDevice": "DcimDevice",
+        "ManagedControllerPhysical": "DcimDevice",
+        "DcimVirtualDevice": "DcimVirtualDevice",
+        "ManagedControllerVirtual": "ManagedControllerVirtual",
+    }
+
+    @classmethod
+    def _paths(cls, selections: Any, prefix: tuple[str, ...] = ()) -> set[tuple[str, ...]]:
+        """Every field path below ``selections`` as the cleaned data names it (inline fragments merged)."""
+        found: set[tuple[str, ...]] = set()
+        for selection in selections:
+            assert not isinstance(selection, FragmentSpreadNode), (
+                "a named fragment nested in an inline fragment resolves to nulls: select plain fields"
+            )
+            if isinstance(selection, InlineFragmentNode):
+                found |= cls._paths(selection.selection_set.selections, prefix)
+            elif isinstance(selection, FieldNode):
+                name = (selection.alias or selection.name).value
+                path = prefix if name in cls.COLLAPSED else (*prefix, "typename" if name == "__typename" else name)
+                found |= ({path} if path else set()) | cls._paths(
+                    selection.selection_set.selections if selection.selection_set else (), path
+                )
+        return found
+
+    @staticmethod
+    def _fragment(root_dir: Path, name: str) -> FragmentDefinitionNode:
+        document = parse((root_dir / "queries/fragments/group_policy.gql").read_text())
+        return next(
+            item
+            for item in document.definitions
+            if isinstance(item, FragmentDefinitionNode) and item.name.value == name
+        )
+
+    @staticmethod
+    def _sub(selections: Any, name: str) -> Any:
+        """The selections of the field ``name`` among ``selections``."""
+        field = next(item for item in selections if isinstance(item, FieldNode) and item.name.value == name)
+        assert field.selection_set is not None
+        return field.selection_set.selections
+
+    @classmethod
+    def _below(cls, selections: Any, *names: str) -> list[SelectionNode]:
+        """The selections of the node reached through the connections ``names`` (``edges { node }`` each)."""
+        for name in names:
+            selections = cls._sub(cls._sub(cls._sub(selections, name), "edges"), "node")
+        return list(selections)
+
+    @staticmethod
+    def _instance(kind: str, name: str, nics: list[dict]) -> dict:
+        found = _gp_instance(name, nics, host=name if "Virtual" in kind else None)
+        found["__typename"] = kind
+        return found
+
+    def _recorded_reads(self, kind: str) -> set[tuple[str, ...]]:
+        """The key paths below a SecurityTag that component_coverage reads for one instance of ``kind``, host
+        cabled through a plain port and a LAG member (port-channel)."""
+        nics = [
+            _nic("srv-web", "eno1", "dc1-leaf-01", "Ethernet10"),
+            _nic("srv-web", "eno2", "dc1-leaf-01", "Ethernet20", lag="port-channel20"),
+            _nic("srv-web", "eno3", "bl-dc12-01", "Ethernet5"),
+        ]
+        roots = _placed_roots(web=[self._instance(kind, "srv-web", nics)], db=[])
+        log: set[tuple[str, ...]] = set()
+        roots["SecurityTag"] = _spied(roots["SecurityTag"], (), log)
+        coverage = _coverage(roots)
+        assert coverage.claims, "the spied data must be placed, or the read paths are a prefix of the real ones"
+        return log
+
+    @pytest.mark.parametrize("kind", sorted(HOST_FRAGMENT))
+    def test_the_fragment_selects_every_key_component_coverage_reads(self, root_dir: Path, kind: str) -> None:
+        """Every key the coverage reads below a tag must be selected: the instance's own fields and the inline
+        fragment of ITS kind (a path selected only for another kind does not count), the rest by the two fragments."""
+        placement = self._fragment(root_dir, "SecurityTagPlacementFields").selection_set.selections
+        shared = self._fragment(root_dir, "SecurityTagGroupPolicyFields").selection_set.selections
+        instance = self._below(placement, "components", "instances")
+        inline = [item for item in instance if isinstance(item, InlineFragmentNode)]
+        assert {item.type_condition.name.value for item in inline} == set(self.HOST_FRAGMENT.values())
+        own_kind = [item for item in inline if item.type_condition.name.value == self.HOST_FRAGMENT[kind]]
+        instance_paths = self._paths(
+            [item for item in instance if item not in inline] + own_kind, ("components", "instances")
+        )
+        tag_paths = self._paths(placement) | self._paths(shared)
+
+        reads = self._recorded_reads(kind)
+        host = ("components", "instances") + (("hosting_device",) if "Virtual" in kind else ())
+        assert (*host, "interfaces", "cable", "endpoints", "lag", "interface_capabilities", "id") in reads, (
+            "the data must exercise the whole walk down to the port-channel's tags"
+        )
+        missing = {
+            path
+            for path in reads
+            if path not in (instance_paths if path[:2] == ("components", "instances") else tag_paths)
+            and path not in {("components",), ("components", "instances")}
+        }
+        assert not missing, f"{kind}: read by component_coverage but not selected for it: {sorted(missing)}"
+
+    def test_the_nic_roles_the_fragment_filters_on_are_the_ones_the_generator_cables(self, root_dir: Path) -> None:
+        fragment = self._fragment(root_dir, "SecurityTagPlacementFields")
+        found: list[list[str]] = []
+
+        def walk(selections: Any) -> None:
+            for selection in selections:
+                if isinstance(selection, FieldNode) and selection.name.value == "interfaces":
+                    for argument in selection.arguments:
+                        assert argument.name.value == "role__values"
+                        found.append([value.value for value in argument.value.values])
+                if getattr(selection, "selection_set", None):
+                    walk(selection.selection_set.selections)
+
+        walk(fragment.selection_set.selections)
+        assert found == [list(ENDPOINT_NIC_ROLES)] * 3, "one filter per host kind"

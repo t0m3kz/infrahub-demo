@@ -86,9 +86,16 @@ generator tags ports for) and the VTEP port at the far end of each uplink or bon
 member, that carries the component's segment. No IP is used (an instance has none, an
 address is spoofable and IPv4 only). A VRF is left unenforced, with the reasons as a
 comment, while a component group it names cannot be placed (coverage blockers: an
-instance with no host, not cabled to a VTEP, cabled to a switch that is no VTEP, a
-bond member with no port-channel, a port shared by two components of one segment) or
-a tenant segment it holds on the device has no classifier.
+instance with no host, not cabled to a VTEP, cabled to a switch that is no VTEP or to a
+VTEP port that does not carry the segment, a cable without exactly one far end, a bond
+member with no port-channel, a port shared by two components of one segment) or a tenant
+segment it holds on the device has no classifier.
+
+The coverage part of the verdict is the data center's, identical on every VTEP of a VRF;
+the per-device part is not: a claimed port that THIS device lacks, has untagged or has no
+VLAN for (``_selectors`` problems) leaves its VRF unenforced here while the other vPC peer
+enforces it. An enforced VRF that relies on component classification lists the claimed
+ports (data center wide) in a documented-not-lab-verified comment on its enforce line.
 """
 
 from __future__ import annotations
@@ -746,7 +753,8 @@ def _place_instance(
     The host (utils/app_instances.physical_host) has its uplink/bond-member NICs; the far end of each NIC's
     cable (the near end skipped by id) is a switch port. A far end that is a VTEP of this data center is
     claimed when it, or its port-channel for a LAG member (never the member port: a LAG member without a
-    port-channel is a problem), carries the segment. A far end that is a VTEP of another data center is that
+    port-channel is a problem), carries the segment; when it does not, that is a problem too (the component's
+    traffic enters the VTEP unclassified). A cable that does not have exactly one far end is a problem. A far end that is a VTEP of another data center is that
     data center's to classify and is ignored; a far end that is a VTEP of none (a leaf below a VTEP, a
     firewall) cannot classify, so it is a problem. An instance reaching no VTEP at all is a problem too, in
     every data center of its segment: where it sits is not known.
@@ -764,8 +772,15 @@ def _place_instance(
     placed = False
     for nic in host.get("interfaces") or []:
         nic_label = f"{host_label} {nic.get('name') or '?'}"
-        far_ends = [end for end in (nic.get("cable") or {}).get("endpoints") or [] if end.get("id") != nic.get("id")]
-        if not far_ends:
+        endpoints = (nic.get("cable") or {}).get("endpoints") or []
+        if not endpoints:
+            continue
+        # The near end is the NIC itself (by id); an endpoint with no id did not match the query's
+        # inline fragment and is no end of anything. A cable that does not leave exactly one other end
+        # (a bundle, a patch panel, a half-loaded cable) cannot say where the NIC lands.
+        far_ends = [end for end in endpoints if end.get("id") and end["id"] != nic.get("id")]
+        if len(far_ends) != 1:
+            problems.append(f"{nic_label}: cable has {len(far_ends)} far ends")
             continue
         far_end = far_ends[0]
         switch = (far_end.get("device") or {}).get("name")
@@ -785,6 +800,10 @@ def _place_instance(
                 port, carried = str(far_end["name"]), _capability_ids(far_end)
             if segment_id in carried:
                 ports.add((str(switch), port))
+            else:
+                # Cabled to a VTEP of this data center that does not carry the segment on that port: the
+                # component's traffic arrives there unclassified, so the group cannot be enforced.
+                problems.append(f"{nic_label} reaches {switch} {port}, which is not tagged with the segment")
         elif switch in other_vtep_names:
             placed = True
         else:
@@ -911,10 +930,30 @@ def _selectors(
             claimed[claim.group].add(claim.port)
             vlan_of_group[claim.group] = vlan
     ports = {
-        group: [{"vlan_id": vlan_of_group[group], "name": name} for name in sort_interface_list(sorted(names))]
+        group: [{"vlan_id": vlan_of_group[group], "name": name} for name in sort_interface_list(list(names))]
         for group, names in claimed.items()
     }
     return _Selectors(vlans=vlans, ports=ports, unclassified=unclassified, problems=dict(problems))
+
+
+_PORT_LIST_LIMIT = 8
+
+
+def _claimed_ports_text(claims: Iterable[ComponentClaim], groups: Iterable[str]) -> str | None:
+    """``<device> <port>, ...`` of the ports the given component groups are classified on, data-center wide
+    (the same on every VTEP), sorted by device and naturally by port, at most ``_PORT_LIST_LIMIT`` listed."""
+    wanted = set(groups)
+    by_device: dict[str, set[str]] = defaultdict(set)
+    for claim in claims:
+        if claim.group in wanted:
+            by_device[claim.vtep].add(claim.port)
+    pairs = [
+        f"{device} {port}" for device in sorted(by_device) for port in sort_interface_list(list(by_device[device]))
+    ]
+    if not pairs:
+        return None
+    more = len(pairs) - _PORT_LIST_LIMIT
+    return ", ".join(pairs[:_PORT_LIST_LIMIT]) + (f" and {more} more" if more > 0 else "")
 
 
 def _vrf_view(
@@ -927,11 +966,18 @@ def _vrf_view(
     unclassified_id: int | None,
     no_classifier: set[str],
     component_blockers: dict[str, list[str]],
+    claims: Iterable[ComponentClaim],
 ) -> dict[str, Any]:
     """The contracts and the enforcement of one VRF (``vxlan_gpo_device_view``).
 
     Enforced when no component group the VRF's contracts name has a blocker (``component_coverage``, plus
     the problems of this device's claimed ports) and no tenant segment it holds here lacks a classifier.
+
+    The coverage part of that verdict is the data center's, identical on every VTEP of the VRF. The
+    per-device part is not: ``component_blockers`` also holds the problems of THIS device's claimed ports
+    (missing, untagged, no VLAN here), so one vPC peer can be left unenforced while the other enforces.
+    ``classified_ports`` (data center wide, identical on every VTEP) lists the ports the VRF's enforcement
+    relies on: component classification by interface + VLAN is documented-not-lab-verified.
     """
     vrf_rows = sorted(vrf_rows, key=lambda row: (row["src_group_id"], row["dst_group_id"]))
     forward = {(row["src"], row["dst"]) for row in vrf_rows}
@@ -974,6 +1020,7 @@ def _vrf_view(
         "contracts": contract_views,
         "unenforced": "; ".join(_one_line(reason) for reason in reasons) or None,
         "enforce_tag": None if reasons else unclassified_id,
+        "classified_ports": _one_line(ports) if (ports := _claimed_ports_text(claims, components)) else None,
     }
 
 
@@ -1098,6 +1145,7 @@ def vxlan_gpo_device_view(
                 unclassified_id=reserved["unclassified"],
                 no_classifier=selectors.unclassified.get(vrf, set()),
                 component_blockers=component_blockers,
+                claims=coverage.claims,
             )
             for vrf, vrf_rows in sorted(rows_by_vrf.items())
         },

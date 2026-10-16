@@ -458,28 +458,6 @@ class TestQueries:
             "the shared fragment stays as the matrix reads it"
         )
 
-    def test_the_placement_fragment_selects_what_component_coverage_reads(self, root_dir: Path) -> None:
-        """Per host kind: NICs by role with the cable's endpoints (id, device, role, tags, port-channel).
-
-        Plain fields inside inline fragments only: a named fragment nested in an inline fragment resolves to nulls.
-        """
-        text = self._fragment(root_dir, "SecurityTagPlacementFields")
-        assert "..." not in text.replace("... on", ""), "a named fragment is spread inside"
-        assert text.count('interfaces(role__values: ["uplink", "lag"])') == 3
-        for needle in (
-            "... on DcimDevice",
-            "... on DcimVirtualDevice",
-            "... on ManagedControllerVirtual",
-            "hosting_device",
-            "endpoints",
-            "device {",
-            "role {",
-            "interface_capabilities {",
-            "lag {",
-            "__typename",
-        ):
-            assert needle in text, needle
-
     def test_fragment_selects_memory_and_kind(self, root_dir: Path) -> None:
         """fabric_reason reads device_type.memory_gb; site_kind reads group_policy_kind."""
         text = (root_dir / "queries/fragments/group_policy.gql").read_text()
