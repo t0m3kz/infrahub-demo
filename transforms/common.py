@@ -16,6 +16,7 @@ from transforms.helpers.firewall import (
     get_exchange_transits,
     get_leaf_firewall_transits,
 )
+from transforms.helpers.group_policy import vxlan_gpo_device_view
 from transforms.helpers.ha import _HA_TYPENAMES
 from transforms.helpers.loadbalancer_pbr import _flatten_deployment_lb_vips, get_lb_backend_pbr_rules
 from transforms.helpers.management import get_management_services
@@ -325,7 +326,7 @@ class BaseDeviceTransform(InfrahubTransform):
         if self.device_role in self._LEAF_ROLES:
             self._refuse_unbindable_sros_acls(platform_name, acls, vxlan)
 
-        return {
+        config = {
             "vlans": vlans,
             "vxlan": vxlan,
             "acls": acls,
@@ -335,6 +336,20 @@ class BaseDeviceTransform(InfrahubTransform):
             # so only the borders originate them as type-5 routes.
             "leaf_transit_prefixes": sorted({t["segment"]["gateway"]["ip_prefix"]["prefix"] for t in leaf_transits}),
         }
+        # Group policy (NX-OS VXLAN GPO) of a VTEP in a reference fabric, from the
+        # fleet roots of the device query; absent for every other device, so its
+        # templates render exactly as before.
+        group_policy = vxlan_gpo_device_view(
+            extra_roots or {},
+            device_name=data.get("name") or "",
+            role=self.device_role,
+            platform=platform_name,
+            activations=activations or [],
+            vrfs=[mapping["vrf_name"] for mapping in (vxlan or {}).get("l3_vni_mappings", [])],
+        )
+        if group_policy:
+            config["group_policy"] = group_policy
+        return config
 
     _LEAF_ROLES = frozenset({"leaf", "tor", "access-leaf"})
 

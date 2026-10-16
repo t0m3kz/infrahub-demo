@@ -109,6 +109,21 @@ infrahub_tests:
         spec:
           kind: python-transform-unit-process
           directory: configs/leaf_sonic_mlag
+      - name: cisco_nxos_gpo_reference
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_cisco_nxos_gpo_reference
+      - name: cisco_nxos_gpo_non_reference
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_cisco_nxos_gpo_non_reference
+      - name: arista_eos_gpo_reference_site
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_arista_eos_gpo_reference_site
   - resource: PythonTransform
     resource_name: spine
     tests:
@@ -293,6 +308,19 @@ infrahub_tests:
         spec:
           kind: python-transform-unit-process
           directory: configs/border_leaf_sonic_mlag
+      - name: cisco_nxos_gpo_reference
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/border_leaf_cisco_nxos_gpo_reference
+  - resource: PythonTransform
+    resource_name: access_leaf
+    tests:
+      - name: cisco_nxos_gpo_reference
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/access_leaf_cisco_nxos_gpo_reference
   - resource: PythonTransform
     resource_name: tor
     tests:

@@ -385,6 +385,42 @@ class TestQueries:
         assert "...DeviceGroupPolicyFields" in text
         assert "role__values" not in text
 
+    @staticmethod
+    def _strip(text: str) -> str:
+        """The query text without comments, whitespace-normalised."""
+        return " ".join(" ".join(line.split("#")[0] for line in text.splitlines()).split())
+
+    @pytest.mark.parametrize(
+        "query", ["queries/config/leaf.gql", "queries/config/border_leaf.gql", "queries/config/border_spine.gql"]
+    )
+    def test_device_queries_carry_the_fleet_roots_of_the_matrix_after_the_device_root(
+        self, root_dir: Path, query: str
+    ) -> None:
+        """The NX-OS GPO block reads the matrix's roots (minus ``target``); DcimDevice stays the first root."""
+        matrix = (root_dir / "queries/topology/segmentation_matrix.gql").read_text()
+        device = (root_dir / query).read_text()
+        fleet = self._strip(matrix[matrix.index("  DcimGroupPolicyProfile {") :])
+        text = self._strip(device)
+        assert fleet in text
+        assert text.index("DcimDevice(") < text.index("DcimGroupPolicyProfile")
+        assert "target" not in text
+
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "queries/topology/segmentation_matrix.gql",
+            "queries/config/leaf.gql",
+            "queries/config/border_leaf.gql",
+            "queries/config/border_spine.gql",
+        ],
+    )
+    def test_every_query_reads_the_tags_through_the_one_fragment(self, root_dir: Path, query: str) -> None:
+        text = (root_dir / query).read_text()
+        assert "...SecurityTagGroupPolicyFields" in text
+        assert "components" not in text
+        fragments = (root_dir / "queries/fragments/group_policy.gql").read_text()
+        assert fragments.count("fragment SecurityTagGroupPolicyFields on SecurityTag") == 1
+
     def test_fragment_selects_memory_and_kind(self, root_dir: Path) -> None:
         """fabric_reason reads device_type.memory_gb; site_kind reads group_policy_kind."""
         text = (root_dir / "queries/fragments/group_policy.gql").read_text()

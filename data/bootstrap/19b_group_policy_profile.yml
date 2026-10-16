@@ -14,9 +14,11 @@
 #   Reserved groups (transforms/helpers/group_policy.py, deny by default):
 #   unaware_group_id 15 (D: Multi-Site installs routes from policy-unaware
 #   sites with reserved tag 15, and contracts with tag 15 are needed);
-#   unclassified_group_id 0 (I: the guide names 0 "unknown" but does not say
-#   which tag unclassified endpoints, transit legs and external routes get in a
-#   policy-aware site: U, lab-sensitive).
+#   unclassified_group_id 0 (I/U: the guide never defines group 0; its only
+#   mention is an ECMP caveat about a next hop "with tag 0", which suggests an
+#   untagged value, and it does not say which tag unclassified endpoints,
+#   transit legs and external routes get in a policy-aware site, nor whether a
+#   contract or `security enforce tag` accepts 0: lab-sensitive).
 #
 # arista_eos: EOS 4.36.2F user manual, "Segment Security" (MSS-G, D for the CLI
 #   and semantics); the manual names no platform. Device types: the 7280R3
