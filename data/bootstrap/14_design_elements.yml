@@ -24,6 +24,16 @@ spec:
     - quantity: 8
       role: leaf
       template: N9K-C9336C-FX2_LEAF_MR
+    # Reference-fabric variant (GX, NX-OS 10.6(3)F): DC10
+    - quantity: 2
+      role: leaf
+      template: N9K-C9364C-GX_LEAF_MR
+    - quantity: 4
+      role: leaf
+      template: N9K-C9364C-GX_LEAF_MR
+    - quantity: 8
+      role: leaf
+      template: N9K-C9364C-GX_LEAF_MR
 
 
     - quantity: 2
@@ -52,6 +62,13 @@ spec:
     - quantity: 4
       role: access-leaf
       template: N9K-C93180YC-EX_ACCESS
+    # Reference-fabric variant (FX3, NX-OS 10.6(3)F): DC10
+    - quantity: 2
+      role: access-leaf
+      template: N9K-C93180YC-FX3_ACCESS
+    - quantity: 4
+      role: access-leaf
+      template: N9K-C93180YC-FX3_ACCESS
     # Cisco L2-Leaf (L2-only — middle_rack/mixed deployments, connects to leafs)
     - quantity: 2
       role: l2-leaf
@@ -277,6 +294,10 @@ spec:
     - quantity: 2
       role: border-leaf
       template: N9K-C9336C-FX2_BORDER_LEAF
+    # Reference-fabric variant (GX, NX-OS 10.6(3)F): DC10
+    - quantity: 2
+      role: border-leaf
+      template: N9K-C9364C-GX_BORDER_LEAF
     - quantity: 2
       role: border-leaf
       template: DCS-7050CX3-32C-R_BORDER_LEAF
