@@ -53,8 +53,9 @@ _COMPONENT_SEGMENT_TARGETS = "app_components"
 # The endpoint NIC roles this generator cables (and whose far ends add_app_component_segment
 # tags): plain uplinks and bond members.
 ENDPOINT_NIC_ROLES = ("uplink", "lag")
-# Instance kinds placed on a physical host through hosting_device (shared with
-# generators/topology/app_instance_segment.py).
+# Instance kinds placed on a physical host through hosting_device. Their typenames are
+# utils/app_instances.HOSTED_INSTANCE_TYPENAMES (what physical_host resolves for the generator
+# and the NX-OS GPO transform); tests/unit/test_app_instances.py pins the two together.
 HOSTED_INSTANCE_KINDS = (DcimVirtualDevice, ManagedControllerVirtual)
 
 

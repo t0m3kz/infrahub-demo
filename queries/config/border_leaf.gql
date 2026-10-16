@@ -179,6 +179,7 @@ query border_leaf_config(
     edges {
       node {
         ...SecurityTagGroupPolicyFields
+        ...SecurityTagPlacementFields
       }
     }
   }

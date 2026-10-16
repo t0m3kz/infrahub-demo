@@ -99,23 +99,24 @@ policy-map type security GPO-f2f210dd03
   class GPO-f2f210dd03
     permit
 !
-! Security groups: the VLAN selector is this device's own VLAN of the segment; a group without one is
-! classified on the VTEPs that carry its segment (the group ID travels in the VXLAN header)
+! Security groups: the VLAN selector is this device's own VLAN of the segment; a component group is
+! classified by VLAN + interface on the VTEP that owns the host port (the group ID travels in the VXLAN header)
+! documented-not-lab-verified: interface+VLAN selectors are documented for trunk ports only (10.6(1)F), so the host ports are trunks
 ! documented-not-lab-verified: the guide gives no range for the group ids and no rules for the group names (a tag name is rewritten to [A-Za-z0-9_-])
 security-group 40 name web-np
   match vlan 110
 security-group 41 name app-np
   match vlan 120
 security-group 42 name db-np
-! documented-not-lab-verified: pay-p: intra-group deny of the microsegmented segment pay-p is not rendered (10.6(3)F intra-group isolation); its hosts talk freely until D2
+! documented-not-lab-verified: pay-p: intra-group deny of the microsegmented segment pay-p is not rendered (10.6(3)F intra-group isolation); its hosts talk freely until it is
 security-group 43 name pay-p
   match vlan 210
 security-group 44 name portal-p
   match vlan 220
-! web_pay_demo_local: component group of segment pay-p, no classifier until D2
 security-group 50 name web_pay_demo_local
-! db_pay_demo_local: component group of segment pay-p, no classifier until D2
+  match vlan 210 interface Ethernet10
 security-group 51 name db_pay_demo_local
+  match vlan 210 interface Ethernet11
 !
 ! Interfaces
 interface Ethernet1
@@ -134,6 +135,16 @@ interface Ethernet10
   switchport
   switchport mode trunk
   switchport trunk allowed vlan 110,120,210,220
+!
+interface Ethernet11
+  no shutdown
+
+  switchport
+  switchport mode trunk
+  switchport trunk native vlan 210
+  switchport trunk allowed vlan 210
+  spanning-tree port type edge trunk
+  ! documented-not-lab-verified: the native VLAN classifies untagged host frames for the interface+VLAN selector of the GPO block; the guide does not cover vPC peer-link behaviour
 !
 interface Loopback0
   no shutdown
@@ -299,7 +310,9 @@ vrf context PROD
   security contract source 44 destination 50 policy GPO-478bae982c bidir
   ! web_pay_demo_local -> db_pay_demo_local
   security contract source 50 destination 51 policy GPO-d77ed0702f bidir
-  ! unenforced: component groups db_pay_demo_local, web_pay_demo_local have no classifier until D2
+  ! documented-not-lab-verified: the guide gives no range or meaning for the enforce tag; the unclassified group id is used
+  ! documented-not-lab-verified: enforcing this VRF relies on native-VLAN frames being classified by match vlan N interface P and on vPC peer-link behaviour (NX-OS 10.6(1)F guide); ports: dc1-leaf-01 Ethernet10, dc1-leaf-01 Ethernet11
+  security enforce tag 0 default deny
   address-family ipv4 unicast
     route-target both 65000:50012
     route-target both 65000:50012 evpn

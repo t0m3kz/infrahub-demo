@@ -2607,6 +2607,108 @@
                     "node": {
                       "id": "seg-pay-p"
                     }
+                  },
+                  "instances": {
+                    "edges": [
+                      {
+                        "node": {
+                          "id": "inst-srv-pay-web-01",
+                          "__typename": "DcimPhysicalDevice",
+                          "name": {
+                            "value": "srv-pay-web-01"
+                          },
+                          "interfaces": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "id": "if-srv-pay-web-01-eno1",
+                                  "name": {
+                                    "value": "eno1"
+                                  },
+                                  "cable": {
+                                    "node": {
+                                      "endpoints": {
+                                        "edges": [
+                                          {
+                                            "node": {
+                                              "id": "if-srv-pay-web-01-eno1",
+                                              "name": {
+                                                "value": "eno1"
+                                              },
+                                              "role": {
+                                                "value": "uplink"
+                                              },
+                                              "device": {
+                                                "node": {
+                                                  "name": {
+                                                    "value": "srv-pay-web-01"
+                                                  }
+                                                }
+                                              },
+                                              "interface_capabilities": {
+                                                "edges": []
+                                              },
+                                              "lag": {
+                                                "node": null
+                                              }
+                                            }
+                                          },
+                                          {
+                                            "node": {
+                                              "id": "if-dc1-leaf-01-Ethernet10",
+                                              "name": {
+                                                "value": "Ethernet10"
+                                              },
+                                              "role": {
+                                                "value": "server"
+                                              },
+                                              "device": {
+                                                "node": {
+                                                  "name": {
+                                                    "value": "dc1-leaf-01"
+                                                  }
+                                                }
+                                              },
+                                              "interface_capabilities": {
+                                                "edges": [
+                                                  {
+                                                    "node": {
+                                                      "id": "seg-web-np"
+                                                    }
+                                                  },
+                                                  {
+                                                    "node": {
+                                                      "id": "seg-app-np"
+                                                    }
+                                                  },
+                                                  {
+                                                    "node": {
+                                                      "id": "seg-pay-p"
+                                                    }
+                                                  },
+                                                  {
+                                                    "node": {
+                                                      "id": "seg-portal-p"
+                                                    }
+                                                  }
+                                                ]
+                                              },
+                                              "lag": {
+                                                "node": null
+                                              }
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
                   }
                 }
               }
@@ -2634,6 +2736,174 @@
                     "node": {
                       "id": "seg-pay-p"
                     }
+                  },
+                  "instances": {
+                    "edges": [
+                      {
+                        "node": {
+                          "id": "inst-vm-pay-db-01",
+                          "__typename": "DcimVirtualDevice",
+                          "name": {
+                            "value": "vm-pay-db-01"
+                          },
+                          "interfaces": {
+                            "edges": []
+                          },
+                          "hosting_device": {
+                            "node": {
+                              "id": "host-srv-pay-db-01",
+                              "name": {
+                                "value": "srv-pay-db-01"
+                              },
+                              "interfaces": {
+                                "edges": [
+                                  {
+                                    "node": {
+                                      "id": "if-srv-pay-db-01-eno1",
+                                      "name": {
+                                        "value": "eno1"
+                                      },
+                                      "cable": {
+                                        "node": {
+                                          "endpoints": {
+                                            "edges": [
+                                              {
+                                                "node": {
+                                                  "id": "if-srv-pay-db-01-eno1",
+                                                  "name": {
+                                                    "value": "eno1"
+                                                  },
+                                                  "role": {
+                                                    "value": "uplink"
+                                                  },
+                                                  "device": {
+                                                    "node": {
+                                                      "name": {
+                                                        "value": "srv-pay-db-01"
+                                                      }
+                                                    }
+                                                  },
+                                                  "interface_capabilities": {
+                                                    "edges": []
+                                                  },
+                                                  "lag": {
+                                                    "node": null
+                                                  }
+                                                }
+                                              },
+                                              {
+                                                "node": {
+                                                  "id": "if-dc1-leaf-01-Ethernet11",
+                                                  "name": {
+                                                    "value": "Ethernet11"
+                                                  },
+                                                  "role": {
+                                                    "value": "server"
+                                                  },
+                                                  "device": {
+                                                    "node": {
+                                                      "name": {
+                                                        "value": "dc1-leaf-01"
+                                                      }
+                                                    }
+                                                  },
+                                                  "interface_capabilities": {
+                                                    "edges": [
+                                                      {
+                                                        "node": {
+                                                          "id": "seg-pay-p"
+                                                        }
+                                                      }
+                                                    ]
+                                                  },
+                                                  "lag": {
+                                                    "node": null
+                                                  }
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "node": {
+                                      "id": "if-srv-pay-db-01-eno2",
+                                      "name": {
+                                        "value": "eno2"
+                                      },
+                                      "cable": {
+                                        "node": {
+                                          "endpoints": {
+                                            "edges": [
+                                              {
+                                                "node": {
+                                                  "id": "if-srv-pay-db-01-eno2",
+                                                  "name": {
+                                                    "value": "eno2"
+                                                  },
+                                                  "role": {
+                                                    "value": "uplink"
+                                                  },
+                                                  "device": {
+                                                    "node": {
+                                                      "name": {
+                                                        "value": "srv-pay-db-01"
+                                                      }
+                                                    }
+                                                  },
+                                                  "interface_capabilities": {
+                                                    "edges": []
+                                                  },
+                                                  "lag": {
+                                                    "node": null
+                                                  }
+                                                }
+                                              },
+                                              {
+                                                "node": {
+                                                  "id": "if-bl-dc12-01-Ethernet5",
+                                                  "name": {
+                                                    "value": "Ethernet5"
+                                                  },
+                                                  "role": {
+                                                    "value": "server"
+                                                  },
+                                                  "device": {
+                                                    "node": {
+                                                      "name": {
+                                                        "value": "bl-dc12-01"
+                                                      }
+                                                    }
+                                                  },
+                                                  "interface_capabilities": {
+                                                    "edges": [
+                                                      {
+                                                        "node": {
+                                                          "id": "seg-pay-p"
+                                                        }
+                                                      }
+                                                    ]
+                                                  },
+                                                  "lag": {
+                                                    "node": null
+                                                  }
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
                   }
                 }
               }

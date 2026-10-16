@@ -56,6 +56,9 @@ vrf context {{ mapping.vrf_name }}
   ! unenforced: {{ gpo.unenforced }}
 {%- else %}
   ! documented-not-lab-verified: the guide gives no range or meaning for the enforce tag; the unclassified group id is used
+{%- if gpo.classified_ports %}
+  ! documented-not-lab-verified: enforcing this VRF relies on native-VLAN frames being classified by match vlan N interface P and on vPC peer-link behaviour (NX-OS 10.6(1)F guide); ports: {{ gpo.classified_ports }}
+{%- endif %}
   security enforce tag {{ gpo.enforce_tag }} default deny
 {%- endif %}
 {%- endif %}

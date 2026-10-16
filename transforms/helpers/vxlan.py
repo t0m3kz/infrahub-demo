@@ -255,12 +255,18 @@ def get_interfaces(
     data: list,
     activations: list[dict[str, Any]] | None = None,
     device_name: str = "",
+    native_vlans: dict[str, int] | None = None,
 ) -> list[dict[str, Any]]:
     """
     Returns a list of interface dictionaries sorted by interface name.
     Only includes 'ospf' key if OSPF area is present.
     Includes IP addresses, description, status, role, and other interface data.
     Also includes circuit and virtual link service information for WAN connectivity.
+
+    ``native_vlans`` (port name -> VLAN) are the host ports an NX-OS GPO interface selector names
+    (transforms/helpers/group_policy.py): such a port must be a trunk, so a port that would be an
+    access port on exactly that VLAN becomes a trunk with it as ``native_vlan`` (the host sends untagged
+    frames). A port already a trunk is left as it is.
     """
     if not data:
         return []
@@ -385,6 +391,12 @@ def get_interfaces(
 
         is_lag = iface.get("typename") == "DcimLAGInterface"
 
+        # The one mode rule (below). A GPO host port that would be access on exactly its claimed VLAN
+        # becomes a trunk with that VLAN native; one already a trunk keeps its tagged VLANs.
+        plain_trunk = bool(vlans) and (len(vlans) > 1 or iface.get("role") in _SERVICE_TRUNK_ROLES)
+        claimed_vlan = (native_vlans or {}).get(name)
+        native_vlan = claimed_vlan if not plain_trunk and claimed_vlan is not None and vlans == [claimed_vlan] else None
+
         iface_dict = {
             "name": name,
             # Sorted when the port carries several VLANs: the list order comes
@@ -397,7 +409,7 @@ def get_interfaces(
             # side). Any other port carrying more than one VLAN (e.g. a host
             # port in two segments) is a trunk of exactly those VLANs; a
             # single-VLAN port keeps its access rendering (None).
-            "mode": "trunk" if vlans and (len(vlans) > 1 or iface.get("role") in _SERVICE_TRUNK_ROLES) else None,
+            "mode": "trunk" if plain_trunk or native_vlan is not None else None,
             # Isolation mode of the port's access (first) VLAN.
             "access_isolation_mode": vlan_isolation.get(vlans[0], "normal") if vlans else None,
             "description": iface.get("description"),
@@ -409,6 +421,9 @@ def get_interfaces(
             "dot1q_vlan": context_vlan_id,
             "parent_interface": iface.get("parent_interface"),
         }
+
+        if native_vlan is not None:
+            iface_dict["native_vlan"] = native_vlan
 
         if is_lag:
             iface_dict["lag_id"] = iface.get("lag_id")

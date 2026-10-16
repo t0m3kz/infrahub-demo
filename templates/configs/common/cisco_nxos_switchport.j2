@@ -1,8 +1,17 @@
-{#- Expects `interface` in scope. Trunk when interface.mode == 'trunk', else access on the first VLAN. -#}
+{#- Expects `interface` in scope. Trunk when interface.mode == 'trunk', else access on the first VLAN.
+    `interface.native_vlan` (set by get_interfaces only for an NX-OS GPO host port, a port an interface+VLAN
+    selector names: cisco_nxos_gpo.j2) makes the trunk an edge trunk with that native VLAN. -#}
 {%- if interface.mode == 'trunk' %}
   switchport
   switchport mode trunk
+{%- if interface.native_vlan %}
+  switchport trunk native vlan {{ interface.native_vlan }}
+{%- endif %}
   switchport trunk allowed vlan {{ interface.vlans|join(',') }}
+{%- if interface.native_vlan %}
+  spanning-tree port type edge trunk
+  ! documented-not-lab-verified: the native VLAN classifies untagged host frames for the interface+VLAN selector of the GPO block; the guide does not cover vPC peer-link behaviour
+{%- endif %}
 {%- elif interface.vlans %}
   switchport
   switchport mode access
