@@ -1,4 +1,8 @@
 ---
+# DC10 is the reference fabric: every VTEP (leaf, access-leaf, border-leaf) is a type and
+# release the group-policy profile accepts (19b_group_policy_profile.yml: GX / FX3 types on
+# NX-OS 10.6(3)F). DC11 and DC12 keep FX2 / EX on 10.3(3) and are reported as not reference
+# fabrics by the reference_fabric check.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -10,7 +14,7 @@ spec:
       size: L
       fabric_templates:
         - ["2", "super-spine", "N9K-C9336C-FX2_SUPER_SPINE"]
-        - ["2", "border-leaf", "N9K-C9336C-FX2_BORDER_LEAF"]
+        - ["2", "border-leaf", "N9K-C9364C-GX_BORDER_LEAF"]
         - ["2", "firewall", "CP-26000_FIREWALL"]
         - ["2", "load-balancer", "BIG-IP-i5800_LOAD_BALANCER"]
       fabric_interface_sorting_method: top_down
@@ -42,8 +46,8 @@ spec:
                   parent: fra-1-s-1
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MR"]
-                    - ["2", "access-leaf", "N9K-C93180YC-EX_ACCESS"]
+                    - ["2", "leaf", "N9K-C9364C-GX_LEAF_MR"]
+                    - ["2", "access-leaf", "N9K-C93180YC-FX3_ACCESS"]
                 - index: 5
                   row_index: 2
                   shortname: fra-1-s-1-r-2-5
@@ -51,8 +55,8 @@ spec:
                   parent: fra-1-s-1
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MR"]
-                    - ["2", "access-leaf", "N9K-C93180YC-EX_ACCESS"]
+                    - ["2", "leaf", "N9K-C9364C-GX_LEAF_MR"]
+                    - ["2", "access-leaf", "N9K-C93180YC-FX3_ACCESS"]
                 # Compute racks: no fabric templates of their own. The endpoint
                 # generator cables their servers to the access-leaf pair in the
                 # network rack that shares their row.

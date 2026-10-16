@@ -242,6 +242,19 @@ spec:
       platform: cisco_nxos
       description: "NX-OS 10.3(3) — current recommended release for Nexus 9000 fabric roles"
 
+    - name: cisco_nxos-10.6.3F
+      version: "10.6(3)F"
+      release_type: ga
+      is_approved: true
+      is_recommended: false
+      release_date: "2025-12-01T00:00:00+00:00"
+      end_of_support: "2029-12-01T00:00:00+00:00"
+      end_of_life: "2030-12-01T00:00:00+00:00"
+      platform: cisco_nxos
+      description: >-
+        NX-OS 10.6(3)F — the reference fabric release (10.6(1)F is the first with VXLAN GPO component tags,
+        see 19b_group_policy_profile.yml)
+
     # ── Dell Enterprise SONiC (PowerSwitch) ───────────────────────────────────
     - name: dell_sonic-4.1.1
       version: "4.1.1"

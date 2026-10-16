@@ -164,6 +164,44 @@ spec:
             name: mgmt0
             role: management
             interface_type: 1000base-t
+    # Reference-fabric variant of N9K-C9336C-FX2_LEAF_MR (same port plan): a GX type on NX-OS 10.6(3)F, the
+    # hardware and release the group-policy profile (19b_group_policy_profile.yml) accepts.
+    - template_name: N9K-C9364C-GX_LEAF_MR
+      owner: "P027"
+      device_type: N9K-C9364C-GX
+      platform: cisco_nxos
+      software_image: cisco_nxos-10.6.3F
+      role: leaf
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: N9K-C9364C-GX_LEAF_MR_Ethernet1/[1-24]
+            name: Ethernet1/[1-24]
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9364C-GX_LEAF_MR_Ethernet1/[25-30]
+            name: Ethernet1/[25-30]
+            role: downlink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9364C-GX_LEAF_MR_Ethernet1/[31-32]
+            name: Ethernet1/[31-32]
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9364C-GX_LEAF_MR_Ethernet1/[33-34]
+            name: Ethernet1/[33-34]
+            role: mlag-peer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9364C-GX_LEAF_MR_Ethernet1/[35-36]
+            name: Ethernet1/[35-36]
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9364C-GX_LEAF_MR_mgmt0
+            name: mgmt0
+            role: management
+            interface_type: 1000base-t
     - template_name: N9K-C9336C-FX2_LEAF_MIXED
       owner: "P027"
       device_type: N9K-C9336C-FX2
@@ -346,6 +384,31 @@ spec:
             name: mgmt0
             role: management
             interface_type: 1000base-t
+    # Reference-fabric variant of N9K-C93180YC-EX_ACCESS (same port plan): an FX3 type on NX-OS 10.6(3)F.
+    - template_name: N9K-C93180YC-FX3_ACCESS
+      owner: "P027"
+      device_type: N9K-C93180YC-FX3
+      platform: cisco_nxos
+      software_image: cisco_nxos-10.6.3F
+      role: access-leaf
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: N9K-C93180YC-FX3_ACCESS_Ethernet1/[1-48]
+            name: Ethernet1/[1-48]
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: N9K-C93180YC-FX3_ACCESS_Ethernet1/[49-54]
+            name: Ethernet1/[49-54]
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C93180YC-FX3_ACCESS_mgmt0
+            name: mgmt0
+            role: management
+            interface_type: 1000base-t
     - template_name: N9K-C9316D-GX_EDGE
       owner: "P027"
       device_type: N9K-C9316D-GX
@@ -482,12 +545,13 @@ spec:
             role: management
             interface_type: 1000base-t
 
+    # Reference-fabric border leaf: a GX type on NX-OS 10.6(3)F (19b_group_policy_profile.yml).
     - template_name: N9K-C9364C-GX_BORDER_LEAF
       owner: "P027"
       device_type: N9K-C9364C-GX
       role: border-leaf
       platform: cisco_nxos
-      software_image: cisco_nxos-10.3.3
+      software_image: cisco_nxos-10.6.3F
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
