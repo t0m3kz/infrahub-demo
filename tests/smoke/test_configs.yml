@@ -318,6 +318,11 @@ infrahub_tests:
         spec:
           kind: python-transform-unit-process
           directory: configs/border_leaf_cisco_nxos_gpo_reference
+      - name: cisco_nxos_bgw_stretched
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/border_leaf_cisco_nxos_bgw_stretched
   - resource: PythonTransform
     resource_name: access_leaf
     tests:

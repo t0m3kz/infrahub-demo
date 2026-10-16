@@ -1714,6 +1714,54 @@ def build_edge_exchange_transit_data(*, device_name: str, platform: str) -> dict
     return data
 
 
+def build_border_leaf_bgw_stretched_data(*, device_name: str, platform: str) -> dict:
+    """A DC border-leaf that is an EVPN Multi-Site BGW with two stretched, hostless segments.
+
+    The exchange-transit wiring (shared and dedicated firewall context, each serving one
+    PROD segment) minus the customer port, plus a multisite-vip loopback and
+    stretch_scope dc_pair on both segments: the BGW stitches them without any
+    customer-facing port, so it renders their VLAN, VNI and anycast SVI but no tenant
+    policy (no ACL, no PBR). Those belong to the leaves that host the segments.
+    """
+    data = build_exchange_transit_bl_data(device_name=device_name, platform=platform, with_customer_port=False)
+    device_node = data["DcimDevice"]["edges"][0]["node"]
+    device_node["interfaces"]["edges"].append(
+        {
+            "node": _make_interface(
+                name="Loopback100",
+                device_name=device_name,
+                description="Multi-Site VIP",
+                role="multisite-vip",
+                ip_address="10.255.100.1/32",
+                typename="DcimVirtualInterface",
+            )
+        }
+    )
+    for dep in device_node["deployment"]["node"]["segment_deployments"]["edges"]:
+        segment = dep["node"]["segment"]["node"]
+        segment["stretch_scope"] = _v("dc_pair")
+        # Zero-trust policy on the segments, as on the leaves that host them: the ACL and PBR
+        # the BGW must not take as input.
+        segment["security_policy"] = _node(
+            _make_security_policy(
+                name="policy-bgw-seg",
+                rules=[_make_policy_rule(index=10, name="allow-https", protocol="tcp", port_start=443)],
+            )
+        )
+    # The DC-wide firewall contexts (what makes the leaves redirect these segments to the
+    # firewall): the same contexts the firewall-role port is tagged with.
+    fw_port = next(e["node"] for e in device_node["interfaces"]["edges"] if e["node"]["role"] == _v("firewall"))
+    firewall = {
+        "node": {
+            "capabilities": _edges(
+                [{"__typename": "ManagedFirewallHA", "contexts": fw_port["interface_capabilities"]}]
+            ),
+        }
+    }
+    device_node["deployment"]["node"]["devices"] = {"edges": [firewall]}
+    return data
+
+
 def build_edge_internet_bgw_data(*, device_name: str, platform: str) -> dict:
     """A colocation edge that is its site's EVPN Multi-Site BGW and peers an ISP in INTERNET.
 
@@ -3377,6 +3425,15 @@ def main() -> int:
         Edge,
         "edge_cisco_nxos_exchange_transit",
         build_edge_exchange_transit_data(device_name="dc1-edge-01", platform="cisco_nxos"),
+    )
+    generated += g
+    errors += e
+    # DC border-leaf BGW: stretched segments without a customer port render no tenant policy.
+    print("\nGenerating border-leaf BGW stretched segments fixture:")
+    g, e = _write_data_fixture(
+        BorderLeaf,
+        "border_leaf_cisco_nxos_bgw_stretched",
+        build_border_leaf_bgw_stretched_data(device_name="dc1-border-leaf-01", platform="cisco_nxos"),
     )
     generated += g
     errors += e

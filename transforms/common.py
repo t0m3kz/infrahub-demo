@@ -260,6 +260,12 @@ class BaseDeviceTransform(InfrahubTransform):
         # PBR and the zero-trust ACLs hang off the segment's SVI; a
         # terminate_inline segment has none here (its HA pair routes it).
         routed = routed_activations(activations)
+        # A border gateway's stitched segments are hostless (no customer-facing port),
+        # so its anycast SVI carries no tenant traffic: hosts are served by the leaf
+        # that hosts them, where ACL + PBR apply. They stay in `activations` (VLAN, VNI,
+        # VRF/L3VNI and the SVI are rendered) but are no input to the policy below.
+        if self.device_role in BORDER_ROLES:
+            routed = [act for act in routed if not act.get("border_gateway")]
 
         # Customer PBR: default-redirect to the firewall context serving this
         # segment's owner; a SecurityPolicyRule permit is the only bypass.
@@ -367,24 +373,24 @@ class BaseDeviceTransform(InfrahubTransform):
             return rules, []
         return rules, get_leaf_firewall_transits(rules, firewall_contexts, device_name=data.get("name", ""))
 
-    # The border_leafs/* templates (border-leaf and border-spine) render the SVI ACL on these platforms only, and never PBR.
-    _BORDER_LEAF_ACL_PLATFORMS = frozenset({"cisco_nxos", "arista_eos"})
-
-    @classmethod
+    @staticmethod
     def _refuse_unprotected_tenant_svis(
-        cls, role: str, platform_name: str, acls: list[dict[str, Any]], leaf_pbr_rules: list[dict[str, Any]]
+        role: str, platform_name: str, acls: list[dict[str, Any]], leaf_pbr_rules: list[dict[str, Any]]
     ) -> None:
         """Raise when a border leaf or border spine (``role``) hosts a routed tenant SVI it cannot protect.
 
-        The segments' ACL (and PBR) would otherwise silently vanish and leave an
-        any-to-any SVI inside the shared tenant VRF.
+        No border_leafs/* template renders PBR or the SVI ACL definitions (the NX-OS and
+        EOS ones would even bind a name nobody defines), so the segments' policy would
+        silently vanish and leave an any-to-any SVI inside the shared tenant VRF. Only
+        host-capable activations reach here: a border gateway's hostless stitched
+        segments are kept out of the policy inputs (see _extra_config).
         """
         if leaf_pbr_rules:
             raise ValueError(
                 f"{platform_name} {role} cannot render PBR policy for VLANs "
                 f"{sorted(rule['vlan_id'] for rule in leaf_pbr_rules)}; refusing unprotected config"
             )
-        if acls and platform_name not in cls._BORDER_LEAF_ACL_PLATFORMS:
+        if acls:
             raise ValueError(
                 f"{platform_name} {role} cannot render the SVI ACL for VLANs "
                 f"{sorted(acl['vlan_id'] for acl in acls)}; refusing unprotected config"
@@ -528,7 +534,9 @@ class BaseDeviceTransform(InfrahubTransform):
             if own_domain_seg is None or not own_domain_seg.get("vlan_id"):
                 continue
             seen.add(seg_id)
-            activations.append({"vlan_id": own_domain_seg["vlan_id"], "vni": dep["vni"], "segment": seg})
+            activations.append(
+                {"vlan_id": own_domain_seg["vlan_id"], "vni": dep["vni"], "segment": seg, "border_gateway": True}
+            )
         return activations
 
     def _load_template(self, platform_name: str) -> Template:
