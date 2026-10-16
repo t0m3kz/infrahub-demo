@@ -156,7 +156,6 @@ class SdwanEdgeGenerator(CommonGenerator):
             gateway_zone_id=gateway_zone_id,
             gateway_zone_name=gateway_zone_name,
             internet_circuit_id=internet_circuit.id,
-            edge_uplink_id=edge_uplink.id,
         )
 
         tunnel_id_attr = getattr(overlay_circuit, "tunnel_id", None)
@@ -172,7 +171,7 @@ class SdwanEdgeGenerator(CommonGenerator):
             tunnel_id_value=int(tunnel_id),
         )
 
-        await self._link_overlay_to_gateway_subinterface(overlay_circuit, gateway_sub_iface.id, office_name)
+        await self._link_overlay_to_interfaces(overlay_circuit, [edge_uplink.id, gateway_sub_iface.id], office_name)
         await self._attach_to_orchestrator(gateway_id=gateway_id, gateway_name=gateway_name, edge_id=edge.id)
 
     async def _resolve_provider_ids(self, office_name: str) -> tuple[str, str]:
@@ -266,12 +265,14 @@ class SdwanEdgeGenerator(CommonGenerator):
         gateway_zone_id: str,
         gateway_zone_name: str,
         internet_circuit_id: str,
-        edge_uplink_id: str,
     ) -> Any:
-        """Create/upsert the overlay VC with only the edge-side interface
-        capability set — the gateway sub-interface doesn't exist yet (its
-        name depends on the tunnel_id this same call allocates), so it's
-        linked in a follow-up save by _link_overlay_to_gateway_subinterface.
+        """Create/upsert the overlay VC without its interface_capabilities.
+
+        The gateway sub-interface doesn't exist yet (its name depends on the
+        tunnel_id this same call allocates), and an upsert REPLACES a
+        cardinality-many relationship it carries: sending the edge side alone
+        would drop the gateway link on every rerun for the follow-up to re-add.
+        _link_overlay_to_interfaces sets both ends once, from the server's list.
         """
         vc_name = f"{office_name}-SDWAN-{gateway_zone_name}"
         pool = await self.client.get(kind="CoreNumberPool", name__value=_TUNNEL_ID_POOL_NAME)
@@ -289,7 +290,6 @@ class SdwanEdgeGenerator(CommonGenerator):
                 "description": f"{office_name} SD-WAN tunnel to {gateway_zone_name} gateway",
                 "locations": [{"id": office_id}, {"id": gateway_zone_id}],
                 "physical_circuits": [{"id": internet_circuit_id}],
-                "interface_capabilities": [{"id": edge_uplink_id}],
                 "member_of_groups": [_target_group("virtual_circuits")],
             },
         )
@@ -321,26 +321,32 @@ class SdwanEdgeGenerator(CommonGenerator):
         self.logger.info(f"Ensured Gateway sub-interface '{sub_iface_name}' on {gateway_name}")
         return sub_iface
 
-    async def _link_overlay_to_gateway_subinterface(
-        self, overlay_circuit: Any, gateway_sub_iface_id: str, office_name: str
+    async def _link_overlay_to_interfaces(
+        self, overlay_circuit: Any, interface_ids: list[str], office_name: str
     ) -> None:
-        """overlay_circuit comes straight out of _ensure_overlay_circuit's own
-        client.create()+save(allow_upsert=True), so its interface_capabilities
-        relationship manager only carries the id given at creation time.
-        Re-reading the node via filters(..., include=[...]) returns the
-        server's full peer list; its peer ids are all this needs (no
-        .fetch(), which would resolve every peer node for nothing).
+        """Make the overlay terminate on exactly ``interface_ids`` (edge uplink, gateway sub-interface).
+
+        Re-reads the circuit via filters(..., include=[...]) for the server's
+        full peer list (peer ids are all this needs, no .fetch()), then adds
+        what is missing and removes what is extra: a rerun over unchanged data
+        finds nothing to change and saves nothing.
         """
         refreshed = await self.client.filters(
             kind=TopologyVirtualCircuit, ids=[overlay_circuit.id], include=["interface_capabilities"]
         )
         if not refreshed:
-            self.fail(f"{office_name}: overlay circuit vanished before linking gateway sub-interface")
+            self.fail(f"{office_name}: overlay circuit vanished before linking its interfaces")
         circuit = refreshed[0]
         iface_capabilities = getattr(circuit, "interface_capabilities")
-        if any(peer.id == gateway_sub_iface_id for peer in iface_capabilities.peers):
+        current = {peer.id for peer in iface_capabilities.peers}
+        desired = set(interface_ids)
+        if current == desired:
             return
-        await self._safe_rel_add(iface_capabilities, {"id": gateway_sub_iface_id})
+        for interface_id in interface_ids:
+            if interface_id not in current:
+                await self._safe_rel_add(iface_capabilities, {"id": interface_id})
+        for interface_id in sorted(current - desired):
+            iface_capabilities.remove(interface_id)
         await circuit.save(allow_upsert=True)
 
     async def _attach_to_orchestrator(self, *, gateway_id: str, gateway_name: str, edge_id: str) -> None:

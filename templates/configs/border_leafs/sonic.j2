@@ -1,4 +1,4 @@
-{#- Sonic JSON Border Leaf Configuration: the leaf ConfigDB without the zero-trust ACL/PBR tables, plus tagged VLAN members on HA-facing trunks. -#}
+{#- Sonic JSON Border Leaf Configuration: the leaf ConfigDB without the zero-trust ACL/PBR tables (its VLAN_MEMBER, tagged on HA-facing trunks, comes from the shared leaf template). -#}
 {%- set sonic_border = true %}
 {%- set sonic_device_type = 'BorderLeafRouter' %}
 {%- include 'leafs/sonic.j2' -%}

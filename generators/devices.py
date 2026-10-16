@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
+from contextlib import AbstractAsyncContextManager
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from infrahub_sdk.exceptions import NodeNotFoundError, ValidationError
@@ -138,6 +139,8 @@ class DeviceMixin(MLAGWiringMixin):
     # (RackGenerator, DCTopologyGenerator) already mixes in PoolMixin
     # alongside DeviceMixin; annotation only, no method body here.
     upsert_number_pool: Any
+    # PoolMixin.resource_lock — a Callable attribute, not a stub, so it never shadows the real one.
+    resource_lock: Callable[[str], AbstractAsyncContextManager[None]]
     # Set once per generator run via set_controllers_from() — see
     # _resolve_role_controller, which reads this via getattr(...,
     # default=[]) since a generator that never sets it (e.g. one that
@@ -600,32 +603,36 @@ class DeviceMixin(MLAGWiringMixin):
         ha_group = None
         for first, second in pair_device_names(device_names):
             ha_name = f"{first}-{second}-ha"
-            existing = await self.client.filters(kind=ha_kind, name__value=ha_name, include=["capabilities"])
-            member_ids: list[str] | None = None
-            if existing:
-                ha_obj = existing[0]
-                self.client.group_context.related_node_ids.append(ha_obj.id)
-            else:
-                devices = await self.client.filters(kind=device_kind, name__values=[first, second])
-                if len(devices) != 2:
-                    self.logger.error(f"HA pair {first}/{second}: could not resolve both devices.")
-                    continue
+            # Two overlapping runs (e.g. add_dc and dc_pod_cascade) can both
+            # find no pair and both create it: the lookup and the create sit
+            # inside one per-pair lock, so the second finds the first's domain.
+            async with self.resource_lock(f"ha-domain-{ha_name}"):
+                existing = await self.client.filters(kind=ha_kind, name__value=ha_name, include=["capabilities"])
+                member_ids: list[str] | None = None
+                if existing:
+                    ha_obj = existing[0]
+                    self.client.group_context.related_node_ids.append(ha_obj.id)
+                else:
+                    devices = await self.client.filters(kind=device_kind, name__values=[first, second])
+                    if len(devices) != 2:
+                        self.logger.error(f"HA pair {first}/{second}: could not resolve both devices.")
+                        continue
 
-                if ha_group is None:
-                    ha_group = await self.client.get(kind=CoreStandardGroup, name__value="ha_domains")
-                ha_obj = await self.client.create(
-                    kind=ha_kind,
-                    data={
-                        "name": ha_name,
-                        "status": "active",
-                        "capabilities": [{"id": dev.id} for dev in devices],
-                        "member_of_groups": [{"id": ha_group.id}],
-                        **({"tenant": {"id": tenant_id}} if tenant_id else {}),
-                    },
-                )
-                await ha_obj.save(allow_upsert=True)
-                self.logger.info(f"Created HA domain {ha_name} for {role_label}s")
-                member_ids = [dev.id for dev in devices]
+                    if ha_group is None:
+                        ha_group = await self.client.get(kind=CoreStandardGroup, name__value="ha_domains")
+                    ha_obj = await self.client.create(
+                        kind=ha_kind,
+                        data={
+                            "name": ha_name,
+                            "status": "active",
+                            "capabilities": [{"id": dev.id} for dev in devices],
+                            "member_of_groups": [{"id": ha_group.id}],
+                            **({"tenant": {"id": tenant_id}} if tenant_id else {}),
+                        },
+                    )
+                    await ha_obj.save(allow_upsert=True)
+                    self.logger.info(f"Created HA domain {ha_name} for {role_label}s")
+                    member_ids = [dev.id for dev in devices]
 
             await self._ensure_ha_interfaces(ha_obj, ha_name, device_kind=device_kind, member_ids=member_ids)
 

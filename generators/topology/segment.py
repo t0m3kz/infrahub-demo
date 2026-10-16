@@ -116,6 +116,11 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGene
                 return existing_vni.value
         return None
 
+    async def _read_segment_vni(self, segment_id: str) -> int | None:
+        """The VNI already allocated to any deployment of the segment, or None."""
+        deployments = await self.client.filters(kind=ManagedSegmentDeployment, segment__ids=[segment_id])
+        return self._extract_existing_vni(deployments)
+
     async def generate(self, data: dict[str, Any]) -> None:
         """Create or upsert ManagedSegmentDeployment records for the segment."""
         cleaned = clean_data(data)
@@ -199,21 +204,25 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGene
             f"{[d.get('name', d.get('id')) for d in target_deployments]}"
         )
 
-        existing_by_deployment_id: dict[str, Any] = {}
-        reusable_vni: int | None = None
+        # The one read of the segment's existing deployments: it answers both
+        # "which deployments already exist" (idempotency) and "which VNI does a
+        # stretched segment already carry" (reuse). A failure is fatal: creating
+        # on a blind read would allocate a second VNI / duplicate the records.
         try:
             existing_deployments = await self.client.filters(
                 kind=ManagedSegmentDeployment,
                 segment__ids=[segment_id],
             )
-            for existing in existing_deployments:
-                deployment_id = getattr(getattr(existing, "deployment", None), "id", None)
-                if deployment_id and deployment_id not in existing_by_deployment_id:
-                    existing_by_deployment_id[deployment_id] = existing
-            if stretched:
-                reusable_vni = self._extract_existing_vni(existing_deployments)
         except Exception as exc:
-            self.logger.warning(f"Segment {segment_name}: failed to prefetch existing deployments: {exc}")
+            self.fail(f"Segment {segment_name}: cannot read its existing SegmentDeployments: {exc}")
+        existing_by_deployment_id: dict[str, Any] = {}
+        for existing in existing_deployments:
+            deployment_id = getattr(getattr(existing, "deployment", None), "id", None)
+            if deployment_id and deployment_id not in existing_by_deployment_id:
+                existing_by_deployment_id[deployment_id] = existing
+        # Only a stretched segment shares a VNI across deployments; a local one
+        # always draws from its own deployment's pool.
+        reusable_vni = self._extract_existing_vni(existing_deployments) if stretched else None
 
         # ----------------------------------------------------------------
         # Create/upsert SegmentDeployment per deployment
@@ -238,6 +247,16 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGene
             )
             if not success:
                 failed_deployments.append(dep_name)
+            elif (
+                stretched
+                and reusable_vni is None
+                and dep_id not in existing_by_deployment_id
+                and dep is not target_deployments[-1]
+            ):
+                # This activation just drew the stretched VNI from the global
+                # pool: read it back so the remaining deployments reuse that
+                # value instead of drawing a second one.
+                reusable_vni = await self._read_segment_vni(segment_id)
 
         if failed_deployments:
             self.logger.error(
@@ -401,38 +420,12 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGene
         queries/topology/add/vxlan_segment.gql); for a stretched one the
         global GLOBAL-L2VNI pool, used only by the first deployment — the
         rest reuse its VNI. A local segment never reuses another site's VNI.
-        Idempotency: checks for existing SegmentDeployment first — from_pool
-        is only called for genuinely new deployments.
+        Idempotency: the caller passes the deployment's existing
+        SegmentDeployment, if any (generate() reads them all once) — from_pool
+        is only called for genuinely new deployments. reusable_vni is the VNI a
+        stretched segment already carries (None for a local one, and for the
+        first stretched deployment, which draws it from vni_pool).
         """
-        # Backward-compatible fallback for direct invocations that do not pass
-        # prefetched context from generate().
-        if existing_deployment is None:
-            try:
-                existing = await self.client.filters(
-                    kind=ManagedSegmentDeployment,
-                    segment__ids=[segment_id],
-                    deployment__ids=[deployment_id],
-                )
-                if existing:
-                    existing_deployment = existing[0]
-            except Exception as exc:
-                self.logger.warning(
-                    f"Error checking existing activations for {segment_name} in {deployment_name}: {exc}"
-                )
-
-        stretched = stretch_scope != "local"
-        if not stretched:
-            reusable_vni = None
-        elif reusable_vni is None:
-            try:
-                existing_for_segment = await self.client.filters(
-                    kind=ManagedSegmentDeployment,
-                    segment__ids=[segment_id],
-                )
-                reusable_vni = self._extract_existing_vni(existing_for_segment)
-            except Exception as exc:
-                self.logger.warning(f"Error checking reusable VNI for {segment_name}: {exc}")
-
         # --- Check idempotency first ---
         if existing_deployment:
             self.logger.info(f"  [{deployment_name}] SegmentDeployment already exists for {segment_name} — skipping")

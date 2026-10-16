@@ -146,6 +146,8 @@ class TestGenerateHappyPath:
         iface_capabilities.peers = []
         overlay_circuit.interface_capabilities = iface_capabilities
         gateway_subiface = _node("subiface-1")
+        # The server-side re-read of the overlay is a different node object from the upserted one.
+        refreshed_overlay = _node("vc-1", interface_capabilities=MagicMock(peers=[]))
 
         gen.client.create = AsyncMock(side_effect=[edge, internet_circuit, overlay_circuit, gateway_subiface])
 
@@ -165,10 +167,10 @@ class TestGenerateHappyPath:
         # resolved; (3) VCE-610_EDGE template lookup; (4) edge uplink
         # interface lookup; (5) re-read the just-created overlay circuit
         # (full interface_capabilities peer list, see
-        # _link_overlay_to_gateway_subinterface's docstring); (6) orchestrator
+        # _link_overlay_to_interfaces's docstring); (6) orchestrator
         # lookup (managed_devices included).
         gen.client.filters = AsyncMock(
-            side_effect=[_providers(), [], [edge_template], [edge_uplink], [overlay_circuit], [orchestrator]]
+            side_effect=[_providers(), [], [edge_template], [edge_uplink], [refreshed_overlay], [orchestrator]]
         )
 
         pool = MagicMock(id="pool-1")
@@ -177,6 +179,7 @@ class TestGenerateHappyPath:
         self._edge = edge
         self._internet_circuit = internet_circuit
         self._overlay_circuit = overlay_circuit
+        self._refreshed_overlay = refreshed_overlay
         self._gateway_subiface = gateway_subiface
         self._orchestrator = orchestrator
         return gen
@@ -250,7 +253,7 @@ class TestGenerateHappyPath:
         # Existing-edge lookup now returns a match — no template lookup follows.
         # The 4th entry is the post-create re-fetch of the overlay circuit
         # (real __typename for interface_capabilities peers, see
-        # _link_overlay_to_gateway_subinterface's docstring) — reusing the
+        # _link_overlay_to_interfaces's docstring) — reusing the
         # same overlay_circuit mock, since only its .interface_capabilities
         # matters here, not a distinct identity.
         gen.client.filters = AsyncMock(
@@ -338,14 +341,65 @@ class TestGenerateHappyPath:
         }
 
     @pytest.mark.asyncio
-    async def test_overlay_circuit_linked_to_gateway_subinterface(self) -> None:
-        """The overlay terminates on the gateway sub-interface once it exists."""
+    async def test_first_run_links_the_overlay_to_edge_uplink_and_gateway_subinterface(self) -> None:
+        """The overlay terminates on both ends, added in one save once the sub-interface exists."""
         gen = self._wire_full_success()
 
         await gen.generate(_office_payload())
 
-        self._overlay_circuit.interface_capabilities.add.assert_called_once_with({"id": "subiface-1"})
-        self._overlay_circuit.save.assert_awaited()
+        caps = self._refreshed_overlay.interface_capabilities
+        assert [c.args[0] for c in caps.add.call_args_list] == [{"id": "edge-uplink-1"}, {"id": "subiface-1"}]
+        caps.remove.assert_not_called()
+        self._refreshed_overlay.save.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_overlay_upsert_never_carries_interface_capabilities(self) -> None:
+        """An upsert replaces a many-relationship it carries: sending the edge side alone would
+        drop the gateway link on every rerun. The link step owns the whole list."""
+        gen = self._wire_full_success()
+
+        await gen.generate(_office_payload())
+
+        overlay_data = gen.client.create.call_args_list[2].kwargs["data"]
+        assert "interface_capabilities" not in overlay_data
+
+    @pytest.mark.asyncio
+    async def test_rerun_over_unchanged_data_removes_and_adds_nothing(self) -> None:
+        """Rerun: both ends already linked, so the overlay is neither modified nor saved again."""
+        gen = self._wire_full_success()
+        caps = self._refreshed_overlay.interface_capabilities
+        caps.peers = [MagicMock(id="edge-uplink-1"), MagicMock(id="subiface-1")]
+
+        await gen.generate(_office_payload())
+
+        caps.add.assert_not_called()
+        caps.remove.assert_not_called()
+        self._refreshed_overlay.save.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_only_the_missing_end_is_added(self) -> None:
+        """Gateway side present, edge side missing: just the edge uplink is added, nothing removed."""
+        gen = self._wire_full_success()
+        caps = self._refreshed_overlay.interface_capabilities
+        caps.peers = [MagicMock(id="subiface-1")]
+
+        await gen.generate(_office_payload())
+
+        caps.add.assert_called_once_with({"id": "edge-uplink-1"})
+        caps.remove.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_a_stale_end_is_removed(self) -> None:
+        """A replaced edge uplink leaves its old interface behind: the link step prunes it."""
+        gen = self._wire_full_success()
+        caps = self._refreshed_overlay.interface_capabilities
+        caps.peers = [MagicMock(id="old-uplink"), MagicMock(id="edge-uplink-1"), MagicMock(id="subiface-1")]
+
+        await gen.generate(_office_payload())
+
+        caps.remove.assert_called_once_with("old-uplink")
+        caps.add.assert_not_called()
+        self._refreshed_overlay.save.assert_awaited()
 
     @pytest.mark.asyncio
     async def test_edge_attached_to_orchestrator_managed_devices(self) -> None:
@@ -368,16 +422,6 @@ class TestGenerateHappyPath:
         assert gen.client.filters.await_args_list[-1].kwargs["include"] == ["managed_devices"]
 
     @pytest.mark.asyncio
-    async def test_already_linked_gateway_subinterface_is_not_re_added(self) -> None:
-        """Rerun: an existing overlay-to-gateway link is left alone."""
-        gen = self._wire_full_success()
-        self._overlay_circuit.interface_capabilities.peers = [MagicMock(id="subiface-1")]
-
-        await gen.generate(_office_payload())
-
-        self._overlay_circuit.interface_capabilities.add.assert_not_called()
-
-    @pytest.mark.asyncio
     async def test_edge_already_managed_is_not_re_added(self) -> None:
         """Rerun: an edge the orchestrator already manages is not re-added or saved."""
         gen = self._wire_full_success()
@@ -396,7 +440,7 @@ class TestGenerateHappyPath:
         edge_uplink = MagicMock(id="edge-uplink-1")
         edge_uplink.name.value = "GE1"
         gen.client.filters = AsyncMock(
-            side_effect=[_providers(), [], [edge_template], [edge_uplink], [self._overlay_circuit], []]
+            side_effect=[_providers(), [], [edge_template], [edge_uplink], [self._refreshed_overlay], []]
         )
 
         await gen.generate(_office_payload())

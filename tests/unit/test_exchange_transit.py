@@ -238,10 +238,19 @@ def test_services_segment_and_its_policy_rules(root_dir: Path) -> None:
         ("172.31.255.1", False),
         ("192.168.1.1", False),
         ("239.1.1.1", False),
+        ("198.18.0.1/32", False),
+        ("198.19.255.1", False),
+        ("100.64.0.1/32", False),
+        ("100.127.255.254", False),
+        ("192.0.0.9", False),
+        ("240.0.0.1", False),
+        ("198.20.0.1", True),
+        ("100.128.0.1", True),
+        ("198.51.100.7", True),
     ],
 )
 def test_is_public_address(address: str, public: bool) -> None:
-    """Only addresses outside RFC 1918 / 6598 / loopback / link-local / multicast are public."""
+    """Only addresses outside NON_INTERNET_PREFIXES (RFC 1918 / 6598 / 2544 / loopback / link-local / multicast) are public."""
     from utils.exchange_transit import is_public_address
 
     assert is_public_address(address) is public

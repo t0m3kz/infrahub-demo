@@ -1,10 +1,12 @@
 """Unit tests for dual-stack support.
 
 Covers:
-  - Dual-stack helper functions in generators/helpers/routing.py
-    (underlay_is_ipv6/underlay_is_dual_stack/p2p_is_ipv6/p2p_addressing) —
-    dc.py/pod.py/rack.py all derive these from a plain underlay_protocol
-    string read off clean_data() output, no shared model class involved.
+  - The per-pool address family and the prefix lengths drawn from it
+    (generators/helpers/routing.py: underlay_pool_is_ipv6, p2p_prefix_length,
+    loopback_prefix_length). dc.py/pod.py/rack.py/pools.py all derive these
+    from a plain underlay_protocol string read off clean_data() output, so
+    the pool a prefix is allocated from and the prefix length requested from
+    it can never disagree.
 
 Pod/DC-fabric pool sizes are fixed HOST-BIT widths — pod-level per layout in
 pod_config.py's POD_LAYOUTS (technical_host_bits/loopback_host_bits),
@@ -17,32 +19,39 @@ IPv6 DC requesting a nonsensically large child prefix from its (deep) IPv6
 parent pool.
 """
 
+import pytest
+
 from generators.dc_config import host_bits_to_prefix_length
-from generators.helpers.routing import p2p_addressing, p2p_is_ipv6, underlay_is_dual_stack, underlay_is_ipv6
+from generators.helpers.routing import loopback_prefix_length, p2p_prefix_length, underlay_pool_is_ipv6
 
 # ===========================================================================
-# Dual-stack helper functions
+# Per-pool address family and the prefix lengths drawn from it
 # ===========================================================================
 
 
-class TestRoutingArchitectureDualStack:
-    def test_ipv4_defaults(self) -> None:
-        assert underlay_is_ipv6("ipv4") is False
-        assert underlay_is_dual_stack("ipv4") is False
-        assert p2p_is_ipv6("ipv4") is False
-        assert p2p_addressing("ipv4") == "/31"
+class TestUnderlayPoolFamily:
+    @pytest.mark.parametrize(
+        ("protocol", "management", "technical", "loopback"),
+        [
+            ("ipv4", False, False, False),
+            ("ipv6", False, True, True),
+            ("dual_stack", False, True, False),
+        ],
+    )
+    def test_family_of_each_pool(self, protocol: str, management: bool, technical: bool, loopback: bool) -> None:
+        assert underlay_pool_is_ipv6(protocol, "management") is management
+        assert underlay_pool_is_ipv6(protocol, "technical") is technical
+        assert underlay_pool_is_ipv6(protocol, "loopback") is loopback
 
-    def test_ipv6_properties(self) -> None:
-        assert underlay_is_ipv6("ipv6") is True
-        assert underlay_is_dual_stack("ipv6") is False
-        assert p2p_is_ipv6("ipv6") is True
-        assert p2p_addressing("ipv6") == "/127"
-
-    def test_dual_stack_properties(self) -> None:
-        assert underlay_is_ipv6("dual_stack") is False
-        assert underlay_is_dual_stack("dual_stack") is True
-        assert p2p_is_ipv6("dual_stack") is True
-        assert p2p_addressing("dual_stack") == "/127"
+    @pytest.mark.parametrize(
+        ("protocol", "p2p", "loopback"),
+        [("ipv4", 31, 32), ("ipv6", 127, 128), ("dual_stack", 127, 32)],
+    )
+    def test_prefix_lengths_follow_the_pool_family(self, protocol: str, p2p: int, loopback: int) -> None:
+        """Dual-stack: the technical pool is IPv6 (so /127, never a /31 from an
+        IPv6 pool) while the loopback pool stays IPv4 (/32)."""
+        assert p2p_prefix_length(protocol) == p2p
+        assert loopback_prefix_length(protocol) == loopback
 
 
 class TestHostBitsToPrefixLength:

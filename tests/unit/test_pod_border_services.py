@@ -119,3 +119,35 @@ class TestGeneratePodScopedBorderServices:
         # instead of pbr's 2 independent legs — connectivity_mode is read from
         # self.data.parent (the DC), not the pod itself.
         assert gen.create_chain_cabling.await_count == 3
+
+
+class TestPodLinkPrefixLengths:
+    """The pod's P2P links take the prefix length of the technical pool's address family."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("protocol", "p2p"), [("ipv4", 31), ("ipv6", 127), ("dual_stack", 127)])
+    async def test_border_leaf_uplinks_use_the_technical_pool_family(self, protocol: str, p2p: int) -> None:
+        gen = _make_generator()
+        gen.fabric_name = "dc1"
+        gen.data.update({"name": "dc1-pod1", "layout": "S_MIXED", "deployment_type": "middle_rack"})
+        gen.create_cabling = AsyncMock(return_value=[])
+        gen.create_routing = AsyncMock()
+        border_leaf = MagicMock()
+        border_leaf.name.value = "dc1-bl-01"
+        uplink = MagicMock()
+        uplink.name.value = "Ethernet1/1"
+        gen.client.filters = AsyncMock(side_effect=[[border_leaf], [uplink]])
+        technical_pool = MagicMock()
+
+        await gen._cable_border_leafs_to_spines(
+            spines=["dc1-spine-01"],
+            spine_downlink_interfaces=["Ethernet1/10"],
+            dc={"size": "M", "index": 1, "naming_convention": "standard"},
+            dc_asn_pool_id=None,
+            pod_pools={"technical": technical_pool},
+            underlay_protocol=protocol,
+        )
+
+        options = gen.create_cabling.call_args.kwargs["options"]
+        assert options["p2p_prefix_length"] == p2p
+        assert options["pool"] is technical_pool

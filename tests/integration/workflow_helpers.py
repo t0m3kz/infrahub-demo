@@ -317,7 +317,7 @@ def create_proposed_change(
     return pc_id
 
 
-def _wait_for_no_running_tasks(
+def wait_for_no_running_tasks(
     client: InfrahubClientSync,
     branch: str | None,
     max_attempts: int = 120,
@@ -518,7 +518,7 @@ def merge_proposed_change(
         # branch's tasks, or other open proposed changes' pipelines that the
         # previous merge into main re-triggered — would fail mid-write. Wait
         # for the whole queue, not just the source branch.
-        _wait_for_no_running_tasks(client, branch=None)
+        wait_for_no_running_tasks(client, branch=None)
 
         mutation = Mutation(
             mutation="CoreProposedChangeMerge",

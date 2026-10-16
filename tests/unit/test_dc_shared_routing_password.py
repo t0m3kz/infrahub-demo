@@ -23,6 +23,9 @@ def _make_generator(fabric_name: str = "dc1") -> Any:
     g.logger = MagicMock()
     g.client = MagicMock()
     g.client.group_context.related_node_ids = []
+    # The per-name lock is not under test in most cases (TestEnsureRoutingPasswordLock covers it).
+    g.acquire_resource_lock = AsyncMock(return_value="lock-id")
+    g.release_resource_lock = AsyncMock()
     return g
 
 
@@ -105,3 +108,74 @@ class TestEnsureRoutingPassword:
         await g._ensure_routing_password(name="dc1-overlay-key", description="overlay")
 
         assert created_names == ["dc1-underlay-key", "dc1-overlay-key"]
+
+
+class TestEnsureRoutingPasswordLock:
+    """Two runs racing the find-or-create would each create the key: it is serialized per name."""
+
+    @staticmethod
+    def _recording_generator(calls: list[str], existing: Any) -> Any:
+        g = _make_generator()
+
+        async def _acquire(key: str) -> str:
+            calls.append(f"acquire:{key}")
+            return "lock-1"
+
+        async def _release(lock_id: str) -> None:
+            calls.append(f"release:{lock_id}")
+
+        async def _get(**kwargs: Any) -> Any:
+            calls.append("query")
+            return existing
+
+        async def _save(**kwargs: Any) -> None:
+            calls.append("save")
+
+        g.acquire_resource_lock = AsyncMock(side_effect=_acquire)
+        g.release_resource_lock = AsyncMock(side_effect=_release)
+        g.client.get = AsyncMock(side_effect=_get)
+        new_obj = MagicMock(id="pw-new")
+        new_obj.save = AsyncMock(side_effect=_save)
+        g.client.create = AsyncMock(return_value=new_obj)
+        return g
+
+    @pytest.mark.asyncio
+    async def test_query_and_create_run_inside_the_per_name_lock(self) -> None:
+        calls: list[str] = []
+        g = self._recording_generator(calls, existing=None)
+
+        await g._ensure_routing_password(name="dc1-underlay-key", description="desc")
+
+        assert calls == ["acquire:routing-password-dc1-underlay-key", "query", "save", "release:lock-1"]
+
+    @pytest.mark.asyncio
+    async def test_existing_password_lookup_is_also_inside_the_lock(self) -> None:
+        calls: list[str] = []
+        g = self._recording_generator(calls, existing=MagicMock(id="pw-existing"))
+
+        assert await g._ensure_routing_password(name="dc1-overlay-key", description="desc") == "pw-existing"
+
+        assert calls == ["acquire:routing-password-dc1-overlay-key", "query", "release:lock-1"]
+
+    @pytest.mark.asyncio
+    async def test_lock_is_released_when_the_lookup_fails(self) -> None:
+        calls: list[str] = []
+        g = self._recording_generator(calls, existing=None)
+        g.client.get = AsyncMock(side_effect=Exception("db down"))
+
+        assert await g._ensure_routing_password(name="dc1-underlay-key", description="desc") is None
+
+        assert calls == ["acquire:routing-password-dc1-underlay-key", "release:lock-1"]
+        g.logger.error.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_lock_acquisition_failure_aborts_without_querying(self) -> None:
+        calls: list[str] = []
+        g = self._recording_generator(calls, existing=None)
+        g.acquire_resource_lock = AsyncMock(side_effect=RuntimeError("could not lock"))
+
+        with pytest.raises(RuntimeError, match="could not lock"):
+            await g._ensure_routing_password(name="dc1-underlay-key", description="desc")
+
+        assert calls == []
+        g.client.create.assert_not_called()

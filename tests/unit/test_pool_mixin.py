@@ -12,6 +12,10 @@ import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+from infrahub_sdk.exceptions import NodeNotFoundError
+
+from generators.logger import GeneratorError
 from generators.pools import PoolMixin
 
 
@@ -153,3 +157,133 @@ class TestEnsureFirewallContextPools:
 
         assert gen.upsert_number_pool.await_args.kwargs["pool_name"] == "dc1-fw-context-vlan-pool"
         gen.ensure_sliced_pool.assert_not_awaited()
+
+
+def _target_node() -> MagicMock:
+    node = MagicMock()
+    node.save = AsyncMock()
+    return node
+
+
+class TestAttachRefs:
+    """The one place pool / evpn_rt_as references are written onto a generator's target node."""
+
+    @pytest.mark.asyncio
+    async def test_sets_every_ref_with_one_fetch_and_one_untracked_plain_save(self) -> None:
+        gen = _make_gen()
+        node = _target_node()
+        gen.client.get = AsyncMock(return_value=node)
+
+        await gen.attach_refs(
+            kind="TopologyDataCenter", node_id="dc-1", refs={"loopback_pool": "lo-1", "vni_pool": "vni-1"}
+        )
+
+        gen.client.get.assert_awaited_once_with(kind="TopologyDataCenter", id="dc-1")
+        assert node.loopback_pool == {"id": "lo-1"}
+        assert node.vni_pool == {"id": "vni-1"}
+        node.save.assert_awaited_once_with(update_group_context=False)
+
+    @pytest.mark.asyncio
+    async def test_none_refs_are_skipped_and_all_none_touches_nothing(self) -> None:
+        gen = _make_gen()
+        node = _target_node()
+        node.fabric_asn_pool = "untouched"
+        gen.client.get = AsyncMock(return_value=node)
+
+        await gen.attach_refs(kind="TopologyDataCenter", node_id="dc-1", refs={"fabric_asn_pool": None, "x": "p-1"})
+        assert node.fabric_asn_pool == "untouched"
+        assert node.x == {"id": "p-1"}
+
+        gen.client.get.reset_mock()
+        await gen.attach_refs(kind="TopologyDataCenter", node_id="dc-1", refs={"fabric_asn_pool": None})
+        gen.client.get.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_rerun_writes_the_same_refs(self) -> None:
+        """Idempotent: a second run attaches the identical ids (and re-saves, by design)."""
+        gen = _make_gen()
+        node = _target_node()
+        gen.client.get = AsyncMock(return_value=node)
+
+        for _ in range(2):
+            await gen.attach_refs(kind="TopologyPod", node_id="pod-1", refs={"asn_pool": "asn-1"})
+
+        assert node.asn_pool == {"id": "asn-1"}
+        assert node.save.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_missing_node_is_fatal_not_skipped(self) -> None:
+        gen = _make_gen()
+        gen.client.get = AsyncMock(
+            side_effect=NodeNotFoundError(branch_name="main", node_type="TopologyPod", identifier={})
+        )
+
+        with pytest.raises(GeneratorError, match="TopologyPod pod-1: node not found"):
+            await gen.attach_refs(kind="TopologyPod", node_id="pod-1", refs={"asn_pool": "asn-1"})
+
+        gen.logger.error.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_save_failure_propagates(self) -> None:
+        gen = _make_gen()
+        node = _target_node()
+        node.save = AsyncMock(side_effect=RuntimeError("write rejected"))
+        gen.client.get = AsyncMock(return_value=node)
+
+        with pytest.raises(RuntimeError, match="write rejected"):
+            await gen.attach_refs(kind="TopologyPod", node_id="pod-1", refs={"asn_pool": "asn-1"})
+
+    @pytest.mark.asyncio
+    async def test_pod_strategy_attaches_loopback_and_prefix_pool_in_one_save(self) -> None:
+        gen = _make_gen()
+        gen.pod_name = "dc1-pod1"
+        gen.ensure_sliced_pool = AsyncMock(
+            side_effect=lambda **kw: MagicMock(id=f"{kw['pool_name']}-id", hfid=[kw["pool_name"]])
+        )
+        pod = _target_node()
+        gen.client.get = AsyncMock(return_value=pod)
+
+        await gen._allocate_resource_pools_locked(strategy="pod", pools={"technical": 24, "loopback": 28}, id="pod-1")
+
+        assert pod.prefix_pool == {"id": "dc1-pod1-technical-pool-id"}
+        assert pod.loopback_pool == {"id": "dc1-pod1-loopback-pool-id"}
+        pod.save.assert_awaited_once_with(update_group_context=False)
+
+    @pytest.mark.asyncio
+    async def test_fabric_strategy_never_touches_a_pod(self) -> None:
+        gen = _make_gen()
+        gen.ensure_sliced_pool = AsyncMock(return_value=MagicMock(id="p"))
+
+        await gen._allocate_resource_pools_locked(strategy="fabric", pools={"technical": 24}, id="dc-1")
+
+        gen.client.get.assert_not_awaited()
+
+
+class TestFabricParentPoolFamily:
+    """allocate_resource_pools slices each fabric pool from the parent of the family the
+    prefix lengths (helpers.routing) are computed for."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("protocol", "management", "technical", "loopback"),
+        [
+            ("ipv4", "Management-IPv4", "Technical-IPv4", "Loopback-IPv4"),
+            ("ipv6", "Management-IPv4", "Technical-IPv6", "Loopback-IPv6"),
+            ("dual_stack", "Management-IPv4", "Technical-IPv6", "Loopback-IPv4"),
+        ],
+    )
+    async def test_parent_pool_per_underlay_protocol(
+        self, protocol: str, management: str, technical: str, loopback: str
+    ) -> None:
+        gen = _make_gen()
+        gen.ensure_sliced_pool = AsyncMock(return_value=MagicMock(id="pool"))
+
+        await gen.allocate_resource_pools(
+            strategy="fabric",
+            pools={"management": 26, "technical": 117, "loopback": 120},
+            id="dc-1",
+            underlay_protocol=protocol,
+        )
+
+        parents = {c.kwargs["role"]: c.kwargs["parent_pool_name"] for c in gen.ensure_sliced_pool.await_args_list}
+        assert parents == {"management": management, "technical": technical, "loopback": loopback}

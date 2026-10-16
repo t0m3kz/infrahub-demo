@@ -8,6 +8,10 @@ RR_ROLES = frozenset({"spine", "border-spine", "super-spine", "hyper-spine"})
 RR_CLIENT_ROLES = frozenset({"leaf", "border-leaf", "tor", "access-leaf"})
 """Roles that peer overlay EVPN as route-reflector clients."""
 
+BORDER_ROLES = frozenset({"border-leaf", "border-spine"})
+"""Roles rendered from the border_leafs/* templates: the DC border and its collapsed spine+border-leaf
+(micro-fabric) form. They carry the tenant SVIs, the firewall transit legs and the same refusals/checks."""
+
 OVERLAY_ROLES = RR_ROLES | RR_CLIENT_ROLES
 """Roles that run an overlay BGP process."""
 

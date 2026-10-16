@@ -20,9 +20,10 @@ For a local segment vni_pool is read straight from the vxlan_segment query's
 TopologySegmentHosting parent fragment (queries/topology/add/vxlan_segment.gql)
 — no separate client.get() round-trip per deployment. A stretched segment
 instead gets the global GLOBAL-L2VNI pool, looked up once per run.
-_activate_segment_in_deployment() does an idempotency check via
-client.filters(), allocates VNI from that pool dict (or reuses a stretched
-segment's VNI), then calls client.create() / save().
+generate() reads the segment's existing deployments once (idempotency and the
+stretched VNI to reuse; a failed read is fatal); _activate_segment_in_deployment()
+then allocates VNI from the pool dict (or reuses the stretched segment's VNI)
+and calls client.create() / save().
 
 Tests use asyncio.run() directly — same pattern as test_circuit_generators.py.
 """
@@ -491,12 +492,21 @@ class TestResolveHostingParent:
 # ===========================================================================
 
 
+def _activation_node() -> MagicMock:
+    """A fresh SegmentDeployment node whose save() is awaitable."""
+    node = MagicMock()
+    node.save = AsyncMock()
+    return node
+
+
 class TestActivateSegmentInDeployment:
     """Tests for _activate_segment_in_deployment on VxlanSegmentGenerator.
 
     VNI-and-status only now — LOCAL VLAN ID realization moved to a separate
     per-VLAN-domain mechanism (ManagedVlanDomainSegment), tested in
-    TestAssignSegmentToDcInterfaces below.
+    TestAssignSegmentToDcInterfaces below. The method does no reads of its
+    own: generate() hands it the deployment's existing record and the VNI to
+    reuse.
     """
 
     # Common invocation kwargs used in every test
@@ -507,35 +517,40 @@ class TestActivateSegmentInDeployment:
         deployment_name="DC-1",
     )
 
-    def _run(self, gen, **overrides) -> None:
-        asyncio.run(gen._activate_segment_in_deployment(**{**self._CALL, **overrides}))
+    def _run(self, gen, **overrides) -> bool:
+        return asyncio.run(gen._activate_segment_in_deployment(**{**self._CALL, **overrides}))
 
     def test_idempotent_existing_deployment_skips_create(self):
-        """When client.filters returns an existing record, create is never called."""
+        """A passed-in existing record is only re-saved: no create, no query."""
         gen = _make_gen()
-        existing = MagicMock()
-        existing.save = AsyncMock()
-        gen.client.filters = AsyncMock(return_value=[existing])
+        existing = _activation_node()
 
-        self._run(gen)
+        assert self._run(gen, existing_deployment=existing) is True
 
         gen.client.create.assert_not_called()
+        gen.client.filters.assert_not_called()
         existing.save.assert_called_once()
-        # An info message mentioning "already exists" should be logged
         info_msgs = " ".join(str(c) for c in gen.logger.info.call_args_list)
         assert "already exists" in info_msgs
+
+    def test_existing_deployment_resave_failure_is_not_a_failed_activation(self):
+        """The tracker re-save of an existing record is best effort: it warns, the activation stands."""
+        gen = _make_gen()
+        existing = _activation_node()
+        existing.save = AsyncMock(side_effect=Exception("conflict"))
+
+        assert self._run(gen, existing_deployment=existing) is True
+
+        gen.client.create.assert_not_called()
+        assert "Failed to re-save" in gen.logger.warning.call_args[0][0]
 
     def test_creates_segment_deployment(self):
         """Happy path: no existing record → create() called with segment/deployment/status only."""
         gen = _make_gen()
-        gen.client.filters = AsyncMock(return_value=[])
-        vni_pool = {"id": "pool-vni", "name": "DC1-VNI-Pool"}
-
-        activation = MagicMock()
-        activation.save = AsyncMock()
+        activation = _activation_node()
         gen.client.create = AsyncMock(return_value=activation)
 
-        self._run(gen, vni_pool=vni_pool)
+        assert self._run(gen, vni_pool={"id": "pool-vni", "name": "DC1-VNI-Pool"}) is True
 
         gen.client.create.assert_called_once()
         call_kwargs = gen.client.create.call_args.kwargs
@@ -545,38 +560,18 @@ class TestActivateSegmentInDeployment:
         assert call_data["segment"] == {"id": "seg-1"}
         assert call_data["deployment"] == {"id": "dc-1"}
         assert "vlan_id" not in call_data
-        assert "from_pool" in call_data["vni"]
         assert call_data["vni"]["from_pool"]["id"] == "pool-vni"
         activation.save.assert_called_once()
+        gen.client.filters.assert_not_called()
 
-    def test_create_exception_logs_error(self):
-        """client.create() raising an exception results in an error log."""
+    def test_create_exception_logs_error_and_reports_failure(self):
+        """client.create() raising an exception results in an error log and a False result."""
         gen = _make_gen()
-        gen.client.filters = AsyncMock(return_value=[])
         gen.client.create = AsyncMock(side_effect=Exception("network timeout"))
 
-        self._run(gen, vni_pool={"id": "pool-vni", "name": "DC1-VNI-Pool"})
+        assert self._run(gen, vni_pool={"id": "pool-vni", "name": "DC1-VNI-Pool"}) is False
 
-        error_msg = gen.logger.error.call_args[0][0]
-        assert "Failed to create" in error_msg
-
-    def test_idempotency_check_exception_still_proceeds(self):
-        """If client.filters raises, a warning is logged but execution continues
-        through to create() — does not silently drop the activation."""
-        gen = _make_gen()
-        gen.client.filters = AsyncMock(side_effect=Exception("timeout"))
-
-        activation = MagicMock()
-        activation.save = AsyncMock()
-        gen.client.create = AsyncMock(return_value=activation)
-
-        self._run(gen, vni_pool={"id": "pool-vni", "name": "DC1-VNI-Pool"})
-
-        # Warning about the exception during idempotency check
-        warning_msgs = " ".join(str(c) for c in gen.logger.warning.call_args_list)
-        assert "Error checking existing activations" in warning_msgs or len(gen.logger.warning.call_args_list) >= 1
-        # Fell through to create despite the filters() exception
-        gen.client.create.assert_called_once()
+        assert "Failed to create" in gen.logger.error.call_args[0][0]
 
 
 # ===========================================================================
@@ -585,7 +580,7 @@ class TestActivateSegmentInDeployment:
 
 
 class TestVxlanVniAllocation:
-    """Tests for VNI allocation logic inside _activate_segment_in_deployment."""
+    """VNI choice inside _activate_segment_in_deployment (no reads: pure decision)."""
 
     _CALL = dict(
         segment_id="seg-2",
@@ -597,121 +592,256 @@ class TestVxlanVniAllocation:
     def _run(self, gen, **overrides) -> None:
         asyncio.run(gen._activate_segment_in_deployment(**{**self._CALL, **overrides}))
 
-    def test_local_segment_never_reuses_other_site_vni(self):
-        """A local segment allocates from its own site's pool even when another
-        site already has a VNI for it — reusing that literal is how one site's
-        pool value collided with another site's own allocation."""
+    def _created_data(self, gen) -> dict[str, Any]:
+        return gen.client.create.call_args.kwargs["data"]
+
+    def _gen(self) -> Any:
         gen = _make_gen()
+        gen.client.create = AsyncMock(return_value=_activation_node())
+        return gen
 
-        existing_dep = MagicMock()
-        existing_dep.resolve = AsyncMock()
-        existing_dep.vni = MagicMock()
-        existing_dep.vni.value = 10100
-
-        # Idempotency check → no existing for this dc. The reuse lookup must
-        # not happen for a local segment, so the second answer stays unused.
-        gen.client.filters = AsyncMock(side_effect=[[], [existing_dep]])
-
-        activation = MagicMock()
-        activation.save = AsyncMock()
-        gen.client.create = AsyncMock(return_value=activation)
-
-        self._run(gen, vni_pool={"id": "pool-vni", "name": "DC1-VNI-Pool"}, reusable_vni=10100)
-
-        call_data = gen.client.create.call_args.kwargs["data"]
-        assert call_data["vni"]["from_pool"]["id"] == "pool-vni"
-        assert call_data["vni"]["identifier"] == "seg-2-dc-1-vni"
-        assert gen.client.filters.await_count == 1
-
-    def test_allocates_vni_from_pool_when_first_dc(self):
-        """When no prior SegmentDeployment exists, VNI is allocated from vni_pool
-        via from_pool dict syntax."""
-        gen = _make_gen()
-
-        # Both idempotency and VNI-reuse checks return empty
-        gen.client.filters = AsyncMock(side_effect=[[], []])
-
-        activation = MagicMock()
-        activation.save = AsyncMock()
-        gen.client.create = AsyncMock(return_value=activation)
+    def test_local_segment_allocates_from_its_own_pool_with_per_deployment_identifier(self):
+        """A local segment draws from the pool it is given, one identifier per deployment."""
+        gen = self._gen()
 
         self._run(gen, vni_pool={"id": "pool-vni", "name": "DC1-VNI-Pool"})
 
-        call_data = gen.client.create.call_args.kwargs["data"]
-        assert "from_pool" in call_data["vni"]
-        assert call_data["vni"]["from_pool"]["id"] == "pool-vni"
+        data = self._created_data(gen)
+        assert data["vni"]["from_pool"]["id"] == "pool-vni"
+        assert data["vni"]["identifier"] == "seg-2-dc-1-vni"
 
     def test_no_vni_pool_logs_warning_but_still_creates(self):
         """If no vni_pool is found (and no prior VNI to reuse), a warning is logged
         but client.create() is still called — 'vni' is simply absent from call_data."""
-        gen = _make_gen()
-
-        gen.client.filters = AsyncMock(side_effect=[[], []])
-
-        activation = MagicMock()
-        activation.save = AsyncMock()
-        gen.client.create = AsyncMock(return_value=activation)
+        gen = self._gen()
 
         self._run(gen, vni_pool=None)
 
-        warning_msgs = " ".join(str(c) for c in gen.logger.warning.call_args_list)
-        assert "vni_pool" in warning_msgs
-
+        assert "vni_pool" in " ".join(str(c) for c in gen.logger.warning.call_args_list)
         gen.client.create.assert_called_once()
-        call_data = gen.client.create.call_args.kwargs["data"]
-        assert "vni" not in call_data
+        assert "vni" not in self._created_data(gen)
 
-    def test_stretched_reuses_existing_vni_and_skips_vni_pool(self):
-        """Stretched allocation reuses existing VNI and avoids new vni_pool calls."""
-        gen = _make_gen()
+    def test_stretched_reuses_the_given_vni_and_ignores_the_pool(self):
+        """A reusable VNI is written as a literal: the pool is not drawn from again."""
+        gen = self._gen()
 
-        existing_dep = MagicMock()
-        existing_dep.resolve = AsyncMock()
-        existing_dep.vni = MagicMock()
-        existing_dep.vni.value = 10100
-
-        # idempotency check -> no existing for this deployment
-        # reusable-VNI lookup -> one existing deployment with vni=10100
-        gen.client.filters = AsyncMock(side_effect=[[], [existing_dep]])
-
-        activation = MagicMock()
-        activation.save = AsyncMock()
-        gen.client.create = AsyncMock(return_value=activation)
-
-        asyncio.run(
-            gen._activate_segment_in_deployment(
-                **self._CALL,
-                stretch_scope="dc_pair",
-            )
+        self._run(
+            gen,
+            stretch_scope="dc_pair",
+            reusable_vni=10100,
+            vni_pool={"id": "pool-global", "name": STRETCHED_VNI_POOL_NAME},
         )
 
-        call_data = gen.client.create.call_args.kwargs["data"]
-        assert call_data["vni"] == 10100
+        assert self._created_data(gen)["vni"] == 10100
 
-    def test_stretched_allocates_from_given_pool_with_shared_identifier(self):
-        """First stretched deployment allocates from the pool it is given (generate()
+    def test_stretched_first_deployment_allocates_from_given_pool_with_shared_identifier(self):
+        """The first stretched deployment allocates from the pool it is given (generate()
         passes GLOBAL-L2VNI) using the shared segment identifier."""
-        gen = _make_gen()
+        gen = self._gen()
 
-        # idempotency check -> no existing for this deployment
-        # reusable-VNI lookup -> none
-        gen.client.filters = AsyncMock(side_effect=[[], []])
+        self._run(gen, vni_pool={"id": "pool-global", "name": "x"}, stretch_scope="dc_pair")
 
-        activation = MagicMock()
-        activation.save = AsyncMock()
-        gen.client.create = AsyncMock(return_value=activation)
+        data = self._created_data(gen)
+        assert data["vni"]["from_pool"]["id"] == "pool-global"
+        assert data["vni"]["identifier"] == "seg-2-vni"
 
-        asyncio.run(
-            gen._activate_segment_in_deployment(
-                **self._CALL,
-                vni_pool={"id": "pool-vni", "name": "DC1-VNI-Pool"},
-                stretch_scope="dc_pair",
-            )
+
+# ===========================================================================
+# TestSegmentVniInvariant — behaviour of generate() against a stateful fake
+# ===========================================================================
+
+
+class _FakeSegmentDeploymentStore:
+    """In-memory ManagedSegmentDeployment store behind client.filters/create.
+
+    A node created with a pool request gets the next pool number (a new
+    consumer id draws a new number, as on a real Number pool); a literal VNI is
+    stored as written. ``pool_draws`` counts pool allocations.
+    """
+
+    def __init__(self, first_vni: int = 10100) -> None:
+        self.records: list[MagicMock] = []
+        self.created_payloads: list[dict[str, Any]] = []
+        self.pool_draws = 0
+        self.filter_calls = 0
+        self._next_vni = first_vni
+
+    def seed(self, deployment_id: str, vni: int | None) -> None:
+        self._store(deployment_id, vni)
+
+    def _store(self, deployment_id: str, vni: int | None) -> MagicMock:
+        record = MagicMock()
+        record.deployment.id = deployment_id
+        record.vni.value = vni
+        record.save = AsyncMock()
+        self.records.append(record)
+        return record
+
+    async def filters(self, *, kind: Any, **kwargs: Any) -> list[Any]:
+        assert kind == ManagedSegmentDeployment
+        self.filter_calls += 1
+        return list(self.records)
+
+    async def create(self, *, kind: Any, data: dict[str, Any]) -> MagicMock:
+        assert kind == ManagedSegmentDeployment
+        self.created_payloads.append(data)
+        vni = data.get("vni")
+        if isinstance(vni, dict):
+            self.pool_draws += 1
+            vni = self._next_vni
+            self._next_vni += 1
+        record = self._store(data["deployment"]["id"], vni)
+        # Persist only on save(), like the SDK: a created-but-unsaved node is invisible.
+        self.records.remove(record)
+
+        async def _save(**_: Any) -> None:
+            self.records.append(record)
+
+        record.save = AsyncMock(side_effect=_save)
+        return record
+
+    def vnis(self) -> dict[str, int | None]:
+        return {r.deployment.id: r.vni.value for r in self.records}
+
+
+def _stateful_gen(store: _FakeSegmentDeploymentStore) -> Any:
+    gen = _make_gen()
+    gen.client.filters = AsyncMock(side_effect=store.filters)
+    gen.client.create = AsyncMock(side_effect=store.create)
+    gen.client.get = AsyncMock(return_value=MagicMock(id="pool-global"))
+    gen._create_inline_sub_interfaces = AsyncMock()
+    return gen
+
+
+class TestSegmentVniInvariant:
+    """A stretched segment carries ONE VNI, a re-run allocates nothing, a first activation allocates one."""
+
+    def _stretched(self) -> dict:
+        return _seg_response(
+            seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1, _DEP_2], stretch_scope="global"
         )
 
-        call_data = gen.client.create.call_args.kwargs["data"]
-        assert call_data["vni"]["from_pool"]["id"] == "pool-vni"
-        assert call_data["vni"]["identifier"] == "seg-2-vni"
+    def test_stretched_segment_over_two_deployments_gets_one_vni(self):
+        store = _FakeSegmentDeploymentStore()
+        gen = _stateful_gen(store)
+
+        asyncio.run(gen.generate(self._stretched()))
+
+        assert store.vnis() == {"dc-1": 10100, "dc-2": 10100}
+        assert store.pool_draws == 1
+
+    def test_rerun_of_a_stretched_segment_allocates_nothing_new(self):
+        store = _FakeSegmentDeploymentStore()
+        gen = _stateful_gen(store)
+        asyncio.run(gen.generate(self._stretched()))
+        created_before = len(store.created_payloads)
+
+        asyncio.run(gen.generate(self._stretched()))
+
+        assert len(store.created_payloads) == created_before
+        assert store.pool_draws == 1
+        assert store.vnis() == {"dc-1": 10100, "dc-2": 10100}
+
+    def test_stretched_activation_adding_a_second_deployment_reuses_the_existing_vni(self):
+        """Only the first site exists (seeded): the new site takes its VNI as a literal."""
+        store = _FakeSegmentDeploymentStore()
+        store.seed("dc-1", 10555)
+        gen = _stateful_gen(store)
+
+        asyncio.run(gen.generate(self._stretched()))
+
+        assert store.pool_draws == 0
+        assert store.created_payloads[0]["vni"] == 10555
+        assert store.vnis() == {"dc-1": 10555, "dc-2": 10555}
+
+    def test_stretched_segment_reads_the_store_once_up_front_and_once_after_the_draw(self):
+        """No per-deployment re-queries: the prefetch plus one read-back of the freshly drawn VNI."""
+        store = _FakeSegmentDeploymentStore()
+        gen = _stateful_gen(store)
+
+        asyncio.run(gen.generate(self._stretched()))
+
+        assert store.filter_calls == 2
+
+    def test_rerun_of_a_stretched_segment_reads_the_store_once(self):
+        store = _FakeSegmentDeploymentStore()
+        store.seed("dc-1", 10100)
+        store.seed("dc-2", 10100)
+        gen = _stateful_gen(store)
+
+        asyncio.run(gen.generate(self._stretched()))
+
+        assert store.filter_calls == 1
+        assert store.created_payloads == []
+
+    def test_first_local_activation_allocates_exactly_one_vni_per_deployment_from_its_own_pool(self):
+        store = _FakeSegmentDeploymentStore()
+        gen = _stateful_gen(store)
+        data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1, _DEP_2])
+
+        asyncio.run(gen.generate(data))
+
+        assert [p["vni"]["from_pool"]["id"] for p in store.created_payloads] == ["pool-vni-1", "pool-vni-2"]
+        assert store.pool_draws == 2
+        assert store.filter_calls == 1
+
+    def test_local_rerun_allocates_nothing_new(self):
+        store = _FakeSegmentDeploymentStore()
+        gen = _stateful_gen(store)
+        data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1, _DEP_2])
+        asyncio.run(gen.generate(data))
+
+        asyncio.run(gen.generate(data))
+
+        assert len(store.created_payloads) == 2
+        assert store.pool_draws == 2
+
+    def test_local_segment_never_reuses_another_sites_vni(self):
+        """A VNI already on another site's deployment is not written as a literal on a local segment."""
+        store = _FakeSegmentDeploymentStore()
+        store.seed("dc-1", 10100)
+        gen = _stateful_gen(store)
+        data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1, _DEP_2])
+
+        asyncio.run(gen.generate(data))
+
+        payload = store.created_payloads[0]
+        assert payload["deployment"] == {"id": "dc-2"}
+        assert payload["vni"]["from_pool"]["id"] == "pool-vni-2"
+
+    def test_unreadable_existing_deployments_fail_the_run_before_any_write(self):
+        """A blind prefetch would allocate a second VNI / duplicate records: fatal, nothing written."""
+        gen = _make_gen()
+        gen.client.filters = AsyncMock(side_effect=Exception("graphql timeout"))
+        gen.client.create = AsyncMock()
+        gen._activate_segment_in_deployment = AsyncMock()
+        data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1])
+
+        with pytest.raises(GeneratorError, match="existing SegmentDeployments"):
+            asyncio.run(gen.generate(data))
+
+        gen.client.create.assert_not_called()
+        gen._activate_segment_in_deployment.assert_not_called()
+
+    def test_unreadable_vni_read_back_fails_instead_of_drawing_a_second_vni(self):
+        """If the read-back after the first draw fails, the run stops before the second site allocates."""
+        store = _FakeSegmentDeploymentStore()
+        gen = _stateful_gen(store)
+        calls = {"n": 0}
+
+        async def _flaky(*, kind: Any, **kwargs: Any) -> list[Any]:
+            calls["n"] += 1
+            if calls["n"] == 2:
+                raise Exception("graphql timeout")
+            return await store.filters(kind=kind, **kwargs)
+
+        gen.client.filters = AsyncMock(side_effect=_flaky)
+
+        with pytest.raises(Exception, match="graphql timeout"):
+            asyncio.run(gen.generate(self._stretched()))
+
+        assert store.pool_draws == 1
+        assert len(store.created_payloads) == 1
 
 
 # ===========================================================================

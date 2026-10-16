@@ -122,4 +122,13 @@ def test_config_transform_matches_fixture(transform_cls: type, fixture_dir: Path
             assert "1|PortChannel101" in configdb["MCLAG_INTERFACE"]
             assert "PortChannel100|Ethernet33" in configdb["PORTCHANNEL_MEMBER"]
             assert "PortChannel101|Ethernet10" in configdb["PORTCHANNEL_MEMBER"]
+        # Every VLAN_MEMBER names a VLAN the device defines; a port carrying VLANs in the
+        # input (a host port) is a member of each, tagged on a trunk, untagged on an access port.
+        members = configdb.get("VLAN_MEMBER", {})
+        assert all(key.split("|")[0] in configdb["VLAN"] for key in members)
+        assert all(entry["tagging_mode"] in {"tagged", "untagged"} for entry in members.values())
+        if fixture_dir.name.endswith(("_sonic_ebgp_ibgp", "_sonic_ospf_ibgp")) and not fixture_dir.name.startswith(
+            ("spine_", "super_spine_", "border_spine_", "border_leaf_")
+        ):
+            assert members, "a SONiC fixture whose host port carries VLANs must render VLAN_MEMBER"
     assert actual == expected

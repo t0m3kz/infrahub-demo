@@ -20,8 +20,10 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from infrahub_sdk.exceptions import NodeNotFoundError
 
 from generators.helpers.naming import DeviceNameContext, DeviceNamingConfig
+from generators.logger import GeneratorError
 from generators.topology.colocation import (
     _COLO_LOOPBACK_PREFIX_LENGTH,
     _COLO_MANAGEMENT_PREFIX_LENGTH,
@@ -476,6 +478,20 @@ class TestPools:
         assert metro.vni_pool == {"id": "vni-pool"}
         metro.save.assert_awaited_once_with(update_group_context=False)
         gen.client.get.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_missing_metro_when_attaching_pools_fails_the_run(self) -> None:
+        """The metro is the generator's own target: not finding it is a fault, not a skip."""
+        gen = _make_generator()
+        gen.ensure_sliced_pool = AsyncMock(return_value=MagicMock(id="pool-x"))
+        gen.upsert_asn_pool = AsyncMock(return_value=MagicMock(id="asn-pool"))
+        gen.upsert_number_pool = AsyncMock(return_value=MagicMock(id="vni-pool"))
+        gen.client.get = AsyncMock(
+            side_effect=NodeNotFoundError(branch_name="main", node_type="TopologyColocationMetro", identifier={})
+        )
+
+        with pytest.raises(GeneratorError, match="TopologyColocationMetro metro-1: node not found"):
+            await gen._ensure_colocation_pools(metro_id="metro-1")
 
     @pytest.mark.asyncio
     async def test_sliced_address_pool_wraps_the_allocated_prefix(self) -> None:

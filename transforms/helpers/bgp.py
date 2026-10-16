@@ -524,12 +524,11 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
             if isinstance(ra, dict) and ra.get("asn"):
                 remote_as = ra["asn"]
                 break
-        _RR_ROLES = ("spine", "super-spine", "border-spine")
         has_rr_flag = any(bool(s.get("route_reflector_client")) for s in overlay_ibgp)
-        # Spines/super-spines are always RRs when peerings have the RR flag.
+        # Every overlay RR role (RR_ROLES) is an RR when peerings have the RR flag.
         # Leafs become intermediate RRs in middle_rack/mixed deployments
         # when they have overlay sessions with tors (2-level RR hierarchy).
-        is_spine_rr = has_rr_flag and device_role in _RR_ROLES
+        is_spine_rr = has_rr_flag and device_role in RR_ROLES
         is_leaf_rr = (
             has_rr_flag
             and device_role in ("leaf", "border-leaf")

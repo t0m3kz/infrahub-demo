@@ -41,5 +41,13 @@
   "VLAN_INTERFACE": {
     "Vlan100": {},
     "Vlan200": {}
+  },
+  "VLAN_MEMBER": {
+    "Vlan100|Ethernet10": {
+      "tagging_mode": "tagged"
+    },
+    "Vlan200|Ethernet10": {
+      "tagging_mode": "tagged"
+    }
   }
 }

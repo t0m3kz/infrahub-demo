@@ -2,7 +2,8 @@
     Populates pre-initialized dicts from parent scope via in-place .update():
     vlan_config, loopback_interfaces, physical_interfaces,
     interface_ips, vlan_interfaces, bgp_neighbors, bgp_globals, ospf_router,
-    bgp_peer_groups, bgp_globals_af -#}
+    bgp_peer_groups, bgp_globals_af, and (templates with host ports, i.e. not
+    the spines) vlan_members -#}
 {%- if vlans and vlans|length > 0 -%}
 {%- for vlan in vlans -%}
 {%- set _ = vlan_config.update({
@@ -47,6 +48,19 @@
 {%- set _ = vlan_interfaces.update({key: {}}) -%}
 {%- endfor -%}
 {%- endif -%}
+{#- VLAN_MEMBER of the host ports: a trunk (mode == 'trunk': several VLANs, or a
+    border-leaf HA-facing service port) carries each of its VLANs tagged, an
+    access port its single VLAN untagged. The MC-LAG peer-link membership is
+    contributed separately by get_sonic_mlag_config. -#}
+{%- for interface in interfaces if interface.vlans -%}
+{%- if interface.mode == 'trunk' -%}
+{%- for vlan_id in interface.vlans -%}
+{%- set _ = vlan_members.update({'Vlan' ~ vlan_id ~ '|' ~ interface.name: {'tagging_mode': 'tagged'}}) -%}
+{%- endfor -%}
+{%- else -%}
+{%- set _ = vlan_members.update({'Vlan' ~ interface.vlans[0] ~ '|' ~ interface.name: {'tagging_mode': 'untagged'}}) -%}
+{%- endif -%}
+{%- endfor -%}
 {%- if bgp and (capabilities is not defined or capabilities.bgp_enabled is not defined or capabilities.bgp_enabled) -%}
 {#- BGP globals -#}
 {%- set globals_entry = {
