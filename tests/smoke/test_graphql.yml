@@ -99,6 +99,14 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: border_spine_config
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/config/border_spine.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: super_spine_config
     tests:
       - name: syntax_check

@@ -2,7 +2,7 @@
 """Generate smoke test fixtures (input.json + output.txt) for all config transforms.
 
 Usage:
-    python tests/smoke/generate_config_fixtures.py
+    PYTHONPATH=. uv run python tests/smoke/generate_config_fixtures.py
 
 Creates directories under tests/smoke/configs/ with input.json and output.txt
 for each device-type × platform × scenario combination.
@@ -2720,23 +2720,18 @@ def _gp_tag(tag_id: str, group_id: int, fqdn: str | None, seg_id: str | None) ->
     }
 
 
-def build_segmentation_matrix_data() -> dict:
-    """DC10 as it is today, not a reference fabric (FX2 leafs and border leaf on 10.3(3) next to an EX
-    access leaf, and a spine, no VTEP), next to DC12 (legacy), against the bootstrap profile rows.
-
-    The 30_all shape: C008's trade portal calls the web component of C005's microsegmented web segment
-    (the one cross-customer rule, narrowed to that component's tag); the web segment has three tagged
-    components (one permit rule, one disabled rule, two un-ruled pairs) and its web component calls
-    the backend component of the segment stretched to DC12; C006's shop sits behind
-    an inline firewall and reaches the internet; the INFRA MANAGEMENT VLAN segment and an untagged
-    C007 segment are never classified; a DC12-only rule is out of scope; one tag is an orphan.
-    """
+def _gp_memory_gb() -> dict[str, int]:
+    """Device type -> memory (data/bootstrap/06_device_types.yml)."""
     device_types = yaml.safe_load((PROJECT_ROOT / "data/bootstrap/06_device_types.yml").read_text())["spec"]["data"]
-    memory_gb = {item["name"]: item.get("memory_gb") for item in device_types}
+    return {item["name"]: item.get("memory_gb") for item in device_types}
+
+
+def _gp_profiles() -> list[dict]:
+    """The bootstrap DcimGroupPolicyProfile rows as GroupPolicyProfileFields returns them."""
     profile_rows = yaml.safe_load((PROJECT_ROOT / "data/bootstrap/19b_group_policy_profile.yml").read_text())["spec"][
         "data"
     ]
-    profiles = [
+    return [
         {
             "name": _v(row["name"]),
             "group_policy_kind": _v(row["group_policy_kind"]),
@@ -2749,6 +2744,21 @@ def build_segmentation_matrix_data() -> dict:
         }
         for row in profile_rows
     ]
+
+
+def build_segmentation_matrix_data() -> dict:
+    """DC10 as it is today, not a reference fabric (FX2 leafs and border leaf on 10.3(3) next to an EX
+    access leaf, and a spine, no VTEP), next to DC12 (legacy), against the bootstrap profile rows.
+
+    The 30_all shape: C008's trade portal calls the web component of C005's microsegmented web segment
+    (the one cross-customer rule, narrowed to that component's tag); the web segment has three tagged
+    components (one permit rule, one disabled rule, two un-ruled pairs) and its web component calls
+    the backend component of the segment stretched to DC12; C006's shop sits behind
+    an inline firewall and reaches the internet; the INFRA MANAGEMENT VLAN segment and an untagged
+    C007 segment are never classified; a DC12-only rule is out of scope; one tag is an orphan.
+    """
+    memory_gb = _gp_memory_gb()
+    profiles = _gp_profiles()
     web = "seg-web"
     segments = [
         _gp_segment(
@@ -2908,6 +2918,271 @@ def write_segmentation_matrix_fixture() -> tuple[int, int]:
         f.write("\n")
     print("  ✓ segmentation_matrix")
     return 1, 0
+
+
+# ============================================================================
+# NX-OS VXLAN GPO device configs (the fleet roots of queries/config/{leaf,border_leaf,border_spine}.gql)
+# ============================================================================
+
+# (name, VLAN, VNI, gateway, VRF, namespace type, L3 VNI): the five tagged tenant segments of DC10.
+# NONPROD is fully classifiable by VLAN; PROD holds a microsegmented segment whose contracts name
+# component groups, so it renders unenforced.
+_GPO_SEGMENTS: list[tuple[str, int, int, str, str, str, int]] = [
+    ("web-np", 110, 10110, "10.10.1.1/24", "NONPROD", "non_prod", 50011),
+    ("app-np", 120, 10120, "10.10.2.1/24", "NONPROD", "non_prod", 50011),
+    ("db-np", 130, 10130, "10.10.3.1/24", "NONPROD", "non_prod", 50011),
+    ("pay-p", 210, 10210, "10.20.1.1/24", "PROD", "prod", 50012),
+    ("portal-p", 220, 10220, "10.20.2.1/24", "PROD", "prod", 50012),
+]
+_GPO_NXOS = {
+    "platform": "cisco_nxos",
+    "leaf": "N9K-C9364C-GX",
+    "access": "N9K-C93180YC-FX3",
+    "border": "N9K-C9364D-GX2A",
+}
+_GPO_EOS = {
+    "platform": "arista_eos",
+    "leaf": "DCS-7280SR3-48YC8",
+    "access": "DCS-7280SR3-48YC8",
+    "border": "DCS-7280SR3-48YC8",
+}
+
+
+def _gpo_fleet_roots(*, fleet: dict[str, str], version: str, leaf_type: str | None = None) -> dict:
+    """The fleet roots of the GPO device queries: DC10's VTEPs (``leaf_type`` overrides the leaf's type)
+    next to DC12 (a legacy border leaf: never policy-aware), the bootstrap profile rows, the segments
+    and their component tags.
+
+    NONPROD: web-np calls app-np (https and a port range, with a reverse udp row: two bidir contracts
+    on one pair), app-np calls db-np, db-np answers with any and icmp, web-np reaches the internet
+    (a service leg); db-np is stretched to DC12. PROD: portal-p calls the web component of the
+    microsegmented pay-p, whose web component calls its db component.
+    """
+    memory_gb = _gp_memory_gb()
+    platform = fleet["platform"]
+
+    def device(name: str, role: str, device_type: str, release: str | None) -> dict:
+        return _gp_device(name, role, device_type, release, memory_gb, platform)
+
+    legacy = _gp_device("bl-dc12-01", "border-leaf", "N9K-C9336C-FX2", "10.3(3)", memory_gb)
+    segments = [
+        _gp_segment(
+            "seg-web-np",
+            "web-np",
+            "C010",
+            prefix="10.10.1.0/24",
+            namespace=("NONPROD", "non_prod"),
+            zone="NONPROD-ZONE",
+            rules=[
+                _gp_rule("web-np-to-app-np-tcp-443", "seg-app-np", 443),
+                _gp_rule("web-np-to-app-np-tcp-8000-8010", "seg-app-np", 8000, index=110, port_end=8010),
+                _gp_rule("web-np-to-internet-tcp-443", "seg-internet", 443, index=120),
+            ],
+            tag=("web-np", 40),
+        ),
+        _gp_segment(
+            "seg-app-np",
+            "app-np",
+            "C010",
+            prefix="10.10.2.0/24",
+            namespace=("NONPROD", "non_prod"),
+            zone="NONPROD-ZONE",
+            rules=[
+                _gp_rule("app-np-to-web-np-udp-5000", "seg-web-np", 5000, protocol="udp"),
+                _gp_rule("app-np-to-db-np-tcp-5432", "seg-db-np", 5432, index=110),
+            ],
+            tag=("app-np", 41),
+        ),
+        _gp_segment(
+            "seg-db-np",
+            "db-np",
+            "C010",
+            prefix="10.10.3.0/24",
+            namespace=("NONPROD", "non_prod"),
+            zone="NONPROD-ZONE",
+            rules=[
+                _gp_rule("db-np-to-app-np-any", "seg-app-np", None, protocol="any"),
+                _gp_rule("db-np-to-web-np-icmp", "seg-web-np", None, protocol="icmp", index=110),
+            ],
+            tag=("db-np", 42),
+            sites=("dc10", "dc12"),
+        ),
+        _gp_segment(
+            "seg-pay-p",
+            "pay-p",
+            "C011",
+            prefix="10.20.1.0/24",
+            namespace=("PROD", "prod"),
+            isolation_mode="microsegmented",
+            rules=[
+                _gp_rule("pay-web-to-pay-db-tcp-5432", "seg-pay-p", 5432, src_tag="tag-pay-web", dst_tag="tag-pay-db")
+            ],
+            tag=("pay-p", 43),
+        ),
+        _gp_segment(
+            "seg-portal-p",
+            "portal-p",
+            "C011",
+            prefix="10.20.2.0/24",
+            namespace=("PROD", "prod"),
+            rules=[_gp_rule("portal-to-pay-web-tcp-443", "seg-pay-p", 443, dst_tag="tag-pay-web")],
+            tag=("portal-p", 44),
+        ),
+        _gp_segment(
+            "seg-internet",
+            "internet-internet-p",
+            "INTERNET",
+            prefix=None,
+            zone="INTERNET-ZONE",
+            kind="ManagedExternalSegment",
+            sites=(),
+        ),
+    ]
+    return {
+        "DcimGroupPolicyProfile": _edges(_gp_profiles()),
+        "TopologyDataCenter": _edges(
+            [
+                {
+                    "id": "dc10",
+                    "devices": _edges([device("dc1-border-leaf-01", "border-leaf", fleet["border"], version)]),
+                },
+                {"id": "dc12", "devices": _edges([legacy])},
+            ]
+        ),
+        "TopologyPod": _edges(
+            [
+                {
+                    "parent": _node({"id": "dc10", "__typename": "TopologyDataCenter"}),
+                    "devices": _edges(
+                        [
+                            device("dc1-leaf-01", "leaf", leaf_type or fleet["leaf"], version),
+                            device("dc1-access-leaf-01", "access-leaf", fleet["access"], version),
+                            # Not a VTEP: the query returns every device, the transform keeps the VTEPs.
+                            device("dc1-spine-01", "spine", "N9K-C9336C-FX2", "10.3(3)"),
+                        ]
+                    ),
+                }
+            ]
+        ),
+        "ManagedNetworkSegment": _edges(segments),
+        "SecurityTag": _edges(
+            [
+                _gp_tag("tag-pay-web", 50, "web.pay.demo.local", "seg-pay-p"),
+                _gp_tag("tag-pay-db", 51, "db.pay.demo.local", "seg-pay-p"),
+            ]
+        ),
+    }
+
+
+def build_gpo_device_data(
+    *,
+    device_name: str,
+    role: str,
+    segments: tuple[str, ...],
+    fleet: dict[str, str] = _GPO_NXOS,
+    version: str = "10.6(3)F",
+    leaf_type: str | None = None,
+) -> dict:
+    """A VTEP of DC10 carrying ``segments`` (names of _GPO_SEGMENTS), with the fleet roots appended."""
+    data = build_device_data(
+        device_name=device_name,
+        role=role,
+        platform=fleet["platform"],
+        scenario="ebgp_ibgp",
+        include_segments=False,
+    )
+    node = data["DcimDevice"]["edges"][0]["node"]
+    node["interfaces"]["edges"] = [
+        edge for edge in node["interfaces"]["edges"] if edge["node"]["name"]["value"] != "Ethernet10"
+    ]
+    node["interfaces"]["edges"].append(
+        {
+            "node": _make_interface(
+                name="Ethernet10",
+                device_name=device_name,
+                description="to server-01",
+                role="server",
+                segments=[
+                    _make_segment_node(
+                        vlan_id=vlan,
+                        vni=vni,
+                        seg_name=name,
+                        seg_type="ManagedVxlanSegment",
+                        gateway_ip=gateway,
+                        ns_name=vrf,
+                        l3_vni=l3_vni,
+                        vlan_domain_id=f"dev-{device_name}",
+                    )
+                    for name, vlan, vni, gateway, vrf, _ns_type, l3_vni in _GPO_SEGMENTS
+                    if name in segments
+                ],
+            )
+        }
+    )
+    return {**data, **_gpo_fleet_roots(fleet=fleet, version=version, leaf_type=leaf_type)}
+
+
+def _gpo_golden_leaf_data(*, fleet: dict[str, str], version: str, leaf_type: str | None = None) -> dict:
+    """The leaf of an existing golden config (``ebgp_ibgp``), with the GPO fleet roots appended."""
+    return {
+        **build_device_data(
+            device_name="dc1-leaf-01",
+            role="leaf",
+            platform=fleet["platform"],
+            scenario="ebgp_ibgp",
+            include_segments=True,
+        ),
+        **_gpo_fleet_roots(fleet=fleet, version=version, leaf_type=leaf_type),
+    }
+
+
+GPO_FIXTURES: list[tuple[type, str, Any]] = [
+    (
+        Leaf,
+        "leaf_cisco_nxos_gpo_reference",
+        lambda: build_gpo_device_data(
+            device_name="dc1-leaf-01", role="leaf", segments=("web-np", "app-np", "pay-p", "portal-p")
+        ),
+    ),
+    # A leaf of the same reference fabric with no tenant segment (the servers sit on the access
+    # leaves): no VRF carries a contract, but the VTEP still enables GPO, so the site never
+    # mixes policy-aware and policy-unaware nodes (spec 2.9).
+    (
+        Leaf,
+        "leaf_cisco_nxos_gpo_reference_no_vrf",
+        lambda: build_gpo_device_data(device_name="dc1-leaf-01", role="leaf", segments=()),
+    ),
+    (
+        AccessLeaf,
+        "access_leaf_cisco_nxos_gpo_reference",
+        lambda: build_gpo_device_data(
+            device_name="dc1-access-leaf-01", role="access-leaf", segments=("app-np", "db-np", "portal-p")
+        ),
+    ),
+    (
+        BorderLeaf,
+        "border_leaf_cisco_nxos_gpo_reference",
+        lambda: build_gpo_device_data(
+            device_name="dc1-border-leaf-01",
+            role="border-leaf",
+            segments=tuple(name for name, *_rest in _GPO_SEGMENTS),
+        ),
+    ),
+    # The same fleet with the leaf on a type and release outside the row: DC10 is no reference
+    # fabric, so the device renders exactly the leaf_cisco_nxos_ebgp_ibgp config.
+    (
+        Leaf,
+        "leaf_cisco_nxos_gpo_non_reference",
+        lambda: _gpo_golden_leaf_data(fleet=_GPO_NXOS, version="10.6(3)F", leaf_type="N9K-C9336C-FX2"),
+    ),
+    # A reference site of another kind (EOS segment_security): no NX-OS renderer applies, and the
+    # EOS leaf renders exactly the leaf_arista_eos_ebgp_ibgp config.
+    (
+        Leaf,
+        "leaf_arista_eos_gpo_reference_site",
+        lambda: _gpo_golden_leaf_data(fleet=_GPO_EOS, version="4.36.2F"),
+    ),
+]
 
 
 def run_transform(transform_cls: type, data: dict) -> str:
@@ -3360,6 +3635,13 @@ def main() -> int:
     g, e = write_segmentation_matrix_fixture()
     generated += g
     errors += e
+
+    # NX-OS VXLAN GPO: a reference fabric's VTEPs render the group policy, any other device nothing.
+    print("\nGenerating the NX-OS GPO device fixtures:")
+    for transform_cls, dir_name, build in GPO_FIXTURES:
+        g, e = _write_data_fixture(transform_cls, dir_name, build())
+        generated += g
+        errors += e
 
     print(f"\nDone: {generated} generated, {errors} errors")
     # A fixture that fails to render writes no file, so it leaves no diff for the

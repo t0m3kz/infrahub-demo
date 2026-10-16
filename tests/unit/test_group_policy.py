@@ -8,6 +8,8 @@ from typing import Any
 
 import pytest
 import yaml
+from graphql import parse, print_ast
+from graphql.language import FieldNode, OperationDefinitionNode
 
 from utils.fabric_roles import DC_VTEP_ROLES, VTEP_ROLES
 from utils.group_policy import (
@@ -384,6 +386,46 @@ class TestQueries:
         assert "...GroupPolicyProfileFields" in text
         assert "...DeviceGroupPolicyFields" in text
         assert "role__values" not in text
+
+    @staticmethod
+    def _roots(text: str) -> dict[str, str]:
+        """Response key -> printed selection of every top-level root of the query operation."""
+        operation = next(item for item in parse(text).definitions if isinstance(item, OperationDefinitionNode))
+        return {
+            (field.alias or field.name).value: print_ast(field)
+            for field in operation.selection_set.selections
+            if isinstance(field, FieldNode)
+        }
+
+    @pytest.mark.parametrize(
+        "query", ["queries/config/leaf.gql", "queries/config/border_leaf.gql", "queries/config/border_spine.gql"]
+    )
+    def test_device_queries_carry_the_fleet_roots_of_the_matrix_after_the_device_root(
+        self, root_dir: Path, query: str
+    ) -> None:
+        """The NX-OS GPO block reads the matrix's roots (minus ``target``) as top-level roots; DcimDevice stays first."""
+        matrix = self._roots((root_dir / "queries/topology/segmentation_matrix.gql").read_text())
+        device = self._roots((root_dir / query).read_text())
+        fleet = {key: root for key, root in matrix.items() if key != "target"}
+        assert list(device)[0] == "DcimDevice"
+        assert list(device)[1:] == list(fleet)
+        assert {key: device[key] for key in fleet} == fleet
+
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "queries/topology/segmentation_matrix.gql",
+            "queries/config/leaf.gql",
+            "queries/config/border_leaf.gql",
+            "queries/config/border_spine.gql",
+        ],
+    )
+    def test_every_query_reads_the_tags_through_the_one_fragment(self, root_dir: Path, query: str) -> None:
+        text = (root_dir / query).read_text()
+        assert "...SecurityTagGroupPolicyFields" in text
+        assert "components" not in text
+        fragments = (root_dir / "queries/fragments/group_policy.gql").read_text()
+        assert fragments.count("fragment SecurityTagGroupPolicyFields on SecurityTag") == 1
 
     def test_fragment_selects_memory_and_kind(self, root_dir: Path) -> None:
         """fabric_reason reads device_type.memory_gb; site_kind reads group_policy_kind."""

@@ -65,17 +65,7 @@ query segmentation_matrix($id: ID) {
   SecurityTag {
     edges {
       node {
-        id
-        name { value }
-        group_id { value }
-        components {
-          edges {
-            node {
-              fqdn { value }
-              network_segment { node { id } }
-            }
-          }
-        }
+        ...SecurityTagGroupPolicyFields
       }
     }
   }

@@ -20,6 +20,12 @@
   statics of the inter-VRF exchange through a firewall context; they sit inside
   the VRF, not as a global `ip route ... vrf X`.
 
+  group_policy (transforms/helpers/group_policy.py vxlan_gpo_device_view; set on a
+  VTEP of a reference fabric only) adds the VRF's `security contract` lines and
+  `security enforce` here, after the statics and before the address-family: the
+  contracts are configured per VRF, inside its `vrf context`. The group,
+  class-map and policy-map definitions they name come from cisco_nxos_gpo.j2.
+
   Included by the leaf/border-leaf NX-OS templates from inside their
   `{% if vxlan and vxlan.enabled %}` guard, so `vxlan` is known non-empty here.
 -#}
@@ -36,6 +42,24 @@ vrf context {{ mapping.vrf_name }}
 {%- for route in vrf_routes | default([]) if route.vrf == mapping.vrf_name %}
   ip route {{ route.prefix }} {{ route.nexthop }}
 {%- endfor %}
+{%- if group_policy %}
+{%- set gpo = group_policy.vrfs.get(mapping.vrf_name) %}
+{%- if gpo %}
+{%- for contract in gpo.contracts %}
+  ! {{ contract.src_name }} -> {{ contract.dst_name }}
+{%- for note in contract.notes %}
+  ! {{ note }}
+{%- endfor %}
+  security contract source {{ contract.src }} destination {{ contract.dst }} policy {{ contract.policy }} bidir
+{%- endfor %}
+{%- if gpo.unenforced %}
+  ! unenforced: {{ gpo.unenforced }}
+{%- else %}
+  ! documented-not-lab-verified: the guide gives no range or meaning for the enforce tag; the unclassified group id is used
+  security enforce tag {{ gpo.enforce_tag }} default deny
+{%- endif %}
+{%- endif %}
+{%- endif %}
   address-family ipv4 unicast
 {%- if mapping.route_target %}
     route-target both {{ mapping.route_target }}

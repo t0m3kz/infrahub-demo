@@ -3,7 +3,9 @@
 # device's role, platform, device type with its memory, and software image;
 # and the DcimGroupPolicyProfile rows it is compared with, with the reserved
 # groups the platform views render (transforms/helpers/group_policy.py). Read
-# by the reference_fabric check and the segmentation_matrix artifact.
+# by the reference_fabric check, the segmentation_matrix artifact and the NX-OS
+# VTEP configs (leaf_config, border_leaf_config, border_spine_config: the same
+# fleet roots as the artifact, transforms/helpers/group_policy.vxlan_gpo_device_view).
 
 fragment DeviceGroupPolicyFields on DcimDevice {
   name { value }
@@ -22,6 +24,22 @@ fragment GroupPolicyProfileFields on DcimGroupPolicyProfile {
   unaware_group_id { value }
   platform { node { name { value } } }
   device_types { edges { node { name { value } } } }
+}
+
+# One group tag with the segment of each of its components (the component
+# groups of a microsegmented segment: transforms/helpers/group_policy.py).
+fragment SecurityTagGroupPolicyFields on SecurityTag {
+  id
+  name { value }
+  group_id { value }
+  components {
+    edges {
+      node {
+        fqdn { value }
+        network_segment { node { id } }
+      }
+    }
+  }
 }
 
 # One segment as the group contract builder reads it
