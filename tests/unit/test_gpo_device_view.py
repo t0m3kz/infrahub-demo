@@ -16,6 +16,7 @@ import random
 from functools import cache
 from pathlib import Path
 from typing import Any
+from unittest.mock import MagicMock, patch
 
 import pytest
 from graphql import parse
@@ -594,6 +595,123 @@ class TestEnforcement:
             pairs = [(item["src"], item["dst"]) for item in vrf["contracts"]]
             assert pairs == sorted(pairs)
             assert len(pairs) == len(set(pairs))
+
+
+STAGED = (
+    "data center DC10 stages group policy (group_policy_enforce is false): "
+    "contracts are configured, security enforce is not"
+)
+
+
+def _stage(roots: dict[str, Any], dc_id: str, enforce: bool | None) -> dict[str, Any]:
+    """Set (None: remove) ``group_policy_enforce`` on one data center of the cleaned fleet roots."""
+    node = next(item for item in roots["TopologyDataCenter"] if item["id"] == dc_id)
+    if enforce is None:
+        node.pop("group_policy_enforce", None)
+    else:
+        node["group_policy_enforce"] = enforce
+    return roots
+
+
+class TestStaging:
+    """A6: ``group_policy_enforce`` of the device's data center; false configures the contracts, not enforcement."""
+
+    def test_the_fixture_data_center_enforces(self) -> None:
+        roots = _roots()
+        assert (
+            next(item for item in roots["TopologyDataCenter"] if item["id"] == "dc10")["group_policy_enforce"] is True
+        )
+        assert data_center_contracts(roots, "dc10").enforce is True
+
+    def test_an_enforcing_data_center_enforces_every_classifiable_vrf(self) -> None:
+        view = _view(_stage(_roots(), "dc10", True))
+        assert view is not None
+        assert {vrf: (item["unenforced"], item["enforce_tag"]) for vrf, item in view["vrfs"].items()} == {
+            "NONPROD": (None, 0),
+            "PROD": (None, 0),
+        }
+
+    @pytest.mark.parametrize("flag", [False, None])
+    def test_a_staging_data_center_enforces_no_vrf_and_says_why_first(self, flag: bool | None) -> None:
+        """False and a missing key (an old query response) both stage."""
+        view = _view(_stage(_roots(), "dc10", flag))
+        assert view is not None
+        for item in view["vrfs"].values():
+            assert item["unenforced"] == STAGED
+            assert item["enforce_tag"] is None
+
+    def test_a_staging_data_center_still_configures_groups_and_contracts(self) -> None:
+        enforcing, staged = _view(_roots()), _view(_stage(_roots(), "dc10", False))
+        assert enforcing is not None and staged is not None
+        assert staged["class_maps"] == enforcing["class_maps"]
+        assert staged["groups"] == enforcing["groups"]
+        for vrf, item in staged["vrfs"].items():
+            assert item["contracts"] == enforcing["vrfs"][vrf]["contracts"]
+            assert item["classified_ports"] == enforcing["vrfs"][vrf]["classified_ports"]
+
+    def test_the_staged_reason_comes_first_and_the_other_reasons_stay_listed(self) -> None:
+        activations = [
+            {**item, "vlan_id": None} if item["segment"]["id"] == "seg-app-np" else item for item in LEAF_ACTIVATIONS
+        ]
+        view = _view(_stage(_roots(), "dc10", False), activations=activations, interfaces=[])
+        assert view is not None
+        assert (
+            view["vrfs"]["NONPROD"]["unenforced"] == f"{STAGED}; segment app-np has no group classifier on this device"
+        )
+        prod = view["vrfs"]["PROD"]["unenforced"]
+        assert prod.startswith(f"{STAGED}; component group ")
+        assert view["vrfs"]["PROD"]["enforce_tag"] is None
+
+    def test_the_flag_of_the_devices_own_data_center_decides(self) -> None:
+        """Two data centers, opposite flags, in either order: DC10's VTEP follows DC10."""
+        for dc10, dc12 in ((False, True), (True, False)):
+            roots = _stage(_stage(_roots(), "dc10", dc10), "dc12", dc12)
+            for ordered in (roots["TopologyDataCenter"], roots["TopologyDataCenter"][::-1]):
+                reordered = {**roots, "TopologyDataCenter": ordered}
+                assert data_center_contracts(reordered, "dc10").enforce is dc10
+                assert data_center_contracts(reordered, "dc12").enforce is dc12
+                view = _view(reordered)
+                assert view is not None
+                assert all((item["unenforced"] == STAGED) is (not dc10) for item in view["vrfs"].values())
+
+    def test_the_data_center_without_a_name_is_named_by_its_id(self) -> None:
+        roots = _stage(_roots(), "dc10", False)
+        next(item for item in roots["TopologyDataCenter"] if item["id"] == "dc10").pop("name")
+        view = _view(roots)
+        assert view is not None
+        assert view["vrfs"]["NONPROD"]["unenforced"] == STAGED.replace("DC10", "dc10")
+
+    def test_the_missing_unclassified_group_id_is_refused_only_when_enforcing(self) -> None:
+        """Staged: no `security enforce tag`, so the profile's unclassified id is not needed for it."""
+        roots = _roots()
+        for segment in roots["ManagedNetworkSegment"]:
+            segment["security_policy"]["rules"] = []
+        TestRefusals._without_unclassified_id(roots)
+        with pytest.raises(ValueError, match=r"VRF NONPROD is enforced but.*refusing unprotected config"):
+            _view(_stage(roots, "dc10", True), vrfs=["NONPROD"])
+        staged = _view(_stage(roots, "dc10", False), vrfs=["NONPROD"])
+        assert staged is not None
+        assert staged["vrfs"]["NONPROD"]["unenforced"] == STAGED
+        assert staged["vrfs"]["NONPROD"]["enforce_tag"] is None
+
+    def test_the_view_is_the_same_for_every_vtep_of_the_staged_data_center(self) -> None:
+        roots = _stage(_roots(), "dc10", False)
+        for role in sorted(DC_VTEP_ROLES):
+            view = _view(roots, role=role)
+            assert view is not None
+            assert view["vrfs"]["NONPROD"]["unenforced"] == STAGED
+
+    def test_the_rendered_config_keeps_the_policy_and_prints_the_staging_comment_instead_of_enforce(self) -> None:
+        enforcing = _run_transform(Leaf, _raw())
+        staged = _run_transform(Leaf, _raw(enforce=False))
+        assert "security enforce tag 0 default deny" in enforcing
+        assert "security enforce" not in staged.replace(f"! unenforced: {STAGED}", "")
+        assert staged.count(f"! unenforced: {STAGED}") == 2, "one comment per VRF"
+        assert enforcing.count("! unenforced:") == 0
+        for line in ("feature security-group", "system routing template-security-groups"):
+            assert staged.splitlines().count(line) == 1
+        assert "class-map type security" in staged and "policy-map type security" in staged
+        assert "security contract" in staged
 
 
 class TestPairNotes:
@@ -1424,21 +1542,64 @@ class TestHostTrunks:
         assert "switchport access vlan 210" in stanza
         assert "native vlan" not in stanza
 
+    @staticmethod
+    def _context(raw: dict, root_dir: Path) -> tuple[dict[str, Any], MagicMock]:
+        """The template context of ``raw`` (``_template_context``, what transform() renders) and the
+        get_interfaces spy of that one call."""
+        transform = Leaf.__new__(Leaf)
+        transform.root_directory = str(root_dir)
+        device, roots, platform = transform._device_and_platform(copy.deepcopy(raw))
+        device["segment_deployments"] = transform._device_activations(device)
+        with patch("transforms.common.get_interfaces", wraps=get_interfaces) as spy:
+            return transform._template_context(device, platform or "", roots), spy
+
     def test_the_transform_hands_the_templates_the_trunked_interfaces_only_for_claimed_ports(
         self, root_dir: Path
     ) -> None:
-        transform = Leaf.__new__(Leaf)
-        transform.root_directory = str(root_dir)
-        device, roots, platform = transform._device_and_platform(copy.deepcopy(_raw()))
-        device["segment_deployments"] = transform._device_activations(device)
-        config = {
-            **transform._build_config(device, platform or ""),
-            **transform._extra_config(device, platform or "", extra_roots=roots),
-        }
+        config, _spy = self._context(_raw(), root_dir)
         by_name = {item["name"]: item for item in config["interfaces"]}
         assert by_name["Ethernet11"]["native_vlan"] == 210
         assert "native_vlan" not in by_name["Ethernet10"]
         assert not any("native_vlan" in item for name, item in by_name.items() if name not in ("Ethernet11",))
+
+    def test_a_vtep_owning_a_claimed_port_builds_its_interfaces_once_with_the_native_vlans(
+        self, root_dir: Path
+    ) -> None:
+        config, spy = self._context(_raw(), root_dir)
+        spy.assert_called_once()
+        # Ethernet10 (the trunk of the web component) is named too; get_interfaces leaves a trunk as it is.
+        assert spy.call_args.kwargs["native_vlans"] == {"Ethernet10": 210, "Ethernet11": 210}
+        assert config["group_policy"]["groups"], "the claimed port comes from the group policy of the same context"
+
+    def test_a_vtep_without_a_claimed_port_builds_its_interfaces_once_without_native_vlans(
+        self, root_dir: Path
+    ) -> None:
+        """An enablement-only VTEP (no tenant VRF) and a device outside a reference fabric."""
+        for raw in (
+            build_gpo_device_data(device_name="dc1-leaf-01", role="leaf", segments=()),
+            build_gpo_device_data(
+                device_name="dc1-leaf-01", role="leaf", segments=LEAF_SEGMENTS, leaf_type="N9K-C9336C-FX2"
+            ),
+        ):
+            _config, spy = self._context(raw, root_dir)
+            spy.assert_called_once()
+            assert spy.call_args.kwargs["native_vlans"] is None
+
+    def test_the_context_keeps_the_extra_config_over_the_base_config_and_the_base_loopback(
+        self, root_dir: Path
+    ) -> None:
+        """The same keys as the two parts merged the old way (base first, then extra on top)."""
+        transform = Leaf.__new__(Leaf)
+        transform.root_directory = str(root_dir)
+        device, roots, platform = transform._device_and_platform(copy.deepcopy(_raw()))
+        device["segment_deployments"] = transform._device_activations(device)
+        config = transform._template_context(device, platform or "", roots)
+        base = transform._build_config(device, platform or "")
+        extra = transform._extra_config(device, platform or "", extra_roots=roots)
+        assert config.keys() == {**base, **extra}.keys()
+        assert config["loopback_name"] == base["loopback_name"]
+        assert {key: config[key] for key in extra} == extra
+        assert [i["name"] for i in config["interfaces"]] == [i["name"] for i in base["interfaces"]]
 
     def test_a_non_reference_device_is_not_touched(self) -> None:
         """No claim, no group policy: get_interfaces is called once, without native VLANs."""

@@ -647,8 +647,17 @@ def _raw_component_tag(tag_id: str, group_id: int, segment: str) -> dict[str, An
     }
 
 
-def _payload(*, border_version: str = "10.6(3)F", access_leaf: bool = True, profiles: list[dict] | None = None) -> dict:
+def _payload(
+    *,
+    border_version: str = "10.6(3)F",
+    access_leaf: bool = True,
+    profiles: list[dict] | None = None,
+    enforce: bool | None = True,
+    dc12_enforce: bool | None = False,
+) -> dict:
     """A raw segmentation_matrix response for DC10 (FX3/GX, an EX access leaf by default) next to a legacy DC12.
+
+    ``enforce`` / ``dc12_enforce`` are the data centers' ``group_policy_enforce`` (None: the key is absent).
 
     Segments: C008's portal (DC10) calling C005's microsegmented web (DC10, components web and session,
     one intra-segment rule), C005's backend stretched DC10 <-> DC12, a remote DC12 segment, the untagged
@@ -699,19 +708,27 @@ def _payload(*, border_version: str = "10.6(3)F", access_leaf: bool = True, prof
         ),
         _raw_segment("s-c007", "c007-untagged-p", "C007"),
     ]
+
+    def flag(value: bool | None) -> dict:
+        return {} if value is None else {"group_policy_enforce": _v(value)}
+
     return {
-        "target": {"edges": [{"node": {"id": "dc10", "name": _v("DC10")}}]},
+        "target": {"edges": [{"node": {"id": "dc10", "name": _v("DC10"), **flag(enforce)}}]},
         "TopologyDataCenter": {
             "edges": [
                 {
                     "node": {
                         "id": "dc10",
+                        "name": _v("DC10"),
+                        **flag(enforce),
                         "devices": {"edges": [_device("bl-01", "border-leaf", "N9K-C9364C-GX", border_version)]},
                     }
                 },
                 {
                     "node": {
                         "id": "dc12",
+                        "name": _v("DC12"),
+                        **flag(dc12_enforce),
                         "devices": {"edges": [_device("bl-12", "border-leaf", "N9K-C9336C-FX2", "10.3(3)", 24)]},
                     }
                 },
@@ -751,6 +768,7 @@ class TestSegmentationMatrixSite:
             "reference": False,
             "kind": "vxlan_gpo",
             "reason": "access-leaf al-01 N9K-C93180YC-EX: device type not in profile reference-cisco-nxos",
+            "enforce": True,
         }
 
     def test_site_names_every_distinct_cause(self) -> None:
@@ -767,7 +785,20 @@ class TestSegmentationMatrixSite:
 
     def test_reference_site(self) -> None:
         result = _render(_payload(access_leaf=False))
-        assert result["site"] == {"reference": True, "kind": "vxlan_gpo", "reason": None}
+        assert result["site"] == {"reference": True, "kind": "vxlan_gpo", "reason": None, "enforce": True}
+
+    def test_site_enforce_is_the_staging_switch_of_this_data_center(self) -> None:
+        """False for a staged DC10 even when another data center enforces; a missing key is False."""
+        assert _render(_payload(enforce=False, dc12_enforce=True))["site"]["enforce"] is False
+        assert _render(_payload(enforce=True, dc12_enforce=False))["site"]["enforce"] is True
+        assert _render(_payload(enforce=None))["site"]["enforce"] is False
+
+    def test_enforce_does_not_change_the_contracts_or_the_reference_verdict(self) -> None:
+        enforcing, staged = _render(_payload(access_leaf=False)), _render(_payload(access_leaf=False, enforce=False))
+        assert staged["site"] == {**enforcing["site"], "enforce": False}
+        assert {key: value for key, value in staged.items() if key != "site"} == {
+            key: value for key, value in enforcing.items() if key != "site"
+        }
 
     def test_non_vtep_devices_are_not_listed(self) -> None:
         payload = _payload(access_leaf=False)

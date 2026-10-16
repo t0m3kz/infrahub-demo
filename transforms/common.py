@@ -102,6 +102,21 @@ def _loopback_name(interfaces: list[dict[str, Any]], platform_name: str) -> str:
     return "loopback0" if platform_name == "cisco_nxos" else "Loopback0"
 
 
+def _gpo_host_vlans(group_policy: dict[str, Any] | None) -> dict[str, int] | None:
+    """Host port -> the VLAN to make its native VLAN (``get_interfaces``), or None when there is none.
+
+    A host port a component selector names must be a trunk (spec 3.6: interface+VLAN selectors are
+    documented for trunk ports only): the one mode rule (get_interfaces) trunks the access ones with
+    the segment's VLAN as native VLAN. ``group_policy`` is the device view, None on a non-GPO device.
+    """
+    host_vlans = {
+        port["name"]: port["vlan_id"]
+        for group in (group_policy or {}).get("groups", [])
+        for port in group["interfaces"]
+    }
+    return host_vlans or None
+
+
 def _combine_leaf_pbr_rules(
     customer_rules: list[dict[str, Any]], lb_backend_rules: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
@@ -175,13 +190,25 @@ class BaseDeviceTransform(InfrahubTransform):
         # ports: VLAN/VNI/VRF/anycast only, never segment policy input.
         device_data["exchange_transits"] = get_exchange_transits(_firewall_context_caps(device_data.get("interfaces")))
 
-        config = self._build_config(device_data, platform_name)
-        config.update(self._extra_config(device_data, platform_name, extra_roots=extra_roots))
+        config = self._template_context(device_data, platform_name, extra_roots)
         if platform_name in {"sonic", "dell_sonic"}:
             unsupported = [key for key in ("snmp", "aaa") if config.get(key)]
             if unsupported:
                 raise ValueError(f"{platform_name} ConfigDB rendering does not support: {', '.join(unsupported)}")
         return self._render(platform_name, config)
+
+    def _template_context(self, device_data: dict, platform_name: str, extra_roots: dict) -> dict:
+        """The template context: the device-specific part (``_extra_config``), then the base part.
+
+        The device-specific part goes first because the host ports of its group policy decide how the
+        base part builds the interfaces (``_gpo_host_vlans``), which then run once. Neither part
+        modifies ``device_data``, so the order does not change what either reads. ``_extra_config``
+        wins on a key both set.
+        """
+        extra = self._extra_config(device_data, platform_name, extra_roots=extra_roots)
+        config = self._build_config(device_data, platform_name, host_vlans=_gpo_host_vlans(extra.get("group_policy")))
+        config.update(extra)
+        return config
 
     @staticmethod
     def _device_and_platform(data: Any) -> tuple[dict, dict, str | None]:
@@ -207,14 +234,17 @@ class BaseDeviceTransform(InfrahubTransform):
     def _render(self, platform_name: str, config: dict) -> str:
         return self._load_template(platform_name).render(**config)
 
-    def _build_config(self, data: dict, platform_name: str) -> dict:
-        """Build the base template context shared by all device transforms."""
+    def _build_config(self, data: dict, platform_name: str, host_vlans: dict[str, int] | None = None) -> dict:
+        """Build the base template context shared by all device transforms.
+
+        ``host_vlans``: the NX-OS GPO host ports (``_gpo_host_vlans``), None on any other device.
+        """
         interfaces = data.get("interfaces") or []
         device_capabilities = data.get("capabilities") or []
         device_name = data.get("name", "")
         management_services = get_management_services(device_capabilities)
         mlag = get_mlag(device_capabilities, interfaces, device_name=device_name)
-        template_interfaces = self._template_interfaces(data)
+        template_interfaces = self._template_interfaces(data, host_vlans=host_vlans)
         config = {
             "name": device_name,
             "hostname": device_name,
@@ -364,14 +394,6 @@ class BaseDeviceTransform(InfrahubTransform):
         )
         if group_policy is not None:
             config["group_policy"] = group_policy
-            # A host port a component selector names must be a trunk (spec 3.6: interface+VLAN selectors are
-            # documented for trunk ports only): the one mode rule (get_interfaces) trunks the access ones
-            # with the segment's VLAN as native VLAN. The interfaces are built again only on such a device.
-            host_vlans = {
-                port["name"]: port["vlan_id"] for group in group_policy["groups"] for port in group["interfaces"]
-            }
-            if host_vlans:
-                config["interfaces"] = self._template_interfaces(data, host_vlans=host_vlans)
         return config
 
     _LEAF_ROLES = frozenset({"leaf", "tor", "access-leaf"})

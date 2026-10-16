@@ -2954,17 +2954,21 @@ def build_segmentation_matrix_data() -> dict:
     ]
     return {
         "data": {
-            "target": _edges([{"id": "dc10", "name": _v("DC10")}]),
+            "target": _edges([{"id": "dc10", "name": _v("DC10"), "group_policy_enforce": _v(True)}]),
             "TopologyDataCenter": _edges(
                 [
                     {
                         "id": "dc10",
+                        "name": _v("DC10"),
+                        "group_policy_enforce": _v(True),
                         "devices": _edges(
                             [_gp_device("bl-dc10-01", "border-leaf", "N9K-C9336C-FX2", "10.3(3)", memory_gb)]
                         ),
                     },
                     {
                         "id": "dc12",
+                        "name": _v("DC12"),
+                        "group_policy_enforce": _v(False),
                         "devices": _edges(
                             [_gp_device("bl-dc12-01", "border-leaf", "N9K-C9336C-FX2", "10.3(3)", memory_gb)]
                         ),
@@ -3051,10 +3055,12 @@ _GPO_EOS = {
 }
 
 
-def _gpo_fleet_roots(*, fleet: dict[str, str], version: str, leaf_type: str | None = None) -> dict:
+def _gpo_fleet_roots(
+    *, fleet: dict[str, str], version: str, leaf_type: str | None = None, enforce: bool = True
+) -> dict:
     """The fleet roots of the GPO device queries: DC10's VTEPs (``leaf_type`` overrides the leaf's type)
     next to DC12 (a legacy border leaf: never policy-aware), the bootstrap profile rows, the segments
-    and their component tags.
+    and their component tags. ``enforce`` is DC10's ``group_policy_enforce`` (A6: False stages it).
 
     NONPROD: web-np calls app-np (https and a port range, with a reverse udp row: two bidir contracts
     on one pair), app-np calls db-np, db-np answers with any and icmp, web-np reaches the internet
@@ -3165,9 +3171,11 @@ def _gpo_fleet_roots(*, fleet: dict[str, str], version: str, leaf_type: str | No
             [
                 {
                     "id": "dc10",
+                    "name": _v("DC10"),
+                    "group_policy_enforce": _v(enforce),
                     "devices": _edges([device("dc1-border-leaf-01", "border-leaf", fleet["border"], version)]),
                 },
-                {"id": "dc12", "devices": _edges([legacy])},
+                {"id": "dc12", "name": _v("DC12"), "group_policy_enforce": _v(False), "devices": _edges([legacy])},
             ]
         ),
         "TopologyPod": _edges(
@@ -3222,9 +3230,11 @@ def build_gpo_device_data(
     version: str = "10.6(3)F",
     leaf_type: str | None = None,
     host_ports: dict[str, tuple[str, ...]] | None = None,
+    enforce: bool = True,
 ) -> dict:
     """A VTEP of DC10 carrying ``segments`` (names of _GPO_SEGMENTS) on Ethernet10, plus one more server port
-    per ``host_ports`` entry (name -> the segments it carries), with the fleet roots appended."""
+    per ``host_ports`` entry (name -> the segments it carries), with the fleet roots appended
+    (``enforce``: DC10's ``group_policy_enforce``, False for the staged variant)."""
     data = build_device_data(
         device_name=device_name,
         role=role,
@@ -3258,10 +3268,12 @@ def build_gpo_device_data(
                 )
             }
         )
-    return {**data, **_gpo_fleet_roots(fleet=fleet, version=version, leaf_type=leaf_type)}
+    return {**data, **_gpo_fleet_roots(fleet=fleet, version=version, leaf_type=leaf_type, enforce=enforce)}
 
 
-def _gpo_golden_leaf_data(*, fleet: dict[str, str], version: str, leaf_type: str | None = None) -> dict:
+def _gpo_golden_leaf_data(
+    *, fleet: dict[str, str], version: str, leaf_type: str | None = None, enforce: bool = True
+) -> dict:
     """The leaf of an existing golden config (``ebgp_ibgp``), with the GPO fleet roots appended."""
     return {
         **build_device_data(
@@ -3271,7 +3283,7 @@ def _gpo_golden_leaf_data(*, fleet: dict[str, str], version: str, leaf_type: str
             scenario="ebgp_ibgp",
             include_segments=True,
         ),
-        **_gpo_fleet_roots(fleet=fleet, version=version, leaf_type=leaf_type),
+        **_gpo_fleet_roots(fleet=fleet, version=version, leaf_type=leaf_type, enforce=enforce),
     }
 
 

@@ -493,8 +493,13 @@ class DataCenterContracts:
     the device renderers. ``reference_sites`` is the fleet as it is (every site
     whose VTEPs are all in their platform's profile row); a reader that wants
     this data center treated as one adds it itself.
+
+    ``enforce`` is the data center's staging switch (``group_policy_enforce``, A6): False renders the
+    contracts but not ``security enforce``. ``name`` is the data center's, for that reason's text.
     """
 
+    name: str | None
+    enforce: bool
     profiles: Profiles
     vteps: list[dict[str, Any]]
     reason: str | None
@@ -533,7 +538,13 @@ def data_center_contracts(
     )
     local = [group for segment in segments for group in by_segment.get(str(segment.get("id")), [])]
     local_names = {group.name for group in local}
+    data_center = next(
+        (node for node in roots.get("TopologyDataCenter") or [] if str(node.get("id")) == dc_id),
+        {},
+    )
     return DataCenterContracts(
+        name=data_center.get("name"),
+        enforce=bool(data_center.get("group_policy_enforce")),
         profiles=profiles,
         vteps=vteps,
         reason=site_reason(vteps, profiles),
@@ -967,11 +978,13 @@ def _vrf_view(
     no_classifier: set[str],
     component_blockers: dict[str, list[str]],
     claims: Iterable[ComponentClaim],
+    staged: str | None,
 ) -> dict[str, Any]:
     """The contracts and the enforcement of one VRF (``vxlan_gpo_device_view``).
 
-    Enforced when no component group the VRF's contracts name has a blocker (``component_coverage``, plus
-    the problems of this device's claimed ports) and no tenant segment it holds here lacks a classifier.
+    Enforced when the data center enforces (``staged`` is the reason it does not, listed first), no
+    component group the VRF's contracts name has a blocker (``component_coverage``, plus the problems of
+    this device's claimed ports) and no tenant segment it holds here lacks a classifier.
 
     The coverage part of that verdict is the data center's, identical on every VTEP of the VRF. The
     per-device part is not: ``component_blockers`` also holds the problems of THIS device's claimed ports
@@ -1010,10 +1023,12 @@ def _vrf_view(
             if end in by_name and by_name[end].kind == "component"
         }
     )
-    reasons = [
+    reasons = [staged] if staged else []
+    reasons += [
         f"component group {_label(name)}: {text}" for name in components for text in component_blockers.get(name, [])
     ]
     reasons += [f"segment {name} has no group classifier on this device" for name in sorted(no_classifier)]
+    # A staged data center always has its reason: the refusal is for a VRF that would really enforce.
     if not reasons and unclassified_id is None:
         raise _refuse(who, f"VRF {vrf} is enforced but the profile names no unclassified group id")
     return {
@@ -1057,7 +1072,8 @@ def vxlan_gpo_device_view(
     component group its contracts name can be classified (no coverage blocker)
     and every routed tenant segment it holds on this device is classified: a
     segment activated here without a group or a VLAN has no classifier. Such a
-    VRF gets its groups and contracts but is left unenforced, with the reasons.
+    VRF gets its groups and contracts but is left unenforced, with the reasons. So does every VRF of a
+    data center that does not enforce (``group_policy_enforce`` false, A6): that reason comes first.
     """
     found = _gpo_data_center(roots, device_name, platform) if role in DC_VTEP_ROLES else None
     if found is None:
@@ -1132,6 +1148,14 @@ def vxlan_gpo_device_view(
             }
         )
 
+    staged = (
+        None
+        if contracts.enforce
+        else (
+            f"data center {contracts.name or dc_id} stages group policy (group_policy_enforce is false): "
+            "contracts are configured, security enforce is not"
+        )
+    )
     return {
         "class_maps": [class_maps[name] for name in sorted(class_maps)],
         "groups": group_defs,
@@ -1146,6 +1170,7 @@ def vxlan_gpo_device_view(
                 no_classifier=selectors.unclassified.get(vrf, set()),
                 component_blockers=component_blockers,
                 claims=coverage.claims,
+                staged=staged,
             )
             for vrf, vrf_rows in sorted(rows_by_vrf.items())
         },

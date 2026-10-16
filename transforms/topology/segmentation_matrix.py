@@ -35,6 +35,8 @@ class SegmentationMatrix(InfrahubTransform):
       group-policy kind of its VTEPs (utils/group_policy.site_reason /
       site_kind), each VTEP with why it is outside its platform's profile row
       (fabric_reason; null: in it);
+    - ``site.enforce``: the data center's staging switch (``group_policy_enforce``): False means a
+      reference fabric configures the contracts but its devices do not enforce them;
     - ``segments``: every segment active in the DC, with its group, customer
       (the segment owner: a label, not a tag), VRF, whether it needs
       component group policy and whether its leaf SVI carries its ACL
@@ -96,6 +98,7 @@ class SegmentationMatrix(InfrahubTransform):
                 "reference": contracts.reason is None,
                 "kind": site_kind(vteps, profiles),
                 "reason": contracts.reason,
+                "enforce": contracts.enforce,
             },
             "vteps": [self._vtep(device, profiles) for device in vteps],
             "segments": [
