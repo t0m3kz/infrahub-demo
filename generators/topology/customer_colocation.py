@@ -22,19 +22,15 @@ the customer_deployments group and querying customer_colocation.gql.
 
 from __future__ import annotations
 
-from typing import Any
-
-from utils.data_cleaning import clean_data
-
 from ..common import CommonGenerator
 from ..connections import CablingMixin
 from ..devices import DeviceMixin
-from ..firewall_context import FirewallContextMixin
 from ..pools import PoolMixin
+from .customer_facility import CustomerFacilityMixin
 
 
 class CustomerDeploymentColocationExchangeGenerator(
-    FirewallContextMixin, PoolMixin, DeviceMixin, CablingMixin, CommonGenerator
+    CustomerFacilityMixin, PoolMixin, DeviceMixin, CablingMixin, CommonGenerator
 ):
     """add_customer_deployment_colocation — FirewallContext and transit legs on
     the parent metro's firewall pair for TopologyCustomerColocation.
@@ -43,46 +39,3 @@ class CustomerDeploymentColocationExchangeGenerator(
     _customer_kind = "TopologyCustomerColocation"
     _parent_label = "ColocationMetro"
     _parent_generators = ("add_colocation_metro",)
-
-    async def generate(self, data: dict[str, Any]) -> None:
-        cleaned = clean_data(data)
-
-        entries = cleaned.get("TopologyCustomerColocation", [])
-        if not entries:
-            self.logger.info("No TopologyCustomerColocation data in GraphQL response — not this generator's kind")
-            return
-        customer = entries[0]
-
-        customer_id: str = customer.get("id", "")
-        if not customer_id:
-            self.logger.error("Deployment missing id — cannot proceed")
-            return
-
-        self.logger.info(f"Processing Colocation deployment {customer.get('name', customer_id)}")
-
-        # This reads metro-level data (firewall_devices, loadbalancer_devices)
-        # written by add_colocation_metro, which is also the only owner of the
-        # metro's firewall HA pair. A customer can board concurrently with (or
-        # immediately after) its metro's own creation, so wait for an in-flight
-        # metro run and re-parse — same as customer_dc.py waits on add_dc.
-        metro_id = (customer.get("parent") or {}).get("id")
-        if metro_id:
-            refreshed = await self.wait_for_parent_generator_and_refetch(self._parent_generators, metro_id)
-            if refreshed is not None:
-                entries = clean_data(refreshed).get("TopologyCustomerColocation", [])
-                if not entries:
-                    self.logger.error("No TopologyCustomerColocation data in GraphQL response")
-                    return
-                customer = entries[0]
-
-        # _all_controllers is read by create_devices() via generators/devices.py's
-        # _resolve_role_controller — always empty here: a metro declares no
-        # controllers, so customer_colocation.gql fetches none (unlike
-        # customer_dc.gql's security_manager_controllers/lb_manager_controllers
-        # aliases).
-        self._all_controllers = []
-
-        target = await self._resolve_context_target(customer, customer_id)
-        if target is not None:
-            await self._ensure_transit_legs(customer=customer, customer_id=customer_id, target=target)
-        await self._ensure_dedicated_loadbalancer(customer, customer_id)

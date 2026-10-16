@@ -6,8 +6,8 @@ only, nothing for a cloud segment), the cage VLAN segment's ports derived from
 its hosts' cabling, _resolve_physical_device_id (physical vs virtual vs
 unresolvable AppInstance kinds), _reconcile_segment_interface_tags (union
 over every component on the segment; add and remove via relationship
-mutations, never a tracked save), _customer_facing_targets (uplink vs
-bonded/lag far ends, dedup) and _resolve_customer_facing_target.
+mutations, never a tracked save), _customer_facing_target_ids (uplink vs
+bonded/lag far ends, dedup) and _resolve_customer_facing_target_id.
 
 The VLAN domain activation reconcile this generator shares with
 VxlanSegmentGenerator (VlanDomainMixin) is covered by
@@ -286,7 +286,7 @@ class TestResolvePhysicalDeviceId:
 
 
 # ===========================================================================
-# _reconcile_segment_interface_tags / _customer_facing_targets
+# _reconcile_segment_interface_tags / _customer_facing_target_ids
 # ===========================================================================
 
 
@@ -311,8 +311,8 @@ class TestReconcileSegmentInterfaceTags:
     def _gen(response: dict[str, Any], targets_by_device: dict[str, list[str]]) -> Any:
         gen = _make_gen()
         gen.client.execute_graphql = AsyncMock(return_value=response)
-        gen._customer_facing_targets = AsyncMock(
-            side_effect=lambda device_id: {t: MagicMock(id=t) for t in targets_by_device.get(device_id, [])}
+        gen._customer_facing_target_ids = AsyncMock(
+            side_effect=lambda device_id: set(targets_by_device.get(device_id, []))
         )
         return gen
 
@@ -343,7 +343,7 @@ class TestReconcileSegmentInterfaceTags:
         )
 
         assert result == (2, 0)
-        assert [c.args[0] for c in gen._customer_facing_targets.await_args_list] == ["dev-1", "dev-2"]
+        assert [c.args[0] for c in gen._customer_facing_target_ids.await_args_list] == ["dev-1", "dev-2"]
         segment_obj.add_relationships.assert_awaited_once_with(
             relation_to_update="interface_capabilities", related_nodes=["if-a", "po-b"]
         )
@@ -400,7 +400,7 @@ class TestReconcileSegmentInterfaceTags:
         )
 
         assert result == (0, 1)
-        gen._customer_facing_targets.assert_not_awaited()
+        gen._customer_facing_target_ids.assert_not_awaited()
 
 
 class TestVlanSegmentFromCabling:
@@ -429,8 +429,8 @@ class TestVlanSegmentFromCabling:
                 ],
             )
         )
-        gen._customer_facing_targets = AsyncMock(
-            side_effect=lambda device_id: {t: MagicMock(id=t) for t in self._CAGE_PORTS.get(device_id, [])}
+        gen._customer_facing_target_ids = AsyncMock(
+            side_effect=lambda device_id: set(self._CAGE_PORTS.get(device_id, []))
         )
         return gen, segment_obj
 
@@ -472,35 +472,33 @@ class TestCustomerFacingTargets:
         gen = _make_gen()
         gen.client.filters = AsyncMock(return_value=[_iface("eth0", cabled=False)])
 
-        assert asyncio.run(gen._customer_facing_targets("dev-1")) == {}
+        assert asyncio.run(gen._customer_facing_target_ids("dev-1")) == set()
 
     def test_uplink_far_end_is_a_target(self) -> None:
         gen = _make_gen()
         gen.client.filters = AsyncMock(return_value=[_iface("eth0")])
-        target = MagicMock(id="far-1")
-        gen._resolve_customer_facing_target = AsyncMock(return_value=target)
+        gen._resolve_customer_facing_target_id = AsyncMock(return_value="far-1")
 
-        assert asyncio.run(gen._customer_facing_targets("dev-1")) == {"far-1": target}
+        assert asyncio.run(gen._customer_facing_target_ids("dev-1")) == {"far-1"}
 
     def test_bonded_members_dedup_to_one_port_channel(self) -> None:
         """Two bond members resolving to the SAME port-channel give one target."""
         gen = _make_gen()
         gen.client.filters = AsyncMock(return_value=[_iface("eth0"), _iface("eth1")])
-        shared = MagicMock(id="po-1")
-        gen._resolve_customer_facing_target = AsyncMock(return_value=shared)
+        gen._resolve_customer_facing_target_id = AsyncMock(return_value="po-1")
 
-        assert asyncio.run(gen._customer_facing_targets("dev-1")) == {"po-1": shared}
+        assert asyncio.run(gen._customer_facing_target_ids("dev-1")) == {"po-1"}
 
     def test_unresolvable_far_end_yields_nothing(self) -> None:
         gen = _make_gen()
         gen.client.filters = AsyncMock(return_value=[_iface("eth0")])
-        gen._resolve_customer_facing_target = AsyncMock(return_value=None)
+        gen._resolve_customer_facing_target_id = AsyncMock(return_value=None)
 
-        assert asyncio.run(gen._customer_facing_targets("dev-1")) == {}
+        assert asyncio.run(gen._customer_facing_target_ids("dev-1")) == set()
 
 
 # ===========================================================================
-# _resolve_customer_facing_target
+# _resolve_customer_facing_target_id
 # ===========================================================================
 
 
@@ -515,7 +513,7 @@ class TestResolveCustomerFacingTarget:
         cable_obj.endpoints.peers = [MagicMock(id="nic-1")]  # only the near end
         gen.client.get = AsyncMock(return_value=cable_obj)
 
-        result = asyncio.run(gen._resolve_customer_facing_target(nic))
+        result = asyncio.run(gen._resolve_customer_facing_target_id(nic))
 
         assert result is None
 
@@ -528,9 +526,9 @@ class TestResolveCustomerFacingTarget:
         far_end.role = MagicMock(value="customer")
         gen.client.get = AsyncMock(side_effect=[cable_obj, far_end])
 
-        result = asyncio.run(gen._resolve_customer_facing_target(nic))
+        result = asyncio.run(gen._resolve_customer_facing_target_id(nic))
 
-        assert result is far_end
+        assert result == "far-1"
 
     def test_lag_far_end_resolves_to_its_port_channel(self) -> None:
         gen = self._gen()
@@ -540,14 +538,12 @@ class TestResolveCustomerFacingTarget:
         far_end = MagicMock(id="far-1")
         far_end.role = MagicMock(value="lag")
         far_end.lag = MagicMock(peer=MagicMock(id="po-1"))
-        port_channel = MagicMock(id="po-1")
-        gen.client.get = AsyncMock(side_effect=[cable_obj, far_end, port_channel])
+        gen.client.get = AsyncMock(side_effect=[cable_obj, far_end])
 
-        result = asyncio.run(gen._resolve_customer_facing_target(nic))
+        result = asyncio.run(gen._resolve_customer_facing_target_id(nic))
 
-        assert result is port_channel
-        get_calls = gen.client.get.await_args_list
-        assert get_calls[2].kwargs["id"] == "po-1"
+        assert result == "po-1"
+        assert gen.client.get.await_count == 2  # cable + far end; the port-channel node is not read
 
     def test_lag_far_end_without_port_channel_warns_and_returns_none(self) -> None:
         gen = self._gen()
@@ -559,7 +555,7 @@ class TestResolveCustomerFacingTarget:
         far_end.lag = MagicMock(peer=None)
         gen.client.get = AsyncMock(side_effect=[cable_obj, far_end])
 
-        result = asyncio.run(gen._resolve_customer_facing_target(nic))
+        result = asyncio.run(gen._resolve_customer_facing_target_id(nic))
 
         assert result is None
         gen.logger.warning.assert_called_once()

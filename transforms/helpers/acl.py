@@ -8,6 +8,7 @@ from transforms.helpers.policy import (
     rule_zone,
     segment_flows,
 )
+from utils.group_policy import is_microsegmented
 from utils.internet_space import NON_INTERNET_PREFIXES
 from utils.segment_addressing import segment_prefix
 
@@ -168,7 +169,7 @@ def _leaf_enforces(seg: dict[str, Any]) -> bool:
     whole ACL, like a microsegmented one.
     """
     inline = seg.get("inline_service") or {}
-    if not (inline.get("id") or inline.get("name")) or seg.get("isolation_mode") == "microsegmented":
+    if not (inline.get("id") or inline.get("name")) or is_microsegmented(seg):
         return True
     return any(rule.get("apply_on_switch") for rule in segment_flows(seg)[0]["rules"])
 

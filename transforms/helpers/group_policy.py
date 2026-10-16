@@ -77,7 +77,7 @@ from typing import Any
 
 from transforms.helpers.policy import segment_flows
 from utils.exchange_transit import is_routed_tenant_segment
-from utils.group_policy import segment_sites, tags_by_segment
+from utils.group_policy import is_microsegmented, segment_sites, tags_by_segment
 
 UNCLASSIFIED = "unclassified"
 """Pseudo-group of every endpoint no selector classifies (service and transit legs, outside the VRF's segments)."""
@@ -95,8 +95,6 @@ stateless renderer without bidir adds mirrored rows itself."""
 
 FALLBACK = "fallback"
 """The MSS-G source of traffic from a prefix in no segment: the destination segment's fallback policy."""
-
-MICROSEGMENTED = "microsegmented"
 
 Entry = tuple[str, int | None, int | None]
 
@@ -150,7 +148,7 @@ def segment_groups(
         tag = segment.get("security_tag") or {}
         if not segment.get("id") or not tag.get("name") or not is_routed_tenant_segment(segment):
             continue
-        microsegmented = segment.get("isolation_mode") == MICROSEGMENTED
+        microsegmented = is_microsegmented(segment)
         common = {
             "segment": str(segment.get("name")),
             "vrf": segment_vrf(segment),

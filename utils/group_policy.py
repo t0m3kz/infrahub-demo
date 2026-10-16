@@ -263,10 +263,18 @@ def tags_by_segment(tags: Iterable[dict[str, Any]]) -> dict[str, list[dict[str, 
     return by_segment
 
 
+MICROSEGMENTED = "microsegmented"
+"""isolation_mode of a segment whose components are told apart from each other, not only from other segments."""
+
+
+def is_microsegmented(segment: dict[str, Any]) -> bool:
+    return segment.get("isolation_mode") == MICROSEGMENTED
+
+
 def gbp_required(segment: dict[str, Any], tag_count: int) -> bool:
     """A microsegmented segment hosting at least two tagged components.
 
     Only traffic between two components of one segment is bridged past the
     segment's SVI ACL, so only such a segment needs group policy.
     """
-    return segment.get("isolation_mode") == "microsegmented" and tag_count >= 2
+    return is_microsegmented(segment) and tag_count >= 2

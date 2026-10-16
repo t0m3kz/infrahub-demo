@@ -52,6 +52,5 @@ class CheckEdge(BaseDeviceCheck):
 
     def validate(self, data: Any) -> None:
         super().validate(data)
-        # InfrahubCheck has no log_warning; log_info does not block the merge.
         for warning in warn_transit_without_internet_bgw(get_data(data)):
-            self.log_info(message=f"WARNING: {warning}")
+            self.log_warning(warning)

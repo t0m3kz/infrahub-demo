@@ -4,8 +4,7 @@ no generator instance needed.
 Covers rule naming (one rule per dependency and port), rule descriptions
 (including target_fqdn external targets), dependency authorization (owner
 approval, prod/non-prod separation),
-rule-payload building, zone context, and the security_profile-driven mappings
-(pick_zone_name).
+rule-payload building, zone context, and the security_profile-driven mappings.
 """
 
 from __future__ import annotations
@@ -415,7 +414,7 @@ class TestZoneContext:
     def test_planner_zone_context_handles_missing_zone_as_cross_zone(self):
         src_seg = {"security_zone": {"name": "internal"}}
         dst_seg = {}
-        src_zone, dst_zone, cross_zone = RulesPlanner.zone_context(src_seg=src_seg, dst_seg=dst_seg, dep={})
+        src_zone, dst_zone, cross_zone = RulesPlanner.zone_context(src_seg=src_seg, dst_seg=dst_seg)
 
         assert src_zone == "internal"
         assert dst_zone is None
@@ -423,17 +422,8 @@ class TestZoneContext:
 
 
 # ===========================================================================
-# TestPickZoneName / TestZoneSeed
+# TestZoneSeed
 # ===========================================================================
-
-
-class TestPickZoneName:
-    def test_pick_zone_name_maps_production_environment(self):
-        assert RulesPlanner.pick_zone_name("p") == "PROD-ZONE"
-
-    def test_pick_zone_name_maps_every_non_production_environment_to_nonprod(self):
-        for environment in ("n", "s", "d", "t"):
-            assert RulesPlanner.pick_zone_name(environment) == "NONPROD-ZONE"
 
 
 # ===========================================================================

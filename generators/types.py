@@ -49,10 +49,6 @@ class DeviceOptions(TypedDict, total=False):
     """Whether this role can use mlag_create="virtual" (anchors on a loopback —
     only L3/routed roles). False forces back-to-back instead of erroring out.
     Default: True."""
-    mlag_peer_template: dict[str, Any]
-    """Template dict used to check for a role="mlag-peer" interface, required
-    for back-to-back MLAG. Defaults to ``template`` (create_devices()'s own
-    positional arg) when omitted."""
     name_override: str
     """Explicit device name, bypassing the naming_convention-generated
     role-index name — only valid with quantity=1. Used for devices whose

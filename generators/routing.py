@@ -29,18 +29,17 @@ from .protocols import (
 )
 from .types import RoutingOptions
 
-_OVERLAY_BGP_MAX_RETRIES = 5
-_OVERLAY_BGP_RETRY_DELAY = 3.0
 _SHARED_OBJECT_MAX_RETRIES = 10
 _SHARED_OBJECT_RETRY_DELAY = 3.0
-_SHARED_OBJECT_RETRY_CAP = 20.0
 
 EVPN_AF = ("l2vpn", "evpn")
+IPV4_UNICAST_AF = ("ipv4", "unicast")
+IPV6_UNICAST_AF = ("ipv6", "unicast")
 # Attributes a missing address family is created with — the same values the
 # bootstrap data file gives them.
 _ADDRESS_FAMILY_DATA: dict[tuple[str, str], dict[str, Any]] = {
-    ("ipv4", "unicast"): {"description": "IPv4 unicast"},
-    ("ipv6", "unicast"): {"description": "IPv6 unicast"},
+    IPV4_UNICAST_AF: {"description": "IPv4 unicast"},
+    IPV6_UNICAST_AF: {"description": "IPv6 unicast"},
     EVPN_AF: {"description": "L2VPN EVPN overlay", "advertise_all_vni": True, "advertise_default_gw": True},
 }
 
@@ -113,13 +112,9 @@ class RoutingMixin:
             options = RoutingOptions()
         if p2p_interfaces is None:
             p2p_interfaces = []
-        design = options.get("design")
-        if isinstance(design, dict):
-            routing_strategy = design.get("routing_strategy")
-        else:
-            routing_strategy = getattr(design, "routing_strategy", None)
+        routing_strategy = (options.get("design") or {}).get("routing_strategy")
 
-        if not design or not routing_strategy:
+        if not routing_strategy:
             self.logger.warning("No design or routing strategy provided")
             return
         if routing_strategy not in {s.value for s in RoutingStrategy}:
@@ -226,7 +221,7 @@ class RoutingMixin:
                     waiting_on.append("shared OSPF area")
                 if missing_overlay_bgp:
                     waiting_on.append(f"overlay BGP for {sorted(missing_overlay_bgp)}")
-                delay = retry_delay(_SHARED_OBJECT_RETRY_DELAY, attempt, cap=_SHARED_OBJECT_RETRY_CAP)
+                delay = retry_delay(_SHARED_OBJECT_RETRY_DELAY, attempt)
                 self.logger.info(
                     f"Waiting on: {', '.join(waiting_on)} — retrying in {delay:.2f}s "
                     f"(attempt {attempt + 1}/{_SHARED_OBJECT_MAX_RETRIES})"
@@ -514,10 +509,7 @@ class RoutingMixin:
             description=f"Shared BGP overlay/EVPN auth key for {self.fabric_name}",
         )
 
-        if isinstance(self.data, dict):
-            strategy = self.data.get("routing_strategy", "ebgp-ebgp")
-        else:
-            strategy = self.data.routing_strategy
+        strategy = self.data.get("routing_strategy", "ebgp-ebgp")
 
         # Super-spine underlay is eBGP whenever underlay_type == "ebgp" (both
         # ebgp-ebgp and ebgp-ibgp — only ospf-ibgp skips underlay for

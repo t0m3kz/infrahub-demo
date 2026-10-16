@@ -93,23 +93,31 @@ HA_KIND_BY_ROLE: dict[str, str] = {
 # other branch that creates it when both merge.
 ROLE_GROUP_NAMES: dict[str, str] = {"load-balancer": "loadbalancers"}
 
-# (physical template's platform name, device_role) -> matching virtual
-# template's name prefix — see data/bootstrap's 09_virtual_device_templates_
-# *.yaml, where every platform/role combination provides a _CUSTOMER_<size>
-# variant per DC size (e.g. "CloudGuard_EDGE_CUSTOMER_L").
-_VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE: dict[tuple[str, str], str] = {
-    ("checkpoint_gaia", "firewall"): "CloudGuard_EDGE",
-    ("panos", "firewall"): "PA-VM_EDGE",
-    ("junos", "firewall"): "vSRX_EDGE",
-    ("f5_tmos", "load-balancer"): "BIG-IP-VE_LOAD_BALANCER",
-    ("netscaler", "load-balancer"): "NetScaler-ADC-VPX_LOAD_BALANCER",
-}
-
 
 def _is_generated_sync_port(iface: Any) -> bool:
     """Whether an HA sync interface is the eth7 _ensure_ha_interfaces creates
     itself (a DcimVirtualInterface), not one the device's template provides."""
     return getattr(iface, "typename", None) == DcimVirtualInterface.__name__ and iface.name.value == "eth7"
+
+
+def _object_id(value: Any | None) -> Any | None:
+    """id of a relationship reference given as None, a ``{"id": ...}`` dict or an SDK node."""
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return value.get("id")
+    return getattr(value, "id", value)
+
+
+def _initialized_peer_id(rel: Any) -> str | None:
+    """Peer id of a RelatedNode, or None when it is missing or unset.
+
+    A RelatedNode wrapper is always truthy even when unset (no __bool__
+    override), and its .peer property raises ValueError instead of returning
+    None when neither id nor hfid is set. Check .initialized before touching
+    .peer at all.
+    """
+    return rel.peer.id if rel is not None and rel.initialized else None
 
 
 class DeviceMixin(MLAGWiringMixin):
@@ -156,15 +164,13 @@ class DeviceMixin(MLAGWiringMixin):
         naming_convention: NamingConvention = "flat",
         options: DeviceOptions | None = None,
         *,
-        owner: Any | None = None,
         hosting_device: Any | None = None,
     ) -> list[str]:
         """Create devices using batch creation.
 
         Uses self.fabric_name and self.pod_name (if set) from instance variables.
-        See ``DeviceOptions`` for available option keys. ``owner`` and
-        ``hosting_device`` let callers supply shared placement context for both
-        physical and virtual device creation.
+        See ``DeviceOptions`` for available option keys. The device owner comes from
+        ``template["owner"]``; ``hosting_device`` places a virtual device on its host.
         """
         # Normalize options
         if options is None:
@@ -216,19 +222,8 @@ class DeviceMixin(MLAGWiringMixin):
 
         device_kind = DcimVirtualDevice if virtual else DcimPhysicalDevice
 
-        def _object_id(value: Any | None) -> Any | None:
-            if value is None:
-                return None
-            if isinstance(value, dict):
-                return value.get("id")
-            return getattr(value, "id", value)
-
-        owner_id = _object_id(owner)
+        owner_id = _object_id(template.get("owner"))
         hosting_device_id = _object_id(hosting_device)
-        template_owner = template.get("owner") if isinstance(template, dict) else None
-        template_owner_id = _object_id(template_owner)
-        if owner_id is None:
-            owner_id = template_owner_id
 
         # Resolve pools: accept SDK objects, ID strings, or fall back to name-based lookup
         management_pool = await self._resolve_pool(
@@ -312,15 +307,7 @@ class DeviceMixin(MLAGWiringMixin):
                     groups.append(device_group.id)
 
                 primary_address_rel = getattr(existing_device, "primary_address", None) if existing_device else None
-                # primary_address_rel is a RelatedNode wrapper — always truthy even when
-                # unset (no __bool__ override), and its .peer property raises ValueError
-                # instead of returning None when neither id nor hfid is set. Check
-                # .initialized before touching .peer at all.
-                primary_address_id = (
-                    primary_address_rel.peer.id
-                    if primary_address_rel is not None and primary_address_rel.initialized
-                    else None
-                )
+                primary_address_id = _initialized_peer_id(primary_address_rel)
                 if primary_address_id:
                     primary_address_data: Any = {"id": primary_address_id}
                 else:
@@ -363,13 +350,7 @@ class DeviceMixin(MLAGWiringMixin):
                 if loopback_pool:
                     existing_loopback = existing_loopbacks_by_device.get(name)
                     loopback_ip_rel = getattr(existing_loopback, "ip_address", None) if existing_loopback else None
-                    # loopback_ip_rel is a RelatedNode wrapper — always truthy even when
-                    # unset (no __bool__ override), and its .peer property raises
-                    # ValueError instead of returning None when neither id nor hfid is
-                    # set. Check .initialized before touching .peer at all.
-                    loopback_ip_id = (
-                        loopback_ip_rel.peer.id if loopback_ip_rel is not None and loopback_ip_rel.initialized else None
-                    )
+                    loopback_ip_id = _initialized_peer_id(loopback_ip_rel)
                     if loopback_ip_id:
                         loopback_ip_data: Any = {"id": loopback_ip_id}
                     else:
@@ -449,7 +430,7 @@ class DeviceMixin(MLAGWiringMixin):
                 device_names,
                 devices_by_name={node.name.value: node for node in created_devices},
                 role_label=device_role,
-                template=options.get("mlag_peer_template", template),
+                template=template,
                 mlag_create=mlag_create,
                 supports_virtual=options.get("mlag_supports_virtual", True),
             )
@@ -529,35 +510,6 @@ class DeviceMixin(MLAGWiringMixin):
             )
             results.append((entry, names))
         return results
-
-    async def resolve_virtual_template(
-        self, *, platform: str | None, role: str, size_suffix: str, fallback: str
-    ) -> dict[str, Any] | None:
-        """The {id, device_type, platform} reference of the virtual template
-        "{prefix}_{size_suffix}" matching a physical platform/role, or None
-        (warned, ending with ``fallback``) when there is no mapping or no
-        such template."""
-        prefix = _VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE.get((platform or "", role))
-        if not prefix:
-            self.logger.warning(f"No virtual template mapping for platform={platform} role={role} — {fallback}.")
-            return None
-        template_name = f"{prefix}_{size_suffix}"
-        templates = await self.client.filters(
-            kind="TemplateDcimVirtualDevice",
-            template_name__value=template_name,
-            include=["device_type", "platform"],
-        )
-        if not templates:
-            self.logger.warning(
-                f"No virtual template '{template_name}' found for platform={platform} role={role} — {fallback}."
-            )
-            return None
-        template = templates[0]
-        return {
-            "id": template.id,
-            "device_type": {"id": template.device_type.peer.id},
-            "platform": {"id": template.platform.peer.id},
-        }
 
     def set_controllers_from(self, source: Mapping[str, Any]) -> None:
         """Set ``self._all_controllers`` from a query's fabric_controllers/
@@ -969,27 +921,3 @@ class DeviceMixin(MLAGWiringMixin):
             parent_id=parent_id,
             parent_attr="vlan_pool",
         )
-
-    async def link_serving_firewall_context(self, *, kind: str, customer_id: str, context_id: str) -> None:
-        """Point this deployment at the context its segments terminate on.
-
-        Shared by generators/topology/customer_dc.py (kind=TopologyCustomerDC)
-        and generators/topology/customer_colocation.py
-        (kind=TopologyCustomerColocation) — same deployment-to-context link,
-        same race-free update, same facility-agnostic rationale.
-
-        The firewall transform reads the link to place each rule in the
-        contexts of its two segments. Only this deployment's own run writes
-        it, so boardings onto one shared context never race. Not tracked:
-        the deployment is the generator's target, not its output, and
-        tracking it would let delete_unused_nodes remove it.
-        """
-        try:
-            deployment = await self.client.get(kind=kind, id=customer_id)
-            if deployment.serving_firewall_context.id == context_id:
-                return
-            deployment.serving_firewall_context = context_id
-            await deployment.save(update_group_context=False)
-            self.logger.info(f"Deployment {customer_id} served by FirewallContext {context_id}")
-        except Exception as exc:
-            self.logger.error(f"Failed to link deployment {customer_id} to FirewallContext {context_id}: {exc}")

@@ -1,5 +1,5 @@
 !
-! Arista EOS Spine Configuration
+! Arista EOS {{ role_label | default('Spine') }} Configuration
 ! Device: {{ hostname }}
 ! Generated for Arista EOS
 !
@@ -21,8 +21,8 @@ vlan {{ vlan.vlan_id }}
 {#- All Interfaces (Loopback, Physical, Virtual) -#}
 {%- for interface in interfaces %}
 interface {{ interface.name }}
-{%- if interface.description %}
-   description {{ interface.description }}
+{%- if interface[description_key | default('description')] %}
+   description {{ interface[description_key | default('description')] }}
 {%- endif %}
 {%- include 'common/arista_eos_interface_ip.j2' %}
 {%- if interface.mode == 'trunk' %}

@@ -66,19 +66,17 @@ from ..common import CommonGenerator
 from ..far_end import far_end_interface
 from ..pools import PoolMixin
 from ..protocols import (
-    DcimLAGInterface,
     DcimPhysicalInterface,
     ManagedVlanSegment,
     ManagedVxlanSegment,
 )
 from ..vlan_domain import TAGGABLE_INTERFACE_KINDS, VlanDomainMixin, segment_lock_key
+from .endpoint import ENDPOINT_NIC_ROLES, HOSTED_INSTANCE_KINDS
 
 # AppInstance kinds that ARE a physical device/controller — used directly.
 _PHYSICAL_INSTANCE_TYPES = frozenset({"DcimPhysicalDevice", "ManagedControllerPhysical"})
 # AppInstance kinds hosted BY a physical device — walk hosting_device to it.
-_VIRTUAL_INSTANCE_TYPES = frozenset({"DcimVirtualDevice", "ManagedControllerVirtual"})
-# Interface roles a tenant's traffic can actually ride on at the device side.
-_CUSTOMER_FACING_NIC_ROLES = ("uplink", "lag")
+_VIRTUAL_INSTANCE_TYPES = frozenset(kind.__name__ for kind in HOSTED_INSTANCE_KINDS)
 _SEGMENT_COMPONENTS_QUERY_PATH = Path(__file__).resolve().parents[2] / "queries/topology/add/segment_components.gql"
 
 
@@ -226,10 +224,8 @@ class AppInstanceSegmentGenerator(PoolMixin, VlanDomainMixin, CommonGenerator):
                 if (device_id := self._resolve_physical_device_id(instance))
             )
         )
-        resolved = await asyncio.gather(*(self._customer_facing_targets(device_id) for device_id in device_ids))
-        desired_ids: set[str] = set()
-        for targets in resolved:
-            desired_ids.update(targets)
+        resolved = await asyncio.gather(*(self._customer_facing_target_ids(device_id) for device_id in device_ids))
+        desired_ids: set[str] = set().union(*resolved)
 
         to_add = sorted(desired_ids - current_ids)
         to_remove = sorted(current_ids - desired_ids)
@@ -258,44 +254,44 @@ class AppInstanceSegmentGenerator(PoolMixin, VlanDomainMixin, CommonGenerator):
             return hosting.get("id")
         return None
 
-    async def _customer_facing_targets(self, device_id: str) -> dict[str, Any]:
-        """Every switch interface `device_id` is cabled to, as {id: target}:
-        the far end of a role=uplink NIC directly, a role=lag NIC's
-        switch-side port-channel. Several bond members resolving to the SAME
-        port-channel dedup to one entry. Read-only."""
+    async def _customer_facing_target_ids(self, device_id: str) -> set[str]:
+        """The ids of every switch interface `device_id` is cabled to: the far
+        end of a role=uplink NIC directly, a role=lag NIC's switch-side
+        port-channel. Several bond members resolving to the SAME port-channel
+        dedup to one id. Read-only."""
         nics = await self.client.filters(
             kind=DcimPhysicalInterface,
             device__ids=[device_id],
-            role__values=list(_CUSTOMER_FACING_NIC_ROLES),
+            role__values=list(ENDPOINT_NIC_ROLES),
             include=["cable"],
         )
         cabled = [nic for nic in nics if nic.cable and nic.cable.id]
         if not cabled:
             self.logger.info(f"  Device {device_id} has no cabled uplink/lag interface yet — nothing to tag")
-            return {}
+            return set()
 
         # Each nic's resolution is independent read-only lookups, so they run
-        # concurrently; the dict merge itself stays single-threaded.
-        resolved_targets = await asyncio.gather(*(self._resolve_customer_facing_target(nic) for nic in cabled))
-        targets = {target.id: target for target in resolved_targets if target is not None}
-        if not targets:
+        # concurrently; the set merge itself stays single-threaded.
+        resolved_ids = await asyncio.gather(*(self._resolve_customer_facing_target_id(nic) for nic in cabled))
+        target_ids = {target_id for target_id in resolved_ids if target_id is not None}
+        if not target_ids:
             self.logger.info(f"  Device {device_id}: cabled but no customer-facing switch port resolved")
-        return targets
+        return target_ids
 
-    async def _resolve_customer_facing_target(self, nic: Any) -> Any | None:
-        """The far end of `nic`'s cable, as the object to tag: the far-end
-        port itself for a plain uplink, or its own switch-side port-channel
-        when the far end is a role=lag member — the aggregate is what
-        carries the VLAN, not the raw member port. None if the cable has no
-        resolvable far end, or a lag far end has no port-channel yet."""
+    async def _resolve_customer_facing_target_id(self, nic: Any) -> str | None:
+        """The id of the far end of `nic`'s cable, as the interface to tag: the
+        far-end port itself for a plain uplink, or its own switch-side
+        port-channel when the far end is a role=lag member — the aggregate is
+        what carries the VLAN, not the raw member port. None if the cable has
+        no resolvable far end, or a lag far end has no port-channel yet."""
         far_end = await far_end_interface(self.client, nic, include=["lag"])
         if far_end is None:
             return None
         if far_end.role.value != "lag":
-            return far_end
+            return far_end.id
 
         port_channel_peer = getattr(far_end.lag, "peer", None)
         if not port_channel_peer:
             self.logger.warning(f"  Far-end port {far_end.id} is role=lag but has no port-channel yet — skipping")
             return None
-        return await self.client.get(kind=DcimLAGInterface, id=port_channel_peer.id)
+        return port_channel_peer.id

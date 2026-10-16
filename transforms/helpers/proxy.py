@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from transforms.helpers.policy import active_rules, enabled_policies
+from transforms.helpers.policy import active_rules, enabled_policies, merge_policies
 from utils.dependency_access import dependency_access_status
 from utils.ports import PortProfileHelper
 
@@ -95,6 +95,14 @@ def flatten_proxy_rules(policies: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for index, rule in enumerate(flat):
         rule["acl_name"] = f"rule_{index:02d}"
     return flat
+
+
+def proxy_rules(
+    shared_policies: list[dict[str, Any]] | None, customers: list[dict[str, Any]] | None
+) -> list[dict[str, Any]]:
+    """The flat rule list of one proxy: its shared policies plus each customer's own, merged by name."""
+    customer_policies = [policy for customer in customers or [] for policy in customer.get("proxy_policies") or []]
+    return flatten_proxy_rules(get_proxy_policies(merge_policies(shared_policies or [], customer_policies)))
 
 
 def _render_ports(specs: list[str] | None) -> list[dict[str, Any]]:

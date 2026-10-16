@@ -26,12 +26,7 @@ interface {{ interface.name }}
    description {{ interface.description }}
 {%- endif %}
 {%- include 'common/arista_eos_interface_ip.j2' %}
-{%- if interface.mode == 'trunk' %}
-   switchport mode trunk
-   switchport trunk allowed vlan {{ interface.vlans|join(',') }}
-{%- elif interface.vlans %}
-   switchport access vlan {{ interface.vlans[0] }}
-{%- endif %}
+{%- include 'common/arista_eos_switchport.j2' %}
    no shutdown
 {% endfor %}
 

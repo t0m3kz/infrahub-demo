@@ -818,7 +818,7 @@ class TestEnsureSegmentZones:
         asyncio.run(gen._ensure_segment_zones([segment]))
 
         assert segment["security_zone"]["name"] == "PROD-ZONE"
-        assert RulesPlanner.zone_context(segment, dict(segment), {})[2] is False
+        assert RulesPlanner.zone_context(segment, dict(segment))[2] is False
         assert gen.client.create.call_args.kwargs["kind"] == "ManagedVlanSegment"
 
     def test_cloud_segment_is_zoned_with_its_own_kind(self) -> None:

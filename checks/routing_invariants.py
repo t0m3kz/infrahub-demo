@@ -42,10 +42,11 @@ from __future__ import annotations
 import ipaddress
 from typing import Any, NamedTuple
 
-from infrahub_sdk.checks import InfrahubCheck
-
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import INTERNET_TYPE, namespace_type_for_environment
+from utils.segment_addressing import segment_namespace
+
+from .base import WarningCheck
 
 # Devices that may legitimately hold an address in the INTERNET VRF: the transit
 # edge, the ISP side, and firewall legs.
@@ -70,7 +71,7 @@ class _Aggregate(NamedTuple):
     prefix: dict[str, Any]
 
 
-class CheckRoutingInvariants(InfrahubCheck):
+class CheckRoutingInvariants(WarningCheck):
     """Namespace-type invariants across route-target joins, the INTERNET VRF and cloud routing domains."""
 
     query = "routing_invariants"
@@ -139,7 +140,7 @@ class CheckRoutingInvariants(InfrahubCheck):
 
     def _validate_internet_vrf(self, segments: list[dict[str, Any]], interfaces: list[dict[str, Any]]) -> None:
         for segment in segments:
-            namespace = ((segment.get("gateway") or {}).get("ip_prefix") or {}).get("ip_namespace") or {}
+            namespace = segment_namespace(segment)
             if namespace.get("namespace_type") == INTERNET_TYPE:
                 self.log_error(
                     message=(
@@ -213,9 +214,9 @@ class CheckRoutingInvariants(InfrahubCheck):
                     continue
                 entry = members.setdefault(table["id"], {"name": table.get("name"), "types": {}})
                 if att_type is None:
-                    self.log_info(
+                    self.log_warning(
                         message=(
-                            f"WARNING: attachment '{att_name}' in route table '{table.get('name')}' resolves to no "
+                            f"attachment '{att_name}' in route table '{table.get('name')}' resolves to no "
                             "namespace type (account has no environment): environment purity cannot be verified"
                         )
                     )

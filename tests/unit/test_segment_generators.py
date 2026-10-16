@@ -345,11 +345,9 @@ class TestVxlanSegmentGeneratorGenerate:
         data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[dep_no_pool])
         asyncio.run(gen.generate(data))
 
-        assert gen.wait_for_parent_generator_and_refetch.await_args_list == [
-            (("add_dc", "dc-1"), {}),
-            (("dc_pod_cascade", "dc-1"), {}),
-            (("add_colocation_metro", "dc-1"), {}),
-        ]
+        gen.wait_for_parent_generator_and_refetch.assert_awaited_once_with(
+            ("add_dc", "dc_pod_cascade", "add_colocation_metro"), "dc-1"
+        )
 
     def test_refetched_data_is_reparsed_when_parent_was_in_flight(self):
         """If add_dc was in-flight, the refreshed data (now carrying the
@@ -360,7 +358,7 @@ class TestVxlanSegmentGeneratorGenerate:
         gen._create_inline_sub_interfaces = AsyncMock()
 
         refreshed_payload = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1])
-        gen.wait_for_parent_generator_and_refetch = AsyncMock(side_effect=[refreshed_payload, None, None])
+        gen.wait_for_parent_generator_and_refetch = AsyncMock(side_effect=[refreshed_payload])
 
         dep_no_pool = {"id": "cust-1", "name": "C001-P-DC1", "parent": {"id": "dc-1", "name": "DC-1"}}
         data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[dep_no_pool])

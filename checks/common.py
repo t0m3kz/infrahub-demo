@@ -2,8 +2,6 @@ from collections.abc import Callable
 from ipaddress import ip_interface
 from typing import Any
 
-from infrahub_sdk.checks import InfrahubCheck
-
 from transforms.common import BaseDeviceTransform
 from transforms.helpers.firewall import _firewall_context_caps, get_exchange_transits
 from transforms.helpers.segments import routed_activations
@@ -13,13 +11,15 @@ from utils.exchange_transit import (
     INTERNET_TYPE,
     OFFSET_MEMBER_A,
     OFFSET_MEMBER_B,
+    TRANSIT_PREFIXLEN,
     TRANSIT_SLOT,
     is_public_address,
     transit_addresses,
     transit_vlan,
 )
 
-TRANSIT_PREFIXLEN = 29
+from .base import WarningCheck
+
 TRANSIT_LEGS_PER_EXCHANGE = 2
 
 __all__ = [
@@ -33,7 +33,7 @@ __all__ = [
 ]
 
 
-class BaseDeviceCheck(InfrahubCheck):
+class BaseDeviceCheck(WarningCheck):
     """Base class for device-role checks that just run a fixed list of
     data-only validators against get_data(data) and log every error.
 
@@ -84,21 +84,8 @@ def validate_transit_vlans(device: dict[str, Any], transform_cls: type[BaseDevic
     """
     transform = transform_cls.__new__(transform_cls)
     interfaces = device.get("interfaces") or []
-    capabilities = device.get("capabilities") or []
-    activations = transform._collect_activations_from_interfaces(
-        interfaces, device_id=device.get("id"), device_capabilities=capabilities
-    )
-    if any(iface.get("role") == "multisite-vip" for iface in interfaces):
-        activations.extend(
-            transform._collect_border_gateway_activations(
-                device.get("deployment"),
-                device_id=device.get("id"),
-                device_capabilities=capabilities,
-                seen={(act.get("segment") or {}).get("id") for act in activations},
-            )
-        )
+    activations = transform._device_activations(device)
     if transform.device_role in BaseDeviceTransform._LEAF_ROLES:
-        activations = transform._filter_segment_deployments(activations)
         try:
             transits = transform._firewall_pbr(device, routed_activations(activations))[1]
         except ValueError as exc:

@@ -3,11 +3,10 @@
 A border-spine micro-fabric pod has no DC-level border-leaf tier to sit in
 front of, so it gets its own dedicated firewall/load-balancer instead (see
 TopologyPodDesign "S_BORDER_SPINE_POD"). This exercises PodTopologyGenerator's
-own _create_role_devices/_cable_border_services (_cable_border_services is
-CablingMixin's, shared via CommonGenerator; _create_role_devices is defined
-directly on PodTopologyGenerator, deliberately duplicated rather than shared
-with DCTopologyGenerator's near-identical version — see dc.py's own copy and
-test_dc_firewall_lb.py for its coverage)."""
+own firewall/load-balancer creation and _cable_border_services
+(create_firewall_and_load_balancer_devices is ServiceDevicesMixin's, shared with
+DCTopologyGenerator — see test_dc_firewall_lb.py; _cable_border_services is
+CablingMixin's, shared via CommonGenerator)."""
 
 from __future__ import annotations
 

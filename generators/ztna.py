@@ -57,7 +57,7 @@ class ZtnaMixin(GetOrCreateByNameMixin):
             self.logger.warning("  Dependency '%s' has a blank target_fqdn - skipping", dep_ref)
             return False
         try:
-            ports = planner.resolve_ports(dep)
+            ports = PortProfileHelper.resolve_dependency_ports(dep)
         except ValueError as exc:
             self.logger.warning("  Dependency '%s': %s - skipping", dep_ref, exc)
             return False
@@ -217,7 +217,7 @@ class ZtnaMixin(GetOrCreateByNameMixin):
             ports: list[str] = []
             try:
                 for dep in grants:
-                    for port in RulesPlanner.resolve_ports(dep, component):
+                    for port in PortProfileHelper.resolve_dependency_ports(dep, component):
                         spec = PortProfileHelper.format_port_spec(port)
                         if spec not in ports:
                             ports.append(spec)

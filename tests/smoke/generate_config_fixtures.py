@@ -395,7 +395,7 @@ def _make_segment_node(
     if security_policy is not None:
         seg["security_policy"] = _node(security_policy)
 
-    # deployments list drives stretched-segment detection in _filter_segment_deployments()
+    # deployments list drives stretched-segment detection (_collect_activations_from_interfaces)
     seg["deployments"] = _edges([{"id": f"fake-dc-{i}"} for i in range(num_deployments)])
 
     return seg

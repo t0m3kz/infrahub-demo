@@ -24,8 +24,6 @@ from ..routing import RoutingMixin
 
 _ROW_LEAF_MAX_RETRIES = 10
 _ROW_LEAF_RETRY_DELAY = 3.0
-_ROW_LEAF_RETRY_CAP = 20.0
-_ROW_LEAF_RETRY_JITTER = 0.25
 
 
 class TopologyRackParentData(TypedDict, total=False):
@@ -128,18 +126,6 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
     def _has_role_templates(self, roles: list[dict[str, Any]]) -> bool:
         """Return True when at least one role template has positive quantity."""
         return any(role.get("quantity", 0) > 0 for role in roles)
-
-    def _has_tor_like_templates(self) -> bool:
-        """ToR-side switch templates (physical ToR, l2-leaf, access-leaf)."""
-        return (
-            self._has_role_templates(self.data.get("tors", []))
-            or self._has_role_templates(self.data.get("l2_leafs", []))
-            or self._has_role_templates(self.data.get("access_leafs", []))
-        )
-
-    def _has_any_switch_templates(self) -> bool:
-        """Any switch template this generator can materialize."""
-        return self._has_role_templates(self.data.get("leafs", [])) or self._has_tor_like_templates()
 
     def _present_roles(self) -> set[str]:
         """Role names with at least one positive-quantity fabric_templates entry on this rack."""
@@ -250,9 +236,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
             if racks_in_row and leaf_devices and leaf_interfaces:
                 break
             if attempt < _ROW_LEAF_MAX_RETRIES - 1:
-                delay = self._retry_delay(
-                    _ROW_LEAF_RETRY_DELAY, attempt, cap=_ROW_LEAF_RETRY_CAP, jitter=_ROW_LEAF_RETRY_JITTER
-                )
+                delay = self._retry_delay(_ROW_LEAF_RETRY_DELAY, attempt)
                 self.logger.info(
                     f"Rack {self.data['name']}: row {row_index} leaf devices/interfaces not ready yet "
                     f"(racks={len(racks_in_row)}, leafs={len(leaf_devices)}, interfaces={len(leaf_interfaces)}) — "
@@ -499,15 +483,21 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
                 top_role=top_role,
             )
 
+    def _load_rack_data(self, raw: dict) -> bool:
+        """Parse a GraphQL response into self.data; False (logged) when it is malformed."""
+        try:
+            self.data = cast(TopologyRackData, parse_rack_data(raw))
+        except (ValueError, KeyError, IndexError) as exc:
+            self.logger.error(f"Generation failed due to {exc}")
+            return False
+        return True
+
     async def generate(self, data: dict) -> None:
         """Generate rack topology with special handling for OOB and console devices."""
         if not data:
             self.logger.error("Generator received empty data")
             return
-        try:
-            self.data = cast(TopologyRackData, parse_rack_data(data))
-        except (ValueError, KeyError, IndexError) as exc:
-            self.logger.error(f"Generation failed due to {exc}")
+        if not self._load_rack_data(data):
             return
 
         shape = "direct node data" if "name" in data and isinstance(data.get("name"), dict) else "query result"
@@ -534,10 +524,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         # pod-level data (spine devices, ASN/loopback pools) — avoid partial data.
         refreshed = await self.wait_for_parent_generator_and_refetch(POD_GENERATORS, pod["id"])
         if refreshed is not None:
-            try:
-                self.data = cast(TopologyRackData, parse_rack_data(refreshed))
-            except (ValueError, KeyError, IndexError) as exc:
-                self.logger.error(f"Generation failed due to {exc}")
+            if not self._load_rack_data(refreshed):
                 return
 
         pod = self.data["pod"]
@@ -567,10 +554,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
             for network_rack in network_racks:
                 refreshed = await self.wait_for_parent_generator_and_refetch("add_rack", network_rack.id)
                 if refreshed is not None:
-                    try:
-                        self.data = cast(TopologyRackData, parse_rack_data(refreshed))
-                    except (ValueError, KeyError, IndexError) as exc:
-                        self.logger.error(f"Generation failed due to {exc}")
+                    if not self._load_rack_data(refreshed):
                         return
                     pod = self.data["pod"]
                     deployment_type = pod["deployment_type"]
@@ -582,7 +566,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
 
         # Endpoint-only racks (no switch templates) are handled by endpoint flows.
         # Skip rack generation here to avoid unnecessary checksum/dependency gating.
-        if not self._has_any_switch_templates():
+        if not self._present_roles():
             self.logger.info(
                 f"Rack {self.data['name']} has no switch templates — skipping rack generator (endpoint-only rack)."
             )

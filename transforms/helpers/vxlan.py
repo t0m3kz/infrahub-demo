@@ -7,6 +7,7 @@ from netutils.interface import sort_interface_list
 
 from transforms.helpers.addressing import host_ip
 from transforms.helpers.segments import _get_segment_gateways, _get_segment_namespace, segment_vlan_ids
+from utils.exchange_transit import MAX_ENCODABLE_VNI
 from utils.fabric_roles import VTEP_ROLES
 
 _log = logging.getLogger(__name__)
@@ -382,10 +383,7 @@ def get_interfaces(
         if ip_obj and isinstance(ip_obj, dict) and ip_obj.get("address"):
             ip_addresses.append(ip_obj)
 
-        is_loopback = "loopback" in name.lower()
-        is_svi = "vlan" in name.lower()
         is_lag = iface.get("typename") == "DcimLAGInterface"
-        is_bgp_unnumbered = not ip_addresses and iface.get("cable") is not None and not is_loopback and not is_svi
 
         iface_dict = {
             "name": name,
@@ -408,7 +406,6 @@ def get_interfaces(
             "interface_type": iface.get("interface_type"),
             "mtu": iface.get("mtu"),
             "ip_addresses": ip_addresses,
-            "is_bgp_unnumbered": is_bgp_unnumbered,
             "dot1q_vlan": context_vlan_id,
             "parent_interface": iface.get("parent_interface"),
         }
@@ -526,7 +523,6 @@ def _overlay_is_ebgp(evpn_process: dict[str, Any] | None) -> bool:
 # bits for the VNI. A VNI above 65535 cannot be encoded into either and the
 # device rejects the line. The L2 VNI pools are capped accordingly; this guard
 # catches any range that gets widened past that again.
-_MAX_ENCODABLE_VNI = 65535
 
 
 def _warn_unencodable_vnis(
@@ -548,7 +544,7 @@ def _warn_unencodable_vnis(
     l2_vnis = {vni for m in l2_vni_mappings for vni in [m.get("vni")] if isinstance(vni, int)}
     l3_vnis = {vni for m in l3_vni_mappings for vni in [m.get("l3_vni")] if isinstance(vni, int)}
 
-    oversized = sorted(vni for vni in l2_vnis | l3_vnis if vni > _MAX_ENCODABLE_VNI)
+    oversized = sorted(vni for vni in l2_vnis | l3_vnis if vni > MAX_ENCODABLE_VNI)
     if oversized:
         _log.warning(
             "%s: VNI(s) %s exceed %s, so the derived route-distinguisher and "
@@ -556,7 +552,7 @@ def _warn_unencodable_vnis(
             "Narrow the VNI pool range.",
             device_name or "device",
             ", ".join(str(v) for v in oversized),
-            _MAX_ENCODABLE_VNI,
+            MAX_ENCODABLE_VNI,
         )
 
     collisions = sorted(l2_vnis & l3_vnis)

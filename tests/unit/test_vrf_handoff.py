@@ -476,7 +476,8 @@ class TestEdgeTemplate:
         ]
         vxlan = {"enabled": False, "anycast_gateway": {"enabled": True, "mac": "00:00:22:22:33:33"}}
         rendered = self._render(env, vlans=vlans, vxlan=vxlan)
-        assert "feature fabric forwarding\nfabric forwarding anycast-gateway-mac 000022223333" in rendered
+        # `feature fabric forwarding` comes with the VXLAN features (cisco_nxos_vxlan.j2).
+        assert "fabric forwarding anycast-gateway-mac 000022223333" in rendered
         assert (
             "interface Vlan100\n  description colo-services-stretch\n  vrf member PROD\n"
             "  ip address 10.5.50.1/24\n  fabric forwarding mode anycast-gateway"

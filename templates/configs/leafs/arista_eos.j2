@@ -35,24 +35,8 @@ vlan {{ vlan.vlan_id }}
 !
 ! Zero-Trust ACLs (one per segment VLAN — inbound on SVI)
 !
-{%- for acl in acls %}
-ip access-list {{ acl.name }}
-{%- for rule in acl.rules %}
-{%- if rule.src_zone or rule.dst_zone %}
-   remark Zone: {{ rule.src_zone or 'any' }} -> {{ rule.dst_zone or 'any' }}
-{%- endif %}
-{%- if rule.src_customer or rule.dst_customer %}
-   remark Customer: {{ rule.src_customer or 'any' }}/{{ rule.src_environment or 'any' }} -> {{ rule.dst_customer or 'any' }}/{{ rule.dst_environment or 'any' }}
-{%- endif %}
-   {{ rule.seq }} {{ rule.action }} {{ rule.protocol }} {{ rule.src -}}
-{%- if rule.src_port %} {{ rule.src_port }}{% endif %} {{ rule.dst -}}
-{%- if rule.dst_port %} {{ rule.dst_port }}{% endif -%}
-{%- if rule.established %} established{% endif -%}
-{%- if rule.log %} log{% endif -%}
-{%- if rule.name %} ! {{ rule.name }}{% endif %}
-{%- endfor %}
-!
-{%- endfor %}
+{%- set acl_indent = '   ' %}
+{%- include 'common/ip_access_lists.j2' %}
 {%- endif %}
 
 {#- LAG / Port-Channel Interfaces -#}
@@ -90,15 +74,8 @@ interface {{ interface.name }}
    description {{ interface.description }}
 {%- endif %}
 {%- include 'common/arista_eos_interface_ip.j2' %}
-{%- if interface.mode == 'trunk' %}
-   switchport mode trunk
-   switchport trunk allowed vlan {{ interface.vlans|join(',') }}
-{%- elif interface.vlans %}
-   switchport access vlan {{ interface.vlans[0] }}
-{%- if interface.access_isolation_mode == 'isolated' %}
-   switchport protected
-{%- endif %}
-{%- endif %}
+{%- set eos_port_protection = true %}
+{%- include 'common/arista_eos_switchport.j2' %}
 {%- if interface.get('ospf') %}
    ip ospf area {{ interface.ospf.area }}
 {%- endif %}
@@ -140,137 +117,8 @@ route-map RM-VRF-CONN-2-EVPN permit 10
 ! Microsegmentation enabled: {{ vxlan.microsegmentation.vrf_count }} VRF(s) for tenant isolation
 {%- endif %}
 !
-interface {{ vxlan.interface }}
-{%- if vxlan.vtep.ipv4 %}
-   vxlan source-interface {{ vxlan.vtep.source_interface }}
-{%- endif %}
-{%- if vxlan.vtep.udp_port != 4789 %}
-   vxlan udp-port {{ vxlan.vtep.udp_port }}
-{%- endif %}
-{%- if vxlan.l2_vni_mappings %}
-   !
-   ! L2 VNI Mappings (VLAN segments)
-{%- for mapping in vxlan.l2_vni_mappings %}
-   vxlan vlan {{ mapping.vlan_id }} vni {{ mapping.vni }}
-{%- endfor %}
-{%- endif %}
-{%- if vxlan.l3_vni_mappings %}
-   !
-   ! L3 VNI Mappings (VRF segments for microsegmentation)
-{%- for mapping in vxlan.l3_vni_mappings %}
-   vxlan vrf {{ mapping.vrf_name }} vni {{ mapping.l3_vni }}
-{%- endfor %}
-{%- endif %}
-{%- if vxlan.flooding == "static" and vxlan.remote_vteps and vxlan.l2_vni_mappings %}
-{%- for mapping in vxlan.l2_vni_mappings %}
-   vxlan vlan {{ mapping.vlan_id }} flood vtep {{ vxlan.remote_vteps | join(' ') }}
-{%- endfor %}
-{%- endif %}
-!
-{%- if vxlan.l3_vni_mappings %}
-!
-! VRF Definitions (Microsegmentation)
-!
-{%- for mapping in vxlan.l3_vni_mappings %}
-vrf instance {{ mapping.vrf_name }}
-   description {{ mapping.description | default('Tenant VRF for microsegmentation') }}
-   {%- if vxlan.evpn.rd_format %}
-   rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.l3_vni | string) }}
-   {%- endif %}
-{#- A `vrf instance` on EOS starts with routing DISABLED. Without this the SVIs
-    below come up, ARP resolves, and hosts inside one subnet talk — but nothing
-    routes between subnets in the VRF and the L3 VNI never forwards, which looks
-    like an EVPN problem and is not one. #}
-!
-ip routing vrf {{ mapping.vrf_name }}
-!
-{%- endfor %}
-{%- endif %}
-{%- if vxlan.vrf_loopbacks %}
-!
-! VRF Loopback Interfaces
-!
-{%- for loopback in vxlan.vrf_loopbacks %}
-interface {{ loopback.name }}
-   description VRF {{ loopback.vrf }} L3VNI {{ loopback.l3_vni }}
-   vrf {{ loopback.vrf }}
-{%- if loopback.ip %}
-   ip address {{ loopback.ip }}/32
-{%- endif %}
-!
-{%- endfor %}
-{%- endif %}
-{%- if vxlan.evpn and vxlan.evpn.enabled and bgp %}
-!
-! EVPN Configuration (L2 + L3 VNI)
-!
-{%- for bgp_config in bgp %}
-router bgp {{ bgp_config.local_as.asn }}
-{%- if vxlan.l2_vni_mappings %}
-   !
-   ! L2 EVPN (VLAN-based)
-{%- for mapping in vxlan.l2_vni_mappings %}
-   vlan {{ mapping.vlan_id }}
-      {%- if vxlan.evpn.rd_format %}
-      rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.vni | string) }}
-      {%- endif %}
-      {%- if mapping.route_target %}
-      route-target both {{ mapping.route_target }}
-      {%- endif %}
-      redistribute learned
-{%- if mapping.get('arp_suppression') %}
-      arp proxy
-{%- endif %}
-{%- endfor %}
-{%- endif %}
-{%- if vxlan.l3_vni_mappings %}
-   !
-   ! L3 EVPN (VRF-based for microsegmentation)
-{%- for mapping in vxlan.l3_vni_mappings %}
-   vrf {{ mapping.vrf_name }}
-      {%- if vxlan.evpn.rd_format %}
-      rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.l3_vni | string) }}
-      {%- endif %}
-      {%- if mapping.route_target %}
-      route-target import evpn {{ mapping.route_target }}
-      route-target export evpn {{ mapping.route_target }}
-      {%- endif %}
-      {%- for rt in mapping.import_route_targets | default([]) %}
-      route-target import evpn {{ rt }}
-      {%- endfor %}
-      redistribute connected{% if leaf_transit_prefixes %} route-map RM-VRF-CONN-2-EVPN{% endif %}
-{%- endfor %}
-{%- endif %}
-{% endfor %}
-{%- endif %}
-{%- if vxlan.anycast_gateway and vxlan.anycast_gateway.enabled %}
-!
-! Anycast Gateway Configuration
-!
-ip virtual-router mac-address {{ vxlan.anycast_gateway.mac }}
-{%- for vlan in vlans %}
-{%- if vlan.gateway_ip or vlan.gateway_ipv6 %}
-interface Vlan{{ vlan.vlan_id }}
-{%- if vlan.isolation_mode == 'isolated' %}
-   ! Isolation Mode: ISOLATED — intra-segment host-to-host traffic blocked via port-isolation
-{%- elif vlan.isolation_mode == 'microsegmented' %}
-   ! Isolation Mode: MICROSEGMENTED — intra+inter segment rules enforced via SVI ACL (and firewall if present)
-{%- endif %}
-{%- if vlan.vrf %}
-   vrf {{ vlan.vrf }}
-{%- endif %}
-{%- if vlan.gateway_ip %}
-   ip address virtual {{ vlan.gateway_ip }}
-{%- endif %}
-{%- if vlan.gateway_ipv6 %}
-   ipv6 address virtual {{ vlan.gateway_ipv6 }}
-{%- endif %}
-{%- if vlan.acl_name %}
-   ip access-group {{ vlan.acl_name }} in
-{%- endif %}
-{%- endif %}
-{%- endfor %}
-{%- endif %}
+{%- set eos_leaf = true %}{%- set eos_arp_proxy = true %}
+{% include 'common/arista_eos_vxlan.j2' %}
 {%- endif %}
 
 {%- if leaf_pbr_rules %}
