@@ -2710,8 +2710,60 @@ def _gp_segment(
     return segment
 
 
-def _gp_tag(tag_id: str, group_id: int, fqdn: str | None, seg_id: str | None) -> dict:
-    components = [{"fqdn": _v(fqdn), "network_segment": _node({"id": seg_id})}] if fqdn else []
+def _gp_nic(
+    host: str,
+    nic: str,
+    switch: str,
+    port: str,
+    segment_ids: tuple[str, ...],
+    *,
+    lag: str | None = None,
+    far_role: str | None = None,
+) -> dict:
+    """A host NIC cabled to ``switch`` ``port`` as SecurityTagPlacementFields selects it: the cable's two
+    endpoints (the near end is the NIC), the far end tagged with ``segment_ids``. A LAG member (``lag`` being
+    its port-channel, which carries the tags) is role lag; ``far_role`` overrides the far end's role."""
+    tagged = [{"id": f"seg-{name}"} for name in segment_ids]
+    near = {
+        "id": f"if-{host}-{nic}",
+        "name": _v(nic),
+        "role": _v("uplink"),
+        "device": _node({"name": _v(host)}),
+        "interface_capabilities": _edges([]),
+        "lag": _node(None),
+    }
+    far = {
+        "id": f"if-{switch}-{port}",
+        "name": _v(port),
+        "role": _v(far_role or ("lag" if lag else "server")),
+        "device": _node({"name": _v(switch)}),
+        "interface_capabilities": _edges([] if lag else tagged),
+        "lag": _node({"name": _v(lag), "interface_capabilities": _edges(tagged)} if lag else None),
+    }
+    return {"id": near["id"], "name": _v(nic), "cable": _node({"endpoints": _edges([near, far])})}
+
+
+def _gp_instance(name: str, nics: list[dict], *, host: str | None = None) -> dict:
+    """A component's instance: a physical device with ``nics``, or (``host`` set) a VM on a host that has them."""
+    if host is None:
+        return {"id": f"inst-{name}", "__typename": "DcimPhysicalDevice", "name": _v(name), "interfaces": _edges(nics)}
+    return {
+        "id": f"inst-{name}",
+        "__typename": "DcimVirtualDevice",
+        "name": _v(name),
+        "interfaces": _edges([]),
+        "hosting_device": _node({"id": f"host-{host}", "name": _v(host), "interfaces": _edges(nics)}),
+    }
+
+
+def _gp_tag(
+    tag_id: str, group_id: int, fqdn: str | None, seg_id: str | None, instances: list[dict] | None = None
+) -> dict:
+    """A SecurityTag with its component; ``instances`` (SecurityTagPlacementFields) only for the NX-OS device queries."""
+    component: dict[str, Any] = {"fqdn": _v(fqdn), "network_segment": _node({"id": seg_id})}
+    if instances is not None:
+        component["instances"] = _edges(instances)
+    components = [component] if fqdn else []
     return {
         "id": tag_id,
         "name": _v(fqdn or f"{tag_id}.retired"),
@@ -2926,7 +2978,7 @@ def write_segmentation_matrix_fixture() -> tuple[int, int]:
 
 # (name, VLAN, VNI, gateway, VRF, namespace type, L3 VNI): the five tagged tenant segments of DC10.
 # NONPROD is fully classifiable by VLAN; PROD holds a microsegmented segment whose contracts name
-# component groups, so it renders unenforced.
+# component groups, classified by the interface + VLAN of the host ports of dc1-leaf-01.
 _GPO_SEGMENTS: list[tuple[str, int, int, str, str, str, int]] = [
     ("web-np", 110, 10110, "10.10.1.1/24", "NONPROD", "non_prod", 50011),
     ("app-np", 120, 10120, "10.10.2.1/24", "NONPROD", "non_prod", 50011),
@@ -2934,6 +2986,9 @@ _GPO_SEGMENTS: list[tuple[str, int, int, str, str, str, int]] = [
     ("pay-p", 210, 10210, "10.20.1.1/24", "PROD", "prod", 50012),
     ("portal-p", 220, 10220, "10.20.2.1/24", "PROD", "prod", 50012),
 ]
+# The segments the host ports of PROD's components carry (tagged by the generator).
+_GPO_PAY_WEB_TAGS = ("web-np", "app-np", "pay-p", "portal-p")
+_GPO_PAY_DB_TAGS = ("pay-p",)
 _GPO_NXOS = {
     "platform": "cisco_nxos",
     "leaf": "N9K-C9364C-GX",
@@ -2965,6 +3020,24 @@ def _gpo_fleet_roots(*, fleet: dict[str, str], version: str, leaf_type: str | No
         return _gp_device(name, role, device_type, release, memory_gb, platform)
 
     legacy = _gp_device("bl-dc12-01", "border-leaf", "N9K-C9336C-FX2", "10.3(3)", memory_gb)
+    # PROD's components sit on the leaf of DC10: the web component on the trunk host port Ethernet10 (the
+    # port of every segment), the db component, a VM, on Ethernet11 (an access port today: GPO trunks it),
+    # its host's second NIC on DC12's border leaf (another data center: not this one's to classify).
+    pay_web = [
+        _gp_instance(
+            "srv-pay-web-01", [_gp_nic("srv-pay-web-01", "eno1", "dc1-leaf-01", "Ethernet10", _GPO_PAY_WEB_TAGS)]
+        )
+    ]
+    pay_db = [
+        _gp_instance(
+            "vm-pay-db-01",
+            [
+                _gp_nic("srv-pay-db-01", "eno1", "dc1-leaf-01", "Ethernet11", _GPO_PAY_DB_TAGS),
+                _gp_nic("srv-pay-db-01", "eno2", "bl-dc12-01", "Ethernet5", _GPO_PAY_DB_TAGS),
+            ],
+            host="srv-pay-db-01",
+        )
+    ]
     segments = [
         _gp_segment(
             "seg-web-np",
@@ -3067,11 +3140,29 @@ def _gpo_fleet_roots(*, fleet: dict[str, str], version: str, leaf_type: str | No
         "ManagedNetworkSegment": _edges(segments),
         "SecurityTag": _edges(
             [
-                _gp_tag("tag-pay-web", 50, "web.pay.demo.local", "seg-pay-p"),
-                _gp_tag("tag-pay-db", 51, "db.pay.demo.local", "seg-pay-p"),
+                _gp_tag("tag-pay-web", 50, "web.pay.demo.local", "seg-pay-p", pay_web),
+                _gp_tag("tag-pay-db", 51, "db.pay.demo.local", "seg-pay-p", pay_db),
             ]
         ),
     }
+
+
+def _gpo_segment_nodes(device_name: str, segments: tuple[str, ...]) -> list[dict]:
+    """The capability nodes of ``segments`` (names of _GPO_SEGMENTS) on a server port of ``device_name``."""
+    return [
+        _make_segment_node(
+            vlan_id=vlan,
+            vni=vni,
+            seg_name=name,
+            seg_type="ManagedVxlanSegment",
+            gateway_ip=gateway,
+            ns_name=vrf,
+            l3_vni=l3_vni,
+            vlan_domain_id=f"dev-{device_name}",
+        )
+        for name, vlan, vni, gateway, vrf, _ns_type, l3_vni in _GPO_SEGMENTS
+        if name in segments
+    ]
 
 
 def build_gpo_device_data(
@@ -3082,8 +3173,10 @@ def build_gpo_device_data(
     fleet: dict[str, str] = _GPO_NXOS,
     version: str = "10.6(3)F",
     leaf_type: str | None = None,
+    host_ports: dict[str, tuple[str, ...]] | None = None,
 ) -> dict:
-    """A VTEP of DC10 carrying ``segments`` (names of _GPO_SEGMENTS), with the fleet roots appended."""
+    """A VTEP of DC10 carrying ``segments`` (names of _GPO_SEGMENTS) on Ethernet10, plus one more server port
+    per ``host_ports`` entry (name -> the segments it carries), with the fleet roots appended."""
     data = build_device_data(
         device_name=device_name,
         role=role,
@@ -3102,23 +3195,21 @@ def build_gpo_device_data(
                 device_name=device_name,
                 description="to server-01",
                 role="server",
-                segments=[
-                    _make_segment_node(
-                        vlan_id=vlan,
-                        vni=vni,
-                        seg_name=name,
-                        seg_type="ManagedVxlanSegment",
-                        gateway_ip=gateway,
-                        ns_name=vrf,
-                        l3_vni=l3_vni,
-                        vlan_domain_id=f"dev-{device_name}",
-                    )
-                    for name, vlan, vni, gateway, vrf, _ns_type, l3_vni in _GPO_SEGMENTS
-                    if name in segments
-                ],
+                segments=_gpo_segment_nodes(device_name, segments),
             )
         }
     )
+    for port, port_segments in (host_ports or {}).items():
+        node["interfaces"]["edges"].append(
+            {
+                "node": _make_interface(
+                    name=port,
+                    device_name=device_name,
+                    role="server",
+                    segments=_gpo_segment_nodes(device_name, port_segments),
+                )
+            }
+        )
     return {**data, **_gpo_fleet_roots(fleet=fleet, version=version, leaf_type=leaf_type)}
 
 
@@ -3141,7 +3232,10 @@ GPO_FIXTURES: list[tuple[type, str, Any]] = [
         Leaf,
         "leaf_cisco_nxos_gpo_reference",
         lambda: build_gpo_device_data(
-            device_name="dc1-leaf-01", role="leaf", segments=("web-np", "app-np", "pay-p", "portal-p")
+            device_name="dc1-leaf-01",
+            role="leaf",
+            segments=("web-np", "app-np", "pay-p", "portal-p"),
+            host_ports={"Ethernet11": _GPO_PAY_DB_TAGS},
         ),
     ),
     # A leaf of the same reference fabric with no tenant segment (the servers sit on the access

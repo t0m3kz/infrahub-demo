@@ -181,6 +181,7 @@ query leaf_config(
     edges {
       node {
         ...SecurityTagGroupPolicyFields
+        ...SecurityTagPlacementFields
       }
     }
   }

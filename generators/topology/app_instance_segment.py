@@ -60,6 +60,7 @@ import asyncio
 from pathlib import Path
 from typing import Any
 
+from utils.app_instances import physical_host
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
@@ -71,12 +72,8 @@ from ..protocols import (
     ManagedVxlanSegment,
 )
 from ..vlan_domain import TAGGABLE_INTERFACE_KINDS, VlanDomainMixin, segment_lock_key
-from .endpoint import ENDPOINT_NIC_ROLES, HOSTED_INSTANCE_KINDS
+from .endpoint import ENDPOINT_NIC_ROLES
 
-# AppInstance kinds that ARE a physical device/controller — used directly.
-_PHYSICAL_INSTANCE_TYPES = frozenset({"DcimPhysicalDevice", "ManagedControllerPhysical"})
-# AppInstance kinds hosted BY a physical device — walk hosting_device to it.
-_VIRTUAL_INSTANCE_TYPES = frozenset(kind.__name__ for kind in HOSTED_INSTANCE_KINDS)
 _SEGMENT_COMPONENTS_QUERY_PATH = Path(__file__).resolve().parents[2] / "queries/topology/add/segment_components.gql"
 
 
@@ -245,14 +242,11 @@ class AppInstanceSegmentGenerator(PoolMixin, VlanDomainMixin, CommonGenerator):
 
         A bare physical device/controller is used directly. A virtual
         instance walks its hosting_device. Anything else (e.g. a cloud
-        instance) has no on-prem device to resolve."""
-        typename = instance.get("typename")
-        if typename in _PHYSICAL_INSTANCE_TYPES:
-            return instance.get("id")
-        if typename in _VIRTUAL_INSTANCE_TYPES:
-            hosting = instance.get("hosting_device") or {}
-            return hosting.get("id")
-        return None
+        instance) has no on-prem device to resolve. The resolution itself
+        (utils.app_instances.physical_host) is shared with the NX-OS GPO
+        transform that classifies the same ports."""
+        host = physical_host(instance)
+        return host.get("id") if host else None
 
     async def _customer_facing_target_ids(self, device_id: str) -> set[str]:
         """The ids of every switch interface `device_id` is cabled to: the far
