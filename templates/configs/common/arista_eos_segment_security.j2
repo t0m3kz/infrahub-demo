@@ -9,8 +9,18 @@
     Evidence: D is the EOS 4.36.2F manual (match-lists, segments, built-in policies, no shutdown); the custom
     policies, application l4, field-set l4-port, fallback policy come from Arista's AVD only, the rest is
     inferred; every such line says documented-not-lab-verified.
-    Never rendered: `no segment policy policy-drop-all default` (removes deny by default for the whole box),
-    redirect, log, `match interface`, uRPF. The anycast-gateway SVI ACL and PBR stay as they are. -#}
+    LAB GATE: custom policies, field-sets, application traffic recognition and `fallback policy` are AVD-documented
+    and may be REJECTED by 4.36.2F (its manual lists only policy-forward-all and policy-drop-all). A whole-config
+    push (configure replace, session commit) fails on an invalid line and the leaf loses ALL its changes; a
+    line-by-line push leaves the feature live with the default drop for every port-specific flow. Keep
+    group_policy_enforce false and verify in a lab first.
+    MSS-G only filters traffic directed TO a segment: egress to a destination in no segment (internet, firewall
+    legs, other VRFs, management) is not restricted by it, only the SVI ACL and PBR (L0) apply (spec 4.2).
+    A stateless reply matches the port as ANY source port, so it is broader than the contract (spec 3.7).
+    Never rendered: `no segment policy policy-drop-all default` (removes deny by default for the whole box; on an
+    incremental session push to a box that once had it, deny by default stays off), redirect, log,
+    `match interface`, uRPF. The anycast-gateway SVI ACL and PBR stay as they are. The feature switch is the LAST
+    line of `router segment-security` (spec 3.16). -#}
 {%- if segment_security and (segment_security.vrfs or segment_security.skipped) %}
 !
 ! Segment security (Arista MSS-G): segments by prefix, policies under the destination segment, deny by default
@@ -21,6 +31,19 @@
 ! documented-not-lab-verified: ordering against the SVI ACL and PBR (spec 1.15) and for bridged traffic inside a VLAN (spec 4.3)
 ! documented-not-lab-verified: no TCAM profile or reload is configured (spec 1.10, 1.12); enabling halves the LPM table
 ! documented-not-lab-verified: the manual calls the configuration non-atomic and disruptive (spec 1.8): push in a maintenance window
+! on a box that already enforces, shut the feature down first (the shutdown line of the segment-security mode): the stanzas below apply live
+! documented-not-lab-verified: remote prefixes reached through the L3 VNI or as EVPN host routes are expected to take the covering segment prefix (LPM, spec 5.4)
+! documented-not-lab-verified: Multi-Site, border gateway and DCI traffic (spec 5.5); the anycast virtual IP as a switch-owned address (spec 1.16, open question 15)
+! documented-not-lab-verified: the VRF must exist (spec 1.13); name limits (spec 2.3); first match in ascending sequence order (spec 3.8); support per SKU (spec 1.9)
+! documented-not-lab-verified: whether the fallback policy also catches a source in a segment with no from line (spec 3.14)
+! note: MSS-G only filters traffic directed to a segment: egress to a destination in no segment (internet, firewall legs, other VRFs, management) is restricted by the SVI ACL and PBR (L0) only (spec 4.2)
+! note: a stateless reply matches the port as ANY source port, so it is broader than the contract (spec 3.7)
+! note: no segment policy policy-drop-all default is never rendered; on an incremental session push to a box that once had it, deny by default stays off
+{%- if segment_security.avd_only %}
+! WARNING: custom policies, field-sets, l4 applications and fallback policy are documented by AVD only; the 4.36.2F manual lists only policy-forward-all and policy-drop-all, so this release may REJECT them
+! WARNING: a whole-config push (configure replace, session commit) fails on an invalid line and the leaf loses ALL its changes; a line-by-line push leaves the feature live with the default drop for every port-specific flow
+! WARNING: keep group_policy_enforce false and verify in a lab first
+{%- endif %}
 {%- for skipped in segment_security.skipped %}
 ! VRF {{ skipped.vrf }} is not rendered: {{ skipped.reason }}
 {%- endfor %}
@@ -51,11 +74,6 @@ application traffic recognition
 {%- endif %}
 !
 router segment-security
-{%- if segment_security.enforce %}
-   no shutdown
-{%- else %}
-   shutdown
-{%- endif %}
 {%- for policy in segment_security.policies %}
 {%- if loop.first %}
    ! documented-not-lab-verified: custom policies are AVD's model (the 4.36.2F manual lists only policy-forward-all and policy-drop-all); the final drop of each is inferred
@@ -72,6 +90,9 @@ router segment-security
 {%- if segment.remote %}
       ! documented-not-lab-verified: defined only because a policy of this device names it (a remote segment, spec 5.2)
 {%- endif %}
+{%- for comment in segment.comments %}
+      ! {{ comment }}
+{%- endfor %}
       segment {{ segment.name }}
          definition
             match prefix-{{ segment.family }} {{ segment.match_list }}
@@ -89,6 +110,11 @@ router segment-security
 {%- endif %}
 {%- endfor %}
 {%- endfor %}
+{%- if segment_security.enforce %}
+   no shutdown
+{%- else %}
+   shutdown
+{%- endif %}
 {%- endif %}
 !
 {%- endif -%}

@@ -465,19 +465,23 @@ class BaseDeviceTransform(InfrahubTransform):
         An IRB attaches the VLAN's bridged ``vpls-<vni>`` to a vprn: ``vprn`` is the VRF's L3 VNI
         (the vprn service id), ``vni`` the L2 VNI (the vpls service id). get_vlans() carries no VNIs,
         so they come from the VXLAN mapping of the same VLAN (a transit VLAN sets both itself).
-        A gateway VLAN with no L2 VNI has no vpls: the IRB would reference a service nothing creates,
-        so refuse instead of rendering it. Without VXLAN the template renders no service at all.
+        A gateway VLAN with no L2 VNI has no vpls, and one whose namespace has no L3 VNI in the VXLAN
+        mappings has no vprn (vprn services come only from ``l3_vni_mappings``): the IRB would reference a
+        service nothing creates, so refuse instead of rendering it. Without VXLAN the template renders no
+        service at all.
         """
         if platform_name != "nokia_sros" or not vxlan:
             return []
         mappings = {mapping["vlan_id"]: mapping for mapping in vxlan.get("l2_vni_mappings") or []}
+        vprns = {mapping["l3_vni"] for mapping in vxlan.get("l3_vni_mappings") or []}
         irbs: list[dict[str, Any]] = []
         for vlan in vlans:
             if not (vlan.get("gateway_ip") or vlan.get("gateway_ipv6")):
                 continue
             mapping = mappings.get(vlan["vlan_id"]) or {}
             vni = vlan.get("vni") or mapping.get("vni")
-            if not vni:
+            vprn = vlan.get("l3_vni") or mapping.get("l3_vni")
+            if not vni or vprn not in vprns:
                 raise ValueError(
                     f"{platform_name} {role} cannot render the gateway of VLAN {vlan['vlan_id']} "
                     "(no vpls/vprn to attach the IRB to); refusing incomplete config"
@@ -486,7 +490,7 @@ class BaseDeviceTransform(InfrahubTransform):
                 {
                     "vlan_id": vlan["vlan_id"],
                     "vni": vni,
-                    "vprn": vlan.get("l3_vni") or mapping.get("l3_vni") or vni,
+                    "vprn": vprn,
                     "gateway_ip": vlan.get("gateway_ip"),
                     "gateway_ipv6": vlan.get("gateway_ipv6"),
                 }

@@ -357,6 +357,70 @@ class TestPrefixes:
         with pytest.raises(ValueError, match="refusing unprotected config"):
             _view(roots)
 
+    def test_nested_prefixes_of_one_vrf_are_rendered_with_a_documented_not_lab_verified_comment(self) -> None:
+        """Spec 2.5: a /16 and a /24 inside one VRF are expected to be longest-prefix, which nothing documents."""
+        roots = _roots()
+        _segment(roots, "seg-app-np")["gateway"]["ip_prefix"]["prefix"] = "10.10.0.0/16"
+        segments = _segments(_good(roots), "NONPROD")
+        assert len(segments["app-np"]["comments"]) == 2
+        assert "10.10.3.0/24 of segment db-np" in segments["app-np"]["comments"][0]
+        assert "10.10.1.0/24 of segment web-np" in segments["app-np"]["comments"][1]
+        assert "10.10.0.0/16 of segment app-np" in segments["web-np"]["comments"][0]
+        assert "10.10.0.0/16 of segment app-np" in segments["db-np"]["comments"][0]
+        assert all(
+            text.startswith("documented-not-lab-verified") for item in segments.values() for text in item["comments"]
+        )
+
+    def test_disjoint_prefixes_carry_no_overlap_comment(self) -> None:
+        assert all(segment["comments"] == [] for segment in _segments(_good(), "NONPROD").values())
+
+    def test_a_from_naming_a_source_of_another_vrf_is_commented_not_dropped_silently(self) -> None:
+        """The builder never produces it from the rows (a row pairs groups of one VRF), but a view that did must show it."""
+        import transforms.helpers.group_policy as module
+
+        original = module.segment_security_view
+
+        def crossing(*args: Any, **kwargs: Any) -> dict[str, Any]:
+            view = original(*args, **kwargs)
+            web = next(item for item in view["segments"] if item["name"] == "web-np")
+            web["policies"].append({"from": "portal-p", "entries": [], "rules": ["stray-rule"]})
+            return view
+
+        with patch.object(module, "segment_security_view", crossing):
+            view = _good()
+        comments = _segments(view, "NONPROD")["web-np"]["comments"]
+        assert comments == ["not rendered (source in another VRF): from portal-p (rules: stray-rule)"]
+        assert _from(view, "NONPROD", "web-np", "portal-p") is None
+
+
+class TestCatalogPolicy:
+    """Which policy a (forward, reply) pair of entry sets gets: forward-all only from the FORWARD set."""
+
+    @staticmethod
+    def _catalog() -> Any:
+        from transforms.helpers.group_policy import _MssgCatalog
+
+        return _MssgCatalog("test")
+
+    def test_a_forward_any_is_the_built_in(self) -> None:
+        assert self._catalog().policy({("any", None, None)}, {("tcp", 22, 22)}) == FORWARD_ALL
+
+    def test_a_reply_any_widens_nothing(self) -> None:
+        catalog = self._catalog()
+        name = catalog.policy({("tcp", 5432, 5432)}, {("any", None, None)})
+        assert name is not None and name != FORWARD_ALL
+        assert [line["action"] for line in catalog.policies[name]["lines"]] == ["forward stateless", "drop stateless"]
+        assert catalog.policies[name]["text"] == "tcp/5432"
+
+    def test_nothing_forward_and_only_a_reply_any_is_no_policy(self) -> None:
+        assert self._catalog().policy(set(), {("any", None, None)}) is None
+        assert self._catalog().policy(set(), set()) is None
+
+    def test_a_reply_only_application_is_marked_reply_even_for_a_whole_protocol(self) -> None:
+        catalog = self._catalog()
+        name = catalog.policy(set(), {("icmp", None, None), ("tcp", 22, 22)})
+        assert name is not None and catalog.policies[name]["text"] == "reply icmp; reply tcp/22"
+
 
 class TestDefinitions:
     """Every segment a ``from`` line names is defined on the device, remote ones included; at most 60."""
@@ -401,11 +465,14 @@ class TestDefinitions:
         assert _from(view, "NONPROD", "web-np", "silent-np") == DROP_ALL
         assert _segments(view, "NONPROD")["silent-np"]["froms"] == [{"source": "silent-np", "policy": FORWARD_ALL}]
 
-    def test_a_destination_with_a_fallback_drops_a_segment_with_no_row_to_it(self) -> None:
+    def test_the_reply_of_a_flow_left_closed_is_not_rendered(self) -> None:
+        """portal-p -> pay-web is left closed (a component destination): its service leg must not open portal-p."""
         view = _good()
-        # portal-p reaches the internet's reply path (a fallback); pay-p has no row to it.
-        assert _segments(view, "PROD")["portal-p"]["fallback"] is not None
-        assert _from(view, "PROD", "portal-p", "pay-p") == DROP_ALL
+        assert any("portal-p -> web_pay_demo_local" in text for text in view["unsupported"])
+        portal = _segments(view, "PROD")["portal-p"]
+        assert portal["fallback"] is None
+        assert [item["source"] for item in portal["froms"]] == ["portal-p"]
+        assert not any("reply tcp/443" == policy["text"] for policy in view["policies"])
 
     def test_the_self_of_a_microsegmented_segment_without_a_row_is_dropped_under_a_fallback(self) -> None:
         """intra deny + a fallback: the segment's own traffic must not fall to the fallback."""
@@ -455,11 +522,37 @@ class TestPolicies:
         assert _from(view, "PROD", "pay-p", "pay-p") is None
 
     def test_an_any_row_is_the_built_in_forward_all(self) -> None:
-        """db-np -> app-np is permit-all: app-np takes everything from db-np, and so does db-np's reply path."""
+        """db-np -> app-np is permit-all: app-np takes everything from db-np."""
         view = _good()
         assert _from(view, "NONPROD", "app-np", "db-np") == FORWARD_ALL
-        assert _from(view, "NONPROD", "db-np", "app-np") == FORWARD_ALL
         assert all(item["name"] != FORWARD_ALL for item in view["policies"])
+
+    def test_a_permit_all_reply_does_not_widen_the_forward_direction(self) -> None:
+        """app-np -> db-np is tcp/5432 only and db-np -> app-np is permit-all: the reply of the latter is not
+        mirrored (a stateless device matches it by source port), so db-np takes tcp/5432 from app-np and nothing else."""
+        view = _good()
+        name = _from(view, "NONPROD", "db-np", "app-np")
+        assert name is not None and name != FORWARD_ALL
+        assert _policy_lines(view, name) == [("tcp", "destination", "5432"), ("app-match-all", None, None)]
+
+    def test_a_permit_all_reply_does_not_widen_the_fallback(self) -> None:
+        """db-np -> UNCLASSIFIED is permit-all (its rule db-np-to-app-np-any): db-np's fallback stays the tcp/5432 leg."""
+        fallback = _segments(_good(), "NONPROD")["db-np"]["fallback"]
+        assert fallback is not None and fallback != FORWARD_ALL
+        assert _policy_lines(_good(), fallback) == [("tcp", "destination", "5432"), ("app-match-all", None, None)]
+
+    def test_the_reply_of_a_permit_all_row_is_listed_as_not_expressible_with_its_rules(self) -> None:
+        texts = _good()["unsupported"]
+        reason = "the reply of a permit-all flow cannot be mirrored by source port on a stateless device"
+        assert any(text.startswith("db-np -> app-np: " + reason) and "db-np-to-app-np-any" in text for text in texts)
+        assert any(text.startswith("db-np -> UNCLASSIFIED: " + reason) for text in texts)
+
+    def test_a_reply_only_whole_protocol_application_is_marked_reply(self) -> None:
+        """db-np -> web-np icmp: web-np answers an icmp it never asked for, so the policy comment says reply."""
+        view = _good()
+        name = _from(view, "NONPROD", "db-np", "web-np")
+        policy = next(item for item in view["policies"] if item["name"] == name)
+        assert policy["text"] == "reply icmp"
 
     def test_a_port_specific_row_is_a_custom_policy_ending_in_a_drop_of_everything_else(self) -> None:
         view = _good()
@@ -546,14 +639,15 @@ class TestPolicies:
     def test_rows_naming_a_component_are_unsupported_and_open_nothing(self) -> None:
         """D4: the web component's rows are listed, and the microsegmented segment is not opened by them."""
         view = _good()
-        assert len(view["unsupported"]) == 3
+        assert len([text for text in view["unsupported"] if "component group" in text]) == 3
         assert any("portal-p -> web_pay_demo_local" in text for text in view["unsupported"])
         assert any("web_pay_demo_local -> db_pay_demo_local" in text for text in view["unsupported"])
         assert _from(view, "PROD", "pay-p", "portal-p") is None
         assert _segments(view, "PROD")["pay-p"]["fallback"] is None
 
     def test_unsupported_rows_of_a_vrf_the_device_does_not_carry_are_not_listed(self) -> None:
-        assert _good(vrfs=("NONPROD",))["unsupported"] == []
+        texts = _good(vrfs=("NONPROD",))["unsupported"]
+        assert texts and not any("component group" in text for text in texts)
 
 
 class TestEnforce:
@@ -584,7 +678,7 @@ class TestDeterminism:
     def test_names_are_the_hash_of_their_content(self) -> None:
         view = _good()
         field_sets = {item["ports"]: item["name"] for item in view["field_sets"]}
-        assert field_sets["443"] == "MSSG-FS-" + _hash(["443"])
+        assert field_sets["5432"] == "MSSG-FS-" + _hash(["5432"])
         assert field_sets["443, 8000-8010"] == "MSSG-FS-" + _hash(["443", "8000-8010"])
         by_name = {item["name"]: item for item in view["applications"]}
         assert "MSSG-APP-" + _hash("tcp", "destination", ["443", "8000-8010"]) in by_name
@@ -680,19 +774,81 @@ class TestRendering:
         assert re.search(r"      \d+ application app-match-all action drop stateless\n", rendered)
 
     @pytest.mark.parametrize("cls", [Leaf, BorderLeaf, AccessLeaf])
+    def test_the_switch_is_the_last_line_of_the_mode(self, cls: type) -> None:
+        """Spec 3.16: configured with the feature shut, switched LAST, inside the same router segment-security block."""
+        for rendered, line in (
+            (self._render(cls), "   no shutdown"),
+            (self._render(cls, enforce=False), "   shutdown"),
+        ):
+            block = _block(rendered)
+            assert block.rstrip().endswith(line + "\n!")
+            assert block.rindex("      segment ") < block.rindex(line + "\n")
+            assert block.count("\nrouter segment-security\n") == 1
+            assert not block.split("\nrouter segment-security\n")[1].startswith("   shutdown")
+            assert not block.split("\nrouter segment-security\n")[1].startswith("   no shutdown")
+
+    @pytest.mark.parametrize("cls", [Leaf, BorderLeaf, AccessLeaf])
     def test_enforcing_enables_and_staged_shuts_down(self, cls: type) -> None:
         """A staged data center keeps every segment, policy and application: only the switch (and a comment) differ."""
         enforcing, staged = self._render(cls), self._render(cls, enforce=False)
-        assert "router segment-security\n   no shutdown\n" in enforcing
-        assert "router segment-security\n   shutdown\n" in staged
+        assert "\n   no shutdown\n!\n" in enforcing
+        assert "\n   shutdown\n!\n" in staged
         assert "no shutdown" not in _block(staged)
         assert "stages group policy (group_policy_enforce is false)" in staged
         assert "stages group policy" not in enforcing
         without_notice = "".join(line for line in staged.splitlines(keepends=True) if "stages group policy" not in line)
-        assert (
-            without_notice.replace("router segment-security\n   shutdown", "router segment-security\n   no shutdown")
-            == enforcing
-        )
+        assert without_notice.replace("\n   shutdown\n!\n", "\n   no shutdown\n!\n") == enforcing
+
+    def test_an_ipv6_prefix_renders_a_prefix_ipv6_match_list_end_to_end(self) -> None:
+        """T1: flip web-np to an IPv6 gateway prefix and render: match-list, its prefix and the segment definition."""
+        raw = _raw()
+        for edge in raw["ManagedNetworkSegment"]["edges"]:
+            if edge["node"]["id"] == "seg-web-np":
+                edge["node"]["gateway"]["node"]["ip_prefix"]["node"]["prefix"]["value"] = "2001:db8:10::/64"
+        block = _block(_run_transform(Leaf, raw))
+        assert "match-list input prefix-ipv6 web-np\n   match prefix-ipv6 2001:db8:10::/64\n" in block
+        assert "      segment web-np\n         definition\n            match prefix-ipv6 web-np\n" in block
+        assert "match-list input prefix-ipv4 web-np" not in block
+        assert "match-list input prefix-ipv4 app-np\n   match prefix-ipv4 10.10.2.0/24\n" in block
+
+    @pytest.mark.parametrize("cls", [Leaf, BorderLeaf, AccessLeaf])
+    def test_the_header_states_the_lab_gate_and_the_limits_of_the_feature(self, cls: type) -> None:
+        """C3: AVD-only lines may be rejected, what MSS-G does not filter, the broader stateless reply."""
+        header = _block(self._render(cls)).split("\nmatch-list ")[0]
+        for text in (
+            "WARNING: custom policies, field-sets, l4 applications and fallback policy are documented by AVD only",
+            "this release may REJECT them",
+            "a whole-config push (configure replace, session commit) fails on an invalid line and the leaf loses ALL",
+            "keep group_policy_enforce false and verify in a lab first",
+            "MSS-G only filters traffic directed to a segment",
+            "restricted by the SVI ACL and PBR (L0) only",
+            "a stateless reply matches the port as ANY source port, so it is broader than the contract",
+            "no segment policy policy-drop-all default is never rendered",
+            "deny by default stays off",
+            "remote prefixes reached through the L3 VNI or as EVPN host routes",
+            "Multi-Site, border gateway and DCI traffic (spec 5.5)",
+            "anycast virtual IP as a switch-owned address",
+            "the VRF must exist (spec 1.13); name limits (spec 2.3); first match in ascending sequence order (spec 3.8)",
+            "whether the fallback policy also catches a source in a segment with no from line (spec 3.14)",
+        ):
+            assert text in header, text
+
+    def test_a_config_with_only_built_in_policies_carries_no_avd_warning(self) -> None:
+        """The warning is about the AVD-only lines: a view without any (only forward-all) does not claim them."""
+        with patch("transforms.helpers.group_policy._MssgCatalog.policy", return_value=FORWARD_ALL):
+            with patch("transforms.helpers.group_policy._fallback_entries", return_value=(set(), set())):
+                rendered = self._render(Leaf)
+        assert "! WARNING" not in rendered
+        assert "field-set l4-port" not in rendered
+
+    def test_nested_prefixes_render_the_overlap_comment_on_both_segments(self) -> None:
+        raw = _raw()
+        for edge in raw["ManagedNetworkSegment"]["edges"]:
+            if edge["node"]["id"] == "seg-app-np":
+                edge["node"]["gateway"]["node"]["ip_prefix"]["node"]["prefix"]["value"] = "10.10.0.0/16"
+        block = _block(_run_transform(Leaf, raw))
+        assert "      ! documented-not-lab-verified: this prefix overlaps 10.10.0.0/16 of segment app-np" in block
+        assert block.index("! documented-not-lab-verified: this prefix overlaps") < block.index("      segment web-np")
 
     @pytest.mark.parametrize("cls", [Leaf, BorderLeaf, AccessLeaf])
     def test_every_unverified_line_says_so(self, cls: type) -> None:

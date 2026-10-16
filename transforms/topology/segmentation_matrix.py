@@ -25,12 +25,7 @@ from utils.group_policy import (
     site_kind,
     tags_by_segment,
 )
-from utils.segment_addressing import segment_prefix
-
-
-def _prefix(segment: dict) -> str | None:
-    """The one prefix a segment is classified by: its IPv4 gateway prefix, else its IPv6 one (as the EOS device view)."""
-    return segment_prefix(segment, "ipv4") or segment_prefix(segment, "ipv6")
+from utils.segment_addressing import classifier_prefix
 
 
 class SegmentationMatrix(InfrahubTransform):
@@ -84,7 +79,7 @@ class SegmentationMatrix(InfrahubTransform):
             "segment_security": segment_security_view(
                 contracts.all_groups,
                 contracts.rows,
-                {str(segment.get("name")): _prefix(segment) for segment in contracts.all_segments},
+                {str(segment.get("name")): classifier_prefix(segment) for segment in contracts.all_segments},
                 local=contracts.local_names,
             ),
             "vxlan_gpo": vxlan_gpo_view(
@@ -154,7 +149,7 @@ class SegmentationMatrix(InfrahubTransform):
                     "vrf": groups[0].vrf,
                     "vlan_id": segment.get("vlan_id"),
                     "vni": vnis[0] if vnis else None,
-                    "prefix": _prefix(segment),
+                    "prefix": classifier_prefix(segment),
                 }
             )
         return {

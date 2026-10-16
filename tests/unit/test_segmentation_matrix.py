@@ -15,6 +15,7 @@ from transforms.helpers.group_policy import (
     REPLIES,
     UNAWARE,
     UNCLASSIFIED,
+    Group,
     get_vrf_contracts,
     segment_groups,
     segment_security_view,
@@ -114,6 +115,10 @@ def _row(rows: list[dict[str, Any]], src: str, dst: str) -> dict[str, Any]:
 
 
 TCP_443 = [{"protocol": "tcp", "port_start": 443, "port_end": 443}]
+
+
+def _entry(protocol: str, port: int | None) -> dict[str, Any]:
+    return {"protocol": protocol, "port_start": port, "port_end": port}
 
 
 class TestGroups:
@@ -497,7 +502,8 @@ class TestSegmentSecurityView:
         """D4: a rule into one component (cross-segment) must not open the whole microsegmented segment.
 
         The row (and the service leg from UNCLASSIFIED into the component) is listed as unsupported; the
-        segment gets neither a policy nor a fallback from it. The leg out of the portal is unaffected.
+        segment gets neither a policy nor a fallback from it. The portal's service leg out is only the leg of that
+        closed flow, so its reply is not kept (it would open the portal to a flow nothing carries).
         """
         tags = [_component_tag("k-web", 20, "c005-web"), _component_tag("k-session", 21, "c005-web")]
         segments = [
@@ -513,7 +519,7 @@ class TestSegmentSecurityView:
         ]
         assert all(item["rules"] == ["portal-to-web"] for item in view["unsupported"])
         portal = next(item for item in view["segments"] if item["name"] == "c008-portal")
-        assert portal["to_unclassified"] == {"entries": TCP_443, "rules": ["portal-to-web"]}
+        assert portal["to_unclassified"] is None
 
     def test_a_row_from_a_component_is_unsupported_not_widened_to_its_segment(self) -> None:
         """D4: a component's dependency on another segment does not become the whole segment's."""
@@ -526,9 +532,64 @@ class TestSegmentSecurityView:
         backend = next(item for item in view["segments"] if item["name"] == "c005-backend")
         assert backend["policies"] == []
         assert backend["fallback"] == {"entries": TCP_443, "rules": ["web-to-backend"]}
-        assert [(item["src"], item["dst"]) for item in view["unsupported"]] == [("k-web.example", "c005-backend")]
+        assert [(item["src"], item["dst"]) for item in view["unsupported"]] == [
+            ("k-web.example", "c005-backend"),
+            ("k-web.example", UNCLASSIFIED),
+        ]
         web = next(item for item in view["segments"] if item["name"] == "c005-web")
         assert web["to_unclassified"] is None, "the component's leg out is not the segment's"
+
+    def test_a_row_from_a_component_to_unclassified_is_unsupported_with_the_component_reason(self) -> None:
+        """C7: the component's leg out used to vanish without a trace."""
+        groups = [
+            Group("A", 1, "segment", "seg-a", "V", None, "deny", frozenset()),
+            Group("A-c", 2, "component", "seg-a", "V", None, "permit", frozenset()),
+            Group("B", 3, "segment", "seg-b", "V", None, "permit", frozenset()),
+        ]
+        rows = [{"vrf": "V", "src": "A-c", "dst": UNCLASSIFIED, "entries": [_entry("tcp", 80)], "rules": ["r"]}]
+        view = segment_security_view(groups, rows, {})
+        assert view["unsupported"] == [
+            {
+                "src": "A-c",
+                "dst": UNCLASSIFIED,
+                "rules": ["r"],
+                "reason": "a component group is not expressible by prefix (the row is not widened to its segment)",
+            }
+        ]
+        assert all(item["to_unclassified"] is None for item in view["segments"])
+
+    def test_a_permit_all_row_lists_its_reply_as_unsupported_and_widens_nothing(self) -> None:
+        """C1: a stateless device matches a reply by source port; ``any`` has none, so that direction stays closed."""
+        groups = [
+            Group("A", 1, "segment", "seg-a", "V", None, "permit", frozenset()),
+            Group("B", 2, "segment", "seg-b", "V", None, "permit", frozenset()),
+        ]
+        rows = [
+            {"vrf": "V", "src": "A", "dst": "B", "entries": [_entry("any", None)], "rules": ["a-to-b-any"]},
+            {"vrf": "V", "src": "B", "dst": UNCLASSIFIED, "entries": [_entry("any", None)], "rules": ["b-out"]},
+        ]
+        view = segment_security_view(groups, rows, {})
+        reason = (
+            "the reply of a permit-all flow cannot be mirrored by source port on a stateless device "
+            "(the reverse direction is left closed)"
+        )
+        assert view["unsupported"] == [
+            {"src": "A", "dst": "B", "rules": ["a-to-b-any"], "reason": reason},
+            {"src": "B", "dst": UNCLASSIFIED, "rules": ["b-out"], "reason": reason},
+        ]
+        b = next(item for item in view["segments"] if item["name"] == "B")
+        assert b["policies"] == [{"from": "A", "entries": [_entry("any", None)], "rules": ["a-to-b-any"]}]
+
+    def test_a_segment_rule_to_the_outside_keeps_its_reply_although_its_components_are_unsupported(self) -> None:
+        """Only a flow INTO a component is closed; a hand-written rule out of a microsegmented segment keeps its leg."""
+        tags = [_component_tag("k-web", 20, "c005-web")]
+        segments = [
+            _seg("c005-web", _rule("web-to-net", None), isolation="microsegmented"),
+        ]
+        view = segment_security_view(_groups(segments, tags), get_vrf_contracts(segments, tags), {})
+        web = next(item for item in view["segments"] if item["name"] == "c005-web")
+        assert web["to_unclassified"] == {"entries": TCP_443, "rules": ["web-to-net"]}
+        assert [(item["src"], item["dst"]) for item in view["unsupported"]] == [("k-web.example", UNCLASSIFIED)]
 
     def test_a_segment_level_rule_keeps_its_segment_row_and_lists_the_component_rows_as_unsupported(self) -> None:
         """A hand-written rule into a microsegmented segment: the segment row stays, the per-component copies are not expressible."""

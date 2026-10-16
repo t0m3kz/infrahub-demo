@@ -1082,10 +1082,14 @@ def _gateway_vlan(vlan_id: int, **extra: object) -> dict:
     return {"vlan_id": vlan_id, "name": f"VLAN{vlan_id}", "gateway_ip": f"10.0.{vlan_id}.1/24", **extra}
 
 
-def _sros_vxlan_with_l3(vlan_ids: list[int], l3_vni: int | None = 50001) -> dict:
+def _sros_vxlan_with_l3(vlan_ids: list[int], l3_vni: int | None = 50001, extra_l3: tuple[int, ...] = ()) -> dict:
+    """The SR OS VXLAN context whose VLANs sit in the VRF of ``l3_vni`` (a vprn service) plus ``extra_l3`` vprns."""
     vxlan = _sros_vxlan(vlan_ids)
     for mapping in vxlan["l2_vni_mappings"]:
         mapping["l3_vni"] = l3_vni
+    vxlan["l3_vni_mappings"] = [
+        {"vrf_name": f"VRF{vni}", "l3_vni": vni} for vni in ([l3_vni] if l3_vni else []) + list(extra_l3)
+    ]
     return vxlan
 
 
@@ -1110,17 +1114,28 @@ class TestSrosIrbs:
         """A transit VLAN carries its own vni and l3_vni (transforms/common.py sets them)."""
         vlan = _gateway_vlan(3001, vni=64001, l3_vni=50003)
 
-        irbs = BaseDeviceTransform._sros_irbs("border-leaf", "nokia_sros", [vlan], _sros_vxlan_with_l3([3001]))
+        irbs = BaseDeviceTransform._sros_irbs(
+            "border-leaf", "nokia_sros", [vlan], _sros_vxlan_with_l3([3001], extra_l3=(50003,))
+        )
 
         assert [(irb["vni"], irb["vprn"]) for irb in irbs] == [(64001, 50003)]
 
-    def test_namespace_without_l3_vni_keeps_the_vprn_fallback_to_the_vni(self) -> None:
-        """Unchanged behaviour: with no L3 VNI the IRB sits in the vprn numbered like the vpls."""
-        irbs = BaseDeviceTransform._sros_irbs(
-            "leaf", "nokia_sros", [_gateway_vlan(100)], _sros_vxlan_with_l3([100], l3_vni=None)
-        )
+    def test_namespace_without_l3_vni_is_refused_not_given_a_vprn_numbered_like_the_vpls(self) -> None:
+        """No L3 VNI mapping means no vprn: the IRB would reference a service nothing creates."""
+        vlan = {"vlan_id": 100, "gateway_ip": "10.0.0.1/24", "gateway_ipv6": None, "vrf": None}
+        vxlan = {"l2_vni_mappings": [{"vlan_id": 100, "vni": 10100, "l3_vni": None}], "l3_vni_mappings": []}
 
-        assert [(irb["vni"], irb["vprn"]) for irb in irbs] == [(10100, 10100)]
+        with pytest.raises(
+            ValueError, match=r"cannot render the gateway of VLAN 100 \(no vpls/vprn to attach the IRB to\)"
+        ):
+            BaseDeviceTransform._sros_irbs("leaf", "nokia_sros", [vlan], vxlan)
+
+    def test_a_vprn_that_no_l3_vni_mapping_creates_is_refused(self) -> None:
+        """A VLAN naming an L3 VNI of another VRF than the device's mappings creates is refused too."""
+        with pytest.raises(ValueError, match=r"cannot render the gateway of VLAN 100"):
+            BaseDeviceTransform._sros_irbs(
+                "leaf", "nokia_sros", [_gateway_vlan(100, l3_vni=50009)], _sros_vxlan_with_l3([100])
+            )
 
     def test_vlan_without_gateway_gets_no_irb(self) -> None:
         irbs = BaseDeviceTransform._sros_irbs(
@@ -1206,7 +1221,8 @@ class TestPolicyBlocksFollowTheContext:
         assert "feature pbr" in rendered
         assert "! Leaf PBR" in rendered
 
-    def test_nxos_border_template_with_no_policy_renders_none(self) -> None:
+    def test_nxos_border_template_renders_only_from_the_context(self) -> None:
+        """The template renders policy only from the context; the refusal tests prove the removed guards redundant."""
         rendered = _render_leaf("cisco_nxos", name="test-bl", nxos_border=True, acls=[], leaf_pbr_rules=[])
 
         assert "Zero-Trust" not in rendered
@@ -1224,7 +1240,8 @@ class TestPolicyBlocksFollowTheContext:
         assert "configure filter ip-filter 100 admin-state enable" in rendered
         assert 'sap 1/1/10:100 ingress ip-filter "100"' in rendered
 
-    def test_sros_border_template_with_no_acls_renders_no_filters(self) -> None:
+    def test_sros_border_template_renders_only_from_the_context(self) -> None:
+        """The template renders filters only from the context; the refusal tests prove the removed guards redundant."""
         rendered = _render_leaf(
             "nokia_sros",
             sros_border=True,

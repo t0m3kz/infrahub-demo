@@ -67,7 +67,10 @@ Platform views map the neutral rows onto one enforcement model:
   because MSS-G is stateless and the reply of such a flow is traffic from
   UNCLASSIFIED to that segment. A prefix cannot tell a component from its
   segment, so a row that names a component group on either side is
-  ``unsupported`` (never widened to the whole segment: that would be fail-open).
+  ``unsupported`` (never widened to the whole segment: that would be fail-open). The reply of a
+  permit-all row is ``unsupported`` too: a stateless device matches a reply by source port and
+  ``any`` has none, so that direction stays closed (never widened to a forward-all policy); and the
+  reply of a flow whose every rule is unsupported is dropped.
 
 Rows are forward only: replies are the renderer's (``REPLIES``). Sorted,
 de-duplicated and id-free.
@@ -114,7 +117,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
 from ipaddress import ip_network
-from itertools import product
+from itertools import combinations, product
 from typing import Any
 
 from netutils.interface import sort_interface_list
@@ -135,7 +138,7 @@ from utils.group_policy import (
     tags_by_segment,
     vteps_by_data_center,
 )
-from utils.segment_addressing import segment_prefix
+from utils.segment_addressing import classifier_prefix
 
 UNCLASSIFIED = "unclassified"
 """Pseudo-group of every endpoint no selector classifies (service and transit legs, outside the VRF's segments)."""
@@ -424,6 +427,13 @@ def vxlan_gpo_view(
     }
 
 
+_COMPONENT_REASON = "a component group is not expressible by prefix (the row is not widened to its segment)"
+_ANY_REPLY_REASON = (
+    "the reply of a permit-all flow cannot be mirrored by source port on a stateless device "
+    "(the reverse direction is left closed)"
+)
+
+
 def segment_security_view(
     groups: Iterable[Group],
     rows: Iterable[dict[str, Any]],
@@ -436,41 +446,64 @@ def segment_security_view(
     ``groups`` are every group the rows name, ``local`` the segment groups to
     list (None: all) besides every segment a row names (a ``from`` line needs its
     source defined); ``prefixes``: segment name -> its gateway prefix (the
-    segment's definition). A row that names a component group is unsupported.
+    segment's definition). A row that names a component group is unsupported, and so is the reply of
+    a permit-all row (MSS-G is stateless: its reply is not a port the device can mirror).
     """
     by_name = {group.name: group for group in groups}
     segment_group = {group.segment: group.name for group in by_name.values() if group.kind == "segment"}
     policies: dict[tuple[str, str], tuple[set[Entry], set[str]]] = {}
     outbound: dict[str, tuple[set[Entry], set[str]]] = {}
+    outbound_rows: list[tuple[str, dict[str, Any]]] = []
     unsupported: list[dict[str, Any]] = []
+    into_component: set[str] = set()
+
+    def _component(row: dict[str, Any], reason: str) -> None:
+        unsupported.append({"src": row["src"], "dst": row["dst"], "rules": row["rules"], "reason": reason})
+
     for row in rows:
         dst, src = by_name.get(row["dst"]), by_name.get(row["src"])
         if dst is None:
             # A row to UNCLASSIFIED: no MSS-G hook, but its reply is a fallback of the source segment.
             if src is not None and src.kind == "segment":
-                entries, rules = outbound.setdefault(src.name, (set(), set()))
-                entries.update((item["protocol"], item["port_start"], item["port_end"]) for item in row["entries"])
-                rules.update(row["rules"])
+                outbound_rows.append((src.name, row))
+            elif src is not None:
+                _component(row, _COMPONENT_REASON)
             continue
         if "component" in (dst.kind, src.kind if src else None):
+            if dst.kind == "component":
+                into_component.update(row["rules"])
             same_segment = src is not None and src.segment == dst.segment
-            unsupported.append(
-                {
-                    "src": row["src"],
-                    "dst": row["dst"],
-                    "rules": row["rules"],
-                    "reason": (
-                        "component groups inside one segment are not expressible by prefix"
-                        if same_segment
-                        else "a component group is not expressible by prefix (the row is not widened to its segment)"
-                    ),
-                }
+            _component(
+                row,
+                "component groups inside one segment are not expressible by prefix"
+                if same_segment
+                else _COMPONENT_REASON,
             )
             continue
         source = FALLBACK if src is None else segment_group[src.segment]
         entries, rules = policies.setdefault((segment_group[dst.segment], source), (set(), set()))
         entries.update((item["protocol"], item["port_start"], item["port_end"]) for item in row["entries"])
         rules.update(row["rules"])
+
+    # The reply of a flow whose destination is left closed above (a component group) would only open the source
+    # segment to its replies: it is not kept. A rule that also has a row into a segment keeps its reply.
+    closed = into_component - {rule for _, rules in policies.values() for rule in rules}
+    for segment, row in outbound_rows:
+        if row["rules"] and set(row["rules"]) <= closed:
+            continue
+        entries, rules = outbound.setdefault(segment, (set(), set()))
+        entries.update((item["protocol"], item["port_start"], item["port_end"]) for item in row["entries"])
+        rules.update(row["rules"])
+
+    # The reply of a permit-all flow is all traffic back, which a stateless device cannot match by source port.
+    for (dst_name, source), (entries, rules) in sorted(policies.items()):
+        if source != FALLBACK and any(entry[0] == "any" for entry in entries):
+            unsupported.append({"src": source, "dst": dst_name, "rules": sorted(rules), "reason": _ANY_REPLY_REASON})
+    for segment, (entries, rules) in sorted(outbound.items()):
+        if any(entry[0] == "any" for entry in entries):
+            unsupported.append(
+                {"src": segment, "dst": UNCLASSIFIED, "rules": sorted(rules), "reason": _ANY_REPLY_REASON}
+            )
 
     def _policies(segment: str) -> list[dict[str, Any]]:
         return [
@@ -1200,9 +1233,8 @@ _MSSG_PROTOCOLS = frozenset({"tcp", "udp", "icmp"})
 """The rule protocols an application renders: the schema's choices but ``any`` (a built-in policy)."""
 
 
-def _mssg_prefix(segment: dict[str, Any]) -> str | None:
-    """The one prefix a segment is classified by: its IPv4 gateway prefix, else its IPv6 one (one gateway per segment)."""
-    return segment_prefix(segment, "ipv4") or segment_prefix(segment, "ipv6")
+def _has_any(entries: set[Entry]) -> bool:
+    return any(entry[0] == "any" for entry in entries)
 
 
 def _mssg_hash(*parts: Any) -> str:
@@ -1226,14 +1258,21 @@ class _MssgCatalog:
         self.applications: dict[str, dict[str, Any]] = {}
         self.policies: dict[str, dict[str, Any]] = {}
 
-    def policy(self, forward: set[Entry], reply: set[Entry]) -> str:
-        """The policy name for the entry sets: a built-in when either allows any protocol, else a custom one."""
-        if any(entry[0] == "any" for entry in (*forward, *reply)):
+    def policy(self, forward: set[Entry], reply: set[Entry]) -> str | None:
+        """The policy name for the entry sets, None when they allow nothing.
+
+        The built-in forward-all only when the FORWARD set (what the contract permits into the destination) has
+        ``any``. A reply of ``any`` cannot be matched by source port: it is left closed, never widened into the
+        forward direction.
+        """
+        if _has_any(forward):
             return _MSSG_FORWARD_ALL
-        found = {
-            application["name"]: application
-            for application in (*self._applications("destination", forward), *self._applications("source", reply))
-        }
+        reply = set() if _has_any(reply) else reply
+        if not forward and not reply:
+            return None
+        found: dict[str, dict[str, Any]] = {}
+        for application in (*self._applications("destination", forward), *self._applications("source", reply)):
+            found.setdefault(application["name"], application)
         applications = sorted(
             found.values(), key=lambda item: (item["protocol"], item["ports"] or [], item["direction"])
         )
@@ -1281,10 +1320,11 @@ class _MssgCatalog:
             field_set = "MSSG-FS-" + _mssg_hash(spans)
             self.field_sets.setdefault(field_set, {"name": field_set, "ports": ", ".join(spans)})
             name = "MSSG-APP-" + _mssg_hash(protocol, direction, spans)
-            text = ("reply " if direction == "source" else "") + f"{protocol}/{','.join(spans)}"
+            text = f"{protocol}/{','.join(spans)}"
         else:
             name = "MSSG-APP-" + _mssg_hash(protocol)
             text = protocol
+        text = ("reply " if direction == "source" else "") + text
         self.applications.setdefault(
             name,
             {
@@ -1307,10 +1347,17 @@ def _entry_set(items: list[dict[str, Any]] | None) -> set[Entry]:
     return {(item["protocol"], item["port_start"], item["port_end"]) for item in items or []}
 
 
+def _fallback_entries(item: dict[str, Any]) -> tuple[set[Entry], set[Entry]]:
+    """(forward, reply) of a destination's fallback: what UNCLASSIFIED may send in; the reply of what it may send out."""
+    forward = _entry_set((item["fallback"] or {}).get("entries"))
+    reply = _entry_set((item["to_unclassified"] or {}).get("entries"))
+    return forward, set() if _has_any(reply) else reply
+
+
 def _segment_security_build(scope: _DeviceScope) -> dict[str, Any] | None:
     """The MSS-G view of one VTEP (``segment_security_device_view``)."""
     who, contracts = scope.who, scope.contracts
-    prefixes = {str(segment.get("name")): _mssg_prefix(segment) for segment in contracts.all_segments}
+    prefixes = {str(segment.get("name")): classifier_prefix(segment) for segment in contracts.all_segments}
     view = segment_security_view(contracts.all_groups, contracts.rows, prefixes, local=contracts.local_names)
     listed = {item["name"]: item for item in view["segments"] if item["vrf"] in scope.vrfs}
     if not listed:
@@ -1320,7 +1367,7 @@ def _segment_security_build(scope: _DeviceScope) -> dict[str, Any] | None:
 
     # A destination's fallback also catches a source in a segment this device does not define (spec 3.14),
     # so a VRF with a fallback defines every segment of the VRF, to drop the ones with no row.
-    fallback_vrfs = {item["vrf"] for item in listed.values() if item["fallback"] or item["to_unclassified"]}
+    fallback_vrfs = {item["vrf"] for item in listed.values() if any(_fallback_entries(item))}
     for group in contracts.all_groups:
         if group.kind == "segment" and group.vrf in fallback_vrfs and group.name not in listed:
             listed[group.name] = {
@@ -1354,6 +1401,7 @@ def _segment_security_build(scope: _DeviceScope) -> dict[str, Any] | None:
     for name in sorted(item["name"] for items in rendered.values() for item in items):
         if safe.setdefault(_cli_name(name), name) != name:
             raise _refuse(who, f"segments {safe[_cli_name(name)]!r} and {name!r} share the name {_cli_name(name)!r}")
+    nested: dict[str, list[str]] = defaultdict(list)
     for vrf, items in rendered.items():
         owners: dict[Any, str] = {}
         for item in items:
@@ -1367,10 +1415,17 @@ def _segment_security_build(scope: _DeviceScope) -> dict[str, Any] | None:
                     f"segments {owners[network]!r} and {item['name']!r} share the prefix {network} in VRF {vrf} "
                     "(a prefix can be in one segment per VRF)",
                 )
+        for (net_a, name_a), (net_b, name_b) in combinations(sorted(owners.items(), key=lambda pair: pair[1]), 2):
+            if net_a.version == net_b.version and net_a.overlaps(net_b):
+                for own, other, other_name in ((name_a, net_b, name_b), (name_b, net_a, name_a)):
+                    nested[own].append(
+                        f"{_UNVERIFIED}: this prefix overlaps {other} of segment {other_name}; nested prefixes are "
+                        "expected to match longest-prefix first, which is not documented (spec 2.5)"
+                    )
 
     catalog = _MssgCatalog(who)
     match_lists = []
-    vrf_views = []
+    vrf_views: list[dict[str, Any]] = []
     for vrf, items in rendered.items():
         entries_to = {
             (item["name"], policy["from"]): _entry_set(policy["entries"])
@@ -1378,9 +1433,17 @@ def _segment_security_build(scope: _DeviceScope) -> dict[str, Any] | None:
             for policy in item["policies"]
         }
         segment_views = []
+        in_vrf = {item["name"] for item in items}
         for item in items:
             name = item["name"]
             family = "ipv6" if ":" in item["prefix"] else "ipv4"
+            comments = list(nested.get(name, []))
+            comments += [
+                f"not rendered (source in another VRF): from {_cli_name(policy['from'])} "
+                f"(rules: {', '.join(policy['rules'])})"
+                for policy in item["policies"]
+                if policy["from"] not in in_vrf
+            ]
             match_lists.append({"name": _cli_name(name), "family": family, "prefix": item["prefix"]})
             froms: dict[str, str] = {}
             if item["intra_segment"] == "permit":
@@ -1388,14 +1451,13 @@ def _segment_security_build(scope: _DeviceScope) -> dict[str, Any] | None:
             for other in items:
                 forward, reply = entries_to.get((name, other["name"])), entries_to.get((other["name"], name))
                 if (forward or reply) and other["name"] != name:
-                    froms[other["name"]] = catalog.policy(forward or set(), reply or set())
+                    policy = catalog.policy(forward or set(), reply or set())
+                    if policy:
+                        froms[other["name"]] = policy
             fallback = None
             notes = []
-            if item["fallback"] or item["to_unclassified"]:
-                fallback = catalog.policy(
-                    _entry_set((item["fallback"] or {}).get("entries")),
-                    _entry_set((item["to_unclassified"] or {}).get("entries")),
-                )
+            if any(_fallback_entries(item)):
+                fallback = catalog.policy(*_fallback_entries(item))
                 dropped = [other["name"] for other in items if other["name"] not in froms]
                 froms.update({name: _MSSG_DROP_ALL for name in dropped})
                 notes = [f"{_UNVERIFIED}: fallback policy is documented by AVD only (R3 series)"]
@@ -1411,6 +1473,7 @@ def _segment_security_build(scope: _DeviceScope) -> dict[str, Any] | None:
                     "family": family,
                     "prefix": item["prefix"],
                     "remote": name not in contracts.local_names,
+                    "comments": comments,
                     "froms": [
                         {"source": _cli_name(source), "policy": froms[source]}
                         for source in sorted(froms, key=_cli_name)
@@ -1424,7 +1487,7 @@ def _segment_security_build(scope: _DeviceScope) -> dict[str, Any] | None:
     unsupported = [
         _one_line(f"{_label(row['src'])} -> {_label(row['dst'])}: {row['reason']} (rules: {', '.join(row['rules'])})")
         for row in view["unsupported"]
-        if by_name[row["dst"]].vrf in rendered
+        if (by_name.get(row["dst"]) or by_name[row["src"]]).vrf in rendered
     ]
     staged = (
         None
@@ -1437,6 +1500,8 @@ def _segment_security_build(scope: _DeviceScope) -> dict[str, Any] | None:
     return {
         "enforce": contracts.enforce,
         "staged": staged,
+        "avd_only": bool(catalog.policies or catalog.field_sets or catalog.applications)
+        or any(segment["fallback"] for vrf_view in vrf_views for segment in vrf_view["segments"]),
         "match_lists": sorted(match_lists, key=lambda item: (item["name"], item["family"])),
         "field_sets": [catalog.field_sets[name] for name in sorted(catalog.field_sets)],
         "applications": [catalog.applications[name] for name in sorted(catalog.applications)],

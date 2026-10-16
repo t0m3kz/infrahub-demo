@@ -296,18 +296,7 @@
           "name": "c008-trade-portal-local-dc10-p",
           "policies": [],
           "prefix": "10.8.10.0/24",
-          "to_unclassified": {
-            "entries": [
-              {
-                "port_end": 443,
-                "port_start": 443,
-                "protocol": "tcp"
-              }
-            ],
-            "rules": [
-              "c008-trade-portal-to-c005-payment-api-tcp-443"
-            ]
-          },
+          "to_unclassified": null,
           "vrf": "PROD"
         }
       ],
@@ -325,6 +314,14 @@
           "reason": "component groups inside one segment are not expressible by prefix",
           "rules": [
             "web-frontend-to-session-store-tcp-6379"
+          ],
+          "src": "api.payment-core.c005.demo.local"
+        },
+        {
+          "dst": "unclassified",
+          "reason": "a component group is not expressible by prefix (the row is not widened to its segment)",
+          "rules": [
+            "c005-payment-web-to-backend-tcp-8443"
           ],
           "src": "api.payment-core.c005.demo.local"
         },

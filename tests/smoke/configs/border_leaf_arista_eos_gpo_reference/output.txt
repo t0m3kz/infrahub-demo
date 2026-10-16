@@ -199,6 +199,19 @@ interface Vlan220
 ! documented-not-lab-verified: ordering against the SVI ACL and PBR (spec 1.15) and for bridged traffic inside a VLAN (spec 4.3)
 ! documented-not-lab-verified: no TCAM profile or reload is configured (spec 1.10, 1.12); enabling halves the LPM table
 ! documented-not-lab-verified: the manual calls the configuration non-atomic and disruptive (spec 1.8): push in a maintenance window
+! on a box that already enforces, shut the feature down first (the shutdown line of the segment-security mode): the stanzas below apply live
+! documented-not-lab-verified: remote prefixes reached through the L3 VNI or as EVPN host routes are expected to take the covering segment prefix (LPM, spec 5.4)
+! documented-not-lab-verified: Multi-Site, border gateway and DCI traffic (spec 5.5); the anycast virtual IP as a switch-owned address (spec 1.16, open question 15)
+! documented-not-lab-verified: the VRF must exist (spec 1.13); name limits (spec 2.3); first match in ascending sequence order (spec 3.8); support per SKU (spec 1.9)
+! documented-not-lab-verified: whether the fallback policy also catches a source in a segment with no from line (spec 3.14)
+! note: MSS-G only filters traffic directed to a segment: egress to a destination in no segment (internet, firewall legs, other VRFs, management) is restricted by the SVI ACL and PBR (L0) only (spec 4.2)
+! note: a stateless reply matches the port as ANY source port, so it is broader than the contract (spec 3.7)
+! note: no segment policy policy-drop-all default is never rendered; on an incremental session push to a box that once had it, deny by default stays off
+! WARNING: custom policies, field-sets, l4 applications and fallback policy are documented by AVD only; the 4.36.2F manual lists only policy-forward-all and policy-drop-all, so this release may REJECT them
+! WARNING: a whole-config push (configure replace, session commit) fails on an invalid line and the leaf loses ALL its changes; a line-by-line push leaves the feature live with the default drop for every port-specific flow
+! WARNING: keep group_policy_enforce false and verify in a lab first
+! not expressible (left closed): db-np -> app-np: the reply of a permit-all flow cannot be mirrored by source port on a stateless device (the reverse direction is left closed) (rules: db-np-to-app-np-any)
+! not expressible (left closed): db-np -> UNCLASSIFIED: the reply of a permit-all flow cannot be mirrored by source port on a stateless device (the reverse direction is left closed) (rules: db-np-to-app-np-any, db-np-to-web-np-icmp)
 ! not expressible (left closed): portal-p -> web_pay_demo_local: a component group is not expressible by prefix (the row is not widened to its segment) (rules: portal-to-pay-web-tcp-443)
 ! not expressible (left closed): UNCLASSIFIED -> web_pay_demo_local: a component group is not expressible by prefix (the row is not widened to its segment) (rules: portal-to-pay-web-tcp-443)
 ! not expressible (left closed): web_pay_demo_local -> db_pay_demo_local: component groups inside one segment are not expressible by prefix (rules: pay-web-to-pay-db-tcp-5432)
@@ -213,14 +226,14 @@ match-list input prefix-ipv4 portal-p
 match-list input prefix-ipv4 web-np
    match prefix-ipv4 10.10.1.0/24
 ! documented-not-lab-verified: field-set l4-port is documented in AVD only
+field-set l4-port MSSG-FS-1edf6d4a55
+   5432
+! documented-not-lab-verified: field-set l4-port is documented in AVD only
 field-set l4-port MSSG-FS-65f9fc45e1
    5000
 ! documented-not-lab-verified: field-set l4-port is documented in AVD only
 field-set l4-port MSSG-FS-8178bca3bc
    443, 8000-8010
-! documented-not-lab-verified: field-set l4-port is documented in AVD only
-field-set l4-port MSSG-FS-de582fbcca
-   443
 ! documented-not-lab-verified: application traffic recognition is documented in AVD only
 application traffic recognition
    application l4 MSSG-APP-0e55614811
@@ -233,11 +246,10 @@ application traffic recognition
       protocol icmp
    application l4 MSSG-APP-9026d55d5e
       protocol udp destination port field-set MSSG-FS-65f9fc45e1
-   application l4 MSSG-APP-9cf0db147e
-      protocol tcp source port field-set MSSG-FS-de582fbcca
+   application l4 MSSG-APP-d4a3ddc4f1
+      protocol tcp destination port field-set MSSG-FS-1edf6d4a55
 !
 router segment-security
-   no shutdown
    ! documented-not-lab-verified: custom policies are AVD's model (the 4.36.2F manual lists only policy-forward-all and policy-drop-all); the final drop of each is inferred
    ! MSSG-POL-07cf58d1d4: icmp; reply tcp/443,8000-8010; udp/5000
    policy MSSG-POL-07cf58d1d4
@@ -245,11 +257,7 @@ router segment-security
       20 application MSSG-APP-2c1414b87a action forward stateless
       30 application MSSG-APP-9026d55d5e action forward stateless
       40 application app-match-all action drop stateless
-   ! MSSG-POL-33de3b072a: reply tcp/443
-   policy MSSG-POL-33de3b072a
-      10 application MSSG-APP-9cf0db147e action forward stateless
-      20 application app-match-all action drop stateless
-   ! MSSG-POL-73f90b406c: icmp
+   ! MSSG-POL-73f90b406c: reply icmp
    policy MSSG-POL-73f90b406c
       10 application MSSG-APP-5a43ffd7e0 action forward stateless
       20 application app-match-all action drop stateless
@@ -263,6 +271,10 @@ router segment-security
       10 application MSSG-APP-2c1414b87a action forward stateless
       20 application MSSG-APP-9026d55d5e action forward stateless
       30 application app-match-all action drop stateless
+   ! MSSG-POL-d1016141de: tcp/5432
+   policy MSSG-POL-d1016141de
+      10 application MSSG-APP-d4a3ddc4f1 action forward stateless
+      20 application app-match-all action drop stateless
    vrf NONPROD
       segment app-np
          definition
@@ -278,10 +290,10 @@ router segment-security
             match prefix-ipv4 db-np
          policies
             ! documented-not-lab-verified: fallback policy is documented by AVD only (R3 series)
-            from app-np policy policy-forward-all
+            from app-np policy MSSG-POL-d1016141de
             from db-np policy policy-forward-all
             from web-np policy MSSG-POL-73f90b406c
-            fallback policy policy-forward-all
+            fallback policy MSSG-POL-d1016141de
       segment web-np
          definition
             match prefix-ipv4 web-np
@@ -299,11 +311,8 @@ router segment-security
          definition
             match prefix-ipv4 portal-p
          policies
-            ! documented-not-lab-verified: fallback policy is documented by AVD only (R3 series)
-            ! documented-not-lab-verified: the fallback also catches a source in a segment without a from line, so each of those gets an explicit policy-drop-all (expected to win over the fallback)
-            from pay-p policy policy-drop-all
             from portal-p policy policy-forward-all
-            fallback policy MSSG-POL-33de3b072a
+   no shutdown
 !
 
 
