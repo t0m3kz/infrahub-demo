@@ -347,7 +347,7 @@ class BaseDeviceTransform(InfrahubTransform):
             activations=activations or [],
             vrfs=[mapping["vrf_name"] for mapping in (vxlan or {}).get("l3_vni_mappings", [])],
         )
-        if group_policy:
+        if group_policy is not None:
             config["group_policy"] = group_policy
         return config
 

@@ -143,9 +143,35 @@ class TestGate:
         roots["TopologyDataCenter"][0]["devices"].append(clean_data({"x": {"edges": [{"node": eos}]}})["x"][0])
         assert _view(roots) is None
 
-    def test_no_activations_or_vrfs_render_nothing(self) -> None:
-        assert _view(_roots(), vrfs=[]) is None
-        assert _view(_roots(), vrfs=["OTHER"]) is None
+    @pytest.mark.parametrize("vrfs", [[], ["OTHER"]])
+    def test_a_vtep_without_a_contract_vrf_only_enables_group_policy(self, vrfs: list[str]) -> None:
+        """No tenant VRF on the device (the servers sit on the access leaves): still policy-aware, nothing to define."""
+        assert _view(_roots(), vrfs=vrfs, activations=[]) == {"class_maps": [], "groups": [], "vrfs": {}}
+
+    @pytest.mark.parametrize("role", sorted(DC_VTEP_ROLES))
+    def test_every_vtep_role_without_a_contract_vrf_is_enabled(self, role: str) -> None:
+        assert _view(_roots(), role=role, vrfs=[]) == {"class_maps": [], "groups": [], "vrfs": {}}
+
+    @pytest.mark.parametrize("role", ["spine", "edge", "l2-leaf"])
+    def test_a_non_vtep_without_a_contract_vrf_renders_nothing(self, role: str) -> None:
+        assert _view(_roots(), role=role, vrfs=[]) is None
+
+    def test_a_non_reference_fabric_without_a_contract_vrf_renders_nothing(self) -> None:
+        assert _view(_roots(_raw(leaf_type="N9K-C9336C-FX2")), vrfs=[]) is None
+
+    def test_an_eos_vtep_without_a_contract_vrf_renders_nothing(self) -> None:
+        raw = build_gpo_device_data(
+            device_name="dc1-leaf-01", role="leaf", segments=(), fleet=_GPO_EOS, version="4.36.2F"
+        )
+        assert _view(_roots(raw), platform="arista_eos", vrfs=[]) is None
+
+    def test_other_vrfs_group_data_does_not_refuse_an_enablement_only_vtep(self) -> None:
+        """Nothing is rendered from the groups, so a collision among them is not this device's to refuse."""
+        roots = _roots()
+        _segment(roots, "seg-app-np")["security_tag"]["name"] = "web-np"
+        assert _view(roots, vrfs=[]) == {"class_maps": [], "groups": [], "vrfs": {}}
+        with pytest.raises(ValueError, match="refusing unprotected config"):
+            _view(roots, vrfs=["NONPROD"])
 
 
 def _vtep(name: str) -> dict[str, Any]:
@@ -607,6 +633,27 @@ class TestExtraConfig:
         raw = self._raw_with_vtep("dc1-leaf-01", role)
         assert "group_policy" not in self._config(transform_cls, raw, root_dir)
 
+    def test_a_vtep_without_tenant_segments_gets_the_enablement_only_group_policy(self, root_dir: Path) -> None:
+        raw = self._raw_with_vtep("dc1-leaf-01", "leaf", segments=())
+        config = self._config(Leaf, raw, root_dir)
+        assert config["group_policy"] == {"class_maps": [], "groups": [], "vrfs": {}}
+
+    def test_the_enablement_only_config_has_no_group_definitions_or_contracts(self, root_dir: Path) -> None:
+        rendered = _run_transform(Leaf, build_gpo_device_data(device_name="dc1-leaf-01", role="leaf", segments=()))
+        lines = rendered.splitlines()
+        assert lines.count("feature security-group") == 1
+        assert lines.count("system routing template-security-groups") == 1
+        for forbidden in (
+            "class-map type security",
+            "policy-map type security",
+            "security-group ",
+            "security contract",
+        ):
+            assert not [line for line in lines if line.strip().startswith(forbidden)]
+        assert "security enforce" not in rendered
+        assert "Group policy" not in rendered
+        assert "Security groups" not in rendered
+
     def test_a_spine_role_gets_none(self, root_dir: Path) -> None:
         transform = BaseDeviceTransform.__new__(BaseDeviceTransform)
         transform.device_role = "spine"
@@ -664,6 +711,7 @@ class TestGoldens:
             "leaf_cisco_nxos_gpo_reference",
             "access_leaf_cisco_nxos_gpo_reference",
             "border_leaf_cisco_nxos_gpo_reference",
+            "leaf_cisco_nxos_gpo_reference_no_vrf",
         ],
     )
     def test_reference_fixtures_never_render_the_unsafe_lines(self, root_dir: Path, fixture: str) -> None:

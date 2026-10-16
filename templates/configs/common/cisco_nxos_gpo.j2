@@ -9,7 +9,7 @@
     chapter); every I/U line says documented-not-lab-verified.
     Never rendered: `system security-group mac-segmentation` (it disables the
     IP-based segmentation), intra-group isolation, TCAM vacl, PVLAN. -#}
-{%- if group_policy %}
+{%- if group_policy and (group_policy.class_maps or group_policy.groups) %}
 !
 ! Group policy (VXLAN GPO): one class-map and policy-map per distinct entry set, then the security groups
 {%- for class_map in group_policy.class_maps %}

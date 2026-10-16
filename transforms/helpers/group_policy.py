@@ -69,7 +69,8 @@ de-duplicated and id-free.
 
 ``vxlan_gpo_device_view`` is the device renderers' reader of the same contracts
 (NX-OS VTEP configs, ``GPO_RENDERERS``): the ``vxlan_gpo_view`` of the device's
-own data center, cut to the VRFs the device carries. Every VTEP of the data
+own data center, cut to the VRFs the device carries (a VTEP with none of them still
+enables GPO, with no groups or contracts). Every VTEP of the data
 center renders the same text for a VRF (class-maps, policy-maps, contracts);
 only the ``match vlan`` selectors differ, since a VLAN ID is per VLAN domain.
 It renders nothing (None) unless the data center is a reference fabric of a
@@ -776,6 +777,9 @@ def vxlan_gpo_device_view(
 ) -> dict[str, Any] | None:
     """The group policy one VTEP renders, or None when it renders none (module docstring).
 
+    A VTEP of a reference fabric always gets it: with no contract row for the VRFs it
+    carries the view is enablement only (empty ``class_maps``, ``groups`` and ``vrfs``).
+
     ``roots`` are the cleaned fleet roots of the device query, ``activations``
     the device's segment activations (``vlan_id`` and ``segment.id``: the VLAN
     ID of a group's segment here, which is per VLAN domain) and ``vrfs`` the
@@ -798,7 +802,6 @@ def vxlan_gpo_device_view(
     dc_id, kind, fleet = found
     who = f"{platform} {role} {device_name}"
     contracts = data_center_contracts(roots, dc_id, fleet=fleet)
-    _refuse_ambiguous_groups(who, contracts.all_groups)
     reserved = reserved_groups(contracts.profiles, kind)
     view = vxlan_gpo_view(
         contracts.all_groups,
@@ -813,7 +816,11 @@ def vxlan_gpo_device_view(
         if row["vrf"] in on_device:
             rows_by_vrf[row["vrf"]].append(row)
     if not rows_by_vrf:
-        return None
+        # A VTEP with no contracts still enables GPO: a policy-unaware VTEP in a reference
+        # site is the mixed state the profile excludes (spec 2.9). Nothing else is rendered,
+        # so none of the group data is validated (the refusals below guard what is rendered).
+        return {"class_maps": [], "groups": [], "vrfs": {}}
+    _refuse_ambiguous_groups(who, contracts.all_groups)
     rows = [row for vrf_rows in rows_by_vrf.values() for row in vrf_rows]
     by_name = {group.name: group for group in contracts.all_groups}
 

@@ -3144,6 +3144,14 @@ GPO_FIXTURES: list[tuple[type, str, Any]] = [
             device_name="dc1-leaf-01", role="leaf", segments=("web-np", "app-np", "pay-p", "portal-p")
         ),
     ),
+    # A leaf of the same reference fabric with no tenant segment (the servers sit on the access
+    # leaves): no VRF carries a contract, but the VTEP still enables GPO, so the site never
+    # mixes policy-aware and policy-unaware nodes (spec 2.9).
+    (
+        Leaf,
+        "leaf_cisco_nxos_gpo_reference_no_vrf",
+        lambda: build_gpo_device_data(device_name="dc1-leaf-01", role="leaf", segments=()),
+    ),
     (
         AccessLeaf,
         "access_leaf_cisco_nxos_gpo_reference",
