@@ -141,6 +141,7 @@ query border_leaf_config(
     edges {
       node {
         id
+        group_policy_enforce { value }
         devices {
           edges {
             node {

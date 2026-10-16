@@ -1,30 +1,17 @@
 # What the routing invariants read, across topologies: namespaces and their
-# type, the RouteLeakExchange route-target joins, interfaces/segments living in
-# the INTERNET namespace, and the cloud Transit Gateway attachments, route
-# tables and virtual interfaces (with the namespaces their circuits terminate
-# in), plus the cloud VPC aggregates (cidr_blocks) with the namespace each is
-# registered in, the cloud subnets that must lie inside them, and the office
-# footprints' LAN prefixes with their namespace and environment. The
-# *Interface queries read every interface of the fleet (a relationship cannot
-# be filtered by a nested namespace type); the check keeps the ones in the
-# INTERNET namespace.
+# type, interfaces/segments living in the INTERNET namespace, and the cloud
+# Transit Gateway attachments, route tables and virtual interfaces (with the
+# namespaces their circuits terminate in), plus the cloud VPC aggregates
+# (cidr_blocks) with the namespace each is registered in, the cloud subnets
+# that must lie inside them, and the office footprints' LAN prefixes with their
+# namespace and environment. The *Interface queries read every interface of the
+# fleet (a relationship cannot be filtered by a nested namespace type); the
+# check keeps the ones in the INTERNET namespace.
 query routing_invariants {
   IpamNamespace {
     edges {
       node {
         id name { value } l3_vni { value } namespace_type { value }
-      }
-    }
-  }
-
-  TopologyRouteLeakExchange {
-    edges {
-      node {
-        id
-        name { value }
-        route_target { value }
-        namespace_a { node { id name { value } l3_vni { value } namespace_type { value } } }
-        namespace_z { node { id name { value } l3_vni { value } namespace_type { value } } }
       }
     }
   }

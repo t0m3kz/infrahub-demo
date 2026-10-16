@@ -1,6 +1,28 @@
-{%- if mlag %}
+{%- if mlag and mlag.virtual_peer_link %}
+{#- A pod with mlag_create: virtual has only a member-less DcimVirtualInterface stand-in (loopback100),
+    which NX-OS cannot bind `vpc peer-link` to. vPC fabric peering would need a routed source/destination
+    address, port-type fabric and TCAM carving, none of which is in the data: render the whole block as a
+    comment rather than a vPC that NX-OS rejects. #}
+!
+! vPC fabric peering (virtual peer-link {{ mlag.peer_link }}, domain {{ mlag.domain_id }}) is not rendered: no routed source/destination address, port-type fabric or TCAM carving in data
+!
+{%- elif mlag %}
 !
 ! vPC Configuration
+!
+{#- NX-OS rejects `vpc peer-link` until the vPC domain exists: the domain comes first. #}
+vpc domain {{ mlag.domain_id }}
+{#- vPC has no routed control session; the keepalive runs out-of-band over
+    mgmt0, which NX-OS always places in the built-in "management" VRF. #}
+{%- if mlag.local_management_ip and mlag.peer_management_ip %}
+  peer-keepalive destination {{ mlag.peer_management_ip }} source {{ mlag.local_management_ip }} vrf management
+{%- endif %}
+{%- if mlag.reload_delay is not none %}
+  delay restore {{ mlag.reload_delay }}
+{%- endif %}
+{%- if mlag.reload_delay_non_mlag is not none %}
+  delay restore interface-vlan {{ mlag.reload_delay_non_mlag }}
+{%- endif %}
 !
 {%- if mlag.peer_link %}
 interface {{ mlag.peer_link }}
@@ -18,17 +40,4 @@ interface {{ member }}
 {%- endfor %}
 {%- endif %}
 {%- endif %}
-vpc domain {{ mlag.domain_id }}
-{#- vPC has no routed control session; the keepalive runs out-of-band over
-    mgmt0, which NX-OS always places in the built-in "management" VRF. #}
-{%- if mlag.local_management_ip and mlag.peer_management_ip %}
-  peer-keepalive destination {{ mlag.peer_management_ip }} source {{ mlag.local_management_ip }} vrf management
-{%- endif %}
-{%- if mlag.reload_delay is not none %}
-  delay restore {{ mlag.reload_delay }}
-{%- endif %}
-{%- if mlag.reload_delay_non_mlag is not none %}
-  delay restore interface-vlan {{ mlag.reload_delay_non_mlag }}
-{%- endif %}
-!
 {%- endif %}

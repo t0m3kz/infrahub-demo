@@ -142,6 +142,7 @@ query border_spine_config(
     edges {
       node {
         id
+        group_policy_enforce { value }
         devices {
           edges {
             node {

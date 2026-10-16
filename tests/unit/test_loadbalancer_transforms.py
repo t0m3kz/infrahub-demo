@@ -11,11 +11,13 @@ Covers:
 from __future__ import annotations
 
 import copy
+import re
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from transforms.cloud.terraform_common import tf_id
 from transforms.config.loadbalancer_cloud import (
     LoadBalancerCloud,
     prepare_aws_data,
@@ -593,6 +595,50 @@ class TestLoadBalancerCloudOutputFormat:
         with patch(_CLEAN_DATA_PATH, return_value=cleaned):
             result = await transform.transform({})
         assert 'resource "aws_lb_listener"' in result
+
+
+_TF_LABEL_RE = re.compile(r'^resource "[a-z_]+" "([^"]*)"', re.MULTILINE)
+_TF_REF_RE = re.compile(r"\b(?:aws|azurerm|google)_[a-z_]+\.([^\s.\[\]]+)\.(?:id|arn|name)\b")
+
+
+class TestLoadBalancerCloudTerraformIdentifiers:
+    """The tf_id Jinja filter is the shared transforms.cloud.terraform_common.tf_id."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("provider", ["aws", "azure", "gcp"])
+    async def test_mixed_case_spaced_names_render_valid_identifiers(self, provider: str) -> None:
+        """Spaces, dots, dashes and upper case in names never reach a resource label or reference."""
+        transform = _make_cloud_transform()
+        cleaned = _cleaned_cloud(provider)
+        lb = cleaned["CloudLoadBalancer"][0]
+        lb["name"] = "Prod ALB.One-A"
+        lb["virtual_network"]["name"] = "Prod VPC"
+        lb["network_segments"] = [{"name": "Subnet A"}]
+        cleaned["LoadbalancerVIP"][0]["hostname"] = "App Web.Example.com"
+        with patch(_CLEAN_DATA_PATH, return_value=cleaned):
+            result = await transform.transform({})
+
+        identifiers = _TF_LABEL_RE.findall(result) + _TF_REF_RE.findall(result)
+        assert identifiers
+        for identifier in identifiers:
+            assert re.fullmatch(r"[a-z0-9_]+", identifier), identifier
+
+    @pytest.mark.asyncio
+    async def test_azure_frontend_name_uses_normalised_lb_name(self) -> None:
+        """Azure frontend name and the lb_rule reference to it use the same normalised identifier."""
+        transform = _make_cloud_transform()
+        cleaned = _cleaned_cloud("azure")
+        cleaned["CloudLoadBalancer"][0]["name"] = "Prod ALB.One-A"
+        with patch(_CLEAN_DATA_PATH, return_value=cleaned):
+            result = await transform.transform({})
+        assert result.count('"prod_alb_one_a-frontend"') == 2
+        assert 'resource "azurerm_lb" "prod_alb_one_a"' in result
+
+    def test_filter_is_shared_tf_id(self) -> None:
+        """The registered filter is the shared normaliser and copes with non-str input."""
+        env = _make_cloud_transform()._load_template("aws").environment
+        render = env.from_string("{{ a | tf_id }}|{{ b | tf_id }}").render
+        assert render(a="A B.c-d", b=123) == f"{tf_id('A B.c-d')}|123" == "a_b_c_d|123"
 
 
 # ===========================================================================

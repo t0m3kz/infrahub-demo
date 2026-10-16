@@ -5,8 +5,8 @@ version: "1.0"
 # Inter-namespace (inter-VRF) traffic exchange. Full design writeup,
 # data-flow diagram, and demo walkthrough: docs/exchange_gateway.md.
 #
-# Two ways traffic crosses between two IpamNamespace VRFs, modeled as
-# concrete realizations of one generic:
+# Inter-VRF traffic is exchanged by an inspected hop through a firewall
+# context, modeled as a concrete realization of one generic:
 #
 #   TopologyRoutedExchange   — the hop through ONE firewall CONTEXT
 #                              (`gateway`, a ManagedFirewallContext) between
@@ -19,11 +19,8 @@ version: "1.0"
 #                              context by the customer boarding generators,
 #                              named `{context}-{A}-{Z}`; there are no
 #                              bootstrap exchanges.
-#   TopologyRouteLeakExchange — fabric BGP EVPN control-plane leak (extra
-#                              route-target import/export). No inspection —
-#                              traffic stays in the fabric ASIC.
 #
-# Both inherit ManagedGenericInterfaces so they surface in
+# It inherits ManagedGenericInterfaces so it surfaces in
 # interface.interface_capabilities — the same capability list already used
 # by RoutingOSPFInterface and ManagedVxlanSegment (see
 # queries/fragments/interface_capabilities.gql). This is what lets a
@@ -101,58 +98,3 @@ nodes:
       # interfaces (many, via ManagedGenericInterfaces) — the context's leg
       # sub-interfaces, one per namespace per member. Enforced by
       # validate_exchange_gateways() in checks/common.py.
-
-  - name: RouteLeakExchange
-    namespace: Topology
-    description: "Fabric BGP EVPN route-target leak between two VRFs — no inspection point"
-    label: "Route Leak Exchange (RT Import)"
-    icon: "mdi:router-network-wireless"
-    include_in_menu: false
-    inherit_from:
-      - TopologyExchangeGateway
-      - ManagedGeneric
-      - ManagedGenericInterfaces
-    human_friendly_id:
-      - name__value
-    order_by:
-      - name__value
-    display_label: "{{ name__value }} ({{ direction__value }})"
-    uniqueness_constraints:
-      - [namespace_a, namespace_z]
-    attributes:
-      - name: direction
-        kind: Dropdown
-        order_weight: 500
-        optional: false
-        default_value: bidirectional
-        choices:
-          - name: a_to_z
-            label: "A to Z"
-            description: "Namespace A imports Namespace Z's route-target"
-            color: "#3498DB"
-          - name: z_to_a
-            label: "Z to A"
-            description: "Namespace Z imports Namespace A's route-target"
-            color: "#9B59B6"
-          - name: bidirectional
-            label: "Bidirectional"
-            description: "Both namespaces import each other's route-target"
-            color: "#2ECC71"
-      - name: route_target
-        kind: Text
-        optional: true
-        order_weight: 600
-        description: "Explicit route-target override (e.g. '65000:5001'). Unset means derive from the peer namespace's l3_vni + local AS."  # yamllint disable-line rule:line-length
-    relationships:
-      - name: cloud_attachment
-        peer: CloudHybridAttachment
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: "route_leak__cloud_attachment"
-        description: "Cloud-side DX VIF or VPN Gateway carrying this leak's BGP session. Unset for a pure on-prem leak."
-        order_weight: 700
-# interfaces (many, via ManagedGenericInterfaces) — optional and usually
-# empty: a pure fabric RT-leak has no interface at all. Set only when the
-# leak requires a DCI transport hop (interfaces on the circuit-facing ports
-# at each side).

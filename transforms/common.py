@@ -341,6 +341,7 @@ class BaseDeviceTransform(InfrahubTransform):
 
         config = {
             "vlans": vlans,
+            "sros_irbs": self._sros_irbs(self.device_role, platform_name, vlans, vxlan),
             "vxlan": vxlan,
             "acls": acls,
             "vrf_routes": vrf_routes,
@@ -431,6 +432,43 @@ class BaseDeviceTransform(InfrahubTransform):
                 f"{platform_name} leaf cannot bind the segment ACL for VLANs {unbound} (no L2 VNI service "
                 "to attach the SAP filter to); refusing unprotected config"
             )
+
+    @staticmethod
+    def _sros_irbs(
+        role: str, platform_name: str, vlans: list[dict[str, Any]], vxlan: dict[str, Any] | None
+    ) -> list[dict[str, Any]]:
+        """The SR OS IRB interfaces (anycast gateway) to render, one per gateway VLAN: [] on any other platform.
+
+        An IRB attaches the VLAN's bridged ``vpls-<vni>`` to a vprn: ``vprn`` is the VRF's L3 VNI
+        (the vprn service id), ``vni`` the L2 VNI (the vpls service id). get_vlans() carries no VNIs,
+        so they come from the VXLAN mapping of the same VLAN (a transit VLAN sets both itself).
+        A gateway VLAN with no L2 VNI has no vpls: the IRB would reference a service nothing creates,
+        so refuse instead of rendering it. Without VXLAN the template renders no service at all.
+        """
+        if platform_name != "nokia_sros" or not vxlan:
+            return []
+        mappings = {mapping["vlan_id"]: mapping for mapping in vxlan.get("l2_vni_mappings") or []}
+        irbs: list[dict[str, Any]] = []
+        for vlan in vlans:
+            if not (vlan.get("gateway_ip") or vlan.get("gateway_ipv6")):
+                continue
+            mapping = mappings.get(vlan["vlan_id"]) or {}
+            vni = vlan.get("vni") or mapping.get("vni")
+            if not vni:
+                raise ValueError(
+                    f"{platform_name} {role} cannot render the gateway of VLAN {vlan['vlan_id']} "
+                    "(no vpls/vprn to attach the IRB to); refusing incomplete config"
+                )
+            irbs.append(
+                {
+                    "vlan_id": vlan["vlan_id"],
+                    "vni": vni,
+                    "vprn": vlan.get("l3_vni") or mapping.get("l3_vni") or vni,
+                    "gateway_ip": vlan.get("gateway_ip"),
+                    "gateway_ipv6": vlan.get("gateway_ipv6"),
+                }
+            )
+        return irbs
 
     _ACTIVE_STATUSES = ("active", "provisioning")
 

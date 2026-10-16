@@ -41,10 +41,6 @@ fragment ExchangeGatewayInterfaceCapabilityFields on TopologyExchangeGateway {
     # groups the legs of the context by the exchange id carried on each leg.
     gateway { node { id tenant { node { id } } } }
   }
-  ... on TopologyRouteLeakExchange {
-    direction { value }
-    route_target { value }
-  }
 }
 
 fragment InterfaceCapabilitiesFields on DcimInterface {

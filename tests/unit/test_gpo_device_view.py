@@ -1500,31 +1500,37 @@ class TestPlacementFragment:
     }
 
     @classmethod
-    def _paths(cls, selections: Any, prefix: tuple[str, ...] = ()) -> set[tuple[str, ...]]:
-        """Every field path below ``selections`` as the cleaned data names it (inline fragments merged)."""
+    def _paths(
+        cls,
+        selections: Any,
+        fragments: dict[str, FragmentDefinitionNode],
+        prefix: tuple[str, ...] = (),
+    ) -> set[tuple[str, ...]]:
+        """Every field path below ``selections`` as the cleaned data names it (inline fragments merged, named
+        spreads resolved from ``fragments``)."""
         found: set[tuple[str, ...]] = set()
         for selection in selections:
-            assert not isinstance(selection, FragmentSpreadNode), (
-                "a named fragment nested in an inline fragment resolves to nulls: select plain fields"
-            )
-            if isinstance(selection, InlineFragmentNode):
-                found |= cls._paths(selection.selection_set.selections, prefix)
+            if isinstance(selection, FragmentSpreadNode):
+                found |= cls._paths(fragments[selection.name.value].selection_set.selections, fragments, prefix)
+            elif isinstance(selection, InlineFragmentNode):
+                found |= cls._paths(selection.selection_set.selections, fragments, prefix)
             elif isinstance(selection, FieldNode):
                 name = (selection.alias or selection.name).value
                 path = prefix if name in cls.COLLAPSED else (*prefix, "typename" if name == "__typename" else name)
                 found |= ({path} if path else set()) | cls._paths(
-                    selection.selection_set.selections if selection.selection_set else (), path
+                    selection.selection_set.selections if selection.selection_set else (), fragments, path
                 )
         return found
 
     @staticmethod
-    def _fragment(root_dir: Path, name: str) -> FragmentDefinitionNode:
+    def _fragments(root_dir: Path) -> dict[str, FragmentDefinitionNode]:
+        """Every fragment of queries/fragments/group_policy.gql by name."""
         document = parse((root_dir / "queries/fragments/group_policy.gql").read_text())
-        return next(
-            item
-            for item in document.definitions
-            if isinstance(item, FragmentDefinitionNode) and item.name.value == name
-        )
+        return {item.name.value: item for item in document.definitions if isinstance(item, FragmentDefinitionNode)}
+
+    @classmethod
+    def _fragment(cls, root_dir: Path, name: str) -> FragmentDefinitionNode:
+        return cls._fragments(root_dir)[name]
 
     @staticmethod
     def _sub(selections: Any, name: str) -> Any:
@@ -1571,10 +1577,11 @@ class TestPlacementFragment:
         inline = [item for item in instance if isinstance(item, InlineFragmentNode)]
         assert {item.type_condition.name.value for item in inline} == set(self.HOST_FRAGMENT.values())
         own_kind = [item for item in inline if item.type_condition.name.value == self.HOST_FRAGMENT[kind]]
+        fragments = self._fragments(root_dir)
         instance_paths = self._paths(
-            [item for item in instance if item not in inline] + own_kind, ("components", "instances")
+            [item for item in instance if item not in inline] + own_kind, fragments, ("components", "instances")
         )
-        tag_paths = self._paths(placement) | self._paths(shared)
+        tag_paths = self._paths(placement, fragments) | self._paths(shared, fragments)
 
         reads = self._recorded_reads(kind)
         host = ("components", "instances") + (("hosting_device",) if "Virtual" in kind else ())
@@ -1604,3 +1611,45 @@ class TestPlacementFragment:
 
         walk(fragment.selection_set.selections)
         assert found == [list(ENDPOINT_NIC_ROLES)] * 3, "one filter per host kind"
+
+    def test_the_nic_block_is_one_fragment_spread_under_a_field_in_each_host_branch(self, root_dir: Path) -> None:
+        """HostNicFields is the single NIC selection: spread as ``interfaces(...) { edges { node { ...F } } }`` of
+        each host kind, so the three branches cannot drift."""
+        placement = self._fragment(root_dir, "SecurityTagPlacementFields").selection_set.selections
+        instance = self._below(placement, "components", "instances")
+        spread_in: list[str] = []
+        for branch in (item for item in instance if isinstance(item, InlineFragmentNode)):
+            selections = branch.selection_set.selections
+            if branch.type_condition.name.value != "DcimDevice":
+                selections = self._sub(self._sub(selections, "hosting_device"), "node")
+            node = self._below(selections, "interfaces")
+            assert len(node) == 1
+            spread = node[0]
+            assert isinstance(spread, FragmentSpreadNode)
+            spread_in.append(f"{branch.type_condition.name.value}:{spread.name.value}")
+        assert spread_in == [
+            f"{kind}:HostNicFields" for kind in ("DcimDevice", "DcimVirtualDevice", "ManagedControllerVirtual")
+        ]
+
+    def test_no_named_spread_sits_directly_under_an_inline_fragment(self, root_dir: Path) -> None:
+        """``... on X { ...F }`` resolves to nulls on a live Infrahub (commit 7a38de0e); a spread under a field
+        inside the inline fragment (``node { ...F }``) works. Holds for every fragment of the file."""
+        offenders = [
+            f"{name}: ... on {inline.type_condition.name.value} {{ ...{spread.name.value} }}"
+            for name, definition in self._fragments(root_dir).items()
+            for inline in self._inline_fragments(definition)
+            for spread in inline.selection_set.selections
+            if isinstance(spread, FragmentSpreadNode)
+        ]
+        assert not offenders, offenders
+
+    @classmethod
+    def _inline_fragments(cls, node: Any) -> list[InlineFragmentNode]:
+        """Every inline fragment at any depth below ``node``."""
+        selection_set = getattr(node, "selection_set", None)
+        found: list[InlineFragmentNode] = []
+        for selection in selection_set.selections if selection_set else ():
+            if isinstance(selection, InlineFragmentNode):
+                found.append(selection)
+            found += cls._inline_fragments(selection)
+        return found
