@@ -1,4 +1,4 @@
-"""Unit tests for the EOS MSS-G device view (transforms/helpers/group_policy.py segment_security_device_view),
+"""Unit tests for the EOS MSS-G device view (transforms/helpers/group_policy.py _segment_security_build),
 its dispatcher (group_policy_device_view) and the EOS leaf / border-leaf templates that render it.
 
 The fleet is the smoke fixture's (tests/smoke/generate_config_fixtures.py ``_gpo_fleet_roots``) on 7280R3 VTEPs at
@@ -31,6 +31,9 @@ from tests.smoke.generate_config_fixtures import (
     _gp_segment,
     _gpo_golden_leaf_data,
     build_gpo_device_data,
+    gpo_roots,
+    gpo_segment,
+    gpo_view,
     run_transform,
 )
 from tests.smoke.test_configs_smoke import _run_transform
@@ -44,8 +47,6 @@ from transforms.helpers.group_policy import (
     GPO_RENDERERS,
     MSSG_MAX_SEGMENTS,
     group_policy_device_view,
-    segment_security_device_view,
-    vxlan_gpo_device_view,
 )
 from transforms.helpers.vxlan import get_interfaces
 from utils.data_cleaning import clean_data
@@ -73,8 +74,7 @@ def _raw(
 
 def _roots(raw: dict | None = None) -> dict[str, Any]:
     """The cleaned fleet roots (everything but the device root)."""
-    cleaned = clean_data(raw or _raw())
-    return {key: value for key, value in cleaned.items() if key != "DcimDevice"}
+    return gpo_roots(raw or _raw())
 
 
 def _view(roots: dict[str, Any], **overrides: Any) -> dict[str, Any] | None:
@@ -82,9 +82,10 @@ def _view(roots: dict[str, Any], **overrides: Any) -> dict[str, Any] | None:
         "device_name": "dc1-leaf-01",
         "role": "leaf",
         "platform": "arista_eos",
+        "activations": (),
         "vrfs": VRFS,
     }
-    return segment_security_device_view(roots, **{**arguments, **overrides})
+    return gpo_view("segment_security", roots, **{**arguments, **overrides})
 
 
 def _good(roots: dict[str, Any] | None = None, **overrides: Any) -> dict[str, Any]:
@@ -115,10 +116,6 @@ def _add_segment(
     )
     roots["ManagedNetworkSegment"].append(segment)
     return segment
-
-
-def _segment(roots: dict[str, Any], seg_id: str) -> dict[str, Any]:
-    return next(segment for segment in roots["ManagedNetworkSegment"] if segment["id"] == seg_id)
 
 
 def _segments(view: dict[str, Any], vrf: str) -> dict[str, dict[str, Any]]:
@@ -189,8 +186,14 @@ class TestGate:
         assert _view(_roots(raw), platform="cisco_nxos") is None
         assert _view(_roots(raw)) is None
         assert (
-            vxlan_gpo_device_view(
-                _roots(), device_name="dc1-leaf-01", role="leaf", platform="arista_eos", vrfs=VRFS, activations=[]
+            gpo_view(
+                "vxlan_gpo",
+                _roots(),
+                device_name="dc1-leaf-01",
+                role="leaf",
+                platform="arista_eos",
+                vrfs=VRFS,
+                activations=[],
             )
             is None
         )
@@ -257,7 +260,7 @@ class TestDispatcher:
         assert found[0] == "segment_security"
         assert found[1] == _view(_roots())
 
-    def test_the_nxos_kind_comes_back_unchanged(self) -> None:
+    def test_the_nxos_kind_comes_back_as_vxlan_gpo(self) -> None:
         raw = _raw(fleet=_GPO_NXOS, version="10.6(3)F", host_ports={"Ethernet11": _GPO_PAY_DB_TAGS})
         roots = _roots(raw)
         interfaces = clean_data(raw)["DcimDevice"][0]["interfaces"]
@@ -272,8 +275,8 @@ class TestDispatcher:
         found = group_policy_device_view(roots, **arguments)
         assert found is not None
         assert found[0] == "vxlan_gpo"
-        assert found[1] == vxlan_gpo_device_view(roots, **arguments)
-        assert segment_security_device_view(roots, **arguments) is None
+        assert set(found[1]) == {"class_maps", "groups", "vrfs"}
+        assert gpo_view("vxlan_gpo", roots, **{**arguments, "platform": "arista_eos"}) is None
 
     @pytest.mark.parametrize(
         ("cls", "name"),
@@ -322,7 +325,7 @@ class TestPrefixes:
 
     def test_an_ipv6_only_segment_makes_an_ipv6_match_list(self) -> None:
         roots = _roots()
-        _segment(roots, "seg-web-np")["gateway"]["ip_prefix"]["prefix"] = "2001:db8:10::/64"
+        gpo_segment(roots, "seg-web-np")["gateway"]["ip_prefix"]["prefix"] = "2001:db8:10::/64"
         view = _good(roots)
         assert {"name": "web-np", "family": "ipv6", "prefix": "2001:db8:10::/64"} in view["match_lists"]
         assert _segments(view, "NONPROD")["web-np"]["family"] == "ipv6"
@@ -330,7 +333,7 @@ class TestPrefixes:
     def test_a_vrf_holding_a_segment_without_a_prefix_is_not_rendered_at_all(self) -> None:
         """EOS enforces box-wide: a segment that cannot be classified would be dropped to wholesale."""
         roots = _roots()
-        _segment(roots, "seg-app-np")["gateway"]["ip_prefix"]["prefix"] = None
+        gpo_segment(roots, "seg-app-np")["gateway"]["ip_prefix"]["prefix"] = None
         view = _good(roots)
         assert [item["name"] for item in view["vrfs"]] == ["PROD"]
         assert [item["vrf"] for item in view["skipped"]] == ["NONPROD"]
@@ -340,27 +343,27 @@ class TestPrefixes:
     def test_every_vrf_skipped_still_explains_itself(self) -> None:
         roots = _roots()
         for seg_id in ("seg-app-np", "seg-pay-p"):
-            _segment(roots, seg_id)["gateway"]["ip_prefix"]["prefix"] = None
+            gpo_segment(roots, seg_id)["gateway"]["ip_prefix"]["prefix"] = None
         view = _good(roots)
         assert view["vrfs"] == [] and view["match_lists"] == []
         assert [item["vrf"] for item in view["skipped"]] == ["NONPROD", "PROD"]
 
     def test_two_segments_of_one_vrf_on_one_prefix_are_refused(self) -> None:
         roots = _roots()
-        _segment(roots, "seg-app-np")["gateway"]["ip_prefix"]["prefix"] = "10.10.1.0/24"
+        gpo_segment(roots, "seg-app-np")["gateway"]["ip_prefix"]["prefix"] = "10.10.1.0/24"
         with pytest.raises(ValueError, match=r"share the prefix 10\.10\.1\.0/24 in VRF NONPROD.*refusing unprotected"):
             _view(roots)
 
     def test_a_prefix_that_is_no_network_is_refused(self) -> None:
         roots = _roots()
-        _segment(roots, "seg-app-np")["gateway"]["ip_prefix"]["prefix"] = "not-a-prefix"
+        gpo_segment(roots, "seg-app-np")["gateway"]["ip_prefix"]["prefix"] = "not-a-prefix"
         with pytest.raises(ValueError, match="refusing unprotected config"):
             _view(roots)
 
     def test_nested_prefixes_of_one_vrf_are_rendered_with_a_documented_not_lab_verified_comment(self) -> None:
         """Spec 2.5: a /16 and a /24 inside one VRF are expected to be longest-prefix, which nothing documents."""
         roots = _roots()
-        _segment(roots, "seg-app-np")["gateway"]["ip_prefix"]["prefix"] = "10.10.0.0/16"
+        gpo_segment(roots, "seg-app-np")["gateway"]["ip_prefix"]["prefix"] = "10.10.0.0/16"
         segments = _segments(_good(roots), "NONPROD")
         assert len(segments["app-np"]["comments"]) == 2
         assert "10.10.3.0/24 of segment db-np" in segments["app-np"]["comments"][0]
@@ -439,7 +442,7 @@ class TestDefinitions:
     def test_a_remote_destination_of_a_local_source_is_defined_with_its_policy(self) -> None:
         roots = _roots()
         rule = _gp_rule("web-to-remote-tcp-22", "seg-remote-np", 22)
-        _segment(roots, "seg-web-np")["security_policy"]["rules"].append(
+        gpo_segment(roots, "seg-web-np")["security_policy"]["rules"].append(
             clean_data({"x": {"edges": [{"node": rule}]}})["x"][0]
         )
         _add_segment(roots, "remote-np", "10.50.1.0/24", group_id=77, sites=("dc12",))
@@ -478,7 +481,7 @@ class TestDefinitions:
         """intra deny + a fallback: the segment's own traffic must not fall to the fallback."""
         roots = _roots()
         rule = _gp_rule("pay-to-internet-tcp-443", "seg-internet", 443)
-        _segment(roots, "seg-pay-p")["security_policy"]["rules"].append(
+        gpo_segment(roots, "seg-pay-p")["security_policy"]["rules"].append(
             clean_data({"x": {"edges": [{"node": rule}]}})["x"][0]
         )
         view = _good(roots)
@@ -585,7 +588,7 @@ class TestPolicies:
     def test_a_forward_only_flow_gets_its_reply_policy_and_nothing_else(self) -> None:
         roots = _roots()
         rule = _gp_rule("web-to-stage-tcp-22", "seg-stage", 22)
-        _segment(roots, "seg-web-np")["security_policy"]["rules"].append(
+        gpo_segment(roots, "seg-web-np")["security_policy"]["rules"].append(
             clean_data({"x": {"edges": [{"node": rule}]}})["x"][0]
         )
         _add_segment(roots, "stage", "10.10.7.0/24", group_id=90)
@@ -607,7 +610,7 @@ class TestPolicies:
     def test_a_port_less_tcp_row_is_the_protocol_without_a_field_set(self) -> None:
         roots = _roots()
         rule = _gp_rule("web-to-stage-tcp", "seg-stage", None)
-        _segment(roots, "seg-web-np")["security_policy"]["rules"].append(
+        gpo_segment(roots, "seg-web-np")["security_policy"]["rules"].append(
             clean_data({"x": {"edges": [{"node": rule}]}})["x"][0]
         )
         _add_segment(roots, "stage", "10.10.7.0/24", group_id=90)
@@ -705,14 +708,14 @@ class TestRefusals:
     @pytest.mark.parametrize("name", ["unclassified", "Fallback", "UNAWARE"])
     def test_a_tag_named_like_a_pseudo_group_is_refused(self, name: str) -> None:
         roots = _roots()
-        _segment(roots, "seg-web-np")["security_tag"]["name"] = name
+        gpo_segment(roots, "seg-web-np")["security_tag"]["name"] = name
         with pytest.raises(ValueError, match="reserved pseudo-group.*refusing unprotected config"):
             _view(roots)
 
     def test_two_segments_sharing_a_cli_name_are_refused(self) -> None:
         roots = _roots()
-        _segment(roots, "seg-web-np")["security_tag"]["name"] = "web.np"
-        _segment(roots, "seg-app-np")["security_tag"]["name"] = "web_np"
+        gpo_segment(roots, "seg-web-np")["security_tag"]["name"] = "web.np"
+        gpo_segment(roots, "seg-app-np")["security_tag"]["name"] = "web_np"
         with pytest.raises(ValueError, match="share the name 'web_np'.*refusing unprotected config"):
             _view(roots)
 
@@ -721,14 +724,14 @@ class TestRefusals:
         rule = clean_data({"x": {"edges": [{"node": _gp_rule("bad-range", "seg-app-np", 9000, port_end=8000)}]}})["x"][
             0
         ]
-        _segment(roots, "seg-web-np")["security_policy"]["rules"].append(rule)
+        gpo_segment(roots, "seg-web-np")["security_policy"]["rules"].append(rule)
         with pytest.raises(ValueError, match="ends before it starts.*refusing unprotected config"):
             _view(roots)
 
     def test_a_protocol_with_no_application_is_refused(self) -> None:
         roots = _roots()
         rule = clean_data({"x": {"edges": [{"node": _gp_rule("gre", "seg-app-np", None, protocol="gre")}]}})["x"][0]
-        _segment(roots, "seg-web-np")["security_policy"]["rules"].append(rule)
+        gpo_segment(roots, "seg-web-np")["security_policy"]["rules"].append(rule)
         with pytest.raises(ValueError, match="no segment security application.*refusing unprotected config"):
             _view(roots)
 

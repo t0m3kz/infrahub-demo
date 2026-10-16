@@ -5,7 +5,7 @@
 # groups the platform views render (transforms/helpers/group_policy.py). Read
 # by the reference_fabric check, the segmentation_matrix artifact and the NX-OS
 # VTEP configs (leaf_config, border_leaf_config, border_spine_config: the same
-# fleet roots as the artifact, transforms/helpers/group_policy.vxlan_gpo_device_view).
+# fleet roots as the artifact, transforms/helpers/group_policy.group_policy_device_view).
 
 fragment DeviceGroupPolicyFields on DcimDevice {
   name { value }

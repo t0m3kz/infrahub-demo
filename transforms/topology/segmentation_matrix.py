@@ -23,7 +23,6 @@ from utils.group_policy import (
     gbp_required,
     reserved_groups,
     site_kind,
-    tags_by_segment,
 )
 from utils.segment_addressing import classifier_prefix
 
@@ -73,7 +72,7 @@ class SegmentationMatrix(InfrahubTransform):
         profiles, vteps = contracts.profiles, contracts.vteps
         # As this data center would enforce once it is a reference fabric.
         reference_sites = contracts.reference_sites | {dc_id}
-        components_of = tags_by_segment(contracts.tags)
+        components_of = contracts.components_of
 
         views = {
             "segment_security": segment_security_view(

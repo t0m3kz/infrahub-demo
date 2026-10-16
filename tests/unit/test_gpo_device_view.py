@@ -1,4 +1,4 @@
-"""Unit tests for the NX-OS VXLAN GPO device view (transforms/helpers/group_policy.py vxlan_gpo_device_view).
+"""Unit tests for the NX-OS VXLAN GPO device view (transforms/helpers/group_policy.py _vxlan_gpo_build).
 
 The fleet is the smoke fixture's (tests/smoke/generate_config_fixtures.py ``_gpo_fleet_roots``): DC10 with a
 leaf, an access leaf and a border leaf in the NX-OS row, a legacy DC12, NONPROD (fully classifiable by VLAN,
@@ -44,6 +44,9 @@ from tests.smoke.generate_config_fixtures import (
     _node,
     _v,
     build_gpo_device_data,
+    gpo_roots,
+    gpo_segment,
+    gpo_view,
 )
 from tests.smoke.test_configs_smoke import _run_transform
 from transforms.common import BaseDeviceTransform
@@ -62,7 +65,6 @@ from transforms.helpers.group_policy import (
     component_coverage,
     data_center_contracts,
     segment_vrf,
-    vxlan_gpo_device_view,
     vxlan_gpo_view,
 )
 from transforms.helpers.vxlan import get_interfaces, get_vxlan_config
@@ -102,8 +104,7 @@ def _leaf_interfaces() -> list[dict[str, Any]]:
 
 def _roots(raw: dict | None = None) -> dict[str, Any]:
     """The cleaned fleet roots (everything but the device root)."""
-    cleaned = clean_data(raw or _raw())
-    return {key: value for key, value in cleaned.items() if key != "DcimDevice"}
+    return gpo_roots(raw or _raw())
 
 
 def _view(roots: dict[str, Any], **overrides: Any) -> dict[str, Any] | None:
@@ -115,11 +116,7 @@ def _view(roots: dict[str, Any], **overrides: Any) -> dict[str, Any] | None:
         "vrfs": VRFS,
         "interfaces": _leaf_interfaces(),
     }
-    return vxlan_gpo_device_view(roots, **{**arguments, **overrides})
-
-
-def _segment(roots: dict[str, Any], seg_id: str) -> dict[str, Any]:
-    return next(segment for segment in roots["ManagedNetworkSegment"] if segment["id"] == seg_id)
+    return gpo_view("vxlan_gpo", roots, **{**arguments, **overrides})
 
 
 def _contract(view: dict[str, Any], vrf: str, src: str, dst: str) -> dict[str, Any]:
@@ -208,7 +205,7 @@ class TestGate:
     def test_other_vrfs_group_data_does_not_refuse_an_enablement_only_vtep(self) -> None:
         """Nothing is rendered from the groups, so a collision among them is not this device's to refuse."""
         roots = _roots()
-        _segment(roots, "seg-app-np")["security_tag"]["name"] = "web-np"
+        gpo_segment(roots, "seg-app-np")["security_tag"]["name"] = "web-np"
         assert _view(roots, vrfs=[]) == {"class_maps": [], "groups": [], "vrfs": {}}
         with pytest.raises(ValueError, match="refusing unprotected config"):
             _view(roots, vrfs=["NONPROD"])
@@ -273,7 +270,7 @@ class TestScope:
         """An enforced VRF denies what no selector classified: a segment with no row needs its group."""
         roots = _roots()
         # app-np has no rules of its own and no rule names it as a destination: it has no row.
-        _segment(roots, "seg-app-np")["security_policy"]["rules"] = []
+        gpo_segment(roots, "seg-app-np")["security_policy"]["rules"] = []
         for segment in roots["ManagedNetworkSegment"]:
             segment["security_policy"]["rules"] = [
                 rule
@@ -377,7 +374,7 @@ class TestEntries:
 
     def test_a_port_less_tcp_rule_uses_the_table_form(self) -> None:
         roots = _roots()
-        rule = _segment(roots, "seg-web-np")["security_policy"]["rules"][0]
+        rule = gpo_segment(roots, "seg-web-np")["security_policy"]["rules"][0]
         rule["port_start"], rule["port_end"] = None, None
         view = _view(roots)
         assert view is not None
@@ -394,7 +391,7 @@ class TestRefusals:
 
     def test_a_group_without_a_group_id(self) -> None:
         roots = _roots()
-        _segment(roots, "seg-web-np")["security_tag"]["group_id"] = None
+        gpo_segment(roots, "seg-web-np")["security_tag"]["group_id"] = None
         with pytest.raises(ValueError, match=r"group web-np has no group id.*refusing unprotected config"):
             _view(roots)
 
@@ -409,26 +406,26 @@ class TestRefusals:
 
     def test_two_groups_sharing_an_id(self) -> None:
         roots = _roots()
-        _segment(roots, "seg-web-np")["security_tag"]["group_id"] = 41
+        gpo_segment(roots, "seg-web-np")["security_tag"]["group_id"] = 41
         with pytest.raises(ValueError, match=r"share group id 41.*refusing unprotected config"):
             _view(roots)
 
     def test_a_group_on_a_reserved_id(self) -> None:
         roots = _roots()
-        _segment(roots, "seg-web-np")["security_tag"]["group_id"] = 15
+        gpo_segment(roots, "seg-web-np")["security_tag"]["group_id"] = 15
         with pytest.raises(ValueError, match=r"share group id 15"):
             _view(roots)
 
     def test_two_groups_sharing_a_cli_name(self) -> None:
         roots = _roots()
-        _segment(roots, "seg-web-np")["security_tag"]["name"] = "a.b"
-        _segment(roots, "seg-app-np")["security_tag"]["name"] = "a_b"
+        gpo_segment(roots, "seg-web-np")["security_tag"]["name"] = "a.b"
+        gpo_segment(roots, "seg-app-np")["security_tag"]["name"] = "a_b"
         with pytest.raises(ValueError, match=r"share the group name 'a_b'.*refusing unprotected config"):
             _view(roots)
 
     def test_a_port_range_ending_before_it_starts(self) -> None:
         roots = _roots()
-        rule = _segment(roots, "seg-web-np")["security_policy"]["rules"][1]
+        rule = gpo_segment(roots, "seg-web-np")["security_policy"]["rules"][1]
         rule["port_start"], rule["port_end"] = 8010, 8000
         with pytest.raises(ValueError, match=r"8010-8000 ends before it starts.*refusing unprotected config"):
             _view(roots)
@@ -461,7 +458,7 @@ class TestRefusals:
     def test_a_tag_shared_by_two_segments_is_refused(self) -> None:
         """The views key a group by name: the later segment's selector would silently win."""
         roots = _roots()
-        _segment(roots, "seg-app-np")["security_tag"]["name"] = "web-np"
+        gpo_segment(roots, "seg-app-np")["security_tag"]["name"] = "web-np"
         with pytest.raises(
             ValueError,
             match=r"group 'web-np' is the tag of segment web-np \(VRF NONPROD\) and of segment app-np \(VRF NONPROD\)"
@@ -471,14 +468,14 @@ class TestRefusals:
 
     def test_a_tag_shared_by_two_vrfs_is_refused(self) -> None:
         roots = _roots()
-        _segment(roots, "seg-portal-p")["security_tag"]["name"] = "web-np"
+        gpo_segment(roots, "seg-portal-p")["security_tag"]["name"] = "web-np"
         with pytest.raises(ValueError, match=r"group 'web-np' is the tag of .*refusing unprotected config"):
             _view(roots)
 
     @pytest.mark.parametrize("name", ["unaware", "UNAWARE", "unclassified", "UNCLASSIFIED", "Fallback", "FALLBACK"])
     def test_a_group_named_like_a_pseudo_group_is_refused(self, name: str) -> None:
         roots = _roots()
-        _segment(roots, "seg-web-np")["security_tag"]["name"] = name
+        gpo_segment(roots, "seg-web-np")["security_tag"]["name"] = name
         with pytest.raises(
             ValueError, match=rf"group '{name}' is named like the reserved pseudo-group.*refusing unprotected config"
         ):
@@ -513,7 +510,7 @@ class TestEnforcement:
 
     def test_a_segment_without_a_group_leaves_its_vrf_unenforced(self) -> None:
         roots = _roots()
-        _segment(roots, "seg-app-np")["security_tag"] = None
+        gpo_segment(roots, "seg-app-np")["security_tag"] = None
         view = _view(roots)
         assert view is not None
         assert view["vrfs"]["NONPROD"]["unenforced"] == "segment app-np has no group classifier on this device"
@@ -1107,7 +1104,7 @@ class TestComponentCoverage:
             }
         )
         roots = _roots(raw)
-        _segment(roots, "seg-app-np")["isolation_mode"] = "microsegmented"
+        gpo_segment(roots, "seg-app-np")["isolation_mode"] = "microsegmented"
         coverage = _coverage(roots)
         assert ComponentClaim("app.app.demo.local", "seg-app-np", "dc1-leaf-01", "Ethernet10") in coverage.claims
         assert _claim(WEB, "dc1-leaf-01", "Ethernet10") in coverage.claims
@@ -1122,7 +1119,7 @@ class TestComponentCoverage:
         """pay-p active only in DC12: its components (even unplaced ones) are no local blocker."""
         web = [_server("srv-web")]
         roots = _placed_roots(web=web)
-        _segment(roots, "seg-pay-p")["segment_deployments"] = [
+        gpo_segment(roots, "seg-pay-p")["segment_deployments"] = [
             {"vni": 10210, "deployment": {"id": "dc12", "name": "DC12"}}
         ]
         coverage = _coverage(roots)
@@ -1131,7 +1128,7 @@ class TestComponentCoverage:
 
     def test_a_segment_that_is_not_microsegmented_has_no_component_groups_to_classify(self) -> None:
         roots = _placed_roots(web=[_server("srv-lost")])
-        _segment(roots, "seg-pay-p")["isolation_mode"] = "normal"
+        gpo_segment(roots, "seg-pay-p")["isolation_mode"] = "normal"
         coverage = _coverage(roots)
         assert coverage.claims == []
         assert coverage.blockers == {}
@@ -1153,7 +1150,7 @@ class TestComponentCoverage:
 
     def test_an_instance_that_sits_nowhere_blocks_every_data_center_of_its_segment(self) -> None:
         roots = _placed_roots(web=[_server("srv-web")])
-        _segment(roots, "seg-pay-p")["segment_deployments"] = [
+        gpo_segment(roots, "seg-pay-p")["segment_deployments"] = [
             {"vni": 10210, "deployment": {"id": "dc10", "name": "DC10"}},
             {"vni": 10210, "deployment": {"id": "dc12", "name": "DC12"}},
         ]
@@ -1196,7 +1193,7 @@ class TestComponentCoverage:
 
 
 class TestComponentSelectors:
-    """vxlan_gpo_device_view: the interface selectors of the owning VTEP, and the gate."""
+    """The vxlan_gpo device view: the interface selectors of the owning VTEP, and the gate."""
 
     @staticmethod
     def _groups(view: dict[str, Any] | None) -> dict[str, dict[str, Any]]:

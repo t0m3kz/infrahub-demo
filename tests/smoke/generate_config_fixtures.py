@@ -35,7 +35,9 @@ from transforms.config.proxy import Proxy
 from transforms.config.spine import Spine
 from transforms.config.super_spine import SuperSpine
 from transforms.config.tor import ToR
+from transforms.helpers.group_policy import group_policy_device_view
 from transforms.topology.segmentation_matrix import SegmentationMatrix
+from utils.data_cleaning import clean_data
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SMOKE_DIR = Path(__file__).resolve().parent / "configs"
@@ -3298,6 +3300,22 @@ def build_gpo_device_data(
             }
         )
     return {**data, **_gpo_fleet_roots(fleet=fleet, version=version, leaf_type=leaf_type, enforce=enforce)}
+
+
+def gpo_roots(raw: dict) -> dict[str, Any]:
+    """The cleaned fleet roots of a ``build_gpo_device_data`` response (everything but the device root)."""
+    return {key: value for key, value in clean_data(raw).items() if key != "DcimDevice"}
+
+
+def gpo_segment(roots: dict[str, Any], seg_id: str) -> dict[str, Any]:
+    """The cleaned segment ``seg_id`` among the fleet roots."""
+    return next(segment for segment in roots["ManagedNetworkSegment"] if segment["id"] == seg_id)
+
+
+def gpo_view(kind: str, roots: dict[str, Any], **arguments: Any) -> dict[str, Any] | None:
+    """The device view of group-policy ``kind`` that ``group_policy_device_view`` gives these arguments, else None."""
+    found = group_policy_device_view(roots, **arguments)
+    return found[1] if found and found[0] == kind else None
 
 
 def _gpo_golden_leaf_data(
