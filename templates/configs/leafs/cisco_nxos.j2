@@ -2,6 +2,13 @@
 ! {{ name }} Configuration
 !
 hostname {{ name }}
+{%- if group_policy %}
+! GPO first enablement, in this order: routing template, copy and flash resize out of band, feature security-group
+! exec out of band: copy running-config startup-config
+! exec out of band: system flash sda resize extended (module reload; 24 GB memory floor; back up bootflash, logflash and the running configuration first)
+system routing template-security-groups
+! documented-not-lab-verified: reload timing of the routing template (the guide ties the reload to the flash resize)
+{%- endif %}
 !
 {%- if not nxos_border %}
 !
@@ -15,6 +22,9 @@ feature vpc
 feature lldp
 {%- if leaf_pbr_rules and not nxos_border %}
 feature pbr
+{%- endif %}
+{%- if group_policy %}
+feature security-group
 {%- endif %}
 !
 {%- include 'common/cisco_nxos_vpc.j2' %}
@@ -36,6 +46,7 @@ vlan {{ vlan.vlan_id }}
 {%- if not nxos_border %}
 !
 {%- endif %}
+{%- include 'common/cisco_nxos_gpo.j2' %}
 ! Interfaces
 {%- for interface in interfaces if interface.role != 'mlag-peer' %}
 interface {{ interface.name }}

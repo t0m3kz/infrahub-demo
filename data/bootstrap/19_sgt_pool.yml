@@ -6,10 +6,12 @@
 # names it as its tag_pool (19b_group_policy_profile.yml); code never uses the
 # name.
 #
-# 16-4095 skips the IDs NX-OS reserves (0 unknown, 1 any, 15 the tag of routes
-# from policy-unaware sites) and sits inside the NX-OS 16-bit group ID. One
-# fabric-wide band keeps a group's ID identical on every VTEP. Never shrink it
-# once tags are allocated.
+# 16-4095 skips 15, the one ID the NX-OS guide reserves (the tag of routes from
+# policy-unaware sites), and 0, which the guide never defines but mentions as an
+# untagged value (the profile's unclassified group); 1 is kept out as a
+# precaution (the guide does not define it, I/U). The 16-bit width is the
+# VXLAN-GPO wire field (I). One fabric-wide band keeps a group's ID identical
+# on every VTEP. Never shrink it once tags are allocated.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

@@ -1,0 +1,409 @@
+!
+! dc1-access-leaf-01 Configuration
+!
+hostname dc1-access-leaf-01
+! GPO first enablement, in this order: routing template, copy and flash resize out of band, feature security-group
+! exec out of band: copy running-config startup-config
+! exec out of band: system flash sda resize extended (module reload; 24 GB memory floor; back up bootflash, logflash and the running configuration first)
+system routing template-security-groups
+! documented-not-lab-verified: reload timing of the routing template (the guide ties the reload to the flash resize)
+!
+!
+feature ospf
+feature bgp
+feature bfd
+feature interface-vlan
+feature lacp
+feature vpc
+feature lldp
+feature security-group
+!
+
+! VLANs
+vlan 120
+  name Customer-A
+!
+vlan 130
+  name Customer-A
+!
+vlan 220
+  name Customer-A
+!
+!
+!
+!
+! Group policy (VXLAN GPO): one class-map and policy-map per distinct entry set, then the security groups
+! GPO-0816a4dbb8: icmp
+! documented-not-lab-verified: `match ip icmp` for icmp is not in the guide; it has no ipv6 form here, so IPv6 for this entry is denied by the default deny (fail closed)
+class-map type security match-any GPO-0816a4dbb8
+  match ip icmp
+policy-map type security GPO-0816a4dbb8
+  class GPO-0816a4dbb8
+    permit
+! GPO-43fde9701f: any
+! documented-not-lab-verified: `match ip` for any is not in the guide; it has no ipv6 form here, so IPv6 for this entry is denied by the default deny (fail closed)
+class-map type security match-any GPO-43fde9701f
+  match ip
+policy-map type security GPO-43fde9701f
+  class GPO-43fde9701f
+    permit
+! GPO-478bae982c: tcp/443
+class-map type security match-any GPO-478bae982c
+  match ipv4 tcp dport 443
+  match ipv6 tcp dport 443
+policy-map type security GPO-478bae982c
+  class GPO-478bae982c
+    permit
+! GPO-5310646ef0: icmp, udp/5000
+! documented-not-lab-verified: `match ip icmp` for icmp is not in the guide; it has no ipv6 form here, so IPv6 for this entry is denied by the default deny (fail closed)
+class-map type security match-any GPO-5310646ef0
+  match ip icmp
+  match ipv4 udp dport 5000
+  match ipv6 udp dport 5000
+policy-map type security GPO-5310646ef0
+  class GPO-5310646ef0
+    permit
+! GPO-5ee805e9a9: tcp/5432, udp/5000
+class-map type security match-any GPO-5ee805e9a9
+  match ipv4 tcp dport 5432
+  match ipv6 tcp dport 5432
+  match ipv4 udp dport 5000
+  match ipv6 udp dport 5000
+policy-map type security GPO-5ee805e9a9
+  class GPO-5ee805e9a9
+    permit
+! GPO-d77ed0702f: tcp/5432
+class-map type security match-any GPO-d77ed0702f
+  match ipv4 tcp dport 5432
+  match ipv6 tcp dport 5432
+policy-map type security GPO-d77ed0702f
+  class GPO-d77ed0702f
+    permit
+! GPO-e7e840137f: udp/5000
+class-map type security match-any GPO-e7e840137f
+  match ipv4 udp dport 5000
+  match ipv6 udp dport 5000
+policy-map type security GPO-e7e840137f
+  class GPO-e7e840137f
+    permit
+! GPO-f2f210dd03: tcp/443, tcp/8000-8010
+class-map type security match-any GPO-f2f210dd03
+  match ipv4 tcp dport 443
+  match ipv6 tcp dport 443
+  match ipv4 tcp dport 8000 to 8010
+  match ipv6 tcp dport 8000 to 8010
+policy-map type security GPO-f2f210dd03
+  class GPO-f2f210dd03
+    permit
+!
+! Security groups: the VLAN selector is this device's own VLAN of the segment; a group without one is
+! classified on the VTEPs that carry its segment (the group ID travels in the VXLAN header)
+! documented-not-lab-verified: the guide gives no range for the group ids and no rules for the group names (a tag name is rewritten to [A-Za-z0-9_-])
+security-group 40 name web-np
+security-group 41 name app-np
+  match vlan 120
+security-group 42 name db-np
+  match vlan 130
+! documented-not-lab-verified: pay-p: intra-group deny of the microsegmented segment pay-p is not rendered (10.6(3)F intra-group isolation); its hosts talk freely until D2
+security-group 43 name pay-p
+security-group 44 name portal-p
+  match vlan 220
+! web_pay_demo_local: component group of segment pay-p, no classifier until D2
+security-group 50 name web_pay_demo_local
+! db_pay_demo_local: component group of segment pay-p, no classifier until D2
+security-group 51 name db_pay_demo_local
+!
+! Interfaces
+interface Ethernet1
+  no shutdown
+  ip address 10.1.0.1/31
+
+!
+interface Ethernet2
+  no shutdown
+  ip address 10.1.0.3/31
+
+!
+interface Ethernet10
+  no shutdown
+
+  switchport
+  switchport mode trunk
+  switchport trunk allowed vlan 120,130,220
+!
+interface Loopback0
+  no shutdown
+  ip address 10.0.0.1/32
+
+!
+!
+! OSPF Configuration
+
+
+!
+! BGP Configuration
+
+router bgp 65000
+  router-id 10.0.0.1
+  graceful-restart
+  !
+  template peer-policy EVPN-PEERS-POLICY
+    send-community
+  !
+  template peer-session EVPN-PEERS-SESSION
+    update-source loopback0
+  !
+  !
+  template peer-policy UNDERLAY-PEERS-POLICY
+    send-community
+  !
+  template peer-session UNDERLAY-PEERS-SESSION
+    bfd
+  !
+  address-family ipv4 unicast
+    redistribute direct route-map RM-CONN-2-BGP
+    maximum-paths 8
+  !
+  address-family l2vpn evpn
+  !
+  neighbor 10.1.0.0
+    remote-as 65100
+    local-as 65001 no-prepend replace-as
+    description spine-01
+    inherit peer-session UNDERLAY-PEERS-SESSION
+    address-family ipv4 unicast
+      inherit peer-policy UNDERLAY-PEERS-POLICY
+    !
+  neighbor 10.1.0.2
+    remote-as 65101
+    local-as 65001 no-prepend replace-as
+    description spine-02
+    inherit peer-session UNDERLAY-PEERS-SESSION
+    address-family ipv4 unicast
+      inherit peer-policy UNDERLAY-PEERS-POLICY
+    !
+  neighbor 10.0.0.100
+    remote-as 65000
+    description spine-01
+    inherit peer-session EVPN-PEERS-SESSION
+    address-family l2vpn evpn
+      inherit peer-policy EVPN-PEERS-POLICY
+    !
+  neighbor 10.0.0.101
+    remote-as 65000
+    description spine-02
+    inherit peer-session EVPN-PEERS-SESSION
+    address-family l2vpn evpn
+      inherit peer-policy EVPN-PEERS-POLICY
+    !
+  vrf NONPROD
+    address-family ipv4 unicast
+      advertise l2vpn evpn
+      redistribute direct route-map RM-VRF-DIRECT-2-EVPN
+  !
+  vrf PROD
+    address-family ipv4 unicast
+      advertise l2vpn evpn
+      redistribute direct route-map RM-VRF-DIRECT-2-EVPN
+  !
+!
+
+!
+!
+! VXLAN Configuration (netlab-style multivendor)
+!
+feature nv overlay
+feature vn-segment-vlan-based
+feature nve
+feature fabric forwarding
+nv overlay evpn
+!
+!
+! VRF Contexts (symmetric IRB — one L3 VNI per tenant)
+!
+vrf context NONPROD
+  vni 50011
+  rd 10.0.0.1:50011
+  ! UNCLASSIFIED -> web-np
+  ! documented-not-lab-verified: reserved group 0 (UNCLASSIFIED) as the source of a contract; the guide does not define it
+  ! documented-not-lab-verified: two bidir contracts on one pair
+  security contract source 0 destination 40 policy GPO-5310646ef0 bidir
+  ! UNCLASSIFIED -> app-np
+  ! documented-not-lab-verified: reserved group 0 (UNCLASSIFIED) as the source of a contract; the guide does not define it
+  ! documented-not-lab-verified: two bidir contracts on one pair
+  security contract source 0 destination 41 policy GPO-43fde9701f bidir
+  ! UNCLASSIFIED -> db-np
+  ! documented-not-lab-verified: reserved group 0 (UNCLASSIFIED) as the source of a contract; the guide does not define it
+  ! documented-not-lab-verified: two bidir contracts on one pair
+  security contract source 0 destination 42 policy GPO-d77ed0702f bidir
+  ! UNAWARE -> web-np
+  security contract source 15 destination 40 policy GPO-0816a4dbb8 bidir
+  ! UNAWARE -> app-np
+  ! documented-not-lab-verified: two bidir contracts on one pair
+  security contract source 15 destination 41 policy GPO-43fde9701f bidir
+  ! UNAWARE -> db-np
+  ! documented-not-lab-verified: two bidir contracts on one pair
+  security contract source 15 destination 42 policy GPO-43fde9701f bidir
+  ! web-np -> UNCLASSIFIED
+  ! documented-not-lab-verified: reserved group 0 (UNCLASSIFIED) as the destination of a contract; the guide does not define it
+  ! documented-not-lab-verified: two bidir contracts on one pair
+  security contract source 40 destination 0 policy GPO-f2f210dd03 bidir
+  ! web-np -> app-np
+  ! documented-not-lab-verified: two bidir contracts on one pair
+  security contract source 40 destination 41 policy GPO-f2f210dd03 bidir
+  ! app-np -> UNCLASSIFIED
+  ! documented-not-lab-verified: reserved group 0 (UNCLASSIFIED) as the destination of a contract; the guide does not define it
+  ! documented-not-lab-verified: two bidir contracts on one pair
+  security contract source 41 destination 0 policy GPO-5ee805e9a9 bidir
+  ! app-np -> UNAWARE
+  ! documented-not-lab-verified: two bidir contracts on one pair
+  security contract source 41 destination 15 policy GPO-d77ed0702f bidir
+  ! app-np -> web-np
+  ! documented-not-lab-verified: two bidir contracts on one pair
+  security contract source 41 destination 40 policy GPO-e7e840137f bidir
+  ! app-np -> db-np
+  ! documented-not-lab-verified: two bidir contracts on one pair
+  security contract source 41 destination 42 policy GPO-d77ed0702f bidir
+  ! db-np -> UNCLASSIFIED
+  ! documented-not-lab-verified: reserved group 0 (UNCLASSIFIED) as the destination of a contract; the guide does not define it
+  ! documented-not-lab-verified: two bidir contracts on one pair
+  security contract source 42 destination 0 policy GPO-43fde9701f bidir
+  ! db-np -> UNAWARE
+  ! documented-not-lab-verified: two bidir contracts on one pair
+  security contract source 42 destination 15 policy GPO-43fde9701f bidir
+  ! db-np -> web-np
+  security contract source 42 destination 40 policy GPO-0816a4dbb8 bidir
+  ! db-np -> app-np
+  ! documented-not-lab-verified: two bidir contracts on one pair
+  security contract source 42 destination 41 policy GPO-43fde9701f bidir
+  ! documented-not-lab-verified: the guide gives no range or meaning for the enforce tag; the unclassified group id is used
+  security enforce tag 0 default deny
+  address-family ipv4 unicast
+    route-target both 65000:50011
+    route-target both 65000:50011 evpn
+!
+vrf context PROD
+  vni 50012
+  rd 10.0.0.1:50012
+  ! UNCLASSIFIED -> web_pay_demo_local
+  ! documented-not-lab-verified: reserved group 0 (UNCLASSIFIED) as the source of a contract; the guide does not define it
+  security contract source 0 destination 50 policy GPO-478bae982c bidir
+  ! portal-p -> UNCLASSIFIED
+  ! documented-not-lab-verified: reserved group 0 (UNCLASSIFIED) as the destination of a contract; the guide does not define it
+  security contract source 44 destination 0 policy GPO-478bae982c bidir
+  ! portal-p -> web_pay_demo_local
+  security contract source 44 destination 50 policy GPO-478bae982c bidir
+  ! web_pay_demo_local -> db_pay_demo_local
+  security contract source 50 destination 51 policy GPO-d77ed0702f bidir
+  ! unenforced: component groups db_pay_demo_local, web_pay_demo_local have no classifier until D2
+  address-family ipv4 unicast
+    route-target both 65000:50012
+    route-target both 65000:50012 evpn
+!
+interface nve1
+  source-interface Loopback0
+  host-reachability protocol bgp
+  member vni 10120
+    suppress-arp
+    ingress-replication protocol bgp
+  member vni 10130
+    suppress-arp
+    ingress-replication protocol bgp
+  member vni 10220
+    suppress-arp
+    ingress-replication protocol bgp
+  member vni 50011 associate-vrf
+  member vni 50012 associate-vrf
+  no shutdown
+!
+!
+! EVPN Configuration
+!
+evpn
+  vni 10120 l2
+    rd 10.0.0.1:10120
+    route-target import 65000:10120
+    route-target export 65000:10120
+  vni 10130 l2
+    rd 10.0.0.1:10130
+    route-target import 65000:10130
+    route-target export 65000:10130
+  vni 10220 l2
+    rd 10.0.0.1:10220
+    route-target import 65000:10220
+    route-target export 65000:10220
+!
+!
+! VLAN to VNI mapping
+!
+vlan 120
+  vn-segment 10120
+vlan 130
+  vn-segment 10130
+vlan 220
+  vn-segment 10220
+!
+! L3 VNI Transit SVIs (symmetric IRB — no host addressing, forwarding only)
+!
+vlan 3900
+  name L3VNI_NONPROD
+  vn-segment 50011
+!
+interface Vlan3900
+  description L3VNI transit SVI for VRF NONPROD
+  vrf member NONPROD
+  ip forward
+  mtu 9216
+  no shutdown
+!
+vlan 3901
+  name L3VNI_PROD
+  vn-segment 50012
+!
+interface Vlan3901
+  description L3VNI transit SVI for VRF PROD
+  vrf member PROD
+  ip forward
+  mtu 9216
+  no shutdown
+!
+!
+! Route-maps
+route-map RM-CONN-2-BGP permit 10
+  match interface loopback0
+!
+route-map RM-VRF-DIRECT-2-EVPN permit 10
+!
+! Anycast Gateway — identical MAC on every leaf/border-leaf in the fabric
+fabric forwarding anycast-gateway-mac 001c7300dc01
+!
+! VLAN SVI Configuration
+!
+interface Vlan120
+  description Customer-A
+  vrf member NONPROD
+  ip address 10.10.2.1/24
+  fabric forwarding mode anycast-gateway
+  no shutdown
+!
+interface Vlan130
+  description Customer-A
+  vrf member NONPROD
+  ip address 10.10.3.1/24
+  fabric forwarding mode anycast-gateway
+  no shutdown
+!
+interface Vlan220
+  description Customer-A
+  vrf member PROD
+  ip address 10.20.2.1/24
+  fabric forwarding mode anycast-gateway
+  no shutdown
+!
+!
+
+!
+! Management
+line console
+line vty
+!
