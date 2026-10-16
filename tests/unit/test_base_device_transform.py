@@ -180,26 +180,15 @@ class TestCombineLeafPbrRules:
             with pytest.raises(ValueError, match=rf"{role} cannot render PBR policy for VLANs \[100\]"):
                 transform._extra_config(_device_data(), platform)
 
-    @pytest.mark.parametrize("platform", ["sonic", "dell_sonic", "nokia_sros"])
+    @pytest.mark.parametrize("platform", ["cisco_nxos", "arista_eos", "sonic", "dell_sonic", "nokia_sros"])
     @pytest.mark.parametrize("role", sorted(BORDER_ROLES))
     def test_border_role_refuses_tenant_svi_acl_it_cannot_render(self, platform: str, role: str) -> None:
-        """SONiC and SR OS border_leafs templates render no SVI ACL: refuse rather than drop it."""
+        """No border_leafs template renders the SVI ACL definitions (NX-OS and EOS only bind the name): refuse."""
         transform = _make_transform(role)
 
         with patch("transforms.common.get_acls", return_value=[{"vlan_id": 100, "name": "ACL-100"}]):
             with pytest.raises(ValueError, match=rf"{role} cannot render the SVI ACL for VLANs \[100\]"):
                 transform._extra_config(_device_data(), platform)
-
-    @pytest.mark.parametrize("platform", ["cisco_nxos", "arista_eos"])
-    @pytest.mark.parametrize("role", sorted(BORDER_ROLES))
-    def test_border_role_renders_tenant_svi_acl_on_acl_platforms(self, platform: str, role: str) -> None:
-        """NX-OS and EOS border_leafs templates render the SVI ACL, so the ACL alone is no reason to refuse."""
-        transform = _make_transform(role)
-
-        with patch("transforms.common.get_acls", return_value=[{"vlan_id": 100, "name": "ACL-100"}]):
-            config = transform._extra_config(_device_data(), platform)
-
-        assert config["acls"] == [{"vlan_id": 100, "name": "ACL-100"}]
 
     @pytest.mark.parametrize("platform", ["cisco_nxos", "sonic", "nokia_sros"])
     @pytest.mark.parametrize("role", sorted(BORDER_ROLES))
@@ -209,6 +198,122 @@ class TestCombineLeafPbrRules:
 
         assert config["acls"] == []
         assert config["leaf_pbr_rules"] == []
+
+    @staticmethod
+    def _gateway_activation(vlan_id: int, *, border_gateway: bool) -> dict:
+        """A routed activation (anycast gateway in PROD, L2 VNI 10000 + vlan, L3 VNI 50000)."""
+        return {
+            "vlan_id": vlan_id,
+            "vni": 10000 + vlan_id,
+            "segment": {
+                "id": f"seg-{vlan_id}",
+                "customer_name": f"seg-{vlan_id}",
+                "gateway": {
+                    "address": f"10.{vlan_id}.0.1/24",
+                    "ip_prefix": {"prefix": f"10.{vlan_id}.0.0/24", "ip_namespace": {"name": "PROD", "l3_vni": 50000}},
+                },
+            },
+            **({"border_gateway": True} if border_gateway else {}),
+        }
+
+    @staticmethod
+    def _policy_for_every_activation() -> tuple:
+        """Patches giving each activation handed to the policy helpers a PBR rule, a backend rule and an ACL."""
+        return (
+            patch(
+                "transforms.common.get_customer_pbr_rules",
+                side_effect=lambda acts, _ctx: [
+                    {"vlan_id": a["vlan_id"], "bypass_prefixes": [], "fw_nexthop": "10.0.0.2"} for a in acts
+                ],
+            ),
+            patch(
+                "transforms.common.get_lb_backend_pbr_rules",
+                side_effect=lambda acts, _vips: [
+                    {"vlan_id": a["vlan_id"], "backend_ips": ["10.0.1.10"], "lb_nexthop": "10.0.0.3"} for a in acts
+                ],
+            ),
+            patch(
+                "transforms.common.get_acls",
+                side_effect=lambda activations: [
+                    {"vlan_id": a["vlan_id"], "name": f"ACL-{a['vlan_id']}"} for a in activations
+                ],
+            ),
+        )
+
+    @pytest.mark.parametrize("platform", ["cisco_nxos", "arista_eos", "sonic", "nokia_sros"])
+    @pytest.mark.parametrize("role", sorted(BORDER_ROLES))
+    def test_border_gateway_activations_render_without_tenant_policy(self, platform: str, role: str) -> None:
+        """A BGW's hostless stitched segments keep their VLAN, VNI and SVI but are no ACL/PBR input."""
+        data = _device_data()
+        data["segment_deployments"] = [self._gateway_activation(100, border_gateway=True)]
+        pbr, backend, acl = self._policy_for_every_activation()
+
+        with pbr, backend, acl:
+            config = _make_transform(role)._extra_config(data, platform)
+
+        assert config["leaf_pbr_rules"] == []
+        assert config["acls"] == []
+        assert [(v["vlan_id"], v["gateway_ip"], v["vrf"], v["acl_name"]) for v in config["vlans"]] == [
+            (100, "10.100.0.1/24", "PROD", None)
+        ]
+        assert [m["vni"] for m in config["vxlan"]["l2_vni_mappings"]] == [10100]
+
+    @pytest.mark.parametrize("role", sorted(BORDER_ROLES))
+    def test_border_role_refuses_host_capable_activation_pbr_beside_border_gateway(self, role: str) -> None:
+        """Only the BGW activations are exempt: an interface-derived one on the same border still needs PBR."""
+        data = _device_data()
+        data["segment_deployments"] = [
+            self._gateway_activation(100, border_gateway=True),
+            self._gateway_activation(101, border_gateway=False),
+        ]
+        pbr, backend, acl = self._policy_for_every_activation()
+
+        with pbr, backend, acl, pytest.raises(ValueError, match=rf"{role} cannot render PBR policy for VLANs \[101\]"):
+            _make_transform(role)._extra_config(data, "cisco_nxos")
+
+    @pytest.mark.parametrize("platform", ["cisco_nxos", "arista_eos", "sonic", "nokia_sros"])
+    @pytest.mark.parametrize("role", sorted(BORDER_ROLES))
+    def test_border_role_refuses_host_capable_activation_acl_beside_border_gateway(
+        self, platform: str, role: str
+    ) -> None:
+        """Same for the SVI ACL, on every platform: the border_leafs templates render none."""
+        data = _device_data()
+        data["segment_deployments"] = [
+            self._gateway_activation(100, border_gateway=True),
+            self._gateway_activation(101, border_gateway=False),
+        ]
+
+        with patch("transforms.common.get_customer_pbr_rules", return_value=[]):
+            _, _, acl = self._policy_for_every_activation()
+            with acl, pytest.raises(ValueError, match=rf"{role} cannot render the SVI ACL for VLANs \[101\]"):
+                _make_transform(role)._extra_config(data, platform)
+
+    def test_edge_keeps_border_gateway_activations_as_policy_input(self) -> None:
+        """The exemption is for border roles only: an edge hands every routed activation to the policy helpers."""
+        data = _device_data()
+        data["segment_deployments"] = [self._gateway_activation(100, border_gateway=True)]
+        pbr, backend, acl = self._policy_for_every_activation()
+
+        with pbr, backend, acl:
+            config = _make_transform("edge")._extra_config(data, "cisco_nxos")
+
+        assert [r["vlan_id"] for r in config["leaf_pbr_rules"]] == [100]
+        assert [a["vlan_id"] for a in config["acls"]] == [100]
+
+    def test_border_gateway_activations_are_flagged_at_collection(self) -> None:
+        """_collect_border_gateway_activations marks what it adds; interface-derived activations stay unflagged."""
+        transform = _make_transform("border-leaf")
+        deployment = {
+            "segment_deployments": [
+                {"vni": 10100, "segment": {"id": "seg-100", "stretch_scope": "dc_pair", "vlan_domain": None}}
+            ]
+        }
+        with patch.object(transform, "_own_vlan_domain_segment", return_value={"vlan_id": 100}):
+            found = transform._collect_border_gateway_activations(
+                deployment, device_id="dev-1", device_capabilities=[], seen=set()
+            )
+
+        assert [(a["vlan_id"], a["border_gateway"]) for a in found] == [(100, True)]
 
     @pytest.mark.parametrize("platform", ["sonic", "dell_sonic", "nokia_sros"])
     def test_real_border_spine_class_refuses_unprotected_tenant_svi(self, platform: str) -> None:
