@@ -43,19 +43,18 @@ standalone "allocate a number" call for a CoreNumberPool, only from_pool
 applied to a real node's attribute.
 
 Failures raise: a missing prerequisite is logged with self.logger.error and
-raised as GeneratorError (_fail), and an SDK error propagates as is, so a
-run that could not provision the office's slice is a failed task, never a
+raised as GeneratorError (CommonGenerator.fail), and an SDK error propagates as is,
+so a run that could not provision the office's slice is a failed task, never a
 green one that silently stopped half way.
 """
 
 from __future__ import annotations
 
-from typing import Any, NoReturn
+from typing import Any
 
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
-from ..logger import GeneratorError
 from ..protocols import (
     DcimPhysicalDevice,
     DcimPhysicalInterface,
@@ -96,16 +95,6 @@ class SdwanEdgeGenerator(CommonGenerator):
     # overloaded signatures and flags every mock assertion as invalid.
     client: Any
 
-    def _fail(self, message: str) -> NoReturn:
-        """Log ``message`` as an error and raise it: the run is a failed task.
-
-        self.logger.error already raises under the generator's fail-on-error
-        logger; the explicit raise keeps that true for any logger and tells
-        the type checker the caller does not continue.
-        """
-        self.logger.error(message)
-        raise GeneratorError(message)
-
     async def generate(self, data: dict[str, Any]) -> None:
         cleaned = clean_data(data)
 
@@ -118,7 +107,7 @@ class SdwanEdgeGenerator(CommonGenerator):
         office_id: str = office.get("id", "")
         office_name: str = office.get("name", office_id)
         if not office_id:
-            self._fail("Office missing id — cannot proceed")
+            self.fail("Office missing id — cannot proceed")
 
         gateway = office.get("sdwan_gateway")
         if not gateway or not gateway.get("id"):
@@ -128,7 +117,7 @@ class SdwanEdgeGenerator(CommonGenerator):
         owner_org = (office.get("parent") or {}).get("owner") or {}
         owner_id: str | None = owner_org.get("id")
         if not owner_id:
-            self._fail(f"{office_name}: no owner resolved via parent — cannot proceed")
+            self.fail(f"{office_name}: no owner resolved via parent — cannot proceed")
 
         self.logger.info(f"Processing SD-WAN edge for office {office_name}")
 
@@ -138,14 +127,14 @@ class SdwanEdgeGenerator(CommonGenerator):
         gateway_zone_id: str | None = gateway_zone.get("id")
         gateway_zone_name: str | None = gateway_zone.get("name")
         if not gateway_zone_id or not gateway_zone_name:
-            self._fail(f"{office_name}: gateway {gateway_name} has no deployment — cannot set circuit locations")
+            self.fail(f"{office_name}: gateway {gateway_name} has no deployment — cannot set circuit locations")
 
         trunk_iface = next(
             (iface for iface in gateway.get("interfaces") or [] if iface.get("role") == "uplink"),
             None,
         )
         if trunk_iface is None:
-            self._fail(f"{office_name}: gateway {gateway_name} has no role=uplink trunk interface")
+            self.fail(f"{office_name}: gateway {gateway_name} has no role=uplink trunk interface")
 
         internet_provider_id, overlay_provider_id = await self._resolve_provider_ids(office_name)
         edge = await self._ensure_edge_device(office_name, office_id, owner_id)
@@ -173,7 +162,7 @@ class SdwanEdgeGenerator(CommonGenerator):
         tunnel_id_attr = getattr(overlay_circuit, "tunnel_id", None)
         tunnel_id = getattr(tunnel_id_attr, "value", None) if tunnel_id_attr else None
         if tunnel_id is None:
-            self._fail(f"{office_name}: overlay circuit has no resolved tunnel_id after save")
+            self.fail(f"{office_name}: overlay circuit has no resolved tunnel_id after save")
 
         gateway_sub_iface = await self._ensure_gateway_subinterface(
             gateway_id=gateway_id,
@@ -193,7 +182,7 @@ class SdwanEdgeGenerator(CommonGenerator):
         by_org_id = {provider.org_id.value: provider.id for provider in providers}
         missing = [org_id for org_id in org_ids if org_id not in by_org_id]
         if missing:
-            self._fail(f"{office_name}: provider org(s) {missing} not found")
+            self.fail(f"{office_name}: provider org(s) {missing} not found")
         return by_org_id[_INTERNET_PROVIDER_ORG_ID], by_org_id[_OVERLAY_PROVIDER_ORG_ID]
 
     async def _ensure_edge_device(self, office_name: str, office_id: str, owner_id: str) -> Any:
@@ -221,7 +210,7 @@ class SdwanEdgeGenerator(CommonGenerator):
                 kind="TemplateDcimPhysicalDevice", template_name__value=_EDGE_TEMPLATE_NAME
             )
             if not templates:
-                self._fail(f"Template '{_EDGE_TEMPLATE_NAME}' not found — cannot create Edge device")
+                self.fail(f"Template '{_EDGE_TEMPLATE_NAME}' not found — cannot create Edge device")
             data["object_template"] = {"id": templates[0].id}
 
         edge = await self.client.create(kind=DcimPhysicalDevice, data=data)
@@ -232,7 +221,7 @@ class SdwanEdgeGenerator(CommonGenerator):
     async def _find_edge_uplink(self, edge_id: str, office_name: str) -> Any:
         ifaces = await self.client.filters(kind=DcimPhysicalInterface, device__ids=[edge_id], role__value="uplink")
         if not ifaces:
-            self._fail(f"{office_name}: edge device has no role=uplink interface")
+            self.fail(f"{office_name}: edge device has no role=uplink interface")
         return sorted(ifaces, key=lambda i: i.name.value)[0]
 
     async def _ensure_internet_circuit(
@@ -336,38 +325,34 @@ class SdwanEdgeGenerator(CommonGenerator):
         self, overlay_circuit: Any, gateway_sub_iface_id: str, office_name: str
     ) -> None:
         """overlay_circuit comes straight out of _ensure_overlay_circuit's own
-        client.create()+save(allow_upsert=True) — its interface_capabilities
-        relationship manager only carries the id given at creation time, no
-        __typename, so calling .fetch() on it directly raises the same
-        "id and/or typename are not defined" error generators/devices.py's
-        _ensure_ha_interfaces docstring documents for a freshly-created node.
-        Re-fetching the node via filters(..., include=[...]) first — the same
-        fix devices.py's own "existing domain" path relies on — returns real
-        typenames from the server, so .fetch() on THAT copy works.
+        client.create()+save(allow_upsert=True), so its interface_capabilities
+        relationship manager only carries the id given at creation time.
+        Re-reading the node via filters(..., include=[...]) returns the
+        server's full peer list; its peer ids are all this needs (no
+        .fetch(), which would resolve every peer node for nothing).
         """
         refreshed = await self.client.filters(
             kind=TopologyVirtualCircuit, ids=[overlay_circuit.id], include=["interface_capabilities"]
         )
         if not refreshed:
-            self._fail(f"{office_name}: overlay circuit vanished before linking gateway sub-interface")
+            self.fail(f"{office_name}: overlay circuit vanished before linking gateway sub-interface")
         circuit = refreshed[0]
         iface_capabilities = getattr(circuit, "interface_capabilities")
-        await iface_capabilities.fetch()
         if any(peer.id == gateway_sub_iface_id for peer in iface_capabilities.peers):
             return
         await self._safe_rel_add(iface_capabilities, {"id": gateway_sub_iface_id})
         await circuit.save(allow_upsert=True)
 
     async def _attach_to_orchestrator(self, *, gateway_id: str, gateway_name: str, edge_id: str) -> None:
-        orchestrators = await self.client.filters(kind=ManagedController, managed_devices__ids=[gateway_id])
+        orchestrators = await self.client.filters(
+            kind=ManagedController, managed_devices__ids=[gateway_id], include=["managed_devices"]
+        )
         if not orchestrators:
             self.logger.warning(f"No orchestrator manages {gateway_name} — new edge will not be group-managed")
             return
 
         orchestrator = orchestrators[0]
-        managed_devices = getattr(orchestrator, "managed_devices")
-        await managed_devices.fetch()
-        if any(peer.id == edge_id for peer in managed_devices.peers):
+        if any(peer.id == edge_id for peer in getattr(orchestrator, "managed_devices").peers):
             return
         # A RelationshipAdd of this one edge, not a save of the whole peer
         # list: every office's run attaches its edge to the same shared

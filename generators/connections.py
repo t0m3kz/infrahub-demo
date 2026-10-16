@@ -19,8 +19,6 @@ from .types import CablingOptions, ChainHop
 
 _INTERFACE_READY_MAX_RETRIES = 10
 _INTERFACE_READY_RETRY_DELAY = 3.0
-_INTERFACE_READY_RETRY_CAP = 20.0
-_INTERFACE_READY_RETRY_JITTER = 0.25
 
 # Default border_role_for for _cable_border_services: every bootstrap border
 # tier (N9K-C9336C-FX2_BORDER_LEAF's Ethernet1/[25-28]/[29-32], border-spine's
@@ -34,7 +32,7 @@ _INTERFACE_READY_RETRY_JITTER = 0.25
 BORDER_ROLE_FOR_SERVICES: dict[str, str] = {"firewall": "firewall", "load-balancer": "load-balancer"}
 
 
-def tracked_save_kwargs(track: bool) -> dict[str, bool]:
+def tracked_save_kwargs(track: bool) -> dict[str, Any]:
     """save() kwargs for a write the run does (track) or does not (not track) own.
 
     track=False adds update_group_context=False so the node is written but not
@@ -111,12 +109,7 @@ class CablingMixin:
             )
             if src_interfaces and dst_interfaces:
                 break
-            delay = self._retry_delay(
-                _INTERFACE_READY_RETRY_DELAY,
-                _attempt,
-                cap=_INTERFACE_READY_RETRY_CAP,
-                jitter=_INTERFACE_READY_RETRY_JITTER,
-            )
+            delay = self._retry_delay(_INTERFACE_READY_RETRY_DELAY, _attempt)
             self.logger.info(
                 f"Interfaces not ready yet (src={len(src_interfaces)}, dst={len(dst_interfaces)}) — "
                 f"retrying in {delay:.2f}s (attempt {_attempt + 1}/{_INTERFACE_READY_MAX_RETRIES})"

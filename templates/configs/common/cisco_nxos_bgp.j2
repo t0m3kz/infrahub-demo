@@ -106,8 +106,8 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- endif %}
 {%- endif %}
 {%- set _afs = session.address_families | default([]) %}
-{%- if 'ipv6' in _afs %}
-    address-family ipv6 unicast
+{%- for _af in ['ipv6', 'ipv4', 'evpn'] if _af in _afs %}
+    address-family {{ 'l2vpn evpn' if _af == 'evpn' else _af ~ ' unicast' }}
 {%- if session.peer_group is defined %}
       inherit peer-policy {{ session.peer_group }}-POLICY
 {%- else %}
@@ -120,73 +120,29 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- if session.get('remove_private_as') %}
       remove-private-as
 {%- endif %}
-{%- endif %}
-{%- if session.get('maximum_routes') %}
-      maximum-prefix {{ session.maximum_routes }}
-{%- endif %}
-{%- if session.get('local_pref') %}
-      route-map {{ session.name }}-LOCAL-PREF-IN in
-{%- endif %}
-{%- if session.get('med') %}
-      route-map {{ session.name }}-MED-OUT out
-{%- endif %}
-{%- if session.get('export_local_only') %}
-      route-map RM-FABRIC-OUT out
-{%- endif %}
-    !
-{%- endif %}
-{%- if 'ipv4' in _afs %}
-    address-family ipv4 unicast
-{%- if session.peer_group is defined %}
-      inherit peer-policy {{ session.peer_group }}-POLICY
-{%- else %}
-{%- if session.get('send_community') %}
-      send-community
-{%- endif %}
-{%- if session.get('send_extended_community') %}
-      send-community extended
-{%- endif %}
-{%- if session.get('remove_private_as') %}
-      remove-private-as
-{%- endif %}
-{%- endif %}
-{%- if session.get('maximum_routes') %}
-      maximum-prefix {{ session.maximum_routes }}
-{%- endif %}
-{%- if session.get('local_pref') %}
-      route-map {{ session.name }}-LOCAL-PREF-IN in
-{%- endif %}
-{%- if session.get('med') %}
-      route-map {{ session.name }}-MED-OUT out
-{%- endif %}
-{%- if session.get('export_local_only') %}
-      route-map RM-FABRIC-OUT out
-{%- endif %}
-    !
-{%- endif %}
-{%- if 'evpn' in _afs %}
-    address-family l2vpn evpn
-{%- if session.peer_group is defined %}
-      inherit peer-policy {{ session.peer_group }}-POLICY
-{%- else %}
-{%- if session.get('send_community') %}
-      send-community
-{%- endif %}
-{%- if session.get('send_extended_community') %}
-      send-community extended
-{%- endif %}
-{%- if session.get('remove_private_as') %}
-      remove-private-as
-{%- endif %}
-{%- if session.get('route_reflector_client') %}
+{%- if _af == 'evpn' and session.get('route_reflector_client') %}
       route-reflector-client
 {%- endif %}
-{%- if session.get('next_hop_unchanged') %}
+{%- if _af == 'evpn' and session.get('next_hop_unchanged') %}
       next-hop-unchanged
 {%- endif %}
 {%- endif %}
-    !
+{%- if _af != 'evpn' %}
+{%- if session.get('maximum_routes') %}
+      maximum-prefix {{ session.maximum_routes }}
 {%- endif %}
+{%- if session.get('local_pref') %}
+      route-map {{ session.name }}-LOCAL-PREF-IN in
+{%- endif %}
+{%- if session.get('med') %}
+      route-map {{ session.name }}-MED-OUT out
+{%- endif %}
+{%- if session.get('export_local_only') %}
+      route-map RM-FABRIC-OUT out
+{%- endif %}
+{%- endif %}
+    !
+{%- endfor %}
 {%- endfor %}
 {#- Per-tenant VRF address-family: the other half of symmetric IRB.
 

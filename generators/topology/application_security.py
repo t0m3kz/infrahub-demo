@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from utils.data_cleaning import clean_data
+from utils.group_policy import is_microsegmented
+from utils.ports import PortProfileHelper
 
 from ..common import CommonGenerator
 from ..helpers.rules import RulesPlanner
@@ -15,7 +17,6 @@ from ..protocols import AppComponent
 from ..segment_firewall import SegmentFirewallMixin
 from ..ztna import ZtnaMixin
 
-MICROSEGMENTED = "microsegmented"
 # The segment kind add_vxlan_segment addresses (generators/topology/segment.py).
 VXLAN_SEGMENT_KIND = "ManagedVxlanSegment"
 
@@ -269,7 +270,7 @@ class AppApplicationGenerator(
                 continue
 
             try:
-                ports = planner.resolve_ports(dep, dst_comp)
+                ports = PortProfileHelper.resolve_dependency_ports(dep, dst_comp)
             except ValueError as exc:
                 self.logger.warning("  Dependency '%s': %s - skipping rule creation", dep_ref, exc)
                 rules_skipped += 1
@@ -338,8 +339,7 @@ class AppApplicationGenerator(
         microsegmented = {
             segment["id"]
             for component in components
-            if (segment := component.get("network_segment") or {}).get("id")
-            and segment.get("isolation_mode") == MICROSEGMENTED
+            if (segment := component.get("network_segment") or {}).get("id") and is_microsegmented(segment)
         }
         targets = [dst for _src, _dep, dst in edges if dst.get("id")]
         own = {id(component) for component in components}

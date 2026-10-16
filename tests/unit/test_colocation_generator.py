@@ -22,7 +22,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.helpers.naming import DeviceNameContext, DeviceNamingConfig
-from generators.helpers.pools import FW_CONTEXT_VLAN_START
 from generators.topology.colocation import (
     _COLO_LOOPBACK_PREFIX_LENGTH,
     _COLO_MANAGEMENT_PREFIX_LENGTH,
@@ -393,7 +392,7 @@ class TestGenerateEntry:
         await gen.generate({"TopologyColocationMetro": [_metro()]})
 
         if expected:
-            gen.ensure_firewall_context_pools.assert_awaited_once_with(name="fr", vlan_start=FW_CONTEXT_VLAN_START)
+            gen.ensure_firewall_context_pools.assert_awaited_once_with(name="fr")
         else:
             gen.ensure_firewall_context_pools.assert_not_awaited()
 
@@ -465,8 +464,10 @@ class TestPools:
         metro = AsyncMock()
         gen.client.get = AsyncMock(return_value=metro)
 
-        await gen._ensure_colocation_pools(metro_id="metro-1")
+        returned = await gen._ensure_colocation_pools(metro_id="metro-1")
 
+        # The ASN pool id is handed on, so the EVPN step needs no second lookup.
+        assert returned == "asn-pool"
         assert metro.loopback_pool == {"id": "id-fr-loopback-pool"}
         assert metro.management_pool == {"id": "id-fr-management-pool"}
         assert metro.technical_pool == {"id": "id-fr-technical-pool"}
@@ -820,7 +821,7 @@ def _loopback(device: str, role: str, *, addressed: bool = True, iface_id: str |
     return loopback
 
 
-def _evpn_generator(*, existing_as: bool = True, asn_pool: bool = True, loopbacks: list | None = None) -> Any:
+def _evpn_generator(*, existing_as: bool = True, loopbacks: list | None = None) -> Any:
     gen = _make_generator()
     gen._edge_devices = {"eg-fr01": "cisco_nxos"}
     gen._vtep_pool = MagicMock(id="vtep-pool")
@@ -829,12 +830,7 @@ def _evpn_generator(*, existing_as: bool = True, asn_pool: bool = True, loopback
     metro_node = MagicMock()
     metro_node.save = AsyncMock()
 
-    async def _get(**kwargs: Any) -> Any:
-        if kwargs.get("kind") == "CoreNumberPool":
-            return MagicMock(id="asn-pool") if asn_pool else None
-        return metro_node
-
-    gen.client.get = AsyncMock(side_effect=_get)
+    gen.client.get = AsyncMock(return_value=metro_node)
     gen.client.filters = AsyncMock(
         side_effect=[
             [site_as] if existing_as else [],
@@ -866,7 +862,7 @@ class TestMetroEvpn:
         """A metro without physical edges makes no EVPN objects."""
         gen = _evpn_generator()
         gen._edge_devices = {}
-        await gen._ensure_metro_evpn(metro_id="metro-1")
+        await gen._ensure_metro_evpn(metro_id="metro-1", asn_pool_id="asn-pool")
         gen.client.create.assert_not_awaited()
         gen.client.filters.assert_not_awaited()
 
@@ -874,7 +870,7 @@ class TestMetroEvpn:
     async def test_existing_site_as_reused_and_attached(self) -> None:
         """The site AS is found by description — never re-drawn from the pool."""
         gen = _evpn_generator()
-        await gen._ensure_metro_evpn(metro_id="metro-1")
+        await gen._ensure_metro_evpn(metro_id="metro-1", asn_pool_id="asn-pool")
         assert gen.client.filters.await_args_list[0].kwargs["description__value"] == "fr EVPN site ASN"
         assert _created(gen, "RoutingAutonomousSystem") == []
         assert gen._metro_node.evpn_rt_as == {"id": "as-site"}
@@ -887,28 +883,21 @@ class TestMetroEvpn:
         new ASN, repointing every edge's overlay BGP."""
         gen = _evpn_generator()
         gen.client.group_context.related_node_ids = []
-        await gen._ensure_metro_evpn(metro_id="metro-1")
+        await gen._ensure_metro_evpn(metro_id="metro-1", asn_pool_id="asn-pool")
         assert "as-site" in gen.client.group_context.related_node_ids
 
     @pytest.mark.asyncio
     async def test_new_site_as_drawn_from_metro_pool(self) -> None:
         gen = _evpn_generator(existing_as=False)
-        await gen._ensure_metro_evpn(metro_id="metro-1")
+        await gen._ensure_metro_evpn(metro_id="metro-1", asn_pool_id="asn-pool")
         (as_data,) = _created(gen, "RoutingAutonomousSystem")
         assert as_data["asn"] == {"from_pool": {"id": "asn-pool"}}
         assert as_data["description"] == "fr EVPN site ASN"
 
     @pytest.mark.asyncio
-    async def test_no_pool_and_no_as_logs_error(self) -> None:
-        gen = _evpn_generator(existing_as=False, asn_pool=False)
-        await gen._ensure_metro_evpn(metro_id="metro-1")
-        gen.logger.error.assert_called_once()
-        gen.client.create.assert_not_awaited()
-
-    @pytest.mark.asyncio
     async def test_new_vtep_allocated_and_overlay_bgp_created(self) -> None:
         gen = _evpn_generator()
-        await gen._ensure_metro_evpn(metro_id="metro-1")
+        await gen._ensure_metro_evpn(metro_id="metro-1", asn_pool_id="asn-pool")
         assert gen.client.allocate_next_ip_address.await_args.kwargs["identifier"] == "eg-fr01-vtep"
         assert gen.client.allocate_next_ip_address.await_args.kwargs["prefix_length"] == 128
         (vtep,) = _created(gen, "DcimVirtualInterface")
@@ -926,7 +915,7 @@ class TestMetroEvpn:
         """A re-run keeps the VTEP's id and address — no new allocation."""
         loopbacks = [_loopback("eg-fr01", "loopback"), _loopback("eg-fr01", "loopback-vtep", iface_id="vtep-1")]
         gen = _evpn_generator(loopbacks=loopbacks)
-        await gen._ensure_metro_evpn(metro_id="metro-1")
+        await gen._ensure_metro_evpn(metro_id="metro-1", asn_pool_id="asn-pool")
         gen.client.allocate_next_ip_address.assert_not_awaited()
         (vtep,) = _created(gen, "DcimVirtualInterface")
         assert vtep["id"] == "vtep-1"
@@ -935,7 +924,7 @@ class TestMetroEvpn:
     @pytest.mark.asyncio
     async def test_edge_without_addressed_loopback_skipped(self) -> None:
         gen = _evpn_generator(loopbacks=[_loopback("eg-fr01", "loopback", addressed=False)])
-        await gen._ensure_metro_evpn(metro_id="metro-1")
+        await gen._ensure_metro_evpn(metro_id="metro-1", asn_pool_id="asn-pool")
         gen.logger.error.assert_called_once()
         assert _created(gen, "ManagedBGP") == []
 
@@ -984,6 +973,17 @@ class TestEdgePair:
         gen._ensure_edge_pair = AsyncMock()
         await gen.generate({"TopologyColocationMetro": [_metro()]})
         gen._ensure_edge_pair.assert_awaited_once_with(physical_edge_names=["eg-fr01"], overlay_process_ids=_PROCESSES)
+
+    @pytest.mark.asyncio
+    async def test_evpn_step_gets_the_asn_pool_of_the_pools_step(self) -> None:
+        gen = _make_generator()
+        gen._ensure_colocation_pools = AsyncMock(return_value="asn-pool")
+        gen._create_metro_devices = AsyncMock(return_value={"edge": ["eg-fr01"]})
+        gen._cable_metro_services = AsyncMock()
+        gen._ensure_metro_evpn = AsyncMock(return_value=_PROCESSES)
+        gen._ensure_edge_pair = AsyncMock()
+        await gen.generate({"TopologyColocationMetro": [_metro()]})
+        gen._ensure_metro_evpn.assert_awaited_once_with(metro_id="metro-1", asn_pool_id="asn-pool")
 
     @pytest.mark.asyncio
     async def test_pair_is_ensured_after_the_metro_evpn_step(self) -> None:
@@ -1076,9 +1076,9 @@ class TestEvpnProcessIds:
     async def test_overlay_process_ids_are_returned_by_edge_name(self) -> None:
         gen = _evpn_generator()
         gen.client.create.return_value.id = "bgp-saved"
-        assert await gen._ensure_metro_evpn(metro_id="metro-1") == {"eg-fr01": "bgp-saved"}
+        assert await gen._ensure_metro_evpn(metro_id="metro-1", asn_pool_id="asn-pool") == {"eg-fr01": "bgp-saved"}
 
     @pytest.mark.asyncio
     async def test_no_edges_returns_no_ids(self) -> None:
         gen = _make_generator()
-        assert await gen._ensure_metro_evpn(metro_id="metro-1") == {}
+        assert await gen._ensure_metro_evpn(metro_id="metro-1", asn_pool_id="asn-pool") == {}

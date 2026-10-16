@@ -142,28 +142,33 @@ class BaseDeviceTransform(InfrahubTransform):
     # Resolve a VxlanSegment's local VLAN through this device's own VLAN domain.
     resolve_vlan_domain: bool = True
 
+    def _device_activations(self, device: dict[str, Any]) -> list[dict[str, Any]]:
+        """Segment activations of one device: from its interface capabilities, plus the
+        stretched segments its multi-site border gateway carries."""
+        interfaces = device.get("interfaces") or []
+        capabilities = device.get("capabilities") or []
+        activations = self._collect_activations_from_interfaces(
+            interfaces, device_id=device.get("id"), device_capabilities=capabilities
+        )
+        if any(iface.get("role") == "multisite-vip" for iface in interfaces):
+            activations.extend(
+                self._collect_border_gateway_activations(
+                    device.get("deployment"),
+                    device_id=device.get("id"),
+                    device_capabilities=capabilities,
+                    seen={(act.get("segment") or {}).get("id") for act in activations},
+                )
+            )
+        return activations
+
     async def transform(self, data: Any) -> Any:
         device_data, extra_roots, platform_name = self._device_and_platform(data)
         if not platform_name:
             return self._no_platform_config(device_data)
 
-        # Collect segment activations from interface capabilities (segment → segment_deployments)
-        activations = self._collect_activations_from_interfaces(
-            device_data.get("interfaces") or [],
-            device_id=device_data.get("id"),
-            device_capabilities=device_data.get("capabilities") or [],
-        )
-        if any(iface.get("role") == "multisite-vip" for iface in device_data.get("interfaces") or []):
-            activations.extend(
-                self._collect_border_gateway_activations(
-                    device_data.get("deployment"),
-                    device_id=device_data.get("id"),
-                    device_capabilities=device_data.get("capabilities") or [],
-                    seen={(act.get("segment") or {}).get("id") for act in activations},
-                )
-            )
+        activations = self._device_activations(device_data)
         if activations:
-            device_data["segment_deployments"] = self._filter_segment_deployments(activations)
+            device_data["segment_deployments"] = activations
         # Transit legs of the firewall contexts tagged on this device's service
         # ports: VLAN/VNI/VRF/anycast only, never segment policy input.
         device_data["exchange_transits"] = get_exchange_transits(_firewall_context_caps(device_data.get("interfaces")))
@@ -324,8 +329,6 @@ class BaseDeviceTransform(InfrahubTransform):
             "vxlan": vxlan,
             "acls": acls,
             "vrf_routes": vrf_routes,
-            "customer_pbr_rules": customer_pbr_rules,
-            "lb_backend_pbr_rules": lb_backend_pbr_rules,
             "leaf_pbr_rules": leaf_pbr_rules,
             # The leaf's own transit /29s: kept out of the direct-to-EVPN redistribution
             # so only the borders originate them as type-5 routes.
@@ -510,14 +513,6 @@ class BaseDeviceTransform(InfrahubTransform):
                 continue
             seen.add(seg_id)
             activations.append({"vlan_id": own_domain_seg["vlan_id"], "vni": dep["vni"], "segment": seg})
-        return activations
-
-    def _filter_segment_deployments(self, activations: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Filter segment activations before they are used in config generation.
-
-        Override in subclasses to restrict which segments appear in the config.
-        Default: return all activations unchanged.
-        """
         return activations
 
     def _load_template(self, platform_name: str) -> Template:

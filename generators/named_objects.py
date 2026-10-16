@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .connections import tracked_save_kwargs
+
 if TYPE_CHECKING:
     import logging
 
@@ -55,10 +57,7 @@ class GetOrCreateByNameMixin:
 
         try:
             obj = await self.client.create(kind=kind, data=create_data)
-            if track:
-                await obj.save(allow_upsert=True)
-            else:
-                await obj.save(allow_upsert=True, update_group_context=False)
+            await obj.save(**tracked_save_kwargs(track))
             if created_log:
                 self.logger.info(created_log, name)
             return obj

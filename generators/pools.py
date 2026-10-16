@@ -26,14 +26,12 @@ from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool, CoreNumb
 if TYPE_CHECKING:
     import logging
 
-from .helpers.pools import FW_CONTEXT_VLAN_END
+from .helpers.pools import FW_CONTEXT_VLAN_END, FW_CONTEXT_VLAN_START
 from .logger import GeneratorError
 from .protocols import TopologyPod
 
 _PARENT_POOL_MAX_RETRIES = 10
 _PARENT_POOL_RETRY_DELAY = 3.0
-_PARENT_POOL_RETRY_CAP = 20.0
-_PARENT_POOL_RETRY_JITTER = 0.25
 
 _RESOURCE_LOCK_MAX_ATTEMPTS = 20
 _RESOURCE_LOCK_RETRY_DELAY = 2.0
@@ -256,9 +254,7 @@ class PoolMixin:
             except NodeNotFoundError:
                 if attempt == _PARENT_POOL_MAX_RETRIES - 1:
                     raise
-                delay = self._retry_delay(
-                    _PARENT_POOL_RETRY_DELAY, attempt, cap=_PARENT_POOL_RETRY_CAP, jitter=_PARENT_POOL_RETRY_JITTER
-                )
+                delay = self._retry_delay(_PARENT_POOL_RETRY_DELAY, attempt)
                 self.logger.info(
                     f"Parent pool '{parent_pool_name}' not found yet — "
                     f"retrying in {delay:.2f}s (attempt {attempt + 1}/{_PARENT_POOL_MAX_RETRIES})"
@@ -270,7 +266,7 @@ class PoolMixin:
             identifier={"name__value": [parent_pool_name]},
         )
 
-    async def ensure_firewall_context_pools(self, *, name: str, vlan_start: int) -> None:
+    async def ensure_firewall_context_pools(self, *, name: str) -> None:
         """Create a fabric's FirewallContext VLAN pool.
 
         Read by generators/firewall_context.py's _ensure_context_vlan, which
@@ -288,7 +284,7 @@ class PoolMixin:
             await self.upsert_number_pool(
                 pool_name=f"{name}-fw-context-vlan-pool",
                 description=f"FirewallContext sub-interface VLAN pool for {name.upper()}",
-                start_range=vlan_start,
+                start_range=FW_CONTEXT_VLAN_START,
                 end_range=FW_CONTEXT_VLAN_END,
                 node="ManagedFirewallContext",
                 node_attribute="vlan_id",

@@ -82,27 +82,7 @@ class TestDeviceMixinCreateDevices:
 
         create_kwargs = gen.client.create.call_args.kwargs
         assert create_kwargs["data"]["owner"] == {"id": "owner-0"}
-
-    @pytest.mark.asyncio
-    async def test_forwards_owner_for_physical_devices(self) -> None:
-        """Physical device creation should include the supplied owner relationship."""
-
-        gen = _make_generator()
-        created_device = _mock_created_device(DcimPhysicalDevice.__name__, "dc1-fw-01")
-        gen.client.create = AsyncMock(return_value=created_device)
-
-        owner = MagicMock(id="owner-1")
-        await gen.create_devices(
-            device_role="firewall",
-            quantity=1,
-            deployment_id="dep-1",
-            template={"device_type": {"id": "dt-1"}, "platform": {"name": "nxos"}},
-            owner=owner,
-        )
-
-        create_kwargs = gen.client.create.call_args.kwargs
         assert create_kwargs["kind"] is DcimPhysicalDevice
-        assert create_kwargs["data"]["owner"] == {"id": "owner-1"}
         assert "hosting_device" not in create_kwargs["data"]
 
     @pytest.mark.asyncio
@@ -113,15 +93,13 @@ class TestDeviceMixinCreateDevices:
         created_device = _mock_created_device(DcimVirtualDevice.__name__, "dc1-vm-01")
         gen.client.create = AsyncMock(return_value=created_device)
 
-        owner = MagicMock(id="owner-2")
         hosting_device = MagicMock(id="host-1")
         await gen.create_devices(
             device_role="appliance",
             quantity=1,
             deployment_id="dep-2",
-            template={"device_type": {"id": "dt-2"}, "platform": {"name": "linux"}},
+            template={"device_type": {"id": "dt-2"}, "platform": {"name": "linux"}, "owner": {"id": "owner-2"}},
             options={"virtual": True},
-            owner=owner,
             hosting_device=hosting_device,
         )
 

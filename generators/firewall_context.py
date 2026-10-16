@@ -29,6 +29,7 @@ from utils.exchange_transit import (
     OFFSET_MEMBER_A,
     OFFSET_MEMBER_B,
     TRANSIT_OFFSETS,
+    TRANSIT_PREFIXLEN,
     namespace_type_for_environment,
     transit_vlan,
 )
@@ -50,7 +51,6 @@ from .protocols import (
 from .types import DeviceOptions
 
 _SHARED_CONTEXT_NAME_SUFFIX = "shared"
-_TRANSIT_PREFIX_LENGTH = 29
 _MEMBER_OFFSETS = (OFFSET_MEMBER_A, OFFSET_MEMBER_B)
 _SNAT_POOL_NAME = "FW-SNAT-INTERNET-IPv4"
 _SNAT_PREFIX_LENGTH = 32
@@ -93,6 +93,19 @@ class _TransitState:
     untagged_port_ids: list[str]
 
 
+# (physical template's platform name, device_role) -> matching virtual
+# template's name prefix — see data/bootstrap's 09_virtual_device_templates_
+# *.yaml, where every platform/role combination provides a _CUSTOMER_<size>
+# variant per DC size (e.g. "CloudGuard_EDGE_CUSTOMER_L").
+_VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE: dict[tuple[str, str], str] = {
+    ("checkpoint_gaia", "firewall"): "CloudGuard_EDGE",
+    ("panos", "firewall"): "PA-VM_EDGE",
+    ("junos", "firewall"): "vSRX_EDGE",
+    ("f5_tmos", "load-balancer"): "BIG-IP-VE_LOAD_BALANCER",
+    ("netscaler", "load-balancer"): "NetScaler-ADC-VPX_LOAD_BALANCER",
+}
+
+
 def _dev_id(device: Any) -> str:
     """id of a device given as a clean_data() dict (GraphQL-sourced) or an SDK node (filters()-sourced)."""
     return device["id"] if isinstance(device, dict) else device.id
@@ -131,8 +144,7 @@ class FirewallContextMixin:
     """Shared/dedicated FirewallContext and dedicated load-balancer provisioning.
 
     The host class sets ``_customer_kind`` and ``_parent_label``, and mixes in PoolMixin (``resource_lock``),
-    DeviceMixin (``create_devices``, ``_ensure_ha_pairs``,
-    ``link_serving_firewall_context``, ``resolve_virtual_template``) and CablingMixin
+    DeviceMixin (``create_devices``, ``_ensure_ha_pairs``) and CablingMixin
     (``find_role_interface``, ``ensure_vlan_subinterface``,
     ``upsert_prefix_addresses``).
     """
@@ -152,12 +164,63 @@ class FirewallContextMixin:
     resource_lock: Callable[[str], AbstractAsyncContextManager[None]]
     create_devices: Callable[..., Awaitable[list[str]]]
     _ensure_ha_pairs: Callable[..., Awaitable[None]]
-    link_serving_firewall_context: Callable[..., Awaitable[None]]
-    resolve_virtual_template: Callable[..., Awaitable[dict[str, Any] | None]]
     find_role_interface: Callable[..., Awaitable[Any]]
     ensure_vlan_subinterface: Callable[..., Awaitable[Any]]
     upsert_prefix_addresses: Callable[..., Awaitable[dict[int, Any]]]
     wait_for_parent_generator_and_refetch: Callable[..., Awaitable[dict | None]]
+
+    async def resolve_virtual_template(
+        self, *, platform: str | None, role: str, size_suffix: str, fallback: str
+    ) -> dict[str, Any] | None:
+        """The {id, device_type, platform} reference of the virtual template
+        "{prefix}_{size_suffix}" matching a physical platform/role, or None
+        (warned, ending with ``fallback``) when there is no mapping or no
+        such template."""
+        prefix = _VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE.get((platform or "", role))
+        if not prefix:
+            self.logger.warning(f"No virtual template mapping for platform={platform} role={role} — {fallback}.")
+            return None
+        template_name = f"{prefix}_{size_suffix}"
+        templates = await self.client.filters(
+            kind="TemplateDcimVirtualDevice",
+            template_name__value=template_name,
+            include=["device_type", "platform"],
+        )
+        if not templates:
+            self.logger.warning(
+                f"No virtual template '{template_name}' found for platform={platform} role={role} — {fallback}."
+            )
+            return None
+        template = templates[0]
+        return {
+            "id": template.id,
+            "device_type": {"id": template.device_type.peer.id},
+            "platform": {"id": template.platform.peer.id},
+        }
+
+    async def link_serving_firewall_context(self, *, kind: str, customer_id: str, context_id: str) -> None:
+        """Point this deployment at the context its segments terminate on.
+
+        Shared by generators/topology/customer_dc.py (kind=TopologyCustomerDC)
+        and generators/topology/customer_colocation.py
+        (kind=TopologyCustomerColocation) — same deployment-to-context link,
+        same race-free update, same facility-agnostic rationale.
+
+        The firewall transform reads the link to place each rule in the
+        contexts of its two segments. Only this deployment's own run writes
+        it, so boardings onto one shared context never race. Not tracked:
+        the deployment is the generator's target, not its output, and
+        tracking it would let delete_unused_nodes remove it.
+        """
+        try:
+            deployment = await self.client.get(kind=kind, id=customer_id)
+            if deployment.serving_firewall_context.id == context_id:
+                return
+            deployment.serving_firewall_context = context_id
+            await deployment.save(update_group_context=False)
+            self.logger.info(f"Deployment {customer_id} served by FirewallContext {context_id}")
+        except Exception as exc:
+            self.logger.error(f"Failed to link deployment {customer_id} to FirewallContext {context_id}: {exc}")
 
     async def _resolve_context_target(self, customer: dict[str, Any], customer_id: str) -> _ContextTarget | None:
         """The cluster, context name and ownership for this customer's context; None (logged) when there is none."""
@@ -549,7 +612,7 @@ class FirewallContextMixin:
                 resource_pool=pool,
                 kind=IpamPrefix,
                 identifier=f"{context_obj.id}-{namespace.name.value}-transit",
-                prefix_length=_TRANSIT_PREFIX_LENGTH,
+                prefix_length=TRANSIT_PREFIXLEN,
                 member_type="address",
                 data={"role": "technical"},
             )

@@ -11,7 +11,6 @@ from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
 from ..dc_config import host_bits_to_prefix_length, resolve_dc_size_layout
 from ..devices import DeviceMixin
 from ..helpers import name_to_asn_range
-from ..helpers.pools import FW_CONTEXT_VLAN_START
 from ..helpers.routing import RoutingStrategy
 from ..helpers.template_interfaces import template_interface_names_by_role
 from ..pod_config import POD_LAYOUTS, templates_by_role
@@ -21,7 +20,8 @@ from ..protocols import (
     TopologyPod,
 )
 from ..routing import RoutingMixin
-from ..types import CablingOptions, NamingConvention, RoutingOptions, naming_convention_of
+from ..types import CablingOptions, RoutingOptions, naming_convention_of
+from .fabric_shared import ServiceDevicesMixin, loopback_prefix_length, p2p_prefix_length
 
 _DC_VALID_FABRIC_ROLES = frozenset({"super-spine", "hyper-spine", "border-leaf", "firewall", "load-balancer"})
 
@@ -60,7 +60,7 @@ class TopologyDcData(TypedDict, total=False):
     lb_manager_controllers: list[dict[str, Any]]
 
 
-class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, CommonGenerator):
+class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, CommonGenerator):
     """Generate data center topology with super-spine infrastructure."""
 
     data: TopologyDcData
@@ -348,7 +348,6 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
                 )
             ]
             if super_spine_names and super_spine_uplink_interfaces and hyper_spine_downlink_interfaces:
-                p2p_prefix_length = 127 if is_ipv6 else 31
                 # Confirmed live on DC4: the DC-level technical pool itself is
                 # NOT duplicated (allocate_resource_pools()'s own lock already
                 # rules that out) — the race is here, in create_cabling()'s
@@ -373,7 +372,7 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
                         strategy="pod",
                         options=CablingOptions(
                             pool=dc_pools.get("technical"),
-                            p2p_prefix_length=p2p_prefix_length,
+                            p2p_prefix_length=p2p_prefix_length(is_ipv6),
                         ),
                     )
                 await self.create_routing(
@@ -432,7 +431,7 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
                         indexes=indexes,
                         allocate_loopback=True,
                         loopback_pool=dc_pools.get("dc-fabric-loopback"),
-                        loopback_prefix_length=128 if is_ipv6 else 32,
+                        loopback_prefix_length=loopback_prefix_length(is_ipv6),
                         management_pool=dc_pools.get("management"),
                     ),
                 )
@@ -534,7 +533,7 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
                     indexes=[self.data["index"], pod.index.value],
                     allocate_loopback=True,
                     loopback_pool=self._dc_fabric_loopback_pool_id,
-                    loopback_prefix_length=128 if self._is_ipv6 else 32,
+                    loopback_prefix_length=loopback_prefix_length(self._is_ipv6),
                 )
                 names = await self.create_devices(
                     deployment_id=self.data["id"],
@@ -563,31 +562,6 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
 
         return all_names
 
-    async def _create_role_devices(
-        self,
-        *,
-        role: Literal["firewall", "load-balancer"],
-        entries: list[dict[str, Any]],
-        deployment_id: str,
-        naming_convention: NamingConvention,
-        indexes: list[int],
-    ) -> list[str]:
-        """Create firewall/load-balancer devices for one fabric_templates role,
-        DC-wide (deployment_id=dc.id), via the shared HA-paired creation shape
-        (DeviceMixin.create_ha_role_devices — also used by pod.py and
-        colocation.py), flattened to the created names."""
-        all_names: list[str] = []
-        for _, names in await self.create_ha_role_devices(
-            role=role,
-            entries=entries,
-            deployment_id=deployment_id,
-            naming_convention=naming_convention,
-            indexes=indexes,
-        ):
-            all_names.extend(names)
-
-        return all_names
-
     async def _generate_dc_scoped_fabric_devices(self) -> None:
         """Create border-leaf devices and provision the DC's shared service chain.
 
@@ -607,27 +581,23 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
         by create_devices(), any quantity) and cable them to border-leaf."""
 
         data = self.data
-        naming_convention = naming_convention_of(data)
-        fabric_templates = data.get("fabric_templates", [])
-        firewall_templates = templates_by_role(fabric_templates, "firewall")
-        load_balancer_templates = templates_by_role(fabric_templates, "load-balancer")
-        firewall_names = await self._create_role_devices(
-            role="firewall",
-            entries=firewall_templates,
+        firewall_names, load_balancer_names = await self.create_firewall_and_load_balancer_devices(
+            fabric_templates=data.get("fabric_templates", []),
             deployment_id=data["id"],
-            naming_convention=naming_convention,
-            indexes=[data["index"]],
-        )
-        load_balancer_names = await self._create_role_devices(
-            role="load-balancer",
-            entries=load_balancer_templates,
-            deployment_id=data["id"],
-            naming_convention=naming_convention,
+            naming_convention=naming_convention_of(data),
             indexes=[data["index"]],
         )
 
         if firewall_names:
-            await self._ensure_firewall_context_pools(dc_name=self.fabric_name)
+            # This DC's own FirewallContext VLAN pool. Per-DC (not global) so each
+            # fabric's context sub-interfaces stay within its own numbering,
+            # matching the {fabric_name}-vlan-pool/{fabric_name}-vni-pool pattern
+            # above; the contexts' transit /29s come from the per-VRF
+            # FW-Transit-* bootstrap pools, so there is no per-DC P2P pool.
+            # generators/topology/customer_dc.py's _resolve_context_target
+            # allocates from it once a customer boards onto this DC. See
+            # PoolMixin.ensure_firewall_context_pools for the locking rationale.
+            await self.ensure_firewall_context_pools(name=self.fabric_name)
 
         await self._cable_border_services(
             border_role_for=BORDER_ROLE_FOR_SERVICES,
@@ -636,21 +606,3 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
             firewall_names=firewall_names,
             load_balancer_names=load_balancer_names,
         )
-
-    async def _ensure_firewall_context_pools(self, *, dc_name: str) -> None:
-        """Create this DC's own FirewallContext VLAN pool.
-
-        Per-DC (not global) so each fabric's context sub-interfaces stay
-        within its own numbering, matching the existing
-        {fabric_name}-vlan-pool/{fabric_name}-vni-pool pattern above. The
-        contexts' transit /29s come from the per-VRF FW-Transit-* bootstrap
-        pools, so there is no per-DC P2P pool.
-
-        generators/topology/customer_dc.py's _resolve_context_target
-        allocates from the VLAN pool once a customer boards onto this DC.
-
-        See PoolMixin.ensure_firewall_context_pools for the shared
-        pool-creation mechanism (also used by generators/topology/
-        colocation.py for the metro equivalent) and its locking rationale.
-        """
-        await self.ensure_firewall_context_pools(name=dc_name, vlan_start=FW_CONTEXT_VLAN_START)

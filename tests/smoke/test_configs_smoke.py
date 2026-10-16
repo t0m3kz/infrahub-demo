@@ -20,10 +20,12 @@ import pytest
 from transforms.cloud.vpc_terraform import CloudVpcTerraform
 from transforms.config.access_leaf import AccessLeaf
 from transforms.config.border_leaf import BorderLeaf
+from transforms.config.border_spine import BorderSpine
 from transforms.config.edge import Edge
 from transforms.config.firewall import Firewall
 from transforms.config.l2_leaf import L2Leaf
 from transforms.config.leaf import Leaf
+from transforms.config.loadbalancer import LoadBalancer
 from transforms.config.proxy import Proxy
 from transforms.config.spine import Spine
 from transforms.config.super_spine import SuperSpine
@@ -38,6 +40,8 @@ _PREFIX_TO_CLASS: list[tuple[str, type]] = sorted(
     [
         ("super_spine", SuperSpine),
         ("border_leaf", BorderLeaf),
+        ("border_spine", BorderSpine),
+        ("loadbalancer", LoadBalancer),
         ("cloud_terraform", CloudVpcTerraform),
         ("firewall", Firewall),
         ("spine", Spine),

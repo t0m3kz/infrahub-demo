@@ -10,6 +10,8 @@ than a previous run if device counts change.
 
 from __future__ import annotations
 
+from utils.exchange_transit import CONTEXT_VLAN_MAX, CONTEXT_VLAN_MIN
+
 DEFAULT_ASN_BASE_START = 4200000000
 
 # Customer-facing VLAN ID range for every local VLAN domain (MLAG pair or
@@ -37,8 +39,8 @@ CUSTOMER_VLAN_ID_MAX = 2999
 
 # FirewallContext VLAN pool of every fabric/metro (one context = one VLAN on the
 # firewall uplink and the border-leaf service port).
-FW_CONTEXT_VLAN_START = 3000
-FW_CONTEXT_VLAN_END = 3199
+FW_CONTEXT_VLAN_START = CONTEXT_VLAN_MIN
+FW_CONTEXT_VLAN_END = CONTEXT_VLAN_MAX
 
 
 def calculate_fabric_asn_block_size(

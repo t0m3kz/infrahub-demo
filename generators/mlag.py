@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
     from infrahub_sdk import InfrahubClient
 
+from .connections import tracked_save_kwargs
 from .helpers import get_lag_name, get_loopback_name
 from .protocols import (
     DcimCable,
@@ -39,12 +40,6 @@ _CONTROL_POOLS: dict[int, tuple[str, int, int]] = {
     4: ("MLAG-Control-IPv4", 31, 32),
     6: ("MLAG-Control-IPv6", 127, 128),
 }
-
-
-def _save_kwargs(track: bool) -> dict[str, Any]:
-    """save() kwargs for a wiring write: a plain upsert when this run owns the
-    domain's wiring, else one that stays out of the run's tracking group."""
-    return {"allow_upsert": True} if track else {"allow_upsert": True, "update_group_context": False}
 
 
 class MLAGWiringMixin:
@@ -238,7 +233,7 @@ class MLAGWiringMixin:
                 "member_interfaces": [{"id": iface.id} for iface in member_ifaces],
             },
         )
-        await lag_obj.save(**_save_kwargs(track))
+        await lag_obj.save(**tracked_save_kwargs(track))
         self.logger.info(
             f"  [{dev_name}] {'Updated' if existing_lag else 'Created'} peer-link LAG {lag_name} ({lag_obj.id})"
         )
@@ -279,7 +274,7 @@ class MLAGWiringMixin:
                 **({"ip_address": {"id": control_ip_id}} if control_ip_id else {}),
             },
         )
-        await virt_obj.save(**_save_kwargs(track))
+        await virt_obj.save(**tracked_save_kwargs(track))
         self.logger.info(
             f"  [{dev_name}] {'Updated' if existing_virt else 'Created'} virtual peer-link "
             f"{loopback_name} ({virt_obj.id})"
@@ -364,7 +359,7 @@ class MLAGWiringMixin:
                 "interface_capabilities": [{"id": mlag_obj.id}],
             },
         )
-        await svi_obj.save(**_save_kwargs(track))
+        await svi_obj.save(**tracked_save_kwargs(track))
         self.logger.info(
             f"  [{device_obj.name.value}] {'Updated' if existing_svi else 'Created'} MLAG control SVI "
             f"{_CONTROL_SVI_NAME} ({svi_obj.id})"
@@ -452,7 +447,7 @@ class MLAGWiringMixin:
             if deployment_id:
                 cable_data["deployment"] = {"id": deployment_id}
             cable_obj = await self.client.create(kind=DcimCable, data=cable_data)
-            await cable_obj.save(**_save_kwargs(track))
+            await cable_obj.save(**tracked_save_kwargs(track))
             self.logger.info(
                 f"  [{mlag_name}] {'Updated' if existing_cable else 'Created'} {cable_name}: "
                 f"{dev_a_name}:{iface_a.name.value} ↔ {dev_b_name}:{iface_b.name.value}"

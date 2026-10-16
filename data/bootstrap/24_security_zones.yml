@@ -1,7 +1,7 @@
 ---
 # The macro trust zones: PROD-ZONE / NONPROD-ZONE are what every tenant segment
-# is classified into by environment (generators/helpers/rules.py
-# RulesPlanner.pick_zone_name); INTERNET-ZONE and MANAGEMENT-ZONE are the
+# is classified into by environment (utils/exchange_transit.py
+# zone_name_for_namespace_type); INTERNET-ZONE and MANAGEMENT-ZONE are the
 # exchange peers (utils/exchange_transit.py ZONE_BY_NS_TYPE), assigned
 # explicitly to the segments that live there.
 # On main from the start so branches boarding segments in parallel share one

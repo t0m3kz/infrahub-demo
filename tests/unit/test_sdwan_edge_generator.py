@@ -143,7 +143,6 @@ class TestGenerateHappyPath:
         overlay_circuit = _node("vc-1")
         overlay_circuit.tunnel_id = MagicMock(value=2000)
         iface_capabilities = MagicMock()
-        iface_capabilities.fetch = AsyncMock()
         iface_capabilities.peers = []
         overlay_circuit.interface_capabilities = iface_capabilities
         gateway_subiface = _node("subiface-1")
@@ -156,7 +155,6 @@ class TestGenerateHappyPath:
         orchestrator = MagicMock()
         orchestrator.name.value = "EQX-FR2-SDWAN-VCO1"
         managed_devices = MagicMock()
-        managed_devices.fetch = AsyncMock()
         managed_devices.peers = []
         orchestrator.managed_devices = managed_devices
         orchestrator.save = AsyncMock()
@@ -165,10 +163,10 @@ class TestGenerateHappyPath:
         # query); (2) existing-edge-by-
         # name lookup -> none, so the edge is new and the template gets
         # resolved; (3) VCE-610_EDGE template lookup; (4) edge uplink
-        # interface lookup; (5) re-fetch the just-created overlay circuit
-        # (real __typename for interface_capabilities peers, see
+        # interface lookup; (5) re-read the just-created overlay circuit
+        # (full interface_capabilities peer list, see
         # _link_overlay_to_gateway_subinterface's docstring); (6) orchestrator
-        # lookup.
+        # lookup (managed_devices included).
         gen.client.filters = AsyncMock(
             side_effect=[_providers(), [], [edge_template], [edge_uplink], [overlay_circuit], [orchestrator]]
         )
@@ -235,7 +233,6 @@ class TestGenerateHappyPath:
         overlay_circuit = _node("vc-1")
         overlay_circuit.tunnel_id = MagicMock(value=2000)
         iface_capabilities = MagicMock()
-        iface_capabilities.fetch = AsyncMock()
         iface_capabilities.peers = []
         overlay_circuit.interface_capabilities = iface_capabilities
         gateway_subiface = _node("subiface-1")
@@ -246,7 +243,6 @@ class TestGenerateHappyPath:
         edge_uplink.name.value = "GE1"
         orchestrator = MagicMock()
         managed_devices = MagicMock()
-        managed_devices.fetch = AsyncMock()
         managed_devices.peers = []
         orchestrator.managed_devices = managed_devices
         orchestrator.save = AsyncMock()
@@ -368,6 +364,8 @@ class TestGenerateHappyPath:
         )
         self._orchestrator.managed_devices.add.assert_not_called()
         self._orchestrator.save.assert_not_awaited()
+        # The peer ids come with the lookup (include=), not from a per-relationship fetch.
+        assert gen.client.filters.await_args_list[-1].kwargs["include"] == ["managed_devices"]
 
     @pytest.mark.asyncio
     async def test_already_linked_gateway_subinterface_is_not_re_added(self) -> None:

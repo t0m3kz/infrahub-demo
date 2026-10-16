@@ -213,9 +213,3 @@ class TestResolveDependencyPorts:
         assert PortProfileHelper.resolve_dependency_ports({"ports": ["tcp/443"]}, {"ports": ["bogus"]}) == [
             ("tcp", 443, None)
         ]
-
-    def test_rules_planner_resolve_ports_delegates(self) -> None:
-        """RulesPlanner.resolve_ports is the same resolution the generators call."""
-        dep = {"ports": []}
-        target = {"ports": ["tcp/5432"]}
-        assert RulesPlanner.resolve_ports(dep, target) == PortProfileHelper.resolve_dependency_ports(dep, target)

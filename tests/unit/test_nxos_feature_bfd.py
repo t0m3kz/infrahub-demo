@@ -15,7 +15,8 @@ from jinja2 import Environment, FileSystemLoader
 
 _TEMPLATES = Path(__file__).resolve().parents[2] / "templates" / "configs"
 _ENV = Environment(loader=FileSystemLoader(str(_TEMPLATES)), trim_blocks=False, keep_trailing_newline=True)
-_DEVICE_TEMPLATES = ["leafs", "border_leafs", "spines", "super_spines", "edges"]
+# border_leafs/cisco_nxos.j2 renders leafs/cisco_nxos.j2 with a flag, so it has no BGP stanza of its own.
+_DEVICE_TEMPLATES = ["leafs", "spines", "super_spines", "edges"]
 
 
 def _bgp(

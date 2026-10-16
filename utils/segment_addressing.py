@@ -11,6 +11,11 @@ def _in_family(prefix: str, family: str) -> bool:
     return is_v6 if family == "ipv6" else not is_v6
 
 
+def segment_namespace(seg: dict[str, Any]) -> dict[str, Any]:
+    """The ip_namespace of the segment's gateway prefix, or {} when it has none."""
+    return ((seg.get("gateway") or {}).get("ip_prefix") or {}).get("ip_namespace") or {}
+
+
 def segment_prefix(seg: dict[str, Any], family: str = "ipv4") -> str | None:
     """The CIDR a segment matches on, or None when it has none in `family`.
 

@@ -18,6 +18,8 @@ from __future__ import annotations
 import ipaddress
 from typing import Any, TypedDict
 
+from utils.segment_addressing import segment_namespace
+
 TRANSIT_SLOT: dict[str, int] = {"prod": 0, "non_prod": 1, "internet": 2, "management": 3}
 """Namespace type -> VLAN slot; one slot per fixed VRF namespace."""
 
@@ -26,6 +28,12 @@ TRANSIT_VLAN_BAND = 200
 
 CONTEXT_VLAN_MIN = 3000
 CONTEXT_VLAN_MAX = 3199
+
+MAX_ENCODABLE_VNI = 65535
+"""A route-target or route-distinguisher built from a 4-byte private ASN leaves 16 bits for the VNI."""
+
+TRANSIT_PREFIXLEN = 29
+"""Prefix length of a firewall transit leg; the member offsets below index into it."""
 
 TRANSIT_VNI_BASE = 61000
 """transit VNI = base + transit VLAN, i.e. 64000-64799 (<= 65535, RD/RT encodable)."""
@@ -145,8 +153,7 @@ def is_routed_tenant_segment(segment: dict[str, Any]) -> bool:
     """
     if segment.get("typename") not in ROUTED_SEGMENT_KINDS:
         return False
-    prefix = (segment.get("gateway") or {}).get("ip_prefix") or {}
-    namespace_type = (prefix.get("ip_namespace") or {}).get("namespace_type")
+    namespace_type = segment_namespace(segment).get("namespace_type")
     zone = (segment.get("security_zone") or {}).get("name")
     return namespace_type in TENANT_NAMESPACE_TYPES and not is_exchange_zone(zone)
 

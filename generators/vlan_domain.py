@@ -28,13 +28,12 @@ import logging
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 from utils.data_cleaning import clean_data
 
 from .connections import BORDER_ROLE_FOR_SERVICES
 from .devices import standalone_vlan_domain_name
-from .logger import GeneratorError
 from .protocols import DcimPhysicalDevice, ManagedStandaloneVlanDomain, ManagedVlanDomainSegment
 
 # Devices that act as a deployment's EVPN Multi-Site border gateway for a
@@ -65,7 +64,7 @@ class VlanDomainMixin:
     """Mixin providing (segment, VLAN domain) -> local VLAN ID realization.
 
     Expects the host class to provide: ``client``, ``logger``,
-    ``resource_lock`` (PoolMixin — every host composes PoolMixin).
+    ``resource_lock`` (PoolMixin — every host composes PoolMixin) and ``fail`` (CommonGenerator).
     """
 
     client: Any
@@ -74,6 +73,8 @@ class VlanDomainMixin:
     # method, so it never shadows the real implementation via MRO (same
     # convention as EndpointUplinkMixin's cross-mixin attributes).
     resource_lock: Callable[[str], AbstractAsyncContextManager[Any]]
+    # CommonGenerator.fail — same convention.
+    fail: Callable[[str], NoReturn]
 
     async def _resolve_vlan_domain(self, device: Any) -> tuple[str, str]:
         """Return (domain_kind, domain_id) for a leaf/tor device: its
@@ -110,8 +111,7 @@ class VlanDomainMixin:
                 f"Standalone VLAN domain {domain_name} not found — the generator that created device "
                 f"{device.name.value} owns it and must run first"
             )
-            self.logger.error(message)  # raises GeneratorError under the generator's fail-on-error logger
-            raise GeneratorError(message)
+            self.fail(message)
         vlan_pool_rel = getattr(domain, "vlan_pool", None)
         pool_id = getattr(vlan_pool_rel, "id", None) if vlan_pool_rel else None
         return domain.id, pool_id

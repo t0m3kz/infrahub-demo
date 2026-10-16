@@ -6,18 +6,16 @@ from typing import Any, cast
 
 from transforms.helpers.addressing import host_ip
 from utils.exchange_transit import EXCHANGE_PEERS, INTERNET_TYPE
+from utils.fabric_roles import RR_ROLES
 
 _log = logging.getLogger(__name__)
 
-# Roles that relay EVPN routes between VTEPs rather than only originating their
-# own. Spellings are the hyphenated ones from the role dropdown in
-# schemas/base/dcim.yml; `super_spine` is tolerated because older data uses it.
-#
-# `border-spine` is included even though it is itself a VTEP (a collapsed
-# spine + border-leaf for micro-fabrics): it relays other VTEPs' routes too,
-# and both knobs gated on this set only affect re-advertised routes, never the
-# device's own originated ones.
-_EVPN_RELAY_ROLES = frozenset({"spine", "super-spine", "super_spine", "hyper-spine", "border-spine"})
+# The overlay route reflectors (utils/fabric_roles.py RR_ROLES) relay EVPN
+# routes between VTEPs rather than only originating their own. `border-spine`
+# is among them even though it is itself a VTEP (a collapsed spine +
+# border-leaf for micro-fabrics): it relays other VTEPs' routes too, and both
+# knobs gated on this set only affect re-advertised routes, never the device's
+# own originated ones.
 
 
 def _sort_key_ip(ip_obj: Any) -> tuple:
@@ -526,7 +524,7 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
             if isinstance(ra, dict) and ra.get("asn"):
                 remote_as = ra["asn"]
                 break
-        _RR_ROLES = ("spine", "super-spine", "super_spine", "border-spine")
+        _RR_ROLES = ("spine", "super-spine", "border-spine")
         has_rr_flag = any(bool(s.get("route_reflector_client")) for s in overlay_ibgp)
         # Spines/super-spines are always RRs when peerings have the RR flag.
         # Leafs become intermediate RRs in middle_rack/mixed deployments
@@ -568,7 +566,7 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
         # Only the relaying tier needs it. A leaf/border-leaf originates its own
         # routes with itself as the next-hop, so setting it there would be
         # wrong (it would preserve a next-hop the leaf must own).
-        is_evpn_relay = device_role in _EVPN_RELAY_ROLES
+        is_evpn_relay = device_role in RR_ROLES
         peer_groups.append(
             {
                 "name": pg_name,

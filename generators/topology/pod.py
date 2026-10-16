@@ -22,6 +22,7 @@ from ..pools import PoolMixin
 from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, TopologyPod
 from ..routing import RoutingMixin
 from ..types import naming_convention_of
+from .fabric_shared import DC_GENERATORS, ServiceDevicesMixin, loopback_prefix_length, p2p_prefix_length
 
 _SIBLING_SPINE_MAX_RETRIES = 10
 _SIBLING_SPINE_RETRY_DELAY = 3.0
@@ -43,6 +44,20 @@ _BORDER_LEAF_RETRY_DELAY = 2.0
 # border-spine instead. See DCS-7050CX3-32C-R_BORDER_SPINE's template for
 # the canonical port layout. BORDER_ROLE_FOR_SERVICES (generators/
 # connections.py) supplies the border_role_for mapping below.
+
+
+def _routing_options(dc: Any, asn_pool_id: str | None, shared_underlay_as_id: str | None = None) -> RoutingOptions:
+    """create_routing() options for a spine/border-leaf tier of this pod's DC.
+
+    design (the DC's routing_strategy lookup) is always set. asn_pool is only
+    meaningful for eBGP strategies (ospf-ibgp draws no per-device ASN from a
+    pool); shared_underlay_as_id, when given, has every bottom device share that
+    one underlay AS.
+    """
+    options = RoutingOptions(design=dc, asn_pool=asn_pool_id)
+    if shared_underlay_as_id:
+        options["shared_underlay_as_id"] = shared_underlay_as_id
+    return options
 
 
 class TopologyPodParentData(TypedDict, total=False):
@@ -94,7 +109,7 @@ class TopologyPodData(TypedDict, total=False):
     asn_pool: dict[str, Any] | None
 
 
-class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, CommonGenerator):
+class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, CommonGenerator):
     """Generate pod topology with resource pools and spine infrastructure.
 
     Creates resource pools (technical and management) and creates spine devices
@@ -126,7 +141,7 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
             # wait for it and re-parse rather than risk running on partial data.
             dc_id = deployment_list[0].get("parent", {}).get("id")
             if dc_id:
-                refreshed = await self.wait_for_parent_generator_and_refetch(("add_dc", "dc_pod_cascade"), dc_id)
+                refreshed = await self.wait_for_parent_generator_and_refetch(DC_GENERATORS, dc_id)
                 if refreshed is not None:
                     deployment_list = clean_data(refreshed).get("TopologyPod", [])
                     if not deployment_list:
@@ -331,7 +346,7 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
                     indexes=indexes,
                     allocate_loopback=True,
                     loopback_pool=pod_pools.get("loopback"),
-                    loopback_prefix_length=128 if is_ipv6 else 32,
+                    loopback_prefix_length=loopback_prefix_length(is_ipv6),
                     management_pool=management_pool_id,
                 ),
             )
@@ -349,13 +364,10 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
             RoutingStrategy.EBGP_IBGP.value,
         ):
             pod_spine_as_id = await self._ensure_pod_spine_as(dc_asn_pool_id)
-            spine_routing_opts = RoutingOptions(design=dc, asn_pool=dc_asn_pool_id)
-            if pod_spine_as_id:
-                spine_routing_opts["shared_underlay_as_id"] = pod_spine_as_id
             await self.create_routing(
                 bottom_devices=spines,
                 top_devices=super_spine_devices,
-                options=spine_routing_opts,
+                options=_routing_options(dc, dc_asn_pool_id, pod_spine_as_id),
                 p2p_interfaces=[],
                 bottom_role=spine_role,
                 top_role="super-spine",
@@ -398,16 +410,6 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
             cabling_offset = base_offset(self.data.get("spine_link_numbering_start", 1)) + (
                 (pod_index - 1) * dc_max_spines
             )
-            p2p_prefix_length = 127 if is_ipv6 else 31
-            # design is always set here (needed for routing_strategy lookup inside
-            # create_routing) — asn_pool is only meaningful for eBGP strategies
-            # (ospf-ibgp draws no per-device ASN from a pool), so omit it rather
-            # than pass None (matches dc.py's own RoutingOptions construction).
-            routing_opts = RoutingOptions(design=dc)
-            if dc_asn_pool_id:
-                routing_opts["asn_pool"] = dc_asn_pool_id
-            if pod_spine_as_id:
-                routing_opts["shared_underlay_as_id"] = pod_spine_as_id
             p2p_pairs = await self.create_cabling(
                 bottom_devices=spines,
                 bottom_interfaces=spine_interfaces,
@@ -417,7 +419,7 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
                 options=CablingOptions(
                     cabling_offset=cabling_offset,
                     pool=pod_pools.get("technical"),
-                    p2p_prefix_length=p2p_prefix_length,
+                    p2p_prefix_length=p2p_prefix_length(is_ipv6),
                 ),
                 bottom_sorting=cast(
                     Literal["top_down", "bottom_up"], self.data.get("spine_interface_sorting_method", "bottom_up")
@@ -429,7 +431,7 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
             await self.create_routing(
                 bottom_devices=spines,
                 top_devices=super_spine_devices,
-                options=routing_opts,
+                options=_routing_options(dc, dc_asn_pool_id, pod_spine_as_id),
                 p2p_interfaces=p2p_pairs,
                 bottom_role=spine_role,
                 top_role="super-spine",
@@ -486,7 +488,7 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
         for attempt in range(_DC_READY_MAX_RETRIES):
             if await self.bgp_processes_ready(super_spine_devices, "overlay"):
                 return True
-            if await self.wait_for_parent_generator_and_refetch(("add_dc", "dc_pod_cascade"), dc_id) is not None:
+            if await self.wait_for_parent_generator_and_refetch(DC_GENERATORS, dc_id) is not None:
                 continue
             if attempt < _DC_READY_MAX_RETRIES - 1:
                 delay = self._retry_delay(_DC_READY_RETRY_DELAY, attempt)
@@ -519,30 +521,13 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
 
         dc = self.data["parent"]
         naming_conv = naming_convention_of(dc)
-        device_indexes = [dc["index"], self.data["index"]]
 
-        firewall_names = [
-            name
-            for _, names in await self.create_ha_role_devices(
-                role="firewall",
-                entries=firewall_entries,
-                deployment_id=self.data["id"],
-                naming_convention=naming_conv,
-                indexes=device_indexes,
-            )
-            for name in names
-        ]
-        load_balancer_names = [
-            name
-            for _, names in await self.create_ha_role_devices(
-                role="load-balancer",
-                entries=load_balancer_entries,
-                deployment_id=self.data["id"],
-                naming_convention=naming_conv,
-                indexes=device_indexes,
-            )
-            for name in names
-        ]
+        firewall_names, load_balancer_names = await self.create_firewall_and_load_balancer_devices(
+            fabric_templates=fabric_templates,
+            deployment_id=self.data["id"],
+            naming_convention=naming_conv,
+            indexes=[dc["index"], self.data["index"]],
+        )
         await self._cable_border_services(
             border_role_for=BORDER_ROLE_FOR_SERVICES,
             connectivity_mode=cast(Literal["pbr", "inline"], dc.get("connectivity_mode", "pbr")),
@@ -644,7 +629,6 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
                 design["rows"] * design["network_racks_per_row"] * design["max_leafs_per_network_rack"]
             )
 
-        p2p_prefix_length = 127 if is_ipv6 else 31
         p2p_pairs = await self.create_cabling(
             bottom_devices=border_leaf_names,
             bottom_interfaces=bl_uplink_names,
@@ -654,22 +638,16 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
             options=CablingOptions(
                 cabling_offset=offset,
                 pool=pod_pools.get("technical"),
-                p2p_prefix_length=p2p_prefix_length,
+                p2p_prefix_length=p2p_prefix_length(is_ipv6),
             ),
         )
-        # design is always set (needed for routing_strategy lookup inside
-        # create_routing) — asn_pool is only meaningful for eBGP strategies
-        # (ospf-ibgp draws no per-device ASN from a pool). Gating the call
-        # itself on dc_asn_pool_id would silently skip routing entirely for
-        # ospf-ibgp fabrics — create_routing()'s own routing_strategy check
-        # is the real gate.
-        routing_opts = RoutingOptions(design=dc)
-        if dc_asn_pool_id:
-            routing_opts["asn_pool"] = dc_asn_pool_id
+        # Gating the call itself on dc_asn_pool_id would silently skip routing
+        # entirely for ospf-ibgp fabrics (no per-device ASN pool) —
+        # create_routing()'s own routing_strategy check is the real gate.
         await self.create_routing(
             bottom_devices=border_leaf_names,
             top_devices=spines,
-            options=routing_opts,
+            options=_routing_options(dc, dc_asn_pool_id),
             p2p_interfaces=p2p_pairs,
             bottom_role="border-leaf",
             top_role="spine",
@@ -719,10 +697,7 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
             self.logger.info(f"Pod {pod_name}: no lower-index sibling pods yet — nothing to mesh-cable")
             return
 
-        p2p_prefix_length = 127 if is_ipv6 else 31
-        routing_opts = RoutingOptions(design=dc, asn_pool=dc_asn_pool_id)
-        if pod_spine_as_id:
-            routing_opts["shared_underlay_as_id"] = pod_spine_as_id
+        routing_opts = _routing_options(dc, dc_asn_pool_id, pod_spine_as_id)
         sorted_lower_siblings = sorted(lower_siblings, key=lambda s: s.index.value)
         for sibling_slot, sibling in enumerate(sorted_lower_siblings):
             # Retry: during INITIAL bulk DC creation, every pod's TopologyPod object
@@ -807,7 +782,7 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
                 options=CablingOptions(
                     cabling_offset=cabling_offset,
                     pool=pod_pools.get("technical"),
-                    p2p_prefix_length=p2p_prefix_length,
+                    p2p_prefix_length=p2p_prefix_length(is_ipv6),
                 ),
             )
             await self.create_routing(

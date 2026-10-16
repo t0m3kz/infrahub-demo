@@ -3,7 +3,9 @@
 !
 hostname {{ name }}
 !
+{%- if not nxos_border %}
 !
+{%- endif %}
 feature ospf
 feature bgp
 {%- include 'common/cisco_nxos_feature_bfd.j2' %}
@@ -11,7 +13,7 @@ feature interface-vlan
 feature lacp
 feature vpc
 feature lldp
-{%- if leaf_pbr_rules %}
+{%- if leaf_pbr_rules and not nxos_border %}
 feature pbr
 {%- endif %}
 !
@@ -20,43 +22,34 @@ feature pbr
 {%- for vlan in vlans %}
 vlan {{ vlan.vlan_id }}
   name {{ vlan.name }}
-{%- if vlan.isolation_mode == 'isolated' %}
+{%- if vlan.isolation_mode == 'isolated' and not nxos_border %}
   ! private-vlan type: isolated  (configure PVLAN or port-protection separately)
 {%- endif %}
 !
 {%- endfor %}
 !
-{%- if acls %}
+{%- if acls and not nxos_border %}
 ! Zero-Trust ACLs (one per segment VLAN — inbound on SVI)
 !
-{%- for acl in acls %}
-ip access-list {{ acl.name }}
-{%- for rule in acl.rules %}
-{%- if rule.src_zone or rule.dst_zone %}
-  remark Zone: {{ rule.src_zone or 'any' }} -> {{ rule.dst_zone or 'any' }}
+{%- include 'common/ip_access_lists.j2' %}
 {%- endif %}
-{%- if rule.src_customer or rule.dst_customer %}
-  remark Customer: {{ rule.src_customer or 'any' }}/{{ rule.src_environment or 'any' }} -> {{ rule.dst_customer or 'any' }}/{{ rule.dst_environment or 'any' }}
-{%- endif %}
-  {{ rule.seq }} {{ rule.action }} {{ rule.protocol }} {{ rule.src -}}
-{%- if rule.src_port %} {{ rule.src_port }}{% endif %} {{ rule.dst -}}
-{%- if rule.dst_port %} {{ rule.dst_port }}{% endif -%}
-{%- if rule.established %} established{% endif -%}
-{%- if rule.log %} log{% endif -%}
-{%- if rule.name %} ! {{ rule.name }}{% endif %}
-{%- endfor %}
+{%- if not nxos_border %}
 !
-{%- endfor %}
 {%- endif %}
-!
 ! Interfaces
 {%- for interface in interfaces if interface.role != 'mlag-peer' %}
 interface {{ interface.name }}
+{%- if nxos_border and interface.display_description %}
+  description {{ interface.display_description }}
+{%- endif %}
+{%- if nxos_border and interface.dot1q_vlan %}
+  encapsulation dot1q {{ interface.dot1q_vlan }}
+{%- endif %}
 {%- if interface.status == 'active' %}
   no shutdown
 {%- endif %}
 {%- include 'common/cisco_nxos_interface_ip.j2' %}
-{%- if interface.vlans %}
+{%- if interface.vlans or nxos_border %}
 {%- include 'common/cisco_nxos_switchport.j2' %}
 {%- if interface.mode != 'trunk' and interface.access_isolation_mode == 'isolated' %}
   ! TODO: configure port-isolation group X (NX-OS port isolation requires interface-level group assignment)
@@ -64,6 +57,22 @@ interface {{ interface.name }}
 {%- endif %}
 {%- if interface.get('ospf') %}
   ip ospf area {{ interface.ospf.area }}
+{%- endif %}
+{%- if nxos_border and interface.circuits %}
+  ! Circuit: {{ interface.circuits[0].circuit_id }} ({{ interface.circuits[0].bandwidth }} Mbps)
+  ! Provider: {{ interface.circuits[0].provider }}
+  ! Side: {{ interface.circuits[0].side }}
+{%- endif %}
+{%- if nxos_border and interface.virtual_links %}
+  ! Virtual Link: {{ interface.virtual_links[0].link_name }}
+  ! Type: {{ interface.virtual_links[0].link_type }}
+  ! Bandwidth: {{ interface.virtual_links[0].bandwidth }} Mbps
+{%- if interface.virtual_links[0].encryption %}
+  ! Encryption: Enabled
+{%- endif %}
+{%- if interface.virtual_links[0].cloud_resource_id %}
+  ! Cloud Resource: {{ interface.virtual_links[0].cloud_resource_id }}
+{%- endif %}
 {%- endif %}
 !
 {%- endfor %}
@@ -78,13 +87,13 @@ interface {{ interface.name }}
 !
 ! Route-maps
 route-map RM-CONN-2-BGP permit 10
-  match interface {{ loopback_name }}
+  match interface {{ ([loopback_name] + (vxlan.multisite.advertise_interfaces if nxos_border and vxlan and vxlan.multisite else [])) | unique | join(' ') }}
 !
 {%- if vxlan and vxlan.l3_vni_mappings %}
 {#- Permit-all, deliberately unqualified: inside a tenant VRF everything that is
     directly connected (the anycast-gateway SVIs) is exactly what should become an
     EVPN type-5 route. Referenced from cisco_nxos_bgp.j2's per-VRF block. #}
-{%- if leaf_transit_prefixes %}
+{%- if leaf_transit_prefixes and not nxos_border %}
 ! The firewall transit /29s this leaf holds locally for PBR are originated by the borders only
 ! documented-not-lab-verified: deny sequence keeps the leaf's connected transit /29 out of the type-5 table
 {%- for prefix in leaf_transit_prefixes %}
@@ -96,9 +105,12 @@ route-map RM-VRF-DIRECT-2-EVPN deny 5
 route-map RM-VRF-DIRECT-2-EVPN permit 10
 !
 {%- endif %}
+{%- if nxos_border %}
+{%- include 'common/cisco_nxos_vrf_static.j2' %}
+{%- endif %}
 {%- include 'common/cisco_nxos_svi.j2' -%}
 !
-{%- if leaf_pbr_rules %}
+{%- if leaf_pbr_rules and not nxos_border %}
 !
 ! Leaf PBR — LB return path first, then permitted firewall bypass,
 ! otherwise redirect to the firewall when a context is present.

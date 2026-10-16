@@ -18,8 +18,6 @@ from .types import RoutingOptions, naming_convention_of
 
 _POD_POOL_MAX_RETRIES = 10
 _POD_POOL_RETRY_DELAY = 3.0
-_POD_POOL_RETRY_CAP = 20.0
-_POD_POOL_RETRY_JITTER = 0.25
 # The pod's own generators — a rack waits for an in-flight one before reading
 # pod-level data (spines, pools).
 POD_GENERATORS = ("add_pod", "pod_rack_cascade")
@@ -209,9 +207,7 @@ class RackMixin:
             if await self.wait_for_parent_generator_and_refetch(POD_GENERATORS, pod["id"]) is not None:
                 continue
             if attempt < _POD_POOL_MAX_RETRIES - 1:
-                delay = self._retry_delay(
-                    _POD_POOL_RETRY_DELAY, attempt, cap=_POD_POOL_RETRY_CAP, jitter=_POD_POOL_RETRY_JITTER
-                )
+                delay = self._retry_delay(_POD_POOL_RETRY_DELAY, attempt)
                 self.logger.info(
                     f"Rack {self.data['name']}: Pod {pod['name']} {', '.join(missing)} not ready yet — "
                     f"retrying in {delay:.2f}s (attempt {attempt + 1}/{_POD_POOL_MAX_RETRIES})"

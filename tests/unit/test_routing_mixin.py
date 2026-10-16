@@ -405,8 +405,7 @@ class TestGroupContextProtection:
         from generators.types import RoutingOptions
 
         m = _make_mixin()
-        design = MagicMock()
-        design.routing_strategy = RoutingStrategy.EBGP_EBGP.value
+        design = {"routing_strategy": RoutingStrategy.EBGP_EBGP.value}
         options: RoutingOptions = RoutingOptions(
             design=design,
             underlay_password_id="pw-underlay",
@@ -468,9 +467,7 @@ class TestGroupContextProtection:
         m = _make_mixin()
 
         # Minimal design mock — EBGP_IBGP strategy requires overlay AS lookup
-        design = MagicMock()
-        design.routing_strategy = RoutingStrategy.EBGP_IBGP.value
-        design.p2p_ipv6 = True
+        design = {"routing_strategy": RoutingStrategy.EBGP_IBGP.value, "p2p_ipv6": True}
 
         options: RoutingOptions = RoutingOptions(design=design)
 
@@ -509,8 +506,7 @@ class TestGroupContextProtection:
         from generators.types import RoutingOptions
 
         m = _make_mixin()
-        design = MagicMock()
-        design.routing_strategy = RoutingStrategy.EBGP_EBGP.value
+        design = {"routing_strategy": RoutingStrategy.EBGP_EBGP.value}
         captured: dict[str, Any] = {}
 
         class _CapturingPlanner:
@@ -548,8 +544,7 @@ class TestGroupContextProtection:
         from generators.types import RoutingOptions
 
         m = _make_mixin()
-        design = MagicMock()
-        design.routing_strategy = RoutingStrategy.EBGP_EBGP.value
+        design = {"routing_strategy": RoutingStrategy.EBGP_EBGP.value}
 
         options: RoutingOptions = RoutingOptions(design=design)
         m.client.group_context = MagicMock()
@@ -578,8 +573,7 @@ class TestGroupContextProtection:
         from generators.types import RoutingOptions
 
         m = _make_mixin()
-        design = MagicMock()
-        design.routing_strategy = RoutingStrategy.EBGP_EBGP.value
+        design = {"routing_strategy": RoutingStrategy.EBGP_EBGP.value}
 
         options: RoutingOptions = RoutingOptions(design=design)
         m.client.group_context = MagicMock()
@@ -604,8 +598,7 @@ class TestGroupContextProtection:
         from generators.types import RoutingOptions
 
         m = _make_mixin()
-        design = MagicMock()
-        design.routing_strategy = RoutingStrategy.EBGP_IBGP.value
+        design = {"routing_strategy": RoutingStrategy.EBGP_IBGP.value}
 
         options: RoutingOptions = RoutingOptions(design=design)
         m.client.group_context = MagicMock()
@@ -646,8 +639,7 @@ class TestGroupContextProtection:
         from generators.types import RoutingOptions
 
         m = _make_mixin()
-        design = MagicMock()
-        design.routing_strategy = "UNKNOWN_STRATEGY"
+        design = {"routing_strategy": "UNKNOWN_STRATEGY"}
         options: RoutingOptions = RoutingOptions(design=design)
 
         await m.create_routing(

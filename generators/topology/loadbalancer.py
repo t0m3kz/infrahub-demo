@@ -23,8 +23,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from infrahub_sdk.protocols import CoreIPAddressPool
-
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
@@ -93,9 +91,19 @@ class LoadbalancerBackendNexthopGenerator(CablingMixin, CommonGenerator):
         segment_prefix_id: str = (backend_segment.get("gateway") or {}).get("ip_prefix") or ""
         pool = None
         if segment_prefix_id:
-            pool = await self._ensure_backend_pool(
-                vip_id=vip_id, vip_hostname=vip_hostname, segment_prefix_id=segment_prefix_id
+            # The backend_segment's EXISTING prefix wrapped in this VIP's own
+            # CoreIPAddressPool (see CablingMixin.ensure_prefix_address_pool).
+            # One pool per VIP, named from the VIP's own id: it belongs to this
+            # VIP's run alone, so tracking it is safe — a pool named after the
+            # segment's prefix was shared by every no-SNAT VIP on that segment,
+            # and the first of them to change its backend deleted it for the
+            # others. Two VIPs' pools over the same prefix still never hand out
+            # the same address: allocation skips addresses already in the prefix.
+            pool = await self.ensure_prefix_address_pool(
+                pool_name=f"lb-backend-{vip_id}-pool", prefix_id=segment_prefix_id, prefix_length=32
             )
+            if pool is None:
+                self.logger.error(f"VIP {vip_hostname}: no backend IP pool — sub-interfaces get no address")
 
         vip_obj = await self.client.get(kind=LoadbalancerVIP, id=vip_id)
 
@@ -104,8 +112,16 @@ class LoadbalancerBackendNexthopGenerator(CablingMixin, CommonGenerator):
             device_name = device["name"]
             ip_id: str | None = None
             if pool is not None:
-                ip_id = await self._allocate_backend_ip(
-                    pool=pool, vip_id=vip_id, segment_prefix_id=segment_prefix_id, device_name=device_name
+                # This VIP's /32 for the device, owned by this VIP's run. The
+                # identifier carries the prefix, so a moved backend_segment
+                # draws a fresh address from the new prefix instead of the old
+                # reservation; the old address is no longer saved and is
+                # cleaned up with the run.
+                ip_id = await self.allocate_prefix_address(
+                    pool=pool,
+                    identifier=f"{vip_id}-{segment_prefix_id}-{device_name}-lb-backend",
+                    prefix_length=32,
+                    description=f"LB backend return-path — {device_name}",
                 )
 
             try:
@@ -131,37 +147,3 @@ class LoadbalancerBackendNexthopGenerator(CablingMixin, CommonGenerator):
                 # The /32 on it stays owned (and cleaned up) by this VIP's run.
                 track=False,
             )
-
-    async def _ensure_backend_pool(
-        self, *, vip_id: str, vip_hostname: str, segment_prefix_id: str
-    ) -> CoreIPAddressPool | None:
-        """The backend_segment's EXISTING prefix wrapped in this VIP's own
-        CoreIPAddressPool (see CablingMixin.ensure_prefix_address_pool).
-
-        One pool per VIP, named from the VIP's own id: it belongs to this
-        VIP's run alone, so tracking it is safe — a pool named after the
-        segment's prefix was shared by every no-SNAT VIP on that segment, and
-        the first of them to change its backend deleted it for the others.
-        Two VIPs' pools over the same prefix still never hand out the same
-        address: allocation skips addresses that already exist in the prefix.
-        """
-        pool = await self.ensure_prefix_address_pool(
-            pool_name=f"lb-backend-{vip_id}-pool", prefix_id=segment_prefix_id, prefix_length=32
-        )
-        if pool is None:
-            self.logger.error(f"VIP {vip_hostname}: no backend IP pool — sub-interfaces get no address")
-        return pool
-
-    async def _allocate_backend_ip(
-        self, *, pool: CoreIPAddressPool, vip_id: str, segment_prefix_id: str, device_name: str
-    ) -> str | None:
-        """This VIP's /32 for ``device_name`` — owned by this VIP's run. The
-        identifier carries the prefix, so a moved backend_segment draws a
-        fresh address from the new prefix instead of the old reservation;
-        the old address is no longer saved and is cleaned up with the run."""
-        return await self.allocate_prefix_address(
-            pool=pool,
-            identifier=f"{vip_id}-{segment_prefix_id}-{device_name}-lb-backend",
-            prefix_length=32,
-            description=f"LB backend return-path — {device_name}",
-        )

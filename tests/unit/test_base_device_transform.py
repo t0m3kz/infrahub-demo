@@ -4,7 +4,6 @@ Covers:
 - transform()  – data routing, platform detection, activation injection
 - _build_config() – base context keys (interfaces, bgp, ospf, capabilities)
 - _extra_config() – vlans/vxlan/acls/vrf_routes when device_role is set
-- _filter_segment_deployments() – default pass-through; override semantics
 - ToR class attributes (device_role="tor", template_subdir="leafs")
 """
 
@@ -398,32 +397,6 @@ class TestGetCapabilitiesEdgeCases:
             }
         )
         assert result["bgp_enabled"] is True
-
-
-# ---------------------------------------------------------------------------
-# _filter_segment_deployments
-# ---------------------------------------------------------------------------
-
-
-class TestFilterSegmentDeployments:
-    def test_default_returns_all_activations(self) -> None:
-        t = _make_transform()
-        activations = [{"id": "a1"}, {"id": "a2"}]
-        assert t._filter_segment_deployments(activations) == activations
-
-    def test_empty_list_returned_unchanged(self) -> None:
-        t = _make_transform()
-        assert t._filter_segment_deployments([]) == []
-
-    def test_subclass_can_filter(self) -> None:
-        class FilteredTransform(BaseDeviceTransform):
-            def _filter_segment_deployments(self, activations):
-                return [a for a in activations if a.get("active")]
-
-        ft = FilteredTransform.__new__(FilteredTransform)
-        ft.device_role = ""
-        activations = [{"id": "a1", "active": True}, {"id": "a2", "active": False}]
-        assert ft._filter_segment_deployments(activations) == [{"id": "a1", "active": True}]
 
 
 # ---------------------------------------------------------------------------
@@ -887,14 +860,6 @@ class TestToRClassAttributes:
         # ToR has device_role set → extra config keys present
         assert "vlans" in kwargs
         assert "vxlan" in kwargs
-
-    @pytest.mark.asyncio
-    async def test_tor_filter_segment_deployments_passthrough(self) -> None:
-        """ToR does not override _filter_segment_deployments — all activations pass."""
-        t = _make_tor()
-        activations = [{"id": "seg-1"}, {"id": "seg-2"}]
-        result = t._filter_segment_deployments(activations)
-        assert result == activations
 
 
 # ---------------------------------------------------------------------------

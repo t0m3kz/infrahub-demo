@@ -114,7 +114,7 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
         rule_name = planner.rule_name(app_name, src_comp, dst_comp, dep, port)
         protocol, port_start, port_end = port
 
-        src_zone, dst_zone, cross_zone = planner.zone_context(src_seg=src_seg, dst_seg=dst_seg, dep=dep)
+        src_zone, dst_zone, cross_zone = planner.zone_context(src_seg=src_seg, dst_seg=dst_seg)
         if src_zone is None or dst_zone is None:
             cross_zone = True
             self.logger.warning(
@@ -324,23 +324,21 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
             rule_indexes[policy_id].add(index)
             return rule, index
 
-    async def _cached_lookup_by_name(self, *, cache_attr: str, kind: Any, name: str) -> Any | None:
-        """Shared cache-or-fetch-by-name-value shape (read-only — never
-        creates on a miss, unlike _get_or_create_by_name)."""
-        cache: dict[str, Any] = getattr(self, cache_attr, {})
-        if name not in cache:
-            try:
-                found = await self.client.filters(kind=kind, name__value=name)
-                cache[name] = found[0] if found else None
-            except Exception:
-                cache[name] = None
-            setattr(self, cache_attr, cache)
-        return cache[name]
-
     async def _get_profile(self, profile_name: str) -> Any | None:
-        return await self._cached_lookup_by_name(
-            cache_attr="_profile_cache", kind=SecuritySecurityProfile, name=profile_name
-        )
+        """The SecuritySecurityProfile named ``profile_name``, cached per run.
+
+        Read-only — never creates on a miss (unlike _get_or_create_by_name);
+        a missing or unreadable profile is cached as None.
+        """
+        cache: dict[str, Any] = getattr(self, "_profile_cache", {})
+        if profile_name not in cache:
+            try:
+                found = await self.client.filters(kind=SecuritySecurityProfile, name__value=profile_name)
+                cache[profile_name] = found[0] if found else None
+            except Exception:
+                cache[profile_name] = None
+            self._profile_cache = cache
+        return cache[profile_name]
 
     async def _ensure_segment_isolation_mode(self, segment: dict[str, Any], app_security_profile: str) -> None:
         """Derive and set a segment's isolation_mode from its application's

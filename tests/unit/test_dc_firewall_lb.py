@@ -10,8 +10,8 @@ test_pod_generator.py-style coverage in generators/topology/pod.py), since pod.p
 already owns spine context.
 
 Firewall/load-balancer: created DC-wide (deployment_id=dc.id) via
-DCTopologyGenerator's own _create_role_devices (a near-identical copy lives
-on PodTopologyGenerator for its own pod-scoped provisioning — see
+ServiceDevicesMixin.create_firewall_and_load_balancer_devices (shared with
+PodTopologyGenerator's pod-scoped provisioning — see
 test_pod_border_services.py), which sets DeviceOptions.ha_kind so
 create_devices() itself pairs the created devices two-at-a-time into HA
 domains (see test_device_mixin.py for that pairing logic — any quantity,
@@ -70,7 +70,7 @@ def _make_generator() -> Any:
     gen.create_devices = AsyncMock(return_value=[])
     gen.create_cabling = AsyncMock(return_value=[])
     gen.create_routing = AsyncMock()
-    # _ensure_firewall_context_pools()/allocate_resource_pools() serialize
+    # ensure_firewall_context_pools()/allocate_resource_pools() serialize
     # concurrent callers via acquire_resource_lock/release_resource_lock — not
     # under test here, and the lock's own client.delete() call has no mock set
     # up on this plain MagicMock client.
@@ -249,10 +249,19 @@ class TestCreateBorderLeafDevices:
         gen.logger.warning.assert_called()
 
 
-class TestCreateRoleDevices:
-    """DCTopologyGenerator._create_role_devices (DC-wide, deployment_id=dc.id) —
-    pod.py has its own near-identical copy for pod-scoped provisioning
-    (deployment_id=pod.id), see test_pod_border_services.py."""
+class TestCreateFirewallAndLoadBalancerDevices:
+    """ServiceDevicesMixin.create_firewall_and_load_balancer_devices as dc.py calls
+    it (DC-wide, deployment_id=dc.id) — pod.py calls the same method for pod-scoped
+    provisioning (deployment_id=pod.id), see test_pod_border_services.py."""
+
+    @staticmethod
+    async def _create(gen: Any, entries: list[dict[str, Any]]) -> tuple[list[str], list[str]]:
+        return await gen.create_firewall_and_load_balancer_devices(
+            fabric_templates=entries,
+            deployment_id=gen.data["id"],
+            naming_convention="standard",
+            indexes=[gen.data["index"]],
+        )
 
     @pytest.mark.asyncio
     async def test_load_balancer_leaves_its_group_to_create_devices(self) -> None:
@@ -261,13 +270,7 @@ class TestCreateRoleDevices:
         gen.create_devices = AsyncMock(return_value=["lb-01"])
         entries = [_entry("load-balancer", 1, _LB_TEMPLATE)]
 
-        names = await gen._create_role_devices(
-            role="load-balancer",
-            entries=entries,
-            deployment_id=gen.data["id"],
-            naming_convention="standard",
-            indexes=[gen.data["index"]],
-        )
+        _, names = await self._create(gen, entries)
 
         assert names == ["lb-01"]
         create_kwargs = gen.create_devices.call_args.kwargs
@@ -280,13 +283,7 @@ class TestCreateRoleDevices:
         gen.create_devices = AsyncMock(return_value=["fw-01"])
         entries = [_entry("firewall", 1, _FW_TEMPLATE)]
 
-        await gen._create_role_devices(
-            role="firewall",
-            entries=entries,
-            deployment_id=gen.data["id"],
-            naming_convention="standard",
-            indexes=[gen.data["index"]],
-        )
+        await self._create(gen, entries)
 
         create_kwargs = gen.create_devices.call_args.kwargs
         assert create_kwargs["options"].get("group_name") is None
@@ -294,18 +291,12 @@ class TestCreateRoleDevices:
     @pytest.mark.asyncio
     async def test_firewall_passes_ha_kind_through_options(self) -> None:
         """HA pairing itself is create_devices()'s job (DeviceOptions.ha_kind) —
-        _create_role_devices only needs to set the right kind per role."""
+        the mixin only needs to set the right kind per role."""
         gen = _make_generator()
         gen.create_devices = AsyncMock(return_value=["fw-01", "fw-02"])
         entries = [_entry("firewall", 2, _FW_TEMPLATE)]
 
-        await gen._create_role_devices(
-            role="firewall",
-            entries=entries,
-            deployment_id=gen.data["id"],
-            naming_convention="standard",
-            indexes=[gen.data["index"]],
-        )
+        await self._create(gen, entries)
 
         create_kwargs = gen.create_devices.call_args.kwargs
         assert create_kwargs["options"]["ha_kind"] == "ManagedFirewallHA"
@@ -316,13 +307,7 @@ class TestCreateRoleDevices:
         gen.create_devices = AsyncMock(return_value=["lb-01", "lb-02"])
         entries = [_entry("load-balancer", 2, _LB_TEMPLATE)]
 
-        await gen._create_role_devices(
-            role="load-balancer",
-            entries=entries,
-            deployment_id=gen.data["id"],
-            naming_convention="standard",
-            indexes=[gen.data["index"]],
-        )
+        await self._create(gen, entries)
 
         create_kwargs = gen.create_devices.call_args.kwargs
         assert create_kwargs["options"]["ha_kind"] == "ManagedLoadbalancerHA"
@@ -428,9 +413,9 @@ class TestGenerateDcScopedFabricDevices:
     async def test_orchestrates_all_three_roles_and_cabling(self) -> None:
         gen = _make_generator()
         gen._create_border_leaf_devices = AsyncMock(return_value=["bl-01"])
-        gen._create_role_devices = AsyncMock(side_effect=[["fw-01"], ["lb-01"]])
+        gen.create_firewall_and_load_balancer_devices = AsyncMock(return_value=(["fw-01"], ["lb-01"]))
         gen._cable_border_services = AsyncMock()
-        gen._ensure_firewall_context_pools = AsyncMock()
+        gen.ensure_firewall_context_pools = AsyncMock()
         gen.data["fabric_templates"] = [
             _entry("firewall", 1, _FW_TEMPLATE),
             _entry("load-balancer", 1, _LB_TEMPLATE),
@@ -439,8 +424,8 @@ class TestGenerateDcScopedFabricDevices:
         await gen._generate_dc_scoped_fabric_devices()
 
         gen._create_border_leaf_devices.assert_awaited_once()
-        assert gen._create_role_devices.await_count == 2
-        gen._ensure_firewall_context_pools.assert_awaited_once_with(dc_name="dc1")
+        gen.create_firewall_and_load_balancer_devices.assert_awaited_once()
+        gen.ensure_firewall_context_pools.assert_awaited_once_with(name="dc1")
         gen._cable_border_services.assert_awaited_once_with(
             border_role_for={"firewall": "firewall", "load-balancer": "load-balancer"},
             connectivity_mode=gen.data["connectivity_mode"],
@@ -468,7 +453,7 @@ class TestEnsureFirewallContextPools:
     async def test_creates_the_vlan_pool_and_no_p2p_slice(self, underlay_protocol: str) -> None:
         gen = self._make_gen(underlay_protocol=underlay_protocol)
 
-        await gen._ensure_firewall_context_pools(dc_name="dc1")
+        await gen.ensure_firewall_context_pools(name="dc1")
 
         gen.upsert_number_pool.assert_awaited_once()
         assert gen.upsert_number_pool.call_args.kwargs["pool_name"] == "dc1-fw-context-vlan-pool"
@@ -486,6 +471,6 @@ class TestEnsureFirewallContextPools:
         gen.acquire_resource_lock = AsyncMock(side_effect=lambda key: calls.append(f"acquire:{key}") or "lock-id")
         gen.release_resource_lock = AsyncMock(side_effect=lambda lock_id: calls.append(f"release:{lock_id}"))
 
-        await gen._ensure_firewall_context_pools(dc_name="dc1")
+        await gen.ensure_firewall_context_pools(name="dc1")
 
         assert calls == ["acquire:fw-context-pools-dc1", "release:lock-id"]

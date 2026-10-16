@@ -15,4 +15,4 @@ class SuperSpine(BaseDeviceTransform):
 
     query = "super_spine_config"
     template_subdir = "super_spines"
-    device_role = "super_spine"
+    device_role = "super-spine"

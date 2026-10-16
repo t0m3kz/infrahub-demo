@@ -2,6 +2,8 @@
 
 from typing import Any
 
+from utils.segment_addressing import segment_namespace
+
 
 def is_inline_terminated(seg: dict) -> bool:
     """True when the segment's L3 gateway is its inline_service HA pair, not the fabric.
@@ -65,7 +67,7 @@ def _get_segment_namespace(seg: dict) -> dict:
     """
     if is_inline_terminated(seg):
         return {}
-    return ((seg.get("gateway") or {}).get("ip_prefix") or {}).get("ip_namespace") or {}
+    return segment_namespace(seg)
 
 
 def segment_hosting_candidates(deployment: Any) -> list[dict]:

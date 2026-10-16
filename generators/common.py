@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-import inspect
 from collections.abc import Iterable
-from typing import Any
+from typing import Any, NoReturn
 
 from infrahub_sdk.generator import InfrahubGenerator
 from infrahub_sdk.protocols import CoreGeneratorDefinition
 from infrahub_sdk.task.models import TaskFilter, TaskState
 
 from .helpers.common import retry_delay
-from .logger import FailOnErrorLoggerMixin
+from .logger import FailOnErrorLoggerMixin, GeneratorError
 
 # Re-export TypedDicts so existing imports (from .common import DeviceOptions, ...) keep working
 from .types import CablingOptions, ChainHop, DeviceOptions, RoutingOptions  # noqa: F401
@@ -47,17 +46,23 @@ class CommonGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
     pod_name: str | None = None
     logger: Any
 
-    @staticmethod
-    def _retry_delay(base: float, attempt: int, cap: float = 20.0, jitter: float = 0.25) -> float:
-        """Shared jittered exponential backoff for generator retry loops."""
-        return retry_delay(base=base, attempt=attempt, cap=cap, jitter=jitter)
+    def fail(self, message: str) -> NoReturn:
+        """Log ``message`` as an error and raise it: the run is a failed task.
+
+        self.logger.error already raises under the generator's fail-on-error
+        logger; the explicit raise keeps that true for any logger (tests use
+        MagicMock loggers) and tells the type checker the caller does not continue.
+        """
+        self.logger.error(message)
+        raise GeneratorError(message)
+
+    # Shared jittered exponential backoff for generator retry loops.
+    _retry_delay = staticmethod(retry_delay)
 
     @staticmethod
     async def _safe_rel_add(rel: Any, obj: Any) -> None:
-        """Add relation peer while supporting sync and async add() implementations."""
-        result = rel.add(obj)
-        if inspect.isawaitable(result):
-            await result
+        """Add a relation peer (RelationshipManager.add is synchronous)."""
+        rel.add(obj)
 
     async def _resolve_pool(
         self,

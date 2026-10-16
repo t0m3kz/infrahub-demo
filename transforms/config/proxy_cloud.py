@@ -3,7 +3,7 @@
 Same "one template per platform" pattern as BaseDeviceTransform._load_template (leaf/spine/tor/
 proxy CLI configs), just keyed on `provider` instead of netmiko_device_type: each vendor gets its
 own template shaped like that vendor's actual Terraform module/API would expect. The underlying
-data (get_proxy_policies/flatten_proxy_rules for egress; get_private_access_segments for private
+data (proxy_rules for egress; get_private_access_segments for private
 access) is vendor-independent and shared by every template — only the rendering differs per
 vendor.
 
@@ -28,8 +28,7 @@ from typing import Any
 from infrahub_sdk.transforms import InfrahubTransform
 from jinja2 import Template
 
-from transforms.helpers.policy import merge_policies
-from transforms.helpers.proxy import flatten_proxy_rules, get_private_access_segments, get_proxy_policies
+from transforms.helpers.proxy import get_private_access_segments, proxy_rules
 from transforms.helpers.templates import load_template
 from utils.data_cleaning import clean_data
 
@@ -73,14 +72,7 @@ class ProxyCloud(InfrahubTransform):
         return self._render_web_gateway(proxy, provider)
 
     def _render_web_gateway(self, proxy: dict[str, Any], provider: str) -> str:
-        shared_policies_data = proxy.get("shared_policies") or []
-        customer_policies = [
-            policy
-            for customer in proxy.get("egress_customers") or []
-            for policy in customer.get("proxy_policies") or []
-        ]
-        policies = get_proxy_policies(merge_policies(shared_policies_data, customer_policies))
-        rules = flatten_proxy_rules(policies)
+        rules = proxy_rules(proxy.get("shared_policies"), proxy.get("egress_customers"))
         for rule in rules:
             rule["verdict"] = "allow" if rule.get("action") in ("allow", "bypass") else "block"
 
