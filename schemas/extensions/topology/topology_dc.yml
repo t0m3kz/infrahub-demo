@@ -278,9 +278,8 @@ nodes:
         default_value: false
         order_weight: 1500
         description: >-
-          Group-based policy staging switch for this data center. Contracts (groups, class/policy maps,
-          segment-security policies) are always rendered; enforcement (NX-OS `security enforce`, EOS MSS-G
-          `no shutdown`) is rendered only when true.
+          Render group-policy enforcement (NX-OS security enforce, EOS no shutdown);
+          contracts always render.
     relationships:
       - name: fabric_templates
         peer: TopologyElement

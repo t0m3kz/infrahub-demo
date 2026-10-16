@@ -800,11 +800,11 @@ def build_device_data(
                 "vlan_domain_id": vlan_domain_id,
             }
         )
-        # SR OS binds a segment ACL only inside the vpls of an L2 VNI and models no
-        # VLAN-only service, so the transform refuses this ACL-bearing VLAN-only
-        # segment (tests/unit/test_base_device_transform.py); the fixture omits it.
-        sros_acl_leaf = platform == "nokia_sros" and (include_acls or isolation_mode not in (None, "normal"))
-        if not sros_acl_leaf:
+        # SR OS models no VLAN-only service: it has no vpls/vprn to attach the gateway IRB
+        # to, so the transform refuses a VLAN-only gateway segment (transforms/common.py
+        # _sros_irbs; the refusal is covered by tests/unit/test_base_device_transform.py)
+        # and binds a segment ACL only inside the vpls of an L2 VNI. The fixture omits it.
+        if platform != "nokia_sros":
             segment_kwargs.append(
                 {
                     "vlan_id": 200,
@@ -2469,6 +2469,35 @@ def build_mlag_device_data(
     return {"DcimDevice": _edges([device_node])}
 
 
+def build_mlag_virtual_peer_link_data(*, device_name: str, peer_name: str, role: str, platform: str) -> dict:
+    """A pod with ``mlag_create: virtual``: the peer-link is a member-less ``loopback100``
+    DcimVirtualInterface (role mlag-peer, no IP on NX-OS) instead of a port-channel
+    (generators/mlag.py _ensure_virtual_peer_link), so no physical peer-link exists to bind."""
+    data = build_mlag_device_data(
+        device_name=device_name,
+        peer_name=peer_name,
+        role=role,
+        platform=platform,
+        domain_id=1,
+        domain_name="DC1-POD1-L1-L2-MLAG",
+    )
+    node = data["DcimDevice"]["edges"][0]["node"]
+    kept = [
+        edge
+        for edge in node["interfaces"]["edges"]
+        if edge["node"]["role"]["value"] != "mlag-peer"  # drops the port-channel and its member ports
+    ]
+    virtual = _make_interface(
+        name="loopback100",
+        device_name=device_name,
+        description="MLAG virtual peer-link — DC1-POD1-L1-L2-MLAG",
+        role="mlag-peer",
+        typename="DcimVirtualInterface",
+    )
+    node["interfaces"]["edges"] = [*kept, {"node": virtual}]
+    return data
+
+
 _PROXY_PLATFORM_VENDOR: dict[str, str] = {
     "haproxy_technologies_linux": "haproxy",
     "squid_cache_linux": "squid",
@@ -3298,6 +3327,19 @@ GPO_FIXTURES: list[tuple[type, str, Any]] = [
             host_ports={"Ethernet11": _GPO_PAY_DB_TAGS},
         ),
     ),
+    # DC10 stages group policy (group_policy_enforce false): groups, class/policy maps and contracts are
+    # rendered, `security enforce` is not, and the VRF says why in an `! unenforced:` comment.
+    (
+        Leaf,
+        "leaf_cisco_nxos_gpo_reference_staged",
+        lambda: build_gpo_device_data(
+            device_name="dc1-leaf-01",
+            role="leaf",
+            segments=("web-np", "app-np", "pay-p", "portal-p"),
+            host_ports={"Ethernet11": _GPO_PAY_DB_TAGS},
+            enforce=False,
+        ),
+    ),
     # A leaf of the same reference fabric with no tenant segment (the servers sit on the access
     # leaves): no VRF carries a contract, but the VTEP still enables GPO, so the site never
     # mixes policy-aware and policy-unaware nodes (spec 2.9).
@@ -3787,6 +3829,19 @@ def main() -> int:
             except Exception as e:
                 print(f"  ✗ {dir_name}: {e}")
                 errors += 1
+
+    # vPC on a pod with a virtual peer-link: NX-OS cannot bind `vpc peer-link` to loopback100, so the
+    # whole vPC block is a comment (no `interface loopback100 ... vpc peer-link`).
+    print("\nGenerating the NX-OS virtual peer-link vPC fixture:")
+    g, e = _write_data_fixture(
+        Leaf,
+        "leaf_cisco_nxos_vpc_virtual",
+        build_mlag_virtual_peer_link_data(
+            device_name="DC1-POD1-L1", peer_name="DC1-POD1-L2", role="leaf", platform="cisco_nxos"
+        ),
+    )
+    generated += g
+    errors += e
 
     # Proxy scenarios: platform × proxy_type
     PROXY_PLATFORMS = list(_PROXY_PLATFORM_VENDOR.keys())

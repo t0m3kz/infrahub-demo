@@ -940,6 +940,27 @@ class TestSegmentationMatrixGroups:
         }
         assert classification["unclassified"] == ["c007-untagged-p"]
 
+    def test_ipv6_only_segment_is_classified_by_its_ipv6_prefix(self) -> None:
+        """A v6-only gateway prefix is the segment's selector and its MSS-G prefix, not null."""
+        payload = _payload(profiles=[NXOS_PROFILE, EOS_PROFILE])
+        portal = next(
+            edge["node"] for edge in payload["ManagedNetworkSegment"]["edges"] if edge["node"]["id"] == "s-portal"
+        )
+        portal["gateway"]["node"]["ip_prefix"]["node"]["prefix"] = _v("2001:db8:8::/64")
+        rendered = _render(payload)
+        selector = next(
+            item
+            for item in rendered["classification"]["selectors"]
+            if item["segment"] == "c008-trade-portal-local-dc10-p"
+        )
+        assert selector["prefix"] == "2001:db8:8::/64"
+        mssg = next(
+            item
+            for item in rendered["kinds"]["segment_security"]["segments"]
+            if item["name"] == "c008-trade-portal-local-dc10-p"
+        )
+        assert mssg["prefix"] == "2001:db8:8::/64"
+
     def test_contracts_are_local_and_deny_by_default(self) -> None:
         """The cross-customer rule names the web component: one cross-customer row, to that component,
         plus its service legs; a rule between two DC12 segments is not here."""

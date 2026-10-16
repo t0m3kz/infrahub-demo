@@ -7,6 +7,9 @@
             "id": "dc10",
             "name": {
               "value": "DC10"
+            },
+            "group_policy_enforce": {
+              "value": true
             }
           }
         }
@@ -17,6 +20,12 @@
         {
           "node": {
             "id": "dc10",
+            "name": {
+              "value": "DC10"
+            },
+            "group_policy_enforce": {
+              "value": true
+            },
             "devices": {
               "edges": [
                 {
@@ -60,6 +69,12 @@
         {
           "node": {
             "id": "dc12",
+            "name": {
+              "value": "DC12"
+            },
+            "group_policy_enforce": {
+              "value": false
+            },
             "devices": {
               "edges": [
                 {
