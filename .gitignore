@@ -1,0 +1,48 @@
+# IDE / editor
+.vscode/
+.roo/
+.kiro/
+.ai/
+
+# OS
+.DS_Store
+
+# Secrets & local env
+.env
+.env.*
+!.env.example
+
+# Python virtualenv
+.venv/
+
+# Python type-checker / linter caches
+.mypy_cache/
+.ruff_cache/
+__pycache__/
+
+# Tool / agent working dirs
+.dev/
+.agents/
+.claude/
+
+# Infrahub dev artefacts
+.graphqlrc.yml
+
+# Misc root-level scripts kept out of the repo
+*.sh
+skills-lock.json
+
+# Docker Compose override kept local
+docker-compose.yml
+
+# tests
+.pytest_cache/
+.pytest-tmp/
+.coverage
+
+.__pycache__/
+# Docs build output
+docs/
+*.pyc
+
+development/
