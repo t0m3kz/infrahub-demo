@@ -13,6 +13,7 @@ import pytest
 from infrahub_sdk import InfrahubClientSync
 
 from .conftest import TestInfrahubDockerWithClient
+from .workflow_helpers import wait_for_no_running_tasks
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -61,6 +62,14 @@ class TestSetup(TestInfrahubDockerWithClient):
             f"  stdout: {load_extensions.stdout}\n"
             f"  stderr: {load_extensions.stderr}"
         )
+
+        # Loading a schema queues background flows that recompute the HFIDs and
+        # display labels of every kind it touches ("Trigger updates for HFID /
+        # display labels for ..."). They write to the same nodes the menu and
+        # bootstrap loads create next; run concurrently the transactions
+        # deadlock in Neo4j, one is rolled back, and the load fails with
+        # "Unable to find the node <id> / ... in the database". Let them finish.
+        wait_for_no_running_tasks(client_main, branch=None)
 
     @pytest.mark.order(3)
     @pytest.mark.dependency(scope="session", name="menu_load", depends=["schema_extensions"])
