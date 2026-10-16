@@ -5,8 +5,13 @@
     so a device without one renders exactly as before. The contracts and
     `security enforce` live in the tenant `vrf context` (cisco_nxos_vxlan_vrf.j2).
     Included before the VXLAN block, after the VLANs (a `match vlan` needs its
-    VLAN). Evidence per line: D documented (NX-OS 10.6(x) VXLAN guide, GPO
-    chapter); every I/U line says documented-not-lab-verified.
+    VLAN). A segment group is classified by `match vlan <this device's VLAN>`; a
+    component group by `match vlan <VLAN> interface <port>` for each host-facing port
+    of THIS device that its instances are cabled to (rendered on the owning VTEP only:
+    the interface selectors differ per VTEP, everything else is identical on every VTEP
+    of the VRF). Such a port is a trunk (cisco_nxos_switchport.j2). Evidence per line:
+    D documented (NX-OS 10.6(x) VXLAN guide, GPO chapter); every I/U line says
+    documented-not-lab-verified.
     Never rendered: `system security-group mac-segmentation` (it disables the
     IP-based segmentation), intra-group isolation, TCAM vacl, PVLAN. -#}
 {%- if group_policy and (group_policy.class_maps or group_policy.groups) %}
@@ -26,8 +31,11 @@ policy-map type security {{ class_map.name }}
     permit
 {%- endfor %}
 !
-! Security groups: the VLAN selector is this device's own VLAN of the segment; a group without one is
-! classified on the VTEPs that carry its segment (the group ID travels in the VXLAN header)
+! Security groups: the VLAN selector is this device's own VLAN of the segment; a component group is
+! classified by VLAN + interface on the VTEP that owns the host port (the group ID travels in the VXLAN header)
+{%- if group_policy.groups | selectattr('interfaces') | list %}
+! documented-not-lab-verified: interface+VLAN selectors are documented for trunk ports only (10.6(1)F), so the host ports are trunks
+{%- endif %}
 ! documented-not-lab-verified: the guide gives no range for the group ids and no rules for the group names (a tag name is rewritten to [A-Za-z0-9_-])
 {%- for group in group_policy.groups %}
 {%- for note in group.notes %}
@@ -37,6 +45,9 @@ security-group {{ group.id }} name {{ group.name }}
 {%- if group.vlan_id %}
   match vlan {{ group.vlan_id }}
 {%- endif %}
+{%- for port in group.interfaces %}
+  match vlan {{ port.vlan_id }} interface {{ port.name }}
+{%- endfor %}
 {%- endfor %}
 !
 {%- endif -%}

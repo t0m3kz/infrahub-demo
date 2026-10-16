@@ -180,6 +180,7 @@ query border_spine_config(
     edges {
       node {
         ...SecurityTagGroupPolicyFields
+        ...SecurityTagPlacementFields
       }
     }
   }

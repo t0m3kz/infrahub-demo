@@ -212,17 +212,9 @@ class BaseDeviceTransform(InfrahubTransform):
         interfaces = data.get("interfaces") or []
         device_capabilities = data.get("capabilities") or []
         device_name = data.get("name", "")
-        activations = (data.get("segment_deployments") or []) + (data.get("exchange_transits") or []) or None
         management_services = get_management_services(device_capabilities)
         mlag = get_mlag(device_capabilities, interfaces, device_name=device_name)
-        # The MLAG control SVI is rendered by the platform's MLAG include
-        # (it needs the peer-link VLAN/trunk group around it), not as a
-        # generic interface.
-        template_interfaces = get_interfaces(
-            [iface for iface in interfaces if iface.get("role") != "mlag-control"],
-            activations=activations,
-            device_name=device_name,
-        )
+        template_interfaces = self._template_interfaces(data)
         config = {
             "name": device_name,
             "hostname": device_name,
@@ -246,6 +238,21 @@ class BaseDeviceTransform(InfrahubTransform):
         if platform_name in {"sonic", "dell_sonic"}:
             config["sonic_mlag"] = get_sonic_mlag_config(mlag)
         return config
+
+    @staticmethod
+    def _template_interfaces(data: dict, *, host_vlans: dict[str, int] | None = None) -> list[dict[str, Any]]:
+        """The interfaces the templates render (get_interfaces), ``host_vlans`` being the NX-OS GPO host ports.
+
+        The MLAG control SVI is rendered by the platform's MLAG include (it needs the peer-link
+        VLAN/trunk group around it), not as a generic interface.
+        """
+        activations = (data.get("segment_deployments") or []) + (data.get("exchange_transits") or []) or None
+        return get_interfaces(
+            [iface for iface in data.get("interfaces") or [] if iface.get("role") != "mlag-control"],
+            activations=activations,
+            device_name=data.get("name", ""),
+            native_vlans=host_vlans,
+        )
 
     def _extra_config(self, data: dict, platform_name: str, extra_roots: dict | None = None) -> dict:
         """Return device-specific template variables.
@@ -352,9 +359,18 @@ class BaseDeviceTransform(InfrahubTransform):
             platform=platform_name,
             activations=activations or [],
             vrfs=[mapping["vrf_name"] for mapping in (vxlan or {}).get("l3_vni_mappings", [])],
+            interfaces=data.get("interfaces") or [],
         )
         if group_policy is not None:
             config["group_policy"] = group_policy
+            # A host port a component selector names must be a trunk (spec 3.6: interface+VLAN selectors are
+            # documented for trunk ports only): the one mode rule (get_interfaces) trunks the access ones
+            # with the segment's VLAN as native VLAN. The interfaces are built again only on such a device.
+            host_vlans = {
+                port["name"]: port["vlan_id"] for group in group_policy["groups"] for port in group["interfaces"]
+            }
+            if host_vlans:
+                config["interfaces"] = self._template_interfaces(data, host_vlans=host_vlans)
         return config
 
     _LEAF_ROLES = frozenset({"leaf", "tor", "access-leaf"})

@@ -42,6 +42,153 @@ fragment SecurityTagGroupPolicyFields on SecurityTag {
   }
 }
 
+# Where the instances of each component of a tag sit (transforms/helpers/group_policy.py
+# component_coverage: a component group is classified by `match vlan <VLAN> interface
+# <port>` on the VTEP port its instances' hosts are cabled to). Spread next to
+# SecurityTagGroupPolicyFields (its `components` merge with this one) by the NX-OS VTEP
+# configs only: the segmentation_matrix artifact does not need it.
+#
+# Per instance: a physical device/controller is its own host; a virtual one walks
+# hosting_device (utils/app_instances.physical_host). The host's uplink/lag NICs are
+# selected with the far end of each cable: its device, role, tags (the segments the
+# generator tagged the port with) and, for a LAG member, its port-channel. The NIC block
+# is written out for each host kind with plain fields inside inline fragments: a named
+# fragment nested in an inline fragment resolves to nulls.
+fragment SecurityTagPlacementFields on SecurityTag {
+  components {
+    edges {
+      node {
+        instances {
+          edges {
+            node {
+              id
+              __typename
+              name { value }
+              ... on DcimDevice {
+                interfaces(role__values: ["uplink", "lag"]) {
+                  edges {
+                    node {
+                      id
+                      name { value }
+                      ... on DcimPhysicalInterface {
+                        cable {
+                          node {
+                            endpoints {
+                              edges {
+                                node {
+                                  id
+                                  ... on DcimPhysicalInterface {
+                                    name { value }
+                                    role { value }
+                                    device { node { name { value } } }
+                                    interface_capabilities { edges { node { id } } }
+                                    lag {
+                                      node {
+                                        name { value }
+                                        interface_capabilities { edges { node { id } } }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              ... on DcimVirtualDevice {
+                hosting_device {
+                  node {
+                    id
+                    name { value }
+                    interfaces(role__values: ["uplink", "lag"]) {
+                      edges {
+                        node {
+                          id
+                          name { value }
+                          ... on DcimPhysicalInterface {
+                            cable {
+                              node {
+                                endpoints {
+                                  edges {
+                                    node {
+                                      id
+                                      ... on DcimPhysicalInterface {
+                                        name { value }
+                                        role { value }
+                                        device { node { name { value } } }
+                                        interface_capabilities { edges { node { id } } }
+                                        lag {
+                                          node {
+                                            name { value }
+                                            interface_capabilities { edges { node { id } } }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              ... on ManagedControllerVirtual {
+                hosting_device {
+                  node {
+                    id
+                    name { value }
+                    interfaces(role__values: ["uplink", "lag"]) {
+                      edges {
+                        node {
+                          id
+                          name { value }
+                          ... on DcimPhysicalInterface {
+                            cable {
+                              node {
+                                endpoints {
+                                  edges {
+                                    node {
+                                      id
+                                      ... on DcimPhysicalInterface {
+                                        name { value }
+                                        role { value }
+                                        device { node { name { value } } }
+                                        interface_capabilities { edges { node { id } } }
+                                        lag {
+                                          node {
+                                            name { value }
+                                            interface_capabilities { edges { node { id } } }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 # One segment as the group contract builder reads it
 # (transforms/helpers/group_policy.py): whether it is a routed tenant segment
 # (kind, gateway namespace type, zone) and its group tag, its owner (the
