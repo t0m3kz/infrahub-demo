@@ -11,8 +11,7 @@ from transforms.helpers.group_policy import (
     DEFAULT_ACTION,
     REPLIES,
     Group,
-    get_vrf_contracts,
-    segment_groups,
+    data_center_contracts,
     segment_security_view,
     segment_vrf,
     vxlan_gpo_view,
@@ -22,13 +21,9 @@ from utils.exchange_transit import is_routed_tenant_segment
 from utils.group_policy import (
     fabric_reason,
     gbp_required,
-    profiles_by_platform,
     reserved_groups,
-    segment_sites,
     site_kind,
-    site_reason,
     tags_by_segment,
-    vteps_by_data_center,
 )
 from utils.segment_addressing import segment_prefix
 
@@ -72,23 +67,17 @@ class SegmentationMatrix(InfrahubTransform):
         data_center = targets[0]
         dc_id = str(data_center.get("id"))
 
-        profiles, _problems = profiles_by_platform(cleaned.get("DcimGroupPolicyProfile") or [])
-        vteps_of = vteps_by_data_center(cleaned.get("TopologyDataCenter") or [], cleaned.get("TopologyPod") or [])
-        vteps = vteps_of.get(dc_id, [])
-        reason = site_reason(vteps, profiles)
-        reference_sites = {site for site, found in vteps_of.items() if site_reason(found, profiles) is None} | {dc_id}
-
-        all_segments = cleaned.get("ManagedNetworkSegment") or []
-        tags = cleaned.get("SecurityTag") or []
-        by_segment, _by_tag = segment_groups(all_segments, tags)
-        all_groups = [group for groups in by_segment.values() for group in groups]
-        segments = sorted(
-            (segment for segment in all_segments if dc_id in segment_sites(segment)),
-            key=lambda segment: str(segment.get("name")),
+        contracts = data_center_contracts(cleaned, dc_id)
+        profiles, vteps, reason, segments = contracts.profiles, contracts.vteps, contracts.reason, contracts.segments
+        all_segments, tags, all_groups = contracts.all_segments, contracts.tags, contracts.all_groups
+        by_segment, local, local_names, rows = (
+            contracts.by_segment,
+            contracts.local,
+            contracts.local_names,
+            contracts.rows,
         )
-        local = [group for segment in segments for group in by_segment.get(str(segment.get("id")), [])]
-        local_names = {group.name for group in local}
-        rows = get_vrf_contracts(all_segments, tags, local=local_names)
+        # As this data center would enforce once it is a reference fabric.
+        reference_sites = contracts.reference_sites | {dc_id}
         components_of = tags_by_segment(tags)
 
         views = {

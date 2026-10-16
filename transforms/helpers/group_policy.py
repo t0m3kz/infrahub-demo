@@ -77,7 +77,15 @@ from typing import Any
 
 from transforms.helpers.policy import segment_flows
 from utils.exchange_transit import is_routed_tenant_segment
-from utils.group_policy import is_microsegmented, segment_sites, tags_by_segment
+from utils.group_policy import (
+    Profiles,
+    is_microsegmented,
+    profiles_by_platform,
+    segment_sites,
+    site_reason,
+    tags_by_segment,
+    vteps_by_data_center,
+)
 
 UNCLASSIFIED = "unclassified"
 """Pseudo-group of every endpoint no selector classifies (service and transit legs, outside the VRF's segments)."""
@@ -434,3 +442,57 @@ def segment_security_view(
         ],
         "unsupported": sorted(unsupported, key=lambda item: (item["src"], item["dst"])),
     }
+
+
+@dataclass(frozen=True)
+class DataCenterContracts:
+    """One data center's group contracts, from the fleet-wide query roots.
+
+    The one composition both readers share: the segmentation_matrix artifact and
+    the device renderers. ``reference_sites`` is the fleet as it is (every site
+    whose VTEPs are all in their platform's profile row); a reader that wants
+    this data center treated as one adds it itself.
+    """
+
+    profiles: Profiles
+    vteps: list[dict[str, Any]]
+    reason: str | None
+    reference_sites: set[str]
+    segments: list[dict[str, Any]]
+    all_segments: list[dict[str, Any]]
+    tags: list[dict[str, Any]]
+    by_segment: dict[str, list[Group]]
+    all_groups: list[Group]
+    local: list[Group]
+    local_names: set[str]
+    rows: list[Any]
+
+
+def data_center_contracts(roots: dict[str, Any], dc_id: str) -> DataCenterContracts:
+    """The groups and contract rows of one data center (``roots``: cleaned query data)."""
+    profiles, _problems = profiles_by_platform(roots.get("DcimGroupPolicyProfile") or [])
+    vteps_of = vteps_by_data_center(roots.get("TopologyDataCenter") or [], roots.get("TopologyPod") or [])
+    vteps = vteps_of.get(dc_id, [])
+    all_segments = roots.get("ManagedNetworkSegment") or []
+    tags = roots.get("SecurityTag") or []
+    by_segment, _by_tag = segment_groups(all_segments, tags)
+    segments = sorted(
+        (segment for segment in all_segments if dc_id in segment_sites(segment)),
+        key=lambda segment: str(segment.get("name")),
+    )
+    local = [group for segment in segments for group in by_segment.get(str(segment.get("id")), [])]
+    local_names = {group.name for group in local}
+    return DataCenterContracts(
+        profiles=profiles,
+        vteps=vteps,
+        reason=site_reason(vteps, profiles),
+        reference_sites={site for site, found in vteps_of.items() if site_reason(found, profiles) is None},
+        segments=segments,
+        all_segments=all_segments,
+        tags=tags,
+        by_segment=by_segment,
+        all_groups=[group for groups in by_segment.values() for group in groups],
+        local=local,
+        local_names=local_names,
+        rows=get_vrf_contracts(all_segments, tags, local=local_names),
+    )
