@@ -77,7 +77,7 @@ def _build_gen() -> Any:
     gen._device_indexes = [1, 1, 1, 1, 2]
     gen._loopback_pool_id = "lo-pool"
     gen._management_pool_id = "mgmt-pool"
-    gen._is_ipv6 = False
+    gen._loopback_prefix_length = 32
     gen._spine_device_names = ["dc1-pod1-spine-01", "dc1-pod1-spine-02"]
     gen._spine_interfaces = ["Eth1/10", "Eth1/11"]
     gen._technical_pool_id = "p2p-pool"

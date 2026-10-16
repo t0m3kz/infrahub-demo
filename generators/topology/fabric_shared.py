@@ -16,16 +16,6 @@ DC_GENERATORS = ("add_dc", "dc_pod_cascade")
 _SERVICE_ROLES: tuple[Literal["firewall", "load-balancer"], ...] = ("firewall", "load-balancer")
 
 
-def p2p_prefix_length(ipv6: bool) -> int:
-    """P2P link prefix length of the fabric's underlay address family."""
-    return 127 if ipv6 else 31
-
-
-def loopback_prefix_length(ipv6: bool) -> int:
-    """Loopback host-route prefix length of the fabric's underlay address family."""
-    return 128 if ipv6 else 32
-
-
 class ServiceDevicesMixin:
     """Firewall + load-balancer creation for a fabric_templates list."""
 

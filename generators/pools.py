@@ -15,7 +15,7 @@ too.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Mapping
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable, Literal
@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     import logging
 
 from .helpers.pools import FW_CONTEXT_VLAN_END, FW_CONTEXT_VLAN_START
+from .helpers.routing import underlay_pool_is_ipv6
 from .logger import GeneratorError
 from .protocols import TopologyPod
 
@@ -149,6 +150,46 @@ class PoolMixin:
         finally:
             await self.release_resource_lock(lock_id)
 
+    async def attach_refs(self, *, kind: str | type[Any], node_id: str, refs: Mapping[str, str | None]) -> None:
+        """Point attributes of an existing node at pools or shared objects: one fetch, one save.
+
+        ``refs`` maps relationship name -> peer id; a ``None`` id means "nothing
+        to attach" and is skipped. The one place a generator writes pool (or
+        ``evpn_rt_as``) references onto its target node, shared by the DC, pod,
+        colocation-metro and VLAN-domain paths.
+
+        Missing-node policy: the node MUST exist. Every caller attaches to the
+        generator's own target (DC, pod, metro) or to a parent it upserted
+        earlier in this same run, and it is fetched by id, never by HFID, so
+        neither a trigger race nor HFID index lag can hide it. A missing node
+        is therefore a real fault: logged as an error (fatal under
+        FailOnErrorLogger) and raised as GeneratorError — never skipped.
+
+        Idempotent: the same ids are written on every run. Re-saved even when
+        unchanged (delete_unused_nodes bookkeeping). Plain save(), not
+        allow_upsert=True: the node was just fetched, so update() sends only
+        the changed fields; the Upsert mutation would resend every attribute
+        and relationship and spuriously re-fire unrelated ``updated`` triggers
+        (index/fabric_templates/mlag_create/connectivity_mode/status) and
+        double-fire dc_pod_cascade. Untracked: attaching a pool does not make
+        this run the node's owner — it is the run's target, or an owned one
+        (an MLAG or standalone VLAN domain just upserted) is already tracked
+        by its own save.
+        """
+        attach = {attribute: ref_id for attribute, ref_id in refs.items() if ref_id}
+        if not attach:
+            return
+        try:
+            node = await self.client.get(kind=kind, id=node_id)
+        except NodeNotFoundError as exc:
+            message = f"Cannot attach {sorted(attach)} to {getattr(kind, '__name__', kind)} {node_id}: node not found"
+            self.logger.error(message)
+            raise GeneratorError(message) from exc
+        for attribute, ref_id in attach.items():
+            setattr(node, attribute, {"id": ref_id})
+        await node.save(update_group_context=False)
+        self.logger.info(f"- Attached {', '.join(sorted(attach))} to {getattr(kind, '__name__', kind)} {node_id}")
+
     async def upsert_number_pool(
         self,
         pool_name: str,
@@ -198,24 +239,7 @@ class PoolMixin:
         )
 
         if parent_kind and parent_id and parent_attr:
-            parent = await self.client.get(kind=parent_kind, id=parent_id)
-            if parent:
-                pool_ref = {"id": pool.id} if pool.id else {"hfid": pool.hfid}
-                setattr(parent, parent_attr, pool_ref)
-                # Plain save(), not allow_upsert=True: `parent` was just fetched via
-                # client.get() so it's a known-existing node — update() sends only the
-                # modified fields. allow_upsert=True would route through create()'s
-                # Upsert mutation instead, which always sends every attribute/relationship
-                # (even unmodified ones), spuriously re-firing any `updated` trigger
-                # watching those other fields (e.g. index/fabric_templates/mlag_create)
-                # on every pool-reference attach.
-                #
-                # Untracked: attaching a pool does not make this run the parent's
-                # owner. The parent is often the run's own target (DC, pod) or
-                # owned elsewhere; an owned one (an MLAG or standalone VLAN
-                # domain this run just upserted) is already tracked by that save.
-                await parent.save(update_group_context=False)
-                self.logger.info("- Updated %s with %s (id: %s)", parent_kind, parent_attr, pool.id)
+            await self.attach_refs(kind=parent_kind, node_id=parent_id, refs={parent_attr: pool.id})
 
         return pool
 
@@ -338,8 +362,7 @@ class PoolMixin:
         strategy: Literal["fabric", "pod"],
         pools: dict[str, Any],
         id: str,
-        ipv6: bool = False,
-        dual_stack: bool = False,
+        underlay_protocol: str = "ipv4",
     ) -> dict[str, Any]:
         """Ensure required per-pod / fabric pools exist.
 
@@ -347,8 +370,9 @@ class PoolMixin:
             strategy: "fabric" for DC-level pools, "pod" for pod-level pools
             pools: Dictionary of explicit pool sizes {pool_name: prefix_length}
             id: DC or Pod ID
-            ipv6: Use IPv6 for data pools
-            dual_stack: IPv6 for technical/P2P pools, IPv4 for loopback/management
+            underlay_protocol: "ipv4", "ipv6" or "dual_stack" — which address family each
+                fabric pool is sliced from (helpers.routing.underlay_pool_is_ipv6);
+                only read by the fabric strategy, a pod slices its DC's pools
 
         Returns:
             Dictionary mapping pool names to pool objects: {"loopback": pool_obj, "technical": pool_obj}
@@ -376,7 +400,7 @@ class PoolMixin:
         # pools; the other waits and then finds them already there.
         async with self.resource_lock(f"pool-alloc-{strategy}-{id}"):
             return await self._allocate_resource_pools_locked(
-                strategy=strategy, pools=pools, id=id, ipv6=ipv6, dual_stack=dual_stack
+                strategy=strategy, pools=pools, id=id, underlay_protocol=underlay_protocol
             )
 
     async def _allocate_resource_pools_locked(
@@ -384,17 +408,13 @@ class PoolMixin:
         strategy: Literal["fabric", "pod"],
         pools: dict[str, Any],
         id: str,
-        ipv6: bool = False,
-        dual_stack: bool = False,
+        underlay_protocol: str = "ipv4",
     ) -> dict[str, Any]:
         """The actual pool-creation body of allocate_resource_pools(), run
         under that method's per-(strategy, id) lock."""
         fabric_name = self.fabric_name
         pod_name = self.pod_name
         pool_prefix = pod_name if pod_name else fabric_name
-
-        # Get pod object if working with pod strategy (needed for updating pool references)
-        pod = await self.client.get(kind=TopologyPod, id=id) if pod_name else None
 
         # Store created pools to return
         created_pools = {}
@@ -406,15 +426,8 @@ class PoolMixin:
                 "technical",
                 "loopback",
             ]:
-                # Dual-stack: technical uses IPv6, loopback/management use IPv4
-                # Full IPv6: technical and loopback use IPv6, management uses IPv4
-                if dual_stack:
-                    use_ipv6 = pool_name == "technical"
-                elif ipv6:
-                    use_ipv6 = pool_name != "management"
-                else:
-                    use_ipv6 = False
-                parent_pool_name = f"{pool_name.capitalize()}-IPv6" if use_ipv6 else f"{pool_name.capitalize()}-IPv4"
+                family = "IPv6" if underlay_pool_is_ipv6(underlay_protocol, pool_name) else "IPv4"
+                parent_pool_name = f"{pool_name.capitalize()}-{family}"
             elif strategy == "fabric" and not pod_name:
                 parent_pool_name = f"{fabric_name}-{pool_name.split('-')[-1]}-pool"
             else:
@@ -440,26 +453,17 @@ class PoolMixin:
             )
             created_pools[pool_name] = new_pool
 
-        # Update pod with all pool references in a single save
-        pool_attribute_map = {
-            "loopback": "loopback_pool",
-            "technical": "prefix_pool",
-        }
-
-        if pod:
-            pod_updated = False
-            for pool_name, pool_obj in created_pools.items():
-                if pool_name in pool_attribute_map:
-                    setattr(pod, pool_attribute_map[pool_name], {"id": pool_obj.id})
-                    self.logger.info(f"- Attaching pool {pool_obj.hfid} to pod (id: {pool_obj.id})")
-                    pod_updated = True
-            if pod_updated:
-                # Plain save(): pod is a known-existing node (fetched above via
-                # client.get()) — see comment on the parent.save() call above for why
-                # allow_upsert=True here would spuriously re-fire unrelated `updated`
-                # triggers (index/fabric_templates/mlag_create) on every pool attach.
-                # Untracked: the pod is the run's target, not its output.
-                await pod.save(update_group_context=False)
-                self.logger.info(f"- Saved pod {pod.name.value} with all pool references")
+        # Update the pod with all its pool references in a single save
+        if pod_name:
+            pool_attribute_map = {"loopback": "loopback_pool", "technical": "prefix_pool"}
+            await self.attach_refs(
+                kind=TopologyPod,
+                node_id=id,
+                refs={
+                    attribute: created_pools[pool_name].id
+                    for pool_name, attribute in pool_attribute_map.items()
+                    if pool_name in created_pools
+                },
+            )
 
         return created_pools

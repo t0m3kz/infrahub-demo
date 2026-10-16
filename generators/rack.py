@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     import logging
 
 from .helpers import DeviceNameContext, DeviceNamingConfig
-from .helpers.routing import RoutingStrategy, p2p_is_ipv6, underlay_is_ipv6
+from .helpers.routing import RoutingStrategy, loopback_prefix_length, p2p_prefix_length
 from .helpers.template_interfaces import template_interface_names_by_role
 from .pod_config import spine_slot_role, spine_slot_templates
 from .protocols import TopologyPod
@@ -266,7 +266,9 @@ class RackMixin:
             )
 
         self._naming_conv = naming_convention_of(dc, lower=False)
-        self._is_ipv6 = underlay_is_ipv6(dc.get("underlay_protocol", "ipv6"))
+        underlay_protocol = dc.get("underlay_protocol", "ipv6")
+        self._loopback_prefix_length = loopback_prefix_length(underlay_protocol)
+        self._p2p_prefix_length = p2p_prefix_length(underlay_protocol)
 
         self._spine_role: Literal["spine", "border-spine"] = spine_slot_role(pod.get("fabric_templates", []))
         self._spine_device_names: list[str] = []
@@ -294,5 +296,4 @@ class RackMixin:
 
         pod_prefix_pool = pod.get("prefix_pool")
         self._technical_pool_id = pod_prefix_pool["id"] if pod_prefix_pool else None
-        self._p2p_prefix_length = 127 if p2p_is_ipv6(dc.get("underlay_protocol", "ipv6")) else 31
         self._routing_options = routing_options

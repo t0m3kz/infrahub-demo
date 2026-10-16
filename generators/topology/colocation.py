@@ -67,6 +67,7 @@ from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
 from ..devices import DeviceMixin
 from ..helpers import get_loopback_name
 from ..helpers.pools import name_to_asn_range
+from ..helpers.routing import loopback_prefix_length, p2p_prefix_length
 from ..pools import PoolMixin
 from ..protocols import DcimVirtualInterface, ManagedBGP, TopologyColocationMetro
 from ..routing import EVPN_AF, RoutingMixin
@@ -156,7 +157,7 @@ _COLO_VNI_RANGE = (10001, 39999)
 # far more than the one link needs.
 _COLO_INTERLINK_ROLE = "interlink"
 _COLO_TECHNICAL_IPV6_PREFIX_LENGTH = 124
-_COLO_P2P_IPV6_PREFIX_LENGTH = 127
+_COLO_P2P_IPV6_PREFIX_LENGTH = p2p_prefix_length("ipv6")
 _COLO_FABRIC_UNICAST_AF = ("ipv6", "unicast")
 
 
@@ -426,23 +427,17 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
             kind="address",
         )
 
-        # One fetch + one save for every pool reference. Plain save(), not
-        # allow_upsert=True: `node` is a known-existing node, so update() sends
-        # only the modified fields — allow_upsert=True routes through the Upsert
-        # mutation, which resends every attribute and relationship and so
-        # re-fires any `updated` trigger watching fabric_templates on every
-        # pool attach.
-        node = await self.client.get(kind=TopologyColocationMetro, id=metro_id)
-        if not node:
-            self.logger.error(f"Metro {metro}: could not re-fetch metro {metro_id} to attach pool references")
-            return asn_pool.id
-        node.loopback_pool = {"id": loopback_pool.id}
-        node.management_pool = {"id": management_pool.id}
-        node.technical_pool = {"id": technical_pool.id}
-        node.asn_pool = {"id": asn_pool.id}
-        node.vni_pool = {"id": vni_pool.id}
-        # Untracked: the metro is this run's target, not its output.
-        await node.save(update_group_context=False)
+        await self.attach_refs(
+            kind=TopologyColocationMetro,
+            node_id=metro_id,
+            refs={
+                "loopback_pool": loopback_pool.id,
+                "management_pool": management_pool.id,
+                "technical_pool": technical_pool.id,
+                "asn_pool": asn_pool.id,
+                "vni_pool": vni_pool.id,
+            },
+        )
         self.logger.info(f"Metro {metro}: attached loopback/management/technical/ASN/VNI pool references")
         return asn_pool.id
 
@@ -489,7 +484,9 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
             # Always allocated, virtual or physical: an edge router runs the
             # routing that peers with the DCs it fronts either way — an MCR
             # still has a loopback and still peers over it.
-            options = DeviceOptions(indexes=[], allocate_loopback=True, loopback_prefix_length=32)
+            options = DeviceOptions(
+                indexes=[], allocate_loopback=True, loopback_prefix_length=loopback_prefix_length("ipv4")
+            )
             if virtual:
                 # Provider-hosted virtual kit, so a DcimVirtualDevice. No
                 # hosting_device: the colocation operator's own platform runs
@@ -537,7 +534,7 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
 
         * a site ASN, attached as ``evpn_rt_as`` — the metro's site-id and the
           admin field of its local route-targets, same role as a DC's fabric AS
-          (generators/routing.py's _attach_evpn_rt_as);
+          (PoolMixin.attach_refs, the same evpn_rt_as link a DC gets);
         * an overlay ManagedBGP per edge in that ASN, so the DCI peerings
           (add_circuit, for a circuit with peering_role=dci) have a process
           to attach to;
@@ -562,7 +559,7 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         if not edge_devices:
             return process_ids
         site_as_id = await self.ensure_shared_as(description=f"{metro} EVPN site ASN", asn_pool_id=asn_pool_id)
-        await self._attach_evpn_rt_as(deployment_id=metro_id, as_id=site_as_id)
+        await self.attach_refs(kind="TopologySegmentHosting", node_id=metro_id, refs={"evpn_rt_as": site_as_id})
 
         loopbacks = await self.client.filters(
             kind=DcimVirtualInterface,

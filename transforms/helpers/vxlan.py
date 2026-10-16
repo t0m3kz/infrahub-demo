@@ -8,7 +8,7 @@ from netutils.interface import sort_interface_list
 from transforms.helpers.addressing import host_ip
 from transforms.helpers.segments import _get_segment_gateways, _get_segment_namespace, segment_vlan_ids
 from utils.exchange_transit import MAX_ENCODABLE_VNI
-from utils.fabric_roles import VTEP_ROLES
+from utils.fabric_roles import BORDER_ROLES, VTEP_ROLES
 
 _log = logging.getLogger(__name__)
 
@@ -446,10 +446,6 @@ def get_interfaces(
 # Following netlab's approach: single implementation, platform-agnostic data model
 
 
-# Roles whose uplinks are intra-site fabric links when the device is a BGW.
-# An edge is a single-box site: its uplinks face the cage, not a fabric.
-_BGW_FABRIC_TRACKING_ROLES = frozenset({"border-leaf", "border-spine"})
-
 # Used when a fabric leaves TopologySegmentHosting.evpn_anycast_gateway_mac unset.
 # 00:1c:73 is Arista's OUI and this is the value their EVPN reference designs use,
 # which is why it is the default here rather than something invented. It is only a
@@ -628,15 +624,14 @@ def _get_multisite_config(
     # Uplinks of a BGW inside a fabric, plus the interlink of any BGW: the
     # direct link to the sibling BGW of a single-box site (the metro edge pair),
     # which is a fabric-facing port even though an edge's uplinks are not.
+    # A border role's uplinks are intra-site fabric links; an edge is a single-box
+    # site whose uplinks face the cage, not a fabric.
     fabric_names = {
         iface["name"]
         for iface in interfaces
         if iface.get("name")
         and iface["name"] not in dci_interfaces
-        and (
-            iface.get("role") == "interlink"
-            or (device_role in _BGW_FABRIC_TRACKING_ROLES and iface.get("role") == "uplink")
-        )
+        and (iface.get("role") == "interlink" or (device_role in BORDER_ROLES and iface.get("role") == "uplink"))
     }
     fabric_interfaces = sort_interface_list(list(fabric_names)) if fabric_names else []
     return {

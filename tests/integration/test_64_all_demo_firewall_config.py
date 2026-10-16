@@ -52,7 +52,6 @@ from transforms.config.leaf import Leaf
 from utils.exchange_transit import (
     EXCHANGE_PEERS,
     MANAGEMENT_TYPE,
-    NON_PUBLIC_PREFIXES,
     transit_addresses,
     transit_vlan,
     transit_vni,
@@ -264,7 +263,9 @@ def _management_border_leaf_errors(device: str, rendered: str, contexts: list[di
     if vrf_block is None:
         return [f"{device}: no 'vrf context {MANAGEMENT_NAMESPACE}'"]
     for prefix, nexthop in re.findall(r"^\s+ip route (\S+) (\S+)", vrf_block, re.MULTILINE):
-        if any(ipaddress.IPv4Network(prefix).subnet_of(private) for private in NON_PUBLIC_PREFIXES):
+        if any(
+            ipaddress.IPv4Network(prefix).subnet_of(ipaddress.IPv4Network(private)) for private in NON_INTERNET_PREFIXES
+        ):
             errors.append(
                 f"{device}: 'ip route {prefix} {nexthop}' inside 'vrf context {MANAGEMENT_NAMESPACE}' "
                 "(tenants are NATed behind the leg VIP, no return route)"
@@ -845,7 +846,8 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                     errors.append(f"{device}: no 'ip route {snat}/32 {vip}' inside 'vrf context INTERNET'")
             for prefix, _nexthop in internet_routes:
                 if prefix.split("/")[0] != "0.0.0.0" and any(
-                    ipaddress.IPv4Network(prefix).subnet_of(private) for private in NON_PUBLIC_PREFIXES
+                    ipaddress.IPv4Network(prefix).subnet_of(ipaddress.IPv4Network(private))
+                    for private in NON_INTERNET_PREFIXES
                 ):
                     errors.append(f"{device}: tenant (non-public) prefix {prefix} routed inside 'vrf context INTERNET'")
 

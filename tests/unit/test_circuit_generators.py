@@ -402,18 +402,66 @@ class TestVirtualCircuitOverlay:
         assert client.allocations == []
         assert client.interfaces == {}
         assert [name for name, _, _ in client.created] == ["ManagedBGPPeering"]
-        data, node = client.created_of("ManagedBGPPeering")[0]
-        assert data == {
-            "name": "C001-SDWAN-FR2-bgp",
-            "description": "Overlay eBGP C001-EDGE1/GE1 <-> EQX-FR2-SDWAN-GW1/eth0.1001 over C001-SDWAN-FR2",
-            "status": "active",
-            "session_type": "EBGP",
-            "peering_role": "overlay",
-            "ttl": 1,
-            "bgp_processes": [{"id": "C001-EDGE1-bgp-underlay"}, {"id": "EQX-FR2-SDWAN-GW1-bgp-underlay"}],
-            "interface_capabilities": [{"id": "if-edge"}, {"id": "if-gw"}],
-        }
+        _, node = client.created_of("ManagedBGPPeering")[0]
         assert client.saves() == {node.id: TRACKED}
+
+    @pytest.mark.asyncio
+    async def test_overlay_session_is_the_shared_peering_payload(self) -> None:
+        """The overlay writes through upsert_bgp_peering like the DCI and fabric sessions: BFD,
+        standard and extended communities, the endpoints' unicast family, the fabric key."""
+        client = FakeClient()
+        dc_end = interface(
+            "if-bl", "Ethernet1/40", "bl-dc101101", address="10.99.1.1/30", dc="DC10", roles=("regular",)
+        )
+
+        await virtual_generator(client).generate(virtual_payload(interfaces=[sdwan_edge(), dc_end]))
+
+        assert _peerings(client) == [
+            {
+                "name": "C001-SDWAN-FR2-bgp",
+                "description": "Overlay eBGP C001-EDGE1/GE1 <-> bl-dc101101/Ethernet1/40 over C001-SDWAN-FR2",
+                "status": "active",
+                "session_type": "EBGP",
+                "peering_role": "overlay",
+                "ttl": 1,
+                "bfd_enabled": True,
+                "send_community": True,
+                "send_extended_community": True,
+                "address_families": [{"id": "af-ipv4-unicast"}],
+                "bgp_processes": [{"id": "C001-EDGE1-bgp-underlay"}, {"id": "bl-dc101101-bgp-regular"}],
+                "password": {"id": DC_KEY_ID},
+                "interface_capabilities": [{"id": "if-edge"}, {"id": "if-bl"}],
+            }
+        ]
+
+    @pytest.mark.asyncio
+    async def test_overlay_session_family_follows_the_endpoint_addresses(self) -> None:
+        client = FakeClient()
+        edge = sdwan_edge(address="fd00:99::2/127")
+        gateway = sdwan_gateway(address="fd00:99::1/127")
+
+        await virtual_generator(client).generate(virtual_payload(interfaces=[edge, gateway]))
+
+        assert _peerings(client)[0]["address_families"] == [{"id": "af-ipv6-unicast"}]
+
+    @pytest.mark.asyncio
+    async def test_missing_address_family_is_created_untracked_under_a_lock(self) -> None:
+        client = FakeClient(address_families=False)
+        gen = virtual_generator(client)
+
+        await gen.generate(virtual_payload())
+
+        assert gen.lock_keys == ["bgp-af-ipv4-unicast"]
+        assert [d["safi"] for d, _ in client.created_of("RoutingBGPAddressFamily")] == ["unicast"]
+
+    @pytest.mark.asyncio
+    async def test_session_between_non_dc_ends_is_written_without_a_password(self) -> None:
+        """Edge <-> gateway have no fabric, so no overlay key: the session is unauthenticated, no password key."""
+        client = FakeClient()
+
+        await virtual_generator(client).generate(virtual_payload())
+
+        assert "password" not in _peerings(client)[0]
 
     @pytest.mark.asyncio
     async def test_waits_for_every_physical_circuit_run(self) -> None:

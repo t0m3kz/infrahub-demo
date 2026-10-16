@@ -127,6 +127,11 @@
     }
   },
   "VLAN_INTERFACE": {},
+  "VLAN_MEMBER": {
+    "Vlan150|Ethernet10": {
+      "tagging_mode": "untagged"
+    }
+  },
   "VRF": {},
   "VXLAN_TUNNEL": {
     "vtep": {

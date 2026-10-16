@@ -75,7 +75,7 @@ def _build_gen(*, deployment_type: Literal["middle_rack", "tor", "mixed"] = "mix
     gen._device_indexes = [1, 1, 1, 2, 2]
     gen._loopback_pool_id = "lo-pool"
     gen._management_pool_id = "mgmt-pool"
-    gen._is_ipv6 = False
+    gen._loopback_prefix_length = 32
     gen._spine_device_names = ["dc1-pod1-spine-01", "dc1-pod1-spine-02"]
     gen._spine_interfaces = ["Eth1/10", "Eth1/11"]
     gen._technical_pool_id = "p2p-pool"
@@ -321,6 +321,25 @@ class TestRackMixinAdditional:
         assert gen._technical_pool_id == "p2p-pool"
         assert gen._p2p_prefix_length == 31
         assert gen._routing_options["asn_pool"] == "asn-pool"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("protocol", "p2p", "loopback"),
+        [("ipv4", 31, 32), ("ipv6", 127, 128), ("dual_stack", 127, 32)],
+    )
+    async def test_prefix_lengths_follow_the_pool_family_of_the_underlay(
+        self, protocol: str, p2p: int, loopback: int
+    ) -> None:
+        """Dual-stack: P2P comes from the IPv6 technical pool (/127), the loopback from the IPv4 pool (/32)."""
+        gen = _build_gen()
+        gen.data["pod"]["parent"]["underlay_protocol"] = protocol
+
+        await gen._prepare_generation_context()
+
+        assert gen._p2p_prefix_length == p2p
+        assert gen._loopback_prefix_length == loopback
+        options = RackRolesHelper(gen).build_device_options(allocate_loopback=True)
+        assert options["loopback_prefix_length"] == loopback
 
     # _derive_super_spine_info() was dead code (never called) and was deleted
     # from RackMixin — see tests/unit/test_rack_parse_and_checksum.py's

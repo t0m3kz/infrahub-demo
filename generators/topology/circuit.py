@@ -38,9 +38,8 @@ from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
 from ..connections import CablingMixin
-from ..helpers.common import save_with_node_not_found_retry
 from ..pools import PoolMixin
-from ..protocols import ManagedBGPPeering, RoutingPassword, TopologyVirtualCircuit
+from ..protocols import RoutingPassword, TopologyVirtualCircuit
 from ..routing import EVPN_AF, IPV4_UNICAST_AF, IPV6_UNICAST_AF, RoutingMixin, _overlay_key_name
 
 PHYSICAL_CIRCUIT_GENERATOR = "add_circuit"
@@ -70,7 +69,7 @@ _PHYSICAL_BACKED_LINK_TYPES = frozenset(
 # family: an EVPN Multi-Site tunnel only forms between border gateways whose
 # VTEPs share one, so the DCI follows the fabric's underlay_protocol.
 _DCI_POOLS: dict[int, tuple[str, int]] = {4: ("DCI-Technical-IPv4", 31), 6: ("DCI-Technical-IPv6", 127)}
-_DCI_UNICAST_AF: dict[int, tuple[str, str]] = {4: IPV4_UNICAST_AF, 6: IPV6_UNICAST_AF}
+_UNICAST_AF: dict[int, tuple[str, str]] = {4: IPV4_UNICAST_AF, 6: IPV6_UNICAST_AF}
 
 # Circuit status -> the status of the interfaces it lands on (templates render
 # a non-active interface shut). A decommissioned circuit builds nothing.
@@ -95,6 +94,8 @@ class CircuitEndpoint:
     device_id: str
     device_name: str
     address_id: str | None
+    # The interface's address with its prefix length ("10.0.0.1/31"), when it has one.
+    address: str | None
     # Lower-cased TopologyDataCenter name when the device belongs to a DC
     # fabric (its deployment), which names the fabric's routing objects.
     fabric: str | None
@@ -123,6 +124,7 @@ class CircuitEndpoint:
             device_id=device.get("id") or "",
             device_name=device.get("name") or "?",
             address_id=address.get("id") if isinstance(address, dict) else None,
+            address=address.get("address") if isinstance(address, dict) else None,
             fabric=fabric or None,
             underlay_protocol=deployment.get("underlay_protocol") if is_dc else None,
             bgp_processes=tuple(
@@ -310,7 +312,7 @@ class PhysicalCircuitGenerator(CablingMixin, _CircuitGenerator):
 
         # Every precondition holds — the writes start here.
         address_families = [
-            await self.ensure_address_family(*_DCI_UNICAST_AF[family]),
+            await self.ensure_address_family(*_UNICAST_AF[family]),
             await self.ensure_address_family(*EVPN_AF),
         ]
         prefix = await self.client.allocate_next_ip_prefix(
@@ -492,22 +494,21 @@ class VirtualCircuitGenerator(_CircuitGenerator):
             return
 
         underlay_active = any(pc.get("status") == "active" for pc in live_underlay)
-        peering = await self.client.create(
-            kind=ManagedBGPPeering,
-            data={
-                # <vc>-bgp: peerings and circuits share one name space.
-                "name": f"{circuit_name}-bgp",
-                "description": f"Overlay eBGP {first.label} <-> {second.label} over {circuit_name}",
-                "status": "active" if status == "active" and underlay_active else "provisioning",
-                "session_type": "EBGP",
-                "peering_role": "overlay",
-                "ttl": 1,
-                "bgp_processes": [{"id": process_id} for process_id in processes],
-                "interface_capabilities": [{"id": first.interface_id}, {"id": second.interface_id}],
-                **({"password": {"id": key.id}} if key is not None else {}),
-            },
+        # The session rides the endpoints' own addresses, directly connected
+        # (ttl 1): it carries that address family's unicast routes.
+        family = 6 if ":" in (first.address or "") else 4
+        await self.upsert_bgp_peering(
+            # <vc>-bgp: peerings and circuits share one name space.
+            name=f"{circuit_name}-bgp",
+            description=f"Overlay eBGP {first.label} <-> {second.label} over {circuit_name}",
+            status="active" if status == "active" and underlay_active else "provisioning",
+            session_type="EBGP",
+            peering_role="overlay",
+            process_ids=processes,
+            address_family_ids=[await self.ensure_address_family(*_UNICAST_AF[family])],
+            password_id=key.id if key is not None else None,
+            interface_ids=[first.interface_id, second.interface_id],
         )
-        await save_with_node_not_found_retry(peering, self.logger)
 
     def _log_summary(self, circuit: dict[str, Any], circuit_name: str) -> None:
         """Log the circuit and warn where its transport and underlay disagree."""

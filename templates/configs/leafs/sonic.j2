@@ -19,6 +19,7 @@
 {%- set bgp_peer_groups = {} -%}
 {%- set bgp_globals_af = {} -%}
 {%- set ospf_router = {} -%}
+{%- set vlan_members = {} -%}
 {%- include 'common/sonic_common.j2' %}
 
 {%- set vxlan_tunnel = {} -%}
@@ -64,19 +65,9 @@
 {%- if not sonic_border -%}
 {%- set _ = configdb.update({'ACL_TABLE': acl_table, 'ACL_RULE': acl_rule}) -%}
 {%- endif -%}
-{%- if sonic_border %}
-{#- HA-facing service ports (interface.mode == 'trunk') carry their
-    terminate_inline segments' VLANs tagged. Only added when present, so
-    border-leafs without one keep their table set. -#}
-{%- set vlan_members = {} -%}
-{%- for interface in interfaces if interface.mode == 'trunk' -%}
-{%- for vlan_id in interface.vlans -%}
-{%- set _ = vlan_members.update({'Vlan' ~ vlan_id ~ '|' ~ interface.name: {'tagging_mode': 'tagged'}}) -%}
-{%- endfor -%}
-{%- endfor -%}
+{#- Only added when a host port carries a VLAN, so a leaf without one keeps its table set. -#}
 {%- if vlan_members -%}
 {%- set _ = configdb.update({'VLAN_MEMBER': vlan_members}) -%}
-{%- endif -%}
 {%- endif %}
 {#- Per-table merge: MC-LAG contributes VLAN/VLAN_MEMBER/VLAN_INTERFACE
     entries that must not replace the tables built above. #}

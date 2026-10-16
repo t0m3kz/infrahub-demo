@@ -32,9 +32,12 @@ query border_spine_config(
         # border-spine is a VTEP (collapsed spine + border-leaf for micro-fabrics
         # and colocation metros), so it needs the fabric-wide EVPN route-target
         # ASN like any other leaf — see transforms/helpers/vxlan.py's rt_asn.
+        # It renders the border-leaf templates and refuses the same unprotected
+        # tenant SVIs, so it reads the firewall contexts they redirect to.
         ... on DcimPhysicalDevice {
           deployment {
             node {
+              ...FirewallContextsOnDeploymentFields
               ...EvpnRtAsOnDeploymentFields
             }
           }

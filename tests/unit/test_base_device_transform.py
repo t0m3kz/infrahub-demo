@@ -18,7 +18,9 @@ import pytest
 import yaml
 
 from transforms.common import BaseDeviceTransform, _combine_leaf_pbr_rules, _loopback_name, get_capabilities
+from transforms.config.border_spine import BorderSpine
 from transforms.config.tor import ToR
+from utils.fabric_roles import BORDER_ROLES
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -168,28 +170,31 @@ class TestCombineLeafPbrRules:
         assert config["leaf_pbr_rules"] == [{**backend, "bypass_prefixes": [], "fw_nexthop": None}]
 
     @pytest.mark.parametrize("platform", ["cisco_nxos", "arista_eos", "sonic", "dell_sonic", "nokia_sros"])
-    def test_border_leaf_refuses_tenant_svi_with_pbr(self, platform: str) -> None:
-        """No border-leaf template renders PBR: a tenant SVI that needs it must not ship unprotected."""
+    @pytest.mark.parametrize("role", sorted(BORDER_ROLES))
+    def test_border_role_refuses_tenant_svi_with_pbr(self, platform: str, role: str) -> None:
+        """No border_leafs template renders PBR: a tenant SVI that needs it must not ship unprotected."""
         customer = {"vlan_id": 100, "bypass_prefixes": [], "fw_nexthop": "10.0.0.2"}
-        transform = _make_transform("border-leaf")
+        transform = _make_transform(role)
 
         with patch("transforms.common.get_customer_pbr_rules", return_value=[customer]):
-            with pytest.raises(ValueError, match=r"border-leaf cannot render PBR policy for VLANs \[100\]"):
+            with pytest.raises(ValueError, match=rf"{role} cannot render PBR policy for VLANs \[100\]"):
                 transform._extra_config(_device_data(), platform)
 
     @pytest.mark.parametrize("platform", ["sonic", "dell_sonic", "nokia_sros"])
-    def test_border_leaf_refuses_tenant_svi_acl_it_cannot_render(self, platform: str) -> None:
-        """SONiC and SR OS border-leaf templates render no SVI ACL: refuse rather than drop it."""
-        transform = _make_transform("border-leaf")
+    @pytest.mark.parametrize("role", sorted(BORDER_ROLES))
+    def test_border_role_refuses_tenant_svi_acl_it_cannot_render(self, platform: str, role: str) -> None:
+        """SONiC and SR OS border_leafs templates render no SVI ACL: refuse rather than drop it."""
+        transform = _make_transform(role)
 
         with patch("transforms.common.get_acls", return_value=[{"vlan_id": 100, "name": "ACL-100"}]):
-            with pytest.raises(ValueError, match=r"border-leaf cannot render the SVI ACL for VLANs \[100\]"):
+            with pytest.raises(ValueError, match=rf"{role} cannot render the SVI ACL for VLANs \[100\]"):
                 transform._extra_config(_device_data(), platform)
 
     @pytest.mark.parametrize("platform", ["cisco_nxos", "arista_eos"])
-    def test_border_leaf_renders_tenant_svi_acl_on_acl_platforms(self, platform: str) -> None:
-        """NX-OS and EOS border-leaf templates render the SVI ACL, so the ACL alone is no reason to refuse."""
-        transform = _make_transform("border-leaf")
+    @pytest.mark.parametrize("role", sorted(BORDER_ROLES))
+    def test_border_role_renders_tenant_svi_acl_on_acl_platforms(self, platform: str, role: str) -> None:
+        """NX-OS and EOS border_leafs templates render the SVI ACL, so the ACL alone is no reason to refuse."""
+        transform = _make_transform(role)
 
         with patch("transforms.common.get_acls", return_value=[{"vlan_id": 100, "name": "ACL-100"}]):
             config = transform._extra_config(_device_data(), platform)
@@ -197,12 +202,29 @@ class TestCombineLeafPbrRules:
         assert config["acls"] == [{"vlan_id": 100, "name": "ACL-100"}]
 
     @pytest.mark.parametrize("platform", ["cisco_nxos", "sonic", "nokia_sros"])
-    def test_border_leaf_without_tenant_policy_renders(self, platform: str) -> None:
-        """A border leaf with no ACL/PBR need (transit legs only) is not refused."""
-        config = _make_transform("border-leaf")._extra_config(_device_data(), platform)
+    @pytest.mark.parametrize("role", sorted(BORDER_ROLES))
+    def test_border_role_without_tenant_policy_renders(self, platform: str, role: str) -> None:
+        """A border leaf or spine with no ACL/PBR need (transit legs only) is not refused."""
+        config = _make_transform(role)._extra_config(_device_data(), platform)
 
         assert config["acls"] == []
         assert config["leaf_pbr_rules"] == []
+
+    @pytest.mark.parametrize("platform", ["sonic", "dell_sonic", "nokia_sros"])
+    def test_real_border_spine_class_refuses_unprotected_tenant_svi(self, platform: str) -> None:
+        """BorderSpine itself (not just the role string) is refused when its tenant SVI would lose its ACL."""
+        transform = BorderSpine.__new__(BorderSpine)
+        transform.root_directory = "/fake/root"
+
+        with patch("transforms.common.get_acls", return_value=[{"vlan_id": 100, "name": "ACL-100"}]):
+            with pytest.raises(ValueError, match=r"border-spine cannot render the SVI ACL for VLANs \[100\]"):
+                transform._extra_config(_device_data(), platform)
+
+    @pytest.mark.parametrize("platform", ["sonic", "nokia_sros"])
+    def test_spine_is_not_subject_to_the_border_refusal(self, platform: str) -> None:
+        """Failure-path guard: the refusal is for border roles only (a spine renders no tenant SVI)."""
+        with patch("transforms.common.get_acls", return_value=[{"vlan_id": 100, "name": "ACL-100"}]):
+            _make_transform("spine")._extra_config(_device_data(), platform)
 
     @pytest.mark.parametrize("platform", ["sonic", "dell_sonic"])
     def test_sonic_template_renders_ordered_pbr_table_per_vlan(self, platform: str) -> None:

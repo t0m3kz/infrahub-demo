@@ -122,18 +122,6 @@ class TestSharedRoutingObjects:
         created.save.assert_awaited_once_with(**UNTRACKED_UPSERT)
 
     @pytest.mark.asyncio
-    async def test_evpn_rt_as_attach_does_not_claim_the_deployment(self) -> None:
-        """The DC/metro is the run's own target: tracked, its own cleanup could delete it."""
-        m = _routing_mixin()
-        deployment = _node("dc-1")
-        m.client.get = AsyncMock(return_value=deployment)
-
-        await m._attach_evpn_rt_as(deployment_id="dc-1", as_id="as-1")
-
-        assert deployment.evpn_rt_as == {"id": "as-1"}
-        deployment.save.assert_awaited_once_with(update_group_context=False)
-
-    @pytest.mark.asyncio
     async def test_routing_password_lookup_failure_fails_the_run(self) -> None:
         """add_dc owns the shared key: a lookup it swallowed would leave the key
         untracked this run, and the run's cleanup would delete it."""

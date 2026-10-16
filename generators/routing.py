@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import secrets
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from contextlib import AbstractAsyncContextManager
 from typing import TYPE_CHECKING, Any
 
@@ -84,6 +84,8 @@ class RoutingMixin:
     data: Any
     # PoolMixin.resource_lock — a Callable attribute, not a stub, so it never shadows the real one.
     resource_lock: Callable[[str], AbstractAsyncContextManager[None]]
+    # PoolMixin.attach_refs — attaches the fabric AS to the deployment as evpn_rt_as.
+    attach_refs: Callable[..., Awaitable[None]]
 
     async def create_routing(
         self,
@@ -443,8 +445,16 @@ class RoutingMixin:
         return device_to_as_id
 
     async def _ensure_routing_password(self, *, name: str, description: str) -> str | None:
-        """Create or reuse a shared RoutingPassword node by deterministic name."""
+        """Create or reuse a shared RoutingPassword node by deterministic name.
 
+        Serialized per name: add_dc and dc_pod_cascade can reach this together,
+        both find nothing and both create the key, and the loser either fails
+        the uniqueness constraint or leaves a second, untracked key behind.
+        """
+        async with self.resource_lock(f"routing-password-{name}"):
+            return await self._ensure_routing_password_locked(name=name, description=description)
+
+    async def _ensure_routing_password_locked(self, *, name: str, description: str) -> str | None:
         try:
             existing = await self.client.get(kind=RoutingPassword, name__value=name, raise_when_missing=False)
             if existing:
@@ -476,8 +486,8 @@ class RoutingMixin:
     async def _create_shared_routing_objects(
         self,
         overlay_asn: int,
+        deployment_id: str,
         asn_pool_id: str | None = None,
-        deployment_id: str | None = None,
     ) -> str | None:
         """Create shared DC-level routing state used by pod and rack generators.
 
@@ -540,24 +550,8 @@ class RoutingMixin:
         # silently getting a second one.
         overlay_desc = _overlay_as_description(self.fabric_name)
         try:
-            existing = await self.client.filters(
-                kind=RoutingAutonomousSystem,
-                description__value=overlay_desc,
-            )
-            if existing:
-                as_obj = existing[0]
-                as_obj.asn.value = overlay_asn
-                await as_obj.save(allow_upsert=True)
-                self.logger.info(f"Updated shared overlay AS: AS{as_obj.asn.value} ({as_obj.id})")
-            else:
-                as_obj = await self.client.create(
-                    kind=RoutingAutonomousSystem,
-                    data={"asn": overlay_asn, "description": overlay_desc},
-                )
-                await as_obj.save(allow_upsert=True)
-                self.logger.info(f"Created shared overlay AS: AS{as_obj.asn.value} ({as_obj.id})")
-            self.client.group_context.related_node_ids.append(as_obj.id)
-            await self._attach_evpn_rt_as(deployment_id=deployment_id, as_id=as_obj.id)
+            as_id = await self._ensure_overlay_as(description=overlay_desc, overlay_asn=overlay_asn)
+            await self.attach_refs(kind="TopologySegmentHosting", node_id=deployment_id, refs={"evpn_rt_as": as_id})
         except Exception as exc:
             self.logger.error(f"Failed to create shared overlay AS: {exc}")
 
@@ -584,6 +578,30 @@ class RoutingMixin:
                 self.logger.error(f"Failed to create shared OSPF area: {exc}")
 
         return super_spine_as_id
+
+    async def _ensure_overlay_as(self, *, description: str, overlay_asn: int) -> str:
+        """Find the fabric's overlay AS by its deterministic description (pinning
+        its ASN to ``overlay_asn``) or create it, and track it in this run's group.
+
+        Same race as ensure_shared_as, so the same per-description lock key: the
+        query and the create both run inside it.
+        """
+        async with self.resource_lock(f"shared-as-{description}"):
+            existing = await self.client.filters(kind=RoutingAutonomousSystem, description__value=description)
+            if existing:
+                as_obj = existing[0]
+                as_obj.asn.value = overlay_asn
+                await as_obj.save(allow_upsert=True)
+                self.logger.info(f"Updated shared overlay AS: AS{as_obj.asn.value} ({as_obj.id})")
+            else:
+                as_obj = await self.client.create(
+                    kind=RoutingAutonomousSystem,
+                    data={"asn": overlay_asn, "description": description},
+                )
+                await as_obj.save(allow_upsert=True)
+                self.logger.info(f"Created shared overlay AS: AS{as_obj.asn.value} ({as_obj.id})")
+            self.client.group_context.related_node_ids.append(as_obj.id)
+            return as_obj.id
 
     async def ensure_shared_as(self, *, description: str, asn_pool_id: str | None) -> str | None:
         """Find the AS carrying this deterministic description, or draw a new
@@ -632,38 +650,6 @@ class RoutingMixin:
         }
         return set(device_names).issubset(ready_devices)
 
-    async def _attach_evpn_rt_as(self, deployment_id: str | None, as_id: str | None) -> None:
-        """Link the fabric AS to the deployment as ``evpn_rt_as``.
-
-        Without this the AS is only discoverable by its description string, which
-        generators can filter on but config transforms cannot — they only ever
-        traverse out from the device. The relationship is what makes the
-        fabric-wide route-target ASN reachable from
-        queries/fragments/evpn_fabric.gql.
-
-        Idempotent: re-running sets the same id, so the plain save() is a no-op
-        update. Non-fatal on failure — a missing RT ASN degrades to the overlay
-        process ASN in transforms/helpers/vxlan.py rather than aborting the
-        fabric build.
-        """
-        if not deployment_id or not as_id:
-            return
-        try:
-            deployment = await self.client.get(kind="TopologySegmentHosting", id=deployment_id)
-            if not deployment:
-                return
-            # Plain save(), not allow_upsert=True — same reasoning as
-            # upsert_number_pool's parent attach in generators/pools.py: the node
-            # was just fetched, so update() sends only this field instead of
-            # re-firing triggers on every unmodified attribute. Untracked: the
-            # deployment is this run's target, not its output — tracked, its
-            # own run's cleanup could delete it.
-            deployment.evpn_rt_as = {"id": as_id}  # type: ignore[attr-defined]
-            await deployment.save(update_group_context=False)
-            self.logger.info(f"- Linked fabric EVPN route-target AS to deployment ({as_id})")
-        except Exception as exc:
-            self.logger.warning(f"Failed to attach evpn_rt_as to deployment {deployment_id}: {exc}")
-
     async def ensure_address_family(self, afi: str, safi: str) -> str:
         """Find or create a RoutingBGPAddressFamily and return its id, untracked, under a lock.
 
@@ -699,8 +685,8 @@ class RoutingMixin:
         peering_role: str,
         process_ids: list[str],
         address_family_ids: list[str],
-        password_id: str,
         interface_ids: list[str],
+        password_id: str | None = None,
     ) -> None:
         """Upsert one directly connected (ttl 1, BFD, extended communities) ManagedBGPPeering.
 
@@ -709,6 +695,10 @@ class RoutingMixin:
         ManagedGeneric name space with circuits: callers prefix the name
         (DCI-<circuit>, FABRIC-<a>-<b>). Processes are passed by id, never
         looked up by name here (search-index lag on same-run objects).
+
+        ``password_id`` keys the session; a session between non-DC ends (an
+        SD-WAN edge to its gateway) has no fabric key, so no password is
+        written at all.
         """
         peering = await self.client.create(
             kind=ManagedBGPPeering,
@@ -724,7 +714,7 @@ class RoutingMixin:
                 "send_extended_community": True,
                 "address_families": [{"id": af_id} for af_id in address_family_ids],
                 "bgp_processes": [{"id": process_id} for process_id in process_ids],
-                "password": {"id": password_id},
+                **({"password": {"id": password_id}} if password_id else {}),
                 "interface_capabilities": [{"id": interface_id} for interface_id in interface_ids],
             },
         )

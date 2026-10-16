@@ -13,16 +13,14 @@ from ..dc_config import host_bits_to_prefix_length, resolve_dc_size_layout
 from ..devices import DeviceMixin
 from ..helpers.naming import DeviceNamingConfig
 from ..helpers.rack import base_offset, expected_device_names
-from ..helpers.routing import RoutingStrategy
-from ..helpers.routing import p2p_addressing as p2p_addressing_for
-from ..helpers.routing import underlay_is_dual_stack, underlay_is_ipv6
+from ..helpers.routing import RoutingStrategy, loopback_prefix_length, p2p_prefix_length, underlay_pool_is_ipv6
 from ..helpers.template_interfaces import template_interface_names_by_role
 from ..pod_config import resolve_pod_layout, spine_slot_role, spine_slot_templates, templates_by_role
 from ..pools import PoolMixin
 from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, TopologyPod
 from ..routing import RoutingMixin
 from ..types import naming_convention_of
-from .fabric_shared import DC_GENERATORS, ServiceDevicesMixin, loopback_prefix_length, p2p_prefix_length
+from .fabric_shared import DC_GENERATORS, ServiceDevicesMixin
 
 _SIBLING_SPINE_MAX_RETRIES = 10
 _SIBLING_SPINE_RETRY_DELAY = 3.0
@@ -273,24 +271,24 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
         # computed per pod from its live spine/leaf/tor counts. Host bits are
         # protocol-agnostic — the real prefix length depends on this DC's
         # underlay_protocol (IPv4 /32 vs IPv6 /128 address space).
-        dc_underlay_protocol = dc.get("underlay_protocol", "ipv6")
-        is_ipv6 = underlay_is_ipv6(dc_underlay_protocol)
-        is_dual_stack = underlay_is_dual_stack(dc_underlay_protocol)
-        p2p_addressing_value = p2p_addressing_for(dc_underlay_protocol)
+        underlay_protocol = dc.get("underlay_protocol", "ipv6")
         dc_design = resolve_dc_size_layout(dc["size"])
 
-        # Dual-stack pods keep loopback on IPv4 (same convention as
-        # allocate_resource_pools' own dual_stack handling) — only technical/
-        # P2P moves to IPv6.
+        # Each pool's address family is the one its DC-level parent was sliced
+        # from (a dual-stack pod: IPv6 technical, IPv4 loopback).
         pool_sizes = {
-            "technical": host_bits_to_prefix_length(design["technical_host_bits"], ipv6=is_ipv6 or is_dual_stack),
-            "loopback": host_bits_to_prefix_length(design["loopback_host_bits"], ipv6=is_ipv6),
+            "technical": host_bits_to_prefix_length(
+                design["technical_host_bits"], ipv6=underlay_pool_is_ipv6(underlay_protocol, "technical")
+            ),
+            "loopback": host_bits_to_prefix_length(
+                design["loopback_host_bits"], ipv6=underlay_pool_is_ipv6(underlay_protocol, "loopback")
+            ),
         }
 
         self.logger.info(
             f"Pod {pod_name} pool sizes: technical=/{pool_sizes['technical']}, "
-            f"loopback=/{pool_sizes['loopback']} (p2p={p2p_addressing_value}, "
-            f"ipv6={is_ipv6}, dual_stack={is_dual_stack}, deployment={deployment_type})"
+            f"loopback=/{pool_sizes['loopback']} (p2p=/{p2p_prefix_length(underlay_protocol)}, "
+            f"underlay={underlay_protocol}, deployment={deployment_type})"
         )
 
         # Allocate/upsert pools (idempotent via identifier + allow_upsert)
@@ -311,17 +309,8 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
             dc_asn_pool_name = dc_fabric_asn_pool["name"]
 
             # Propagate DC pool reference to pod so rack generator can find it via pod.asn_pool
-            pod_obj = await self.client.get(kind=TopologyPod, id=pod_id)
-            if pod_obj:
-                pod_obj.asn_pool = {"id": dc_fabric_asn_pool["id"]}
-                # Plain save(): pod_obj is a known-existing node (just fetched) —
-                # allow_upsert=True would route through create()'s Upsert mutation,
-                # which sends every attribute/relationship (even unmodified ones),
-                # spuriously re-firing unrelated `updated` triggers (index/
-                # fabric_templates/mlag_create) on every ASN-pool link.
-                # Untracked: the pod is this run's target, not its output.
-                await pod_obj.save(update_group_context=False)
-                self.logger.info(f"Pod {pod_name}: linked to DC ASN pool '{dc_asn_pool_name}'")
+            await self.attach_refs(kind=TopologyPod, node_id=pod_id, refs={"asn_pool": dc_asn_pool_id})
+            self.logger.info(f"Pod {pod_name}: linked to DC ASN pool '{dc_asn_pool_name}'")
 
         # Pass management pool ID from DC parent (create_devices resolves ID to SDK object)
         dc_management_pool = dc.get("management_pool")
@@ -346,7 +335,7 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
                     indexes=indexes,
                     allocate_loopback=True,
                     loopback_pool=pod_pools.get("loopback"),
-                    loopback_prefix_length=loopback_prefix_length(is_ipv6),
+                    loopback_prefix_length=loopback_prefix_length(underlay_protocol),
                     management_pool=management_pool_id,
                 ),
             )
@@ -401,7 +390,7 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
                 dc=dc,
                 dc_asn_pool_id=dc_asn_pool_id,
                 pod_pools=pod_pools,
-                is_ipv6=is_ipv6,
+                underlay_protocol=underlay_protocol,
                 pod_spine_as_id=pod_spine_as_id,
             )
 
@@ -419,7 +408,7 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
                 options=CablingOptions(
                     cabling_offset=cabling_offset,
                     pool=pod_pools.get("technical"),
-                    p2p_prefix_length=p2p_prefix_length(is_ipv6),
+                    p2p_prefix_length=p2p_prefix_length(underlay_protocol),
                 ),
                 bottom_sorting=cast(
                     Literal["top_down", "bottom_up"], self.data.get("spine_interface_sorting_method", "bottom_up")
@@ -454,7 +443,7 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
             dc=dc,
             dc_asn_pool_id=dc_asn_pool_id,
             pod_pools=pod_pools,
-            is_ipv6=is_ipv6,
+            underlay_protocol=underlay_protocol,
         )
 
         # This pod's own firewall/load-balancer, only present when spine_role
@@ -560,7 +549,7 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
         dc: Any,
         dc_asn_pool_id: str | None,
         pod_pools: dict[str, Any],
-        is_ipv6: bool,
+        underlay_protocol: str,
     ) -> None:
         """Cable+route this pod's own border-leaf devices (already created by
         dc.py, deployment_id=the DC — border-leaf is a DC-level fabric tier,
@@ -638,7 +627,7 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
             options=CablingOptions(
                 cabling_offset=offset,
                 pool=pod_pools.get("technical"),
-                p2p_prefix_length=p2p_prefix_length(is_ipv6),
+                p2p_prefix_length=p2p_prefix_length(underlay_protocol),
             ),
         )
         # Gating the call itself on dc_asn_pool_id would silently skip routing
@@ -661,7 +650,7 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
         dc: Any,
         dc_asn_pool_id: str | None,
         pod_pools: dict[str, Any],
-        is_ipv6: bool,
+        underlay_protocol: str,
         pod_spine_as_id: str | None = None,
     ) -> None:
         """Cable this pod's spines to every EXISTING lower-index sibling pod (back-to-back mesh).
@@ -782,7 +771,7 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
                 options=CablingOptions(
                     cabling_offset=cabling_offset,
                     pool=pod_pools.get("technical"),
-                    p2p_prefix_length=p2p_prefix_length(is_ipv6),
+                    p2p_prefix_length=p2p_prefix_length(underlay_protocol),
                 ),
             )
             await self.create_routing(

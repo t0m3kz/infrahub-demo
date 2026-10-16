@@ -26,7 +26,7 @@ DC_SIZE_LAYOUTS: dict[str, dict[str, int]] = {
         # absolute prefix length — the actual prefix length depends on the
         # DC's underlay_protocol (IPv4 max /32 vs IPv6 max /128), computed at
         # each call site via host_bits_to_prefix_length() (same idiom as
-        # p2p_addressing's /127-vs-/31 below). An absolute value here would
+        # helpers.routing.p2p_prefix_length's /127-vs-/31). An absolute value here would
         # silently request a nonsensically large IPv6 child prefix (e.g.
         # /28) from a deep IPv6 parent pool (e.g. /118) and fail with
         # "No more resources available".

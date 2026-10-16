@@ -145,22 +145,34 @@ class RoutingStrategy(str, Enum):
     OSPF_IBGP = "ospf-ibgp"
 
 
-def underlay_is_ipv6(underlay_protocol: str) -> bool:
+def underlay_pool_is_ipv6(underlay_protocol: str, pool: str) -> bool:
+    """Whether a fabric's ``pool`` ("management", "technical" or "loopback") is IPv6 space.
+
+    The single source of the address family per pool, read by the pool
+    allocator (which parent pool each is sliced from) and by every prefix
+    length drawn from those pools, so the two can never disagree:
+
+    * ``ipv4``: all three IPv4.
+    * ``ipv6``: technical (P2P) and loopback IPv6.
+    * ``dual_stack``: technical IPv6, loopback IPv4.
+
+    Management is always IPv4.
+    """
+    if pool == "management":
+        return False
+    if underlay_protocol == "dual_stack":
+        return pool == "technical"
     return underlay_protocol == "ipv6"
 
 
-def underlay_is_dual_stack(underlay_protocol: str) -> bool:
-    return underlay_protocol == "dual_stack"
+def p2p_prefix_length(underlay_protocol: str) -> int:
+    """P2P link prefix length of the technical pool's family: /31 (RFC 3021) or /127 (RFC 6164)."""
+    return 127 if underlay_pool_is_ipv6(underlay_protocol, "technical") else 31
 
 
-def p2p_is_ipv6(underlay_protocol: str) -> bool:
-    """Whether P2P fabric links use IPv6 addressing."""
-    return underlay_protocol in ("ipv6", "dual_stack")
-
-
-def p2p_addressing(underlay_protocol: str) -> str:
-    """P2P link prefix: /31 for IPv4, /127 for IPv6/dual-stack."""
-    return "/127" if p2p_is_ipv6(underlay_protocol) else "/31"
+def loopback_prefix_length(underlay_protocol: str) -> int:
+    """Loopback host-route prefix length of the loopback pool's family: /32 or /128."""
+    return 128 if underlay_pool_is_ipv6(underlay_protocol, "loopback") else 32
 
 
 def _safe_device_name(bgp: Any) -> str | None:

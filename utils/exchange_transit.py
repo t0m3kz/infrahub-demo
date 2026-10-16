@@ -18,6 +18,7 @@ from __future__ import annotations
 import ipaddress
 from typing import Any, TypedDict
 
+from utils.internet_space import NON_INTERNET_PREFIXES
 from utils.segment_addressing import segment_namespace
 
 TRANSIT_SLOT: dict[str, int] = {"prod": 0, "non_prod": 1, "internet": 2, "management": 3}
@@ -64,21 +65,6 @@ INTERNET_TYPE = "internet"
 MANAGEMENT_TYPE = "management"
 """namespace_type of the MANAGEMENT VRF namespace (core infrastructure services, DC-local)."""
 
-NON_PUBLIC_PREFIXES: tuple[ipaddress.IPv4Network, ...] = tuple(
-    ipaddress.IPv4Network(prefix)
-    for prefix in (
-        "0.0.0.0/8",
-        "10.0.0.0/8",
-        "100.64.0.0/10",
-        "127.0.0.0/8",
-        "169.254.0.0/16",
-        "172.16.0.0/12",
-        "192.168.0.0/16",
-        "224.0.0.0/3",
-    )
-)
-"""Space that is not internet-routable: RFC 1918, RFC 6598 (covers the FW-Transit pools), loopback, link-local, multicast/reserved."""
-
 ZONE_BY_NS_TYPE: dict[str, str] = {
     "prod": "PROD-ZONE",
     "non_prod": "NONPROD-ZONE",
@@ -95,9 +81,9 @@ TRANSIT_OFFSETS: tuple[int, ...] = (OFFSET_ANYCAST, OFFSET_VIP, OFFSET_MEMBER_A,
 
 
 def is_public_address(address: str) -> bool:
-    """Whether an IPv4 address (with or without a mask) lies outside NON_PUBLIC_PREFIXES."""
+    """Whether an IPv4 address (with or without a mask) lies outside NON_INTERNET_PREFIXES."""
     ip = ipaddress.ip_interface(address).ip
-    return ip.version == 4 and not any(ip in prefix for prefix in NON_PUBLIC_PREFIXES)
+    return ip.version == 4 and not any(ip in ipaddress.ip_network(prefix) for prefix in NON_INTERNET_PREFIXES)
 
 
 class TransitAddresses(TypedDict):
