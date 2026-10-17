@@ -207,15 +207,6 @@ match-list input prefix-ipv4 portal-p
    match prefix-ipv4 10.20.2.0/24
 match-list input prefix-ipv4 web-np
    match prefix-ipv4 10.10.1.0/24
-! documented-not-lab-verified: field-set l4-port is documented in AVD only
-field-set l4-port MSSG-FS-1edf6d4a55
-   5432
-! documented-not-lab-verified: field-set l4-port is documented in AVD only
-field-set l4-port MSSG-FS-65f9fc45e1
-   5000
-! documented-not-lab-verified: field-set l4-port is documented in AVD only
-field-set l4-port MSSG-FS-8178bca3bc
-   443, 8000-8010
 ! documented-not-lab-verified: application traffic recognition is documented in AVD only
 application traffic recognition
    application l4 MSSG-APP-0e55614811
@@ -230,6 +221,18 @@ application traffic recognition
       protocol udp destination port field-set MSSG-FS-65f9fc45e1
    application l4 MSSG-APP-d4a3ddc4f1
       protocol tcp destination port field-set MSSG-FS-1edf6d4a55
+   !
+   ! documented-not-lab-verified: field-set l4-port is documented in AVD only
+   field-set l4-port MSSG-FS-1edf6d4a55
+      5432
+   !
+   ! documented-not-lab-verified: field-set l4-port is documented in AVD only
+   field-set l4-port MSSG-FS-65f9fc45e1
+      5000
+   !
+   ! documented-not-lab-verified: field-set l4-port is documented in AVD only
+   field-set l4-port MSSG-FS-8178bca3bc
+      443, 8000-8010
 !
 router segment-security
    ! documented-not-lab-verified: custom policies are AVD's model (the 4.36.2F manual lists only policy-forward-all and policy-drop-all); the final drop of each is inferred

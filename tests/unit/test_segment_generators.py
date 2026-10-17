@@ -600,15 +600,15 @@ class TestVxlanVniAllocation:
         gen.client.create = AsyncMock(return_value=_activation_node())
         return gen
 
-    def test_local_segment_allocates_from_its_own_pool_with_per_deployment_identifier(self):
-        """A local segment draws from the pool it is given, one identifier per deployment."""
+    def test_local_segment_allocates_from_its_own_pool(self):
+        """A local segment draws from the pool it is given; the from_pool dict carries nothing else (a Number
+        pool ignores sibling keys such as identifier)."""
         gen = self._gen()
 
         self._run(gen, vni_pool={"id": "pool-vni", "name": "DC1-VNI-Pool"})
 
         data = self._created_data(gen)
-        assert data["vni"]["from_pool"]["id"] == "pool-vni"
-        assert data["vni"]["identifier"] == "seg-2-dc-1-vni"
+        assert data["vni"] == {"from_pool": {"id": "pool-vni"}}
 
     def test_no_vni_pool_logs_warning_but_still_creates(self):
         """If no vni_pool is found (and no prior VNI to reuse), a warning is logged
@@ -627,23 +627,20 @@ class TestVxlanVniAllocation:
 
         self._run(
             gen,
-            stretch_scope="dc_pair",
             reusable_vni=10100,
             vni_pool={"id": "pool-global", "name": STRETCHED_VNI_POOL_NAME},
         )
 
         assert self._created_data(gen)["vni"] == 10100
 
-    def test_stretched_first_deployment_allocates_from_given_pool_with_shared_identifier(self):
+    def test_stretched_first_deployment_allocates_from_given_pool(self):
         """The first stretched deployment allocates from the pool it is given (generate()
-        passes GLOBAL-L2VNI) using the shared segment identifier."""
+        passes GLOBAL-L2VNI)."""
         gen = self._gen()
 
-        self._run(gen, vni_pool={"id": "pool-global", "name": "x"}, stretch_scope="dc_pair")
+        self._run(gen, vni_pool={"id": "pool-global", "name": "x"})
 
-        data = self._created_data(gen)
-        assert data["vni"]["from_pool"]["id"] == "pool-global"
-        assert data["vni"]["identifier"] == "seg-2-vni"
+        assert self._created_data(gen)["vni"] == {"from_pool": {"id": "pool-global"}}
 
 
 # ===========================================================================
@@ -911,8 +908,7 @@ class TestCreateVlanDomainSegment:
         call_kwargs = gen.client.create.call_args.kwargs
         assert call_kwargs["data"]["segment"] == {"id": "seg-1"}
         assert call_kwargs["data"]["vlan_domain"] == {"id": "mlag-1"}
-        assert call_kwargs["data"]["vlan_id"]["from_pool"]["id"] == "pool-vlan-1"
-        assert call_kwargs["data"]["vlan_id"]["identifier"] == "seg-1-mlag-1-vlan"
+        assert call_kwargs["data"]["vlan_id"] == {"from_pool": {"id": "pool-vlan-1"}}
         activation.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
 
     def test_known_pool_skips_reading_the_domain(self) -> None:

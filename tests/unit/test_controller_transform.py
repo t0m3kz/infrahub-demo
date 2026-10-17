@@ -226,8 +226,13 @@ def _raw_bgp_proc(device: str, asn: int) -> dict:
     }
 
 
-def _gateway_with_handoff(namespace: str = "PROD", local_iface: str = "eth0.1900") -> dict:
-    """GW1 as data/demos/30_all/08_interconnects/04_sdwan/06_vrf_handoff.yml loads it."""
+def _gateway_with_handoff(
+    namespace: str = "PROD", local_iface: str = "eth0.1900", password: str | None = "demo-handoff-secret"
+) -> dict:
+    """GW1 as data/demos/30_all/08_interconnects/04_sdwan/06_vrf_handoff.yml loads it.
+
+    password is the peering's RoutingPassword value; None leaves the peering without one.
+    """
     device = _raw_device("EQX-FR2-SDWAN-GW1", role="edge", address=None)
     peering = {
         "node": {
@@ -236,6 +241,7 @@ def _gateway_with_handoff(namespace: str = "PROD", local_iface: str = "eth0.1900
             "peering_role": {"value": "regular"},
             "session_type": {"value": "EBGP"},
             "ttl": {"value": 1},
+            **({"password": {"node": {"password": {"value": password}}}} if password is not None else {}),
             "address_families": {"edges": [{"node": {"afi": {"value": "ipv4"}, "safi": {"value": "unicast"}}}]},
             "interface_capabilities": {
                 "edges": [
@@ -288,9 +294,23 @@ class TestVelocloudVrfHandoffs:
                     "neighbor-ip": "10.255.5.0",
                     "neighbor-asn": 4200000101,
                     "neighbor": "eg-fr01",
+                    "password": "demo-handoff-secret",
                 },
             }
         ]
+
+    def test_handoff_carries_the_peering_password(self) -> None:
+        """The Orchestrator configures the session's BGP key, so it is the peering's RoutingPassword value."""
+        handoff = self._payload(_gateway_with_handoff(password="demo-other-secret"))["edges"][0]["handoffs"][0]
+
+        assert handoff["bgp"]["password"] == "demo-other-secret"
+
+    def test_handoff_without_a_peering_password_has_none(self) -> None:
+        """No RoutingPassword on the peering yields an explicit null, not a missing key."""
+        handoff = self._payload(_gateway_with_handoff(password=None))["edges"][0]["handoffs"][0]
+
+        assert "password" in handoff["bgp"]
+        assert handoff["bgp"]["password"] is None
 
     def test_default_namespace_session_is_not_a_handoff(self) -> None:
         """Only sessions in a tenant namespace are VRF handoffs."""

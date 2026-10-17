@@ -19,6 +19,7 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
+from jinja2 import Template
 
 from tests.smoke.generate_config_fixtures import (
     _GPO_EOS,
@@ -749,8 +750,8 @@ class TestRendering:
         rendered = self._render(cls)
         order = [
             "match-list input prefix-ipv4 app-np",
-            "field-set l4-port",
             "application traffic recognition",
+            "   field-set l4-port",
             "router segment-security",
             "   policy MSSG-POL-",
             "\n   vrf NONPROD\n      segment app-np",
@@ -764,7 +765,7 @@ class TestRendering:
     def test_the_leaf_block_is_the_documented_shape(self) -> None:
         rendered = self._render(Leaf)
         assert "match-list input prefix-ipv4 web-np\n   match prefix-ipv4 10.10.1.0/24\n" in rendered
-        assert "field-set l4-port MSSG-FS-" + _hash(["443", "8000-8010"]) + "\n   443, 8000-8010\n" in rendered
+        assert "   field-set l4-port MSSG-FS-" + _hash(["443", "8000-8010"]) + "\n      443, 8000-8010\n" in rendered
         assert "application traffic recognition\n" in rendered
         assert re.search(r"      protocol tcp destination port field-set MSSG-FS-\w+\n", rendered)
         assert re.search(r"      protocol icmp\n", rendered)
@@ -775,6 +776,43 @@ class TestRendering:
         assert re.search(r"            fallback policy (policy-forward-all|MSSG-POL-\w+)\n", rendered)
         assert re.search(r"      10 application MSSG-APP-\w+ action forward stateless\n", rendered)
         assert re.search(r"      \d+ application app-match-all action drop stateless\n", rendered)
+
+    @pytest.mark.parametrize("cls", [Leaf, BorderLeaf, AccessLeaf])
+    def test_field_sets_are_inside_the_application_traffic_recognition_block(self, cls: type) -> None:
+        """AVD renders `field-set l4-port` indented inside `application traffic recognition`, ports 6 spaces, after the applications."""
+        lines = self._render(cls).splitlines()
+        start = lines.index("application traffic recognition")
+        end = lines.index("router segment-security")
+        field_set_lines = [index for index, line in enumerate(lines) if "field-set l4-port" in line and "!" not in line]
+        assert field_set_lines
+        assert not [line for line in lines if line.startswith("field-set l4-port")]
+        assert all(start < index < end for index in field_set_lines)
+        last_application = max(index for index, line in enumerate(lines) if line.startswith("   application l4 "))
+        for index in field_set_lines:
+            assert index > last_application
+            assert lines[index].startswith("   field-set l4-port MSSG-FS-")
+            assert re.fullmatch(r"      \d[\d, -]*", lines[index + 1])
+        assert lines[end - 1] == "!"
+        assert all(line.startswith("   ") for line in lines[start + 1 : end - 1])
+
+    def test_a_view_with_field_sets_but_no_applications_still_renders_the_block(self) -> None:
+        """The block guard is `applications or field_sets`, so a field-set is never emitted outside a block."""
+        view = {
+            "enforce": True,
+            "staged": None,
+            "avd_only": True,
+            "vrfs": [{"name": "V", "segments": []}],
+            "skipped": [],
+            "unsupported": [],
+            "match_lists": [],
+            "field_sets": [{"name": "FS1", "ports": "80, 443"}],
+            "applications": [],
+            "policies": [],
+        }
+        template = Path(__file__).parents[2] / "templates" / "configs" / "common" / "arista_eos_segment_security.j2"
+        rendered = Template(template.read_text()).render(segment_security=view)
+        assert "application traffic recognition\n   !\n" in rendered
+        assert "\n   field-set l4-port FS1\n      80, 443\n" in rendered
 
     @pytest.mark.parametrize("cls", [Leaf, BorderLeaf, AccessLeaf])
     def test_the_switch_is_the_last_line_of_the_mode(self, cls: type) -> None:
@@ -858,8 +896,8 @@ class TestRendering:
         rendered = self._render(cls)
         lines = rendered.splitlines()
         for index, line in enumerate(lines):
-            if line.startswith("field-set l4-port") or line == "application traffic recognition":
-                assert lines[index - 1].startswith("! documented-not-lab-verified")
+            if line.strip().startswith("field-set l4-port") or line == "application traffic recognition":
+                assert lines[index - 1].strip().startswith("! documented-not-lab-verified")
             if line.strip().startswith("fallback policy"):
                 assert any("documented-not-lab-verified" in earlier for earlier in lines[index - 8 : index])
         assert "documented-not-lab-verified: custom policies are AVD's model" in rendered

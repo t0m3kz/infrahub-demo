@@ -36,6 +36,7 @@ query customer_office_sdwan($name: String!) {
             interfaces {
               edges {
                 node {
+                  __typename
                   id
                   name { value }
                   role { value }

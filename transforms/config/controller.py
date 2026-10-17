@@ -126,6 +126,7 @@ def _vrf_handoffs(device: dict[str, Any]) -> list[dict[str, Any]]:
                         "neighbor-ip": host_ip((session.get("remote_ip") or {}).get("address")),
                         "neighbor-asn": (session.get("remote_as") or {}).get("asn"),
                         "neighbor": session.get("remote_device"),
+                        "password": session.get("password"),
                     },
                 }
             )

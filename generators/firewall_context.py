@@ -839,10 +839,7 @@ class FirewallContextMixin:
                 kind=ManagedFirewallContext,
                 data={
                     "id": context_obj.id,
-                    "vlan_id": {
-                        "from_pool": {"id": vlan_pool.id},
-                        "identifier": f"{context_obj.id}-fw-context-vlan",
-                    },
+                    "vlan_id": {"from_pool": {"id": vlan_pool.id}},
                 },
             )
             await node.save(**tracked_save_kwargs(track))
