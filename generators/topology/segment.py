@@ -243,7 +243,6 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGene
                 vni_pool=stretched_vni_pool if stretched else dep.get("vni_pool"),
                 existing_deployment=existing_by_deployment_id.get(dep_id),
                 reusable_vni=reusable_vni,
-                stretch_scope=stretch_scope,
             )
             if not success:
                 failed_deployments.append(dep_name)
@@ -408,7 +407,6 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGene
         vni_pool: dict[str, Any] | None = None,
         existing_deployment: Any | None = None,
         reusable_vni: int | None = None,
-        stretch_scope: str = "local",
     ) -> bool:
         """Create or upsert one SegmentDeployment record (VNI-and-status only —
         local VLAN ID realization is per VLAN domain, see
@@ -448,12 +446,7 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGene
             # Local segment, or the first site to activate a stretched one
             vni_pool_id = (vni_pool or {}).get("id")
             if vni_pool_id:
-                # Local segments use per-deployment identifiers; stretched fallback
-                # keeps one identifier to converge to a shared VNI.
-                vni_identifier = (
-                    f"{segment_id}-{deployment_id}-vni" if stretch_scope == "local" else f"{segment_id}-vni"
-                )
-                vni_from_pool = {"from_pool": {"id": vni_pool_id}, "identifier": vni_identifier}
+                vni_from_pool = {"from_pool": {"id": vni_pool_id}}
                 self.logger.info(f"  [{deployment_name}] Allocating VNI from pool {(vni_pool or {}).get('name')}")
             else:
                 self.logger.warning(
