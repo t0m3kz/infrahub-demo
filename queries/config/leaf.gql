@@ -32,11 +32,11 @@ query leaf_config(
         ... on DcimPhysicalDevice {
           deployment {
             node {
+              ...LispSiteOnDeploymentFields
               ...FirewallContextsOnDeploymentFields
               ...LoadbalancerVipsOnDeploymentFields
               ...EvpnRtAsOnDeploymentFields
               ...LispMapServersOnDeploymentFields
-              ...LispSiteOnDeploymentFields
             }
           }
         }

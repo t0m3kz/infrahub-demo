@@ -64,11 +64,18 @@ fragment LispMapServersOnDeploymentFields on TopologyDeployment {
   }
 }
 
-# The shared registration key and the LISP site name (the DC's name). The
-# border leaves read both (their deployment is the DC directly); the edges
-# read the key only, through the pod -> parent hop of the Deployment wrapper
-# below, exactly like the map-servers.
+# The shared registration key and the LISP site name (the DC's name), plus the fabric flag.
+# The border leaves read all of them (their deployment is the DC directly); the edges read the
+# key through the pod -> parent hop of the Deployment wrapper below, like the map-servers.
+#
+# ORDER MATTERS: spread LispSiteOnDeploymentFields FIRST in the device's deployment selection.
+# For the pod -> parent hop Infrahub returns null for the TopologySegmentHosting fields of a
+# spread that comes after a TopologyDeviceHosting one (Firewall/Loadbalancer/map-servers) and for
+# a second SegmentHosting-typed fragment; verified on a settled stack with the leaf query. Every
+# field the LISP renderer needs from the DC is therefore in this one fragment (the flag is also
+# in EvpnRtAsOnSegmentHostingFields, which keeps its own position for the EVPN readers).
 fragment LispSiteOnSegmentHostingFields on TopologySegmentHosting {
+  overlay_control_plane { value }
   name { value }
   lisp_site_key { node { password { value } } }
 }
