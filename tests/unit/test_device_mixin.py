@@ -1048,7 +1048,7 @@ class TestCreateDevicesControllerRouting:
         controller_obj.hfid = "cp-sms-1"
         controller_obj.managed_devices.fetch = AsyncMock()
         controller_obj.managed_devices.peers = []
-        controller_obj.managed_devices.add = MagicMock()
+        controller_obj.add_relationships = AsyncMock()
         controller_obj.save = AsyncMock()
         gen.client.get = AsyncMock(return_value=controller_obj)
 
@@ -1064,9 +1064,36 @@ class TestCreateDevicesControllerRouting:
 
         create_kwargs = gen.client.create.call_args.kwargs
         assert create_kwargs["data"]["member_of_groups"] == []
-        controller_obj.managed_devices.add.assert_called_once_with(created_device)
-        # Untracked: the data-loaded controller is shared, not this run's output.
-        controller_obj.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
+        # Only the missing device is added, atomically: a save of the whole peer list lets
+        # concurrent racks of one controller overwrite each other's devices.
+        controller_obj.add_relationships.assert_awaited_once_with(
+            relation_to_update="managed_devices", related_nodes=[created_device.id]
+        )
+        controller_obj.save.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_already_attached_device_is_not_added_again(self) -> None:
+        """A rerun over a device the controller already manages adds nothing."""
+        gen = _make_generator()
+        gen._all_controllers = [_controller_dict("security_manager", platform_id="plat-checkpoint", id_="cp-sms-1")]
+        created_device = _mock_created_device(DcimPhysicalDevice.__name__, "dc1-firewall-01")
+
+        controller_obj = MagicMock()
+        controller_obj.hfid = "cp-sms-1"
+        controller_obj.managed_devices.fetch = AsyncMock()
+        controller_obj.managed_devices.peers = [MagicMock(id=created_device.id)]
+        controller_obj.add_relationships = AsyncMock()
+        gen.client.get = AsyncMock(return_value=controller_obj)
+        gen.client.create = AsyncMock(return_value=created_device)
+
+        await gen.create_devices(
+            device_role="firewall",
+            quantity=1,
+            deployment_id="dc-1",
+            template={"device_type": {"id": "dt-1"}, "platform": {"id": "plat-checkpoint"}},
+        )
+
+        controller_obj.add_relationships.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_no_matching_controller_falls_back_to_group(self) -> None:
