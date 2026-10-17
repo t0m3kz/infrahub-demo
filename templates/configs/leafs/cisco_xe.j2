@@ -1,6 +1,6 @@
 !
 ! {{ name }} Configuration
-! Cisco IOS-XE (Catalyst 9000) EVPN-VXLAN {{ device_role }}
+! Cisco IOS-XE (Catalyst 9000) {{ 'LISP' if lisp else 'EVPN-VXLAN' }} {{ device_role }}
 !
 hostname {{ name }}
 !
@@ -48,12 +48,16 @@ interface {{ interface.name }}
 ! BGP Configuration
 {{ bgp_text | trim }}
 {%- endif %}
+{%- if not lisp %}
 ! Route-maps
 route-map RM-CONN-2-BGP permit 10
  match interface {{ loopback_name }}
 !
+{%- endif %}
 {%- if vxlan and vxlan.enabled %}
 {%- include 'common/cisco_xe_vxlan.j2' %}
+{%- elif lisp %}
+{%- include 'common/cisco_xe_lisp.j2' %}
 {%- endif %}
 {%- set ios_dialect = true %}
 {%- set management %}{% include 'common/cisco_nxos_management.j2' %}{% endset %}

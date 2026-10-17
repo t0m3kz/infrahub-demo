@@ -36,6 +36,8 @@ query border_leaf_config(
               ...LoadbalancerVipsOnDeploymentFields
               ...SegmentDeploymentsOnDeploymentFields
               ...EvpnRtAsOnDeploymentFields
+              ...LispMapServersOnDeploymentFields
+              ...LispSiteOnDeploymentFields
             }
           }
         }

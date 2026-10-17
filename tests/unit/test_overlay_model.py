@@ -5,6 +5,7 @@ Covers:
   - build_overlay_node()     — role gate, instances, locator, default-exit flag, anycast gateway
   - evpn_vxlan_context()     — get_vxlan_config is exactly the composition of builder and renderer
   - purity                   — neither the inputs nor the model are mutated; output lists stay lists
+  - control-plane registry   — OVERLAY_RENDERERS / OVERLAY_CONFIG_KEYS pins, the two renderer layers never import each other
 """
 
 from __future__ import annotations
@@ -19,14 +20,18 @@ from typing import Any
 
 import pytest
 
-from transforms.helpers import overlay
+from transforms.helpers import lisp, overlay
+from transforms.helpers import vxlan as vxlan_module
 from transforms.helpers.overlay import (
+    OVERLAY_CONFIG_KEYS,
+    OVERLAY_RENDERERS,
     AnycastGateway,
     L2Instance,
     L3Instance,
     Locator,
     OverlayNode,
     build_overlay_node,
+    select_locator,
 )
 from transforms.helpers.vxlan import (
     _DEFAULT_ANYCAST_GATEWAY_MAC,
@@ -196,6 +201,58 @@ class TestNeutralityGuard:
         } | {alias.name for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names}
         assert "transforms.helpers.vxlan" not in imported
         assert not {m for m in imported if "bgp" in m}
+
+
+def _imported_modules(module: Any) -> set[str]:
+    """Every module a source file imports (``import x`` and ``from x import y``)."""
+    tree = ast.parse(Path(module.__file__).read_text())
+    return {node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module is not None} | {
+        alias.name for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names
+    }
+
+
+class TestControlPlaneRegistry:
+    def test_only_lisp_has_a_renderer_allow_list_and_it_is_cisco_xe(self) -> None:
+        """bgp_evpn is the default and has no entry: every platform decides for itself whether it renders EVPN."""
+        assert OVERLAY_RENDERERS == {"lisp": frozenset({"cisco_xe"})}
+
+    def test_config_keys_name_the_template_context_key_of_each_control_plane(self) -> None:
+        assert OVERLAY_CONFIG_KEYS == {"bgp_evpn": "vxlan", "lisp": "lisp"}
+
+    def test_every_control_plane_with_a_renderer_has_a_config_key(self) -> None:
+        assert set(OVERLAY_RENDERERS) <= set(OVERLAY_CONFIG_KEYS)
+
+    def test_the_lisp_layer_never_imports_the_evpn_layer(self) -> None:
+        imported = _imported_modules(lisp)
+        assert "transforms.helpers.vxlan" not in imported
+        assert not {m for m in imported if "bgp" in m}
+
+    def test_the_evpn_layer_never_imports_the_lisp_layer(self) -> None:
+        assert "transforms.helpers.lisp" not in _imported_modules(vxlan_module)
+
+    def test_the_anycast_mac_default_lives_in_the_neutral_model_and_vxlan_re_exports_it(self) -> None:
+        assert overlay._DEFAULT_ANYCAST_GATEWAY_MAC == "00:1c:73:00:dc:01"
+        assert vxlan_module._DEFAULT_ANYCAST_GATEWAY_MAC is overlay._DEFAULT_ANYCAST_GATEWAY_MAC
+
+    def test_the_overlay_model_has_no_lisp_fields(self) -> None:
+        """EID prefixes, map-servers, site and key are the LISP layer's inputs, not model fields."""
+        names = {f.name for cls in _MODEL_CLASSES for f in dataclasses.fields(cls)}
+        assert not {n for n in names if _tokens(n) & {"lisp", "eid", "site", "key", "map", "flood"}}
+
+
+class TestSelectLocator:
+    def test_prefers_the_dedicated_vtep_loopback(self) -> None:
+        assert select_locator(_bgw_edge()["interfaces"]) == Locator(interface="loopback1", address="fd00:100::1")
+
+    def test_falls_back_to_loopback0(self) -> None:
+        assert select_locator(_leaf()["interfaces"]) == Locator(interface="Loopback0", address="10.0.0.1")
+
+    def test_no_loopback_is_an_empty_locator_and_does_not_mutate(self) -> None:
+        interfaces = [{"name": "Ethernet1", "role": "uplink"}]
+        before = copy.deepcopy(interfaces)
+
+        assert select_locator(interfaces) == Locator(interface=None, address=None)
+        assert interfaces == before
 
 
 class TestBuildOverlayNode:

@@ -53,6 +53,7 @@ fragment DataCenterFields on TopologyDataCenter {
   fabric_interface_sorting_method { value }
   connectivity_mode { value }
   routing_strategy { value }
+  overlay_control_plane { value }
   underlay_protocol { value }
   fabric_templates {
     edges {

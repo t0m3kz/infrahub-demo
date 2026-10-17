@@ -1,0 +1,93 @@
+{#- LISP fabric for a Catalyst 9000 (IOS-XE). Included by leafs/cisco_xe.j2 (and so border_leafs/cisco_xe.j2) when the
+    fabric's overlay_control_plane is lisp (`lisp` in scope, `vxlan` None; transforms/common.py). The IOS-XE OSPFv2
+    underlay is rendered by the OSPF include of the including template, not here.
+
+    Edge (leaf, ToR, access leaf): the RLOC locator-set, the ITR/ETR of service ipv4 and ethernet toward every
+    map-server, and one instance-id per L3 VRF and per L2 VNI. Border leaf: the same plus the co-located
+    map-server/map-resolver and the `site` stanza registering the fabric's EID records. Not rendered: proxy-etr/itr,
+    use-petr, publisher/subscriber, route-import/export, flooding, extranet, service ipv6.
+
+    No lab has run any of it: EVERY LISP command here sits under a `! unverified-no-lab:` comment. -#}
+{%- set anycast_gateway = lisp.anycast_gateway %}
+{%- set lisp_mobility = true %}
+! LISP Configuration (Catalyst 9000, IOS-XE)
+{%- if lisp.l3_instances %}
+!
+! Tenant VRFs (the EID tables of the L3 instance-ids)
+! unverified-no-lab: a plain `vrf definition` with an IPv4 address family is all the EID table and the SVIs need
+{%- for l3 in lisp.l3_instances %}
+vrf definition {{ l3.vrf }}
+ address-family ipv4
+ exit-address-family
+!
+{%- endfor %}
+{%- endif %}
+! unverified-no-lab: `router lisp` and everything under it
+router lisp
+ ! unverified-no-lab: locator-set RLOC on the underlay loopback, used as the default locator and as the source locator
+ locator-table default
+ locator-set RLOC
+  IPv4-interface {{ lisp.rloc_interface }} priority 10 weight 10
+  exit-locator-set
+ locator default-set RLOC
+ ipv4 source-locator {{ lisp.rloc_interface }}
+{%- for service in ['ipv4', 'ethernet'] %}
+ ! unverified-no-lab: service {{ service }}: {{ 'map-server and map-resolver co-located on this border leaf, ' if lisp.role == 'border' }}ITR and ETR toward every map-server{{ ', VXLAN encapsulation' if service == 'ipv4' }}
+ service {{ service }}
+{%- if service == 'ipv4' %}
+  encapsulation vxlan
+{%- endif %}
+{%- if lisp.role == 'border' %}
+  map-server
+  map-resolver
+{%- endif %}
+{%- for map_server in lisp.map_servers %}
+  itr map-resolver {{ map_server }}
+{%- endfor %}
+{%- for map_server in lisp.map_servers %}
+  etr map-server {{ map_server }} key {{ lisp.site_key }}
+  etr map-server {{ map_server }} proxy-reply
+{%- endfor %}
+  itr
+  etr
+  exit-service-{{ service }}
+{%- endfor %}
+{%- for l3 in lisp.l3_instances %}
+ ! unverified-no-lab: L3 instance-id {{ l3.instance_id }} for VRF {{ l3.vrf }}: dynamic-eid with the gateway subnets, IPv4 EID table, default map-request
+ instance-id {{ l3.instance_id }}
+{%- if l3.prefixes %}
+  dynamic-eid {{ l3.vrf }}-IPV4
+{%- for prefix in l3.prefixes %}
+   database-mapping {{ prefix }} locator-set RLOC
+{%- endfor %}
+   exit-dynamic-eid
+{%- endif %}
+  service ipv4
+   eid-table vrf {{ l3.vrf }}
+   map-cache 0.0.0.0/0 map-request
+   exit-service-ipv4
+  exit-instance-id
+{%- endfor %}
+{%- for l2 in lisp.l2_instances %}
+ ! unverified-no-lab: L2 instance-id {{ l2.instance_id }} for VLAN {{ l2.vlan_id }}: Ethernet EID table and the local MAC database mapping
+ instance-id {{ l2.instance_id }}
+  service ethernet
+   eid-table vlan {{ l2.vlan_id }}
+   database-mapping mac locator-set RLOC
+   exit-service-ethernet
+  exit-instance-id
+{%- endfor %}
+{%- if lisp.site %}
+ ! unverified-no-lab: site {{ lisp.site.name }}: authentication key and the EID records the edges may register
+ site {{ lisp.site.name }}
+  authentication-key {{ lisp.site_key }}
+{%- for record in lisp.site.l3_records %}
+  eid-record instance-id {{ record.instance_id }} {{ record.prefix }} accept-more-specifics
+{%- endfor %}
+{%- for instance_id in lisp.site.l2_instance_ids %}
+  eid-record instance-id {{ instance_id }} any-mac
+{%- endfor %}
+  exit-site
+{%- endif %}
+!
+{%- include 'common/cisco_xe_gateway_svis.j2' -%}

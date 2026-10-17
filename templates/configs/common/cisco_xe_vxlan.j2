@@ -7,10 +7,7 @@
     `interface nve1` with `member vni`, and the tenant VRF address families in `router bgp`. No lab has run any of
     it: every construct this template is not sure of carries an `unverified-no-lab` comment. -#}
 {%- set anycast = vxlan.anycast_gateway and vxlan.anycast_gateway.enabled %}
-{%- if anycast %}
-{%- set mac = vxlan.anycast_gateway.mac | replace(':', '') | replace('.', '') | replace('-', '') %}
-{%- set anycast_mac = mac[0:4] ~ '.' ~ mac[4:8] ~ '.' ~ mac[8:12] %}
-{%- endif %}
+{%- set anycast_gateway = vxlan.anycast_gateway %}
 ! VXLAN / EVPN Configuration (Catalyst 9000, IOS-XE)
 {%- if vxlan.l3_vni_mappings %}
 !
@@ -129,35 +126,4 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- endfor %}
 !
 {%- endfor %}
-{%- if vlans %}
-!
-! Gateway SVIs
-{%- if anycast %}
-! Anycast gateway — the same SVI MAC on every VTEP of the fabric
-! unverified-no-lab: `mac-address <anycast mac>` and `no autostate` on the tenant gateway SVIs
-{%- endif %}
-{%- for vlan in vlans if vlan.gateway_ip or vlan.gateway_ipv6 %}
-interface Vlan{{ vlan.vlan_id }}
- description {{ vlan.name }}
-{%- if vlan.isolation_mode == 'isolated' %}
- ! Isolation Mode: ISOLATED — intra-segment host-to-host traffic is not blocked by this template
-{%- elif vlan.isolation_mode == 'microsegmented' %}
- ! Isolation Mode: MICROSEGMENTED — no SVI ACL is rendered on IOS-XE
-{%- endif %}
-{%- if vlan.vrf %}
- vrf forwarding {{ vlan.vrf }}
-{%- endif %}
-{%- if vlan.gateway_ip %}
- ip address {{ vlan.gateway_ip.split('/')[0] }} {{ vlan.gateway_ip.split('/')[1] | int | cidr_to_netmask }}
-{%- endif %}
-{%- if vlan.gateway_ipv6 %}
- ipv6 address {{ vlan.gateway_ipv6 }}
-{%- endif %}
-{%- if anycast %}
- mac-address {{ anycast_mac }}
- no autostate
-{%- endif %}
- no shutdown
-!
-{%- endfor %}
-{%- endif -%}
+{%- include 'common/cisco_xe_gateway_svis.j2' -%}

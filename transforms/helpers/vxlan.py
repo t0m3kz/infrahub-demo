@@ -11,6 +11,7 @@ from transforms.helpers.addressing import host_ip
 
 # The neutral overlay model owns these (transforms/helpers/overlay.py); they stay importable from here.
 from transforms.helpers.overlay import (
+    _DEFAULT_ANYCAST_GATEWAY_MAC,
     _INTERNET_NAMESPACE_TYPE,
 )
 from transforms.helpers.overlay import _L3VNI_SVI_VLAN_BASE as _L3VNI_SVI_VLAN_BASE
@@ -389,15 +390,6 @@ def get_interfaces(
 # VXLAN Configuration (Unified across all device types)
 # ============================================================================
 # Following netlab's approach: single implementation, platform-agnostic data model
-
-
-# Used when a fabric leaves TopologySegmentHosting.evpn_anycast_gateway_mac unset.
-# 00:1c:73 is Arista's OUI and this is the value their EVPN reference designs use,
-# which is why it is the default here rather than something invented. It is only a
-# default: what actually matters is that every VTEP in one fabric uses the SAME
-# value, so set evpn_anycast_gateway_mac explicitly on any fabric where a
-# vendor-neutral or site-specific MAC is wanted.
-_DEFAULT_ANYCAST_GATEWAY_MAC = "00:1c:73:00:dc:01"
 
 
 def _select_evpn_bgp_process(device_capabilities: list[dict[str, Any]]) -> dict[str, Any] | None:

@@ -97,6 +97,9 @@ fragment PodFields on TopologyPod {
         routing_strategy {
           value
         }
+        overlay_control_plane {
+          value
+        }
         underlay_protocol {
           value
         }

@@ -334,6 +334,11 @@ check_definitions:
   - name: validate_evpn_fabric
     class_name: CheckEvpnFabric
     file_path: checks/evpn_fabric.py
+  # Targetless: the LISP profile (strategy, underlay, border pair, platform,
+  # site key) is a property of a whole fabric, not of one device.
+  - name: validate_lisp_fabric
+    class_name: CheckLispFabric
+    file_path: checks/lisp_fabric.py
   # Targetless: a dependency spans two applications, and an external target
   # is no object at all.
   - name: validate_app_dependency
@@ -680,6 +685,8 @@ queries:
     file_path: queries/validation/routing_invariants.gql
   - name: evpn_fabric
     file_path: queries/validation/evpn_fabric.gql
+  - name: lisp_fabric
+    file_path: queries/validation/lisp_fabric.gql
   - name: app_dependency_validation
     file_path: queries/validation/app_dependency.gql
   - name: hypervisor_environment

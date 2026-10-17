@@ -3,7 +3,8 @@
 ``build_overlay_node`` answers "which overlay instances does this device terminate, what is
 its locator, and does it host an anycast gateway" without knowing which control plane
 advertises them. A renderer layer adds its own control-plane state on top: today that is
-``evpn_vxlan_context`` in transforms/helpers/vxlan.py (BGP EVPN / VXLAN).
+``evpn_vxlan_context`` in transforms/helpers/vxlan.py (BGP EVPN / VXLAN) and ``get_lisp_config`` in
+transforms/helpers/lisp.py (LISP). The two renderer layers never import each other.
 
 Neutrality rule: no field here may carry route-distinguishers, route-targets, ASNs or any other
 BGP/EVPN state, and the builder takes no BGP capabilities (tests/unit/test_overlay_model.py
@@ -23,8 +24,8 @@ L2Instance.name                 VLAN / MAC-VRF name          VLAN / instance nam
 L2Instance.vrf                  tenant VRF of the SVI        VRF (EID table) of the SVI
 L2Instance.l3_instance_id       symmetric-IRB L3 VNI         L3 instance-id of the VRF
 L2Instance.gateway_ip/_ipv6     anycast SVI address          anycast / default gateway address
-L2Instance.arp_suppression      ARP suppression on the VNI   (no counterpart; ignored)
-L2Instance.stretched            Multi-Site stretched VNI     (no counterpart; ignored)
+L2Instance.arp_suppression      ARP suppression on the VNI   (no counterpart; ignored on lisp)
+L2Instance.stretched            Multi-Site stretched VNI     (no counterpart; ignored on lisp)
 L3Instance.instance_id          L3 VNI                       L3 instance-id
 L3Instance.vrf                  tenant VRF                   VRF holding the EID prefixes
 L3Instance.svi_vlan_id          local `ip forward` SVI VLAN  (no counterpart; ignored)
@@ -32,10 +33,12 @@ L3Instance.default_exit         upstream-transit VRF         proxy-ETR / default
 AnycastGateway.enabled, .mac    fabric anycast-gateway MAC   anycast-gateway MAC
 ==============================  ===========================  ================================================
 
-LISP additionally needs flood mode per L2 instance, the map-server/map-resolver set with site and
-auth-key reference, EID prefixes per L3 instance, address families and extranet (VRF leak pairs).
-It does not use RD, RT, ASN, the BGW anycast VIP, DCI or the Multi-Site site-id, which stay
-EVPN-only (transforms/helpers/vxlan.py). Expect the next step to reshape this module.
+LISP additionally needs the map-server/map-resolver set with site and auth key, and EID prefixes per
+L3 instance. None of that is a field here: the EID prefixes and address families are derived from
+``L2Instance.gateway_ip`` / ``gateway_ipv6`` grouped by ``vrf``, and the map-server set, site and key
+are the LISP renderer's own inputs (``LispInputs`` in transforms/helpers/lisp.py). LISP renders
+no flood mode and no extranet. It does not use RD, RT, ASN, the BGW anycast VIP, DCI or the Multi-Site
+site-id, which stay EVPN-only (transforms/helpers/vxlan.py).
 """
 
 import logging
@@ -47,6 +50,22 @@ from transforms.helpers.segments import _get_segment_gateways, _get_segment_name
 from utils.fabric_roles import VTEP_ROLES
 
 _log = logging.getLogger(__name__)
+
+# Overlay control plane -> the netmiko platforms whose device templates render it (like
+# group_policy.GPO_RENDERERS). bgp_evpn has no entry: it is the default and every platform
+# decides for itself whether it renders EVPN.
+OVERLAY_RENDERERS: dict[str, frozenset[str]] = {"lisp": frozenset({"cisco_xe"})}
+
+# Overlay control plane -> the template context key of its device config.
+OVERLAY_CONFIG_KEYS: dict[str, str] = {"bgp_evpn": "vxlan", "lisp": "lisp"}
+
+# Used when a fabric leaves TopologySegmentHosting.evpn_anycast_gateway_mac unset.
+# 00:1c:73 is Arista's OUI and this is the value their EVPN reference designs use,
+# which is why it is the default here rather than something invented. It is only a
+# default: what actually matters is that every VTEP in one fabric uses the SAME
+# value, so set evpn_anycast_gateway_mac explicitly on any fabric where a
+# vendor-neutral or site-specific MAC is wanted. Both control planes use it.
+_DEFAULT_ANYCAST_GATEWAY_MAC = "00:1c:73:00:dc:01"
 
 # Local VLAN ID band for the per-VRF L3 VNI SVI.
 #
@@ -237,6 +256,18 @@ def _select_vtep_interface(interfaces: list[dict[str, Any]]) -> dict[str, Any] |
     return next((iface for iface in interfaces if "loopback0" in (iface.get("name") or "").lower()), None)
 
 
+def select_locator(interfaces: list[dict[str, Any]]) -> Locator:
+    """The locator (data plane): dedicated loopback-vtep, else Loopback0.
+
+    ``address`` holds the locator address of either family (the colocation BGWs source an IPv6 VTEP).
+    """
+    locator_interface = _select_vtep_interface(interfaces)
+    return Locator(
+        interface=(locator_interface or {}).get("name") or None,
+        address=_interface_address(locator_interface) if locator_interface else None,
+    )
+
+
 def build_overlay_node(
     interfaces: list[dict[str, Any]],
     device_role: str,
@@ -274,15 +305,9 @@ def build_overlay_node(
     if not l2 and not l3:
         return None
 
-    # Locator (data plane): dedicated loopback-vtep, else Loopback0. `address` holds the
-    # locator address of either family (the colocation BGWs source an IPv6 VTEP).
-    locator_interface = _select_vtep_interface(interfaces)
     return OverlayNode(
         role=device_role,
-        locator=Locator(
-            interface=(locator_interface or {}).get("name") or None,
-            address=_interface_address(locator_interface) if locator_interface else None,
-        ),
+        locator=select_locator(interfaces),
         l2=l2,
         l3=l3,
         gateway=AnycastGateway(enabled=any(i.gateway_ip for i in l2), mac=anycast_mac),

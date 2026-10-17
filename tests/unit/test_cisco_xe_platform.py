@@ -7,7 +7,8 @@ refuses what those templates do not render (ACLs, PBR, inter-VRF statics, MLAG, 
 
 Byte-exact rendering is covered by tests/smoke/test_configs_smoke.py (the ``*_cisco_xe_*`` goldens); this file
 covers the wiring, the IOS-XE-versus-NX-OS dialect, the refusal guard and the unchanged behaviour of the other
-roles and platforms.
+roles and platforms. The ``*_cisco_xe_lisp_ospf_ibgp`` goldens (a fabric whose overlay_control_plane is ``lisp``) are
+covered in section 5: the guard's refusals that still apply there, and the LISP rendering of those inputs.
 """
 
 from __future__ import annotations
@@ -35,6 +36,7 @@ from transforms.config.spine import Spine
 from transforms.config.super_spine import SuperSpine
 from transforms.config.tor import ToR
 from transforms.helpers.vxlan import get_vxlan_config
+from utils.data_cleaning import clean_data
 
 CONFIGS_DIR = Path(__file__).resolve().parents[1] / "smoke" / "configs"
 
@@ -362,6 +364,25 @@ class TestRefuseCiscoXeUnrendered:
 
         _make_transform(role)._refuse_cisco_xe_unrendered("cisco_xe", config)
 
+    @pytest.mark.parametrize("role", FABRIC_ROLES)
+    @pytest.mark.parametrize("key", REFUSED_KEYS)
+    def test_lisp_config_without_vxlan_still_refuses_each_unrendered_service(self, role: str, key: str) -> None:
+        """A LISP device (`lisp` context, `vxlan: None`) is refused for the same services as an EVPN one."""
+        config = {**_clean_config(), "vxlan": None, "lisp": {"enabled": True}}
+        config[key] = [{"vlan_id": 100}] if key != "mlag" else {"domain_id": 1}
+
+        with pytest.raises(ValueError) as excinfo:
+            _make_transform(role)._refuse_cisco_xe_unrendered("cisco_xe", config)
+
+        assert str(excinfo.value) == f"cisco_xe {role} cannot render: {key}; refusing incomplete config"
+
+    @pytest.mark.parametrize("role", FABRIC_ROLES)
+    def test_lisp_config_without_vxlan_or_evpn_process_is_not_refused(self, role: str) -> None:
+        """A LISP device has no EVPN BGP process by design: the missing-EVPN refusal needs VXLAN enabled."""
+        config = {**_clean_config(), "vxlan": None, "lisp": {"enabled": True}}
+
+        _make_transform(role)._refuse_cisco_xe_unrendered("cisco_xe", config)
+
     def test_lists_every_unsupported_feature_in_a_fixed_order(self) -> None:
         """Several problems at once: all reported, services first, then multisite, then the EVPN gap."""
         config = {
@@ -518,3 +539,186 @@ class TestUnsupportedCombinationsUnchanged:
         """BorderSpine must not silently render the border-leaf template without its route-reflector role."""
         with pytest.raises(ValueError, match="route-reflector"):
             _run_transform(BorderSpine, _golden_input("leaf_cisco_xe_ebgp_ibgp"))
+
+
+# ---------------------------------------------------------------------------
+# 5. LISP overlay fabric: the *_cisco_xe_lisp_ospf_ibgp goldens
+# ---------------------------------------------------------------------------
+
+LISP_VARIANT = "lisp_ospf_ibgp"
+LISP_MARKER = "! unverified-no-lab:"
+# The map-servers of the golden inputs, in the sorted-by-device-name order the template renders them.
+LISP_MAP_SERVER_ADDRESSES = ["10.255.0.1", "10.255.0.2"]
+
+
+def _lisp_deployment(prefix: str) -> dict[str, Any]:
+    """The cleaned `deployment` object of a LISP golden input (what the transforms read the LISP keys from)."""
+    cleaned = clean_data(_golden_input(f"{prefix}_cisco_xe_{LISP_VARIANT}"))
+    return cleaned["DcimDevice"][0]["deployment"]
+
+
+@pytest.mark.parametrize(("prefix", "transform_cls", "role"), FABRIC_TRANSFORMS)
+class TestCiscoXeLispGoldenInputs:
+    """The LISP golden inputs carry the keys of queries/fragments/lisp_fabric.gql in their cleaned shape."""
+
+    def test_input_carries_the_fabric_flag_map_servers_and_site_key(
+        self, prefix: str, transform_cls: type[BaseDeviceTransform], role: str
+    ) -> None:
+        """overlay_control_plane, lisp_map_servers[i].interfaces[j].ip_address.address and lisp_site_key.password."""
+        deployment = _lisp_deployment(prefix)
+
+        assert deployment["overlay_control_plane"] == "lisp"
+        assert deployment["name"] == "DC-1"
+        assert deployment["lisp_site_key"] == {"password": "s3cr3t"}
+        servers = deployment["lisp_map_servers"]
+        assert [server["name"] for server in servers] == ["dc1-border-leaf-02", "dc1-border-leaf-01"]
+        assert [server["interfaces"][0]["ip_address"]["address"] for server in servers] == [
+            "10.255.0.2/32",
+            "10.255.0.1/32",
+        ]
+
+    def test_input_has_no_bgp_process(self, prefix: str, transform_cls: type[BaseDeviceTransform], role: str) -> None:
+        """A LISP fabric has no BGP overlay: the ManagedBGP capability is gone, only OSPF is left."""
+        node = _golden_input(f"{prefix}_cisco_xe_{LISP_VARIANT}")["DcimDevice"]["edges"][0]["node"]
+
+        kinds = {edge["node"].get("__typename") for edge in node["capabilities"]["edges"]}
+        assert kinds == {"ManagedOSPF"}
+
+
+@pytest.mark.parametrize(("prefix", "transform_cls", "role"), FABRIC_TRANSFORMS)
+class TestCiscoXeLispRendering:
+    """The three fabric roles render the LISP overlay, never the EVPN-VXLAN one, from the same inputs."""
+
+    def test_renders_lisp_and_no_evpn_vxlan_or_bgp(
+        self, prefix: str, transform_cls: type[BaseDeviceTransform], role: str
+    ) -> None:
+        """`router lisp` with the RLOC and instance-ids; no l2vpn evpn, nve1, vlan configuration or router bgp."""
+        output = _render(prefix, LISP_VARIANT)
+
+        assert f"! Cisco IOS-XE (Catalyst 9000) LISP {role}\n" in output
+        assert re.search(r"^router lisp$", output, re.M)
+        assert " IPv4-interface Loopback0 priority 10 weight 10\n" in output
+        assert " instance-id 50001\n" in output
+        assert " instance-id 10100\n" in output
+        assert re.search(r"^ lisp mobility VRF_A-IPV4$", output, re.M)
+        for absent in ("l2vpn evpn", "nve1", "vlan configuration", "router bgp", "RM-CONN-2-BGP"):
+            assert absent not in output, absent
+        assert "router ospf 1" in output
+
+    def test_every_edge_registers_with_every_map_server_in_name_order(
+        self, prefix: str, transform_cls: type[BaseDeviceTransform], role: str
+    ) -> None:
+        """The inputs list the map-servers out of order; the key and proxy-reply follow each, sorted by device name."""
+        output = _render(prefix, LISP_VARIANT)
+
+        for service in ("ipv4", "ethernet"):
+            block = output.split(f" service {service}\n", 1)[1].split(f"  exit-service-{service}", 1)[0]
+            registered = re.findall(r"^  etr map-server (\S+) key s3cr3t$", block, re.M)
+            resolvers = re.findall(r"^  itr map-resolver (\S+)$", block, re.M)
+            assert registered == LISP_MAP_SERVER_ADDRESSES
+            assert resolvers == LISP_MAP_SERVER_ADDRESSES
+
+    def test_every_lisp_command_is_under_an_unverified_no_lab_comment(
+        self, prefix: str, transform_cls: type[BaseDeviceTransform], role: str
+    ) -> None:
+        """No lab verified any of it: each LISP block (and the VRF / SVI lines it adds) opens with the marker."""
+        lines = _render(prefix, LISP_VARIANT).splitlines()
+        covered = False
+        uncovered: list[str] = []
+        in_lisp = False
+        for line in lines:
+            if line.lstrip().startswith(LISP_MARKER):
+                covered = True
+                continue
+            if line == "!" and not in_lisp:
+                covered = False
+            if line == "router lisp":
+                in_lisp = True
+            elif in_lisp and not line.startswith(" "):
+                in_lisp = False
+            lisp_line = in_lisp or line.startswith("vrf definition") or line.strip().startswith("lisp mobility")
+            if lisp_line and not covered:
+                uncovered.append(line)
+        assert not uncovered, uncovered
+
+    def test_only_the_border_leaf_is_a_map_server_with_a_site(
+        self, prefix: str, transform_cls: type[BaseDeviceTransform], role: str
+    ) -> None:
+        """The border leaf is the co-located map-server/resolver and registers the DC's EIDs; edges do neither."""
+        output = _render(prefix, LISP_VARIANT)
+
+        if role == "border-leaf":
+            assert output.count("  map-server\n") == 2
+            assert output.count("  map-resolver\n") == 2
+            assert " site DC-1\n" in output
+            assert "  authentication-key s3cr3t\n" in output
+            assert "  eid-record instance-id 50001 10.100.0.0/24 accept-more-specifics\n" in output
+            assert "  eid-record instance-id 10100 any-mac\n" in output
+        else:
+            assert "  map-server\n" not in output
+            assert "  map-resolver\n" not in output
+            assert " site " not in output
+            assert "eid-record" not in output
+
+
+def test_lisp_access_leaf_renders_the_leaf_config_but_for_the_header() -> None:
+    """The access-leaf and leaf LISP inputs describe the same fabric: only the identity lines differ."""
+    leaf = _render("leaf", LISP_VARIANT).splitlines()
+    other = _render("access_leaf", LISP_VARIANT).splitlines()
+
+    assert len(leaf) == len(other)
+    differing = [i for i, (a, b) in enumerate(zip(leaf, other, strict=True)) if a != b]
+    assert differing
+    assert all(i < 6 for i in differing)
+
+
+@pytest.mark.parametrize(("prefix", "transform_cls", "role"), FABRIC_TRANSFORMS)
+class TestCiscoXeLispRefusalThroughTransform:
+    """The guard still runs inside transform() on a LISP fabric: the services its templates lack are refused."""
+
+    @pytest.mark.parametrize("key", REFUSED_KEYS)
+    def test_lisp_transform_refuses_unrendered_service(
+        self, prefix: str, transform_cls: type[BaseDeviceTransform], role: str, key: str
+    ) -> None:
+        """acls / leaf_pbr_rules / vrf_routes / mlag on a LISP device make transform() raise, not drop them."""
+        real = BaseDeviceTransform._template_context
+
+        def with_service(self: BaseDeviceTransform, *args: Any, **kwargs: Any) -> dict[str, Any]:
+            return {**real(self, *args, **kwargs), key: [{"vlan_id": 100}]}
+
+        with patch.object(BaseDeviceTransform, "_template_context", with_service):
+            with pytest.raises(ValueError, match=rf"cisco_xe {role} cannot render: {key}; refusing incomplete config"):
+                _run_transform(transform_cls, _golden_input(f"{prefix}_cisco_xe_{LISP_VARIANT}"))
+
+    def test_lisp_transform_refuses_a_platform_without_a_lisp_renderer(
+        self, prefix: str, transform_cls: type[BaseDeviceTransform], role: str
+    ) -> None:
+        """The same input on a platform that cannot render LISP is a refusal, not an EVPN config."""
+        data = _with_platform(_golden_input(f"{prefix}_cisco_xe_{LISP_VARIANT}"), "arista_eos")
+
+        with pytest.raises(ValueError) as excinfo:
+            _run_transform(transform_cls, data)
+
+        assert str(excinfo.value) == f"arista_eos {role} cannot render the LISP overlay; refusing incomplete config"
+
+    def test_lisp_transform_without_a_site_key_is_refused(
+        self, prefix: str, transform_cls: type[BaseDeviceTransform], role: str
+    ) -> None:
+        """No lisp_site_key on the deployment: nothing can register, so no config is rendered."""
+        data = _golden_input(f"{prefix}_cisco_xe_{LISP_VARIANT}")
+        del data["DcimDevice"]["edges"][0]["node"]["deployment"]["node"]["lisp_site_key"]
+
+        with pytest.raises(ValueError, match=f"cisco_xe {role} cannot render the LISP overlay: the fabric has no LISP"):
+            _run_transform(transform_cls, data)
+
+    def test_lisp_transform_without_a_map_server_is_refused(
+        self, prefix: str, transform_cls: type[BaseDeviceTransform], role: str
+    ) -> None:
+        """No border leaf to register with: refuse instead of rendering an unreachable ETR."""
+        data = _golden_input(f"{prefix}_cisco_xe_{LISP_VARIANT}")
+        data["DcimDevice"]["edges"][0]["node"]["deployment"]["node"]["lisp_map_servers"] = {"edges": []}
+
+        with pytest.raises(
+            ValueError, match=f"cisco_xe {role} cannot render the LISP overlay: the fabric has no border"
+        ):
+            _run_transform(transform_cls, data)

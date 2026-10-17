@@ -35,6 +35,8 @@ query leaf_config(
               ...FirewallContextsOnDeploymentFields
               ...LoadbalancerVipsOnDeploymentFields
               ...EvpnRtAsOnDeploymentFields
+              ...LispMapServersOnDeploymentFields
+              ...LispSiteOnDeploymentFields
             }
           }
         }

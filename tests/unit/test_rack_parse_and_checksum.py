@@ -463,6 +463,26 @@ class TestGenerateRackGating:
         assert any("endpoint-only rack" in str(call.args[0]) for call in gen.logger.info.call_args_list)
 
     @pytest.mark.asyncio
+    async def test_lisp_rack_does_not_wait_for_spine_bgp(self) -> None:
+        """A LISP fabric's spines own no BGP process (OSPF underlay, no overlay BGP): the rack never
+        awaits one, and goes on past the readiness gate instead of deferring forever."""
+        gen = _build_rack_generator(deployment_type="mixed", rack_type="compute", leafs=[])
+        gen.data["tors"] = []
+        gen.data["l2_leafs"] = []
+        gen.data["access_leafs"] = []
+        gen.data["pod"]["parent"]["routing_strategy"] = "ospf-ibgp"
+        gen.data["pod"]["parent"]["overlay_control_plane"] = "lisp"
+        gen.data["pod"]["devices"] = [{"name": "spine-1"}]
+        gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
+        gen.bgp_processes_ready = AsyncMock(return_value=False)
+
+        with patch("generators.topology.rack.parse_rack_data", return_value=gen.data):
+            await gen.generate({"any": "shape"})
+
+        gen.bgp_processes_ready.assert_not_awaited()
+        assert any("endpoint-only rack" in str(call.args[0]) for call in gen.logger.info.call_args_list)
+
+    @pytest.mark.asyncio
     async def test_endpoint_only_rack_skips_before_role_check(self) -> None:
         gen = _build_rack_generator(deployment_type="mixed", rack_type="compute", leafs=[])
         gen.data["tors"] = []

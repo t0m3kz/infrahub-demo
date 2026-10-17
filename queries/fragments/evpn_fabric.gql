@@ -5,6 +5,10 @@ fragment EvpnRtAsOnSegmentHostingFields on TopologySegmentHosting {
     }
   }
   evpn_anycast_gateway_mac { value }
+  # Fabric flag read by every overlay-aware transform (bgp_evpn | lisp); riding
+  # this fragment puts it on every config query that already spreads
+  # EvpnRtAsOnDeploymentFields.
+  overlay_control_plane { value }
 }
 
 # Fabric-wide EVPN constants, reached from a device's own `deployment`: the
