@@ -1,0 +1,32 @@
+---
+# Rome: the site of DC14. Suite 1 holds pod 1's racks (two rows, each with one network rack and one
+# compute rack); suite 2 holds pod 2, which stays greenfield (it exists to host the second
+# border-leaf: an S_MIDDLE pod takes at most one).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationMetro
+  data:
+    - name: "Rome"
+      shortname: "rom"
+      parent: it
+      children:
+        kind: LocationFacility
+        data:
+          - name: "ROM-1"
+            shortname: "rom-1"
+            children:
+              kind: LocationSuite
+              data:
+                - suite_name: "Suite-1"
+                  index: 1
+                  shortname: "rom-1-s-1"
+                  parent: rom-1
+                  rows: 2
+                  racks_per_row: 2
+                - suite_name: "Suite-2"
+                  index: 2
+                  shortname: "rom-1-s-2"
+                  parent: rom-1
+                  rows: 2
+                  racks_per_row: 1

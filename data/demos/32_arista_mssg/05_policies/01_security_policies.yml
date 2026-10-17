@@ -1,0 +1,92 @@
+---
+# The tenant's contract, one egress policy per source segment (seg-<segment>-egress, the one policy
+# per segment the application generator would share; index < 100 for hand-written rules). Every
+# permit rule between two tagged segments is a contract between their group tags
+# (transforms/helpers/group_policy.py), which the Arista renderer turns into MSS-G policies under the
+# DESTINATION segment. Default deny everywhere. What each rule is there to produce on the EOS leaf:
+#
+#   web -> app  tcp 443 and tcp 8000-8010 : a custom policy with a port field-set (443, 8000-8010)
+#                                           under app, and its mirrored reply (MSS-G is stateless)
+#                                           under web.
+#   app -> db   tcp 5432                   : a custom policy under db.
+#   db -> app   any protocol               : `policy-forward-all` under app, and, under db, a line
+#                                           `! not expressible (left closed)`: the reply of a
+#                                           permit-all flow cannot be matched by source port.
+#   web -> db   icmp                       : a port-less icmp application, no field-set.
+#
+# Each flow between two segments also yields a row to/from UNCLASSIFIED (the firewall legs), which
+# the renderer expresses as the destination segment's `fallback policy`.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityPolicy
+  data:
+    - name: seg-mssg1-web-p-egress
+      description: "Egress contract of mssg1-web-p"
+      segment: "mssg1-web-p"
+      default_action: deny
+      enabled: true
+      rules:
+        data:
+          - index: 10
+            name: web-to-app-https
+            action: permit
+            protocol: tcp
+            port_start: 443
+            source_segment: "mssg1-web-p"
+            destination_segment: "mssg1-app-p"
+            log: false
+            description: "Web tier to the app tier over https"
+
+          - index: 20
+            name: web-to-app-service-range
+            action: permit
+            protocol: tcp
+            port_start: 8000
+            port_end: 8010
+            source_segment: "mssg1-web-p"
+            destination_segment: "mssg1-app-p"
+            log: false
+            description: "Web tier to the app tier service ports 8000-8010"
+
+          - index: 30
+            name: web-to-db-icmp
+            action: permit
+            protocol: icmp
+            source_segment: "mssg1-web-p"
+            destination_segment: "mssg1-db-p"
+            log: false
+            description: "Web tier may ping the database tier"
+
+    - name: seg-mssg1-app-p-egress
+      description: "Egress contract of mssg1-app-p"
+      segment: "mssg1-app-p"
+      default_action: deny
+      enabled: true
+      rules:
+        data:
+          - index: 10
+            name: app-to-db-postgres
+            action: permit
+            protocol: tcp
+            port_start: 5432
+            source_segment: "mssg1-app-p"
+            destination_segment: "mssg1-db-p"
+            log: false
+            description: "App tier to the database tier over postgres"
+
+    - name: seg-mssg1-db-p-egress
+      description: "Egress contract of mssg1-db-p"
+      segment: "mssg1-db-p"
+      default_action: deny
+      enabled: true
+      rules:
+        data:
+          - index: 10
+            name: db-to-app-any
+            action: permit
+            protocol: any
+            source_segment: "mssg1-db-p"
+            destination_segment: "mssg1-app-p"
+            log: false
+            description: "Database tier to the app tier, any protocol (the permit-all row MSS-G cannot mirror)"

@@ -38,6 +38,7 @@ Each scenario creates infrastructure incrementally and merges to main:
 - `test_20_dc6_add_endpoints.py` - **Scenario 7:** Endpoint servers across DC6's pods (`data/demos/06_servers`)
 - `test_59` - `test_65` - **Scenario 8:** The `30_all` demo, end to end (see [The 30_all Suite](#the-30_all-suite)). This one deviates from the pattern above: it loads in stages, shares one branch across six modules, and does not merge to main.
 - `test_70` - **Scenario 9:** The LISP demo fabric (`data/demos/31_lisp_fabric`), on its own branch (see [The LISP Suite](#the-lisp-suite)).
+- `test_71` - **Scenario 10:** The Arista EOS MSS-G demo fabric (`data/demos/32_arista_mssg`), on its own branch (see [The Arista MSS-G Suite](#the-arista-mss-g-suite)).
 
 Scenarios 2-7 form one chain on DC6: `test_12` depends on `dc6_verify_after_merge` from `test_10`, and each
 later module depends on the previous one's merge. Every growth check is scoped to DC6 (devices reachable from
@@ -59,8 +60,8 @@ deployed for the chain, so `DC_DEPLOYMENT_TEST_DCS=dc6` cuts `test_10` down to t
 #### `test_helpers.py` - Generic Async Utilities
 
 - `wait_for_condition()` - Polling utility for async conditions
-- `render_device_config()` - Run a device-config query and its transform in-process (test_64, test_70)
-- `snapshot_topology()` / `diff_snapshots()` - Snapshot the graph's topology kinds and diff two snapshots (test_65, test_70)
+- `render_device_config()` - Run a device-config query and its transform in-process (test_64, test_70, test_71)
+- `snapshot_topology()` / `diff_snapshots()` - Snapshot the graph's topology kinds and diff two snapshots (test_65, test_70, test_71)
 
 #### Other Files
 
@@ -136,6 +137,9 @@ uv run invoke test-integration-all-demo
 # The LISP demo fabric (setup, repository, test_70)
 uv run invoke test-integration-lisp
 
+# The Arista EOS MSS-G demo fabric (setup, repository, test_71)
+uv run invoke test-integration-arista-mssg
+
 # Automatic DC/POD/rack routing regression
 uv run invoke test-integration-routing
 
@@ -178,6 +182,32 @@ and `test_70` only. The constants (branch, stages, expected role counts) are loc
 | Rerun | a second `add_dc` run changes no id, address, pool or count, and keeps the site key |
 
 Every IOS-XE line in the renders is unverified-no-lab: the test pins the shape of the render, not device behaviour.
+
+### The Arista MSS-G Suite
+
+`test_71_arista_mssg.py` loads `data/demos/32_arista_mssg` (DC14: an all-7280R3 fabric on EOS 4.36.2F, the one
+platform, device type and release the `reference-arista-eos` group-policy profile row accepts) on its own branch
+(`arista-mssg-scenario`). Like the LISP scope it is not in `30_all` and is never merged to main;
+`invoke test-integration-arista-mssg` runs `test_01`, `test_02` and `test_71` only. The constants (branch, stages,
+segment names, expected roles) are local to the module. It proves the path *generators -> group tags and contract
+rules -> transform -> rendered EOS Segment Security (MSS-G) text*:
+
+| Step | What it checks |
+| --- | --- |
+| Fabric load | design and fabric stages settle with no failed task; the expected roles; three back-to-back MLAG pairs, none virtual |
+| Tenant load | servers, footprint, three VXLAN segments, hand-written policies and one application, each stage settled |
+| Tenant state | each server cabled to the intended tier; every segment has a gateway prefix, a group tag and one active deployment in DC14; the policies hold exactly the hand-written rules |
+| Checks | `CheckReferenceFabric` reports no error and `DC14 is a reference fabric (segment_security, N VTEPs)`; `CheckSegmentSecurity` reports no error |
+| Segmentation matrix | a staged `segment_security` reference site, prefixes equal to the live gateways, the db -> app any-reply in `unsupported` |
+| Renders | leaf, access-leaf and border-leaf: `router segment-security` with the live match-lists and VRF, the expected `from` / `fallback policy` lines, `field-set l4-port` indented inside `application traffic recognition`, the staged comment and a final `shutdown`, no `policy-drop-all default`; a spine and a leaf that hosts no segment render none |
+| Enforce | `group_policy_enforce` starts no generator and changes each render by the staged comment and `shutdown` -> `no shutdown` |
+| Negative gate | one access-leaf on EOS 4.32.1F makes DC14 no reference fabric and removes the block from every device; restoring the image brings it back |
+| Rerun | a second `add_vxlan_segment` run changes no tag, prefix or id and no render |
+
+Not covered: that EOS accepts or enforces any rendered line (custom policies, field-sets, application traffic
+recognition and the fallback policy are documented by Arista's AVD only), and a stored proposed-change artifact
+compared with the in-process render (the proposed-change helpers report artifact status, not content). The 7280R3 port
+plans of the scope's templates are approximate. See `data/demos/32_arista_mssg/README.md`.
 
 ### Run Setup Only
 
@@ -383,6 +413,9 @@ uv run invoke test-integration-all-demo
 
 # The LISP demo fabric
 uv run invoke test-integration-lisp
+
+# The Arista EOS MSS-G demo fabric
+uv run invoke test-integration-arista-mssg
 
 # One scenario, with its prerequisites in front
 uv run invoke test-integration --tests "tests/integration/test_01_setup.py \

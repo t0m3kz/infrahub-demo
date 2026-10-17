@@ -1,0 +1,18 @@
+---
+# Fabric elements of the MSS-G demo (quantity, role, template). The pods' spine element
+# (2 x DCS-7050CX3-32C-R_SPINE) and the DC's firewall element (2 x CP-26000_FIREWALL) already exist
+# in data/bootstrap/14_design_elements.yml.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyElement
+  data:
+    - quantity: 2
+      role: border-leaf
+      template: DCS-7280CR3-32P4_BORDER_LEAF
+    - quantity: 2
+      role: leaf
+      template: DCS-7280SR3-48YC8_LEAF
+    - quantity: 2
+      role: access-leaf
+      template: DCS-7280SR3-48YC8_ACCESS

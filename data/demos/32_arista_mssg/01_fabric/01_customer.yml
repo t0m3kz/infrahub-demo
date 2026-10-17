@@ -1,0 +1,10 @@
+---
+# The tenant of the MSS-G demo. Declared in the fabric stage so the servers of ../02_compute/ and the
+# footprint of ../03_footprint/ can name it as their owner.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: OrganizationCustomer
+  data:
+    - name: "Roma Segment Security Demo S.p.A."
+      org_id: "MSSG1"
