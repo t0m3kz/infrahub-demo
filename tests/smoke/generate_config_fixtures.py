@@ -3534,14 +3534,14 @@ LISP_MAP_SERVERS = (("dc1-border-leaf-02", "10.255.0.2/32"), ("dc1-border-leaf-0
 LISP_SITE_KEY = "s3cr3t"
 
 
-def build_lisp_device_data(*, device_name: str, role: str) -> dict:
+def build_lisp_device_data(*, device_name: str, role: str, include_segments: bool = True) -> dict:
     """The raw cisco_xe device query response of a device in a fabric whose overlay_control_plane is `lisp`."""
     data = build_device_data(
         device_name=device_name,
         role=role,
         platform="cisco_xe",
         scenario="ospf_ibgp",
-        include_segments=True,
+        include_segments=include_segments,
     )
     node = data["DcimDevice"]["edges"][0]["node"]
     node["capabilities"]["edges"] = [
@@ -3560,8 +3560,13 @@ def build_lisp_device_data(*, device_name: str, role: str) -> dict:
 
 
 def write_cisco_xe_lisp_fixtures() -> tuple[int, int]:
-    """Write the Catalyst 9000 leaf / access-leaf / border-leaf LISP-overlay fixtures (OSPF underlay, no BGP)."""
+    """Write the Catalyst 9000 leaf / access-leaf / border-leaf LISP-overlay fixtures (OSPF underlay, no BGP).
+
+    Plus a hostless leaf: an edge that hosts no segment yet still carries the edge LISP config.
+    """
     generated = errors = 0
+    hostless = build_lisp_device_data(device_name="dc1-leaf-01", role="leaf", include_segments=False)
+    generated, errors = _write_data_fixture(Leaf, "leaf_cisco_xe_lisp_hostless", hostless)
     for transform_cls, role, type_prefix in CISCO_XE_DEVICE_CONFIGS:
         data = build_lisp_device_data(device_name=f"dc1-{type_prefix.replace('_', '-')}-01", role=role)
         g, e = _write_data_fixture(transform_cls, f"{type_prefix}_cisco_xe_lisp_ospf_ibgp", data)

@@ -3,7 +3,8 @@
     underlay is rendered by the OSPF include of the including template, not here.
 
     Edge (leaf, ToR, access leaf): the RLOC locator-set, the ITR/ETR of service ipv4 and ethernet toward every
-    map-server, and one instance-id per L3 VRF and per L2 VNI. Border leaf: the same plus the co-located
+    map-server, and one instance-id per L3 VRF and per L2 VNI (none while the edge hosts no
+    segment: hosts register later, the rest of the config is always there). Border leaf: the same plus the co-located
     map-server/map-resolver and the `site` stanza registering the fabric's EID records. Not rendered: proxy-etr/itr,
     use-petr, publisher/subscriber, route-import/export, flooding, extranet, service ipv6.
 

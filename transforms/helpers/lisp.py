@@ -147,11 +147,13 @@ def get_lisp_config(
     activations: list[dict[str, Any]] | None,
     lisp_inputs: LispInputs,
     fabric_anycast_mac: str | None = None,
-) -> dict[str, Any] | None:
-    """The ``lisp`` template context of one device, or None when it neither terminates an overlay nor is a border.
+) -> dict[str, Any]:
+    """The ``lisp`` template context of one VTEP of a LISP fabric (the roles of ``DC_VTEP_ROLES``).
 
-    A border leaf always gets a context (it is the map-server even with no instance of its own); any
-    other role only when the neutral model has an instance for it. Pure: no input is modified.
+    Every such device gets a context, whether or not it hosts anything yet: a fabric edge always carries
+    the RLOC, the ITR/ETR and the map-server registration (hosts register with it later), with empty
+    ``l2_instances`` / ``l3_instances`` until a segment is activated on it; a border leaf is the map-server
+    with its ``site`` even with no instance of its own. Pure: no input is modified.
 
     Raises:
         ValueError: an L2 instance has an IPv6 gateway or a gateway outside a VRF with an L3 instance,
@@ -165,8 +167,6 @@ def get_lisp_config(
         [],
         fabric_anycast_mac or _DEFAULT_ANYCAST_GATEWAY_MAC,
     )
-    if node is None and not border:
-        return None
     if not lisp_inputs.map_servers:
         raise _refuse(device_role, "the fabric has no border leaf map-server")
     if not lisp_inputs.site_key:

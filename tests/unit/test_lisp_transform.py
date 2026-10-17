@@ -24,6 +24,7 @@ import pytest
 
 from tests.smoke.test_configs_smoke import _run_transform
 from transforms.common import BaseDeviceTransform, _fabric_overlay_control_plane
+from transforms.config.access_leaf import AccessLeaf
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.leaf import Leaf
 from transforms.helpers.lisp import EidRecord, LispInputs, build_lisp_inputs, get_lisp_config
@@ -32,6 +33,7 @@ CONFIGS_DIR = Path(__file__).resolve().parents[1] / "smoke" / "configs"
 MARKER = "unverified-no-lab:"
 LEAF_INPUT = "leaf_cisco_xe_ospf_ibgp"
 BORDER_INPUT = "border_leaf_cisco_xe_ospf_ibgp"
+HOSTLESS_INPUT = "leaf_cisco_xe_lisp_hostless"
 
 _MAP_SERVERS: list[dict[str, Any]] = [
     {"name": "dc1-border-02", "interfaces": [{"ip_address": {"address": "10.255.0.2/32"}}]},
@@ -159,6 +161,25 @@ class TestRenderedLeaf:
         assert "  itr map-resolver 10.255.0.1\n  itr map-resolver 10.255.0.2\n" in text
         assert text.count("  etr map-server 10.255.0.1 key s3cr3t") == 2  # service ipv4 and service ethernet
         assert text.count("  etr map-server 10.255.0.2 proxy-reply") == 2
+
+    @pytest.mark.parametrize(("cls", "role"), [(Leaf, "leaf"), (AccessLeaf, "access-leaf")])
+    def test_a_hostless_edge_renders_the_edge_config_with_no_instance(self, cls: type, role: str) -> None:
+        """No segment on the device: the edge LISP config is complete, with no instance-id, VRF or dangling `!`."""
+        data = _lisp_raw_input(HOSTLESS_INPUT)
+        data["DcimDevice"]["edges"][0]["node"]["role"] = {"value": role}
+        text = _run_transform(cls, data)
+        lisp = _lisp_lines(text)
+
+        assert "LISP" in text.splitlines()[2] and "EVPN-VXLAN" not in text
+        assert lisp.count("  itr map-resolver 10.255.0.1") == 2 and lisp.count("  itr map-resolver 10.255.0.2") == 2
+        assert text.count("  etr map-server 10.255.0.1 key s3cr3t") == 2
+        assert text.count("  etr map-server 10.255.0.2 key s3cr3t") == 2
+        assert lisp.count("  itr") == 2 and lisp.count("  etr") == 2
+        assert not any("instance-id" in line or "dynamic-eid" in line or line.startswith(" site ") for line in lisp)
+        assert "vrf definition" not in text and "Gateway SVIs" not in text
+        assert "  map-server" not in lisp and "  map-resolver" not in lisp
+        assert "\n!\n!\n" not in text.split("router lisp")[1]
+        assert not any(re.search(pattern, text, re.MULTILINE) for pattern in ("l2vpn evpn", r"\bnve1\b", "^router bgp"))
 
     def test_leaf_is_not_a_map_server_and_has_no_site(self) -> None:
         lisp = _lisp_lines(_render(Leaf, LEAF_INPUT))
@@ -366,9 +387,33 @@ class TestLispContext:
             "PROD": ["10.1.0.0/24", "10.1.1.0/24"],
         }
 
-    def test_an_edge_without_instances_has_no_lisp_context(self) -> None:
-        assert get_lisp_config(_device(), "leaf", [], _inputs()) is None
-        assert get_lisp_config(_device(), "leaf", [_activation(250, None, gateway=None)], _inputs()) is None
+    @pytest.mark.parametrize("role", ["leaf", "tor", "access-leaf"])
+    @pytest.mark.parametrize("activations", [[], [_activation(250, None, gateway=None)]])
+    def test_an_edge_without_instances_still_has_the_edge_context(
+        self, role: str, activations: list[dict[str, Any]]
+    ) -> None:
+        """A fabric edge that hosts nothing yet keeps the RLOC, map-servers and key; only the instances are empty."""
+        config = get_lisp_config(_device(), role, activations, _inputs())
+
+        assert config["enabled"] is True
+        assert config["role"] == "edge"
+        assert config["rloc_interface"] == "Loopback0"
+        assert config["map_servers"] == ["10.255.0.1", "10.255.0.2"]
+        assert config["site_key"] == "s3cr3t"
+        assert config["l2_instances"] == [] and config["l3_instances"] == []
+        assert config["anycast_gateway"] == {"enabled": False, "mac": "00:1c:73:00:dc:01"}
+        assert config["site"] is None
+
+    @pytest.mark.parametrize(
+        ("inputs", "match"),
+        [
+            (_inputs(map_servers=()), "no border leaf map-server"),
+            (_inputs(site_key=None), "no LISP site key"),
+        ],
+    )
+    def test_a_hostless_edge_is_still_refused_without_map_server_or_key(self, inputs: LispInputs, match: str) -> None:
+        with pytest.raises(ValueError, match=match):
+            get_lisp_config(_device(), "leaf", [], inputs)
 
     def test_a_border_always_has_a_context_with_its_site(self) -> None:
         config = get_lisp_config(_device(), "border-leaf", [], _inputs())
@@ -532,11 +577,12 @@ class TestControlPlaneGate:
 
         assert view.call_args.kwargs["vrfs"] == ["PROD"]
 
-    def test_an_edge_without_instances_gets_no_lisp_key(self) -> None:
+    def test_an_edge_without_instances_still_gets_the_lisp_key(self) -> None:
         config = _make_transform("leaf")._extra_config(_fabric_data("leaf", "cisco_xe", "lisp"), "cisco_xe")
 
         assert config["vxlan"] is None
-        assert "lisp" not in config
+        assert config["lisp"]["role"] == "edge"
+        assert config["lisp"]["l2_instances"] == [] and config["lisp"]["l3_instances"] == []
 
     def test_evpn_render_is_unchanged_by_the_explicit_default_flag(self) -> None:
         """An explicit bgp_evpn flag and none at all render the same EVPN config."""

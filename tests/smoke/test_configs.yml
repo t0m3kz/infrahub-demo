@@ -159,6 +159,11 @@ infrahub_tests:
         spec:
           kind: python-transform-unit-process
           directory: configs/leaf_cisco_xe_lisp_ospf_ibgp
+      - name: cisco_xe_lisp_hostless
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_cisco_xe_lisp_hostless
   - resource: PythonTransform
     resource_name: spine
     tests:
