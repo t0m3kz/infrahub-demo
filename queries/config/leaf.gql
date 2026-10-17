@@ -129,7 +129,7 @@ query leaf_config(
   # The fleet roots of queries/topology/segmentation_matrix.gql, minus its
   # target: the group contracts of the device's data center and the reference
   # fabric verdict of every site, for the NX-OS GPO block
-  # (transforms/helpers/group_policy.vxlan_gpo_device_view). The device root
+  # (transforms/helpers/group_policy.group_policy_device_view). The device root
   # above must stay first (transforms/common.py _device_and_platform).
   DcimGroupPolicyProfile {
     edges {
@@ -143,6 +143,8 @@ query leaf_config(
     edges {
       node {
         id
+        name { value }
+        group_policy_enforce { value }
         devices {
           edges {
             node {

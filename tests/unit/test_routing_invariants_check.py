@@ -35,16 +35,6 @@ def _run(**sections: Any) -> Any:
     return check
 
 
-def _leak(ns_a: dict[str, Any], ns_z: dict[str, Any], route_target: str | None = None) -> dict[str, Any]:
-    return {
-        "id": "leak-1",
-        "name": _v("leak-1"),
-        "route_target": _v(route_target),
-        "namespace_a": {"node": ns_a},
-        "namespace_z": {"node": ns_z},
-    }
-
-
 def _interface(device_role: str, role: str | None, ns_type: str = "internet") -> dict[str, Any]:
     return {
         "__typename": "DcimPhysicalInterface",
@@ -122,42 +112,8 @@ def _vif(vif_id: str, circuits: dict[str, list[str | None]], env: str | None = N
     }
 
 
-class TestRouteTargetJoins:
-    """Route-target imports may only join namespaces of one type."""
-
-    def test_same_type_leak_passes(self) -> None:
-        """A leak between two prod namespaces is accepted."""
-        check = _run(TopologyRouteLeakExchange=[_leak(_ns("A", "prod", 1), _ns("B", "prod", 2))])
-        assert check._captured_errors == []
-
-    def test_cross_type_leak_fails(self) -> None:
-        """A leak joining prod and non_prod is an error."""
-        check = _run(TopologyRouteLeakExchange=[_leak(_ns("A", "prod", 1), _ns("B", "non_prod", 2))])
-        assert len(check._captured_errors) == 1
-        assert "same type" in check._captured_errors[0]
-
-    def test_untyped_namespace_fails(self) -> None:
-        """A leak with an untyped side cannot be verified and is an error."""
-        check = _run(TopologyRouteLeakExchange=[_leak(_ns("A", "prod", 1), _ns("B", None, 2))])
-        assert len(check._captured_errors) == 1
-
-    def test_explicit_route_target_naming_foreign_vni_fails(self) -> None:
-        """An explicit route_target carrying another type's L3 VNI is an error."""
-        prod, other = _ns("A", "prod", 100), _ns("N", "non_prod", 200)
-        check = _run(
-            IpamNamespace=[prod, other],
-            TopologyRouteLeakExchange=[_leak(prod, _ns("B", "prod", 101), "65000:200")],
-        )
-        assert any("route_target" in e for e in check._captured_errors)
-
-    def test_explicit_route_target_same_type_passes(self) -> None:
-        """An explicit route_target on a same-type VNI is accepted."""
-        prod = _ns("A", "prod", 100)
-        check = _run(
-            IpamNamespace=[prod],
-            TopologyRouteLeakExchange=[_leak(prod, _ns("B", "prod", 101), "65000:100")],
-        )
-        assert check._captured_errors == []
+class TestL3VniSharing:
+    """Namespaces of different types never share an l3_vni."""
 
     def test_shared_l3_vni_across_types_fails(self) -> None:
         """Namespaces of different types sharing an l3_vni share a route-target."""

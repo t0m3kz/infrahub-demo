@@ -18,6 +18,7 @@ spec:
         - ["2", "firewall", "CP-26000_FIREWALL"]
         - ["2", "load-balancer", "BIG-IP-i5800_LOAD_BALANCER"]
       fabric_interface_sorting_method: top_down
+      group_policy_enforce: true
       member_of_groups:
         - topologies_dc
       children:

@@ -225,6 +225,30 @@ class TestGetMlagPeerLink:
         assert result is not None
         assert result["peer_link"] == "Ethernet1/33"
 
+    def test_physical_peer_link_is_not_virtual(self) -> None:
+        """A DcimLAGInterface peer-link (and an untyped one) is a physical port-channel."""
+        for iface in (
+            {**_peer_link_iface(), "typename": "DcimLAGInterface", "lag_id": 100},
+            _peer_link_iface(),
+        ):
+            result = get_mlag([_mlag_cap()], [iface])
+            assert result is not None
+            assert result["virtual_peer_link"] is False
+
+    def test_virtual_interface_peer_link_is_flagged_virtual(self) -> None:
+        """mlag_create: virtual leaves a member-less DcimVirtualInterface (loopback100) as the peer-link."""
+        result = get_mlag([_mlag_cap()], [{**_peer_link_iface("loopback100"), "typename": "DcimVirtualInterface"}])
+        assert result is not None
+        assert result["peer_link"] == "loopback100"
+        assert result["virtual_peer_link"] is True
+        assert result["peer_link_lag_id"] is None
+        assert result["peer_link_members"] == []
+
+    def test_no_peer_link_is_not_virtual(self) -> None:
+        result = get_mlag([_mlag_cap()], [_uplink_iface()])
+        assert result is not None
+        assert result["virtual_peer_link"] is False
+
 
 def _sonic_mlag(**overrides: object) -> dict:
     return {
@@ -320,6 +344,72 @@ def test_cisco_vpc_keepalive_uses_management_vrf() -> None:
     )
     assert "vpc peer-link" in rendered
     assert "peer-keepalive destination 192.0.2.2 source 192.0.2.1 vrf management" in rendered
+
+
+_VPC_MLAG = {
+    "domain_id": 1,
+    "peer_link": "port-channel100",
+    "peer_link_lag_id": 100,
+    "peer_link_lacp_mode": "active",
+    "peer_link_members": ["Ethernet1/33", "Ethernet1/34"],
+    "local_management_ip": "192.0.2.1",
+    "peer_management_ip": "192.0.2.2",
+    "reload_delay": 300,
+    "reload_delay_non_mlag": 330,
+}
+
+
+def test_cisco_vpc_renders_domain_before_the_physical_peer_link() -> None:
+    """NX-OS rejects `vpc peer-link` until the vPC domain exists: domain, then port-channel, then members."""
+    rendered = _render_common("common/cisco_nxos_vpc.j2", mlag={**_VPC_MLAG, "virtual_peer_link": False})
+    assert rendered == (
+        "\n!\n! vPC Configuration\n!\n"
+        "vpc domain 1\n"
+        "  peer-keepalive destination 192.0.2.2 source 192.0.2.1 vrf management\n"
+        "  delay restore 300\n"
+        "  delay restore interface-vlan 330\n"
+        "!\n"
+        "interface port-channel100\n"
+        "  description vPC Peer-Link\n"
+        "  switchport mode trunk\n"
+        "  no shutdown\n"
+        "  vpc peer-link\n"
+        "!\n"
+        "interface Ethernet1/33\n"
+        "  channel-group 100 mode active\n"
+        "  no shutdown\n"
+        "!\n"
+        "interface Ethernet1/34\n"
+        "  channel-group 100 mode active\n"
+        "  no shutdown\n"
+        "!"
+    )
+
+
+def test_cisco_vpc_virtual_peer_link_renders_only_a_comment() -> None:
+    """A member-less virtual peer-link (loopback100) cannot take `vpc peer-link`: no vPC block, one comment."""
+    rendered = _render_common(
+        "common/cisco_nxos_vpc.j2",
+        mlag={
+            **_VPC_MLAG,
+            "peer_link": "loopback100",
+            "peer_link_lag_id": None,
+            "peer_link_members": [],
+            "virtual_peer_link": True,
+        },
+    )
+    assert rendered.strip().splitlines() == [
+        "!",
+        "! vPC fabric peering (virtual peer-link loopback100, domain 1) is not rendered: "
+        "no routed source/destination address, port-type fabric or TCAM carving in data",
+        "!",
+    ]
+    for rejected in ("vpc domain", "vpc peer-link", "interface loopback100", "switchport"):
+        assert rejected not in rendered
+
+
+def test_cisco_vpc_without_mlag_renders_nothing() -> None:
+    assert _render_common("common/cisco_nxos_vpc.j2", mlag=None) == ""
 
 
 def test_arista_mlag_control_svi_and_peer_addresses() -> None:

@@ -3,6 +3,7 @@ from typing import Any
 from infrahub_sdk.transforms import InfrahubTransform
 from jinja2 import Template
 
+from transforms.cloud.terraform_common import tf_id
 from transforms.helpers.addressing import host_ip
 from transforms.helpers.loadbalancer_pbr import pool_interfaces
 from transforms.helpers.templates import load_template
@@ -219,5 +220,5 @@ class LoadBalancerCloud(InfrahubTransform):
         return load_template(
             f"{self.root_directory}/templates/configs",
             f"loadbalancers_cloud/{name}.j2",
-            filters={"tf_id": lambda value: str(value).replace(".", "_").replace("-", "_")},
+            filters={"tf_id": lambda value: tf_id(str(value))},
         )

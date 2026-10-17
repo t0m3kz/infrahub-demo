@@ -12,6 +12,7 @@ query segmentation_matrix($id: ID) {
       node {
         id
         name { value }
+        group_policy_enforce { value }
       }
     }
   }
@@ -28,6 +29,8 @@ query segmentation_matrix($id: ID) {
     edges {
       node {
         id
+        name { value }
+        group_policy_enforce { value }
         devices {
           edges {
             node {

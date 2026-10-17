@@ -4,11 +4,8 @@ PROD and NON-PROD never meet, and the INTERNET VRF carries both environments'
 SNAT /32s, so it must stay transit-only. None of these is visible in a
 rendered config; each is a property of data that spans topologies.
 
-1. Route-target joins. A RouteLeakExchange (the only route-target import
-   between namespaces) may join namespaces of one namespace_type only, and an
-   explicit route_target must not name the L3 VNI of a namespace of another
-   type. Two namespaces of different types sharing an l3_vni would also share
-   a route-target, an implicit import.
+1. L3 VNI sharing. Two namespaces of different namespace_types sharing an
+   l3_vni would also share a route-target, an implicit import.
 2. The INTERNET VRF has no host-facing interface: no segment gateway and no
    address on a host, a customer port or any device other than a transit
    edge, a provider or a firewall.
@@ -72,14 +69,14 @@ class _Aggregate(NamedTuple):
 
 
 class CheckRoutingInvariants(WarningCheck):
-    """Namespace-type invariants across route-target joins, the INTERNET VRF and cloud routing domains."""
+    """Namespace-type invariants across shared L3 VNIs, the INTERNET VRF and cloud routing domains."""
 
     query = "routing_invariants"
 
     def validate(self, data: Any) -> None:
         cleaned = clean_data(data)
         namespaces = cleaned.get("IpamNamespace") or []
-        self._validate_route_target_joins(namespaces, cleaned.get("TopologyRouteLeakExchange") or [])
+        self._validate_l3_vni_sharing(namespaces)
         self._validate_internet_vrf(
             segments=cleaned.get("ManagedNetworkSegment") or [],
             interfaces=[iface for key in _INTERNET_INTERFACE_KEYS for iface in cleaned.get(key) or []],
@@ -93,10 +90,10 @@ class CheckRoutingInvariants(WarningCheck):
         self._validate_aggregate_overlaps(aggregates, cleaned.get("ManagedNetworkSegment") or [])
 
     # ------------------------------------------------------------------
-    # 1. Route-target joins
+    # 1. L3 VNI sharing
     # ------------------------------------------------------------------
 
-    def _validate_route_target_joins(self, namespaces: list[dict[str, Any]], leaks: list[dict[str, Any]]) -> None:
+    def _validate_l3_vni_sharing(self, namespaces: list[dict[str, Any]]) -> None:
         by_vni: dict[int, list[dict[str, Any]]] = {}
         for namespace in namespaces:
             if isinstance(namespace.get("l3_vni"), int):
@@ -111,28 +108,6 @@ class CheckRoutingInvariants(WarningCheck):
                         "they share a route-target and so import each other's routes"
                     )
                 )
-
-        for leak in leaks:
-            name = leak.get("name", "<unnamed-route-leak>")
-            ns_a, ns_z = leak.get("namespace_a") or {}, leak.get("namespace_z") or {}
-            type_a, type_z = ns_a.get("namespace_type"), ns_z.get("namespace_type")
-            if not type_a or not type_z or type_a != type_z:
-                self.log_error(
-                    message=(
-                        f"Route leak '{name}' joins '{ns_a.get('name')}' ({type_a}) and '{ns_z.get('name')}' "
-                        f"({type_z}): route-target imports may only join namespaces of the same type"
-                    )
-                )
-                continue
-            vni = _route_target_vni(leak.get("route_target"))
-            for target in by_vni.get(vni, []) if vni is not None else []:
-                if target.get("namespace_type") != type_a:
-                    self.log_error(
-                        message=(
-                            f"Route leak '{name}' route_target {leak['route_target']} names the L3 VNI of "
-                            f"'{target.get('name')}' ({target.get('namespace_type')}), not a {type_a} namespace"
-                        )
-                    )
 
     # ------------------------------------------------------------------
     # 2. INTERNET VRF is transit-only
@@ -377,9 +352,3 @@ def _overlap(
 
 def _account_environment(virtual_network: dict[str, Any] | None) -> str | None:
     return (((virtual_network or {}).get("account")) or {}).get("environment")
-
-
-def _route_target_vni(route_target: str | None) -> int | None:
-    """The assigned-number half of an `asn:vni` route-target, or None when it does not parse."""
-    _, _, assigned = (route_target or "").rpartition(":")
-    return int(assigned) if assigned.isdigit() else None

@@ -29,3 +29,8 @@ def segment_prefix(seg: dict[str, Any], family: str = "ipv4") -> str | None:
     if cidr_block and family == "ipv4" and _in_family(cidr_block, family):
         return cidr_block
     return None
+
+
+def classifier_prefix(seg: dict[str, Any]) -> str | None:
+    """The one prefix a segment is classified by (MSS-G, the segmentation matrix): its IPv4 prefix, else its IPv6 one."""
+    return segment_prefix(seg, "ipv4") or segment_prefix(seg, "ipv6")

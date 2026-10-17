@@ -16,7 +16,7 @@ from transforms.helpers.firewall import (
     get_exchange_transits,
     get_leaf_firewall_transits,
 )
-from transforms.helpers.group_policy import vxlan_gpo_device_view
+from transforms.helpers.group_policy import GPO_CONFIG_KEYS, group_policy_device_view
 from transforms.helpers.ha import _HA_TYPENAMES
 from transforms.helpers.loadbalancer_pbr import _flatten_deployment_lb_vips, get_lb_backend_pbr_rules
 from transforms.helpers.management import get_management_services
@@ -102,6 +102,21 @@ def _loopback_name(interfaces: list[dict[str, Any]], platform_name: str) -> str:
     return "loopback0" if platform_name == "cisco_nxos" else "Loopback0"
 
 
+def _gpo_host_vlans(group_policy: dict[str, Any] | None) -> dict[str, int] | None:
+    """Host port -> the VLAN to make its native VLAN (``get_interfaces``), or None when there is none.
+
+    A host port a component selector names must be a trunk (spec 3.6: interface+VLAN selectors are
+    documented for trunk ports only): the one mode rule (get_interfaces) trunks the access ones with
+    the segment's VLAN as native VLAN. ``group_policy`` is the device view, None on a non-GPO device.
+    """
+    host_vlans = {
+        port["name"]: port["vlan_id"]
+        for group in (group_policy or {}).get("groups", [])
+        for port in group["interfaces"]
+    }
+    return host_vlans or None
+
+
 def _combine_leaf_pbr_rules(
     customer_rules: list[dict[str, Any]], lb_backend_rules: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
@@ -175,13 +190,25 @@ class BaseDeviceTransform(InfrahubTransform):
         # ports: VLAN/VNI/VRF/anycast only, never segment policy input.
         device_data["exchange_transits"] = get_exchange_transits(_firewall_context_caps(device_data.get("interfaces")))
 
-        config = self._build_config(device_data, platform_name)
-        config.update(self._extra_config(device_data, platform_name, extra_roots=extra_roots))
+        config = self._template_context(device_data, platform_name, extra_roots)
         if platform_name in {"sonic", "dell_sonic"}:
             unsupported = [key for key in ("snmp", "aaa") if config.get(key)]
             if unsupported:
                 raise ValueError(f"{platform_name} ConfigDB rendering does not support: {', '.join(unsupported)}")
         return self._render(platform_name, config)
+
+    def _template_context(self, device_data: dict, platform_name: str, extra_roots: dict) -> dict:
+        """The template context: the device-specific part (``_extra_config``), then the base part.
+
+        The device-specific part goes first because the host ports of its group policy decide how the
+        base part builds the interfaces (``_gpo_host_vlans``), which then run once. Neither part
+        modifies ``device_data``, so the order does not change what either reads. ``_extra_config``
+        wins on a key both set.
+        """
+        extra = self._extra_config(device_data, platform_name, extra_roots=extra_roots)
+        config = self._build_config(device_data, platform_name, host_vlans=_gpo_host_vlans(extra.get("group_policy")))
+        config.update(extra)
+        return config
 
     @staticmethod
     def _device_and_platform(data: Any) -> tuple[dict, dict, str | None]:
@@ -207,14 +234,17 @@ class BaseDeviceTransform(InfrahubTransform):
     def _render(self, platform_name: str, config: dict) -> str:
         return self._load_template(platform_name).render(**config)
 
-    def _build_config(self, data: dict, platform_name: str) -> dict:
-        """Build the base template context shared by all device transforms."""
+    def _build_config(self, data: dict, platform_name: str, host_vlans: dict[str, int] | None = None) -> dict:
+        """Build the base template context shared by all device transforms.
+
+        ``host_vlans``: the NX-OS GPO host ports (``_gpo_host_vlans``), None on any other device.
+        """
         interfaces = data.get("interfaces") or []
         device_capabilities = data.get("capabilities") or []
         device_name = data.get("name", "")
         management_services = get_management_services(device_capabilities)
         mlag = get_mlag(device_capabilities, interfaces, device_name=device_name)
-        template_interfaces = self._template_interfaces(data)
+        template_interfaces = self._template_interfaces(data, host_vlans=host_vlans)
         config = {
             "name": device_name,
             "hostname": device_name,
@@ -341,6 +371,7 @@ class BaseDeviceTransform(InfrahubTransform):
 
         config = {
             "vlans": vlans,
+            "sros_irbs": self._sros_irbs(self.device_role, platform_name, vlans, vxlan),
             "vxlan": vxlan,
             "acls": acls,
             "vrf_routes": vrf_routes,
@@ -349,10 +380,10 @@ class BaseDeviceTransform(InfrahubTransform):
             # so only the borders originate them as type-5 routes.
             "leaf_transit_prefixes": sorted({t["segment"]["gateway"]["ip_prefix"]["prefix"] for t in leaf_transits}),
         }
-        # Group policy (NX-OS VXLAN GPO) of a VTEP in a reference fabric, from the
-        # fleet roots of the device query; absent for every other device, so its
-        # templates render exactly as before.
-        group_policy = vxlan_gpo_device_view(
+        # Group policy of a VTEP in a reference fabric, from the fleet roots of the device query:
+        # NX-OS VXLAN GPO as `group_policy`, EOS MSS-G as `segment_security`. Absent for every other
+        # device, so its templates render exactly as before.
+        found = group_policy_device_view(
             extra_roots or {},
             device_name=data.get("name") or "",
             role=self.device_role,
@@ -361,16 +392,9 @@ class BaseDeviceTransform(InfrahubTransform):
             vrfs=[mapping["vrf_name"] for mapping in (vxlan or {}).get("l3_vni_mappings", [])],
             interfaces=data.get("interfaces") or [],
         )
-        if group_policy is not None:
-            config["group_policy"] = group_policy
-            # A host port a component selector names must be a trunk (spec 3.6: interface+VLAN selectors are
-            # documented for trunk ports only): the one mode rule (get_interfaces) trunks the access ones
-            # with the segment's VLAN as native VLAN. The interfaces are built again only on such a device.
-            host_vlans = {
-                port["name"]: port["vlan_id"] for group in group_policy["groups"] for port in group["interfaces"]
-            }
-            if host_vlans:
-                config["interfaces"] = self._template_interfaces(data, host_vlans=host_vlans)
+        if found is not None:
+            kind, view = found
+            config[GPO_CONFIG_KEYS[kind]] = view
         return config
 
     _LEAF_ROLES = frozenset({"leaf", "tor", "access-leaf"})
@@ -431,6 +455,47 @@ class BaseDeviceTransform(InfrahubTransform):
                 f"{platform_name} leaf cannot bind the segment ACL for VLANs {unbound} (no L2 VNI service "
                 "to attach the SAP filter to); refusing unprotected config"
             )
+
+    @staticmethod
+    def _sros_irbs(
+        role: str, platform_name: str, vlans: list[dict[str, Any]], vxlan: dict[str, Any] | None
+    ) -> list[dict[str, Any]]:
+        """The SR OS IRB interfaces (anycast gateway) to render, one per gateway VLAN: [] on any other platform.
+
+        An IRB attaches the VLAN's bridged ``vpls-<vni>`` to a vprn: ``vprn`` is the VRF's L3 VNI
+        (the vprn service id), ``vni`` the L2 VNI (the vpls service id). get_vlans() carries no VNIs,
+        so they come from the VXLAN mapping of the same VLAN (a transit VLAN sets both itself).
+        A gateway VLAN with no L2 VNI has no vpls, and one whose namespace has no L3 VNI in the VXLAN
+        mappings has no vprn (vprn services come only from ``l3_vni_mappings``): the IRB would reference a
+        service nothing creates, so refuse instead of rendering it. Without VXLAN the template renders no
+        service at all.
+        """
+        if platform_name != "nokia_sros" or not vxlan:
+            return []
+        mappings = {mapping["vlan_id"]: mapping for mapping in vxlan.get("l2_vni_mappings") or []}
+        vprns = {mapping["l3_vni"] for mapping in vxlan.get("l3_vni_mappings") or []}
+        irbs: list[dict[str, Any]] = []
+        for vlan in vlans:
+            if not (vlan.get("gateway_ip") or vlan.get("gateway_ipv6")):
+                continue
+            mapping = mappings.get(vlan["vlan_id"]) or {}
+            vni = vlan.get("vni") or mapping.get("vni")
+            vprn = vlan.get("l3_vni") or mapping.get("l3_vni")
+            if not vni or vprn not in vprns:
+                raise ValueError(
+                    f"{platform_name} {role} cannot render the gateway of VLAN {vlan['vlan_id']} "
+                    "(no vpls/vprn to attach the IRB to); refusing incomplete config"
+                )
+            irbs.append(
+                {
+                    "vlan_id": vlan["vlan_id"],
+                    "vni": vni,
+                    "vprn": vprn,
+                    "gateway_ip": vlan.get("gateway_ip"),
+                    "gateway_ipv6": vlan.get("gateway_ipv6"),
+                }
+            )
+        return irbs
 
     _ACTIVE_STATUSES = ("active", "provisioning")
 

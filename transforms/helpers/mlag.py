@@ -42,11 +42,18 @@ def get_mlag(
     is taken directly from the database — the generator creates it with the
     vendor-correct naming convention (Port-Channel100, port-channel100,
     lag-100, PortChannel100, peer-link, etc.).
+
+    ``virtual_peer_link`` is True when that interface is a DcimVirtualInterface:
+    the generator's member-less stand-in for a pod with ``mlag_create: virtual``
+    (generators/mlag.py _ensure_virtual_peer_link), not a port-channel a device
+    can bind. Templates that need a physical peer-link must not render it (cisco_nxos_vpc.j2 does
+    not; arista_eos_mlag.j2 does not consult it yet, but no EOS pod is virtual).
     """
     for cap in device_capabilities or []:
         if cap.get("typename") != "ManagedMLAG":
             continue
         peer_link = None
+        virtual_peer_link = False
         peer_link_lag_id = None
         peer_link_lacp_mode = None
         peer_link_members: list[str] = []
@@ -54,6 +61,7 @@ def get_mlag(
         for iface in sorted(peer_interfaces, key=lambda iface: iface.get("lag_id") is None):
             iface_name = iface.get("name")
             lag_id = iface.get("lag_id")
+            virtual_peer_link = iface.get("typename") == "DcimVirtualInterface"
             if lag_id is not None:
                 peer_link = iface_name
                 peer_link_lag_id = lag_id
@@ -93,6 +101,7 @@ def get_mlag(
             "local_management_ip": _management_ip(own) if own else None,
             "peer_management_ip": _management_ip(peer) if peer else None,
             "peer_link": peer_link,
+            "virtual_peer_link": virtual_peer_link,
             "peer_link_lag_id": peer_link_lag_id,
             "peer_link_lacp_mode": peer_link_lacp_mode,
             "peer_link_members": peer_link_members,

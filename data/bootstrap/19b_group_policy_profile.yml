@@ -20,12 +20,15 @@
 #   transit legs and external routes get in a policy-aware site, nor whether a
 #   contract or `security enforce tag` accepts 0: lab-sensitive).
 #
-# arista_eos: EOS 4.36.2F user manual, "Segment Security" (MSS-G, D for the CLI
-#   and semantics); the manual names no platform. Device types: the 7280R3
-#   fixed systems (I: AVD's router_segment_security model says the fallback
-#   policy is "only supported on the R3 series platforms", and the MSS-G TOI is
-#   tied to Jericho2/R3). Not listed: the 7500R3 / 7800R3 modular systems (R3
-#   is their line-card generation, which a chassis device type cannot express:
+# arista_eos: EOS 4.36.2F user manual, "Segment Security" (MSS-G): D for the
+#   segments, match-lists, the built-in policies and the feature switch only;
+#   custom policies, application traffic recognition and the fallback policy
+#   are AVD-documented (D (AVD)), not in the manual; the manual names no
+#   platform. Device types: the 7280R3 fixed systems (I: AVD's
+#   router_segment_security model says the fallback policy is "only supported
+#   on the R3 series platforms", and the MSS-G TOI is tied to Jericho2/R3).
+#   Not listed: the 7500R3 / 7800R3 modular systems (R3 is their line-card
+#   generation, which a chassis device type cannot express:
 #   U) and the 7050X3 / 7050X4 (Trident) types the demos use (U). No memory
 #   floor is documented. MSS-G is name-based: no group ID on the wire, so no
 #   tag pool and no reserved groups (it classifies every source, local or

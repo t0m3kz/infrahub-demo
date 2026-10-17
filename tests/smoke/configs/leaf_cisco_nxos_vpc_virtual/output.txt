@@ -1,0 +1,58 @@
+!
+! DC1-POD1-L1 Configuration
+!
+hostname DC1-POD1-L1
+!
+!
+feature ospf
+feature bgp
+feature interface-vlan
+feature lacp
+feature vpc
+feature lldp
+!
+!
+! vPC fabric peering (virtual peer-link loopback100, domain 1) is not rendered: no routed source/destination address, port-type fabric or TCAM carving in data
+!
+
+! VLANs
+!
+!
+! Interfaces
+interface Ethernet1/1
+  no shutdown
+  ip address 10.1.2.1/31
+
+!
+interface Ethernet1/2
+  no shutdown
+  ip address 10.1.2.3/31
+
+!
+interface Loopback0
+  no shutdown
+  ip address 10.0.2.1/32
+
+!
+!
+! OSPF Configuration
+
+
+!
+! BGP Configuration
+
+! BGP disabled by capability profile
+
+!
+!
+! Route-maps
+route-map RM-CONN-2-BGP permit 10
+  match interface loopback0
+!
+!
+
+!
+! Management
+line console
+line vty
+!

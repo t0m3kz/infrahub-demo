@@ -5,7 +5,7 @@
 # groups the platform views render (transforms/helpers/group_policy.py). Read
 # by the reference_fabric check, the segmentation_matrix artifact and the NX-OS
 # VTEP configs (leaf_config, border_leaf_config, border_spine_config: the same
-# fleet roots as the artifact, transforms/helpers/group_policy.vxlan_gpo_device_view).
+# fleet roots as the artifact, transforms/helpers/group_policy.group_policy_device_view).
 
 fragment DeviceGroupPolicyFields on DcimDevice {
   name { value }
@@ -51,9 +51,42 @@ fragment SecurityTagGroupPolicyFields on SecurityTag {
 # Per instance: a physical device/controller is its own host; a virtual one walks
 # hosting_device (utils/app_instances.physical_host). The host's uplink/lag NICs are
 # selected with the far end of each cable: its device, role, tags (the segments the
-# generator tagged the port with) and, for a LAG member, its port-channel. The NIC block
-# is written out for each host kind with plain fields inside inline fragments: a named
-# fragment nested in an inline fragment resolves to nulls.
+# generator tagged the port with) and, for a LAG member, its port-channel. That NIC
+# selection is HostNicFields, written once and spread in the `node` of each host kind's
+# `interfaces(role__values: [...]) { edges { node { ...HostNicFields } } }`: the role
+# filter stays per host kind. Rule: a named fragment is spread only under a field
+# (`node { ...F }`), NEVER directly inside an inline fragment (`... on X { ...F }`),
+# which resolves to nulls on a live Infrahub (commit 7a38de0e).
+fragment HostNicFields on DcimInterface {
+  id
+  name { value }
+  ... on DcimPhysicalInterface {
+    cable {
+      node {
+        endpoints {
+          edges {
+            node {
+              id
+              ... on DcimPhysicalInterface {
+                name { value }
+                role { value }
+                device { node { name { value } } }
+                interface_capabilities { edges { node { id } } }
+                lag {
+                  node {
+                    name { value }
+                    interface_capabilities { edges { node { id } } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 fragment SecurityTagPlacementFields on SecurityTag {
   components {
     edges {
@@ -66,37 +99,7 @@ fragment SecurityTagPlacementFields on SecurityTag {
               name { value }
               ... on DcimDevice {
                 interfaces(role__values: ["uplink", "lag"]) {
-                  edges {
-                    node {
-                      id
-                      name { value }
-                      ... on DcimPhysicalInterface {
-                        cable {
-                          node {
-                            endpoints {
-                              edges {
-                                node {
-                                  id
-                                  ... on DcimPhysicalInterface {
-                                    name { value }
-                                    role { value }
-                                    device { node { name { value } } }
-                                    interface_capabilities { edges { node { id } } }
-                                    lag {
-                                      node {
-                                        name { value }
-                                        interface_capabilities { edges { node { id } } }
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
+                  edges { node { ...HostNicFields } }
                 }
               }
               ... on DcimVirtualDevice {
@@ -105,37 +108,7 @@ fragment SecurityTagPlacementFields on SecurityTag {
                     id
                     name { value }
                     interfaces(role__values: ["uplink", "lag"]) {
-                      edges {
-                        node {
-                          id
-                          name { value }
-                          ... on DcimPhysicalInterface {
-                            cable {
-                              node {
-                                endpoints {
-                                  edges {
-                                    node {
-                                      id
-                                      ... on DcimPhysicalInterface {
-                                        name { value }
-                                        role { value }
-                                        device { node { name { value } } }
-                                        interface_capabilities { edges { node { id } } }
-                                        lag {
-                                          node {
-                                            name { value }
-                                            interface_capabilities { edges { node { id } } }
-                                          }
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
+                      edges { node { ...HostNicFields } }
                     }
                   }
                 }
@@ -146,37 +119,7 @@ fragment SecurityTagPlacementFields on SecurityTag {
                     id
                     name { value }
                     interfaces(role__values: ["uplink", "lag"]) {
-                      edges {
-                        node {
-                          id
-                          name { value }
-                          ... on DcimPhysicalInterface {
-                            cable {
-                              node {
-                                endpoints {
-                                  edges {
-                                    node {
-                                      id
-                                      ... on DcimPhysicalInterface {
-                                        name { value }
-                                        role { value }
-                                        device { node { name { value } } }
-                                        interface_capabilities { edges { node { id } } }
-                                        lag {
-                                          node {
-                                            name { value }
-                                            interface_capabilities { edges { node { id } } }
-                                          }
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
+                      edges { node { ...HostNicFields } }
                     }
                   }
                 }
@@ -195,8 +138,9 @@ fragment SecurityTagPlacementFields on SecurityTag {
 # customer label), where it is active (utils/group_policy.segment_sites: the
 # VXLAN deployments, the VLAN footprint's data center), its classification
 # (VLAN ID, prefix) and its own rules with the component tags they carry
-# (every rule lives in its source segment's policy). Inline fragments only
-# below: a named fragment nested in an inline fragment resolves to nulls.
+# (every rule lives in its source segment's policy). The inline fragments below
+# select plain fields: a named fragment spread directly inside an inline fragment
+# (`... on X { ...F }`) resolves to nulls (commit 7a38de0e).
 fragment SegmentGroupPolicyFields on ManagedNetworkSegment {
   id
   __typename

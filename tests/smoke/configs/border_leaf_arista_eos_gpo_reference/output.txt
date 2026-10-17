@@ -1,0 +1,319 @@
+!
+! Arista EOS Border Leaf Configuration
+! Device: dc1-border-leaf-01
+! Generated for Arista EOS
+!
+
+hostname dc1-border-leaf-01
+
+! EVPN on EOS requires the multi-agent routing model (the legacy ribd model has
+! no EVPN address-family at all). Changing it reloads the routing agents, so it
+! must be present from the first push, not added later.
+service routing protocols model multi-agent
+
+! Configure spanning tree mode
+spanning-tree mode mstp
+
+! Configure VLAN 1
+no spanning-tree vlan-id 4094
+
+vlan 110
+   name Customer-A
+
+vlan 120
+   name Customer-A
+
+vlan 130
+   name Customer-A
+
+vlan 210
+   name Customer-A
+
+vlan 220
+   name Customer-A
+
+interface Ethernet1
+   description to spine-01
+   ip address 10.1.0.1/31
+
+   no shutdown
+
+interface Ethernet2
+   description to spine-02
+   ip address 10.1.0.3/31
+
+   no shutdown
+
+interface Ethernet10
+   description to server-01
+
+   switchport mode trunk
+   switchport trunk allowed vlan 110,120,130,210,220
+   no shutdown
+
+interface Loopback0
+   description Router ID
+   ip address 10.0.0.1/32
+
+   no shutdown
+
+! Configure BGP
+
+router bgp 65000
+   router-id 10.0.0.1
+   no bgp default ipv4-unicast
+   distance bgp 20 200 200
+   graceful-restart
+   maximum-paths 4 ecmp 64
+   !
+   neighbor EVPN-PEERS peer-group
+   neighbor EVPN-PEERS remote-as 65000
+   neighbor EVPN-PEERS update-source Loopback0
+   neighbor EVPN-PEERS send-community
+   !
+   neighbor UNDERLAY-PEERS peer-group
+   neighbor UNDERLAY-PEERS send-community
+   neighbor UNDERLAY-PEERS bfd
+   neighbor 10.1.0.0 peer-group UNDERLAY-PEERS
+   neighbor 10.1.0.0 remote-as 65100
+   neighbor 10.1.0.0 local-as 65001 no-prepend replace-as
+
+   neighbor 10.1.0.0 description spine-01
+   neighbor 10.1.0.2 peer-group UNDERLAY-PEERS
+   neighbor 10.1.0.2 remote-as 65101
+   neighbor 10.1.0.2 local-as 65001 no-prepend replace-as
+
+   neighbor 10.1.0.2 description spine-02
+   neighbor 10.0.0.100 peer-group EVPN-PEERS
+
+   neighbor 10.0.0.100 description spine-01
+   neighbor 10.0.0.101 peer-group EVPN-PEERS
+
+   neighbor 10.0.0.101 description spine-02
+   !
+   address-family ipv4
+      redistribute connected route-map RM-CONN-2-BGP
+      neighbor UNDERLAY-PEERS activate
+   !
+   address-family evpn
+      neighbor EVPN-PEERS activate
+
+
+! Configure route-maps
+route-map RM-CONN-2-BGP permit 10
+   match interface Loopback0
+!
+! VXLAN Configuration — border-leaf is a VTEP too, terminating customer/shared
+! VNIs the same as a regular leaf.
+!
+interface Vxlan1
+   vxlan source-interface Loopback0
+   !
+   ! L2 VNI Mappings (VLAN segments)
+   vxlan vlan 110 vni 10110
+   vxlan vlan 120 vni 10120
+   vxlan vlan 130 vni 10130
+   vxlan vlan 210 vni 10210
+   vxlan vlan 220 vni 10220
+   !
+   ! L3 VNI Mappings (VRF segments for microsegmentation)
+   vxlan vrf NONPROD vni 50011
+   vxlan vrf PROD vni 50012
+!
+!
+! VRF Definitions (Microsegmentation)
+!
+vrf instance NONPROD
+   description Tenant VRF for microsegmentation
+   rd 10.0.0.1:50011
+!
+ip routing vrf NONPROD
+!
+vrf instance PROD
+   description Tenant VRF for microsegmentation
+   rd 10.0.0.1:50012
+!
+ip routing vrf PROD
+!
+!
+! EVPN Configuration (L2 + L3 VNI)
+!
+router bgp 65000
+   !
+   ! L2 EVPN (VLAN-based)
+   vlan 110
+      rd 10.0.0.1:10110
+      route-target both 65000:10110
+      redistribute learned
+   vlan 120
+      rd 10.0.0.1:10120
+      route-target both 65000:10120
+      redistribute learned
+   vlan 130
+      rd 10.0.0.1:10130
+      route-target both 65000:10130
+      redistribute learned
+   vlan 210
+      rd 10.0.0.1:10210
+      route-target both 65000:10210
+      redistribute learned
+   vlan 220
+      rd 10.0.0.1:10220
+      route-target both 65000:10220
+      redistribute learned
+   !
+   ! L3 EVPN (VRF-based for microsegmentation)
+   vrf NONPROD
+      rd 10.0.0.1:50011
+      route-target import evpn 65000:50011
+      route-target export evpn 65000:50011
+      redistribute connected
+   vrf PROD
+      rd 10.0.0.1:50012
+      route-target import evpn 65000:50012
+      route-target export evpn 65000:50012
+      redistribute connected
+
+!
+! Anycast Gateway Configuration
+!
+ip virtual-router mac-address 00:1c:73:00:dc:01
+interface Vlan110
+   vrf NONPROD
+   ip address virtual 10.10.1.1/24
+interface Vlan120
+   vrf NONPROD
+   ip address virtual 10.10.2.1/24
+interface Vlan130
+   vrf NONPROD
+   ip address virtual 10.10.3.1/24
+interface Vlan210
+   vrf PROD
+   ip address virtual 10.20.1.1/24
+interface Vlan220
+   vrf PROD
+   ip address virtual 10.20.2.1/24
+!
+! Segment security (Arista MSS-G): segments by prefix, policies under the destination segment, deny by default
+! documented-not-lab-verified: whether the lookup sees the inner IP of VXLAN-decapsulated traffic (spec 1.14, 5.1)
+! documented-not-lab-verified: ordering against the SVI ACL and PBR (spec 1.15) and for bridged traffic inside a VLAN (spec 4.3)
+! documented-not-lab-verified: no TCAM profile or reload is configured (spec 1.10, 1.12); enabling halves the LPM table
+! documented-not-lab-verified: the manual calls the configuration non-atomic and disruptive (spec 1.8): push in a maintenance window
+! on a box that already enforces, shut the feature down first (the shutdown line of the segment-security mode): the stanzas below apply live
+! documented-not-lab-verified: remote prefixes reached through the L3 VNI or as EVPN host routes are expected to take the covering segment prefix (LPM, spec 5.4)
+! documented-not-lab-verified: Multi-Site, border gateway and DCI traffic (spec 5.5); the anycast virtual IP as a switch-owned address (spec 1.16, open question 15)
+! documented-not-lab-verified: the VRF must exist (spec 1.13); name limits (spec 2.3); first match in ascending sequence order (spec 3.8); support per SKU (spec 1.9)
+! documented-not-lab-verified: whether the fallback policy also catches a source in a segment with no from line (spec 3.14)
+! note: MSS-G only filters traffic directed to a segment: egress to a destination in no segment (internet, firewall legs, other VRFs, management) is restricted by the SVI ACL and PBR (L0) only (spec 4.2)
+! note: a stateless reply matches the port as ANY source port, so it is broader than the contract (spec 3.7)
+! note: no segment policy policy-drop-all default is never rendered; on an incremental session push to a box that once had it, deny by default stays off
+! WARNING: custom policies, field-sets, l4 applications and fallback policy are documented by AVD only; the 4.36.2F manual lists only policy-forward-all and policy-drop-all, so this release may REJECT them
+! WARNING: a whole-config push (configure replace, session commit) fails on an invalid line and the leaf loses ALL its changes; a line-by-line push leaves the feature live with the default drop for every port-specific flow
+! WARNING: keep group_policy_enforce false and verify in a lab first
+! not expressible (left closed): db-np -> app-np: the reply of a permit-all flow cannot be mirrored by source port on a stateless device (the reverse direction is left closed) (rules: db-np-to-app-np-any)
+! not expressible (left closed): db-np -> UNCLASSIFIED: the reply of a permit-all flow cannot be mirrored by source port on a stateless device (the reverse direction is left closed) (rules: db-np-to-app-np-any, db-np-to-web-np-icmp)
+! not expressible (left closed): portal-p -> web_pay_demo_local: a component group is not expressible by prefix (the row is not widened to its segment) (rules: portal-to-pay-web-tcp-443)
+! not expressible (left closed): UNCLASSIFIED -> web_pay_demo_local: a component group is not expressible by prefix (the row is not widened to its segment) (rules: portal-to-pay-web-tcp-443)
+! not expressible (left closed): web_pay_demo_local -> db_pay_demo_local: component groups inside one segment are not expressible by prefix (rules: pay-web-to-pay-db-tcp-5432)
+match-list input prefix-ipv4 app-np
+   match prefix-ipv4 10.10.2.0/24
+match-list input prefix-ipv4 db-np
+   match prefix-ipv4 10.10.3.0/24
+match-list input prefix-ipv4 pay-p
+   match prefix-ipv4 10.20.1.0/24
+match-list input prefix-ipv4 portal-p
+   match prefix-ipv4 10.20.2.0/24
+match-list input prefix-ipv4 web-np
+   match prefix-ipv4 10.10.1.0/24
+! documented-not-lab-verified: field-set l4-port is documented in AVD only
+field-set l4-port MSSG-FS-1edf6d4a55
+   5432
+! documented-not-lab-verified: field-set l4-port is documented in AVD only
+field-set l4-port MSSG-FS-65f9fc45e1
+   5000
+! documented-not-lab-verified: field-set l4-port is documented in AVD only
+field-set l4-port MSSG-FS-8178bca3bc
+   443, 8000-8010
+! documented-not-lab-verified: application traffic recognition is documented in AVD only
+application traffic recognition
+   application l4 MSSG-APP-0e55614811
+      protocol udp source port field-set MSSG-FS-65f9fc45e1
+   application l4 MSSG-APP-25324e08e5
+      protocol tcp destination port field-set MSSG-FS-8178bca3bc
+   application l4 MSSG-APP-2c1414b87a
+      protocol tcp source port field-set MSSG-FS-8178bca3bc
+   application l4 MSSG-APP-5a43ffd7e0
+      protocol icmp
+   application l4 MSSG-APP-9026d55d5e
+      protocol udp destination port field-set MSSG-FS-65f9fc45e1
+   application l4 MSSG-APP-d4a3ddc4f1
+      protocol tcp destination port field-set MSSG-FS-1edf6d4a55
+!
+router segment-security
+   ! documented-not-lab-verified: custom policies are AVD's model (the 4.36.2F manual lists only policy-forward-all and policy-drop-all); the final drop of each is inferred
+   ! MSSG-POL-07cf58d1d4: icmp; reply tcp/443,8000-8010; udp/5000
+   policy MSSG-POL-07cf58d1d4
+      10 application MSSG-APP-5a43ffd7e0 action forward stateless
+      20 application MSSG-APP-2c1414b87a action forward stateless
+      30 application MSSG-APP-9026d55d5e action forward stateless
+      40 application app-match-all action drop stateless
+   ! MSSG-POL-73f90b406c: reply icmp
+   policy MSSG-POL-73f90b406c
+      10 application MSSG-APP-5a43ffd7e0 action forward stateless
+      20 application app-match-all action drop stateless
+   ! MSSG-POL-8deb6c16d2: tcp/443,8000-8010; reply udp/5000
+   policy MSSG-POL-8deb6c16d2
+      10 application MSSG-APP-25324e08e5 action forward stateless
+      20 application MSSG-APP-0e55614811 action forward stateless
+      30 application app-match-all action drop stateless
+   ! MSSG-POL-c3c5455070: reply tcp/443,8000-8010; udp/5000
+   policy MSSG-POL-c3c5455070
+      10 application MSSG-APP-2c1414b87a action forward stateless
+      20 application MSSG-APP-9026d55d5e action forward stateless
+      30 application app-match-all action drop stateless
+   ! MSSG-POL-d1016141de: tcp/5432
+   policy MSSG-POL-d1016141de
+      10 application MSSG-APP-d4a3ddc4f1 action forward stateless
+      20 application app-match-all action drop stateless
+   vrf NONPROD
+      segment app-np
+         definition
+            match prefix-ipv4 app-np
+         policies
+            ! documented-not-lab-verified: fallback policy is documented by AVD only (R3 series)
+            from app-np policy policy-forward-all
+            from db-np policy policy-forward-all
+            from web-np policy MSSG-POL-8deb6c16d2
+            fallback policy policy-forward-all
+      segment db-np
+         definition
+            match prefix-ipv4 db-np
+         policies
+            ! documented-not-lab-verified: fallback policy is documented by AVD only (R3 series)
+            from app-np policy MSSG-POL-d1016141de
+            from db-np policy policy-forward-all
+            from web-np policy MSSG-POL-73f90b406c
+            fallback policy MSSG-POL-d1016141de
+      segment web-np
+         definition
+            match prefix-ipv4 web-np
+         policies
+            ! documented-not-lab-verified: fallback policy is documented by AVD only (R3 series)
+            from app-np policy MSSG-POL-c3c5455070
+            from db-np policy MSSG-POL-73f90b406c
+            from web-np policy policy-forward-all
+            fallback policy MSSG-POL-07cf58d1d4
+   vrf PROD
+      segment pay-p
+         definition
+            match prefix-ipv4 pay-p
+      segment portal-p
+         definition
+            match prefix-ipv4 portal-p
+         policies
+            from portal-p policy policy-forward-all
+   no shutdown
+!
+
+
+! End of configuration
