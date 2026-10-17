@@ -1,0 +1,24 @@
+{#- Zero-trust per-segment ACLs for a Catalyst 9000 (IOS-XE), bound inbound on the gateway SVIs by
+    common/cisco_xe_gateway_svis.j2 (`ip access-group <name> in`). `xe_acls` comes from
+    transforms/helpers/cisco_xe.py: every address is already `any`, `host A.B.C.D` or `A.B.C.D <wildcard>`, every line
+    carries its own sequence number, and a rule IOS-XE cannot express never gets here (the transform refuses). -#}
+{%- if xe_acls %}
+! Zero-Trust ACLs (one per segment VLAN — inbound on SVI)
+! unverified-no-lab: `ip access-list extended` with explicit sequence numbers and `<seq> remark` lines
+! unverified-no-lab: `log` on an ACL entry of a Catalyst 9000 SVI ACL (punted to the CPU), `established` after the destination port
+{%- for acl in xe_acls %}
+ip access-list extended {{ acl.name }}
+{%- for line in acl.lines %}
+{%- if line.remark is defined %}
+ {{ line.seq }} remark {{ line.remark }}
+{%- else %}
+ {{ line.seq }} {{ line.action }} {{ line.protocol }} {{ line.src }}
+{%- if line.src_port %} {{ line.src_port }}{% endif %} {{ line.dst }}
+{%- if line.dst_port %} {{ line.dst_port }}{% endif %}
+{%- if line.established %} established{% endif %}
+{%- if line.log %} log{% endif %}
+{%- endif %}
+{%- endfor %}
+!
+{%- endfor %}
+{%- endif -%}

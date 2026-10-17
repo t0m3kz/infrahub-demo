@@ -8,8 +8,8 @@
 #   - two Catalyst 9500 border-leafs (the map-server pair), Catalyst 9300 leafs and access-leafs.
 #     The spines are Arista EOS (their OSPF template exists); every VTEP role must be cisco_xe.
 #   - no super-spine, hyper-spine or border-spine (a LISP fabric has no spine overlay role), no
-#     firewall and no load balancer: the PROD SVIs of this scope are unprotected, because
-#     cisco_xe renders no SVI ACL, PBR or VRF statics.
+#     firewall and no load balancer: the PROD SVIs of this scope are unprotected, because it
+#     hosts nothing (cisco_xe renders the SVI ACL and VRF statics of a hosted segment, not PBR).
 #   - mlag_create stays "no": cisco_xe refuses an MLAG domain.
 apiVersion: infrahub.app/v1
 kind: Object

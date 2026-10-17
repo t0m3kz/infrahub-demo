@@ -299,8 +299,9 @@ class TestLispFabric(TestInfrahubDockerWithClient):
         """Every leaf and access-leaf renders (the transform does not refuse), carries the OSPF underlay and the edge
         LISP config (``router lisp``, ``etr map-server`` toward every border) and renders no EVPN, VXLAN or BGP.
 
-        The scope hosts no segment (a hosted routed tenant segment gets an SVI ACL that cisco_xe refuses to render,
-        see the scope README), so the edge LISP config has no instance-id yet: hosts would register later.
+        The scope hosts no segment (a cisco_xe leaf can render a hosted segment and its SVI ACL, but this test does
+        not exercise it, see the scope README), so the edge LISP config has no instance-id yet: hosts would register
+        later.
         """
         logging.info("=== %s - Step 8: Leaf and Access-leaf Renders ===", SCENARIO_NAME)
 
