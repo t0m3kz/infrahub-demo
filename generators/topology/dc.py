@@ -11,6 +11,7 @@ from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
 from ..dc_config import host_bits_to_prefix_length, resolve_dc_size_layout
 from ..devices import DeviceMixin
 from ..helpers import name_to_asn_range
+from ..helpers.pools import SITE_VNI_END, SITE_VNI_START
 from ..helpers.routing import RoutingStrategy, loopback_prefix_length, p2p_prefix_length, underlay_pool_is_ipv6
 from ..helpers.template_interfaces import template_interface_names_by_role
 from ..pod_config import POD_LAYOUTS, templates_by_role
@@ -243,8 +244,8 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
         vni_pool = await self.upsert_number_pool(
             pool_name=f"{self.fabric_name}-vni-pool",
             description=f"L2 VNI pool for {self.fabric_name.upper()}",
-            start_range=10001,
-            end_range=39999,
+            start_range=SITE_VNI_START,
+            end_range=SITE_VNI_END,
             node="ManagedSegmentDeployment",
             node_attribute="vni",
         )

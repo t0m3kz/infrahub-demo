@@ -35,3 +35,10 @@ VTEP_ROLES = frozenset({"leaf", "border-leaf", "tor", "access-leaf", "border-spi
 DC_VTEP_ROLES = VTEP_ROLES - {"edge"}
 """The VTEPs of a data center: an edge is a VTEP only as a colocation metro's
 border gateway, never part of a data center's fabric (utils/group_policy.py)."""
+
+CAMPUS_FABRIC_ROLES = frozenset({"access-switch"})
+"""Fabric edge of an office LISP site (SD-Access style): the nodes hosts attach to. Deliberately not in
+DC_VTEP_ROLES or BORDER_ROLES: those drive the DC-only SVI refusals, the VXLAN rendering and the group policy."""
+
+LISP_BORDER_ROLES = frozenset({"distribution-switch"})
+"""Co-located border and control-plane (map-server/map-resolver) node of an office LISP site."""

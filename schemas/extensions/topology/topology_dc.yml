@@ -105,6 +105,14 @@ nodes:
             label: Proxy
             description: "Forward, transparent, or reverse proxy appliance."
             color: "#5ba85b"
+          - name: access-switch
+            label: Access Switch
+            description: "Campus wiring-closet switch — a LISP fabric edge node in an office fabric."
+            color: "#b4d6ff"
+          - name: distribution-switch
+            label: Distribution Switch
+            description: "Campus aggregation switch — a LISP border and control-plane node in an office fabric."
+            color: "#87b8e8"
     relationships:
       - name: template
         label: Device Template

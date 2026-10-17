@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
+import yaml
 from infrahub_sdk.protocols import CoreStandardGroup
 
-from generators.devices import DeviceMixin
+from generators.devices import ROLE_GROUP_NAMES, DeviceMixin
 from generators.protocols import (
     DcimCable,
     DcimInterface,
@@ -1112,7 +1114,15 @@ class TestCreateDevicesControllerRouting:
         assert create_kwargs["data"]["member_of_groups"] == [{"id": "group-1"}]
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize(("role", "group"), [("load-balancer", "loadbalancers"), ("firewall", "firewalls")])
+    @pytest.mark.parametrize(
+        ("role", "group"),
+        [
+            ("load-balancer", "loadbalancers"),
+            ("firewall", "firewalls"),
+            ("access-switch", "access-switches"),
+            ("distribution-switch", "distribution-switches"),
+        ],
+    )
     async def test_role_joins_its_bootstrap_group(self, role: str, group: str) -> None:
         """Every caller lands a role in its bootstrap group — load-balancer is
         "loadbalancers", not the derived "load-balancers" a branch would create."""
@@ -1130,3 +1140,46 @@ class TestCreateDevicesControllerRouting:
             call for call in gen.client.get.call_args_list if call.kwargs.get("kind") is CoreStandardGroup
         )
         assert group_lookup.kwargs["name__value"] == group
+
+
+class TestCampusRoles:
+    """The office fabric's roles: only the access-switch (the switch hosts attach to) is its own VLAN
+    domain, and neither role joins a derived "access-switchs"-style group."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("role", "kinds"),
+        [
+            ("access-switch", [DcimPhysicalDevice, ManagedStandaloneVlanDomain]),
+            ("distribution-switch", [DcimPhysicalDevice]),
+        ],
+    )
+    async def test_only_the_access_switch_gets_a_standalone_vlan_domain(self, role: str, kinds: list[Any]) -> None:
+        gen = _make_generator()
+        gen.client.create = AsyncMock(
+            side_effect=[
+                _mock_created_device(DcimPhysicalDevice.__name__, f"c005-p-{role}-01"),
+                _mock_created_device(ManagedStandaloneVlanDomain.__name__, f"c005-p-{role}-01-vlan-domain"),
+            ]
+        )
+
+        await gen.create_devices(
+            device_role=role,
+            quantity=1,
+            deployment_id="office-1",
+            template={"device_type": {"id": "dt-1"}, "platform": {"name": "cisco_xe"}},
+        )
+
+        assert [call.kwargs["kind"] for call in gen.client.create.call_args_list] == kinds
+
+    def test_every_role_group_is_a_bootstrap_group(self, root_dir: Path) -> None:
+        """A group the bootstrap does not load is created on whichever branch needs it first and then
+        collides with every other branch that creates it (see ROLE_GROUP_NAMES)."""
+        groups = {
+            entry["name"]
+            for document in yaml.safe_load_all((root_dir / "data/bootstrap/00_groups.yml").read_text())
+            if document and document["spec"]["kind"] == "CoreStandardGroup"
+            for entry in document["spec"]["data"]
+        }
+
+        assert set(ROLE_GROUP_NAMES.values()) <= groups

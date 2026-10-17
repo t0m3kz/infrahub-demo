@@ -86,7 +86,8 @@ def _all_demo(kind: str) -> list[Declared]:
 # cage racks too (they are in topologies_rack and add_rack no-ops on them),
 # add_colocation_metro every metro, though only FR and PA carry
 # fabric_templates, and add_sdwan_edge every office, though the generator
-# no-ops on those without sdwan_gateway; updated-triggers only add runs.
+# no-ops on those without sdwan_gateway (add_office_fabric likewise: every office,
+# though only those with fabric_templates generate); updated-triggers only add runs.
 # add_customer_deployment_cloud/office were removed: their only job was
 # hub-and-spoke exchange auto-provisioning, now replaced by the per-context
 # TopologyRoutedExchange objects the DC/colocation customer generators
@@ -105,6 +106,7 @@ ALL_DEMO_EXPECTED_GENERATORS: dict[str, int] = {
         "add_customer_deployment_dc",
         "add_customer_deployment_colocation",
         "add_sdwan_edge",
+        "add_office_fabric",
         "add_application_orchestrator_routing",
         "add_app_component_segment",
         "add_customer_dc_orchestrator_routing",

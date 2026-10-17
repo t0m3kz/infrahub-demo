@@ -294,6 +294,7 @@ nodes:
       - TopologyClusterHosting
       - TopologyPhysicalDeployment
       - TopologyDeviceHosting
+      - TopologySegmentHosting
       - TopologyConnectableLocation
     parent: TopologyOfficeCustomer
     children: ""
@@ -470,6 +471,21 @@ nodes:
         optional: true
         identifier: "customer_office__sdwan_gateway"
         order_weight: 1200
+      # The office's own switching fabric, the opt-in of add_office_fabric
+      # (generators/topology/office_fabric.py): the same intent surface as a
+      # colocation metro's fabric_templates ("2 x distribution-switch on template
+      # X"), validated against the campus roles only. Absent means the office has
+      # no fabric and the generator no-ops, as add_sdwan_edge does without a
+      # gateway.
+      - name: fabric_templates
+        peer: TopologyElement
+        label: "Office Fabric Elements"
+        description: "Access-switch and distribution-switch templates for this office's own LISP fabric (opts the office into add_office_fabric)"  # yamllint disable-line rule:line-length
+        optional: true
+        cardinality: many
+        kind: Attribute
+        identifier: "customer_office__fabric_templates"
+        order_weight: 1250
 
 
   - name: CustomerCloud

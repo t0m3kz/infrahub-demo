@@ -56,12 +56,13 @@ _FABRIC_ROLES = frozenset(
 )
 
 # Switch roles that carry customer segments (servers cable into leaf/tor/
-# l2-leaf/access-leaf, see generators/topology/endpoint.py) or act as an EVPN
+# l2-leaf/access-leaf, see generators/topology/endpoint.py; an office's
+# access-switch is the fabric edge its hosts attach to) or act as an EVPN
 # Multi-Site border gateway (border-leaf, edge — generators/topology/
 # segment.py's _BORDER_GATEWAY_ROLES). A physical one that is not MLAG-paired
 # is its own VLAN domain, created with the device — see
 # _ensure_standalone_vlan_domains.
-VLAN_DOMAIN_ROLES = frozenset({"leaf", "tor", "l2-leaf", "access-leaf", "border-leaf", "edge"})
+VLAN_DOMAIN_ROLES = frozenset({"leaf", "tor", "l2-leaf", "access-leaf", "access-switch", "border-leaf", "edge"})
 
 
 def standalone_vlan_domain_name(device_name: str) -> str:
@@ -92,7 +93,11 @@ HA_KIND_BY_ROLE: dict[str, str] = {
 # f"{device_role}s" convention. One map for every create_devices() caller: a
 # group created on a branch because a caller missed it collides with every
 # other branch that creates it when both merge.
-ROLE_GROUP_NAMES: dict[str, str] = {"load-balancer": "loadbalancers"}
+ROLE_GROUP_NAMES: dict[str, str] = {
+    "load-balancer": "loadbalancers",
+    "access-switch": "access-switches",
+    "distribution-switch": "distribution-switches",
+}
 
 
 def _is_generated_sync_port(iface: Any) -> bool:

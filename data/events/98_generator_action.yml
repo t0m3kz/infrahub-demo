@@ -82,3 +82,6 @@ spec:
     - name: run-sdwan-edge-generator
       description: Provision an SD-WAN Edge, tunnel, and circuits for a customer office that opted in
       generator: add_sdwan_edge
+    - name: run-office-fabric-generator
+      description: Create an office's LISP fabric (pools, switches, cabling, OSPF underlay) when fabric_templates is set
+      generator: add_office_fabric

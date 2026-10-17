@@ -582,9 +582,11 @@ class TopologyCustomerOffice(
     TopologyClusterHosting,
     TopologyPhysicalDeployment,
     TopologyDeviceHosting,
+    TopologySegmentHosting,
     TopologyConnectableLocation,
 ):
     name: StringOptional
+    fabric_templates: RelationshipManager[TopologyElement]
     locations: RelationshipManager[LocationFacility]
     lan_prefixes: RelationshipManager[IpamPrefix]
 
@@ -1384,7 +1386,7 @@ class ManagedVxlanSegment(ManagedGeneric, ManagedNetworkSegment, ManagedGenericI
     arp_suppression: Boolean
     segment_type: Dropdown
     terminate_inline: Boolean
-    customer_deployments: RelationshipManager[TopologyCustomer]
+    customer_deployments: RelationshipManager[TopologyDeployment]
     inline_service: RelationshipAttribute[ManagedGeneric]
 
 
