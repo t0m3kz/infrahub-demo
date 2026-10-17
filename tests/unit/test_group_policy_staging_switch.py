@@ -8,6 +8,9 @@ scan of every schema file is here too.
 
 from __future__ import annotations
 
+import shutil
+import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +22,21 @@ SCHEMAS = ROOT / "schemas"
 DESCRIPTION_LIMIT = 128
 """Infrahub's maximum length of an attribute or relationship description."""
 SWITCH = "group_policy_enforce"
+
+
+@pytest.fixture
+def tmp_path() -> Iterator[Path]:
+    """A scratch directory inside the repository (the CI runner's own temp directory is not always writable)."""
+    base = Path(__file__).resolve().parent / ".scratch"
+    base.mkdir(exist_ok=True)
+    path = Path(tempfile.mkdtemp(dir=base))
+    yield path
+    shutil.rmtree(path, ignore_errors=True)
+    try:
+        base.rmdir()
+    except OSError:
+        pass
+
 
 DATA_CENTERS = {
     "DC10": ROOT / "data/demos/30_all/03_dc/dc10/01_topology.yml",
