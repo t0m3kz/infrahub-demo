@@ -195,7 +195,36 @@ class BaseDeviceTransform(InfrahubTransform):
             unsupported = [key for key in ("snmp", "aaa") if config.get(key)]
             if unsupported:
                 raise ValueError(f"{platform_name} ConfigDB rendering does not support: {', '.join(unsupported)}")
+        self._refuse_cisco_xe_unrendered(platform_name, config)
         return self._render(platform_name, config)
+
+    # The roles rendered by a cisco_xe fabric template (leafs/ and border_leafs/); the Edge's cisco_xe template is IOS.
+    _CISCO_XE_FABRIC_ROLES = frozenset({"leaf", "tor", "access-leaf", "border-leaf"})
+
+    def _refuse_cisco_xe_unrendered(self, platform_name: str, config: dict) -> None:
+        """Raise when a Catalyst 9000 (cisco_xe) fabric device needs what its EVPN-VXLAN templates do not render.
+
+        Those templates render the EVPN-VXLAN overlay, BGP, OSPF and the gateway SVIs only. Dropping the
+        segment ACLs, PBR, inter-VRF exchange statics, MLAG or Multi-Site would ship an unprotected or
+        incomplete config, so refuse instead, like SONiC and SR OS.
+        """
+        if platform_name != "cisco_xe":
+            return
+        if self.device_role == "border-spine":
+            # It shares the border_leafs/ template directory but is also a route reflector, which that template does not render.
+            raise ValueError("cisco_xe border-spine cannot render the route-reflector role; refusing incomplete config")
+        if self.device_role not in self._CISCO_XE_FABRIC_ROLES:
+            return
+        vxlan = config.get("vxlan") or {}
+        unsupported = [key for key in ("acls", "leaf_pbr_rules", "vrf_routes", "mlag") if config.get(key)]
+        if vxlan.get("multisite"):
+            unsupported.append("multisite")
+        if vxlan.get("enabled") and not (vxlan.get("evpn") or {}).get("enabled"):
+            unsupported.append("VXLAN without an EVPN BGP process")
+        if unsupported:
+            raise ValueError(
+                f"cisco_xe {self.device_role} cannot render: {', '.join(unsupported)}; refusing incomplete config"
+            )
 
     def _template_context(self, device_data: dict, platform_name: str, extra_roots: dict) -> dict:
         """The template context: the device-specific part (``_extra_config``), then the base part.

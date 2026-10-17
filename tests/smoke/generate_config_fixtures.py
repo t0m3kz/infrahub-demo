@@ -3499,6 +3499,34 @@ DEVICE_CONFIGS: list[tuple[type, str, str, list[str]]] = [
 ]
 
 
+# Catalyst 9000 (IOS-XE): an EVPN-VXLAN leaf, access-leaf and border-leaf only. Every other role has no
+# cisco_xe fabric template, so cisco_xe is not in FABRIC_PLATFORMS.
+CISCO_XE_DEVICE_CONFIGS: list[tuple[type, str, str]] = [
+    (Leaf, "leaf", "leaf"),
+    (AccessLeaf, "access-leaf", "access_leaf"),
+    (BorderLeaf, "border-leaf", "border_leaf"),
+]
+
+
+def write_cisco_xe_fixtures() -> tuple[int, int]:
+    """Write the Catalyst 9000 leaf / access-leaf / border-leaf fixtures for every scenario."""
+    generated = errors = 0
+    for transform_cls, role, type_prefix in CISCO_XE_DEVICE_CONFIGS:
+        for scenario in SCENARIOS:
+            g, e = _write_fixture(
+                transform_cls,
+                dir_name=f"{type_prefix}_cisco_xe_{scenario}",
+                dev_name=f"dc1-{type_prefix.replace('_', '-')}-01",
+                role=role,
+                platform="cisco_xe",
+                scenario=scenario,
+                include_segments=True,
+            )
+            generated += g
+            errors += e
+    return generated, errors
+
+
 def _write_fixture(
     transform_cls: type,
     dir_name: str,
@@ -3568,6 +3596,11 @@ def main() -> int:
                 )
                 generated += g
                 errors += e
+
+    print("\nGenerating Catalyst 9000 (cisco_xe) fixtures:")
+    g, e = write_cisco_xe_fixtures()
+    generated += g
+    errors += e
 
     # ACL scenario: leaf only, ebgp_ibgp base, with a security_policy on each segment
     print("\nGenerating ACL fixtures (leaf):")

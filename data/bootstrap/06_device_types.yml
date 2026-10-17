@@ -102,6 +102,27 @@ spec:
       max_routes: 24000
       tcam_entries: 3072
       unit_price: 6200
+    # Catalyst 9000 EVPN-VXLAN (cisco_xe); sizing values are approximate datasheet figures
+    - name: C9300-48UXM
+      part_number: C9300-48UXM
+      height: 1
+      full_depth: false
+      manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 8
+      max_routes: 32000
+      tcam_entries: 4096
+      unit_price: 14500
+    - name: C9500-32C
+      part_number: C9500-32C
+      height: 1
+      full_depth: false
+      manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 16
+      max_routes: 212000
+      tcam_entries: 8192
+      unit_price: 32000
     - name: C9130AXI-B
       part_number: C9130AXI-B
       height: 0

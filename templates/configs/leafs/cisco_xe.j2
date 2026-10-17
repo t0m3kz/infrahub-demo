@@ -1,0 +1,67 @@
+!
+! {{ name }} Configuration
+! Cisco IOS-XE (Catalyst 9000) EVPN-VXLAN {{ device_role }}
+!
+hostname {{ name }}
+!
+ip routing
+spanning-tree mode rapid-pvst
+!
+{#- VLAN Configuration -#}
+{%- for vlan in vlans %}
+vlan {{ vlan.vlan_id }}
+ name {{ vlan.name }}
+!
+{%- endfor %}
+!
+! Interfaces
+{%- for interface in interfaces %}
+interface {{ interface.name }}
+{%- if interface.display_description %}
+ description {{ interface.display_description }}
+{%- endif %}
+{%- if interface.dot1q_vlan %}
+ encapsulation dot1Q {{ interface.dot1q_vlan }}
+{%- elif interface.ip_addresses and not interface.name.lower().startswith('loopback') %}
+ no switchport
+{%- endif %}
+{%- include 'common/cisco_xe_interface_ip.j2' %}
+{%- if interface.mode == 'trunk' %}
+ switchport mode trunk
+ switchport trunk allowed vlan {{ interface.vlans | join(',') }}
+{%- elif interface.vlans %}
+ switchport mode access
+ switchport access vlan {{ interface.vlans[0] }}
+{%- endif %}
+{%- if interface.status == 'active' %}
+ no shutdown
+{%- endif %}
+!
+{%- endfor %}
+{%- if ospf and ospf | length > 0 %}
+{%- set ospf_text %}{% include 'common/cisco_xe_ospf.j2' %}{% endset %}
+! OSPF Configuration
+{{ ospf_text | trim }}
+{%- endif %}
+{%- if bgp and bgp | length > 0 %}
+{%- set bgp_text %}{% include 'common/cisco_ios_bgp.j2' %}{% endset %}
+! BGP Configuration
+{{ bgp_text | trim }}
+{%- endif %}
+! Route-maps
+route-map RM-CONN-2-BGP permit 10
+ match interface {{ loopback_name }}
+!
+{%- if vxlan and vxlan.enabled %}
+{%- include 'common/cisco_xe_vxlan.j2' %}
+{%- endif %}
+{%- set ios_dialect = true %}
+{%- set management %}{% include 'common/cisco_nxos_management.j2' %}{% endset %}
+{%- if management | trim %}
+{{ management | trim }}
+{%- endif %}
+! Management
+line console 0
+line vty 0 15
+!
+end

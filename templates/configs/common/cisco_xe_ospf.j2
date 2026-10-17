@@ -1,0 +1,40 @@
+{#- IOS-XE OSPF: the process, then each OSPF interface's own area and attributes (`ip ospf <pid> area <area>`). -#}
+{%- if capabilities is not defined or capabilities.ospf_enabled is not defined or capabilities.ospf_enabled %}
+{%- for ospf_config in ospf %}
+router ospf {{ ospf_config.process_id }}
+ router-id {{ ospf_config.router_id.split('/')[0] }}
+ auto-cost reference-bandwidth {{ ospf_config.reference_bandwidth }}
+ passive-interface default
+{%- for interface in interfaces %}
+{%- if interface.get('ospf') and interface.ospf.mode != 'passive' %}
+ no passive-interface {{ interface.name }}
+{%- endif %}
+{%- endfor %}
+!
+{%- endfor %}
+{%- for interface in interfaces %}
+{%- if interface.get('ospf') %}
+{%- set ospf = interface.ospf %}
+interface {{ interface.name }}
+{%- if ospf.area is not none %}
+ ip ospf {{ ospf.process_id or 1 }} area {{ ospf.area }}
+{%- endif %}
+{%- if ospf.mode == 'peer_to_peer' %}
+ ip ospf network point-to-point
+{%- endif %}
+{%- if ospf.metric is not none %}
+ ip ospf cost {{ ospf.metric }}
+{%- endif %}
+{%- if ospf.get('password') %}
+{%- if ospf.get('authentication_mode') == 'md5' %}
+ ip ospf authentication message-digest
+ ip ospf message-digest-key 1 md5 {{ ospf.password }}
+{%- else %}
+ ip ospf authentication
+ ip ospf authentication-key {{ ospf.password }}
+{%- endif %}
+{%- endif %}
+!
+{%- endif %}
+{%- endfor %}
+{%- endif %}

@@ -782,6 +782,7 @@ def get_vxlan_config(
 _PLATFORM_VXLAN_KEYS: dict[str, dict[str, str]] = {
     "arista_eos": {"interface": "Vxlan1"},
     "cisco_nxos": {"nve_interface": "nve1"},
+    "cisco_xe": {"nve_interface": "nve1", "replication_type": "static"},
     "sonic": {"interface": "vtep"},
     "dell_sonic": {"interface": "vtep"},
 }
