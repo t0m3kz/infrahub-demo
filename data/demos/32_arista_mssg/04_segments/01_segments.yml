@@ -1,0 +1,40 @@
+---
+# Three production VXLAN segments of one tenant: web, app and db. Names are computed
+# ({org_id}-{customer_name}-{environment}): mssg1-web-p, mssg1-app-p, mssg1-db-p. add_vxlan_segment
+# allocates each one's prefix and anycast gateway (.1) from the tenant pool of the PROD namespace, the
+# VNI from DC14's pool, its security zone and its group tag (ensure_segment_addressing, ensure_segment_tag).
+# The gateway prefix is what MSS-G classifies the segment by, so the test reads it from the stack
+# instead of pinning an address. isolation_mode stays `normal` (hosts of one segment talk freely):
+# MSS-G cannot tell the components of a microsegmented segment apart (no prefix per component).
+# No host port carries a segment yet: ../06_application/ attaches the servers.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVxlanSegment
+  data:
+    - owner: "MSSG1"
+      customer_name: "web"
+      environment: "p"
+      stretch_scope: local
+      customer_deployments:
+        - "MSSG1-P-DC14"
+      member_of_groups:
+        - vxlan_segments
+
+    - owner: "MSSG1"
+      customer_name: "app"
+      environment: "p"
+      stretch_scope: local
+      customer_deployments:
+        - "MSSG1-P-DC14"
+      member_of_groups:
+        - vxlan_segments
+
+    - owner: "MSSG1"
+      customer_name: "db"
+      environment: "p"
+      stretch_scope: local
+      customer_deployments:
+        - "MSSG1-P-DC14"
+      member_of_groups:
+        - vxlan_segments

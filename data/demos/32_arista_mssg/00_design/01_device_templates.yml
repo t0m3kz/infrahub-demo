@@ -1,0 +1,119 @@
+---
+# Arista 7280R3 (Jericho2) fabric templates of the MSS-G demo, kept in this scope instead of
+# data/bootstrap/ because no other demo runs a 7280R3 fabric. The device types
+# (DCS-7280SR3-48YC8, DCS-7280CR3-32P4) come from data/bootstrap/06_device_types.yml; both are rows
+# of the reference-arista-eos group-policy profile.
+#
+# THE PORT PLANS ARE APPROXIMATE AND UNVERIFIED. No datasheet was read. The shapes assumed here:
+#   - DCS-7280SR3-48YC8: 48 x 25G SFP28 (Ethernet1-48, flat names) and 8 x 100G QSFP100
+#     (Ethernet49/1-56/1, the /1 names the 7050SX3 templates use for their 100G ports).
+#   - DCS-7280CR3-32P4: 32 x 100G QSFP100 only (Ethernet1/1-32/1). The 400G ports of the real
+#     part are not modelled (interface_type has no OSFP choice).
+# What the generators need, and nothing more: a speed match on every tier pair (leaf -> spine
+# 100G, access-leaf -> leaf 100G, server -> access-leaf/leaf 25G), one uplink per spine, two
+# downlink ports on a leaf for its two access-leafs, and mlag-peer ports on every template the
+# pod pairs back-to-back (generators/devices.py refuses a back-to-back pair without them).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TemplateDcimPhysicalDevice
+  data:
+    # DC-level border pair. Role plan copied from DCS-7050CX3-32C-R_BORDER_LEAF with 20 downlinks
+    # instead of 24: the part has 32 ports, the 7050CX3 plan counts 36.
+    - template_name: DCS-7280CR3-32P4_BORDER_LEAF
+      owner: "P027"
+      device_type: DCS-7280CR3-32P4
+      platform: arista_eos
+      software_image: arista_eos-4.36.2F
+      role: border-leaf
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: DCS-7280CR3-32P4_BORDER_LEAF_Ethernet[1-20]/1
+            name: Ethernet[1-20]/1
+            role: downlink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7280CR3-32P4_BORDER_LEAF_Ethernet[21-24]/1
+            name: Ethernet[21-24]/1
+            role: firewall
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7280CR3-32P4_BORDER_LEAF_Ethernet[25-28]/1
+            name: Ethernet[25-28]/1
+            role: load-balancer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7280CR3-32P4_BORDER_LEAF_Ethernet[29-32]/1
+            name: Ethernet[29-32]/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7280CR3-32P4_BORDER_LEAF_Management1
+            name: Management1
+            role: management
+            interface_type: 1000base-t
+    # Leaf: 48 host ports at 25G; the eight 100G ports are 4 uplinks (2 spines per pod), 2
+    # downlinks (one per access-leaf of the rack) and the 2-port back-to-back MLAG peer link.
+    - template_name: DCS-7280SR3-48YC8_LEAF
+      owner: "P027"
+      device_type: DCS-7280SR3-48YC8
+      platform: arista_eos
+      software_image: arista_eos-4.36.2F
+      role: leaf
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: DCS-7280SR3-48YC8_LEAF_Ethernet[1-48]
+            name: Ethernet[1-48]
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: DCS-7280SR3-48YC8_LEAF_Ethernet[49-52]/1
+            name: Ethernet[49-52]/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7280SR3-48YC8_LEAF_Ethernet[53-54]/1
+            name: Ethernet[53-54]/1
+            role: downlink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7280SR3-48YC8_LEAF_Ethernet[55-56]/1
+            name: Ethernet[55-56]/1
+            role: mlag-peer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7280SR3-48YC8_LEAF_Management1
+            name: Management1
+            role: management
+            interface_type: 1000base-t
+    # Access-leaf: 48 host ports at 25G, 2 uplinks to the rack's leaf pair and, because the two
+    # access-leafs of a rack pair back-to-back (the pod is mlag_create: back-to-back), a 2-port
+    # peer link. Without mlag-peer ports add_rack logs an error and the task fails.
+    - template_name: DCS-7280SR3-48YC8_ACCESS
+      owner: "P027"
+      device_type: DCS-7280SR3-48YC8
+      platform: arista_eos
+      software_image: arista_eos-4.36.2F
+      role: access-leaf
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: DCS-7280SR3-48YC8_ACCESS_Ethernet[1-48]
+            name: Ethernet[1-48]
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: DCS-7280SR3-48YC8_ACCESS_Ethernet[49-50]/1
+            name: Ethernet[49-50]/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7280SR3-48YC8_ACCESS_Ethernet[51-52]/1
+            name: Ethernet[51-52]/1
+            role: mlag-peer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7280SR3-48YC8_ACCESS_Management1
+            name: Management1
+            role: management
+            interface_type: 1000base-t
