@@ -129,12 +129,22 @@ class SdwanEdgeGenerator(CommonGenerator):
         if not gateway_zone_id or not gateway_zone_name:
             self.fail(f"{office_name}: gateway {gateway_name} has no deployment — cannot set circuit locations")
 
-        trunk_iface = next(
-            (iface for iface in gateway.get("interfaces") or [] if iface.get("role") == "uplink"),
-            None,
+        # Only physical ports qualify: this generator's own tunnel sub-interfaces
+        # (DcimVirtualInterface, role uplink) must never be taken for the trunk.
+        trunk_candidates = sorted(
+            (
+                iface
+                for iface in gateway.get("interfaces") or []
+                if iface.get("typename") == DcimPhysicalInterface.__name__ and iface.get("role") == "uplink"
+            ),
+            key=lambda iface: iface.get("name") or "",
         )
-        if trunk_iface is None:
+        if not trunk_candidates:
             self.fail(f"{office_name}: gateway {gateway_name} has no role=uplink trunk interface")
+        if len(trunk_candidates) > 1:
+            names = [iface.get("name") for iface in trunk_candidates]
+            self.fail(f"{office_name}: gateway {gateway_name} has several role=uplink trunk interfaces {names}")
+        trunk_iface = trunk_candidates[0]
 
         internet_provider_id, overlay_provider_id = await self._resolve_provider_ids(office_name)
         edge = await self._ensure_edge_device(office_name, office_id, owner_id)
@@ -284,7 +294,7 @@ class SdwanEdgeGenerator(CommonGenerator):
                 "transport_mode": "internet_backed",
                 "status": "active",
                 "encryption": True,
-                "tunnel_id": {"from_pool": {"id": pool.id}, "identifier": f"{office_name}-sdwan-tunnel_id"},
+                "tunnel_id": {"from_pool": {"id": pool.id}},
                 "provider": {"id": provider_id},
                 "owner": {"id": owner_id},
                 "description": f"{office_name} SD-WAN tunnel to {gateway_zone_name} gateway",

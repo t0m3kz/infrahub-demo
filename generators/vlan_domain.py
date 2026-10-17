@@ -140,13 +140,12 @@ class VlanDomainMixin:
             )
             return
 
-        vlan_identifier = f"{segment_id}-{domain_id}-vlan"
         activation = await self.client.create(
             kind=ManagedVlanDomainSegment,
             data={
                 "segment": {"id": segment_id},
                 "vlan_domain": {"id": domain_id},
-                "vlan_id": {"from_pool": {"id": pool_id}, "identifier": vlan_identifier},
+                "vlan_id": {"from_pool": {"id": pool_id}},
             },
         )
         await activation.save(allow_upsert=True, update_group_context=False)
