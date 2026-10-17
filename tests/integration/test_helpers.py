@@ -1468,7 +1468,17 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     "LocationRack": "name { value }",
     "TopologyPod": "name { value }",
     "TopologyDataCenter": "name { value }",
-    "ManagedController": "name { value }",
+    # add_circuit/add_virtual_circuit/add_sdwan_edge output: an SD-WAN overlay's tunnel_id is
+    # Number-pool allocated per node id, so a rerun that re-created one shows up as a new tunnel_id.
+    "TopologyPhysicalCircuit": (
+        "name { value } locations { edges { node { id } } } "
+        "customer_interfaces { edges { node { id } } } provider_interfaces { edges { node { id } } }"
+    ),
+    "TopologyVirtualCircuit": (
+        "name { value } tunnel_id { value } physical_circuits { edges { node { id } } } "
+        "interface_capabilities { edges { node { id } } } locations { edges { node { id } } }"
+    ),
+    "ManagedController": "name { value } managed_devices { edges { node { id } } }",
     "ManagedFirewallHA": "name { value }",
     "ManagedFirewallContext": "name { value }",
     "ManagedMLAG": "name { value }",

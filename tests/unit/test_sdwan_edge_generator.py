@@ -8,13 +8,15 @@ convention test_customer_colocation.py/test_customer_dc.py use.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Literal
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+import yaml
 
 from generators.logger import GeneratorError
-from generators.topology.sdwan_edge import SdwanEdgeGenerator
+from generators.topology.sdwan_edge import _INTERNET_PROVIDER_ORG_ID, _OVERLAY_PROVIDER_ORG_ID, SdwanEdgeGenerator
 
 _USE_DEFAULT_GATEWAY: Literal["__default__"] = "__default__"
 
@@ -26,14 +28,21 @@ def _make_gen() -> SdwanEdgeGenerator:
     return gen
 
 
+_SUBIFACE_ETH0_1999 = {"typename": "DcimVirtualInterface", "id": "sub-1999", "name": "eth0.1999", "role": "uplink"}
+_SECOND_TRUNK_ETH1 = {"typename": "DcimPhysicalInterface", "id": "trunk-2", "name": "eth1", "role": "uplink"}
+
+
 def _gateway(
     *,
     gateway_id: str = "gw-1",
     name: str = "EQX-FR2-SDWAN-GW1",
     zone_name: str | None = "FR2",
     trunk_role: str | None = "uplink",
+    extra_interfaces: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    interfaces = [{"id": "trunk-1", "name": "eth0", "role": trunk_role}] if trunk_role else []
+    """The Gateway as generate() sees it; extra_interfaces are listed BEFORE the trunk."""
+    trunk = {"typename": "DcimPhysicalInterface", "id": "trunk-1", "name": "eth0", "role": trunk_role}
+    interfaces = [*(extra_interfaces or []), *([trunk] if trunk_role else [])]
     return {
         "id": gateway_id,
         "name": name,
@@ -119,6 +128,16 @@ class TestGenerateGuardClauses:
             pytest.param(_office_payload(owner_id=None), "no owner", id="no-owner"),
             pytest.param(_office_payload(gateway=_gateway(zone_name=None)), "no deployment", id="no-gateway-zone"),
             pytest.param(_office_payload(gateway=_gateway(trunk_role=None)), "no role=uplink trunk", id="no-trunk"),
+            pytest.param(
+                _office_payload(gateway=_gateway(trunk_role=None, extra_interfaces=[_SUBIFACE_ETH0_1999])),
+                "no role=uplink trunk",
+                id="only-a-virtual-uplink",
+            ),
+            pytest.param(
+                _office_payload(gateway=_gateway(extra_interfaces=[_SECOND_TRUNK_ETH1])),
+                r"several role=uplink trunk interfaces \['eth0', 'eth1'\]",
+                id="ambiguous-trunk",
+            ),
         ],
     )
     @pytest.mark.asyncio
@@ -278,6 +297,19 @@ class TestGenerateHappyPath:
         assert subiface_call.kwargs["data"]["name"] == "eth0.2000"
 
     @pytest.mark.asyncio
+    async def test_trunk_is_the_physical_uplink_even_when_virtual_uplinks_are_listed_first(self) -> None:
+        """The generator's own tunnel sub-interfaces are role=uplink too: listed before the trunk, they
+        must not be taken for it (the new sub-interface would be eth0.1999.2000 under the wrong parent)."""
+        gen = self._wire_full_success()
+        payload = _office_payload(gateway=_gateway(extra_interfaces=[_SUBIFACE_ETH0_1999]))
+
+        await gen.generate(payload)
+
+        subiface_data = gen.client.create.call_args_list[3].kwargs["data"]
+        assert subiface_data["name"] == "eth0.2000"
+        assert subiface_data["parent_interface"] == {"id": "trunk-1"}
+
+    @pytest.mark.asyncio
     async def test_circuits_use_real_ids_for_locations_not_names(self) -> None:
         """locations peers TopologyConnectableLocation — it must be given
         real resolved ids (office_id/gateway_zone_id), never the office's or
@@ -310,7 +342,7 @@ class TestGenerateHappyPath:
 
     @pytest.mark.asyncio
     async def test_rerun_sends_the_same_payloads(self) -> None:
-        """Idempotent: a second run upserts the same names, HFIDs and pool identifier (no new tunnel id key)."""
+        """Idempotent: a second run upserts the same names, HFIDs and pool reference (no new tunnel id key)."""
         first = self._wire_full_success()
         await first.generate(_office_payload())
         second = self._wire_full_success()
@@ -329,16 +361,14 @@ class TestGenerateHappyPath:
 
     @pytest.mark.asyncio
     async def test_overlay_circuit_allocates_tunnel_id_from_pool(self) -> None:
-        """The tunnel id comes from GLOBAL-SDWAN-TUNNEL-ID, keyed per office."""
+        """The tunnel id comes from GLOBAL-SDWAN-TUNNEL-ID; a Number pool is idempotent per node id, so the
+        from_pool dict carries no identifier."""
         gen = self._wire_full_success()
 
         await gen.generate(_office_payload())
 
         overlay_call = gen.client.create.call_args_list[2]
-        assert overlay_call.kwargs["data"]["tunnel_id"] == {
-            "from_pool": {"id": "pool-1"},
-            "identifier": "C002-P-sdwan-tunnel_id",
-        }
+        assert overlay_call.kwargs["data"]["tunnel_id"] == {"from_pool": {"id": "pool-1"}}
 
     @pytest.mark.asyncio
     async def test_first_run_links_the_overlay_to_edge_uplink_and_gateway_subinterface(self) -> None:
@@ -548,3 +578,19 @@ class TestGenerateFailurePaths:
 
         with pytest.raises(GeneratorError, match="vanished"):
             await gen.generate(_office_payload())
+
+
+class TestHardCodedProviderIds:
+    """The generator looks its providers up by org_id; a rename in the bootstrap data would fail every office."""
+
+    def test_provider_org_ids_exist_in_bootstrap_providers(self) -> None:
+        """Both hard-coded org ids are declared by data/bootstrap/02_providers.yml."""
+        path = Path(__file__).parents[2] / "data" / "bootstrap" / "02_providers.yml"
+        declared = {
+            entry["org_id"]
+            for doc in yaml.safe_load_all(path.read_text())
+            if doc and doc["spec"]["kind"] == "OrganizationProvider"
+            for entry in doc["spec"]["data"]
+        }
+
+        assert {_INTERNET_PROVIDER_ORG_ID, _OVERLAY_PROVIDER_ORG_ID} <= declared

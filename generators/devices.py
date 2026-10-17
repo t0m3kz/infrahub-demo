@@ -409,12 +409,13 @@ class DeviceMixin(MLAGWiringMixin):
                 managed_devices = controller.managed_devices
                 await managed_devices.fetch()
                 existing_managed_ids = {peer.id for peer in managed_devices.peers}
-                for node in created_devices:
-                    if node.id not in existing_managed_ids:
-                        managed_devices.add(node)
-                # Untracked: the controller is data-loaded and shared by every
-                # deployment it manages — it is not this run's output.
-                await controller.save(allow_upsert=True, update_group_context=False)
+                missing_ids = [node.id for node in created_devices if node.id not in existing_managed_ids]
+                # A RelationshipAdd of just these devices, not a save of the whole peer list: every
+                # rack and pod of the deployments one controller manages attaches to it concurrently,
+                # and a save lets the last writer drop the others' devices. It stays untracked: the
+                # controller is data-loaded and shared, not this run's output.
+                if missing_ids:
+                    await controller.add_relationships(relation_to_update="managed_devices", related_nodes=missing_ids)
                 self.logger.info(
                     f"Added {len(created_devices)} {device_role}(s) to controller {controller.hfid}'s managed_devices"
                 )
