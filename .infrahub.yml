@@ -58,6 +58,20 @@ artifact_definitions:
     transformation: access_leaf
     parameters:
       device: name__value
+  - name: access_switch_config
+    artifact_name: access-switch
+    content_type: text/plain
+    targets: access-switches
+    transformation: access_switch
+    parameters:
+      device: name__value
+  - name: distribution_switch_config
+    artifact_name: distribution-switch
+    content_type: text/plain
+    targets: distribution-switches
+    transformation: distribution_switch
+    parameters:
+      device: name__value
   - name: spine_config
     artifact_name: spine
     content_type: text/plain
@@ -414,6 +428,22 @@ python_transforms:
         - transforms/
         - templates/
         - utils/
+  - name: access_switch
+    class_name: AccessSwitch
+    file_path: transforms/config/access_switch.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
+  - name: distribution_switch
+    class_name: DistributionSwitch
+    file_path: transforms/config/distribution_switch.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
   - name: spine
     class_name: Spine
     file_path: transforms/config/spine.py
@@ -619,6 +649,10 @@ queries:
     file_path: queries/config/leaf.gql
   - name: border_leaf_config
     file_path: queries/config/border_leaf.gql
+  - name: access_switch_config
+    file_path: queries/config/access_switch.gql
+  - name: distribution_switch_config
+    file_path: queries/config/distribution_switch.gql
   - name: border_spine_config
     file_path: queries/config/border_spine.gql
   - name: spine_config

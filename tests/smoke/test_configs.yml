@@ -422,6 +422,22 @@ infrahub_tests:
           kind: python-transform-unit-process
           directory: configs/access_leaf_cisco_xe_lisp_ospf_ibgp
   - resource: PythonTransform
+    resource_name: access_switch
+    tests:
+      - name: cisco_xe_lisp_ospf
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/access_switch_cisco_xe_lisp_ospf
+  - resource: PythonTransform
+    resource_name: distribution_switch
+    tests:
+      - name: cisco_xe_lisp_ospf
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/distribution_switch_cisco_xe_lisp_ospf
+  - resource: PythonTransform
     resource_name: tor
     tests:
       - name: arista_eos_ebgp_ibgp

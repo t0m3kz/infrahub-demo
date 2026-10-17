@@ -1,0 +1,130 @@
+# Config of an office's distribution-switch (co-located border and map-server of its LISP site, cisco_xe):
+# the border-leaf query without the group-policy fleet roots. Same direct office hop and same ORDER rule as
+# access_switch.gql; SegmentDeploymentsOnDeploymentFields gives the EID records its `site` registers.
+query distribution_switch_config(
+  $device: String!
+) {
+  DcimDevice(name__value: $device) {
+    edges {
+      node {
+        __typename
+        id
+        name { value }
+        role { value }
+        platform {
+          node {
+            name { value }
+            netmiko_device_type { value }
+          }
+        }
+        primary_address {
+          node {
+            address { value }
+            ip_namespace { node { name { value } } }
+          }
+        }
+        tags {
+          edges {
+            node { name { value } }
+          }
+        }
+
+        # Device Services (BGP, OSPF) with nested peerings
+        ...DeviceCapabilitiesOnDeviceFields
+
+        ... on DcimPhysicalDevice {
+          deployment {
+            node {
+              ...EvpnRtAsOnDeploymentFields
+              ...FirewallContextsOnDeploymentFields
+              ...LoadbalancerVipsOnDeploymentFields
+              ...SegmentDeploymentsOnDeploymentFields
+              ...LispMapServersOnDeploymentFields
+            }
+          }
+        }
+
+        # Interface Information
+        interfaces {
+          edges {
+            node {
+              __typename
+              name { value }
+              description { value }
+              status { value }
+              role { value }
+              ...InterfaceCapabilitiesWithSegmentOnInterfaceFields
+              ... on DcimPhysicalInterface {
+                interface_type { value }
+                mtu { value }
+                ip_address {
+                  node {
+                    address { value }
+                    ip_namespace { node { name { value } } }
+                  }
+                }
+                cable {
+                  node {
+                    id
+                    endpoints {
+                      edges {
+                        node {
+                          __typename
+                          ... on DcimPhysicalInterface {
+                            name { value }
+                            ip_address {
+                              node {
+                                address { value }
+                              }
+                            }
+                            device {
+                              node {
+                                name { value }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+
+              ... on DcimVirtualInterface {
+                ip_address {
+                  node {
+                    address { value }
+                    ip_namespace { node { name { value } } }
+                  }
+                }
+                parent_interface { node { name { value } } }
+              }
+
+              ... on DcimLAGInterface {
+                lag_id { value }
+                lacp_mode { value }
+                mtu { value }
+                minimum_links { value }
+                mlag_domain { node { id name { value } } }
+                ip_address {
+                  node {
+                    address { value }
+                    ip_namespace { node { name { value } } }
+                  }
+                }
+                member_interfaces {
+                  edges {
+                    node {
+                      name { value }
+                    }
+                  }
+                }
+              }
+
+            }
+          }
+        }
+      }
+    }
+  }
+}

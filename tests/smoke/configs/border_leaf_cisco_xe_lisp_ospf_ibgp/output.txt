@@ -136,7 +136,9 @@ interface Vlan100
 !
 interface Vlan200
  description Customer-A
+ vrf forwarding VRF_A
  ip address 10.200.0.1 255.255.255.0
+ lisp mobility VRF_A-IPV4
  mac-address 001c.7300.dc01
  no autostate
  no shutdown

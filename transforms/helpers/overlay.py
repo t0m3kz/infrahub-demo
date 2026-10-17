@@ -47,7 +47,7 @@ from typing import Any
 
 from transforms.helpers.addressing import host_ip
 from transforms.helpers.segments import _get_segment_gateways, _get_segment_namespace
-from utils.fabric_roles import VTEP_ROLES
+from utils.fabric_roles import OFFICE_LISP_ROLES, VTEP_ROLES
 
 _log = logging.getLogger(__name__)
 
@@ -289,7 +289,8 @@ def build_overlay_node(
     # Spine/super-spine/hyper-spine are underlay+route-reflector only — never VTEPs.
     # Gated here (not just by callers' query shape or generator wiring) so this
     # function is self-defending regardless of what data happens to reach it.
-    if device_role not in VTEP_ROLES:
+    # An office's access/distribution switches terminate the overlay too (LISP only).
+    if device_role not in VTEP_ROLES | OFFICE_LISP_ROLES:
         return None
 
     l2 = tuple(l2_instance(act) for act in vni_activations(activations))

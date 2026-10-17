@@ -99,6 +99,22 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: access_switch_config
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/config/access_switch.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: distribution_switch_config
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/config/distribution_switch.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: border_spine_config
     tests:
       - name: syntax_check

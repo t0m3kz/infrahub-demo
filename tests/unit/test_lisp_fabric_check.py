@@ -54,11 +54,59 @@ def _pod(*devices: dict[str, Any], parent_id: str = "dc-1") -> dict[str, Any]:
     return {"parent": {"id": parent_id, "__typename": "TopologyDataCenter"}, "devices": list(devices)}
 
 
-def _run(dc: dict[str, Any], *pods: dict[str, Any], metros: list[dict[str, Any]] | None = None) -> list[str]:
-    """Validate one data center (plus pods and metros) and return the logged errors."""
+def _run(
+    dc: dict[str, Any],
+    *pods: dict[str, Any],
+    metros: list[dict[str, Any]] | None = None,
+    offices: list[dict[str, Any]] | None = None,
+) -> list[str]:
+    """Validate one data center (plus pods, metros and offices) and return the logged errors."""
     check = _check()
-    check.validate({"TopologyDataCenter": [dc], "TopologyPod": list(pods), "TopologyColocationMetro": metros or []})
+    check.validate(
+        {
+            "TopologyDataCenter": [dc],
+            "TopologyPod": list(pods),
+            "TopologyColocationMetro": metros or [],
+            "TopologyCustomerOffice": offices or [],
+        }
+    )
     return check._captured_errors
+
+
+def _run_offices(*offices: dict[str, Any]) -> list[str]:
+    """Validate offices only (no data center, pod or metro) and return the logged errors."""
+    check = _check()
+    check.validate({"TopologyCustomerOffice": list(offices)})
+    return check._captured_errors
+
+
+def _gateway(vrf: str | None = "VRF_A", l3_vni: int | None = 50001) -> dict[str, Any]:
+    """A cleaned segment gateway whose prefix sits in the namespace ``vrf`` (None: no namespace at all)."""
+    namespace = {"name": vrf, "l3_vni": l3_vni} if vrf else None
+    return {"id": "ip-1", "ip_prefix": {"ip_namespace": namespace}}
+
+
+def _office(**overrides: Any) -> dict[str, Any]:
+    """A clean LISP office: fabric_templates, one building, two cisco_xe distribution-switches, an access-switch, a key.
+
+    The office also holds its SD-WAN edge, which is not part of the LISP site and may be on any platform.
+    """
+    office: dict[str, Any] = {
+        "id": "office-1",
+        "name": "C005-P",
+        "fabric_templates": ["tpl-1", "tpl-2"],
+        "locations": [{"id": "loc-1", "name": "ams-branch"}],
+        "lisp_site_key": {"id": "key-1"},
+        "devices": [
+            _device("ds-c005-p01", "distribution-switch"),
+            _device("ds-c005-p02", "distribution-switch"),
+            _device("as-c005-p01", "access-switch"),
+            _device("C005-P-EDGE1", "edge", "velocloud"),
+        ],
+        "segment_deployments": [{"vni": 10100, "segment": {"name": "web", "gateway": _gateway()}}],
+    }
+    office.update(overrides)
+    return office
 
 
 class TestCleanFabric:
@@ -214,3 +262,132 @@ class TestMultipleProblems:
         )
         # strategy, underlay, <2 borders, non-xe border, super-spine, site key
         assert len(_run(dc)) == 6
+
+
+class TestOfficeFabric:
+    def test_clean_office_is_silent(self) -> None:
+        """An office inside the profile logs nothing, and its SD-WAN edge on another platform is not part of it."""
+        assert _run_offices(_office()) == []
+
+    def test_clean_office_next_to_a_clean_data_center_is_silent(self) -> None:
+        assert _run(_dc(), offices=[_office()]) == []
+
+    def test_office_without_fabric_templates_is_not_a_lisp_footprint(self) -> None:
+        """No opt-in, no rules: such an office has no fabric (only its SD-WAN edge)."""
+        bare = _office(fabric_templates=[], devices=[], lisp_site_key=None, segment_deployments=[])
+        assert _run_offices(bare) == []
+        assert _run_offices({"id": "o", "name": "C001-P", "locations": [{"id": "loc-1", "name": "x"}]}) == []
+
+    def test_a_clean_office_does_not_hide_a_broken_data_center(self) -> None:
+        errors = _run(_dc(lisp_site_key=None), offices=[_office()])
+        assert len(errors) == 1 and "Data center" in errors[0]
+
+    def test_office_without_distribution_switch_is_an_error(self) -> None:
+        errors = _run_offices(_office(devices=[_device("as-c005-p01", "access-switch")]))
+        assert len(errors) == 1
+        assert "C005-P" in errors[0] and "0 distribution-switch" in errors[0]
+
+    def test_one_distribution_switch_is_enough(self) -> None:
+        assert _run_offices(_office(devices=[_device("ds-c005-p01", "distribution-switch")])) == []
+
+    @pytest.mark.parametrize("role", ["access-switch", "distribution-switch"])
+    @pytest.mark.parametrize("platform", ["arista_eos", None])
+    def test_non_cisco_xe_fabric_device_is_an_error_naming_the_device(self, role: str, platform: str | None) -> None:
+        devices = _office()["devices"] + [_device("c005-bad-01", role, platform)]
+        errors = _run_offices(_office(devices=devices))
+        assert len(errors) == 1
+        assert "c005-bad-01" in errors[0] and role in errors[0] and "cisco_xe" in errors[0]
+
+    def test_missing_site_key_with_a_fabric_is_an_error(self) -> None:
+        errors = _run_offices(_office(lisp_site_key=None))
+        assert len(errors) == 1
+        assert "lisp_site_key" in errors[0]
+
+    def test_missing_site_key_without_fabric_devices_is_not_an_error_by_itself(self) -> None:
+        """The key is provisioned with the devices (the generator has not run yet)."""
+        errors = _run_offices(_office(lisp_site_key=None, devices=[]))
+        assert all("lisp_site_key" not in error for error in errors)
+
+    def test_segment_without_gateway_is_an_error(self) -> None:
+        office = _office(segment_deployments=[{"vni": 10200, "segment": {"name": "db", "gateway": None}}])
+        errors = _run_offices(office)
+        assert len(errors) == 1
+        assert "db" in errors[0] and "10200" in errors[0] and "no gateway" in errors[0]
+
+    @pytest.mark.parametrize("vrf", ["default", None])
+    def test_segment_in_the_default_namespace_is_an_error(self, vrf: str | None) -> None:
+        """A gateway outside a VRF would render a host SVI in the global table (the transform refuses it)."""
+        office = _office(segment_deployments=[{"vni": 10200, "segment": {"name": "db", "gateway": _gateway(vrf)}}])
+        errors = _run_offices(office)
+        assert len(errors) == 1
+        assert "db" in errors[0] and "10200" in errors[0] and "default namespace" in errors[0]
+
+    def test_segment_in_a_vrf_without_l3_vni_is_an_error(self) -> None:
+        office = _office(
+            segment_deployments=[{"vni": 10200, "segment": {"name": "db", "gateway": _gateway("DEV", None)}}]
+        )
+        errors = _run_offices(office)
+        assert len(errors) == 1
+        assert "db" in errors[0] and "'DEV'" in errors[0] and "l3_vni" in errors[0]
+
+    def test_a_gatewayless_segment_is_reported_once_not_also_as_vrf_less(self) -> None:
+        office = _office(segment_deployments=[{"vni": 1, "segment": {"name": "a", "gateway": None}}])
+        assert len(_run_offices(office)) == 1
+
+    def test_every_offending_segment_is_reported(self) -> None:
+        office = _office(
+            segment_deployments=[
+                {"vni": 1, "segment": {"name": "a", "gateway": None}},
+                {"vni": 2, "segment": {"name": "b", "gateway": _gateway("default", None)}},
+                {"vni": 3, "segment": {"name": "c", "gateway": _gateway()}},
+                {"vni": 4, "segment": {"name": "d", "gateway": _gateway("DEV", None)}},
+            ]
+        )
+        assert len(_run_offices(office)) == 3
+
+    def test_two_lisp_offices_in_one_building_are_both_errors(self) -> None:
+        first = _office()
+        second = _office(id="office-2", name="C006-P")
+        errors = _run_offices(first, second)
+        assert len(errors) == 2
+        assert any("C005-P" in e and "C006-P" in e and "ams-branch" in e for e in errors)
+        assert any(e.startswith("Office 'C006-P'") and "C005-P" in e for e in errors)
+
+    def test_lisp_offices_in_different_buildings_are_silent(self) -> None:
+        second = _office(id="office-2", name="C006-P", locations=[{"id": "loc-2", "name": "fra-hq"}])
+        assert _run_offices(_office(), second) == []
+
+    def test_an_office_without_a_fabric_does_not_share_the_building(self) -> None:
+        """Only footprints that run a fabric count: an SD-WAN-only office in the same building is fine."""
+        sdwan_only = {"id": "office-2", "name": "C006-P", "locations": [{"id": "loc-1", "name": "ams-branch"}]}
+        assert _run_offices(_office(), sdwan_only) == []
+
+    def test_a_footprint_with_several_buildings_is_checked_per_building(self) -> None:
+        wide = _office(locations=[{"id": "loc-1", "name": "ams-branch"}, {"id": "loc-9", "name": "fra-hq"}])
+        other = _office(id="office-2", name="C006-P", locations=[{"id": "loc-9", "name": "fra-hq"}])
+        errors = _run_offices(wide, other)
+        assert len(errors) == 2
+        assert all("fra-hq" in e and "ams-branch" not in e for e in errors)
+
+    def test_every_problem_is_its_own_error(self) -> None:
+        office = _office(
+            lisp_site_key=None,
+            devices=[_device("as-c005-p01", "access-switch", "arista_eos")],
+            segment_deployments=[{"vni": 1, "segment": {"name": "a", "gateway": None}}],
+        )
+        # no distribution-switch, non-xe access-switch, site key, gatewayless segment
+        assert len(_run_offices(office)) == 4
+
+    def test_errors_carry_the_office_as_the_object(self) -> None:
+        check = _check()
+        recorded: list[dict[str, Any]] = []
+        check.log_error = lambda message, **kwargs: recorded.append(kwargs)
+        check.validate({"TopologyCustomerOffice": [_office(lisp_site_key=None)]})
+        assert recorded == [{"object_id": "office-1", "object_type": "TopologyCustomerOffice"}]
+
+    def test_the_data_center_and_metro_rules_are_unchanged_by_offices(self) -> None:
+        """Offices neither add to nor remove from the DC and metro errors."""
+        metros = [{"id": "m-1", "name": "AMS", "overlay_control_plane": "lisp"}]
+        alone = _run(_dc(lisp_site_key=None), metros=metros)
+        with_office = _run(_dc(lisp_site_key=None), metros=metros, offices=[_office()])
+        assert with_office == alone and len(alone) == 2

@@ -1,4 +1,8 @@
-"""The DC fields (EVPN route-target ASN, LISP site) only resolve on the pod -> parent hop in one shape."""
+"""The DC fields (EVPN route-target ASN, LISP site) only resolve on the pod -> parent hop in one shape.
+
+An office's switches hang directly off the office (the direct shape of a border-leaf), where the order is not
+known to matter; the rule is kept for them so the fields never depend on it.
+"""
 
 import re
 from pathlib import Path
@@ -6,7 +10,7 @@ from pathlib import Path
 import pytest
 
 QUERIES = Path(__file__).resolve().parents[2] / "queries"
-CONFIG_QUERIES = ["leaf", "border_leaf"]
+CONFIG_QUERIES = ["leaf", "border_leaf", "access_switch", "distribution_switch"]
 
 
 def _deployment_spreads(query: str) -> list[str]:
@@ -41,3 +45,25 @@ def test_the_pod_tier_query_reads_the_dc_fields_from_a_single_segment_hosting_fr
     )
     assert typed == ["EvpnRtAsOnSegmentHostingFields", "SegmentDeploymentsOnDeploymentFields"], typed
     assert "SegmentDeploymentsOnDeploymentFields" not in _deployment_spreads("leaf")
+
+
+@pytest.mark.parametrize("query", ["access_switch", "distribution_switch"])
+def test_office_switch_queries_read_the_lisp_inputs_from_the_office(query: str) -> None:
+    """The office is the LISP site: its name, key and map-servers come from the one deployment selection."""
+    spreads = _deployment_spreads(query)
+    assert "LispMapServersOnDeploymentFields" in spreads, spreads
+    # No fleet roots: an office has no data center, reference fabric or group policy.
+    text = (QUERIES / "config" / f"{query}.gql").read_text()
+    assert "TopologyDataCenter" not in text and "DcimGroupPolicyProfile" not in text
+
+
+def test_only_the_border_office_switch_reads_the_segment_activations() -> None:
+    """The distribution-switch registers the site's EID records; the access-switch hosts its own segments."""
+    assert "SegmentDeploymentsOnDeploymentFields" in _deployment_spreads("distribution_switch")
+    assert "SegmentDeploymentsOnDeploymentFields" not in _deployment_spreads("access_switch")
+
+
+def test_the_map_servers_are_the_border_leaves_and_the_distribution_switches() -> None:
+    """One fragment serves both fabrics: a footprint holds only its own kind of border."""
+    text = (QUERIES / "fragments" / "lisp_fabric.gql").read_text()
+    assert 'lisp_map_servers: devices(role__values: ["border-leaf", "distribution-switch"])' in text

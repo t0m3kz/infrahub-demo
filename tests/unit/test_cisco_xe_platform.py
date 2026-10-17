@@ -632,16 +632,24 @@ class TestCiscoXeLispRendering:
     def test_every_lisp_command_is_under_an_unverified_no_lab_comment(
         self, prefix: str, transform_cls: type[BaseDeviceTransform], role: str
     ) -> None:
-        """No lab verified any of it: each LISP block (and the VRF / SVI lines it adds) opens with the marker."""
+        """No lab verified any of it: each LISP block (and the VRF / SVI lines it adds) opens with the marker.
+
+        The gateway SVIs are one section: its marker above the first SVI covers every `lisp mobility` line under it.
+        """
         lines = _render(prefix, LISP_VARIANT).splitlines()
         covered = False
         uncovered: list[str] = []
         in_lisp = False
+        in_svi_section = False
         for line in lines:
             if line.lstrip().startswith(LISP_MARKER):
                 covered = True
                 continue
-            if line == "!" and not in_lisp:
+            if line == "! Gateway SVIs":
+                in_svi_section = True
+            elif line == "! Management":
+                in_svi_section = False
+            if line == "!" and not in_lisp and not in_svi_section:
                 covered = False
             if line == "router lisp":
                 in_lisp = True
@@ -730,7 +738,7 @@ class TestCiscoXeLispRefusalThroughTransform:
         data["DcimDevice"]["edges"][0]["node"]["deployment"]["node"]["lisp_map_servers"] = {"edges": []}
 
         with pytest.raises(
-            ValueError, match=f"cisco_xe {role} cannot render the LISP overlay: the fabric has no border"
+            ValueError, match=f"cisco_xe {role} cannot render the LISP overlay: the fabric has no map-server"
         ):
             _run_transform(transform_cls, data)
 

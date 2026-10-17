@@ -1,21 +1,25 @@
 # LISP fabric inputs, read by the cisco_xe leaf tier (map-servers to register
-# with) and the border leaves (the map-servers themselves: site key + EIDs).
-# Only meaningful when the fabric's overlay_control_plane (evpn_fabric.gql) is
-# `lisp`; for `bgp_evpn` fabrics the selections below are simply unused.
+# with) and the border leaves (the map-servers themselves: site key + EIDs), and
+# by an office's access-switch / distribution-switch the same way (the office is
+# the site, its distribution-switches the map-servers).
+# For a data center only meaningful when the fabric's overlay_control_plane
+# (evpn_fabric.gql) is `lisp`; for `bgp_evpn` fabrics the selections below are
+# simply unused. An office has no such flag: its switches are always LISP.
 #
 # CLEANED SHAPE (after utils/data_cleaning.clean_data), the contract the
 # transforms code against. `D` is the object the flag sits on: the device's
-# `deployment` for DC-level tiers (border-leaf), `deployment.parent` for
-# pod-level tiers (leaf, access-leaf, tor) — the same two shapes as
-# EvpnRtAsOnDeploymentFields in evpn_fabric.gql.
+# `deployment` for DC-level tiers (border-leaf) and for an office's switches (the
+# office hosts them directly), `deployment.parent` for pod-level tiers (leaf,
+# access-leaf, tor) — the same two shapes as EvpnRtAsOnDeploymentFields in
+# evpn_fabric.gql.
 #
-#   D["lisp_map_servers"]                       -> list of border-leaf devices
+#   D["lisp_map_servers"]                       -> list of border-leaf / distribution-switch devices
 #   D["lisp_map_servers"][i]["name"]            -> str
 #   D["lisp_map_servers"][i]["interfaces"][j]["ip_address"]["address"]
 #                                               -> CIDR str ("10.0.0.1/32"), loopback-role
 #                                                  interfaces only (strip the mask in code)
 #   D["lisp_site_key"]["password"]              -> str secret (None/absent when unset)
-#   D["name"]                                   -> str, the DC name (LISP site name; border-leaf)
+#   D["name"]                                   -> str, the DC or office name (LISP site name; border)
 #
 # Segment EIDs are NOT selected here: border_leaf.gql already spreads
 # SegmentDeploymentsOnDeploymentFields (network_segment.gql), whose
@@ -28,9 +32,10 @@ fragment LispMapServersOnDeviceHostingFields on TopologyDeviceHosting {
   # Aliased: FirewallContextsOnDeviceHostingFields selects `devices` on the same
   # TopologyDeviceHosting with a different role__value argument, and GraphQL
   # rejects two same-named fields with differing arguments at one selection
-  # set. The map-servers are the border leaves; each is reached through its
-  # loopback so the ETR/ITR can address it.
-  lisp_map_servers: devices(role__value: "border-leaf") {
+  # set. The map-servers are the border leaves of a data center or the
+  # distribution switches of an office (a footprint holds only its own kind);
+  # each is reached through its loopback so the ETR/ITR can address it.
+  lisp_map_servers: devices(role__values: ["border-leaf", "distribution-switch"]) {
     edges {
       node {
         name { value }
@@ -51,8 +56,9 @@ fragment LispMapServersOnDeviceHostingFields on TopologyDeviceHosting {
 }
 
 # Same two-shape traversal as FirewallContextsOnDeploymentFields: a DC-level
-# device's `deployment` IS the DC (direct match), a pod-level device's is the
-# POD, which needs one `parent` hop to the DC that owns the border leaves.
+# device's `deployment` IS the DC (direct match), an office switch's IS the
+# office (direct match), a pod-level device's is the POD, which needs one
+# `parent` hop to the DC that owns the border leaves.
 fragment LispMapServersOnDeploymentFields on TopologyDeployment {
   ...LispMapServersOnDeviceHostingFields
   ... on TopologyPod {

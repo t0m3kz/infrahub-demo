@@ -33,7 +33,7 @@ from transforms.helpers.segments import (
 from transforms.helpers.templates import load_template
 from transforms.helpers.vxlan import get_interfaces, get_vxlan_config
 from utils.data_cleaning import clean_data
-from utils.fabric_roles import BORDER_ROLES, DC_VTEP_ROLES
+from utils.fabric_roles import BORDER_ROLES, DC_VTEP_ROLES, OFFICE_LISP_ROLES
 
 
 def _fabric_rt_asn(deployment: Any) -> int | None:
@@ -63,6 +63,17 @@ def _fabric_overlay_control_plane(deployment: Any) -> str:
         if isinstance(control_plane, str) and control_plane:
             return control_plane
     return "bgp_evpn"
+
+
+def _runs_lisp(device_role: str, deployment: Any) -> bool:
+    """Whether the device renders the LISP overlay instead of EVPN-VXLAN.
+
+    An office's access/distribution switch always does: its site has no other overlay, so there is
+    no flag to read. A data center's VTEP does when the fabric's overlay_control_plane says lisp.
+    """
+    if device_role in OFFICE_LISP_ROLES:
+        return True
+    return device_role in DC_VTEP_ROLES and _fabric_overlay_control_plane(deployment) == "lisp"
 
 
 def _fabric_anycast_mac(deployment: Any) -> str | None:
@@ -215,8 +226,9 @@ class BaseDeviceTransform(InfrahubTransform):
         config.update(self._cisco_xe_context(platform_name, config))
         return self._render(platform_name, config)
 
-    # The roles rendered by a cisco_xe fabric template (leafs/ and border_leafs/); the Edge's cisco_xe template is IOS.
-    _CISCO_XE_FABRIC_ROLES = frozenset({"leaf", "tor", "access-leaf", "border-leaf"})
+    # The roles rendered by a cisco_xe fabric template (leafs/, border_leafs/ and the office's
+    # access_switches/, distribution_switches/); the Edge's cisco_xe template is IOS.
+    _CISCO_XE_FABRIC_ROLES = frozenset({"leaf", "tor", "access-leaf", "border-leaf"}) | OFFICE_LISP_ROLES
 
     def _refuse_cisco_xe_unrendered(self, platform_name: str, config: dict) -> None:
         """Raise when a Catalyst 9000 (cisco_xe) fabric device needs what its EVPN-VXLAN templates do not render.
@@ -428,7 +440,7 @@ class BaseDeviceTransform(InfrahubTransform):
             self._refuse_unprotected_tenant_svis(self.device_role, platform_name, acls, leaf_pbr_rules)
 
         lisp = None
-        if _fabric_overlay_control_plane(data.get("deployment")) == "lisp" and self.device_role in DC_VTEP_ROLES:
+        if _runs_lisp(self.device_role, data.get("deployment")):
             # The spines of a LISP fabric are underlay only: they keep taking the EVPN path below (no VXLAN).
             if platform_name not in OVERLAY_RENDERERS["lisp"]:
                 raise ValueError(

@@ -24,8 +24,10 @@ from unittest.mock import AsyncMock, MagicMock
 import yaml
 
 from transforms.config.access_leaf import AccessLeaf
+from transforms.config.access_switch import AccessSwitch
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.border_spine import BorderSpine
+from transforms.config.distribution_switch import DistributionSwitch
 from transforms.config.edge import Edge
 from transforms.config.firewall import Firewall
 from transforms.config.l2_leaf import L2Leaf
@@ -424,8 +426,8 @@ def _make_segment_deployment(**kwargs: Any) -> dict:
 # Scenario builders
 # ============================================================================
 # Roles that terminate customer segments, so their fixtures need segments attached.
-# Mirrors utils/fabric_roles.py's VTEP_ROLES (without edge) plus l2-leaf (pure L2, no VNI).
-SEGMENT_ROLES = ("leaf", "border-leaf", "border-spine", "tor", "l2-leaf", "access-leaf")
+# Mirrors utils/fabric_roles.py's VTEP_ROLES (without edge) plus l2-leaf (pure L2, no VNI) and an office's access-switch.
+SEGMENT_ROLES = ("leaf", "border-leaf", "border-spine", "tor", "l2-leaf", "access-leaf", "access-switch")
 
 # Fabric-wide EVPN route-target administrative ASN
 # (TopologySegmentHosting.evpn_rt_as). Deliberately NOT any device's own ASN:
@@ -445,8 +447,12 @@ def build_device_data(
     include_acls: bool = False,
     isolation_mode: str | None = None,
     security_fields: bool = False,
+    vlan_segment_vrf: bool = False,
 ) -> dict:
     """Build a complete raw GraphQL response for a device config query.
+
+    ``vlan_segment_vrf`` puts the VLAN-only seg-200 in VRF_A with an L3 VNI instead of the default
+    namespace: a LISP fabric refuses a gateway outside a VRF with an L3 instance-id.
 
     Scenarios:
         ebgp_ebgp: eBGP underlay (TTL=1) + eBGP overlay (TTL=2), per-device ASN
@@ -813,6 +819,7 @@ def build_device_data(
                     "seg_name": "seg-200",
                     "seg_type": "ManagedVlanSegment",
                     "gateway_ip": "10.200.0.1/24",
+                    **({"ns_name": "VRF_A", "l3_vni": 50001} if vlan_segment_vrf else {}),
                     "security_policy": policy_vlan,
                     "isolation_mode": isolation_mode,
                     "num_deployments": 1,
@@ -3545,6 +3552,7 @@ def build_lisp_device_data(
         scenario="ospf_ibgp",
         include_segments=include_segments,
         include_acls=include_acls,
+        vlan_segment_vrf=True,
     )
     node = data["DcimDevice"]["edges"][0]["node"]
     node["capabilities"]["edges"] = [
@@ -3573,6 +3581,77 @@ def write_cisco_xe_lisp_fixtures() -> tuple[int, int]:
     for transform_cls, role, type_prefix in CISCO_XE_DEVICE_CONFIGS:
         data = build_lisp_device_data(device_name=f"dc1-{type_prefix.replace('_', '-')}-01", role=role)
         g, e = _write_data_fixture(transform_cls, f"{type_prefix}_cisco_xe_lisp_ospf_ibgp", data)
+        generated += g
+        errors += e
+    return generated, errors
+
+
+# Office LISP site (add_office_fabric, SD-Access style): an access-switch edge and a distribution-switch border-and-
+# map-server pair on one office footprint. The cisco_xe ospf_ibgp inputs without the BGP capability, the uplinks re-wired
+# to the pair, and the office's own deployment (queries/config/access_switch.gql): its name is the LISP site, its
+# site key and the two distribution-switch map-servers (listed out of name order: the transform sorts them).
+OFFICE_NAME = "C005-P"
+OFFICE_MAP_SERVERS = (("ds-c005-p02", "10.250.5.2/32"), ("ds-c005-p01", "10.250.5.1/32"))
+OFFICE_SITE_KEY = "0ff1c3-k3y"
+
+
+def _rewire_uplink(iface: dict, *, role: str, peer: str) -> None:
+    """Point one P2P interface of the base fixture at the office peer ``peer`` (description, role, cable far end)."""
+    iface["role"] = _v(role)
+    iface["description"] = _v(f"to {peer}")
+    iface["cable"]["node"]["endpoints"]["edges"][1]["node"]["device"] = _node({"name": _v(peer)})
+
+
+def build_office_lisp_device_data(*, device_name: str, role: str) -> dict:
+    """The raw cisco_xe device query response of an office access-switch or distribution-switch."""
+    data = build_device_data(
+        device_name=device_name,
+        role=role,
+        platform="cisco_xe",
+        scenario="ospf_ibgp",
+        include_segments=True,
+        vlan_segment_vrf=True,
+    )
+    node = data["DcimDevice"]["edges"][0]["node"]
+    node["capabilities"]["edges"] = [
+        edge for edge in node["capabilities"]["edges"] if edge["node"].get("__typename") != "ManagedBGP"
+    ]
+    by_name = {edge["node"]["name"]["value"]: edge["node"] for edge in node["interfaces"]["edges"]}
+    if role == "access-switch":
+        _rewire_uplink(by_name["Ethernet1"], role="uplink", peer="ds-c005-p01")
+        _rewire_uplink(by_name["Ethernet2"], role="uplink", peer="ds-c005-p02")
+    else:
+        _rewire_uplink(by_name["Ethernet1"], role="downlink", peer="as-c005-p01")
+        _rewire_uplink(by_name["Ethernet2"], role="interlink", peer="ds-c005-p02")
+    deployment = node["deployment"]["node"]
+    deployment.update(
+        {
+            "id": "office-1",
+            "name": _v(OFFICE_NAME),
+            "lisp_map_servers": _edges(
+                [
+                    {"name": _v(name), "interfaces": _edges([{"ip_address": _node({"address": _v(address)})}])}
+                    for name, address in OFFICE_MAP_SERVERS
+                ]
+            ),
+            "lisp_site_key": _node({"password": _v(OFFICE_SITE_KEY)}),
+        }
+    )
+    # An office has no EVPN route-target ASN (unset on TopologyCustomerOffice) and no overlay flag.
+    deployment.pop("evpn_rt_as", None)
+    return data
+
+
+def write_office_lisp_fixtures() -> tuple[int, int]:
+    """Write the office access-switch and distribution-switch LISP fixtures (OSPF underlay, no BGP)."""
+    generated = errors = 0
+    for transform_cls, role, dir_name, device_name in (
+        (AccessSwitch, "access-switch", "access_switch_cisco_xe_lisp_ospf", "as-c005-p01"),
+        (DistributionSwitch, "distribution-switch", "distribution_switch_cisco_xe_lisp_ospf", "ds-c005-p01"),
+    ):
+        g, e = _write_data_fixture(
+            transform_cls, dir_name, build_office_lisp_device_data(device_name=device_name, role=role)
+        )
         generated += g
         errors += e
     return generated, errors
@@ -3762,6 +3841,11 @@ def main() -> int:
 
     print("\nGenerating Catalyst 9000 (cisco_xe) LISP overlay fixtures:")
     g, e = write_cisco_xe_lisp_fixtures()
+    generated += g
+    errors += e
+
+    print("\nGenerating Catalyst 9000 (cisco_xe) office LISP site fixtures:")
+    g, e = write_office_lisp_fixtures()
     generated += g
     errors += e
 

@@ -46,9 +46,24 @@ _MAP_SERVERS: list[dict[str, Any]] = [
 # ---------------------------------------------------------------------------
 
 
+def _put_seg200_in_a_vrf(node: Any) -> None:
+    """Move the VLAN-only seg-200 of an EVPN golden into VRF_A with its L3 VNI, as a LISP fabric requires."""
+    if isinstance(node, dict):
+        if node.get("name") == {"value": "seg-200"} and node.get("gateway", {}).get("node"):
+            namespace = node["gateway"]["node"]["ip_prefix"]["node"]["ip_namespace"]["node"]
+            namespace["name"]["value"] = "VRF_A"
+            namespace["l3_vni"]["value"] = 50001
+        for child in node.values():
+            _put_seg200_in_a_vrf(child)
+    elif isinstance(node, list):
+        for child in node:
+            _put_seg200_in_a_vrf(child)
+
+
 def _lisp_raw_input(directory: str, *, key: bool = True, platform: str | None = None) -> dict[str, Any]:
     """The raw GraphQL input of a smoke golden, turned into a LISP fabric (no BGP process, flag, map-servers, key)."""
     data = json.loads((CONFIGS_DIR / directory / "input.json").read_text())
+    _put_seg200_in_a_vrf(data)
     node = data["DcimDevice"]["edges"][0]["node"]
     node["capabilities"]["edges"] = [
         edge for edge in node["capabilities"]["edges"] if edge["node"].get("__typename") != "ManagedBGP"
@@ -326,7 +341,7 @@ class TestContentRefusals:
             get_lisp_config(_device(), "leaf", [activation], _inputs())
 
     def test_no_map_server_is_refused(self) -> None:
-        with pytest.raises(ValueError, match="the fabric has no border leaf map-server"):
+        with pytest.raises(ValueError, match=r"the fabric has no map-server \(border-leaf or distribution-switch\)"):
             get_lisp_config(_device(), "leaf", [_activation()], _inputs(map_servers=()))
 
     def test_no_site_key_is_refused(self) -> None:
@@ -334,7 +349,7 @@ class TestContentRefusals:
             get_lisp_config(_device(), "leaf", [_activation()], _inputs(site_key=None))
 
     def test_a_border_without_a_site_name_is_refused(self) -> None:
-        with pytest.raises(ValueError, match="the data center has no name for the LISP site"):
+        with pytest.raises(ValueError, match="the fabric has no name for the LISP site"):
             get_lisp_config(_device(), "border-leaf", [], _inputs(site_name=None))
 
     def test_a_map_server_without_a_loopback_address_is_refused(self) -> None:
@@ -410,7 +425,7 @@ class TestLispContext:
     @pytest.mark.parametrize(
         ("inputs", "match"),
         [
-            (_inputs(map_servers=()), "no border leaf map-server"),
+            (_inputs(map_servers=()), "no map-server"),
             (_inputs(site_key=None), "no LISP site key"),
         ],
     )

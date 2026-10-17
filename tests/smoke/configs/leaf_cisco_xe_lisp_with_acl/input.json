@@ -814,10 +814,10 @@
                                   "ip_namespace": {
                                     "node": {
                                       "name": {
-                                        "value": "default"
+                                        "value": "VRF_A"
                                       },
                                       "l3_vni": {
-                                        "value": null
+                                        "value": 50001
                                       }
                                     }
                                   }
@@ -1397,10 +1397,10 @@
                                   "ip_namespace": {
                                     "node": {
                                       "name": {
-                                        "value": "default"
+                                        "value": "VRF_A"
                                       },
                                       "l3_vni": {
-                                        "value": null
+                                        "value": 50001
                                       }
                                     }
                                   }
