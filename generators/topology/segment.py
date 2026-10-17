@@ -11,9 +11,10 @@ VxlanSegmentGenerator handles:
      segment name) and the anycast gateway on its .1, once
      (ensure_segment_addressing). An authored gateway is kept.
   1. Determine target customer deployments from segment.customer_deployments
-  2. Resolve each customer deployment's parent (TopologyDataCenter or
-     TopologyColocationMetro) — the VNI pool and SegmentDeployment record
-     live on the parent (TopologySegmentHosting), not on the customer footprint.
+  2. Resolve each customer deployment's hosting node — the VNI pool and
+     SegmentDeployment record live on the TopologySegmentHosting node: the
+     parent (TopologyDataCenter or TopologyColocationMetro) of a DC or
+     colocation footprint, the footprint itself for an office (TopologyCustomerOffice).
   3. For each resolved parent, create (or upsert) a ManagedSegmentDeployment
      with a locally-allocated VNI from its pool range.
   4. Reconcile the segment's LOCAL VLAN ID activations (one per VLAN domain
@@ -173,7 +174,7 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGene
         if missing_pool_ids:
             for dep_id in missing_pool_ids:
                 refreshed = await self.wait_for_parent_generator_and_refetch(
-                    ("add_dc", "dc_pod_cascade", "add_colocation_metro"), dep_id
+                    ("add_dc", "dc_pod_cascade", "add_colocation_metro", "add_office_fabric"), dep_id
                 )
                 if refreshed is not None:
                     cleaned = clean_data(refreshed)
@@ -354,12 +355,7 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGene
         self.logger.info(f"Segment {segment_name}: gateway {gateway.address.value} from {pool_name}")
 
     def _resolve_target_deployments(self, segment: dict[str, Any], segment_name: str) -> list[dict[str, Any]]:
-        """Resolve segment.customer_deployments to their hosting parents.
-
-        VLAN/VNI pools and SegmentDeployment records live on the parent
-        (TopologyDataCenter / TopologyColocationMetro via TopologySegmentHosting),
-        not on the customer footprint itself.
-        """
+        """Resolve segment.customer_deployments to their hosting nodes (see _resolve_hosting_parent)."""
         customer_deployments: list[dict] = segment.get("customer_deployments") or []
         if not customer_deployments:
             self.logger.warning(
@@ -374,19 +370,27 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGene
         ]
 
     def _resolve_hosting_parent(self, customer_deployment: dict[str, Any], segment_name: str) -> dict[str, Any] | None:
-        """Resolve a customer footprint (CustomerDC/CustomerColocation) to its hosting parent.
+        """Resolve a customer footprint to the TopologySegmentHosting node that hosts its segments.
 
-        VLAN/VNI pools and SegmentDeployment records live on the parent
-        (TopologyDataCenter / TopologyColocationMetro via TopologySegmentHosting),
-        not on the customer footprint itself. The parent must be present in the
-        GraphQL response (see the ... on TopologyCustomerDC/Colocation fragments
-        in the vxlan_segment query) — no fallback fetch.
+        VLAN/VNI pools and SegmentDeployment records live on that node: the
+        footprint's parent (TopologyDataCenter / TopologyColocationMetro) for a
+        CustomerDC/CustomerColocation, the footprint itself for a
+        CustomerOffice, which is SegmentHosting in its own right (its parent,
+        the OfficeCustomer grouping node, hosts nothing). The query selects
+        ``vni_pool`` on the footprint only where the footprint hosts itself —
+        its presence is the signal, whether the pool is set yet or not — the
+        same rule as transforms/helpers/segments.py's segment_hosting_candidates.
+        Either way the node must be in the GraphQL response (the ``... on
+        TopologyCustomer*`` fragments of the vxlan_segment query) — no fallback fetch.
         """
         cust_id: str = customer_deployment.get("id", "")
         cust_name: str = customer_deployment.get("name", cust_id)
         if not cust_id:
             self.logger.warning("Customer deployment entry missing id — skipping")
             return None
+
+        if "vni_pool" in customer_deployment:
+            return customer_deployment
 
         parent = customer_deployment.get("parent")
         if isinstance(parent, dict) and parent.get("id"):

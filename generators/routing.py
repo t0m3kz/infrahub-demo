@@ -120,9 +120,10 @@ class RoutingMixin:
             p2p_interfaces = []
         design = options.get("design") or {}
         routing_strategy = design.get("routing_strategy")
-        # "lisp": the overlay is LISP, so the fabric has no overlay BGP, no
-        # overlay AS and no EVPN address family — only the OSPF underlay below.
-        lisp = overlay_control_plane_of(design) == LISP_OVERLAY
+        # The fabric has no overlay BGP, no overlay AS and no EVPN address family
+        # — only the OSPF underlay below: an office fabric (options no_overlay),
+        # or a data center whose overlay is LISP.
+        lisp = bool(options.get("no_overlay")) or overlay_control_plane_of(design) == LISP_OVERLAY
 
         if not routing_strategy:
             self.logger.warning("No design or routing strategy provided")
@@ -342,7 +343,7 @@ class RoutingMixin:
                 underlay_password_id=options.get("underlay_password_id") or "",
                 overlay_password_id=options.get("overlay_password_id") or "",
                 mlag_pairs=mlag_pairs,
-                overlay_control_plane=overlay_control_plane_of(design),
+                overlay_control_plane=LISP_OVERLAY if lisp else overlay_control_plane_of(design),
             )
         )
 
@@ -534,17 +535,7 @@ class RoutingMixin:
         )
         lisp = overlay_control_plane_of(self.data) == LISP_OVERLAY
         if lisp:
-            # LISP has no BGP overlay (no overlay key, no overlay AS): the
-            # border-leafs' map-server site authenticates the edge ETRs with
-            # this one key. Reached by transforms as the deployment's
-            # lisp_site_key, the way the overlay AS is as evpn_rt_as.
-            site_key_id = await self._ensure_routing_password(
-                name=_lisp_site_key_name(self.fabric_name),
-                description=f"Shared LISP map-server site key for {self.fabric_name}",
-            )
-            await self.attach_refs(
-                kind="TopologySegmentHosting", node_id=deployment_id, refs={"lisp_site_key": site_key_id}
-            )
+            await self.ensure_lisp_site_key(deployment_id=deployment_id)
         else:
             await self._ensure_routing_password(
                 name=_overlay_key_name(self.fabric_name),
@@ -592,28 +583,58 @@ class RoutingMixin:
                 self.logger.error(f"Failed to create shared overlay AS: {exc}")
 
         if strategy == RoutingStrategy.OSPF_IBGP.value:
-            area_name = _ospf_area_name(self.fabric_name)
-            try:
-                area_obj = await self.client.get(kind=RoutingOSPFArea, name__value=area_name, raise_when_missing=False)
-                if area_obj:
-                    self.client.group_context.related_node_ids.append(area_obj.id)
-                else:
-                    area_obj = await self.client.create(
-                        kind=RoutingOSPFArea,
-                        data={
-                            "name": area_name,
-                            "area": 0,
-                            "area_type": "standard",
-                            "description": f"OSPF backbone area for {self.fabric_name}",
-                        },
-                    )
-                    await area_obj.save(allow_upsert=True)
-                    self.client.group_context.related_node_ids.append(area_obj.id)
-                    self.logger.info(f"Created shared OSPF area: {area_name}")
-            except Exception as exc:
-                self.logger.error(f"Failed to create shared OSPF area: {exc}")
+            await self.ensure_ospf_area()
 
         return super_spine_as_id
+
+    async def ensure_lisp_site_key(self, *, deployment_id: str) -> str | None:
+        """Find or create the deployment's shared LISP site key and attach it as ``lisp_site_key``.
+
+        The one site key a LISP fabric's map-servers authenticate the edge ETRs
+        with; reached by transforms as the deployment's lisp_site_key, the way
+        the overlay AS is as evpn_rt_as. Shared by the DC (a fabric with no BGP
+        overlay has no overlay key either) and the office fabric generator,
+        which attach it to their own TopologySegmentHosting node. Returns the
+        key's id (None when it could not be found or created).
+        """
+        site_key_id = await self._ensure_routing_password(
+            name=_lisp_site_key_name(self.fabric_name),
+            description=f"Shared LISP map-server site key for {self.fabric_name}",
+        )
+        await self.attach_refs(
+            kind="TopologySegmentHosting", node_id=deployment_id, refs={"lisp_site_key": site_key_id}
+        )
+        return site_key_id
+
+    async def ensure_ospf_area(self) -> str | None:
+        """Find or create the fabric's OSPF backbone area (area 0) and track it in this run's group.
+
+        Returns the area's id, None when it could not be found or created (the
+        failure is logged as an error). Shared by the DC (ospf-ibgp) and the
+        office fabric generator; both own the area and track it on every run.
+        """
+        area_name = _ospf_area_name(self.fabric_name)
+        try:
+            area_obj = await self.client.get(kind=RoutingOSPFArea, name__value=area_name, raise_when_missing=False)
+            if area_obj:
+                self.client.group_context.related_node_ids.append(area_obj.id)
+            else:
+                area_obj = await self.client.create(
+                    kind=RoutingOSPFArea,
+                    data={
+                        "name": area_name,
+                        "area": 0,
+                        "area_type": "standard",
+                        "description": f"OSPF backbone area for {self.fabric_name}",
+                    },
+                )
+                await area_obj.save(allow_upsert=True)
+                self.client.group_context.related_node_ids.append(area_obj.id)
+                self.logger.info(f"Created shared OSPF area: {area_name}")
+            return area_obj.id
+        except Exception as exc:
+            self.logger.error(f"Failed to create shared OSPF area: {exc}")
+            return None
 
     async def _ensure_overlay_as(self, *, description: str, overlay_asn: int) -> str:
         """Find the fabric's overlay AS by its deterministic description (pinning

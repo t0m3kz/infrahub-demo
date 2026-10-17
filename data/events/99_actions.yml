@@ -602,6 +602,32 @@ spec:
           - relationship_name: sdwan_gateway
             modification_type: updated
 
+    # ── Office Fabric ─────────────────────────────────────────────────────────
+    # An office with fabric_templates is a LISP site: add_office_fabric creates
+    # its pools, access/distribution switches, cabling and OSPF underlay. Like
+    # the SD-WAN rules above it fires for EVERY office (all are members of
+    # customer_deployments_office) and the generator no-ops on one without
+    # fabric_templates. `created` covers an office loaded with its fabric_templates
+    # inline; the `updated` rule an existing office that opts in later. The
+    # generator writes only vni_pool and lisp_site_key back onto the office, never
+    # fabric_templates, so it cannot re-fire itself.
+    - name: trigger-customer-office-fabric-on-created
+      branch_scope: "other_branches"
+      node_kind: TopologyCustomerOffice
+      mutation_action: "created"
+      action: run-office-fabric-generator
+
+    - name: trigger-customer-office-fabric-update-fabric-templates
+      branch_scope: "other_branches"
+      node_kind: TopologyCustomerOffice
+      mutation_action: "updated"
+      action: run-office-fabric-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: fabric_templates
+            modification_type: updated
+
     # ── Circuits ──────────────────────────────────────────────────────────────
     # add_circuit/add_virtual_circuit target physical_circuits/virtual_circuits,
     # so every circuit — loaded or generator-created (add_sdwan_edge creates

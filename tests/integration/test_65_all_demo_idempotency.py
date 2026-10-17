@@ -11,7 +11,7 @@ Two passes: the security path (rules, policies, segment attachments, firewall
 contexts with their sub-interfaces and P2P addresses, orchestrator routing
 groups), then the topology path (devices, interfaces, cables, addressing and
 pools of DCs, pods, racks, colocation metros, endpoints, MLAG domains,
-circuits, LB next-hops, per-instance segment tagging and SD-WAN edges).
+circuits, LB next-hops, per-instance segment tagging, SD-WAN edges and office fabrics).
 
 Each pass compares both snapshots, and the topology snapshot also covers
 objects the rerun generators do not own — data-loaded devices, racks, pods,
@@ -192,6 +192,7 @@ TOPOLOGY_RERUN_GENERATORS = {
     "add_lb_backend_nexthop": "loadbalancer_vips",
     "add_app_component_segment": "app_components",
     "add_sdwan_edge": "customer_deployments_office",
+    "add_office_fabric": "customer_deployments_office",
 }
 
 

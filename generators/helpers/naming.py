@@ -34,6 +34,8 @@ ROLE_CODES: dict[str, str] = {
     "tor": "tor",
     "l2-leaf": "l2",
     "access-leaf": "al",
+    "access-switch": "as",
+    "distribution-switch": "ds",
     "firewall": "fw",
     "load-balancer": "lb",
 }

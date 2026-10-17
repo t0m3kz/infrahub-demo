@@ -118,6 +118,71 @@ class TestSegmentPlacementCheck:
         assert check._captured_errors == []
 
 
+class TestOfficeSegments:
+    """An office hosts its own VXLAN segments (it is TopologySegmentHosting), locally only."""
+
+    @staticmethod
+    def _segment(stretch_scope: str, deployments: list[dict[str, Any]]) -> dict[str, Any]:
+        return {
+            "ManagedVxlanSegment": [
+                {
+                    "name": "seg-office",
+                    "stretch_scope": stretch_scope,
+                    "customer_deployments": deployments,
+                    "segment_deployments": [],
+                }
+            ]
+        }
+
+    # The vxlan_segment query selects no parent on an office (the OfficeCustomer hosts nothing), so the
+    # parent kind check, which would call TopologyOfficeCustomer "not TopologySegmentHosting", is skipped.
+    _OFFICE = {"typename": "TopologyCustomerOffice", "name": "C005-P"}
+
+    def test_local_vxlan_segment_on_an_office_passes(self) -> None:
+        check = _check()
+
+        check.validate(self._segment("local", [self._OFFICE]))
+
+        assert check._captured_errors == []
+
+    def test_office_parent_is_not_checked_for_segment_hosting(self) -> None:
+        """Even if a parent came back, the office is the hosting node: its parent is not judged."""
+        check = _check()
+        office = {**self._OFFICE, "parent": {"typename": "TopologyOfficeCustomer", "name": "C005"}}
+
+        check.validate(self._segment("local", [office]))
+
+        assert check._captured_errors == []
+
+    def test_stretching_a_segment_onto_an_office_is_an_error(self) -> None:
+        """An office has no border gateway to stretch a segment through."""
+        check = _check()
+        dc = {
+            "typename": "TopologyCustomerDC",
+            "name": "C005-P-DC10",
+            "parent": {"typename": "TopologyDataCenter", "name": "DC10"},
+        }
+
+        check.validate(self._segment("global", [dc, self._OFFICE]))
+
+        assert len(check._captured_errors) == 1
+        assert "must be local" in check._captured_errors[0]
+        assert "C005-P" in check._captured_errors[0]
+
+    def test_other_footprints_still_need_a_segment_hosting_parent(self) -> None:
+        """The exemption is the office's own: a DC footprint under a non-hosting parent is still an error."""
+        check = _check()
+        dc = {
+            "typename": "TopologyCustomerDC",
+            "name": "C005-P-DC10",
+            "parent": {"typename": "TopologyOfficeCustomer", "name": "C005"},
+        }
+
+        check.validate(self._segment("local", [dc]))
+
+        assert any("not TopologySegmentHosting" in msg for msg in check._captured_errors)
+
+
 class TestInlineTermination:
     """terminate_inline needs an on-prem HA pair: the fabric drops the segment's gateway."""
 

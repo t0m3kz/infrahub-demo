@@ -37,6 +37,12 @@ DEFAULT_ASN_BASE_START = 4200000000
 CUSTOMER_VLAN_ID_MIN = 100
 CUSTOMER_VLAN_ID_MAX = 2999
 
+# L2 VNI band of every site's own "{site}-vni-pool" (a DC's, a colocation metro's, an
+# office's). Why 39999: see the comment at dc.py's vni pool (16-bit RD/RT ceiling, disjoint
+# from the 50001-59999 L3 VNI range and from GLOBAL-L2VNI's 40000-49999).
+SITE_VNI_START = 10001
+SITE_VNI_END = 39999
+
 # FirewallContext VLAN pool of every fabric/metro (one context = one VLAN on the
 # firewall uplink and the border-leaf service port).
 FW_CONTEXT_VLAN_START = CONTEXT_VLAN_MIN

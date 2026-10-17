@@ -108,7 +108,9 @@ def _seg_response(
     dict with "id", "name", and "parent" (the hosting DC/Metro dict, optionally
     carrying a "vni_pool" sub-dict with "id"/"name") — mirroring the
     `... on TopologyCustomerDC/Colocation { parent { node {... vni_pool ...} } }`
-    fragment in the real vxlan_segment query.
+    fragment in the real vxlan_segment query. An office entry has no "parent"
+    but its own "vni_pool" key (value None when the pool is not set yet),
+    mirroring `... on TopologyCustomerOffice { vni_pool }`.
     """
 
     def _pool_node(pool: dict | None) -> dict | None:
@@ -118,19 +120,17 @@ def _seg_response(
 
     dep_edges = []
     for d in deployments:
-        parent = d["parent"]
-        parent_node: dict[str, Any] = {"id": parent["id"], "name": {"value": parent["name"]}}
-        if "vni_pool" in parent:
-            parent_node["vni_pool"] = _pool_node(parent["vni_pool"])
-        dep_edges.append(
-            {
-                "node": {
-                    "id": d["id"],
-                    "name": {"value": d["name"]},
-                    "parent": {"node": parent_node},
-                }
-            }
-        )
+        node: dict[str, Any] = {"id": d["id"], "name": {"value": d["name"]}}
+        if "parent" in d:
+            parent = d["parent"]
+            parent_node: dict[str, Any] = {"id": parent["id"], "name": {"value": parent["name"]}}
+            if "vni_pool" in parent:
+                parent_node["vni_pool"] = _pool_node(parent["vni_pool"])
+            node["parent"] = {"node": parent_node}
+        if "vni_pool" in d:
+            # `... on TopologyCustomerOffice { vni_pool }`: the footprint hosts itself.
+            node["vni_pool"] = _pool_node(d["vni_pool"])
+        dep_edges.append({"node": node})
     return {
         "ManagedVxlanSegment": {
             "edges": [
@@ -347,8 +347,39 @@ class TestVxlanSegmentGeneratorGenerate:
         asyncio.run(gen.generate(data))
 
         gen.wait_for_parent_generator_and_refetch.assert_awaited_once_with(
-            ("add_dc", "dc_pod_cascade", "add_colocation_metro"), "dc-1"
+            ("add_dc", "dc_pod_cascade", "add_colocation_metro", "add_office_fabric"), "dc-1"
         )
+
+    def test_office_without_pool_waits_on_its_own_id(self):
+        """An office hosts its own segments, so the wait is on the office itself (add_office_fabric
+        creates its vni_pool) — not on its parent, which hosts nothing."""
+        gen = _make_gen()
+        gen._activate_segment_in_deployment = AsyncMock()
+        gen._create_inline_sub_interfaces = AsyncMock()
+
+        office_no_pool = {"id": "office-1", "name": "C005-P", "vni_pool": None}
+        data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[office_no_pool])
+        asyncio.run(gen.generate(data))
+
+        gen.wait_for_parent_generator_and_refetch.assert_awaited_once_with(
+            ("add_dc", "dc_pod_cascade", "add_colocation_metro", "add_office_fabric"), "office-1"
+        )
+
+    def test_office_segment_is_activated_on_the_office_with_its_own_pool(self):
+        """The SegmentDeployment goes on the office footprint and draws the VNI from its vni_pool."""
+        gen = _make_gen()
+        gen._activate_segment_in_deployment = AsyncMock(return_value=True)
+        gen._create_inline_sub_interfaces = AsyncMock()
+
+        office = {"id": "office-1", "name": "C005-P", "vni_pool": {"id": "pool-office", "name": "c005-p-vni-pool"}}
+        data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[office])
+        asyncio.run(gen.generate(data))
+
+        gen.wait_for_parent_generator_and_refetch.assert_not_awaited()
+        call = gen._activate_segment_in_deployment.call_args
+        assert call.kwargs["deployment_id"] == "office-1"
+        assert call.kwargs["deployment_name"] == "C005-P"
+        assert call.kwargs["vni_pool"] == {"id": "pool-office", "name": "c005-p-vni-pool"}
 
     def test_refetched_data_is_reparsed_when_parent_was_in_flight(self):
         """If add_dc was in-flight, the refreshed data (now carrying the
@@ -470,6 +501,28 @@ class TestResolveHostingParent:
         customer_deployment = {"id": "cust-1", "name": "C001-P-DC1", "parent": {"id": "dc-1", "name": "DC-1"}}
         result = gen._resolve_hosting_parent(customer_deployment, "vxlan-1000")
         assert result == {"id": "dc-1", "name": "DC-1"}
+
+    def test_office_hosts_itself(self):
+        """CustomerOffice is TopologySegmentHosting: its vni_pool is on the footprint, so the
+        footprint is the hosting node (its parent, the OfficeCustomer, hosts nothing)."""
+        gen = _make_gen()
+        office = {"id": "office-1", "name": "C005-P", "vni_pool": {"id": "pool-1", "name": "c005-p-vni-pool"}}
+        assert gen._resolve_hosting_parent(office, "vxlan-1000") is office
+        gen.logger.error.assert_not_called()
+
+    def test_office_without_a_pool_yet_still_hosts_itself(self):
+        """The key's presence decides, not its value: an office whose add_office_fabric has not run
+        has vni_pool None, and that must not fall through to the (absent) parent."""
+        gen = _make_gen()
+        office = {"id": "office-1", "name": "C005-P", "vni_pool": None}
+        assert gen._resolve_hosting_parent(office, "vxlan-1000") is office
+        gen.logger.error.assert_not_called()
+
+    def test_dc_footprint_keeps_resolving_to_its_parent(self):
+        """A CustomerDC carries no vni_pool of its own: the pool is on its parent."""
+        gen = _make_gen()
+        dep = {"id": "cust-1", "name": "C001-P-DC1", "parent": {"id": "dc-1", "vni_pool": {"id": "p"}}}
+        assert gen._resolve_hosting_parent(dep, "vxlan-1000") == {"id": "dc-1", "vni_pool": {"id": "p"}}
 
     def test_missing_id_logs_warning_returns_none(self):
         gen = _make_gen()

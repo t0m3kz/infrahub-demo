@@ -66,7 +66,7 @@ from ..common import CommonGenerator, DeviceOptions
 from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
 from ..devices import DeviceMixin
 from ..helpers import get_loopback_name
-from ..helpers.pools import name_to_asn_range
+from ..helpers.pools import SITE_VNI_END, SITE_VNI_START, name_to_asn_range
 from ..helpers.routing import loopback_prefix_length, p2p_prefix_length
 from ..pools import PoolMixin
 from ..protocols import DcimVirtualInterface, ManagedBGP, TopologyColocationMetro
@@ -146,11 +146,6 @@ _COLO_ASN_MAX_PODS = 1
 # router-id is 32-bit and cannot be an IPv6 address).
 _COLO_LOOPBACK_IPV6_PREFIX_LENGTH = 120
 _COLO_VTEP_LOOPBACK_INDEX = 1
-# Same range and reasoning as dc.py's "{fabric}-vni-pool": 16-bit RD/RT
-# ceiling, and disjoint from both GLOBAL-L2VNI (40000-49999, stretched
-# segments) and the 50001-59999 L3 VNI range.
-_COLO_VNI_RANGE = (10001, 39999)
-
 # The two edges of a metro share no fabric: one direct link between them (port
 # role `interlink`, N9K-C9316D-GX_EDGE's Ethernet1/8) carries a /127 and the
 # iBGP FABRIC session (see _ensure_edge_pair). A /124 slice holds eight /127s,
@@ -414,8 +409,8 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         vni_pool = await self.upsert_number_pool(
             pool_name=f"{metro}-vni-pool",
             description=f"L2 VNI pool for colocation metro {metro.upper()}",
-            start_range=_COLO_VNI_RANGE[0],
-            end_range=_COLO_VNI_RANGE[1],
+            start_range=SITE_VNI_START,
+            end_range=SITE_VNI_END,
             node="ManagedSegmentDeployment",
             node_attribute="vni",
         )

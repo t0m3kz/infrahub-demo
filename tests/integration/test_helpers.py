@@ -1484,6 +1484,10 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     "ManagedMLAG": "name { value }",
     "ManagedStandaloneVlanDomain": "name { value }",
     "RoutingOSPFArea": "name { value } area { value }",
+    # The office fabric's OSPF underlay (add_office_fabric): the only OSPF in 30_all.
+    "ManagedOSPF": "name { value }",
+    "ManagedOSPFPeering": "name { value }",
+    "RoutingOSPFInterface": "name { value }",
     "RoutingPassword": "name { value }",
     "RoutingBGPAddressFamily": "",
     "SecurityZone": "name { value }",

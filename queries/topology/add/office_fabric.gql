@@ -1,0 +1,43 @@
+query topology_office_fabric($name: String!) {
+  TopologyCustomerOffice(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        naming_convention { value }
+        # The opt-in: an office with no fabric_templates has no fabric and the
+        # generator no-ops (the same entries as a colocation metro's, see
+        # colocation_metro.gql). template_kind is aliased because clean_data()
+        # strips "__" out of any key it finds, so a bare __typename would arrive
+        # as "typename".
+        fabric_templates {
+          edges {
+            node {
+              role { value }
+              quantity { value }
+              template {
+                node {
+                  id
+                  template_kind: __typename
+                  ... on TemplateDcimPhysicalDevice {
+                    template_name { value }
+                    platform { node { id name { value } } }
+                    device_type { node { id } }
+                    interfaces {
+                      edges {
+                        node {
+                          name { value }
+                          role { value }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

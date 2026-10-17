@@ -33,7 +33,13 @@ class CheckSegmentPlacement(InfrahubCheck):
     _VXLAN_ALLOWED_DEPLOYMENTS = {
         "TopologyCustomerDC",
         "TopologyCustomerColocation",
+        "TopologyCustomerOffice",
     }
+    # Footprints that are TopologySegmentHosting themselves: they host their
+    # segments (VNI pool, SegmentDeployment) and have no hosting parent to check.
+    # An office has no border gateway to stretch a segment through, so its
+    # segments are local-only.
+    _SELF_HOSTING_DEPLOYMENTS = {"TopologyCustomerOffice"}
     _VXLAN_ALLOWED_PARENTS = {
         "TopologyDataCenter",
         "TopologyColocationMetro",
@@ -155,6 +161,17 @@ class CheckSegmentPlacement(InfrahubCheck):
                             f"{sorted(self._VXLAN_ALLOWED_DEPLOYMENTS)}"
                         )
                     )
+
+                if dep_kind in self._SELF_HOSTING_DEPLOYMENTS:
+                    if stretch_scope != "local":
+                        self.log_error(
+                            message=(
+                                f"VXLAN segment '{seg_name}' uses stretch_scope={stretch_scope} but is attached to "
+                                f"{dep_kind} '{dep_name}': an office has no border gateway to stretch a segment "
+                                "through, so its segments must be local"
+                            )
+                        )
+                    continue
 
                 parent = deployment.get("parent") or {}
                 parent_kind = parent.get("typename")

@@ -16,6 +16,10 @@ spec:
       description: All L2-leaf switches (L2-only aggregation — middle_rack/mixed, connects to leafs)
     - name: access-leafs
       description: All access-leaf switches (VXLAN-EVPN VTEP — connects to leafs, not spines)
+    - name: access-switches
+      description: All access-switches (campus LISP fabric edge nodes of an office)
+    - name: distribution-switches
+      description: All distribution-switches (co-located LISP border and control-plane nodes of an office)
     - name: border-leafs
       description: All border leafs
     - name: border-spines
@@ -112,7 +116,7 @@ spec:
     - name: customer_deployments_cloud
       description: TopologyCustomerCloud footprints — generator target for TopologyOrchestratorRoutingGenerator (add_customer_cloud_orchestrator_routing)  # yamllint disable-line rule:line-length
     - name: customer_deployments_office
-      description: TopologyCustomerOffice footprints — generator target for SdwanEdgeGenerator (no-ops unless sdwan_gateway is set). Formerly CustomerDeploymentOfficeExchangeGenerator, removed per docs/exchange_gateway.md. Also the target of TopologyOrchestratorRoutingGenerator (add_customer_office_orchestrator_routing).  # yamllint disable-line rule:line-length
+      description: TopologyCustomerOffice footprints — generator target for SdwanEdgeGenerator (no-ops unless sdwan_gateway is set) and OfficeFabricGenerator (no-ops unless fabric_templates is set). Formerly CustomerDeploymentOfficeExchangeGenerator, removed per docs/exchange_gateway.md. Also the target of TopologyOrchestratorRoutingGenerator (add_customer_office_orchestrator_routing).  # yamllint disable-line rule:line-length
     - name: colocation_metros
       description: "TopologyColocationMetro regions — generator target for ColocationMetroGenerator. Every metro joins, even one without fabric_templates, because the created-trigger fires per kind and would raise on a non-member"  # yamllint disable-line rule:line-length
     - name: physical_circuits

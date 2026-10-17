@@ -96,6 +96,15 @@ spec:
     - quantity: 2
       role: edge
       template: C8000V_EDGE
+    # Catalyst 9000 office fabric (cisco_xe): the distribution pair is the LISP site's
+    # border and control plane, the access pair its fabric edge
+    # (TopologyCustomerOffice.fabric_templates, generators/topology/office_fabric.py).
+    - quantity: 2
+      role: distribution-switch
+      template: C9500-32C_DISTRIBUTION
+    - quantity: 2
+      role: access-switch
+      template: C9300-48UXM_ACCESS_SWITCH
     # Arista Leafs
     - quantity: 2
       role: leaf
