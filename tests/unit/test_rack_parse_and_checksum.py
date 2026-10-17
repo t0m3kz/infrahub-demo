@@ -413,6 +413,56 @@ class TestGenerateRackGating:
         gen.logger.error.assert_not_called()
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("strategy", "expected_role"),
+        [
+            ("ebgp-ebgp", "underlay"),
+            ("ebgp-ibgp", "underlay"),
+            ("ospf-ibgp", "overlay"),
+        ],
+    )
+    async def test_rack_defers_until_the_spine_bgp_its_strategy_creates_is_ready(
+        self, strategy: str, expected_role: str
+    ) -> None:
+        """A rack waits for the spine process role its routing strategy really creates.
+
+        ospf-ibgp has no underlay ManagedBGP, so waiting for one deferred every
+        rack of such a fabric forever.
+        """
+        gen = _build_rack_generator(deployment_type="mixed", rack_type="network")
+        gen.data["pod"]["parent"]["routing_strategy"] = strategy
+        gen.data["pod"]["devices"] = [{"name": "spine-1"}, {"name": "spine-2"}]
+        gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
+        gen.bgp_processes_ready = AsyncMock(return_value=False)
+        gen._prepare_generation_context = MagicMock()
+
+        with patch("generators.topology.rack.parse_rack_data", return_value=gen.data):
+            await gen.generate({"any": "shape"})
+
+        gen.bgp_processes_ready.assert_awaited_once_with(["spine-1", "spine-2"], expected_role)
+        gen._prepare_generation_context.assert_not_called()
+        gen.logger.error.assert_not_called()
+        assert any(expected_role in call.args for call in gen.logger.info.call_args_list)
+
+    @pytest.mark.asyncio
+    async def test_rack_proceeds_once_the_spine_bgp_is_ready(self) -> None:
+        """With the awaited spine process present the rack goes on past the readiness gate."""
+        gen = _build_rack_generator(deployment_type="mixed", rack_type="compute", leafs=[])
+        gen.data["tors"] = []
+        gen.data["l2_leafs"] = []
+        gen.data["access_leafs"] = []
+        gen.data["pod"]["parent"]["routing_strategy"] = "ospf-ibgp"
+        gen.data["pod"]["devices"] = [{"name": "spine-1"}]
+        gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
+        gen.bgp_processes_ready = AsyncMock(return_value=True)
+
+        with patch("generators.topology.rack.parse_rack_data", return_value=gen.data):
+            await gen.generate({"any": "shape"})
+
+        gen.bgp_processes_ready.assert_awaited_once_with(["spine-1"], "overlay")
+        assert any("endpoint-only rack" in str(call.args[0]) for call in gen.logger.info.call_args_list)
+
+    @pytest.mark.asyncio
     async def test_endpoint_only_rack_skips_before_role_check(self) -> None:
         gen = _build_rack_generator(deployment_type="mixed", rack_type="compute", leafs=[])
         gen.data["tors"] = []

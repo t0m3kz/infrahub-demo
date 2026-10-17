@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
@@ -29,6 +29,22 @@ _POD_POOL_FIELDS = ("loopback_pool", "prefix_pool", "asn_pool")
 # Underlays that allocate a per-device ASN from the pod's ASN pool. An OSPF
 # underlay never does, so a missing asn_pool is not worth waiting for there.
 _EBGP_UNDERLAY_STRATEGIES = frozenset({RoutingStrategy.EBGP_EBGP.value, RoutingStrategy.EBGP_IBGP.value})
+
+
+def spine_bgp_readiness_role(dc: Mapping[str, Any]) -> str:
+    """The ManagedBGP process role the pod's spines must own before a rack bootstraps.
+
+    The rack's leaf sessions peer with the spine process of this role, so only
+    a role the strategy actually creates may be waited for:
+
+    * eBGP underlay (ebgp-ebgp, ebgp-ibgp): ``underlay``, pre-seeded by add_pod
+      before cabling.
+    * ospf-ibgp: no underlay BGP exists (the underlay is OSPF); the spines
+      carry only the shared-AS ``overlay`` process.
+    """
+    strategy = dc.get("routing_strategy", RoutingStrategy.EBGP_EBGP.value)
+    return "underlay" if strategy in _EBGP_UNDERLAY_STRATEGIES else "overlay"
+
 
 # Roles whose generation reads _spine_device_names/_spine_interfaces: "leaf"
 # and "tor" cable to the pod's spines, and "access_leaf" opens a second,

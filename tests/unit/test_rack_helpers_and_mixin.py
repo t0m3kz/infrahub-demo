@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.helpers.rack import RackRolesHelper
+from generators.rack import spine_bgp_readiness_role
 from generators.topology.rack import RackGenerator, TopologyRackData
 
 
@@ -140,6 +141,22 @@ def _mock_pod_pools(*, loopback_id: str | None, prefix_id: str | None, asn_id: s
     pod_obj.prefix_pool = MagicMock(id=prefix_id)
     pod_obj.asn_pool = MagicMock(id=asn_id)
     return pod_obj
+
+
+class TestSpineBgpReadinessRole:
+    @pytest.mark.parametrize(
+        ("dc", "expected"),
+        [
+            ({"routing_strategy": "ebgp-ebgp"}, "underlay"),
+            ({"routing_strategy": "ebgp-ibgp"}, "underlay"),
+            ({"routing_strategy": "ospf-ibgp"}, "overlay"),
+            ({}, "underlay"),
+        ],
+    )
+    def test_role_follows_the_underlay_the_strategy_creates(self, dc: dict[str, str], expected: str) -> None:
+        """Only an eBGP underlay has spine underlay BGP; ospf-ibgp spines carry the overlay process alone;
+        a missing strategy keeps the ebgp-ebgp default."""
+        assert spine_bgp_readiness_role(dc) == expected
 
 
 class TestRackMixinAdditional:
