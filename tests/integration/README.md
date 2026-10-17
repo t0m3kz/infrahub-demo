@@ -174,7 +174,7 @@ and `test_70` only. The constants (branch, stages, expected role counts) are loc
 | DC state | `lisp` / `ospf-ibgp` / `ipv4`, the site key attached, both tenant segments active on the DC |
 | `CheckLispFabric` | run in-process against the branch: no error |
 | Border-leaf renders | `router lisp`, `map-server`, `site DC13`, the L3 `eid-record`s, OSPF; no `l2vpn evpn`, `nve1` or `router bgp` |
-| Leaf / access-leaf renders | the transform does not refuse, OSPF underlay, the edge LISP config (`router lisp`, `etr map-server ... key`, no `map-server` role); no `l2vpn evpn`, `nve1` or `router bgp`. No instance-id yet: the scope hosts no segment |
+| Leaf / access-leaf renders | the transform does not refuse, OSPF underlay, the edge LISP config (`router lisp`, `etr map-server ... key`, no `map-server` role); no `l2vpn evpn`, `nve1` or `router bgp`. No instance-id yet: the scope hosts no segment (a `cisco_xe` leaf can now render hosts and their SVI ACL, see the smoke golden `leaf_cisco_xe_lisp_with_acl`; `test_70` does not exercise it) |
 | Rerun | a second `add_dc` run changes no id, address, pool or count, and keeps the site key |
 
 Every IOS-XE line in the renders is unverified-no-lab: the test pins the shape of the render, not device behaviour.
