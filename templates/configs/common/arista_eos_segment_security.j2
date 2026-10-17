@@ -3,7 +3,8 @@
     `segment_security` (transforms/helpers/group_policy.py group_policy_device_view) is set only on a
     VTEP of a reference fabric that has a VRF with a segment to define; every block here is guarded by it, so
     a device without one renders exactly as before. Order (spec): global match-lists (one per segment, the
-    segment's gateway prefix), field-sets and application traffic recognition (custom policies only), then
+    segment's gateway prefix), application traffic recognition with its field-sets inside the block (custom
+    policies only), then
     `router segment-security`: the feature switch, the policies, and per VRF the segments with their
     definition and `from <source segment> policy <policy>` lines under the DESTINATION segment.
     Evidence: D is the EOS 4.36.2F manual (match-lists, segments, built-in policies, no shutdown); the custom
@@ -55,12 +56,7 @@
 match-list input prefix-{{ match_list.family }} {{ match_list.name }}
    match prefix-{{ match_list.family }} {{ match_list.prefix }}
 {%- endfor %}
-{%- for field_set in segment_security.field_sets %}
-! documented-not-lab-verified: field-set l4-port is documented in AVD only
-field-set l4-port {{ field_set.name }}
-   {{ field_set.ports }}
-{%- endfor %}
-{%- if segment_security.applications %}
+{%- if segment_security.applications or segment_security.field_sets %}
 ! documented-not-lab-verified: application traffic recognition is documented in AVD only
 application traffic recognition
 {%- for application in segment_security.applications %}
@@ -70,6 +66,12 @@ application traffic recognition
 {%- else %}
       protocol {{ application.protocol }}
 {%- endif %}
+{%- endfor %}
+{%- for field_set in segment_security.field_sets %}
+   !
+   ! documented-not-lab-verified: field-set l4-port is documented in AVD only
+   field-set l4-port {{ field_set.name }}
+      {{ field_set.ports }}
 {%- endfor %}
 {%- endif %}
 !
