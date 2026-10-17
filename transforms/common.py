@@ -18,10 +18,12 @@ from transforms.helpers.firewall import (
 )
 from transforms.helpers.group_policy import GPO_CONFIG_KEYS, group_policy_device_view
 from transforms.helpers.ha import _HA_TYPENAMES
+from transforms.helpers.lisp import build_lisp_inputs, get_lisp_config
 from transforms.helpers.loadbalancer_pbr import _flatten_deployment_lb_vips, get_lb_backend_pbr_rules
 from transforms.helpers.management import get_management_services
 from transforms.helpers.mlag import get_mlag, get_sonic_mlag_config
 from transforms.helpers.ospf import get_ospf
+from transforms.helpers.overlay import OVERLAY_CONFIG_KEYS, OVERLAY_RENDERERS
 from transforms.helpers.segments import (
     get_vlans,
     routed_activations,
@@ -30,7 +32,7 @@ from transforms.helpers.segments import (
 from transforms.helpers.templates import load_template
 from transforms.helpers.vxlan import get_interfaces, get_vxlan_config
 from utils.data_cleaning import clean_data
-from utils.fabric_roles import BORDER_ROLES
+from utils.fabric_roles import BORDER_ROLES, DC_VTEP_ROLES
 
 
 def _fabric_rt_asn(deployment: Any) -> int | None:
@@ -47,6 +49,19 @@ def _fabric_rt_asn(deployment: Any) -> int | None:
         if isinstance(asn, int):
             return asn
     return None
+
+
+def _fabric_overlay_control_plane(deployment: Any) -> str:
+    """Return the fabric's overlay control plane: ``bgp_evpn`` (the default) or ``lisp``.
+
+    Reads ``TopologySegmentHosting.overlay_control_plane`` off the device's own deployment, with
+    the same two-shape resolution as _fabric_rt_asn: every device of a fabric resolves the same value.
+    """
+    for candidate in segment_hosting_candidates(deployment):
+        control_plane = candidate.get("overlay_control_plane")
+        if isinstance(control_plane, str) and control_plane:
+            return control_plane
+    return "bgp_evpn"
 
 
 def _fabric_anycast_mac(deployment: Any) -> str | None:
@@ -195,7 +210,36 @@ class BaseDeviceTransform(InfrahubTransform):
             unsupported = [key for key in ("snmp", "aaa") if config.get(key)]
             if unsupported:
                 raise ValueError(f"{platform_name} ConfigDB rendering does not support: {', '.join(unsupported)}")
+        self._refuse_cisco_xe_unrendered(platform_name, config)
         return self._render(platform_name, config)
+
+    # The roles rendered by a cisco_xe fabric template (leafs/ and border_leafs/); the Edge's cisco_xe template is IOS.
+    _CISCO_XE_FABRIC_ROLES = frozenset({"leaf", "tor", "access-leaf", "border-leaf"})
+
+    def _refuse_cisco_xe_unrendered(self, platform_name: str, config: dict) -> None:
+        """Raise when a Catalyst 9000 (cisco_xe) fabric device needs what its EVPN-VXLAN templates do not render.
+
+        Those templates render the EVPN-VXLAN overlay, BGP, OSPF and the gateway SVIs only. Dropping the
+        segment ACLs, PBR, inter-VRF exchange statics, MLAG or Multi-Site would ship an unprotected or
+        incomplete config, so refuse instead, like SONiC and SR OS.
+        """
+        if platform_name != "cisco_xe":
+            return
+        if self.device_role == "border-spine":
+            # It shares the border_leafs/ template directory but is also a route reflector, which that template does not render.
+            raise ValueError("cisco_xe border-spine cannot render the route-reflector role; refusing incomplete config")
+        if self.device_role not in self._CISCO_XE_FABRIC_ROLES:
+            return
+        vxlan = config.get("vxlan") or {}
+        unsupported = [key for key in ("acls", "leaf_pbr_rules", "vrf_routes", "mlag") if config.get(key)]
+        if vxlan.get("multisite"):
+            unsupported.append("multisite")
+        if vxlan.get("enabled") and not (vxlan.get("evpn") or {}).get("enabled"):
+            unsupported.append("VXLAN without an EVPN BGP process")
+        if unsupported:
+            raise ValueError(
+                f"cisco_xe {self.device_role} cannot render: {', '.join(unsupported)}; refusing incomplete config"
+            )
 
     def _template_context(self, device_data: dict, platform_name: str, extra_roots: dict) -> dict:
         """The template context: the device-specific part (``_extra_config``), then the base part.
@@ -358,14 +402,30 @@ class BaseDeviceTransform(InfrahubTransform):
         if self.device_role in BORDER_ROLES:
             self._refuse_unprotected_tenant_svis(self.device_role, platform_name, acls, leaf_pbr_rules)
 
-        vxlan = get_vxlan_config(
-            data,
-            platform_name,
-            device_role=self.device_role,
-            activations=(activations or []) + transits,
-            fabric_rt_asn=_fabric_rt_asn(data.get("deployment")),
-            fabric_anycast_mac=_fabric_anycast_mac(data.get("deployment")),
-        )
+        lisp = None
+        if _fabric_overlay_control_plane(data.get("deployment")) == "lisp" and self.device_role in DC_VTEP_ROLES:
+            # The spines of a LISP fabric are underlay only: they keep taking the EVPN path below (no VXLAN).
+            if platform_name not in OVERLAY_RENDERERS["lisp"]:
+                raise ValueError(
+                    f"{platform_name} {self.device_role} cannot render the LISP overlay; refusing incomplete config"
+                )
+            vxlan = None
+            lisp = get_lisp_config(
+                data,
+                self.device_role,
+                (activations or []) + transits,
+                build_lisp_inputs(data.get("deployment"), self.device_role),
+                fabric_anycast_mac=_fabric_anycast_mac(data.get("deployment")),
+            )
+        else:
+            vxlan = get_vxlan_config(
+                data,
+                platform_name,
+                device_role=self.device_role,
+                activations=(activations or []) + transits,
+                fabric_rt_asn=_fabric_rt_asn(data.get("deployment")),
+                fabric_anycast_mac=_fabric_anycast_mac(data.get("deployment")),
+            )
         if self.device_role in self._LEAF_ROLES:
             self._refuse_unbindable_sros_acls(platform_name, acls, vxlan)
 
@@ -380,6 +440,8 @@ class BaseDeviceTransform(InfrahubTransform):
             # so only the borders originate them as type-5 routes.
             "leaf_transit_prefixes": sorted({t["segment"]["gateway"]["ip_prefix"]["prefix"] for t in leaf_transits}),
         }
+        if lisp is not None:
+            config[OVERLAY_CONFIG_KEYS["lisp"]] = lisp
         # Group policy of a VTEP in a reference fabric, from the fleet roots of the device query:
         # NX-OS VXLAN GPO as `group_policy`, EOS MSS-G as `segment_security`. Absent for every other
         # device, so its templates render exactly as before.
@@ -389,7 +451,11 @@ class BaseDeviceTransform(InfrahubTransform):
             role=self.device_role,
             platform=platform_name,
             activations=activations or [],
-            vrfs=[mapping["vrf_name"] for mapping in (vxlan or {}).get("l3_vni_mappings", [])],
+            vrfs=(
+                [l3["vrf"] for l3 in lisp["l3_instances"]]
+                if lisp
+                else [mapping["vrf_name"] for mapping in (vxlan or {}).get("l3_vni_mappings", [])]
+            ),
             interfaces=data.get("interfaces") or [],
         )
         if found is not None:

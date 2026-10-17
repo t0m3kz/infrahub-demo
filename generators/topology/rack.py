@@ -19,6 +19,7 @@ from ..rack import (
     ROLES_BY_DEPLOYMENT_TYPE,
     ROW_DEPENDENT_RACK_TYPES,
     RackMixin,
+    spine_bgp_readiness_role,
 )
 from ..routing import RoutingMixin
 
@@ -39,6 +40,7 @@ class TopologyRackParentData(TypedDict, total=False):
     fabric_interface_sorting_method: str
     connectivity_mode: str
     routing_strategy: str
+    overlay_control_plane: str
     underlay_protocol: str
     management_pool: dict[str, Any] | None
     size: str
@@ -529,10 +531,12 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
 
         pod = self.data["pod"]
         spine_names = [device["name"] for device in pod.get("devices", [])]
-        if spine_names and not await self.bgp_processes_ready(spine_names, "underlay"):
+        spine_bgp_role = spine_bgp_readiness_role(pod.get("parent") or {})
+        if spine_names and spine_bgp_role and not await self.bgp_processes_ready(spine_names, spine_bgp_role):
             self.logger.info(
-                "Rack %s: deferring bootstrap until parent POD spine underlay BGP is ready",
+                "Rack %s: deferring bootstrap until parent POD spine %s BGP is ready",
                 self.data["name"],
+                spine_bgp_role,
             )
             return
         deployment_type = pod["deployment_type"]

@@ -1,0 +1,129 @@
+{#- EVPN-VXLAN for a Catalyst 9000 (IOS-XE). Included by leafs/cisco_xe.j2 from inside its
+    `{% if vxlan and vxlan.enabled %}` guard. transforms/common.py refuses a cisco_xe device whose VXLAN is not EVPN
+    (a Catalyst 9000 has no static VXLAN here) or that needs Multi-Site, so `vxlan.evpn.enabled` holds.
+
+    The model follows the Cisco Catalyst 9000 BGP EVPN VXLAN guide: `l2vpn evpn instance <id> vlan-based` per L2
+    VNI bound to its VLAN by `vlan configuration`, `vrf definition` with `stitching` route targets per L3 VNI, an
+    `interface nve1` with `member vni`, and the tenant VRF address families in `router bgp`. No lab has run any of
+    it: every construct this template is not sure of carries an `unverified-no-lab` comment. -#}
+{%- set anycast = vxlan.anycast_gateway and vxlan.anycast_gateway.enabled %}
+{%- set anycast_gateway = vxlan.anycast_gateway %}
+! VXLAN / EVPN Configuration (Catalyst 9000, IOS-XE)
+{%- if vxlan.l3_vni_mappings %}
+!
+! Tenant VRFs (symmetric IRB — one L3 VNI per tenant)
+! unverified-no-lab: `route-target ... stitching` is how the guide imports and exports a VRF into L2VPN EVPN
+{%- for mapping in vxlan.l3_vni_mappings %}
+vrf definition {{ mapping.vrf_name }}
+{%- if vxlan.evpn.rd_format %}
+ rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.l3_vni | string) }}
+{%- endif %}
+ address-family ipv4
+{%- if mapping.route_target %}
+  route-target export {{ mapping.route_target }}
+  route-target import {{ mapping.route_target }}
+  route-target export {{ mapping.route_target }} stitching
+  route-target import {{ mapping.route_target }} stitching
+{%- endif %}
+{%- for rt in mapping.import_route_targets | default([]) %}
+  route-target import {{ rt }}
+  route-target import {{ rt }} stitching
+{%- endfor %}
+ exit-address-family
+!
+{%- endfor %}
+{%- endif %}
+!
+! EVPN
+! unverified-no-lab: `replication-type static` (ingress replication) is a global l2vpn evpn command
+! unverified-no-lab: `router-id <loopback>` under l2vpn evpn
+l2vpn evpn
+ replication-type {{ vxlan.replication_type }}
+{%- if vxlan.vtep.ipv4 %}
+ router-id {{ vxlan.vtep.source_interface }}
+{%- endif %}
+{%- if anycast %}
+ ! unverified-no-lab: `default-gateway advertise` globally (later trains also take `enable` per instance)
+ default-gateway advertise
+{%- endif %}
+!
+{%- if vxlan.l2_vni_mappings %}
+! unverified-no-lab: `rd` and `route-target` under `l2vpn evpn instance`; ARP/ND flooding suppression is left at the platform default
+{%- endif %}
+{%- for mapping in vxlan.l2_vni_mappings %}
+l2vpn evpn instance {{ mapping.vlan_id }} vlan-based
+ encapsulation vxlan
+{%- if vxlan.evpn.rd_format %}
+ rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.vni | string) }}
+{%- endif %}
+{%- if mapping.route_target %}
+ route-target export {{ mapping.route_target }}
+ route-target import {{ mapping.route_target }}
+{%- endif %}
+!
+vlan configuration {{ mapping.vlan_id }}
+ member evpn-instance {{ mapping.vlan_id }} vni {{ mapping.vni }}
+!
+{%- endfor %}
+{%- if vxlan.l3_vni_mappings %}
+!
+! L3 VNI transit SVIs (symmetric IRB — no host addressing, forwarding only)
+! unverified-no-lab: `vlan configuration <vlan>` / `member vni <l3vni>` binds the L3 VNI to its SVI VLAN
+! unverified-no-lab: `ip unnumbered Loopback0` and `no autostate` on the L3 VNI SVI
+{%- for mapping in vxlan.l3_vni_mappings if mapping.svi_vlan_id %}
+vlan {{ mapping.svi_vlan_id }}
+ name L3VNI_{{ mapping.vrf_name }}
+!
+vlan configuration {{ mapping.svi_vlan_id }}
+ member vni {{ mapping.l3_vni }}
+!
+interface Vlan{{ mapping.svi_vlan_id }}
+ description L3VNI transit SVI for VRF {{ mapping.vrf_name }}
+ vrf forwarding {{ mapping.vrf_name }}
+ ip unnumbered {{ vxlan.vtep.source_interface }}
+ no autostate
+ no shutdown
+!
+{%- endfor %}
+{%- endif %}
+!
+! VTEP
+! unverified-no-lab: `member vni <l2vni> ingress-replication` alongside `replication-type static`
+! unverified-no-lab: `member vni <l3vni> vrf <vrf>`
+interface {{ vxlan.nve_interface }}
+ no ip address
+{%- if vxlan.vtep.ipv4 %}
+ source-interface {{ vxlan.vtep.source_interface }}
+{%- endif %}
+ host-reachability protocol bgp
+{%- for mapping in vxlan.l2_vni_mappings %}
+ member vni {{ mapping.vni }} ingress-replication
+{%- endfor %}
+{%- for mapping in vxlan.l3_vni_mappings %}
+ member vni {{ mapping.l3_vni }} vrf {{ mapping.vrf_name }}
+{%- endfor %}
+ no shutdown
+!
+{%- for bgp_config in bgp | default([]) if bgp_config.has_evpn %}
+!
+! EVPN in BGP: community export towards the EVPN neighbours, tenant VRFs advertised as type-5
+! unverified-no-lab: `neighbor <peer> send-community both` inside address-family l2vpn evpn (the shared BGP block sets it globally)
+! unverified-no-lab: `advertise l2vpn evpn` and `redistribute connected` inside `address-family ipv4 vrf <vrf>`
+router bgp {{ bgp_config.local_as.asn }}
+ address-family l2vpn evpn
+{%- for pg in bgp_config.peer_groups | default([]) if 'evpn' in (pg.address_families | default([])) %}
+  neighbor {{ pg.name }} send-community both
+{%- endfor %}
+{%- for session in bgp_config.sessions if not session.get('vrf') and session.peer_group is not defined and 'evpn' in (session.address_families | default([])) %}
+  neighbor {{ session.neighbor }} send-community both
+{%- endfor %}
+ exit-address-family
+{%- for mapping in vxlan.l3_vni_mappings %}
+ address-family ipv4 vrf {{ mapping.vrf_name }}
+  advertise l2vpn evpn
+  redistribute connected
+ exit-address-family
+{%- endfor %}
+!
+{%- endfor %}
+{%- include 'common/cisco_xe_gateway_svis.j2' -%}

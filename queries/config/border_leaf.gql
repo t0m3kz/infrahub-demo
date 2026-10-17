@@ -32,10 +32,12 @@ query border_leaf_config(
         ... on DcimPhysicalDevice {
           deployment {
             node {
+              ...LispSiteOnDeploymentFields
               ...FirewallContextsOnDeploymentFields
               ...LoadbalancerVipsOnDeploymentFields
               ...SegmentDeploymentsOnDeploymentFields
               ...EvpnRtAsOnDeploymentFields
+              ...LispMapServersOnDeploymentFields
             }
           }
         }
