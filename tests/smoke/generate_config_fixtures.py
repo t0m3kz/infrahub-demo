@@ -35,7 +35,9 @@ from transforms.config.proxy import Proxy
 from transforms.config.spine import Spine
 from transforms.config.super_spine import SuperSpine
 from transforms.config.tor import ToR
+from transforms.helpers.group_policy import group_policy_device_view
 from transforms.topology.segmentation_matrix import SegmentationMatrix
+from utils.data_cleaning import clean_data
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SMOKE_DIR = Path(__file__).resolve().parent / "configs"
@@ -800,11 +802,11 @@ def build_device_data(
                 "vlan_domain_id": vlan_domain_id,
             }
         )
-        # SR OS binds a segment ACL only inside the vpls of an L2 VNI and models no
-        # VLAN-only service, so the transform refuses this ACL-bearing VLAN-only
-        # segment (tests/unit/test_base_device_transform.py); the fixture omits it.
-        sros_acl_leaf = platform == "nokia_sros" and (include_acls or isolation_mode not in (None, "normal"))
-        if not sros_acl_leaf:
+        # SR OS models no VLAN-only service: it has no vpls/vprn to attach the gateway IRB
+        # to, so the transform refuses a VLAN-only gateway segment (transforms/common.py
+        # _sros_irbs; the refusal is covered by tests/unit/test_base_device_transform.py)
+        # and binds a segment ACL only inside the vpls of an L2 VNI. The fixture omits it.
+        if platform != "nokia_sros":
             segment_kwargs.append(
                 {
                     "vlan_id": 200,
@@ -2469,6 +2471,35 @@ def build_mlag_device_data(
     return {"DcimDevice": _edges([device_node])}
 
 
+def build_mlag_virtual_peer_link_data(*, device_name: str, peer_name: str, role: str, platform: str) -> dict:
+    """A pod with ``mlag_create: virtual``: the peer-link is a member-less ``loopback100``
+    DcimVirtualInterface (role mlag-peer, no IP on NX-OS) instead of a port-channel
+    (generators/mlag.py _ensure_virtual_peer_link), so no physical peer-link exists to bind."""
+    data = build_mlag_device_data(
+        device_name=device_name,
+        peer_name=peer_name,
+        role=role,
+        platform=platform,
+        domain_id=1,
+        domain_name="DC1-POD1-L1-L2-MLAG",
+    )
+    node = data["DcimDevice"]["edges"][0]["node"]
+    kept = [
+        edge
+        for edge in node["interfaces"]["edges"]
+        if edge["node"]["role"]["value"] != "mlag-peer"  # drops the port-channel and its member ports
+    ]
+    virtual = _make_interface(
+        name="loopback100",
+        device_name=device_name,
+        description="MLAG virtual peer-link — DC1-POD1-L1-L2-MLAG",
+        role="mlag-peer",
+        typename="DcimVirtualInterface",
+    )
+    node["interfaces"]["edges"] = [*kept, {"node": virtual}]
+    return data
+
+
 _PROXY_PLATFORM_VENDOR: dict[str, str] = {
     "haproxy_technologies_linux": "haproxy",
     "squid_cache_linux": "squid",
@@ -2954,17 +2985,21 @@ def build_segmentation_matrix_data() -> dict:
     ]
     return {
         "data": {
-            "target": _edges([{"id": "dc10", "name": _v("DC10")}]),
+            "target": _edges([{"id": "dc10", "name": _v("DC10"), "group_policy_enforce": _v(True)}]),
             "TopologyDataCenter": _edges(
                 [
                     {
                         "id": "dc10",
+                        "name": _v("DC10"),
+                        "group_policy_enforce": _v(True),
                         "devices": _edges(
                             [_gp_device("bl-dc10-01", "border-leaf", "N9K-C9336C-FX2", "10.3(3)", memory_gb)]
                         ),
                     },
                     {
                         "id": "dc12",
+                        "name": _v("DC12"),
+                        "group_policy_enforce": _v(False),
                         "devices": _edges(
                             [_gp_device("bl-dc12-01", "border-leaf", "N9K-C9336C-FX2", "10.3(3)", memory_gb)]
                         ),
@@ -3051,10 +3086,12 @@ _GPO_EOS = {
 }
 
 
-def _gpo_fleet_roots(*, fleet: dict[str, str], version: str, leaf_type: str | None = None) -> dict:
+def _gpo_fleet_roots(
+    *, fleet: dict[str, str], version: str, leaf_type: str | None = None, enforce: bool = True
+) -> dict:
     """The fleet roots of the GPO device queries: DC10's VTEPs (``leaf_type`` overrides the leaf's type)
     next to DC12 (a legacy border leaf: never policy-aware), the bootstrap profile rows, the segments
-    and their component tags.
+    and their component tags. ``enforce`` is DC10's ``group_policy_enforce`` (A6: False stages it).
 
     NONPROD: web-np calls app-np (https and a port range, with a reverse udp row: two bidir contracts
     on one pair), app-np calls db-np, db-np answers with any and icmp, web-np reaches the internet
@@ -3165,9 +3202,11 @@ def _gpo_fleet_roots(*, fleet: dict[str, str], version: str, leaf_type: str | No
             [
                 {
                     "id": "dc10",
+                    "name": _v("DC10"),
+                    "group_policy_enforce": _v(enforce),
                     "devices": _edges([device("dc1-border-leaf-01", "border-leaf", fleet["border"], version)]),
                 },
-                {"id": "dc12", "devices": _edges([legacy])},
+                {"id": "dc12", "name": _v("DC12"), "group_policy_enforce": _v(False), "devices": _edges([legacy])},
             ]
         ),
         "TopologyPod": _edges(
@@ -3222,9 +3261,11 @@ def build_gpo_device_data(
     version: str = "10.6(3)F",
     leaf_type: str | None = None,
     host_ports: dict[str, tuple[str, ...]] | None = None,
+    enforce: bool = True,
 ) -> dict:
     """A VTEP of DC10 carrying ``segments`` (names of _GPO_SEGMENTS) on Ethernet10, plus one more server port
-    per ``host_ports`` entry (name -> the segments it carries), with the fleet roots appended."""
+    per ``host_ports`` entry (name -> the segments it carries), with the fleet roots appended
+    (``enforce``: DC10's ``group_policy_enforce``, False for the staged variant)."""
     data = build_device_data(
         device_name=device_name,
         role=role,
@@ -3258,10 +3299,28 @@ def build_gpo_device_data(
                 )
             }
         )
-    return {**data, **_gpo_fleet_roots(fleet=fleet, version=version, leaf_type=leaf_type)}
+    return {**data, **_gpo_fleet_roots(fleet=fleet, version=version, leaf_type=leaf_type, enforce=enforce)}
 
 
-def _gpo_golden_leaf_data(*, fleet: dict[str, str], version: str, leaf_type: str | None = None) -> dict:
+def gpo_roots(raw: dict) -> dict[str, Any]:
+    """The cleaned fleet roots of a ``build_gpo_device_data`` response (everything but the device root)."""
+    return {key: value for key, value in clean_data(raw).items() if key != "DcimDevice"}
+
+
+def gpo_segment(roots: dict[str, Any], seg_id: str) -> dict[str, Any]:
+    """The cleaned segment ``seg_id`` among the fleet roots."""
+    return next(segment for segment in roots["ManagedNetworkSegment"] if segment["id"] == seg_id)
+
+
+def gpo_view(kind: str, roots: dict[str, Any], **arguments: Any) -> dict[str, Any] | None:
+    """The device view of group-policy ``kind`` that ``group_policy_device_view`` gives these arguments, else None."""
+    found = group_policy_device_view(roots, **arguments)
+    return found[1] if found and found[0] == kind else None
+
+
+def _gpo_golden_leaf_data(
+    *, fleet: dict[str, str], version: str, leaf_type: str | None = None, enforce: bool = True
+) -> dict:
     """The leaf of an existing golden config (``ebgp_ibgp``), with the GPO fleet roots appended."""
     return {
         **build_device_data(
@@ -3271,7 +3330,7 @@ def _gpo_golden_leaf_data(*, fleet: dict[str, str], version: str, leaf_type: str
             scenario="ebgp_ibgp",
             include_segments=True,
         ),
-        **_gpo_fleet_roots(fleet=fleet, version=version, leaf_type=leaf_type),
+        **_gpo_fleet_roots(fleet=fleet, version=version, leaf_type=leaf_type, enforce=enforce),
     }
 
 
@@ -3284,6 +3343,19 @@ GPO_FIXTURES: list[tuple[type, str, Any]] = [
             role="leaf",
             segments=("web-np", "app-np", "pay-p", "portal-p"),
             host_ports={"Ethernet11": _GPO_PAY_DB_TAGS},
+        ),
+    ),
+    # DC10 stages group policy (group_policy_enforce false): groups, class/policy maps and contracts are
+    # rendered, `security enforce` is not, and the VRF says why in an `! unenforced:` comment.
+    (
+        Leaf,
+        "leaf_cisco_nxos_gpo_reference_staged",
+        lambda: build_gpo_device_data(
+            device_name="dc1-leaf-01",
+            role="leaf",
+            segments=("web-np", "app-np", "pay-p", "portal-p"),
+            host_ports={"Ethernet11": _GPO_PAY_DB_TAGS},
+            enforce=False,
         ),
     ),
     # A leaf of the same reference fabric with no tenant segment (the servers sit on the access
@@ -3317,12 +3389,54 @@ GPO_FIXTURES: list[tuple[type, str, Any]] = [
         "leaf_cisco_nxos_gpo_non_reference",
         lambda: _gpo_golden_leaf_data(fleet=_GPO_NXOS, version="10.6(3)F", leaf_type="N9K-C9336C-FX2"),
     ),
-    # A reference site of another kind (EOS segment_security): no NX-OS renderer applies, and the
-    # EOS leaf renders exactly the leaf_arista_eos_ebgp_ibgp config.
+    # A reference site of the EOS kind (segment_security, MSS-G): the same fleet as the NX-OS ones, on 7280R3
+    # VTEPs at 4.36.2F. The leaf renders the MSS-G block (enforcing), a staged DC10 renders it shut down.
     (
         Leaf,
         "leaf_arista_eos_gpo_reference_site",
-        lambda: _gpo_golden_leaf_data(fleet=_GPO_EOS, version="4.36.2F"),
+        lambda: build_gpo_device_data(
+            device_name="dc1-leaf-01",
+            role="leaf",
+            segments=("web-np", "app-np", "pay-p", "portal-p"),
+            host_ports={"Ethernet11": _GPO_PAY_DB_TAGS},
+            fleet=_GPO_EOS,
+            version="4.36.2F",
+        ),
+    ),
+    (
+        Leaf,
+        "leaf_arista_eos_gpo_reference_staged",
+        lambda: build_gpo_device_data(
+            device_name="dc1-leaf-01",
+            role="leaf",
+            segments=("web-np", "app-np", "pay-p", "portal-p"),
+            host_ports={"Ethernet11": _GPO_PAY_DB_TAGS},
+            fleet=_GPO_EOS,
+            version="4.36.2F",
+            enforce=False,
+        ),
+    ),
+    (
+        AccessLeaf,
+        "access_leaf_arista_eos_gpo_reference",
+        lambda: build_gpo_device_data(
+            device_name="dc1-access-leaf-01",
+            role="access-leaf",
+            segments=("app-np", "db-np", "portal-p"),
+            fleet=_GPO_EOS,
+            version="4.36.2F",
+        ),
+    ),
+    (
+        BorderLeaf,
+        "border_leaf_arista_eos_gpo_reference",
+        lambda: build_gpo_device_data(
+            device_name="dc1-border-leaf-01",
+            role="border-leaf",
+            segments=tuple(name for name, *_rest in _GPO_SEGMENTS),
+            fleet=_GPO_EOS,
+            version="4.36.2F",
+        ),
     ),
 ]
 
@@ -3734,6 +3848,19 @@ def main() -> int:
                 print(f"  ✗ {dir_name}: {e}")
                 errors += 1
 
+    # vPC on a pod with a virtual peer-link: NX-OS cannot bind `vpc peer-link` to loopback100, so the
+    # whole vPC block is a comment (no `interface loopback100 ... vpc peer-link`).
+    print("\nGenerating the NX-OS virtual peer-link vPC fixture:")
+    g, e = _write_data_fixture(
+        Leaf,
+        "leaf_cisco_nxos_vpc_virtual",
+        build_mlag_virtual_peer_link_data(
+            device_name="DC1-POD1-L1", peer_name="DC1-POD1-L2", role="leaf", platform="cisco_nxos"
+        ),
+    )
+    generated += g
+    errors += e
+
     # Proxy scenarios: platform × proxy_type
     PROXY_PLATFORMS = list(_PROXY_PLATFORM_VENDOR.keys())
     PROXY_TYPES = ["explicit", "transparent", "reverse"]
@@ -3788,7 +3915,7 @@ def main() -> int:
     errors += e
 
     # NX-OS VXLAN GPO: a reference fabric's VTEPs render the group policy, any other device nothing.
-    print("\nGenerating the NX-OS GPO device fixtures:")
+    print("\nGenerating the NX-OS and EOS group policy device fixtures:")
     for transform_cls, dir_name, build in GPO_FIXTURES:
         g, e = _write_data_fixture(transform_cls, dir_name, build())
         generated += g

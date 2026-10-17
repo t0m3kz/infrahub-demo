@@ -15,6 +15,7 @@ from transforms.helpers.group_policy import (
     REPLIES,
     UNAWARE,
     UNCLASSIFIED,
+    Group,
     get_vrf_contracts,
     segment_groups,
     segment_security_view,
@@ -114,6 +115,10 @@ def _row(rows: list[dict[str, Any]], src: str, dst: str) -> dict[str, Any]:
 
 
 TCP_443 = [{"protocol": "tcp", "port_start": 443, "port_end": 443}]
+
+
+def _entry(protocol: str, port: int | None) -> dict[str, Any]:
+    return {"protocol": protocol, "port_start": port, "port_end": port}
 
 
 class TestGroups:
@@ -480,7 +485,11 @@ class TestSegmentSecurityView:
         """A prefix cannot split two components of one segment."""
         segments, tags = _fleet()
         view = segment_security_view(_groups(segments, tags), get_vrf_contracts(segments, tags), {})
-        assert view["unsupported"] == [
+        assert [
+            item
+            for item in view["unsupported"]
+            if item["src"] == "k-web.example" and item["dst"] == "k-session.example"
+        ] == [
             {
                 "src": "k-web.example",
                 "dst": "k-session.example",
@@ -489,8 +498,113 @@ class TestSegmentSecurityView:
             }
         ]
 
-    def test_a_component_counts_as_its_segment_and_rows_to_unclassified_are_dropped(self) -> None:
-        """MSS-G only enforces traffic to a segment; a component's hosts are in its segment's prefix."""
+    def test_a_row_naming_a_component_is_unsupported_not_widened_to_its_segment(self) -> None:
+        """D4: a rule into one component (cross-segment) must not open the whole microsegmented segment.
+
+        The row (and the service leg from UNCLASSIFIED into the component) is listed as unsupported; the
+        segment gets neither a policy nor a fallback from it. The portal's service leg out is only the leg of that
+        closed flow, so its reply is not kept (it would open the portal to a flow nothing carries).
+        """
+        tags = [_component_tag("k-web", 20, "c005-web"), _component_tag("k-session", 21, "c005-web")]
+        segments = [
+            _seg("c008-portal", _rule("portal-to-web", "c005-web", dst_tag="k-web"), customer="C008"),
+            _seg("c005-web", isolation="microsegmented"),
+        ]
+        view = segment_security_view(_groups(segments, tags), get_vrf_contracts(segments, tags), {})
+        web = next(item for item in view["segments"] if item["name"] == "c005-web")
+        assert web["policies"] == [] and web["fallback"] is None
+        assert [(item["src"], item["dst"]) for item in view["unsupported"]] == [
+            ("c008-portal", "k-web.example"),
+            (UNCLASSIFIED, "k-web.example"),
+        ]
+        assert all(item["rules"] == ["portal-to-web"] for item in view["unsupported"])
+        portal = next(item for item in view["segments"] if item["name"] == "c008-portal")
+        assert portal["to_unclassified"] is None
+
+    def test_a_row_from_a_component_is_unsupported_not_widened_to_its_segment(self) -> None:
+        """D4: a component's dependency on another segment does not become the whole segment's."""
+        tags = [_component_tag("k-web", 20, "c005-web"), _component_tag("k-session", 21, "c005-web")]
+        segments = [
+            _seg("c005-web", _rule("web-to-backend", "c005-backend", src_tag="k-web"), isolation="microsegmented"),
+            _seg("c005-backend"),
+        ]
+        view = segment_security_view(_groups(segments, tags), get_vrf_contracts(segments, tags), {})
+        backend = next(item for item in view["segments"] if item["name"] == "c005-backend")
+        assert backend["policies"] == []
+        assert backend["fallback"] == {"entries": TCP_443, "rules": ["web-to-backend"]}
+        assert [(item["src"], item["dst"]) for item in view["unsupported"]] == [
+            ("k-web.example", "c005-backend"),
+            ("k-web.example", UNCLASSIFIED),
+        ]
+        web = next(item for item in view["segments"] if item["name"] == "c005-web")
+        assert web["to_unclassified"] is None, "the component's leg out is not the segment's"
+
+    def test_a_row_from_a_component_to_unclassified_is_unsupported_with_the_component_reason(self) -> None:
+        """C7: the component's leg out used to vanish without a trace."""
+        groups = [
+            Group("A", 1, "segment", "seg-a", "V", None, "deny", frozenset()),
+            Group("A-c", 2, "component", "seg-a", "V", None, "permit", frozenset()),
+            Group("B", 3, "segment", "seg-b", "V", None, "permit", frozenset()),
+        ]
+        rows = [{"vrf": "V", "src": "A-c", "dst": UNCLASSIFIED, "entries": [_entry("tcp", 80)], "rules": ["r"]}]
+        view = segment_security_view(groups, rows, {})
+        assert view["unsupported"] == [
+            {
+                "src": "A-c",
+                "dst": UNCLASSIFIED,
+                "rules": ["r"],
+                "reason": "a component group is not expressible by prefix (the row is not widened to its segment)",
+            }
+        ]
+        assert all(item["to_unclassified"] is None for item in view["segments"])
+
+    def test_a_permit_all_row_lists_its_reply_as_unsupported_and_widens_nothing(self) -> None:
+        """C1: a stateless device matches a reply by source port; ``any`` has none, so that direction stays closed."""
+        groups = [
+            Group("A", 1, "segment", "seg-a", "V", None, "permit", frozenset()),
+            Group("B", 2, "segment", "seg-b", "V", None, "permit", frozenset()),
+        ]
+        rows = [
+            {"vrf": "V", "src": "A", "dst": "B", "entries": [_entry("any", None)], "rules": ["a-to-b-any"]},
+            {"vrf": "V", "src": "B", "dst": UNCLASSIFIED, "entries": [_entry("any", None)], "rules": ["b-out"]},
+        ]
+        view = segment_security_view(groups, rows, {})
+        reason = (
+            "the reply of a permit-all flow cannot be mirrored by source port on a stateless device "
+            "(the reverse direction is left closed)"
+        )
+        assert view["unsupported"] == [
+            {"src": "A", "dst": "B", "rules": ["a-to-b-any"], "reason": reason},
+            {"src": "B", "dst": UNCLASSIFIED, "rules": ["b-out"], "reason": reason},
+        ]
+        b = next(item for item in view["segments"] if item["name"] == "B")
+        assert b["policies"] == [{"from": "A", "entries": [_entry("any", None)], "rules": ["a-to-b-any"]}]
+
+    def test_a_segment_rule_to_the_outside_keeps_its_reply_although_its_components_are_unsupported(self) -> None:
+        """Only a flow INTO a component is closed; a hand-written rule out of a microsegmented segment keeps its leg."""
+        tags = [_component_tag("k-web", 20, "c005-web")]
+        segments = [
+            _seg("c005-web", _rule("web-to-net", None), isolation="microsegmented"),
+        ]
+        view = segment_security_view(_groups(segments, tags), get_vrf_contracts(segments, tags), {})
+        web = next(item for item in view["segments"] if item["name"] == "c005-web")
+        assert web["to_unclassified"] == {"entries": TCP_443, "rules": ["web-to-net"]}
+        assert [(item["src"], item["dst"]) for item in view["unsupported"]] == [("k-web.example", UNCLASSIFIED)]
+
+    def test_a_segment_level_rule_keeps_its_segment_row_and_lists_the_component_rows_as_unsupported(self) -> None:
+        """A hand-written rule into a microsegmented segment: the segment row stays, the per-component copies are not expressible."""
+        segments, tags = _fleet()
+        view = segment_security_view(_groups(segments, tags), get_vrf_contracts(segments, tags), {})
+        web = next(item for item in view["segments"] if item["name"] == "c005-web")
+        assert web["policies"] == [{"from": "c008-portal", "entries": TCP_443, "rules": ["portal-to-web"]}]
+        assert {(item["src"], item["dst"]) for item in view["unsupported"]} >= {
+            ("c008-portal", "k-web.example"),
+            ("c008-portal", "k-session.example"),
+            (UNCLASSIFIED, "k-web.example"),
+        }
+
+    def test_rows_to_unclassified_are_no_policy_but_kept_as_the_segments_outbound_for_its_replies(self) -> None:
+        """MSS-G only enforces traffic to a segment; the reply of a flow out of a segment is traffic into it."""
         segments, tags = _fleet()
         view = segment_security_view(_groups(segments, tags), get_vrf_contracts(segments, tags), {})
         backend = next(item for item in view["segments"] if item["name"] == "c005-backend")
@@ -502,11 +616,31 @@ class TestSegmentSecurityView:
             }
         ]
         assert all(policy["from"] != UNCLASSIFIED for item in view["segments"] for policy in item["policies"])
+        web = next(item for item in view["segments"] if item["name"] == "c005-web")
+        assert web["to_unclassified"] == {
+            "entries": [{"protocol": "tcp", "port_start": 8443, "port_end": 8443}],
+            "rules": ["web-to-backend"],
+        }
+        assert backend["to_unclassified"] is None
 
-    def test_only_local_segments_are_listed(self) -> None:
+    def test_only_local_segments_and_the_segments_their_rows_name_are_listed(self) -> None:
+        """A ``from`` line needs its source defined: a remote source is listed too; an unrelated remote segment is not."""
         segments, tags = _fleet()
-        view = segment_security_view(_groups(segments, tags), [], {}, local={"c008-portal"})
-        assert [item["name"] for item in view["segments"]] == ["c008-portal"]
+        rows = get_vrf_contracts(segments, tags, local={"c005-backend"})
+        view = segment_security_view(_groups(segments, tags), rows, {}, local={"c005-backend"})
+        assert [item["name"] for item in view["segments"]] == ["c005-backend", "c005-web"]
+        assert [
+            item["name"]
+            for item in segment_security_view(_groups(segments, tags), [], {}, local={"c008-portal"})["segments"]
+        ] == ["c008-portal"]
+
+    def test_a_remote_destination_of_a_local_source_is_listed_with_its_policy(self) -> None:
+        """A row from a local segment to a remote one is a policy under the remote destination."""
+        segments, tags = _fleet()
+        rows = get_vrf_contracts(segments, tags, local={"c008-portal"})
+        view = segment_security_view(_groups(segments, tags), rows, {}, local={"c008-portal"})
+        web = next(item for item in view["segments"] if item["name"] == "c005-web")
+        assert web["policies"] == [{"from": "c008-portal", "entries": TCP_443, "rules": ["portal-to-web"]}]
 
 
 # ---------------------------------------------------------------------------
@@ -647,8 +781,17 @@ def _raw_component_tag(tag_id: str, group_id: int, segment: str) -> dict[str, An
     }
 
 
-def _payload(*, border_version: str = "10.6(3)F", access_leaf: bool = True, profiles: list[dict] | None = None) -> dict:
+def _payload(
+    *,
+    border_version: str = "10.6(3)F",
+    access_leaf: bool = True,
+    profiles: list[dict] | None = None,
+    enforce: bool | None = True,
+    dc12_enforce: bool | None = False,
+) -> dict:
     """A raw segmentation_matrix response for DC10 (FX3/GX, an EX access leaf by default) next to a legacy DC12.
+
+    ``enforce`` / ``dc12_enforce`` are the data centers' ``group_policy_enforce`` (None: the key is absent).
 
     Segments: C008's portal (DC10) calling C005's microsegmented web (DC10, components web and session,
     one intra-segment rule), C005's backend stretched DC10 <-> DC12, a remote DC12 segment, the untagged
@@ -699,19 +842,27 @@ def _payload(*, border_version: str = "10.6(3)F", access_leaf: bool = True, prof
         ),
         _raw_segment("s-c007", "c007-untagged-p", "C007"),
     ]
+
+    def flag(value: bool | None) -> dict:
+        return {} if value is None else {"group_policy_enforce": _v(value)}
+
     return {
-        "target": {"edges": [{"node": {"id": "dc10", "name": _v("DC10")}}]},
+        "target": {"edges": [{"node": {"id": "dc10", "name": _v("DC10"), **flag(enforce)}}]},
         "TopologyDataCenter": {
             "edges": [
                 {
                     "node": {
                         "id": "dc10",
+                        "name": _v("DC10"),
+                        **flag(enforce),
                         "devices": {"edges": [_device("bl-01", "border-leaf", "N9K-C9364C-GX", border_version)]},
                     }
                 },
                 {
                     "node": {
                         "id": "dc12",
+                        "name": _v("DC12"),
+                        **flag(dc12_enforce),
                         "devices": {"edges": [_device("bl-12", "border-leaf", "N9K-C9336C-FX2", "10.3(3)", 24)]},
                     }
                 },
@@ -751,6 +902,7 @@ class TestSegmentationMatrixSite:
             "reference": False,
             "kind": "vxlan_gpo",
             "reason": "access-leaf al-01 N9K-C93180YC-EX: device type not in profile reference-cisco-nxos",
+            "enforce": True,
         }
 
     def test_site_names_every_distinct_cause(self) -> None:
@@ -767,7 +919,20 @@ class TestSegmentationMatrixSite:
 
     def test_reference_site(self) -> None:
         result = _render(_payload(access_leaf=False))
-        assert result["site"] == {"reference": True, "kind": "vxlan_gpo", "reason": None}
+        assert result["site"] == {"reference": True, "kind": "vxlan_gpo", "reason": None, "enforce": True}
+
+    def test_site_enforce_is_the_staging_switch_of_this_data_center(self) -> None:
+        """False for a staged DC10 even when another data center enforces; a missing key is False."""
+        assert _render(_payload(enforce=False, dc12_enforce=True))["site"]["enforce"] is False
+        assert _render(_payload(enforce=True, dc12_enforce=False))["site"]["enforce"] is True
+        assert _render(_payload(enforce=None))["site"]["enforce"] is False
+
+    def test_enforce_does_not_change_the_contracts_or_the_reference_verdict(self) -> None:
+        enforcing, staged = _render(_payload(access_leaf=False)), _render(_payload(access_leaf=False, enforce=False))
+        assert staged["site"] == {**enforcing["site"], "enforce": False}
+        assert {key: value for key, value in staged.items() if key != "site"} == {
+            key: value for key, value in enforcing.items() if key != "site"
+        }
 
     def test_non_vtep_devices_are_not_listed(self) -> None:
         payload = _payload(access_leaf=False)
@@ -836,6 +1001,27 @@ class TestSegmentationMatrixGroups:
         }
         assert classification["unclassified"] == ["c007-untagged-p"]
 
+    def test_ipv6_only_segment_is_classified_by_its_ipv6_prefix(self) -> None:
+        """A v6-only gateway prefix is the segment's selector and its MSS-G prefix, not null."""
+        payload = _payload(profiles=[NXOS_PROFILE, EOS_PROFILE])
+        portal = next(
+            edge["node"] for edge in payload["ManagedNetworkSegment"]["edges"] if edge["node"]["id"] == "s-portal"
+        )
+        portal["gateway"]["node"]["ip_prefix"]["node"]["prefix"] = _v("2001:db8:8::/64")
+        rendered = _render(payload)
+        selector = next(
+            item
+            for item in rendered["classification"]["selectors"]
+            if item["segment"] == "c008-trade-portal-local-dc10-p"
+        )
+        assert selector["prefix"] == "2001:db8:8::/64"
+        mssg = next(
+            item
+            for item in rendered["kinds"]["segment_security"]["segments"]
+            if item["name"] == "c008-trade-portal-local-dc10-p"
+        )
+        assert mssg["prefix"] == "2001:db8:8::/64"
+
     def test_contracts_are_local_and_deny_by_default(self) -> None:
         """The cross-customer rule names the web component: one cross-customer row, to that component,
         plus its service legs; a rule between two DC12 segments is not here."""
@@ -869,6 +1055,18 @@ class TestSegmentationMatrixGroups:
         names = [item["name"] for item in result["kinds"]["segment_security"]["segments"]]
         assert "c010-remote-p" not in names
         assert "c008-trade-portal-local-dc10-p" in names
+
+    def test_segment_security_kind_agrees_with_the_device_on_component_rows(self) -> None:
+        """D4: a cross-segment row naming a component group is unsupported in the artifact, never the whole segment's."""
+        view = _render(_payload(profiles=[NXOS_PROFILE, EOS_PROFILE]))["kinds"]["segment_security"]
+        by_name = {item["name"]: item for item in view["segments"]}
+        assert by_name["c005-web-frontend-local-dc10-p"]["policies"] == []
+        assert by_name["c005-web-frontend-local-dc10-p"]["fallback"] is None
+        assert {(item["src"], item["dst"]) for item in view["unsupported"]} >= {
+            ("c008-trade-portal-local-dc10-p", "k-web.example"),
+            (UNCLASSIFIED, "k-web.example"),
+            ("k-web.example", "c005-app-backend-stretch-p"),
+        }
 
     def test_re_render_is_byte_identical(self) -> None:
         assert json.dumps(_render(_payload()), sort_keys=True) == json.dumps(_render(_payload()), sort_keys=True)

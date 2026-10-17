@@ -611,6 +611,7 @@ class TopologyDataCenter(
 ):
     connectivity_mode: Dropdown
     fabric_interface_sorting_method: Dropdown
+    group_policy_enforce: BooleanOptional
     index: Integer
     routing_strategy: Dropdown
     size: Dropdown
@@ -1111,12 +1112,6 @@ class CloudRoute(CloudResource):
     internet_gateway: RelationshipAttribute[CloudInternetGateway]
     nat_gateway: RelationshipAttribute[CloudNATGateway]
     route_table: RelationshipAttribute[CloudRouteTable]
-
-
-class TopologyRouteLeakExchange(TopologyExchangeGateway, ManagedGeneric, ManagedGenericInterfaces):
-    direction: Dropdown
-    route_target: StringOptional
-    cloud_attachment: RelationshipAttribute[CloudHybridAttachment]
 
 
 class CloudRouteTable(CloudResource):

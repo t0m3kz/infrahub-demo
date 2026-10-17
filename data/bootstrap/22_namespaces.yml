@@ -10,7 +10,7 @@
 # MANAGEMENT (core services, tenant-initiated only) through a
 # TopologyRoutedExchange that the customer boarding generator creates per
 # firewall context (`{context}-{A}-INTERNET`, `{context}-{A}-MANAGEMENT`), an
-# inspected hop through the context's VRF legs, never a bare RouteLeakExchange.
+# inspected hop through the context's VRF legs, never a bare route-target leak.
 # The leg /29s come from the FW-Transit-*-IPv4 pools in 23_transit_pools.yml,
 # which need these namespaces to exist first. MANAGEMENT is DC-local: the
 # services live in one DC and have no global route-target.

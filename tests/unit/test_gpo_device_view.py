@@ -1,4 +1,4 @@
-"""Unit tests for the NX-OS VXLAN GPO device view (transforms/helpers/group_policy.py vxlan_gpo_device_view).
+"""Unit tests for the NX-OS VXLAN GPO device view (transforms/helpers/group_policy.py _vxlan_gpo_build).
 
 The fleet is the smoke fixture's (tests/smoke/generate_config_fixtures.py ``_gpo_fleet_roots``): DC10 with a
 leaf, an access leaf and a border leaf in the NX-OS row, a legacy DC12, NONPROD (fully classifiable by VLAN,
@@ -16,6 +16,7 @@ import random
 from functools import cache
 from pathlib import Path
 from typing import Any
+from unittest.mock import MagicMock, patch
 
 import pytest
 from graphql import parse
@@ -43,6 +44,9 @@ from tests.smoke.generate_config_fixtures import (
     _node,
     _v,
     build_gpo_device_data,
+    gpo_roots,
+    gpo_segment,
+    gpo_view,
 )
 from tests.smoke.test_configs_smoke import _run_transform
 from transforms.common import BaseDeviceTransform
@@ -61,7 +65,6 @@ from transforms.helpers.group_policy import (
     component_coverage,
     data_center_contracts,
     segment_vrf,
-    vxlan_gpo_device_view,
     vxlan_gpo_view,
 )
 from transforms.helpers.vxlan import get_interfaces, get_vxlan_config
@@ -101,8 +104,7 @@ def _leaf_interfaces() -> list[dict[str, Any]]:
 
 def _roots(raw: dict | None = None) -> dict[str, Any]:
     """The cleaned fleet roots (everything but the device root)."""
-    cleaned = clean_data(raw or _raw())
-    return {key: value for key, value in cleaned.items() if key != "DcimDevice"}
+    return gpo_roots(raw or _raw())
 
 
 def _view(roots: dict[str, Any], **overrides: Any) -> dict[str, Any] | None:
@@ -114,11 +116,7 @@ def _view(roots: dict[str, Any], **overrides: Any) -> dict[str, Any] | None:
         "vrfs": VRFS,
         "interfaces": _leaf_interfaces(),
     }
-    return vxlan_gpo_device_view(roots, **{**arguments, **overrides})
-
-
-def _segment(roots: dict[str, Any], seg_id: str) -> dict[str, Any]:
-    return next(segment for segment in roots["ManagedNetworkSegment"] if segment["id"] == seg_id)
+    return gpo_view("vxlan_gpo", roots, **{**arguments, **overrides})
 
 
 def _contract(view: dict[str, Any], vrf: str, src: str, dst: str) -> dict[str, Any]:
@@ -207,7 +205,7 @@ class TestGate:
     def test_other_vrfs_group_data_does_not_refuse_an_enablement_only_vtep(self) -> None:
         """Nothing is rendered from the groups, so a collision among them is not this device's to refuse."""
         roots = _roots()
-        _segment(roots, "seg-app-np")["security_tag"]["name"] = "web-np"
+        gpo_segment(roots, "seg-app-np")["security_tag"]["name"] = "web-np"
         assert _view(roots, vrfs=[]) == {"class_maps": [], "groups": [], "vrfs": {}}
         with pytest.raises(ValueError, match="refusing unprotected config"):
             _view(roots, vrfs=["NONPROD"])
@@ -272,7 +270,7 @@ class TestScope:
         """An enforced VRF denies what no selector classified: a segment with no row needs its group."""
         roots = _roots()
         # app-np has no rules of its own and no rule names it as a destination: it has no row.
-        _segment(roots, "seg-app-np")["security_policy"]["rules"] = []
+        gpo_segment(roots, "seg-app-np")["security_policy"]["rules"] = []
         for segment in roots["ManagedNetworkSegment"]:
             segment["security_policy"]["rules"] = [
                 rule
@@ -376,7 +374,7 @@ class TestEntries:
 
     def test_a_port_less_tcp_rule_uses_the_table_form(self) -> None:
         roots = _roots()
-        rule = _segment(roots, "seg-web-np")["security_policy"]["rules"][0]
+        rule = gpo_segment(roots, "seg-web-np")["security_policy"]["rules"][0]
         rule["port_start"], rule["port_end"] = None, None
         view = _view(roots)
         assert view is not None
@@ -393,7 +391,7 @@ class TestRefusals:
 
     def test_a_group_without_a_group_id(self) -> None:
         roots = _roots()
-        _segment(roots, "seg-web-np")["security_tag"]["group_id"] = None
+        gpo_segment(roots, "seg-web-np")["security_tag"]["group_id"] = None
         with pytest.raises(ValueError, match=r"group web-np has no group id.*refusing unprotected config"):
             _view(roots)
 
@@ -408,26 +406,26 @@ class TestRefusals:
 
     def test_two_groups_sharing_an_id(self) -> None:
         roots = _roots()
-        _segment(roots, "seg-web-np")["security_tag"]["group_id"] = 41
+        gpo_segment(roots, "seg-web-np")["security_tag"]["group_id"] = 41
         with pytest.raises(ValueError, match=r"share group id 41.*refusing unprotected config"):
             _view(roots)
 
     def test_a_group_on_a_reserved_id(self) -> None:
         roots = _roots()
-        _segment(roots, "seg-web-np")["security_tag"]["group_id"] = 15
+        gpo_segment(roots, "seg-web-np")["security_tag"]["group_id"] = 15
         with pytest.raises(ValueError, match=r"share group id 15"):
             _view(roots)
 
     def test_two_groups_sharing_a_cli_name(self) -> None:
         roots = _roots()
-        _segment(roots, "seg-web-np")["security_tag"]["name"] = "a.b"
-        _segment(roots, "seg-app-np")["security_tag"]["name"] = "a_b"
+        gpo_segment(roots, "seg-web-np")["security_tag"]["name"] = "a.b"
+        gpo_segment(roots, "seg-app-np")["security_tag"]["name"] = "a_b"
         with pytest.raises(ValueError, match=r"share the group name 'a_b'.*refusing unprotected config"):
             _view(roots)
 
     def test_a_port_range_ending_before_it_starts(self) -> None:
         roots = _roots()
-        rule = _segment(roots, "seg-web-np")["security_policy"]["rules"][1]
+        rule = gpo_segment(roots, "seg-web-np")["security_policy"]["rules"][1]
         rule["port_start"], rule["port_end"] = 8010, 8000
         with pytest.raises(ValueError, match=r"8010-8000 ends before it starts.*refusing unprotected config"):
             _view(roots)
@@ -460,7 +458,7 @@ class TestRefusals:
     def test_a_tag_shared_by_two_segments_is_refused(self) -> None:
         """The views key a group by name: the later segment's selector would silently win."""
         roots = _roots()
-        _segment(roots, "seg-app-np")["security_tag"]["name"] = "web-np"
+        gpo_segment(roots, "seg-app-np")["security_tag"]["name"] = "web-np"
         with pytest.raises(
             ValueError,
             match=r"group 'web-np' is the tag of segment web-np \(VRF NONPROD\) and of segment app-np \(VRF NONPROD\)"
@@ -470,14 +468,14 @@ class TestRefusals:
 
     def test_a_tag_shared_by_two_vrfs_is_refused(self) -> None:
         roots = _roots()
-        _segment(roots, "seg-portal-p")["security_tag"]["name"] = "web-np"
+        gpo_segment(roots, "seg-portal-p")["security_tag"]["name"] = "web-np"
         with pytest.raises(ValueError, match=r"group 'web-np' is the tag of .*refusing unprotected config"):
             _view(roots)
 
     @pytest.mark.parametrize("name", ["unaware", "UNAWARE", "unclassified", "UNCLASSIFIED", "Fallback", "FALLBACK"])
     def test_a_group_named_like_a_pseudo_group_is_refused(self, name: str) -> None:
         roots = _roots()
-        _segment(roots, "seg-web-np")["security_tag"]["name"] = name
+        gpo_segment(roots, "seg-web-np")["security_tag"]["name"] = name
         with pytest.raises(
             ValueError, match=rf"group '{name}' is named like the reserved pseudo-group.*refusing unprotected config"
         ):
@@ -512,7 +510,7 @@ class TestEnforcement:
 
     def test_a_segment_without_a_group_leaves_its_vrf_unenforced(self) -> None:
         roots = _roots()
-        _segment(roots, "seg-app-np")["security_tag"] = None
+        gpo_segment(roots, "seg-app-np")["security_tag"] = None
         view = _view(roots)
         assert view is not None
         assert view["vrfs"]["NONPROD"]["unenforced"] == "segment app-np has no group classifier on this device"
@@ -594,6 +592,123 @@ class TestEnforcement:
             pairs = [(item["src"], item["dst"]) for item in vrf["contracts"]]
             assert pairs == sorted(pairs)
             assert len(pairs) == len(set(pairs))
+
+
+STAGED = (
+    "data center DC10 stages group policy (group_policy_enforce is false): "
+    "contracts are configured, security enforce is not"
+)
+
+
+def _stage(roots: dict[str, Any], dc_id: str, enforce: bool | None) -> dict[str, Any]:
+    """Set (None: remove) ``group_policy_enforce`` on one data center of the cleaned fleet roots."""
+    node = next(item for item in roots["TopologyDataCenter"] if item["id"] == dc_id)
+    if enforce is None:
+        node.pop("group_policy_enforce", None)
+    else:
+        node["group_policy_enforce"] = enforce
+    return roots
+
+
+class TestStaging:
+    """A6: ``group_policy_enforce`` of the device's data center; false configures the contracts, not enforcement."""
+
+    def test_the_fixture_data_center_enforces(self) -> None:
+        roots = _roots()
+        assert (
+            next(item for item in roots["TopologyDataCenter"] if item["id"] == "dc10")["group_policy_enforce"] is True
+        )
+        assert data_center_contracts(roots, "dc10").enforce is True
+
+    def test_an_enforcing_data_center_enforces_every_classifiable_vrf(self) -> None:
+        view = _view(_stage(_roots(), "dc10", True))
+        assert view is not None
+        assert {vrf: (item["unenforced"], item["enforce_tag"]) for vrf, item in view["vrfs"].items()} == {
+            "NONPROD": (None, 0),
+            "PROD": (None, 0),
+        }
+
+    @pytest.mark.parametrize("flag", [False, None])
+    def test_a_staging_data_center_enforces_no_vrf_and_says_why_first(self, flag: bool | None) -> None:
+        """False and a missing key (an old query response) both stage."""
+        view = _view(_stage(_roots(), "dc10", flag))
+        assert view is not None
+        for item in view["vrfs"].values():
+            assert item["unenforced"] == STAGED
+            assert item["enforce_tag"] is None
+
+    def test_a_staging_data_center_still_configures_groups_and_contracts(self) -> None:
+        enforcing, staged = _view(_roots()), _view(_stage(_roots(), "dc10", False))
+        assert enforcing is not None and staged is not None
+        assert staged["class_maps"] == enforcing["class_maps"]
+        assert staged["groups"] == enforcing["groups"]
+        for vrf, item in staged["vrfs"].items():
+            assert item["contracts"] == enforcing["vrfs"][vrf]["contracts"]
+            assert item["classified_ports"] == enforcing["vrfs"][vrf]["classified_ports"]
+
+    def test_the_staged_reason_comes_first_and_the_other_reasons_stay_listed(self) -> None:
+        activations = [
+            {**item, "vlan_id": None} if item["segment"]["id"] == "seg-app-np" else item for item in LEAF_ACTIVATIONS
+        ]
+        view = _view(_stage(_roots(), "dc10", False), activations=activations, interfaces=[])
+        assert view is not None
+        assert (
+            view["vrfs"]["NONPROD"]["unenforced"] == f"{STAGED}; segment app-np has no group classifier on this device"
+        )
+        prod = view["vrfs"]["PROD"]["unenforced"]
+        assert prod.startswith(f"{STAGED}; component group ")
+        assert view["vrfs"]["PROD"]["enforce_tag"] is None
+
+    def test_the_flag_of_the_devices_own_data_center_decides(self) -> None:
+        """Two data centers, opposite flags, in either order: DC10's VTEP follows DC10."""
+        for dc10, dc12 in ((False, True), (True, False)):
+            roots = _stage(_stage(_roots(), "dc10", dc10), "dc12", dc12)
+            for ordered in (roots["TopologyDataCenter"], roots["TopologyDataCenter"][::-1]):
+                reordered = {**roots, "TopologyDataCenter": ordered}
+                assert data_center_contracts(reordered, "dc10").enforce is dc10
+                assert data_center_contracts(reordered, "dc12").enforce is dc12
+                view = _view(reordered)
+                assert view is not None
+                assert all((item["unenforced"] == STAGED) is (not dc10) for item in view["vrfs"].values())
+
+    def test_the_data_center_without_a_name_is_named_by_its_id(self) -> None:
+        roots = _stage(_roots(), "dc10", False)
+        next(item for item in roots["TopologyDataCenter"] if item["id"] == "dc10").pop("name")
+        view = _view(roots)
+        assert view is not None
+        assert view["vrfs"]["NONPROD"]["unenforced"] == STAGED.replace("DC10", "dc10")
+
+    def test_the_missing_unclassified_group_id_is_refused_only_when_enforcing(self) -> None:
+        """Staged: no `security enforce tag`, so the profile's unclassified id is not needed for it."""
+        roots = _roots()
+        for segment in roots["ManagedNetworkSegment"]:
+            segment["security_policy"]["rules"] = []
+        TestRefusals._without_unclassified_id(roots)
+        with pytest.raises(ValueError, match=r"VRF NONPROD is enforced but.*refusing unprotected config"):
+            _view(_stage(roots, "dc10", True), vrfs=["NONPROD"])
+        staged = _view(_stage(roots, "dc10", False), vrfs=["NONPROD"])
+        assert staged is not None
+        assert staged["vrfs"]["NONPROD"]["unenforced"] == STAGED
+        assert staged["vrfs"]["NONPROD"]["enforce_tag"] is None
+
+    def test_the_view_is_the_same_for_every_vtep_of_the_staged_data_center(self) -> None:
+        roots = _stage(_roots(), "dc10", False)
+        for role in sorted(DC_VTEP_ROLES):
+            view = _view(roots, role=role)
+            assert view is not None
+            assert view["vrfs"]["NONPROD"]["unenforced"] == STAGED
+
+    def test_the_rendered_config_keeps_the_policy_and_prints_the_staging_comment_instead_of_enforce(self) -> None:
+        enforcing = _run_transform(Leaf, _raw())
+        staged = _run_transform(Leaf, _raw(enforce=False))
+        assert "security enforce tag 0 default deny" in enforcing
+        assert "security enforce" not in staged.replace(f"! unenforced: {STAGED}", "")
+        assert staged.count(f"! unenforced: {STAGED}") == 2, "one comment per VRF"
+        assert enforcing.count("! unenforced:") == 0
+        for line in ("feature security-group", "system routing template-security-groups"):
+            assert staged.splitlines().count(line) == 1
+        assert "class-map type security" in staged and "policy-map type security" in staged
+        assert "security contract" in staged
 
 
 class TestPairNotes:
@@ -734,7 +849,6 @@ class TestGoldens:
         ("gpo_fixture", "golden"),
         [
             ("leaf_cisco_nxos_gpo_non_reference", "leaf_cisco_nxos_ebgp_ibgp"),
-            ("leaf_arista_eos_gpo_reference_site", "leaf_arista_eos_ebgp_ibgp"),
         ],
     )
     def test_output_equals_the_existing_golden(self, root_dir: Path, gpo_fixture: str, golden: str) -> None:
@@ -990,7 +1104,7 @@ class TestComponentCoverage:
             }
         )
         roots = _roots(raw)
-        _segment(roots, "seg-app-np")["isolation_mode"] = "microsegmented"
+        gpo_segment(roots, "seg-app-np")["isolation_mode"] = "microsegmented"
         coverage = _coverage(roots)
         assert ComponentClaim("app.app.demo.local", "seg-app-np", "dc1-leaf-01", "Ethernet10") in coverage.claims
         assert _claim(WEB, "dc1-leaf-01", "Ethernet10") in coverage.claims
@@ -1005,7 +1119,7 @@ class TestComponentCoverage:
         """pay-p active only in DC12: its components (even unplaced ones) are no local blocker."""
         web = [_server("srv-web")]
         roots = _placed_roots(web=web)
-        _segment(roots, "seg-pay-p")["segment_deployments"] = [
+        gpo_segment(roots, "seg-pay-p")["segment_deployments"] = [
             {"vni": 10210, "deployment": {"id": "dc12", "name": "DC12"}}
         ]
         coverage = _coverage(roots)
@@ -1014,7 +1128,7 @@ class TestComponentCoverage:
 
     def test_a_segment_that_is_not_microsegmented_has_no_component_groups_to_classify(self) -> None:
         roots = _placed_roots(web=[_server("srv-lost")])
-        _segment(roots, "seg-pay-p")["isolation_mode"] = "normal"
+        gpo_segment(roots, "seg-pay-p")["isolation_mode"] = "normal"
         coverage = _coverage(roots)
         assert coverage.claims == []
         assert coverage.blockers == {}
@@ -1036,7 +1150,7 @@ class TestComponentCoverage:
 
     def test_an_instance_that_sits_nowhere_blocks_every_data_center_of_its_segment(self) -> None:
         roots = _placed_roots(web=[_server("srv-web")])
-        _segment(roots, "seg-pay-p")["segment_deployments"] = [
+        gpo_segment(roots, "seg-pay-p")["segment_deployments"] = [
             {"vni": 10210, "deployment": {"id": "dc10", "name": "DC10"}},
             {"vni": 10210, "deployment": {"id": "dc12", "name": "DC12"}},
         ]
@@ -1079,7 +1193,7 @@ class TestComponentCoverage:
 
 
 class TestComponentSelectors:
-    """vxlan_gpo_device_view: the interface selectors of the owning VTEP, and the gate."""
+    """The vxlan_gpo device view: the interface selectors of the owning VTEP, and the gate."""
 
     @staticmethod
     def _groups(view: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
@@ -1424,21 +1538,64 @@ class TestHostTrunks:
         assert "switchport access vlan 210" in stanza
         assert "native vlan" not in stanza
 
+    @staticmethod
+    def _context(raw: dict, root_dir: Path) -> tuple[dict[str, Any], MagicMock]:
+        """The template context of ``raw`` (``_template_context``, what transform() renders) and the
+        get_interfaces spy of that one call."""
+        transform = Leaf.__new__(Leaf)
+        transform.root_directory = str(root_dir)
+        device, roots, platform = transform._device_and_platform(copy.deepcopy(raw))
+        device["segment_deployments"] = transform._device_activations(device)
+        with patch("transforms.common.get_interfaces", wraps=get_interfaces) as spy:
+            return transform._template_context(device, platform or "", roots), spy
+
     def test_the_transform_hands_the_templates_the_trunked_interfaces_only_for_claimed_ports(
         self, root_dir: Path
     ) -> None:
-        transform = Leaf.__new__(Leaf)
-        transform.root_directory = str(root_dir)
-        device, roots, platform = transform._device_and_platform(copy.deepcopy(_raw()))
-        device["segment_deployments"] = transform._device_activations(device)
-        config = {
-            **transform._build_config(device, platform or ""),
-            **transform._extra_config(device, platform or "", extra_roots=roots),
-        }
+        config, _spy = self._context(_raw(), root_dir)
         by_name = {item["name"]: item for item in config["interfaces"]}
         assert by_name["Ethernet11"]["native_vlan"] == 210
         assert "native_vlan" not in by_name["Ethernet10"]
         assert not any("native_vlan" in item for name, item in by_name.items() if name not in ("Ethernet11",))
+
+    def test_a_vtep_owning_a_claimed_port_builds_its_interfaces_once_with_the_native_vlans(
+        self, root_dir: Path
+    ) -> None:
+        config, spy = self._context(_raw(), root_dir)
+        spy.assert_called_once()
+        # Ethernet10 (the trunk of the web component) is named too; get_interfaces leaves a trunk as it is.
+        assert spy.call_args.kwargs["native_vlans"] == {"Ethernet10": 210, "Ethernet11": 210}
+        assert config["group_policy"]["groups"], "the claimed port comes from the group policy of the same context"
+
+    def test_a_vtep_without_a_claimed_port_builds_its_interfaces_once_without_native_vlans(
+        self, root_dir: Path
+    ) -> None:
+        """An enablement-only VTEP (no tenant VRF) and a device outside a reference fabric."""
+        for raw in (
+            build_gpo_device_data(device_name="dc1-leaf-01", role="leaf", segments=()),
+            build_gpo_device_data(
+                device_name="dc1-leaf-01", role="leaf", segments=LEAF_SEGMENTS, leaf_type="N9K-C9336C-FX2"
+            ),
+        ):
+            _config, spy = self._context(raw, root_dir)
+            spy.assert_called_once()
+            assert spy.call_args.kwargs["native_vlans"] is None
+
+    def test_the_context_keeps_the_extra_config_over_the_base_config_and_the_base_loopback(
+        self, root_dir: Path
+    ) -> None:
+        """The same keys as the two parts merged the old way (base first, then extra on top)."""
+        transform = Leaf.__new__(Leaf)
+        transform.root_directory = str(root_dir)
+        device, roots, platform = transform._device_and_platform(copy.deepcopy(_raw()))
+        device["segment_deployments"] = transform._device_activations(device)
+        config = transform._template_context(device, platform or "", roots)
+        base = transform._build_config(device, platform or "")
+        extra = transform._extra_config(device, platform or "", extra_roots=roots)
+        assert config.keys() == {**base, **extra}.keys()
+        assert config["loopback_name"] == base["loopback_name"]
+        assert {key: config[key] for key in extra} == extra
+        assert [i["name"] for i in config["interfaces"]] == [i["name"] for i in base["interfaces"]]
 
     def test_a_non_reference_device_is_not_touched(self) -> None:
         """No claim, no group policy: get_interfaces is called once, without native VLANs."""
@@ -1500,31 +1657,37 @@ class TestPlacementFragment:
     }
 
     @classmethod
-    def _paths(cls, selections: Any, prefix: tuple[str, ...] = ()) -> set[tuple[str, ...]]:
-        """Every field path below ``selections`` as the cleaned data names it (inline fragments merged)."""
+    def _paths(
+        cls,
+        selections: Any,
+        fragments: dict[str, FragmentDefinitionNode],
+        prefix: tuple[str, ...] = (),
+    ) -> set[tuple[str, ...]]:
+        """Every field path below ``selections`` as the cleaned data names it (inline fragments merged, named
+        spreads resolved from ``fragments``)."""
         found: set[tuple[str, ...]] = set()
         for selection in selections:
-            assert not isinstance(selection, FragmentSpreadNode), (
-                "a named fragment nested in an inline fragment resolves to nulls: select plain fields"
-            )
-            if isinstance(selection, InlineFragmentNode):
-                found |= cls._paths(selection.selection_set.selections, prefix)
+            if isinstance(selection, FragmentSpreadNode):
+                found |= cls._paths(fragments[selection.name.value].selection_set.selections, fragments, prefix)
+            elif isinstance(selection, InlineFragmentNode):
+                found |= cls._paths(selection.selection_set.selections, fragments, prefix)
             elif isinstance(selection, FieldNode):
                 name = (selection.alias or selection.name).value
                 path = prefix if name in cls.COLLAPSED else (*prefix, "typename" if name == "__typename" else name)
                 found |= ({path} if path else set()) | cls._paths(
-                    selection.selection_set.selections if selection.selection_set else (), path
+                    selection.selection_set.selections if selection.selection_set else (), fragments, path
                 )
         return found
 
     @staticmethod
-    def _fragment(root_dir: Path, name: str) -> FragmentDefinitionNode:
+    def _fragments(root_dir: Path) -> dict[str, FragmentDefinitionNode]:
+        """Every fragment of queries/fragments/group_policy.gql by name."""
         document = parse((root_dir / "queries/fragments/group_policy.gql").read_text())
-        return next(
-            item
-            for item in document.definitions
-            if isinstance(item, FragmentDefinitionNode) and item.name.value == name
-        )
+        return {item.name.value: item for item in document.definitions if isinstance(item, FragmentDefinitionNode)}
+
+    @classmethod
+    def _fragment(cls, root_dir: Path, name: str) -> FragmentDefinitionNode:
+        return cls._fragments(root_dir)[name]
 
     @staticmethod
     def _sub(selections: Any, name: str) -> Any:
@@ -1571,10 +1734,11 @@ class TestPlacementFragment:
         inline = [item for item in instance if isinstance(item, InlineFragmentNode)]
         assert {item.type_condition.name.value for item in inline} == set(self.HOST_FRAGMENT.values())
         own_kind = [item for item in inline if item.type_condition.name.value == self.HOST_FRAGMENT[kind]]
+        fragments = self._fragments(root_dir)
         instance_paths = self._paths(
-            [item for item in instance if item not in inline] + own_kind, ("components", "instances")
+            [item for item in instance if item not in inline] + own_kind, fragments, ("components", "instances")
         )
-        tag_paths = self._paths(placement) | self._paths(shared)
+        tag_paths = self._paths(placement, fragments) | self._paths(shared, fragments)
 
         reads = self._recorded_reads(kind)
         host = ("components", "instances") + (("hosting_device",) if "Virtual" in kind else ())
@@ -1604,3 +1768,45 @@ class TestPlacementFragment:
 
         walk(fragment.selection_set.selections)
         assert found == [list(ENDPOINT_NIC_ROLES)] * 3, "one filter per host kind"
+
+    def test_the_nic_block_is_one_fragment_spread_under_a_field_in_each_host_branch(self, root_dir: Path) -> None:
+        """HostNicFields is the single NIC selection: spread as ``interfaces(...) { edges { node { ...F } } }`` of
+        each host kind, so the three branches cannot drift."""
+        placement = self._fragment(root_dir, "SecurityTagPlacementFields").selection_set.selections
+        instance = self._below(placement, "components", "instances")
+        spread_in: list[str] = []
+        for branch in (item for item in instance if isinstance(item, InlineFragmentNode)):
+            selections = branch.selection_set.selections
+            if branch.type_condition.name.value != "DcimDevice":
+                selections = self._sub(self._sub(selections, "hosting_device"), "node")
+            node = self._below(selections, "interfaces")
+            assert len(node) == 1
+            spread = node[0]
+            assert isinstance(spread, FragmentSpreadNode)
+            spread_in.append(f"{branch.type_condition.name.value}:{spread.name.value}")
+        assert spread_in == [
+            f"{kind}:HostNicFields" for kind in ("DcimDevice", "DcimVirtualDevice", "ManagedControllerVirtual")
+        ]
+
+    def test_no_named_spread_sits_directly_under_an_inline_fragment(self, root_dir: Path) -> None:
+        """``... on X { ...F }`` resolves to nulls on a live Infrahub (commit 7a38de0e); a spread under a field
+        inside the inline fragment (``node { ...F }``) works. Holds for every fragment of the file."""
+        offenders = [
+            f"{name}: ... on {inline.type_condition.name.value} {{ ...{spread.name.value} }}"
+            for name, definition in self._fragments(root_dir).items()
+            for inline in self._inline_fragments(definition)
+            for spread in inline.selection_set.selections
+            if isinstance(spread, FragmentSpreadNode)
+        ]
+        assert not offenders, offenders
+
+    @classmethod
+    def _inline_fragments(cls, node: Any) -> list[InlineFragmentNode]:
+        """Every inline fragment at any depth below ``node``."""
+        selection_set = getattr(node, "selection_set", None)
+        found: list[InlineFragmentNode] = []
+        for selection in selection_set.selections if selection_set else ():
+            if isinstance(selection, InlineFragmentNode):
+                found.append(selection)
+            found += cls._inline_fragments(selection)
+        return found

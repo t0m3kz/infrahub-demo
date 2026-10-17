@@ -271,6 +271,15 @@ nodes:
             label: "Inline Service Chain"
             description: "BL->FW->LB->BL physical chain; FW and LB sit directly in the forwarding path"
             color: "#BF7F7F"
+      - name: group_policy_enforce
+        kind: Boolean
+        label: "Enforce Group Policy"
+        optional: true
+        default_value: false
+        order_weight: 1500
+        description: >-
+          Render group-policy enforcement (NX-OS security enforce, EOS no shutdown);
+          contracts always render.
     relationships:
       - name: fabric_templates
         peer: TopologyElement

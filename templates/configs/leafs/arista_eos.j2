@@ -121,6 +121,8 @@ route-map RM-VRF-CONN-2-EVPN permit 10
 {% include 'common/arista_eos_vxlan.j2' %}
 {%- endif %}
 
+{%- include 'common/arista_eos_segment_security.j2' %}
+
 {%- if leaf_pbr_rules %}
 !
 ! Leaf PBR — LB return path first, then permitted firewall bypass,

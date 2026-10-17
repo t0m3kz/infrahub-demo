@@ -102,8 +102,3 @@ configure service vprn 50001 interface "int-vpls-10100" vpls "vpls-10100"
 configure service vprn 50001 interface "int-vpls-10100" mac "00:1c:73:00:dc:01"
 configure service vprn 50001 interface "int-vpls-10100" ipv4 primary-address "10.100.0.1/24"
 !
-configure service vprn 200 interface "int-vpls-200" admin-state enable
-configure service vprn 200 interface "int-vpls-200" vpls "vpls-200"
-configure service vprn 200 interface "int-vpls-200" mac "00:1c:73:00:dc:01"
-configure service vprn 200 interface "int-vpls-200" ipv4 primary-address "10.200.0.1/24"
-!

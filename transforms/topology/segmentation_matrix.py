@@ -23,9 +23,8 @@ from utils.group_policy import (
     gbp_required,
     reserved_groups,
     site_kind,
-    tags_by_segment,
 )
-from utils.segment_addressing import segment_prefix
+from utils.segment_addressing import classifier_prefix
 
 
 class SegmentationMatrix(InfrahubTransform):
@@ -35,6 +34,8 @@ class SegmentationMatrix(InfrahubTransform):
       group-policy kind of its VTEPs (utils/group_policy.site_reason /
       site_kind), each VTEP with why it is outside its platform's profile row
       (fabric_reason; null: in it);
+    - ``site.enforce``: the data center's staging switch (``group_policy_enforce``): False means a
+      reference fabric configures the contracts but its devices do not enforce them;
     - ``segments``: every segment active in the DC, with its group, customer
       (the segment owner: a label, not a tag), VRF, whether it needs
       component group policy and whether its leaf SVI carries its ACL
@@ -71,13 +72,13 @@ class SegmentationMatrix(InfrahubTransform):
         profiles, vteps = contracts.profiles, contracts.vteps
         # As this data center would enforce once it is a reference fabric.
         reference_sites = contracts.reference_sites | {dc_id}
-        components_of = tags_by_segment(contracts.tags)
+        components_of = contracts.components_of
 
         views = {
             "segment_security": segment_security_view(
                 contracts.all_groups,
                 contracts.rows,
-                {str(segment.get("name")): segment_prefix(segment) for segment in contracts.all_segments},
+                {str(segment.get("name")): classifier_prefix(segment) for segment in contracts.all_segments},
                 local=contracts.local_names,
             ),
             "vxlan_gpo": vxlan_gpo_view(
@@ -96,6 +97,7 @@ class SegmentationMatrix(InfrahubTransform):
                 "reference": contracts.reason is None,
                 "kind": site_kind(vteps, profiles),
                 "reason": contracts.reason,
+                "enforce": contracts.enforce,
             },
             "vteps": [self._vtep(device, profiles) for device in vteps],
             "segments": [
@@ -146,7 +148,7 @@ class SegmentationMatrix(InfrahubTransform):
                     "vrf": groups[0].vrf,
                     "vlan_id": segment.get("vlan_id"),
                     "vni": vnis[0] if vnis else None,
-                    "prefix": segment_prefix(segment),
+                    "prefix": classifier_prefix(segment),
                 }
             )
         return {

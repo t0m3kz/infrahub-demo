@@ -253,69 +253,21 @@
       "replies": "stateless (AVD): a reply needs its own policy at the source segment (I/LS)",
       "segments": [
         {
-          "fallback": {
-            "entries": [
-              {
-                "port_end": 8443,
-                "port_start": 8443,
-                "protocol": "tcp"
-              }
-            ],
-            "rules": [
-              "c005-payment-web-to-backend-tcp-8443"
-            ]
-          },
+          "fallback": null,
           "intra_segment": "deny",
           "name": "c005-app-backend-stretch-p",
-          "policies": [
-            {
-              "entries": [
-                {
-                  "port_end": 8443,
-                  "port_start": 8443,
-                  "protocol": "tcp"
-                }
-              ],
-              "from": "c005-web-frontend-local-dc10-p",
-              "rules": [
-                "c005-payment-web-to-backend-tcp-8443"
-              ]
-            }
-          ],
+          "policies": [],
           "prefix": "10.5.20.0/24",
+          "to_unclassified": null,
           "vrf": "PROD"
         },
         {
-          "fallback": {
-            "entries": [
-              {
-                "port_end": 443,
-                "port_start": 443,
-                "protocol": "tcp"
-              }
-            ],
-            "rules": [
-              "c008-trade-portal-to-c005-payment-api-tcp-443"
-            ]
-          },
+          "fallback": null,
           "intra_segment": "deny",
           "name": "c005-web-frontend-local-dc10-p",
-          "policies": [
-            {
-              "entries": [
-                {
-                  "port_end": 443,
-                  "port_start": 443,
-                  "protocol": "tcp"
-                }
-              ],
-              "from": "c008-trade-portal-local-dc10-p",
-              "rules": [
-                "c008-trade-portal-to-c005-payment-api-tcp-443"
-              ]
-            }
-          ],
+          "policies": [],
           "prefix": "10.5.10.0/24",
+          "to_unclassified": null,
           "vrf": "PROD"
         },
         {
@@ -324,6 +276,18 @@
           "name": "c006-shop-p",
           "policies": [],
           "prefix": "10.6.10.0/24",
+          "to_unclassified": {
+            "entries": [
+              {
+                "port_end": 443,
+                "port_start": 443,
+                "protocol": "tcp"
+              }
+            ],
+            "rules": [
+              "shop-to-internet-https"
+            ]
+          },
           "vrf": "PROD"
         },
         {
@@ -332,10 +296,19 @@
           "name": "c008-trade-portal-local-dc10-p",
           "policies": [],
           "prefix": "10.8.10.0/24",
+          "to_unclassified": null,
           "vrf": "PROD"
         }
       ],
       "unsupported": [
+        {
+          "dst": "backend.payment-core.c005.demo.local",
+          "reason": "a component group is not expressible by prefix (the row is not widened to its segment)",
+          "rules": [
+            "c005-payment-web-to-backend-tcp-8443"
+          ],
+          "src": "api.payment-core.c005.demo.local"
+        },
         {
           "dst": "sessions.payment-core.c005.demo.local",
           "reason": "component groups inside one segment are not expressible by prefix",
@@ -343,6 +316,38 @@
             "web-frontend-to-session-store-tcp-6379"
           ],
           "src": "api.payment-core.c005.demo.local"
+        },
+        {
+          "dst": "unclassified",
+          "reason": "a component group is not expressible by prefix (the row is not widened to its segment)",
+          "rules": [
+            "c005-payment-web-to-backend-tcp-8443"
+          ],
+          "src": "api.payment-core.c005.demo.local"
+        },
+        {
+          "dst": "api.payment-core.c005.demo.local",
+          "reason": "a component group is not expressible by prefix (the row is not widened to its segment)",
+          "rules": [
+            "c008-trade-portal-to-c005-payment-api-tcp-443"
+          ],
+          "src": "c008-trade-portal-local-dc10-p"
+        },
+        {
+          "dst": "api.payment-core.c005.demo.local",
+          "reason": "a component group is not expressible by prefix (the row is not widened to its segment)",
+          "rules": [
+            "c008-trade-portal-to-c005-payment-api-tcp-443"
+          ],
+          "src": "unclassified"
+        },
+        {
+          "dst": "backend.payment-core.c005.demo.local",
+          "reason": "a component group is not expressible by prefix (the row is not widened to its segment)",
+          "rules": [
+            "c005-payment-web-to-backend-tcp-8443"
+          ],
+          "src": "unclassified"
         }
       ]
     },
@@ -603,6 +608,7 @@
     }
   ],
   "site": {
+    "enforce": true,
     "kind": "vxlan_gpo",
     "reason": "access-leaf al-dc10-01 N9K-C93180YC-EX: device type not in profile reference-cisco-nxos (and 2 more)",
     "reference": false

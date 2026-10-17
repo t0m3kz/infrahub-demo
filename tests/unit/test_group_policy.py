@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 import yaml
 from graphql import parse, print_ast
-from graphql.language import FieldNode, FragmentDefinitionNode, OperationDefinitionNode
+from graphql.language import FieldNode, FragmentDefinitionNode, FragmentSpreadNode, OperationDefinitionNode
 
 from utils.fabric_roles import DC_VTEP_ROLES, VTEP_ROLES
 from utils.group_policy import (
@@ -444,6 +444,46 @@ class TestQueries:
         assert "components" not in text
         fragments = (root_dir / "queries/fragments/group_policy.gql").read_text()
         assert fragments.count("fragment SecurityTagGroupPolicyFields on SecurityTag") == 1
+
+    @pytest.mark.parametrize("query", ("queries/topology/segmentation_matrix.gql", *DEVICE_QUERIES))
+    def test_the_enforcement_switch_is_read_on_the_data_center_roots(self, root_dir: Path, query: str) -> None:
+        """``group_policy_enforce`` (A6) rides on the fleet TopologyDataCenter root of every query, and on the
+        matrix's ``target`` (the data center the artifact is for)."""
+        roots = self._roots((root_dir / query).read_text())
+        assert ("target" in roots) == query.endswith("segmentation_matrix.gql")
+        for key in ("target", "TopologyDataCenter"):
+            if key in roots:
+                assert "group_policy_enforce {\n" in roots[key]
+
+    @pytest.mark.parametrize("query", ("queries/topology/segmentation_matrix.gql", *DEVICE_QUERIES))
+    def test_every_spread_resolves_against_the_fragments_directory(self, root_dir: Path, query: str) -> None:
+        """.infrahub.yml loads the whole queries/fragments/ directory: every named spread, transitively
+        (SecurityTagPlacementFields -> HostNicFields), must be defined there exactly once."""
+        defined: dict[str, FragmentDefinitionNode] = {}
+        for path in sorted((root_dir / "queries/fragments").glob("*.gql")):
+            for item in parse(path.read_text()).definitions:
+                if isinstance(item, FragmentDefinitionNode):
+                    assert item.name.value not in defined, f"{item.name.value} defined twice"
+                    defined[item.name.value] = item
+
+        def spreads(node: Any) -> set[str]:
+            if isinstance(node, FragmentSpreadNode):
+                return {node.name.value}
+            selection_set = getattr(node, "selection_set", None)
+            found: set[str] = set()
+            for child in selection_set.selections if selection_set else ():
+                found |= spreads(child)
+            return found
+
+        pending = spreads(parse((root_dir / query).read_text()).definitions[0])
+        seen: set[str] = set()
+        while pending:
+            name = pending.pop()
+            assert name in defined, f"{query} spreads {name}, defined in no queries/fragments/ file"
+            seen.add(name)
+            pending |= spreads(defined[name]) - seen
+        if "SecurityTagPlacementFields" in seen:
+            assert "HostNicFields" in seen
 
     def test_only_the_device_queries_read_the_instance_placement(self, root_dir: Path) -> None:
         """The matrix artifact (and the check) must not pay for the NIC and cable walk of every instance."""

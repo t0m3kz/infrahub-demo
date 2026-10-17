@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from utils.segment_addressing import segment_prefix
+from utils.segment_addressing import classifier_prefix, segment_prefix
 
 
 def _gw(prefix: str | None) -> dict[str, Any]:
@@ -70,3 +70,20 @@ class TestSegmentDeploymentIdsCoverCloud:
         from transforms.helpers.firewall import _segment_deployment_ids
 
         assert _segment_deployment_ids({"cidr_block": "10.0.0.0/24", "customer_deployment": None}) == []
+
+
+class TestClassifierPrefix:
+    """The one prefix a segment is classified by (MSS-G, the segmentation matrix): IPv4, else IPv6."""
+
+    def test_ipv4_prefix_is_the_classifier(self) -> None:
+        assert classifier_prefix(_gw("10.0.0.0/24")) == "10.0.0.0/24"
+
+    def test_ipv6_only_segment_is_classified_by_its_ipv6_prefix(self) -> None:
+        assert classifier_prefix(_gw("2001:db8::/64")) == "2001:db8::/64"
+
+    def test_cloud_cidr_block_is_the_classifier(self) -> None:
+        assert classifier_prefix({"cidr_block": "10.0.1.0/24"}) == "10.0.1.0/24"
+
+    def test_segment_without_a_prefix_has_no_classifier(self) -> None:
+        assert classifier_prefix({}) is None
+        assert classifier_prefix(_gw(None)) is None
