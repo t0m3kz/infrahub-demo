@@ -322,6 +322,28 @@ def test_integration_lisp(
     )
 
 
+@_task(optional=["basetemp", "server_port"])
+def test_integration_arista_mssg(
+    context: Context, basetemp: str = "~/.pytest-tmp/infrahub-demo", server_port: int = 8100
+) -> None:
+    """Run the Arista EOS MSS-G suite (data/demos/32_arista_mssg): load, checks, matrix, renders, enforce, gate.
+
+    The scope is not part of 30_all, so test_71 builds its own branch and needs only the setup and
+    repository prerequisites. It proves the generators -> group tags -> transform -> EOS text path, not that
+    EOS accepts the rendered lines (custom policies and the fallback policy are AVD-documented only).
+
+    Example:
+        uv run invoke dev.test-integration-arista-mssg
+    """
+    _run_integration_suite(
+        context,
+        tests="tests/integration/test_01_setup.py tests/integration/test_02_repository.py "
+        "tests/integration/test_71_arista_mssg.py",
+        basetemp=basetemp,
+        server_port=server_port,
+    )
+
+
 @_task(optional=["increment"])
 def release(context: Context, increment: str = "") -> None:
     """Bump version, update CHANGELOG.md, commit, and tag using commitizen.
@@ -785,6 +807,7 @@ dev_ns.add_task(cast(Task, test_integration_fast), name="test-integration-fast")
 dev_ns.add_task(cast(Task, test_integration_routing), name="test-integration-routing")
 dev_ns.add_task(cast(Task, test_integration_all_demo), name="test-integration-all-demo")
 dev_ns.add_task(cast(Task, test_integration_lisp), name="test-integration-lisp")
+dev_ns.add_task(cast(Task, test_integration_arista_mssg), name="test-integration-arista-mssg")
 dev_ns.add_task(cast(Task, release))
 dev_ns.add_task(cast(Task, upgrade))
 dev_ns.add_task(cast(Task, clean_testcontainers), name="clean-testcontainers")
@@ -812,6 +835,7 @@ ns.add_task(cast(Task, test_integration_fast), name="test-integration-fast")
 ns.add_task(cast(Task, test_integration_routing), name="test-integration-routing")
 ns.add_task(cast(Task, test_integration_all_demo), name="test-integration-all-demo")
 ns.add_task(cast(Task, test_integration_lisp), name="test-integration-lisp")
+ns.add_task(cast(Task, test_integration_arista_mssg), name="test-integration-arista-mssg")
 ns.add_task(cast(Task, clean_testcontainers), name="clean-testcontainers")
 ns.add_task(cast(Task, upgrade))
 ns.add_task(cast(Task, release))

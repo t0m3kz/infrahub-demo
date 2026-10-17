@@ -1,0 +1,60 @@
+---
+# One tenant application on the three segments. It exists to put the segments on host ports: a VTEP
+# renders its tenant VRFs, and so `router segment-security`, only for segments tagged on its own
+# interfaces (transforms/common.py _collect_activations_from_interfaces), and a segment is tagged on
+# the ports its component's instance is cabled to (add_app_component_segment). It declares no
+# AppDependency, so it writes no security rule: the contract is the hand-written policies of
+# ../05_policies/.
+#
+# Placement: server-1 sits in row 1 (access-leaf pair) and server-2 in row 2 (leaf pair); the app tier
+# runs on both so each pair carries the PROD VRF, web only on server-1 and db only on server-2.
+# Memberships: the AppApplication created-trigger dispatches add_app_application, which raises for a
+# non-member of app_applications; add_app_component_segment targets app_components.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppApplication
+  data:
+    - label: mssg-demo
+      environment: p
+      criticality: low
+      fqdn: mssg-demo.mssg1.demo.local
+      owner: MSSG1
+      member_of_groups:
+        - app_applications
+      children:
+        kind: AppComponent
+        data:
+          - name: web
+            fqdn: web.mssg-demo.mssg1.demo.local
+            component_type: frontend
+            ports:
+              - tcp/443
+            network_segment: mssg1-web-p
+            instances:
+              - dc14-pod1-server-1
+            member_of_groups:
+              - app_components
+
+          - name: app
+            fqdn: app.mssg-demo.mssg1.demo.local
+            component_type: backend
+            ports:
+              - tcp/8000
+            network_segment: mssg1-app-p
+            instances:
+              - dc14-pod1-server-1
+              - dc14-pod1-server-2
+            member_of_groups:
+              - app_components
+
+          - name: db
+            fqdn: db.mssg-demo.mssg1.demo.local
+            component_type: database
+            ports:
+              - tcp/5432
+            network_segment: mssg1-db-p
+            instances:
+              - dc14-pod1-server-2
+            member_of_groups:
+              - app_components

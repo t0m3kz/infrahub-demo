@@ -1,0 +1,92 @@
+---
+# DC14 - the Arista EOS MSS-G reference fabric. Shaped like data/demos/30_all/03_dc/dc10 (the NX-OS
+# reference fabric) and data/demos/31_lisp_fabric's DC13 (size M, two S_MIDDLE pods, a DC-level
+# border-leaf pair), with these differences:
+#
+#   - every VTEP is a 7280R3 on EOS 4.36.2F, the one platform/type/release the reference-arista-eos
+#     profile row (data/bootstrap/19b_group_policy_profile.yml) accepts. One VTEP outside the row
+#     silently removes the MSS-G block from EVERY device of the DC (utils/group_policy.site_reason).
+#     The spines are 7050CX3 on 4.32.1F: spines are not VTEPs and are not checked.
+#   - group_policy_enforce is left out (false): the render is the STAGED output, `shutdown` under
+#     `router segment-security`. test_71 flips it on its branch to prove the one-line difference.
+#   - mlag_create: back-to-back, never virtual: arista_eos_mlag.j2 does not render a virtual peer link.
+#   - underlay_protocol ipv4 (the schema default is ipv6).
+#   - no load balancer: the border-leaf template still carries load-balancer ports, which stay free.
+#
+# Pod 1 is the compute pod: two rows, each a network rack (the row's leaf pair; row 1 adds an
+# access-leaf pair) plus a compute rack (../02_compute/ servers). Servers attach to the access-leaf pair
+# of their row when it has one (generators/topology/endpoint.py), else to the leaf pair, so row 1's
+# hosts put the tenant VRF on the access-leafs and row 2's put it on the leafs: MSS-G is rendered only
+# on a VTEP that carries a tenant VRF, and a VTEP carries it only through a hosted segment.
+# Pod 2 has no racks (like DC10's pod 2): it hosts the second border-leaf.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyDataCenter
+  data:
+    - name: DC14
+      index: 14
+      parent: DC
+      size: M
+      routing_strategy: ebgp-ebgp
+      underlay_protocol: ipv4
+      naming_convention: hierarchical
+      fabric_templates:
+        - ["2", "border-leaf", "DCS-7280CR3-32P4_BORDER_LEAF"]
+        - ["2", "firewall", "CP-26000_FIREWALL"]
+      fabric_interface_sorting_method: top_down
+      member_of_groups:
+        - topologies_dc
+      children:
+        kind: TopologyPod
+        data:
+          - index: 1
+            layout: S_MIDDLE
+            deployment_type: middle_rack
+            suites: [rom-1-s-1]
+            fabric_templates:
+              - ["2", "spine", "DCS-7050CX3-32C-R_SPINE"]
+            mlag_create: back-to-back
+            member_of_groups:
+              - topologies_pod
+            racks:
+              kind: LocationRack
+              data:
+                # Network racks: row 1 = leaf pair + access-leaf pair, row 2 = leaf pair.
+                - index: 5
+                  row_index: 1
+                  shortname: rom-1-s-1-r-1-5
+                  rack_type: network
+                  parent: rom-1-s-1
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "leaf", "DCS-7280SR3-48YC8_LEAF"]
+                    - ["2", "access-leaf", "DCS-7280SR3-48YC8_ACCESS"]
+                - index: 5
+                  row_index: 2
+                  shortname: rom-1-s-1-r-2-5
+                  rack_type: network
+                  parent: rom-1-s-1
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "leaf", "DCS-7280SR3-48YC8_LEAF"]
+                # Compute racks: no fabric templates of their own; the endpoint generator cables
+                # their servers to the network rack that shares their row.
+                - index: 1
+                  row_index: 1
+                  shortname: rom-1-s-1-r-1-1
+                  parent: rom-1-s-1
+                  member_of_groups: [topologies_rack]
+                - index: 1
+                  row_index: 2
+                  shortname: rom-1-s-1-r-2-1
+                  parent: rom-1-s-1
+                  member_of_groups: [topologies_rack]
+          - index: 2
+            layout: S_MIDDLE
+            deployment_type: middle_rack
+            suites: [rom-1-s-2]
+            fabric_templates:
+              - ["2", "spine", "DCS-7050CX3-32C-R_SPINE"]
+            member_of_groups:
+              - topologies_pod
