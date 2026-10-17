@@ -8,6 +8,7 @@ from netutils.utils import jinja2_convenience_function
 
 from transforms.helpers.acl import get_acls
 from transforms.helpers.bgp import get_bgp_profile
+from transforms.helpers.cisco_xe import get_cisco_xe_acls, get_cisco_xe_vrf_routes, refuse_unfiltered_ipv6
 from transforms.helpers.firewall import (
     _firewall_context_caps,
     _flatten_deployment_firewall_contexts,
@@ -211,6 +212,7 @@ class BaseDeviceTransform(InfrahubTransform):
             if unsupported:
                 raise ValueError(f"{platform_name} ConfigDB rendering does not support: {', '.join(unsupported)}")
         self._refuse_cisco_xe_unrendered(platform_name, config)
+        config.update(self._cisco_xe_context(platform_name, config))
         return self._render(platform_name, config)
 
     # The roles rendered by a cisco_xe fabric template (leafs/ and border_leafs/); the Edge's cisco_xe template is IOS.
@@ -219,9 +221,10 @@ class BaseDeviceTransform(InfrahubTransform):
     def _refuse_cisco_xe_unrendered(self, platform_name: str, config: dict) -> None:
         """Raise when a Catalyst 9000 (cisco_xe) fabric device needs what its EVPN-VXLAN templates do not render.
 
-        Those templates render the EVPN-VXLAN overlay, BGP, OSPF and the gateway SVIs only. Dropping the
-        segment ACLs, PBR, inter-VRF exchange statics, MLAG or Multi-Site would ship an unprotected or
-        incomplete config, so refuse instead, like SONiC and SR OS.
+        Those templates render the overlay (EVPN-VXLAN or LISP), BGP, OSPF, the gateway SVIs, the segment ACLs and
+        the inter-VRF exchange statics. Dropping PBR, MLAG or Multi-Site would ship an unprotected or incomplete
+        config, so refuse instead, like SONiC and SR OS. What the ACLs and statics themselves cannot express is
+        refused by ``_cisco_xe_context``.
         """
         if platform_name != "cisco_xe":
             return
@@ -231,7 +234,7 @@ class BaseDeviceTransform(InfrahubTransform):
         if self.device_role not in self._CISCO_XE_FABRIC_ROLES:
             return
         vxlan = config.get("vxlan") or {}
-        unsupported = [key for key in ("acls", "leaf_pbr_rules", "vrf_routes", "mlag") if config.get(key)]
+        unsupported = [key for key in ("leaf_pbr_rules", "mlag") if config.get(key)]
         if vxlan.get("multisite"):
             unsupported.append("multisite")
         if vxlan.get("enabled") and not (vxlan.get("evpn") or {}).get("enabled"):
@@ -240,6 +243,28 @@ class BaseDeviceTransform(InfrahubTransform):
             raise ValueError(
                 f"cisco_xe {self.device_role} cannot render: {', '.join(unsupported)}; refusing incomplete config"
             )
+
+    def _cisco_xe_context(self, platform_name: str, config: dict) -> dict[str, Any]:
+        """The IOS-XE form of the segment ACLs and the VRF statics (``xe_acls``, ``xe_vrf_routes``).
+
+        Empty for anything but a cisco_xe fabric role, so no other device's context changes. Raises ValueError
+        for an ACL or static IOS-XE cannot express (see transforms/helpers/cisco_xe.py).
+        """
+        if platform_name != "cisco_xe" or self.device_role not in self._CISCO_XE_FABRIC_ROLES:
+            return {}
+        refuse_unfiltered_ipv6(config.get("vlans") or [], self.device_role)
+        lisp = config.get(OVERLAY_CONFIG_KEYS["lisp"])
+        defined_vrfs = (
+            [l3["vrf"] for l3 in lisp["l3_instances"]]
+            if lisp
+            else [mapping["vrf_name"] for mapping in (config.get("vxlan") or {}).get("l3_vni_mappings", [])]
+        )
+        return {
+            "xe_acls": get_cisco_xe_acls(config.get("acls"), self.device_role),
+            "xe_vrf_routes": get_cisco_xe_vrf_routes(
+                config.get("vrf_routes"), defined_vrfs, self.device_role, lisp=bool(lisp)
+            ),
+        }
 
     def _template_context(self, device_data: dict, platform_name: str, extra_roots: dict) -> dict:
         """The template context: the device-specific part (``_extra_config``), then the base part.

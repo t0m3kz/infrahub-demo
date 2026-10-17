@@ -18,11 +18,16 @@ The scope is self-contained: load it on top of the standard bootstrap data. It i
   `add_pod` / `add_rack` run no longer produces the overlay `ManagedBGP` processes and peerings, and the tracking
   cleanup deletes them. Switching back to `bgp_evpn` re-creates them with new ids (and, for the number pools, new
   numbers). Do it on a branch, never on a fabric you want to keep as it is.
-- **The PROD SVIs of this scope are unprotected.** `cisco_xe` renders no SVI ACL, no PBR and no VRF statics, and
-  DC13 has no firewall or load balancer. This is accepted for a demo that is never merged.
-- **A host on a routed tenant segment makes a `cisco_xe` leaf refuse to render, so the scope attaches no hosts.** A
-  hosted routed tenant segment gets a zero-trust SVI ACL (`get_acls` always emits an implicit-deny ACL), which
-  `cisco_xe` cannot render ("refusing incomplete config"). A fabric edge always carries the edge LISP config
+- **The PROD SVIs of this scope are unprotected.** The scope has no host, so no SVI ACL is rendered, and DC13 has no
+  firewall or load balancer (no PBR, which `cisco_xe` still refuses). This is accepted for a demo that is never merged.
+- **The scope attaches no hosts, but a `cisco_xe` leaf can now render them.** A hosted routed tenant segment gets a
+  zero-trust SVI ACL (`get_acls` always emits an implicit-deny ACL); `cisco_xe` renders it as an
+  `ip access-list extended` bound with `ip access-group ... in` on the gateway SVI, and the exchange VRF statics as
+  `ip route vrf` (`templates/configs/common/cisco_xe_acl.j2`, `cisco_xe_vrf_static.j2`), still `unverified-no-lab`. The
+  integration test `test_70` does not exercise it: no data changed, the scope keeps hosting nothing, and the smoke
+  golden `leaf_cisco_xe_lisp_with_acl` is the only render of a LISP leaf with hosts. Still refused: PBR, MLAG, Multi-Site,
+  a border leaf with a hosted tenant SVI, and an exported inter-VRF static (a LISP fabric has no redistribution). A
+  fabric edge always carries the edge LISP config
   (`router lisp`, the RLOC locator-set, ITR/ETR and `etr map-server ... key` toward every border) with no
   instance-id while it hosts nothing: the leafs and access-leafs render the OSPF underlay plus that edge config, and the
   border-leafs add the map-server, `site` and EID records.

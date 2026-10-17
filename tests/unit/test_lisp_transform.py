@@ -303,8 +303,11 @@ class TestPlatformRefusal:
 
     def test_cisco_xe_existing_refusals_still_apply_on_lisp(self) -> None:
         data = _lisp_raw_input(LEAF_INPUT)
-        with patch("transforms.common.get_acls", return_value=[{"vlan_id": 100, "name": "ACL-100"}]):
-            with pytest.raises(ValueError, match=r"cisco_xe leaf cannot render: acls; refusing incomplete config"):
+        # The segment ACLs and the exchange statics are rendered on LISP too (test_cisco_xe_platform.py); PBR is not.
+        with patch("transforms.common._combine_leaf_pbr_rules", return_value=[{"vlan_id": 100}]):
+            with pytest.raises(
+                ValueError, match=r"cisco_xe leaf cannot render: leaf_pbr_rules; refusing incomplete config"
+            ):
                 _run_transform(Leaf, data)
 
 

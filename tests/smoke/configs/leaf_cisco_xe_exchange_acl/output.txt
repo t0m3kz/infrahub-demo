@@ -1,0 +1,386 @@
+!
+! dc1-leaf-01 Configuration
+! Cisco IOS-XE (Catalyst 9000) EVPN-VXLAN leaf
+!
+hostname dc1-leaf-01
+!
+ip routing
+spanning-tree mode rapid-pvst
+!
+vlan 100
+ name Customer-A
+!
+vlan 3000
+ name XCHG-dc1-fw-shared-PROD
+!
+vlan 3001
+ name XCHG-dc1-fw-acme-PROD
+!
+vlan 3400
+ name XCHG-dc1-fw-shared-INTERNET
+!
+vlan 3401
+ name XCHG-dc1-fw-acme-INTERNET
+!
+vlan 3600
+ name XCHG-dc1-fw-shared-MANAGEMENT
+!
+vlan 3601
+ name XCHG-dc1-fw-acme-MANAGEMENT
+!
+!
+! Zero-Trust ACLs (one per segment VLAN — inbound on SVI)
+! unverified-no-lab: `ip access-list extended` with explicit sequence numbers and `<seq> remark` lines
+! unverified-no-lab: `log` on an ACL entry of a Catalyst 9000 SVI ACL (punted to the CPU), `established` after the destination port
+ip access-list extended ACL-VLAN100-IN
+ 10 remark Rule: allow-https
+ 20 permit tcp any any eq 443
+ 30 remark Rule: allow-ping
+ 40 permit icmp any any
+ 50 remark Rule: implicit-deny-all
+ 60 deny ip any any log
+!
+! Interfaces
+interface Ethernet1
+ description to spine-01
+ no switchport
+ ip address 10.1.0.1 255.255.255.254
+ no shutdown
+!
+interface Ethernet2
+ description to spine-02
+ no switchport
+ ip address 10.1.0.3 255.255.255.254
+ no shutdown
+!
+interface Ethernet10
+ description to server-01
+ switchport mode access
+ switchport access vlan 100
+ no shutdown
+!
+interface Ethernet20
+ description to dc1-fw-01
+ switchport mode trunk
+ switchport trunk allowed vlan 3000,3001,3400,3401,3600,3601
+ no shutdown
+!
+interface Loopback0
+ description Router ID
+ ip address 10.0.0.1 255.255.255.255
+ no shutdown
+!
+! BGP Configuration
+router bgp 65000
+  bgp router-id 10.0.0.1
+  bgp graceful-restart
+  maximum-paths 4
+  !
+  neighbor EVPN-PEERS peer-group
+  neighbor EVPN-PEERS remote-as 65000
+  neighbor EVPN-PEERS update-source Loopback0
+  neighbor EVPN-PEERS send-community standard
+  !
+  neighbor UNDERLAY-PEERS peer-group
+  neighbor UNDERLAY-PEERS send-community standard
+  neighbor UNDERLAY-PEERS fall-over bfd
+  neighbor 10.1.0.0 peer-group UNDERLAY-PEERS
+  neighbor 10.1.0.0 remote-as 65100
+  neighbor 10.1.0.0 local-as 65001 no-prepend replace-as
+  neighbor 10.1.0.0 description spine-01
+  neighbor 10.1.0.2 peer-group UNDERLAY-PEERS
+  neighbor 10.1.0.2 remote-as 65101
+  neighbor 10.1.0.2 local-as 65001 no-prepend replace-as
+  neighbor 10.1.0.2 description spine-02
+  neighbor 10.0.0.100 peer-group EVPN-PEERS
+  neighbor 10.0.0.100 description spine-01
+  neighbor 10.0.0.101 peer-group EVPN-PEERS
+  neighbor 10.0.0.101 description spine-02
+  !
+  address-family ipv4 unicast
+    redistribute connected route-map RM-CONN-2-BGP
+    neighbor UNDERLAY-PEERS activate
+  exit-address-family
+  !
+  address-family l2vpn evpn
+    neighbor EVPN-PEERS activate
+  exit-address-family
+!
+! Route-maps
+route-map RM-CONN-2-BGP permit 10
+ match interface Loopback0
+!
+! VXLAN / EVPN Configuration (Catalyst 9000, IOS-XE)
+!
+! Tenant VRFs (symmetric IRB — one L3 VNI per tenant)
+! unverified-no-lab: `route-target ... stitching` is how the guide imports and exports a VRF into L2VPN EVPN
+vrf definition INTERNET
+ rd 10.0.0.1:50003
+ address-family ipv4
+  route-target export 50003:50003
+  route-target import 50003:50003
+  route-target export 50003:50003 stitching
+  route-target import 50003:50003 stitching
+ exit-address-family
+!
+vrf definition MANAGEMENT
+ rd 10.0.0.1:50004
+ address-family ipv4
+  route-target export 65000:50004
+  route-target import 65000:50004
+  route-target export 65000:50004 stitching
+  route-target import 65000:50004 stitching
+ exit-address-family
+!
+vrf definition PROD
+ rd 10.0.0.1:50001
+ address-family ipv4
+  route-target export 65000:50001
+  route-target import 65000:50001
+  route-target export 65000:50001 stitching
+  route-target import 65000:50001 stitching
+ exit-address-family
+!
+!
+! EVPN
+! unverified-no-lab: `replication-type static` (ingress replication) is a global l2vpn evpn command
+! unverified-no-lab: `router-id <loopback>` under l2vpn evpn
+l2vpn evpn
+ replication-type static
+ router-id Loopback0
+ ! unverified-no-lab: `default-gateway advertise` globally (later trains also take `enable` per instance)
+ default-gateway advertise
+!
+! unverified-no-lab: `rd` and `route-target` under `l2vpn evpn instance`; ARP/ND flooding suppression is left at the platform default
+l2vpn evpn instance 100 vlan-based
+ encapsulation vxlan
+ rd 10.0.0.1:10100
+ route-target export 65000:10100
+ route-target import 65000:10100
+!
+vlan configuration 100
+ member evpn-instance 100 vni 10100
+!
+l2vpn evpn instance 3000 vlan-based
+ encapsulation vxlan
+ rd 10.0.0.1:64000
+ route-target export 65000:64000
+ route-target import 65000:64000
+!
+vlan configuration 3000
+ member evpn-instance 3000 vni 64000
+!
+l2vpn evpn instance 3001 vlan-based
+ encapsulation vxlan
+ rd 10.0.0.1:64001
+ route-target export 65000:64001
+ route-target import 65000:64001
+!
+vlan configuration 3001
+ member evpn-instance 3001 vni 64001
+!
+l2vpn evpn instance 3400 vlan-based
+ encapsulation vxlan
+ rd 10.0.0.1:64400
+ route-target export 65000:64400
+ route-target import 65000:64400
+!
+vlan configuration 3400
+ member evpn-instance 3400 vni 64400
+!
+l2vpn evpn instance 3401 vlan-based
+ encapsulation vxlan
+ rd 10.0.0.1:64401
+ route-target export 65000:64401
+ route-target import 65000:64401
+!
+vlan configuration 3401
+ member evpn-instance 3401 vni 64401
+!
+l2vpn evpn instance 3600 vlan-based
+ encapsulation vxlan
+ rd 10.0.0.1:64600
+ route-target export 65000:64600
+ route-target import 65000:64600
+!
+vlan configuration 3600
+ member evpn-instance 3600 vni 64600
+!
+l2vpn evpn instance 3601 vlan-based
+ encapsulation vxlan
+ rd 10.0.0.1:64601
+ route-target export 65000:64601
+ route-target import 65000:64601
+!
+vlan configuration 3601
+ member evpn-instance 3601 vni 64601
+!
+!
+! L3 VNI transit SVIs (symmetric IRB — no host addressing, forwarding only)
+! unverified-no-lab: `vlan configuration <vlan>` / `member vni <l3vni>` binds the L3 VNI to its SVI VLAN
+! unverified-no-lab: `ip unnumbered Loopback0` and `no autostate` on the L3 VNI SVI
+vlan 3900
+ name L3VNI_INTERNET
+!
+vlan configuration 3900
+ member vni 50003
+!
+interface Vlan3900
+ description L3VNI transit SVI for VRF INTERNET
+ vrf forwarding INTERNET
+ ip unnumbered Loopback0
+ no autostate
+ no shutdown
+!
+vlan 3901
+ name L3VNI_MANAGEMENT
+!
+vlan configuration 3901
+ member vni 50004
+!
+interface Vlan3901
+ description L3VNI transit SVI for VRF MANAGEMENT
+ vrf forwarding MANAGEMENT
+ ip unnumbered Loopback0
+ no autostate
+ no shutdown
+!
+vlan 3902
+ name L3VNI_PROD
+!
+vlan configuration 3902
+ member vni 50001
+!
+interface Vlan3902
+ description L3VNI transit SVI for VRF PROD
+ vrf forwarding PROD
+ ip unnumbered Loopback0
+ no autostate
+ no shutdown
+!
+!
+! VTEP
+! unverified-no-lab: `member vni <l2vni> ingress-replication` alongside `replication-type static`
+! unverified-no-lab: `member vni <l3vni> vrf <vrf>`
+interface nve1
+ no ip address
+ source-interface Loopback0
+ host-reachability protocol bgp
+ member vni 10100 ingress-replication
+ member vni 64000 ingress-replication
+ member vni 64001 ingress-replication
+ member vni 64400 ingress-replication
+ member vni 64401 ingress-replication
+ member vni 64600 ingress-replication
+ member vni 64601 ingress-replication
+ member vni 50003 vrf INTERNET
+ member vni 50004 vrf MANAGEMENT
+ member vni 50001 vrf PROD
+ no shutdown
+!
+!
+! EVPN in BGP: community export towards the EVPN neighbours, tenant VRFs advertised as type-5
+! unverified-no-lab: `neighbor <peer> send-community both` inside address-family l2vpn evpn (the shared BGP block sets it globally)
+! unverified-no-lab: `advertise l2vpn evpn` and `redistribute connected` inside `address-family ipv4 vrf <vrf>`
+! unverified-no-lab: `redistribute static route-map RM-VRF-STATIC-2-EVPN-<vrf>` inside `address-family ipv4 vrf <vrf>` (exchange statics as type-5)
+router bgp 65000
+ address-family l2vpn evpn
+  neighbor EVPN-PEERS send-community both
+ exit-address-family
+ address-family ipv4 vrf INTERNET
+  advertise l2vpn evpn
+  redistribute connected
+  redistribute static route-map RM-VRF-STATIC-2-EVPN-INTERNET
+ exit-address-family
+ address-family ipv4 vrf MANAGEMENT
+  advertise l2vpn evpn
+  redistribute connected
+ exit-address-family
+ address-family ipv4 vrf PROD
+  advertise l2vpn evpn
+  redistribute connected
+  redistribute static route-map RM-VRF-STATIC-2-EVPN-PROD
+ exit-address-family
+!
+!
+! Gateway SVIs
+! Anycast gateway — the same SVI MAC on every VTEP of the fabric
+! unverified-no-lab: `mac-address <anycast mac>` and `no autostate` on the tenant gateway SVIs
+! unverified-no-lab: `ip access-group <name> in` on the tenant gateway SVIs (a routed-traffic ACL on a Catalyst 9000 SVI)
+interface Vlan100
+ description Customer-A
+ vrf forwarding PROD
+ ip address 10.1.0.1 255.255.255.0
+ ip access-group ACL-VLAN100-IN in
+ mac-address 001c.7300.dc01
+ no autostate
+ no shutdown
+!
+interface Vlan3000
+ description XCHG-dc1-fw-shared-PROD
+ vrf forwarding PROD
+ ip address 100.66.0.1 255.255.255.248
+ mac-address 001c.7300.dc01
+ no autostate
+ no shutdown
+!
+interface Vlan3001
+ description XCHG-dc1-fw-acme-PROD
+ vrf forwarding PROD
+ ip address 100.66.0.9 255.255.255.248
+ mac-address 001c.7300.dc01
+ no autostate
+ no shutdown
+!
+interface Vlan3400
+ description XCHG-dc1-fw-shared-INTERNET
+ vrf forwarding INTERNET
+ ip address 100.66.32.1 255.255.255.248
+ mac-address 001c.7300.dc01
+ no autostate
+ no shutdown
+!
+interface Vlan3401
+ description XCHG-dc1-fw-acme-INTERNET
+ vrf forwarding INTERNET
+ ip address 100.66.32.9 255.255.255.248
+ mac-address 001c.7300.dc01
+ no autostate
+ no shutdown
+!
+interface Vlan3600
+ description XCHG-dc1-fw-shared-MANAGEMENT
+ vrf forwarding MANAGEMENT
+ ip address 100.66.48.1 255.255.255.248
+ mac-address 001c.7300.dc01
+ no autostate
+ no shutdown
+!
+interface Vlan3601
+ description XCHG-dc1-fw-acme-MANAGEMENT
+ vrf forwarding MANAGEMENT
+ ip address 100.66.48.9 255.255.255.248
+ mac-address 001c.7300.dc01
+ no autostate
+ no shutdown
+!
+!
+! Inter-VRF exchange routes (TopologyRoutedExchange, via the firewall context)
+! unverified-no-lab: `ip route vrf <vrf> <network> <mask> <next hop>` with the next hop on the transit SVI of that VRF
+ip route vrf INTERNET 192.0.2.5 255.255.255.255 100.66.32.4
+ip route vrf INTERNET 192.0.2.6 255.255.255.255 100.66.32.12
+ip route vrf PROD 0.0.0.0 0.0.0.0 100.66.0.4
+! unverified-no-lab: exact-match prefix-list and route-map for `redistribute static route-map` in the VRF address family
+ip prefix-list PL-VRF-STATIC-INTERNET seq 10 permit 192.0.2.5/32
+ip prefix-list PL-VRF-STATIC-INTERNET seq 20 permit 192.0.2.6/32
+route-map RM-VRF-STATIC-2-EVPN-INTERNET permit 10
+ match ip address prefix-list PL-VRF-STATIC-INTERNET
+ip prefix-list PL-VRF-STATIC-PROD seq 10 permit 0.0.0.0/0
+route-map RM-VRF-STATIC-2-EVPN-PROD permit 10
+ match ip address prefix-list PL-VRF-STATIC-PROD
+!
+! Management
+line console 0
+line vty 0 15
+!
+end

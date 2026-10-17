@@ -164,6 +164,21 @@ infrahub_tests:
         spec:
           kind: python-transform-unit-process
           directory: configs/leaf_cisco_xe_lisp_hostless
+      - name: cisco_xe_with_acl
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_cisco_xe_with_acl
+      - name: cisco_xe_lisp_with_acl
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_cisco_xe_lisp_with_acl
+      - name: cisco_xe_exchange_acl
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_cisco_xe_exchange_acl
   - resource: PythonTransform
     resource_name: spine
     tests:
@@ -378,6 +393,11 @@ infrahub_tests:
         spec:
           kind: python-transform-unit-process
           directory: configs/border_leaf_cisco_xe_lisp_ospf_ibgp
+      - name: cisco_xe_exchange_transit
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/border_leaf_cisco_xe_exchange_transit
   - resource: PythonTransform
     resource_name: access_leaf
     tests:

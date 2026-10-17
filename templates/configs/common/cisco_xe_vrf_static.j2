@@ -1,0 +1,26 @@
+{#- Inter-VRF exchange statics (TopologyRoutedExchange, via the firewall context) of a Catalyst 9000 (IOS-XE).
+    `xe_vrf_routes` comes from transforms/helpers/cisco_xe.py (dotted mask, `exported` = not local_only).
+    An exported static enters EVPN as a type-5 route through `redistribute static route-map RM-VRF-STATIC-2-EVPN-<vrf>`
+    under the VRF address family of common/cisco_xe_vxlan.j2; the route-map matches an exact-match prefix-list, as on
+    NX-OS (cisco_nxos_vrf_static.j2) and EOS, so the default route is the only 0/0 candidate. A LISP fabric exports
+    nothing (the transform refuses an exported static there), so only the `ip route` lines apply. -#}
+{%- if xe_vrf_routes %}
+!
+! Inter-VRF exchange routes (TopologyRoutedExchange, via the firewall context)
+! unverified-no-lab: `ip route vrf <vrf> <network> <mask> <next hop>` with the next hop on the transit SVI of that VRF
+{%- for route in xe_vrf_routes %}
+ip route vrf {{ route.vrf }} {{ route.network }} {{ route.mask }} {{ route.nexthop }}
+{%- endfor %}
+{%- set exported = xe_vrf_routes | selectattr('exported') | list %}
+{%- if exported %}
+! unverified-no-lab: exact-match prefix-list and route-map for `redistribute static route-map` in the VRF address family
+{%- for vrf in exported | map(attribute='vrf') | unique | list %}
+{%- for prefix in exported | selectattr('vrf', 'equalto', vrf) | map(attribute='prefix') | unique | list %}
+ip prefix-list PL-VRF-STATIC-{{ vrf }} seq {{ loop.index * 10 }} permit {{ prefix }}
+{%- endfor %}
+route-map RM-VRF-STATIC-2-EVPN-{{ vrf }} permit 10
+ match ip address prefix-list PL-VRF-STATIC-{{ vrf }}
+{%- endfor %}
+{%- endif %}
+!
+{%- endif -%}

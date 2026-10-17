@@ -13,6 +13,9 @@
 ! Anycast gateway — the same SVI MAC on every VTEP of the fabric
 ! unverified-no-lab: `mac-address <anycast mac>` and `no autostate` on the tenant gateway SVIs
 {%- endif %}
+{%- if vlans | selectattr('acl_name') | list %}
+! unverified-no-lab: `ip access-group <name> in` on the tenant gateway SVIs (a routed-traffic ACL on a Catalyst 9000 SVI)
+{%- endif %}
 {%- if lisp_mobility is defined and lisp_mobility %}
 ! unverified-no-lab: `lisp mobility <VRF>-IPV4` binds the SVI to the dynamic-eid of its VRF
 {%- endif %}
@@ -22,7 +25,7 @@ interface Vlan{{ vlan.vlan_id }}
 {%- if vlan.isolation_mode == 'isolated' %}
  ! Isolation Mode: ISOLATED — intra-segment host-to-host traffic is not blocked by this template
 {%- elif vlan.isolation_mode == 'microsegmented' %}
- ! Isolation Mode: MICROSEGMENTED — no SVI ACL is rendered on IOS-XE
+ ! Isolation Mode: MICROSEGMENTED — intra+inter segment rules enforced via SVI ACL (and firewall if present)
 {%- endif %}
 {%- if vlan.vrf %}
  vrf forwarding {{ vlan.vrf }}
@@ -32,6 +35,9 @@ interface Vlan{{ vlan.vlan_id }}
 {%- endif %}
 {%- if vlan.gateway_ipv6 %}
  ipv6 address {{ vlan.gateway_ipv6 }}
+{%- endif %}
+{%- if vlan.acl_name %}
+ ip access-group {{ vlan.acl_name }} in
 {%- endif %}
 {%- if lisp_mobility is defined and lisp_mobility and vlan.vrf %}
  lisp mobility {{ vlan.vrf }}-IPV4
