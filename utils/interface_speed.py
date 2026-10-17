@@ -16,6 +16,8 @@ class InterfaceSpeedMatcher:
     """Extract and group interfaces by speed for mixed-speed deployments."""
 
     SPEED_PATTERN = re.compile(r"(\d+)gbase", re.IGNORECASE)
+    # Gigabit Ethernet types are named in Mbps (1000base-t, 1000base-x-sfp), not "<n>gbase".
+    GIGABIT_PATTERN = re.compile(r"^1000base", re.IGNORECASE)
 
     @classmethod
     def extract_speed(cls, interface_type: Any) -> int | None:
@@ -27,7 +29,9 @@ class InterfaceSpeedMatcher:
             return None
 
         match = cls.SPEED_PATTERN.search(interface_type)
-        return int(match.group(1)) if match else None
+        if match:
+            return int(match.group(1))
+        return 1 if cls.GIGABIT_PATTERN.search(interface_type) else None
 
     @classmethod
     def group_by_speed(
