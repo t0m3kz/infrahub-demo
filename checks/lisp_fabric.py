@@ -9,7 +9,8 @@ the profile is enforced here, on the fabric as a whole, not per device.
 
 An office with a fabric (fabric_templates) is a LISP site by role, not by flag: its access-switches and
 distribution-switches always run LISP, so its profile is checked here too (cisco_xe, a distribution-switch
-map-server, a site key, every segment in a VRF with an L3 instance-id, one LISP footprint per building).
+map-server, a site key, every segment in a VRF with an L3 instance-id, an SD-WAN edge with the BGP process of its WAN
+exit, one LISP footprint per building).
 
 A fabric with the default bgp_evpn control plane produces no output.
 """
@@ -37,6 +38,8 @@ OFFICE_FABRIC_ROLES = CAMPUS_FABRIC_ROLES | LISP_BORDER_ROLES
 """The roles of an office LISP site; any other device of the office (its SD-WAN edge) is not part of it."""
 MIN_DISTRIBUTION_SWITCHES = 1
 """Distribution switches are the office's map-servers; a single one is enough for the demo site."""
+EDGE_ROLE = "edge"
+"""The office's SD-WAN edge (add_sdwan_edge): the far end of the WAN exit of the distribution switches."""
 
 
 def _gateway_problems(activations: list[dict[str, Any]]) -> list[str]:
@@ -181,6 +184,17 @@ class CheckLispFabric(InfrahubCheck):
 
         if fabric and not office.get("lisp_site_key"):
             problems.append("it has no lisp_site_key, the ETRs cannot authenticate to the map-servers")
+
+        # The exit is built by add_office_fabric for the edge the office has: an edge with no BGP process of its own
+        # means the exit is missing (the generator ran before the edge existed and has not run since).
+        for device in office.get("devices") or []:
+            if device.get("role") == EDGE_ROLE and not any(
+                capability.get("typename") == "ManagedBGP" for capability in device.get("capabilities") or []
+            ):
+                problems.append(
+                    f"its SD-WAN edge '{device.get('name', '<unnamed-device>')}' has no BGP process, "
+                    "the WAN exit of the distribution-switches is not built"
+                )
 
         activations = office.get("segment_deployments") or []
         problems.extend(_gateway_problems(activations))

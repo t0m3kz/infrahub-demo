@@ -602,7 +602,15 @@ class TestQueries:
         parse(text)
         office = text.split("TopologyCustomerOffice {")[1]
 
-        for selection in ("fabric_templates", "locations", "lisp_site_key", "devices", "segment_deployments", "l3_vni"):
+        for selection in (
+            "fabric_templates",
+            "locations",
+            "lisp_site_key",
+            "devices",
+            "capabilities",
+            "segment_deployments",
+            "l3_vni",
+        ):
             assert selection in office
 
     def test_the_office_schema_has_every_field_the_check_and_the_config_queries_read(self) -> None:

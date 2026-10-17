@@ -44,6 +44,11 @@ TRANSIT_VLAN_MAX = CONTEXT_VLAN_MAX + TRANSIT_VLAN_BAND * max(TRANSIT_SLOT.value
 TRANSIT_VNI_MIN = TRANSIT_VNI_BASE + TRANSIT_VLAN_MIN
 TRANSIT_VNI_MAX = TRANSIT_VNI_BASE + TRANSIT_VLAN_MAX
 
+WAN_EXIT_VLAN_BASE = TRANSIT_VLAN_MAX + 1
+"""First VLAN after the transit band (3800): an office's WAN exit tags its handoff sub-interface
+``WAN_EXIT_VLAN_BASE + TRANSIT_SLOT[namespace type]``. Outside the customer VLAN range (100-2999, a tag a
+segment could take on the same switch) and below the L3 VNI SVI band (3900-3967)."""
+
 EXCHANGE_PEERS: dict[str, tuple[str, ...]] = {
     "prod": ("internet", "management"),
     "non_prod": ("internet", "management"),
@@ -90,6 +95,16 @@ class TransitAddresses(TypedDict):
     anycast: str
     vip: str
     members: list[str]
+
+
+def transit_pool_name(namespace_name: str) -> str:
+    """The bootstrap prefix pool of a VRF's transit space (data/bootstrap/23_transit_pools.yml), e.g. FW-Transit-PROD-IPv4."""
+    return f"FW-Transit-{namespace_name}-IPv4"
+
+
+def wan_exit_vlan(namespace_type: str) -> int:
+    """The dot1q tag of an office's WAN exit in a tenant VRF (3800 PROD, 3801 NON-PROD)."""
+    return WAN_EXIT_VLAN_BASE + TRANSIT_SLOT[namespace_type]
 
 
 def namespace_type_for_environment(environment: str) -> str:

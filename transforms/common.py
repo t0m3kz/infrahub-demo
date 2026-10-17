@@ -251,6 +251,14 @@ class BaseDeviceTransform(InfrahubTransform):
             unsupported.append("multisite")
         if vxlan.get("enabled") and not (vxlan.get("evpn") or {}).get("enabled"):
             unsupported.append("VXLAN without an EVPN BGP process")
+        lisp = config.get(OVERLAY_CONFIG_KEYS["lisp"])
+        if lisp:
+            # The LISP template defines the VRFs of its L3 instances; a BGP session (an office's WAN exit) in any
+            # other VRF would render under a VRF the device does not have.
+            session_vrfs = {vrf for bgp in config.get("bgp") or [] for vrf in bgp.get("vrf_sessions") or {}}
+            undefined = sorted(session_vrfs - {l3["vrf"] for l3 in lisp.get("l3_instances") or []})
+            if undefined:
+                unsupported.append(f"a BGP session in VRF {', '.join(undefined)}, which no hosted segment defines")
         if unsupported:
             raise ValueError(
                 f"cisco_xe {self.device_role} cannot render: {', '.join(unsupported)}; refusing incomplete config"

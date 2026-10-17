@@ -55,6 +55,7 @@ from typing import Any
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
+from ..helpers.naming import sdwan_edge_name
 from ..protocols import (
     DcimPhysicalDevice,
     DcimPhysicalInterface,
@@ -202,7 +203,7 @@ class SdwanEdgeGenerator(CommonGenerator):
         DcimPhysicalInterface") — an existing device is instead upserted by
         id, never re-sent its template.
         """
-        edge_name = f"{office_name}-EDGE1"
+        edge_name = sdwan_edge_name(office_name)
         existing = await self.client.filters(kind=DcimPhysicalDevice, name__values=[edge_name])
 
         data: dict[str, Any] = {

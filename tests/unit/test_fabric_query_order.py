@@ -67,3 +67,20 @@ def test_the_map_servers_are_the_border_leaves_and_the_distribution_switches() -
     """One fragment serves both fabrics: a footprint holds only its own kind of border."""
     text = (QUERIES / "fragments" / "lisp_fabric.gql").read_text()
     assert 'lisp_map_servers: devices(role__values: ["border-leaf", "distribution-switch"])' in text
+
+
+@pytest.mark.parametrize("query", ["access_switch", "distribution_switch"])
+def test_office_switch_queries_read_the_offices_sdwan_edge_from_the_office(query: str) -> None:
+    """The WAN exit's signal (the office has an SD-WAN edge) rides a DeviceHosting fragment, after the SegmentHosting one."""
+    spreads = _deployment_spreads(query)
+    assert "LispWanEdgesOnDeploymentFields" in spreads, spreads
+    assert spreads.index("EvpnRtAsOnDeploymentFields") == 0
+
+
+def test_the_sdwan_edge_fragment_is_deployment_hosting_typed_and_in_no_dc_query() -> None:
+    """A SegmentHosting-typed fragment would join the pod -> parent hop quirk; and a DC's LISP fabric has no WAN exit."""
+    text = (QUERIES / "fragments" / "lisp_fabric.gql").read_text()
+    assert "fragment LispWanEdgesOnDeploymentFields on TopologyDeviceHosting" in text
+    assert 'lisp_wan_edges: devices(role__value: "edge")' in text
+    for query in ("leaf", "border_leaf"):
+        assert "LispWanEdgesOnDeploymentFields" not in _deployment_spreads(query)

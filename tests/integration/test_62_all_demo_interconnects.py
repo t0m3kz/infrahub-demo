@@ -30,7 +30,7 @@ import pytest
 from infrahub_sdk import InfrahubClient
 
 from generators.helpers.pools import FW_CONTEXT_VLAN_END, FW_CONTEXT_VLAN_START
-from utils.exchange_transit import EXCHANGE_PEERS, TRANSIT_OFFSETS, transit_vlan
+from utils.exchange_transit import EXCHANGE_PEERS, TRANSIT_OFFSETS, transit_vlan, wan_exit_vlan
 
 from .conftest import TestInfrahubDockerWithClient
 from .test_constants import (
@@ -53,6 +53,7 @@ from .test_constants import (
     ALL_DEMO_INTERNET_UPSTREAM_BY_DC,
     ALL_DEMO_LEGACY_EXCHANGES,
     ALL_DEMO_METRO_SITE_VIPS,
+    ALL_DEMO_OFFICE_WAN_EXITS,
     ALL_DEMO_PHYSICAL_CIRCUIT_TYPES,
     ALL_DEMO_SEGMENT_LEGS,
     ALL_DEMO_SHARED_FIREWALL_CONTEXTS,
@@ -161,6 +162,40 @@ query ($ids: [ID]) {
       node {
         id
         endpoints { edges { node { id } } }
+      }
+    }
+  }
+}
+"""
+
+# The office WAN exit sessions add_office_fabric builds toward the SD-WAN edge (the VCO describes the edge's side
+# from the same peering): processes with their AS, the key, and the two dot1q sub-interfaces with their addresses.
+WAN_EXIT_SESSIONS_QUERY = """
+query ($names: [String]) {
+  ManagedBGPPeering(name__values: $names) {
+    edges {
+      node {
+        name { value }
+        peering_role { value }
+        session_type { value }
+        ttl { value }
+        password { node { name { value } } }
+        address_families { edges { node { afi { value } safi { value } } } }
+        bgp_processes {
+          edges { node { name { value } process_role { value } local_as { node { asn { value } } } } }
+        }
+        interface_capabilities {
+          edges {
+            node {
+              name { value }
+              device { node { name { value } } }
+              ... on DcimVirtualInterface {
+                parent_interface { node { name { value } } }
+                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -1148,4 +1183,94 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         )
 
         logging.info("Metro edge pairs verified: %s", sorted(ALL_DEMO_EDGE_INTERLINKS))
+        logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)
+
+    @pytest.mark.order(411)
+    @pytest.mark.dependency(scope="session", depends=["all_demo_physical_circuits"])
+    @pytest.mark.asyncio
+    async def test_09_verify_office_wan_exit(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """Verify each office with a fabric and an SD-WAN edge exits through it (add_office_fabric).
+
+        Per distribution-switch: one WAN-EXIT-<switch>-<edge> eBGP session (role regular, ttl 1, ipv4 unicast, keyed
+        with the office's wan-exit key) between a regular BGP process on the switch and one on the edge, over two
+        dot1q sub-interfaces <port>.<tag> in the office's tenant VRF (the tag is the VRF's wan_exit_vlan) addressed
+        from one /31. The switches of an office share one AS, the edge has another, both from the 32-bit private pool.
+        """
+        logging.info("=== %s - Step 9: Office WAN exit ===", SCENARIO_NAME)
+
+        errors: list[str] = []
+        for office, switches in sorted(ALL_DEMO_OFFICE_WAN_EXITS.items()):
+            edge = f"{office}-EDGE1"
+            namespace = deployment_namespace(office)
+            tag = wan_exit_vlan(transit_namespace_type(namespace))
+            expected = {f"WAN-EXIT-{switch}-{edge}": switch for switch in switches}
+            result = await async_client_main.execute_graphql(
+                query=WAN_EXIT_SESSIONS_QUERY, variables={"names": sorted(expected)}, branch_name=scenario_branch
+            )
+            sessions = {e["node"]["name"]["value"]: e["node"] for e in result["ManagedBGPPeering"]["edges"]}
+            if sorted(sessions) != sorted(expected):
+                errors.append(f"{office}: WAN exit sessions {sorted(sessions)}, expected {sorted(expected)}")
+
+            switch_asns: set[int] = set()
+            edge_asns: set[int] = set()
+            for name, switch in sorted(expected.items()):
+                session = sessions.get(name)
+                if session is None:
+                    continue
+                if (session["peering_role"]["value"], session["session_type"]["value"]) != ("regular", "EBGP"):
+                    errors.append(f"{name}: {session['peering_role']['value']}/{session['session_type']['value']}")
+                if session["ttl"]["value"] != 1:
+                    errors.append(f"{name}: ttl {session['ttl']['value']}, expected 1 (directly connected)")
+                key = ((session.get("password") or {}).get("node") or {}).get("name", {}).get("value")
+                if key != f"{office.lower()}-wan-exit-key":
+                    errors.append(f"{name}: keyed with '{key}', expected '{office.lower()}-wan-exit-key'")
+                families = sorted(
+                    (e["node"]["afi"]["value"], e["node"]["safi"]["value"])
+                    for e in session["address_families"]["edges"]
+                )
+                if families != [("ipv4", "unicast")]:
+                    errors.append(f"{name}: address families {families}")
+                processes = {e["node"]["name"]["value"]: e["node"] for e in session["bgp_processes"]["edges"]}
+                if sorted(processes) != sorted([f"{switch}-bgp-wan-exit", f"{edge}-bgp-wan-exit"]):
+                    errors.append(f"{name}: runs on {sorted(processes)}")
+                else:
+                    if {p["process_role"]["value"] for p in processes.values()} != {"regular"}:
+                        errors.append(
+                            f"{name}: process roles {[p['process_role']['value'] for p in processes.values()]}"
+                        )
+                    switch_asns.add(processes[f"{switch}-bgp-wan-exit"]["local_as"]["node"]["asn"]["value"])
+                    edge_asns.add(processes[f"{edge}-bgp-wan-exit"]["local_as"]["node"]["asn"]["value"])
+                ends = {
+                    e["node"]["device"]["node"]["name"]["value"]: e["node"]
+                    for e in session["interface_capabilities"]["edges"]
+                }
+                if sorted(ends) != sorted([switch, edge]):
+                    errors.append(f"{name}: on devices {sorted(ends)}, expected {sorted([switch, edge])}")
+                    continue
+                networks = set()
+                for device, end in sorted(ends.items()):
+                    parent = ((end.get("parent_interface") or {}).get("node") or {}).get("name", {}).get("value")
+                    if not parent or end["name"]["value"] != f"{parent}.{tag}":
+                        errors.append(f"{name}: {device} interface {end['name']['value']}, expected <port>.{tag}")
+                    ip = ((end.get("ip_address") or {}).get("node")) or {}
+                    if ((ip.get("ip_namespace") or {}).get("node") or {}).get("name", {}).get("value") != namespace:
+                        errors.append(f"{name}: {device} address is not in {namespace}")
+                    if ip.get("address"):
+                        networks.add(ipaddress.IPv4Interface(ip["address"]["value"]).network)
+                if len(networks) != 1 or next(iter(networks)).prefixlen != 31:
+                    errors.append(f"{name}: the two ends are not one IPv4 /31 ({sorted(map(str, networks))})")
+            if len(switch_asns) > 1:
+                errors.append(f"{office}: the switches use several AS numbers {sorted(switch_asns)}, expected one")
+            if switch_asns & edge_asns or any(asn < 4200000000 for asn in switch_asns | edge_asns):
+                errors.append(f"{office}: AS numbers {sorted(switch_asns)} / {sorted(edge_asns)} (edge)")
+
+        assert not errors, f"30_all office WAN exits are wrong on branch '{scenario_branch}':\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
+
+        logging.info("Office WAN exits verified: %s", sorted(ALL_DEMO_OFFICE_WAN_EXITS))
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)

@@ -9,9 +9,11 @@ records a border registers) and nothing of the EVPN layer, which this module nev
 
 EID prefixes and address families are not model fields: they come from ``L2Instance.gateway_ip``
 (IPv4) grouped by ``vrf``. A gateway with only an IPv6 address is refused because ``service ipv6``
-is not rendered. There is no flood mode, extranet, PETR or publisher/subscriber (see
+is not rendered. There is no flood mode, extranet or publisher/subscriber (see
 templates/configs/common/cisco_xe_lisp.j2); the map-server and map-resolver are co-located on the
-borders (the border leaves, or the distribution switches of an office). Only platforms in
+borders (the border leaves, or the distribution switches of an office). An office whose deployment has an
+SD-WAN edge (``wan_exit``) adds the exit: its borders are the proxy-ETR/ITR and the default route out, its
+edges ``use-petr`` the borders (the same locators as the map-servers). Only platforms in
 ``OVERLAY_RENDERERS["lisp"]`` render the result (transforms/common.py).
 """
 
@@ -29,7 +31,7 @@ from transforms.helpers.overlay import (
 from transforms.helpers.segments import _get_segment_gateways
 from transforms.helpers.segments import _get_segment_namespace as segment_namespace
 from transforms.helpers.segments import is_inline_terminated, segment_hosting_candidates
-from utils.fabric_roles import BORDER_ROLES, LISP_BORDER_ROLES
+from utils.fabric_roles import BORDER_ROLES, LISP_BORDER_ROLES, OFFICE_LISP_ROLES
 from utils.segment_addressing import segment_prefix
 
 
@@ -48,7 +50,8 @@ class LispInputs:
 
     ``map_servers`` are the loopback addresses of the borders (mask stripped, sorted by device
     name); ``site_name`` and ``l3_records`` / ``l2_instance_ids`` (the EID records of the site) are
-    only filled for a border, the one device that renders the ``site`` stanza.
+    only filled for a border, the one device that renders the ``site`` stanza. ``wan_exit``: the office
+    has an SD-WAN edge, so its borders carry the exit and its edges use them as PETRs.
     """
 
     map_servers: tuple[str, ...]
@@ -56,6 +59,7 @@ class LispInputs:
     site_key: str | None
     l3_records: tuple[EidRecord, ...]
     l2_instance_ids: tuple[int, ...]
+    wan_exit: bool = False
 
 
 def _is_border(device_role: str) -> bool:
@@ -140,6 +144,9 @@ def build_lisp_inputs(deployment: Any, device_role: str) -> LispInputs:
         site_key=site_key,
         l3_records=l3_records,
         l2_instance_ids=l2_ids,
+        # An office's SD-WAN edge is the way out (add_office_fabric builds the BGP session to it). A DC's LISP
+        # fabric has none, whatever edge devices its deployment lists.
+        wan_exit=device_role in OFFICE_LISP_ROLES and bool(_first_of(candidates, "lisp_wan_edges")),
     )
 
 
@@ -165,6 +172,21 @@ def _refuse_unroutable_gateways(device_role: str, activations: list[dict[str, An
             raise _refuse(device_role, f"VLAN {act.get('vlan_id')} has an IPv6 gateway (service ipv6 is not rendered)")
         if gateway_ip and not (vrf and l3_vni):
             raise _refuse(device_role, f"the gateway of VLAN {act.get('vlan_id')} is in no VRF with an L3 instance-id")
+
+
+def _with_exit_vrfs(l3_instances: list[dict[str, Any]], site_records: Iterable[EidRecord]) -> list[dict[str, Any]]:
+    """The border's L3 instances plus one per VRF of the site it is the exit for, by instance-id.
+
+    A distribution-switch hosts no segment port, so its own activations name no VRF; yet as the way out of the
+    site it is the proxy-ETR/ITR of every VRF the site registers (``site_records``) and runs the BGP session to
+    the WAN edge in one of them. Added with no prefixes: no host of this device is learned dynamically.
+    """
+    known = {instance["vrf"] for instance in l3_instances}
+    added = {record.vrf: record for record in site_records if record.vrf not in known}
+    return sorted(
+        [*l3_instances, *({"instance_id": r.instance_id, "vrf": r.vrf, "prefixes": []} for r in added.values())],
+        key=lambda instance: instance["instance_id"],
+    )
 
 
 def get_lisp_config(
@@ -200,6 +222,10 @@ def get_lisp_config(
     if border and not lisp_inputs.site_name:
         raise _refuse(device_role, "the fabric has no name for the LISP site")
 
+    locator = select_locator(data.get("interfaces", []))
+    if lisp_inputs.wan_exit and border and not locator.address:
+        raise _refuse(device_role, "the WAN exit needs an address on the locator loopback (proxy-ITR)")
+
     _refuse_unroutable_gateways(device_role, activations or [])
     l2s = node.l2 if node else ()
     l3s = node.l3 if node else ()
@@ -208,17 +234,21 @@ def get_lisp_config(
         if l2.gateway_ip and l2.vrf:
             prefixes[l2.vrf].add(_eid_prefix(l2.gateway_ip))
 
+    l3_instances = [{"instance_id": l3.instance_id, "vrf": l3.vrf, "prefixes": sorted(prefixes[l3.vrf])} for l3 in l3s]
+    if lisp_inputs.wan_exit and border:
+        l3_instances = _with_exit_vrfs(l3_instances, lisp_inputs.l3_records)
+
     gateway = node.gateway if node else None
     return {
         "enabled": True,
         "role": "border" if border else "edge",
-        "rloc_interface": select_locator(data.get("interfaces", [])).interface or "Loopback0",
+        "rloc_interface": locator.interface or "Loopback0",
+        "rloc_address": locator.address,
+        "wan_exit": lisp_inputs.wan_exit,
         "map_servers": list(lisp_inputs.map_servers),
         "site_key": lisp_inputs.site_key,
         "l2_instances": [{"instance_id": l2.instance_id, "vlan_id": l2.vlan_id, "name": l2.name} for l2 in l2s],
-        "l3_instances": [
-            {"instance_id": l3.instance_id, "vrf": l3.vrf, "prefixes": sorted(prefixes[l3.vrf])} for l3 in l3s
-        ],
+        "l3_instances": l3_instances,
         "anycast_gateway": {
             "enabled": bool(gateway and gateway.enabled),
             "mac": gateway.mac if gateway else fabric_anycast_mac or _DEFAULT_ANYCAST_GATEWAY_MAC,

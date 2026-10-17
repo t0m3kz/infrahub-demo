@@ -18,6 +18,9 @@
 #   D["lisp_map_servers"][i]["interfaces"][j]["ip_address"]["address"]
 #                                               -> CIDR str ("10.0.0.1/32"), loopback-role
 #                                                  interfaces only (strip the mask in code)
+#   D["lisp_wan_edges"]                         -> list of the office's role=edge devices (its SD-WAN edge; the
+#                                                  presence of one is the office's WAN exit). Office switches only,
+#                                                  see LispWanEdgesOnDeploymentFields
 #   D["lisp_site_key"]["password"]              -> str secret (None/absent when unset)
 #   D["name"]                                   -> str, the DC or office name (LISP site name; border)
 #
@@ -65,6 +68,20 @@ fragment LispMapServersOnDeploymentFields on TopologyDeployment {
     parent {
       node {
         ...LispMapServersOnDeviceHostingFields
+      }
+    }
+  }
+}
+
+# An office's SD-WAN edge (<office>-EDGE1, add_sdwan_edge): its presence on the office makes the office's
+# distribution-switches the exit (proxy-ETR/ITR, redistribute lisp) and its access-switches use them
+# (use-petr). Spread by the office queries only: a data center's LISP fabric has no WAN exit. The office hosts
+# its devices directly (the same direct hop as the map-servers above), so no `parent` shape is needed.
+fragment LispWanEdgesOnDeploymentFields on TopologyDeviceHosting {
+  lisp_wan_edges: devices(role__value: "edge") {
+    edges {
+      node {
+        name { value }
       }
     }
   }

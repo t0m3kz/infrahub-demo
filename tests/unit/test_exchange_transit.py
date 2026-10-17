@@ -18,13 +18,16 @@ from utils.exchange_transit import (
     TRANSIT_VLAN_BAND,
     TRANSIT_VNI_MAX,
     TRANSIT_VNI_MIN,
+    WAN_EXIT_VLAN_BASE,
     ZONE_BY_NS_TYPE,
     is_routed_tenant_segment,
     joins_prod_and_nonprod,
     namespace_type_for_environment,
     transit_addresses,
+    transit_pool_name,
     transit_vlan,
     transit_vni,
+    wan_exit_vlan,
     zone_name_for_namespace_type,
 )
 
@@ -315,3 +318,30 @@ def test_routed_tenant_segment(segment: dict, tenant: bool) -> None:
 def test_tenant_namespace_types_are_the_exchange_peers_tenants() -> None:
     """One source: the tenant VRFs are the namespace types that exchange with others."""
     assert TENANT_NAMESPACE_TYPES == frozenset({"prod", "non_prod"}) == frozenset(EXCHANGE_PEERS)
+
+
+def test_transit_pool_name_is_the_bootstrap_pool_of_the_vrf() -> None:
+    """data/bootstrap/23_transit_pools.yml names one pool per fixed VRF namespace."""
+    assert transit_pool_name("PROD") == "FW-Transit-PROD-IPv4"
+    assert transit_pool_name("NON-PROD") == "FW-Transit-NON-PROD-IPv4"
+
+
+def test_wan_exit_vlans_follow_the_slots_just_after_the_transit_band() -> None:
+    assert WAN_EXIT_VLAN_BASE == 3800
+    assert {ns_type: wan_exit_vlan(ns_type) for ns_type in TRANSIT_SLOT} == {
+        "prod": 3800,
+        "non_prod": 3801,
+        "internet": 3802,
+        "management": 3803,
+    }
+
+
+def test_wan_exit_vlans_collide_with_nothing_else_on_a_switch() -> None:
+    """Not a customer VLAN (100-2999), not a transit leg (3000-3799), not an L3 VNI SVI (3900-3967)."""
+    from generators.helpers.pools import CUSTOMER_VLAN_ID_MAX
+    from transforms.helpers.overlay import _L3VNI_SVI_VLAN_BASE
+
+    tags = {wan_exit_vlan(ns_type) for ns_type in TRANSIT_SLOT}
+    assert all(tag > CUSTOMER_VLAN_ID_MAX for tag in tags)
+    assert all(tag > CONTEXT_VLAN_MAX + TRANSIT_VLAN_BAND * max(TRANSIT_SLOT.values()) for tag in tags)
+    assert all(tag < _L3VNI_SVI_VLAN_BASE for tag in tags)

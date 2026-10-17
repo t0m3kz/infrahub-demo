@@ -203,3 +203,60 @@ class TestPools:
         from generators.topology.office_fabric import _OFFICE_TECHNICAL_PREFIX_LENGTH
 
         assert 2 ** (31 - _OFFICE_TECHNICAL_PREFIX_LENGTH) >= 5
+
+
+class TestWanExitData:
+    """What the WAN exit (add_office_fabric._ensure_wan_exit) assumes of the data, read from the YAML alone."""
+
+    EDGE_TEMPLATE = "VCE-610_EDGE"
+
+    @staticmethod
+    def _sdwan_fabric_offices() -> list[Any]:
+        return [
+            office
+            for office in distinct(declared("TopologyCustomerOffice", ALL_DEMO))
+            if office.item.get("fabric_templates") and office.item.get("sdwan_gateway")
+        ]
+
+    def test_the_demo_office_has_both_a_fabric_and_an_sdwan_edge(self) -> None:
+        """No new operator input: the exit exists because the office declares both, nothing else."""
+        assert {name(office) for office in self._sdwan_fabric_offices()} == FABRIC_OFFICES
+
+    def test_each_distribution_switch_has_one_wan_port_facing_an_edge_lan_port(
+        self, fabric_offices: dict[str, list[list[str]]], templates: dict[str, dict[str, Any]]
+    ) -> None:
+        """rack cabling: edge (bottom) ports to one `uplink` port per distribution-switch, speed-matched."""
+        edge = templates[self.EDGE_TEMPLATE]
+        for office, references in fabric_offices.items():
+            quantity, _, template = next(ref for ref in references if ref[1] == "distribution-switch")
+            distribution = templates[template]
+            # the WAN port is the only uplink of a distribution-switch (an access-switch's uplinks face it)
+            assert _port_count(distribution, "uplink") == 1, office
+            assert _port_count(edge, "downlink") >= int(quantity), f"{office}: fewer edge LAN ports than switches"
+            assert {p["interface_type"] for p in _ports(distribution, "uplink")} <= {
+                p["interface_type"] for p in _ports(edge, "downlink")
+            }, office
+
+    def test_the_tenant_namespace_transit_pool_and_asn_pool_exist(self) -> None:
+        from generators.topology.office_fabric import _WAN_EXIT_ASN_POOL
+        from utils.exchange_transit import transit_pool_name
+
+        namespaces = {entry["name"] for entry in _spec_data(BOOTSTRAP / "22_namespaces.yml")}
+        pools = {entry["name"] for entry in _spec_data(BOOTSTRAP / "23_transit_pools.yml") if "resources" in entry}
+        for office in self._sdwan_fabric_offices():
+            namespace = {"p": "PROD"}.get(office.item["environment"], "NON-PROD")
+            assert namespace in namespaces
+            assert transit_pool_name(namespace) in pools
+        assert _WAN_EXIT_ASN_POOL in {entry["name"] for entry in _spec_data(BOOTSTRAP / "16_asn_pools.yml")}
+
+    def test_the_demo_office_hosts_one_derived_vxlan_segment_in_its_own_environment(self) -> None:
+        """The border needs a VRF with an L3 instance-id to exit from: the office hosts a segment there."""
+        segments = [
+            segment
+            for segment in distinct(declared("ManagedVxlanSegment", ALL_DEMO))
+            if "C005-P" in (segment.item.get("customer_deployments") or [])
+        ]
+        assert [segment.item["customer_name"] for segment in segments] == ["office-lan"]
+        assert segments[0].item["environment"] == "p"
+        assert "gateway" not in segments[0].item, "gateway and prefix are derived (tenant pool)"
+        assert not segments[0].item.get("stretch_scope"), "an office never stretches a segment"

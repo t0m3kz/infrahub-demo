@@ -29,6 +29,11 @@ spec:
 # of Catalyst 9000 (cisco_xe) design elements. Pools, device names, ports,
 # cabling, the OSPF area, the loopbacks and the LISP site key are all derived.
 # C005 is the only office with a fabric; the others stay a single SD-WAN edge.
+# Both sdwan_gateway and fabric_templates are set, so the fabric also gets its WAN exit
+# to C005-P-EDGE1: each distribution-switch is cabled to the edge and peers with it over
+# eBGP in VRF PROD (same shape as the gateway's handoff in
+# ../../../08_interconnects/04_sdwan/06_vrf_handoff.yml, but generated): the tag, the
+# addresses, the AS numbers and the key are all derived, nothing more is declared here.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

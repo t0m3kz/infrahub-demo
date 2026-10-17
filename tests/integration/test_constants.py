@@ -354,6 +354,26 @@ ALL_DEMO_FABRIC_PEERINGS: dict[str, str] = {
     metro: f"FABRIC-{a}-{b}" for metro, (a, b) in ALL_DEMO_EDGE_PAIR_METROS.items()
 }
 
+# The WAN exit of an office with both a fabric and an SD-WAN edge (add_office_fabric): office -> its
+# distribution-switches (a flat office is named `ds-<office>NN`), each peered to `<office>-EDGE1` by one
+# `WAN-EXIT-<switch>-<edge>` eBGP session in the office's tenant VRF, over a dot1q sub-interface tagged
+# utils.exchange_transit.wan_exit_vlan. Declared nowhere: a fabric_templates line and an sdwan_gateway are the
+# whole input.
+ALL_DEMO_OFFICE_WAN_EXITS: dict[str, tuple[str, ...]] = {
+    name(office): tuple(
+        f"ds-{name(office).lower()}{index:02d}"
+        for index in range(
+            1,
+            1
+            + sum(
+                int(quantity) for quantity, role, _ in office.item["fabric_templates"] if role == "distribution-switch"
+            ),
+        )
+    )
+    for office in _SDWAN_OFFICES
+    if office.item.get("fabric_templates")
+}
+
 # The metro-owned slice of Technical-IPv6 the interlink /127 comes from: `{metro}-technical-ipv6-pool`.
 ALL_DEMO_EDGE_PAIR_POOL_TEMPLATE = "{metro}-technical-ipv6-pool"
 
@@ -721,15 +741,19 @@ ALL_DEMO_EXPECTED_OBJECTS["ManagedFirewallContext"] = ALL_DEMO_SHARED_FIREWALL_C
 )
 ALL_DEMO_EXPECTED_OBJECTS["TopologyRoutedExchange"] = ALL_DEMO_TRANSIT_EXCHANGES
 
-# Every VXLAN segment -> the sites (DC or colocation metro) of the
+# Every VXLAN segment -> the sites (DC, colocation metro or office) of the
 # deployments it is activated in: one ManagedSegmentDeployment record each
 # (a dc_pair "stretch" segment has two DC legs; C005's colo-services-stretch
 # one DC leg plus one colocation-metro leg, FR, reached over DF-DC10-EQXFR2
-# through the EVPN Multi-Site border gateways).
+# through the EVPN Multi-Site border gateways; C005's office-lan one leg, the
+# office itself: an office hosts its own segments, it has no site above it).
 _FOOTPRINT_SITES = {
-    name(deployment): _site(deployment)
-    for kind in ("TopologyCustomerDC", "TopologyCustomerColocation")
-    for deployment in _all_demo(kind)
+    **{
+        name(deployment): _site(deployment)
+        for kind in ("TopologyCustomerDC", "TopologyCustomerColocation")
+        for deployment in _all_demo(kind)
+    },
+    **{name(office): name(office) for office in _all_demo("TopologyCustomerOffice")},
 }
 ALL_DEMO_SEGMENT_LEGS: dict[str, tuple[str, ...]] = {
     name(segment): tuple(_FOOTPRINT_SITES[deployment] for deployment in segment.item.get("customer_deployments") or [])

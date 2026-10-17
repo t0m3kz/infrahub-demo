@@ -5,6 +5,10 @@ query topology_office_fabric($name: String!) {
         id
         name { value }
         naming_convention { value }
+        # The environment picks the tenant VRF of the WAN exit (p -> PROD, else NON-PROD); sdwan_gateway says its
+        # SD-WAN edge is coming, so the generator waits for it instead of skipping the exit on a race.
+        environment { value }
+        sdwan_gateway { node { id } }
         # The opt-in: an office with no fabric_templates has no fabric and the
         # generator no-ops (the same entries as a colocation metro's, see
         # colocation_metro.gql). template_kind is aliased because clean_data()

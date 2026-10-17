@@ -31,6 +31,7 @@ from utils.exchange_transit import (
     TRANSIT_OFFSETS,
     TRANSIT_PREFIXLEN,
     namespace_type_for_environment,
+    transit_pool_name,
     transit_vlan,
 )
 
@@ -454,7 +455,7 @@ class FirewallContextMixin:
 
     async def _transit_pools(self, namespaces: dict[str, Any]) -> dict[str, Any] | None:
         """The FW-Transit-<VRF>-IPv4 pool of each namespace (data/bootstrap), one query; None (logged) when one is missing."""
-        pool_names = {leg_type: f"FW-Transit-{ns.name.value}-IPv4" for leg_type, ns in namespaces.items()}
+        pool_names = {leg_type: transit_pool_name(ns.name.value) for leg_type, ns in namespaces.items()}
         pools = {
             pool.name.value: pool
             for pool in await self.client.filters(kind=CoreIPPrefixPool, name__values=sorted(pool_names.values()))

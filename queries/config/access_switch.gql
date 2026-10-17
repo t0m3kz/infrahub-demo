@@ -42,6 +42,7 @@ query access_switch_config(
               ...FirewallContextsOnDeploymentFields
               ...LoadbalancerVipsOnDeploymentFields
               ...LispMapServersOnDeploymentFields
+              ...LispWanEdgesOnDeploymentFields
             }
           }
         }

@@ -89,7 +89,8 @@ def _gateway(vrf: str | None = "VRF_A", l3_vni: int | None = 50001) -> dict[str,
 def _office(**overrides: Any) -> dict[str, Any]:
     """A clean LISP office: fabric_templates, one building, two cisco_xe distribution-switches, an access-switch, a key.
 
-    The office also holds its SD-WAN edge, which is not part of the LISP site and may be on any platform.
+    The office also holds its SD-WAN edge, which is not part of the LISP site and may be on any platform; with the
+    BGP process of its WAN exit (add_office_fabric), as a settled office has it.
     """
     office: dict[str, Any] = {
         "id": "office-1",
@@ -101,7 +102,7 @@ def _office(**overrides: Any) -> dict[str, Any]:
             _device("ds-c005-p01", "distribution-switch"),
             _device("ds-c005-p02", "distribution-switch"),
             _device("as-c005-p01", "access-switch"),
-            _device("C005-P-EDGE1", "edge", "velocloud"),
+            {**_device("C005-P-EDGE1", "edge", "velocloud"), "capabilities": [{"typename": "ManagedBGP"}]},
         ],
         "segment_deployments": [{"vni": 10100, "segment": {"name": "web", "gateway": _gateway()}}],
     }
@@ -286,6 +287,36 @@ class TestOfficeFabric:
         errors = _run_offices(_office(devices=[_device("as-c005-p01", "access-switch")]))
         assert len(errors) == 1
         assert "C005-P" in errors[0] and "0 distribution-switch" in errors[0]
+
+    def test_an_sdwan_edge_without_a_bgp_process_means_the_wan_exit_is_missing(self) -> None:
+        """The exit is built by add_office_fabric for the edge the office has; the edge's BGP process is its proof."""
+        bare = {**_device("C005-P-EDGE1", "edge", "velocloud"), "capabilities": [{"typename": "ManagedOSPF"}]}
+        devices = [d for d in _office()["devices"] if d["role"] != "edge"]
+
+        errors = _run_offices(_office(devices=[*devices, bare]))
+
+        assert len(errors) == 1
+        assert "C005-P-EDGE1" in errors[0] and "no BGP process" in errors[0] and "WAN exit" in errors[0]
+
+    @pytest.mark.parametrize("capabilities", [None, []])
+    def test_an_sdwan_edge_with_no_capabilities_at_all_is_the_same_error(self, capabilities: Any) -> None:
+        devices = [d for d in _office()["devices"] if d["role"] != "edge"]
+        edge = {**_device("C005-P-EDGE1", "edge", "velocloud"), "capabilities": capabilities}
+
+        errors = _run_offices(_office(devices=[*devices, edge]))
+
+        assert len(errors) == 1 and "no BGP process" in errors[0]
+
+    def test_an_office_without_an_sdwan_edge_has_no_exit_to_check(self) -> None:
+        devices = [d for d in _office()["devices"] if d["role"] != "edge"]
+
+        assert _run_offices(_office(devices=devices)) == []
+
+    def test_an_office_without_a_fabric_is_not_asked_for_an_exit(self) -> None:
+        """C001-C003 and C015 are a single SD-WAN edge with no fabric: no LISP footprint, no rule."""
+        edge = {**_device("C001-P-EDGE1", "edge", "velocloud"), "capabilities": []}
+
+        assert _run_offices(_office(fabric_templates=[], devices=[edge])) == []
 
     def test_one_distribution_switch_is_enough(self) -> None:
         assert _run_offices(_office(devices=[_device("ds-c005-p01", "distribution-switch")])) == []

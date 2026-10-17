@@ -264,3 +264,34 @@ class TestEnsureVlanSubinterfaceExtraCapabilities:
         await self._run(gen, [MagicMock(id="ex-1")])
 
         node.save.assert_awaited_once_with(**_TRACKED)
+
+
+class TestEnsureVlanSubinterfaceWithoutCapability:
+    """A sub-interface the caller links itself (an office's WAN exit) has no capability and its own role."""
+
+    @pytest.mark.asyncio
+    async def test_no_capability_means_one_save_and_no_capability_round_trip(self) -> None:
+        gen = _make_gen()
+        node = _sub_iface(existing_peer_ids=[])
+        gen.client.create = AsyncMock(return_value=node)
+
+        result = await gen.ensure_vlan_subinterface(
+            device_id="ds-1", device_name="ds-c005-p01", trunk_iface=_trunk(), vlan_id_value=3800, ip_address_id="ip-a"
+        )
+
+        assert result is node
+        node.save.assert_awaited_once_with(**_TRACKED)
+        node.interface_capabilities.fetch.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_role_defaults_to_service_and_can_be_given(self) -> None:
+        gen = _make_gen()
+        gen.client.create = AsyncMock(return_value=_sub_iface(existing_peer_ids=[]))
+
+        await gen.ensure_vlan_subinterface(device_id="d", device_name="D", trunk_iface=_trunk(), vlan_id_value=3000)
+        await gen.ensure_vlan_subinterface(
+            device_id="d", device_name="D", trunk_iface=_trunk(), vlan_id_value=3800, role="uplink"
+        )
+
+        roles = [c.kwargs["data"]["role"] for c in gen.client.create.call_args_list]
+        assert roles == ["service", "uplink"]
