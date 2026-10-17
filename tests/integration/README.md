@@ -37,6 +37,7 @@ Each scenario creates infrastructure incrementally and merges to main:
 - `test_19_dc6_segments.py` - **Scenario 6:** Board C001 into DC6 and deploy two VXLAN segments (`data/20_segments`)
 - `test_20_dc6_add_endpoints.py` - **Scenario 7:** Endpoint servers across DC6's pods (`data/demos/06_servers`)
 - `test_59` - `test_65` - **Scenario 8:** The `30_all` demo, end to end (see [The 30_all Suite](#the-30_all-suite)). This one deviates from the pattern above: it loads in stages, shares one branch across six modules, and does not merge to main.
+- `test_70` - **Scenario 9:** The LISP demo fabric (`data/demos/31_lisp_fabric`), on its own branch (see [The LISP Suite](#the-lisp-suite)).
 
 Scenarios 2-7 form one chain on DC6: `test_12` depends on `dc6_verify_after_merge` from `test_10`, and each
 later module depends on the previous one's merge. Every growth check is scoped to DC6 (devices reachable from
@@ -58,6 +59,8 @@ deployed for the chain, so `DC_DEPLOYMENT_TEST_DCS=dc6` cuts `test_10` down to t
 #### `test_helpers.py` - Generic Async Utilities
 
 - `wait_for_condition()` - Polling utility for async conditions
+- `render_device_config()` - Run a device-config query and its transform in-process (test_64, test_70)
+- `snapshot_topology()` / `diff_snapshots()` - Snapshot the graph's topology kinds and diff two snapshots (test_65, test_70)
 
 #### Other Files
 
@@ -130,6 +133,9 @@ uv run invoke test-integration-fast
 # The 30_all demo, end to end
 uv run invoke test-integration-all-demo
 
+# The LISP demo fabric (setup, repository, test_70)
+uv run invoke test-integration-lisp
+
 # Automatic DC/POD/rack routing regression
 uv run invoke test-integration-routing
 
@@ -153,6 +159,25 @@ The fast profile intentionally stops after setup and repository synchronization.
 | `test_65_all_demo_idempotency.py` | Two more runs of the security generators, then of the topology generators, leave rules, contexts, devices, cables, addresses, pools and allocated numbers unchanged |
 
 Only `test_59` loads data, and the load is deliberately staged — later stages reference objects that only exist once an earlier stage's generators have finished. `ALL_DEMO_LOAD_STAGES` in `tasks.py` (shared with `invoke load-all-demo`, re-exported by `test_constants.py`) documents which stage needs what. Running `test_60`-`test_65` on their own will skip: their session-scoped dependencies are unmet without `test_59`.
+
+### The LISP Suite
+
+`test_70_lisp_fabric.py` loads `data/demos/31_lisp_fabric` (DC13: `overlay_control_plane: lisp`, OSPF-iBGP, IPv4
+underlay, Catalyst 9500 border-leafs as map-servers) on its own branch (`lisp-fabric-scenario`). The scope is not in
+`30_all`, so `test_59`-`test_65` neither load nor cover it; `invoke test-integration-lisp` runs `test_01`, `test_02`
+and `test_70` only. The constants (branch, stages, expected role counts) are local to the module. It asserts:
+
+| Step | What it checks |
+| --- | --- |
+| Staged load | design, fabric, footprint and segments stages each settle with no failed task |
+| Routing | the expected device roles, a ManagedOSPF on every device, no ManagedBGP and no BGP peering on the branch |
+| DC state | `lisp` / `ospf-ibgp` / `ipv4`, the site key attached, both tenant segments active on the DC |
+| `CheckLispFabric` | run in-process against the branch: no error |
+| Border-leaf renders | `router lisp`, `map-server`, `site DC13`, the L3 `eid-record`s, OSPF; no `l2vpn evpn`, `nve1` or `router bgp` |
+| Leaf / access-leaf renders | the transform does not refuse, OSPF underlay, the edge LISP config (`router lisp`, `etr map-server ... key`, no `map-server` role); no `l2vpn evpn`, `nve1` or `router bgp`. No instance-id yet: the scope hosts no segment |
+| Rerun | a second `add_dc` run changes no id, address, pool or count, and keeps the site key |
+
+Every IOS-XE line in the renders is unverified-no-lab: the test pins the shape of the render, not device behaviour.
 
 ### Run Setup Only
 
@@ -355,6 +380,9 @@ uv run invoke test-integration-fast
 
 # The 30_all demo
 uv run invoke test-integration-all-demo
+
+# The LISP demo fabric
+uv run invoke test-integration-lisp
 
 # One scenario, with its prerequisites in front
 uv run invoke test-integration --tests "tests/integration/test_01_setup.py \

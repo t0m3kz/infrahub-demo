@@ -33,6 +33,7 @@ from infrahub_sdk import InfrahubClient
 
 from .conftest import TestInfrahubDockerWithClient
 from .test_constants import ALL_DEMO_BRANCH, ALL_DEMO_FABRIC_PEERINGS, ALL_DEMO_METRO_SITE_VIPS
+from .test_helpers import diff_snapshots, snapshot_topology
 from .workflow_helpers import run_generator, verify_no_failed_tasks, wait_for_tasks_completion
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -193,60 +194,6 @@ TOPOLOGY_RERUN_GENERATORS = {
     "add_sdwan_edge": "customer_deployments_office",
 }
 
-# Kind -> the selection that must not change on a rerun. Generic kinds, so
-# every concrete device (DcimPhysicalDevice, DcimVirtualDevice, ...),
-# interface (DcimPhysicalInterface, DcimVirtualInterface, DcimLAGInterface,
-# ...) and pool kind is covered; a reallocated address or number shows up as a
-# changed value or a deleted-and-added id. The kinds after the generator
-# outputs are mostly data-loaded or owned by another generator: an id lost
-# there is a foreign deletion, i.e. a generator cleaned up a node it does not
-# own. interface_capabilities carries the segment tags on switch ports.
-TOPOLOGY_SNAPSHOT_KINDS = {
-    "DcimDevice": "name { value }",
-    "DcimInterface": "name { value } interface_capabilities { edges { node { id } } }",
-    "DcimCable": "endpoints { edges { node { id } } }",
-    "IpamIPAddress": "address { value }",
-    "IpamPrefix": "prefix { value }",
-    "CoreNumberPool": "name { value }",
-    "CoreIPPrefixPool": "name { value }",
-    "CoreIPAddressPool": "name { value }",
-    "RoutingAutonomousSystem": "asn { value }",
-    "ManagedBGP": "local_as { node { id } }",
-    # The DCI-* and FABRIC-* sessions: a rerun that rebuilt one (new id) or re-attached it to other
-    # processes, ports or address families is a diff here.
-    "ManagedBGPPeering": (
-        "name { value } peering_role { value } session_type { value } ttl { value } "
-        "bgp_processes { edges { node { id } } } address_families { edges { node { id } } } "
-        "interface_capabilities { edges { node { id } } }"
-    ),
-    "ManagedHA": "group_id { value }",
-    "ManagedSegmentDeployment": "vni { value } local_vni_override { value }",
-    "ManagedVlanDomainSegment": "vlan_id { value }",
-    "LocationRack": "name { value }",
-    "TopologyPod": "name { value }",
-    "TopologyDataCenter": "name { value }",
-    "ManagedController": "name { value }",
-    "ManagedFirewallHA": "name { value }",
-    "ManagedFirewallContext": "name { value }",
-    "ManagedMLAG": "name { value }",
-    "ManagedStandaloneVlanDomain": "name { value }",
-    "RoutingOSPFArea": "name { value } area { value }",
-    "RoutingPassword": "name { value }",
-    "RoutingBGPAddressFamily": "",
-    "SecurityZone": "name { value }",
-    "SecurityPolicy": "name { value }",
-    "ProxyPolicy": "name { value }",
-    "CoreStandardGroup": "name { value } members { edges { node { id } } }",
-}
-
-# Kind -> name prefixes left out of the snapshot. Resource locks are
-# CoreStandardGroups that every run creates and deletes again.
-SNAPSHOT_EXCLUDED_NAME_PREFIXES = {"CoreStandardGroup": ("lock-",)}
-
-# Explicit GraphQL paging: the branch holds thousands of interfaces and
-# addresses, more than one unpaged query is guaranteed to return.
-PAGE_SIZE = 1000
-
 
 def _value(node: dict[str, Any], attribute: str) -> Any:
     return (node.get(attribute) or {}).get("value")
@@ -341,73 +288,6 @@ def _snapshot(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
     }
 
 
-def _canonical(value: Any) -> Any:
-    """Hashable form of a GraphQL node: edges become a sorted tuple."""
-    if isinstance(value, dict):
-        if "edges" in value:
-            return tuple(sorted((_canonical(edge["node"]) for edge in value["edges"]), key=repr))
-        return tuple(sorted((key, _canonical(item)) for key, item in value.items()))
-    return value
-
-
-def _excluded(kind: str, node: dict[str, Any]) -> bool:
-    prefixes = SNAPSHOT_EXCLUDED_NAME_PREFIXES.get(kind)
-    return bool(prefixes) and str(_value(node, "name") or "").startswith(prefixes)
-
-
-async def _topology_snapshot(client: InfrahubClient, branch: str) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
-    """Kind -> {id: comparable state} for TOPOLOGY_SNAPSHOT_KINDS, paged, plus
-    id -> "<concrete kind> <display_label>" so a diff can name what moved."""
-    snapshot: dict[str, dict[str, Any]] = {}
-    labels: dict[str, str] = {}
-    for kind, selection in TOPOLOGY_SNAPSHOT_KINDS.items():
-        objects: dict[str, Any] = {}
-        offset = 0
-        while True:
-            query = (
-                f"query {{ {kind}(limit: {PAGE_SIZE}, offset: {offset}) "
-                f"{{ count edges {{ node {{ id __typename display_label {selection} }} }} }} }}"
-            )
-            result = (await client.execute_graphql(query=query, branch_name=branch))[kind]
-            for edge in result["edges"]:
-                node = dict(edge["node"])
-                if _excluded(kind, node):
-                    continue
-                node_id = node.pop("id")
-                labels[node_id] = f"{node.pop('__typename')} '{node.pop('display_label')}'"
-                objects[node_id] = _canonical(node)
-            offset += PAGE_SIZE
-            if offset >= result["count"]:
-                break
-        snapshot[kind] = objects
-    return snapshot, labels
-
-
-def _diff(
-    before: dict[str, dict[str, Any]],
-    after: dict[str, dict[str, Any]],
-    labels: dict[str, str] | None = None,
-) -> list[str]:
-    """Deleted, added and changed objects per kind; `labels` (id -> kind and
-    display label, from both snapshots) names each one."""
-    labels = labels or {}
-
-    def _name(kind: str, node_id: str) -> str:
-        return f"{kind} {node_id} [{labels[node_id]}]" if node_id in labels else f"{kind} {node_id}"
-
-    changes: list[str] = []
-    for kind, old in before.items():
-        new = after[kind]
-        changes += [f"{_name(kind, node_id)} deleted: {old[node_id]}" for node_id in sorted(old.keys() - new.keys())]
-        changes += [f"{_name(kind, node_id)} added: {new[node_id]}" for node_id in sorted(new.keys() - old.keys())]
-        changes += [
-            f"{_name(kind, node_id)} changed: {old[node_id]} -> {new[node_id]}"
-            for node_id in sorted(old.keys() & new.keys())
-            if old[node_id] != new[node_id]
-        ]
-    return changes
-
-
 async def _failed_tasks(client: InfrahubClient, branch: str) -> list[str]:
     """Failed tasks on the branch, as report lines. Catches what a run's own
     outcome cannot: generators a rerun dispatched without waiting."""
@@ -486,9 +366,9 @@ class TestAllDemoIdempotency(TestInfrahubDockerWithClient):
                     await wait_for_tasks_completion(client, branch)
 
             failed += await _failed_tasks(client, branch)
-            topology_after, labels_after = await _topology_snapshot(client, branch)
-            changes = _diff(topology_before, topology_after, {**labels_after, **labels_before})
-            changes += _diff(security_before, await self._take_snapshot(client, branch))
+            topology_after, labels_after = await snapshot_topology(client, branch)
+            changes = diff_snapshots(topology_before, topology_after, {**labels_after, **labels_before})
+            changes += diff_snapshots(security_before, await self._take_snapshot(client, branch))
             assert not failed and not changes, _rerun_report(f"{label} {attempt}", failed, changes)
 
     @pytest.mark.order(410)
@@ -510,7 +390,7 @@ class TestAllDemoIdempotency(TestInfrahubDockerWithClient):
         client = async_client_main
         await wait_for_tasks_completion(client, scenario_branch)
         before = await self._take_snapshot(client, scenario_branch)
-        topology_before, labels = await _topology_snapshot(client, scenario_branch)
+        topology_before, labels = await snapshot_topology(client, scenario_branch)
         workflow_state["idempotency_snapshot"] = before
         logging.info("Snapshot: %s", {kind: len(objects) for kind, objects in before.items()})
         logging.info("Topology snapshot: %s", {kind: len(objects) for kind, objects in topology_before.items()})
@@ -585,7 +465,7 @@ class TestAllDemoIdempotency(TestInfrahubDockerWithClient):
 
         client = async_client_main
         await wait_for_tasks_completion(client, scenario_branch)
-        before, labels = await _topology_snapshot(client, scenario_branch)
+        before, labels = await snapshot_topology(client, scenario_branch)
         security_before = await self._take_snapshot(client, scenario_branch)
         logging.info("Topology snapshot: %s", {kind: len(objects) for kind, objects in before.items()})
         for kind in ("DcimDevice", "DcimInterface", "DcimCable", "IpamIPAddress"):
