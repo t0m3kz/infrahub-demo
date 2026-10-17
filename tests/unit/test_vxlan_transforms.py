@@ -254,8 +254,7 @@ class TestTransformVxlanArista:
             "vtep": {"source_interface": "Loopback0", "ipv4": "10.0.0.1", "udp_port": 4789},
             "l2_vni_mappings": l2_mappings or [],
             "l3_vni_mappings": [],
-            "flooding": "evpn",
-            "evpn": {"enabled": True, "rd_format": "10.0.0.1:{vni}", "rt_format": "65001:{vni}"},
+            "evpn": {"enabled": True, "rd_format": "10.0.0.1:{vni}"},
             "microsegmentation": {"enabled": False, "vrf_count": 0},
             "anycast_gateway": {"enabled": False, "mac": "00:1c:73:00:dc:01"},
         }
@@ -1184,7 +1183,6 @@ def _vxlan_with_anycast(mac: str = "00:1c:73:00:dc:01") -> dict:
         "vtep": {"source_interface": "Loopback0", "ipv4": "10.0.0.1", "udp_port": 4789},
         "l2_vni_mappings": [],
         "l3_vni_mappings": [],
-        "flooding": "evpn",
         "evpn": {"enabled": False},
         "microsegmentation": {"enabled": False, "vrf_count": 0},
         "anycast_gateway": {"enabled": True, "mac": mac},
@@ -1442,7 +1440,7 @@ class TestSelectEvpnBgpProcess:
 
     The original filter was `service_type == "bgp"`. ManagedBGP has no
     `service_type` attribute, so it matched nothing — which pinned
-    `evpn.enabled` to False and left `rt_format` unset on every VTEP in the
+    `evpn.enabled` to False and left the route-target unset on every VTEP in the
     project while ruff, ty and the whole test suite stayed green.
     """
 
@@ -1541,8 +1539,8 @@ class TestGetVxlanConfigEvpn:
     def test_evpn_disabled_without_a_bgp_process(self) -> None:
         """No BGP process means no fabric ASN, so there is no RT to derive.
 
-        `rt_format` must be None, NOT the literal string "auto": templates skip
-        the line when the format is unset, and `rd auto` / `route-target ... auto`
+        The per-mapping `route_target` must be None, NOT the literal string "auto": templates skip
+        the line when the route-target is unset, and `rd auto` / `route-target ... auto`
         — while valid NX-OS/EOS — is a syntax error in FRR, which is what the
         Dell SONiC templates emit.
 
@@ -1555,7 +1553,7 @@ class TestGetVxlanConfigEvpn:
         result = get_vxlan_config(self._data(), "arista_eos", device_role="leaf", activations=acts)
         assert result is not None
         assert result["evpn"]["enabled"] is False
-        assert result["evpn"]["rt_format"] is None
+        assert result["l2_vni_mappings"][0]["route_target"] is None
         assert result["evpn"]["rd_format"] == "10.0.0.1:{vni}"
 
     def test_evpn_enabled_with_a_bgp_process(self) -> None:
@@ -1593,7 +1591,7 @@ class TestGetVxlanConfigEvpn:
             fabric_rt_asn=4245880999,
         )
         assert result is not None
-        assert result["evpn"]["rt_format"] == "4245880999:{vni}"
+        assert result["l2_vni_mappings"][0]["route_target"] == "4245880999:10100"
 
     def test_two_vteps_with_different_local_asns_derive_the_same_rt(self) -> None:
         """The property that actually matters: same fabric RT ASN in, same RT out."""
@@ -1613,7 +1611,8 @@ class TestGetVxlanConfigEvpn:
             fabric_rt_asn=4245880999,
         )
         assert leaf1 is not None and leaf2 is not None
-        assert leaf1["evpn"]["rt_format"] == leaf2["evpn"]["rt_format"]
+        assert leaf1["l2_vni_mappings"][0]["route_target"] == "4245880999:10100"
+        assert leaf1["l2_vni_mappings"][0]["route_target"] == leaf2["l2_vni_mappings"][0]["route_target"]
         # ...while the RD stays per-VTEP, which is its whole purpose.
         assert leaf1["evpn"]["rd_format"] != leaf2["evpn"]["rd_format"]
 
@@ -1629,7 +1628,7 @@ class TestGetVxlanConfigEvpn:
             fabric_rt_asn=None,
         )
         assert result is not None
-        assert result["evpn"]["rt_format"] == "4245880999:{vni}"
+        assert result["l2_vni_mappings"][0]["route_target"] == "4245880999:10100"
 
     def test_rd_and_rt_derived_from_the_overlay_process(self) -> None:
         caps = [
@@ -1640,7 +1639,7 @@ class TestGetVxlanConfigEvpn:
         result = get_vxlan_config(self._data(caps), "arista_eos", device_role="leaf", activations=acts)
         assert result is not None
         assert result["evpn"]["rd_format"] == "10.0.0.7:{vni}"
-        assert result["evpn"]["rt_format"] == "4245880999:{vni}"
+        assert result["l2_vni_mappings"][0]["route_target"] == "4245880999:10100"
 
 
 # ===========================================================================

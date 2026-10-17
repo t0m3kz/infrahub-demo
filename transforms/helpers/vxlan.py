@@ -476,8 +476,8 @@ def _select_evpn_bgp_process(device_capabilities: list[dict[str, Any]]) -> dict[
     Discriminates on ``typename``, which is what clean_data actually produces.
     The previous filter here was ``service_type == "bgp"`` — ManagedBGP has no
     ``service_type`` attribute at all, so it matched nothing, which pinned
-    ``evpn.enabled`` to False and ``rt_format`` to "auto" on every VTEP in the
-    project. transforms/helpers/bgp.py already used the correct ``typename``
+    ``evpn.enabled`` to False and left every route-target unset on every VTEP in
+    the project. transforms/helpers/bgp.py already used the correct ``typename``
     form; this brings VXLAN in line with it.
 
     Then selects on ``process_role``, which generators/helpers/routing.py writes
@@ -764,7 +764,7 @@ def get_vxlan_config(
         mapping["route_target"] = f"{admin}:{mapping['vni']}" if admin else None
 
     # Per-VRF imports of the other sites' L3 route-targets (see
-    # _multisite_vrf_site_asns); this fabric's own RT stays rt_format.
+    # _multisite_vrf_site_asns); this fabric's own RT is the mapping's route_target.
     site_asns_by_vrf = _multisite_vrf_site_asns(activations or [])
     for mapping in l3_vni_mappings:
         mapping["route_target"] = _l3_route_target(mapping, rt_asn)
@@ -788,7 +788,6 @@ def get_vxlan_config(
         "l2_vni_mappings": l2_vni_mappings,
         # L3 VNIs for VRF segments (microsegmentation)
         "l3_vni_mappings": l3_vni_mappings,
-        "flooding": "evpn",  # Use EVPN when BGP is available
         # Explicit RD/RT, deliberately NOT the `rd auto` / `route-target both
         # auto` of the .dev/scenariusze.txt reference configs. Do not "fix" this
         # back toward the reference; three reasons it cannot be used here:
@@ -801,8 +800,8 @@ def get_vxlan_config(
         #      and SR OS has auto-RD but no auto-RT.
         #   3. An `auto` value is invisible to Infrahub, so no check can assert
         #      that a fabric's VTEPs actually agree on it.
-        # A None format means "let the platform derive it": templates must then
-        # omit the line entirely rather than emitting the literal word `auto`,
+        # A None route_target means "let the platform derive it": templates must
+        # then omit the line entirely rather than emitting the literal word `auto`,
         # which is valid NX-OS/EOS but a syntax error in FRR.
         "evpn": {
             "enabled": bool(evpn_process),
@@ -810,9 +809,6 @@ def get_vxlan_config(
             # segment's routes distinguishable per advertising VTEP, so it uses
             # this device's own overlay router-id.
             "rd_format": f"{router_id}:{{vni}}" if router_id else None,
-            # RT is deliberately fabric-wide: every VTEP must derive the SAME
-            # value for a given VNI or imports never match. See rt_asn above.
-            "rt_format": f"{rt_asn}:{{vni}}" if rt_asn else None,
         },
         # Microsegmentation metadata
         "microsegmentation": {
