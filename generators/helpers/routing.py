@@ -25,6 +25,7 @@ Strategies:
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Mapping
 from enum import Enum
 from typing import Any, NamedTuple
 
@@ -35,6 +36,19 @@ from utils.fabric_roles import OVERLAY_ROLES, RR_CLIENT_ROLES, RR_ROLES
 from ..types import RoutingOptions
 
 _SPINE_ROLES = frozenset({"spine", "border-spine"})
+
+LISP_OVERLAY = "lisp"
+
+
+def overlay_control_plane_of(data: Mapping[str, Any] | None) -> str:
+    """A deployment's overlay_control_plane ("bgp_evpn" when unset).
+
+    ``data`` is the cleaned DC dict (or a pod's ``parent``). Under "lisp" the
+    fabric has an OSPF underlay and no overlay BGP at all (no EVPN sessions,
+    no overlay AS): the control plane is LISP map-server/map-resolver on the
+    border-leafs.
+    """
+    return (data or {}).get("overlay_control_plane") or "bgp_evpn"
 
 
 class RoutingPlanInput(BaseModel):
@@ -60,6 +74,9 @@ class RoutingPlanInput(BaseModel):
         MLAG-paired (leaf/tor/l2-leaf/access-leaf; border-leaf is never
         MLAG-paired in this project). Both devices in a pair get the SAME
         underlay ASN — see ``_plan_ebgp_underlay``.
+      - overlay_control_plane: "lisp" plans the underlay only (the strategy's
+        overlay half is treated as "none": no overlay BGP processes, no
+        overlay peerings); "bgp_evpn" (default) plans the strategy as named.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -79,6 +96,7 @@ class RoutingPlanInput(BaseModel):
     underlay_password_id: str = ""
     overlay_password_id: str = ""
     mlag_pairs: dict[str, str] = Field(default_factory=dict)
+    overlay_control_plane: str = "bgp_evpn"
 
 
 class PendingASRef(BaseModel):
@@ -258,6 +276,8 @@ class RoutingPlanner:
     def build_routing_plan(self, inp: RoutingPlanInput) -> RoutingPlan:
         """Build complete routing plan from pre-queried SDK objects."""
         underlay_type, overlay_type = inp.routing_strategy.split("-")
+        if inp.overlay_control_plane == LISP_OVERLAY:
+            overlay_type = "none"
         plan = RoutingPlan()
 
         all_device_names = set(inp.bottom_devices + inp.top_devices)
@@ -345,7 +365,7 @@ class RoutingPlanner:
             )
 
         # ---- Overlay peerings ----
-        if design:
+        if design and overlay_type != "none":
             overlay_bgp = [b for b in plan.bgp_processes if b.get("process_role") == "overlay"]
             planned_device_ids = {b["capabilities"][0]["id"] for b in overlay_bgp}
 

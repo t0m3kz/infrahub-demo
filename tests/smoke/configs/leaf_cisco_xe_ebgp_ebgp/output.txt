@@ -1,0 +1,179 @@
+!
+! dc1-leaf-01 Configuration
+! Cisco IOS-XE (Catalyst 9000) EVPN-VXLAN leaf
+!
+hostname dc1-leaf-01
+!
+ip routing
+spanning-tree mode rapid-pvst
+!
+vlan 100
+ name Customer-A
+!
+vlan 200
+ name Customer-A
+!
+!
+! Interfaces
+interface Ethernet1
+ description to spine-01
+ no switchport
+ ip address 10.1.0.1 255.255.255.254
+ no shutdown
+!
+interface Ethernet2
+ description to spine-02
+ no switchport
+ ip address 10.1.0.3 255.255.255.254
+ no shutdown
+!
+interface Ethernet10
+ description to server-01
+ switchport mode trunk
+ switchport trunk allowed vlan 100,200
+ no shutdown
+!
+interface Loopback0
+ description Router ID
+ ip address 10.0.0.1 255.255.255.255
+ no shutdown
+!
+! BGP Configuration
+router bgp 65001
+  bgp router-id 10.0.0.1
+  bgp graceful-restart
+  maximum-paths 4
+  !
+  neighbor EVPN-OVERLAY peer-group
+  neighbor EVPN-OVERLAY update-source Loopback0
+  neighbor EVPN-OVERLAY send-community both
+  neighbor EVPN-OVERLAY ebgp-multihop 255
+  !
+  neighbor UNDERLAY-PEERS peer-group
+  neighbor UNDERLAY-PEERS send-community standard
+  neighbor UNDERLAY-PEERS fall-over bfd
+  neighbor 10.1.0.0 peer-group UNDERLAY-PEERS
+  neighbor 10.1.0.0 remote-as 65100
+  neighbor 10.1.0.0 description spine-01
+  neighbor 10.1.0.2 peer-group UNDERLAY-PEERS
+  neighbor 10.1.0.2 remote-as 65101
+  neighbor 10.1.0.2 description spine-02
+  neighbor 10.0.0.100 peer-group EVPN-OVERLAY
+  neighbor 10.0.0.100 remote-as 65100
+  neighbor 10.0.0.100 description spine-01
+  neighbor 10.0.0.101 peer-group EVPN-OVERLAY
+  neighbor 10.0.0.101 remote-as 65101
+  neighbor 10.0.0.101 description spine-02
+  !
+  address-family ipv4 unicast
+    redistribute connected route-map RM-CONN-2-BGP
+    neighbor UNDERLAY-PEERS activate
+  exit-address-family
+  !
+  address-family l2vpn evpn
+    neighbor EVPN-OVERLAY activate
+  exit-address-family
+!
+! Route-maps
+route-map RM-CONN-2-BGP permit 10
+ match interface Loopback0
+!
+! VXLAN / EVPN Configuration (Catalyst 9000, IOS-XE)
+!
+! Tenant VRFs (symmetric IRB — one L3 VNI per tenant)
+! unverified-no-lab: `route-target ... stitching` is how the guide imports and exports a VRF into L2VPN EVPN
+vrf definition VRF_A
+ rd 10.0.0.1:50001
+ address-family ipv4
+  route-target export 65000:50001
+  route-target import 65000:50001
+  route-target export 65000:50001 stitching
+  route-target import 65000:50001 stitching
+ exit-address-family
+!
+!
+! EVPN
+! unverified-no-lab: `replication-type static` (ingress replication) is a global l2vpn evpn command
+! unverified-no-lab: `router-id <loopback>` under l2vpn evpn
+l2vpn evpn
+ replication-type static
+ router-id Loopback0
+ ! unverified-no-lab: `default-gateway advertise` globally (later trains also take `enable` per instance)
+ default-gateway advertise
+!
+! unverified-no-lab: `rd` and `route-target` under `l2vpn evpn instance`; ARP/ND flooding suppression is left at the platform default
+l2vpn evpn instance 100 vlan-based
+ encapsulation vxlan
+ rd 10.0.0.1:10100
+ route-target export 65000:10100
+ route-target import 65000:10100
+!
+vlan configuration 100
+ member evpn-instance 100 vni 10100
+!
+!
+! L3 VNI transit SVIs (symmetric IRB — no host addressing, forwarding only)
+! unverified-no-lab: `vlan configuration <vlan>` / `member vni <l3vni>` binds the L3 VNI to its SVI VLAN
+! unverified-no-lab: `ip unnumbered Loopback0` and `no autostate` on the L3 VNI SVI
+vlan 3900
+ name L3VNI_VRF_A
+!
+vlan configuration 3900
+ member vni 50001
+!
+interface Vlan3900
+ description L3VNI transit SVI for VRF VRF_A
+ vrf forwarding VRF_A
+ ip unnumbered Loopback0
+ no autostate
+ no shutdown
+!
+!
+! VTEP
+! unverified-no-lab: `member vni <l2vni> ingress-replication` alongside `replication-type static`
+! unverified-no-lab: `member vni <l3vni> vrf <vrf>`
+interface nve1
+ no ip address
+ source-interface Loopback0
+ host-reachability protocol bgp
+ member vni 10100 ingress-replication
+ member vni 50001 vrf VRF_A
+ no shutdown
+!
+!
+! EVPN in BGP: community export towards the EVPN neighbours, tenant VRFs advertised as type-5
+! unverified-no-lab: `neighbor <peer> send-community both` inside address-family l2vpn evpn (the shared BGP block sets it globally)
+! unverified-no-lab: `advertise l2vpn evpn` and `redistribute connected` inside `address-family ipv4 vrf <vrf>`
+router bgp 65001
+ address-family l2vpn evpn
+  neighbor EVPN-OVERLAY send-community both
+ exit-address-family
+ address-family ipv4 vrf VRF_A
+  advertise l2vpn evpn
+  redistribute connected
+ exit-address-family
+!
+!
+! Gateway SVIs
+! Anycast gateway — the same SVI MAC on every VTEP of the fabric
+! unverified-no-lab: `mac-address <anycast mac>` and `no autostate` on the tenant gateway SVIs
+interface Vlan100
+ description Customer-A
+ vrf forwarding VRF_A
+ ip address 10.100.0.1 255.255.255.0
+ mac-address 001c.7300.dc01
+ no autostate
+ no shutdown
+!
+interface Vlan200
+ description Customer-A
+ ip address 10.200.0.1 255.255.255.0
+ mac-address 001c.7300.dc01
+ no autostate
+ no shutdown
+!
+! Management
+line console 0
+line vty 0 15
+!
+end

@@ -29,6 +29,7 @@ from tests.integration.demo_data import (
 # Data whose objects the integration suite loads with the trigger rules active.
 _TRIGGERED_DATA_DIRS = (
     ROOT / "data" / "demos" / "30_all",
+    ROOT / "data" / "demos" / "31_lisp_fabric",
     ROOT / "tests" / "integration" / "data",
 )
 # Fields every node has without declaring them.

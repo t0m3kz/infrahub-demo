@@ -13,7 +13,14 @@ from ..dc_config import host_bits_to_prefix_length, resolve_dc_size_layout
 from ..devices import DeviceMixin
 from ..helpers.naming import DeviceNamingConfig
 from ..helpers.rack import base_offset, expected_device_names
-from ..helpers.routing import RoutingStrategy, loopback_prefix_length, p2p_prefix_length, underlay_pool_is_ipv6
+from ..helpers.routing import (
+    LISP_OVERLAY,
+    RoutingStrategy,
+    loopback_prefix_length,
+    overlay_control_plane_of,
+    p2p_prefix_length,
+    underlay_pool_is_ipv6,
+)
 from ..helpers.template_interfaces import template_interface_names_by_role
 from ..pod_config import resolve_pod_layout, spine_slot_role, spine_slot_templates, templates_by_role
 from ..pools import PoolMixin
@@ -71,6 +78,7 @@ class TopologyPodParentData(TypedDict, total=False):
     fabric_interface_sorting_method: str
     connectivity_mode: str
     routing_strategy: str
+    overlay_control_plane: str
     underlay_protocol: str
     fabric_templates: list[dict[str, Any]]
     size: str
@@ -262,7 +270,13 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
         # cleanup would delete everything else it owned last run (cables, BGP,
         # border-leaf/FW/LB wiring). Returning before any save leaves the
         # tracking group untouched.
-        if super_spine_devices and not await self._wait_for_super_spine_overlay(super_spine_devices, dc_id, pod_name):
+        #
+        # Under a LISP overlay the super-spines have no overlay BGP to wait for.
+        if (
+            super_spine_devices
+            and overlay_control_plane_of(dc) != LISP_OVERLAY
+            and not await self._wait_for_super_spine_overlay(super_spine_devices, dc_id, pod_name)
+        ):
             return
 
         # Fixed per-pod pool sizes from this pod's own layout (see

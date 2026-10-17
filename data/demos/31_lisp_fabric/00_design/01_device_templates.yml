@@ -1,0 +1,98 @@
+---
+# Catalyst 9000 (cisco_xe) fabric templates of the LISP demo, kept in this scope instead of
+# data/bootstrap/ because no other demo runs a cisco_xe fabric. The device types
+# (C9300-48UXM, C9500-32C) come from data/bootstrap/06_device_types.yml.
+#
+# Port names and speeds are approximate datasheet values chosen so the generator's
+# speed-aware cabling finds a match on every tier pair: leaf -> spine 100G (a C9300X
+# style 2x100G network module), access-leaf -> leaf 10G, border-leaf -> spine 100G.
+# No lab has run any of it (unverified-no-lab).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TemplateDcimPhysicalDevice
+  data:
+    - template_name: C9500-32C_BORDER_LEAF
+      owner: "P027"
+      device_type: C9500-32C
+      platform: cisco_xe
+      software_image: cisco_xe-17.12.4
+      role: border-leaf
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: C9500-32C_BORDER_LEAF_HundredGigE1/0/[1-24]
+            name: HundredGigE1/0/[1-24]
+            role: downlink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: C9500-32C_BORDER_LEAF_HundredGigE1/0/[25-28]
+            name: HundredGigE1/0/[25-28]
+            role: firewall
+            interface_type: 100gbase-x-qsfp28
+          - template_name: C9500-32C_BORDER_LEAF_HundredGigE1/0/[29-30]
+            name: HundredGigE1/0/[29-30]
+            role: load-balancer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: C9500-32C_BORDER_LEAF_HundredGigE1/0/[31-32]
+            name: HundredGigE1/0/[31-32]
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: C9500-32C_BORDER_LEAF_GigabitEthernet0/0
+            name: GigabitEthernet0/0
+            role: management
+            interface_type: 1000base-t
+    - template_name: C9300-48UXM_LEAF
+      owner: "P027"
+      device_type: C9300-48UXM
+      platform: cisco_xe
+      software_image: cisco_xe-17.12.4
+      role: leaf
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: C9300-48UXM_LEAF_TenGigabitEthernet1/0/[1-30]
+            name: TenGigabitEthernet1/0/[1-30]
+            role: customer
+            interface_type: 10gbase-t
+          - template_name: C9300-48UXM_LEAF_TenGigabitEthernet1/0/[31-36]
+            name: TenGigabitEthernet1/0/[31-36]
+            role: downlink
+            interface_type: 10gbase-t
+          - template_name: C9300-48UXM_LEAF_HundredGigE1/1/[1-2]
+            name: HundredGigE1/1/[1-2]
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: C9300-48UXM_LEAF_GigabitEthernet0/0
+            name: GigabitEthernet0/0
+            role: management
+            interface_type: 1000base-t
+    - template_name: C9300-48UXM_ACCESS
+      owner: "P027"
+      device_type: C9300-48UXM
+      platform: cisco_xe
+      software_image: cisco_xe-17.12.4
+      role: access-leaf
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: C9300-48UXM_ACCESS_TenGigabitEthernet1/0/[1-36]
+            name: TenGigabitEthernet1/0/[1-36]
+            role: customer
+            interface_type: 10gbase-t
+          - template_name: C9300-48UXM_ACCESS_TenGigabitEthernet1/0/[37-40]
+            name: TenGigabitEthernet1/0/[37-40]
+            role: uplink
+            interface_type: 10gbase-t
+          - template_name: C9300-48UXM_ACCESS_GigabitEthernet0/0
+            name: GigabitEthernet0/0
+            role: management
+            interface_type: 1000base-t

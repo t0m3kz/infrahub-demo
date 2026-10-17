@@ -36,7 +36,6 @@ import ipaddress
 import logging
 import re
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -47,7 +46,6 @@ from generators.protocols import DcimPhysicalDevice
 from transforms.config.access_leaf import AccessLeaf
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.edge import Edge
-from transforms.config.firewall import Firewall
 from transforms.config.leaf import Leaf
 from utils.exchange_transit import (
     EXCHANGE_PEERS,
@@ -84,7 +82,7 @@ from .test_constants import (
     ExpectedTransitContext,
     transit_namespace_type,
 )
-from .test_helpers import fetch_dc_topology, fetch_transit_inventory, match_transit_contexts
+from .test_helpers import fetch_dc_topology, fetch_transit_inventory, match_transit_contexts, render_device_config
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -169,26 +167,6 @@ query ($name: String!) {
 _ACL_LINE = re.compile(
     r"^\s+(?P<seq>\d+) (?P<action>permit|deny) (?P<proto>\S+) (?P<src>\S+) (?P<dst>\S+)(?P<rest>.*)$"
 )
-
-_ROOT = str(Path(__file__).parent.parent.parent)
-
-
-async def _render(
-    client: InfrahubClient,
-    branch: str,
-    device: str,
-    query: str = "firewall_config",
-    transform_cls: type[Any] = Firewall,
-) -> str:
-    """Run a device-config query and its transform in-process, return the rendered config."""
-    raw = await client.query_gql_query(name=query, branch_name=branch, variables={"device": device})
-    data: dict[str, Any] = raw.get("data") or raw
-
-    transform = transform_cls.__new__(transform_cls)
-    transform.root_directory = _ROOT
-    rendered = await transform.transform(data)
-    assert isinstance(rendered, str) and rendered, f"{query} transform produced no output for device {device}"
-    return rendered
 
 
 @dataclass(frozen=True)
@@ -644,7 +622,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         platform_by_name = await _platform_by_name(async_client_main, scenario_branch)
         errors: list[str] = []
         for device in serving_cluster["members"]:
-            rendered = await _render(async_client_main, scenario_branch, device)
+            rendered = await render_device_config(async_client_main, scenario_branch, device)
             if f"set vsys {context}" not in rendered:
                 errors.append(f"{device}: no vsys '{context}' rendered")
             if platform_by_name.get(device) != "panos":
@@ -659,7 +637,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
 
         outsider = serving_cluster["outsider"]
         assert outsider, f"no firewall outside {serving_cluster['members']} on their platform to render against"
-        rendered = await _render(async_client_main, scenario_branch, outsider)
+        rendered = await render_device_config(async_client_main, scenario_branch, outsider)
         leaked = [name for name in EXPECTED_RULE_NAMES if name in rendered]
         if leaked:
             errors.append(f"{outsider}: does not serve '{SOURCE_SEGMENT}' but renders rule(s) {leaked}")
@@ -744,7 +722,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                 if platform not in ("panos", "checkpoint_gaia"):
                     errors.append(f"{dc}/{device}: platform '{platform}' has no transit assertions in this test")
                     continue
-                rendered = await _render(async_client_main, scenario_branch, device)
+                rendered = await render_device_config(async_client_main, scenario_branch, device)
                 rendered_count += 1
                 for leg in (leg for leg in context["legs"] if leg["device"] == device):
                     network = ipaddress.IPv4Interface(leg["address"]).network
@@ -815,7 +793,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
 
         errors: list[str] = []
         for device in border_leafs:
-            rendered = await _render(
+            rendered = await render_device_config(
                 async_client_main, scenario_branch, device, query="border_leaf_config", transform_cls=BorderLeaf
             )
             for vrf in ("PROD", "INTERNET"):
@@ -888,7 +866,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
             assert members, f"{dc}: the shared context has no firewall member"
             base = rf"^set vsys {re.escape(str(context['name']))} rulebase security rules {re.escape(rule_name)}"
             for device in members:
-                rendered = await _render(async_client_main, scenario_branch, device)
+                rendered = await render_device_config(async_client_main, scenario_branch, device)
                 expected = {
                     "to": rf"{base} to {re.escape(rule['destination_zone'])}$",
                     "from": rf"{base} from \S+$",
@@ -912,7 +890,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                 if device.get("role") not in leaf_classes:
                     continue
                 device_name = str(device["name"])
-                rendered = await _render(
+                rendered = await render_device_config(
                     async_client_main,
                     scenario_branch,
                     device_name,
@@ -1013,7 +991,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                 if platform not in ("panos", "checkpoint_gaia"):
                     errors.append(f"{dc}/{device}: platform '{platform}' has no SNAT assertions in this test")
                     continue
-                rendered = await _render(async_client_main, scenario_branch, device)
+                rendered = await render_device_config(async_client_main, scenario_branch, device)
                 rendered_by_platform[str(platform)] = rendered_by_platform.get(str(platform), 0) + 1
                 if platform == "panos":
                     for zone in zones:
@@ -1069,7 +1047,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
 
         errors: list[str] = []
         for device in sorted(ALL_DEMO_INTERNET_BGWS):
-            rendered = await _render(
+            rendered = await render_device_config(
                 async_client_main, scenario_branch, device, query="edge_config", transform_cls=Edge
             )
 
@@ -1146,13 +1124,13 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
             assert len(edges) == 2, f"{site}: service ports on {edges}, expected both edges of the metro"
             served_edges.update(edges)
             for device in edges:
-                rendered = await _render(
+                rendered = await render_device_config(
                     async_client_main, scenario_branch, device, query="edge_config", transform_cls=Edge
                 )
                 errors.extend(_edge_transit_errors(device, rendered, context))
 
         for device in sorted(set(ALL_DEMO_INTERNET_BGWS) - served_edges):
-            rendered = await _render(
+            rendered = await render_device_config(
                 async_client_main, scenario_branch, device, query="edge_config", transform_cls=Edge
             )
             if re.search(r"^interface Vlan3[0-7]\d{2}$", rendered, re.MULTILINE):
@@ -1212,7 +1190,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                 if platform not in ("panos", "checkpoint_gaia"):
                     errors.append(f"{dc}/{device}: platform '{platform}' has no MANAGEMENT assertions in this test")
                     continue
-                rendered = await _render(async_client_main, scenario_branch, device)
+                rendered = await render_device_config(async_client_main, scenario_branch, device)
                 rendered_by_platform[str(platform)] = rendered_by_platform.get(str(platform), 0) + 1
                 leg_interface = next(
                     str(leg["interface"])
@@ -1323,7 +1301,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         assert members, f"{MANAGEMENT_SERVICES_DC}: the shared context has no firewall member"
         errors: list[str] = []
         for device in members:
-            rendered = await _render(async_client_main, scenario_branch, device)
+            rendered = await render_device_config(async_client_main, scenario_branch, device)
             for rule_name, (protocol, port) in ALL_DEMO_MANAGEMENT_RULES.items():
                 base = f"set vsys {context['name']} rulebase security rules {rule_name}"
                 for line in (
@@ -1368,7 +1346,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
             if device.get("role") not in leaf_classes:
                 continue
             name = str(device["name"])
-            rendered = await _render(
+            rendered = await render_device_config(
                 async_client_main,
                 scenario_branch,
                 name,

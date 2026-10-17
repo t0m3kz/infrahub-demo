@@ -1,0 +1,3 @@
+{#- IOS-XE border leaf: the leaf template. A Catalyst 9000 border leaf differs from a leaf only by its routed
+    sub-interfaces (`encapsulation dot1Q`) and VRF handoff sessions, which the leaf template already renders. -#}
+{%- include 'leafs/cisco_xe.j2' -%}

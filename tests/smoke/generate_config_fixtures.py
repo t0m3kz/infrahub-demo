@@ -3499,6 +3499,82 @@ DEVICE_CONFIGS: list[tuple[type, str, str, list[str]]] = [
 ]
 
 
+# Catalyst 9000 (IOS-XE): an EVPN-VXLAN leaf, access-leaf and border-leaf only. Every other role has no
+# cisco_xe fabric template, so cisco_xe is not in FABRIC_PLATFORMS.
+CISCO_XE_DEVICE_CONFIGS: list[tuple[type, str, str]] = [
+    (Leaf, "leaf", "leaf"),
+    (AccessLeaf, "access-leaf", "access_leaf"),
+    (BorderLeaf, "border-leaf", "border_leaf"),
+]
+
+
+def write_cisco_xe_fixtures() -> tuple[int, int]:
+    """Write the Catalyst 9000 leaf / access-leaf / border-leaf fixtures for every scenario."""
+    generated = errors = 0
+    for transform_cls, role, type_prefix in CISCO_XE_DEVICE_CONFIGS:
+        for scenario in SCENARIOS:
+            g, e = _write_fixture(
+                transform_cls,
+                dir_name=f"{type_prefix}_cisco_xe_{scenario}",
+                dev_name=f"dc1-{type_prefix.replace('_', '-')}-01",
+                role=role,
+                platform="cisco_xe",
+                scenario=scenario,
+                include_segments=True,
+            )
+            generated += g
+            errors += e
+    return generated, errors
+
+
+# LISP overlay fabric: the cisco_xe ospf_ibgp inputs with the BGP capability removed (a LISP fabric has no BGP
+# overlay) and the fabric flag, the two border-leaf map-servers (listed out of name order: the transform sorts
+# them) and the shared site key on the device's deployment (queries/fragments/lisp_fabric.gql).
+LISP_MAP_SERVERS = (("dc1-border-leaf-02", "10.255.0.2/32"), ("dc1-border-leaf-01", "10.255.0.1/32"))
+LISP_SITE_KEY = "s3cr3t"
+
+
+def build_lisp_device_data(*, device_name: str, role: str, include_segments: bool = True) -> dict:
+    """The raw cisco_xe device query response of a device in a fabric whose overlay_control_plane is `lisp`."""
+    data = build_device_data(
+        device_name=device_name,
+        role=role,
+        platform="cisco_xe",
+        scenario="ospf_ibgp",
+        include_segments=include_segments,
+    )
+    node = data["DcimDevice"]["edges"][0]["node"]
+    node["capabilities"]["edges"] = [
+        edge for edge in node["capabilities"]["edges"] if edge["node"].get("__typename") != "ManagedBGP"
+    ]
+    deployment = node["deployment"]["node"]
+    deployment["overlay_control_plane"] = _v("lisp")
+    deployment["lisp_map_servers"] = _edges(
+        [
+            {"name": _v(name), "interfaces": _edges([{"ip_address": _node({"address": _v(address)})}])}
+            for name, address in LISP_MAP_SERVERS
+        ]
+    )
+    deployment["lisp_site_key"] = _node({"password": _v(LISP_SITE_KEY)})
+    return data
+
+
+def write_cisco_xe_lisp_fixtures() -> tuple[int, int]:
+    """Write the Catalyst 9000 leaf / access-leaf / border-leaf LISP-overlay fixtures (OSPF underlay, no BGP).
+
+    Plus a hostless leaf: an edge that hosts no segment yet still carries the edge LISP config.
+    """
+    generated = errors = 0
+    hostless = build_lisp_device_data(device_name="dc1-leaf-01", role="leaf", include_segments=False)
+    generated, errors = _write_data_fixture(Leaf, "leaf_cisco_xe_lisp_hostless", hostless)
+    for transform_cls, role, type_prefix in CISCO_XE_DEVICE_CONFIGS:
+        data = build_lisp_device_data(device_name=f"dc1-{type_prefix.replace('_', '-')}-01", role=role)
+        g, e = _write_data_fixture(transform_cls, f"{type_prefix}_cisco_xe_lisp_ospf_ibgp", data)
+        generated += g
+        errors += e
+    return generated, errors
+
+
 def _write_fixture(
     transform_cls: type,
     dir_name: str,
@@ -3568,6 +3644,16 @@ def main() -> int:
                 )
                 generated += g
                 errors += e
+
+    print("\nGenerating Catalyst 9000 (cisco_xe) fixtures:")
+    g, e = write_cisco_xe_fixtures()
+    generated += g
+    errors += e
+
+    print("\nGenerating Catalyst 9000 (cisco_xe) LISP overlay fixtures:")
+    g, e = write_cisco_xe_lisp_fixtures()
+    generated += g
+    errors += e
 
     # ACL scenario: leaf only, ebgp_ibgp base, with a security_policy on each segment
     print("\nGenerating ACL fixtures (leaf):")

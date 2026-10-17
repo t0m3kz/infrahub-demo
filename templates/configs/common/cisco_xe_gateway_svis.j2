@@ -1,0 +1,46 @@
+{#- Tenant gateway SVIs of a Catalyst 9000 (IOS-XE), shared by the EVPN-VXLAN and the LISP overlay. In scope:
+    `vlans` and `anycast_gateway` (the fabric anycast-gateway dict: enabled, mac). Set `lisp_mobility` to also render
+    `lisp mobility <VRF>-IPV4` on the SVIs (the dynamic-eid name of common/cisco_xe_lisp.j2). -#}
+{%- set anycast = anycast_gateway and anycast_gateway.enabled %}
+{%- if anycast %}
+{%- set mac = anycast_gateway.mac | replace(':', '') | replace('.', '') | replace('-', '') %}
+{%- set anycast_mac = mac[0:4] ~ '.' ~ mac[4:8] ~ '.' ~ mac[8:12] %}
+{%- endif %}
+{%- if vlans %}
+!
+! Gateway SVIs
+{%- if anycast %}
+! Anycast gateway — the same SVI MAC on every VTEP of the fabric
+! unverified-no-lab: `mac-address <anycast mac>` and `no autostate` on the tenant gateway SVIs
+{%- endif %}
+{%- if lisp_mobility is defined and lisp_mobility %}
+! unverified-no-lab: `lisp mobility <VRF>-IPV4` binds the SVI to the dynamic-eid of its VRF
+{%- endif %}
+{%- for vlan in vlans if vlan.gateway_ip or vlan.gateway_ipv6 %}
+interface Vlan{{ vlan.vlan_id }}
+ description {{ vlan.name }}
+{%- if vlan.isolation_mode == 'isolated' %}
+ ! Isolation Mode: ISOLATED — intra-segment host-to-host traffic is not blocked by this template
+{%- elif vlan.isolation_mode == 'microsegmented' %}
+ ! Isolation Mode: MICROSEGMENTED — no SVI ACL is rendered on IOS-XE
+{%- endif %}
+{%- if vlan.vrf %}
+ vrf forwarding {{ vlan.vrf }}
+{%- endif %}
+{%- if vlan.gateway_ip %}
+ ip address {{ vlan.gateway_ip.split('/')[0] }} {{ vlan.gateway_ip.split('/')[1] | int | cidr_to_netmask }}
+{%- endif %}
+{%- if vlan.gateway_ipv6 %}
+ ipv6 address {{ vlan.gateway_ipv6 }}
+{%- endif %}
+{%- if lisp_mobility is defined and lisp_mobility and vlan.vrf %}
+ lisp mobility {{ vlan.vrf }}-IPV4
+{%- endif %}
+{%- if anycast %}
+ mac-address {{ anycast_mac }}
+ no autostate
+{%- endif %}
+ no shutdown
+!
+{%- endfor %}
+{%- endif -%}

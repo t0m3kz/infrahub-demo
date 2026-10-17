@@ -416,7 +416,7 @@ class TestSonicImportRouteTargets:
             "enabled": True,
             "interface": "vtep",
             "vtep": {"ipv4": "10.0.0.1"},
-            "evpn": {"enabled": True, "rt_format": "65100:{vni}"},
+            "evpn": {"enabled": True},
             "l3_vni_mappings": [mapping],
         }
         return _render_sonic(env, part="common/sonic_vxlan.j2", vxlan=vxlan)

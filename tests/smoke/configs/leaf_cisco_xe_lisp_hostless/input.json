@@ -1,0 +1,558 @@
+{
+  "DcimDevice": {
+    "edges": [
+      {
+        "node": {
+          "__typename": "DcimPhysicalDevice",
+          "id": "dev-dc1-leaf-01",
+          "name": {
+            "value": "dc1-leaf-01"
+          },
+          "role": {
+            "value": "leaf"
+          },
+          "platform": {
+            "node": {
+              "id": "plat-cisco_xe",
+              "name": {
+                "value": "cisco_xe"
+              },
+              "netmiko_device_type": {
+                "value": "cisco_xe"
+              },
+              "napalm_driver": {
+                "value": "cisco_xe"
+              },
+              "ansible_network_os": {
+                "value": "cisco_xe"
+              }
+            }
+          },
+          "primary_address": {
+            "node": {
+              "address": {
+                "value": "10.0.0.1/32"
+              },
+              "ip_namespace": {
+                "node": {
+                  "name": {
+                    "value": "default"
+                  }
+                }
+              }
+            }
+          },
+          "tags": {
+            "edges": []
+          },
+          "capabilities": {
+            "edges": [
+              {
+                "node": {
+                  "__typename": "ManagedOSPF",
+                  "name": {
+                    "value": "ospf-underlay"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "process_id": {
+                    "value": 1
+                  },
+                  "version": {
+                    "value": "v2"
+                  },
+                  "router_type": {
+                    "value": "standard"
+                  },
+                  "reference_bandwidth": {
+                    "value": 100000
+                  },
+                  "router_id": {
+                    "node": {
+                      "address": {
+                        "value": "10.0.0.1/32"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "interfaces": {
+            "edges": [
+              {
+                "node": {
+                  "__typename": "DcimVirtualInterface",
+                  "name": {
+                    "value": "Loopback0"
+                  },
+                  "description": {
+                    "value": "Router ID"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "loopback"
+                  },
+                  "ip_address": {
+                    "node": {
+                      "address": {
+                        "value": "10.0.0.1/32"
+                      },
+                      "ip_namespace": {
+                        "node": {
+                          "name": {
+                            "value": "default"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "interface_capabilities": {
+                    "edges": []
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimPhysicalInterface",
+                  "name": {
+                    "value": "Ethernet1"
+                  },
+                  "description": {
+                    "value": "to spine-01"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "spine"
+                  },
+                  "interface_type": {
+                    "value": "10gbase-x-sfpp"
+                  },
+                  "mtu": {
+                    "value": 9000
+                  },
+                  "ip_address": {
+                    "node": {
+                      "address": {
+                        "value": "10.1.0.1/31"
+                      },
+                      "ip_namespace": {
+                        "node": {
+                          "name": {
+                            "value": "default"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "cable": {
+                    "node": {
+                      "id": "cable-Ethernet1",
+                      "endpoints": {
+                        "edges": [
+                          {
+                            "node": {
+                              "__typename": "DcimPhysicalInterface",
+                              "name": {
+                                "value": "Ethernet1"
+                              },
+                              "ip_address": {
+                                "node": {
+                                  "address": {
+                                    "value": "10.1.0.1/31"
+                                  }
+                                }
+                              },
+                              "device": {
+                                "node": {
+                                  "name": {
+                                    "value": "dc1-leaf-01"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "node": {
+                              "__typename": "DcimPhysicalInterface",
+                              "name": {
+                                "value": "Ethernet1/1"
+                              },
+                              "ip_address": {
+                                "node": {
+                                  "address": {
+                                    "value": "10.1.0.0/31"
+                                  }
+                                }
+                              },
+                              "device": {
+                                "node": {
+                                  "name": {
+                                    "value": "spine-01"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "interface_capabilities": {
+                    "edges": [
+                      {
+                        "node": {
+                          "__typename": "RoutingOSPFInterface",
+                          "name": {
+                            "value": "ospf-Ethernet1"
+                          },
+                          "mode": {
+                            "value": "point-to-point"
+                          },
+                          "metric": {
+                            "value": null
+                          },
+                          "authentication_mode": {
+                            "value": null
+                          },
+                          "password": {
+                            "node": null
+                          },
+                          "peering": {
+                            "node": {
+                              "ospf_process": {
+                                "edges": [
+                                  {
+                                    "node": {
+                                      "process_id": {
+                                        "value": 1
+                                      },
+                                      "router_id": {
+                                        "node": {
+                                          "address": {
+                                            "value": "10.0.0.1/32"
+                                          }
+                                        }
+                                      },
+                                      "capabilities": {
+                                        "edges": [
+                                          {
+                                            "node": {
+                                              "name": {
+                                                "value": "dc1-leaf-01"
+                                              }
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              "ospf_area": {
+                                "node": {
+                                  "area": {
+                                    "value": "0.0.0.0"
+                                  },
+                                  "area_type": {
+                                    "value": "standard"
+                                  }
+                                }
+                              },
+                              "network_type": {
+                                "value": "point-to-point"
+                              },
+                              "cost": {
+                                "value": null
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimPhysicalInterface",
+                  "name": {
+                    "value": "Ethernet2"
+                  },
+                  "description": {
+                    "value": "to spine-02"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "spine"
+                  },
+                  "interface_type": {
+                    "value": "10gbase-x-sfpp"
+                  },
+                  "mtu": {
+                    "value": 9000
+                  },
+                  "ip_address": {
+                    "node": {
+                      "address": {
+                        "value": "10.1.0.3/31"
+                      },
+                      "ip_namespace": {
+                        "node": {
+                          "name": {
+                            "value": "default"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "cable": {
+                    "node": {
+                      "id": "cable-Ethernet2",
+                      "endpoints": {
+                        "edges": [
+                          {
+                            "node": {
+                              "__typename": "DcimPhysicalInterface",
+                              "name": {
+                                "value": "Ethernet2"
+                              },
+                              "ip_address": {
+                                "node": {
+                                  "address": {
+                                    "value": "10.1.0.3/31"
+                                  }
+                                }
+                              },
+                              "device": {
+                                "node": {
+                                  "name": {
+                                    "value": "dc1-leaf-01"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "node": {
+                              "__typename": "DcimPhysicalInterface",
+                              "name": {
+                                "value": "Ethernet1/2"
+                              },
+                              "ip_address": {
+                                "node": {
+                                  "address": {
+                                    "value": "10.1.0.2/31"
+                                  }
+                                }
+                              },
+                              "device": {
+                                "node": {
+                                  "name": {
+                                    "value": "spine-02"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "interface_capabilities": {
+                    "edges": [
+                      {
+                        "node": {
+                          "__typename": "RoutingOSPFInterface",
+                          "name": {
+                            "value": "ospf-Ethernet2"
+                          },
+                          "mode": {
+                            "value": "point-to-point"
+                          },
+                          "metric": {
+                            "value": null
+                          },
+                          "authentication_mode": {
+                            "value": null
+                          },
+                          "password": {
+                            "node": null
+                          },
+                          "peering": {
+                            "node": {
+                              "ospf_process": {
+                                "edges": [
+                                  {
+                                    "node": {
+                                      "process_id": {
+                                        "value": 1
+                                      },
+                                      "router_id": {
+                                        "node": {
+                                          "address": {
+                                            "value": "10.0.0.1/32"
+                                          }
+                                        }
+                                      },
+                                      "capabilities": {
+                                        "edges": [
+                                          {
+                                            "node": {
+                                              "name": {
+                                                "value": "dc1-leaf-01"
+                                              }
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              "ospf_area": {
+                                "node": {
+                                  "area": {
+                                    "value": "0.0.0.0"
+                                  },
+                                  "area_type": {
+                                    "value": "standard"
+                                  }
+                                }
+                              },
+                              "network_type": {
+                                "value": "point-to-point"
+                              },
+                              "cost": {
+                                "value": null
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimPhysicalInterface",
+                  "name": {
+                    "value": "Ethernet10"
+                  },
+                  "description": {
+                    "value": "to server-01"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "server"
+                  },
+                  "interface_type": {
+                    "value": "10gbase-x-sfpp"
+                  },
+                  "mtu": {
+                    "value": 9000
+                  },
+                  "ip_address": {
+                    "node": null
+                  },
+                  "cable": {
+                    "node": null
+                  },
+                  "interface_capabilities": {
+                    "edges": []
+                  }
+                }
+              }
+            ]
+          },
+          "deployment": {
+            "node": {
+              "id": "dc-1",
+              "name": {
+                "value": "DC-1"
+              },
+              "evpn_rt_as": {
+                "node": {
+                  "asn": {
+                    "value": 65000
+                  }
+                }
+              },
+              "segment_deployments": {
+                "edges": []
+              },
+              "overlay_control_plane": {
+                "value": "lisp"
+              },
+              "lisp_map_servers": {
+                "edges": [
+                  {
+                    "node": {
+                      "name": {
+                        "value": "dc1-border-leaf-02"
+                      },
+                      "interfaces": {
+                        "edges": [
+                          {
+                            "node": {
+                              "ip_address": {
+                                "node": {
+                                  "address": {
+                                    "value": "10.255.0.2/32"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "node": {
+                      "name": {
+                        "value": "dc1-border-leaf-01"
+                      },
+                      "interfaces": {
+                        "edges": [
+                          {
+                            "node": {
+                              "ip_address": {
+                                "node": {
+                                  "address": {
+                                    "value": "10.255.0.1/32"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                ]
+              },
+              "lisp_site_key": {
+                "node": {
+                  "password": {
+                    "value": "s3cr3t"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+}

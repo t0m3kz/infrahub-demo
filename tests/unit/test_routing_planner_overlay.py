@@ -12,7 +12,10 @@ RoutingPlanner._plan_overlay_peerings() for:
 from typing import Any
 from unittest.mock import MagicMock
 
-from generators.helpers.routing import RoutingPlan, RoutingPlanInput, RoutingPlanner
+import pytest
+
+from generators.helpers.routing import RoutingPlan, RoutingPlanInput, RoutingPlanner, overlay_control_plane_of
+from generators.types import RoutingOptions
 
 # ================================================================
 # Test Data Helpers
@@ -720,3 +723,97 @@ class TestOverlayIntegration:
         overlay = [p for p in result.bgp_peerings if p["name"].startswith("overlay")]
         for p in overlay:
             assert "leaf-1" in p["description"]
+
+
+# ================================================================
+# LISP overlay control plane: OSPF underlay only, no overlay BGP
+# ================================================================
+
+
+def _ospf_ibgp_plan(overlay_control_plane: str, *, overlay_as_id: str | None, existing_overlay: list | None = None):
+    """Plan a two-device ospf-ibgp fabric under the given overlay control plane."""
+    loopbacks = [
+        _make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
+        _make_loopback("leaf-1", "l1", "leaf", "10.0.1.1"),
+    ]
+    interfaces = [
+        _make_p2p_interface("if1", "Ethernet1/1", "s1", "c1"),
+        _make_p2p_interface("if2", "Ethernet1/1", "l1", "c1"),
+    ]
+    options = RoutingOptions(ospf_area_id="area-0", design=_design())
+    if overlay_as_id:
+        options["overlay_as_id"] = overlay_as_id
+    return RoutingPlanner(deployment_id="dc-1").build_routing_plan(
+        RoutingPlanInput(
+            bottom_devices=["spine-1", "leaf-1"],
+            interfaces=interfaces,
+            loopback_interfaces=loopbacks,
+            overlay=existing_overlay or [],
+            options=options,
+            routing_strategy="ospf-ibgp",
+            deployment_name="dc1",
+            overlay_control_plane=overlay_control_plane,
+        )
+    )
+
+
+class TestLispOverlayPlan:
+    """overlay_control_plane="lisp" keeps the OSPF underlay and drops every overlay BGP object."""
+
+    def test_lisp_plans_ospf_underlay_only(self) -> None:
+        """A lisp ospf-ibgp fabric gets OSPF processes/peerings and no BGP at all."""
+        plan = _ospf_ibgp_plan("lisp", overlay_as_id=None)
+
+        assert sorted(p["name"] for p in plan.ospf_processes) == ["leaf-1-ospf-underlay", "spine-1-ospf-underlay"]
+        assert len(plan.ospf_peerings) == 1
+        assert plan.bgp_processes == []
+        assert plan.bgp_peerings == []
+        assert plan.autonomous_systems == []
+
+    def test_lisp_needs_no_overlay_as(self) -> None:
+        """Without a shared overlay AS the iBGP overlay would raise; lisp must not."""
+        with pytest.raises(ValueError, match="overlay_as_id is required"):
+            _ospf_ibgp_plan("bgp_evpn", overlay_as_id=None)
+
+        plan = _ospf_ibgp_plan("lisp", overlay_as_id=None)
+
+        assert plan.bgp_processes == []
+
+    def test_lisp_ignores_existing_overlay_processes(self) -> None:
+        """A stale overlay ManagedBGP on a flipped fabric gets no peering planned against it."""
+        stale = []
+        for name in ("spine-1", "leaf-1"):
+            process = MagicMock(id=f"bgp-old-{name}")
+            process.capabilities.peers = [MagicMock(display_label=name)]
+            stale.append(process)
+
+        plan = _ospf_ibgp_plan("lisp", overlay_as_id=None, existing_overlay=stale)
+
+        assert plan.bgp_peerings == []
+
+    def test_bgp_evpn_ospf_ibgp_still_plans_overlay(self) -> None:
+        """The default control plane is unchanged: shared-AS iBGP overlay processes and peerings."""
+        plan = _ospf_ibgp_plan("bgp_evpn", overlay_as_id="overlay-as-1")
+
+        overlay = [b for b in plan.bgp_processes if b["process_role"] == "overlay"]
+        assert len(overlay) == 2
+        assert {p["session_type"] for p in plan.bgp_peerings} == {"IBGP"}
+        assert len(plan.ospf_processes) == 2
+
+    def test_default_control_plane_is_bgp_evpn(self) -> None:
+        """RoutingPlanInput defaults to bgp_evpn so existing callers keep their behaviour."""
+        assert RoutingPlanInput().overlay_control_plane == "bgp_evpn"
+
+    @pytest.mark.parametrize(
+        ("data", "expected"),
+        [
+            ({"overlay_control_plane": "lisp"}, "lisp"),
+            ({"overlay_control_plane": "bgp_evpn"}, "bgp_evpn"),
+            ({}, "bgp_evpn"),
+            ({"overlay_control_plane": None}, "bgp_evpn"),
+            (None, "bgp_evpn"),
+        ],
+    )
+    def test_overlay_control_plane_of(self, data: dict | None, expected: str) -> None:
+        """A missing or empty flag reads as bgp_evpn."""
+        assert overlay_control_plane_of(data) == expected

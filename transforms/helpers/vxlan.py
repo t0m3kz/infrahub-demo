@@ -1,84 +1,38 @@
 """VXLAN and interface configuration helpers for device transforms."""
 
 import logging
+from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 
 from netutils.interface import sort_interface_list
 
 from transforms.helpers.addressing import host_ip
-from transforms.helpers.segments import _get_segment_gateways, _get_segment_namespace, segment_vlan_ids
+
+# The neutral overlay model owns these (transforms/helpers/overlay.py); they stay importable from here.
+from transforms.helpers.overlay import (
+    _DEFAULT_ANYCAST_GATEWAY_MAC,
+    _INTERNET_NAMESPACE_TYPE,
+)
+from transforms.helpers.overlay import _L3VNI_SVI_VLAN_BASE as _L3VNI_SVI_VLAN_BASE
+from transforms.helpers.overlay import _L3VNI_SVI_VLAN_MAX as _L3VNI_SVI_VLAN_MAX
+from transforms.helpers.overlay import L2Instance, L3Instance, OverlayNode
+from transforms.helpers.overlay import _collect_l3_vni_from_namespaces as _collect_l3_vni_from_namespaces
+from transforms.helpers.overlay import _interface_address, _is_multisite_segment
+from transforms.helpers.overlay import _l3_from_activations as _l3_from_activations
+from transforms.helpers.overlay import _select_vtep_interface as _select_vtep_interface
+from transforms.helpers.overlay import build_overlay_node, l2_instance, vni_activations
+from transforms.helpers.segments import _get_segment_namespace, segment_vlan_ids
 from utils.exchange_transit import MAX_ENCODABLE_VNI
-from utils.fabric_roles import BORDER_ROLES, VTEP_ROLES
+from utils.fabric_roles import BORDER_ROLES
 
 _log = logging.getLogger(__name__)
-
-# Local VLAN ID band for the per-VRF L3 VNI SVI.
-#
-# Symmetric IRB on Cisco NX-OS needs an SVI per L3 VNI carrying `ip forward` —
-# the VLAN it sits on is the local handle for the tenant's transit VNI. It
-# carries no hosts and is never trunked, but it does consume a VLAN ID in the
-# device's own VLAN space, so it must not collide with a customer segment.
-#
-# The band is deliberately NOT modelled data and NOT drawn from a pool: a VLAN
-# ID has only local significance and this SVI never appears on a wire, so no two
-# devices need to agree on the number (only on the L3 VNI itself, which IS
-# modelled, on IpamNamespace.l3_vni). Arista EOS and FRR/SONiC need no such SVI
-# at all — they bind the VRF to the VNI directly — so this is NX-OS-only.
-#
-# 3900-3967 sits above the customer VLAN ceiling (CUSTOMER_VLAN_ID_MAX in
-# generators/helpers/pools.py, which is capped at 2999 so the firewall-context and transit bands fit below)
-# and below NX-OS's own internally-reserved 3968-4094.
-_L3VNI_SVI_VLAN_BASE = 3900
-_L3VNI_SVI_VLAN_MAX = 3967
 
 # Border-leaf port roles facing a firewall / load-balancer HA member — the
 # values of generators/connections.py's BORDER_ROLE_FOR_SERVICES. Such a port
 # carrying segment VLANs is a tagged L2 trunk (never also the routed parent of
 # pbr-mode FirewallContext sub-interfaces; the segment generator refuses that).
 _SERVICE_TRUNK_ROLES = frozenset({"firewall", "load-balancer"})
-
-
-# namespace_type of the INTERNET VRF. It is one VRF for the whole network, so
-# its L3 route-target is global rather than per fabric (_l3_route_target).
-_INTERNET_NAMESPACE_TYPE = "internet"
-
-
-def _collect_l3_vni_from_namespaces(namespaces) -> list[dict[str, Any]]:
-    """Collect unique L3 VNI (VRF) mappings from an iterable of namespace dicts.
-
-    Each mapping also carries ``svi_vlan_id``: the local VLAN the NX-OS
-    templates hang the L3 VNI's `ip forward` SVI on. Assigned by position in the
-    VRF-name-sorted list so it is stable for a given set of VRFs on a given
-    device — see _L3VNI_SVI_VLAN_BASE for why local stability is sufficient.
-    """
-    seen: dict[str, dict] = {}
-    for ns in namespaces:
-        ns_name = ns.get("name")
-        l3_vni = ns.get("l3_vni")
-        if ns_name and ns_name != "default" and l3_vni and ns_name not in seen:
-            seen[ns_name] = {
-                "vrf_name": ns_name,
-                "l3_vni": l3_vni,
-            }
-            if ns.get("namespace_type") == _INTERNET_NAMESPACE_TYPE:
-                seen[ns_name]["namespace_type"] = _INTERNET_NAMESPACE_TYPE
-    mappings = sorted(seen.values(), key=lambda v: v.get("vrf_name", ""))
-    for index, mapping in enumerate(mappings):
-        svi_vlan_id = _L3VNI_SVI_VLAN_BASE + index
-        if svi_vlan_id > _L3VNI_SVI_VLAN_MAX:
-            _log.warning(
-                "VRF %s: no local VLAN left in the L3 VNI SVI band %s-%s (%s VRFs on this "
-                "device). NX-OS symmetric IRB will not be rendered for it; widen the band "
-                "and lower CUSTOMER_VLAN_ID_MAX to match.",
-                mapping["vrf_name"],
-                _L3VNI_SVI_VLAN_BASE,
-                _L3VNI_SVI_VLAN_MAX,
-                len(mappings),
-            )
-            mapping["svi_vlan_id"] = None
-        else:
-            mapping["svi_vlan_id"] = svi_vlan_id
-    return mappings
 
 
 def _stretch_rt_anchor(segment: dict[str, Any]) -> int | None:
@@ -129,59 +83,36 @@ def _multisite_vrf_site_asns(activations: list[dict[str, Any]]) -> dict[str, set
     return by_vrf
 
 
-def _is_multisite_segment(segment: dict[str, Any]) -> bool:
-    """True when a stretched segment is active in more than one deployment."""
-    if (segment.get("stretch_scope") or "local") == "local":
-        return False
-    deployment_ids = {
-        dep_id
-        for dep in segment.get("segment_deployments") or []
-        for dep_id in [((dep or {}).get("deployment") or {}).get("id")]
-        if dep_id
+def _l2_mapping(l2: L2Instance) -> dict[str, Any]:
+    """The L2 VNI mapping dict the templates read, from a neutral L2 instance."""
+    return {
+        "vlan_id": l2.vlan_id,
+        "vni": l2.instance_id,
+        "name": l2.name,
+        "gateway_ip": l2.gateway_ip,
+        "gateway_ipv6": l2.gateway_ipv6,
+        "arp_suppression": l2.arp_suppression,
+        "vrf": l2.vrf,
+        "l3_vni": l2.l3_instance_id,
+        "multisite": l2.stretched,
     }
-    return len(deployment_ids) > 1
+
+
+def _l3_mapping(l3: L3Instance) -> dict[str, Any]:
+    """The L3 VNI (VRF) mapping dict the templates read, from a neutral L3 instance."""
+    mapping: dict[str, Any] = {"vrf_name": l3.vrf, "l3_vni": l3.instance_id}
+    if l3.default_exit:
+        mapping["namespace_type"] = _INTERNET_NAMESPACE_TYPE
+    mapping["svi_vlan_id"] = l3.svi_vlan_id
+    return mapping
 
 
 def _l2_from_activations(activations: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Build L2 VNI mappings from SegmentDeployment records."""
-    mappings: list[dict[str, Any]] = []
-    seen: set[int] = set()
-    for act in activations:
-        vlan_id = act.get("vlan_id")
-        vni = act.get("vni")
-        if not vlan_id or vlan_id in seen:
-            continue
-        if not vni:
-            # No VNI → traditional VLAN, skip from VNI mappings
-            continue
-        seg = act.get("segment") or {}
-        gateway_ip, gateway_ipv6, vrf, l3_vni = _get_segment_gateways(seg)
-        mappings.append(
-            {
-                "vlan_id": vlan_id,
-                "vni": vni,
-                "name": seg.get("customer_name") or seg.get("name") or f"VLAN_{vlan_id}",
-                "gateway_ip": gateway_ip,
-                "gateway_ipv6": gateway_ipv6,
-                "arp_suppression": seg.get("arp_suppression", True),
-                "vrf": vrf,
-                "l3_vni": l3_vni,
-                "multisite": _is_multisite_segment(seg),
-                "rt_anchor_asn": _stretch_rt_anchor(seg),
-            }
-        )
-        seen.add(vlan_id)
-    mappings.sort(key=lambda m: m.get("vlan_id") or 0)
-    return mappings
-
-
-def _l3_from_activations(
-    activations: list[dict[str, Any]], extra_namespaces: list[dict[str, Any]] | None = None
-) -> list[dict[str, Any]]:
-    """Build L3 VNI (VRF) mappings from SegmentDeployment records plus extra namespaces."""
-    return _collect_l3_vni_from_namespaces(
-        [*(_get_segment_namespace(act.get("segment") or {}) for act in activations), *(extra_namespaces or [])]
-    )
+    """L2 VNI mappings from SegmentDeployment records, each with its stretched-segment RT anchor."""
+    return [
+        {**_l2_mapping(l2_instance(act)), "rt_anchor_asn": _stretch_rt_anchor(act.get("segment") or {})}
+        for act in vni_activations(activations)
+    ]
 
 
 def _is_bgw(data: dict[str, Any], fabric_rt_asn: int | None) -> bool:
@@ -461,23 +392,14 @@ def get_interfaces(
 # Following netlab's approach: single implementation, platform-agnostic data model
 
 
-# Used when a fabric leaves TopologySegmentHosting.evpn_anycast_gateway_mac unset.
-# 00:1c:73 is Arista's OUI and this is the value their EVPN reference designs use,
-# which is why it is the default here rather than something invented. It is only a
-# default: what actually matters is that every VTEP in one fabric uses the SAME
-# value, so set evpn_anycast_gateway_mac explicitly on any fabric where a
-# vendor-neutral or site-specific MAC is wanted.
-_DEFAULT_ANYCAST_GATEWAY_MAC = "00:1c:73:00:dc:01"
-
-
 def _select_evpn_bgp_process(device_capabilities: list[dict[str, Any]]) -> dict[str, Any] | None:
     """Return the BGP process that carries this device's EVPN overlay.
 
     Discriminates on ``typename``, which is what clean_data actually produces.
     The previous filter here was ``service_type == "bgp"`` — ManagedBGP has no
     ``service_type`` attribute at all, so it matched nothing, which pinned
-    ``evpn.enabled`` to False and ``rt_format`` to "auto" on every VTEP in the
-    project. transforms/helpers/bgp.py already used the correct ``typename``
+    ``evpn.enabled`` to False and left every route-target unset on every VTEP in
+    the project. transforms/helpers/bgp.py already used the correct ``typename``
     form; this brings VXLAN in line with it.
 
     Then selects on ``process_role``, which generators/helpers/routing.py writes
@@ -577,27 +499,6 @@ def _warn_unencodable_vnis(
         )
 
 
-def _interface_address(iface: dict[str, Any]) -> str | None:
-    ip_address = (iface.get("ip_addresses") or [None])[0] or iface.get("ip_address")
-    if isinstance(ip_address, dict) and ip_address.get("address"):
-        return host_ip(ip_address["address"])
-    return None
-
-
-def _select_vtep_interface(interfaces: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """Return the NVE source interface.
-
-    A dedicated role=loopback-vtep interface wins — the colocation edges get
-    one because their IPv4 Loopback0 cannot be the VTEP of an IPv6 DCI.
-    Otherwise Loopback0 by convention, matched case-insensitively: NX-OS
-    names it `loopback0`, which an exact "Loopback0" match never found.
-    """
-    dedicated = [iface for iface in interfaces if iface.get("role") == "loopback-vtep"]
-    if dedicated:
-        return sorted(dedicated, key=lambda iface: iface.get("name") or "")[0]
-    return next((iface for iface in interfaces if "loopback0" in (iface.get("name") or "").lower()), None)
-
-
 def _get_multisite_config(
     data: dict[str, Any],
     device_role: str,
@@ -661,73 +562,68 @@ def _get_multisite_config(
     }
 
 
-def get_vxlan_config(
-    data: dict,
-    platform: str,
-    device_role: str = "leaf",
-    activations: list[dict[str, Any]] | None = None,
-    fabric_rt_asn: int | None = None,
-    fabric_anycast_mac: str | None = None,
-) -> dict | None:
-    """Get VXLAN configuration with microsegmentation support.
+@dataclass(frozen=True)
+class EvpnInputs:
+    """What the EVPN renderer needs beyond the neutral overlay model: this device's BGP/EVPN state.
 
-    Builds L2/L3 VNI mappings from SegmentDeployment records.
-
-    Args:
-        data: Device data from GraphQL query
-        platform: Platform name (arista_eos, cisco_nxos, dell_sonic, etc.)
-        device_role: Device role (leaf, border-leaf, tor, access-leaf, border-spine)
-        activations: List of SegmentDeployment dicts for this deployment
-        fabric_rt_asn: Fabric-wide administrative ASN used as the route-target
-            admin field (``TopologySegmentHosting.evpn_rt_as``). Must be the
-            same for every VTEP in a fabric — see rt_asn in the body.
-        fabric_anycast_mac: Fabric-wide anycast-gateway MAC
-            (``TopologySegmentHosting.evpn_anycast_gateway_mac``). Falls back to
-            ``_DEFAULT_ANYCAST_GATEWAY_MAC`` when the fabric does not set one.
-
-    Returns:
-        VXLAN configuration dict or None if VXLAN not needed
+    ``rt_anchor_by_vlan`` maps each L2 VLAN to the admin ASN its stretched segment anchors on
+    (None for a local segment); ``remote_site_asns_by_vrf`` holds the site ASNs of every VRF's
+    Multi-Site segments. ``device_data`` is the device's raw GraphQL data, read for the
+    Multi-Site border-gateway block only.
     """
-    # Spine/super-spine/hyper-spine are underlay+EVPN-route-reflector only —
-    # never VTEPs, never terminate VXLAN. Gated here (not just by callers'
-    # query shape or generator wiring) so this function is self-defending
-    # regardless of what data happens to reach it.
-    if device_role not in VTEP_ROLES:
-        return None
 
-    interfaces = data.get("interfaces", [])
+    device_data: dict[str, Any]
+    fabric_rt_asn: int | None
+    local_as: int | None
+    evpn_enabled: bool
+    overlay_is_ebgp: bool
+    router_id: str | None
+    rt_anchor_by_vlan: Mapping[int, int | None]
+    remote_site_asns_by_vrf: Mapping[str, set[int]]
 
-    # A BGW with an upstream transit session also needs the INTERNET L3 VNI, with
-    # or without stretched segments (an edge usually has none).
-    internet_namespaces = _internet_session_namespaces(data) if _is_bgw(data, fabric_rt_asn) else []
-    if not activations and not internet_namespaces:
-        return None
 
-    l2_vni_mappings = _l2_from_activations(activations or [])
-    l3_vni_mappings = _l3_from_activations(activations or [], internet_namespaces)
-
-    if not l2_vni_mappings and not l3_vni_mappings:
-        return None
-
-    # VTEP source (data plane): dedicated loopback-vtep, else Loopback0.
-    # `ipv4` is the historical key name; it holds the VTEP address of either
-    # family (the colocation BGWs source an IPv6 VTEP).
-    vtep_interface = _select_vtep_interface(interfaces)
-    vtep_ipv4 = _interface_address(vtep_interface) if vtep_interface else None
-    vtep_source = (vtep_interface or {}).get("name") or "Loopback0"
-
-    # Get BGP config for EVPN
-    device_capabilities = data.get("capabilities", [])
-    evpn_process = _select_evpn_bgp_process(device_capabilities)
+def build_evpn_inputs(
+    data: dict[str, Any], activations: list[dict[str, Any]] | None, fabric_rt_asn: int | None
+) -> EvpnInputs:
+    """This device's EVPN inputs: the overlay BGP process, the RT anchors and the Multi-Site VRF ASNs."""
+    evpn_process = _select_evpn_bgp_process(data.get("capabilities", []))
     local_as = None
-    router_id = vtep_ipv4  # Use VTEP IP as router ID
-
+    router_id = None
     if evpn_process:
         local_as = (evpn_process.get("local_as") or {}).get("asn")
         # Try to get explicit router_id if configured
         bgp_router_id = evpn_process.get("router_id", {})
         if bgp_router_id:
-            router_id = host_ip(bgp_router_id.get("address")) or vtep_ipv4
+            router_id = host_ip(bgp_router_id.get("address"))
+    return EvpnInputs(
+        device_data=data,
+        fabric_rt_asn=fabric_rt_asn,
+        local_as=local_as,
+        evpn_enabled=bool(evpn_process),
+        overlay_is_ebgp=_overlay_is_ebgp(evpn_process),
+        router_id=router_id,
+        rt_anchor_by_vlan={m["vlan_id"]: m["rt_anchor_asn"] for m in _l2_from_activations(activations or [])},
+        remote_site_asns_by_vrf=_multisite_vrf_site_asns(activations or []),
+    )
+
+
+def evpn_vxlan_context(node: OverlayNode, evpn_inputs: EvpnInputs, platform: str) -> dict:
+    """The ``vxlan`` template context: the neutral overlay plus RD, RT, imports, Multi-Site and platform keys.
+
+    Pure: neither ``node`` nor ``evpn_inputs`` is modified.
+    """
+    data = evpn_inputs.device_data
+    fabric_rt_asn = evpn_inputs.fabric_rt_asn
+    local_as = evpn_inputs.local_as
+
+    # VTEP source (data plane): the locator, else Loopback0. `ipv4` is the historical key
+    # name; it holds the VTEP address of either family.
+    vtep_source = node.locator.interface or "Loopback0"
+    vtep_ipv4 = node.locator.address
+    router_id = evpn_inputs.router_id or vtep_ipv4  # Use VTEP IP as router ID
+
+    l2_vni_mappings = [_l2_mapping(l2) for l2 in node.l2]
+    l3_vni_mappings = [_l3_mapping(l3) for l3 in node.l3]
 
     # RT admin field: fabric-wide constant, NOT this device's local ASN.
     # Under ebgp-ebgp every VTEP runs its own ASN, so `{local_as}:{vni}` makes
@@ -739,7 +635,7 @@ def get_vxlan_config(
     # ebgp-ibgp/ospf-ibgp, so those strategies stay correct even where the
     # relationship has not been populated yet.
     rt_asn = fabric_rt_asn if fabric_rt_asn else local_as
-    if not fabric_rt_asn and _overlay_is_ebgp(evpn_process):
+    if not fabric_rt_asn and evpn_inputs.overlay_is_ebgp:
         # The fallback is only safe when the overlay ASN is itself fabric-wide,
         # i.e. iBGP. Here it is not: an eBGP overlay means a per-device ASN, so
         # every VTEP is about to derive a DIFFERENT route-target for the same
@@ -760,23 +656,22 @@ def get_vxlan_config(
     # Per-mapping route-target: the fabric's own RT, except for a stretched
     # segment, which every site anchors on the same admin ASN (_stretch_rt_anchor).
     for mapping in l2_vni_mappings:
-        admin = mapping.pop("rt_anchor_asn", None) or rt_asn
+        admin = evpn_inputs.rt_anchor_by_vlan.get(mapping["vlan_id"]) or rt_asn
         mapping["route_target"] = f"{admin}:{mapping['vni']}" if admin else None
 
     # Per-VRF imports of the other sites' L3 route-targets (see
-    # _multisite_vrf_site_asns); this fabric's own RT stays rt_format.
-    site_asns_by_vrf = _multisite_vrf_site_asns(activations or [])
+    # _multisite_vrf_site_asns); this fabric's own RT is the mapping's route_target.
     for mapping in l3_vni_mappings:
         mapping["route_target"] = _l3_route_target(mapping, rt_asn)
-        remote_asns = sorted(site_asns_by_vrf.get(mapping["vrf_name"], set()) - {rt_asn})
+        remote_asns = sorted(evpn_inputs.remote_site_asns_by_vrf.get(mapping["vrf_name"], set()) - {rt_asn})
         mapping["import_route_targets"] = [f"{asn}:{mapping['l3_vni']}" for asn in remote_asns]
 
-    multisite = _get_multisite_config(data, device_role, fabric_rt_asn, vtep_source=vtep_source)
+    multisite = _get_multisite_config(data, node.role, fabric_rt_asn, vtep_source=vtep_source)
 
     # Base VXLAN config with microsegmentation support (platform-agnostic)
     base_config = {
         "enabled": True,
-        "role": device_role,
+        "role": node.role,
         "vtep": {
             "source_interface": vtep_source,
             "ipv4": vtep_ipv4,
@@ -788,7 +683,6 @@ def get_vxlan_config(
         "l2_vni_mappings": l2_vni_mappings,
         # L3 VNIs for VRF segments (microsegmentation)
         "l3_vni_mappings": l3_vni_mappings,
-        "flooding": "evpn",  # Use EVPN when BGP is available
         # Explicit RD/RT, deliberately NOT the `rd auto` / `route-target both
         # auto` of the .dev/scenariusze.txt reference configs. Do not "fix" this
         # back toward the reference; three reasons it cannot be used here:
@@ -801,18 +695,15 @@ def get_vxlan_config(
         #      and SR OS has auto-RD but no auto-RT.
         #   3. An `auto` value is invisible to Infrahub, so no check can assert
         #      that a fabric's VTEPs actually agree on it.
-        # A None format means "let the platform derive it": templates must then
-        # omit the line entirely rather than emitting the literal word `auto`,
+        # A None route_target means "let the platform derive it": templates must
+        # then omit the line entirely rather than emitting the literal word `auto`,
         # which is valid NX-OS/EOS but a syntax error in FRR.
         "evpn": {
-            "enabled": bool(evpn_process),
+            "enabled": evpn_inputs.evpn_enabled,
             # RD is deliberately per-VTEP: its whole job is to make the same
             # segment's routes distinguishable per advertising VTEP, so it uses
             # this device's own overlay router-id.
             "rd_format": f"{router_id}:{{vni}}" if router_id else None,
-            # RT is deliberately fabric-wide: every VTEP must derive the SAME
-            # value for a given VNI or imports never match. See rt_asn above.
-            "rt_format": f"{rt_asn}:{{vni}}" if rt_asn else None,
         },
         # Microsegmentation metadata
         "microsegmentation": {
@@ -828,18 +719,62 @@ def get_vxlan_config(
         # Platform-agnostic here so _platform_vxlan_config inherits it
         # without recomputing per platform.
         "anycast_gateway": {
-            "enabled": any(m.get("gateway_ip") for m in l2_vni_mappings),
-            "mac": fabric_anycast_mac or _DEFAULT_ANYCAST_GATEWAY_MAC,
+            "enabled": node.gateway.enabled,
+            "mac": node.gateway.mac,
         },
     }
 
     return _platform_vxlan_config(base_config, platform)
 
 
+def get_vxlan_config(
+    data: dict,
+    platform: str,
+    device_role: str = "leaf",
+    activations: list[dict[str, Any]] | None = None,
+    fabric_rt_asn: int | None = None,
+    fabric_anycast_mac: str | None = None,
+) -> dict | None:
+    """Get VXLAN configuration with microsegmentation support.
+
+    The composition of the neutral overlay model (build_overlay_node) and its EVPN
+    rendering (evpn_vxlan_context). Builds L2/L3 VNI mappings from SegmentDeployment records.
+
+    Args:
+        data: Device data from GraphQL query
+        platform: Platform name (arista_eos, cisco_nxos, dell_sonic, etc.)
+        device_role: Device role (leaf, border-leaf, tor, access-leaf, border-spine)
+        activations: List of SegmentDeployment dicts for this deployment
+        fabric_rt_asn: Fabric-wide administrative ASN used as the route-target
+            admin field (``TopologySegmentHosting.evpn_rt_as``). Must be the
+            same for every VTEP in a fabric — see rt_asn in evpn_vxlan_context.
+        fabric_anycast_mac: Fabric-wide anycast-gateway MAC
+            (``TopologySegmentHosting.evpn_anycast_gateway_mac``). Falls back to
+            ``_DEFAULT_ANYCAST_GATEWAY_MAC`` when the fabric does not set one.
+
+    Returns:
+        VXLAN configuration dict or None if VXLAN not needed
+    """
+    # A BGW with an upstream transit session also needs the INTERNET L3 VNI, with
+    # or without stretched segments (an edge usually has none).
+    default_exit_namespaces = _internet_session_namespaces(data) if _is_bgw(data, fabric_rt_asn) else []
+    node = build_overlay_node(
+        data.get("interfaces", []),
+        device_role,
+        activations or [],
+        default_exit_namespaces,
+        fabric_anycast_mac or _DEFAULT_ANYCAST_GATEWAY_MAC,
+    )
+    if node is None:
+        return None
+    return evpn_vxlan_context(node, build_evpn_inputs(data, activations, fabric_rt_asn), platform)
+
+
 # Platform-specific keys added to the platform-agnostic VXLAN config (netlab style).
 _PLATFORM_VXLAN_KEYS: dict[str, dict[str, str]] = {
     "arista_eos": {"interface": "Vxlan1"},
     "cisco_nxos": {"nve_interface": "nve1"},
+    "cisco_xe": {"nve_interface": "nve1", "replication_type": "static"},
     "sonic": {"interface": "vtep"},
     "dell_sonic": {"interface": "vtep"},
 }

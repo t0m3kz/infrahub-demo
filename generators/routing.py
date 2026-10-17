@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 from .helpers import PendingASRef, RoutingPlanInput, RoutingPlanner, RoutingStrategy
 from .helpers.common import retry_delay, save_with_node_not_found_retry
-from .helpers.routing import _safe_device_name
+from .helpers.routing import LISP_OVERLAY, _safe_device_name, overlay_control_plane_of
 from .protocols import (
     DcimVirtualInterface,
     ManagedBGP,
@@ -59,6 +59,10 @@ def _super_spine_as_description(fabric_name: str) -> str:
     return f"{fabric_name} super-spine underlay ASN"
 
 
+def _lisp_site_key_name(fabric_name: str) -> str:
+    return f"{fabric_name}-lisp-site-key"
+
+
 def _overlay_as_description(fabric_name: str) -> str:
     return f"{fabric_name} overlay ASN for iBGP EVPN"
 
@@ -84,7 +88,7 @@ class RoutingMixin:
     data: Any
     # PoolMixin.resource_lock — a Callable attribute, not a stub, so it never shadows the real one.
     resource_lock: Callable[[str], AbstractAsyncContextManager[None]]
-    # PoolMixin.attach_refs — attaches the fabric AS to the deployment as evpn_rt_as.
+    # PoolMixin.attach_refs — attaches the fabric AS (evpn_rt_as) or LISP site key (lisp_site_key) to the deployment.
     attach_refs: Callable[..., Awaitable[None]]
 
     async def create_routing(
@@ -114,13 +118,21 @@ class RoutingMixin:
             options = RoutingOptions()
         if p2p_interfaces is None:
             p2p_interfaces = []
-        routing_strategy = (options.get("design") or {}).get("routing_strategy")
+        design = options.get("design") or {}
+        routing_strategy = design.get("routing_strategy")
+        # "lisp": the overlay is LISP, so the fabric has no overlay BGP, no
+        # overlay AS and no EVPN address family — only the OSPF underlay below.
+        lisp = overlay_control_plane_of(design) == LISP_OVERLAY
 
         if not routing_strategy:
             self.logger.warning("No design or routing strategy provided")
             return
         if routing_strategy not in {s.value for s in RoutingStrategy}:
             self.logger.warning(f"Routing strategy '{routing_strategy}' not supported")
+            return
+
+        if lisp and options.get("skip_underlay"):
+            self.logger.info("LISP overlay and no underlay requested: no routing to create")
             return
 
         all_device_names = bottom_devices + top_devices
@@ -144,9 +156,14 @@ class RoutingMixin:
         # re-sleeping) independently in sequence.
         interfaces = [iface for pair in p2p_interfaces for iface in pair]
 
-        needs_overlay_as = not options.get("overlay_as_id") and routing_strategy in (
-            RoutingStrategy.EBGP_IBGP,
-            RoutingStrategy.OSPF_IBGP,
+        needs_overlay_as = (
+            not lisp
+            and not options.get("overlay_as_id")
+            and routing_strategy
+            in (
+                RoutingStrategy.EBGP_IBGP,
+                RoutingStrategy.OSPF_IBGP,
+            )
         )
         needs_ospf_area = (
             not options.get("ospf_area_id")
@@ -158,7 +175,7 @@ class RoutingMixin:
         # add-on, not required for connectivity, so routing creation proceeds without it
         # even if the retry loop below never finds them.
         needs_underlay_password = not options.get("underlay_password_id") and not options.get("skip_underlay")
-        needs_overlay_password = not options.get("overlay_password_id")
+        needs_overlay_password = not lisp and not options.get("overlay_password_id")
 
         overlay_as_id = options.get("overlay_as_id")
         ospf_area_id = options.get("ospf_area_id")
@@ -206,7 +223,7 @@ class RoutingMixin:
             overlay_device_names = {
                 name for b in all_bgp if b.process_role.value == "overlay" and (name := _safe_device_name(b))
             }
-            missing_overlay_bgp = top_device_set - overlay_device_names
+            missing_overlay_bgp = set() if lisp else top_device_set - overlay_device_names
 
             still_missing = (
                 (needs_overlay_as and not overlay_as_id)
@@ -306,7 +323,7 @@ class RoutingMixin:
         # the next regression from being invisible.
         planner = RoutingPlanner(deployment_id=self.deployment_id, logger=self.logger, strict=True)
 
-        evpn_af_id = await self.ensure_address_family(*EVPN_AF)
+        evpn_af_id = "" if lisp else await self.ensure_address_family(*EVPN_AF)
 
         plan = planner.build_routing_plan(
             RoutingPlanInput(
@@ -325,6 +342,7 @@ class RoutingMixin:
                 underlay_password_id=options.get("underlay_password_id") or "",
                 overlay_password_id=options.get("overlay_password_id") or "",
                 mlag_pairs=mlag_pairs,
+                overlay_control_plane=overlay_control_plane_of(design),
             )
         )
 
@@ -514,10 +532,24 @@ class RoutingMixin:
             name=_underlay_key_name(self.fabric_name),
             description=f"Shared eBGP/OSPF underlay auth key for {self.fabric_name}",
         )
-        await self._ensure_routing_password(
-            name=_overlay_key_name(self.fabric_name),
-            description=f"Shared BGP overlay/EVPN auth key for {self.fabric_name}",
-        )
+        lisp = overlay_control_plane_of(self.data) == LISP_OVERLAY
+        if lisp:
+            # LISP has no BGP overlay (no overlay key, no overlay AS): the
+            # border-leafs' map-server site authenticates the edge ETRs with
+            # this one key. Reached by transforms as the deployment's
+            # lisp_site_key, the way the overlay AS is as evpn_rt_as.
+            site_key_id = await self._ensure_routing_password(
+                name=_lisp_site_key_name(self.fabric_name),
+                description=f"Shared LISP map-server site key for {self.fabric_name}",
+            )
+            await self.attach_refs(
+                kind="TopologySegmentHosting", node_id=deployment_id, refs={"lisp_site_key": site_key_id}
+            )
+        else:
+            await self._ensure_routing_password(
+                name=_overlay_key_name(self.fabric_name),
+                description=f"Shared BGP overlay/EVPN auth key for {self.fabric_name}",
+            )
 
         strategy = self.data.get("routing_strategy", "ebgp-ebgp")
 
@@ -548,12 +580,16 @@ class RoutingMixin:
         # The description string is the idempotency key and deliberately
         # unchanged, so existing fabrics keep their AS object rather than
         # silently getting a second one.
-        overlay_desc = _overlay_as_description(self.fabric_name)
-        try:
-            as_id = await self._ensure_overlay_as(description=overlay_desc, overlay_asn=overlay_asn)
-            await self.attach_refs(kind="TopologySegmentHosting", node_id=deployment_id, refs={"evpn_rt_as": as_id})
-        except Exception as exc:
-            self.logger.error(f"Failed to create shared overlay AS: {exc}")
+        #
+        # Not under LISP: no RT is derived and no overlay BGP exists, so there is
+        # no fabric AS to stamp anywhere.
+        if not lisp:
+            overlay_desc = _overlay_as_description(self.fabric_name)
+            try:
+                as_id = await self._ensure_overlay_as(description=overlay_desc, overlay_asn=overlay_asn)
+                await self.attach_refs(kind="TopologySegmentHosting", node_id=deployment_id, refs={"evpn_rt_as": as_id})
+            except Exception as exc:
+                self.logger.error(f"Failed to create shared overlay AS: {exc}")
 
         if strategy == RoutingStrategy.OSPF_IBGP.value:
             area_name = _ospf_area_name(self.fabric_name)

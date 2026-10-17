@@ -49,6 +49,7 @@ class TopologyDcData(TypedDict, total=False):
     connectivity_mode: str
     underlay_protocol: str
     routing_strategy: str
+    overlay_control_plane: str
     fabric_templates: list[dict[str, Any]]
     loopback_pool: dict[str, Any] | None
     technical_pool: dict[str, Any] | None

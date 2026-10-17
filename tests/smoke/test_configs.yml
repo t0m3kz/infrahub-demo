@@ -144,6 +144,26 @@ infrahub_tests:
         spec:
           kind: python-transform-unit-process
           directory: configs/leaf_arista_eos_gpo_reference_staged
+      - name: cisco_xe_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_cisco_xe_ebgp_ibgp
+      - name: cisco_xe_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_cisco_xe_ospf_ibgp
+      - name: cisco_xe_lisp_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_cisco_xe_lisp_ospf_ibgp
+      - name: cisco_xe_lisp_hostless
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_cisco_xe_lisp_hostless
   - resource: PythonTransform
     resource_name: spine
     tests:
@@ -343,6 +363,21 @@ infrahub_tests:
         spec:
           kind: python-transform-unit-process
           directory: configs/border_leaf_cisco_nxos_bgw_stretched
+      - name: cisco_xe_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/border_leaf_cisco_xe_ebgp_ibgp
+      - name: cisco_xe_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/border_leaf_cisco_xe_ospf_ibgp
+      - name: cisco_xe_lisp_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/border_leaf_cisco_xe_lisp_ospf_ibgp
   - resource: PythonTransform
     resource_name: access_leaf
     tests:
@@ -356,6 +391,16 @@ infrahub_tests:
         spec:
           kind: python-transform-unit-process
           directory: configs/access_leaf_arista_eos_gpo_reference
+      - name: cisco_xe_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/access_leaf_cisco_xe_ebgp_ibgp
+      - name: cisco_xe_lisp_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/access_leaf_cisco_xe_lisp_ospf_ibgp
   - resource: PythonTransform
     resource_name: tor
     tests:

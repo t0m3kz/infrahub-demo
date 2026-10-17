@@ -71,3 +71,10 @@ infrahub_tests:
       - name: syntax_check
         spec:
           kind: check-smoke
+
+  - resource: Check
+    resource_name: validate_lisp_fabric
+    tests:
+      - name: syntax_check
+        spec:
+          kind: check-smoke

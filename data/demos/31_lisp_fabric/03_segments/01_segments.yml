@@ -1,0 +1,30 @@
+---
+# Two VXLAN segments, one per footprint. Prefix and anycast gateway (.1) are allocated by
+# add_vxlan_segment from the tenant pool of the segment's VRF (data/bootstrap/23b_tenant_pools.yml),
+# the VNI from DC13's pool. Each gateway makes the segment an L2 and an L3 instance-id on the
+# border-leafs' LISP site. No host port carries them (see README: a cisco_xe leaf cannot render
+# the SVI ACL a hosted tenant segment gets).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: OrganizationCustomer
+  data:
+    - name: "Iberia Lisp Demo S.A."
+      org_id: "LISP1"
+      network_segments:
+        - kind: ManagedVxlanSegment
+          data:
+            customer_name: "web"
+            environment: "p"
+            customer_deployments:
+              - "LISP1-P-DC13"
+            member_of_groups:
+              - vxlan_segments
+        - kind: ManagedVxlanSegment
+          data:
+            customer_name: "app"
+            environment: "d"
+            customer_deployments:
+              - "LISP1-D-DC13"
+            member_of_groups:
+              - vxlan_segments
