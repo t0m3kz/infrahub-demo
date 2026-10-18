@@ -27,6 +27,10 @@ _TOPOLOGY_KINDS = (
     "TopologyCustomerCloud",
 )
 
+# An office is always production (it has no environment attribute); a cloud footprint is not environment-scoped
+# (its accounts and segments carry the environment). Only DC/colocation footprints read `environment` from the node.
+_OFFICE_ENVIRONMENT = "p"
+
 
 def _first_topology_deployment(cleaned: dict[str, Any]) -> dict[str, Any] | None:
     for kind in _TOPOLOGY_KINDS:
@@ -34,18 +38,14 @@ def _first_topology_deployment(cleaned: dict[str, Any]) -> dict[str, Any] | None
         if entries:
             deployment = dict(entries[0])
             deployment["kind"] = kind
+            if kind == "TopologyCustomerOffice":
+                deployment["environment"] = _OFFICE_ENVIRONMENT
             return deployment
     return None
 
 
 def _deployment_org_id(deployment: dict[str, Any]) -> str:
-    owner = deployment.get("owner") or {}
-    if owner.get("org_id"):
-        return owner["org_id"]
-    # TopologyCustomerOffice has no owner of its own — it groups under
-    # TopologyOfficeCustomer (deployment.parent), which carries owner.
-    parent_owner = ((deployment.get("parent") or {}).get("owner")) or {}
-    return parent_owner.get("org_id", "")
+    return (deployment.get("owner") or {}).get("org_id", "")
 
 
 def _deployment_parent_name(deployment: dict[str, Any]) -> str:
@@ -67,7 +67,7 @@ def _topology_ansible(deployment: dict[str, Any]) -> str:
         f"    infrahub_id: {deployment.get('id', '')}",
         f"    infrahub_kind: {deployment.get('kind', '')}",
         f"    owner_org_id: {_deployment_org_id(deployment)}",
-        f"    environment: {deployment.get('environment', '')}",
+        *([f"    environment: {deployment['environment']}"] if deployment.get("environment") else []),
         f"    parent: {_deployment_parent_name(deployment)}",
     ]
     return "\n".join(lines) + "\n"
@@ -78,7 +78,7 @@ def _topology_terraform(deployment: dict[str, Any]) -> str:
         f'infrahub_id       = "{deployment.get("id", "")}"',
         f'infrahub_kind     = "{deployment.get("kind", "")}"',
         f'owner_org_id      = "{_deployment_org_id(deployment)}"',
-        f'environment       = "{deployment.get("environment", "")}"',
+        *([f'environment       = "{deployment["environment"]}"'] if deployment.get("environment") else []),
         f'parent            = "{_deployment_parent_name(deployment)}"',
     ]
     return "\n".join(lines) + "\n"
@@ -95,7 +95,7 @@ def _topology_argocd(deployment: dict[str, Any]) -> str:
                 "infrahub-id": deployment.get("id", ""),
                 "infrahub-kind": deployment.get("kind", ""),
                 "owner-org-id": _deployment_org_id(deployment),
-                "environment": deployment.get("environment", ""),
+                **({"environment": deployment["environment"]} if deployment.get("environment") else {}),
             },
         },
         "spec": {
@@ -121,7 +121,7 @@ def _topology_github_actions(deployment: dict[str, Any]) -> str:
             "infrahub_id": deployment.get("id", ""),
             "infrahub_kind": deployment.get("kind", ""),
             "owner_org_id": _deployment_org_id(deployment),
-            "environment": deployment.get("environment", ""),
+            **({"environment": deployment["environment"]} if deployment.get("environment") else {}),
             "parent": _deployment_parent_name(deployment),
         },
     }

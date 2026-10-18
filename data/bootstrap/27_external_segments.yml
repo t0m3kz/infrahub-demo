@@ -19,6 +19,7 @@ spec:
   data:
     - owner: "INTERNET"
       customer_name: "Internet"
+      environment: "p"
       description: "The public internet — any address outside the managed namespaces"
       segment_type: vlan
       pbr_enabled: false

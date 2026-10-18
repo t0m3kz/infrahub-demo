@@ -423,13 +423,9 @@ spec:
     #
     # Customer deployments: one generator definition per kind, each targeting
     # that kind's CoreGeneratorGroup (customer_deployments_dc/colocation/
-    # cloud/office). Every footprint in the demo data already joins its
-    # per-kind group (the add_customer_deployment_* and add_sdwan_edge
-    # created-triggers require it), whereas the shared customer_deployments
-    # group has no members, so a rule dispatching into it would raise for
-    # every node (see the endpoint note above).
-    # TopologyCustomerSaas carries infrastructure_orchestrator too but has no
-    # target group and is not a query root of TopologyOrchestratorRoutingGenerator.
+    # cloud/office). Every footprint in the demo data joins its per-kind group
+    # (the add_customer_deployment_* and add_sdwan_edge created-triggers
+    # require it).
     - name: trigger-application-orchestrator-routing-on-created
       branch_scope: "other_branches"
       node_kind: AppApplication
@@ -522,13 +518,8 @@ spec:
     # TopologyCustomerCloud/Office had no fabric of their own — their only job
     # was hub-and-spoke exchange auto-provisioning, now replaced by the
     # per-context TopologyRoutedExchange objects the DC/colocation customer
-    # generators create (docs/exchange_gateway.md), so those two generators/triggers were removed
-    # rather than left as no-ops. Regressed in c1b686e7 (removed
-    # trigger-exchange-gateway-on-customer-*-created without a replacement,
-    # leaving these generators — targets: customer_deployments, a
-    # CoreStandardGroup, never a CoreGeneratorGroup — permanently
-    # undispatched): no ManagedFirewallContext/dedicated LoadbalancerHA was
-    # ever created for any TopologyCustomerDC/Colocation boarded since.
+    # generators create (docs/exchange_gateway.md), so those two
+    # generators/triggers were removed rather than left as no-ops.
     - name: trigger-customer-deployment-dc-on-created
       branch_scope: "other_branches"
       node_kind: TopologyCustomerDC

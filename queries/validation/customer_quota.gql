@@ -1,0 +1,106 @@
+# validate_customer_quota (checks/customer_quota.py): what each DC customer
+# footprint with a design uses, against the numbers its design carries.
+#   - TopologyCustomerDC: the design's quota (max_segments, ports_<speed>g) and
+#     the DC the footprint hangs off (a port counts for a footprint only in its DC).
+#   - ManagedVxlanSegment / ManagedVlanSegment: the footprints each names and the
+#     switch ports tagged with it (its `capabilities`). A port's speed is its
+#     interface_type; a port-channel carries its member ports' speeds. role tells
+#     the host-facing ports from the border-leaf firewall/load-balancer ports;
+#     the device's deployment (a pod, a colocation zone) is how the port is placed
+#     in a DC. security_zone: an exchange-zone segment is a shared service.
+query customer_quota {
+  TopologyCustomerDC {
+    edges {
+      node {
+        id
+        name { value }
+        parent { node { id name { value } } }
+        design {
+          node {
+            id
+            name { value }
+            max_segments { value }
+            ports_25g { value }
+            ports_100g { value }
+          }
+        }
+      }
+    }
+  }
+
+  ManagedVxlanSegment {
+    edges {
+      node {
+        id
+        name { value }
+        security_zone { node { name { value } } }
+        customer_deployments { edges { node { id name { value } } } }
+        capabilities {
+          edges {
+            node {
+              id
+              __typename
+              role { value }
+              device {
+                node {
+                  ... on DcimPhysicalDevice {
+                    deployment {
+                      node {
+                        id
+                        __typename
+                        ... on TopologyPod { parent { node { id name { value } } } }
+                        ... on TopologyColocationZone { parent { node { id name { value } } } }
+                      }
+                    }
+                  }
+                }
+              }
+              ... on DcimPhysicalInterface { interface_type { value } }
+              ... on DcimLAGInterface {
+                member_interfaces { edges { node { id interface_type { value } } } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  ManagedVlanSegment {
+    edges {
+      node {
+        id
+        name { value }
+        security_zone { node { name { value } } }
+        customer_deployment { node { id name { value } } }
+        capabilities {
+          edges {
+            node {
+              id
+              __typename
+              role { value }
+              device {
+                node {
+                  ... on DcimPhysicalDevice {
+                    deployment {
+                      node {
+                        id
+                        __typename
+                        ... on TopologyPod { parent { node { id name { value } } } }
+                        ... on TopologyColocationZone { parent { node { id name { value } } } }
+                      }
+                    }
+                  }
+                }
+              }
+              ... on DcimPhysicalInterface { interface_type { value } }
+              ... on DcimLAGInterface {
+                member_interfaces { edges { node { id interface_type { value } } } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

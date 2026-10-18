@@ -1,0 +1,19 @@
+---
+# C005 production footprints in DC10 and DC12.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerDC
+  data:
+    - owner: "C005"
+      environment: "p"
+      infrastructure_orchestrator: ansible_automation_platform
+      parent: "DC10"
+      design: "M_DC"
+      member_of_groups: [customer_deployments_dc]
+    - owner: "C005"
+      environment: "p"
+      infrastructure_orchestrator: ansible_automation_platform
+      parent: "DC12"
+      design: "L_DC"
+      member_of_groups: [customer_deployments_dc]

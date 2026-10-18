@@ -23,7 +23,7 @@ from generators.types import RoutingOptions
 def _mixin() -> Any:
     """A RoutingMixin standing in for a generator: mock client, no-op lock, recording attach_refs."""
     mixin: Any = RoutingMixin.__new__(RoutingMixin)
-    mixin.fabric_name = "c005-p"
+    mixin.fabric_name = "c005-office"
     mixin.deployment_id = "office-1"
     mixin.logger = MagicMock()
     mixin.client = MagicMock()
@@ -61,7 +61,7 @@ class TestEnsureLispSiteKey:
         assert site_key_id == "key-1"
         create = mixin.client.create.await_args.kwargs
         assert create["kind"] is RoutingPassword
-        assert create["data"]["name"] == "c005-p-lisp-site-key"
+        assert create["data"]["name"] == "c005-office-lisp-site-key"
         assert create["data"]["password"]
         mixin.attach_refs.assert_awaited_once_with(
             kind="TopologyCustomerOffice", node_id="office-1", refs={"lisp_site_key": "key-1"}
@@ -110,7 +110,7 @@ class TestEnsureOspfArea:
         assert area_id == "area-1"
         create = mixin.client.create.await_args.kwargs
         assert create["kind"] is RoutingOSPFArea
-        assert create["data"]["name"] == "c005-p-ospf-area-0"
+        assert create["data"]["name"] == "c005-office-ospf-area-0"
         assert create["data"]["area"] == 0
         area.save.assert_awaited_once_with(allow_upsert=True)
         assert "area-1" in mixin.client.group_context.related_node_ids

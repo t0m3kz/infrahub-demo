@@ -67,10 +67,7 @@ class ManagedController(CoreNode):
 
 
 class TopologyCustomer(CoreNode):
-    environment: Dropdown
     name: String
-    org_id: String
-    status: Dropdown
     network_segments: RelationshipManager[ManagedNetworkSegment]
     owner: RelationshipAttribute[OrganizationEntity]
 
@@ -80,7 +77,6 @@ class TopologyCustomerTemplate(CoreNode):
     dedicated_loadbalancer: Boolean
     description: StringOptional
     name: String
-    size: Dropdown
 
 
 class TopologyDeployment(CoreNode):
@@ -89,6 +85,10 @@ class TopologyDeployment(CoreNode):
 
 class TopologyDesign(CoreNode):
     name: String
+
+
+class TopologyEnvironmentScoped(CoreNode):
+    environment: Dropdown
 
 
 class DcimDevice(CoreNode):
@@ -447,12 +447,14 @@ class TopologyCustomerCloud(TopologyCustomer, TopologyDeployment, TopologyConnec
 
 
 class TopologyCustomerColocation(
-    TopologyCustomer, TopologyDeployment, TopologyConnectableLocation, ManagedTenantScoped
+    TopologyCustomer, TopologyEnvironmentScoped, TopologyDeployment, TopologyConnectableLocation, ManagedTenantScoped
 ):
     name: StringOptional
 
 
-class TopologyCustomerDC(TopologyCustomer, TopologyDeployment, TopologyConnectableLocation, ManagedTenantScoped):
+class TopologyCustomerDC(
+    TopologyCustomer, TopologyEnvironmentScoped, TopologyDeployment, TopologyConnectableLocation, ManagedTenantScoped
+):
     name: StringOptional
     design: RelationshipAttribute[TopologyCustomerTemplateDC]
 
@@ -465,7 +467,6 @@ class CloudCustomerGateway(CloudResource):
 
 
 class TopologyCustomerOffice(
-    TopologyCustomer,
     TopologyDeployment,
     TopologyPhysicalDeployment,
     TopologyDeviceHosting,
@@ -477,10 +478,13 @@ class TopologyCustomerOffice(
     fabric_templates: RelationshipManager[TopologyElement]
     locations: RelationshipManager[LocationFacility]
     lan_prefixes: RelationshipManager[IpamPrefix]
+    owner: RelationshipAttribute[OrganizationEntity]
 
 
 class TopologyCustomerTemplateDC(TopologyCustomerTemplate):
-    pass
+    max_segments: Integer
+    ports_100g: Integer
+    ports_25g: Integer
 
 
 class TopologyDataCenter(

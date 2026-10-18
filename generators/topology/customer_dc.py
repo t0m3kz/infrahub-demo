@@ -3,20 +3,29 @@
 Triggered on TopologyCustomerDC creation (see data/events/99_actions.yml's
 trigger-customer-deployment-dc-on-created rule).
 
-DC customers reach everything over the fabric's own L2 domain. Inter-VRF
-routing (PROD/NON-PROD <-> INTERNET, never PROD <-> NON-PROD) is a
-TopologyRoutedExchange per FirewallContext, `{context}-{A}-{Z}`, whose legs
-are the context's member sub-interfaces in the tenant VRF and INTERNET (a /29
-transit per context and VRF; see docs/exchange_gateway.md); there are no
-bootstrap exchanges. So this generator's job is FirewallContext (VDOM/vsys)
-provisioning, plus the context's exchange legs (FirewallContextMixin), on the
-parent DC's ManagedFirewallHA cluster: dedicated (tenant = this deployment)
-if design.dedicated_firewall is true, else ONE shared context per cluster
-(tenant unset) reused by every other customer. Same for an optional
-dedicated load-balancer HA pair (design.dedicated_loadbalancer).
+A DC customer's segments live on the fabric's own L2 domain; what this
+generator adds is the customer's place on the parent DC's firewall pair
+(FirewallContextMixin, generators/firewall_context.py):
+
+* a FirewallContext (VDOM/vsys) on the DC's ManagedFirewallHA cluster: ONE
+  shared context per cluster (tenant unset) reused by every customer, or, when
+  the footprint's design (TopologyCustomerTemplateDC) sets dedicated_firewall,
+  a dedicated virtual pair hosted on the physical peers with this customer as
+  tenant;
+* the context's transit legs (a /29 and a VLAN sub-interface per firewall
+  member, per VRF: the footprint's PROD or NON-PROD plus INTERNET and
+  MANAGEMENT), joined by a TopologyRoutedExchange `{context}-{A}-{Z}` per pair
+  (never PROD <-> NON-PROD; see docs/exchange_gateway.md);
+* the footprint's serving_firewall_context link, which the firewall transform
+  reads to place each rule;
+* a dedicated load-balancer HA pair when the design sets dedicated_loadbalancer.
+
+A dedicated request that cannot be built (the DC has no size, not exactly two
+physical peers, no matching *_CUSTOMER_<size> virtual template) is an error,
+never a silent move onto the shared context.
 
 Registered as add_customer_deployment_dc in .infrahub.yml, targeting the
-customer_deployments group and querying customer_dc.gql.
+customer_deployments_dc group and querying customer_dc.gql.
 """
 
 from __future__ import annotations

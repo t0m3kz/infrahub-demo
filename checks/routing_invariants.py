@@ -26,8 +26,8 @@ rendered config; each is a property of data that spans topologies.
    referenced by both a VPC and an on-prem segment is flagged on its own: an
    object-file upsert of an identical CIDR silently adopts the on-prem object.
 6. Office LAN prefixes. Each `TopologyCustomerOffice.lan_prefixes` prefix is
-   registered in the namespace whose type matches the footprint's environment,
-   and is held to the same overlap rule as a VPC block: inside one namespace it
+   registered in the PROD namespace (an office is always production), and is
+   held to the same overlap rule as a VPC block: inside one namespace it
    overlaps no VPC block, no other office's LAN and no on-prem prefix. These
    are the routes an office may announce into its VRF over SD-WAN.
 
@@ -40,7 +40,7 @@ import ipaddress
 from typing import Any, NamedTuple
 
 from utils.data_cleaning import clean_data
-from utils.exchange_transit import INTERNET_TYPE, namespace_type_for_environment
+from utils.exchange_transit import INTERNET_TYPE, PROD_TYPE, namespace_type_for_environment
 from utils.segment_addressing import segment_namespace
 
 from .base import WarningCheck
@@ -318,13 +318,13 @@ def _vpc_aggregates(networks: list[dict[str, Any]]) -> list[_Aggregate]:
 
 
 def _office_aggregates(offices: list[dict[str, Any]]) -> list[_Aggregate]:
-    """Each office footprint's lan_prefixes entry, expected in its own environment's namespace."""
+    """Each office footprint's lan_prefixes entry, expected in the PROD namespace (an office has no environment)."""
     return [
         _Aggregate(
             owner=f"office '{office.get('name')}'",
             noun="LAN prefix",
-            origin="its environment",
-            expected=_type_for_environment(office.get("environment")),
+            origin="its being an office (always production)",
+            expected=PROD_TYPE,
             prefix=prefix,
         )
         for office in offices

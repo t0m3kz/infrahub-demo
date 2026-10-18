@@ -282,16 +282,17 @@ class TestFirewallContextProvisioning:
         )
 
     @pytest.mark.asyncio
-    async def test_dedicated_request_without_dedicated_pair_falls_back_to_shared(self) -> None:
-        """No dedicated pair provisioned: the shared context, untracked."""
-        gen, _, cluster = self._make_gen_with_cluster()
+    async def test_dedicated_request_without_dedicated_pair_provisions_no_context(self) -> None:
+        """No dedicated pair provisioned: no shared-context fallback, no context target and no transit leg
+        (the real logger.error raises inside the pair step, which fails the run)."""
+        gen, _, _ = self._make_gen_with_cluster()
         gen._ensure_transit_legs = AsyncMock()
         gen._ensure_dedicated_device_pair = AsyncMock(return_value=None)
 
         await gen.generate(_colo_payload_with_parent(customer_id="cust-1", dedicated_firewall=True))
 
-        target = gen._ensure_transit_legs.await_args_list[-1].kwargs["target"]
-        assert (target.context_name, target.tenant_id, target.track) == (f"{cluster.name.value}-shared", None, False)
+        gen._ensure_dedicated_device_pair.assert_awaited_once()
+        gen._ensure_transit_legs.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_boarding_runs_the_shared_transit_leg_step(self) -> None:

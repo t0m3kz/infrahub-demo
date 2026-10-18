@@ -1113,8 +1113,8 @@ class TestCampusRoles:
         gen = _make_generator()
         gen.client.create = AsyncMock(
             side_effect=[
-                _mock_created_device(DcimPhysicalDevice.__name__, f"c005-p-{role}-01"),
-                _mock_created_device(ManagedStandaloneVlanDomain.__name__, f"c005-p-{role}-01-vlan-domain"),
+                _mock_created_device(DcimPhysicalDevice.__name__, f"c005-office-{role}-01"),
+                _mock_created_device(ManagedStandaloneVlanDomain.__name__, f"c005-office-{role}-01-vlan-domain"),
             ]
         )
 

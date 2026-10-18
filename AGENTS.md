@@ -244,7 +244,18 @@ class MyCheck(InfrahubCheck):
   `ManagedVxlanSegment` and `CloudNetworkSegment` inherit `ManagedNetworkSegment`; `ManagedLoadbalancerHA` and
   `CloudLoadBalancer` inherit `ManagedLoadBalancer`.
 - **Topology.Customer**: Per-facility tenant footprints (`TopologyCustomerDC`, `TopologyCustomerColocation`,
-  `TopologyCustomerCloud`, `TopologyCustomerOffice`, `TopologyCustomerSaas`) — not a separate `Customer.*` namespace; these inherit `TopologyConnectableLocation` alongside the facility nodes so a circuit endpoint is one shared relationship, not a duplicated model
+  `TopologyCustomerCloud`) — not a separate `Customer.*` namespace; these inherit `TopologyConnectableLocation`
+  alongside the facility nodes so a circuit endpoint is one shared relationship, not a duplicated model. The
+  `TopologyCustomer` generic carries only the owner-derived `name`, `infrastructure_orchestrator` and `owner`.
+  `TopologyEnvironmentScoped` adds the required `environment` and only DC and Colocation footprints inherit it;
+  a cloud footprint has no environment (`CloudAccount.environment` and the segments carry it).
+- **Office**: `TopologyCustomerOffice` is not a `TopologyCustomer`. The owner sits directly on it, its name is
+  `{OWNER}-OFFICE` (for example `C005-OFFICE`), it is always PROD (no `environment`) and its parent is the
+  "Campus and Office" `TopologyLabel`.
+- **DC service tier**: `TopologyCustomerTemplateDC` (referenced by the footprint's `design`, for example `M_DC`)
+  holds `dedicated_firewall`, `dedicated_loadbalancer`, `max_segments`, `ports_25g` and `ports_100g` (0 = no
+  host-facing ports of that speed). `checks/customer_quota.py` enforces the segment and port numbers; a footprint
+  with no `design` is not metered.
 - **Capability edges**: a capability reaches devices via `ManagedGenericDevice` and interfaces via
   `ManagedGenericInterfaces`. Inherit the second only when something reads the interface edge.
 

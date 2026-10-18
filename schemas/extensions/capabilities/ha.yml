@@ -146,8 +146,8 @@ nodes:
 
   # ── Firewall Context (VDOM/vsys) — tenant-scoped slice of a shared cluster ─
   # One ManagedFirewallHA cluster hosts many contexts: one dedicated context
-  # per high-risk tenant (critical/fintech_strict/dedicated_firewall), plus a
-  # shared "low-risk" context (tenant unset) for everyone else — see
+  # per customer whose design sets dedicated_firewall, plus a
+  # shared context (tenant unset) for everyone else — see
   # docs/firewall_service_insertion.md's namespace-per-zone pattern, now with
   # an explicit node instead of an implicit VDOM name. network_segment.
   # inline_service (peer: ManagedGeneric) can target this directly, the same

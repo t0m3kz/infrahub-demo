@@ -46,7 +46,7 @@ def _role_code(device_role: str) -> str:
 
 
 def sdwan_edge_name(office_name: str) -> str:
-    """The SD-WAN branch edge of an office footprint (``C005-P`` -> ``C005-P-EDGE1``).
+    """The SD-WAN branch edge of an office footprint (``C005-OFFICE`` -> ``C005-OFFICE-EDGE1``).
 
     The one spelling of that name: add_sdwan_edge creates the device under it and add_office_fabric looks it
     up by it to build the office's WAN exit, the two generators sharing nothing but this name.

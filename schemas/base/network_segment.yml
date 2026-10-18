@@ -36,7 +36,7 @@ generics:
       - name: environment
         kind: Dropdown
         description: "Customer Environment"
-        optional: true
+        optional: false
         order_weight: 160
         choices:
           - name: p
@@ -59,7 +59,6 @@ generics:
             label: Testing
             description: "Testing environment"
             color: "#D2B4DE"
-        default_value: p
       - name: segment_type
         kind: Dropdown
         optional: true

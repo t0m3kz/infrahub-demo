@@ -1,7 +1,7 @@
 # 30_all: The Everything Demo
 
 Every other demo shows one piece. This one loads all of them into one branch: three DC fabrics, colocation
-cages from three operators, three clouds, a SaaS edge, four offices, sixteen customers' footprints, nine
+cages from three operators, three clouds, a SaaS edge, five offices, sixteen customers' footprints, nine
 applications, and the interconnect layer that ties them together.
 
 It is also the only demo that **must be loaded in order**. The steps below are that order.
@@ -84,7 +84,7 @@ Load the stages **in this order**. After each one, wait until no generator task 
 | # | Stage | What it loads | Generators it fires |
 | --- | --- | --- | --- |
 | 1 | foundation | Customers, cloud, colocation (with the shared SD-WAN gateway and orchestrator), the internet's ISPs (`04_internet`), SaaS, offices, and the three DC sites with their fabrics and controllers | `add_colocation_metro` (×9), `add_dc` → `add_pod` → `add_rack` (longest stage) |
-| 2 | compute_and_customers | Application hosts, DC-only customers' footprints, and the boarding set: DC/colocation/cloud/office footprints, cage kit, VMs | `add_endpoint`, `add_customer_deployment_*`, `add_sdwan_edge` |
+| 2 | compute_and_customers | Application hosts and the boarding set: DC/colocation/cloud/office footprints (one `01_deployments.yml` per customer for its DC footprints), cage kit, VMs | `add_endpoint`, `add_customer_deployment_*`, `add_sdwan_edge` |
 | 3 | applications | Segments, applications, deployment-request catalogue | `add_vxlan_segment`, `add_app_application` |
 | 4 | interconnects | Colo on-ramp, cloud hub, virtual circuits, SD-WAN backhaul and handoff, cloud endpoints, internet transit | — (data only) |
 
@@ -101,7 +101,7 @@ uv run infrahubctl object load $D/00_customer $D/01_cloud $D/02_colo \
 
 # 2. compute_and_customers
 uv run infrahubctl object load $D/03_dc/dc10/05_servers.yml $D/03_dc/dc11/05_servers.yml \
-  $D/03_dc/dc12/05_servers.yml $D/03_dc/new_customers $D/06_customer_boarding --branch $BRANCH
+  $D/03_dc/dc12/05_servers.yml $D/06_customer_boarding --branch $BRANCH
 
 # 3. applications
 uv run infrahubctl object load $D/07_applications --branch $BRANCH
@@ -143,7 +143,7 @@ Once stage 4 has settled, the branch should contain at least:
 | `TopologyDataCenter` | 3 |
 | `TopologyPod` | 6 |
 | `LocationRack` | 25 |
-| `TopologyCustomerDC` | 9 |
+| `TopologyCustomerDC` | 10 |
 | `TopologyCustomerColocation` | 7 |
 | `TopologyCustomerCloud` | 4 |
 | `TopologyCustomerOffice` | 5 |

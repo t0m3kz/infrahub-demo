@@ -1,21 +1,39 @@
-# validate_hypervisor_environment: every VM with the physical host it runs on
-# and the environment of the customer footprint it is deployed for. A VM whose
-# deployment is not a customer footprint (no environment) has no class and is
-# skipped by the check.
+# validate_hypervisor_environment: every VM with the physical host it runs on,
+# the host's deployment (a pod or colocation zone; its parent is the DC or
+# metro) and the customer footprint the VM is deployed for.
+#   - environment: only a DC or Colocation footprint states one
+#     (TopologyEnvironmentScoped); an office is always PROD, a footprint with
+#     neither is skipped by the check.
+#   - parent: the footprint's DC or metro, which must be where the host is.
 query hypervisor_environment {
   DcimVirtualDevice {
     edges {
       node {
         id
         name { value }
-        hosting_device { node { id name { value } } }
+        hosting_device {
+          node {
+            id
+            name { value }
+            deployment {
+              node {
+                id
+                __typename
+                name { value }
+                ... on TopologyPod { parent { node { id name { value } } } }
+                ... on TopologyColocationZone { parent { node { id name { value } } } }
+              }
+            }
+          }
+        }
         deployment {
           node {
             id
             __typename
             name { value }
-            ... on TopologyCustomer { environment { value } }
-            ... on TopologyCustomerOffice { environment { value } }
+            ... on TopologyEnvironmentScoped { environment { value } }
+            ... on TopologyCustomerDC { parent { node { id name { value } } } }
+            ... on TopologyCustomerColocation { parent { node { id name { value } } } }
           }
         }
       }

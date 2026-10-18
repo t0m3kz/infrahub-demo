@@ -86,7 +86,7 @@ data/
 The DC6 chain (`test_12`-`test_20`) loads its switch, rack, pod and server data straight from `data/demos/`
 (paths in `test_constants.py`), so the demos and the tests cannot drift apart. `20_segments` is the one
 test-local exception: `data/demos/07_customers` and `08_segments` depend on the `30_all` customer organizations
-and still use the old `[org_id, environment]` footprint HFID, so they cannot be loaded on their own.
+and still use the old `[org_id, environment]` footprint HFID (a footprint's HFID is now its `name`), so they cannot be loaded on their own.
 
 The `30_all` suite (`test_59`-`test_65`) is the exception: it loads from `data/demos/30_all/` at the repository
 root, not from here, because it exercises the shipped demo rather than test-only fixtures.

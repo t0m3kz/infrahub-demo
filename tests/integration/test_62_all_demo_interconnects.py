@@ -71,6 +71,7 @@ from .test_constants import (
     ALL_DEMO_TRANSIT_RESOURCES,
     ALL_DEMO_TRANSIT_SUBINTERFACES,
     ALL_DEMO_VIRTUAL_CIRCUITS,
+    OFFICE_NAMESPACE,
     deployment_environment,
     deployment_namespace,
     transit_namespace_type,
@@ -1265,7 +1266,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         errors: list[str] = []
         for office, switches in sorted(ALL_DEMO_OFFICE_WAN_EXITS.items()):
             edge = f"{office}-EDGE1"
-            namespace = deployment_namespace(office)
+            namespace = OFFICE_NAMESPACE
             tag = wan_exit_vlan(transit_namespace_type(namespace))
             expected = {f"WAN-EXIT-{switch}-{edge}": switch for switch in switches}
             result = await async_client_main.execute_graphql(

@@ -131,10 +131,9 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
             self.logger.info(f"{office_name}: no sdwan_gateway set — SD-WAN edge provisioning not requested")
             return
 
-        owner_org = (office.get("parent") or {}).get("owner") or {}
-        owner_id: str | None = owner_org.get("id")
+        owner_id: str | None = (office.get("owner") or {}).get("id")
         if not owner_id:
-            self.fail(f"{office_name}: no owner resolved via parent — cannot proceed")
+            self.fail(f"{office_name}: office has no owner — cannot proceed")
 
         self.logger.info(f"Processing SD-WAN edge for office {office_name}")
 

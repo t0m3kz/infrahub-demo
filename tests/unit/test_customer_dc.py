@@ -331,18 +331,17 @@ class TestFirewallContextProvisioning:
         assert gen._ensure_dedicated_device_pair.call_args.kwargs["physical_devices"] == [fw1, fw2]
 
     @pytest.mark.asyncio
-    async def test_dedicated_request_without_dedicated_pair_falls_back_to_shared(self) -> None:
-        """No dedicated pair (no template/size): shared capacity, untracked —
-        never a tenant-tagged "{shared cluster}-context" every such fallback
-        customer would claim and re-tenant on the same name."""
-        gen, _, cluster = self._make_gen_with_cluster()
+    async def test_dedicated_request_without_dedicated_pair_provisions_no_context(self) -> None:
+        """A dedicated request whose pair cannot be built never lands on the shared context: no
+        context target is resolved, so no transit leg is written (the real logger.error raises, which
+        fails the run; see TestEnsureDedicatedDevicePair for each cause)."""
+        gen, _, _ = self._make_gen_with_cluster()
         gen._ensure_dedicated_device_pair = AsyncMock(return_value=None)
 
         await gen.generate(_dc_payload_with_parent(customer_id="cust-1", dedicated_firewall=True))
 
-        target = gen._ensure_transit_legs.call_args.kwargs["target"]
-        assert target.context_name == f"{cluster.name.value}-shared"
-        assert (target.tenant_id, target.track) == (None, False)
+        gen._ensure_dedicated_device_pair.assert_awaited_once()
+        gen._ensure_transit_legs.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_connectivity_mode_does_not_change_the_transit_path(self) -> None:
@@ -415,7 +414,8 @@ class TestEnsureDedicatedDevicePair:
         ]
 
     @pytest.mark.asyncio
-    async def test_no_dc_size_returns_none(self) -> None:
+    async def test_no_dc_size_is_an_error(self) -> None:
+        """No parent size: logger.error (raises in production), None, nothing looked up."""
         gen = self._make_gen()
         result = await gen._ensure_dedicated_device_pair(
             role="firewall",
@@ -427,10 +427,37 @@ class TestEnsureDedicatedDevicePair:
             customer_name="C005",
         )
         assert result is None
+        gen.logger.error.assert_called_once()
+        assert "no size set" in gen.logger.error.call_args.args[0]
         gen.client.filters.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_unmapped_platform_returns_none(self) -> None:
+    @pytest.mark.parametrize("peers", [0, 1, 3])
+    async def test_not_exactly_two_physical_peers_is_an_error(self, peers: int) -> None:
+        """A dedicated pair is one virtual instance per physical peer of a PAIR: anything else is an error."""
+        gen = self._make_gen()
+        gen.create_devices = AsyncMock()
+        physical = [_fw_device(id=f"fw-{n}", name=f"DC10-FW{n}", platform="checkpoint_gaia") for n in range(peers)]
+
+        result = await gen._ensure_dedicated_device_pair(
+            role="firewall",
+            ha_kind="ManagedFirewallHA",
+            physical_devices=physical,
+            parent_id="dc-1",
+            parent_name="DC10",
+            dc_size="M",
+            customer_name="C005",
+        )
+
+        assert result is None
+        gen.logger.error.assert_called_once()
+        assert f"found {peers}" in gen.logger.error.call_args.args[0]
+        gen.client.filters.assert_not_called()
+        gen.create_devices.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_unmapped_platform_is_an_error(self) -> None:
+        """No dedicated variant mapped for the physical platform: logger.error, None."""
         gen = self._make_gen()
         physical = self._physical_pair(platform="unknown_os")
 
@@ -445,10 +472,13 @@ class TestEnsureDedicatedDevicePair:
         )
 
         assert result is None
+        gen.logger.error.assert_called_once()
+        assert "No virtual template mapping" in gen.logger.error.call_args.args[0]
         gen.client.filters.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_missing_customer_template_returns_none(self) -> None:
+    async def test_missing_customer_template_is_an_error(self) -> None:
+        """The *_CUSTOMER_* virtual template does not exist: logger.error, None."""
         gen = self._make_gen()
         physical = self._physical_pair()
         gen.client.filters = AsyncMock(return_value=[])
@@ -464,6 +494,8 @@ class TestEnsureDedicatedDevicePair:
         )
 
         assert result is None
+        gen.logger.error.assert_called_once()
+        assert "CloudGuard_EDGE_CUSTOMER_M" in gen.logger.error.call_args.args[0]
         assert gen.client.filters.call_args_list[0].kwargs["template_name__value"] == "CloudGuard_EDGE_CUSTOMER_M"
 
     @pytest.mark.asyncio

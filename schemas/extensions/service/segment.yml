@@ -137,8 +137,8 @@ nodes:
     relationships:
       # TopologyDeployment, not TopologyCustomer: a TopologyCustomerOffice hosts
       # its own segments (it is TopologySegmentHosting) but is not a
-      # TopologyCustomer (its owner is its parent's), so the narrower generic
-      # could not name it. checks/segment_placement.py is what limits the kinds.
+      # TopologyCustomer (it carries its own owner, and no environment), so the
+      # narrower generic could not name it. checks/segment_placement.py is what limits the kinds.
       - name: customer_deployments
         peer: TopologyDeployment
         cardinality: many

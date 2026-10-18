@@ -51,8 +51,8 @@ DISTRIBUTION_PLAIN = "distribution_switch_cisco_xe_lisp_ospf"
 DC_BORDER = "border_leaf_cisco_xe_ospf_ibgp"
 
 _MAP_SERVERS: list[dict[str, Any]] = [
-    {"name": "ds-c005-p02", "interfaces": [{"ip_address": {"address": "10.250.5.2/32"}}]},
-    {"name": "ds-c005-p01", "interfaces": [{"ip_address": {"address": "10.250.5.1/32"}}]},
+    {"name": "ds-c005-office02", "interfaces": [{"ip_address": {"address": "10.250.5.2/32"}}]},
+    {"name": "ds-c005-office01", "interfaces": [{"ip_address": {"address": "10.250.5.1/32"}}]},
 ]
 _EDGES = [{"name": OFFICE_EDGE_NAME}]
 
@@ -72,7 +72,7 @@ def _deployment(data: dict[str, Any]) -> dict[str, Any]:
 def _inputs(**overrides: Any) -> LispInputs:
     values: dict[str, Any] = {
         "map_servers": ("10.250.5.1", "10.250.5.2"),
-        "site_name": "C005-P",
+        "site_name": "C005-OFFICE",
         "site_key": "0ff1c3-k3y",
         "l3_records": (EidRecord(instance_id=50001, vrf="VRF_A", prefix="10.100.0.0/24"),),
         "l2_instance_ids": (10100,),
@@ -84,7 +84,7 @@ def _inputs(**overrides: Any) -> LispInputs:
 
 def _device(*, loopback: str | None = "10.250.5.1/32") -> dict[str, Any]:
     address = {"ip_address": {"address": loopback}} if loopback else {}
-    return {"name": "ds-c005-p01", "interfaces": [{"name": "Loopback0", "role": "loopback", **address}]}
+    return {"name": "ds-c005-office01", "interfaces": [{"name": "Loopback0", "role": "loopback", **address}]}
 
 
 def _block(text: str, header: str) -> list[str]:
@@ -288,8 +288,8 @@ class TestRenderedDistributionSwitch:
 
     def test_the_goldens_are_what_the_writer_and_the_transform_produce(self) -> None:
         for cls, role, directory, name in (
-            (AccessSwitch, "access-switch", ACCESS_EXIT, "as-c005-p01"),
-            (DistributionSwitch, "distribution-switch", DISTRIBUTION_EXIT, "ds-c005-p01"),
+            (AccessSwitch, "access-switch", ACCESS_EXIT, "as-c005-office01"),
+            (DistributionSwitch, "distribution-switch", DISTRIBUTION_EXIT, "ds-c005-office01"),
         ):
             data = build_office_wan_exit_data(device_name=name, role=role)
 
