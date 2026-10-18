@@ -1,4 +1,4 @@
-"""Unit tests for the EOS MSS-G device view (transforms/helpers/group_policy.py _segment_security_build),
+"""Unit tests for the EOS MSS-G device view (transforms/helpers/group_policy/ _segment_security_build),
 its dispatcher (group_policy_device_view) and the EOS leaf / border-leaf templates that render it.
 
 The fleet is the smoke fixture's (tests/smoke/generate_config_fixtures.py ``_gpo_fleet_roots``) on 7280R3 VTEPs at
@@ -380,7 +380,7 @@ class TestPrefixes:
 
     def test_a_from_naming_a_source_of_another_vrf_is_commented_not_dropped_silently(self) -> None:
         """The builder never produces it from the rows (a row pairs groups of one VRF), but a view that did must show it."""
-        import transforms.helpers.group_policy as module
+        import transforms.helpers.group_policy.eos as module
 
         original = module.segment_security_view
 
@@ -876,8 +876,8 @@ class TestRendering:
 
     def test_a_config_with_only_built_in_policies_carries_no_avd_warning(self) -> None:
         """The warning is about the AVD-only lines: a view without any (only forward-all) does not claim them."""
-        with patch("transforms.helpers.group_policy._MssgCatalog.policy", return_value=FORWARD_ALL):
-            with patch("transforms.helpers.group_policy._fallback_entries", return_value=(set(), set())):
+        with patch("transforms.helpers.group_policy.eos._MssgCatalog.policy", return_value=FORWARD_ALL):
+            with patch("transforms.helpers.group_policy.eos._fallback_entries", return_value=(set(), set())):
                 rendered = self._render(Leaf)
         assert "! WARNING" not in rendered
         assert "field-set l4-port" not in rendered

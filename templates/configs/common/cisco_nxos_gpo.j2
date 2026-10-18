@@ -1,6 +1,6 @@
 {#- NX-OS VXLAN GPO (security groups): class-maps, policy-maps and group definitions.
 
-    `group_policy` (transforms/helpers/group_policy.py group_policy_device_view) is
+    `group_policy` (transforms/helpers/group_policy/ group_policy_device_view) is
     set only on a VTEP of a reference fabric; every block here is guarded by it,
     so a device without one renders exactly as before. The contracts and
     `security enforce` live in the tenant `vrf context` (cisco_nxos_vxlan_vrf.j2).
