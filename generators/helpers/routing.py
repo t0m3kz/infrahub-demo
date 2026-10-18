@@ -183,10 +183,11 @@ def _safe_device_name(bgp: Any) -> str | None:
     Requires the caller to have queried with include=["capabilities"],
     prefetch_relationships=True.
 
-    Schema-wise `capabilities` is cardinality=many, but every process created
-    by `_make_bgp_proc`/`_plan_ospf_underlay` in this module attaches exactly
-    one device. Anything other than exactly one peer is treated as unresolved
-    (None) rather than guessing which device it belongs to.
+    Exactly one device by construction (every process created by
+    `_make_bgp_proc`/`_plan_ospf_underlay` in this module attaches one), but a
+    many relationship cannot be capped at 1 in the schema, so anything other
+    than exactly one peer is treated as unresolved (None) rather than guessing
+    which device it belongs to.
     """
     try:
         peers = bgp.capabilities.peers

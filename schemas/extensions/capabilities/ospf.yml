@@ -174,7 +174,7 @@ nodes:
       - name: capabilities
         peer: DcimCapabilities
         label: "Device"
-        description: "The single device this OSPF process runs on — always created one-per-device."  # yamllint disable-line rule:line-length
+        description: "The device this process runs on: one by construction (a many rel cannot be capped at 1)"  # yamllint disable-line rule:line-length
         cardinality: many
         optional: true
         kind: Attribute

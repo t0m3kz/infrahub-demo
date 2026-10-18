@@ -1065,7 +1065,8 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
 
     Returns:
         {"physical": [{"circuit_id", "circuit_type", "status", "provider",
-                       "owner", "locations": [str]}],
+                       "owner", "locations": [str],
+                       "end_ids": [str], "ends": [(device, interface)]}],
          "virtual": [{"name", "link_type", "transport_mode", "owner",
                       "locations": [str], "physical_circuits": [str],
                       "interfaces": [(device, interface)],
@@ -1085,6 +1086,11 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
             "provider": (circuit.get("provider") or {}).get("name"),
             "owner": (circuit.get("owner") or {}).get("name"),
             "locations": sorted(str(loc.get("name") or "") for loc in circuit.get("locations", []) or []),
+            "end_ids": sorted(str(end.get("id") or "") for end in circuit.get("interface_capabilities", []) or []),
+            "ends": sorted(
+                (str((end.get("device") or {}).get("name") or ""), str(end.get("name") or ""))
+                for end in circuit.get("interface_capabilities", []) or []
+            ),
         }
         for circuit in result.get("TopologyPhysicalCircuit", []) or []
     ]
@@ -1119,11 +1125,12 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
     )
     for circuit in sorted(physical, key=lambda c: str(c["circuit_id"])):
         logger.info(
-            "  PHY %s [%s] %s owner=%s",
+            "  PHY %s [%s] %s owner=%s ends=%s",
             circuit["circuit_id"],
             circuit["circuit_type"],
             circuit["locations"],
             circuit["owner"],
+            circuit["ends"],
         )
     for circuit in sorted(virtual, key=lambda c: str(c["name"])):
         logger.info(
@@ -1471,8 +1478,7 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     # add_circuit/add_virtual_circuit/add_sdwan_edge output: an SD-WAN overlay's tunnel_id is
     # Number-pool allocated per node id, so a rerun that re-created one shows up as a new tunnel_id.
     "TopologyPhysicalCircuit": (
-        "name { value } locations { edges { node { id } } } "
-        "customer_interfaces { edges { node { id } } } provider_interfaces { edges { node { id } } }"
+        "name { value } locations { edges { node { id } } } interface_capabilities { edges { node { id } } }"
     ),
     "TopologyVirtualCircuit": (
         "name { value } tunnel_id { value } physical_circuits { edges { node { id } } } "

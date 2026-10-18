@@ -61,62 +61,6 @@ fragment ManagedBGPServiceFields on ManagedBGP {
   }
 }
 
-fragment ManagedNTPServiceFields on ManagedNTP {
-  timezone { value }
-  servers {
-    edges {
-      node {
-        address { node { address { value } } }
-        prefer { value }
-        version { value }
-      }
-    }
-  }
-}
-
-fragment ManagedSyslogServiceFields on ManagedSyslog {
-  servers {
-    edges {
-      node {
-        address { node { address { value } } }
-        port { value }
-        severity { value }
-      }
-    }
-  }
-}
-
-fragment ManagedSNMPServiceFields on ManagedSNMP {
-  version { value }
-  community_ro { value }
-  location { value }
-  contact { value }
-  trap_targets {
-    edges {
-      node {
-        address { node { address { value } } }
-        port { value }
-      }
-    }
-  }
-}
-
-fragment ManagedAAAServiceFields on ManagedAAA {
-  authentication_order { value }
-  authorization_commands { value }
-  accounting_enabled { value }
-  servers {
-    edges {
-      node {
-        address { node { address { value } } }
-        protocol { value }
-        port { value }
-        timeout { value }
-      }
-    }
-  }
-}
-
 fragment DeviceCapabilitiesFields on DcimCapabilities {
   capabilities {
     edges {
@@ -137,14 +81,6 @@ fragment DeviceCapabilitiesFields on DcimCapabilities {
           reference_bandwidth { value }
           router_id { node { address { value } } }
         }
-
-        ...ManagedNTPServiceFields
-
-        ...ManagedSyslogServiceFields
-
-        ...ManagedSNMPServiceFields
-
-        ...ManagedAAAServiceFields
 
         # A non-MLAG switch's own VLAN domain: its id is what that switch's
         # ManagedVlanDomainSegment.vlan_domain points at

@@ -70,8 +70,7 @@ interface {{ interface.name }}
 route-map RM-CONN-2-BGP permit 10
   match interface Loopback0
 !
-{%- set ios_dialect = true %}
-{%- include 'common/cisco_nxos_management.j2' %}
+
 !
 ! Management
 line console

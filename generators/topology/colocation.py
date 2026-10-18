@@ -3,10 +3,7 @@
 A colocation metro is the third deployment kind that owns physical devices
 (after TopologyDataCenter and TopologyPod), and until now the only one whose
 devices were hand-written YAML: data/demos/30_all/08_interconnects/ declared
-raw DcimPhysicalDevice entries with hand-picked names, and
-data/demos/16_hub_and_spoke/ went further and built a device called
-"C004-EDGE1" out of SRX-1500_EDGE_FIREWALL (role=firewall, no dci ports),
-i.e. a firewall template doing edge-router duty.
+raw DcimPhysicalDevice entries with hand-picked names.
 
 That is what this generator replaces: a metro declares
 ``fabric_templates: [{quantity: 2, role: edge, template: ...}]`` exactly like
@@ -89,9 +86,9 @@ _COLO_VALID_FABRIC_ROLES = frozenset({"edge", "firewall", "load-balancer"})
 #
 # The template a firewall/load-balancer entry points at MUST provide an
 # interface with role=ha (CP-26000_FIREWALL's `sync`, PA-5260_FIREWALL's
-# `HA1`): _ensure_ha_interfaces needs one per member to build the
-# ManagedHAInterface pair and the sync cable, and logs an error — i.e. fails the
-# generator task — when a physical member has none. SRX-1500_EDGE_FIREWALL, for
+# `HA1`): _ensure_ha_interfaces needs one per member to lay the sync cable, and
+# logs an error — i.e. fails the generator task — when a physical member has
+# none. SRX-1500_EDGE_FIREWALL, for
 # instance, has only fxp0 + four downlinks and cannot be paired.
 _COLO_SERVICE_ROLES = frozenset({"firewall", "load-balancer"})
 

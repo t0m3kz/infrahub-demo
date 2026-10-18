@@ -10,11 +10,21 @@ No-ops unless office.sdwan_gateway is set — that relationship is the opt-in
 signal (see schemas/extensions/topology/topology_customer.yml), same shape
 as design.dedicated_firewall gating dedicated provisioning elsewhere. When
 set, this generator provisions the per-office slice of SD-WAN: an Edge
-device, the SD-WAN overlay TopologyVirtualCircuit (with a pool-allocated
-tunnel_id), the Gateway's matching tunnel sub-interface, and an
-internet-underlay circuit — then attaches the new Edge to the Gateway's own
-Orchestrator (VCO) via managed_devices. It is the only path: no office's
-Edge, tunnel or underlay is hand-authored.
+device, the internet-underlay TopologyPhysicalCircuit INET-<office> (the
+Edge's uplink to a free ``customer`` port of the ISP's access PE), the
+SD-WAN overlay TopologyVirtualCircuit (with a pool-allocated tunnel_id) and
+the Gateway's matching tunnel sub-interface — then attaches the new Edge to
+the Gateway's own Orchestrator (VCO) via managed_devices. It is the only
+path: no office's Edge, tunnel or underlay is hand-authored.
+
+The underlay's far end is not authored per office. The ISP is the one
+TopologyExternalProviders of the internet provider (data/demos/30_all/
+04_internet), its one device the access PE; the circuit takes that PE's first
+free ``customer`` port (a port that is an end of no physical circuit), and
+reuses its own port on a rerun. The pick and the circuit's single save (a
+physical circuit needs both ends at creation) run under one resource_lock,
+because the offices board in one load and run concurrently. The circuit's
+locations are the office and the ISP; the overlay keeps the Gateway's zone.
 
 The shared Gateway/VCO themselves stay hand-authored and load with the
 foundation stage (data/demos/30_all/02_colo/equinix/fr/04_sdwan_gateway.yml),
@@ -52,23 +62,29 @@ from __future__ import annotations
 
 from typing import Any
 
+from netutils.interface import sort_interface_list
+
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
 from ..helpers.naming import sdwan_edge_name
+from ..pools import PoolMixin
 from ..protocols import (
     DcimPhysicalDevice,
     DcimPhysicalInterface,
     DcimVirtualInterface,
     ManagedController,
+    TopologyExternalProviders,
     TopologyPhysicalCircuit,
     TopologyVirtualCircuit,
 )
 
 # Who sells each office its internet access. Not modelled per office (no
 # "chosen ISP" signal on TopologyCustomerOffice), so every office's underlay
-# gets the same provider: Orange S.A. A per-office knob is added only when a
-# transform or check reads it.
+# gets the same provider: Orange S.A. Its TopologyExternalProviders (the ISP
+# location, with the access PE as its one device) is the underlay's far end,
+# resolved from this org. A per-office knob is added only when a transform or
+# check reads it.
 _INTERNET_PROVIDER_ORG_ID = "P019"
 # Who operates the overlay riding that underlay: the SD-WAN service provider
 # (VMware VeloCloud), never the ISP — the tunnel is not bought from the ISP.
@@ -86,7 +102,7 @@ def _target_group(name: str) -> dict[str, Any]:
     return {"hfid": [name], "kind": "CoreGeneratorGroup"}
 
 
-class SdwanEdgeGenerator(CommonGenerator):
+class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
     """add_sdwan_edge — per-office SD-WAN Edge, tunnel, and circuit provisioning."""
 
     # Widens the type for the type checker only (mirrors generators/devices.py's
@@ -150,6 +166,7 @@ class SdwanEdgeGenerator(CommonGenerator):
         internet_provider_id, overlay_provider_id = await self._resolve_provider_ids(office_name)
         edge = await self._ensure_edge_device(office_name, office_id, owner_id)
         edge_uplink = await self._find_edge_uplink(edge.id, office_name)
+        isp_location_id, isp_device_id = await self._resolve_isp_access(office_name, internet_provider_id)
 
         internet_circuit = await self._ensure_internet_circuit(
             office_name=office_name,
@@ -157,7 +174,8 @@ class SdwanEdgeGenerator(CommonGenerator):
             owner_id=owner_id,
             provider_id=internet_provider_id,
             edge_uplink_id=edge_uplink.id,
-            gateway_zone_id=gateway_zone_id,
+            isp_location_id=isp_location_id,
+            isp_device_id=isp_device_id,
         )
         overlay_circuit = await self._ensure_overlay_circuit(
             office_name=office_name,
@@ -234,6 +252,19 @@ class SdwanEdgeGenerator(CommonGenerator):
             self.fail(f"{office_name}: edge device has no role=uplink interface")
         return sorted(ifaces, key=lambda i: i.name.value)[0]
 
+    async def _resolve_isp_access(self, office_name: str, internet_provider_id: str) -> tuple[str, str]:
+        """(ISP location id, access PE device id): the internet provider's one topology and its one device."""
+        isps = await self.client.filters(
+            kind=TopologyExternalProviders, provider__ids=[internet_provider_id], include=["devices"]
+        )
+        if len(isps) != 1:
+            self.fail(f"{office_name}: expected exactly 1 ISP topology for the internet provider, found {len(isps)}")
+        isp = isps[0]
+        device_ids = [peer.id for peer in getattr(isp, "devices").peers]
+        if len(device_ids) != 1:
+            self.fail(f"{office_name}: ISP {isp.name.value} must host exactly 1 access device, found {len(device_ids)}")
+        return isp.id, device_ids[0]
+
     async def _ensure_internet_circuit(
         self,
         *,
@@ -242,29 +273,71 @@ class SdwanEdgeGenerator(CommonGenerator):
         owner_id: str,
         provider_id: str,
         edge_uplink_id: str,
-        gateway_zone_id: str,
+        isp_location_id: str,
+        isp_device_id: str,
     ) -> Any:
+        """Create/upsert INET-<office> from the Edge uplink to the ISP access PE's port, in one save.
+
+        A physical circuit needs both ends when it is written, so the port is
+        picked and the circuit saved inside one lock: two offices running at
+        once would otherwise both see the same port free.
+        """
         circuit_name = f"INET-{office_name}"
-        circuit = await self.client.create(
-            kind=TopologyPhysicalCircuit,
-            data={
-                "circuit_id": circuit_name,
-                "name": circuit_name,
-                "circuit_type": "internet",
-                "status": "active",
-                "provider": {"id": provider_id},
-                "owner": {"id": owner_id},
-                "description": f"{office_name} internet access (SD-WAN underlay)",
-                # locations peers TopologyConnectableLocation — the office
-                # itself (not the edge device) and the gateway's zone.
-                "locations": [{"id": office_id}, {"id": gateway_zone_id}],
-                "customer_interfaces": [{"id": edge_uplink_id}],
-                "member_of_groups": [_target_group("physical_circuits")],
-            },
-        )
-        await circuit.save(allow_upsert=True)
+        async with self.resource_lock(f"isp-access-port-{isp_device_id}"):
+            isp_port_id = await self._pick_isp_port(office_name, circuit_name, isp_device_id)
+            circuit = await self.client.create(
+                kind=TopologyPhysicalCircuit,
+                data={
+                    "circuit_id": circuit_name,
+                    "name": circuit_name,
+                    "circuit_type": "internet",
+                    "status": "active",
+                    "provider": {"id": provider_id},
+                    "owner": {"id": owner_id},
+                    "description": f"{office_name} internet access (SD-WAN underlay)",
+                    # locations peers TopologyConnectableLocation: the office
+                    # itself (not the edge device) and the ISP the far end sits in.
+                    "locations": [{"id": office_id}, {"id": isp_location_id}],
+                    "interface_capabilities": [{"id": edge_uplink_id}, {"id": isp_port_id}],
+                    "member_of_groups": [_target_group("physical_circuits")],
+                },
+            )
+            await circuit.save(allow_upsert=True)
         self.logger.info(f"Ensured internet-underlay circuit '{circuit_name}'")
         return circuit
+
+    async def _pick_isp_port(self, office_name: str, circuit_name: str, isp_device_id: str) -> str:
+        """The access PE port for this circuit: the one it already ends on, else the first free ``customer`` port.
+
+        Free = no physical circuit among the port's interface_capabilities
+        (a virtual circuit's tunnel port may be shared, a physical end may
+        not). Fails, before anything is written, when none is left. Call
+        inside the isp-access-port lock.
+        """
+        circuits = await self.client.filters(
+            kind=TopologyPhysicalCircuit, name__value=circuit_name, include=["interface_capabilities"]
+        )
+        own_ends = {peer.id for circuit in circuits for peer in getattr(circuit, "interface_capabilities").peers}
+        ports = await self.client.filters(
+            kind=DcimPhysicalInterface,
+            device__ids=[isp_device_id],
+            role__value="customer",
+            include=["interface_capabilities"],
+        )
+        for port in ports:
+            if port.id in own_ends:
+                return port.id
+        free = {
+            port.name.value: port.id
+            for port in ports
+            if not any(
+                peer.typename == TopologyPhysicalCircuit.__name__
+                for peer in getattr(port, "interface_capabilities").peers
+            )
+        }
+        if not free:
+            self.fail(f"{office_name}: the ISP access device has no free customer port for {circuit_name}")
+        return free[sort_interface_list(list(free))[0]]
 
     async def _ensure_overlay_circuit(
         self,

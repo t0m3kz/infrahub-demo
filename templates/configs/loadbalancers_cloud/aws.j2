@@ -29,13 +29,7 @@ resource "aws_lb_target_group" "{{ pool.name | tf_id }}" {
   }
 {%- endif %}
 }
-{% for target in pool.targets %}
-resource "aws_lb_target_group_attachment" "{{ pool.name | tf_id }}_{{ loop.index }}" {
-  target_group_arn = aws_lb_target_group.{{ pool.name | tf_id }}.arn
-  target_id        = "{{ target.ip }}"
-  port             = {{ target.port }}
-}
-{% endfor %}
+
 {% endfor %}
 {% for listener in listeners %}
 resource "aws_lb_listener" "{{ listener.hostname | tf_id }}_{{ listener.port }}" {

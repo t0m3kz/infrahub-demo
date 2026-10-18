@@ -32,10 +32,12 @@ version: "1.0"
 # as separate interface_a/interface_z fields, so the two can't disagree.
 #
 # TopologyRoutedExchange's interfaces (the legs) are unconstrained at the schema level
-# (min_count/max_count cannot be overridden per-node on a relationship
-# inherited from a generic — see identifier collision if attempted); the
-# "one leg per namespace on the gateway context's devices" invariant is
-# enforced by validate_exchange_gateways() in checks/common.py, not by the schema.
+# (no min_count/max_count). A node may re-declare an inherited relationship to add a
+# count, but only under the SAME name and the same peer (the node declaration then
+# replaces the generic's wholesale); a DIFFERENTLY named relationship carrying the
+# same identifier collides. The "one leg per namespace on the gateway context's
+# devices" invariant is enforced by validate_exchange_gateways() in
+# checks/common.py, not by the schema.
 
 generics:
   - name: ExchangeGateway

@@ -37,9 +37,6 @@
 {%- endif %}
 
 {%- set static_route_table = {} -%}
-{%- set ntp_servers = {} -%}
-{%- set syslog_servers = {} -%}
-{%- include 'common/sonic_management.j2' %}
 
 {%- set configdb = {
   'DEVICE_METADATA': device_metadata,
@@ -59,8 +56,8 @@
   'BGP_GLOBALS_EVPN_RT': bgp_evpn_rt,
   'EVPN_NVO': evpn_nvo,
   'STATIC_ROUTE': static_route_table,
-  'NTP_SERVER': ntp_servers,
-  'SYSLOG_SERVER': syslog_servers
+  'NTP_SERVER': {},
+  'SYSLOG_SERVER': {}
 } -%}
 {%- if not sonic_border -%}
 {%- set _ = configdb.update({'ACL_TABLE': acl_table, 'ACL_RULE': acl_rule}) -%}

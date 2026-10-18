@@ -314,6 +314,15 @@ ALL_DEMO_INTERNET_TRANSIT_CIRCUITS: frozenset[str] = frozenset(
     {"INET-LUMEN-EQXFR2", "INET-COGENT-EQXFR2", "INET-LUMEN-EQXPA4", "INET-COGENT-EQXPA4"}
 )
 
+# The SD-WAN offices' internet access (add_sdwan_edge): INET-<office> runs from the office edge's GE1 to a free
+# `customer` port of the one ISP access PE (30_all/04_internet), in the ISP's location. The offices board in one load and
+# take the first free port in natural order under a lock, so together they hold xe-0/1/[0..n-1] exactly.
+ALL_DEMO_SDWAN_UNDERLAY_CIRCUITS: dict[str, str] = {f"INET-{name(office)}": name(office) for office in _SDWAN_OFFICES}
+ALL_DEMO_SDWAN_EDGE_UPLINK = "GE1"
+ALL_DEMO_ISP_ACCESS_DEVICE = "EXT-ORANGE"
+ALL_DEMO_ISP_ACCESS_LOCATION = "ISP-ORANGE"
+ALL_DEMO_ISP_ACCESS_PORTS: frozenset[str] = frozenset(f"xe-0/1/{n}" for n in range(len(_SDWAN_OFFICES)))
+
 # INTERNET upstream (PR 4c, extended by the metro edge pair): the colo edges are
 # their metro's EVPN Multi-Site border gateways and export the ISP default route
 # as an EVPN type-5 route (L3 VNI 60002, one global route-target for the

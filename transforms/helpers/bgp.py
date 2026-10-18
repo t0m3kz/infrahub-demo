@@ -197,34 +197,8 @@ def _build_session_from_peering(
             if local_iface_name:
                 break
 
-        if not local_iface_name:
-            # Inter-site circuit with no DcimCable: a TopologyVirtualCircuit is a
-            # ManagedGenericInterfaces, so it shows up in its terminating port's
-            # interface_capabilities, and its own interface_capabilities are the
-            # circuit endpoints (local + remote). Only virtual circuits appear
-            # here — TopologyPhysicalCircuit deliberately does not inherit
-            # ManagedGenericInterfaces, keeping the customer/provider split that
-            # carries an endpoint role the flat capability edge cannot express.
-            # This path also needs the caller's query to select circuit fields
-            # under interface_capabilities; queries/fragments/*.gql do not yet,
-            # so today the fallback below resolves inter-site underlay IPs.
-            for iface in interfaces:
-                for svc in iface.get("interface_capabilities") or []:
-                    if svc.get("typename") != "TopologyVirtualCircuit":
-                        continue
-                    for other_iface in svc.get("interface_capabilities") or []:
-                        if (other_iface.get("device") or {}).get("name") == remote_device_name:
-                            local_interface_ip = iface.get("ip_address")
-                            remote_interface_ip = other_iface.get("ip_address")
-                            local_iface_name = iface.get("name")
-                            break
-                    if local_iface_name:
-                        break
-                if local_iface_name:
-                    break
-
         if not local_interface_ip and not local_iface_name:
-            # No cable or circuit resolved an IP — fall back to the IP already set
+            # No cable resolved an IP — fall back to the IP already set
             # directly on the peering's own interface_capabilities (e.g. a VTI/
             # sub-interface addressed inline, with no DcimCable and no separate
             # TopologyCircuit object to traverse).
@@ -234,7 +208,7 @@ def _build_session_from_peering(
                 local_iface_name = local_iface.get("name")
 
         if not local_interface_ip and not local_iface_name:
-            return None  # No cable, circuit, or direct IP connects this device to the remote — skip session
+            return None  # No cable or direct IP connects this device to the remote — skip session
 
         if local_interface_ip:
             session["local_ip"] = local_interface_ip

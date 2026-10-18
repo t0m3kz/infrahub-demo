@@ -70,11 +70,6 @@ route-map RM-CONN-2-BGP permit 10
 {%- include 'common/cisco_xe_lisp.j2' %}
 {%- endif %}
 {%- include 'common/cisco_xe_vrf_static.j2' %}
-{%- set ios_dialect = true %}
-{%- set management %}{% include 'common/cisco_nxos_management.j2' %}{% endset %}
-{%- if management | trim %}
-{{ management | trim }}
-{%- endif %}
 ! Management
 line console 0
 line vty 0 15

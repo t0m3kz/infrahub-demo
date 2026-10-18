@@ -1,9 +1,8 @@
 from typing import Any
 
 from transforms.common import BaseDeviceTransform
-from transforms.helpers.addressing import host_ip, management_ip
+from transforms.helpers.addressing import management_ip
 from transforms.helpers.ha import get_ha, inline_addresses
-from transforms.helpers.loadbalancer_pbr import pool_interfaces
 
 
 def _build_lb_interfaces(interfaces: list[dict[str, Any]], ha: dict[str, Any] | None = None) -> list[dict[str, Any]]:
@@ -28,16 +27,6 @@ def _build_lb_interfaces(interfaces: list[dict[str, Any]], ha: dict[str, Any] | 
     return lb_ifaces
 
 
-def _lb_nodes(vips: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Pool members with an address across all VIPs, once per member name."""
-    nodes: dict[str, dict[str, Any]] = {}
-    for vip in vips:
-        for member in vip["members"]:
-            if member["ip"] and member["name"] not in nodes:
-                nodes[member["name"]] = member
-    return list(nodes.values())
-
-
 def _build_vips_from_interfaces(interfaces: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Build VIP list from interface_capabilities — LoadbalancerVIP is an interface capability."""
     vips = []
@@ -47,17 +36,6 @@ def _build_vips_from_interfaces(interfaces: list[dict[str, Any]]) -> list[dict[s
                 continue
             vip_ip_obj = cap.get("vip_ip") or {}
             lb_node = cap.get("load_balancer") or {}
-
-            members = [
-                {
-                    "name": m.get("name"),
-                    "port": pi.get("port"),
-                    "weight": m.get("weight", 1),
-                    "ip": (pi.get("ip_address") or {}).get("address"),
-                    "address": host_ip((pi.get("ip_address") or {}).get("address")),
-                }
-                for m, pi in pool_interfaces(cap)
-            ]
 
             health_checks = []
             for hc in cap.get("health_checks") or []:
@@ -84,7 +62,6 @@ def _build_vips_from_interfaces(interfaces: list[dict[str, Any]]) -> list[dict[s
                     "load_balancing_algorithm": cap.get("load_balancing_algorithm"),
                     "session_persistence": cap.get("session_persistence"),
                     "vip_ip": vip_ip_obj.get("address"),
-                    "members": members,
                     "health_checks": health_checks,
                 }
             )
@@ -110,7 +87,6 @@ class LoadBalancer(BaseDeviceTransform):
                 "lb_interfaces": lb_interfaces,
                 "management_ip": management_ip(lb_interfaces),
                 "vips": vips,
-                "lb_nodes": _lb_nodes(vips),
                 "ha": ha,
             }
         )

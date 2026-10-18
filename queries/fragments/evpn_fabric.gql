@@ -9,9 +9,9 @@ fragment EvpnRtAsOnSegmentHostingFields on TopologySegmentHosting {
 
 # ORDER MATTERS: spread EvpnRtAsOnDeploymentFields FIRST in the device's deployment selection. On the
 # pod -> parent hop Infrahub returns null for the TopologySegmentHosting fields of a spread that comes
-# after a TopologyDeviceHosting one (FirewallContexts/LoadbalancerVips) and for a second
+# after a TopologyDeviceHosting one (FirewallContexts) and for a second
 # SegmentHosting-typed fragment, so every field read from the DC lives in this one fragment. With the
-# spread after those two, a pod-tier VTEP got evpn_rt_as = null and derived its route-targets from its
+# spread after that one, a pod-tier VTEP got evpn_rt_as = null and derived its route-targets from its
 # own ASN (checked on the 30_all stack: every leaf/access-leaf of DC10-12 had it null).
 #
 # Fabric-wide EVPN constants, reached from a device's own `deployment`: the

@@ -18,10 +18,7 @@ from transforms.helpers.firewall import (
     get_leaf_firewall_transits,
 )
 from transforms.helpers.group_policy import GPO_CONFIG_KEYS, group_policy_device_view
-from transforms.helpers.ha import _HA_TYPENAMES
 from transforms.helpers.lisp import build_lisp_inputs, get_lisp_config
-from transforms.helpers.loadbalancer_pbr import _flatten_deployment_lb_vips, get_lb_backend_pbr_rules
-from transforms.helpers.management import get_management_services
 from transforms.helpers.mlag import get_mlag, get_sonic_mlag_config
 from transforms.helpers.ospf import get_ospf
 from transforms.helpers.overlay import OVERLAY_CONFIG_KEYS, OVERLAY_RENDERERS
@@ -82,12 +79,6 @@ def get_capabilities(data: dict[str, Any]) -> dict[str, Any]:
     return {
         "bgp_enabled": "ManagedBGP" in typenames,
         "ospf_enabled": "ManagedOSPF" in typenames,
-        "mlag_enabled": "ManagedMLAG" in typenames,
-        "ntp_enabled": "ManagedNTP" in typenames,
-        "syslog_enabled": "ManagedSyslog" in typenames,
-        "snmp_enabled": "ManagedSNMP" in typenames,
-        "aaa_enabled": "ManagedAAA" in typenames,
-        "ha_enabled": not typenames.isdisjoint(_HA_TYPENAMES),
     }
 
 
@@ -118,20 +109,6 @@ def _gpo_host_vlans(group_policy: dict[str, Any] | None) -> dict[str, int] | Non
         for port in group["interfaces"]
     }
     return host_vlans or None
-
-
-def _combine_leaf_pbr_rules(
-    customer_rules: list[dict[str, Any]], lb_backend_rules: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
-    """Combine firewall and LB redirects into one policy per VLAN."""
-    by_vlan = {rule["vlan_id"]: {**rule, "backend_ips": [], "lb_nexthop": None} for rule in customer_rules}
-    for rule in lb_backend_rules:
-        vlan_id = rule["vlan_id"]
-        if vlan_id in by_vlan:
-            by_vlan[vlan_id].update(backend_ips=rule["backend_ips"], lb_nexthop=rule["lb_nexthop"])
-        else:
-            by_vlan[vlan_id] = {**rule, "bypass_prefixes": [], "fw_nexthop": None}
-    return [by_vlan[vlan_id] for vlan_id in sorted(by_vlan)]
 
 
 class BaseDeviceTransform(InfrahubTransform):
@@ -194,10 +171,6 @@ class BaseDeviceTransform(InfrahubTransform):
         device_data["exchange_transits"] = get_exchange_transits(_firewall_context_caps(device_data.get("interfaces")))
 
         config = self._template_context(device_data, platform_name, extra_roots)
-        if platform_name in {"sonic", "dell_sonic"}:
-            unsupported = [key for key in ("snmp", "aaa") if config.get(key)]
-            if unsupported:
-                raise ValueError(f"{platform_name} ConfigDB rendering does not support: {', '.join(unsupported)}")
         self._refuse_cisco_xe_unrendered(platform_name, config)
         config.update(self._cisco_xe_context(platform_name, config))
         return self._render(platform_name, config)
@@ -307,7 +280,6 @@ class BaseDeviceTransform(InfrahubTransform):
         interfaces = data.get("interfaces") or []
         device_capabilities = data.get("capabilities") or []
         device_name = data.get("name", "")
-        management_services = get_management_services(device_capabilities)
         mlag = get_mlag(device_capabilities, interfaces, device_name=device_name)
         template_interfaces = self._template_interfaces(data, host_vlans=host_vlans)
         config = {
@@ -324,10 +296,6 @@ class BaseDeviceTransform(InfrahubTransform):
             ),
             "ospf": get_ospf(device_capabilities, interfaces),
             "mlag": mlag,
-            "ntp": management_services["ntp"],
-            "syslog": management_services["syslog"],
-            "snmp": management_services["snmp"],
-            "aaa": management_services["aaa"],
             "capabilities": get_capabilities(data),
         }
         if platform_name in {"sonic", "dell_sonic"}:
@@ -377,14 +345,8 @@ class BaseDeviceTransform(InfrahubTransform):
         # leaf ever owns a FirewallContext interface itself, only the
         # firewall/border-leaf do. Computed before the VLANs: a leaf's PBR next
         # hops decide which transit legs it holds locally.
-        customer_pbr_rules, leaf_transits = self._firewall_pbr(data, routed)
+        leaf_pbr_rules, leaf_transits = self._firewall_pbr(data, routed)
 
-        # LB backend no-SNAT return-path PBR: same device-scoped deployment
-        # traversal as firewall_contexts above, leaf-only in practice since
-        # border-leaf never hosts pool members (no activations there).
-        lb_vips = _flatten_deployment_lb_vips(data.get("deployment"))
-        lb_backend_pbr_rules = get_lb_backend_pbr_rules(routed, lb_vips)
-        leaf_pbr_rules = _combine_leaf_pbr_rules(customer_pbr_rules, lb_backend_pbr_rules)
         if self.device_role in self._LEAF_ROLES:
             # SONiC renders PBR (ConfigDB PBR ACL table); SR OS leafs do not.
             # Refuse rather than ship a VLAN whose firewall steering silently vanished.

@@ -2,7 +2,7 @@
 
 PhysicalCircuitGenerator (add_circuit)
     ``peering_role: dci`` builds the EVPN Multi-Site DCI session over the
-    circuit's two endpoints (customer_interfaces + provider_interfaces): a
+    circuit's two endpoints (interface_capabilities, exactly two by schema): a
     P2P prefix from the DCI pool, both addresses, the two interfaces
     addressed, and one directly connected eBGP peering between the two
     devices' overlay ManagedBGP processes, keyed with the DC fabric's
@@ -160,9 +160,9 @@ def _parse_endpoints(interfaces: list[dict[str, Any]]) -> list[CircuitEndpoint]:
     return endpoints
 
 
-def physical_circuit_endpoints(circuit: dict[str, Any]) -> list[CircuitEndpoint]:
-    """customer_interfaces + provider_interfaces: data fills the two inconsistently."""
-    return _parse_endpoints([*(circuit.get("customer_interfaces") or []), *(circuit.get("provider_interfaces") or [])])
+def circuit_endpoints(circuit: dict[str, Any]) -> list[CircuitEndpoint]:
+    """The circuit's ends, from its one ``interface_capabilities`` edge (physical and virtual circuits alike)."""
+    return _parse_endpoints(circuit.get("interface_capabilities") or [])
 
 
 def endpoint_problem(endpoints: list[CircuitEndpoint]) -> str | None:
@@ -236,7 +236,7 @@ class PhysicalCircuitGenerator(CablingMixin, _CircuitGenerator):
 
         role: str = circuit.get("peering_role") or "none"
         status: str = circuit.get("status") or ""
-        endpoints = physical_circuit_endpoints(circuit)
+        endpoints = circuit_endpoints(circuit)
         summary = " | ".join(e.label for e in endpoints) or "no endpoints"
         self.logger.info(f"Processing physical circuit {circuit_name} (role={role}, status={status}): {summary}")
 
@@ -466,7 +466,7 @@ class VirtualCircuitGenerator(_CircuitGenerator):
             )
             return
 
-        endpoints = _parse_endpoints(circuit.get("interface_capabilities") or [])
+        endpoints = circuit_endpoints(circuit)
         problem = endpoint_problem(endpoints)
         if problem:
             self.logger.error(f"{circuit_name}: peering_role overlay needs {problem}")

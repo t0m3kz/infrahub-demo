@@ -80,18 +80,6 @@ spec:
                   kind: TopologyCustomerTemplateDC
                   icon: "mdi:floor-plan"
 
-                - namespace: Topology
-                  name: DesignCustomerTemplateColoItem
-                  label: Colocation
-                  kind: TopologyCustomerTemplateColo
-                  icon: "mdi:office-building-outline"
-
-                - namespace: Topology
-                  name: DesignCustomerTemplateCloudItem
-                  label: Cloud
-                  kind: TopologyCustomerTemplateCloud
-                  icon: "mdi:cloud-outline"
-
     # ──────────────────────────────────────────────────────────────────────────
     # INVENTORY — physical devices and hardware
     # ──────────────────────────────────────────────────────────────────────────
@@ -319,37 +307,6 @@ spec:
             label: Network Segments
             kind: ManagedNetworkSegment
             icon: "mdi:layers-triple"
-
-          # ── Infrastructure Services ────────────────────────────────────────
-          - namespace: Managed
-            name: InfraServicesMenu
-            label: Infrastructure Services
-            icon: "mdi:server-plus"
-            children:
-              data:
-                - namespace: Managed
-                  name: NtpItem
-                  label: NTP
-                  kind: ManagedNTP
-                  icon: "mdi:clock-outline"
-
-                - namespace: Managed
-                  name: SyslogItem
-                  label: Syslog
-                  kind: ManagedSyslog
-                  icon: "mdi:text-box-multiple-outline"
-
-                - namespace: Managed
-                  name: SnmpItem
-                  label: SNMP
-                  kind: ManagedSNMP
-                  icon: "mdi:gauge"
-
-                - namespace: Managed
-                  name: AaaItem
-                  label: AAA
-                  kind: ManagedAAA
-                  icon: "mdi:shield-account-outline"
 
           # ── Traffic Management ─────────────────────────────────────────────
           - namespace: Managed

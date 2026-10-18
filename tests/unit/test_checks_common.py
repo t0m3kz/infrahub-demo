@@ -71,7 +71,7 @@ class TestValidateRoutingPasswordBgp:
 
     def test_non_bgp_capability_ignored(self):
         data = {
-            "capabilities": [{"typename": "ManagedNTP", "servers": []}],
+            "capabilities": [{"typename": "ManagedStandaloneVlanDomain"}],
         }
         assert validate_routing_password(data) == []
 

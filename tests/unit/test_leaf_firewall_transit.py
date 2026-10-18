@@ -193,8 +193,8 @@ class TestGetLeafFirewallTransits:
         assert len(get_leaf_firewall_transits(rules, [_context()], device_name="leaf-01")) == 1
 
     def test_no_firewall_rule_means_no_transit(self) -> None:
-        """LB-only / bypass-only leaves (no fw_nexthop) hold no transit leg."""
-        rules = [{"vlan_id": 100, "fw_nexthop": None, "lb_nexthop": "10.0.0.3"}]
+        """Bypass-only leaves (no fw_nexthop) hold no transit leg."""
+        rules = [{"vlan_id": 100, "fw_nexthop": None, "bypass_prefixes": ["10.0.2.0/24"]}]
         assert get_leaf_firewall_transits(rules, [_context()], device_name="leaf-01") == []
         assert get_leaf_firewall_transits([], [_context()], device_name="leaf-01") == []
 

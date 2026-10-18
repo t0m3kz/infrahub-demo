@@ -94,6 +94,7 @@ nodes:
     inherit_from:
       - TopologyCircuit
       - ManagedGeneric
+      - ManagedGenericInterfaces
     human_friendly_id:
       - circuit_id__value
     display_label: "{{ circuit_id__value }} - {{ provider__name__value }}"
@@ -186,23 +187,19 @@ nodes:
         order_weight: 610
 
     relationships:
-      - name: customer_interfaces
-        label: "Customer Interfaces"
+      # Re-declares ManagedGenericInterfaces.interface_capabilities with a count. The cap holds when the
+      # circuit side is written; checks/physical_circuit_ports.py holds it for interface-side writes.
+      - name: interface_capabilities
         peer: DcimInterface
+        label: "Ends"
+        kind: Generic
         cardinality: many
-        optional: true
-        identifier: "physical_circuit__customer_interfaces"
+        optional: false
+        min_count: 2
+        max_count: 2
+        identifier: interface_capabilities
         order_weight: 1100
-        description: "Customer-facing circuit interfaces (typically A/Z pair)"
-
-      - name: provider_interfaces
-        label: "Provider Interfaces"
-        peer: DcimInterface
-        cardinality: many
-        optional: true
-        identifier: "physical_circuit__provider_interfaces"
-        order_weight: 1200
-        description: "Provider-facing handoff interfaces (typically A/Z pair)"
+        description: "The two ports this circuit terminates on, one at each end"
 
   - name: VirtualCircuit
     namespace: Topology
@@ -210,12 +207,11 @@ nodes:
     label: "Virtual Circuit"
     icon: "mdi:cloud-sync"
     include_in_menu: false
-    # ManagedGenericInterfaces is what puts this circuit into a terminating
-    # interface's `interface_capabilities` list, alongside RoutingOSPFInterface,
-    # ManagedVxlanSegment and TopologyExchangeGateway. That is the one uniform
-    # way in this schema to ask "what is this port doing", and the edge a walk
-    # outward from a changed interface follows. It replaces the bespoke `interfaces` relationship this
-    # node used to declare — two edges for the same fact could disagree.
+    # ManagedGenericInterfaces puts this circuit into a terminating interface's `interface_capabilities` list,
+    # alongside RoutingOSPFInterface, ManagedVxlanSegment and TopologyExchangeGateway: the one uniform way in this
+    # schema to ask "what is this port doing", and the edge a walk outward from a changed interface follows. The
+    # physical circuit uses the same edge with exactly two ends; a virtual circuit leaves it uncapped because a
+    # tunnel port carries several circuits.
     inherit_from:
       - TopologyCircuit
       - ManagedGeneric

@@ -42,7 +42,6 @@ spec:
           - index: 1
             layout: S_MIDDLE
             deployment_type: middle_rack
-            suites: [rom-1-s-1]
             fabric_templates:
               - ["2", "spine", "DCS-7050CX3-32C-R_SPINE"]
             mlag_create: back-to-back
@@ -84,7 +83,6 @@ spec:
           - index: 2
             layout: S_MIDDLE
             deployment_type: middle_rack
-            suites: [rom-1-s-2]
             fabric_templates:
               - ["2", "spine", "DCS-7050CX3-32C-R_SPINE"]
             member_of_groups:

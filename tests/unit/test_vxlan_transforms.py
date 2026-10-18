@@ -1163,11 +1163,6 @@ def _minimal_ctx(**overrides) -> dict:
         "bgp": None,
         "vxlan": {"enabled": False},
         "vrf_routes": [],
-        # Management-section variables expected by arista_eos_management.j2
-        "ntp": None,
-        "syslog": None,
-        "snmp": None,
-        "aaa": None,
         # MLAG section
         "mlag": None,
     }
@@ -1457,7 +1452,7 @@ class TestSelectEvpnBgpProcess:
 
     def test_non_bgp_capabilities_are_ignored(self) -> None:
         caps = [
-            {"typename": "ManagedNTP", "name": "ntp"},
+            {"typename": "ManagedStandaloneVlanDomain", "name": "vlan-domain"},
             {"typename": "ManagedOSPF", "name": "ospf"},
         ]
         assert _select_evpn_bgp_process(caps) is None

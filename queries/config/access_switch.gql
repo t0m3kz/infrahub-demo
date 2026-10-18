@@ -41,7 +41,6 @@ query access_switch_config(
               ...EvpnRtAsOnDeploymentFields
               ...LispSiteOnOfficeFields
               ...FirewallContextsOnDeploymentFields
-              ...LoadbalancerVipsOnDeploymentFields
             }
           }
         }

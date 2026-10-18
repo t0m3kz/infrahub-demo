@@ -24,7 +24,6 @@ from .protocols import (
     DcimVirtualDevice,
     DcimVirtualInterface,
     ManagedController,
-    ManagedHAInterface,
     ManagedMLAG,
     ManagedStandaloneVlanDomain,
 )
@@ -587,8 +586,8 @@ class DeviceMixin(MLAGWiringMixin):
         tenant_id: str | None = None,
     ) -> None:
         """Pair same-role devices two-at-a-time (sorted, odd one unpaired) into
-        HA domains, then ensure each pair's HA sync interfaces/ManagedHAInterface/
-        cable in the same call — no separate add_ha generator/trigger round-trip
+        HA domains, then ensure each pair's HA sync interfaces/cable in the
+        same call — no separate add_ha generator/trigger round-trip
         (that used to run async off a ManagedFirewallHA/LoadbalancerHA "updated"
         mutation, and re-fired 2-3x per domain whenever two concurrent callers
         raced on the filter-then-create check below, since every racer's
@@ -650,13 +649,11 @@ class DeviceMixin(MLAGWiringMixin):
         device_kind: type[Any] = DcimPhysicalDevice,
         member_ids: list[str] | None = None,
     ) -> None:
-        """Ensure each member device has a ManagedHAInterface on its HA sync
-        interface, and (for physical pairs only) a DcimCable between the two
-        sync interfaces. Purely idempotent: every write is gated on an
-        existing-membership check first, so a repeat call on an unchanged
-        domain performs zero writes (see _ensure_ha_pairs's docstring for why
-        that matters — this used to be a separate generator invoked via
-        trigger, unconditionally create()-ing on every run).
+        """Ensure each member device has an active HA sync interface, and (for
+        physical pairs only) a DcimCable between the two sync interfaces.
+        Idempotent (see _ensure_ha_pairs's docstring for why that matters —
+        this used to be a separate generator invoked via trigger,
+        unconditionally create()-ing on every run).
 
         member_ids lets a caller that already knows the two device ids (the
         freshly-created-domain path in _ensure_ha_pairs) skip reading
@@ -670,22 +667,6 @@ class DeviceMixin(MLAGWiringMixin):
 
         is_physical = device_kind is DcimPhysicalDevice
         member_devices = await self.client.filters(kind=device_kind, ids=member_ids, include=["deployment"])
-
-        existing_ha_ifaces = await self.client.filters(
-            kind=ManagedHAInterface, ha_domain__ids=[ha_obj.id], include=["interface_capabilities"]
-        )
-        existing_sync_iface_ids: set[str] = set()
-        for node in existing_ha_ifaces:
-            # Re-register with this run's tracking group, for the same reason
-            # _ensure_ha_pairs re-registers an existing HA domain: a generator
-            # body runs inside client.start_tracking(delete_unused_nodes=True),
-            # so every node it created in an EARLIER run and does not touch in
-            # this one is deleted as "no longer required". Left unregistered,
-            # these ManagedHAInterfaces (and the sync cable below) vanish on the
-            # first idempotent re-run and come back on the next one — a
-            # flip-flop, since the run that re-creates them registers them again.
-            self.client.group_context.related_node_ids.append(node.id)
-            existing_sync_iface_ids.update(peer.id for peer in getattr(node, "interface_capabilities").peers)
 
         sync_ifaces: list[Any] = []
         for device_obj in member_devices:
@@ -732,8 +713,8 @@ class DeviceMixin(MLAGWiringMixin):
             # not stay at DcimInterface's `free` default — same flip, and same
             # reason, as create_connections() applies to both ends of every cable
             # it lays and _ensure_mlag_pairs applies to the peer-link members.
-            # Deliberately outside the existing_sync_iface_ids skip below, so a
-            # pair created before this was fixed self-heals on its next run.
+            # Runs on every call, so a pair created before this was fixed
+            # self-heals on its next run.
             #
             # update_group_context=False: a physical sync port belongs to the
             # device's object_template, not to this generator run — it must never
@@ -741,27 +722,6 @@ class DeviceMixin(MLAGWiringMixin):
             if getattr(sync_iface, "status").value != "active":
                 getattr(sync_iface, "status").value = "active"
                 await sync_iface.save(allow_upsert=True, update_group_context=False)
-
-            if sync_iface.id in existing_sync_iface_ids:
-                continue
-
-            suffix = "HA-MIRROR" if "mirror" in sync_iface.name.value.lower() else "HA-SYNC"
-            node_name = f"{device_obj.name.value}-{suffix}"
-            self.logger.info(
-                f"  [{device_obj.name.value}:{sync_iface.name.value}] Creating ManagedHAInterface {node_name}"
-            )
-            ha_iface = await self.client.create(
-                kind=ManagedHAInterface,
-                data={
-                    "name": node_name,
-                    "link_type": "sync",
-                    "status": "active",
-                    "description": f"HA link — {device_obj.name.value}:{sync_iface.name.value}",
-                    "ha_domain": {"id": ha_obj.id},
-                    "interface_capabilities": [{"id": sync_iface.id}],
-                },
-            )
-            await ha_iface.save(allow_upsert=True)
 
         if is_physical and len(sync_ifaces) == 2:
             await self._ensure_ha_cable(ha_name, sync_ifaces)
@@ -774,10 +734,11 @@ class DeviceMixin(MLAGWiringMixin):
 
         existing = await self.client.filters(kind=DcimCable, name__value=cable_name)
         if existing:
-            # Keep it in this run's tracking group — see the note in
-            # _ensure_ha_interfaces. Returning without registering made the
-            # cable oscillate: created on one run, deleted as unused at the end
-            # of the next.
+            # Keep it in this run's tracking group: a generator body runs inside
+            # client.start_tracking(delete_unused_nodes=True), so a node from an
+            # earlier run that this run does not touch is deleted as unused.
+            # Returning without registering made the cable oscillate: created on
+            # one run, deleted as unused at the end of the next.
             self.client.group_context.related_node_ids.append(existing[0].id)
             return
 

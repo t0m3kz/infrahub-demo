@@ -62,10 +62,10 @@ def test_peering_names_do_not_collide_with_circuits() -> None:
 
 @pytest.mark.parametrize("circuit_id", sorted(_circuits()))
 def test_peering_rides_its_circuit(circuit_id: str) -> None:
-    """The session's two interfaces are the circuit's cage and ISP ends."""
+    """The session's two interfaces are the circuit's cage (first) and ISP (second) ends, in that order."""
     circuit = _circuits()[circuit_id]
     peering = _peerings()[circuit_id]
-    ends = [tuple(i) for i in circuit["customer_interfaces"] + circuit["provider_interfaces"]]
+    ends = [tuple(i) for i in circuit["interface_capabilities"]]
     assert [tuple(i) for i in peering["interface_capabilities"]] == ends
 
 
@@ -74,12 +74,13 @@ def test_transit_link_is_one_31_with_isp_on_even(circuit_id: str) -> None:
     """Both ends share a /31 in INTERNET and the ISP takes the even address."""
     circuit = _circuits()[circuit_id]
     ips = _interface_ips()
-    cage = ips[tuple(circuit["customer_interfaces"][0])]
-    isp = ips[tuple(circuit["provider_interfaces"][0])]
+    cage_end, isp_end = circuit["interface_capabilities"]
+    cage = ips[tuple(cage_end)]
+    isp = ips[tuple(isp_end)]
     assert cage.network == isp.network
     assert cage.network.prefixlen == 31
     assert isp.ip == cage.network.network_address
-    assert circuit["customer_interfaces"][0][0] in _CAGE_EDGES
+    assert cage_end[0] in _CAGE_EDGES
 
 
 def test_transit_networks_do_not_overlap() -> None:

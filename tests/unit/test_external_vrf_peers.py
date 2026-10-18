@@ -104,7 +104,7 @@ _NO_SDWAN: dict[str, Any] = {"device_capabilities": None, "offices": None}
 def _bgp_facing(*ends: tuple[str, str]) -> list[dict[str, Any]]:
     """Cleaned device capabilities: one ManagedBGP whose peerings run eg-fr01 (local iface) -> remote device."""
     return [
-        {"typename": "ManagedNTP", "name": "ntp"},
+        {"typename": "ManagedStandaloneVlanDomain", "name": "vlan-domain"},
         {
             "typename": "ManagedBGP",
             "peerings": [
@@ -661,7 +661,7 @@ class TestAllDemoData:
         device, interface = peering["interface_capabilities"][0]
         port, _, vlan = interface.rpartition(".")
         assert device in dx["physical_devices"]
-        assert [device, port] in xc["customer_interfaces"]
+        assert [device, port] in xc["interface_capabilities"]
         assert int(vlan) == vif["vlan_id"]
         assert peering["namespaces"] == ["PROD", "PROD"]
 

@@ -403,7 +403,7 @@ class TestRefusals:
         assert str(error.value) == f"{platform} {role} cannot render the LISP overlay; refusing incomplete config"
 
     def test_pbr_is_still_refused_on_an_office_switch(self) -> None:
-        with patch("transforms.common._combine_leaf_pbr_rules", return_value=[{"vlan_id": 100}]):
+        with patch("transforms.common.get_customer_pbr_rules", return_value=[{"vlan_id": 100}]):
             with pytest.raises(ValueError, match=r"cisco_xe access-switch cannot render: leaf_pbr_rules"):
                 _run_transform(AccessSwitch, _raw(ACCESS_INPUT))
 

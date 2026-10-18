@@ -20,9 +20,6 @@
 {%- set bgp_globals_af = {} -%}
 {%- set ospf_router = {} -%}
 {%- include 'common/sonic_common.j2' %}
-{%- set ntp_servers = {} -%}
-{%- set syslog_servers = {} -%}
-{%- include 'common/sonic_management.j2' %}
 
 {{ {
   'DEVICE_METADATA': device_metadata,
@@ -36,6 +33,6 @@
   'BGP_PEER_GROUP': bgp_peer_groups,
   'BGP_NEIGHBOR': bgp_neighbors,
   'OSPF_ROUTER': ospf_router,
-  'NTP_SERVER': ntp_servers,
-  'SYSLOG_SERVER': syslog_servers
+  'NTP_SERVER': {},
+  'SYSLOG_SERVER': {}
 } | tojson(indent=2) }}

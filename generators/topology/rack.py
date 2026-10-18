@@ -8,7 +8,7 @@ from typing_extensions import TypedDict
 from ..common import CablingOptions, CommonGenerator
 from ..connections import CablingMixin
 from ..devices import DeviceMixin
-from ..helpers.rack import RackRolesHelper, base_offset, parse_rack_data, rack_sort_key
+from ..helpers.rack import RackRolesHelper, parse_rack_data, rack_sort_key
 from ..helpers.template_interfaces import template_interface_names_by_role
 from ..pod_config import pod_profile
 from ..pools import PoolMixin
@@ -301,10 +301,8 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
 
         # Compute rack (mixed deployment): cable to middle-rack leafs in same row
         pod = self.data["pod"]
-        rack_base = base_offset(pod.get("rack_numbering_start_index", 1))
-        leaf_base = base_offset(pod.get("leaf_link_numbering_start", 1))
-        effective_rack_index = max(0, self.data["index"] - 1 - rack_base)
-        cabling_offset = leaf_base + (effective_rack_index * devices_per_rack)
+        effective_rack_index = max(0, self.data["index"] - 1)
+        cabling_offset = effective_rack_index * devices_per_rack
 
         if leaf_row_cache is None:
             leaf_row_cache = await self._get_leaf_devices_in_row(pod_id=pod["id"], row_index=self.data["row_index"])
@@ -338,7 +336,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         current_index = data["index"]
         pod = data["pod"]
         deployment_type = pod["deployment_type"]
-        effective_rack_index = max(0, current_index - 1 - base_offset(pod.get("rack_numbering_start_index", 1)))
+        effective_rack_index = max(0, current_index - 1)
 
         # For middle_rack deployment ToRs: always offset=0 (ToRs connect to leafs in same rack)
         if deployment_type == "middle_rack" and device_type == "tor":
@@ -350,7 +348,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         # For mixed/middle_rack deployment leafs: calculate offset based on row position
         # Middle rack leafs serve all ToRs in their row
         elif deployment_type in ("mixed", "middle_rack") and device_type == "leaf":
-            offset = base_offset(pod.get("leaf_link_numbering_start", 1)) + (data["row_index"] - 1) * device_count
+            offset = (data["row_index"] - 1) * device_count
 
             self.logger.info(
                 f"Calculated {device_type} offset={offset} for rack {data['name']} "
@@ -364,9 +362,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         elif deployment_type in ("mixed", "tor") and device_type == "tor":
             tors_in_previous_rows = (racks_in_previous_rows or 0) * device_count
             offset_in_current_row = device_count * effective_rack_index
-            offset = (
-                base_offset(pod.get("spine_link_numbering_start", 1)) + tors_in_previous_rows + offset_in_current_row
-            )
+            offset = tors_in_previous_rows + offset_in_current_row
 
             self.logger.info(
                 f"Calculated {device_type} offset={offset} for rack {data['name']} "

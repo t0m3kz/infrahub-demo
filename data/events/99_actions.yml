@@ -641,7 +641,7 @@ spec:
       mutation_action: "created"
       action: run-circuit-generator
 
-    - name: trigger-circuit-on-customer-interfaces-updated
+    - name: trigger-circuit-on-interface-capabilities-updated
       branch_scope: "other_branches"
       node_kind: TopologyPhysicalCircuit
       mutation_action: "updated"
@@ -649,18 +649,7 @@ spec:
       matches:
         kind: CoreNodeTriggerRelationshipMatch
         data:
-          - relationship_name: customer_interfaces
-            modification_type: updated
-
-    - name: trigger-circuit-on-provider-interfaces-updated
-      branch_scope: "other_branches"
-      node_kind: TopologyPhysicalCircuit
-      mutation_action: "updated"
-      action: run-circuit-generator
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: provider_interfaces
+          - relationship_name: interface_capabilities
             modification_type: updated
 
     - name: trigger-circuit-on-status-updated

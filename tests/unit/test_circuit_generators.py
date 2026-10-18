@@ -15,7 +15,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from generators.logger import GeneratorError
-from generators.topology.circuit import CircuitEndpoint, endpoint_problem, order_endpoints, physical_circuit_endpoints
+from generators.topology.circuit import CircuitEndpoint, circuit_endpoints, endpoint_problem, order_endpoints
 from tests.unit.simulators.circuit_fakes import (
     DC_KEY_ID,
     PREFIX_ID,
@@ -48,11 +48,10 @@ def _peerings(client: FakeClient) -> list[dict[str, Any]]:
 
 
 class TestEndpoints:
-    def test_customer_and_provider_interfaces_are_one_endpoint_list(self) -> None:
-        """Data fills customer_interfaces/provider_interfaces inconsistently:
-        the endpoints are both lists together, deduplicated."""
-        circuit = clean_data(physical_payload(customer=[dc_border_leaf(), cage_edge()], provider=[cage_edge()]))
-        endpoints = physical_circuit_endpoints(circuit["TopologyPhysicalCircuit"][0])
+    def test_both_ends_come_from_interface_capabilities_deduplicated(self) -> None:
+        """The circuit's ends are its interface_capabilities, one list; a port listed twice counts once."""
+        circuit = clean_data(physical_payload(ends=[dc_border_leaf(), cage_edge(), cage_edge()]))
+        endpoints = circuit_endpoints(circuit["TopologyPhysicalCircuit"][0])
 
         assert [e.label for e in endpoints] == ["bl-dc101101/Ethernet1/35", "eg-fr01/Ethernet1/10"]
 
@@ -120,11 +119,11 @@ class TestPhysicalCircuitNoSession:
 
     @pytest.mark.asyncio
     async def test_role_none_with_one_endpoint_only_logs(self) -> None:
-        """An INET-style circuit with one terminating port is fine without a session."""
+        """A one-ended circuit (an interface-side write the schema cap does not see) is only logged without a session."""
         client = FakeClient()
         gen = physical_generator(client)
 
-        await gen.generate(physical_payload(role="none", provider=[]))
+        await gen.generate(physical_payload(role="none", ends=[dc_border_leaf()]))
 
         assert client.writes == []
         assert any("exactly 2 endpoint interfaces" in str(c) for c in gen.logger.info.call_args_list)
@@ -175,7 +174,7 @@ class TestPhysicalCircuitDci:
     async def test_ipv4_fabric_uses_the_ipv4_dci_pool_and_unicast_family(self) -> None:
         """The DCI follows the DC fabric's underlay_protocol."""
         client = FakeClient()
-        payload = physical_payload(customer=[dc_border_leaf(underlay="ipv4")])
+        payload = physical_payload(ends=[dc_border_leaf(underlay="ipv4"), cage_edge()])
 
         await physical_generator(client).generate(payload)
 
@@ -303,24 +302,31 @@ class TestPhysicalCircuitDciRefusals:
     @pytest.mark.parametrize(
         ("payload", "client_kwargs", "message"),
         [
-            pytest.param(physical_payload(provider=[]), {}, "exactly 2 endpoint interfaces, found 1", id="one-end"),
             pytest.param(
-                physical_payload(provider=[interface("if-bl-2", "Ethernet1/36", "bl-dc101101", dc="DC10")]),
+                physical_payload(ends=[dc_border_leaf()]), {}, "exactly 2 endpoint interfaces, found 1", id="one-end"
+            ),
+            pytest.param(
+                physical_payload(
+                    ends=[dc_border_leaf(), interface("if-bl-2", "Ethernet1/36", "bl-dc101101", dc="DC10")]
+                ),
                 {},
                 "2 different devices",
                 id="same-device",
             ),
             pytest.param(
-                physical_payload(customer=[sdwan_edge()]), {}, "needs a DC fabric device at one end", id="no-dc-end"
+                physical_payload(ends=[sdwan_edge(), cage_edge()]),
+                {},
+                "needs a DC fabric device at one end",
+                id="no-dc-end",
             ),
             pytest.param(
-                physical_payload(provider=[cage_edge(roles=("underlay",))]),
+                physical_payload(ends=[dc_border_leaf(), cage_edge(roles=("underlay",))]),
                 {},
                 "eg-fr01 has no single overlay ManagedBGP process",
                 id="no-overlay-process",
             ),
             pytest.param(
-                physical_payload(customer=[dc_border_leaf(kind="DcimLAGInterface")]),
+                physical_payload(ends=[dc_border_leaf(kind="DcimLAGInterface"), cage_edge()]),
                 {},
                 "takes no address",
                 id="lag-endpoint",

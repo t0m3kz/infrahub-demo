@@ -1086,6 +1086,16 @@ class TestGetCustomerPbrRules:
         assert result[0]["vlan_id"] == 100
         assert result[0]["bypass_prefixes"] == []
 
+    def test_one_rule_per_vlan_sorted_by_vlan_id(self) -> None:
+        """Repeated activations of one VLAN yield one rule, and the rules come out in VLAN order."""
+        activations = [
+            _make_pbr_activation(vlan_id=300, security_policies=[]),
+            _make_pbr_activation(vlan_id=100, security_policies=[]),
+            _make_pbr_activation(vlan_id=300, security_policies=[]),
+        ]
+        result = get_customer_pbr_rules(activations, [_make_context_leg()])
+        assert [rule["vlan_id"] for rule in result] == [100, 300]
+
     def test_dedicated_context_nexthop_preferred_over_shared(self) -> None:
         activations = [_make_pbr_activation(deployment_id="dep-a", security_policies=[])]
         contexts = [

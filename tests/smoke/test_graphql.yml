@@ -317,14 +317,6 @@ infrahub_tests:
 
   # ==================== VALIDATION QUERIES ====================
   - resource: GraphQLQuery
-    resource_name: capability_guard
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/validation/capability_guard.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
     resource_name: app_dependency_validation
     tests:
       - name: syntax_check
@@ -378,6 +370,14 @@ infrahub_tests:
       - name: syntax_check
         spec:
           path: queries/validation/lisp_fabric.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: physical_circuit_ports
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/physical_circuit_ports.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery

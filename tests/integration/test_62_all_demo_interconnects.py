@@ -29,6 +29,7 @@ import logging
 import pytest
 from infrahub_sdk import InfrahubClient
 
+from generators.helpers.naming import sdwan_edge_name
 from generators.helpers.pools import FW_CONTEXT_VLAN_END, FW_CONTEXT_VLAN_START
 from utils.exchange_transit import EXCHANGE_PEERS, TRANSIT_OFFSETS, transit_vlan, wan_exit_vlan
 
@@ -51,10 +52,15 @@ from .test_constants import (
     ALL_DEMO_INTERNET_TRANSIT_CIRCUITS,
     ALL_DEMO_INTERNET_TRANSIT_PEERINGS,
     ALL_DEMO_INTERNET_UPSTREAM_BY_DC,
+    ALL_DEMO_ISP_ACCESS_DEVICE,
+    ALL_DEMO_ISP_ACCESS_LOCATION,
+    ALL_DEMO_ISP_ACCESS_PORTS,
     ALL_DEMO_LEGACY_EXCHANGES,
     ALL_DEMO_METRO_SITE_VIPS,
     ALL_DEMO_OFFICE_WAN_EXITS,
     ALL_DEMO_PHYSICAL_CIRCUIT_TYPES,
+    ALL_DEMO_SDWAN_EDGE_UPLINK,
+    ALL_DEMO_SDWAN_UNDERLAY_CIRCUITS,
     ALL_DEMO_SEGMENT_LEGS,
     ALL_DEMO_SHARED_FIREWALL_CONTEXTS,
     ALL_DEMO_SNAT_ADDRESSES,
@@ -289,11 +295,13 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify the physical underlay: type mix, provider, and two endpoints.
+        """Verify the physical underlay: type mix, provider, two locations and two distinct ends.
 
-        Every circuit is point-to-point, so exactly two locations is a hard
-        invariant — a one-ended circuit is a dangling reference the loader
-        accepts silently.
+        Every circuit is point-to-point, so exactly two locations and exactly
+        two distinct ports (its interface_capabilities, min and max count 2) are
+        hard invariants, and a port is an end of at most one circuit — the
+        SD-WAN offices' INET-<office> circuits, created concurrently, are where a
+        shared access port would show.
         """
         logging.info("=== %s - Step 1: Physical Circuits ===", SCENARIO_NAME)
 
@@ -331,11 +339,63 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             if circuit["circuit_type"] in ("dark_fiber", "cross_connect") and circuit["owner"]:
                 errors.append(f"{circuit_id}: shared {circuit['circuit_type']} circuit owned by '{circuit['owner']}'")
 
+        errors.extend(self._port_errors(physical))
+        errors.extend(self._sdwan_underlay_errors(physical))
+
         assert not errors, f"30_all physical circuits are wrong on branch '{scenario_branch}':\n" + "\n".join(
             f"  - {e}" for e in errors
         )
 
         logging.info("Physical circuits verified: %d (%s)", len(physical), dict(sorted(by_type.items())))
+
+    @staticmethod
+    def _port_errors(physical: list[dict]) -> list[str]:
+        """Every circuit has two distinct ends, and no port is an end of two circuits."""
+        errors: list[str] = []
+        circuit_of_port: dict[tuple[str, str], str] = {}
+        for circuit in sorted(physical, key=lambda c: c["circuit_id"]):
+            circuit_id = circuit["circuit_id"]
+            if len(circuit["end_ids"]) != 2 or len(set(circuit["end_ids"])) != 2:
+                errors.append(f"{circuit_id}: ends {circuit['ends']}, expected exactly 2 distinct ports")
+            for end in circuit["ends"]:
+                if end in circuit_of_port:
+                    errors.append(f"{end} is an end of both {circuit_of_port[end]} and {circuit_id}")
+                circuit_of_port[end] = circuit_id
+        return errors
+
+    @staticmethod
+    def _sdwan_underlay_errors(physical: list[dict]) -> list[str]:
+        """INET-<office>: the office edge's uplink to its own access-PE port, in the office and the ISP.
+
+        The offices board in one load and add_sdwan_edge picks the first free
+        port of the access PE under a lock, so the five circuits together
+        hold exactly xe-0/1/[0-4].
+        """
+        errors: list[str] = []
+        by_id = {circuit["circuit_id"]: circuit for circuit in physical}
+        isp_ports: list[str] = []
+        for circuit_id, office in sorted(ALL_DEMO_SDWAN_UNDERLAY_CIRCUITS.items()):
+            circuit = by_id.get(circuit_id)
+            if circuit is None:
+                errors.append(f"{circuit_id}: SD-WAN internet underlay of {office} was not created")
+                continue
+            if (sdwan_edge_name(office), ALL_DEMO_SDWAN_EDGE_UPLINK) not in circuit["ends"]:
+                errors.append(
+                    f"{circuit_id}: ends {circuit['ends']}, expected {sdwan_edge_name(office)} {ALL_DEMO_SDWAN_EDGE_UPLINK}"
+                )
+            isp_ends = [port for device, port in circuit["ends"] if device == ALL_DEMO_ISP_ACCESS_DEVICE]
+            if len(isp_ends) != 1:
+                errors.append(f"{circuit_id}: {len(isp_ends)} end(s) on {ALL_DEMO_ISP_ACCESS_DEVICE}, expected 1")
+            isp_ports.extend(isp_ends)
+            expected_locations = sorted([office, ALL_DEMO_ISP_ACCESS_LOCATION])
+            if circuit["locations"] != expected_locations:
+                errors.append(f"{circuit_id}: locations {circuit['locations']}, expected {expected_locations}")
+        if set(isp_ports) != ALL_DEMO_ISP_ACCESS_PORTS or len(isp_ports) != len(ALL_DEMO_ISP_ACCESS_PORTS):
+            errors.append(
+                f"{ALL_DEMO_ISP_ACCESS_DEVICE} ports {sorted(isp_ports)}, "
+                f"expected one circuit on each of {sorted(ALL_DEMO_ISP_ACCESS_PORTS)}"
+            )
+        return errors
 
     # ------------------------------------------------------------------
     # Virtual layer

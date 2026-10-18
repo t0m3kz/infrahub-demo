@@ -64,22 +64,7 @@ generics:
         direction: inbound
         identifier: capabilities
 
-  - name: GenericCluster
-    namespace: Managed
-    description: "Capabilities attached to virtualisation clusters"
-    label: "Cluster-based Resource"
-    include_in_menu: false
-    relationships:
-      - name: cluster_capabilities
-        peer: VirtCluster
-        label: Assigned Clusters
-        cardinality: many
-        kind: Generic
-        optional: true
-        direction: inbound
-        identifier: cluster_capabilities
-
-  # Use this generic ONLY for segments (VLAN, VXLAN, VRF, etc.)
+  # Capabilities attached to device interfaces (segments, circuits, peerings, firewall-context legs, VIPs)
   - name: GenericInterfaces
     namespace: Managed
     description: "Capabilities attached to multiple device interfaces"
@@ -117,14 +102,3 @@ extensions:
           cardinality: many
           kind: Generic
           on_delete: no-action
-    - kind: VirtCluster
-      relationships:
-        - name: cluster_capabilities
-          peer: ManagedGenericCluster
-          label: Cluster capabilities
-          optional: true
-          cardinality: many
-          direction: outbound
-          kind: Generic
-          on_delete: no-action
-          identifier: cluster_capabilities

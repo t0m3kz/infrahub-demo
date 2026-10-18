@@ -335,7 +335,7 @@ class TestHaSyncPortOwnership:
         gen.client.filters = AsyncMock(side_effect=_filters)
         resaved = _node("eth7-1", "eth7")
         resaved.status = MagicMock(value="active")
-        gen.client.create = AsyncMock(side_effect=[resaved, _node("ha-iface-1")])
+        gen.client.create = AsyncMock(return_value=resaved)
 
         await gen._ensure_ha_interfaces(ha_obj, "vfw-01-vfw-02-ha", device_kind=DcimVirtualDevice)
 
@@ -364,7 +364,7 @@ class TestHaSyncPortOwnership:
             return []
 
         gen.client.filters = AsyncMock(side_effect=_filters)
-        gen.client.create = AsyncMock(return_value=_node("ha-iface-1"))
+        gen.client.create = AsyncMock()
 
         await gen._ensure_ha_interfaces(ha_obj, "vfw-01-vfw-02-ha", device_kind=DcimVirtualDevice)
 

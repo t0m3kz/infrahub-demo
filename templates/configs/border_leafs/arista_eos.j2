@@ -91,6 +91,5 @@ ip route vrf {{ route.vrf }} {{ route.prefix }} {{ route.nexthop }}
 {%- endfor %}
 {%- endif %}
 
-{%- include 'common/arista_eos_management.j2' %}
 
 ! End of configuration

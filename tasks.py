@@ -451,8 +451,10 @@ ALL_DEMO_LOAD_STAGES: tuple[tuple[str, tuple[str, ...]], ...] = (
         # Everything that depends only on bootstrap data: customers, cloud
         # regions/zones, colocation metros/cages and racks (and the shared
         # SD-WAN gateway and orchestrator in the FR2 cage, so an office opts in
-        # when it is boarded), SaaS, office buildings, and the three DC sites
-        # with their fabrics and controllers.
+        # when it is boarded), the internet's ISPs (Orange's access PE is the
+        # far end of every SD-WAN office's INET circuit, so it must exist
+        # before add_sdwan_edge runs), SaaS, office buildings, and the three DC
+        # sites with their fabrics and controllers.
         # One load, so add_colocation_metro (one run per metro) and
         # add_dc -> add_pod -> add_rack (per DC) generate in parallel. The
         # loader sorts files by path, so each DC's 00_location.yml lands before
@@ -472,6 +474,7 @@ ALL_DEMO_LOAD_STAGES: tuple[tuple[str, tuple[str, ...]], ...] = (
             "03_dc/dc12/01_controllers_physical.yml",
             "03_dc/dc12/02_controllers_virtual.yml",
             "03_dc/dc12/03_topology.yml",
+            "04_internet",
             "04_saas",
             "05_office",
         ),

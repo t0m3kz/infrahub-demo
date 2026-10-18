@@ -38,7 +38,6 @@ query distribution_switch_config(
               ...EvpnRtAsOnDeploymentFields
               ...LispSiteOnOfficeFields
               ...FirewallContextsOnDeploymentFields
-              ...LoadbalancerVipsOnDeploymentFields
               ...SegmentDeploymentsOnDeploymentFields
             }
           }
