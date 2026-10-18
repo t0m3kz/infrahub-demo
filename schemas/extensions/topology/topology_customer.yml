@@ -494,7 +494,8 @@ nodes:
         label: "Max Segments"
         description: "Network-segment quota of the footprint, enforced by checks/customer_quota.py; no `design` means not metered"  # yamllint disable-line rule:line-length
         optional: false
-        min_value: 1
+        parameters:
+          min_value: 1
         order_weight: 320
       # ports_<speed>g: number of host-facing leaf/access ports of that speed
       # the customer may have tagged with its segments; 0 = none of this speed
@@ -507,14 +508,16 @@ nodes:
         label: "25G Ports"
         description: "Host-facing leaf/access ports of this speed the customer may tag with its segments; 0 = none allowed"  # yamllint disable-line rule:line-length
         optional: false
-        min_value: 0
+        parameters:
+          min_value: 0
         order_weight: 330
       - name: ports_100g
         kind: Number
         label: "100G Ports"
         description: "Host-facing leaf/access ports of this speed the customer may tag with its segments; 0 = none allowed"  # yamllint disable-line rule:line-length
         optional: false
-        min_value: 0
+        parameters:
+          min_value: 0
         order_weight: 340
 
 extensions:
