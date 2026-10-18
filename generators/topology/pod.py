@@ -12,12 +12,10 @@ from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
 from ..dc_config import host_bits_to_prefix_length, resolve_dc_size_layout
 from ..devices import DeviceMixin
 from ..helpers.naming import DeviceNamingConfig
-from ..helpers.rack import base_offset, expected_device_names
+from ..helpers.rack import expected_device_names
 from ..helpers.routing import (
-    LISP_OVERLAY,
     RoutingStrategy,
     loopback_prefix_length,
-    overlay_control_plane_of,
     p2p_prefix_length,
     underlay_pool_is_ipv6,
 )
@@ -78,7 +76,6 @@ class TopologyPodParentData(TypedDict, total=False):
     fabric_interface_sorting_method: str
     connectivity_mode: str
     routing_strategy: str
-    overlay_control_plane: str
     underlay_protocol: str
     fabric_templates: list[dict[str, Any]]
     size: str
@@ -104,10 +101,6 @@ class TopologyPodData(TypedDict, total=False):
     layout: str
     leaf_interface_sorting_method: str
     spine_interface_sorting_method: str
-    rack_numbering_start_index: int
-    leaf_link_numbering_start: int
-    spine_link_numbering_start: int
-    tor_link_numbering_start: int
     fabric_templates: list[dict[str, Any]]
     parent: TopologyPodParentData
     loopback_pool: dict[str, Any] | None
@@ -270,13 +263,7 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
         # cleanup would delete everything else it owned last run (cables, BGP,
         # border-leaf/FW/LB wiring). Returning before any save leaves the
         # tracking group untouched.
-        #
-        # Under a LISP overlay the super-spines have no overlay BGP to wait for.
-        if (
-            super_spine_devices
-            and overlay_control_plane_of(dc) != LISP_OVERLAY
-            and not await self._wait_for_super_spine_overlay(super_spine_devices, dc_id, pod_name)
-        ):
+        if super_spine_devices and not await self._wait_for_super_spine_overlay(super_spine_devices, dc_id, pod_name):
             return
 
         # Fixed per-pod pool sizes from this pod's own layout (see
@@ -410,9 +397,7 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
 
         if not skip_cabling:
             dc_max_spines = dc_design["max_spines_per_pod"]
-            cabling_offset = base_offset(self.data.get("spine_link_numbering_start", 1)) + (
-                (pod_index - 1) * dc_max_spines
-            )
+            cabling_offset = (pod_index - 1) * dc_max_spines
             p2p_pairs = await self.create_cabling(
                 bottom_devices=spines,
                 bottom_interfaces=spine_interfaces,
@@ -622,15 +607,10 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
             return
 
         design = resolve_pod_layout(self.data["layout"])
-        spine_link_base_offset = base_offset(self.data.get("spine_link_numbering_start", 1))
         if self.data["deployment_type"] == "tor":
-            offset = spine_link_base_offset + (
-                design["rows"] * design["compute_racks_per_row"] * design["max_tors_per_compute_rack"]
-            )
+            offset = design["rows"] * design["compute_racks_per_row"] * design["max_tors_per_compute_rack"]
         else:
-            offset = spine_link_base_offset + (
-                design["rows"] * design["network_racks_per_row"] * design["max_leafs_per_network_rack"]
-            )
+            offset = design["rows"] * design["network_racks_per_row"] * design["max_leafs_per_network_rack"]
 
         p2p_pairs = await self.create_cabling(
             bottom_devices=border_leaf_names,
@@ -769,8 +749,7 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
             # pod3's inbound link to pod2 both claimed pod2's first uplink pair).
             sibling_own_outbound_slots = sibling.index.value - 1
             pair_slot = sibling_own_outbound_slots + max(0, pod_index - sibling.index.value - 1)
-            spine_link_base_offset = base_offset(self.data.get("spine_link_numbering_start", 1))
-            cabling_offset = spine_link_base_offset + (pair_slot * links_per_sibling)
+            cabling_offset = pair_slot * links_per_sibling
             self.logger.info(
                 f"Pod {pod_name} (idx={pod_index}): cabling to sibling pod idx={sibling.index.value} "
                 f"[offset={cabling_offset}, pair_slot={pair_slot}, slot_start={slot_start}, "

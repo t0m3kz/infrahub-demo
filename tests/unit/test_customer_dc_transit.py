@@ -84,7 +84,7 @@ class _World:
                 id=f"bl-port-{device_id}",
                 role=SimpleNamespace(value="firewall"),
                 device=SimpleNamespace(id=f"bl-{device_id}", display_label=f"BL-{device_id}"),
-                interface_capabilities=_Many(),
+                capabilities=_Many(),
             )
             for device_id in ("fw-1", "fw-2")
         }
@@ -120,12 +120,8 @@ class _World:
         if name == "TopologyRoutedExchange":
             return [ex for ex_name, ex in self.exchanges.items() if ex_name in kwargs["name__values"]]
         if name == "DcimVirtualInterface":
-            ids = set(kwargs["interface_capabilities__ids"])
-            return [
-                sub
-                for sub in self.sub_interfaces.values()
-                if ids & {peer.id for peer in sub.interface_capabilities.peers}
-            ]
+            ids = set(kwargs["capabilities__ids"])
+            return [sub for sub in self.sub_interfaces.values() if ids & {peer.id for peer in sub.capabilities.peers}]
         if name == "IpamIPAddress":
             return [ip for ip in self.addresses.values() if ip.id in kwargs["ids"]]
         raise AssertionError(f"unexpected filters({name})")
@@ -219,7 +215,7 @@ class _World:
                     name=SimpleNamespace(value=data["name"]),
                     device=SimpleNamespace(id=data["device"]["id"]),
                     ip_address=SimpleNamespace(id=None),
-                    interface_capabilities=_Many(),
+                    capabilities=_Many(),
                 ),
             )
             sub.ip_address = SimpleNamespace(id=(data.get("ip_address") or {}).get("id") or sub.ip_address.id)
@@ -255,11 +251,11 @@ class _World:
         if kind == "ManagedFirewallContext" and backing is not None:
 
             async def add_relationships(*, relation_to_update: str, related_nodes: list[str]) -> None:
-                assert relation_to_update == "interface_capabilities"
+                assert relation_to_update == "capabilities"
                 world.tags.append((backing.id, list(related_nodes)))
                 for port in world.bl_ports.values():
                     if port.id in related_nodes:
-                        port.interface_capabilities.peers.append(SimpleNamespace(id=backing.id))
+                        port.capabilities.peers.append(SimpleNamespace(id=backing.id))
 
             node.add_relationships = add_relationships
         return node
@@ -333,7 +329,7 @@ async def _run(gen: Any, world: _World, payload: dict[str, Any]) -> None:
 
 
 def _sub_names(world: _World) -> dict[tuple[str, str], list[str]]:
-    return {key: [peer.id for peer in sub.interface_capabilities.peers] for key, sub in world.sub_interfaces.items()}
+    return {key: [peer.id for peer in sub.capabilities.peers] for key, sub in world.sub_interfaces.items()}
 
 
 def test_generator_is_a_common_generator() -> None:
@@ -411,7 +407,7 @@ class TestFreshSharedBoarding:
             ("management", {f"{_SHARED}-PROD-MANAGEMENT"}),
         ):
             sub = world.sub_interfaces[("fw-1", f"Ethernet1/25.{transit_vlan(vlan, ns_type)}")]
-            assert {peer.id for peer in sub.interface_capabilities.peers} == {
+            assert {peer.id for peer in sub.capabilities.peers} == {
                 context.id,
                 *(world.exchanges[name].id for name in expected),
             }, ns_type
@@ -522,10 +518,10 @@ class TestRerunAndSecondCustomer:
         prod_sub = world.sub_interfaces[("fw-1", f"Ethernet1/25.{transit_vlan(vlan, 'prod')}")]
         non_prod_exchange = world.exchanges[f"{_SHARED}-NON-PROD-INTERNET"].id
         prod_exchange = world.exchanges[f"{_SHARED}-PROD-INTERNET"].id
-        assert non_prod_exchange in {peer.id for peer in non_prod_sub.interface_capabilities.peers}
-        assert prod_exchange not in {peer.id for peer in non_prod_sub.interface_capabilities.peers}
-        assert {non_prod_exchange, prod_exchange} <= {peer.id for peer in internet_sub.interface_capabilities.peers}
-        assert non_prod_exchange not in {peer.id for peer in prod_sub.interface_capabilities.peers}
+        assert non_prod_exchange in {peer.id for peer in non_prod_sub.capabilities.peers}
+        assert prod_exchange not in {peer.id for peer in non_prod_sub.capabilities.peers}
+        assert {non_prod_exchange, prod_exchange} <= {peer.id for peer in internet_sub.capabilities.peers}
+        assert non_prod_exchange not in {peer.id for peer in prod_sub.capabilities.peers}
         # The INTERNET and MANAGEMENT /29s are the ones allocated for the first customer, not a second.
         assert len([k for k in world.allocated if k.endswith("-INTERNET-transit")]) == 1
         assert len([k for k in world.allocated if k.endswith("-MANAGEMENT-transit")]) == 1
@@ -617,7 +613,7 @@ class TestHealingAndFailures:
         world = _World()
         gen, _ = _make_gen(world)
         await _run(gen, world, _payload())
-        world.bl_ports["fw-2"].interface_capabilities.peers.clear()
+        world.bl_ports["fw-2"].capabilities.peers.clear()
         saves_before = len(world.saves)
 
         await _run(gen, world, _payload())

@@ -1,0 +1,147 @@
+!
+! ds-c005-p01 Configuration
+! Cisco IOS-XE (Catalyst 9000) LISP distribution-switch
+!
+hostname ds-c005-p01
+!
+ip routing
+spanning-tree mode rapid-pvst
+!
+!
+! Interfaces
+interface Ethernet1
+ description to as-c005-p01
+ no switchport
+ ip address 10.1.0.1 255.255.255.254
+ no shutdown
+!
+interface Ethernet2
+ description to ds-c005-p02
+ no switchport
+ ip address 10.1.0.3 255.255.255.254
+ no shutdown
+!
+interface GigabitEthernet1/0/26
+ description ds-c005-p01-GigabitEthernet1/0/26__C005-P-EDGE1-GE3
+ ! unverified-no-lab: a routed port, the parent of the dot1q sub-interface
+ no switchport
+ no shutdown
+!
+interface GigabitEthernet1/0/26.3800
+ ! unverified-no-lab: routed dot1q sub-interface (an office's WAN exit handoff to its SD-WAN edge) in the tenant VRF
+ encapsulation dot1Q 3800
+ vrf forwarding VRF_A
+ ip address 100.66.0.0 255.255.255.254
+ no shutdown
+!
+interface Loopback0
+ description Router ID
+ ip address 10.250.5.1 255.255.255.255
+ no shutdown
+!
+! OSPF Configuration
+router ospf 1
+ router-id 10.0.0.1
+ auto-cost reference-bandwidth 10000
+ passive-interface default
+ no passive-interface Ethernet1
+ no passive-interface Ethernet2
+!
+interface Ethernet1
+ ip ospf 1 area 0.0.0.0
+!
+interface Ethernet2
+ ip ospf 1 area 0.0.0.0
+!
+! BGP Configuration
+! unverified-no-lab: eBGP in the tenant VRF toward the SD-WAN edge (the office's WAN exit), over the dot1q sub-interface above
+router bgp 4200000001
+  bgp router-id 10.250.5.1
+  bgp graceful-restart
+  !
+  address-family ipv4 unicast
+  exit-address-family
+  !
+  address-family ipv4 vrf VRF_A
+    ! unverified-no-lab: the EID prefixes registered with this border (route-export site-registrations) go to the WAN edge
+    redistribute lisp metric 10
+    neighbor 100.66.0.1 remote-as 4200000002
+    neighbor 100.66.0.1 description C005-P-EDGE1
+    neighbor 100.66.0.1 send-community both
+    neighbor 100.66.0.1 fall-over bfd
+    neighbor 100.66.0.1 password 0ff1c3-w4n-k3y
+    neighbor 100.66.0.1 activate
+  exit-address-family
+!
+! LISP Configuration (Catalyst 9000, IOS-XE)
+!
+! Tenant VRFs (the EID tables of the L3 instance-ids)
+! unverified-no-lab: a plain `vrf definition` with an IPv4 address family is all the EID table and the SVIs need
+vrf definition VRF_A
+ ! unverified-no-lab: the eBGP session to the WAN edge runs in this VRF, and a BGP address-family in a VRF needs a route distinguisher
+ rd 10.250.5.1:50001
+ address-family ipv4
+ exit-address-family
+!
+! unverified-no-lab: `router lisp` and everything under it
+router lisp
+ ! unverified-no-lab: locator-set RLOC on the underlay loopback, used as the default locator and as the source locator
+ locator-table default
+ locator-set RLOC
+  IPv4-interface Loopback0 priority 10 weight 10
+  exit-locator-set
+ locator default-set RLOC
+ ipv4 source-locator Loopback0
+ ! unverified-no-lab: service ipv4: map-server and map-resolver co-located on this border leaf, ITR and ETR toward every map-server, VXLAN encapsulation
+ service ipv4
+  encapsulation vxlan
+  map-server
+  map-resolver
+  itr map-resolver 10.250.5.1
+  itr map-resolver 10.250.5.2
+  etr map-server 10.250.5.1 key 0ff1c3-k3y
+  etr map-server 10.250.5.1 proxy-reply
+  etr map-server 10.250.5.2 key 0ff1c3-k3y
+  etr map-server 10.250.5.2 proxy-reply
+  itr
+  etr
+  ! unverified-no-lab: proxy-ETR/ITR: the border decapsulates what the edges send to destinations outside the site, and encapsulates the way back
+  proxy-etr
+  proxy-itr 10.250.5.1
+  exit-service-ipv4
+ ! unverified-no-lab: service ethernet: map-server and map-resolver co-located on this border leaf, ITR and ETR toward every map-server
+ service ethernet
+  map-server
+  map-resolver
+  itr map-resolver 10.250.5.1
+  itr map-resolver 10.250.5.2
+  etr map-server 10.250.5.1 key 0ff1c3-k3y
+  etr map-server 10.250.5.1 proxy-reply
+  etr map-server 10.250.5.2 key 0ff1c3-k3y
+  etr map-server 10.250.5.2 proxy-reply
+  itr
+  etr
+  exit-service-ethernet
+ ! unverified-no-lab: L3 instance-id 50001 for VRF VRF_A: dynamic-eid with the gateway subnets, IPv4 EID table, default map-request
+ instance-id 50001
+  service ipv4
+   eid-table vrf VRF_A
+   map-cache 0.0.0.0/0 map-request
+   ! unverified-no-lab: the site registrations of this VRF into its RIB, where BGP redistributes them to the WAN edge
+   route-export site-registrations
+   distance site-registrations 250
+   map-cache site-registration
+   exit-service-ipv4
+  exit-instance-id
+ ! unverified-no-lab: site C005-P: authentication key and the EID records the edges may register
+ site C005-P
+  authentication-key 0ff1c3-k3y
+  eid-record instance-id 50001 10.100.0.0/24 accept-more-specifics
+  eid-record instance-id 10100 any-mac
+  exit-site
+!
+! Management
+line console 0
+line vty 0 15
+!
+end

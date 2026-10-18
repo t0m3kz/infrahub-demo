@@ -30,7 +30,7 @@ def _transit_peering(namespace: dict[str, Any]) -> dict[str, Any]:
         "peering_role": "regular",
         "ttl": 1,
         "maximum_routes": 100,
-        "interface_capabilities": [
+        "capabilities": [
             {
                 "name": "Ethernet1/14",
                 "device": {"name": "eg-fr01"},

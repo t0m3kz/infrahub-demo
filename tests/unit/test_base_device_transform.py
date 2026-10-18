@@ -17,7 +17,7 @@ import jinja2
 import pytest
 import yaml
 
-from transforms.common import BaseDeviceTransform, _combine_leaf_pbr_rules, _loopback_name, get_capabilities
+from transforms.common import BaseDeviceTransform, _loopback_name, get_capabilities
 from transforms.config.border_spine import BorderSpine
 from transforms.config.tor import ToR
 from utils.fabric_roles import BORDER_ROLES
@@ -27,27 +27,7 @@ from utils.fabric_roles import BORDER_ROLES
 # ---------------------------------------------------------------------------
 
 
-class TestCombineLeafPbrRules:
-    def test_overlapping_vlan_keeps_lb_and_firewall_actions(self) -> None:
-        customer = {"vlan_id": 100, "bypass_prefixes": ["10.0.2.0/24"], "fw_nexthop": "10.0.0.2"}
-        backend = {"vlan_id": 100, "backend_ips": ["10.0.1.10"], "lb_nexthop": "10.0.0.3"}
-
-        assert _combine_leaf_pbr_rules([customer], [backend]) == [{**customer, **backend}]
-
-    def test_firewall_only_vlan_needs_no_load_balancer(self) -> None:
-        customer = {"vlan_id": 200, "bypass_prefixes": [], "fw_nexthop": "10.0.0.2"}
-
-        assert _combine_leaf_pbr_rules([customer], []) == [{**customer, "backend_ips": [], "lb_nexthop": None}]
-
-    def test_nonoverlapping_vlans_preserve_only_their_actions(self) -> None:
-        customer = {"vlan_id": 200, "bypass_prefixes": [], "fw_nexthop": "10.0.0.2"}
-        backend = {"vlan_id": 100, "backend_ips": ["10.0.1.10"], "lb_nexthop": "10.0.0.3"}
-
-        assert _combine_leaf_pbr_rules([customer], [backend]) == [
-            {**backend, "bypass_prefixes": [], "fw_nexthop": None},
-            {**customer, "backend_ips": [], "lb_nexthop": None},
-        ]
-
+class TestLeafPbrRules:
     @staticmethod
     def _render_pbr(platform: str, rules: list[dict]) -> str:
         """Render the leaf template of ``platform`` with only PBR rules."""
@@ -71,16 +51,13 @@ class TestCombineLeafPbrRules:
         )
 
     def test_nxos_template_attaches_one_ordered_policy_per_vlan(self) -> None:
-        """NX-OS: LB return, then bypass, then the firewall redirect, on one SVI, behind `feature pbr`."""
+        """NX-OS: bypass, then the firewall redirect, on one SVI, behind `feature pbr`."""
         customer = {"vlan_id": 100, "bypass_prefixes": ["10.0.2.0/24"], "fw_nexthop": "10.0.0.2"}
-        backend = {"vlan_id": 100, "backend_ips": ["10.0.1.10"], "lb_nexthop": "10.0.0.3"}
 
-        rendered = self._render_pbr("cisco_nxos", _combine_leaf_pbr_rules([customer], [backend]))
+        rendered = self._render_pbr("cisco_nxos", [customer])
 
         assert rendered.count("ip policy route-map RM-LEAF-PBR-VLAN100") == 1
-        assert rendered.index("RM-LEAF-PBR-VLAN100 permit 10") < rendered.index("RM-LEAF-PBR-VLAN100 deny 20")
         assert rendered.index("RM-LEAF-PBR-VLAN100 deny 20") < rendered.index("RM-LEAF-PBR-VLAN100 permit 30")
-        assert "set ip next-hop 10.0.0.3" in rendered
         assert "set ip next-hop 10.0.0.2" in rendered
         assert rendered.index("feature pbr") < rendered.index("route-map RM-LEAF-PBR-VLAN100")
         assert "TODO(lab): TCAM carving for PBR" in rendered
@@ -89,7 +66,7 @@ class TestCombineLeafPbrRules:
         """NX-OS: PBR ACLs hold no deny entries; bypass traffic skips PBR via a route-map deny sequence."""
         customer = {"vlan_id": 100, "bypass_prefixes": ["10.0.2.0/24"], "fw_nexthop": "10.0.0.2"}
 
-        rendered = self._render_pbr("cisco_nxos", _combine_leaf_pbr_rules([customer], []))
+        rendered = self._render_pbr("cisco_nxos", [customer])
 
         assert "deny ip" not in rendered
         assert "permit ip any 10.0.2.0/24" in rendered
@@ -101,7 +78,7 @@ class TestCombineLeafPbrRules:
         """NX-OS: an empty bypass list must not render an empty ACL or a deny sequence."""
         customer = {"vlan_id": 200, "bypass_prefixes": [], "fw_nexthop": "10.0.0.2"}
 
-        rendered = self._render_pbr("cisco_nxos", _combine_leaf_pbr_rules([customer], []))
+        rendered = self._render_pbr("cisco_nxos", [customer])
 
         assert "PBR-BYPASS-VLAN200" not in rendered
         assert "RM-LEAF-PBR-VLAN200 deny" not in rendered
@@ -116,25 +93,18 @@ class TestCombineLeafPbrRules:
         assert "cts" not in rendered
 
     def test_eos_template_uses_policy_map_type_pbr(self) -> None:
-        """EOS: class-map/policy-map type pbr in LB, bypass, firewall order, attached with service-policy."""
+        """EOS: class-map/policy-map type pbr in bypass, firewall order, attached with service-policy."""
         customer = {"vlan_id": 100, "bypass_prefixes": ["10.0.2.0/24"], "fw_nexthop": "10.0.0.2"}
-        backend = {"vlan_id": 100, "backend_ips": ["10.0.1.10"], "lb_nexthop": "10.0.0.3"}
 
-        rendered = self._render_pbr("arista_eos", _combine_leaf_pbr_rules([customer], [backend]))
+        rendered = self._render_pbr("arista_eos", [customer])
 
         assert rendered.count("service-policy type pbr input PM-LEAF-PBR-VLAN100") == 1
         assert "route-map RM-LEAF-PBR" not in rendered
         assert "ip policy route-map" not in rendered
         assert "mac security" not in rendered
-        lb, bypass, firewall = (
-            rendered.index("class CM-LB-BACKEND-VLAN100"),
-            rendered.index("class CM-PBR-BYPASS-VLAN100"),
-            rendered.index("class CM-PBR-ALL-VLAN100"),
-        )
-        assert lb < bypass < firewall
+        assert rendered.index("class CM-PBR-BYPASS-VLAN100") < rendered.index("class CM-PBR-ALL-VLAN100")
         assert "class class-default" not in rendered
         assert "deny ip any any" not in rendered
-        assert "set nexthop 10.0.0.3" in rendered
         assert "set nexthop 10.0.0.2" in rendered
         assert "documented-not-lab-verified" in rendered
 
@@ -146,7 +116,7 @@ class TestCombineLeafPbrRules:
         assert "mac security" not in rendered
 
     def test_unsupported_leaf_refuses_firewall_only_pbr(self) -> None:
-        """An SR OS leaf must not silently omit a firewall redirect when no LB exists."""
+        """An SR OS leaf must not silently omit a firewall redirect."""
         customer = {"vlan_id": 100, "bypass_prefixes": ["10.0.2.0/24"], "fw_nexthop": "10.0.0.2"}
         transform = _make_transform("leaf")
 
@@ -159,15 +129,18 @@ class TestCombineLeafPbrRules:
 
     @pytest.mark.parametrize("role", ["leaf", "tor", "access-leaf"])
     @pytest.mark.parametrize("platform", ["sonic", "dell_sonic"])
-    def test_sonic_leaf_accepts_lb_only_pbr(self, platform: str, role: str) -> None:
-        """SONiC renders LB return-path PBR (no firewall leg needed), so the rules reach the template."""
-        backend = {"vlan_id": 100, "backend_ips": ["10.0.1.10"], "lb_nexthop": "10.0.0.3"}
+    def test_sonic_leaf_accepts_firewall_pbr(self, platform: str, role: str) -> None:
+        """SONiC renders the firewall redirect (ConfigDB PBR ACL table), so the rule reaches the template."""
+        customer = {"vlan_id": 100, "bypass_prefixes": [], "fw_nexthop": "10.0.0.2"}
         transform = _make_transform(role)
 
-        with patch("transforms.common.get_lb_backend_pbr_rules", return_value=[backend]):
+        with (
+            patch("transforms.common.get_customer_pbr_rules", return_value=[customer]),
+            patch("transforms.common.get_leaf_firewall_transits", return_value=[]),
+        ):
             config = transform._extra_config(_device_data(), platform)
 
-        assert config["leaf_pbr_rules"] == [{**backend, "bypass_prefixes": [], "fw_nexthop": None}]
+        assert config["leaf_pbr_rules"] == [customer]
 
     @pytest.mark.parametrize("platform", ["cisco_nxos", "arista_eos", "sonic", "dell_sonic", "nokia_sros"])
     @pytest.mark.parametrize("role", sorted(BORDER_ROLES))
@@ -218,18 +191,12 @@ class TestCombineLeafPbrRules:
 
     @staticmethod
     def _policy_for_every_activation() -> tuple:
-        """Patches giving each activation handed to the policy helpers a PBR rule, a backend rule and an ACL."""
+        """Patches giving each activation handed to the policy helpers a PBR rule and an ACL."""
         return (
             patch(
                 "transforms.common.get_customer_pbr_rules",
                 side_effect=lambda acts, _ctx: [
                     {"vlan_id": a["vlan_id"], "bypass_prefixes": [], "fw_nexthop": "10.0.0.2"} for a in acts
-                ],
-            ),
-            patch(
-                "transforms.common.get_lb_backend_pbr_rules",
-                side_effect=lambda acts, _vips: [
-                    {"vlan_id": a["vlan_id"], "backend_ips": ["10.0.1.10"], "lb_nexthop": "10.0.0.3"} for a in acts
                 ],
             ),
             patch(
@@ -246,9 +213,9 @@ class TestCombineLeafPbrRules:
         """A BGW's hostless stitched segments keep their VLAN, VNI and SVI but are no ACL/PBR input."""
         data = _device_data()
         data["segment_deployments"] = [self._gateway_activation(100, border_gateway=True)]
-        pbr, backend, acl = self._policy_for_every_activation()
+        pbr, acl = self._policy_for_every_activation()
 
-        with pbr, backend, acl:
+        with pbr, acl:
             config = _make_transform(role)._extra_config(data, platform)
 
         assert config["leaf_pbr_rules"] == []
@@ -266,9 +233,9 @@ class TestCombineLeafPbrRules:
             self._gateway_activation(100, border_gateway=True),
             self._gateway_activation(101, border_gateway=False),
         ]
-        pbr, backend, acl = self._policy_for_every_activation()
+        pbr, acl = self._policy_for_every_activation()
 
-        with pbr, backend, acl, pytest.raises(ValueError, match=rf"{role} cannot render PBR policy for VLANs \[101\]"):
+        with pbr, acl, pytest.raises(ValueError, match=rf"{role} cannot render PBR policy for VLANs \[101\]"):
             _make_transform(role)._extra_config(data, "cisco_nxos")
 
     @pytest.mark.parametrize("platform", ["cisco_nxos", "arista_eos", "sonic", "nokia_sros"])
@@ -284,7 +251,7 @@ class TestCombineLeafPbrRules:
         ]
 
         with patch("transforms.common.get_customer_pbr_rules", return_value=[]):
-            _, _, acl = self._policy_for_every_activation()
+            _, acl = self._policy_for_every_activation()
             with acl, pytest.raises(ValueError, match=rf"{role} cannot render the SVI ACL for VLANs \[101\]"):
                 _make_transform(role)._extra_config(data, platform)
 
@@ -292,9 +259,9 @@ class TestCombineLeafPbrRules:
         """The exemption is for border roles only: an edge hands every routed activation to the policy helpers."""
         data = _device_data()
         data["segment_deployments"] = [self._gateway_activation(100, border_gateway=True)]
-        pbr, backend, acl = self._policy_for_every_activation()
+        pbr, acl = self._policy_for_every_activation()
 
-        with pbr, backend, acl:
+        with pbr, acl:
             config = _make_transform("edge")._extra_config(data, "cisco_nxos")
 
         assert [r["vlan_id"] for r in config["leaf_pbr_rules"]] == [100]
@@ -333,7 +300,7 @@ class TestCombineLeafPbrRules:
 
     @pytest.mark.parametrize("platform", ["sonic", "dell_sonic"])
     def test_sonic_template_renders_ordered_pbr_table_per_vlan(self, platform: str) -> None:
-        """ConfigDB PBR mirrors the route-map order: LB return > bypass > firewall redirect."""
+        """ConfigDB PBR mirrors the route-map order: bypass > firewall redirect."""
         customer = {
             "vlan_id": 100,
             "customer_name": "c001",
@@ -341,9 +308,8 @@ class TestCombineLeafPbrRules:
             "bypass_prefixes": ["10.0.2.0/24", "10.0.3.0/24"],
             "fw_nexthop": "10.0.0.2",
         }
-        backend = {"vlan_id": 100, "backend_ips": ["10.0.1.10", "10.0.1.11/32"], "lb_nexthop": "10.0.0.3"}
 
-        config = json.loads(_render_leaf(platform, leaf_pbr_rules=_combine_leaf_pbr_rules([customer], [backend])))
+        config = json.loads(_render_leaf(platform, leaf_pbr_rules=[customer]))
 
         assert config["ACL_TABLE"]["PBR-VLAN100"] == {
             "type": "PBR",
@@ -353,18 +319,6 @@ class TestCombineLeafPbrRules:
         }
         rules = {k: v for k, v in config["ACL_RULE"].items() if k.startswith("PBR-VLAN100|")}
         assert rules == {
-            "PBR-VLAN100|LB_1": {
-                "PRIORITY": "8999",
-                "IP_TYPE": "IPV4ANY",
-                "SRC_IP": "10.0.1.10/32",
-                "PACKET_ACTION": "REDIRECT:10.0.0.3",
-            },
-            "PBR-VLAN100|LB_2": {
-                "PRIORITY": "8998",
-                "IP_TYPE": "IPV4ANY",
-                "SRC_IP": "10.0.1.11/32",
-                "PACKET_ACTION": "REDIRECT:10.0.0.3",
-            },
             "PBR-VLAN100|BYPASS_1": {
                 "PRIORITY": "7999",
                 "IP_TYPE": "IPV4ANY",
@@ -379,15 +333,6 @@ class TestCombineLeafPbrRules:
             },
             "PBR-VLAN100|FW_REDIRECT": {"PRIORITY": "1000", "IP_TYPE": "IPV4ANY", "PACKET_ACTION": "REDIRECT:10.0.0.2"},
         }
-
-    def test_sonic_template_lb_only_vlan_has_no_firewall_redirect(self) -> None:
-        """Without a firewall next-hop there is nothing to bypass and no catch-all redirect."""
-        backend = {"vlan_id": 200, "backend_ips": ["10.0.1.10"], "lb_nexthop": "10.0.0.3"}
-
-        config = json.loads(_render_leaf("sonic", leaf_pbr_rules=_combine_leaf_pbr_rules([], [backend])))
-
-        assert config["ACL_TABLE"]["PBR-VLAN200"]["policy_desc"] == "Leaf PBR for any/any"
-        assert sorted(k for k in config["ACL_RULE"] if k.startswith("PBR-VLAN200|")) == ["PBR-VLAN200|LB_1"]
 
     def test_sonic_template_without_pbr_rules_has_no_pbr_table(self) -> None:
         """No rules (or a role that never passes them) adds no PBR table."""
@@ -413,8 +358,6 @@ def _render_leaf(platform: str, **overrides: object) -> str:
         "bgp": [],
         "ospf": [],
         "mlag": None,
-        "ntp": {"servers": []},
-        "syslog": {"servers": []},
         **overrides,
     }
     return template.render(**context)
@@ -423,7 +366,7 @@ def _render_leaf(platform: str, **overrides: object) -> str:
 @pytest.mark.parametrize("role", ["leafs", "border_leafs", "l2_leafs", "spines", "super_spines"])
 @pytest.mark.parametrize("platform", ["sonic", "dell_sonic"])
 def test_sonic_templates_render_pure_configdb(role: str, platform: str) -> None:
-    """Management services stay in a single JSON artifact for every switch role."""
+    """Every SONiC switch role renders one JSON ConfigDB with the empty NTP/SYSLOG tables."""
     template_dir = Path(__file__).parents[2] / "templates" / "configs"
     template = jinja2.Environment(loader=jinja2.FileSystemLoader(str(template_dir))).get_template(
         f"{role}/{platform}.j2"
@@ -438,12 +381,10 @@ def test_sonic_templates_render_pure_configdb(role: str, platform: str) -> None:
         bgp=[],
         ospf=[],
         mlag=None,
-        ntp={"servers": [{"address": "192.0.2.1"}]},
-        syslog={"servers": [{"address": "192.0.2.2"}]},
     )
     config = json.loads(rendered)
-    assert config["NTP_SERVER"] == {"192.0.2.1": {}}
-    assert config["SYSLOG_SERVER"] == {"192.0.2.2": {}}
+    assert config["NTP_SERVER"] == {}
+    assert config["SYSLOG_SERVER"] == {}
 
 
 def test_hyper_spine_artifact_uses_super_spine_transform(root_dir: Path) -> None:
@@ -498,16 +439,7 @@ def _device_data(
 class TestGetCapabilitiesEdgeCases:
     def test_empty_dict_returns_false_false(self) -> None:
         result = get_capabilities({})
-        assert result == {
-            "bgp_enabled": False,
-            "ospf_enabled": False,
-            "mlag_enabled": False,
-            "ha_enabled": False,
-            "ntp_enabled": False,
-            "syslog_enabled": False,
-            "snmp_enabled": False,
-            "aaa_enabled": False,
-        }
+        assert result == {"bgp_enabled": False, "ospf_enabled": False}
 
     def test_unknown_service_type_ignored(self) -> None:
         result = get_capabilities({"capabilities": [{"typename": "UnknownService"}]})
@@ -572,16 +504,7 @@ class TestBuildConfig:
         t = _make_transform()
         data = _device_data()
         cfg = t._build_config(data, "arista_eos")
-        assert cfg["capabilities"] == {
-            "bgp_enabled": False,
-            "ospf_enabled": False,
-            "mlag_enabled": False,
-            "ha_enabled": False,
-            "ntp_enabled": False,
-            "syslog_enabled": False,
-            "snmp_enabled": False,
-            "aaa_enabled": False,
-        }
+        assert cfg["capabilities"] == {"bgp_enabled": False, "ospf_enabled": False}
 
 
 # ---------------------------------------------------------------------------
@@ -634,13 +557,13 @@ class TestTransformDataRouting:
         assert "No configuration generated" in result
 
     @pytest.mark.asyncio
-    async def test_activation_from_interface_capabilities(self) -> None:
-        """Activations on segment.segment_deployments within interface_capabilities are collected."""
+    async def test_activation_from_capabilities(self) -> None:
+        """Activations on segment.segment_deployments within capabilities are collected."""
         t = _make_transform(device_role="leaf")
         interfaces = [
             {
                 "name": "Ethernet10",
-                "interface_capabilities": [
+                "capabilities": [
                     {
                         "id": "seg-1",
                         "typename": "ManagedVxlanSegment",
@@ -675,7 +598,7 @@ class TestTransformDataRouting:
         interfaces = [
             {
                 "name": "Ethernet10",
-                "interface_capabilities": [
+                "capabilities": [
                     {
                         "id": "seg-1",
                         "typename": "ManagedVlanSegment",
@@ -712,7 +635,7 @@ class TestTransformDataRouting:
         interfaces = [
             {
                 "name": "Ethernet10",
-                "interface_capabilities": [
+                "capabilities": [
                     {
                         "id": "seg-1",
                         "typename": "ManagedVlanSegment",
@@ -740,10 +663,10 @@ class TestTransformDataRouting:
 
     @pytest.mark.asyncio
     async def test_activation_missing_yields_no_vlans(self) -> None:
-        """No segment_deployments on interface_capabilities → vlans is empty in rendered config."""
+        """No segment_deployments on capabilities → vlans is empty in rendered config."""
         t = _make_transform(device_role="leaf")
-        # Interfaces with no interface_capabilities carrying segment_deployments
-        device = _device_data(interfaces=[{"name": "Ethernet1", "interface_capabilities": []}])
+        # Interfaces with no capabilities carrying segment_deployments
+        device = _device_data(interfaces=[{"name": "Ethernet1", "capabilities": []}])
 
         fake_template = MagicMock()
         fake_template.render.return_value = "! rendered"
@@ -778,23 +701,6 @@ class TestTransformDataRouting:
         assert "name" in call_kwargs
         assert "bgp" in call_kwargs
         assert "ospf" in call_kwargs
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("setting", ["snmp", "aaa"])
-    @pytest.mark.parametrize("platform", ["sonic", "dell_sonic"])
-    async def test_sonic_unsupported_settings_fail_before_render(self, platform: str, setting: str) -> None:
-        """Unsupported settings cannot disappear while converting CLI artifacts to JSON."""
-        transform = _make_transform(device_role="leaf")
-        device = _device_data(platform=platform)
-        with (
-            patch("transforms.common.clean_data", return_value={"DcimPhysicalDevice": [device]}),
-            patch.object(transform, "_build_config", return_value={setting: {"enabled": True}}),
-            patch.object(transform, "_extra_config", return_value={}),
-            patch.object(transform, "_load_template") as load_template,
-            pytest.raises(ValueError, match=setting),
-        ):
-            await transform.transform({"raw": "data"})
-        load_template.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_extra_roots_passed_through(self) -> None:
@@ -886,7 +792,7 @@ class TestCollectActivationsVlanDomainMatching:
     @staticmethod
     def _vxlan_iface(vlan_domain_id: str, vlan_id: int = 100) -> dict:
         return {
-            "interface_capabilities": [
+            "capabilities": [
                 {
                     "typename": "ManagedVxlanSegment",
                     "id": "seg-1",

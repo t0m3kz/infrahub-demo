@@ -177,7 +177,7 @@
                       }
                     }
                   },
-                  "interface_capabilities": {
+                  "capabilities": {
                     "edges": [
                       {
                         "node": {
@@ -203,7 +203,7 @@
                               }
                             }
                           },
-                          "interface_capabilities": {
+                          "capabilities": {
                             "edges": [
                               {
                                 "node": {

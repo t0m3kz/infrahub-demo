@@ -83,7 +83,7 @@ Load the stages **in this order**. After each one, wait until no generator task 
 
 | # | Stage | What it loads | Generators it fires |
 | --- | --- | --- | --- |
-| 1 | foundation | Customers, cloud, colocation (with the shared SD-WAN gateway and orchestrator), SaaS, offices, and the three DC sites with their fabrics and controllers | `add_colocation_metro` (×9), `add_dc` → `add_pod` → `add_rack` (longest stage) |
+| 1 | foundation | Customers, cloud, colocation (with the shared SD-WAN gateway and orchestrator), the internet's ISPs (`04_internet`), SaaS, offices, and the three DC sites with their fabrics and controllers | `add_colocation_metro` (×9), `add_dc` → `add_pod` → `add_rack` (longest stage) |
 | 2 | compute_and_customers | Application hosts, DC-only customers' footprints, and the boarding set: DC/colocation/cloud/office footprints, cage kit, VMs | `add_endpoint`, `add_customer_deployment_*`, `add_sdwan_edge` |
 | 3 | applications | Segments, applications, deployment-request catalogue | `add_vxlan_segment`, `add_app_application` |
 | 4 | interconnects | Colo on-ramp, cloud hub, virtual circuits, SD-WAN backhaul and handoff, cloud endpoints, internet transit | — (data only) |
@@ -97,7 +97,7 @@ uv run infrahubctl object load $D/00_customer $D/01_cloud $D/02_colo \
   $D/03_dc/dc11/00_location.yml $D/03_dc/dc11/01_controllers_virtual.yml $D/03_dc/dc11/02_topology.yml \
   $D/03_dc/dc12/00_location.yml $D/03_dc/dc12/01_controllers_physical.yml \
   $D/03_dc/dc12/02_controllers_virtual.yml $D/03_dc/dc12/03_topology.yml \
-  $D/04_saas $D/05_office --branch $BRANCH
+  $D/04_internet $D/04_saas $D/05_office --branch $BRANCH
 
 # 2. compute_and_customers
 uv run infrahubctl object load $D/03_dc/dc10/05_servers.yml $D/03_dc/dc11/05_servers.yml \
@@ -149,14 +149,17 @@ Once stage 4 has settled, the branch should contain at least:
 | `TopologyCustomerOffice` | 5 |
 | `ManagedVxlanSegment` | 5 |
 | `AppApplication` | 9 |
-| `TopologyExternalProviders` | 2 |
+| `TopologyExternalProviders` | 3 |
 | `TopologyPhysicalCircuit` (`internet`) | 9 |
 
 ### Internet Transit
 
-`08_interconnects/06_internet` connects the colocation cages to the internet. It adds an `INTERNET` topology
-(`TopologyExternal`) with two ISPs, Lumen and Cogent, each a `TopologyExternalProviders` holding its provider
-edges (`EXT-LUMEN-FRA1`, `EXT-COGENT-PAR1`, ...). Each cage edge (`eg-fr01/02`, `eg-pa01/02`) gets one 10G
+`04_internet` (foundation stage) declares the `INTERNET` topology (`TopologyExternal`) with three ISPs, each a
+`TopologyExternalProviders`: Lumen and Cogent sell transit to the colocation cages, Orange is the access ISP of the
+SD-WAN offices. Orange's access PE (`EXT-ORANGE`, template `MX204_ISP_ACCESS`) is the far end of every office's
+`INET-<office>` circuit: `add_sdwan_edge` takes a free `customer` port on it per office, so a new office adds no
+data row. `08_interconnects/06_internet` connects the cages to the transit ISPs, whose provider edges
+(`EXT-LUMEN-FRA1`, `EXT-COGENT-PAR1`, ...) it declares. Each cage edge (`eg-fr01/02`, `eg-pa01/02`) gets one 10G
 transit circuit on `Ethernet1/14` and an eBGP session in VRF `INTERNET`. The ISPs send a default route only. A
 DC reaches the internet through these edges, so a flow trace towards the internet ends on an ISP device. All
 four edges are Multi-Site border gateways (two per metro), so the default from either ISP reaches the DCs.

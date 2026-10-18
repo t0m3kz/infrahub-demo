@@ -2,7 +2,7 @@
 # (generators/vlan_domain.py, VlanDomainMixin.reconcile_segment_vlan_domains),
 # shared by add_vxlan_segment and add_app_component_segment. Read by id from
 # Python, not a generator definition's own query.
-#   - interface_capabilities: the switch ports carrying the segment; their
+#   - capabilities: the switch ports carrying the segment; their
 #     devices' VLAN domains need it (DcimPhysicalInterface/DcimLAGInterface
 #     only — an inline DcimVirtualInterface sub-interface on a firewall/LB
 #     HA pair takes the facing border leaf's VLAN, it has no domain). role
@@ -38,7 +38,7 @@ query segment_vlan_domains($segment_id: ID!) {
             }
           }
         }
-        interface_capabilities {
+        capabilities {
           edges {
             node {
               id

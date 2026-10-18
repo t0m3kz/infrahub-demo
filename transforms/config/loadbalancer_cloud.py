@@ -4,20 +4,8 @@ from infrahub_sdk.transforms import InfrahubTransform
 from jinja2 import Template
 
 from transforms.cloud.terraform_common import tf_id
-from transforms.helpers.addressing import host_ip
-from transforms.helpers.loadbalancer_pbr import pool_interfaces
 from transforms.helpers.templates import load_template
 from utils.data_cleaning import clean_data
-
-
-def _members_to_targets(vip: dict) -> list[dict]:
-    """Pool members with an address: name, ip (no prefix length), port, weight."""
-    return [
-        {"name": m.get("name", ""), "ip": ip, "port": pi.get("port"), "weight": m.get("weight", 1)}
-        for m, pi in pool_interfaces(vip)
-        for ip in [host_ip((pi.get("ip_address") or {}).get("address"))]
-        if ip
-    ]
 
 
 def prepare_aws_data(lb: dict, vips: list[dict]) -> dict:
@@ -37,9 +25,8 @@ def prepare_aws_data(lb: dict, vips: list[dict]) -> dict:
             listener["certificate_arn"] = vip["ssl_certificate"]
         listeners.append(listener)
 
-        targets = _members_to_targets(vip)
         pool_name = f"{vip.get('hostname')}-{vip.get('protocol')}-{vip.get('port')}"
-        pool_data: dict = {"name": pool_name, "targets": targets}
+        pool_data: dict = {"name": pool_name}
 
         health_checks = vip.get("health_checks", [])
         if health_checks:
@@ -84,9 +71,7 @@ def prepare_azure_data(lb: dict, vips: list[dict]) -> dict:
             }
         )
 
-        backend_addresses = [{"name": t["name"], "ip_address": t["ip"]} for t in _members_to_targets(vip)]
-
-        pool_data: dict = {"name": pool_name, "backend_addresses": backend_addresses}
+        pool_data: dict = {"name": pool_name}
 
         health_checks = vip.get("health_checks", [])
         if health_checks:
@@ -133,15 +118,12 @@ def prepare_gcp_data(lb: dict, vips: list[dict]) -> dict:
             }
         )
 
-        targets = [{"name": t["name"], "ip": t["ip"]} for t in _members_to_targets(vip)]
-
         backend_services.append(
             {
                 "name": pool_name,
                 "protocol": "HTTP" if lb.get("lb_type") == "application" else "TCP",
                 "session_affinity": "NONE",
                 "health_check": f"{pool_name}-health-check",
-                "targets": targets,
             }
         )
 

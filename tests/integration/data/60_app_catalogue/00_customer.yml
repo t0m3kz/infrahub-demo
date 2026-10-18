@@ -1,7 +1,7 @@
 ---
 # Throwaway customer for the app-catalogue integration scenario — deliberately
-# NOT reusing C001 (data/demos/16_hub_and_spoke) so this test has no dependency
-# on the DC/customer-boarding demo chain.
+# NOT reusing the demo customers so this test has no dependency on the
+# DC/customer-boarding demo chain.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

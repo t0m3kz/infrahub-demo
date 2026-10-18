@@ -133,7 +133,7 @@ def _internet_session_namespaces(data: dict[str, Any]) -> list[dict[str, Any]]:
         if cap.get("typename") != "ManagedBGP":
             continue
         for peering in cap.get("peerings") or []:
-            for iface in peering.get("interface_capabilities") or []:
+            for iface in peering.get("capabilities") or []:
                 if (iface.get("device") or {}).get("name") != device_name:
                     continue
                 ns = (iface.get("ip_address") or {}).get("ip_namespace") or {}
@@ -222,7 +222,7 @@ def get_interfaces(
         if not name:
             continue
 
-        capabilities = iface.get("interface_capabilities") or []
+        capabilities = iface.get("capabilities") or []
         by_type: dict[str | None, list[dict[str, Any]]] = {}
         for cap in capabilities:
             by_type.setdefault(cap.get("typename"), []).append(cap)
@@ -533,7 +533,7 @@ def _get_multisite_config(
             if cap.get("typename") == "ManagedBGP"
             for peering in cap.get("peerings") or []
             if peering.get("peering_role") == "dci"
-            for iface in peering.get("interface_capabilities") or []
+            for iface in peering.get("capabilities") or []
             if (iface.get("device") or {}).get("name") == device_name and iface.get("name")
         }
     )

@@ -152,7 +152,7 @@ class CheckRoutingInvariants(WarningCheck):
             for circuit in vif.get("virtual_circuits") or []:
                 types = {
                     ((iface.get("ip_address") or {}).get("ip_namespace") or {}).get("namespace_type")
-                    for iface in circuit.get("interface_capabilities") or []
+                    for iface in circuit.get("capabilities") or []
                 }
                 per_circuit[circuit.get("name", "<unnamed-circuit>")] = {t for t in types if t}
             all_types = set().union(*per_circuit.values()) if per_circuit else set()

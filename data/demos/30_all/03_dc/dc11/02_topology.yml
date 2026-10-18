@@ -35,7 +35,6 @@ spec:
           - index: 1
             layout: S_MIDDLE
             deployment_type: middle_rack
-            suites: [lyo-1-s-1]
             fabric_templates:
               - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             mlag_create: virtual
@@ -78,7 +77,6 @@ spec:
           - index: 2
             layout: S_MIDDLE
             deployment_type: middle_rack
-            suites: [lyo-1-s-2]
             fabric_templates:
               - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             member_of_groups:

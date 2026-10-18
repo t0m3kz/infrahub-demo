@@ -278,7 +278,9 @@ class TestInterfaceSpeedMatching:
             ("25gbase-x-sfp28", 25),
             ("10gbase-t", 10),
             ("40gbase-x-qsfpplus", 40),
-            ("1000base-t", None),  # No match in current pattern
+            ("1000base-t", 1),
+            ("1000base-x-sfp", 1),
+            ("100base-tx", None),
             ("unknown-type", None),
         ],
     )

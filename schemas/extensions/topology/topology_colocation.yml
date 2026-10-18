@@ -37,6 +37,7 @@ nodes:
       - TopologyDeployment
       - TopologyPhysicalDeployment
       - TopologyDeviceHosting
+      - TopologyDeviceNaming
       - TopologySegmentHosting
     uniqueness_constraints:
       - ["name__value", "parent"]

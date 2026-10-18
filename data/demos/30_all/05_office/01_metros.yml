@@ -1,0 +1,20 @@
+---
+# The Metros the customer office footprints (06_customer_boarding/c*/office/01_location.yml) hang their
+# LocationFacility under. par is created here because nothing else sets its parent.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationMetro
+  data:
+    - name: "Warsaw"
+      shortname: "waw"
+      parent: "pl"
+    - name: "Marseille"
+      shortname: "mar"
+      parent: "fr"
+    - name: "Munich"
+      shortname: "muc"
+      parent: "de"
+    - name: "Paris"
+      shortname: "par"
+      parent: "fr"

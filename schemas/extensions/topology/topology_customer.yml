@@ -294,6 +294,7 @@ nodes:
       - TopologyClusterHosting
       - TopologyPhysicalDeployment
       - TopologyDeviceHosting
+      - TopologyDeviceNaming
       - TopologySegmentHosting
       - TopologyConnectableLocation
     parent: TopologyOfficeCustomer
@@ -448,7 +449,7 @@ nodes:
         identifier: "topology_customer_office__namespace"
         order_weight: 1100
         description: "IPAM namespace (= VRF) for this environment's footprint"
-      # On the per-tenant footprint, not on LocationOffice: the footprint knows
+      # On the per-tenant footprint, not on the office location: the footprint knows
       # its environment (which decides the shared namespace a prefix lives in)
       # and its tenant (parent OfficeCustomer), while one building can host
       # several tenants and environments. The SD-WAN VRF handoff's inbound
@@ -486,6 +487,19 @@ nodes:
         kind: Attribute
         identifier: "customer_office__fabric_templates"
         order_weight: 1250
+      # LISP map-servers authenticate registrations from the edge ETRs with one
+      # shared site key, so it is identical across the office fabric. The
+      # office-fabric generator creates it and attaches it here; the config
+      # transforms and the lisp_fabric check read it.
+      - name: lisp_site_key
+        label: LISP Site Key
+        peer: RoutingPassword
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "customer_office__lisp_site_key"
+        order_weight: 1300
+        description: "Authentication key shared by this office fabric's LISP map-servers and edge ETRs; set by the office-fabric generator"  # yamllint disable-line rule:line-length
 
 
   - name: CustomerCloud
@@ -592,38 +606,6 @@ nodes:
     description: "Boarding blueprint for a data center customer deployment"
     label: "Customer Template (Data Center)"
     icon: "mdi:file-document-edit-outline"
-    inherit_from:
-      - TopologyCustomerTemplate
-    include_in_menu: false
-    human_friendly_id:
-      - name__value
-    order_by:
-      - name__value
-    display_label: "{{ name__value }}"
-    uniqueness_constraints:
-      - [name__value]
-
-  - name: CustomerTemplateColo
-    namespace: Topology
-    description: "Boarding blueprint for a colocation customer deployment"
-    label: "Customer Template (Colocation)"
-    icon: "mdi:file-document-plus-outline"
-    inherit_from:
-      - TopologyCustomerTemplate
-    include_in_menu: false
-    human_friendly_id:
-      - name__value
-    order_by:
-      - name__value
-    display_label: "{{ name__value }}"
-    uniqueness_constraints:
-      - [name__value]
-
-  - name: CustomerTemplateCloud
-    namespace: Topology
-    description: "Boarding blueprint for a cloud customer deployment"
-    label: "Customer Template (Cloud)"
-    icon: "mdi:file-cloud-outline"
     inherit_from:
       - TopologyCustomerTemplate
     include_in_menu: false

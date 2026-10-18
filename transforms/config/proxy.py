@@ -19,7 +19,7 @@ def _build_proxy_interfaces(interfaces: list[dict[str, Any]], ha: dict[str, Any]
                 "status": iface.get("status"),
                 "role": iface.get("role"),
                 "ip_address": ip_obj if ip_obj.get("address") else None,
-                **inline_addresses(iface.get("interface_capabilities"), ha),
+                **inline_addresses(iface.get("capabilities"), ha),
             }
         )
     return proxy_ifaces

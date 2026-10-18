@@ -196,7 +196,7 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
 }
 
 # Every segment activation IN A DC, for the DC-level tiers (border-leaf,
-# BGW edge) that have no customer-facing interface_capabilities of their own
+# BGW edge) that have no customer-facing capabilities of their own
 # the way a leaf does: reached via TopologySegmentHosting.segment_deployments
 # (see schemas/extensions/service/segment.yml — TopologyDataCenter inherits
 # TopologySegmentHosting directly). vni is the dedup/naming key here (NOT

@@ -200,7 +200,8 @@ query edge_config($device: String!) {
   }
 
   # Office footprints and the SD-WAN gateway each sits behind: what the session
-  # facing that gateway may accept (the union of its offices' lan_prefixes).
+  # facing that gateway may accept (the union of its offices' lan_prefixes and
+  # the prefixes of the segments they host themselves).
   # Matched to the handoff through the BGP peering's far-end device in
   # transforms/helpers/bgp.py (get_external_peer_prefixes).
   TopologyCustomerOffice {
@@ -208,6 +209,17 @@ query edge_config($device: String!) {
       node {
         sdwan_gateway { node { name { value } } }
         lan_prefixes { edges { node { prefix { value } ip_namespace { node { name { value } } } } } }
+        segment_deployments(status__values: ["active", "provisioning"]) {
+          edges {
+            node {
+              segment {
+                node {
+                  gateway { node { ip_prefix { node { prefix { value } ip_namespace { node { name { value } } } } } } }
+                }
+              }
+            }
+          }
+        }
       }
     }
   }

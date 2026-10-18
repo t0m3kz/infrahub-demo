@@ -5,7 +5,7 @@ Covers:
 - prepare_azure_data() — lb_rules, backend addresses, health probe, tags
 - prepare_gcp_data()   — forwarding rules, backend services, health checks
 - LoadBalancerCloud.transform() — provider detection, HCL output, provider routing
-- LoadBalancer.transform()      — VIP extraction from ManagedHA capabilities, members
+- LoadBalancer.transform()      — VIP extraction from interface capabilities
 """
 
 from __future__ import annotations
@@ -56,18 +56,6 @@ _BASE_VIPS: list = [
                 "timeout": 5000,
             }
         ],
-        "members": [
-            {
-                "name": "web-01",
-                "weight": 1,
-                "pool_interfaces": [{"port": 8443, "ip_address": {"address": "10.0.1.10/24"}}],
-            },
-            {
-                "name": "web-02",
-                "weight": 1,
-                "pool_interfaces": [{"port": 8443, "ip_address": {"address": "10.0.1.11/24"}}],
-            },
-        ],
     }
 ]
 
@@ -93,7 +81,6 @@ def _vips_two() -> list:
             "protocol": "http",
             "ssl_certificate": None,
             "health_checks": [],
-            "members": [],
         }
     )
     return vips
@@ -169,30 +156,11 @@ class TestPrepareAwsDataBackendPools:
         pool = prepare_aws_data(_lb(), _vips())["backend_pools"][0]
         assert pool["name"] == _POOL_NAME
 
-    def test_member_ips_in_targets(self) -> None:
-        targets = prepare_aws_data(_lb(), _vips())["backend_pools"][0]["targets"]
-        ips = [t.get("ip") for t in targets]
-        assert "10.0.1.10" in ips
-        assert "10.0.1.11" in ips
-
-    def test_member_cidr_stripped(self) -> None:
-        targets = prepare_aws_data(_lb(), _vips())["backend_pools"][0]["targets"]
-        for t in targets:
-            if t.get("ip"):
-                assert "/" not in t["ip"]
-
     def test_two_vips_produce_two_pools(self) -> None:
         assert len(prepare_aws_data(_lb(), _vips_two())["backend_pools"]) == 2
 
     def test_no_vips_produces_no_pools(self) -> None:
         assert prepare_aws_data(_lb(), [])["backend_pools"] == []
-
-    def test_member_without_ip_skipped(self) -> None:
-        vips = _vips()
-        vips[0]["members"][0]["pool_interfaces"][0]["ip_address"] = {}
-        targets = prepare_aws_data(_lb(), vips)["backend_pools"][0]["targets"]
-        ips = [t.get("ip") for t in targets]
-        assert "10.0.1.10" not in ips
 
 
 class TestPrepareAwsDataHealthChecks:
@@ -286,23 +254,8 @@ class TestPrepareAzureDataBackendPools:
     def test_pool_name_derived_from_hostname_protocol_port(self) -> None:
         assert prepare_azure_data(_lb(), _vips())["backend_pools"][0]["name"] == _POOL_NAME
 
-    def test_member_ip_added_as_backend_address(self) -> None:
-        ips = [a["ip_address"] for a in prepare_azure_data(_lb(), _vips())["backend_pools"][0]["backend_addresses"]]
-        assert "10.0.1.10" in ips
-
-    def test_member_cidr_stripped(self) -> None:
-        for addr in prepare_azure_data(_lb(), _vips())["backend_pools"][0]["backend_addresses"]:
-            if "ip_address" in addr:
-                assert "/" not in addr["ip_address"]
-
     def test_no_vips_produces_no_pools(self) -> None:
         assert prepare_azure_data(_lb(), [])["backend_pools"] == []
-
-    def test_member_without_ip_skipped(self) -> None:
-        vips = _vips()
-        vips[0]["members"][0]["pool_interfaces"][0]["ip_address"] = {}
-        ips = [a.get("ip_address") for a in prepare_azure_data(_lb(), vips)["backend_pools"][0]["backend_addresses"]]
-        assert "10.0.1.10" not in ips
 
 
 class TestPrepareAzureDataHealthProbe:
@@ -417,15 +370,6 @@ class TestPrepareGcpDataBackendServices:
         lb = _lb()
         lb["lb_type"] = "network"
         assert prepare_gcp_data(lb, _vips())["backend_services"][0]["protocol"] == "TCP"
-
-    def test_member_target_added_with_ip(self) -> None:
-        ips = [t.get("ip") for t in prepare_gcp_data(_lb(), _vips())["backend_services"][0]["targets"]]
-        assert "10.0.1.10" in ips
-
-    def test_member_cidr_stripped(self) -> None:
-        for target in prepare_gcp_data(_lb(), _vips())["backend_services"][0]["targets"]:
-            if "ip" in target:
-                assert "/" not in target["ip"]
 
     def test_backend_service_references_health_check_name(self) -> None:
         result = prepare_gcp_data(_lb(), _vips())
@@ -674,13 +618,6 @@ def _cleaned_device(
                 "vip_ip": {"address": "10.100.0.1/32"},
                 "load_balancer": {"name": "DC3-LB-C001"},
                 "health_checks": [],
-                "members": [
-                    {
-                        "name": "C001-WEB-VM-01",
-                        "weight": 1,
-                        "pool_interfaces": [{"port": 8443, "ip_address": {"address": "10.0.1.10/24"}}],
-                    }
-                ],
             }
         ]
     return {
@@ -693,7 +630,7 @@ def _cleaned_device(
                         "name": "1.1",
                         "role": "uplink",
                         "status": "active",
-                        "interface_capabilities": vip_services,
+                        "capabilities": vip_services,
                     }
                 ],
                 "capabilities": [
@@ -762,10 +699,10 @@ class TestLoadBalancerOnpremVipProcessing:
         assert vip["lb_name"] == "DC3-LB-C001"
 
     @pytest.mark.asyncio
-    async def test_no_vips_when_no_interface_capabilities(self) -> None:
+    async def test_no_vips_when_no_capabilities(self) -> None:
         transform = _make_onprem_transform()
         cleaned = _cleaned_device()
-        cleaned["DcimPhysicalDevice"][0]["interfaces"][0]["interface_capabilities"] = []
+        cleaned["DcimPhysicalDevice"][0]["interfaces"][0]["capabilities"] = []
         with patch(_LB_CLEAN_DATA_PATH, return_value=cleaned):
             with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()
@@ -775,9 +712,12 @@ class TestLoadBalancerOnpremVipProcessing:
         assert mock_template.render.call_args[1]["vips"] == []
 
 
-class TestLoadBalancerOnpremMembers:
+class TestLoadBalancerOnpremRenderContext:
+    """The render context carries VIP data only, no pool-member data."""
+
     @pytest.mark.asyncio
-    async def test_members_included_in_vip(self) -> None:
+    async def test_context_has_no_member_data(self) -> None:
+        """Neither the VIPs nor the render context expose pool members (no such data exists in the model)."""
         transform = _make_onprem_transform()
         with patch(_LB_CLEAN_DATA_PATH, return_value=_cleaned_device()):
             with patch("transforms.helpers.templates.Environment") as mock_env:
@@ -785,46 +725,9 @@ class TestLoadBalancerOnpremMembers:
                 mock_template.render.return_value = ""
                 mock_env.return_value.get_template.return_value = mock_template
                 await transform.transform({})
-        members = mock_template.render.call_args[1]["vips"][0]["members"]
-        assert len(members) == 1
-        assert members[0]["name"] == "C001-WEB-VM-01"
-
-    @pytest.mark.asyncio
-    async def test_member_ip_extracted(self) -> None:
-        transform = _make_onprem_transform()
-        with patch(_LB_CLEAN_DATA_PATH, return_value=_cleaned_device()):
-            with patch("transforms.helpers.templates.Environment") as mock_env:
-                mock_template = MagicMock()
-                mock_template.render.return_value = ""
-                mock_env.return_value.get_template.return_value = mock_template
-                await transform.transform({})
-        members = mock_template.render.call_args[1]["vips"][0]["members"]
-        assert members[0]["ip"] == "10.0.1.10/24"
-
-    @pytest.mark.asyncio
-    async def test_empty_members_when_vip_has_no_members(self) -> None:
-        vip_services = [
-            {
-                "typename": "LoadbalancerVIP",
-                "hostname": "web.dc3.internal",
-                "protocol": "https",
-                "port": 443,
-                "status": "active",
-                "description": "",
-                "vip_ip": {"address": "10.100.0.1/32"},
-                "load_balancer": {"name": "DC3-LB-C001"},
-                "health_checks": [],
-                "members": [],
-            }
-        ]
-        transform = _make_onprem_transform()
-        with patch(_LB_CLEAN_DATA_PATH, return_value=_cleaned_device(vip_services=vip_services)):
-            with patch("transforms.helpers.templates.Environment") as mock_env:
-                mock_template = MagicMock()
-                mock_template.render.return_value = ""
-                mock_env.return_value.get_template.return_value = mock_template
-                await transform.transform({})
-        assert mock_template.render.call_args[1]["vips"][0]["members"] == []
+        context = mock_template.render.call_args[1]
+        assert "lb_nodes" not in context
+        assert "members" not in context["vips"][0]
 
 
 class TestLoadBalancerOnpremHealthChecks:
@@ -841,7 +744,6 @@ class TestLoadBalancerOnpremHealthChecks:
                 "vip_ip": {"address": "10.100.0.1/32"},
                 "load_balancer": {"name": "DC3-LB-C001"},
                 "health_checks": [{"check": "http", "rise": 2, "fall": 4, "timeout": 3000}],
-                "members": [],
             }
         ]
         transform = _make_onprem_transform()
@@ -886,7 +788,6 @@ class TestLoadBalancerOnpremVipLbParams:
                 "vip_ip": {"address": "10.100.0.1/32"},
                 "load_balancer": {"name": "DC3-LB-C001"},
                 "health_checks": [],
-                "members": [],
             }
         ]
         transform = _make_onprem_transform()

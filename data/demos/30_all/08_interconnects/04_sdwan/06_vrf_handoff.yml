@@ -89,10 +89,10 @@ spec:
 # RM-<name>-IN accepts only the far end's registered prefixes and
 # RM-PROD-EXTERNAL-OUT announces only PROD's on-prem segment prefixes. The far
 # end here is EQX-FR2-SDWAN-GW1, so the registered prefixes are the PROD
-# lan_prefixes of every TopologyCustomerOffice whose sdwan_gateway is GW1 (C002
-# 10.210.2.0/24, C005 10.210.5.0/24; get_external_peer_prefixes in
-# transforms/helpers/bgp.py). An office without a registered LAN adds nothing:
-# C001, C003 and C015 are behind GW1 too but register none.
+# lan_prefixes and the PROD segments hosted by every TopologyCustomerOffice whose
+# sdwan_gateway is GW1 (C002's lan_prefixes 10.210.2.0/24, C005's hosted office-lan
+# segment; get_external_peer_prefixes in transforms/helpers/bgp.py). An office
+# with neither adds nothing: C001, C003 and C015 are behind GW1 too but register none.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -113,6 +113,6 @@ spec:
         - "eg-fr01-bgp-overlay"
         - "EQX-FR2-SDWAN-GW1-bgp"
       password: "eqx-fr2-sdwan-handoff-key"
-      interface_capabilities:
+      capabilities:
         - ["eg-fr01", "Ethernet1/13.1900"]
         - ["EQX-FR2-SDWAN-GW1", "eth0.1900"]

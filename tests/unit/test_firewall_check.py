@@ -76,8 +76,7 @@ def _carried(seg_id: str, policy: dict[str, Any] | None, inbound: list[dict[str,
 
 def _payload(*capabilities: dict[str, Any]) -> dict[str, Any]:
     interfaces = [
-        {"name": _v(f"eth0.{i}"), "interface_capabilities": _edges([capability])}
-        for i, capability in enumerate(capabilities)
+        {"name": _v(f"eth0.{i}"), "capabilities": _edges([capability])} for i, capability in enumerate(capabilities)
     ]
     return {"DcimPhysicalDevice": _edges([{"name": _v("fw-1"), "interfaces": _edges(interfaces)}])}
 
@@ -202,7 +201,7 @@ def _leg_interface(name: str, address: str, namespace: str, ns_type: str, exchan
         "ip_address": _node(
             {"address": _v(address), "ip_namespace": _node({"name": _v(namespace), "namespace_type": _v(ns_type)})}
         ),
-        "interface_capabilities": _edges([context, exchange]),
+        "capabilities": _edges([context, exchange]),
     }
 
 
@@ -218,7 +217,7 @@ def _exchange_payload(internet_vlan: str, snat: str | None = "192.0.2.5/32") -> 
         "__typename": "TopologyRoutedExchange",
         "id": "xchg-1",
         "name": _v("ctx-1-PROD-INTERNET"),
-        # The exchange's own namespace_a / namespace_z come back null through interface_capabilities;
+        # The exchange's own namespace_a / namespace_z come back null through capabilities;
         # the check reads the namespaces off the legs' addresses instead.
         "namespace_a": {"node": None},
         "namespace_z": {"node": None},

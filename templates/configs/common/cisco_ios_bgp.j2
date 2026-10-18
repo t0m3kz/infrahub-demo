@@ -97,7 +97,9 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- endfor %}
   !
   address-family ipv4 unicast
+{%- if not lisp %}
     redistribute connected route-map RM-CONN-2-BGP
+{%- endif %}
 {%- for pg in bgp_config.peer_groups | default([]) %}
 {%- if 'ipv4' in (pg.address_families | default([])) %}
     neighbor {{ pg.name }} activate
@@ -137,6 +139,10 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- for _af, _af_sessions in _by_af.items() %}
   !
   address-family {{ _af }} vrf {{ vrf_name }}
+{%- if _af == 'ipv4' and lisp and lisp.wan_exit and lisp.role == 'border' %}
+    ! unverified-no-lab: the EID prefixes registered with this border (route-export site-registrations) go to the WAN edge
+    redistribute lisp metric 10
+{%- endif %}
 {%- for session in _af_sessions %}
     neighbor {{ session.neighbor }} remote-as {{ session.remote_as.asn }}
 {%- if session.get('remote_device') %}

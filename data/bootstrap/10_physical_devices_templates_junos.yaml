@@ -83,3 +83,29 @@ spec:
             name: xe-0/1/[0-7]
             role: uplink
             interface_type: 10gbase-x-sfpp
+
+    # An access ISP's PE as seen from a customer office handoff: xe-0/1/[0-7] face offices, et-0/0/[0-3] the core.
+    - template_name: MX204_ISP_ACCESS
+      owner: "P027"
+      device_type: MX204
+      platform: junos
+      software_image: junos-23.4R2
+      role: edge
+      status: active
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: MX204_ISP_ACCESS_fxp0
+            name: fxp0
+            role: management
+            interface_type: 1000base-t
+          - template_name: MX204_ISP_ACCESS_xe-0/1/[0-7]
+            name: xe-0/1/[0-7]
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: MX204_ISP_ACCESS_et-0/0/[0-3]
+            name: et-0/0/[0-3]
+            role: uplink
+            interface_type: 100gbase-x-qsfp28

@@ -4,85 +4,32 @@ kind: Object
 spec:
   kind: TopologyElement
   data:
-    # Cisco Leafs
+    # Cisco Middle Rack Leafs
     - quantity: 2
-      role: leaf
-      template: N9K-C9336C-FX2_LEAF
-    - quantity: 4
-      role: leaf
-      template: N9K-C9336C-FX2_LEAF
-    - quantity: 8
-      role: leaf
-      template: N9K-C9336C-FX2_LEAF
-
-    - quantity: 2
-      role: leaf
-      template: N9K-C9336C-FX2_LEAF_MR
-    - quantity: 4
-      role: leaf
-      template: N9K-C9336C-FX2_LEAF_MR
-    - quantity: 8
       role: leaf
       template: N9K-C9336C-FX2_LEAF_MR
     # Reference-fabric variant (GX, NX-OS 10.6(3)F): DC10
     - quantity: 2
       role: leaf
       template: N9K-C9364C-GX_LEAF_MR
-    - quantity: 4
-      role: leaf
-      template: N9K-C9364C-GX_LEAF_MR
-    - quantity: 8
-      role: leaf
-      template: N9K-C9364C-GX_LEAF_MR
-
-
-    - quantity: 2
-      role: leaf
-      template: N9K-C9336C-FX2_LEAF_MIXED
 
     # Cisco ToR (VTEP — tor-deployment, connects directly to spines)
     - quantity: 2
       role: tor
       template: N9K-C9336C-FX2_TOR
-    - quantity: 4
-      role: tor
-      template: N9K-C9336C-FX2_TOR
-    # Cisco Access-Leaf (routed VTEP — connects to leafs, not spines)
-    - quantity: 2
-      role: access-leaf
-      template: N9K-C9336C-FX2_ACCESS
-    - quantity: 4
-      role: access-leaf
-      template: N9K-C9336C-FX2_ACCESS
     # 25G access-leaf — the customer ports match the server templates' NICs, so
     # this is the element to pick for a rack that has endpoints cabled to it.
     - quantity: 2
-      role: access-leaf
-      template: N9K-C93180YC-EX_ACCESS
-    - quantity: 4
       role: access-leaf
       template: N9K-C93180YC-EX_ACCESS
     # Reference-fabric variant (FX3, NX-OS 10.6(3)F): DC10
     - quantity: 2
       role: access-leaf
       template: N9K-C93180YC-FX3_ACCESS
-    - quantity: 4
-      role: access-leaf
-      template: N9K-C93180YC-FX3_ACCESS
     # Cisco L2-Leaf (L2-only — middle_rack/mixed deployments, connects to leafs)
     - quantity: 2
       role: l2-leaf
       template: N9K-C9336C-FX2_TOR
-    - quantity: 4
-      role: l2-leaf
-      template: N9K-C9336C-FX2_TOR
-    # Cisco OOB
-    - quantity: 2
-      role: oob
-      template: C9200L-24P-4G_OOB
-    - quantity: 2
-      role: oob
-      template: C9200L-48P-4G_OOB
 
     # Cisco Edge
     - quantity: 2
@@ -105,36 +52,6 @@ spec:
     - quantity: 2
       role: access-switch
       template: C9300-48UXM_ACCESS_SWITCH
-    # Arista Leafs
-    - quantity: 2
-      role: leaf
-      template: DCS-7050CX3-32C-R_LEAF
-    - quantity: 4
-      role: leaf
-      template: DCS-7050CX3-32C-R_LEAF
-    - quantity: 8
-      role: leaf
-      template: DCS-7050CX3-32C-R_LEAF
-
-    - quantity: 2
-      role: leaf
-      template: DCS-7050CX4M-48D8-F_LEAF
-    - quantity: 4
-      role: leaf
-      template: DCS-7050CX4M-48D8-F_LEAF
-    - quantity: 8
-      role: leaf
-      template: DCS-7050CX4M-48D8-F_LEAF
-
-    - quantity: 2
-      role: leaf
-      template: DCS-7050SX3-24YC4C-S-R_LEAF
-    - quantity: 4
-      role: leaf
-      template: DCS-7050SX3-24YC4C-S-R_LEAF
-    - quantity: 8
-      role: leaf
-      template: DCS-7050SX3-24YC4C-S-R_LEAF
 
     # Arista Middle Rack Leafs
     - quantity: 2
@@ -151,69 +68,20 @@ spec:
     - quantity: 2
       role: tor
       template: DCS-7050CX3-32C-R_TOR
-    - quantity: 2
-      role: tor
-      template: DCS-7050SX3-24YC4C-S-R_TOR
-    # Arista Access-Leafs (routed VTEP — connects to leafs, not spines)
-    - quantity: 2
-      role: access-leaf
-      template: DCS-7050CX3-32C-R_ACCESS
-    - quantity: 2
-      role: access-leaf
-      template: DCS-7050SX3-24YC4C-S-R_ACCESS
     # Arista L2-Leafs (L2-only — middle_rack/mixed deployments)
     - quantity: 2
       role: l2-leaf
       template: DCS-7050CX3-32C-R_TOR
 
-    # Dell Leafs
-    - quantity: 2
-      role: leaf
-      template: PowerSwitch-S5224F-ON_LEAF
-    - quantity: 4
-      role: leaf
-      template: PowerSwitch-S5224F-ON_LEAF
-    - quantity: 8
-      role: leaf
-      template: PowerSwitch-S5224F-ON_LEAF
-
-    - quantity: 2
-      role: leaf
-      template: PowerSwitch-S5248F-ON_LEAF
-    - quantity: 4
-      role: leaf
-      template: PowerSwitch-S5248F-ON_LEAF
-    - quantity: 8
-      role: leaf
-      template: PowerSwitch-S5248F-ON_LEAF
-
     # Dell Middle Rack Leafs
     - quantity: 2
       role: leaf
       template: PowerSwitch-S5232F-ON_LEAF_MR
-    - quantity: 8
-      role: leaf
-      template: PowerSwitch-S5232F-ON_LEAF_MR
-
-    # Dell Mixed Rack Leafs
-    - quantity: 2
-      role: leaf
-      template: PowerSwitch-S5224F-ON_LEAF_MR
 
     # Dell ToRs (VTEP — tor-deployment)
     - quantity: 2
       role: tor
       template: PowerSwitch-S5224F-ON_TOR
-    - quantity: 2
-      role: tor
-      template: PowerSwitch-S5248F-ON_TOR
-    # Dell Access-Leafs (routed VTEP — connects to leafs, not spines)
-    - quantity: 2
-      role: access-leaf
-      template: PowerSwitch-S5224F-ON_ACCESS
-    - quantity: 2
-      role: access-leaf
-      template: PowerSwitch-S5248F-ON_ACCESS
     # Dell L2-Leafs (L2-only — middle_rack/mixed deployments)
     - quantity: 2
       role: l2-leaf
@@ -225,26 +93,7 @@ spec:
     # Edgecore Leafs
     - quantity: 2
       role: leaf
-      template: Edgecore-7AS7326-56X-O-48V-F_LEAF
-    - quantity: 4
-      role: leaf
-      template: Edgecore-7AS7326-56X-O-48V-F_LEAF
-    - quantity: 8
-      role: leaf
-      template: Edgecore-7AS7326-56X-O-48V-F_LEAF
-    - quantity: 2
-      role: leaf
       template: Edgecore-7726-32X-O_LEAF_MR
-    - quantity: 8
-      role: leaf
-      template: Edgecore-7726-32X-O_LEAF_MR
-    - quantity: 2
-      role: tor
-      template: Edgecore-7AS7326-56X-O-48V-F_TOR
-    # Edgecore Access-Leaf (routed VTEP — connects to leafs, not spines)
-    - quantity: 2
-      role: access-leaf
-      template: Edgecore-7AS7326-56X-O-48V-F_ACCESS
     # Edgecore L2-Leaf (L2-only — middle_rack/mixed deployments)
     - quantity: 2
       role: l2-leaf
@@ -278,20 +127,12 @@ spec:
       template: N9K-C9336C-FX2_SUPER_SPINE
     - quantity: 4
       role: super-spine
-      template: N9K-C9336C-FX2_SUPER_SPINE
-    - quantity: 4
-      role: super-spine
       template: DCS-7050CX3-32C-R_SUPER_SPINE
 
     # Dell Super-Spines
     - quantity: 4
       role: super-spine
       template: PowerSwitch-S5232F-ON_SUPER_SPINE
-
-    # Edgecore Super-Spines
-    - quantity: 2
-      role: super-spine
-      template: Edgecore-7726-32X-O_SUPER_SPINE
 
     # Hyper-Spines (DC-level fabric_templates, XL fabrics only — see
     # TopologyDataCenterDesign "XL_EBGP_EBGP" and role: hyper-spine)
@@ -310,35 +151,15 @@ spec:
     - quantity: 2
       role: border-leaf
       template: DCS-7050CX3-32C-R_BORDER_LEAF
-    - quantity: 4
-      role: border-leaf
-      template: DCS-7050CX3-32C-R_BORDER_LEAF
     - quantity: 2
       role: border-leaf
       template: PowerSwitch-S5232F-ON_BORDER_LEAF
-    - quantity: 2
-      role: border-leaf
-      template: Edgecore-7726-32X-O_BORDER_LEAF
 
     # Border Spines (collapsed spine + border-leaf, pod-level fabric_templates
     # in border-spine micro-fabrics — see TopologyPodDesign "S_BORDER_SPINE_POD")
     - quantity: 2
       role: border-spine
       template: DCS-7050CX3-32C-R_BORDER_SPINE
-    - quantity: 2
-      role: border-spine
-      template: PowerSwitch-S5232F-ON_BORDER_SPINE
-    - quantity: 2
-      role: border-spine
-      template: Edgecore-7726-32X-O_BORDER_SPINE
-
-    # Juniper Firewalls
-    - quantity: 2
-      role: firewall
-      template: SRX-1500_EDGE_FIREWALL
-    - quantity: 2
-      role: firewall
-      template: SRX-1500_DC_FIREWALL
 
     # Border-leaf-attached firewalls (DC-level fabric_templates)
     - quantity: 2
@@ -355,8 +176,3 @@ spec:
     - quantity: 2
       role: load-balancer
       template: NetScaler-MPX-26000-100G_LOAD_BALANCER
-
-    # Perle Consoles
-    - quantity: 2
-      role: console
-      template: SCG50R_CONSOLE

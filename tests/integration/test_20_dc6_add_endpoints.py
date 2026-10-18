@@ -70,7 +70,7 @@ query ($name: String!) {
     edges {
       node {
         id
-        interface_capabilities {
+        capabilities {
           edges { node { id name { value } device { node { name { value } } } } }
         }
       }
@@ -357,7 +357,7 @@ class TestDC6AddEndpoints(TestInfrahubDockerWithClient):
         cabled_switches = {link["peer_device"] for link in hosts[SCENARIO_ENDPOINT_SERVER]["links"]}
         tagged = [
             (edge["node"]["device"]["node"]["name"]["value"], edge["node"]["name"]["value"])
-            for edge in segment["interface_capabilities"]["edges"]
+            for edge in segment["capabilities"]["edges"]
         ]
         tagged_switches = {device for device, _ in tagged}
         assert tagged, f"No switch interface carries '{SCENARIO_ENDPOINT_SEGMENT}'"

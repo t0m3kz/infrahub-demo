@@ -1,9 +1,8 @@
 """Unit tests for the RoutingMixin helpers the DC and the office fabric share.
 
-ensure_lisp_site_key and ensure_ospf_area were lifted out of the DC's
-_create_shared_routing_objects so the office fabric generator calls the same
-code instead of a copy; create_routing's ``no_overlay`` option is the
-office-driven way to ask for an underlay-only plan.
+ensure_lisp_site_key (the office's site key, attached to the office as ``lisp_site_key``) and ensure_ospf_area
+(shared with the DC's ospf-ibgp) are the helpers the office fabric generator calls; create_routing's ``no_overlay``
+option is the office-driven way to ask for an underlay-only plan.
 """
 
 from __future__ import annotations
@@ -65,7 +64,7 @@ class TestEnsureLispSiteKey:
         assert create["data"]["name"] == "c005-p-lisp-site-key"
         assert create["data"]["password"]
         mixin.attach_refs.assert_awaited_once_with(
-            kind="TopologySegmentHosting", node_id="office-1", refs={"lisp_site_key": "key-1"}
+            kind="TopologyCustomerOffice", node_id="office-1", refs={"lisp_site_key": "key-1"}
         )
         # tracked: the run that owns the key keeps it on every later run
         assert key.id in mixin.client.group_context.related_node_ids
@@ -82,7 +81,7 @@ class TestEnsureLispSiteKey:
         assert site_key_id == "key-1"
         mixin.client.create.assert_not_awaited()
         mixin.attach_refs.assert_awaited_once_with(
-            kind="TopologySegmentHosting", node_id="office-1", refs={"lisp_site_key": "key-1"}
+            kind="TopologyCustomerOffice", node_id="office-1", refs={"lisp_site_key": "key-1"}
         )
         assert "key-1" in mixin.client.group_context.related_node_ids
 
@@ -96,7 +95,7 @@ class TestEnsureLispSiteKey:
         assert site_key_id is None
         mixin.logger.error.assert_called_once()
         mixin.attach_refs.assert_awaited_once_with(
-            kind="TopologySegmentHosting", node_id="office-1", refs={"lisp_site_key": None}
+            kind="TopologyCustomerOffice", node_id="office-1", refs={"lisp_site_key": None}
         )
 
 
@@ -180,7 +179,7 @@ class TestCreateRoutingNoOverlay:
         mixin.ensure_address_family.assert_not_awaited()
         assert "overlay_as_id" not in options
         assert len(inputs) == 1
-        assert inputs[0].overlay_control_plane == "lisp"
+        assert inputs[0].options["no_overlay"] is True
         assert inputs[0].evpn_af_id == ""
         assert inputs[0].overlay_password_id == ""
         assert inputs[0].options["ospf_area_id"] == "area-1"
@@ -199,7 +198,8 @@ class TestCreateRoutingNoOverlay:
         )
 
         mixin.ensure_address_family.assert_awaited_once_with("l2vpn", "evpn")
-        assert inputs[0].overlay_control_plane == "bgp_evpn"
+        assert not inputs[0].options.get("no_overlay")
+        assert inputs[0].evpn_af_id == "evpn-af-1"
 
     @pytest.mark.asyncio
     async def test_no_overlay_with_skip_underlay_is_a_noop(self) -> None:

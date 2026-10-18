@@ -81,7 +81,7 @@ def _make_peering(
         "password": {"password": password} if password is not None else None,
         "ttl": ttl,
         "route_reflector_client": route_reflector_client,
-        "interface_capabilities": _make_peering_interfaces(
+        "capabilities": _make_peering_interfaces(
             local_name="Ethernet1",
             local_ip=local_ip,
             local_device=local_device,
@@ -219,9 +219,9 @@ class TestBuildSessionFromPeering:
             "name": "bad",
             "session_type": "EBGP",
             "ttl": 1,
-            "interface_capabilities": [{"device": {"name": "leaf-01"}}],  # only 1
+            "capabilities": [{"device": {"name": "leaf-01"}}],  # only 1
         }
-        with pytest.raises(ValueError, match="expected 2 interface_capabilities"):
+        with pytest.raises(ValueError, match="expected 2 capabilities"):
             _build_session_from_peering(
                 peering,
                 device_name="leaf-01",
@@ -235,7 +235,7 @@ class TestBuildSessionFromPeering:
             "name": "bad-mapping",
             "session_type": "IBGP",
             "ttl": 255,
-            "interface_capabilities": [
+            "capabilities": [
                 {"device": {"name": "spine-01"}, "ip_address": {"address": "10.0.0.1/32"}},
                 {"device": {"name": "spine-02"}, "ip_address": {"address": "10.0.0.2/32"}},
             ],
@@ -462,292 +462,12 @@ class TestExtractRemoteAsnFromPeering:
 
 
 # ============================================================================
-# Helpers — circuit interface service (post-clean_data format)
-# ============================================================================
-
-
-def _make_circuit_iface(
-    *,
-    circuit_typename: str = "TopologyVirtualCircuit",
-    local_device: str,
-    local_iface: str,
-    local_ip: str,
-    remote_device: str,
-    remote_iface: str,
-    remote_ip: str,
-) -> dict:
-    """Build a device interface dict with a circuit in interface_capabilities.
-
-    TopologyVirtualCircuit inherits ManagedGenericInterfaces, so it appears in a
-    terminating port's interface_capabilities alongside OSPF/segment services,
-    and its own interface_capabilities are the circuit's endpoints (local +
-    remote). TopologyPhysicalCircuit does not inherit it and so can never appear
-    here — pass that typename to assert the helper ignores it.
-    """
-    circuit = {
-        "typename": circuit_typename,
-        "interface_capabilities": [
-            {
-                "name": local_iface,
-                "ip_address": {"address": local_ip},
-                "device": {"name": local_device},
-            },
-            {
-                "name": remote_iface,
-                "ip_address": {"address": remote_ip},
-                "device": {"name": remote_device},
-            },
-        ],
-    }
-    return {
-        "name": local_iface,
-        "ip_address": {"address": local_ip},
-        "cable": None,
-        "device": {"name": local_device},
-        "interface_capabilities": [circuit],
-    }
-
-
-# ============================================================================
-# _build_session_from_peering — circuit service traversal (DCI)
-# ============================================================================
-
-
-class TestCircuitServiceTraversal:
-    """TTL=1 underlay sessions where connectivity is expressed via interface
-    services (ManagedVirtualCircuit / ManagedPhysicalCircuit) rather than a
-    direct DcimCable between the two device interfaces."""
-
-    def _dci_peering(self, local_device: str, remote_device: str) -> dict:
-        return {
-            "name": "dci-underlay--dc1-dc2-primary",
-            "session_type": "EBGP",
-            "bfd_enabled": True,
-            "send_community": True,
-            "ttl": 1,
-            "route_reflector_client": False,
-            "interface_capabilities": [
-                {"name": "Ethernet1/31", "ip_address": None, "device": {"name": local_device}},
-                {"name": "Ethernet25/1", "ip_address": None, "device": {"name": remote_device}},
-            ],
-            "bgp_processes": [
-                {"capabilities": [{"name": local_device}], "local_as": {"asn": 65001}},
-                {"capabilities": [{"name": remote_device}], "local_as": {"asn": 65002}},
-            ],
-        }
-
-    def test_virtual_circuit_traversal_resolves_ips(self):
-        """Session with TopologyVirtualCircuit interface service finds peer IP."""
-        local_iface = _make_circuit_iface(
-            circuit_typename="TopologyVirtualCircuit",
-            local_device="dc1-super-spine-01",
-            local_iface="Ethernet1/31",
-            local_ip="fd00:2200::1/127",
-            remote_device="dc2-super-spine-01",
-            remote_iface="Ethernet25/1",
-            remote_ip="fd00:2200::2/127",
-        )
-        peering = self._dci_peering("dc1-super-spine-01", "dc2-super-spine-01")
-        session = _build_session_from_peering(
-            peering,
-            device_name="dc1-super-spine-01",
-            local_as={"asn": 65001},
-            interfaces=[local_iface],
-        )
-        assert session is not None
-        assert session["local_ip"] == {"address": "fd00:2200::1/127"}
-        assert session["remote_ip"] == {"address": "fd00:2200::2/127"}
-        assert session["remote_device"] == "dc2-super-spine-01"
-        assert session["remote_as"] == {"asn": 65002}
-
-    def test_physical_circuit_is_not_traversed_as_a_capability(self):
-        """A physical circuit is not a ManagedGenericInterfaces, so it never
-        appears in interface_capabilities and must not be traversed there.
-
-        Its endpoints carry a customer/provider role instead, and the helper has
-        no business guessing which side is local. With no cable, no virtual
-        circuit and no IP on the peering's own interfaces, the session is
-        skipped rather than resolved from an edge that cannot exist.
-        """
-        local_iface = _make_circuit_iface(
-            circuit_typename="TopologyPhysicalCircuit",
-            local_device="dc1-super-spine-01",
-            local_iface="Ethernet1/31",
-            local_ip="100.64.0.0/31",
-            remote_device="dc2-super-spine-01",
-            remote_iface="Ethernet25/1",
-            remote_ip="100.64.0.1/31",
-        )
-        peering = self._dci_peering("dc1-super-spine-01", "dc2-super-spine-01")
-        session = _build_session_from_peering(
-            peering,
-            device_name="dc1-super-spine-01",
-            local_as={"asn": 65001},
-            interfaces=[local_iface],
-        )
-        assert session is None
-
-    def test_cable_takes_precedence_over_circuit(self):
-        """When a cable is present it is preferred over circuit traversal."""
-        cabled_iface = {
-            "name": "Ethernet1",
-            "ip_address": {"address": "10.0.0.1/31"},
-            "device": {"name": "leaf-01"},
-            "cable": {
-                "endpoints": [
-                    {
-                        "name": "Ethernet1",
-                        "ip_address": {"address": "10.0.0.1/31"},
-                        "device": {"name": "leaf-01"},
-                    },
-                    {
-                        "name": "Ethernet2",
-                        "ip_address": {"address": "10.0.0.0/31"},
-                        "device": {"name": "spine-01"},
-                    },
-                ]
-            },
-            "interface_capabilities": [
-                # A circuit also present — should NOT be used
-                {
-                    "typename": "ManagedVirtualCircuit",
-                    "topology_circuit": {
-                        "connectors": [
-                            {
-                                "interface": {
-                                    "name": "Ethernet1",
-                                    "ip_address": {"address": "fd00::1/127"},
-                                    "device": {"name": "leaf-01"},
-                                }
-                            },
-                            {
-                                "interface": {
-                                    "name": "Ethernet2",
-                                    "ip_address": {"address": "fd00::2/127"},
-                                    "device": {"name": "spine-01"},
-                                }
-                            },
-                        ]
-                    },
-                }
-            ],
-        }
-        peering = _make_peering(
-            session_type="EBGP",
-            ttl=1,
-            local_device="leaf-01",
-            remote_device="spine-01",
-            local_asn=65001,
-            remote_asn=65000,
-        )
-        session = _build_session_from_peering(
-            peering,
-            device_name="leaf-01",
-            local_as={"asn": 65001},
-            interfaces=[cabled_iface],
-        )
-        assert session is not None
-        # IP comes from cable, not from the fd00::/127 circuit
-        assert session.get("local_ip") == {"address": "10.0.0.1/31"}
-        assert session.get("remote_ip") == {"address": "10.0.0.0/31"}
-
-    def test_no_cable_no_circuit_returns_none(self):
-        """TTL=1 session with no cable and no matching circuit is skipped."""
-        bare_iface = {
-            "name": "Ethernet1/31",
-            "ip_address": {"address": "fd00::1/127"},
-            "cable": None,
-            "device": {"name": "dc1-super-spine-01"},
-            "interface_capabilities": [],
-        }
-        peering = self._dci_peering("dc1-super-spine-01", "dc2-super-spine-01")
-        session = _build_session_from_peering(
-            peering,
-            device_name="dc1-super-spine-01",
-            local_as={"asn": 65001},
-            interfaces=[bare_iface],
-        )
-        assert session is None
-
-    def test_circuit_with_wrong_remote_skipped(self):
-        """Circuit whose remote side doesn't match remote_device_name is ignored."""
-        iface = _make_circuit_iface(
-            circuit_typename="TopologyVirtualCircuit",
-            local_device="dc1-super-spine-01",
-            local_iface="Ethernet1/31",
-            local_ip="fd00::1/127",
-            remote_device="dc3-super-spine-01",  # wrong remote
-            remote_iface="Ethernet25/1",
-            remote_ip="fd00::2/127",
-        )
-        peering = self._dci_peering("dc1-super-spine-01", "dc2-super-spine-01")
-        session = _build_session_from_peering(
-            peering,
-            device_name="dc1-super-spine-01",
-            local_as={"asn": 65001},
-            interfaces=[iface],
-        )
-        assert session is None
-
-    def test_z_side_device_also_resolves(self):
-        """The Z-side device resolves its peer via interface_capabilities circuit lookup."""
-        circuit = {
-            "typename": "TopologyVirtualCircuit",
-            "interface_capabilities": [
-                {
-                    "name": "Ethernet1/31",
-                    "ip_address": {"address": "fd00:2200::1/127"},
-                    "device": {"name": "dc1-super-spine-01"},
-                },
-                {
-                    "name": "Ethernet25/1",
-                    "ip_address": {"address": "fd00:2200::2/127"},
-                    "device": {"name": "dc2-super-spine-01"},
-                },
-            ],
-        }
-        z_iface = {
-            "name": "Ethernet25/1",
-            "ip_address": {"address": "fd00:2200::2/127"},
-            "cable": None,
-            "device": {"name": "dc2-super-spine-01"},
-            "interface_capabilities": [circuit],
-        }
-        peering = {
-            "name": "dci-underlay--dc1-dc2-primary",
-            "session_type": "EBGP",
-            "bfd_enabled": True,
-            "send_community": True,
-            "ttl": 1,
-            "route_reflector_client": False,
-            "interface_capabilities": [
-                {"name": "Ethernet25/1", "ip_address": None, "device": {"name": "dc2-super-spine-01"}},
-                {"name": "Ethernet1/31", "ip_address": None, "device": {"name": "dc1-super-spine-01"}},
-            ],
-            "bgp_processes": [
-                {"capabilities": [{"name": "dc2-super-spine-01"}], "local_as": {"asn": 65002}},
-                {"capabilities": [{"name": "dc1-super-spine-01"}], "local_as": {"asn": 65001}},
-            ],
-        }
-        session = _build_session_from_peering(
-            peering,
-            device_name="dc2-super-spine-01",
-            local_as={"asn": 65002},
-            interfaces=[z_iface],
-        )
-        assert session is not None
-        assert session["local_ip"] == {"address": "fd00:2200::2/127"}
-        assert session["remote_ip"] == {"address": "fd00:2200::1/127"}
-        assert session["remote_device"] == "dc1-super-spine-01"
-
-
-# ============================================================================
-# _build_session_from_peering — direct IP fallback (no cable, no circuit)
+# _build_session_from_peering — direct IP fallback (no cable)
 # ============================================================================
 
 
 class TestDirectIpFallback:
-    """TTL=1 underlay sessions where the peering's own interface_capabilities
+    """TTL=1 underlay sessions where the peering's own capabilities
     already carry both sides' IPs directly (e.g. a VTI/sub-interface with no
     DcimCable and no separate TopologyCircuit object to traverse — external
     BGP peering over a fabric/MPLS-VPN virtual circuit handoff)."""
@@ -769,7 +489,7 @@ class TestDirectIpFallback:
             "send_community": True,
             "ttl": 1,
             "route_reflector_client": False,
-            "interface_capabilities": [
+            "capabilities": [
                 {"name": remote_iface, "ip_address": {"address": remote_ip}, "device": {"name": remote_device}},
                 {"name": local_iface, "ip_address": {"address": local_ip}, "device": {"name": local_device}},
             ],
@@ -786,7 +506,7 @@ class TestDirectIpFallback:
             "ip_address": {"address": "10.255.0.24/31"},
             "cable": None,
             "device": {"name": "FR2-EDGE-01"},
-            "interface_capabilities": [],
+            "capabilities": [],
         }
         peering = self._direct_ip_peering(
             local_device="FR2-EDGE-01",
@@ -810,7 +530,7 @@ class TestDirectIpFallback:
 
     def test_cable_still_takes_precedence_over_direct_ip(self):
         """A cable connecting the two sides is preferred even when the peering
-        interface_capabilities also carry an IP directly."""
+        capabilities also carry an IP directly."""
         cabled_iface = {
             "name": "Ethernet1/1",
             "ip_address": {"address": "10.0.0.1/31"},
@@ -829,7 +549,7 @@ class TestDirectIpFallback:
                     },  # noqa: E501
                 ]
             },
-            "interface_capabilities": [],
+            "capabilities": [],
         }
         peering = self._direct_ip_peering(
             local_device="FR6-EDGE-01",
@@ -859,7 +579,7 @@ class TestDirectIpFallback:
             "ip_address": {"address": "fd00::1/127"},
             "cable": None,
             "device": {"name": "dc1-super-spine-01"},
-            "interface_capabilities": [],
+            "capabilities": [],
         }
         peering = {
             "name": "dci-underlay--dc1-dc2-primary",
@@ -868,7 +588,7 @@ class TestDirectIpFallback:
             "send_community": True,
             "ttl": 1,
             "route_reflector_client": False,
-            "interface_capabilities": [
+            "capabilities": [
                 {"name": "Ethernet1/31", "ip_address": None, "device": {"name": "dc1-super-spine-01"}},
                 {"name": "Ethernet25/1", "ip_address": None, "device": {"name": "dc2-super-spine-01"}},
             ],

@@ -18,9 +18,6 @@
 {%- set ospf_router = {} -%}
 {%- set vlan_members = {} -%}
 {%- include 'common/sonic_common.j2' %}
-{%- set ntp_servers = {} -%}
-{%- set syslog_servers = {} -%}
-{%- include 'common/sonic_management.j2' %}
 
 {%- set configdb = {
   'DEVICE_METADATA': device_metadata,
@@ -28,8 +25,8 @@
   'INTERFACE': physical_interfaces,
   'INTERFACE_IP': interface_ips,
   'VLAN_INTERFACE': vlan_interfaces,
-  'NTP_SERVER': ntp_servers,
-  'SYSLOG_SERVER': syslog_servers
+  'NTP_SERVER': {},
+  'SYSLOG_SERVER': {}
 } -%}
 {#- Only added when a host port carries a VLAN, so a switch without one keeps its table set. -#}
 {%- if vlan_members -%}

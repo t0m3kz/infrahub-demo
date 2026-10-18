@@ -2,7 +2,7 @@
 # IP transit, cage -> ISP. Unowned like the rest of the on-ramp underlay
 # (../01_colo_onramp/03_physical_circuits.yml): every tenant's internet traffic
 # leaves over these. The cage end is the zone the dark fibre also lands in, the
-# far end the ISP's endpoint in the INTERNET topology (01_topology.yml).
+# far end the ISP's endpoint in the INTERNET topology (../../04_internet/01_topology.yml).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -19,9 +19,8 @@ spec:
       locations:
         - "FR2"
         - "ISP-LUMEN"
-      customer_interfaces:
+      capabilities:
         - ["eg-fr01", "Ethernet1/14"]
-      provider_interfaces:
         - ["EXT-LUMEN-FRA1", "et-0/0/0"]
 
     - circuit_id: "INET-COGENT-EQXFR2"
@@ -35,9 +34,8 @@ spec:
       locations:
         - "FR2"
         - "ISP-COGENT"
-      customer_interfaces:
+      capabilities:
         - ["eg-fr02", "Ethernet1/14"]
-      provider_interfaces:
         - ["EXT-COGENT-FRA1", "et-0/0/0"]
 
     - circuit_id: "INET-LUMEN-EQXPA4"
@@ -51,9 +49,8 @@ spec:
       locations:
         - "PA4"
         - "ISP-LUMEN"
-      customer_interfaces:
+      capabilities:
         - ["eg-pa01", "Ethernet1/14"]
-      provider_interfaces:
         - ["EXT-LUMEN-PAR1", "et-0/0/0"]
 
     - circuit_id: "INET-COGENT-EQXPA4"
@@ -67,7 +64,6 @@ spec:
       locations:
         - "PA4"
         - "ISP-COGENT"
-      customer_interfaces:
+      capabilities:
         - ["eg-pa02", "Ethernet1/14"]
-      provider_interfaces:
         - ["EXT-COGENT-PAR1", "et-0/0/0"]

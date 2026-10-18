@@ -180,7 +180,7 @@
                       }
                     }
                   },
-                  "interface_capabilities": {
+                  "capabilities": {
                     "edges": []
                   }
                 }
@@ -223,7 +223,7 @@
                   "cable": {
                     "node": null
                   },
-                  "interface_capabilities": {
+                  "capabilities": {
                     "edges": []
                   }
                 }
@@ -266,7 +266,7 @@
                   "cable": {
                     "node": null
                   },
-                  "interface_capabilities": {
+                  "capabilities": {
                     "edges": []
                   }
                 }
@@ -327,7 +327,7 @@
                       }
                     ]
                   },
-                  "interface_capabilities": {
+                  "capabilities": {
                     "edges": []
                   }
                 }
@@ -359,7 +359,7 @@
                   "cable": {
                     "node": null
                   },
-                  "interface_capabilities": {
+                  "capabilities": {
                     "edges": []
                   }
                 }
@@ -391,7 +391,7 @@
                   "cable": {
                     "node": null
                   },
-                  "interface_capabilities": {
+                  "capabilities": {
                     "edges": []
                   }
                 }
@@ -425,7 +425,7 @@
                       }
                     }
                   },
-                  "interface_capabilities": {
+                  "capabilities": {
                     "edges": []
                   }
                 }
@@ -479,7 +479,7 @@
                       }
                     ]
                   },
-                  "interface_capabilities": {
+                  "capabilities": {
                     "edges": []
                   }
                 }
@@ -511,7 +511,7 @@
                   "cable": {
                     "node": null
                   },
-                  "interface_capabilities": {
+                  "capabilities": {
                     "edges": []
                   }
                 }

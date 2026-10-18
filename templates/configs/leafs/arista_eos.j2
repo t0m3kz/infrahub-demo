@@ -135,16 +135,6 @@ route-map RM-VRF-CONN-2-EVPN permit 10
 !
 {%- for rule in leaf_pbr_rules %}
 ! Customer: {{ rule.customer_name or 'any' }}/{{ rule.environment or 'any' }}
-{%- if rule.lb_nexthop %}
-ip access-list LB-BACKEND-VLAN{{ rule.vlan_id }}
-{%- for ip in rule.backend_ips %}
-   permit ip host {{ ip }} any
-{%- endfor %}
-!
-class-map type pbr match-any CM-LB-BACKEND-VLAN{{ rule.vlan_id }}
-   match ip access-group LB-BACKEND-VLAN{{ rule.vlan_id }}
-!
-{%- endif %}
 {%- if rule.fw_nexthop %}
 ip access-list PBR-BYPASS-VLAN{{ rule.vlan_id }}
 {%- for prefix in rule.bypass_prefixes %}
@@ -162,10 +152,6 @@ class-map type pbr match-any CM-PBR-ALL-VLAN{{ rule.vlan_id }}
 !
 {%- endif %}
 policy-map type pbr PM-LEAF-PBR-VLAN{{ rule.vlan_id }}
-{%- if rule.lb_nexthop %}
-   class CM-LB-BACKEND-VLAN{{ rule.vlan_id }}
-      set nexthop {{ rule.lb_nexthop }}
-{%- endif %}
 {%- if rule.fw_nexthop %}
    class CM-PBR-BYPASS-VLAN{{ rule.vlan_id }}
    class CM-PBR-ALL-VLAN{{ rule.vlan_id }}
@@ -178,6 +164,5 @@ interface Vlan{{ rule.vlan_id }}
 {%- endfor %}
 {%- endif %}
 
-{%- include 'common/arista_eos_management.j2' %}
 
 ! End of configuration

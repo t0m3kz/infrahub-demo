@@ -547,7 +547,7 @@ async def test_fetch_transit_inventory_tags_edge_service_ports_like_border_leaf_
     context = {
         "id": "ctx",
         "name": {"value": "fw-fr-shared"},
-        "interface_capabilities": {
+        "capabilities": {
             "edges": [port("p1", "eg-fr01", "edge"), port("p2", "eg-fr02", "edge"), port("p3", "server-1", "server")]
         },
         "cluster": {"node": {"capabilities": {"edges": []}}},

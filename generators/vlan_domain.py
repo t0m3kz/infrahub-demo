@@ -210,7 +210,7 @@ class VlanDomainMixin:
         border-leaf ports facing its inline-terminating HA pair."""
         return {
             iface["id"]
-            for iface in segment.get("interface_capabilities") or []
+            for iface in segment.get("capabilities") or []
             if iface.get("typename") in TAGGABLE_INTERFACE_KINDS
             and iface.get("id")
             and (iface.get("role") in SERVICE_PORT_ROLES) == service_ports
@@ -223,7 +223,7 @@ class VlanDomainMixin:
         tagged_device_ids = sorted(
             {
                 device_id
-                for iface in segment.get("interface_capabilities") or []
+                for iface in segment.get("capabilities") or []
                 if iface.get("typename") in TAGGABLE_INTERFACE_KINDS
                 and (device_id := (iface.get("device") or {}).get("id"))
             }

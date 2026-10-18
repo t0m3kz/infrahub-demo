@@ -1,0 +1,23 @@
+# The rows of checks/physical_circuit_ports.py: every physical circuit with the ports it terminates on (the one
+# capabilities edge, exactly two by schema) and, per end, its kind, name and device so a finding names the
+# port. Virtual circuits are not selected: a tunnel port carries several.
+query physical_circuit_ports {
+  TopologyPhysicalCircuit {
+    edges {
+      node {
+        id
+        circuit_id { value }
+        capabilities {
+          edges {
+            node {
+              id
+              __typename
+              name { value }
+              device { node { name { value } } }
+            }
+          }
+        }
+      }
+    }
+  }
+}

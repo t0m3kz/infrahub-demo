@@ -19,8 +19,10 @@ import pytest
 
 from transforms.cloud.vpc_terraform import CloudVpcTerraform
 from transforms.config.access_leaf import AccessLeaf
+from transforms.config.access_switch import AccessSwitch
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.border_spine import BorderSpine
+from transforms.config.distribution_switch import DistributionSwitch
 from transforms.config.edge import Edge
 from transforms.config.firewall import Firewall
 from transforms.config.l2_leaf import L2Leaf
@@ -48,6 +50,8 @@ _PREFIX_TO_CLASS: list[tuple[str, type]] = sorted(
         ("proxy", Proxy),
         ("l2_leaf", L2Leaf),
         ("access_leaf", AccessLeaf),
+        ("access_switch", AccessSwitch),
+        ("distribution_switch", DistributionSwitch),
         ("leaf", Leaf),
         ("tor", ToR),
         ("edge", Edge),

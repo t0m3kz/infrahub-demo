@@ -157,7 +157,7 @@ def _firewall_context_caps(interfaces: list[dict[str, Any]] | None) -> list[dict
     for iface in interfaces or []:
         if iface.get("role") != "firewall":
             continue
-        for cap in iface.get("interface_capabilities") or []:
+        for cap in iface.get("capabilities") or []:
             if cap.get("typename") != "ManagedFirewallContext":
                 continue
             key = cap.get("id") or cap.get("name")
@@ -174,7 +174,7 @@ def _transit_legs(ctx: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """
     legs: dict[str, dict[str, Any]] = {}
     context_vlan = ctx.get("vlan_id")
-    for leg in ctx.get("interface_capabilities") or []:
+    for leg in ctx.get("capabilities") or []:
         if (leg.get("device") or {}).get("role") != "firewall":
             continue
         address = (leg.get("ip_address") or {}).get("address")
@@ -339,12 +339,12 @@ def get_exchange_routes(
         legs = _transit_legs(ctx)
         snat = _snat_host(ctx)
         # An exchange's sides are the namespaces of the legs carrying it: its own
-        # namespace_a / namespace_z come back null through interface_capabilities.
+        # namespace_a / namespace_z come back null through capabilities.
         exchanges: dict[str, dict[str, Any]] = {}
         sides: dict[str, set[str]] = {}
-        for leg in ctx.get("interface_capabilities") or []:
+        for leg in ctx.get("capabilities") or []:
             leg_ns = ((leg.get("ip_address") or {}).get("ip_namespace") or {}).get("name")
-            for exchange in leg.get("interface_capabilities") or []:
+            for exchange in leg.get("capabilities") or []:
                 if exchange.get("id") and leg_ns in legs:
                     exchanges.setdefault(exchange["id"], exchange)
                     sides.setdefault(exchange["id"], set()).add(leg_ns)
@@ -390,7 +390,7 @@ def get_firewall_contexts(
 ) -> list[dict[str, Any]]:
     """Build the per-VDOM/vsys/context list from this firewall's own sub-interfaces.
 
-    A ManagedFirewallContext shows up as an interface_capabilities entry on
+    A ManagedFirewallContext shows up as an capabilities entry on
     the DcimVirtualInterface(s) generators/topology/customer_dc.py created for
     it on the cluster's "uplink"-role trunk. A colocation context has no
     legs at all, hence no interface on a member: it comes from
@@ -415,7 +415,7 @@ def get_firewall_contexts(
     for iface in interfaces or []:
         ip_obj = iface.get("ip_address") or {}
         parent_iface = iface.get("parent_interface") or {}
-        for cap in iface.get("interface_capabilities") or []:
+        for cap in iface.get("capabilities") or []:
             if cap.get("typename") != "ManagedFirewallContext":
                 continue
             context_id = cap.get("id")
@@ -555,7 +555,7 @@ def _has_firewall_leg(ctx: dict[str, Any]) -> bool:
     """True when the context has an addressed leg on a firewall member (inline contexts have none)."""
     return any(
         (leg.get("device") or {}).get("role") == "firewall" and (leg.get("ip_address") or {}).get("address")
-        for leg in ctx.get("interface_capabilities") or []
+        for leg in ctx.get("capabilities") or []
     )
 
 
@@ -566,7 +566,7 @@ def _context_leg_ip(ctx: dict[str, Any], namespace: str | None = None) -> str | 
     fixed offset (utils.exchange_transit); the members' own addresses are never the
     nexthop. None without a transit leg in ``namespace``.
     """
-    for leg in ctx.get("interface_capabilities") or []:
+    for leg in ctx.get("capabilities") or []:
         if (leg.get("device") or {}).get("role") != "firewall":
             continue
         ip_obj = leg.get("ip_address") or {}

@@ -10,6 +10,7 @@ left next to a generated one is a duplicate session to the same neighbour.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +20,10 @@ import yaml
 _DEMOS = Path(__file__).parents[2] / "data" / "demos"
 _BOOTSTRAP_GROUPS = Path(__file__).parents[2] / "data" / "bootstrap" / "00_groups.yml"
 _TARGET_GROUPS = {"TopologyPhysicalCircuit": "physical_circuits", "TopologyVirtualCircuit": "virtual_circuits"}
-_ONRAMP = _DEMOS / "30_all" / "08_interconnects" / "01_colo_onramp"
+_ALL = _DEMOS / "30_all"
+_ONRAMP = _ALL / "08_interconnects" / "01_colo_onramp"
+_INTERNET = _ALL / "04_internet"
+_JUNOS_TEMPLATES = Path(__file__).parents[2] / "data" / "bootstrap" / "10_physical_devices_templates_junos.yaml"
 # One fibre per DC to each of the metro's two edges (both are Multi-Site border gateways).
 _DCI_CIRCUITS = {
     "DF-DC10-EQXFR2",
@@ -32,13 +36,23 @@ _DCI_CIRCUITS = {
 
 
 def _objects(root: Path, kind: str) -> list[tuple[Path, dict[str, Any]]]:
-    """(file, entry) for every data entry of `kind` under root."""
+    """(file, entry) for every data entry of `kind` under root (a directory or one file)."""
     entries: list[tuple[Path, dict[str, Any]]] = []
-    for path in sorted(root.rglob("*.yml")):
+    for path in [root] if root.is_file() else sorted(root.rglob("*.yml")):
         for doc in yaml.safe_load_all(path.read_text()):
             if isinstance(doc, dict) and doc.get("kind") == "Object" and doc["spec"]["kind"] == kind:
                 entries.extend((path, entry) for entry in doc["spec"]["data"])
     return entries
+
+
+def _nested(node: Any, key: str) -> list[dict[str, Any]]:
+    """Every mapping holding `key`, at any depth of a loaded document (nested children included)."""
+    if isinstance(node, dict):
+        found = [node] if key in node else []
+        return found + [hit for value in node.values() for hit in _nested(value, key)]
+    if isinstance(node, list):
+        return [hit for value in node for hit in _nested(value, key)]
+    return []
 
 
 def _circuit_name(entry: dict[str, Any]) -> str:
@@ -81,7 +95,7 @@ def test_dark_fibres_are_the_dci_circuits() -> None:
 def test_dci_circuit_has_a_border_leaf_and_a_cage_edge_end(circuit_id: str) -> None:
     """add_circuit refuses anything but two endpoints on two devices, one of them a DC device."""
     circuit = next(e for _, e in _objects(_ONRAMP, "TopologyPhysicalCircuit") if e["circuit_id"] == circuit_id)
-    ends = [tuple(i) for i in (circuit.get("customer_interfaces") or []) + (circuit.get("provider_interfaces") or [])]
+    ends = [tuple(i) for i in circuit["capabilities"]]
     devices = sorted(device for device, _ in ends)
 
     assert len(set(ends)) == 2
@@ -109,11 +123,7 @@ def test_generated_peering_names_do_not_collide_with_data() -> None:
 
 def test_every_dci_fibre_lands_on_its_own_free_port() -> None:
     """No two fibres share a port: each DC border leaf uses Ethernet1/35 and 1/36, each cage edge its dci ports."""
-    ends = [
-        tuple(i)
-        for _, e in _objects(_ONRAMP, "TopologyPhysicalCircuit")
-        for i in (e.get("customer_interfaces") or []) + (e.get("provider_interfaces") or [])
-    ]
+    ends = [tuple(i) for _, e in _objects(_ONRAMP, "TopologyPhysicalCircuit") for i in e["capabilities"]]
     assert len(ends) == len(set(ends))
     border_leaf_ports = {port for device, port in ends if device.startswith("bl-dc")}
     assert border_leaf_ports == {"Ethernet1/35", "Ethernet1/36"}
@@ -135,3 +145,78 @@ def test_generated_fabric_peering_names_do_not_collide_with_data() -> None:
     names = {e["name"] for _, e in _objects(_DEMOS, "ManagedBGPPeering")}
     names |= {_circuit_name(e) for kind in _TARGET_GROUPS for _, e in _objects(_DEMOS, kind)}
     assert not {"FABRIC-eg-fr01-eg-fr02", "FABRIC-eg-pa01-eg-pa02"} & names
+
+
+def test_every_physical_circuit_row_has_two_distinct_ends_and_no_port_is_in_two_rows() -> None:
+    """A physical circuit terminates on exactly two ports (the schema's min/max count), each port on one circuit.
+
+    The INET-<office> circuits are not data rows: add_sdwan_edge creates them with both ends in one write.
+    """
+    rows = _objects(_ALL, "TopologyPhysicalCircuit")
+    assert rows
+    seen: dict[tuple[str, str], str] = {}
+    for _, row in rows:
+        ends = [tuple(end) for end in row["capabilities"]]
+        assert len(ends) == 2 and len(set(ends)) == 2, f"{_circuit_name(row)}: {ends}"
+        for end in ends:
+            assert end not in seen, f"{end} is an end of {seen[end]} and {_circuit_name(row)}"
+            seen[end] = _circuit_name(row)
+
+
+def test_every_cross_connect_far_end_is_a_declared_cloud_provider_edge() -> None:
+    """A cross-connect's second port sits on a device the 01_colo_onramp cloud provider edges declare."""
+    declared = {e["name"] for _, e in _objects(_ONRAMP / "02_cloud_provider_edges.yml", "DcimPhysicalDevice")}
+    cross_connects = [
+        e for _, e in _objects(_ONRAMP, "TopologyPhysicalCircuit") if e["circuit_type"] == "cross_connect"
+    ]
+    assert sorted(_circuit_name(e) for e in cross_connects) == ["XC-EQXFR2-AWS-EUC1", "XC-EQXPA4-AZURE-WEU"]
+    for circuit in cross_connects:
+        cage_end, cloud_end = circuit["capabilities"]
+        assert cage_end[0].startswith("eg-")
+        assert cloud_end[0] in declared, f"{_circuit_name(circuit)}: {cloud_end[0]} is not declared"
+
+
+def _template_ports(name: str, role: str) -> list[str]:
+    """The expanded interface names of `role` on a bootstrap device template."""
+    (doc,) = [d for d in yaml.safe_load_all(_JUNOS_TEMPLATES.read_text()) if d]
+    (template,) = [t for t in doc["spec"]["data"] if t["template_name"] == name]
+    ports: list[str] = []
+    for iface in template["interfaces"]["data"]:
+        if iface["role"] != role:
+            continue
+        match = re.fullmatch(r"(.*)\[(\d+)-(\d+)\]", iface["name"])
+        if match:
+            prefix, low, high = match.groups()
+            ports.extend(f"{prefix}{n}" for n in range(int(low), int(high) + 1))
+        else:
+            ports.append(iface["name"])
+    return ports
+
+
+def test_the_orange_access_pe_has_a_customer_port_for_every_sdwan_office() -> None:
+    """add_sdwan_edge takes a free `customer` port of the one access PE per office: 8 ports cover the 5 offices."""
+    (device,) = [e for _, e in _objects(_INTERNET, "DcimPhysicalDevice")]
+    assert (device["name"], device["object_template"], device["deployment"]) == (
+        "EXT-ORANGE",
+        "MX204_ISP_ACCESS",
+        "ISP-ORANGE",
+    )
+    ports = _template_ports("MX204_ISP_ACCESS", "customer")
+    assert ports == [f"xe-0/1/{n}" for n in range(8)]
+    sdwan_offices = [
+        office
+        for path in (_ALL / "06_customer_boarding").rglob("*.yml")
+        for doc in yaml.safe_load_all(path.read_text())
+        for office in _nested(doc, "sdwan_gateway")
+    ]
+    assert len(sdwan_offices) == 5
+    assert len(ports) >= len(sdwan_offices)
+
+
+def test_the_orange_isp_topology_is_the_foundation_isp_of_its_access_pe() -> None:
+    """The generator resolves the ISP topology of the internet provider (Orange, P019); its one device is the PE."""
+    (topology,) = [e for _, e in _objects(_INTERNET / "01_topology.yml", "TopologyExternal")]
+    isps = {c["name"]: c for c in topology["children"]["data"]}
+    assert isps["ISP-ORANGE"]["provider"] == "P019"
+    (device,) = [e for _, e in _objects(_INTERNET, "DcimPhysicalDevice")]
+    assert device["deployment"] == "ISP-ORANGE" and device["owner"] == "P019"

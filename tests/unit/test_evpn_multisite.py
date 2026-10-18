@@ -92,14 +92,14 @@ def _bgw_device(role: str = "edge", *, with_vip: bool = True) -> dict[str, Any]:
                 "peerings": [
                     {
                         "peering_role": "dci",
-                        "interface_capabilities": [
+                        "capabilities": [
                             {"name": "Ethernet1/49", "device": {"name": "eg-fr01"}},
                             {"name": "Ethernet1/49", "device": {"name": "dc10-bl01"}},
                         ],
                     },
                     {
                         "peering_role": "underlay",
-                        "interface_capabilities": [{"name": "Ethernet1/1", "device": {"name": "eg-fr01"}}],
+                        "capabilities": [{"name": "Ethernet1/1", "device": {"name": "eg-fr01"}}],
                     },
                 ],
             }
@@ -191,7 +191,7 @@ class TestFabricPeerGroup:
             "ttl": 1,
             "peering_role": "fabric",
             "address_families": [{"afi": "ipv6", "safi": "unicast"}, {"afi": "l2vpn", "safi": "evpn"}],
-            "interface_capabilities": [
+            "capabilities": [
                 {"name": "Ethernet1/8", "device": {"name": "eg-fr01"}, "ip_address": {"address": "fd00:ff::/127"}},
                 {"name": "Ethernet1/8", "device": {"name": "eg-fr02"}, "ip_address": {"address": "fd00:ff::1/127"}},
             ],

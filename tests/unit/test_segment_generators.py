@@ -1141,9 +1141,7 @@ class TestReconcileInlineServicePorts:
     def _gen(tagged: list[dict[str, Any]]) -> Any:
         gen = _inline_gen({})
         gen._inline_legs = AsyncMock(return_value=[{"border_port_id": "bl-fw-new"}])
-        gen._fetch_segment_vlan_state = AsyncMock(
-            return_value={"segment": {"interface_capabilities": tagged}, "activations": {}}
-        )
+        gen._fetch_segment_vlan_state = AsyncMock(return_value={"segment": {"capabilities": tagged}, "activations": {}})
         gen.segment_obj = MagicMock()
         gen.segment_obj.add_relationships = AsyncMock()
         gen.segment_obj.remove_relationships = AsyncMock()
@@ -1163,10 +1161,10 @@ class TestReconcileInlineServicePorts:
 
         assert legs == [{"border_port_id": "bl-fw-new"}]
         gen.segment_obj.add_relationships.assert_awaited_once_with(
-            relation_to_update="interface_capabilities", related_nodes=["bl-fw-new"]
+            relation_to_update="capabilities", related_nodes=["bl-fw-new"]
         )
         gen.segment_obj.remove_relationships.assert_awaited_once_with(
-            relation_to_update="interface_capabilities", related_nodes=["bl-fw-old"]
+            relation_to_update="capabilities", related_nodes=["bl-fw-old"]
         )
 
     def test_terminate_inline_off_untags_every_service_port(self) -> None:
@@ -1179,7 +1177,7 @@ class TestReconcileInlineServicePorts:
         gen._inline_legs.assert_not_awaited()
         gen.segment_obj.add_relationships.assert_not_awaited()
         gen.segment_obj.remove_relationships.assert_awaited_once_with(
-            relation_to_update="interface_capabilities", related_nodes=["bl-fw-old"]
+            relation_to_update="capabilities", related_nodes=["bl-fw-old"]
         )
 
 

@@ -34,8 +34,6 @@ query leaf_config(
             node {
               ...EvpnRtAsOnDeploymentFields
               ...FirewallContextsOnDeploymentFields
-              ...LoadbalancerVipsOnDeploymentFields
-              ...LispMapServersOnDeploymentFields
             }
           }
         }

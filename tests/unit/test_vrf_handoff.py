@@ -48,7 +48,7 @@ def _handoff_peering(*, remote_ip: dict[str, Any] | None = None, namespace: str 
         "peering_role": "regular",
         "ttl": 1,
         "send_community": True,
-        "interface_capabilities": [
+        "capabilities": [
             {
                 "name": "Ethernet1/13.1900",
                 "device": {"name": "eg-fr01"},

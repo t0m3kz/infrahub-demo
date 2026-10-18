@@ -20,7 +20,6 @@ from generators.protocols import (
     DcimPhysicalInterface,
     DcimVirtualDevice,
     DcimVirtualInterface,
-    ManagedHAInterface,
     ManagedMLAG,
     ManagedStandaloneVlanDomain,
 )
@@ -616,9 +615,10 @@ class TestEnsureHaInterfaces:
         caps.fetch.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_creates_interface_capability_for_each_member_with_existing_sync_iface(self) -> None:
-        """Physical devices already have a role=ha interface from their
-        template — no on-demand creation, just wire ManagedHAInterface."""
+    async def test_physical_pair_gets_active_sync_ports_and_a_sync_cable_only(self) -> None:
+        """Physical devices already have a role=ha interface from their template:
+        no on-demand creation. The pair ends with active sync ports and the one
+        sync cable between them, and nothing else is created."""
         gen = self._gen()
         ha_obj = MagicMock(id="ha-1", capabilities=_mock_relmgr(["dev-1", "dev-2"]))
         dev_1 = MagicMock(id="dev-1", deployment=MagicMock(initialized=False))
@@ -631,63 +631,21 @@ class TestEnsureHaInterfaces:
         async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
             if kind is DcimPhysicalDevice:
                 return [dev_1, dev_2]
-            if kind is ManagedHAInterface:
-                return []  # no existing HAInterface nodes
             if kind is DcimPhysicalInterface:
                 return [iface_1] if kwargs.get("device__ids") == ["dev-1"] else [iface_2]
             return []
 
         gen.client.filters = AsyncMock(side_effect=_filters)
-        created_ha_iface = MagicMock(save=AsyncMock())
-        gen.client.create = AsyncMock(return_value=created_ha_iface)
+        gen.client.create = AsyncMock(return_value=MagicMock(save=AsyncMock()))
 
         await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02-ha")
 
-        ha_iface_calls = [c for c in gen.client.create.call_args_list if c.kwargs["kind"] is ManagedHAInterface]
-        assert len(ha_iface_calls) == 2
-        assert ha_iface_calls[0].kwargs["data"]["name"] == "fw-01-HA-SYNC"
-        assert ha_iface_calls[0].kwargs["data"]["interface_capabilities"] == [{"id": "iface-1"}]
-
-    @pytest.mark.asyncio
-    async def test_existing_sync_iface_membership_skips_create(self) -> None:
-        """An interface already wired to a ManagedHAInterface in this domain
-        must not get a second ManagedHAInterface created for it."""
-        gen = self._gen()
-        ha_obj = MagicMock(id="ha-1", capabilities=_mock_relmgr(["dev-1", "dev-2"]))
-        dev_1 = MagicMock(id="dev-1", deployment=MagicMock(initialized=False))
-        dev_1.name = MagicMock(value="fw-01")
-        dev_2 = MagicMock(id="dev-2", deployment=MagicMock(initialized=False))
-        dev_2.name = MagicMock(value="fw-02")
-        iface_1 = _mock_iface("iface-1", "sync0")
-        iface_2 = _mock_iface("iface-2", "sync0")
-        existing_ha_iface = MagicMock(
-            id="existing-ha-iface", interface_capabilities=_mock_relmgr(["iface-1", "iface-2"])
-        )
-
-        async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
-            if kind is DcimPhysicalDevice:
-                return [dev_1, dev_2]
-            if kind is ManagedHAInterface:
-                return [existing_ha_iface]
-            if kind is DcimPhysicalInterface:
-                return [iface_1] if kwargs.get("device__ids") == ["dev-1"] else [iface_2]
-            return []
-
-        gen.client.filters = AsyncMock(side_effect=_filters)
-
-        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02-ha")
-
-        ha_iface_calls = [c for c in gen.client.create.call_args_list if c.kwargs["kind"] is ManagedHAInterface]
-        assert len(ha_iface_calls) == 0
-        # ... and it must stay in the run's tracking group, or the next run
-        # deletes it as unused — same trap as the sync cable, see
-        # TestEnsureHaCable.
-        assert gen.client.group_context.related_node_ids == ["existing-ha-iface"]
-        # The status flip still happens on this path: a pair built before the
-        # flip existed has cabled-but-`free` sync ports, and re-running the
-        # generator is what repairs them.
         assert iface_1.status.value == "active"
         assert iface_2.status.value == "active"
+        created = [(c.kwargs["kind"], c.kwargs["data"]) for c in gen.client.create.call_args_list]
+        assert [kind for kind, _ in created] == [DcimCable]
+        assert created[0][1]["name"] == "CBL-fw-01-fw-02-ha-SYNC"
+        assert created[0][1]["endpoints"] == ["iface-1", "iface-2"]
 
     @pytest.mark.asyncio
     async def test_sync_ports_are_flipped_to_active(self) -> None:
@@ -759,7 +717,7 @@ class TestEnsureHaInterfaces:
         async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
             if kind is DcimVirtualDevice:
                 return [dev_1, dev_2]
-            return []  # no existing sync interface, no existing HAInterface
+            return []  # no existing sync interface
 
         gen.client.filters = AsyncMock(side_effect=_filters)
         gen.client.create = AsyncMock(
@@ -802,19 +760,16 @@ class TestEnsureHaInterfaces:
                 return [dev_1, dev_2]
             if kind is DcimInterface:
                 return [iface_1] if kwargs.get("device__ids") == ["dev-1"] else [iface_2]
-            return []  # no existing HAInterface; DcimVirtualInterface must not be queried
+            return []  # DcimVirtualInterface must not be queried
 
         gen.client.filters = AsyncMock(side_effect=_filters)
-        created_ha_iface = MagicMock(save=AsyncMock())
-        gen.client.create = AsyncMock(return_value=created_ha_iface)
+        gen.client.create = AsyncMock(return_value=MagicMock(save=AsyncMock()))
 
         await gen._ensure_ha_interfaces(ha_obj, "vfw-01-vfw-02-ha", device_kind=DcimVirtualDevice)
 
-        virtual_iface_calls = [c for c in gen.client.create.call_args_list if c.kwargs["kind"] is DcimVirtualInterface]
-        assert len(virtual_iface_calls) == 0
-        ha_iface_calls = [c for c in gen.client.create.call_args_list if c.kwargs["kind"] is ManagedHAInterface]
-        assert len(ha_iface_calls) == 2
-        assert ha_iface_calls[0].kwargs["data"]["interface_capabilities"] == [{"id": "iface-1"}]
+        # The existing eth7 is reused: nothing is created (no duplicate port, no cable).
+        gen.client.create.assert_not_called()
+        assert iface_1.status.value == "active"
 
     @pytest.mark.asyncio
     async def test_virtual_pairs_never_create_a_cable(self) -> None:

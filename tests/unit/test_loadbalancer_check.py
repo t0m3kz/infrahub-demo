@@ -24,7 +24,7 @@ def _device(**overrides: Any) -> dict[str, Any]:
             {
                 "role": "uplink",
                 "status": "active",
-                "interface_capabilities": [{"typename": "LoadbalancerVIP", "name": "vip-1"}],
+                "capabilities": [{"typename": "LoadbalancerVIP", "name": "vip-1"}],
             }
         ],
         "capabilities": [{"typename": "ManagedLoadbalancerHA", "name": "ha-1", "capabilities": [{}, {}]}],
@@ -44,7 +44,7 @@ class TestLoadBalancerCheck:
         bad = _device(
             platform={},
             status="planned",
-            interfaces=[{"role": "uplink", "status": "planned", "interface_capabilities": []}],
+            interfaces=[{"role": "uplink", "status": "planned", "capabilities": []}],
             capabilities=[],
         )
 

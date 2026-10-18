@@ -2,7 +2,7 @@
 
 PhysicalCircuitGenerator (add_circuit)
     ``peering_role: dci`` builds the EVPN Multi-Site DCI session over the
-    circuit's two endpoints (customer_interfaces + provider_interfaces): a
+    circuit's two endpoints (capabilities, exactly two by schema): a
     P2P prefix from the DCI pool, both addresses, the two interfaces
     addressed, and one directly connected eBGP peering between the two
     devices' overlay ManagedBGP processes, keyed with the DC fabric's
@@ -13,7 +13,7 @@ PhysicalCircuitGenerator (add_circuit)
 
 VirtualCircuitGenerator (add_virtual_circuit)
     ``peering_role: overlay`` on a tunnel link type builds one eBGP peering
-    between the two endpoint interfaces (interface_capabilities) over their
+    between the two endpoint interfaces (capabilities) over their
     existing addresses, after waiting for the add_circuit runs of the
     physical circuits it rides. It allocates nothing and never writes the
     interfaces: a tunnel port carries several virtual circuits.
@@ -160,9 +160,9 @@ def _parse_endpoints(interfaces: list[dict[str, Any]]) -> list[CircuitEndpoint]:
     return endpoints
 
 
-def physical_circuit_endpoints(circuit: dict[str, Any]) -> list[CircuitEndpoint]:
-    """customer_interfaces + provider_interfaces: data fills the two inconsistently."""
-    return _parse_endpoints([*(circuit.get("customer_interfaces") or []), *(circuit.get("provider_interfaces") or [])])
+def circuit_endpoints(circuit: dict[str, Any]) -> list[CircuitEndpoint]:
+    """The circuit's ends, from its one ``capabilities`` edge (physical and virtual circuits alike)."""
+    return _parse_endpoints(circuit.get("capabilities") or [])
 
 
 def endpoint_problem(endpoints: list[CircuitEndpoint]) -> str | None:
@@ -236,7 +236,7 @@ class PhysicalCircuitGenerator(CablingMixin, _CircuitGenerator):
 
         role: str = circuit.get("peering_role") or "none"
         status: str = circuit.get("status") or ""
-        endpoints = physical_circuit_endpoints(circuit)
+        endpoints = circuit_endpoints(circuit)
         summary = " | ".join(e.label for e in endpoints) or "no endpoints"
         self.logger.info(f"Processing physical circuit {circuit_name} (role={role}, status={status}): {summary}")
 
@@ -466,7 +466,7 @@ class VirtualCircuitGenerator(_CircuitGenerator):
             )
             return
 
-        endpoints = _parse_endpoints(circuit.get("interface_capabilities") or [])
+        endpoints = circuit_endpoints(circuit)
         problem = endpoint_problem(endpoints)
         if problem:
             self.logger.error(f"{circuit_name}: peering_role overlay needs {problem}")
@@ -514,7 +514,7 @@ class VirtualCircuitGenerator(_CircuitGenerator):
         """Log the circuit and warn where its transport and underlay disagree."""
         link_type: str = circuit.get("link_type") or ""
         transport_mode: str = circuit.get("transport_mode") or self._infer_transport_mode(link_type)
-        interfaces = circuit.get("interface_capabilities") or []
+        interfaces = circuit.get("capabilities") or []
         physical = circuit.get("physical_circuits") or []
         ends = " | ".join(
             f"{(iface.get('device') or {}).get('name') or '?'}/{iface.get('name', '?')}" for iface in interfaces

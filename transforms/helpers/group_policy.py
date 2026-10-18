@@ -840,7 +840,7 @@ class ComponentCoverage:
 
 def _capability_ids(interface: dict[str, Any]) -> set[str]:
     """The ids of what an interface is tagged with (segments, among others)."""
-    return {str(item["id"]) for item in interface.get("interface_capabilities") or [] if item.get("id")}
+    return {str(item["id"]) for item in interface.get("capabilities") or [] if item.get("id")}
 
 
 def _place_instance(

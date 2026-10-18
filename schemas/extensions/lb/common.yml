@@ -3,8 +3,8 @@ version: "1.0"
 
 # ============================================================================
 # Load Balancer — Common schema
-# Shared base generic, service objects, and supporting nodes used by both
-# on-prem (OnpremLoadbalancer) and cloud (CloudLoadBalancer).
+# Shared base generic, service objects, and supporting nodes. Only
+# ManagedLoadbalancerHA (on-prem) and CloudLoadBalancer implement ManagedLoadBalancer.
 # ============================================================================
 
 generics:
@@ -414,7 +414,7 @@ nodes:
         optional: true
         order_weight: 650
         identifier: vip_service__backend_segment
-        description: "VLAN/VXLAN segment this VIP's pool members live in — required when snat_enabled is false."  # yamllint disable-line rule:line-length
+        description: "VLAN/VXLAN segment this VIP's backends live in — required when snat_enabled is false."  # yamllint disable-line rule:line-length
       - name: health_checks
         peer: LoadbalancerHealthCheck
         cardinality: many
@@ -422,14 +422,6 @@ nodes:
         optional: true
         order_weight: 800
         identifier: vip_service__health_checks
-      - name: members
-        peer: LoadbalancerPoolMember
-        cardinality: many
-        kind: Generic
-        optional: true
-        order_weight: 850
-        identifier: loadbalancer_pool_member__vip_service
-        description: "Backend pool members (devices) serving this VIP"
 
 extensions:
   nodes:

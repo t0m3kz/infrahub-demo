@@ -35,6 +35,4 @@ configure router "Base" interface "{{ interface.name }}" ipv4 primary address "{
 {#- BGP Configuration -#}
 {% include 'common/nokia_sros_bgp.j2' %}
 
-{%- include 'common/nokia_sros_management.j2' %}
-
 ! End of configuration

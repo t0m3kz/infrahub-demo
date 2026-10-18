@@ -9,9 +9,6 @@ version: "1.0"
 # inline in a network segment (firewalls and load balancers).
 # Concrete types inherit from ManagedHA + ManagedGeneric + ManagedInlineService,
 # plus ManagedGenericDevice for on-prem devices.
-#
-# ManagedHAInterface is a capability node that models the sync/heartbeat/
-# control link on a specific device interface.
 # ============================================================================
 
 generics:
@@ -476,52 +473,6 @@ nodes:
         order_weight: 1600
         label: "Dedicated Customer"
         description: "Customer this broker is dedicated to; unset means shared across all customers"
-
-  # ── HA Interface capability ───────────────────────────────────────────────
-  - name: HAInterface
-    namespace: Managed
-    description: "Interface-level HA service — models sync/heartbeat/control link on a specific interface"
-    label: HA Interface
-    icon: "mdi:link-variant"
-    include_in_menu: false
-    human_friendly_id:
-      - "name__value"
-    inherit_from:
-      - ManagedGeneric
-      - ManagedGenericInterfaces
-    uniqueness_constraints:
-      - ["name__value"]
-    display_label: "{{name__value}}"
-    order_by:
-      - name__value
-    relationships:
-      - name: ha_domain
-        peer: ManagedHA
-        label: "HA Domain"
-        description: "HA domain this interface link belongs to"
-        cardinality: one
-        kind: Attribute
-        optional: false
-        identifier: ha_interface__domain
-        order_weight: 900
-    attributes:
-      - name: link_type
-        kind: Dropdown
-        label: "Link Type"
-        description: "HA link role on this interface"
-        optional: true
-        default_value: sync
-        choices:
-          - name: sync
-            label: "Sync"
-            color: "#3498DB"
-          - name: heartbeat
-            label: "Heartbeat"
-            color: "#2ECC71"
-          - name: control
-            label: "Control"
-            color: "#E67E22"
-        order_weight: 1000
 
 extensions:
   nodes:

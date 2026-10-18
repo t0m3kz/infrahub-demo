@@ -58,6 +58,20 @@ artifact_definitions:
     transformation: access_leaf
     parameters:
       device: name__value
+  - name: access_switch_config
+    artifact_name: access-switch
+    content_type: text/plain
+    targets: access-switches
+    transformation: access_switch
+    parameters:
+      device: name__value
+  - name: distribution_switch_config
+    artifact_name: distribution-switch
+    content_type: text/plain
+    targets: distribution-switches
+    transformation: distribution_switch
+    parameters:
+      device: name__value
   - name: spine_config
     artifact_name: spine
     content_type: text/plain
@@ -301,9 +315,6 @@ check_definitions:
     targets: sdwan_orchestrators
     parameters:
       controller: name__value
-  - name: validate_capability_guard
-    class_name: CheckCapabilityGuard
-    file_path: checks/capability_guard.py
   - name: validate_segment_placement
     class_name: CheckSegmentPlacement
     file_path: checks/segment_placement.py
@@ -334,11 +345,16 @@ check_definitions:
   - name: validate_evpn_fabric
     class_name: CheckEvpnFabric
     file_path: checks/evpn_fabric.py
-  # Targetless: the LISP profile (strategy, underlay, border pair, platform,
-  # site key) is a property of a whole fabric, not of one device.
+  # Targetless: the LISP profile of an office (platform, map-server, site key,
+  # segment VRFs, WAN exit) is a property of a whole site, not of one device.
   - name: validate_lisp_fabric
     class_name: CheckLispFabric
     file_path: checks/lisp_fabric.py
+  # Targetless: a port is shared between circuits, so the rule spans every
+  # physical circuit, not one device or one circuit.
+  - name: validate_physical_circuit_ports
+    class_name: CheckPhysicalCircuitPorts
+    file_path: checks/physical_circuit_ports.py
   # Targetless: a dependency spans two applications, and an external target
   # is no object at all.
   - name: validate_app_dependency
@@ -409,6 +425,22 @@ python_transforms:
   - name: access_leaf
     class_name: AccessLeaf
     file_path: transforms/config/access_leaf.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
+  - name: access_switch
+    class_name: AccessSwitch
+    file_path: transforms/config/access_switch.py
+    watch:
+      files:
+        - transforms/
+        - templates/
+        - utils/
+  - name: distribution_switch
+    class_name: DistributionSwitch
+    file_path: transforms/config/distribution_switch.py
     watch:
       files:
         - transforms/
@@ -619,6 +651,10 @@ queries:
     file_path: queries/config/leaf.gql
   - name: border_leaf_config
     file_path: queries/config/border_leaf.gql
+  - name: access_switch_config
+    file_path: queries/config/access_switch.gql
+  - name: distribution_switch_config
+    file_path: queries/config/distribution_switch.gql
   - name: border_spine_config
     file_path: queries/config/border_spine.gql
   - name: spine_config
@@ -671,8 +707,6 @@ queries:
     file_path: queries/topology/add/circuit.gql
   - name: virtual_circuit_data
     file_path: queries/topology/add/virtual_circuit.gql
-  - name: capability_guard
-    file_path: queries/validation/capability_guard.gql
   - name: segment_placement
     file_path: queries/validation/segment_placement.gql
   - name: segment_security
@@ -689,6 +723,8 @@ queries:
     file_path: queries/validation/evpn_fabric.gql
   - name: lisp_fabric
     file_path: queries/validation/lisp_fabric.gql
+  - name: physical_circuit_ports
+    file_path: queries/validation/physical_circuit_ports.gql
   - name: app_dependency_validation
     file_path: queries/validation/app_dependency.gql
   - name: hypervisor_environment

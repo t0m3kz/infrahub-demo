@@ -31,6 +31,7 @@ from utils.exchange_transit import (
     TRANSIT_OFFSETS,
     TRANSIT_PREFIXLEN,
     namespace_type_for_environment,
+    transit_pool_name,
     transit_vlan,
 )
 
@@ -438,7 +439,7 @@ class FirewallContextMixin:
             # ports with their segments, and a bulk load writes them concurrently.
             if state.untagged_port_ids:
                 await context_obj.add_relationships(
-                    relation_to_update="interface_capabilities", related_nodes=state.untagged_port_ids
+                    relation_to_update="capabilities", related_nodes=state.untagged_port_ids
                 )
                 self.logger.info(f"{context_name}: tagged {len(state.untagged_port_ids)} border service port(s)")
 
@@ -454,7 +455,7 @@ class FirewallContextMixin:
 
     async def _transit_pools(self, namespaces: dict[str, Any]) -> dict[str, Any] | None:
         """The FW-Transit-<VRF>-IPv4 pool of each namespace (data/bootstrap), one query; None (logged) when one is missing."""
-        pool_names = {leg_type: f"FW-Transit-{ns.name.value}-IPv4" for leg_type, ns in namespaces.items()}
+        pool_names = {leg_type: transit_pool_name(ns.name.value) for leg_type, ns in namespaces.items()}
         pools = {
             pool.name.value: pool
             for pool in await self.client.filters(kind=CoreIPPrefixPool, name__values=sorted(pool_names.values()))
@@ -508,10 +509,8 @@ class FirewallContextMixin:
         if not contexts:
             return _TransitState(context=None, complete=False, untagged_port_ids=every_port)
         context = contexts[0]
-        ports = await self.client.filters(
-            kind=DcimPhysicalInterface, ids=every_port, include=["interface_capabilities"]
-        )
-        tagged = {port.id for port in ports if any(cap.id == context.id for cap in port.interface_capabilities.peers)}
+        ports = await self.client.filters(kind=DcimPhysicalInterface, ids=every_port, include=["capabilities"])
+        tagged = {port.id for port in ports if any(cap.id == context.id for cap in port.capabilities.peers)}
         untagged = [port_id for port_id in every_port if port_id not in tagged]
         vlan_id = getattr(context.vlan_id, "value", None)
         incomplete = _TransitState(context=context, complete=False, untagged_port_ids=untagged)
@@ -531,7 +530,7 @@ class FirewallContextMixin:
         sub_interfaces = {
             (sub.device.id, sub.name.value): sub
             for sub in await self.client.filters(
-                kind=DcimVirtualInterface, interface_capabilities__ids=[context.id], include=["interface_capabilities"]
+                kind=DcimVirtualInterface, capabilities__ids=[context.id], include=["capabilities"]
             )
         }
         address_namespace: dict[str, str] = {}  # IpamIPAddress id -> namespace id it must be in
@@ -543,7 +542,7 @@ class FirewallContextMixin:
                 )
                 if sub is None or not sub.ip_address.id:
                     return incomplete
-                if not wanted <= {cap.id for cap in sub.interface_capabilities.peers}:
+                if not wanted <= {cap.id for cap in sub.capabilities.peers}:
                     return incomplete
                 address_namespace[sub.ip_address.id] = namespaces[leg_type].id
         addresses = await self.client.filters(
@@ -868,7 +867,7 @@ class FirewallContextMixin:
         firewall, BORDER_ROLE_FOR_SERVICES) on a border leaf or edge — the one
         port the context's transit leg faces for this
         firewall, whatever the number of border devices. Fetched with its
-        interface_capabilities, the context tags read from it.
+        capabilities, the context tags read from it.
         """
         fw_name = _dev_name(fw_device)
         hosting = None if isinstance(fw_device, dict) else getattr(fw_device, "hosting_device", None)
@@ -881,7 +880,7 @@ class FirewallContextMixin:
                 f"{fw_name}: uplink {uplink.name.value} is not cabled — no border service port for '{context_name}'"
             )
             return None
-        peer_port = await far_end_interface(self.client, uplink, include=["device", "interface_capabilities"])
+        peer_port = await far_end_interface(self.client, uplink, include=["device", "capabilities"])
         if peer_port is None or peer_port.role.value != BORDER_ROLE_FOR_SERVICES["firewall"]:
             self.logger.error(
                 f"{fw_name}: uplink {uplink.name.value} is not cabled to a "

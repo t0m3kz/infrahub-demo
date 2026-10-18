@@ -121,7 +121,7 @@ def inline_addresses(
         standby_ip = next(
             (
                 address
-                for iface in cap.get("interface_capabilities") or []
+                for iface in cap.get("capabilities") or []
                 if (iface.get("device") or {}).get("name") == secondary
                 and (address := (iface.get("ip_address") or {}).get("address"))
             ),

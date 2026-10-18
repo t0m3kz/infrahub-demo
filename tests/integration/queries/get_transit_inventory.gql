@@ -42,7 +42,7 @@ query GetTransitInventory {
         }
         # Legs (the members' VLAN sub-interfaces) and the border-leaf service
         # ports tagged with the context, told apart by __typename.
-        interface_capabilities {
+        capabilities {
           edges {
             node {
               __typename
@@ -56,7 +56,7 @@ query GetTransitInventory {
                     ip_namespace { node { name { value } namespace_type { value } } }
                   }
                 }
-                interface_capabilities {
+                capabilities {
                   edges {
                     node {
                       __typename

@@ -259,7 +259,7 @@ class TestEnsureLagPeerLink:
         assert "id" not in create_kwargs["data"]
         assert create_kwargs["data"]["member_interfaces"] == [{"id": "iface-1"}, {"id": "iface-2"}]
         assert create_kwargs["data"]["mlag_domain"] == {"id": "mlag-1"}
-        assert create_kwargs["data"]["interface_capabilities"] == [{"id": "mlag-1"}]
+        assert "capabilities" not in create_kwargs["data"]
         lag_obj.save.assert_awaited_once_with(allow_upsert=True)
 
     @pytest.mark.asyncio
@@ -292,7 +292,7 @@ class TestEnsureLagPeerLink:
         create_kwargs = gen.client.create.call_args.kwargs
         assert create_kwargs["data"]["id"] == "lag-1"
         assert create_kwargs["data"]["mlag_domain"] == {"id": "mlag-new"}
-        assert create_kwargs["data"]["interface_capabilities"] == [{"id": "mlag-new"}]
+        assert "capabilities" not in create_kwargs["data"]
         lag_obj.save.assert_awaited_once_with(allow_upsert=True)
 
 
@@ -313,7 +313,7 @@ class TestEnsureVirtualPeerLink:
         assert "id" not in create_kwargs["data"]
         assert create_kwargs["data"]["role"] == "mlag-peer"
         assert create_kwargs["data"]["device"] == {"id": device_obj.id}
-        assert create_kwargs["data"]["interface_capabilities"] == [{"id": "mlag-1"}]
+        assert "capabilities" not in create_kwargs["data"]
         virt_obj.save.assert_awaited_once_with(allow_upsert=True)
 
     @pytest.mark.asyncio

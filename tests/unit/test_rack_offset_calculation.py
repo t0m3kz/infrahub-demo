@@ -17,9 +17,6 @@ def _build_generator(
     maximum_tors_per_row: int | None = None,
     rows: int = 1,
     leafs_per_network_rack: int = 0,
-    rack_numbering_start_index: int = 1,
-    leaf_link_numbering_start: int = 1,
-    spine_link_numbering_start: int = 1,
 ) -> RackGenerator:
     """Create a RackGenerator instance with minimal data for offset calculation.
 
@@ -50,9 +47,6 @@ def _build_generator(
         "fabric_templates": [{"role": "spine", "quantity": 2, "template": {"id": "tmpl-spine"}}],
         "deployment_type": deployment_type,
         "layout": "S_MIXED",
-        "rack_numbering_start_index": rack_numbering_start_index,
-        "leaf_link_numbering_start": leaf_link_numbering_start,
-        "spine_link_numbering_start": spine_link_numbering_start,
     }
 
     suite = {"index": 1}
@@ -300,38 +294,3 @@ def test_dc1_pod3_missing_racks_in_previous_rows_defaults_to_zero() -> None:
     )
     assert offset_actual == 22  # safely within 30 downlinks
     assert offset_actual < SPINE_DOWNLINKS
-
-
-def test_leaf_offset_respects_leaf_link_numbering_start_base() -> None:
-    generator = _build_generator(
-        deployment_type="mixed",
-        row_index=2,
-        leaf_link_numbering_start=5,
-    )
-
-    # base=4 + (row_index-1)*device_count = 4 + 2 = 6
-    offset = generator.calculate_cabling_offsets(device_count=2, device_type="leaf")
-
-    assert offset == 6
-
-
-def test_tor_offset_respects_rack_and_spine_start_bases() -> None:
-    generator = _build_generator(
-        deployment_type="tor",
-        rack_index=4,
-        row_index=2,
-        rack_numbering_start_index=2,
-        spine_link_numbering_start=3,
-    )
-
-    # rack base: effective index=(4-1)-(2-1)=2 -> 2*2=4
-    # previous rows: 5*2=10
-    # spine base: 2
-    # total = 2 + 10 + 4 = 16
-    offset = generator.calculate_cabling_offsets(
-        device_count=2,
-        device_type="tor",
-        racks_in_previous_rows=5,
-    )
-
-    assert offset == 16

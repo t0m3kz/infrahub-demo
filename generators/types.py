@@ -104,8 +104,7 @@ class RoutingOptions(TypedDict, total=False):
     """Skip underlay planning entirely (overlay BGP only). Used for super-spines in ospf-ibgp."""
     no_overlay: bool
     """Plan the underlay only: no overlay BGP, overlay AS, EVPN address family or overlay key (the strategy's
-    overlay half is treated as "none"). Set by an office fabric, whose overlay is LISP; a data center asks for
-    the same through its design's overlay_control_plane."""
+    overlay half is treated as "none"). Set by an office fabric, whose overlay is LISP."""
     underlay_password_id: str | None
     """Pre-resolved shared underlay BGP/OSPF auth key (RoutingPassword) ID."""
     overlay_password_id: str | None

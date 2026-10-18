@@ -7,8 +7,10 @@
 # Port names and speeds are approximate datasheet values chosen so the generator's
 # speed-aware cabling finds a match: access-switch uplink 100G (a C9300X style
 # 2x100G network module) to distribution-switch downlink 100G, and the two
-# distribution-switches to each other on `interlink`. No lab has run any of it
-# (unverified-no-lab).
+# distribution-switches to each other on `interlink`. The distribution-switch's one `uplink` is its WAN exit
+# (an office with an SD-WAN edge): a 1G copper port facing a LAN port of the VCE-610 edge
+# (10_physical_devices_templates_velocloud.yaml), a Catalyst 9500-32C having no copper of its own, so approximate
+# too. No lab has run any of it (unverified-no-lab).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -34,6 +36,10 @@ spec:
             name: HundredGigE1/0/25
             role: interlink
             interface_type: 100gbase-x-qsfp28
+          - template_name: C9500-32C_DISTRIBUTION_GigabitEthernet1/0/26
+            name: GigabitEthernet1/0/26
+            role: uplink
+            interface_type: 1000base-t
           - template_name: C9500-32C_DISTRIBUTION_GigabitEthernet0/0
             name: GigabitEthernet0/0
             role: management

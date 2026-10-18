@@ -98,8 +98,14 @@ class TestInterfaceSpeedMatcher:
     def test_extract_speed_none_returns_none(self) -> None:
         assert InterfaceSpeedMatcher.extract_speed(None) is None
 
-    def test_extract_speed_non_gbase_returns_none(self) -> None:
-        assert InterfaceSpeedMatcher.extract_speed("1000base-t") is None
+    @pytest.mark.parametrize("interface_type", ["1000base-t", "1000base-x-sfp", "1000base-x-gbic"])
+    def test_extract_speed_gigabit_types_are_one_gbps(self, interface_type: str) -> None:
+        """Gigabit Ethernet types are named in Mbps, so the <n>gbase pattern misses them."""
+        assert InterfaceSpeedMatcher.extract_speed(interface_type) == 1
+
+    @pytest.mark.parametrize("interface_type", ["100base-tx", "100base-t1", "unknown-type"])
+    def test_extract_speed_non_gigabit_types_return_none(self, interface_type: str) -> None:
+        assert InterfaceSpeedMatcher.extract_speed(interface_type) is None
 
     def test_extract_speed_non_string_returns_none(self) -> None:
         assert InterfaceSpeedMatcher.extract_speed(12345) is None
@@ -586,3 +592,27 @@ class TestBuildSpeedAwarePlan:
             assert InterfaceSpeedMatcher.extract_speed(
                 bottom_intf.interface_type
             ) == InterfaceSpeedMatcher.extract_speed(top_intf.interface_type)
+
+
+class TestGigabitCabling:
+    """The office WAN exit cables a VCE-610's two 1000base-t LAN ports to one 1000base-t port per switch."""
+
+    def test_rack_plan_pairs_one_edge_port_per_switch(self) -> None:
+        bottom = [
+            _make_interface("GE3", "C005-P-EDGE1", "1000base-t"),
+            _make_interface("GE4", "C005-P-EDGE1", "1000base-t"),
+        ]
+        top = [
+            _make_interface("GigabitEthernet1/0/26", "ds-c005-p01", "1000base-t"),
+            _make_interface("GigabitEthernet1/0/26", "ds-c005-p02", "1000base-t"),
+        ]
+        plan = CablingPlanner(bottom, top).build_cabling_plan(scenario="rack")
+        assert sorted((a.id, b.id) for a, b in plan) == [
+            ("C005-P-EDGE1:GE3", "ds-c005-p01:GigabitEthernet1/0/26"),
+            ("C005-P-EDGE1:GE4", "ds-c005-p02:GigabitEthernet1/0/26"),
+        ]
+
+    def test_a_gigabit_port_does_not_pair_with_a_faster_one(self) -> None:
+        bottom = [_make_interface("GE3", "edge", "1000base-t")]
+        top = [_make_interface("HundredGigE1/0/1", "switch", "100gbase-x-qsfp28")]
+        assert CablingPlanner(bottom, top).build_cabling_plan(scenario="rack") == []

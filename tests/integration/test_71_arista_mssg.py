@@ -276,7 +276,7 @@ async def _set_software_image(client: InfrahubClient, branch: str, device: str, 
 # Render helpers
 # ---------------------------------------------------------------------------
 
-# role -> (query, transform class) of the in-process render, the same pairs test_70 uses.
+# role -> (query, transform class) of the in-process render, the same pairs test_64 uses.
 RENDERERS: dict[str, tuple[str, type[Any]]] = {
     "leaf": ("leaf_config", Leaf),
     "access-leaf": ("leaf_config", AccessLeaf),

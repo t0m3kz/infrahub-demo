@@ -26,7 +26,7 @@ class CheckLoadBalancer(InfrahubCheck):
         vips = [
             cap
             for iface in (device.get("interfaces") or [])
-            for cap in (iface.get("interface_capabilities") or [])
+            for cap in (iface.get("capabilities") or [])
             if cap.get("typename") == "LoadbalancerVIP"
         ]
         if not vips:

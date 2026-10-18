@@ -52,7 +52,7 @@ class CheckPbrFirewallReachability(InfrahubCheck):
             cap["id"]
             for port in ports
             if ((port.get("device") or {}).get("role")) in CARRIER_ROLES
-            for cap in port.get("interface_capabilities") or []
+            for cap in port.get("capabilities") or []
             if cap.get("typename") == "ManagedFirewallContext" and cap.get("id")
         }
 
@@ -62,7 +62,7 @@ class CheckPbrFirewallReachability(InfrahubCheck):
         return sorted(
             {
                 leg["ip_address"]["ip_namespace"]["name"]
-                for leg in ctx.get("interface_capabilities") or []
+                for leg in ctx.get("capabilities") or []
                 if (leg.get("device") or {}).get("role") == "firewall"
                 and ((leg.get("ip_address") or {}).get("ip_namespace") or {}).get("namespace_type")
                 in TENANT_NAMESPACE_TYPES

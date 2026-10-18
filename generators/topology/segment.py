@@ -591,13 +591,9 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGene
             if to_add or to_remove:
                 segment_obj = await self.client.get(kind=ManagedVxlanSegment, id=segment_id)
                 if to_add:
-                    await segment_obj.add_relationships(
-                        relation_to_update="interface_capabilities", related_nodes=to_add
-                    )
+                    await segment_obj.add_relationships(relation_to_update="capabilities", related_nodes=to_add)
                 if to_remove:
-                    await segment_obj.remove_relationships(
-                        relation_to_update="interface_capabilities", related_nodes=to_remove
-                    )
+                    await segment_obj.remove_relationships(relation_to_update="capabilities", related_nodes=to_remove)
         if to_add or to_remove:
             self.logger.info(
                 f"Segment {segment_name}: border service ports — tagged {len(to_add)}, untagged {len(to_remove)}"

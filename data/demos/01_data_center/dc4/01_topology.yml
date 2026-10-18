@@ -31,7 +31,6 @@ spec:
           - index: 1
             layout: S_MIDDLE
             deployment_type: middle_rack
-            suites: [ber-1-s-1]
             fabric_templates:
               - ["2", "spine", "DCS-7050CX3-32C-R_SPINE"]
             member_of_groups:
@@ -51,7 +50,6 @@ spec:
           - index: 2
             layout: S_MIXED
             deployment_type: mixed
-            suites: [ber-1-s-2]
             fabric_templates:
               - ["4", "spine", "DCS-7050CX3-32C-R_SPINE"]
             member_of_groups:
@@ -78,7 +76,6 @@ spec:
           - index: 3
             layout: S_TOR
             deployment_type: tor
-            suites: [ber-1-s-3]
             fabric_templates:
               - ["4", "spine", "DCS-7050CX3-32C-R_SPINE"]
             member_of_groups:

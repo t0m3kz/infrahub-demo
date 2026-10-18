@@ -53,40 +53,12 @@ ltm monitor tcp tcp_monitor {
 {%- if vips %}
 #
 # --- Nodes and Pools ---
-{%- for member in lb_nodes %}
-ltm node {{ member.name }} {
-    address {{ member.address }}
-}
-{%- endfor %}
-{%- for vip in vips %}
-{%- if vip.members %}
-ltm pool {{ vip.slug }}_pool {
-    monitor {{ 'tcp_monitor' if vip.protocol == 'tcp' else 'http_monitor' }}
-    load-balancing-mode round-robin
-    members {
-        {%- for member in vip.members %}
-        {%- if member.ip %}
-        {{ member.name }}:{{ member.port if member.port else vip.port }} {
-            address {{ member.address }}
-            {%- if member.weight and member.weight != 1 %}
-            ratio {{ member.weight }}
-            {%- endif %}
-        }
-        {%- endif %}
-        {%- endfor %}
-    }
-}
-{%- endif %}
-{%- endfor %}
 #
 # --- Virtual Servers (VIPs) ---
 {%- for vip in vips %}
 ltm virtual {{ vip.slug }} {
     destination {{ vip.vip_ip if vip.vip_ip else '0.0.0.0' }}:{{ vip.port }}
     ip-protocol {{ 'tcp' if vip.protocol in ['http', 'https', 'tls', 'tcp'] else 'udp' }}
-    {%- if vip.members %}
-    pool {{ vip.slug }}_pool
-    {%- endif %}
     {%- if vip.protocol == 'https' %}
     profiles {
         clientssl { context clientside }

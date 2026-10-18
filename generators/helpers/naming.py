@@ -45,6 +45,15 @@ def _role_code(device_role: str) -> str:
     return ROLE_CODES.get(device_role, device_role)
 
 
+def sdwan_edge_name(office_name: str) -> str:
+    """The SD-WAN branch edge of an office footprint (``C005-P`` -> ``C005-P-EDGE1``).
+
+    The one spelling of that name: add_sdwan_edge creates the device under it and add_office_fabric looks it
+    up by it to build the office's WAN exit, the two generators sharing nothing but this name.
+    """
+    return f"{office_name}-EDGE1"
+
+
 class DeviceNameContext(BaseModel):
     """Explicit inputs for one device name.
 

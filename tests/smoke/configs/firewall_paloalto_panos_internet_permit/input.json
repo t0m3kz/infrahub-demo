@@ -78,7 +78,7 @@
                   "ha_domain": {
                     "node": null
                   },
-                  "interface_capabilities": {
+                  "capabilities": {
                     "edges": [
                       {
                         "node": {
@@ -332,7 +332,7 @@
                   "ha_domain": {
                     "node": null
                   },
-                  "interface_capabilities": {
+                  "capabilities": {
                     "edges": [
                       {
                         "node": {

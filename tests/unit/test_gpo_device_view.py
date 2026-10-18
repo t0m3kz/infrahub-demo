@@ -994,8 +994,8 @@ class TestComponentCoverage:
         """A LAG member: the port-channel is what must carry the segment, whatever the member port is tagged with."""
         member = _nic("srv-web", "eno1", "dc1-leaf-01", "Ethernet20", lag="port-channel20")
         far = member["cable"]["node"]["endpoints"]["edges"][1]["node"]
-        far["interface_capabilities"] = _edges([{"id": "seg-pay-p"}])  # the member port is tagged, not the channel
-        far["lag"]["node"]["interface_capabilities"] = _edges([{"id": "seg-web-np"}])
+        far["capabilities"] = _edges([{"id": "seg-pay-p"}])  # the member port is tagged, not the channel
+        far["lag"]["node"]["capabilities"] = _edges([{"id": "seg-web-np"}])
         roots = _placed_roots(web=[_server("srv-web", member)])
         coverage = _coverage(roots)
         assert not [claim for claim in coverage.claims if claim.group == WEB]
@@ -1243,7 +1243,7 @@ class TestComponentSelectors:
     def _with_port_channel() -> list[dict[str, Any]]:
         return [
             *_leaf_interfaces(),
-            {"name": "port-channel30", "typename": "DcimLAGInterface", "interface_capabilities": [{"id": "seg-pay-p"}]},
+            {"name": "port-channel30", "typename": "DcimLAGInterface", "capabilities": [{"id": "seg-pay-p"}]},
         ]
 
     def test_ports_are_sorted_naturally(self) -> None:
@@ -1256,7 +1256,7 @@ class TestComponentSelectors:
                 _nic("srv-web", "eno3", "dc1-leaf-01", "Ethernet10"),
             )
         ]
-        interfaces = [*_leaf_interfaces(), {"name": "Ethernet2", "interface_capabilities": [{"id": "seg-pay-p"}]}]
+        interfaces = [*_leaf_interfaces(), {"name": "Ethernet2", "capabilities": [{"id": "seg-pay-p"}]}]
         view = _view(_placed_roots(web=web, db=[]), interfaces=interfaces)
         assert [port["name"] for port in self._groups(view)["web_pay_demo_local"]["interfaces"]] == [
             "Ethernet2",
@@ -1335,8 +1335,7 @@ class TestComponentGate:
 
     def test_a_claimed_port_not_tagged_with_the_segment_unenforces_it(self) -> None:
         interfaces = [
-            {**item, "interface_capabilities": []} if item["name"] == "Ethernet11" else item
-            for item in _leaf_interfaces()
+            {**item, "capabilities": []} if item["name"] == "Ethernet11" else item for item in _leaf_interfaces()
         ]
         assert "port Ethernet11 is not an interface of dc1-leaf-01 tagged with the segment" in (
             _prod_reason(_view(_roots(), interfaces=interfaces)) or ""
@@ -1742,7 +1741,7 @@ class TestPlacementFragment:
 
         reads = self._recorded_reads(kind)
         host = ("components", "instances") + (("hosting_device",) if "Virtual" in kind else ())
-        assert (*host, "interfaces", "cable", "endpoints", "lag", "interface_capabilities", "id") in reads, (
+        assert (*host, "interfaces", "cable", "endpoints", "lag", "capabilities", "id") in reads, (
             "the data must exercise the whole walk down to the port-channel's tags"
         )
         missing = {

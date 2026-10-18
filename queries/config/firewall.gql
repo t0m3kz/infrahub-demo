@@ -56,7 +56,7 @@ query firewall_config(
               ... on DcimLAGInterface {
                 ip_address { node { address { value } ip_namespace { node { name { value } namespace_type { value } } } } }
               }
-              interface_capabilities {
+              capabilities {
                 edges {
                   node {
                     __typename

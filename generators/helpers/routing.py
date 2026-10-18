@@ -25,7 +25,6 @@ Strategies:
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Mapping
 from enum import Enum
 from typing import Any, NamedTuple
 
@@ -36,19 +35,6 @@ from utils.fabric_roles import OVERLAY_ROLES, RR_CLIENT_ROLES, RR_ROLES
 from ..types import RoutingOptions
 
 _SPINE_ROLES = frozenset({"spine", "border-spine"})
-
-LISP_OVERLAY = "lisp"
-
-
-def overlay_control_plane_of(data: Mapping[str, Any] | None) -> str:
-    """A deployment's overlay_control_plane ("bgp_evpn" when unset).
-
-    ``data`` is the cleaned DC dict (or a pod's ``parent``). Under "lisp" the
-    fabric has an OSPF underlay and no overlay BGP at all (no EVPN sessions,
-    no overlay AS): the control plane is LISP map-server/map-resolver on the
-    border-leafs.
-    """
-    return (data or {}).get("overlay_control_plane") or "bgp_evpn"
 
 
 class RoutingPlanInput(BaseModel):
@@ -69,14 +55,13 @@ class RoutingPlanInput(BaseModel):
       - overlay: ManagedBGP overlay or ManagedOSPF (existing) SDK objects
       - interfaces: DcimPhysicalInterface fabric-p2p SDK objects (device, cable, name)
       - loopback_interfaces: DcimVirtualInterface loopback SDK objects (device + ip_address)
-      - options: RoutingOptions dict (design, asn_pool, overlay_as_id, ospf_area_id)
+      - options: RoutingOptions dict (design, asn_pool, overlay_as_id, ospf_area_id; ``no_overlay`` plans the
+        underlay only: the strategy's overlay half is treated as "none", so no overlay BGP processes and no
+        overlay peerings)
       - mlag_pairs: device name -> MLAG domain name, for devices that ARE
         MLAG-paired (leaf/tor/l2-leaf/access-leaf; border-leaf is never
         MLAG-paired in this project). Both devices in a pair get the SAME
         underlay ASN — see ``_plan_ebgp_underlay``.
-      - overlay_control_plane: "lisp" plans the underlay only (the strategy's
-        overlay half is treated as "none": no overlay BGP processes, no
-        overlay peerings); "bgp_evpn" (default) plans the strategy as named.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -96,7 +81,6 @@ class RoutingPlanInput(BaseModel):
     underlay_password_id: str = ""
     overlay_password_id: str = ""
     mlag_pairs: dict[str, str] = Field(default_factory=dict)
-    overlay_control_plane: str = "bgp_evpn"
 
 
 class PendingASRef(BaseModel):
@@ -199,10 +183,11 @@ def _safe_device_name(bgp: Any) -> str | None:
     Requires the caller to have queried with include=["capabilities"],
     prefetch_relationships=True.
 
-    Schema-wise `capabilities` is cardinality=many, but every process created
-    by `_make_bgp_proc`/`_plan_ospf_underlay` in this module attaches exactly
-    one device. Anything other than exactly one peer is treated as unresolved
-    (None) rather than guessing which device it belongs to.
+    Exactly one device by construction (every process created by
+    `_make_bgp_proc`/`_plan_ospf_underlay` in this module attaches one), but a
+    many relationship cannot be capped at 1 in the schema, so anything other
+    than exactly one peer is treated as unresolved (None) rather than guessing
+    which device it belongs to.
     """
     try:
         peers = bgp.capabilities.peers
@@ -276,7 +261,7 @@ class RoutingPlanner:
     def build_routing_plan(self, inp: RoutingPlanInput) -> RoutingPlan:
         """Build complete routing plan from pre-queried SDK objects."""
         underlay_type, overlay_type = inp.routing_strategy.split("-")
-        if inp.overlay_control_plane == LISP_OVERLAY:
+        if inp.options.get("no_overlay"):
             overlay_type = "none"
         plan = RoutingPlan()
 
@@ -613,7 +598,7 @@ class RoutingPlanner:
                     "send_community": True,
                     "ttl": 1,
                     "peering_role": "underlay",
-                    "interface_capabilities": [{"id": a.id}, {"id": b.id}],
+                    "capabilities": [{"id": a.id}, {"id": b.id}],
                     "bgp_processes": [
                         {"hfid": f"{a_name}-bgp-underlay"},
                         {"hfid": f"{b_name}-bgp-underlay"},
@@ -806,7 +791,7 @@ class RoutingPlanner:
                     "name": ospf_iface_name,
                     "description": f"OSPF config for {dev_name}:{iname}",
                     "mode": "peer_to_peer",
-                    "interface_capabilities": [{"id": iface.id}],
+                    "capabilities": [{"id": iface.id}],
                     **({"password": {"id": password_id}} if password_id else {}),
                 }
             )
@@ -824,7 +809,7 @@ class RoutingPlanner:
                     "description": f"OSPF peering: {a_name} ({ia}) <-> {b_name} ({ib})",
                     "network_type": "point-to-point",
                     "ospf_area": area_ref,
-                    "interface_capabilities": [{"id": a.id}, {"id": b.id}],
+                    "capabilities": [{"id": a.id}, {"id": b.id}],
                     "ospf_process": [
                         {"hfid": f"{a_name}-ospf-underlay"},
                         {"hfid": f"{b_name}-ospf-underlay"},
@@ -946,7 +931,7 @@ class RoutingPlanner:
                 "bgp_processes": [_bgp_process_ref(bgp1), _bgp_process_ref(bgp2)],
             }
             if peering_interfaces:
-                peering["interface_capabilities"] = peering_interfaces
+                peering["capabilities"] = peering_interfaces
 
             plan.bgp_peerings.append(peering)
 

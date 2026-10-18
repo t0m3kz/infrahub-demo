@@ -53,6 +53,5 @@ interface {{ interface.name }}
 route-map RM-CONN-2-BGP permit 10
    match interface {{ loopback_name }}
 
-{%- include 'common/arista_eos_management.j2' %}
 
 ! End of configuration

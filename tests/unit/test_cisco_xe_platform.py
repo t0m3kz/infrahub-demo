@@ -8,8 +8,8 @@ statics are rendered (section 6, transforms/helpers/cisco_xe.py); what IOS-XE ca
 
 Byte-exact rendering is covered by tests/smoke/test_configs_smoke.py (the ``*_cisco_xe_*`` goldens); this file
 covers the wiring, the IOS-XE-versus-NX-OS dialect, the refusal guard and the unchanged behaviour of the other
-roles and platforms. The ``*_cisco_xe_lisp_ospf_ibgp`` goldens (a fabric whose overlay_control_plane is ``lisp``) are
-covered in section 5: the guard's refusals that still apply there, and the LISP rendering of those inputs.
+roles and platforms. The office switches' LISP goldens (``access_switch_/distribution_switch_cisco_xe_lisp_*``) are
+covered in section 5: the guard's refusals that still apply there; their rendering is tests/unit/test_office_lisp_transform.py.
 """
 
 from __future__ import annotations
@@ -28,8 +28,10 @@ import pytest
 from tests.smoke.test_configs_smoke import _run_transform
 from transforms.common import BaseDeviceTransform
 from transforms.config.access_leaf import AccessLeaf
+from transforms.config.access_switch import AccessSwitch
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.border_spine import BorderSpine
+from transforms.config.distribution_switch import DistributionSwitch
 from transforms.config.edge import Edge
 from transforms.config.l2_leaf import L2Leaf
 from transforms.config.leaf import Leaf
@@ -38,7 +40,6 @@ from transforms.config.super_spine import SuperSpine
 from transforms.config.tor import ToR
 from transforms.helpers.cisco_xe import get_cisco_xe_acls, get_cisco_xe_vrf_routes, refuse_unfiltered_ipv6
 from transforms.helpers.vxlan import get_vxlan_config
-from utils.data_cleaning import clean_data
 
 CONFIGS_DIR = Path(__file__).resolve().parents[1] / "smoke" / "configs"
 
@@ -50,6 +51,12 @@ FABRIC_TRANSFORMS: list[tuple[str, type[BaseDeviceTransform], str]] = [
     ("leaf", Leaf, "leaf"),
     ("access_leaf", AccessLeaf, "access-leaf"),
     ("border_leaf", BorderLeaf, "border-leaf"),
+]
+
+# (golden directory prefix, transform class, device_role) of an office's LISP switches, which share the leaf template.
+OFFICE_TRANSFORMS: list[tuple[str, type[BaseDeviceTransform], str]] = [
+    ("access_switch", AccessSwitch, "access-switch"),
+    ("distribution_switch", DistributionSwitch, "distribution-switch"),
 ]
 
 # Roles that have no cisco_xe fabric template and so are untouched by the refusal guard.
@@ -553,139 +560,15 @@ class TestUnsupportedCombinationsUnchanged:
 
 
 # ---------------------------------------------------------------------------
-# 5. LISP overlay fabric: the *_cisco_xe_lisp_ospf_ibgp goldens
+# 5. Office LISP site: the guard still runs on the access-switch / distribution-switch goldens
 # ---------------------------------------------------------------------------
 
-LISP_VARIANT = "lisp_ospf_ibgp"
-LISP_MARKER = "! unverified-no-lab:"
-# The map-servers of the golden inputs, in the sorted-by-device-name order the template renders them.
-LISP_MAP_SERVER_ADDRESSES = ["10.255.0.1", "10.255.0.2"]
+OFFICE_LISP_VARIANT = "lisp_ospf"
 
 
-def _lisp_deployment(prefix: str) -> dict[str, Any]:
-    """The cleaned `deployment` object of a LISP golden input (what the transforms read the LISP keys from)."""
-    cleaned = clean_data(_golden_input(f"{prefix}_cisco_xe_{LISP_VARIANT}"))
-    return cleaned["DcimDevice"][0]["deployment"]
-
-
-@pytest.mark.parametrize(("prefix", "transform_cls", "role"), FABRIC_TRANSFORMS)
-class TestCiscoXeLispGoldenInputs:
-    """The LISP golden inputs carry the keys of queries/fragments/lisp_fabric.gql in their cleaned shape."""
-
-    def test_input_carries_the_fabric_flag_map_servers_and_site_key(
-        self, prefix: str, transform_cls: type[BaseDeviceTransform], role: str
-    ) -> None:
-        """overlay_control_plane, lisp_map_servers[i].interfaces[j].ip_address.address and lisp_site_key.password."""
-        deployment = _lisp_deployment(prefix)
-
-        assert deployment["overlay_control_plane"] == "lisp"
-        assert deployment["name"] == "DC-1"
-        assert deployment["lisp_site_key"] == {"password": "s3cr3t"}
-        servers = deployment["lisp_map_servers"]
-        assert [server["name"] for server in servers] == ["dc1-border-leaf-02", "dc1-border-leaf-01"]
-        assert [server["interfaces"][0]["ip_address"]["address"] for server in servers] == [
-            "10.255.0.2/32",
-            "10.255.0.1/32",
-        ]
-
-    def test_input_has_no_bgp_process(self, prefix: str, transform_cls: type[BaseDeviceTransform], role: str) -> None:
-        """A LISP fabric has no BGP overlay: the ManagedBGP capability is gone, only OSPF is left."""
-        node = _golden_input(f"{prefix}_cisco_xe_{LISP_VARIANT}")["DcimDevice"]["edges"][0]["node"]
-
-        kinds = {edge["node"].get("__typename") for edge in node["capabilities"]["edges"]}
-        assert kinds == {"ManagedOSPF"}
-
-
-@pytest.mark.parametrize(("prefix", "transform_cls", "role"), FABRIC_TRANSFORMS)
-class TestCiscoXeLispRendering:
-    """The three fabric roles render the LISP overlay, never the EVPN-VXLAN one, from the same inputs."""
-
-    def test_renders_lisp_and_no_evpn_vxlan_or_bgp(
-        self, prefix: str, transform_cls: type[BaseDeviceTransform], role: str
-    ) -> None:
-        """`router lisp` with the RLOC and instance-ids; no l2vpn evpn, nve1, vlan configuration or router bgp."""
-        output = _render(prefix, LISP_VARIANT)
-
-        assert f"! Cisco IOS-XE (Catalyst 9000) LISP {role}\n" in output
-        assert re.search(r"^router lisp$", output, re.M)
-        assert " IPv4-interface Loopback0 priority 10 weight 10\n" in output
-        assert " instance-id 50001\n" in output
-        assert " instance-id 10100\n" in output
-        assert re.search(r"^ lisp mobility VRF_A-IPV4$", output, re.M)
-        for absent in ("l2vpn evpn", "nve1", "vlan configuration", "router bgp", "RM-CONN-2-BGP"):
-            assert absent not in output, absent
-        assert "router ospf 1" in output
-
-    def test_every_edge_registers_with_every_map_server_in_name_order(
-        self, prefix: str, transform_cls: type[BaseDeviceTransform], role: str
-    ) -> None:
-        """The inputs list the map-servers out of order; the key and proxy-reply follow each, sorted by device name."""
-        output = _render(prefix, LISP_VARIANT)
-
-        for service in ("ipv4", "ethernet"):
-            block = output.split(f" service {service}\n", 1)[1].split(f"  exit-service-{service}", 1)[0]
-            registered = re.findall(r"^  etr map-server (\S+) key s3cr3t$", block, re.M)
-            resolvers = re.findall(r"^  itr map-resolver (\S+)$", block, re.M)
-            assert registered == LISP_MAP_SERVER_ADDRESSES
-            assert resolvers == LISP_MAP_SERVER_ADDRESSES
-
-    def test_every_lisp_command_is_under_an_unverified_no_lab_comment(
-        self, prefix: str, transform_cls: type[BaseDeviceTransform], role: str
-    ) -> None:
-        """No lab verified any of it: each LISP block (and the VRF / SVI lines it adds) opens with the marker."""
-        lines = _render(prefix, LISP_VARIANT).splitlines()
-        covered = False
-        uncovered: list[str] = []
-        in_lisp = False
-        for line in lines:
-            if line.lstrip().startswith(LISP_MARKER):
-                covered = True
-                continue
-            if line == "!" and not in_lisp:
-                covered = False
-            if line == "router lisp":
-                in_lisp = True
-            elif in_lisp and not line.startswith(" "):
-                in_lisp = False
-            lisp_line = in_lisp or line.startswith("vrf definition") or line.strip().startswith("lisp mobility")
-            if lisp_line and not covered:
-                uncovered.append(line)
-        assert not uncovered, uncovered
-
-    def test_only_the_border_leaf_is_a_map_server_with_a_site(
-        self, prefix: str, transform_cls: type[BaseDeviceTransform], role: str
-    ) -> None:
-        """The border leaf is the co-located map-server/resolver and registers the DC's EIDs; edges do neither."""
-        output = _render(prefix, LISP_VARIANT)
-
-        if role == "border-leaf":
-            assert output.count("  map-server\n") == 2
-            assert output.count("  map-resolver\n") == 2
-            assert " site DC-1\n" in output
-            assert "  authentication-key s3cr3t\n" in output
-            assert "  eid-record instance-id 50001 10.100.0.0/24 accept-more-specifics\n" in output
-            assert "  eid-record instance-id 10100 any-mac\n" in output
-        else:
-            assert "  map-server\n" not in output
-            assert "  map-resolver\n" not in output
-            assert " site " not in output
-            assert "eid-record" not in output
-
-
-def test_lisp_access_leaf_renders_the_leaf_config_but_for_the_header() -> None:
-    """The access-leaf and leaf LISP inputs describe the same fabric: only the identity lines differ."""
-    leaf = _render("leaf", LISP_VARIANT).splitlines()
-    other = _render("access_leaf", LISP_VARIANT).splitlines()
-
-    assert len(leaf) == len(other)
-    differing = [i for i, (a, b) in enumerate(zip(leaf, other, strict=True)) if a != b]
-    assert differing
-    assert all(i < 6 for i in differing)
-
-
-@pytest.mark.parametrize(("prefix", "transform_cls", "role"), FABRIC_TRANSFORMS)
+@pytest.mark.parametrize(("prefix", "transform_cls", "role"), OFFICE_TRANSFORMS)
 class TestCiscoXeLispRefusalThroughTransform:
-    """The guard still runs inside transform() on a LISP fabric: the services its templates lack are refused."""
+    """The guard runs inside transform() on a LISP device: the services its templates lack are refused."""
 
     @pytest.mark.parametrize("key", REFUSED_KEYS)
     def test_lisp_transform_refuses_unrendered_service(
@@ -699,40 +582,7 @@ class TestCiscoXeLispRefusalThroughTransform:
 
         with patch.object(BaseDeviceTransform, "_template_context", with_service):
             with pytest.raises(ValueError, match=rf"cisco_xe {role} cannot render: {key}; refusing incomplete config"):
-                _run_transform(transform_cls, _golden_input(f"{prefix}_cisco_xe_{LISP_VARIANT}"))
-
-    def test_lisp_transform_refuses_a_platform_without_a_lisp_renderer(
-        self, prefix: str, transform_cls: type[BaseDeviceTransform], role: str
-    ) -> None:
-        """The same input on a platform that cannot render LISP is a refusal, not an EVPN config."""
-        data = _with_platform(_golden_input(f"{prefix}_cisco_xe_{LISP_VARIANT}"), "arista_eos")
-
-        with pytest.raises(ValueError) as excinfo:
-            _run_transform(transform_cls, data)
-
-        assert str(excinfo.value) == f"arista_eos {role} cannot render the LISP overlay; refusing incomplete config"
-
-    def test_lisp_transform_without_a_site_key_is_refused(
-        self, prefix: str, transform_cls: type[BaseDeviceTransform], role: str
-    ) -> None:
-        """No lisp_site_key on the deployment: nothing can register, so no config is rendered."""
-        data = _golden_input(f"{prefix}_cisco_xe_{LISP_VARIANT}")
-        del data["DcimDevice"]["edges"][0]["node"]["deployment"]["node"]["lisp_site_key"]
-
-        with pytest.raises(ValueError, match=f"cisco_xe {role} cannot render the LISP overlay: the fabric has no LISP"):
-            _run_transform(transform_cls, data)
-
-    def test_lisp_transform_without_a_map_server_is_refused(
-        self, prefix: str, transform_cls: type[BaseDeviceTransform], role: str
-    ) -> None:
-        """No border leaf to register with: refuse instead of rendering an unreachable ETR."""
-        data = _golden_input(f"{prefix}_cisco_xe_{LISP_VARIANT}")
-        data["DcimDevice"]["edges"][0]["node"]["deployment"]["node"]["lisp_map_servers"] = {"edges": []}
-
-        with pytest.raises(
-            ValueError, match=f"cisco_xe {role} cannot render the LISP overlay: the fabric has no border"
-        ):
-            _run_transform(transform_cls, data)
+                _run_transform(transform_cls, _golden_input(f"{prefix}_cisco_xe_{OFFICE_LISP_VARIANT}"))
 
 
 # ---------------------------------------------------------------------------
@@ -740,7 +590,7 @@ class TestCiscoXeLispRefusalThroughTransform:
 # ---------------------------------------------------------------------------
 
 ACL_EVPN = "leaf_cisco_xe_with_acl"
-ACL_LISP = "leaf_cisco_xe_lisp_with_acl"
+ACL_LISP = "access_switch_cisco_xe_lisp_with_acl"
 EXCHANGE_ACL = "leaf_cisco_xe_exchange_acl"
 
 
@@ -785,7 +635,7 @@ def _host_segment(data: dict[str, Any]) -> dict[str, Any]:
     """The raw first segment node carried by Ethernet10 of a golden input."""
     interfaces = data["DcimDevice"]["edges"][0]["node"]["interfaces"]["edges"]
     port = next(e["node"] for e in interfaces if e["node"]["name"]["value"] == "Ethernet10")
-    return port["interface_capabilities"]["edges"][0]["node"]
+    return port["capabilities"]["edges"][0]["node"]
 
 
 class TestCiscoXeAclTranslation:
@@ -1008,23 +858,31 @@ class TestCiscoXeIpv6SviIsRefused:
             _run_transform(Leaf, data)
 
 
+# (golden, transform, device role): the EVPN leaf and the office's LISP access-switch both render the segment ACLs.
+ACL_GOLDENS = [(ACL_EVPN, Leaf, "leaf"), (ACL_LISP, AccessSwitch, "access-switch")]
+
+
 class TestCiscoXeAclRenderingThroughTransform:
     """The golden inputs with a security policy render ACLs on the EVPN and the LISP path."""
 
-    @pytest.mark.parametrize("golden", [ACL_EVPN, ACL_LISP])
-    def test_acl_is_defined_before_the_svi_that_binds_it(self, golden: str) -> None:
+    @pytest.mark.parametrize(("golden", "transform_cls", "role"), ACL_GOLDENS)
+    def test_acl_is_defined_before_the_svi_that_binds_it(
+        self, golden: str, transform_cls: type[BaseDeviceTransform], role: str
+    ) -> None:
         """`ip access-list extended` precedes `interface Vlan<N>` and `ip access-group ... in` names the same ACL."""
-        output = _run_transform(Leaf, _golden_input(golden))
+        output = _run_transform(transform_cls, _golden_input(golden))
 
         for vlan in (100, 200):
             name = f"ACL-VLAN{vlan}-IN"
             assert output.index(f"ip access-list extended {name}\n") < output.index(f"interface Vlan{vlan}\n")
             assert re.search(rf"^interface Vlan{vlan}\n(?: .*\n)*? ip access-group {name} in\n", output, re.M)
 
-    @pytest.mark.parametrize("golden", [ACL_EVPN, ACL_LISP])
-    def test_entries_use_wildcards_ports_remarks_and_the_closing_deny(self, golden: str) -> None:
+    @pytest.mark.parametrize(("golden", "transform_cls", "role"), ACL_GOLDENS)
+    def test_entries_use_wildcards_ports_remarks_and_the_closing_deny(
+        self, golden: str, transform_cls: type[BaseDeviceTransform], role: str
+    ) -> None:
         """The shapes IOS-XE writes differently from NX-OS/EOS: wildcard masks, host, ranges, established, remarks."""
-        output = _run_transform(Leaf, _golden_input(golden))
+        output = _run_transform(transform_cls, _golden_input(golden))
 
         for expected in (
             " 20 permit tcp any any eq 443\n",
@@ -1038,32 +896,39 @@ class TestCiscoXeAclRenderingThroughTransform:
             assert expected in output, expected
         assert not re.search(r"^ \d+ (permit|deny) .*\d+\.\d+\.\d+\.\d+/\d+", output, re.M)
 
-    @pytest.mark.parametrize("golden", [ACL_EVPN, ACL_LISP])
-    def test_the_acl_blocks_are_marked_unverified_no_lab(self, golden: str) -> None:
+    @pytest.mark.parametrize(("golden", "transform_cls", "role"), ACL_GOLDENS)
+    def test_the_acl_blocks_are_marked_unverified_no_lab(
+        self, golden: str, transform_cls: type[BaseDeviceTransform], role: str
+    ) -> None:
         """No lab has run an IOS-XE ACL: the ACL section and the SVI binding say so."""
-        output = _run_transform(Leaf, _golden_input(golden))
+        output = _run_transform(transform_cls, _golden_input(golden))
 
         section = output.split("! Zero-Trust ACLs", 1)[1].split("ip access-list extended", 1)[0]
         assert "! unverified-no-lab:" in section
         assert "! unverified-no-lab: `ip access-group <name> in`" in output
 
     @pytest.mark.parametrize(
-        ("golden", "plain"),
-        [(ACL_EVPN, "leaf_cisco_xe_ebgp_ibgp"), (ACL_LISP, "leaf_cisco_xe_lisp_ospf_ibgp")],
+        ("golden", "transform_cls", "plain"),
+        [
+            (ACL_EVPN, Leaf, "leaf_cisco_xe_ebgp_ibgp"),
+            (ACL_LISP, AccessSwitch, "access_switch_cisco_xe_lisp_ospf"),
+        ],
     )
-    def test_the_only_difference_from_the_policy_free_golden_is_the_acl(self, golden: str, plain: str) -> None:
+    def test_the_only_difference_from_the_policy_free_golden_is_the_acl(
+        self, golden: str, transform_cls: type[BaseDeviceTransform], plain: str
+    ) -> None:
         """Same hosted segments, with and without a security policy: dropping the ACL lines gives the plain config."""
-        with_acl = _run_transform(Leaf, _golden_input(golden))
+        with_acl = _run_transform(transform_cls, _golden_input(golden))
         stripped = re.sub(r"! Zero-Trust ACLs.*?(?=! Interfaces)", "", with_acl, flags=re.S)
         stripped = re.sub(
             r"^ ip access-group .*\n|^! unverified-no-lab: `ip access-group.*\n", "", stripped, flags=re.M
         )
 
-        assert stripped == _run_transform(Leaf, _golden_input(plain))
+        assert stripped == _run_transform(transform_cls, _golden_input(plain))
 
     def test_the_lisp_path_still_renders_the_instances_of_the_hosted_segment(self) -> None:
         """Hosts behind an ACL are still registered: L3 instance-id for the VRF, L2 for the VNI, mobility on the SVI."""
-        output = _run_transform(Leaf, _golden_input(ACL_LISP))
+        output = _run_transform(AccessSwitch, _golden_input(ACL_LISP))
 
         assert re.search(r"^router lisp$", output, re.M)
         assert " instance-id 50001\n" in output
@@ -1072,8 +937,10 @@ class TestCiscoXeAclRenderingThroughTransform:
         for absent in ("l2vpn evpn", "nve1", "router bgp"):
             assert absent not in output, absent
 
-    @pytest.mark.parametrize("golden", [ACL_EVPN, ACL_LISP])
-    def test_an_ipv6_rule_endpoint_is_refused_through_transform(self, golden: str) -> None:
+    @pytest.mark.parametrize(("golden", "transform_cls", "role"), ACL_GOLDENS)
+    def test_an_ipv6_rule_endpoint_is_refused_through_transform(
+        self, golden: str, transform_cls: type[BaseDeviceTransform], role: str
+    ) -> None:
         """A rule whose destination is an IPv6 prefix cannot go into an `ip access-list extended`."""
         data = _golden_input(golden)
         _first_policy_rule(data)["destination_ip_addresses"] = {
@@ -1081,9 +948,9 @@ class TestCiscoXeAclRenderingThroughTransform:
         }
 
         with pytest.raises(ValueError) as excinfo:
-            _run_transform(Leaf, data)
+            _run_transform(transform_cls, data)
 
-        assert str(excinfo.value).startswith("cisco_xe leaf cannot render ACL ACL-VLAN100-IN rule 'allow-https': ")
+        assert str(excinfo.value).startswith(f"cisco_xe {role} cannot render ACL ACL-VLAN100-IN rule 'allow-https': ")
         assert "IPv6" in str(excinfo.value)
 
     def test_access_leaf_renders_the_acl_too(self) -> None:

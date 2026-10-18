@@ -416,19 +416,23 @@ class CablingMixin:
         device_name: str,
         trunk_iface: Any,
         vlan_id_value: int,
-        capability_obj: Any,
+        capability_obj: Any | None = None,
         extra_capability_objs: Sequence[Any] = (),
         ip_address_id: str | None = None,
         track: bool = True,
+        role: str = "service",
     ) -> Any | None:
         """Upsert a VLAN-tagged DcimVirtualInterface (<trunk>.<vlan_id>) on
         trunk_iface, linked to capability_obj (and any extra_capability_objs,
         e.g. the exchanges a firewall-context leg belongs to) via
-        interface_capabilities. Capabilities are only ever added, never removed —
+        capabilities. Capabilities are only ever added, never removed —
         shared by customer_dc.py/customer_colocation.py's FirewallContext
         sub-interfaces and segment.py's inline VxlanSegment termination.
         Trunk-interface resolution stays with the caller since fallback
         behavior differs (see find_role_interface).
+
+        No capability_obj: a sub-interface the caller links itself (an office's WAN
+        exit, which the BGP peering names as its interface), with its own ``role``.
 
         track=False makes every save here (the sub-interface and its
         capability-link re-save) use update_group_context=False, for a
@@ -444,22 +448,24 @@ class CablingMixin:
             "device": {"id": device_id},
             "parent_interface": {"id": trunk_iface.id},
             "status": "active",
-            "role": "service",
+            "role": role,
             **({"ip_address": {"id": ip_address_id}} if ip_address_id else {}),
         }
 
         try:
             sub_iface = await self.client.create(kind=DcimVirtualInterface, data=sub_iface_data)
             await sub_iface.save(**tracked_save_kwargs(track))
-            iface_capabilities = getattr(sub_iface, "interface_capabilities")
-            await iface_capabilities.fetch()
-            linked = {peer.id for peer in iface_capabilities.peers}
-            missing = [cap for cap in (capability_obj, *extra_capability_objs) if cap.id not in linked]
-            if missing:
-                for cap in missing:
-                    await self._safe_rel_add(iface_capabilities, cap)
-                # The capability may be an exchange another run created a moment ago.
-                await save_with_node_not_found_retry(sub_iface, self.logger, **tracked_save_kwargs(track))
+            capabilities = [cap for cap in (capability_obj, *extra_capability_objs) if cap is not None]
+            if capabilities:
+                iface_capabilities = getattr(sub_iface, "capabilities")
+                await iface_capabilities.fetch()
+                linked = {peer.id for peer in iface_capabilities.peers}
+                missing = [cap for cap in capabilities if cap.id not in linked]
+                if missing:
+                    for cap in missing:
+                        await self._safe_rel_add(iface_capabilities, cap)
+                    # The capability may be an exchange another run created a moment ago.
+                    await save_with_node_not_found_retry(sub_iface, self.logger, **tracked_save_kwargs(track))
             self.logger.info(f"Upserted sub-interface {sub_iface_name} on {device_name}")
             return sub_iface
         except Exception as exc:

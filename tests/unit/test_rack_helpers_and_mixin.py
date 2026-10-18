@@ -151,14 +151,11 @@ class TestSpineBgpReadinessRole:
             ({"routing_strategy": "ebgp-ibgp"}, "underlay"),
             ({"routing_strategy": "ospf-ibgp"}, "overlay"),
             ({}, "underlay"),
-            ({"routing_strategy": "ospf-ibgp", "overlay_control_plane": "bgp_evpn"}, "overlay"),
-            ({"routing_strategy": "ospf-ibgp", "overlay_control_plane": "lisp"}, None),
-            ({"routing_strategy": "ebgp-ebgp", "overlay_control_plane": "lisp"}, None),
         ],
     )
-    def test_role_follows_the_underlay_the_strategy_creates(self, dc: dict[str, str], expected: str | None) -> None:
+    def test_role_follows_the_underlay_the_strategy_creates(self, dc: dict[str, str], expected: str) -> None:
         """Only an eBGP underlay has spine underlay BGP; ospf-ibgp spines carry the overlay process alone;
-        a missing strategy keeps the ebgp-ebgp default; a LISP overlay leaves the spines no BGP to wait for."""
+        a missing strategy keeps the ebgp-ebgp default."""
         assert spine_bgp_readiness_role(dc) == expected
 
 

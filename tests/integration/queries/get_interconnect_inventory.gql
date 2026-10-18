@@ -34,6 +34,23 @@ query GetInterconnectInventory {
             }
           }
         }
+        capabilities {
+          edges {
+            node {
+              id
+              name {
+                value
+              }
+              device {
+                node {
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -74,7 +91,7 @@ query GetInterconnectInventory {
             }
           }
         }
-        interface_capabilities {
+        capabilities {
           edges {
             node {
               name {

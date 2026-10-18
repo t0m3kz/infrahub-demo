@@ -129,7 +129,7 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
     - One DcimFirewallInterface with a security_zone
     - One zone with one segment whose own policy has one permit rule
     """
-    # Segment node embedded in interface_capabilities (security_zone + policies on segment)
+    # Segment node embedded in capabilities (security_zone + policies on segment)
     seg_node: dict[str, Any] = {
         "__typename": {"value": "ManagedVxlanSegment"},
         "id": "seg-smoke",
@@ -188,7 +188,7 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
         },
     }
 
-    # FW interface with IP — zone and policies come from interface_capabilities segment
+    # FW interface with IP — zone and policies come from capabilities segment
     fw_iface_node: dict[str, Any] = {
         "__typename": {"value": "DcimVirtualInterface"},
         "name": {"value": "eth0.100"},
@@ -203,7 +203,7 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
             }
         },
         "ha_domain": {"node": None},
-        "interface_capabilities": {"edges": [{"node": seg_node}]},
+        "capabilities": {"edges": [{"node": seg_node}]},
     }
 
     # Zone also exposed as a top-level SecurityZone root
@@ -256,7 +256,7 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
 def _smoke_segment(data: dict[str, Any]) -> dict[str, Any]:
     """The segment the smoke firewall carries on eth0.100."""
     iface = data["DcimPhysicalDevice"]["edges"][0]["node"]["interfaces"]["edges"][0]["node"]
-    return iface["interface_capabilities"]["edges"][0]["node"]
+    return iface["capabilities"]["edges"][0]["node"]
 
 
 def _add_segment_rule(data: dict[str, Any], rule_node: dict[str, Any]) -> None:
@@ -912,7 +912,7 @@ def _make_context_smoke_data(platform: str, *, serves_segment: bool) -> dict[str
         "parent_interface": {"node": {"name": {"value": "eth1"}}},
         "ip_address": {"node": {"address": {"value": "100.65.0.4/31"}, "ip_namespace": {"node": None}}},
         "ha_domain": {"node": None},
-        "interface_capabilities": {
+        "capabilities": {
             "edges": [
                 {
                     "node": {
@@ -986,7 +986,7 @@ def _leg_interface(ns_type: str, *, context_id: str = "ctx-shared") -> dict[str,
             }
         },
         "ha_domain": {"node": None},
-        "interface_capabilities": {
+        "capabilities": {
             "edges": [
                 {
                     "node": {
@@ -1221,7 +1221,7 @@ class TestFirewallExchangeLegs:
         its vsys and the rules of the segments it serves still render."""
         data = _make_context_smoke_data("paloalto_panos", serves_segment=True)
         device = data["DcimPhysicalDevice"]["edges"][0]["node"]
-        context = device["interfaces"]["edges"].pop()["node"]["interface_capabilities"]["edges"][0]["node"]
+        context = device["interfaces"]["edges"].pop()["node"]["capabilities"]["edges"][0]["node"]
         device["capabilities"] = {
             "edges": [
                 {

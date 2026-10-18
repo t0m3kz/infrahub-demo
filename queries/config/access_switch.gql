@@ -1,0 +1,134 @@
+# Config of an office's access-switch (fabric edge of its LISP site, cisco_xe): the leaf query without the
+# group-policy fleet roots (no DC, no reference fabric). The device hangs directly off its office, which
+# hosts segments itself (TopologySegmentHosting): EvpnRtAsOnDeploymentFields stays FIRST in the deployment
+# selection (queries/fragments/evpn_fabric.gql, tests/unit/test_fabric_query_order.py) and carries the
+# anycast MAC; LispSiteOnOfficeFields, spread right after it, carries the office name (LISP site), the site
+# key and the office's distribution-switches, the map-servers to register with.
+query access_switch_config(
+  $device: String!
+) {
+  DcimDevice(name__value: $device) {
+    edges {
+      node {
+        __typename
+        id
+        name { value }
+        role { value }
+        platform {
+          node {
+            name { value }
+            netmiko_device_type { value }
+          }
+        }
+        primary_address {
+          node {
+            address { value }
+            ip_namespace { node { name { value } } }
+          }
+        }
+        tags {
+          edges {
+            node { name { value } }
+          }
+        }
+
+        # Device Services (BGP, OSPF) with nested peerings
+        ...DeviceCapabilitiesOnDeviceFields
+
+        ... on DcimPhysicalDevice {
+          deployment {
+            node {
+              ...EvpnRtAsOnDeploymentFields
+              ...LispSiteOnOfficeFields
+              ...FirewallContextsOnDeploymentFields
+            }
+          }
+        }
+
+        # Interface Information
+        interfaces {
+          edges {
+            node {
+              __typename
+              name { value }
+              description { value }
+              status { value }
+              role { value }
+              ... on DcimPhysicalInterface {
+                interface_type { value }
+                mtu { value }
+                ip_address {
+                  node {
+                    address { value }
+                    ip_namespace { node { name { value } } }
+                  }
+                }
+                cable {
+                  node {
+                    id
+                    endpoints {
+                      edges {
+                        node {
+                          __typename
+                          ... on DcimPhysicalInterface {
+                            name { value }
+                            ip_address {
+                              node {
+                                address { value }
+                              }
+                            }
+                            device {
+                              node {
+                                name { value }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+
+              ... on DcimVirtualInterface {
+                ip_address {
+                  node {
+                    address { value }
+                    ip_namespace { node { name { value } } }
+                  }
+                }
+              }
+
+              ... on DcimLAGInterface {
+                lag_id { value }
+                lacp_mode { value }
+                mtu { value }
+                minimum_links { value }
+                ip_address {
+                  node {
+                    address { value }
+                    ip_namespace { node { name { value } } }
+                  }
+                }
+                mlag_domain {
+                  node {
+                    id
+                    name { value }
+                  }
+                }
+                member_interfaces {
+                  edges {
+                    node {
+                      name { value }
+                    }
+                  }
+                }
+              }
+              ...InterfaceCapabilitiesWithSegmentOnInterfaceFields
+            }
+          }
+        }
+      }
+    }
+  }
+}

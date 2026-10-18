@@ -111,6 +111,14 @@ def test_stage_paths_exist_on_disk(root_dir: Any) -> None:
             assert (root_dir / path).exists(), path
 
 
+def test_internet_access_edge_loads_in_foundation_before_boarding() -> None:
+    """add_sdwan_edge (boarding stage) needs the ISP and its access PE, so 04_internet is a foundation path."""
+    stages = dict(ALL_DEMO_LOAD_STAGES)
+    assert "04_internet" in stages["foundation"]
+    assert "04_internet" not in stages["interconnects"]
+    assert STAGE_NAMES.index("foundation") < STAGE_NAMES.index("compute_and_customers")
+
+
 def test_wait_requires_consecutive_quiet_polls() -> None:
     """A quiet poll between generator waves does not count as settled."""
     busy = [_task("t1")]

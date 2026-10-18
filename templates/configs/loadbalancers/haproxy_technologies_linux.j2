@@ -57,66 +57,6 @@ listen haproxy-stats
     acl network_allowed src 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
     http-request deny unless network_allowed
 
-{%- if vips %}
-{%- for vip in vips %}
-{%- if vip.backend_servers %}
-
-# Frontend for {{ vip.hostname }} ({{ vip.protocol }}:{{ vip.port }})
-frontend {{ vip.hostname | replace('.', '_') | replace('-', '_') }}_frontend
-    {%- if vip.mode == 'tcp' %}
-    mode tcp
-    {%- else %}
-    mode http
-    {%- endif %}
-
-    bind {{ vip.vip_ip }}:{{ vip.port }}
-    {%- if vip.ssl_certificate %}
-    bind {{ vip.vip_ip }}:443 ssl crt {{ vip.ssl_certificate }}
-    {%- if vip.mode == 'http' %}
-    redirect scheme https if !{ ssl_fc }
-    {%- endif %}
-    {%- endif %}
-
-    default_backend {{ vip.hostname | replace('.', '_') | replace('-', '_') }}_backend
-
-# Backend for {{ vip.hostname }}
-backend {{ vip.hostname | replace('.', '_') | replace('-', '_') }}_backend
-    {%- if vip.mode == 'tcp' %}
-    mode tcp
-    {%- else %}
-    mode http
-    {%- endif %}
-
-    {%- if vip.balance == 'roundrobin' %}
-    balance roundrobin
-    {%- elif vip.balance == 'leastconn' %}
-    balance leastconn
-    {%- elif vip.balance == 'source' %}
-    balance source
-    {%- elif vip.balance == 'random' %}
-    balance random
-    {%- else %}
-    balance roundrobin
-    {%- endif %}
-
-    {%- if vip.mode == 'http' %}
-    option httpchk GET /health
-    http-check expect status 200
-    {%- endif %}
-
-    {%- for server in vip.backend_servers %}
-    server {{ server.hostname | replace('.', '_') | replace('-', '_') }} {{ server.ip_address }}:{{ server.port }} check
-    {%- endfor %}
-
-    {%- if vip.health_checks %}
-    {%- for check in vip.health_checks %}
-    # Health check: {{ check.check_type }} (rise={{ check.rise }}, fall={{ check.fall }}, timeout={{ check.timeout }}ms)
-    {%- endfor %}
-    {%- endif %}
-
-{%- endif %}
-{%- endfor %}
-{%- endif %}
 {%- if ha %}
 # --- HAProxy Peers (HA State Sync) ---
 peers haproxy_cluster

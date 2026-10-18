@@ -243,7 +243,7 @@ def _gateway_with_handoff(
             "ttl": {"value": 1},
             **({"password": {"node": {"password": {"value": password}}}} if password is not None else {}),
             "address_families": {"edges": [{"node": {"afi": {"value": "ipv4"}, "safi": {"value": "unicast"}}}]},
-            "interface_capabilities": {
+            "capabilities": {
                 "edges": [
                     _raw_iface("eg-fr01", "Ethernet1/13.1900", "10.255.5.0/31", namespace),
                     _raw_iface("EQX-FR2-SDWAN-GW1", local_iface, "10.255.5.1/31", namespace),
@@ -325,6 +325,83 @@ class TestVelocloudVrfHandoffs:
     def test_device_without_capabilities_has_no_handoffs(self) -> None:
         """An office Edge with no BGP capability gets an empty list."""
         assert self._payload(_raw_device("C005-P-EDGE1"))["edges"][0]["handoffs"] == []
+
+
+def _office_edge_with_wan_exit(password: str | None = "0ff1c3-w4n-k3y") -> dict:
+    """C005-P-EDGE1 as add_office_fabric's WAN exit leaves it: a regular BGP process and the peering to a switch."""
+    device = _raw_device("C005-P-EDGE1", role="edge", address=None)
+    peering = {
+        "node": {
+            "id": "peering-wan-exit",
+            "name": {"value": "WAN-EXIT-ds-c005-p01-C005-P-EDGE1"},
+            "peering_role": {"value": "regular"},
+            "session_type": {"value": "EBGP"},
+            "ttl": {"value": 1},
+            **({"password": {"node": {"password": {"value": password}}}} if password is not None else {}),
+            "address_families": {"edges": [{"node": {"afi": {"value": "ipv4"}, "safi": {"value": "unicast"}}}]},
+            "capabilities": {
+                "edges": [
+                    _raw_iface("ds-c005-p01", "GigabitEthernet1/0/26.3800", "100.66.0.0/31", "PROD"),
+                    _raw_iface("C005-P-EDGE1", "GE3.3800", "100.66.0.1/31", "PROD"),
+                ]
+            },
+            "bgp_processes": {
+                "edges": [_raw_bgp_proc("ds-c005-p01", 4200000001), _raw_bgp_proc("C005-P-EDGE1", 4200000002)]
+            },
+        }
+    }
+    device["node"]["capabilities"] = {
+        "edges": [
+            {
+                "node": {
+                    "__typename": "ManagedBGP",
+                    "name": {"value": "C005-P-EDGE1-bgp-wan-exit"},
+                    "status": {"value": "active"},
+                    "process_role": {"value": "regular"},
+                    "local_as": {"node": {"asn": {"value": 4200000002}}},
+                    "router_id": {"node": {"address": {"value": "100.66.0.1/31"}}},
+                    "peerings": {"edges": [peering]},
+                }
+            }
+        ]
+    }
+    return device
+
+
+class TestVelocloudOfficeEdgeWanExit:
+    """The office's WAN exit needs no VCO-side field of its own: the edge's handoff is described, like the gateway's,
+    from the one ManagedBGPPeering add_office_fabric generates (the border renders the other end)."""
+
+    def _handoffs(self, device: dict) -> list[dict[str, Any]]:
+        data = _raw_controller("VCO1", "sdwan_orchestrator", platform_name="velocloud", devices=[device])
+        return json.loads(asyncio.run(_make_transform().transform(data)))["edges"][0]["handoffs"]
+
+    def test_the_edge_hands_off_in_the_tenant_vrf_on_the_dot1q_sub_interface_to_the_switch(self) -> None:
+        assert self._handoffs(_office_edge_with_wan_exit()) == [
+            {
+                "segment": "PROD",
+                "interface": "GE3.3800",
+                "vlan": 3800,
+                "local-address": "100.66.0.1/31",
+                "bgp": {
+                    "local-asn": 4200000002,
+                    "neighbor-ip": "100.66.0.0",
+                    "neighbor-asn": 4200000001,
+                    "neighbor": "ds-c005-p01",
+                    "password": "0ff1c3-w4n-k3y",
+                },
+            }
+        ]
+
+    def test_both_ends_of_the_session_agree_on_addresses_and_asns(self) -> None:
+        """What the border renders (neighbor 100.66.0.1 remote-as 4200000002) is the mirror of this handoff."""
+        handoff = self._handoffs(_office_edge_with_wan_exit())[0]
+
+        assert handoff["bgp"]["neighbor-ip"] == "100.66.0.0" and handoff["local-address"] == "100.66.0.1/31"
+        assert (handoff["bgp"]["local-asn"], handoff["bgp"]["neighbor-asn"]) == (4200000002, 4200000001)
+
+    def test_an_edge_without_the_exit_still_has_no_handoff(self) -> None:
+        assert self._handoffs(_raw_device("C001-P-EDGE1", role="edge", address=None)) == []
 
 
 class TestNoMatch:

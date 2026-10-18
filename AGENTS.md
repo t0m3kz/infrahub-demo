@@ -225,140 +225,46 @@ class MyCheck(InfrahubCheck):
 
 #### Base vs Extensions
 
-- **Base schemas** (`schemas/base/`): Core models (DCIM, IPAM, Location, Topology, Platform generics).
-- **Extension schemas** (`schemas/extensions/`): Feature-specific extensions and implementations.
+- **Base schemas** (`schemas/base/`): DCIM, IPAM, Location, Organization, App instance and the `ManagedNetworkSegment`
+  generic.
+- **Extension schemas** (`schemas/extensions/<domain>/`): every other node, generic and extension.
 
-#### Schema Architecture & Namespace Strategy
+#### Namespaces
 
-This project follows a **layered architecture** with clear separation between platform abstractions and technology implementations:
+| Namespace | Holds |
+| --------- | ----- |
+| Managed | On-prem services and the shared generics `ManagedGeneric` (name, description, status), `ManagedGenericDevice` (the device `capabilities` edge), `ManagedGenericInterfaces` (the interface-side `capabilities` edge; its identifier stays `interface_capabilities`), `ManagedNetworkSegment` and `ManagedLoadBalancer` |
+| Cloud | Public-cloud resources; all inherit `CloudResource` |
+| Topology | Deployments (`TopologyDataCenter`, `TopologyPod`, `TopologyColocationMetro`, ...), design elements, circuits (`TopologyPhysicalCircuit`, `TopologyVirtualCircuit`) and the tenant footprints `TopologyCustomer*` |
+| Dcim, Ipam, Location, Organization | Devices/interfaces/cables, prefixes/addresses/namespaces, geography, providers/customers |
+| Routing | Shared routing objects (`RoutingAutonomousSystem`, `RoutingOSPFArea`, `RoutingPassword`) |
+| Security, Loadbalancer, Proxy, App, Virt | Functional domains |
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│                    PLATFORM LAYER                           │
-│  Technology-agnostic base abstractions (schemas/base/)      │
-├─────────────────────────────────────────────────────────────┤
-│  Platform.NetworkSegment    # Base for all segments        │
-│  Platform.LoadBalancer      # Base for all LBs             │
-├─────────────────────────────────────────────────────────────┤
-│              CUSTOMER FOOTPRINTS                            │
-│  Tenant footprints, namespaced Topology (schemas/extensions)│
-├─────────────────────────────────────────────────────────────┤
-│  Topology.Customer*         # Per-facility tenant footprint │
-│    CustomerDC/Colocation/Cloud/Office/Saas                  │
-│    (inherit TopologyConnectableLocation to share circuit    │
-│     endpoints with the facility they sit in — not a         │
-│     separate connectivity model)                            │
-├─────────────────────────────────────────────────────────────┤
-│              IMPLEMENTATION LAYERS                          │
-│  Technology-specific implementations (schemas/extensions/)  │
-├─────────────────────────────────────────────────────────────┤
-│  Managed.*                   # On-premises infrastructure    │
-│    Managed.NetworkSegment    # VLANs, VXLANs, VRFs         │
-│    Managed.LoadBalancer      # VIP/HAProxy/F5/Nginx        │
-│                                                             │
-│  Cloud.*                    # Public cloud resources        │
-│    Cloud.Subnet             # Cloud network segments        │
-│    Cloud.LoadBalancer       # ALB/NLB/Azure LB             │
-│                                                             │
-│  Hybrid.*                   # Cross-platform (future)       │
-│  Edge.*                     # Edge computing (future)       │
-├─────────────────────────────────────────────────────────────┤
-│              FUNCTIONAL DOMAINS                             │
-│  Routing.*, Security.*, Loadbalancer.*, Service.*          │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**Namespace Guidelines**:
-
-- **Platform**: Technology-agnostic base generics that provide common classification (segment_type, lb_type)
-- **Topology.Customer**: Per-facility tenant footprints (CustomerDC, CustomerColocation, CustomerCloud, CustomerOffice, CustomerSaas) — not a separate `Customer.*` namespace; these inherit `TopologyConnectableLocation` alongside the facility nodes so a circuit endpoint is one shared relationship, not a duplicated model
-- **Managed**: On-premises/self-hosted infrastructure (physical data centers, private cloud)
-- **Cloud**: Public cloud providers (AWS, Azure, GCP, Oracle Cloud)
-- **Dcim**: Physical infrastructure and devices
-- **Ipam**: IP address management
-- **Location**: Geographic hierarchy
-- **Topology**: Deployment structures and hierarchies
-- **Routing**: Routing protocols and configurations
-- **Security**: Security policies, zones, and objects
-- **Service**: Running service instances (OSPF, BGP, PIM services)
-- **Loadbalancer**: Load balancing support objects (Server, HealthCheck)
-
-**Naming Convention Best Practice**:
-
-- `Service.*` → `Managed.*` for clarity (recommended for future refactoring)
-- Alternatives considered: `Private.*`, `SelfHosted.*`, `Enterprise.*`
-- **Recommended**: `Managed` (clearest distinction from Cloud)
+- **One Managed generic per concept, with an implementation per technology**: `ManagedVlanSegment`,
+  `ManagedVxlanSegment` and `CloudNetworkSegment` inherit `ManagedNetworkSegment`; `ManagedLoadbalancerHA` and
+  `CloudLoadBalancer` inherit `ManagedLoadBalancer`.
+- **Topology.Customer**: Per-facility tenant footprints (`TopologyCustomerDC`, `TopologyCustomerColocation`,
+  `TopologyCustomerCloud`, `TopologyCustomerOffice`, `TopologyCustomerSaas`) — not a separate `Customer.*` namespace; these inherit `TopologyConnectableLocation` alongside the facility nodes so a circuit endpoint is one shared relationship, not a duplicated model
+- **Capability edges**: a capability reaches devices via `ManagedGenericDevice` and interfaces via
+  `ManagedGenericInterfaces`. Inherit the second only when something reads the interface edge.
 
 #### Schema Best Practices
 
 **1. Generic Design Pattern**:
 
-```yaml
-# Base generic (schemas/base/)
-generics:
-  - name: NetworkSegment
-    namespace: Platform
-    description: "Base for all network segmentation"
-    attributes:
-      - name: segment_type  # Classification only
-        kind: Dropdown
-        choices:
-          - vlan
-          - vxlan
-          - vpc
-          - subnet
-      - name: status        # Common lifecycle
-        kind: Dropdown
-    relationships:
-      - name: ip_prefixes   # Common relationships
-        peer: IpamPrefix
-        cardinality: many
-
-# On-prem implementation (schemas/extensions/)
-nodes:
-  - name: NetworkSegment
-    namespace: Managed  # or Service (current)
-    inherit_from:
-      - PlatformNetworkSegment  # Gets segment_type, status, ip_prefixes
-      - ManagedGeneric           # Gets deployment, owner metadata
-    attributes:
-      - name: vlan_id         # Technology-specific
-        kind: Number
-      - name: vni             # Technology-specific
-        kind: Number
-
-# Cloud implementation
-nodes:
-  - name: Subnet
-    namespace: Cloud
-    inherit_from:
-      - PlatformNetworkSegment  # Gets segment_type, status, ip_prefixes
-      - CloudResource            # Gets cloud_id, account metadata
-    attributes:
-      - name: is_public       # Cloud-specific
-        kind: Boolean
-    relationships:
-      - name: availability_zone  # Cloud-specific
-        peer: TopologyCloudAZ
-```
-
-**2. Avoid Attribute Conflicts**:
-
-- Base generics should NOT define attributes that technology-specific parents already provide
-- Example: Don't define `name`, `description`, `status` in Platform generics if CloudResource or ServiceGeneric
-  already provide them
-- Only define attributes truly unique to the concept (e.g., `segment_type` for NetworkSegment, `lb_type` for LoadBalancer)
-
-**3. Multiple Inheritance Order**:
+- A generic carries what every implementation shares. `ManagedNetworkSegment` holds `segment_type`,
+  `ManagedVxlanSegment` adds `vni`, and `CloudNetworkSegment` adds the VPC side (`virtual_network`).
+- Never redefine on a node an attribute that a generic provides (there is no `allow_override`).
+- Inheritance order: `ManagedGeneric` or `CloudResource` first, then the concept generic, then the edge generics.
 
 ```yaml
 inherit_from:
-  - PlatformGeneric      # Provides classification (segment_type, lb_type)
-  - TechnologyGeneric    # Provides metadata (name, description, cloud_id, deployment)
-  - FeatureGeneric       # Provides domain features (interfaces, services)
+  - ManagedGeneric           # name, description, status
+  - ManagedNetworkSegment    # the concept generic (segment_type, ...)
+  - ManagedGenericInterfaces # edge generic: the interface-side capabilities edge (identifier interface_capabilities)
 ```
 
-**4. Uniqueness Constraints**:
+**2. Uniqueness Constraints**:
 
 ```yaml
 uniqueness_constraints:
@@ -369,7 +275,7 @@ uniqueness_constraints:
 
 Note: Use `__value` suffix for attributes, `__id` suffix for relationships
 
-**5. Relationship Identifiers**:
+**3. Relationship Identifiers**:
 
 When a node has multiple relationships to the same peer, use unique identifiers:
 
@@ -383,7 +289,7 @@ relationships:
     identifier: "cloud_peering_accepter"   # Different identifier
 ```
 
-**6. Order Weights**:
+**4. Order Weights**:
 
 - Organize attributes logically in the UI
 - Use increments of 50-100 to allow insertions
@@ -393,7 +299,7 @@ relationships:
   - 500-1000: Technical attributes
   - 1000+: Relationships
 
-**7. Selective Relationship Inheritance**:
+**5. Selective Relationship Inheritance**:
 
 Use intermediate generics to add relationships only to specific node types:
 
@@ -459,8 +365,8 @@ nodes:
     icon: "mdi:icon-name"
     include_in_menu: false
     inherit_from:
-      - PlatformGeneric
-      - TechnologyGeneric
+      - ManagedGeneric
+      - ManagedGenericDevice
     attributes:
       - name: my_attribute
         kind: Text
@@ -501,31 +407,22 @@ Valid attribute kinds (case-sensitive):
 
 #### InfraHub Naming
 
-- **Nodes**: `PascalCase` (e.g., `LocationBuilding`, `TopologyPod`, `NetworkSegment`)
+- **Nodes**: `PascalCase` (e.g., `LocationRack`, `TopologyPod`, `ManagedVxlanSegment`)
 - **Attributes**: `snake_case` (e.g., `device_type`, `serial_number`, `segment_type`)
 - **Relationships**: `snake_case` (e.g., `parent_location`, `connected_to`, `ip_prefixes`)
-- **Namespaces**: `PascalCase` (e.g., `Platform`, `Managed`, `Cloud`, `Dcim`, `Ipam`, `Routing`)
+- **Namespaces**: `PascalCase` (e.g., `Topology`, `Managed`, `Cloud`, `Dcim`, `Ipam`, `Routing`)
 
 **Namespace Naming Conventions**:
 
-- Use singular form for technology domains: `Managed`, `Cloud`, `Edge` (not `Manageds`, `Clouds`)
-- Functional domains: `Routing`, `Security`, `Loadbalancer`, `Service`
+- Use singular form for technology domains: `Managed`, `Cloud` (not `Manageds`, `Clouds`)
+- Functional domains: `Routing`, `Security`, `Loadbalancer`, `Proxy`, `App`
 - Avoid abbreviations unless industry-standard: `Dcim` (ok), `Ipam` (ok), `LB` (avoid - use `Loadbalancer`)
 
 **Node Naming Conventions**:
 
-- Managed resources: Use generic business names (`NetworkSegment`, `LoadBalancer`, `Firewall`)
-- Cloud resources: Use provider-agnostic names (`Subnet`, `LoadBalancer`, `VPC`)
-- Customer footprints: Use `Customer<FacilityType>` names (`CustomerDC`, `CustomerColocation`, `CustomerCloud`)
-- Avoid technology-specific prefixes in node names (`NetworkSegment` not `VLANSegment`)
-
-**Implementation Status**:
-
-- ✅ `Platform.*` - Base generics for classification
-- ✅ `Topology.Customer*` - Per-facility tenant footprints (CustomerDC, CustomerColocation, CustomerCloud, CustomerOffice, CustomerSaas); the earlier `Customer.VirtualCloud`/`Customer.VirtualFabric` design was superseded and removed (see `chore: remove dead CustomerVirtualCloud schema`)
-- ✅ `Managed.*` - On-premises infrastructure (NetworkSegment, LoadBalancer)
-- ✅ `Cloud.*` - Public cloud resources (Subnet, LoadBalancer, VPC)
-- ✅ `Service.*` - Running service instances (OSPF, BGP, PIM)
+- Use generic business names and let the technology be the implementation (`ManagedVxlanSegment`).
+- Cloud names are provider-agnostic (`CloudNetworkSegment`, `CloudLoadBalancer`, `CloudVirtualNetwork`).
+- Customer footprints are `TopologyCustomer<FacilityType>` (`TopologyCustomerDC`, `TopologyCustomerColocation`).
 
 ## Testing Requirements
 
@@ -698,7 +595,7 @@ async def main():
     c = InfrahubClient(address='http://localhost:8000')
     c.default_branch = 'flow'
 
-    kinds = ['DcimPhysicalDevice', 'DcimCable', 'TopologyCircuit', 'TopologyVirtualLink']
+    kinds = ['DcimPhysicalDevice', 'DcimCable', 'TopologyPhysicalCircuit', 'TopologyVirtualCircuit']
 
     print()
     print('='*60)
@@ -774,7 +671,7 @@ async def main():
 
     result = await client.execute_graphql(query="""
         query {
-            TopologyCircuit {
+            TopologyPhysicalCircuit {
                 edges {
                     node {
                         display_label
@@ -784,14 +681,11 @@ async def main():
                                 name { value }
                             }
                         }
-                        a_side_location {
-                            node {
-                                display_label
-                            }
-                        }
-                        z_side_location {
-                            node {
-                                display_label
+                        locations {
+                            edges {
+                                node {
+                                    display_label
+                                }
                             }
                         }
                     }
@@ -800,7 +694,7 @@ async def main():
         }
     """)
 
-    circuits = result["TopologyCircuit"]["edges"]
+    circuits = result["TopologyPhysicalCircuit"]["edges"]
     missing_provider = []
     missing_location = []
 
@@ -811,7 +705,7 @@ async def main():
         if not circuit.get("provider") or not circuit["provider"].get("node"):
             missing_provider.append(circuit_id)
 
-        if not circuit.get("a_side_location") or not circuit.get("z_side_location"):
+        if len(circuit["locations"]["edges"]) < 2:
             missing_location.append(circuit_id)
 
     print(f"\n{'='*60}")
@@ -879,20 +773,10 @@ async def main():
     # Circuit Layer
     circuits_result = await client.execute_graphql(query="""
         query {
-            TopologyCircuit {
+            TopologyPhysicalCircuit {
                 edges {
                     node {
                         circuit_type { value }
-                        a_side_location {
-                            node {
-                                display_label
-                            }
-                        }
-                        z_side_location {
-                            node {
-                                display_label
-                            }
-                        }
                     }
                 }
             }
@@ -900,9 +784,9 @@ async def main():
     """)
 
     # Virtual Layer
-    vlinks_result = await client.execute_graphql(query="""
+    virtual_circuits_result = await client.execute_graphql(query="""
         query {
-            TopologyVirtualLink {
+            TopologyVirtualCircuit {
                 edges {
                     node {
                         link_type { value }
@@ -938,7 +822,7 @@ async def main():
             print(f"   🔌 {dev1}:{int1} ═══[{cable_type}]═══ {dev2}:{int2}")
 
     # Circuit Layer
-    circuits = circuits_result["TopologyCircuit"]["edges"]
+    circuits = circuits_result["TopologyPhysicalCircuit"]["edges"]
     circuit_types = {}
     for edge in circuits:
         circuit = edge["node"]
@@ -950,14 +834,14 @@ async def main():
         print(f"   📡 {ctype}: {count}")
 
     # Virtual Layer
-    vlinks = vlinks_result["TopologyVirtualLink"]["edges"]
+    virtual_circuits = virtual_circuits_result["TopologyVirtualCircuit"]["edges"]
     providers = {}
-    for edge in vlinks:
-        vlink = edge["node"]
-        provider = vlink["provider"]["node"]["name"]["value"]
+    for edge in virtual_circuits:
+        provider_node = edge["node"]["provider"]["node"]
+        provider = provider_node["name"]["value"] if provider_node else "unknown"
         providers[provider] = providers.get(provider, 0) + 1
 
-    print(f"\nVIRTUAL LAYER: {len(vlinks)} virtual links\n")
+    print(f"\nVIRTUAL LAYER: {len(virtual_circuits)} virtual circuits\n")
     for provider, count in providers.items():
         print(f"   ☁️  {provider}: {count}")
 
@@ -1023,7 +907,7 @@ endpoints {
 **Filters**:
 
 ```graphql
-TopologyCircuit(circuit_type__value: "dark_fiber") {
+TopologyPhysicalCircuit(circuit_type__value: "dark_fiber") {
     edges {
         node {
             display_label
@@ -1141,7 +1025,7 @@ Next paragraph.
 - **Hardcoded paths in tests**: Always use fixtures like `root_dir` to build paths dynamically.
 - **Non-idempotent generators**: Ensure generators can be run multiple times without creating duplicate objects or causing errors.
 - **Ignoring `order_weight`**: Forgetting to set `order_weight` in schemas can lead to an inconsistent UI.
-- **Attribute conflicts in generics**: Base generics (Platform.*) should NOT redefine attributes from technology generics (CloudResource, ServiceGeneric)
+- **Attribute conflicts in generics**: a node must not redefine an attribute one of its generics provides (no `allow_override`)
 - **Missing relationship identifiers**: When multiple relationships point to the same peer, always specify unique `identifier` values
 - **Object file HFID errors**: Ensure all values in HFID arrays are strings, even for Number attributes (e.g., `["value1", "3", "443"]`)
 - **Generic HFID lookup failures**: Generics used as relationship peers must have `human_friendly_id` defined if data files reference them via HFID strings
@@ -1228,7 +1112,7 @@ primary_ip:
 
 ```yaml
 load_balancer:
-  kind: ManagedLoadBalancer  # Specify concrete type when peer is generic
+  kind: ManagedLoadbalancerHA  # Specify concrete type when peer is generic
   data:
     name: "my-lb"
 ```
@@ -1299,7 +1183,7 @@ spec:
 
 ```yaml
 spec:
-  kind: ServiceLoadBalancerVIP
+  kind: LoadbalancerVIP
   data:
     - hostname: "www.example.com"
       protocol: "https"
@@ -1308,19 +1192,6 @@ spec:
       vip_ip: ["10.1.1.10/32", "default"]  # Two-part HFID
       health_checks:
         - ["http", "3", "3", "2000"]  # Four-part HFID (all strings!)
-```
-
-#### Backend Pools with Three-Part HFID
-
-```yaml
-spec:
-  kind: ServiceBackendPool
-  data:
-    - name: "web-pool"
-      vip_service: ["www.example.com", "https", "443"]  # Port as string!
-      load_balancing_algorithm: "round_robin"
-      Managed_servers:
-        - ["web-01", "10.1.10.11/24", "default"]
 ```
 
 ### Range Expansion
@@ -1393,100 +1264,24 @@ uv run infrahubctl object load data/demos/my-demo/01_devices.yml
 
 ## Architecture Decision Records
 
-### Namespace Strategy (2026-01)
+### Namespaces by technology
 
-**Decision**: Use technology-based namespaces (`Managed`, `Cloud`) rather than functional (`Service`, `Connectivity`)
-
-**Rationale**:
-
-1. **Operational alignment** - Teams typically manage "cloud resources" or "on-prem infrastructure" separately
-2. **Clear boundaries** - Easy to apply different policies, generators, or transforms per technology
-3. **Query simplicity** - `kind=Cloud*` gets all cloud resources, `kind=Managed*` gets all on-premises
-4. **Future extensibility** - Easy to add `Container.*`, `Edge.*`, `IoT.*` namespaces
-5. **RBAC granularity** - Can assign permissions by technology domain
-
-**Current State** (transition in progress):
-
-- `Service.*` → Rename to `Managed.*` (recommended)
-- `Cloud.*` → Keep as-is ✅
-- `Platform.*` → Base generics ✅
-
-**Alternatives considered**:
-
-- `Private.*` - Too vague, could mean security level
-- `SelfHosted.*` - Too long, less common terminology
-- `Enterprise.*` - Doesn't distinguish from cloud enterprise features
-- `Managed.*` - ✅ **Selected**: Clear, industry-standard, distinguishable from Cloud
-
-### Generic Pattern (2026-01)
-
-**Decision**: Platform generics provide ONLY classification attributes specific to the concept
+**Decision**: Namespaces follow the technology: `Managed` is on-prem, `Cloud` is public cloud. Each concept has one
+`Managed` generic (`ManagedNetworkSegment`, `ManagedLoadBalancer`) and one implementation per technology.
 
 **Rationale**:
 
-1. Avoid attribute conflicts when inheriting from multiple generics
-2. Technology generics (CloudResource, ServiceGeneric) already provide name, description, status
-3. Platform generics should add value through classification (segment_type, lb_type) not duplication
+1. Teams, policies, generators and RBAC are split by technology, not by function.
+2. `kind=Cloud*` and `kind=Managed*` select the right resources without extra filters.
+3. `Service.*` and `Platform.*` are gone; there is no namespace per functional layer.
+4. Operational responsibility is an attribute where a node needs it, not a namespace
+   (for example `ManagedCloudProxy.deployment_model`).
 
-**Pattern**:
+### Generics carry shared fields only
 
-```yaml
-# ✅ Good: Platform generic adds classification
-Platform.NetworkSegment:
-  - segment_type (vlan/vxlan/vpc/subnet)
-  - ip_prefixes (relationship)
+**Decision**: A generic holds only what every implementation shares. Technology-specific fields live on the node.
 
-# ✅ Good: Platform generic adds classification
-Platform.LoadBalancer:
-  - lb_type (application/network/hardware/software)
-
-# ❌ Bad: Platform generic duplicates common attributes
-Platform.NetworkSegment:
-  - name, description, status  # Already in CloudResource/ServiceGeneric
-  - segment_type
-```
-
-**Implementation Guide**:
-
-- Platform generics: Classification attributes only
-- Technology generics (CloudResource, ManagedGeneric): Metadata (name, description, cloud_id, deployment)
-- Feature generics (ServiceGenericInterfaces): Domain-specific features
-
-### Deployment Model Pattern (2026-01)
-
-**Decision**: Use `deployment_model` attribute to distinguish operational responsibility, not namespace
-separation
-
-**Context**: In mixed environments (e.g., colocation), resources can be either self-managed or
-provider-managed within the same location.
-
-**Pattern**:
-
-```yaml
-# Added to ManagedGeneric and PlatformLoadBalancer
-deployment_model:
-  - self_managed      # Managed DC - full control, generates device configs
-  - provider_managed  # Colocation - managed by facility provider
-  - cloud_native      # Cloud - managed via APIs/Terraform
-```
-
-**Use Cases**:
-
-1. **Managed Data Center**: All resources are `self_managed`
-2. **Colocation Facility**: Mix of `self_managed` (your equipment) and `provider_managed` (provider services)
-3. **Cloud Deployments**: All resources are `cloud_native`
-
-**Benefits**:
-
-- Single namespace (Managed) with operational classification
-- Query flexibility: "Show all provider_managed LoadBalancers in colocation"
-- Avoids namespace explosion (Managed.*, SelfManaged.*, etc.)
-- Clear separation of concerns: location (namespace) vs. operation (attribute)
-
-**Alternatives Rejected**:
-
-- `Managed.*` namespace - Ambiguous, conflicts with "managed services" terminology
-- Separate namespaces per operational model - Creates unnecessary complexity for mixed environments
+See `.claude/skills/infrahub-greenfield-schema` for the full rules and examples.
 
 ## Resources
 

@@ -18,10 +18,7 @@ from transforms.helpers.firewall import (
     get_leaf_firewall_transits,
 )
 from transforms.helpers.group_policy import GPO_CONFIG_KEYS, group_policy_device_view
-from transforms.helpers.ha import _HA_TYPENAMES
 from transforms.helpers.lisp import build_lisp_inputs, get_lisp_config
-from transforms.helpers.loadbalancer_pbr import _flatten_deployment_lb_vips, get_lb_backend_pbr_rules
-from transforms.helpers.management import get_management_services
 from transforms.helpers.mlag import get_mlag, get_sonic_mlag_config
 from transforms.helpers.ospf import get_ospf
 from transforms.helpers.overlay import OVERLAY_CONFIG_KEYS, OVERLAY_RENDERERS
@@ -33,7 +30,7 @@ from transforms.helpers.segments import (
 from transforms.helpers.templates import load_template
 from transforms.helpers.vxlan import get_interfaces, get_vxlan_config
 from utils.data_cleaning import clean_data
-from utils.fabric_roles import BORDER_ROLES, DC_VTEP_ROLES
+from utils.fabric_roles import BORDER_ROLES, OFFICE_LISP_ROLES
 
 
 def _fabric_rt_asn(deployment: Any) -> int | None:
@@ -50,19 +47,6 @@ def _fabric_rt_asn(deployment: Any) -> int | None:
         if isinstance(asn, int):
             return asn
     return None
-
-
-def _fabric_overlay_control_plane(deployment: Any) -> str:
-    """Return the fabric's overlay control plane: ``bgp_evpn`` (the default) or ``lisp``.
-
-    Reads ``TopologySegmentHosting.overlay_control_plane`` off the device's own deployment, with
-    the same two-shape resolution as _fabric_rt_asn: every device of a fabric resolves the same value.
-    """
-    for candidate in segment_hosting_candidates(deployment):
-        control_plane = candidate.get("overlay_control_plane")
-        if isinstance(control_plane, str) and control_plane:
-            return control_plane
-    return "bgp_evpn"
 
 
 def _fabric_anycast_mac(deployment: Any) -> str | None:
@@ -95,12 +79,6 @@ def get_capabilities(data: dict[str, Any]) -> dict[str, Any]:
     return {
         "bgp_enabled": "ManagedBGP" in typenames,
         "ospf_enabled": "ManagedOSPF" in typenames,
-        "mlag_enabled": "ManagedMLAG" in typenames,
-        "ntp_enabled": "ManagedNTP" in typenames,
-        "syslog_enabled": "ManagedSyslog" in typenames,
-        "snmp_enabled": "ManagedSNMP" in typenames,
-        "aaa_enabled": "ManagedAAA" in typenames,
-        "ha_enabled": not typenames.isdisjoint(_HA_TYPENAMES),
     }
 
 
@@ -131,20 +109,6 @@ def _gpo_host_vlans(group_policy: dict[str, Any] | None) -> dict[str, int] | Non
         for port in group["interfaces"]
     }
     return host_vlans or None
-
-
-def _combine_leaf_pbr_rules(
-    customer_rules: list[dict[str, Any]], lb_backend_rules: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
-    """Combine firewall and LB redirects into one policy per VLAN."""
-    by_vlan = {rule["vlan_id"]: {**rule, "backend_ips": [], "lb_nexthop": None} for rule in customer_rules}
-    for rule in lb_backend_rules:
-        vlan_id = rule["vlan_id"]
-        if vlan_id in by_vlan:
-            by_vlan[vlan_id].update(backend_ips=rule["backend_ips"], lb_nexthop=rule["lb_nexthop"])
-        else:
-            by_vlan[vlan_id] = {**rule, "bypass_prefixes": [], "fw_nexthop": None}
-    return [by_vlan[vlan_id] for vlan_id in sorted(by_vlan)]
 
 
 class BaseDeviceTransform(InfrahubTransform):
@@ -207,16 +171,13 @@ class BaseDeviceTransform(InfrahubTransform):
         device_data["exchange_transits"] = get_exchange_transits(_firewall_context_caps(device_data.get("interfaces")))
 
         config = self._template_context(device_data, platform_name, extra_roots)
-        if platform_name in {"sonic", "dell_sonic"}:
-            unsupported = [key for key in ("snmp", "aaa") if config.get(key)]
-            if unsupported:
-                raise ValueError(f"{platform_name} ConfigDB rendering does not support: {', '.join(unsupported)}")
         self._refuse_cisco_xe_unrendered(platform_name, config)
         config.update(self._cisco_xe_context(platform_name, config))
         return self._render(platform_name, config)
 
-    # The roles rendered by a cisco_xe fabric template (leafs/ and border_leafs/); the Edge's cisco_xe template is IOS.
-    _CISCO_XE_FABRIC_ROLES = frozenset({"leaf", "tor", "access-leaf", "border-leaf"})
+    # The roles rendered by a cisco_xe fabric template (leafs/, border_leafs/ and the office's
+    # access_switches/, distribution_switches/); the Edge's cisco_xe template is IOS.
+    _CISCO_XE_FABRIC_ROLES = frozenset({"leaf", "tor", "access-leaf", "border-leaf"}) | OFFICE_LISP_ROLES
 
     def _refuse_cisco_xe_unrendered(self, platform_name: str, config: dict) -> None:
         """Raise when a Catalyst 9000 (cisco_xe) fabric device needs what its EVPN-VXLAN templates do not render.
@@ -239,6 +200,14 @@ class BaseDeviceTransform(InfrahubTransform):
             unsupported.append("multisite")
         if vxlan.get("enabled") and not (vxlan.get("evpn") or {}).get("enabled"):
             unsupported.append("VXLAN without an EVPN BGP process")
+        lisp = config.get(OVERLAY_CONFIG_KEYS["lisp"])
+        if lisp:
+            # The LISP template defines the VRFs of its L3 instances; a BGP session (an office's WAN exit) in any
+            # other VRF would render under a VRF the device does not have.
+            session_vrfs = {vrf for bgp in config.get("bgp") or [] for vrf in bgp.get("vrf_sessions") or {}}
+            undefined = sorted(session_vrfs - {l3["vrf"] for l3 in lisp.get("l3_instances") or []})
+            if undefined:
+                unsupported.append(f"a BGP session in VRF {', '.join(undefined)}, which no hosted segment defines")
         if unsupported:
             raise ValueError(
                 f"cisco_xe {self.device_role} cannot render: {', '.join(unsupported)}; refusing incomplete config"
@@ -311,7 +280,6 @@ class BaseDeviceTransform(InfrahubTransform):
         interfaces = data.get("interfaces") or []
         device_capabilities = data.get("capabilities") or []
         device_name = data.get("name", "")
-        management_services = get_management_services(device_capabilities)
         mlag = get_mlag(device_capabilities, interfaces, device_name=device_name)
         template_interfaces = self._template_interfaces(data, host_vlans=host_vlans)
         config = {
@@ -328,10 +296,6 @@ class BaseDeviceTransform(InfrahubTransform):
             ),
             "ospf": get_ospf(device_capabilities, interfaces),
             "mlag": mlag,
-            "ntp": management_services["ntp"],
-            "syslog": management_services["syslog"],
-            "snmp": management_services["snmp"],
-            "aaa": management_services["aaa"],
             "capabilities": get_capabilities(data),
         }
         if platform_name in {"sonic", "dell_sonic"}:
@@ -381,14 +345,8 @@ class BaseDeviceTransform(InfrahubTransform):
         # leaf ever owns a FirewallContext interface itself, only the
         # firewall/border-leaf do. Computed before the VLANs: a leaf's PBR next
         # hops decide which transit legs it holds locally.
-        customer_pbr_rules, leaf_transits = self._firewall_pbr(data, routed)
+        leaf_pbr_rules, leaf_transits = self._firewall_pbr(data, routed)
 
-        # LB backend no-SNAT return-path PBR: same device-scoped deployment
-        # traversal as firewall_contexts above, leaf-only in practice since
-        # border-leaf never hosts pool members (no activations there).
-        lb_vips = _flatten_deployment_lb_vips(data.get("deployment"))
-        lb_backend_pbr_rules = get_lb_backend_pbr_rules(routed, lb_vips)
-        leaf_pbr_rules = _combine_leaf_pbr_rules(customer_pbr_rules, lb_backend_pbr_rules)
         if self.device_role in self._LEAF_ROLES:
             # SONiC renders PBR (ConfigDB PBR ACL table); SR OS leafs do not.
             # Refuse rather than ship a VLAN whose firewall steering silently vanished.
@@ -428,8 +386,8 @@ class BaseDeviceTransform(InfrahubTransform):
             self._refuse_unprotected_tenant_svis(self.device_role, platform_name, acls, leaf_pbr_rules)
 
         lisp = None
-        if _fabric_overlay_control_plane(data.get("deployment")) == "lisp" and self.device_role in DC_VTEP_ROLES:
-            # The spines of a LISP fabric are underlay only: they keep taking the EVPN path below (no VXLAN).
+        if self.device_role in OFFICE_LISP_ROLES:
+            # An office's access/distribution switch always renders LISP: its site has no other overlay.
             if platform_name not in OVERLAY_RENDERERS["lisp"]:
                 raise ValueError(
                     f"{platform_name} {self.device_role} cannot render the LISP overlay; refusing incomplete config"
@@ -625,7 +583,7 @@ class BaseDeviceTransform(InfrahubTransform):
         device_id: str | None = None,
         device_capabilities: list[dict] | None = None,
     ) -> list[dict]:
-        """Collect unique segment activations from interface_capabilities.
+        """Collect unique segment activations from capabilities.
 
         VlanSegment.vlan_id is a plain manual attribute directly on the segment
         (single-site, no realization record). VxlanSegment.segment_deployments
@@ -644,7 +602,7 @@ class BaseDeviceTransform(InfrahubTransform):
         seen: set[str] = set()
         activations: list[dict] = []
         for iface in interfaces:
-            for cap in iface.get("interface_capabilities") or []:
+            for cap in iface.get("capabilities") or []:
                 seg_id = cap.get("id") or cap.get("name")
                 if not seg_id or seg_id in seen:
                     continue
@@ -687,7 +645,7 @@ class BaseDeviceTransform(InfrahubTransform):
 
         A border gateway stitches each stretched segment between its fabric and
         the DCI without any customer-facing port carrying it, so
-        interface_capabilities never surface those segments. They come from the
+        capabilities never surface those segments. They come from the
         site's own TopologySegmentHosting.segment_deployments instead (queries/
         fragments/network_segment.gql SegmentDeploymentsOnDeploymentFields),
         keeping only stretch_scope != local. The local VLAN still has to be the

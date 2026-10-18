@@ -160,21 +160,18 @@ class TestPbrAndAclSkip:
 
     @pytest.mark.parametrize("role", ["leaf", "tor", "border-leaf"])
     def test_pbr_and_acl_helpers_never_see_inline_segment(self, role: str) -> None:
-        """Customer PBR, LB backend PBR and SVI ACLs are built from routed activations only."""
+        """Customer PBR and SVI ACLs are built from routed activations only."""
         transform = _make_transform(BaseDeviceTransform, role)
         customer_pbr = MagicMock(return_value=[])
-        lb_pbr = MagicMock(return_value=[])
         acls = MagicMock(return_value=[])
 
         with (
             patch("transforms.common.get_customer_pbr_rules", customer_pbr),
-            patch("transforms.common.get_lb_backend_pbr_rules", lb_pbr),
             patch("transforms.common.get_acls", acls),
         ):
             transform._extra_config(_device_data(), "arista_eos")
 
-        for helper in (customer_pbr, lb_pbr):
-            assert [a["vlan_id"] for a in helper.call_args.args[0]] == [100]
+        assert [a["vlan_id"] for a in customer_pbr.call_args.args[0]] == [100]
         assert [a["vlan_id"] for a in acls.call_args.kwargs["activations"]] == [100]
 
     def test_vlans_and_vxlan_still_carry_inline_segment(self) -> None:
@@ -192,8 +189,8 @@ class TestPbrAndAclSkip:
 
 
 def _interface(name: str, role: str, segments: list[dict]) -> dict:
-    """A physical interface carrying `segments` as interface_capabilities."""
-    return {"name": name, "role": role, "typename": "DcimPhysicalInterface", "interface_capabilities": segments}
+    """A physical interface carrying `segments` as capabilities."""
+    return {"name": name, "role": role, "typename": "DcimPhysicalInterface", "capabilities": segments}
 
 
 class TestTrunkMode:

@@ -6,6 +6,11 @@ version: "1.0"
 # An MLAG domain is a shared construct between exactly two peer devices.
 # Both devices include the same ManagedMLAG node in their device_capabilities,
 # so the relationship is inbound here (device_capabilities is the owner side).
+# The pair is written from the MLAG side (generators/devices.py MLAG upsert), and
+# the min/max count of 2 holds only on that side: a write from the device side
+# (DcimCapabilities.capabilities, peer = generic ManagedGenericDevice) resolves the
+# generic's uncapped declaration and is not capped. Runtime guards in the
+# generators therefore remain.
 # ============================================================================
 
 nodes:
@@ -20,13 +25,27 @@ nodes:
     inherit_from:
       - ManagedGeneric
       - ManagedGenericDevice
-      - ManagedGenericInterfaces
       - ManagedGenericVlanDomain
     uniqueness_constraints:
       - ["name__value"]
     display_label: "{{name__value}}"
     order_by:
       - name__value
+    relationships:
+      # Re-declares the generic's `capabilities` (same name, peer, kind, direction and
+      # identifier) to cap it at exactly two peer devices.
+      - name: capabilities
+        peer: DcimCapabilities
+        label: "Peer Devices"
+        description: "The two peer devices of this MLAG domain"
+        cardinality: many
+        kind: Generic
+        optional: false
+        min_count: 2
+        max_count: 2
+        direction: inbound
+        identifier: capabilities
+        order_weight: 1000
     attributes:
       - name: domain_id
         kind: Number

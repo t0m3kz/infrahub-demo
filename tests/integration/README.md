@@ -37,8 +37,7 @@ Each scenario creates infrastructure incrementally and merges to main:
 - `test_19_dc6_segments.py` - **Scenario 6:** Board C001 into DC6 and deploy two VXLAN segments (`data/20_segments`)
 - `test_20_dc6_add_endpoints.py` - **Scenario 7:** Endpoint servers across DC6's pods (`data/demos/06_servers`)
 - `test_59` - `test_65` - **Scenario 8:** The `30_all` demo, end to end (see [The 30_all Suite](#the-30_all-suite)). This one deviates from the pattern above: it loads in stages, shares one branch across six modules, and does not merge to main.
-- `test_70` - **Scenario 9:** The LISP demo fabric (`data/demos/31_lisp_fabric`), on its own branch (see [The LISP Suite](#the-lisp-suite)).
-- `test_71` - **Scenario 10:** The Arista EOS MSS-G demo fabric (`data/demos/32_arista_mssg`), on its own branch (see [The Arista MSS-G Suite](#the-arista-mss-g-suite)).
+- `test_71` - **Scenario 9:** The Arista EOS MSS-G demo fabric (`data/demos/32_arista_mssg`), on its own branch (see [The Arista MSS-G Suite](#the-arista-mss-g-suite)).
 
 Scenarios 2-7 form one chain on DC6: `test_12` depends on `dc6_verify_after_merge` from `test_10`, and each
 later module depends on the previous one's merge. Every growth check is scoped to DC6 (devices reachable from
@@ -60,8 +59,8 @@ deployed for the chain, so `DC_DEPLOYMENT_TEST_DCS=dc6` cuts `test_10` down to t
 #### `test_helpers.py` - Generic Async Utilities
 
 - `wait_for_condition()` - Polling utility for async conditions
-- `render_device_config()` - Run a device-config query and its transform in-process (test_64, test_70, test_71)
-- `snapshot_topology()` / `diff_snapshots()` - Snapshot the graph's topology kinds and diff two snapshots (test_65, test_70, test_71)
+- `render_device_config()` - Run a device-config query and its transform in-process (test_64, test_71)
+- `snapshot_topology()` / `diff_snapshots()` - Snapshot the graph's topology kinds and diff two snapshots (test_65, test_71)
 
 #### Other Files
 
@@ -134,9 +133,6 @@ uv run invoke test-integration-fast
 # The 30_all demo, end to end
 uv run invoke test-integration-all-demo
 
-# The LISP demo fabric (setup, repository, test_70)
-uv run invoke test-integration-lisp
-
 # The Arista EOS MSS-G demo fabric (setup, repository, test_71)
 uv run invoke test-integration-arista-mssg
 
@@ -159,35 +155,16 @@ The fast profile intentionally stops after setup and repository synchronization.
 | `test_60_app_catalogue.py` | Deployment-request materialization, proxy egress rule, inter-segment firewall rule |
 | `test_61_all_demo_compute.py` | The three fabrics, their routing, host cabling, and the application graph down to hosting devices |
 | `test_62_all_demo_interconnects.py` | Physical and virtual circuits, cloud terminations, firewall contexts, segment legs, which metro's firewalls serve each colocation deployment |
-| `test_64_all_demo_firewall_config.py` | Colo cloud/partner/SaaS zone policies: served by the FR metro's firewall pair, `CheckFirewall` passes, every pair member renders them and a firewall outside the pair does not |
+| `test_64_all_demo_firewall_config.py` | Colo cloud/partner/SaaS zone policies: served by the FR metro's firewall pair, `CheckFirewall` passes, every pair member renders them and a firewall outside the pair does not. Office LISP fabrics: `CheckLispFabric` passes and every access-switch and distribution-switch renders its LISP site in-process (`router lisp`, the map-server `site` and EID records, `proxy-etr` / `use-petr` where the office has an SD-WAN edge; every IOS-XE line is unverified-no-lab) |
 | `test_65_all_demo_idempotency.py` | Two more runs of the security generators, then of the topology generators, leave rules, contexts, devices, cables, addresses, pools and allocated numbers unchanged |
 
 Only `test_59` loads data, and the load is deliberately staged — later stages reference objects that only exist once an earlier stage's generators have finished. `ALL_DEMO_LOAD_STAGES` in `tasks.py` (shared with `invoke load-all-demo`, re-exported by `test_constants.py`) documents which stage needs what. Running `test_60`-`test_65` on their own will skip: their session-scoped dependencies are unmet without `test_59`.
-
-### The LISP Suite
-
-`test_70_lisp_fabric.py` loads `data/demos/31_lisp_fabric` (DC13: `overlay_control_plane: lisp`, OSPF-iBGP, IPv4
-underlay, Catalyst 9500 border-leafs as map-servers) on its own branch (`lisp-fabric-scenario`). The scope is not in
-`30_all`, so `test_59`-`test_65` neither load nor cover it; `invoke test-integration-lisp` runs `test_01`, `test_02`
-and `test_70` only. The constants (branch, stages, expected role counts) are local to the module. It asserts:
-
-| Step | What it checks |
-| --- | --- |
-| Staged load | design, fabric, footprint and segments stages each settle with no failed task |
-| Routing | the expected device roles, a ManagedOSPF on every device, no ManagedBGP and no BGP peering on the branch |
-| DC state | `lisp` / `ospf-ibgp` / `ipv4`, the site key attached, both tenant segments active on the DC |
-| `CheckLispFabric` | run in-process against the branch: no error |
-| Border-leaf renders | `router lisp`, `map-server`, `site DC13`, the L3 `eid-record`s, OSPF; no `l2vpn evpn`, `nve1` or `router bgp` |
-| Leaf / access-leaf renders | the transform does not refuse, OSPF underlay, the edge LISP config (`router lisp`, `etr map-server ... key`, no `map-server` role); no `l2vpn evpn`, `nve1` or `router bgp`. No instance-id yet: the scope hosts no segment (a `cisco_xe` leaf can now render hosts and their SVI ACL, see the smoke golden `leaf_cisco_xe_lisp_with_acl`; `test_70` does not exercise it) |
-| Rerun | a second `add_dc` run changes no id, address, pool or count, and keeps the site key |
-
-Every IOS-XE line in the renders is unverified-no-lab: the test pins the shape of the render, not device behaviour.
 
 ### The Arista MSS-G Suite
 
 `test_71_arista_mssg.py` loads `data/demos/32_arista_mssg` (DC14: an all-7280R3 fabric on EOS 4.36.2F, the one
 platform, device type and release the `reference-arista-eos` group-policy profile row accepts) on its own branch
-(`arista-mssg-scenario`). Like the LISP scope it is not in `30_all` and is never merged to main;
+(`arista-mssg-scenario`). It is not in `30_all` and is never merged to main;
 `invoke test-integration-arista-mssg` runs `test_01`, `test_02` and `test_71` only. The constants (branch, stages,
 segment names, expected roles) are local to the module. It proves the path *generators -> group tags and contract
 rules -> transform -> rendered EOS Segment Security (MSS-G) text*:
@@ -410,9 +387,6 @@ uv run invoke test-integration-fast
 
 # The 30_all demo
 uv run invoke test-integration-all-demo
-
-# The LISP demo fabric
-uv run invoke test-integration-lisp
 
 # The Arista EOS MSS-G demo fabric
 uv run invoke test-integration-arista-mssg

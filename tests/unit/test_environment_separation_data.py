@@ -49,6 +49,17 @@ _FOOTPRINTS: dict[str, str] = {
     for kind, entry in _OBJECTS
     if kind.startswith("TopologyCustomer") and {"owner", "environment", "parent"} <= set(entry)
 }
+# An office footprint is nested under its TopologyOfficeCustomer (the owner) and computed {owner}-{environment}:
+# an office hosts its own segments (C005-P's office-lan).
+_FOOTPRINTS.update(
+    {
+        f"{entry['owner']}-{child['data']['environment'].upper()}": child["data"]["environment"]
+        for kind, entry in _OBJECTS
+        if kind == "TopologyOfficeCustomer"
+        for child in entry.get("children") or []
+        if child.get("kind") == "TopologyCustomerOffice"
+    }
+)
 _SEGMENTS = [
     entry
     for kind, entry in _OBJECTS

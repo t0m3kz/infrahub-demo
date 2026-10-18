@@ -302,27 +302,6 @@ def test_integration_all_demo(
 
 
 @_task(optional=["basetemp", "server_port"])
-def test_integration_lisp(
-    context: Context, basetemp: str = "~/.pytest-tmp/infrahub-demo", server_port: int = 8100
-) -> None:
-    """Run the LISP demo suite (data/demos/31_lisp_fabric): load, routing, check, renders, add_dc rerun.
-
-    The scope is not part of 30_all, so test_70 builds its own branch and needs only the setup and
-    repository prerequisites. Every IOS-XE LISP line it renders is unverified-no-lab.
-
-    Example:
-        uv run invoke dev.test-integration-lisp
-    """
-    _run_integration_suite(
-        context,
-        tests="tests/integration/test_01_setup.py tests/integration/test_02_repository.py "
-        "tests/integration/test_70_lisp_fabric.py",
-        basetemp=basetemp,
-        server_port=server_port,
-    )
-
-
-@_task(optional=["basetemp", "server_port"])
 def test_integration_arista_mssg(
     context: Context, basetemp: str = "~/.pytest-tmp/infrahub-demo", server_port: int = 8100
 ) -> None:
@@ -472,8 +451,10 @@ ALL_DEMO_LOAD_STAGES: tuple[tuple[str, tuple[str, ...]], ...] = (
         # Everything that depends only on bootstrap data: customers, cloud
         # regions/zones, colocation metros/cages and racks (and the shared
         # SD-WAN gateway and orchestrator in the FR2 cage, so an office opts in
-        # when it is boarded), SaaS, office buildings, and the three DC sites
-        # with their fabrics and controllers.
+        # when it is boarded), the internet's ISPs (Orange's access PE is the
+        # far end of every SD-WAN office's INET circuit, so it must exist
+        # before add_sdwan_edge runs), SaaS, office buildings, and the three DC
+        # sites with their fabrics and controllers.
         # One load, so add_colocation_metro (one run per metro) and
         # add_dc -> add_pod -> add_rack (per DC) generate in parallel. The
         # loader sorts files by path, so each DC's 00_location.yml lands before
@@ -493,6 +474,7 @@ ALL_DEMO_LOAD_STAGES: tuple[tuple[str, tuple[str, ...]], ...] = (
             "03_dc/dc12/01_controllers_physical.yml",
             "03_dc/dc12/02_controllers_virtual.yml",
             "03_dc/dc12/03_topology.yml",
+            "04_internet",
             "04_saas",
             "05_office",
         ),
@@ -806,7 +788,6 @@ dev_ns.add_task(cast(Task, test_integration), name="test-integration")
 dev_ns.add_task(cast(Task, test_integration_fast), name="test-integration-fast")
 dev_ns.add_task(cast(Task, test_integration_routing), name="test-integration-routing")
 dev_ns.add_task(cast(Task, test_integration_all_demo), name="test-integration-all-demo")
-dev_ns.add_task(cast(Task, test_integration_lisp), name="test-integration-lisp")
 dev_ns.add_task(cast(Task, test_integration_arista_mssg), name="test-integration-arista-mssg")
 dev_ns.add_task(cast(Task, release))
 dev_ns.add_task(cast(Task, upgrade))
@@ -834,7 +815,6 @@ ns.add_task(cast(Task, test_integration), name="test-integration")
 ns.add_task(cast(Task, test_integration_fast), name="test-integration-fast")
 ns.add_task(cast(Task, test_integration_routing), name="test-integration-routing")
 ns.add_task(cast(Task, test_integration_all_demo), name="test-integration-all-demo")
-ns.add_task(cast(Task, test_integration_lisp), name="test-integration-lisp")
 ns.add_task(cast(Task, test_integration_arista_mssg), name="test-integration-arista-mssg")
 ns.add_task(cast(Task, clean_testcontainers), name="clean-testcontainers")
 ns.add_task(cast(Task, upgrade))

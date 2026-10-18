@@ -87,7 +87,7 @@ spec:
         - "eg-fr01-bgp-overlay"
         - "EXT-LUMEN-FRA1-bgp"
       password: "inet-lumen-eqxfr2-key"
-      interface_capabilities:
+      capabilities:
         - ["eg-fr01", "Ethernet1/14"]
         - ["EXT-LUMEN-FRA1", "et-0/0/0"]
     - name: "TRANSIT-COGENT-EQXFR2"
@@ -105,7 +105,7 @@ spec:
         - "eg-fr02-bgp-overlay"
         - "EXT-COGENT-FRA1-bgp"
       password: "inet-cogent-eqxfr2-key"
-      interface_capabilities:
+      capabilities:
         - ["eg-fr02", "Ethernet1/14"]
         - ["EXT-COGENT-FRA1", "et-0/0/0"]
     - name: "TRANSIT-LUMEN-EQXPA4"
@@ -123,7 +123,7 @@ spec:
         - "eg-pa01-bgp-overlay"
         - "EXT-LUMEN-PAR1-bgp"
       password: "inet-lumen-eqxpa4-key"
-      interface_capabilities:
+      capabilities:
         - ["eg-pa01", "Ethernet1/14"]
         - ["EXT-LUMEN-PAR1", "et-0/0/0"]
     - name: "TRANSIT-COGENT-EQXPA4"
@@ -141,6 +141,6 @@ spec:
         - "eg-pa02-bgp-overlay"
         - "EXT-COGENT-PAR1-bgp"
       password: "inet-cogent-eqxpa4-key"
-      interface_capabilities:
+      capabilities:
         - ["eg-pa02", "Ethernet1/14"]
         - ["EXT-COGENT-PAR1", "et-0/0/0"]

@@ -78,3 +78,10 @@ infrahub_tests:
       - name: syntax_check
         spec:
           kind: check-smoke
+
+  - resource: Check
+    resource_name: validate_physical_circuit_ports
+    tests:
+      - name: syntax_check
+        spec:
+          kind: check-smoke

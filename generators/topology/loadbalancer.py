@@ -6,8 +6,7 @@ backend pool members see the real client IP, so their response traffic
 would otherwise return via the fabric's anycast gateway, bypassing the
 load balancer entirely. Attaching the LB directly to the VIP's
 backend_segment as a routed peer (a VLAN sub-interface + IP on that
-segment) gives PBR rendering (transforms/helpers/loadbalancer_pbr.py) a
-real next-hop to redirect backend response traffic through.
+segment) gives backend response traffic a real next-hop through the LB.
 
 No-op when snat_enabled is true (default) or backend_segment is unset —
 SNAT is the common case and needs nothing extra, the LB's own vip_ip

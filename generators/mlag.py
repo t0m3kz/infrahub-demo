@@ -188,9 +188,9 @@ class MLAGWiringMixin:
         member_interfaces (unlike HA's single sync interface, an MLAG
         peer-link LAG can bundle more than one physical port). Always
         create()+save()'d with the full desired state (existing id passed
-        when found) — never a conditional skip — so mlag_domain/
-        interface_capabilities/member_interfaces self-heal on every run and
-        the node stays inside this run's tracking group."""
+        when found) — never a conditional skip — so mlag_domain/member_interfaces
+        self-heal on every run and the node stays inside this run's tracking
+        group."""
         dev_name = device_obj.name.value
         lag_name = get_lag_name(platform_name, _PEER_LINK_LAG_ID)
 
@@ -229,7 +229,6 @@ class MLAGWiringMixin:
                 "mtu": 9000,
                 "minimum_links": 1,
                 "mlag_domain": {"id": mlag_obj.id},
-                "interface_capabilities": [{"id": mlag_obj.id}],
                 "member_interfaces": [{"id": iface.id} for iface in member_ifaces],
             },
         )
@@ -270,7 +269,6 @@ class MLAGWiringMixin:
                 "status": "active",
                 "role": "mlag-peer",
                 "description": f"MLAG virtual peer-link — {mlag_name}",
-                "interface_capabilities": [{"id": mlag_obj.id}],
                 **({"ip_address": {"id": control_ip_id}} if control_ip_id else {}),
             },
         )
@@ -356,7 +354,6 @@ class MLAGWiringMixin:
                 "role": "mlag-control",
                 "description": f"MLAG control — {mlag_name}",
                 "ip_address": {"id": control_ip_id},
-                "interface_capabilities": [{"id": mlag_obj.id}],
             },
         )
         await svi_obj.save(**tracked_save_kwargs(track))

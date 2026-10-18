@@ -1,7 +1,0 @@
-{#- Build ConfigDB management tables before the parent serializes the document. -#}
-{%- for server in ntp.servers if ntp -%}
-{%- set _ = ntp_servers.update({server.address: {}}) -%}
-{%- endfor -%}
-{%- for server in syslog.servers if syslog -%}
-{%- set _ = syslog_servers.update({server.address: {}}) -%}
-{%- endfor -%}
