@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 from abc import ABC, abstractmethod
 from collections import Counter, defaultdict
-from typing import TYPE_CHECKING, Any, Literal, Sequence
+from typing import TYPE_CHECKING, Any, Literal, NoReturn, Sequence
 
 from netutils.interface import sort_interface_list
 
@@ -116,6 +116,10 @@ class ConnectionValidator:
 # ============================================================================
 
 
+class CablingPlanError(ValueError):
+    """Raised when a cabling plan cannot be built safely."""
+
+
 class CablingStrategy(ABC):
     """Base class for cabling strategies."""
 
@@ -128,9 +132,34 @@ class CablingStrategy(ABC):
         """Build cabling plan for this strategy."""
         pass
 
+    def _fail(self, message: str) -> NoReturn:
+        """Log and raise: a cable the plan needs but cannot place fails the
+        generator run. Never log-and-skip — a skipped cable leaves a device
+        silently disconnected while the run still reports success."""
+        self.logger.error(message)
+        raise CablingPlanError(message)
 
-class CablingPlanError(ValueError):
-    """Raised when a cabling plan cannot be built safely."""
+    def _validate_bottom_port_count(self) -> None:
+        """Reject a plan where a bottom device has fewer ports than top devices.
+
+        Every strategy that indexes a bottom device's ports by top-device index
+        (rack, pod) needs one port per top device. A physical interface holds
+        exactly one cable, so wrapping the port index double-books it. Infrahub
+        does reject the second cable, but only at save time and with a message
+        about relationship cardinality on an opaque node id — which says nothing
+        about the device template being two ports short. Raising here names the
+        device, the shortfall and the fix instead.
+        """
+        num_top_devices = len(self.planner._sorted_top_devices)
+        for bottom_device in self.planner._sorted_bottom_devices:
+            available = len(self.planner.bottom_by_device[bottom_device])
+            if available < num_top_devices:
+                self._fail(
+                    f"INSUFFICIENT INTERFACES - bottom device {bottom_device}: {available} port(s) "
+                    f"available but {num_top_devices} top device(s) to reach, so at least one port "
+                    f"would carry two cables. Add uplink ports to this device's template or reduce "
+                    f"the number of top devices in the pod."
+                )
 
 
 class PodCablingStrategy(CablingStrategy):
@@ -139,13 +168,28 @@ class PodCablingStrategy(CablingStrategy):
     def build_plan(
         self, cabling_offset: int = 0, **kwargs
     ) -> list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]]:
-        """Builds a cabling plan between source and destination interfaces based on cabling offset."""
+        """Builds a cabling plan between source and destination interfaces based on cabling offset.
+
+        Same fail-fast rules as RackCablingStrategy: the top port index is NOT
+        wrapped modulo the port count (wrapping put pod N and pod N+len(ports)
+        on the same super-spine port), and every bottom device needs one port
+        per top device.
+        """
         cabling_plan: list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]] = []
 
-        for top_index, top_device in enumerate(sorted(self.planner.top_by_device.keys())):
+        self._validate_bottom_port_count()
+
+        for top_index, top_device in enumerate(self.planner._sorted_top_devices):
             top_interfaces = self.planner.top_by_device[top_device]
-            for bottom_index, bottom_device in enumerate(sorted(self.planner.bottom_by_device.keys())):
-                top_intf_index = (bottom_index + cabling_offset) % len(top_interfaces)
+            for bottom_index, bottom_device in enumerate(self.planner._sorted_bottom_devices):
+                top_intf_index = bottom_index + cabling_offset
+                if top_intf_index >= len(top_interfaces):
+                    self._fail(
+                        f"OFFSET OVERFLOW - top device {top_device}: port index {top_intf_index} "
+                        f"(offset={cabling_offset} + device={bottom_index}, {bottom_device}) exceeds its "
+                        f"{len(top_interfaces)} available interfaces. Add downlink ports to the top device's "
+                        f"template or reduce the number of pods/devices it serves."
+                    )
                 top_intf = top_interfaces[top_intf_index]
                 bottom_intf = self.planner.bottom_by_device[bottom_device][(top_index)]
                 cabling_plan.append((bottom_intf, top_intf))
@@ -180,14 +224,12 @@ class RackCablingStrategy(CablingStrategy):
                     if bottom_index < len(self.planner._sorted_bottom_devices)
                     else f"index={bottom_index}"
                 )
-                msg = (
+                self._fail(
                     f"OFFSET OVERFLOW - bottom device {bottom_label}: "
                     f"top_interface_index={top_interface_index} (offset={cabling_offset} + device={bottom_index}) "
                     f"exceeds {max_top_interfaces} available top interfaces. "
                     f"Reduce the offset or add more interfaces to top devices."
                 )
-                self.logger.error(msg)
-                raise CablingPlanError(msg)
 
             for top_index, top_device in enumerate(self.planner._sorted_top_devices):
                 top_intf = self.planner.top_by_device[top_device][top_interface_index]
@@ -198,28 +240,6 @@ class RackCablingStrategy(CablingStrategy):
                 cabling_plan.append((bottom_intf, top_intf))
 
         return cabling_plan
-
-    def _validate_bottom_port_count(self) -> None:
-        """Reject a plan where a bottom device has fewer ports than top devices.
-
-        A physical interface holds exactly one cable, so wrapping the port index
-        double-books it. Infrahub does reject the second cable, but only at save
-        time and with a message about relationship cardinality on an opaque node
-        id — which says nothing about the device template being two ports short.
-        Raising here names the device, the shortfall and the fix instead.
-        """
-        num_top_devices = len(self.planner._sorted_top_devices)
-        for bottom_device in self.planner._sorted_bottom_devices:
-            available = len(self.planner.bottom_by_device[bottom_device])
-            if available < num_top_devices:
-                msg = (
-                    f"INSUFFICIENT INTERFACES - bottom device {bottom_device}: {available} port(s) "
-                    f"available but {num_top_devices} top device(s) to reach, so at least one port "
-                    f"would carry two cables. Add uplink ports to this device's template or reduce "
-                    f"the number of top devices in the pod."
-                )
-                self.logger.error(msg)
-                raise CablingPlanError(msg)
 
 
 class ChainCablingStrategy(CablingStrategy):
@@ -246,7 +266,6 @@ class ChainCablingStrategy(CablingStrategy):
         top_cursor: dict[str, int] = {device: 0 for device in self.planner._sorted_top_devices}
 
         num_pairs = max(num_bottom, num_top)
-        any_pair_cabled = False
         for pair_index in range(num_pairs):
             bottom_device = self.planner._sorted_bottom_devices[pair_index % num_bottom]
             top_device = self.planner._sorted_top_devices[pair_index % num_top]
@@ -257,11 +276,10 @@ class ChainCablingStrategy(CablingStrategy):
             top_free = len(top_ports) - top_cursor[top_device]
             links_for_pair = min(bottom_free, top_free)
             if links_for_pair <= 0:
-                self.logger.error(
+                self._fail(
                     f"INSUFFICIENT INTERFACES - {bottom_device}<->{top_device} (chain pair {pair_index}): "
                     f"no free ports left on at least one side (bottom_free={bottom_free}, top_free={top_free})."
                 )
-                continue
 
             for _ in range(links_for_pair):
                 bottom_intf = bottom_ports[bottom_cursor[bottom_device]]
@@ -269,12 +287,6 @@ class ChainCablingStrategy(CablingStrategy):
                 bottom_cursor[bottom_device] += 1
                 top_cursor[top_device] += 1
                 cabling_plan.append((bottom_intf, top_intf))
-            any_pair_cabled = True
-
-        if not any_pair_cabled:
-            self.logger.error(
-                "INSUFFICIENT INTERFACES - No chain pair had a free port on both sides; no connections created."
-            )
 
         return cabling_plan
 
@@ -352,14 +364,12 @@ class IntraRackCablingStrategy(CablingStrategy):
             top_device = reuse_top_devices[uplink_idx % len(reuse_top_devices)]
             top_interfaces = self.planner.top_by_device[top_device]
 
-            if uplink_idx < len(top_interfaces):
-                top_intf = top_interfaces[uplink_idx]
-                cabling_plan.append((bottom_intf, top_intf))
-            else:
-                self.logger.error(
+            if uplink_idx >= len(top_interfaces):
+                self._fail(
                     f"INSUFFICIENT INTERFACES - Cannot create connection from {bottom_device} uplink {uplink_idx} to {top_device}. "
                     f"Required interface index {uplink_idx} but only {len(top_interfaces)} interface(s) available."
                 )
+            cabling_plan.append((bottom_intf, top_interfaces[uplink_idx]))
 
     def _create_round_robin_connections(
         self,
@@ -372,15 +382,13 @@ class IntraRackCablingStrategy(CablingStrategy):
             top_device = self.planner._sorted_top_devices[top_device_idx]
             top_interfaces = self.planner.top_by_device[top_device]
 
-            if port_offset < len(top_interfaces):
-                top_intf = top_interfaces[port_offset]
-                cabling_plan.append((bottom_intf, top_intf))
-            else:
-                self.logger.error(
+            if port_offset >= len(top_interfaces):
+                self._fail(
                     f"INSUFFICIENT INTERFACES - Cannot create connection from "
                     f"{bottom_intf.device.display_label}:{bottom_intf.name.value} to {top_device}. "
                     f"Required port offset {port_offset} but only {len(top_interfaces)} interface(s) available."
                 )
+            cabling_plan.append((bottom_intf, top_interfaces[port_offset]))
 
 
 class IntraRackMiddleCablingStrategy(CablingStrategy):
@@ -390,9 +398,7 @@ class IntraRackMiddleCablingStrategy(CablingStrategy):
         """Build cabling plan for middle_rack deployment."""
         cabling_plan: list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]] = []
 
-        num_top_devices = len(self.planner._sorted_top_devices)
-        if not self._validate_min_top_devices(num_top_devices, MIN_LEAF_DEVICES_FOR_PAIRING, "Middle rack"):
-            return cabling_plan
+        self._require_leaf_pair("Middle rack")
 
         leaf_pairs, num_pairs = self._create_leaf_pairs(self.planner._sorted_top_devices)
 
@@ -401,14 +407,14 @@ class IntraRackMiddleCablingStrategy(CablingStrategy):
 
         return cabling_plan
 
-    def _validate_min_top_devices(self, num_devices: int, min_required: int, deployment_type: str) -> bool:
-        """Validate minimum number of top devices for deployment."""
-        if num_devices < min_required:
-            self.logger.warning(
-                f"{deployment_type} cabling requires at least {min_required} leaf devices, found {num_devices}"
+    def _require_leaf_pair(self, deployment_type: str) -> None:
+        """Fail unless there are enough leafs to dual-home every bottom device to a pair."""
+        num_devices = len(self.planner._sorted_top_devices)
+        if num_devices < MIN_LEAF_DEVICES_FOR_PAIRING:
+            self._fail(
+                f"{deployment_type} cabling requires at least {MIN_LEAF_DEVICES_FOR_PAIRING} leaf devices, "
+                f"found {num_devices}"
             )
-            return False
-        return True
 
     def _create_leaf_pairs(self, sorted_top_devices: list[str]) -> tuple[list[list[str]], int]:
         """Create pairs of leaf devices for paired uplink connectivity."""
@@ -447,15 +453,13 @@ class IntraRackMiddleCablingStrategy(CablingStrategy):
             top_device = selected_leafs[uplink_idx]
             top_interfaces = self.planner.top_by_device[top_device]
 
-            if tors_using_same_pair < len(top_interfaces):
-                top_intf = top_interfaces[tors_using_same_pair]
-                cabling_plan.append((bottom_intf, top_intf))
-            else:
-                self.logger.error(
+            if tors_using_same_pair >= len(top_interfaces):
+                self._fail(
                     f"INSUFFICIENT INTERFACES - Cannot create connection from "
                     f"{bottom_intf.device.display_label}:{bottom_intf.name.value} to {top_device}. "
                     f"Leaf pair slot {tors_using_same_pair} required but only {len(top_interfaces)} interface(s) available."
                 )
+            cabling_plan.append((bottom_intf, top_interfaces[tors_using_same_pair]))
 
 
 class IntraRackMixedCablingStrategy(CablingStrategy):
@@ -467,14 +471,8 @@ class IntraRackMixedCablingStrategy(CablingStrategy):
         """Build cabling plan for mixed deployment (ToR racks to middle rack leafs)."""
         cabling_plan: list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]] = []
 
-        num_top_devices = len(self.planner._sorted_top_devices)
-        if num_top_devices < MIN_LEAF_DEVICES_FOR_PAIRING:
-            self.logger.warning(
-                f"Mixed rack cabling requires at least {MIN_LEAF_DEVICES_FOR_PAIRING} leaf devices, found {num_top_devices}"
-            )
-            return cabling_plan
-
         middle_strategy = IntraRackMiddleCablingStrategy(self.planner)
+        middle_strategy._require_leaf_pair("Mixed rack")
         leaf_pairs, num_pairs = middle_strategy._create_leaf_pairs(self.planner._sorted_top_devices)
 
         for local_tor_index, bottom_device in enumerate(self.planner._sorted_bottom_devices):
@@ -593,12 +591,13 @@ class CablingPlanner:
 
             bottom_speeds_str = ", ".join(str(s) for s in sorted([s for s in bottom_speeds if s is not None]))
             top_speeds_str = ", ".join(str(s) for s in sorted([s for s in top_speeds if s is not None]))
-            self.logger.error(
+            message = (
                 f"INTERFACE TYPE MISMATCH - No matching speed groups found for speed-aware cabling. "
                 f"Bottom devices have: {bottom_speeds_str}Gbps, Top devices have: {top_speeds_str}Gbps. "
                 f"Cannot create any connections."
             )
-            return []
+            self.logger.error(message)
+            raise CablingPlanError(message)
 
         combined_plan = []
 
@@ -614,11 +613,10 @@ class CablingPlanner:
                 top_sorting=self._top_sorting,
             )
 
-            try:
-                speed_plan = temp_planner._strategies[scenario].build_plan(cabling_offset=cabling_offset)
-            except ValueError as e:
-                self.logger.warning(f"Speed-aware mode error for scenario '{scenario}': {e}")
-                continue
+            # No try/except: a strategy's CablingPlanError (overflow, too few ports)
+            # must fail the run. Catching it here used to drop the whole speed group,
+            # so create_cabling got [] and the devices stayed uncabled on a green run.
+            speed_plan = temp_planner._strategies[scenario].build_plan(cabling_offset=cabling_offset)
 
             combined_plan.extend(speed_plan)
             self.logger.info(f"Added {len(speed_plan)} connections for {speed}G group")

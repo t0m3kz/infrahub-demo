@@ -12,6 +12,7 @@ import time
 from typing import Any, cast
 
 from infrahub_sdk import InfrahubClient, InfrahubClientSync
+from infrahub_sdk.exceptions import NodeNotFoundError
 from infrahub_sdk.graphql import Mutation
 from infrahub_sdk.task.models import TaskFilter, TaskState
 
@@ -360,25 +361,36 @@ def wait_for_no_running_tasks(
 
 def wait_for_validations(
     client: InfrahubClientSync,
+    pc_id: str,
     pc_name: str,
     allow_failures: bool = False,
 ) -> list[Any]:
     """Wait for proposed change validations to complete.
 
+    Looks the proposed change up by the id create_proposed_change() returned
+    (pc_name is only for messages), and treats "not found" as not ready yet:
+    the first read can come straight after the create and miss it — observed
+    as a NodeNotFoundError on the first poll in test_16, after the same lookup
+    had worked for test_12 and test_14 in the same run.
+
     Returns:
         List of validation results
     """
-    logger.info("Waiting for validations to complete for PC: %s", pc_name)
+    logger.info("Waiting for validations to complete for PC: %s (%s)", pc_name, pc_id)
 
     def _check_validations() -> tuple[bool, list[Any]]:
-        pc = client.get(
-            "CoreProposedChange",
-            name__value=pc_name,
-            include=["validations"],
-            exclude=["reviewers", "approved_by", "created_by"],
-            prefetch_relationships=True,
-            populate_store=True,
-        )
+        try:
+            pc = client.get(
+                "CoreProposedChange",
+                id=pc_id,
+                include=["validations"],
+                exclude=["reviewers", "approved_by", "created_by"],
+                prefetch_relationships=True,
+                populate_store=True,
+            )
+        except NodeNotFoundError:
+            logger.info("PC %s (%s) not visible yet", pc_name, pc_id)
+            return False, []
 
         if hasattr(pc.validations, "peers") and pc.validations.peers:
             peers_list = cast(list, pc.validations.peers)
@@ -408,18 +420,24 @@ def wait_for_validations(
 
     failures: list[str] = []
     for result in validation_results:
-        name = result.name.value if hasattr(result, "name") else str(result.id)
+        # Validators carry a label, not a name; the id is only the fallback.
+        label = result.label.value if hasattr(result, "label") else str(result.id)
         conclusion = result.conclusion.value if hasattr(result, "conclusion") else "unknown"
-        logger.info("  Validation: %s - %s", name, conclusion)
+        logger.info("  Validation: %s - %s", label, conclusion)
         if conclusion == "failure":
-            failures.append(name)
+            failures.append(label)
 
+    # The validator only says it failed; the check under it says why.
+    failed_checks = _fetch_failed_checks(client, pc_id) if failures else []
+    if failed_checks:
+        logger.error("Failing checks:\n  - %s", "\n  - ".join(failed_checks))
     if not allow_failures:
         assert not failures, (
-            f"Validations completed but {len(failures)} check(s) failed.\n"
+            f"Validations completed but {len(failures)} validation(s) failed.\n"
             f"  Proposed change: {pc_name}\n"
             f"  Failed validations: {', '.join(failures)}\n"
-            f"  Merge will be blocked. Check server logs for details."
+            f"  Failing checks: {'; '.join(failed_checks) or 'none reported'}\n"
+            f"  Merge will be blocked."
         )
 
     return validation_results
@@ -430,9 +448,10 @@ def _fetch_failed_checks(client: InfrahubClientSync, pc_id: str) -> list[str]:
 
     Infrahub's own merge task rejects a merge whose validators contain a
     failing check ("Unable to merge proposed change containing failing
-    checks") without saying which one — wait_for_validations() only sees a
-    validator's own conclusion, not the individual checks under it, and a
-    validator can still show "success" overall depending on aggregation. This
+    checks") without saying which one — a validator's own conclusion says
+    nothing about the individual checks under it, and a validator can still
+    show "success" overall depending on aggregation. Used by the merge path
+    and by wait_for_validations() when a validator fails. This
     is the only path to the actual self.log_error() message a check reported,
     which is the one piece of information that turns "the merge failed" into
     something actionable.
@@ -641,7 +660,7 @@ def create_and_validate_proposed_change(
         source_branch=source_branch,
         destination_branch=destination_branch,
     )
-    validations = wait_for_validations(client=client, pc_name=name)
+    validations = wait_for_validations(client=client, pc_id=pc_id, pc_name=name)
     return {
         "pc_id": pc_id,
         "validations": validations,

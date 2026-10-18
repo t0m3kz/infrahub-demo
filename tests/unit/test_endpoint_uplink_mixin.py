@@ -317,7 +317,9 @@ class TestBuildConnectionPlan:
         assert plan == []
         assert any("Could not determine device name" in str(c.args[0]) for c in host.logger.warning.call_args_list)
 
-    def test_no_available_interfaces_on_switch_logs_warning(self) -> None:
+    def test_no_available_interfaces_on_switch_logs_error(self) -> None:
+        """A server NIC with no switch port left is a failed deployment: logged as an
+        error, which raises under the generator's FailOnErrorLogger."""
         host = _make_host()
         server_intfs = [_iface(f"eth{i}", device="server-1") for i in range(2)]
         # Only leaf-1 has interfaces; leaf-2 has none registered.
@@ -330,7 +332,9 @@ class TestBuildConnectionPlan:
         )
 
         assert len(plan) == 1
-        host.logger.warning.assert_called_once()
+        host.logger.error.assert_called_once()
+        assert "No available interfaces on leaf-2" in host.logger.error.call_args.args[0]
+        host.logger.warning.assert_not_called()
 
     def test_already_planned_fingerprint_excluded_from_new_plan(self) -> None:
         host = _make_host()

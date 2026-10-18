@@ -664,15 +664,16 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
         """
         pod_name = self.data["name"]
         pod_index = self.data["index"]
-        if not spine_interfaces:
-            self.logger.warning(f"Pod {pod_name}: no spine uplink interfaces — skipping inter-pod mesh cabling")
-            return
-
         siblings = await self.client.filters(kind=TopologyPod, parent__ids=[dc["id"]])
         lower_siblings = [s for s in siblings if s.index.value < pod_index]
         if not lower_siblings:
             self.logger.info(f"Pod {pod_name}: no lower-index sibling pods yet — nothing to mesh-cable")
             return
+        if not spine_interfaces:
+            self.fail(
+                f"Pod {pod_name}: no {spine_role} uplink interfaces to mesh-cable to "
+                f"{len(lower_siblings)} lower-index sibling pod(s) — add uplink-role ports to the spine template"
+            )
 
         routing_opts = _routing_options(dc, dc_asn_pool_id, pod_spine_as_id)
         sorted_lower_siblings = sorted(lower_siblings, key=lambda s: s.index.value)
@@ -710,11 +711,12 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
                     await asyncio.sleep(delay)
 
             if not sibling_spines or not sibling_uplink_names:
-                self.logger.warning(
+                # Only the higher-index pod ever cables a pair, so skipping here
+                # leaves the pair uncabled for good — fail and let a re-run retry.
+                self.fail(
                     f"Pod {pod_name}: sibling pod idx={sibling.index.value} still has no spine "
-                    f"devices/uplinks after {_SIBLING_SPINE_MAX_RETRIES} attempts — skipping this pair"
+                    f"devices/uplinks after {_SIBLING_SPINE_MAX_RETRIES} attempts — cannot mesh-cable this pair"
                 )
-                continue
 
             # Each sibling-pod pair gets a deterministic local uplink slot range.
             # Reserve exactly the number of links this pair consumes per spine pair.
