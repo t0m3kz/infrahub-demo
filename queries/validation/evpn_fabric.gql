@@ -58,9 +58,10 @@ query evpn_fabric {
     }
   }
 
-  # L3 VNIs: one per VRF namespace, allocated from the GLOBAL-L3VNI pool, so these
-  # are global and must not collide with each other or with any L2 VNI — on the
-  # wire a VNI is a single 24-bit field with no L2/L3 discriminator.
+  # L3 VNIs: one per VRF namespace, fixed by hand in
+  # data/bootstrap/22_namespaces.yml (no pool allocates them), so these are global
+  # and must not collide with each other or with any L2 VNI — on the wire a VNI is
+  # a single 24-bit field with no L2/L3 discriminator.
   IpamNamespace {
     edges {
       node {

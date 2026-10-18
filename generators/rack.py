@@ -17,7 +17,7 @@ from .helpers.routing import (
 )
 from .helpers.template_interfaces import template_interface_names_by_role
 from .pod_config import spine_slot_role, spine_slot_templates
-from .protocols import TopologyPod
+from .protocols import TopologyDataCenter, TopologyPod
 from .types import RoutingOptions, naming_convention_of
 
 _POD_POOL_MAX_RETRIES = 10
@@ -26,12 +26,12 @@ _POD_POOL_RETRY_DELAY = 3.0
 # pod-level data (spines, pools).
 POD_GENERATORS = ("add_pod", "pod_rack_cascade")
 
-# Pod-level pools this generator cannot proceed without, in the order add_pod
-# writes them. asn_pool comes last and is conditional — see _wait_for_pod_pools.
-_POD_POOL_FIELDS = ("loopback_pool", "prefix_pool", "asn_pool")
+# Pod-level pools this generator cannot proceed without. The ASN pool is not
+# one of them: it is the parent DC's fabric_asn_pool, conditional — see _wait_for_pools.
+_POD_POOL_FIELDS = ("loopback_pool", "prefix_pool")
 
-# Underlays that allocate a per-device ASN from the pod's ASN pool. An OSPF
-# underlay never does, so a missing asn_pool is not worth waiting for there.
+# Underlays that allocate a per-device ASN from the DC's fabric_asn_pool. An OSPF
+# underlay never does, so a missing pool is not worth waiting for there.
 _EBGP_UNDERLAY_STRATEGIES = frozenset({RoutingStrategy.EBGP_EBGP.value, RoutingStrategy.EBGP_IBGP.value})
 
 
@@ -181,46 +181,46 @@ class RackMixin:
         )
         return device_names, interface_names
 
-    def _missing_pod_pools(self, pod: dict[str, Any], *, needs_asn_pool: bool) -> list[str]:
-        """Which of this pod's required pools are still unresolved."""
-        return [
-            field
-            for field in _POD_POOL_FIELDS
-            if not (pod.get(field) or {}).get("id") and (field != "asn_pool" or needs_asn_pool)
-        ]
+    def _missing_pools(self, pod: dict[str, Any], dc: Mapping[str, Any], *, needs_asn_pool: bool) -> list[str]:
+        """Which required pools are still unresolved, as ``pod.<field>`` / ``dc.fabric_asn_pool`` labels."""
+        missing = [f"pod.{field}" for field in _POD_POOL_FIELDS if not (pod.get(field) or {}).get("id")]
+        if needs_asn_pool and not (dc.get("fabric_asn_pool") or {}).get("id"):
+            missing.append("dc.fabric_asn_pool")
+        return missing
 
-    async def _wait_for_pod_pools(self, pod: dict[str, Any], *, needs_asn_pool: bool) -> dict[str, Any]:
-        """Retry-refetch the pod directly until add_pod has written its pools.
+    async def _wait_for_pools(self, pod: dict[str, Any], dc: dict[str, Any], *, needs_asn_pool: bool) -> None:
+        """Retry-refetch the pod (and, if needed, the DC) until its pools are persisted; updates both in place.
 
-        A rack's own created-trigger can fire and reach here before add_pod's
-        created-trigger task is even visible in the task list — nesting racks
-        under their pod in one object-load mutation removed the incidental
-        delay that made wait_for_parent_generator_and_refetch's task-list check
-        reliable in practice. Checking the pod NODE's actual persisted state
-        (not the task list) closes that race regardless of task-list indexing
-        timing.
+        The rack's query snapshot can predate the writes it depends on: racks
+        are created in the same object-load as their DC and pod, so the rack's
+        created-trigger can run before add_dc wrote ``fabric_asn_pool`` or
+        add_pod wrote the loopback/prefix pools. Checking the nodes' persisted
+        state (not the task list, which may not show the pod's task yet) closes
+        that race.
 
-        asn_pool has to be waited on alongside the other two, not assumed to
-        arrive with them: add_pod creates the loopback/prefix pools first and
-        only links the DC's fabric ASN pool onto the pod afterwards (see
-        generators/topology/pod.py). A rack that stopped polling the moment
-        loopback/prefix appeared kept the None asn_pool from its own query
-        snapshot, so _prepare_generation_context built RoutingOptions without a
-        pool — and RoutingPlanner then emitted "No ASN pool for <device>" as a
-        *warning*, created no AS and therefore no BGP process for any device in
-        the rack, while the run still reported "generation completed". Observed
-        on DC12's second network rack in a 30_all load: four devices cabled,
-        addressed and entirely unrouted, with no failed task to show for it.
+        The DC's fabric_asn_pool needs no wait of its own beyond the pod's:
+        add_pod only writes the pod pools after it has seen the DC pool, so
+        visible pod pools imply a persisted DC pool. It is still refetched here
+        when the snapshot lacks it, because a rack that went on without it
+        built RoutingOptions with no pool — RoutingPlanner then only warned,
+        created no AS and no BGP process for the rack's devices, and the run
+        still reported success (DC12's second network rack in a 30_all load).
         """
         for attempt in range(_POD_POOL_MAX_RETRIES):
-            pod_obj = await self.client.get(kind=TopologyPod, id=pod["id"], include=list(_POD_POOL_FIELDS))
-            for field in _POD_POOL_FIELDS:
-                if pool_id := getattr(pod_obj, field).id:
-                    pod[field] = {"id": pool_id}
+            missing = self._missing_pools(pod, dc, needs_asn_pool=needs_asn_pool)
+            if any(label.startswith("pod.") for label in missing):
+                pod_obj = await self.client.get(kind=TopologyPod, id=pod["id"], include=list(_POD_POOL_FIELDS))
+                for field in _POD_POOL_FIELDS:
+                    if pool_id := getattr(pod_obj, field).id:
+                        pod[field] = {"id": pool_id}
+            if needs_asn_pool and not (dc.get("fabric_asn_pool") or {}).get("id"):
+                dc_obj = await self.client.get(kind=TopologyDataCenter, id=dc["id"], include=["fabric_asn_pool"])
+                if pool_id := dc_obj.fabric_asn_pool.id:
+                    dc["fabric_asn_pool"] = {"id": pool_id}
 
-            missing = self._missing_pod_pools(pod, needs_asn_pool=needs_asn_pool)
+            missing = self._missing_pools(pod, dc, needs_asn_pool=needs_asn_pool)
             if not missing:
-                return pod
+                return
             # Under load add_pod's own task can surface only now, queued behind
             # other fabrics' work: once it is in flight, wait for it outright
             # rather than spending blind retries until they run out.
@@ -229,11 +229,10 @@ class RackMixin:
             if attempt < _POD_POOL_MAX_RETRIES - 1:
                 delay = self._retry_delay(_POD_POOL_RETRY_DELAY, attempt)
                 self.logger.info(
-                    f"Rack {self.data['name']}: Pod {pod['name']} {', '.join(missing)} not ready yet — "
+                    f"Rack {self.data['name']}: {', '.join(missing)} not ready yet — "
                     f"retrying in {delay:.2f}s (attempt {attempt + 1}/{_POD_POOL_MAX_RETRIES})"
                 )
                 await asyncio.sleep(delay)
-        return pod
 
     async def _prepare_generation_context(self) -> None:
         """Compute and store shared context needed by every per-role generation method."""
@@ -244,23 +243,28 @@ class RackMixin:
         self.fabric_name = dc["name"].lower()
 
         needs_asn_pool = dc.get("routing_strategy", "ebgp-ebgp") in _EBGP_UNDERLAY_STRATEGIES
-        if self._missing_pod_pools(pod, needs_asn_pool=needs_asn_pool):
-            pod = await self._wait_for_pod_pools(pod, needs_asn_pool=needs_asn_pool)
+        if self._missing_pools(pod, dc, needs_asn_pool=needs_asn_pool):
+            await self._wait_for_pools(pod, dc, needs_asn_pool=needs_asn_pool)
 
-        if missing_pools := self._missing_pod_pools(pod, needs_asn_pool=needs_asn_pool):
+        if missing_pools := self._missing_pools(pod, dc, needs_asn_pool=needs_asn_pool):
             # Refuse rather than carry on. There is no legitimate state in which
             # these are absent: add_dc creates the fabric ASN pool, add_pod
-            # creates the loopback/prefix pools and links the ASN pool onto the
-            # pod, and the retry loop above already covers the visibility lag.
-            # Carrying on builds a rack whose devices are cabled and addressed
-            # but have no BGP process — indistinguishable from a healthy rack
-            # unless you count processes. Raising fails this generator's task,
-            # which is how such a rack becomes visible at all. Nothing has been
-            # created at this point, so the failed run leaves no partial state.
+            # creates the loopback/prefix pools, and the retry loop above
+            # already covers the visibility lag. Carrying on builds a rack whose
+            # devices are cabled and addressed but have no BGP process —
+            # indistinguishable from a healthy rack unless you count processes.
+            # Raising fails this generator's task, which is how such a rack
+            # becomes visible at all. Nothing has been created at this point, so
+            # the failed run leaves no partial state.
+            hints = []
+            if any(label.startswith("pod.") for label in missing_pools):
+                hints.append(f"infrahubctl generator generate_pod name={pod['name']}")
+            if "dc.fabric_asn_pool" in missing_pools:
+                hints.append(f"infrahubctl generator generate_dc name={dc['name']}")
             message = (
-                f"Rack {self.data['name']}: Pod {pod['name']} {', '.join(missing_pools)} not found after "
+                f"Rack {self.data['name']}: {', '.join(missing_pools)} not found after "
                 f"{_POD_POOL_MAX_RETRIES} attempts — refusing to generate devices that would have no routing. "
-                f"Run the pod generator first: infrahubctl generator generate_pod name={pod['name']}"
+                f"Run the generator first: {' / '.join(hints)}"
             )
             self.logger.error(message)
             raise RuntimeError(message)
@@ -310,9 +314,9 @@ class RackMixin:
             self.logger.info(f"{exc} — rack has no spine-dependent roles, continuing.")
 
         routing_options: RoutingOptions = RoutingOptions(design=dc)
-        pod_asn_pool = pod.get("asn_pool")
-        if pod_asn_pool and pod_asn_pool.get("id"):
-            routing_options["asn_pool"] = pod_asn_pool["id"]
+        dc_asn_pool = dc.get("fabric_asn_pool")
+        if dc_asn_pool and dc_asn_pool.get("id"):
+            routing_options["asn_pool"] = dc_asn_pool["id"]
 
         pod_prefix_pool = pod.get("prefix_pool")
         self._technical_pool_id = pod_prefix_pool["id"] if pod_prefix_pool else None

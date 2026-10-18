@@ -105,7 +105,6 @@ class TopologyPodData(TypedDict, total=False):
     parent: TopologyPodParentData
     loopback_pool: dict[str, Any] | None
     prefix_pool: dict[str, Any] | None
-    asn_pool: dict[str, Any] | None
 
 
 class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, CommonGenerator):
@@ -301,17 +300,12 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
         )
 
         # Reference DC-level ASN pool (one pool per DC, shared by all devices)
-        # DC generator creates the pool; pod just references it for routing and propagates to pod.asn_pool
+        # DC generator creates the pool; pod just references it for routing (racks read it from the DC too)
         dc_asn_pool_id: str | None = None
-        dc_asn_pool_name: str | None = None
         dc_fabric_asn_pool = dc.get("fabric_asn_pool")
         if dc_fabric_asn_pool and dc_fabric_asn_pool.get("name"):
             dc_asn_pool_id = dc_fabric_asn_pool["id"]
-            dc_asn_pool_name = dc_fabric_asn_pool["name"]
-
-            # Propagate DC pool reference to pod so rack generator can find it via pod.asn_pool
-            await self.attach_refs(kind=TopologyPod, node_id=pod_id, refs={"asn_pool": dc_asn_pool_id})
-            self.logger.info(f"Pod {pod_name}: linked to DC ASN pool '{dc_asn_pool_name}'")
+            self.logger.info(f"Pod {pod_name}: using DC ASN pool '{dc_fabric_asn_pool['name']}'")
 
         # Pass management pool ID from DC parent (create_devices resolves ID to SDK object)
         dc_management_pool = dc.get("management_pool")

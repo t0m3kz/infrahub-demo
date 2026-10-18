@@ -267,8 +267,8 @@ class TestDC6Segments(TestInfrahubDockerWithClient):
         # Each local VXLAN segment gets an L2 VNI from the DC's own pool. The
         # upper bound is not the 24-bit VNI maximum: the EVPN RD/RT are derived
         # from the VNI and only have a 16-bit assigned-number field, and the
-        # range must stay disjoint from GLOBAL-L2VNI and the L3 VNI pools
-        # because the VNI space is flat (see generators/topology/dc.py).
+        # range must stay disjoint from GLOBAL-L2VNI and the fixed namespace
+        # L3 VNIs because the VNI space is flat (see generators/topology/dc.py).
         low, high = LOCAL_VNI_RANGE
         vnis = [d["vni"] for d in deployments]
         assert all(vni is not None for vni in vnis), f"Segment deployment(s) without a VNI: {deployments}"

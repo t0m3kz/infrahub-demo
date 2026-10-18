@@ -1,0 +1,37 @@
+---
+# C008 footprints: production in DC10 and DC12, development in DC12.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerDC
+  data:
+    # Second production tenant on the DC10 fabric next to C005 (and C007). Its
+    # trade-portal application (../../../07_applications/c008/) calls C005's
+    # payment API, the one cross-customer flow in DC10: an approved
+    # AppDependency, so exactly one rule (and so one group contract) crosses
+    # the two customers' segments, and every other flow between them is denied
+    # (transforms/helpers/group_policy.py).
+    #
+    # design M_DC: no dedicated firewall, so DC10's shared context serves it,
+    # like C005-P-DC10.
+    - owner: "C008"
+      environment: "p"
+      infrastructure_orchestrator: github_actions
+      parent: "DC10"
+      design: "M_DC"
+      member_of_groups: [customer_deployments_dc]
+    - owner: "C008"
+      environment: "p"
+      parent: "DC12"
+      design: "S_DC"
+      member_of_groups: [customer_deployments_dc]
+    # Development footprint next to the production one (C008-P-DC12). The
+    # inventory-sync dev VMs run on the shared DC12 hosts owned by the
+    # technology partner (P027), which only carry non-prod workloads: C005's
+    # DC12 prod VMs run on its own server-3/4, so prod and non-prod never share
+    # a hypervisor (checks/hypervisor_environment.py).
+    - owner: "C008"
+      environment: "d"
+      parent: "DC12"
+      design: "M_DC"
+      member_of_groups: [customer_deployments_dc]

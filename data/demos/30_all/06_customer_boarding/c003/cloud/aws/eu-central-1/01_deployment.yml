@@ -1,16 +1,5 @@
 ---
-# Customer C003 deployment footprint inside an existing cloud region from
-# data/demos/11_cloud/. TopologyCustomerCloud's parent is the region
-# (TopologyCloudRegion), not the individual zone.
-#
-# Requires the corresponding region to already exist:
-#   - eu-central-1 (AWS)  <- data/demos/11_cloud/aws/
-#
-# name is a computed attribute ({owner_org_id}-{customer_name}-{environment}-
-# {parent}) — read-only, do not set it explicitly. customer_name is a unique
-# per-cloud-account identifier (VXLAN across DC+Colo can't stretch into
-# cloud, so cloud footprints are named independently).
-
+# C003 cloud footprint in eu-central-1 (data/demos/11_cloud/), named C003-VAULTEX-AWS-EU-CENTRAL-1.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -18,8 +7,6 @@ spec:
   data:
     - owner: "C003"
       customer_name: "vaultex-aws"
-      environment: "p"
       infrastructure_orchestrator: terraform
       parent: "eu-central-1"
-      member_of_groups:
-        - customer_deployments_cloud
+      member_of_groups: [customer_deployments_cloud]

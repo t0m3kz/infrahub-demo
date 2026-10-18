@@ -24,6 +24,7 @@ import yaml
 from tests.integration.demo_data import (
     ROOT,
     attribute,
+    attribute_names,
     declared,
     distinct,
     name,
@@ -36,7 +37,7 @@ ALL_DEMO = ROOT / "data" / "demos" / "30_all"
 BOOTSTRAP = ROOT / "data" / "bootstrap"
 
 # Offices of 30_all that opt into a fabric. Every other office stays a single SD-WAN edge.
-FABRIC_OFFICES = {"C005-P"}
+FABRIC_OFFICES = {"C005-OFFICE"}
 
 
 def _spec_data(path: Path) -> list[dict[str, Any]]:
@@ -114,6 +115,17 @@ class TestSchema:
         assert forward["identifier"] == reverse["identifier"]
         assert reverse["peer"] == "ManagedNetworkSegment"
 
+    def test_office_is_always_prod_and_owned_directly(self) -> None:
+        """No environment, status or wrapper: the owner sits on the office, its parent is the campus label."""
+        assert not {"environment", "status", "namespace"} & attribute_names("TopologyCustomerOffice")
+        assert "TopologyCustomer" not in schema()["TopologyCustomerOffice"].inherit_from
+        assert "TopologyEnvironmentScoped" not in schema()["TopologyCustomerOffice"].inherit_from
+        owner = relationship("TopologyCustomerOffice", "owner")
+        assert owner is not None
+        assert owner["peer"] == "OrganizationEntity"
+        assert owner.get("optional") is False
+        assert "TopologyOfficeCustomer" not in schema()
+
     def test_relationship_identifiers_are_unique_per_kind(self) -> None:
         identifiers = [rel.get("identifier") for rel in schema()["TopologyCustomerOffice"].relationships.values()]
         named = [i for i in identifiers if i]
@@ -123,6 +135,16 @@ class TestSchema:
 class TestOfficeData:
     def test_only_the_fabric_offices_declare_fabric_templates(self, fabric_offices: dict[str, Any]) -> None:
         assert set(fabric_offices) == FABRIC_OFFICES
+
+    def test_every_office_row_is_single_level_with_its_owner_and_the_campus_label(self) -> None:
+        """The office is declared directly (no OfficeCustomer wrapper row): owner and label parent on the row."""
+        offices = distinct(declared("TopologyCustomerOffice", ALL_DEMO))
+        assert offices
+        for office in offices:
+            assert office.item.get("owner"), f"{name(office)}: no owner"
+            assert office.item.get("parent") == "Campus and Office"
+            assert "environment" not in office.item
+            assert name(office).endswith("-OFFICE")
 
     def test_every_fabric_office_is_in_the_generator_target_group(self) -> None:
         for office in distinct(declared("TopologyCustomerOffice", ALL_DEMO)):
@@ -243,10 +265,10 @@ class TestWanExitData:
 
         namespaces = {entry["name"] for entry in _spec_data(BOOTSTRAP / "22_namespaces.yml")}
         pools = {entry["name"] for entry in _spec_data(BOOTSTRAP / "23_transit_pools.yml") if "resources" in entry}
-        for office in self._sdwan_fabric_offices():
-            namespace = {"p": "PROD"}.get(office.item["environment"], "NON-PROD")
-            assert namespace in namespaces
-            assert transit_pool_name(namespace) in pools
+        # an office is always PROD: its exit lives in the PROD tenant VRF
+        assert self._sdwan_fabric_offices()
+        assert "PROD" in namespaces
+        assert transit_pool_name("PROD") in pools
         assert _WAN_EXIT_ASN_POOL in {entry["name"] for entry in _spec_data(BOOTSTRAP / "16_asn_pools.yml")}
 
     def test_the_demo_office_hosts_one_derived_vxlan_segment_in_its_own_environment(self) -> None:
@@ -254,7 +276,7 @@ class TestWanExitData:
         segments = [
             segment
             for segment in distinct(declared("ManagedVxlanSegment", ALL_DEMO))
-            if "C005-P" in (segment.item.get("customer_deployments") or [])
+            if "C005-OFFICE" in (segment.item.get("customer_deployments") or [])
         ]
         assert [segment.item["customer_name"] for segment in segments] == ["office-lan"]
         assert segments[0].item["environment"] == "p"
@@ -264,7 +286,7 @@ class TestWanExitData:
     def test_the_hosted_segment_is_the_offices_only_lan_there_is_no_typed_lan_prefix(self) -> None:
         """The office-lan segment's /24 is derived from the tenant pool and is what the SD-WAN handoff registers
         (get_external_peer_prefixes): a typed lan_prefixes entry would be a second, unreachable LAN."""
-        (office,) = [office for office in declared("TopologyCustomerOffice", ALL_DEMO) if name(office) == "C005-P"]
+        (office,) = [office for office in declared("TopologyCustomerOffice", ALL_DEMO) if name(office) == "C005-OFFICE"]
 
         assert not office.item.get("lan_prefixes")
         assert office.item.get("sdwan_gateway")
@@ -273,9 +295,9 @@ class TestWanExitData:
         from tests.integration.test_constants import ALL_DEMO_OFFICE_FABRICS, ALL_DEMO_OFFICE_WAN_EXITS
 
         assert ALL_DEMO_OFFICE_FABRICS == {
-            "C005-P": {
-                "distribution-switch": ("ds-c005-p01", "ds-c005-p02"),
-                "access-switch": ("as-c005-p01", "as-c005-p02"),
+            "C005-OFFICE": {
+                "distribution-switch": ("ds-c005-office01", "ds-c005-office02"),
+                "access-switch": ("as-c005-office01", "as-c005-office02"),
             }
         }
-        assert ALL_DEMO_OFFICE_WAN_EXITS == {"C005-P": ("ds-c005-p01", "ds-c005-p02")}
+        assert ALL_DEMO_OFFICE_WAN_EXITS == {"C005-OFFICE": ("ds-c005-office01", "ds-c005-office02")}

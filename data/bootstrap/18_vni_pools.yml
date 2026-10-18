@@ -4,17 +4,13 @@ kind: Object
 spec:
   kind: CoreNumberPool
   data:
-    - name: GLOBAL-L3VNI
-      description: Global L3 VNI pool for VRF namespaces (EVPN symmetric IRB)
-      node: BuiltinIPNamespace
-      node_attribute: l3_vni
-      start_range: 50001
-      end_range: 59999
     # One VNI per stretched segment, shared by every site it reaches. Site
     # pools ({fabric}-vni-pool, {metro}-vni-pool: 10001-39999) all hand out
     # the same band, so a stretched VNI drawn from one of them and reused in
     # another site collides with that site's own local segments. This band
-    # sits between them and the L3 VNIs above, so it can meet neither.
+    # sits above them, so it can meet neither those nor the fixed namespace
+    # L3 VNIs (60000-60003, set by hand in 22_namespaces.yml). No pool
+    # allocates L3 VNIs.
     - name: GLOBAL-L2VNI
       description: Global L2 VNI pool for stretched segments (one VNI per segment, every site)
       node: ManagedSegmentDeployment

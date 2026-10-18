@@ -34,7 +34,6 @@ spec:
             customer_name: "core-dns-ntp"
             description: "DC11 core infrastructure services (DNS, NTP)"
             environment: "p"
-            segment_role: management
             vlan_id: 250
             gateway:
               data:

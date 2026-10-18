@@ -85,3 +85,10 @@ infrahub_tests:
       - name: syntax_check
         spec:
           kind: check-smoke
+
+  - resource: Check
+    resource_name: validate_customer_quota
+    tests:
+      - name: syntax_check
+        spec:
+          kind: check-smoke

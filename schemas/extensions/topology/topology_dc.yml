@@ -470,11 +470,3 @@ nodes:
         identifier: "pod__prefix_pool"
         order_weight: 7000
         on_delete: cascade
-      - name: asn_pool
-        peer: CoreNumberPool
-        kind: Attribute
-        cardinality: one
-        optional: true
-        identifier: "pod__asn_pool"
-        order_weight: 7100
-        on_delete: cascade

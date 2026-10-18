@@ -696,15 +696,9 @@ class TestAllDemoData:
         (peering,) = [p for p in _external_handoffs() if p["name"] == "VRF-PROD-EQXFR2-SDWAN"]
         (gateway,) = [device for device, _ in peering["capabilities"] if not device.startswith("eg-")]
         behind: list[list[list[str]]] = []
-        for customer in _objects(
-            _ROOT / "data" / "demos" / "30_all" / "06_customer_boarding", "TopologyOfficeCustomer"
-        ):
-            for child in customer.get("children") or []:
-                if isinstance(child, dict) and child.get("kind") == "TopologyCustomerOffice":
-                    entries = child["data"]
-                    for office in entries if isinstance(entries, list) else [entries]:
-                        if office.get("sdwan_gateway") == gateway:
-                            behind.append(office.get("lan_prefixes") or [])
+        for office in _objects(_ROOT / "data" / "demos" / "30_all" / "06_customer_boarding", "TopologyCustomerOffice"):
+            if office.get("sdwan_gateway") == gateway:
+                behind.append(office.get("lan_prefixes") or [])
         registered = [prefix for office_lans in behind for prefix in office_lans]
         assert behind and registered
         assert {namespace for _, namespace in registered} == set(peering["namespaces"])

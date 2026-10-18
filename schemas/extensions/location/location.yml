@@ -65,11 +65,6 @@ nodes:
         unique: false
         optional: true
         order_weight: 1500
-      - name: is_cloud
-        kind: Boolean
-        optional: true
-        default_value: false
-        order_weight: 1600
     relationships:
       - name: owner
         peer: OrganizationGeneric
@@ -100,22 +95,6 @@ nodes:
         kind: Number
         optional: false
         order_weight: 120
-      - name: rows
-        label: "Number of Rows"
-        description: "Total number of rack rows in this suite"
-        kind: Number
-        optional: false
-        order_weight: 130
-        parameters:
-          min_value: 1
-      - name: racks_per_row
-        label: "Racks per Row"
-        description: "Number of racks per row in this suite"
-        kind: Number
-        optional: false
-        order_weight: 140
-        parameters:
-          min_value: 1
     relationships:
       - name: owner
         peer: OrganizationGeneric
@@ -198,13 +177,6 @@ nodes:
         identifier: "device_rack"
 extensions:
   nodes:
-    - kind: OrganizationProvider
-      relationships:
-        - name: location
-          peer: LocationFacility
-          cardinality: many
-          optional: true
-
     - kind: DcimPhysicalDevice
       relationships:
         - name: rack

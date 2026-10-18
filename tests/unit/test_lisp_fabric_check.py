@@ -50,15 +50,15 @@ def _office(**overrides: Any) -> dict[str, Any]:
     """
     office: dict[str, Any] = {
         "id": "office-1",
-        "name": "C005-P",
+        "name": "C005-OFFICE",
         "fabric_templates": ["tpl-1", "tpl-2"],
         "locations": [{"id": "loc-1", "name": "ams-branch"}],
         "lisp_site_key": {"id": "key-1"},
         "devices": [
-            _device("ds-c005-p01", "distribution-switch"),
-            _device("ds-c005-p02", "distribution-switch"),
-            _device("as-c005-p01", "access-switch"),
-            {**_device("C005-P-EDGE1", "edge", "velocloud"), "capabilities": [{"typename": "ManagedBGP"}]},
+            _device("ds-c005-office01", "distribution-switch"),
+            _device("ds-c005-office02", "distribution-switch"),
+            _device("as-c005-office01", "access-switch"),
+            {**_device("C005-OFFICE-EDGE1", "edge", "velocloud"), "capabilities": [{"typename": "ManagedBGP"}]},
         ],
         "segment_deployments": [{"vni": 10100, "segment": {"name": "web", "gateway": _gateway()}}],
     }
@@ -95,27 +95,27 @@ class TestOfficeFabric:
         """No opt-in, no rules: such an office has no fabric (only its SD-WAN edge)."""
         bare = _office(fabric_templates=[], devices=[], lisp_site_key=None, segment_deployments=[])
         assert _run_offices(bare) == []
-        assert _run_offices({"id": "o", "name": "C001-P", "locations": [{"id": "loc-1", "name": "x"}]}) == []
+        assert _run_offices({"id": "o", "name": "C001-OFFICE", "locations": [{"id": "loc-1", "name": "x"}]}) == []
 
     def test_office_without_distribution_switch_is_an_error(self) -> None:
-        errors = _run_offices(_office(devices=[_device("as-c005-p01", "access-switch")]))
+        errors = _run_offices(_office(devices=[_device("as-c005-office01", "access-switch")]))
         assert len(errors) == 1
-        assert "C005-P" in errors[0] and "0 distribution-switch" in errors[0]
+        assert "C005-OFFICE" in errors[0] and "0 distribution-switch" in errors[0]
 
     def test_an_sdwan_edge_without_a_bgp_process_means_the_wan_exit_is_missing(self) -> None:
         """The exit is built by add_office_fabric for the edge the office has; the edge's BGP process is its proof."""
-        bare = {**_device("C005-P-EDGE1", "edge", "velocloud"), "capabilities": [{"typename": "ManagedOSPF"}]}
+        bare = {**_device("C005-OFFICE-EDGE1", "edge", "velocloud"), "capabilities": [{"typename": "ManagedOSPF"}]}
         devices = [d for d in _office()["devices"] if d["role"] != "edge"]
 
         errors = _run_offices(_office(devices=[*devices, bare]))
 
         assert len(errors) == 1
-        assert "C005-P-EDGE1" in errors[0] and "no BGP process" in errors[0] and "WAN exit" in errors[0]
+        assert "C005-OFFICE-EDGE1" in errors[0] and "no BGP process" in errors[0] and "WAN exit" in errors[0]
 
     @pytest.mark.parametrize("capabilities", [None, []])
     def test_an_sdwan_edge_with_no_capabilities_at_all_is_the_same_error(self, capabilities: Any) -> None:
         devices = [d for d in _office()["devices"] if d["role"] != "edge"]
-        edge = {**_device("C005-P-EDGE1", "edge", "velocloud"), "capabilities": capabilities}
+        edge = {**_device("C005-OFFICE-EDGE1", "edge", "velocloud"), "capabilities": capabilities}
 
         errors = _run_offices(_office(devices=[*devices, edge]))
 
@@ -128,12 +128,12 @@ class TestOfficeFabric:
 
     def test_an_office_without_a_fabric_is_not_asked_for_an_exit(self) -> None:
         """C001-C003 and C015 are a single SD-WAN edge with no fabric: no LISP footprint, no rule."""
-        edge = {**_device("C001-P-EDGE1", "edge", "velocloud"), "capabilities": []}
+        edge = {**_device("C001-OFFICE-EDGE1", "edge", "velocloud"), "capabilities": []}
 
         assert _run_offices(_office(fabric_templates=[], devices=[edge])) == []
 
     def test_one_distribution_switch_is_enough(self) -> None:
-        assert _run_offices(_office(devices=[_device("ds-c005-p01", "distribution-switch")])) == []
+        assert _run_offices(_office(devices=[_device("ds-c005-office01", "distribution-switch")])) == []
 
     @pytest.mark.parametrize("role", ["access-switch", "distribution-switch"])
     @pytest.mark.parametrize("platform", ["arista_eos", None])
@@ -192,24 +192,24 @@ class TestOfficeFabric:
 
     def test_two_lisp_offices_in_one_building_are_both_errors(self) -> None:
         first = _office()
-        second = _office(id="office-2", name="C006-P")
+        second = _office(id="office-2", name="C006-OFFICE")
         errors = _run_offices(first, second)
         assert len(errors) == 2
-        assert any("C005-P" in e and "C006-P" in e and "ams-branch" in e for e in errors)
-        assert any(e.startswith("Office 'C006-P'") and "C005-P" in e for e in errors)
+        assert any("C005-OFFICE" in e and "C006-OFFICE" in e and "ams-branch" in e for e in errors)
+        assert any(e.startswith("Office 'C006-OFFICE'") and "C005-OFFICE" in e for e in errors)
 
     def test_lisp_offices_in_different_buildings_are_silent(self) -> None:
-        second = _office(id="office-2", name="C006-P", locations=[{"id": "loc-2", "name": "fra-hq"}])
+        second = _office(id="office-2", name="C006-OFFICE", locations=[{"id": "loc-2", "name": "fra-hq"}])
         assert _run_offices(_office(), second) == []
 
     def test_an_office_without_a_fabric_does_not_share_the_building(self) -> None:
         """Only footprints that run a fabric count: an SD-WAN-only office in the same building is fine."""
-        sdwan_only = {"id": "office-2", "name": "C006-P", "locations": [{"id": "loc-1", "name": "ams-branch"}]}
+        sdwan_only = {"id": "office-2", "name": "C006-OFFICE", "locations": [{"id": "loc-1", "name": "ams-branch"}]}
         assert _run_offices(_office(), sdwan_only) == []
 
     def test_a_footprint_with_several_buildings_is_checked_per_building(self) -> None:
         wide = _office(locations=[{"id": "loc-1", "name": "ams-branch"}, {"id": "loc-9", "name": "fra-hq"}])
-        other = _office(id="office-2", name="C006-P", locations=[{"id": "loc-9", "name": "fra-hq"}])
+        other = _office(id="office-2", name="C006-OFFICE", locations=[{"id": "loc-9", "name": "fra-hq"}])
         errors = _run_offices(wide, other)
         assert len(errors) == 2
         assert all("fra-hq" in e and "ams-branch" not in e for e in errors)
@@ -217,7 +217,7 @@ class TestOfficeFabric:
     def test_every_problem_is_its_own_error(self) -> None:
         office = _office(
             lisp_site_key=None,
-            devices=[_device("as-c005-p01", "access-switch", "arista_eos")],
+            devices=[_device("as-c005-office01", "access-switch", "arista_eos")],
             segment_deployments=[{"vni": 1, "segment": {"name": "a", "gateway": None}}],
         )
         # no distribution-switch, non-xe access-switch, site key, gatewayless segment

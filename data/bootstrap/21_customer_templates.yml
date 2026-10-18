@@ -1,22 +1,27 @@
 ---
-# Customer Deployment Templates - Boarding Blueprints
-# These define the reusable capacity/capability tiers applied when boarding
-# a customer into a DC.
-# Loaded at bootstrap time, referenced by TopologyCustomer* instances.
+# Customer Deployment Templates - DC service tiers
+# The reusable tiers a DC customer footprint picks with `design`. Loaded at
+# bootstrap time, referenced by TopologyCustomerDC instances.
 #
-# Naming convention: {SIZE}_{DEPLOYMENT_TYPE}
-#   size:            S, M, L, XL (t-shirt sizing — label only, see below)
-#   deployment_type: DC
+# Naming convention: {TIER}_DC (S_DC, M_DC, L_DC, XL_DC). S and M use the
+# shared firewall/load balancer capacity, L and XL are dedicated.
 #
-# size is a naming-convention label, not an enforced default:
-#   S  - shared firewall/LB/proxy, single network segment
-#   M  - shared firewall/LB/proxy, a few network segments
-#   L  - dedicated firewall and/or LB, several network segments
-#   XL - dedicated firewall, LB, and proxy; many network segments
+# What reads a row:
+#   dedicated_firewall / dedicated_loadbalancer - generators/firewall_context.py
+#   max_segments, ports_25g, ports_100g         - checks/customer_quota.py, an
+#     ERROR when a footprint with this design goes above them. A footprint
+#     without a design is not metered.
 #
-# What a generator reads is dedicated_firewall and dedicated_loadbalancer of
-# a DC footprint's design (generators/firewall_context.py); the rest of a tier
-# is its label.
+#   max_segments  network segments naming the footprint in customer_deployments
+#   ports_<n>g    host-facing leaf/access ports of that speed tagged with the
+#                 footprint's segments (0 = none of that speed allowed)
+#
+# The numbers are the highest use in data/demos/30_all (S: 1 segment, 4 x 25G;
+# M: 4 segments, 8 x 25G; L: 3 segments, 4 x 25G; XL: unused) with headroom: about
+# 1.5x the tier's highest use, at least one segment more, rounded to a clean number.
+# Every column grows from tier to tier (L doubles M, XL doubles L, whatever the
+# demo uses of them) so a larger tier is never entitled to less. No footprint
+# uses 100G host ports (the server NICs are 25G); the dedicated tiers allow some.
 
 apiVersion: infrahub.app/v1
 kind: Object
@@ -24,33 +29,33 @@ spec:
   kind: TopologyCustomerTemplateDC
   data:
     - name: "S_DC"
-      description: >
-        Small DC customer footprint. Shared firewall/LB/proxy capacity,
-        single network segment.
-      size: "s"
+      description: "Shared firewall/LB. Up to 2 segments, 6 x 25G host ports."
       dedicated_firewall: false
       dedicated_loadbalancer: false
+      max_segments: 2
+      ports_25g: 6
+      ports_100g: 0
 
     - name: "M_DC"
-      description: >
-        Medium DC customer footprint. Shared firewall/LB/proxy capacity,
-        a few network segments.
-      size: "m"
+      description: "Shared firewall/LB. Up to 6 segments, 12 x 25G host ports."
       dedicated_firewall: false
       dedicated_loadbalancer: false
+      max_segments: 6
+      ports_25g: 12
+      ports_100g: 0
 
     - name: "L_DC"
-      description: >
-        Large DC customer footprint. Dedicated firewall and load balancer,
-        several network segments.
-      size: "l"
+      description: "Dedicated firewall and LB. Up to 12 segments, 24 x 25G and 4 x 100G host ports."
       dedicated_firewall: true
       dedicated_loadbalancer: true
+      max_segments: 12
+      ports_25g: 24
+      ports_100g: 4
 
     - name: "XL_DC"
-      description: >
-        Extra large DC customer footprint. Dedicated firewall, load balancer,
-        and proxy; many network segments.
-      size: "xl"
+      description: "Dedicated firewall and LB. Up to 24 segments, 48 x 25G and 8 x 100G host ports."
       dedicated_firewall: true
       dedicated_loadbalancer: true
+      max_segments: 24
+      ports_25g: 48
+      ports_100g: 8

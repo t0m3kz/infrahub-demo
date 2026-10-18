@@ -66,8 +66,8 @@ query vxlan_segment_data($name: String!) {
                 }
               }
               # An office hosts its own segments (it is TopologySegmentHosting), so
-              # the pool is on the footprint itself — its parent, the OfficeCustomer
-              # grouping node, hosts nothing. The key's presence is how
+              # the pool is on the footprint itself — its parent, the "Campus and
+              # Office" label, hosts nothing. The key's presence is how
               # generators/topology/segment.py tells the two shapes apart.
               ... on TopologyCustomerOffice {
                 vni_pool { node { id name { value } } }

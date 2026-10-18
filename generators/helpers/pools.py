@@ -39,7 +39,7 @@ CUSTOMER_VLAN_ID_MAX = 2999
 
 # L2 VNI band of every site's own "{site}-vni-pool" (a DC's, a colocation metro's, an
 # office's). Why 39999: see the comment at dc.py's vni pool (16-bit RD/RT ceiling, disjoint
-# from the 50001-59999 L3 VNI range and from GLOBAL-L2VNI's 40000-49999).
+# from the fixed L3 VNIs 60000-60003 and transit band 61000+, and from GLOBAL-L2VNI's 40000-49999).
 SITE_VNI_START = 10001
 SITE_VNI_END = 39999
 

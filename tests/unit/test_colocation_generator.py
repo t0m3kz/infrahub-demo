@@ -474,7 +474,7 @@ class TestPools:
         assert metro.management_pool == {"id": "id-fr-management-pool"}
         assert metro.technical_pool == {"id": "id-fr-technical-pool"}
         # The ASN and VNI pools ride the same single save.
-        assert metro.asn_pool == {"id": "asn-pool"}
+        assert metro.fabric_asn_pool == {"id": "asn-pool"}
         assert metro.vni_pool == {"id": "vni-pool"}
         metro.save.assert_awaited_once_with(update_group_context=False)
         gen.client.get.assert_awaited_once()

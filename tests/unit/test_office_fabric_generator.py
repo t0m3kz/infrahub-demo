@@ -108,15 +108,14 @@ def _make_generator(*, wan_exit: bool = False) -> Any:
 
 async def _fake_names(*, device_role: str, quantity: int, **_: Any) -> list[str]:
     code = {"access-switch": "as", "distribution-switch": "ds"}[device_role]
-    return [f"{code}-c005-p{n:02d}" for n in range(1, quantity + 1)]
+    return [f"{code}-c005-office{n:02d}" for n in range(1, quantity + 1)]
 
 
 def _office(**overrides: Any) -> dict[str, Any]:
     office: dict[str, Any] = {
         "id": "office-1",
-        "name": "C005-P",
+        "name": "C005-OFFICE",
         "naming_convention": "standard",
-        "environment": "p",
         "sdwan_gateway": {"id": "gw-1"},
         "fabric_templates": [_DISTRIBUTION_ENTRY, _ACCESS_ENTRY],
     }
@@ -144,7 +143,6 @@ def _payload(*offices: dict[str, Any]) -> dict[str, Any]:
                         "id": office["id"],
                         "name": {"value": office["name"]},
                         "naming_convention": {"value": office["naming_convention"]},
-                        "environment": {"value": office["environment"]},
                         "sdwan_gateway": {"node": office["sdwan_gateway"]},
                         "fabric_templates": {"edges": [_entry(e) for e in office["fabric_templates"]]},
                     }
@@ -163,12 +161,12 @@ class TestRoles:
 
     @pytest.mark.parametrize(
         ("role", "expected"),
-        [("distribution-switch", "ds-c005-p01"), ("access-switch", "as-c005-p01")],
+        [("distribution-switch", "ds-c005-office01"), ("access-switch", "as-c005-office01")],
     )
     def test_standard_names_carry_the_role_code_and_the_office(self, role: str, expected: str) -> None:
         """create_devices() names a flat office device "{role code}-{office}{NN}"."""
         name = DeviceNamingConfig(strategy="standard").format_device_name(
-            DeviceNameContext.from_indexes(fabric_name="c005-p", device_role=role, role_index=1, indexes=[])
+            DeviceNameContext.from_indexes(fabric_name="c005-office", device_role=role, role_index=1, indexes=[])
         )
         assert name == expected
 
@@ -176,7 +174,7 @@ class TestRoles:
 class TestFabricTemplateValidation:
     def _gen(self, entries: list[dict[str, Any]]) -> Any:
         gen = _make_generator()
-        gen.fabric_name = "c005-p"
+        gen.fabric_name = "c005-office"
         gen.data = _office(fabric_templates=entries)
         return gen
 
@@ -230,29 +228,29 @@ class TestPools:
     @pytest.mark.asyncio
     async def test_slices_each_bootstrap_pool_under_the_office_name(self) -> None:
         gen = _make_generator()
-        gen.fabric_name = "c005-p"
+        gen.fabric_name = "c005-office"
 
         pools = await gen._ensure_office_pools(office_id="office-1")
 
         calls = {call.kwargs["pool_name"]: call.kwargs for call in gen.ensure_sliced_pool.await_args_list}
         assert calls == {
-            "c005-p-loopback-pool": {
-                "pool_name": "c005-p-loopback-pool",
+            "c005-office-loopback-pool": {
+                "pool_name": "c005-office-loopback-pool",
                 "parent_pool_name": "Loopback-IPv4",
                 "prefix_length": _OFFICE_LOOPBACK_PREFIX_LENGTH,
                 "role": "loopback",
                 "kind": "address",
             },
-            "c005-p-management-pool": {
-                "pool_name": "c005-p-management-pool",
+            "c005-office-management-pool": {
+                "pool_name": "c005-office-management-pool",
                 "parent_pool_name": "Management-IPv4",
                 "prefix_length": _OFFICE_MANAGEMENT_PREFIX_LENGTH,
                 "role": "management",
                 "kind": "address",
                 "namespace": "MANAGEMENT",
             },
-            "c005-p-technical-pool": {
-                "pool_name": "c005-p-technical-pool",
+            "c005-office-technical-pool": {
+                "pool_name": "c005-office-technical-pool",
                 "parent_pool_name": "Technical-IPv4",
                 "prefix_length": _OFFICE_TECHNICAL_PREFIX_LENGTH,
                 "role": "technical",
@@ -265,12 +263,12 @@ class TestPools:
     async def test_vni_pool_is_the_offices_own_and_attached_as_vni_pool(self) -> None:
         """The pool add_vxlan_segment reads off the office (TopologySegmentHosting.vni_pool)."""
         gen = _make_generator()
-        gen.fabric_name = "c005-p"
+        gen.fabric_name = "c005-office"
 
         await gen._ensure_office_pools(office_id="office-1")
 
         vni = gen.upsert_number_pool.await_args.kwargs
-        assert vni["pool_name"] == "c005-p-vni-pool"
+        assert vni["pool_name"] == "c005-office-vni-pool"
         assert (vni["node"], vni["node_attribute"]) == ("ManagedSegmentDeployment", "vni")
         assert (vni["start_range"], vni["end_range"]) == (10001, 39999)
         gen.attach_refs.assert_awaited_once_with(
@@ -280,7 +278,7 @@ class TestPools:
     @pytest.mark.asyncio
     async def test_pools_are_created_under_a_per_office_lock(self) -> None:
         gen = _make_generator()
-        gen.fabric_name = "c005-p"
+        gen.fabric_name = "c005-office"
         keys: list[str] = []
 
         @asynccontextmanager
@@ -299,7 +297,7 @@ class TestDevices:
     @pytest.mark.asyncio
     async def test_every_entry_becomes_devices_of_its_role_with_loopback_and_pools(self) -> None:
         gen = _make_generator()
-        gen.fabric_name = "c005-p"
+        gen.fabric_name = "c005-office"
         gen.data = _office()
         pools = {"loopback": MagicMock(), "management": MagicMock(), "technical": MagicMock()}
 
@@ -308,8 +306,8 @@ class TestDevices:
         )
 
         assert names == {
-            "distribution-switch": ["ds-c005-p01", "ds-c005-p02"],
-            "access-switch": ["as-c005-p01", "as-c005-p02"],
+            "distribution-switch": ["ds-c005-office01", "ds-c005-office02"],
+            "access-switch": ["as-c005-office01", "as-c005-office02"],
         }
         by_role = {call.kwargs["device_role"]: call.kwargs for call in gen.create_devices.await_args_list}
         for role, entry in (("distribution-switch", _DISTRIBUTION_ENTRY), ("access-switch", _ACCESS_ENTRY)):
@@ -330,7 +328,7 @@ class TestDevices:
     @pytest.mark.asyncio
     async def test_naming_convention_comes_from_the_office(self) -> None:
         gen = _make_generator()
-        gen.fabric_name = "c005-p"
+        gen.fabric_name = "c005-office"
         gen.data = _office(naming_convention="Flat")
         pools = {"loopback": MagicMock(), "management": MagicMock(), "technical": MagicMock()}
 
@@ -342,7 +340,7 @@ class TestDevices:
 class TestCabling:
     def _gen(self) -> Any:
         gen = _make_generator()
-        gen.fabric_name = "c005-p"
+        gen.fabric_name = "c005-office"
         return gen
 
     @pytest.mark.asyncio
@@ -352,15 +350,15 @@ class TestCabling:
 
         await gen._cable_office_fabric(
             templates=[_DISTRIBUTION_ENTRY, _ACCESS_ENTRY],
-            access_names=["as-c005-p01", "as-c005-p02"],
-            distribution_names=["ds-c005-p01", "ds-c005-p02"],
+            access_names=["as-c005-office01", "as-c005-office02"],
+            distribution_names=["ds-c005-office01", "ds-c005-office02"],
             technical_pool=pool,
         )
 
         kwargs = gen.create_cabling.await_args.kwargs
-        assert kwargs["bottom_devices"] == ["as-c005-p01", "as-c005-p02"]
+        assert kwargs["bottom_devices"] == ["as-c005-office01", "as-c005-office02"]
         assert kwargs["bottom_interfaces"] == ["HundredGigE1/1/1", "HundredGigE1/1/2"]
-        assert kwargs["top_devices"] == ["ds-c005-p01", "ds-c005-p02"]
+        assert kwargs["top_devices"] == ["ds-c005-office01", "ds-c005-office02"]
         assert kwargs["top_interfaces"] == ["HundredGigE1/0/1", "HundredGigE1/0/2"]
         # every access-switch dual-homed to every distribution-switch
         assert kwargs["strategy"] == "rack"
@@ -374,15 +372,15 @@ class TestCabling:
 
         pairs = await gen._cable_office_fabric(
             templates=[_DISTRIBUTION_ENTRY, _ACCESS_ENTRY],
-            access_names=["as-c005-p01"],
-            distribution_names=["ds-c005-p02", "ds-c005-p01"],
+            access_names=["as-c005-office01"],
+            distribution_names=["ds-c005-office02", "ds-c005-office01"],
             technical_pool=pool,
         )
 
         hops = gen.create_chain_cabling.await_args.kwargs["hops"]
         assert hops == [
-            {"devices": ["ds-c005-p01"], "down_role": "interlink"},
-            {"devices": ["ds-c005-p02"], "up_role": "interlink"},
+            {"devices": ["ds-c005-office01"], "down_role": "interlink"},
+            {"devices": ["ds-c005-office02"], "up_role": "interlink"},
         ]
         assert gen.create_chain_cabling.await_args.kwargs["options"]["pool"] is pool
         # the routing planner gets both the uplinks and the interlink
@@ -395,8 +393,8 @@ class TestCabling:
 
         await gen._cable_office_fabric(
             templates=[_DISTRIBUTION_ENTRY, _ACCESS_ENTRY],
-            access_names=["as-c005-p01"],
-            distribution_names=[f"ds-c005-p0{n}" for n in range(1, count + 1)],
+            access_names=["as-c005-office01"],
+            distribution_names=[f"ds-c005-office0{n}" for n in range(1, count + 1)],
             technical_pool=MagicMock(),
         )
 
@@ -409,8 +407,8 @@ class TestCabling:
 
         pairs = await gen._cable_office_fabric(
             templates=[_DISTRIBUTION_ENTRY, _ACCESS_ENTRY],
-            access_names=["as-c005-p01"],
-            distribution_names=["ds-c005-p01", "ds-c005-p02"],
+            access_names=["as-c005-office01"],
+            distribution_names=["ds-c005-office01", "ds-c005-office02"],
             technical_pool=MagicMock(),
         )
 
@@ -436,8 +434,8 @@ class TestCabling:
 
         pairs = await gen._cable_office_fabric(
             templates=templates,
-            access_names=["as-c005-p01"],
-            distribution_names=["ds-c005-p01"],
+            access_names=["as-c005-office01"],
+            distribution_names=["ds-c005-office01"],
             technical_pool=MagicMock(),
         )
 
@@ -453,7 +451,7 @@ class TestCabling:
         pairs = await gen._cable_office_fabric(
             templates=[_DISTRIBUTION_ENTRY],
             access_names=[],
-            distribution_names=["ds-c005-p01", "ds-c005-p02"],
+            distribution_names=["ds-c005-office01", "ds-c005-office02"],
             technical_pool=MagicMock(),
         )
 
@@ -494,11 +492,11 @@ class TestGenerate:
             "ensure_lisp_site_key",
             "_ensure_wan_exit",
         ]
-        assert (gen.fabric_name, gen.pod_name, gen.deployment_id) == ("c005-p", None, "office-1")
+        assert (gen.fabric_name, gen.pod_name, gen.deployment_id) == ("c005-office", None, "office-1")
 
         routing = gen.create_routing.await_args.kwargs
-        assert routing["bottom_devices"] == ["as-c005-p01", "as-c005-p02"]
-        assert routing["top_devices"] == ["ds-c005-p01", "ds-c005-p02"]
+        assert routing["bottom_devices"] == ["as-c005-office01", "as-c005-office02"]
+        assert routing["top_devices"] == ["ds-c005-office01", "ds-c005-office02"]
         assert routing["bottom_role"] == "access-switch"
         assert routing["top_role"] == "distribution-switch"
         assert routing["p2p_interfaces"] == [("a", "b"), ("x", "y")]
@@ -509,7 +507,7 @@ class TestGenerate:
         gen.ensure_lisp_site_key.assert_awaited_once_with(deployment_id="office-1")
         # the exit is built toward the distribution pair, from its own template's ports
         gen._ensure_wan_exit.assert_awaited_once_with(
-            distribution_names=["ds-c005-p01", "ds-c005-p02"], distribution_template=_DISTRIBUTION_TEMPLATE
+            distribution_names=["ds-c005-office01", "ds-c005-office02"], distribution_template=_DISTRIBUTION_TEMPLATE
         )
         gen.logger.error.assert_not_called()
 
@@ -560,13 +558,13 @@ class TestGenerate:
     @pytest.mark.asyncio
     async def test_each_office_of_the_response_is_generated_with_its_own_names(self) -> None:
         gen = _make_generator()
-        other = _office(id="office-2", name="C002-P")
+        other = _office(id="office-2", name="C002-OFFICE")
 
         await gen.generate(_payload(_office(), other))
 
         assert gen.create_routing.await_count == 2
         assert [call.kwargs["node_id"] for call in gen.attach_refs.await_args_list] == ["office-1", "office-2"]
-        assert gen.fabric_name == "c002-p"
+        assert gen.fabric_name == "c002-office"
 
 
 def _named(obj_id: str, name: str) -> MagicMock:
@@ -584,19 +582,19 @@ def _port(port_id: str, name: str, device_id: str, device_name: str, role: str) 
     return port
 
 
-_EDGE = "C005-P-EDGE1"
+_EDGE = "C005-OFFICE-EDGE1"
 
 
 class _WanExit:
     """A generator wired for the real WAN exit step, and the mocks it talks to."""
 
-    def __init__(self, *, environment: str = "p", sdwan_gateway: bool = True, edge_present: bool = True) -> None:
+    def __init__(self, *, sdwan_gateway: bool = True, edge_present: bool = True) -> None:
         self.gen = _make_generator(wan_exit=True)
-        self.gen.fabric_name = "c005-p"
-        self.gen.data = _office(environment=environment, sdwan_gateway={"id": "gw-1"} if sdwan_gateway else None)
+        self.gen.fabric_name = "c005-office"
+        self.gen.data = _office(sdwan_gateway={"id": "gw-1"} if sdwan_gateway else None)
         self.created: list[dict[str, Any]] = []
         self.edge = MagicMock(id="edge-id")
-        self.namespace = _named("ns-id", {"p": "PROD"}.get(environment, "NON-PROD"))
+        self.namespace = _named("ns-id", "PROD")
         self.edge_ports = [_named("p1", "GE3"), _named("p2", "GE4")]
         self.loopbacks = [
             self._loopback("ds-id-1", "lo-ip-1"),
@@ -634,7 +632,7 @@ class _WanExit:
 
     @staticmethod
     def _switch_port(index: int) -> MagicMock:
-        return _port(f"s-{index}", "GigabitEthernet1/0/26", f"ds-id-{index}", f"ds-c005-p0{index}", "uplink")
+        return _port(f"s-{index}", "GigabitEthernet1/0/26", f"ds-id-{index}", f"ds-c005-office0{index}", "uplink")
 
     @staticmethod
     def _loopback(device_id: str, ip_id: str) -> MagicMock:
@@ -656,7 +654,7 @@ class _WanExit:
     async def run(self, template: dict[str, Any] = _DISTRIBUTION_TEMPLATE) -> None:
         with self.sleep:
             await self.gen._ensure_wan_exit(
-                distribution_names=["ds-c005-p01", "ds-c005-p02"], distribution_template=template
+                distribution_names=["ds-c005-office01", "ds-c005-office02"], distribution_template=template
             )
 
     def processes(self) -> dict[str, dict[str, Any]]:
@@ -681,7 +679,7 @@ class TestWanExit:
         kwargs = exit_.gen.create_cabling.await_args.kwargs
         assert kwargs["bottom_devices"] == [_EDGE]
         assert kwargs["bottom_interfaces"] == ["GE3", "GE4"]
-        assert kwargs["top_devices"] == ["ds-c005-p01", "ds-c005-p02"]
+        assert kwargs["top_devices"] == ["ds-c005-office01", "ds-c005-office02"]
         assert kwargs["top_interfaces"] == ["GigabitEthernet1/0/26"]
         assert kwargs["strategy"] == "rack"
         # no technical pool: the link's addresses are the tenant-VRF ones on the sub-interfaces
@@ -693,7 +691,7 @@ class TestWanExit:
 
         await exit_.run()
 
-        assert sdwan_edge_name("C005-P") == _EDGE
+        assert sdwan_edge_name("C005-OFFICE") == _EDGE
         assert exit_.filter_calls("DcimPhysicalDevice") == [{"name__values": [_EDGE]}]
 
     @pytest.mark.asyncio
@@ -722,7 +720,7 @@ class TestWanExit:
 
         calls = [c.kwargs for c in exit_.gen.ensure_vlan_subinterface.await_args_list]
         assert [(c["device_name"], c["device_id"], c["vlan_id_value"], c["role"]) for c in calls[:2]] == [
-            ("ds-c005-p01", "ds-id-1", 3800, "uplink"),
+            ("ds-c005-office01", "ds-id-1", 3800, "uplink"),
             (_EDGE, "edge-id", 3800, "downlink"),
         ]
         # the switch takes the lower address, the edge the upper
@@ -733,15 +731,16 @@ class TestWanExit:
         assert all("capability_obj" not in c for c in calls)
 
     @pytest.mark.asyncio
-    async def test_a_non_prod_office_exits_in_the_non_prod_vrf_with_its_own_tag(self) -> None:
-        exit_ = _WanExit(environment="n")
+    async def test_an_office_always_exits_in_the_prod_vrf_with_the_prod_tag(self) -> None:
+        """An office has no environment: its exit is the PROD namespace's, never a NON-PROD one."""
+        exit_ = _WanExit()
 
         await exit_.run()
 
-        assert wan_exit_vlan("non_prod") == 3801
-        assert {c.kwargs["vlan_id_value"] for c in exit_.gen.ensure_vlan_subinterface.await_args_list} == {3801}
-        assert exit_.filter_calls("CoreIPPrefixPool") == [{"name__value": "FW-Transit-NON-PROD-IPv4"}]
-        assert exit_.filter_calls("IpamNamespace") == [{"namespace_type__value": "non_prod"}]
+        assert wan_exit_vlan("prod") == 3800
+        assert {c.kwargs["vlan_id_value"] for c in exit_.gen.ensure_vlan_subinterface.await_args_list} == {3800}
+        assert exit_.filter_calls("CoreIPPrefixPool") == [{"name__value": "FW-Transit-PROD-IPv4"}]
+        assert exit_.filter_calls("IpamNamespace") == [{"namespace_type__value": "prod"}]
 
     @pytest.mark.asyncio
     async def test_one_process_per_switch_and_one_on_the_edge_all_regular_and_tracked(self) -> None:
@@ -750,16 +749,20 @@ class TestWanExit:
         await exit_.run()
 
         processes = exit_.processes()
-        assert set(processes) == {"ds-c005-p01-bgp-wan-exit", "ds-c005-p02-bgp-wan-exit", f"{_EDGE}-bgp-wan-exit"}
+        assert set(processes) == {
+            "ds-c005-office01-bgp-wan-exit",
+            "ds-c005-office02-bgp-wan-exit",
+            f"{_EDGE}-bgp-wan-exit",
+        }
         assert {p["process_role"] for p in processes.values()} == {"regular"}
-        switch = processes["ds-c005-p01-bgp-wan-exit"]
+        switch = processes["ds-c005-office01-bgp-wan-exit"]
         assert switch["capabilities"] == [{"id": "ds-id-1"}]
         assert switch["router_id"] == {"id": "lo-ip-1"}  # the switch's Loopback0
-        assert switch["local_as"] == {"id": "as[c005-p WAN exit ASN]"}
+        assert switch["local_as"] == {"id": "as[c005-office WAN exit ASN]"}
         edge = processes[f"{_EDGE}-bgp-wan-exit"]
         assert edge["capabilities"] == [{"id": "edge-id"}]
         assert edge["router_id"] == {"id": "eg-prefix-wan-exit__e-1__s-1"}  # no loopback: its first handoff address
-        assert edge["local_as"] == {"id": "as[c005-p SD-WAN edge ASN]"}
+        assert edge["local_as"] == {"id": "as[c005-office SD-WAN edge ASN]"}
 
     @pytest.mark.asyncio
     async def test_the_two_as_numbers_are_found_by_description_before_one_is_drawn(self) -> None:
@@ -770,8 +773,8 @@ class TestWanExit:
 
         calls = exit_.gen.ensure_shared_as.await_args_list
         assert [c.kwargs for c in calls] == [
-            {"description": "c005-p WAN exit ASN", "asn_pool_id": "asn-pool-id"},
-            {"description": "c005-p SD-WAN edge ASN", "asn_pool_id": "asn-pool-id"},
+            {"description": "c005-office WAN exit ASN", "asn_pool_id": "asn-pool-id"},
+            {"description": "c005-office SD-WAN edge ASN", "asn_pool_id": "asn-pool-id"},
         ]
         exit_.gen.client.get.assert_awaited_once()
         assert exit_.gen.client.get.await_args.kwargs["name__value"] == "PRIVATE-ASN32"
@@ -784,7 +787,10 @@ class TestWanExit:
         await exit_.run()
 
         calls = [c.kwargs for c in exit_.gen.upsert_bgp_peering.await_args_list]
-        assert [c["name"] for c in calls] == [f"WAN-EXIT-ds-c005-p01-{_EDGE}", f"WAN-EXIT-ds-c005-p02-{_EDGE}"]
+        assert [c["name"] for c in calls] == [
+            f"WAN-EXIT-ds-c005-office01-{_EDGE}",
+            f"WAN-EXIT-ds-c005-office02-{_EDGE}",
+        ]
         for call, index in zip(calls, (1, 2)):
             assert call["session_type"] == "EBGP"
             assert call["peering_role"] == "regular"
@@ -792,7 +798,7 @@ class TestWanExit:
             assert call["address_family_ids"] == ["af-ipv4"]
             assert call["password_id"] == "key-id"
             assert call["process_ids"] == [
-                f"ManagedBGP-ds-c005-p0{index}-bgp-wan-exit",
+                f"ManagedBGP-ds-c005-office0{index}-bgp-wan-exit",
                 f"ManagedBGP-{_EDGE}-bgp-wan-exit",
             ]
             assert call["interface_ids"] == [f"sub-ds-id-{index}", "sub-edge-id"]
@@ -830,7 +836,7 @@ class TestWanExit:
         await exit_.run()
 
         exit_.gen._ensure_routing_password.assert_awaited_once()
-        assert exit_.gen._ensure_routing_password.await_args.kwargs["name"] == "c005-p-wan-exit-key"
+        assert exit_.gen._ensure_routing_password.await_args.kwargs["name"] == "c005-office-wan-exit-key"
 
     @pytest.mark.asyncio
     async def test_a_rerun_asks_for_the_same_identifiers_and_names(self) -> None:
@@ -872,7 +878,7 @@ class TestWanExitSkips:
 
         with patch("generators.topology.office_fabric.asyncio.sleep", new=sleep):
             await exit_.gen._ensure_wan_exit(
-                distribution_names=["ds-c005-p01"], distribution_template=_DISTRIBUTION_TEMPLATE
+                distribution_names=["ds-c005-office01"], distribution_template=_DISTRIBUTION_TEMPLATE
             )
 
         sleep.assert_not_awaited()
@@ -887,7 +893,7 @@ class TestWanExitSkips:
 
         with patch("generators.topology.office_fabric.asyncio.sleep", new=sleep):
             await exit_.gen._ensure_wan_exit(
-                distribution_names=["ds-c005-p01"], distribution_template=_DISTRIBUTION_TEMPLATE
+                distribution_names=["ds-c005-office01"], distribution_template=_DISTRIBUTION_TEMPLATE
             )
 
         assert exit_.gen.client.filters.await_count == _EDGE_WAIT_ATTEMPTS
@@ -970,7 +976,7 @@ class TestWanExitSkips:
 
         exit_.gen.logger.warning.assert_called()
         peerings = [c.kwargs["name"] for c in exit_.gen.upsert_bgp_peering.await_args_list]
-        assert peerings == [f"WAN-EXIT-ds-c005-p02-{_EDGE}"]
+        assert peerings == [f"WAN-EXIT-ds-c005-office02-{_EDGE}"]
 
     @pytest.mark.asyncio
     async def test_a_switch_without_an_addressed_loopback_gets_no_session(self) -> None:
@@ -980,10 +986,10 @@ class TestWanExitSkips:
         await exit_.run()
 
         exit_.gen.logger.warning.assert_called()
-        assert "ds-c005-p01" in exit_.gen.logger.warning.call_args.args[0]
+        assert "ds-c005-office01" in exit_.gen.logger.warning.call_args.args[0]
         peerings = [c.kwargs["name"] for c in exit_.gen.upsert_bgp_peering.await_args_list]
-        assert peerings == [f"WAN-EXIT-ds-c005-p02-{_EDGE}"]
-        assert "ds-c005-p01-bgp-wan-exit" not in exit_.processes()
+        assert peerings == [f"WAN-EXIT-ds-c005-office02-{_EDGE}"]
+        assert "ds-c005-office01-bgp-wan-exit" not in exit_.processes()
 
     @pytest.mark.asyncio
     async def test_no_key_means_no_session(self) -> None:

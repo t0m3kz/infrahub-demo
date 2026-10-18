@@ -163,4 +163,4 @@ def test_sdwan_edge_name_is_the_one_spelling_both_office_generators_share() -> N
     """add_sdwan_edge creates `<office>-EDGE1`; add_office_fabric looks the same name up to build the WAN exit."""
     from generators.helpers.naming import sdwan_edge_name
 
-    assert sdwan_edge_name("C005-P") == "C005-P-EDGE1"
+    assert sdwan_edge_name("C005-OFFICE") == "C005-OFFICE-EDGE1"

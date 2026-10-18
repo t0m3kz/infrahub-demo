@@ -375,8 +375,8 @@ class VxlanSegmentGenerator(PoolMixin, CablingMixin, VlanDomainMixin, CommonGene
         VLAN/VNI pools and SegmentDeployment records live on that node: the
         footprint's parent (TopologyDataCenter / TopologyColocationMetro) for a
         CustomerDC/CustomerColocation, the footprint itself for a
-        CustomerOffice, which is SegmentHosting in its own right (its parent,
-        the OfficeCustomer grouping node, hosts nothing). The query selects
+        CustomerOffice, which is SegmentHosting in its own right (its parent
+        is only the "Campus and Office" label, which hosts nothing). The query selects
         ``vni_pool`` on the footprint only where the footprint hosts itself —
         its presence is the signal, whether the pool is set yet or not — the
         same rule as transforms/helpers/segments.py's segment_hosting_candidates.

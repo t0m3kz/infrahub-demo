@@ -33,15 +33,8 @@ query topology_orchestrator_routing_data($name: String!) {
         __typename
         id
         name { value }
-        environment { value }
         infrastructure_orchestrator { value }
-        parent {
-          node {
-            ... on TopologyOfficeCustomer {
-              owner { node { org_id { value } } }
-            }
-          }
-        }
+        owner { node { org_id { value } } }
       }
     }
   }
@@ -52,7 +45,6 @@ query topology_orchestrator_routing_data($name: String!) {
         __typename
         id
         name { value }
-        environment { value }
         infrastructure_orchestrator { value }
         owner { node { org_id { value } } }
         parent { node { name { value } } }

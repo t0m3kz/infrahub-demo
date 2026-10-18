@@ -131,7 +131,6 @@ nodes:
     inherit_from:
       - ManagedGeneric
       - ManagedGenericDevice
-      - ManagedRouting
     attributes:
       - name: process_id
         kind: Text
@@ -279,13 +278,6 @@ extensions:
   nodes:
     - kind: RoutingOSPFInterface
       relationships:
-        - name: ospf_services
-          label: OSPF Services
-          kind: Generic
-          cardinality: many
-          optional: true
-          peer: ManagedOSPF
-          order_weight: 2000
         - name: peering
           peer: ManagedOSPFPeering
           label: "OSPF Peering"

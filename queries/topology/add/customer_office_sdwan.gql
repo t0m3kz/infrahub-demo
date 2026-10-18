@@ -4,20 +4,12 @@ query customer_office_sdwan($name: String!) {
       node {
         id
         name { value }
-        environment { value }
         branch_to_branch { value }
-        parent {
+        owner {
           node {
             id
-            ... on TopologyOfficeCustomer {
-              owner {
-                node {
-                  id
-                  ... on OrganizationCustomer {
-                    name { value }
-                  }
-                }
-              }
+            ... on OrganizationCustomer {
+              name { value }
             }
           }
         }

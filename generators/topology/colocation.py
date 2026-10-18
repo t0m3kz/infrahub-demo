@@ -164,7 +164,7 @@ class TopologyColocationMetroData(TypedDict, total=False):
     loopback_pool: dict[str, Any] | None
     technical_pool: dict[str, Any] | None
     management_pool: dict[str, Any] | None
-    asn_pool: dict[str, Any] | None
+    fabric_asn_pool: dict[str, Any] | None
     fabric_templates: list[dict[str, Any]]
 
 
@@ -426,7 +426,7 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
                 "loopback_pool": loopback_pool.id,
                 "management_pool": management_pool.id,
                 "technical_pool": technical_pool.id,
-                "asn_pool": asn_pool.id,
+                "fabric_asn_pool": asn_pool.id,
                 "vni_pool": vni_pool.id,
             },
         )

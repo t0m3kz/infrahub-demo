@@ -22,11 +22,7 @@ spec:
                   index: 1
                   shortname: "rom-1-s-1"
                   parent: rom-1
-                  rows: 2
-                  racks_per_row: 2
                 - suite_name: "Suite-2"
                   index: 2
                   shortname: "rom-1-s-2"
                   parent: rom-1
-                  rows: 2
-                  racks_per_row: 1

@@ -87,7 +87,7 @@ spec:
             member_of_groups:
               - vxlan_segments
 
-        # Hosted by the C005-P office footprint itself, not by a DC: the office is a LISP site (SD-Access
+        # Hosted by the C005-OFFICE footprint itself, not by a DC: the office is a LISP site (SD-Access
         # style, add_office_fabric), so this is an L2 instance-id (VNI from the office's own pool) and an L3
         # EID in VRF PROD on its access and distribution switches. Local, like web-frontend-local-dc10: it
         # is never stretched.
@@ -96,6 +96,6 @@ spec:
             customer_name: "office-lan"
             environment: "p"
             customer_deployments:
-              - "C005-P"
+              - "C005-OFFICE"
             member_of_groups:
               - vxlan_segments

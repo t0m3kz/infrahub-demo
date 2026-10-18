@@ -357,7 +357,7 @@ class TestVxlanSegmentGeneratorGenerate:
         gen._activate_segment_in_deployment = AsyncMock()
         gen._create_inline_sub_interfaces = AsyncMock()
 
-        office_no_pool = {"id": "office-1", "name": "C005-P", "vni_pool": None}
+        office_no_pool = {"id": "office-1", "name": "C005-OFFICE", "vni_pool": None}
         data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[office_no_pool])
         asyncio.run(gen.generate(data))
 
@@ -371,15 +371,19 @@ class TestVxlanSegmentGeneratorGenerate:
         gen._activate_segment_in_deployment = AsyncMock(return_value=True)
         gen._create_inline_sub_interfaces = AsyncMock()
 
-        office = {"id": "office-1", "name": "C005-P", "vni_pool": {"id": "pool-office", "name": "c005-p-vni-pool"}}
+        office = {
+            "id": "office-1",
+            "name": "C005-OFFICE",
+            "vni_pool": {"id": "pool-office", "name": "c005-office-vni-pool"},
+        }
         data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[office])
         asyncio.run(gen.generate(data))
 
         gen.wait_for_parent_generator_and_refetch.assert_not_awaited()
         call = gen._activate_segment_in_deployment.call_args
         assert call.kwargs["deployment_id"] == "office-1"
-        assert call.kwargs["deployment_name"] == "C005-P"
-        assert call.kwargs["vni_pool"] == {"id": "pool-office", "name": "c005-p-vni-pool"}
+        assert call.kwargs["deployment_name"] == "C005-OFFICE"
+        assert call.kwargs["vni_pool"] == {"id": "pool-office", "name": "c005-office-vni-pool"}
 
     def test_refetched_data_is_reparsed_when_parent_was_in_flight(self):
         """If add_dc was in-flight, the refreshed data (now carrying the
@@ -504,9 +508,9 @@ class TestResolveHostingParent:
 
     def test_office_hosts_itself(self):
         """CustomerOffice is TopologySegmentHosting: its vni_pool is on the footprint, so the
-        footprint is the hosting node (its parent, the OfficeCustomer, hosts nothing)."""
+        footprint is the hosting node (its parent is just the \"Campus and Office\" label, which hosts nothing)."""
         gen = _make_gen()
-        office = {"id": "office-1", "name": "C005-P", "vni_pool": {"id": "pool-1", "name": "c005-p-vni-pool"}}
+        office = {"id": "office-1", "name": "C005-OFFICE", "vni_pool": {"id": "pool-1", "name": "c005-office-vni-pool"}}
         assert gen._resolve_hosting_parent(office, "vxlan-1000") is office
         gen.logger.error.assert_not_called()
 
@@ -514,7 +518,7 @@ class TestResolveHostingParent:
         """The key's presence decides, not its value: an office whose add_office_fabric has not run
         has vni_pool None, and that must not fall through to the (absent) parent."""
         gen = _make_gen()
-        office = {"id": "office-1", "name": "C005-P", "vni_pool": None}
+        office = {"id": "office-1", "name": "C005-OFFICE", "vni_pool": None}
         assert gen._resolve_hosting_parent(office, "vxlan-1000") is office
         gen.logger.error.assert_not_called()
 

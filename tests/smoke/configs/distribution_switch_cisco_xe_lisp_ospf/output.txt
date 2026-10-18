@@ -1,8 +1,8 @@
 !
-! ds-c005-p01 Configuration
+! ds-c005-office01 Configuration
 ! Cisco IOS-XE (Catalyst 9000) LISP distribution-switch
 !
-hostname ds-c005-p01
+hostname ds-c005-office01
 !
 ip routing
 spanning-tree mode rapid-pvst
@@ -10,13 +10,13 @@ spanning-tree mode rapid-pvst
 !
 ! Interfaces
 interface Ethernet1
- description to as-c005-p01
+ description to as-c005-office01
  no switchport
  ip address 10.1.0.1 255.255.255.254
  no shutdown
 !
 interface Ethernet2
- description to ds-c005-p02
+ description to ds-c005-office02
  no switchport
  ip address 10.1.0.3 255.255.255.254
  no shutdown
@@ -77,8 +77,8 @@ router lisp
   itr
   etr
   exit-service-ethernet
- ! unverified-no-lab: site C005-P: authentication key and the EID records the edges may register
- site C005-P
+ ! unverified-no-lab: site C005-OFFICE: authentication key and the EID records the edges may register
+ site C005-OFFICE
   authentication-key 0ff1c3-k3y
   eid-record instance-id 50001 10.100.0.0/24 accept-more-specifics
   eid-record instance-id 10100 any-mac

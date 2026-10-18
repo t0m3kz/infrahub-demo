@@ -80,14 +80,13 @@ query routing_invariants {
     }
   }
 
-  # Office LANs: held to the VPC aggregate rules (namespace type of the
-  # footprint's environment, no overlap inside one namespace).
+  # Office LANs: held to the VPC aggregate rules (the PROD namespace, an office
+  # has no environment; no overlap inside one namespace).
   TopologyCustomerOffice {
     edges {
       node {
         id
         name { value }
-        environment { value }
         lan_prefixes {
           edges {
             node {

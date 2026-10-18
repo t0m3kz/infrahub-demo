@@ -144,15 +144,3 @@ extensions:
           label: "Dependents"
           description: "Inbound dependency edges reaching this component"
           direction: inbound
-    - kind: SecurityAccessProfile
-      relationships:
-        - name: dependencies
-          peer: AppDependency
-          cardinality: many
-          kind: Attribute
-          optional: true
-          identifier: "app_dependency__source_profile"
-          order_weight: 1100
-          label: "Grants"
-          description: "Private-access dependencies this profile grants"
-          direction: inbound

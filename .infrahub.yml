@@ -321,6 +321,11 @@ check_definitions:
   - name: validate_segment_security
     class_name: CheckSegmentSecurity
     file_path: checks/segment_security.py
+  # Targetless: a footprint's usage spans every segment naming it and every
+  # port those segments tag, not one device.
+  - name: validate_customer_quota
+    class_name: CheckCustomerQuota
+    file_path: checks/customer_quota.py
   # Targetless: reads every segment and the firewall contexts PBR redirects to.
   - name: validate_tenant_svi_protection
     class_name: CheckTenantSviProtection
@@ -711,6 +716,8 @@ queries:
     file_path: queries/validation/segment_placement.gql
   - name: segment_security
     file_path: queries/validation/segment_security.gql
+  - name: customer_quota
+    file_path: queries/validation/customer_quota.gql
   - name: tenant_svi_protection
     file_path: queries/validation/tenant_svi_protection.gql
   - name: pbr_firewall_reachability
@@ -1066,10 +1073,9 @@ generator_definitions:
         - utils/
   # One definition per customer deployment kind, each targeting the kind's
   # own CoreGeneratorGroup: every footprint is already a member of that group
-  # (the per-kind created-triggers require it), while the shared
-  # customer_deployments group has no members, so a definition targeting it
-  # never dispatched. Same class and query; the query reads all four kinds by
-  # name and the footprint's computed name is unique across them.
+  # (the per-kind created-triggers require it). Same class and query; the
+  # query reads all four kinds by name and the footprint's computed name is
+  # unique across them.
   - name: add_customer_dc_orchestrator_routing
     file_path: generators/topology/orchestrator_routing.py
     targets: customer_deployments_dc

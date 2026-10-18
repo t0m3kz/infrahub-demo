@@ -120,28 +120,6 @@ nodes:
         identifier: "cloud__region__location"
         description: >
           Geographic location mapping for this region
-      - name: direct_connects
-        peer: CloudDirectConnect
-        cardinality: many
-        optional: true
-        order_weight: 2000
-        description: >
-          Direct Connect / Dedicated Interconnect gateway for this region
-      - name: vpn_gateways
-        peer: CloudVPNGateway
-        cardinality: many
-        optional: true
-        order_weight: 2050
-        description: >
-          VPN gateways attached to this region
-      - name: virtual_networks
-        peer: CloudVirtualNetwork
-        cardinality: many
-        kind: Generic
-        optional: true
-        identifier: "cloudregion__virtual_networks"
-        order_weight: 2100
-        description: "Virtual networks (VPC/VNet) deployed in this region"
 
   - name: CloudZone
     namespace: Topology
@@ -158,23 +136,6 @@ nodes:
     uniqueness_constraints:
       - ["name__value", "parent"]
     include_in_menu: false
-    relationships:
-      - name: network_segments
-        peer: CloudNetworkSegment
-        cardinality: many
-        kind: Generic
-        optional: true
-        identifier: "cloudnetworksegment__availability_zone"
-        order_weight: 2000
-        description: "Subnets deployed in this availability zone"
-      - name: instances
-        peer: CloudInstance
-        cardinality: many
-        kind: Generic
-        optional: true
-        identifier: "cloudzone__instances"
-        order_weight: 2100
-        description: "Instances running in this availability zone"
 
   - name: Account
     namespace: Cloud
@@ -223,39 +184,6 @@ nodes:
             description: Non-production environment
             color: "#A9DFBF"
         order_weight: 1400
-      # What the account is FOR, in a hub-and-spoke landing zone. This is not
-      # cosmetic: any change inside a `network` account is shared-fate by
-      # construction — that account owns the Transit Gateway every other
-      # account transits — even when the local blast radius looks small. Without the
-      # role there is no way to tell a hub account from a workload account
-      # except by noticing it happens to own a TGW.
-      - name: account_role
-        kind: Dropdown
-        label: "Account Role"
-        optional: true
-        order_weight: 1450
-        description: "Function of this account within the landing zone"
-        choices:
-          - name: network
-            label: Network
-            description: Owns shared connectivity — transit gateways, DX, inspection
-            color: "#9B59B6"
-          - name: workload
-            label: Workload
-            description: Runs application workloads; a spoke of the network account
-            color: "#3498DB"
-          - name: security
-            label: Security
-            description: Logging, audit, and guardrail tooling
-            color: "#E74C3C"
-          - name: shared_services
-            label: Shared Services
-            description: DNS, directory, CI, artifact registries used by many spokes
-            color: "#F39C12"
-          - name: sandbox
-            label: Sandbox
-            description: Experimentation account, not expected to carry production traffic
-            color: "#BFBFBF"
     relationships:
       - name: provider
         peer: OrganizationProvider
@@ -280,10 +208,6 @@ nodes:
       - name__value
     display_label: "{{name__value}}"
     attributes:
-      - name: is_shared
-        kind: Boolean
-        order_weight: 350
-        optional: true
       - name: is_default
         label: Default VPC
         kind: Boolean
@@ -328,22 +252,6 @@ nodes:
         optional: true
         description: Subnets within this virtual network
         order_weight: 2000
-      - name: customer_deployment
-        peer: TopologyCustomer
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: "virtual_network__customer_deployments"
-        description: "Customer deployment footprint this VPC belongs to."
-        order_weight: 2100
-      - name: instances
-        peer: CloudInstance
-        cardinality: many
-        kind: Generic
-        optional: true
-        identifier: "virtual_network__instances"
-        description: "Instances placed directly in this VPC (no subnet-level segment)."
-        order_weight: 2200
     uniqueness_constraints:
       - [account, name__value]
 
@@ -679,14 +587,6 @@ nodes:
         optional: true
         description: Network segment where this instance is deployed
         order_weight: 1100
-      - name: virtual_network
-        peer: CloudVirtualNetwork
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: "virtual_network__instances"
-        description: "VPC this instance runs in — set directly when the instance has no subnet-level network_segment."  # yamllint disable-line rule:line-length
-        order_weight: 1120
       - name: security_groups
         peer: CloudSecurityGroup
         cardinality: many
@@ -1007,26 +907,6 @@ nodes:
         identifier: "transit_gateway__route_tables"
         order_weight: 600
         description: "Transit Gateway this route table belongs to"
-      # "Who else is in this routing domain" is the blast-radius question for a
-      # cloud change, and it is answered by the PROPAGATION set, not the
-      # association set: association says where a spoke's own lookups happen,
-      # propagation says whose lookups can see the spoke.
-      - name: associated_attachments
-        label: "Associated Attachments"
-        peer: CloudTransitGatewayAttachment
-        cardinality: many
-        optional: true
-        identifier: "transit_gateway_attachment__associated_route_table"
-        order_weight: 700
-        description: "Attachments whose outbound lookups resolve in this route table"
-      - name: propagated_attachments
-        label: "Propagated Attachments"
-        peer: CloudTransitGatewayAttachment
-        cardinality: many
-        optional: true
-        identifier: "transit_gateway_attachment__propagated_route_tables"
-        order_weight: 800
-        description: "Attachments advertising their prefixes into this route table"
 
   - name: TransitGatewayAttachment
     namespace: Cloud
@@ -1093,16 +973,6 @@ nodes:
         identifier: "transit_gateway_attachment__virtual_network"
         order_weight: 700
         description: "Spoke virtual network — set when attachment_type is vpc"
-      # Fewer entries than the virtual network has zones means the attachment
-      # is single-zone, which the risk check reports as its own finding.
-      - name: network_segments
-        label: "Attachment Subnets"
-        peer: CloudNetworkSegment
-        cardinality: many
-        optional: true
-        identifier: "transit_gateway_attachment__network_segments"
-        order_weight: 750
-        description: "Subnets hosting the attachment interfaces, one per zone"
       # One relationship for both hybrid endpoint kinds rather than a separate
       # direct_connect/vpn pair — CloudHybridAttachment is the generic that
       # CloudVirtualInterface and CloudVPNGateway already share.
@@ -1234,12 +1104,6 @@ nodes:
         cardinality: one
         optional: false
         order_weight: 700
-      - name: physical_device
-        peer: DcimDevice
-        cardinality: one
-        optional: true
-        order_weight: 800
-        description: "Physical device representing this customer gateway"
     uniqueness_constraints:
       - [account, name__value]
 
@@ -1305,11 +1169,6 @@ nodes:
         optional: true
         order_weight: 700
         description: "Physical location/data center"
-      - name: virtual_interfaces
-        peer: CloudVirtualInterface
-        cardinality: many
-        optional: true
-        order_weight: 800
     uniqueness_constraints:
       - [account, name__value]
 
@@ -1392,9 +1251,9 @@ extensions:
           description: "Node pool / ASG that manages this instance."
           order_weight: 2600
 
-    # Reverse lookups for the hub attachment/route-table pair above, so the
-    # graph can be walked both ways; a relationship declared on only one side
-    # is a direction GraphQL cannot express.
+    # Reverse lookup of the hub attachment, so the graph can be walked from the
+    # Transit Gateway to its attachments; a relationship declared on only one
+    # side is a direction GraphQL cannot express.
     - kind: CloudTransitGateway
       relationships:
         - name: attachments
@@ -1405,47 +1264,6 @@ extensions:
           identifier: "transit_gateway__attachments"
           order_weight: 2000
           description: "All attachments landing on this Transit Gateway, across accounts"
-        - name: route_tables
-          label: "Route Tables"
-          peer: CloudTransitGatewayRouteTable
-          cardinality: many
-          optional: true
-          identifier: "transit_gateway__route_tables"
-          order_weight: 2100
-          description: "Routing domains configured on this Transit Gateway"
-
-    - kind: CloudAccount
-      relationships:
-        - name: transit_gateway_attachments
-          label: "Transit Gateway Attachments"
-          peer: CloudTransitGatewayAttachment
-          cardinality: many
-          optional: true
-          identifier: "transit_gateway_attachment__owner_account"
-          order_weight: 2000
-          description: "Transit Gateway attachments owned by this account"
-
-    - kind: CloudVirtualNetwork
-      relationships:
-        - name: transit_gateway_attachments
-          label: "Transit Gateway Attachments"
-          peer: CloudTransitGatewayAttachment
-          cardinality: many
-          optional: true
-          identifier: "transit_gateway_attachment__virtual_network"
-          order_weight: 2500
-          description: "Transit Gateway attachment(s) for this virtual network"
-
-    - kind: CloudNetworkSegment
-      relationships:
-        - name: transit_gateway_attachments
-          label: "Transit Gateway Attachments"
-          peer: CloudTransitGatewayAttachment
-          cardinality: many
-          optional: true
-          identifier: "transit_gateway_attachment__network_segments"
-          order_weight: 2500
-          description: "Attachment(s) with interfaces in this subnet"
 
     # On the generic, so both CloudVirtualInterface (transit VIF) and
     # CloudVPNGateway pick it up from one declaration.

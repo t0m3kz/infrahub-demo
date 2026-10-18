@@ -17,7 +17,6 @@ spec:
       criticality: high
       security_profile: internet_exposed
       fqdn: checkout.c001.demo.local
-      ingress_mode: dns
       owner: C001
       member_of_groups:
         - app_applications

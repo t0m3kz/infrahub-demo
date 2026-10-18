@@ -599,17 +599,17 @@ class TestGigabitCabling:
 
     def test_rack_plan_pairs_one_edge_port_per_switch(self) -> None:
         bottom = [
-            _make_interface("GE3", "C005-P-EDGE1", "1000base-t"),
-            _make_interface("GE4", "C005-P-EDGE1", "1000base-t"),
+            _make_interface("GE3", "C005-OFFICE-EDGE1", "1000base-t"),
+            _make_interface("GE4", "C005-OFFICE-EDGE1", "1000base-t"),
         ]
         top = [
-            _make_interface("GigabitEthernet1/0/26", "ds-c005-p01", "1000base-t"),
-            _make_interface("GigabitEthernet1/0/26", "ds-c005-p02", "1000base-t"),
+            _make_interface("GigabitEthernet1/0/26", "ds-c005-office01", "1000base-t"),
+            _make_interface("GigabitEthernet1/0/26", "ds-c005-office02", "1000base-t"),
         ]
         plan = CablingPlanner(bottom, top).build_cabling_plan(scenario="rack")
         assert sorted((a.id, b.id) for a, b in plan) == [
-            ("C005-P-EDGE1:GE3", "ds-c005-p01:GigabitEthernet1/0/26"),
-            ("C005-P-EDGE1:GE4", "ds-c005-p02:GigabitEthernet1/0/26"),
+            ("C005-OFFICE-EDGE1:GE3", "ds-c005-office01:GigabitEthernet1/0/26"),
+            ("C005-OFFICE-EDGE1:GE4", "ds-c005-office02:GigabitEthernet1/0/26"),
         ]
 
     def test_a_gigabit_port_does_not_pair_with_a_faster_one(self) -> None:

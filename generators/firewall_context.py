@@ -171,15 +171,14 @@ class FirewallContextMixin:
     wait_for_parent_generator_and_refetch: Callable[..., Awaitable[dict | None]]
 
     async def resolve_virtual_template(
-        self, *, platform: str | None, role: str, size_suffix: str, fallback: str
+        self, *, platform: str | None, role: str, size_suffix: str
     ) -> dict[str, Any] | None:
         """The {id, device_type, platform} reference of the virtual template
         "{prefix}_{size_suffix}" matching a physical platform/role, or None
-        (warned, ending with ``fallback``) when there is no mapping or no
-        such template."""
+        (logged as an error) when there is no mapping or no such template."""
         prefix = _VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE.get((platform or "", role))
         if not prefix:
-            self.logger.warning(f"No virtual template mapping for platform={platform} role={role} — {fallback}.")
+            self.logger.error(f"No virtual template mapping for platform={platform} role={role}.")
             return None
         template_name = f"{prefix}_{size_suffix}"
         templates = await self.client.filters(
@@ -188,9 +187,7 @@ class FirewallContextMixin:
             include=["device_type", "platform"],
         )
         if not templates:
-            self.logger.warning(
-                f"No virtual template '{template_name}' found for platform={platform} role={role} — {fallback}."
-            )
+            self.logger.error(f"No virtual template '{template_name}' found for platform={platform} role={role}.")
             return None
         template = templates[0]
         return {
@@ -276,9 +273,10 @@ class FirewallContextMixin:
         # onto the cluster, so they belong to none of them: written untracked,
         # or one customer moving to dedicated (or being removed) would delete
         # what every other customer still uses. A dedicated request whose
-        # dedicated pair cannot be provisioned falls back to the shared
-        # context — never a "{shared cluster}-context" every such fallback
-        # customer would fight over (and re-tenant) on the same name.
+        # dedicated pair cannot be provisioned is an error, never a silent
+        # move onto the shared context.
+        if (customer.get("design") or {}).get("dedicated_firewall") and dedicated_result is None:
+            return None
         if dedicated_result is not None:
             cluster, fw_devices = dedicated_result
             # cluster.name.value already carries customer_name (see
@@ -686,21 +684,22 @@ class FirewallContextMixin:
         (see _get_or_create_firewall_context), not on ManagedFirewallHA itself.
 
         Returns (dedicated_cluster, dedicated_devices) on success. Returns
-        None (caller falls back to shared capacity) when the physical
-        template's platform has no dedicated variant mapped, or the
-        *_CUSTOMER_* template itself doesn't exist yet.
+        None (logged as an error, never a fallback to shared capacity) when
+        the parent has no size, does not have exactly 2 physical peers, the
+        physical template's platform has no dedicated variant mapped, or the
+        *_CUSTOMER_* template itself doesn't exist.
         """
         if not dc_size:
-            self.logger.warning(f"{parent_name}: no size set — cannot resolve dedicated {role} template size")
+            self.logger.error(f"{parent_name}: no size set — cannot resolve dedicated {role} template size")
             return None
 
         # physical_devices already carries platform (customer.parent.
         # firewall_devices/loadbalancer_devices in the boarding query).
         physical_pair = physical_devices
         if len(physical_pair) != 2:
-            self.logger.warning(
+            self.logger.error(
                 f"{parent_name}: expected 2 physical {role} peers for dedicated provisioning, "
-                f"found {len(physical_pair)} — falling back to shared capacity"
+                f"found {len(physical_pair)}"
             )
             return None
 
@@ -709,7 +708,6 @@ class FirewallContextMixin:
                 platform=(physical_pair[0].get("platform") or {}).get("name"),
                 role=role,
                 size_suffix=f"CUSTOMER_{dc_size}",
-                fallback=f"cannot provision a dedicated {role} instance, falling back to shared capacity",
             )
         except Exception as exc:
             self.logger.error(f"Error looking up dedicated {role} template: {exc}")

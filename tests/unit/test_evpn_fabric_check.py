@@ -185,7 +185,7 @@ class TestVniUniqueness:
         assert check._captured_errors == []
 
     def test_two_namespaces_sharing_an_l3_vni(self) -> None:
-        """L3 VNIs are global, so any duplicate routes two VRFs into each other."""
+        """L3 VNIs are fixed per namespace and global, so any duplicate routes two VRFs into each other."""
         check = _check()
 
         check.validate(
@@ -232,7 +232,7 @@ class TestVniUniqueness:
         assert "50001" in message
 
     def test_disjoint_l2_and_l3_ranges_are_clean(self) -> None:
-        """The shipped pools (L2 10001-39999 + 40000-49999, L3 50001-59999) must not trip anything."""
+        """The shipped L2 pools (10001-39999 + 40000-49999) and a namespace l3_vni outside them must not trip anything."""
         check = _check()
 
         check.validate(

@@ -2,7 +2,7 @@
 
 from typing import TypedDict
 
-from utils.exchange_transit import EXCHANGE_PEERS, namespace_type_for_environment
+from utils.exchange_transit import EXCHANGE_PEERS, PROD_TYPE, namespace_type_for_environment
 
 from .demo_data import ROOT, Declared, created_dispatches, declared, distinct, name, render
 
@@ -449,7 +449,7 @@ def _sdwan_tunnel(office: Declared) -> tuple[str, VirtualCircuitExpectation]:
     return f"{office_name}-SDWAN-{zone}", {
         "link_type": "sd_wan",
         "transport_mode": "internet_backed",
-        "owner": _CUSTOMER_NAMES[render(office, "{{ parent__owner__org_id__value }}")],
+        "owner": _CUSTOMER_NAMES[render(office, "{{ owner__org_id__value }}")],
         "physical_circuits": (f"INET-{office_name}",),
         "interfaces": 2,
         "cloud_endpoints": (),
@@ -507,7 +507,7 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
     },
     # One generated tunnel per SD-WAN office (_sdwan_tunnel).
     **dict(_sdwan_tunnel(office) for office in _SDWAN_OFFICES),
-    # Second tunnel riding the same internet underlay as C001-P-SDWAN-FR2, on a
+    # Second tunnel riding the same internet underlay as C001-OFFICE-SDWAN-FR2, on a
     # different gateway sub-interface — see 08_interconnects/07_zone_policies/
     # 01_partner_virtual_circuit.yml for why this is an overlay, not a new
     # dedicated physical cross-connect.
@@ -515,7 +515,7 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
         "link_type": "vpn_ipsec",
         "transport_mode": "internet_backed",
         "owner": "Nordix Ltd.",
-        "physical_circuits": ("INET-C001-P",),
+        "physical_circuits": ("INET-C001-OFFICE",),
         "interfaces": 2,
         "cloud_endpoints": (),
     },
@@ -611,9 +611,10 @@ ALL_DEMO_INTERNET_EGRESS_RULES: dict[str, InternetEgressRule] = {
 # no dedicated context. A served colocation metro
 # (ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS, FR) has one shared context serving
 # all its deployments, on the same rules. A deployment's VRF follows its
-# environment (`p` is PROD, every other value NON-PROD). The deployments are
-# the TopologyCustomerDC footprints 30_all declares (03_dc/new_customers and
-# 06_customer_boarding).
+# environment (`p` is PROD, every other value NON-PROD); an office has no
+# environment and is always PROD (OFFICE_NAMESPACE). The deployments are
+# the TopologyCustomerDC footprints 30_all declares (06_customer_boarding,
+# <customer>/dc/01_deployments.yml).
 # ---------------------------------------------------------------------------
 
 ALL_DEMO_TRANSIT_NAMESPACES = ("PROD", "NON-PROD", "INTERNET", "MANAGEMENT")
@@ -683,8 +684,12 @@ class ExpectedTransitContext(TypedDict):
     exchanges: tuple[str, ...]
 
 
+OFFICE_NAMESPACE = _TRANSIT_NAMESPACE_BY_TYPE[PROD_TYPE]
+"""The tenant VRF of every office: it has no environment, an office is always PROD."""
+
+
 def deployment_environment(deployment: str) -> str:
-    """`C008-D-DC12` -> `d`: the environment segment of a deployment name."""
+    """`C008-D-DC12` -> `d`: the environment segment of a DC or colocation deployment name (not an office's)."""
     return deployment.split("-")[1].lower()
 
 

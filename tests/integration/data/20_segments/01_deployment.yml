@@ -11,8 +11,6 @@ spec:
   data:
     - owner: "C001"
       environment: "p"
-      status: active
       parent: "DC6"
       design: "M_DC"
-      member_of_groups:
-        - customer_deployments_dc
+      member_of_groups: [customer_deployments_dc]

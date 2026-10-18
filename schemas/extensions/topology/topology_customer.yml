@@ -5,18 +5,21 @@ version: "1.0"
 # TopologyCustomer — a customer's deployment footprint inside an existing
 # topology deployment (DC, Colocation, or Cloud).
 #
-# One shared generic (TopologyCustomer) carries the common fields (owner,
-# environment, status, namespace), and one concrete node per parent
-# deployment type (CustomerDC, CustomerColocation, CustomerCloud) sets
-# parent: to that specific deployment kind, so the hierarchy is explicit
-# in the schema rather than relying on the bare-generic TopologyDeployment
-# parent trick (confirmed valid via `infrahubctl schema check`, but less
-# self-documenting than naming the concrete parent per node).
+# One shared generic (TopologyCustomer) carries the common field (owner), and
+# one concrete node per parent deployment type (CustomerDC, CustomerColocation,
+# CustomerCloud) sets parent: to that specific deployment kind, so the
+# hierarchy is explicit in the schema rather than relying on the bare-generic
+# TopologyDeployment parent trick (confirmed valid via `infrahubctl schema
+# check`, but less self-documenting than naming the concrete parent per node).
+#
+# `environment` is deliberately NOT on TopologyCustomer: only the footprints
+# that pick a shared namespace/zone by environment carry it (CustomerDC and
+# CustomerColocation, through TopologyEnvironmentScoped). A cloud footprint
+# reads the environment of its CloudAccount, and an office is always PROD.
 #
 # TopologyCustomerTemplate is a second, unrelated generic: a reusable
-# boarding blueprint, not part of the topology hierarchy (no parent/
-# children) — it carries the defaults a boarding generator applies when
-# instantiating a CustomerDC/CustomerColocation/CustomerCloud.
+# service-tier blueprint, not part of the topology hierarchy (no parent/
+# children). A CustomerDC references one as its `design`.
 # ============================================================================
 
 generics:
@@ -35,68 +38,19 @@ generics:
     # No [owner, environment] constraint here: Infrahub enforces a generic's
     # constraint across every implementing kind, which would allow a customer
     # only one footprint per environment in total (e.g. block C005-P-FR next to
-    # C005-P-DC10). Each concrete node is unique on [name, parent, environment]
-    # instead — one footprint per facility and environment.
+    # C005-P-DC10). Each concrete node is unique on [name, parent, ...] instead
+    # (DC/Colocation add environment): one footprint per facility and
+    # environment. The generic's own name template is a placeholder; every
+    # concrete node overrides `name` with its own.
     attributes:
       - name: name
         kind: Text
         order_weight: 100
         computed_attribute:
           kind: Jinja2
-          jinja2_template: "{{ owner__org_id__value|upper }}-{{ environment__label|upper }}"
+          jinja2_template: "{{ owner__org_id__value|upper }}"
         read_only: true
         optional: false
-
-      - name: org_id
-        kind: Text
-        label: "Owner Org ID"
-        description: "Owner's org_id, one hop closer for 1-hop-only Jinja2 computed_attribute consumers"  # yamllint disable-line rule:line-length
-        order_weight: 110
-        computed_attribute:
-          kind: Jinja2
-          jinja2_template: "{{ owner__org_id__value }}"
-        read_only: true
-        optional: false
-
-      # Required with no default: `p` silently means the PROD namespace,
-      # PROD-ZONE and the PROD firewall leg, so every footprint states it.
-      - name: environment
-        kind: Dropdown
-        description: "Environment this customer deployment footprint represents"
-        optional: false
-        order_weight: 200
-        choices:
-          - name: p
-            label: Production
-            color: "#A9CCE3"
-          - name: n
-            label: Non-Production
-            color: "#A9DFBF"
-          - name: s
-            label: Staging
-            color: "#FFA500"
-          - name: d
-            label: Development
-            color: "#7f7fff"
-          - name: t
-            label: Testing
-            color: "#D2B4DE"
-
-      - name: status
-        kind: Dropdown
-        optional: true
-        default_value: active
-        order_weight: 300
-        choices:
-          - name: active
-            label: Active
-            color: "#7fbf7f"
-          - name: provisioning
-            label: Provisioning
-            color: "#ffff7f"
-          - name: decommissioned
-            label: Decommissioned
-            color: "#bfbfbf"
 
       - name: infrastructure_orchestrator
         kind: Dropdown
@@ -133,20 +87,51 @@ generics:
         identifier: "topology_customer__owner"
         description: "Customer or provider this footprint belongs to (e.g.
           an operator's own hub PoP has a Provider owner)."
-      - name: namespace
-        peer: BuiltinIPNamespace
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: "topology_customer__namespace"
-        order_weight: 160
-        description: "IPAM namespace (= VRF). Set on hub footprints (e.g.
-          the operator's own SD-WAN PoP) to make them an ExchangeGateway
-          side."
 
+  # Carried by the footprints whose environment decides where they live: the
+  # shared namespace, PROD-ZONE and the PROD firewall leg (CustomerDC,
+  # CustomerColocation). CustomerCloud (environment comes from its
+  # CloudAccount) and CustomerOffice (always PROD) must not have it. Readers
+  # reach it with `... on TopologyEnvironmentScoped { environment { value } }`.
+  # No hfid or uniqueness here: it carries one attribute and is never a
+  # relationship peer; each concrete node constrains [name, parent, environment].
+  - name: EnvironmentScoped
+    namespace: Topology
+    description: "Marker for customer footprints that state the environment they represent (DC, Colocation)"  # yamllint disable-line rule:line-length
+    label: "Environment-Scoped Footprint"
+    include_in_menu: false
+    attributes:
+      # Required with no default: `p` silently means the PROD namespace,
+      # PROD-ZONE and the PROD firewall leg, so every footprint states it.
+      - name: environment
+        kind: Dropdown
+        description: "Environment this customer deployment footprint represents"
+        optional: false
+        order_weight: 200
+        choices:
+          - name: p
+            label: Production
+            color: "#A9CCE3"
+          - name: n
+            label: Non-Production
+            color: "#A9DFBF"
+          - name: s
+            label: Staging
+            color: "#FFA500"
+          - name: d
+            label: Development
+            color: "#7f7fff"
+          - name: t
+            label: Testing
+            color: "#D2B4DE"
+
+  # Naming convention for template rows: {SIZE}_{TYPE} (S_DC, M_DC, L_DC,
+  # XL_DC) — S and M use the shared firewall/load balancer capacity, L and XL
+  # are dedicated. The name is a label only; the generators and checks read the
+  # flags and numbers the template carries.
   - name: CustomerTemplate
     namespace: Topology
-    description: "Reusable boarding blueprint for a customer deployment"
+    description: "Reusable service-tier blueprint for a customer deployment: dedicated devices and entitlements"
     label: "Customer Deployment Template"
     icon: "mdi:account-network"
     include_in_menu: false
@@ -168,31 +153,6 @@ generics:
         kind: Text
         optional: true
         order_weight: 150
-
-      - name: size
-        kind: Dropdown
-        label: "Size"
-        description: "T-shirt size label for this template's capacity tier (naming convention only — does not drive defaults)"  # yamllint disable-line rule:line-length
-        optional: true
-        default_value: s
-        order_weight: 250
-        choices:
-          - name: s
-            label: Small
-            description: "Shared firewall/LB/proxy, single network segment"
-            color: "#A9DFBF"
-          - name: m
-            label: Medium
-            description: "Shared firewall/LB/proxy, a few network segments"
-            color: "#A9CCE3"
-          - name: l
-            label: Large
-            description: "Dedicated firewall and/or LB, several network segments"
-            color: "#FFA500"
-          - name: xl
-            label: Extra Large
-            description: "Dedicated firewall, LB, and proxy; many network segments"
-            color: "#BF7F7F"
 
       - name: dedicated_firewall
         kind: Boolean
@@ -219,8 +179,8 @@ nodes:
     inherit_from:
       - CoreArtifactTarget
       - TopologyCustomer
+      - TopologyEnvironmentScoped
       - TopologyDeployment
-      - TopologyClusterHosting
       - TopologyConnectableLocation
       - ManagedTenantScoped
     parent: TopologyDataCenter
@@ -259,8 +219,8 @@ nodes:
     inherit_from:
       - CoreArtifactTarget
       - TopologyCustomer
+      - TopologyEnvironmentScoped
       - TopologyDeployment
-      - TopologyClusterHosting
       - TopologyConnectableLocation
       - ManagedTenantScoped
     parent: TopologyColocationMetro
@@ -283,84 +243,51 @@ nodes:
         read_only: true
         optional: false
 
+  # A customer's office: exactly one per customer, directly under TopologyLabel
+  # ("Campus and Office") with no grouping node in between. Not a
+  # TopologyCustomer: an office is always PROD (its prefixes live in the PROD
+  # namespace), so it has no environment, and it carries its own `owner`.
+  # Circuits terminate on this footprint (TopologyConnectableLocation), never
+  # on a shared grouping node. `locations` is the building(s) it occupies; the
+  # devices and cables belong to the footprint.
   - name: CustomerOffice
     namespace: Topology
-    description: "Customer deployment footprint inside an office building"
+    description: "A customer's office footprint (always production)"
     label: "Customer (Office)"
     icon: "mdi:office-building-outline"
     inherit_from:
       - CoreArtifactTarget
       - TopologyDeployment
-      - TopologyClusterHosting
       - TopologyPhysicalDeployment
       - TopologyDeviceHosting
       - TopologyDeviceNaming
       - TopologySegmentHosting
       - TopologyConnectableLocation
-    parent: TopologyOfficeCustomer
+    parent: TopologyLabel
     children: ""
     include_in_menu: false
-    # name__value, like CustomerDC's and CustomerColocation's, rather than the
-    # [parent__name__value, environment__value] pair this used to declare. The
-    # pair identifies the same row, but a relationship whose peer is the
-    # TopologyDeployment generic resolves references against the *generic's* hfid
-    # — a single name__value — so a two-element hfid made this the one deployment
-    # kind that could not be referenced by an object file at all (a device could
-    # say `deployment: "FR2"` but not `deployment: "C001-P"`).
+    # name__value, like CustomerDC's and CustomerColocation's: a relationship
+    # whose peer is the TopologyDeployment generic resolves references against
+    # the *generic's* hfid — a single name__value — so a device can say
+    # `deployment: "C001-OFFICE"`.
     human_friendly_id:
       - name__value
     order_by:
       - name__value
     display_label: "{{ name__value }}"
+    # One office per customer. The name embeds the owner's org_id, so the
+    # constraint holds without naming the (mandatory but relationship) owner.
     uniqueness_constraints:
-      - ["name__value", "parent", "environment__value"]
+      - ["name__value"]
     attributes:
       - name: name
         kind: Text
         order_weight: 100
         computed_attribute:
           kind: Jinja2
-          jinja2_template: "{{ parent__name__value|upper }}-{{ environment__value|upper }}"  # yamllint disable-line rule:line-length
+          jinja2_template: "{{ owner__org_id__value|upper }}-OFFICE"
         read_only: true
         optional: false
-      # Required with no default: `p` silently means the PROD namespace,
-      # PROD-ZONE and the PROD firewall leg, so every footprint states it.
-      - name: environment
-        kind: Dropdown
-        description: "Environment this customer deployment footprint represents"
-        optional: false
-        order_weight: 200
-        choices:
-          - name: p
-            label: Production
-            color: "#A9CCE3"
-          - name: n
-            label: Non-Production
-            color: "#A9DFBF"
-          - name: s
-            label: Staging
-            color: "#FFA500"
-          - name: d
-            label: Development
-            color: "#7f7fff"
-          - name: t
-            label: Testing
-            color: "#D2B4DE"
-      - name: status
-        kind: Dropdown
-        optional: true
-        default_value: active
-        order_weight: 300
-        choices:
-          - name: active
-            label: Active
-            color: "#7fbf7f"
-          - name: provisioning
-            label: Provisioning
-            color: "#ffff7f"
-          - name: decommissioned
-            label: Decommissioned
-            color: "#bfbfbf"
       - name: infrastructure_orchestrator
         kind: Dropdown
         label: "Infrastructure Orchestrator"
@@ -432,6 +359,15 @@ nodes:
             description: "Direct edge-to-edge tunnels build dynamically once demand crosses a threshold"  # yamllint disable-line rule:line-length
             color: "#3498DB"
     relationships:
+      - name: owner
+        peer: OrganizationEntity
+        label: "Owner"
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 150
+        identifier: "customer_office__owner"
+        description: "Customer or provider this office belongs to"
       - name: locations
         peer: LocationFacility
         cardinality: many
@@ -441,23 +377,13 @@ nodes:
         order_weight: 1000
         description: "Building locations backing this customer's office footprint
           (single for branch/regional, multiple for HQ/campus)"
-      - name: namespace
-        peer: BuiltinIPNamespace
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: "topology_customer_office__namespace"
-        order_weight: 1100
-        description: "IPAM namespace (= VRF) for this environment's footprint"
-      # On the per-tenant footprint, not on the office location: the footprint knows
-      # its environment (which decides the shared namespace a prefix lives in)
-      # and its tenant (parent OfficeCustomer), while one building can host
-      # several tenants and environments. The SD-WAN VRF handoff's inbound
+      # On the per-tenant footprint, not on the office location: one building
+      # can host several tenants. The SD-WAN VRF handoff's inbound
       # prefix-list is built from these.
       - name: lan_prefixes
         peer: IpamPrefix
         label: "LAN Prefixes"
-        description: "Office LAN prefixes this footprint owns, registered in its environment's namespace"
+        description: "Office LAN prefixes this footprint owns, registered in the PROD namespace"
         cardinality: many
         kind: Attribute
         optional: true
@@ -511,7 +437,6 @@ nodes:
       - CoreArtifactTarget
       - TopologyCustomer
       - TopologyDeployment
-      - TopologyClusterHosting
       - TopologyConnectableLocation
     parent: TopologyCloudRegion
     children: ""
@@ -521,89 +446,33 @@ nodes:
     order_by:
       - name__value
     display_label: "{{ name__value }}"
+    # No environment: a cloud footprint's environment is its CloudAccount's
+    # (CloudAccount.environment), which its segments and resources reference.
     uniqueness_constraints:
-      - ["name__value", "parent", "environment__value"]
+      - ["name__value", "parent"]
     attributes:
       - name: name
         kind: Text
         order_weight: 100
         computed_attribute:
           kind: Jinja2
-          jinja2_template: "{{ owner__org_id__value|upper }}-{{ customer_name__value|upper }}-{{ environment__value|upper }}-{{ parent__name__value|upper }}"  # yamllint disable-line rule:line-length
+          jinja2_template: "{{ owner__org_id__value|upper }}-{{ customer_name__value|upper }}-{{ parent__name__value|upper }}"  # yamllint disable-line rule:line-length
         read_only: true
         optional: false
       - name: customer_name
         kind: Text
         optional: false
         order_weight: 100
-    relationships:
-      - name: cloud_account
-        peer: CloudAccount
-        label: "Cloud Account"
-        cardinality: one
-        kind: Attribute
-        optional: true
-        order_weight: 200
-      - name: virtual_networks
-        label: "Virtual Networks"
-        peer: CloudVirtualNetwork
-        cardinality: many
-        kind: Generic
-        optional: true
-        identifier: "virtual_network__customer_deployments"
-        description: "VPCs belonging to this customer deployment footprint."
-        order_weight: 300
 
-  # Customer deployment footprint inside a SaaS provider region — same shape
-  # as CustomerCloud (parent: a region, owner/environment/status from
-  # TopologyCustomer). Inherits TopologyClusterHosting/TopologyConnectableLocation
-  # only for parity with the other TopologyCustomer* kinds (unused: a SaaS
-  # tenant is reached over the internet/API, not a physical or virtual
-  # circuit, so it has no fabric or transport connectivity to model).
-  - name: CustomerSaas
-    namespace: Topology
-    description: "Customer deployment footprint inside a SaaS provider region"
-    label: "Customer (SaaS)"
-    icon: "mdi:account-cloud-outline"
-    inherit_from:
-      - CoreArtifactTarget
-      - TopologyCustomer
-      - TopologyDeployment
-      - TopologyClusterHosting
-      - TopologyConnectableLocation
-    parent: TopologySaasRegion
-    children: ""
-    include_in_menu: false
-    human_friendly_id:
-      - name__value
-    order_by:
-      - name__value
-    display_label: "{{ name__value }}"
-    uniqueness_constraints:
-      - ["name__value", "parent", "environment__value"]
-    attributes:
-      - name: name
-        kind: Text
-        order_weight: 100
-        computed_attribute:
-          kind: Jinja2
-          jinja2_template: "{{ owner__org_id__value|upper }}-{{ customer_name__value|upper }}-{{ environment__value|upper }}-{{ parent__name__value|upper }}"  # yamllint disable-line rule:line-length
-        read_only: true
-        optional: false
-      - name: customer_name
-        kind: Text
-        optional: false
-        order_weight: 100
-      - name: tenant_id
-        kind: Text
-        label: "Tenant / Org ID"
-        description: "Provider-side tenant or organization identifier for this customer"  # yamllint disable-line rule:line-length
-        optional: true
-        order_weight: 200
-
+  # The DC customer's service tier, referenced by a CustomerDC's `design`.
+  # Naming convention {SIZE}_DC: S and M share the firewall/load balancer
+  # capacity, L and XL are dedicated. The numbers below live once, in the
+  # template rows (data/bootstrap/21_customer_templates.yml), and are
+  # enforced by checks/customer_quota.py; the dedicated flags are read by
+  # generators/firewall_context.py.
   - name: CustomerTemplateDC
     namespace: Topology
-    description: "Boarding blueprint for a data center customer deployment"
+    description: "Data center customer service tier: dedicated devices, segment quota, port entitlement (S/M shared, L/XL dedicated)"  # yamllint disable-line rule:line-length
     label: "Customer Template (Data Center)"
     icon: "mdi:file-document-edit-outline"
     inherit_from:
@@ -616,6 +485,40 @@ nodes:
     display_label: "{{ name__value }}"
     uniqueness_constraints:
       - [name__value]
+    attributes:
+      # Network-segment quota of the footprint, enforced by
+      # checks/customer_quota.py (an ERROR above the limit; not used for
+      # sizing). A footprint without `design` is not metered.
+      - name: max_segments
+        kind: Number
+        label: "Max Segments"
+        description: "Network-segment quota of the footprint, enforced by checks/customer_quota.py; no `design` means not metered"  # yamllint disable-line rule:line-length
+        optional: false
+        parameters:
+          min_value: 1
+        order_weight: 320
+      # ports_<speed>g: number of host-facing leaf/access ports of that speed
+      # the customer may have tagged with its segments; 0 = none of this speed
+      # allowed. Enforced by checks/customer_quota.py; a footprint without
+      # `design` is not metered. One attribute per server-NIC speed in the
+      # model: the server device types carry 25G and 100G NICs only
+      # (utils/interface_speed.py derives the speed from interface_type).
+      - name: ports_25g
+        kind: Number
+        label: "25G Ports"
+        description: "Host-facing leaf/access ports of this speed the customer may tag with its segments; 0 = none allowed"  # yamllint disable-line rule:line-length
+        optional: false
+        parameters:
+          min_value: 0
+        order_weight: 330
+      - name: ports_100g
+        kind: Number
+        label: "100G Ports"
+        description: "Host-facing leaf/access ports of this speed the customer may tag with its segments; 0 = none allowed"  # yamllint disable-line rule:line-length
+        optional: false
+        parameters:
+          min_value: 0
+        order_weight: 340
 
 extensions:
   nodes:

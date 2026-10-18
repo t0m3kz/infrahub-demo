@@ -1,0 +1,12 @@
+---
+# C009 production footprint in DC11.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerDC
+  data:
+    - owner: "C009"
+      environment: "p"
+      parent: "DC11"
+      design: "XL_DC"
+      member_of_groups: [customer_deployments_dc]

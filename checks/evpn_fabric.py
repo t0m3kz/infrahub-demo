@@ -149,8 +149,8 @@ class CheckEvpnFabric(InfrahubCheck):
                         )
                     )
 
-        # L3 VNIs come from the GLOBAL-L3VNI pool, so they are global, not scoped
-        # to a deployment.
+        # L3 VNIs are fixed per namespace (data/bootstrap/22_namespaces.yml), so they
+        # are global, not scoped to a deployment.
         l3_by_vni: dict[int, list[str]] = {}
         for namespace in namespaces:
             ns_name = namespace.get("name", "<unnamed-namespace>")
@@ -167,7 +167,8 @@ class CheckEvpnFabric(InfrahubCheck):
                     message=(
                         f"L3 VNI {vni} is shared by {len(ns_names)} namespaces: {sorted(ns_names)}. "
                         "The L3 VNI is the tenant's transit VNI, so these VRFs would route into "
-                        "each other. Reallocate from the GLOBAL-L3VNI pool."
+                        "each other. l3_vni is fixed per namespace in data/bootstrap/22_namespaces.yml; "
+                        "correct the conflicting namespace value."
                     )
                 )
 
@@ -179,7 +180,7 @@ class CheckEvpnFabric(InfrahubCheck):
                     message=(
                         f"L2 VNI {vni} (segments {sorted(by_vni[vni])}, deployment '{dep_name}') sits "
                         f"in the exchange transit VNI band {TRANSIT_VNI_MIN}-{TRANSIT_VNI_MAX}, which "
-                        "border leaves derive for firewall transit VLANs. Keep L2 VNI pools outside it."
+                        "border leaves derive for firewall transit VLANs. Keep L2 VNI pool ranges outside it."
                     )
                 )
         for vni, ns_names in sorted(l3_by_vni.items()):
@@ -187,13 +188,14 @@ class CheckEvpnFabric(InfrahubCheck):
                 self.log_error(
                     message=(
                         f"L3 VNI {vni} for namespace(s) {sorted(ns_names)} sits in the exchange transit "
-                        f"VNI band {TRANSIT_VNI_MIN}-{TRANSIT_VNI_MAX}. Keep L3 VNI pools outside it."
+                        f"VNI band {TRANSIT_VNI_MIN}-{TRANSIT_VNI_MAX}. l3_vni is fixed per namespace in "
+                        "data/bootstrap/22_namespaces.yml; move it out of the band."
                     )
                 )
 
         # The crossover case: same 24-bit space, so an L2/L3 collision is just as
-        # real as an L2/L2 one and is the easier of the two to introduce, because
-        # the L2 and L3 pools are configured independently per fabric.
+        # real as an L2/L2 one. L3 VNIs are fixed per namespace while L2 VNIs come
+        # from the per-site pools, so a pool range can grow over a namespace value.
         for dep_name, by_vni in sorted(l2_by_deployment.items()):
             for vni in sorted(set(by_vni) & set(l3_by_vni)):
                 self.log_error(
@@ -202,7 +204,8 @@ class CheckEvpnFabric(InfrahubCheck):
                         f"{sorted(by_vni[vni])}) and as an L3 VNI for namespace(s) "
                         f"{sorted(l3_by_vni[vni])}. A VNI on the wire carries no L2/L3 "
                         "discriminator, so bridged and routed traffic would share one VNI. Make "
-                        "the L2 and L3 VNI pool ranges disjoint."
+                        "the L2 VNI pools clear of the fixed namespace l3_vni (correct the namespace value in "
+                        "data/bootstrap/22_namespaces.yml or move the conflicting L2 pool)."
                     )
                 )
 

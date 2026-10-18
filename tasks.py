@@ -480,22 +480,19 @@ ALL_DEMO_LOAD_STAGES: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
     (
-        # Application hosts, DC-only customer footprints and the full boarding
-        # set (DC/colocation/cloud/office footprints, the cage kit, the VMs the
-        # applications are built from). None of it references anything this
-        # stage's own generators create, only declared data and the foundation
-        # stage's output, so add_endpoint (needs the access-leafs add_rack
-        # created), add_customer_deployment_* and add_sdwan_edge run in
-        # parallel. VMs pin to hosts by name; 03_dc/ sorts before
-        # 06_customer_boarding/, so the hosts exist by then. c005/c006 boarding
-        # re-declares the new_customers footprints (same HFID), which updates
-        # them in place.
+        # Application hosts and the full boarding set (DC/colocation/cloud/
+        # office footprints, the cage kit, the VMs the applications are built
+        # from). None of it references anything this stage's own generators
+        # create, only declared data and the foundation stage's output, so
+        # add_endpoint (needs the access-leafs add_rack created),
+        # add_customer_deployment_* and add_sdwan_edge run in parallel. VMs pin
+        # to hosts by name; 03_dc/ sorts before 06_customer_boarding/, so the
+        # hosts exist by then.
         "compute_and_customers",
         (
             "03_dc/dc10/05_servers.yml",
             "03_dc/dc11/05_servers.yml",
             "03_dc/dc12/05_servers.yml",
-            "03_dc/new_customers",
             "06_customer_boarding",
         ),
     ),

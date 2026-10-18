@@ -1,15 +1,5 @@
 ---
-# Customer C013 deployment footprint inside an existing colocation metro
-# from data/demos/10_colocation/. TopologyCustomerColocation's parent is the
-# metro (TopologyColocationMetro), not the individual zone — the customer's
-# presence spans the whole metro.
-#
-# Requires the corresponding metro to already exist:
-#   - AMS (Megaport Amsterdam)  <- data/demos/10_colocation/megaport/ams/
-#
-# name is a computed attribute ({owner_org_id}-{environment}-{parent}) —
-# read-only, do not set it explicitly.
-
+# C013 colocation footprint in the AMS metro (data/demos/10_colocation/).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -18,5 +8,4 @@ spec:
     - owner: "C013"
       environment: "p"
       parent: "AMS"
-      member_of_groups:
-        - customer_deployments_colocation
+      member_of_groups: [customer_deployments_colocation]

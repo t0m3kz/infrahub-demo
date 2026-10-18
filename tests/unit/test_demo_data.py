@@ -66,24 +66,20 @@ _OFFICES = """\
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: TopologyOfficeCustomer
+  kind: TopologyCustomerOffice
   data:
     - owner: "C002"
       parent: "Campus and Office"
-      children:
-        - kind: TopologyCustomerOffice
-          data:
-            environment: "p"
-            member_of_groups:
-              - customer_deployments_office
+      member_of_groups:
+        - customer_deployments_office
 ---
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: TopologyCustomerOffice
   data:
-    - parent: "C002"
-      environment: "p"
+    - owner: "C002"
+      parent: "Campus and Office"
       member_of_groups:
         - customer_deployments_office
       sdwan_gateway: "GW1"
@@ -175,11 +171,11 @@ class TestNames:
         assert name(declared("ManagedVxlanSegment", demo)[0]) == "c008-trade-portal-p"
         assert name(declared("ManagedVlanSegment", demo)[0]) == "c008-krafven-dev-d"
 
-    def test_office_name_resolves_its_parent_through_the_enclosing_office_customer(self, demo: Path) -> None:
-        """Nested: the parent is the TopologyOfficeCustomer, whose own name is computed from its owner."""
-        nested, top_level = declared("TopologyCustomerOffice", demo)
-        assert name(nested) == "C002-P"
-        assert name(top_level) == "C002-P"
+    def test_office_name_is_computed_from_its_owner_alone(self, demo: Path) -> None:
+        """An office has no environment and no wrapper: `{OWNER}-OFFICE`, whatever declaration it is."""
+        first, second = declared("TopologyCustomerOffice", demo)
+        assert name(first) == "C002-OFFICE"
+        assert name(second) == "C002-OFFICE"
 
     def test_application_name_is_owner_label_environment(self, demo: Path) -> None:
         """A space in the label becomes a dash."""
@@ -208,7 +204,7 @@ class TestDistinct:
     """A re-declaration that updates an object is the same object."""
 
     def test_office_declared_twice_is_one_office(self, demo: Path) -> None:
-        """The stage-4 SD-WAN opt-in re-declares an office by (parent, environment)."""
+        """The stage-4 SD-WAN opt-in re-declares an office by its owner-derived name."""
         offices = declared("TopologyCustomerOffice", demo)
         assert len(offices) == 2
         assert len(distinct(offices)) == 1

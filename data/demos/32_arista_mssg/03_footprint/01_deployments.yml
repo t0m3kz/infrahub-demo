@@ -1,7 +1,6 @@
 ---
-# The tenant's production footprint in DC14 (PROD VRF). name is computed
-# ({org_id}-{environment}-{parent}): MSSG1-P-DC14, which is what the segments reference. Membership
-# of customer_deployments_dc is required: the created-trigger dispatches
+# The tenant's production footprint in DC14 (PROD VRF), MSSG1-P-DC14, which the segments reference. Membership of
+# customer_deployments_dc is required: the created-trigger dispatches
 # add_customer_deployment_dc, which raises for non-members.
 apiVersion: infrahub.app/v1
 kind: Object
@@ -10,8 +9,6 @@ spec:
   data:
     - owner: "MSSG1"
       environment: "p"
-      status: active
       parent: "DC14"
       design: "M_DC"
-      member_of_groups:
-        - customer_deployments_dc
+      member_of_groups: [customer_deployments_dc]

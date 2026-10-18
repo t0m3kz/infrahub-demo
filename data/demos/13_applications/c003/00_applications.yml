@@ -20,7 +20,6 @@ spec:
       criticality: critical
       security_profile: fintech_strict
       fqdn: custody-ledger.c003.demo.local
-      ingress_mode: frontend
       owner: C003
       member_of_groups:
         - app_applications

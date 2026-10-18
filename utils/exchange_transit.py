@@ -21,7 +21,16 @@ from typing import Any, TypedDict
 from utils.internet_space import NON_INTERNET_PREFIXES
 from utils.segment_addressing import segment_namespace
 
-TRANSIT_SLOT: dict[str, int] = {"prod": 0, "non_prod": 1, "internet": 2, "management": 3}
+PROD_TYPE = "prod"
+"""namespace_type of the PROD VRF namespace (every office, and every `p` environment, lives here)."""
+
+INTERNET_TYPE = "internet"
+"""namespace_type of the INTERNET VRF namespace."""
+
+MANAGEMENT_TYPE = "management"
+"""namespace_type of the MANAGEMENT VRF namespace (core infrastructure services, DC-local)."""
+
+TRANSIT_SLOT: dict[str, int] = {PROD_TYPE: 0, "non_prod": 1, INTERNET_TYPE: 2, MANAGEMENT_TYPE: 3}
 """Namespace type -> VLAN slot; one slot per fixed VRF namespace."""
 
 TRANSIT_VLAN_BAND = 200
@@ -50,8 +59,8 @@ WAN_EXIT_VLAN_BASE = TRANSIT_VLAN_MAX + 1
 segment could take on the same switch) and below the L3 VNI SVI band (3900-3967)."""
 
 EXCHANGE_PEERS: dict[str, tuple[str, ...]] = {
-    "prod": ("internet", "management"),
-    "non_prod": ("internet", "management"),
+    PROD_TYPE: (INTERNET_TYPE, MANAGEMENT_TYPE),
+    "non_prod": (INTERNET_TYPE, MANAGEMENT_TYPE),
 }
 """Tenant namespace type -> namespace types it exchanges with (tenant-initiated only). Never prod <-> non_prod."""
 
@@ -64,17 +73,11 @@ ROUTED_SEGMENT_KINDS = frozenset({"ManagedVlanSegment", "ManagedVxlanSegment"})
 EXTERNAL_SEGMENT_KIND = "ManagedExternalSegment"
 """Segment kind whose zone is authoritative data (always an exchange zone), never derived from an environment."""
 
-INTERNET_TYPE = "internet"
-"""namespace_type of the INTERNET VRF namespace."""
-
-MANAGEMENT_TYPE = "management"
-"""namespace_type of the MANAGEMENT VRF namespace (core infrastructure services, DC-local)."""
-
 ZONE_BY_NS_TYPE: dict[str, str] = {
-    "prod": "PROD-ZONE",
+    PROD_TYPE: "PROD-ZONE",
     "non_prod": "NONPROD-ZONE",
-    "internet": "INTERNET-ZONE",
-    "management": "MANAGEMENT-ZONE",
+    INTERNET_TYPE: "INTERNET-ZONE",
+    MANAGEMENT_TYPE: "MANAGEMENT-ZONE",
 }
 
 OFFSET_ANYCAST = 1
@@ -109,7 +112,7 @@ def wan_exit_vlan(namespace_type: str) -> int:
 
 def namespace_type_for_environment(environment: str) -> str:
     """`p` is production, every other environment value is non-production."""
-    return "prod" if environment == "p" else "non_prod"
+    return PROD_TYPE if environment == "p" else "non_prod"
 
 
 def joins_prod_and_nonprod(environment_a: str | None, environment_b: str | None) -> bool:

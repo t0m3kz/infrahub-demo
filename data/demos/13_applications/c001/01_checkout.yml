@@ -17,7 +17,6 @@ spec:
       criticality: high
       security_profile: internet_exposed
       fqdn: checkout.c001.demo.local
-      ingress_mode: dns
       owner: C001
       member_of_groups:
         - app_applications
@@ -50,8 +49,6 @@ spec:
   data:
     - name: c001-private-access-standard
       description: "C001 standard private-access controls"
-      mfa_required: true
-      device_posture_required: true
       allowed_groups:
         - c001-engineering
 ---

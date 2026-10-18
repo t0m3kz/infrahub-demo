@@ -39,8 +39,8 @@ ACCESS_INPUT = "access_switch_cisco_xe_lisp_ospf"
 HOSTLESS_INPUT = "access_switch_cisco_xe_lisp_hostless"
 
 _MAP_SERVERS: list[dict[str, Any]] = [
-    {"name": "ds-c005-p02", "interfaces": [{"ip_address": {"address": "10.250.5.2/32"}}]},
-    {"name": "ds-c005-p01", "interfaces": [{"ip_address": {"address": "10.250.5.1/32"}}]},
+    {"name": "ds-c005-office02", "interfaces": [{"ip_address": {"address": "10.250.5.2/32"}}]},
+    {"name": "ds-c005-office01", "interfaces": [{"ip_address": {"address": "10.250.5.1/32"}}]},
 ]
 
 
@@ -57,7 +57,7 @@ def _raw(directory: str) -> dict[str, Any]:
 def _inputs(**overrides: Any) -> LispInputs:
     values: dict[str, Any] = {
         "map_servers": ("10.250.5.1", "10.250.5.2"),
-        "site_name": "C005-P",
+        "site_name": "C005-OFFICE",
         "site_key": "s3cr3t",
         "l3_records": (EidRecord(instance_id=50001, vrf="PROD", prefix="10.1.0.0/24"),),
         "l2_instance_ids": (10100,),
@@ -83,7 +83,7 @@ def _activation(
 
 def _device() -> dict[str, Any]:
     return {
-        "name": "as-c005-p01",
+        "name": "as-c005-office01",
         "interfaces": [
             {"name": "Loopback0", "role": "loopback", "ip_address": {"address": "10.0.0.1/32"}},
             {"name": "Ethernet1", "role": "uplink"},
@@ -102,7 +102,7 @@ def _make_transform(device_role: str) -> BaseDeviceTransform:
 def _office_data(role: str, platform: str = "cisco_xe") -> dict[str, Any]:
     """A cleaned device with the office deployment the LISP queries return (queries/fragments/lisp_fabric.gql)."""
     deployment: dict[str, Any] = {
-        "name": "C005-P",
+        "name": "C005-OFFICE",
         "lisp_map_servers": _MAP_SERVERS,
         "lisp_site_key": {"password": "k"},
     }
@@ -213,9 +213,9 @@ class TestContentRefusals:
             get_lisp_config(_device(), "distribution-switch", [], _inputs(site_name=None))
 
     def test_a_map_server_without_a_loopback_address_is_refused(self) -> None:
-        deployment = {"lisp_map_servers": [{"name": "ds-c005-p01", "interfaces": []}]}
+        deployment = {"lisp_map_servers": [{"name": "ds-c005-office01", "interfaces": []}]}
 
-        with pytest.raises(ValueError, match="LISP map-server ds-c005-p01 has no loopback address"):
+        with pytest.raises(ValueError, match="LISP map-server ds-c005-office01 has no loopback address"):
             build_lisp_inputs(deployment, "access-switch")
 
     def test_an_ipv6_segment_prefix_on_a_border_is_refused(self) -> None:
@@ -300,7 +300,7 @@ class TestLispContext:
         assert config["l2_instances"] == [] and config["l3_instances"] == []
         assert config["anycast_gateway"] == {"enabled": False, "mac": "00:1c:73:00:dc:01"}
         assert config["site"] == {
-            "name": "C005-P",
+            "name": "C005-OFFICE",
             "l3_records": [{"instance_id": 50001, "vrf": "PROD", "prefix": "10.1.0.0/24"}],
             "l2_instance_ids": [10100],
         }
@@ -340,7 +340,7 @@ class TestBuildLispInputs:
     def test_the_border_reads_the_eid_records_of_the_active_vni_segments(self) -> None:
         """A VLAN-only segment has no instance, an inline-terminated one is L2 only, one outside a VRF has no record."""
         deployment = {
-            "name": "C005-P",
+            "name": "C005-OFFICE",
             "lisp_map_servers": _MAP_SERVERS,
             "lisp_site_key": {"password": "k"},
             "segment_deployments": [
@@ -382,7 +382,7 @@ class TestBuildLispInputs:
 
         assert inputs == LispInputs(
             map_servers=("10.250.5.1", "10.250.5.2"),
-            site_name="C005-P",
+            site_name="C005-OFFICE",
             site_key="k",
             l3_records=(EidRecord(50001, "PROD", "10.1.0.0/24"),),
             l2_instance_ids=(10100, 10200, 10300),
@@ -396,7 +396,7 @@ class TestBuildLispInputs:
         assert inputs.wan_exit is False
 
     def test_the_wan_exit_is_the_presence_of_an_sdwan_edge_on_the_office(self) -> None:
-        with_edge = {"lisp_wan_edges": [{"name": "C005-P-EDGE1"}]}
+        with_edge = {"lisp_wan_edges": [{"name": "C005-OFFICE-EDGE1"}]}
 
         assert build_lisp_inputs(with_edge, "access-switch").wan_exit is True
         assert build_lisp_inputs({"lisp_wan_edges": []}, "access-switch").wan_exit is False
@@ -466,7 +466,7 @@ class TestPurityAndShape:
 
     def test_build_lisp_inputs_does_not_mutate_the_deployment(self) -> None:
         deployment = {
-            "name": "C005-P",
+            "name": "C005-OFFICE",
             "lisp_map_servers": copy.deepcopy(_MAP_SERVERS),
             "lisp_site_key": {"password": "k"},
             "segment_deployments": [

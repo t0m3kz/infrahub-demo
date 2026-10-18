@@ -12,12 +12,13 @@ parent.firewall_devices), links the deployment to it as its
 serving_firewall_context so the firewall transform places the deployment's
 policies there, and builds the context's transit legs and exchanges facing the
 metro's edge pair (their firewall-role ports play the border leaf's part). A
-metro without firewalls gets no context. The provisioning itself is
-generators/firewall_context.py's FirewallContextMixin, shared with
+metro without firewalls gets no context. A colocation footprint has no
+design, so its context is always the metro's shared one. The provisioning itself
+is generators/firewall_context.py's FirewallContextMixin, shared with
 customer_dc.py.
 
 Registered as add_customer_deployment_colocation in .infrahub.yml, targeting
-the customer_deployments group and querying customer_colocation.gql.
+the customer_deployments_colocation group and querying customer_colocation.gql.
 """
 
 from __future__ import annotations

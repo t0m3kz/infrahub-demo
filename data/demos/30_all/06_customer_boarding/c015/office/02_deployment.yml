@@ -2,18 +2,12 @@
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: TopologyOfficeCustomer
+  kind: TopologyCustomerOffice
   data:
     - owner: "C015"
       parent: "Campus and Office"
-      children:
-        - kind: TopologyCustomerOffice
-          data:
-            environment: "p"
-            locations:
-              - "par-office"
-            member_of_groups:
-              - customer_deployments_office
-            # Opts into add_sdwan_edge (generators/topology/sdwan_edge.py), which
-            # builds this office's edge, internet underlay and tunnel to GW1.
-            sdwan_gateway: "EQX-FR2-SDWAN-GW1"
+      locations: ["par-office"]
+      member_of_groups: [customer_deployments_office]
+      # Opts into add_sdwan_edge (generators/topology/sdwan_edge.py), which
+      # builds this office's edge, internet underlay and tunnel to GW1.
+      sdwan_gateway: "EQX-FR2-SDWAN-GW1"

@@ -19,6 +19,7 @@ def _build_gen(*, deployment_type: Literal["middle_rack", "tor", "mixed"] = "mix
         "underlay_protocol": "ipv4",
         "naming_convention": "standard",
         "management_pool": {"id": "mgmt-pool", "name": "mgmt"},
+        "fabric_asn_pool": {"id": "asn-pool", "name": "asn"},
     }
     pod = {
         "id": "pod-1",
@@ -29,7 +30,6 @@ def _build_gen(*, deployment_type: Literal["middle_rack", "tor", "mixed"] = "mix
         "spine_interface_sorting_method": "bottom_up",
         "loopback_pool": {"id": "lo-pool", "name": "lo"},
         "prefix_pool": {"id": "p2p-pool", "name": "p2p"},
-        "asn_pool": {"id": "asn-pool", "name": "asn"},
         "deployment_type": deployment_type,
         "layout": "S_MIXED",
         "fabric_templates": [
@@ -132,15 +132,32 @@ class TestRackRolesHelper:
         assert "skip_underlay" not in gen._routing_options
 
 
-def _mock_pod_pools(*, loopback_id: str | None, prefix_id: str | None, asn_id: str | None = "asn-pool") -> MagicMock:
+def _mock_pod_pools(*, loopback_id: str | None, prefix_id: str | None) -> MagicMock:
     """Mirror RelatedNode.id, which returns None when unset (unlike .peer.id,
     which raises ValueError if neither an id nor an hfid is set — see
     RelatedNode.get()'s docstring)."""
     pod_obj = MagicMock()
     pod_obj.loopback_pool = MagicMock(id=loopback_id)
     pod_obj.prefix_pool = MagicMock(id=prefix_id)
-    pod_obj.asn_pool = MagicMock(id=asn_id)
     return pod_obj
+
+
+def _mock_dc_pool(*, asn_id: str | None) -> MagicMock:
+    """The DC node a rack refetches with include=["fabric_asn_pool"]."""
+    dc_obj = MagicMock()
+    dc_obj.fabric_asn_pool = MagicMock(id=asn_id)
+    return dc_obj
+
+
+def _kind_dispatch(**by_kind: Any) -> AsyncMock:
+    """A client.get side effect answering per kind name; a list value is consumed one entry per call."""
+    queues = {kind: list(value) if isinstance(value, list) else value for kind, value in by_kind.items()}
+
+    async def _get(*, kind: Any, **_: Any) -> Any:
+        entry = queues[kind.__name__]
+        return entry.pop(0) if isinstance(entry, list) else entry
+
+    return AsyncMock(side_effect=_get)
 
 
 class TestSpineBgpReadinessRole:
@@ -226,22 +243,32 @@ class TestRackMixinAdditional:
         assert gen._loopback_pool_id == "lo-pool-late"
 
     @pytest.mark.asyncio
-    async def test_prepare_generation_context_waits_for_asn_pool_alone(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """An eBGP rack waits for asn_pool even when loopback/prefix are already there.
+    async def test_prepare_generation_context_reads_asn_pool_from_the_dc(self) -> None:
+        """The ASN pool comes straight from the parent DC's fabric_asn_pool in the
+        query snapshot: no refetch of the pod or the DC on the happy path."""
+        gen = _build_gen()
+        gen.client.get = AsyncMock()
 
-        add_pod creates the loopback/prefix pools first and only links the DC's
-        fabric ASN pool onto the pod afterwards, so this exact snapshot — both
-        IP pools resolved, asn_pool still None — is what a racing rack reads.
-        Proceeding on it produced devices with no BGP process at all and no
-        failed task to show for it.
+        await gen._prepare_generation_context()
+
+        gen.client.get.assert_not_awaited()
+        assert gen._routing_options["asn_pool"] == "asn-pool"
+
+    @pytest.mark.asyncio
+    async def test_prepare_generation_context_refetches_stale_dc_asn_pool(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A stale DC snapshot (no fabric_asn_pool yet) is refetched during the wait.
+
+        The rack can be created in the same object-load as its DC and pod, so
+        its query may predate add_dc's write. Proceeding on it produced devices
+        with no BGP process at all and no failed task to show for it. The pod
+        pools are already visible here, so only the DC is fetched.
         """
         gen = _build_gen()
-        gen.data["pod"]["asn_pool"] = None
-        gen.client.get = AsyncMock(
-            side_effect=[
-                _mock_pod_pools(loopback_id="lo-pool", prefix_id="p2p-pool", asn_id=None),
-                _mock_pod_pools(loopback_id="lo-pool", prefix_id="p2p-pool", asn_id="asn-pool-late"),
-            ]
+        gen.data["pod"]["parent"]["fabric_asn_pool"] = None
+        gen.client.get = _kind_dispatch(
+            TopologyDataCenter=[_mock_dc_pool(asn_id=None), _mock_dc_pool(asn_id="asn-pool-late")]
         )
         sleep_mock = AsyncMock()
         monkeypatch.setattr("generators.rack.asyncio.sleep", sleep_mock)
@@ -250,15 +277,36 @@ class TestRackMixinAdditional:
 
         gen.logger.error.assert_not_called()
         sleep_mock.assert_awaited_once()
+        assert gen.client.get.await_count == 2
+        assert gen._routing_options["asn_pool"] == "asn-pool-late"
+
+    @pytest.mark.asyncio
+    async def test_prepare_generation_context_refetches_pod_and_dc_pools_together(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Pod pools and the DC ASN pool both stale: one retry resolves both."""
+        gen = _build_gen()
+        gen.data["pod"]["loopback_pool"] = None
+        gen.data["pod"]["parent"]["fabric_asn_pool"] = None
+        gen.client.get = _kind_dispatch(
+            TopologyPod=_mock_pod_pools(loopback_id="lo-pool-late", prefix_id="p2p-pool"),
+            TopologyDataCenter=_mock_dc_pool(asn_id="asn-pool-late"),
+        )
+        monkeypatch.setattr("generators.rack.asyncio.sleep", AsyncMock())
+
+        await gen._prepare_generation_context()
+
+        gen.logger.error.assert_not_called()
+        assert gen._loopback_pool_id == "lo-pool-late"
         assert gen._routing_options["asn_pool"] == "asn-pool-late"
 
     @pytest.mark.asyncio
     async def test_prepare_generation_context_ospf_underlay_ignores_asn_pool(self) -> None:
-        """An OSPF underlay allocates no per-device ASN, so a missing asn_pool
-        is neither waited on nor an error."""
+        """An OSPF underlay allocates no per-device ASN, so a missing DC
+        fabric_asn_pool is neither waited on nor an error."""
         gen = _build_gen()
         gen.data["pod"]["parent"]["routing_strategy"] = "ospf-ibgp"
-        gen.data["pod"]["asn_pool"] = None
+        gen.data["pod"]["parent"]["fabric_asn_pool"] = None
         gen.client.get = AsyncMock()
 
         await gen._prepare_generation_context()
@@ -268,26 +316,42 @@ class TestRackMixinAdditional:
         assert "asn_pool" not in gen._routing_options
 
     @pytest.mark.asyncio
-    async def test_prepare_generation_context_missing_asn_pool_refuses_to_generate(
+    async def test_prepare_generation_context_missing_dc_asn_pool_refuses_to_generate(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """asn_pool never arrives on an eBGP rack — the whole run fails.
+        """The DC's fabric_asn_pool never arrives on an eBGP rack — the whole run fails.
 
-        There is no legitimate state in which it is absent (add_dc creates the
-        fabric ASN pool, add_pod links it onto the pod), so a rack that still
-        cannot see it must not generate devices it will be unable to route.
+        There is no legitimate state in which it is absent (add_dc creates it),
+        so a rack that still cannot see it must not generate devices it will be
+        unable to route. The refusal points at the DC generator, not the pod's.
         """
         gen = _build_gen()
-        gen.data["pod"]["asn_pool"] = None
-        gen.client.get = AsyncMock(
-            return_value=_mock_pod_pools(loopback_id="lo-pool", prefix_id="p2p-pool", asn_id=None)
-        )
+        gen.data["pod"]["parent"]["fabric_asn_pool"] = None
+        gen.client.get = _kind_dispatch(TopologyDataCenter=_mock_dc_pool(asn_id=None))
         monkeypatch.setattr("generators.rack.asyncio.sleep", AsyncMock())
 
-        with pytest.raises(RuntimeError, match="asn_pool"):
+        with pytest.raises(RuntimeError, match="dc.fabric_asn_pool") as excinfo:
             await gen._prepare_generation_context()
 
+        assert "generate_dc" in str(excinfo.value)
+        assert "generate_pod" not in str(excinfo.value)
         gen.logger.error.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_prepare_generation_context_missing_pod_pool_refusal_points_at_pod_generator(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A missing pod pool still says to run the pod generator, and not the DC's."""
+        gen = _build_gen()
+        gen.data["pod"]["loopback_pool"] = None
+        gen.client.get = _kind_dispatch(TopologyPod=_mock_pod_pools(loopback_id=None, prefix_id="p2p-pool"))
+        monkeypatch.setattr("generators.rack.asyncio.sleep", AsyncMock())
+
+        with pytest.raises(RuntimeError, match="pod.loopback_pool") as excinfo:
+            await gen._prepare_generation_context()
+
+        assert "generate_pod" in str(excinfo.value)
+        assert "generate_dc" not in str(excinfo.value)
 
     @pytest.mark.asyncio
     async def test_prepare_generation_context_spine_failure_fails_spine_dependent_rack(self) -> None:

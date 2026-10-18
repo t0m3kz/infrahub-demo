@@ -31,8 +31,6 @@ spec:
           - suite_name: NY1
             index: 1
             shortname: ny1-s1
-            rows: 1
-            racks_per_row: 1
             children:
               kind: LocationRack
               data:
@@ -51,8 +49,6 @@ spec:
           - suite_name: VA1
             index: 1
             shortname: va1-s1
-            rows: 1
-            racks_per_row: 1
             children:
               kind: LocationRack
               data:

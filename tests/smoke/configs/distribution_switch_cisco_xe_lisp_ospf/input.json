@@ -4,9 +4,9 @@
       {
         "node": {
           "__typename": "DcimPhysicalDevice",
-          "id": "dev-ds-c005-p01",
+          "id": "dev-ds-c005-office01",
           "name": {
-            "value": "ds-c005-p01"
+            "value": "ds-c005-office01"
           },
           "role": {
             "value": "distribution-switch"
@@ -122,7 +122,7 @@
                     "value": "Ethernet1"
                   },
                   "description": {
-                    "value": "to as-c005-p01"
+                    "value": "to as-c005-office01"
                   },
                   "status": {
                     "value": "active"
@@ -171,7 +171,7 @@
                               "device": {
                                 "node": {
                                   "name": {
-                                    "value": "ds-c005-p01"
+                                    "value": "ds-c005-office01"
                                   }
                                 }
                               }
@@ -193,7 +193,7 @@
                               "device": {
                                 "node": {
                                   "name": {
-                                    "value": "as-c005-p01"
+                                    "value": "as-c005-office01"
                                   }
                                 }
                               }
@@ -244,7 +244,7 @@
                                           {
                                             "node": {
                                               "name": {
-                                                "value": "ds-c005-p01"
+                                                "value": "ds-c005-office01"
                                               }
                                             }
                                           }
@@ -285,7 +285,7 @@
                     "value": "Ethernet2"
                   },
                   "description": {
-                    "value": "to ds-c005-p02"
+                    "value": "to ds-c005-office02"
                   },
                   "status": {
                     "value": "active"
@@ -334,7 +334,7 @@
                               "device": {
                                 "node": {
                                   "name": {
-                                    "value": "ds-c005-p01"
+                                    "value": "ds-c005-office01"
                                   }
                                 }
                               }
@@ -356,7 +356,7 @@
                               "device": {
                                 "node": {
                                   "name": {
-                                    "value": "ds-c005-p02"
+                                    "value": "ds-c005-office02"
                                   }
                                 }
                               }
@@ -407,7 +407,7 @@
                                           {
                                             "node": {
                                               "name": {
-                                                "value": "ds-c005-p01"
+                                                "value": "ds-c005-office01"
                                               }
                                             }
                                           }
@@ -447,7 +447,7 @@
             "node": {
               "id": "office-1",
               "name": {
-                "value": "C005-P"
+                "value": "C005-OFFICE"
               },
               "segment_deployments": {
                 "edges": [
@@ -528,7 +528,7 @@
                                   },
                                   "vlan_domain": {
                                     "node": {
-                                      "id": "dev-ds-c005-p01"
+                                      "id": "dev-ds-c005-office01"
                                     }
                                   }
                                 }
@@ -625,7 +625,7 @@
                   {
                     "node": {
                       "name": {
-                        "value": "ds-c005-p02"
+                        "value": "ds-c005-office02"
                       },
                       "interfaces": {
                         "edges": [
@@ -647,7 +647,7 @@
                   {
                     "node": {
                       "name": {
-                        "value": "ds-c005-p01"
+                        "value": "ds-c005-office01"
                       },
                       "interfaces": {
                         "edges": [

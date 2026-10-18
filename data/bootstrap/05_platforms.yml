@@ -5,154 +5,132 @@ spec:
   kind: DcimPlatform
   data:
     - name: cisco_ios
-      nornir_platform: iosxe
       napalm_driver: ios
       netmiko_device_type: cisco_ios
       ansible_network_os: ios
       containerlab_os: ios
 
     - name: cisco_xr
-      nornir_platform: iosxr
       napalm_driver: iosxr
       netmiko_device_type: cisco_xr
       ansible_network_os: cisco.iosxr.iosxr
       containerlab_os: cisco_xrv
 
     - name: cisco_xe
-      nornir_platform: iosxe
       napalm_driver: iosxe
       netmiko_device_type: cisco_xe
       ansible_network_os: cisco.iosxe.iosxe
       containerlab_os: cisco_xrv
 
     - name: cisco_nxos
-      nornir_platform: nxos
       napalm_driver: nxos_ssh
       netmiko_device_type: cisco_nxos
       ansible_network_os: nxos
       containerlab_os: cisco_n9kv
 
     - name: dell_sonic
-      nornir_platform: sonic
       napalm_driver: sonic
       netmiko_device_type: dell_sonic
       ansible_network_os: sonic
       containerlab_os: linux
 
     - name: juniper_junos
-      nornir_platform: junos
       napalm_driver: junos
       netmiko_device_type: juniper_junos
       ansible_network_os: junos
       containerlab_os: juniper_vjunosswitch
 
     - name: arista_eos
-      nornir_platform: eos
       napalm_driver: eos
       netmiko_device_type: arista_eos
       ansible_network_os: eos
       containerlab_os: ceos
 
     - name: sonic
-      nornir_platform: sonic
       napalm_driver: sonic
       netmiko_device_type: sonic
       ansible_network_os: sonic
       containerlab_os: sonic-vm
 
     - name: nokia_sros
-      nornir_platform: sros
       napalm_driver: sros
       netmiko_device_type: nokia_sros
       ansible_network_os: sros
       containerlab_os: vr-sros
 
     - name: linux
-      nornir_platform: linux
       napalm_driver: linux
       netmiko_device_type: linux
       ansible_network_os: linux
       containerlab_os: linux
 
     - name: perle
-      nornir_platform: linux
       napalm_driver: linux
       netmiko_device_type: linux
       ansible_network_os: linux
       containerlab_os: linux
 
     - name: perle_iolan
-      nornir_platform: iolan
       napalm_driver: linux
       netmiko_device_type: linux
       ansible_network_os: linux
       containerlab_os: linux
 
     - name: checkpoint_gaia
-      nornir_platform: gaia
       napalm_driver: linux
       netmiko_device_type: checkpoint_gaia
       ansible_network_os: linux
       containerlab_os: gaia
 
     - name: netscaler
-      nornir_platform: netscaler
       napalm_driver: linux
       netmiko_device_type: netscaler
       ansible_network_os: linux
       containerlab_os: netscaler
 
     - name: junos
-      nornir_platform: juniper_junos
       napalm_driver: linux
       netmiko_device_type: juniper_junos
       ansible_network_os: linux
       containerlab_os: juniper_junos
 
     - name: velocloud
-      nornir_platform: velocloud
       napalm_driver: linux
       netmiko_device_type: linux
       ansible_network_os: linux
       containerlab_os: linux
 
     - name: haproxy_technologies
-      nornir_platform: linux
       napalm_driver: linux
       netmiko_device_type: haproxy_technologies_linux
       ansible_network_os: linux
       containerlab_os: linux
 
     - name: squid_cache
-      nornir_platform: linux
       napalm_driver: linux
       netmiko_device_type: squid_cache_linux
       ansible_network_os: linux
       containerlab_os: linux
 
     - name: bluecoat_sgos
-      nornir_platform: linux
       napalm_driver: linux
       netmiko_device_type: bluecoat_sgos
       ansible_network_os: linux
       containerlab_os: linux
 
     - name: cisco_wsa
-      nornir_platform: linux
       napalm_driver: linux
       netmiko_device_type: cisco_wsa_asyncos
       ansible_network_os: linux
       containerlab_os: linux
 
     - name: f5_tmos
-      nornir_platform: f5_tmos
       napalm_driver: f5
       netmiko_device_type: f5_linux
       ansible_network_os: f5networks.f5_modules.bigip
       containerlab_os: linux
 
     - name: panos
-      nornir_platform: panos
       napalm_driver: panos
       netmiko_device_type: paloalto_panos
       ansible_network_os: paloaltonetworks.panos.panos
