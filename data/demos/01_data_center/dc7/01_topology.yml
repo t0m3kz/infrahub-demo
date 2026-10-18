@@ -20,7 +20,6 @@ spec:
         data:
           - index: 1
             layout: S_BORDER_SPINE_POD
-            deployment_type: middle_rack
             fabric_templates:
               - ["2", "border-spine", "DCS-7050CX3-32C-R_BORDER_SPINE"]
               - ["2", "firewall", "PA-5260_FIREWALL"]
@@ -40,7 +39,6 @@ spec:
                     - ["8", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
           - index: 2
             layout: S_BORDER_SPINE_POD
-            deployment_type: middle_rack
             fabric_templates:
               - ["2", "border-spine", "DCS-7050CX3-32C-R_BORDER_SPINE"]
               - ["2", "firewall", "PA-5260_FIREWALL"]

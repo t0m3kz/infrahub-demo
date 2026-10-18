@@ -22,10 +22,10 @@ fabric.
 
 | Pod | Vendor    | Spines | Design   | Deployment  |
 | --- | --------- | ------ | -------- | ----------- |
-| 1   | Cisco     | 2      | L_MIDDLE | middle_rack |
-| 2   | Arista    | 2      | L_MIDDLE | middle_rack |
-| 3   | Dell      | 2      | L_MIDDLE | middle_rack |
-| 4   | Edgecore  | 2      | L_MIDDLE | middle_rack |
+| 1   | Cisco     | 2      | M_MIDDLE | middle_rack |
+| 2   | Arista    | 2      | M_MIDDLE | middle_rack |
+| 3   | Dell      | 2      | M_MIDDLE | middle_rack |
+| 4   | Edgecore  | 2      | M_MIDDLE | middle_rack |
 
 ## Quick Start
 

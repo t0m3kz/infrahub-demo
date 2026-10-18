@@ -30,7 +30,6 @@ spec:
         data:
           - index: 1
             layout: S_MIDDLE
-            deployment_type: middle_rack
             fabric_templates:
               - ["2", "spine", "DCS-7050CX3-32C-R_SPINE"]
             member_of_groups:
@@ -49,7 +48,6 @@ spec:
                     - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
           - index: 2
             layout: S_MIXED
-            deployment_type: mixed
             fabric_templates:
               - ["4", "spine", "DCS-7050CX3-32C-R_SPINE"]
             member_of_groups:
@@ -75,7 +73,6 @@ spec:
                     - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
           - index: 3
             layout: S_TOR
-            deployment_type: tor
             fabric_templates:
               - ["4", "spine", "DCS-7050CX3-32C-R_SPINE"]
             member_of_groups:

@@ -37,7 +37,7 @@ def _rack(*, rack_id: str = "rack-1", row_index: int = 1, rack_type: str = "comp
             "id": "pod-1",
             "name": "POD1",
             "index": 1,
-            "deployment_type": "mixed",
+            "layout": "S_MIXED",
             "parent": {"id": "dc-1", "name": "DC1"},
         },
     }
@@ -163,7 +163,7 @@ class TestGenerateGuardClauses:
         endpoint.gql's PodFields fragment is on TopologyPod, so a colocation cage
         rack (pod = TopologyColocationZone) arrives as an empty pod dict. There is
         no fabric to dual-home into — that kit is cabled explicitly in the object
-        data. The guard must fire before pod["deployment_type"] is read, which sits
+        data. The guard must fire before pod["layout"] is read, which sits
         outside the try/except and would otherwise raise KeyError and fail the task.
         Those hosts do reach this generator: trigger-endpoint-generator-on-created
         matches on role=endpoint, not on the site.
@@ -707,16 +707,6 @@ class TestResolveTargetInterfaces:
         result = await gen._resolve_target_interfaces("mixed")
 
         assert result == ["x"]
-
-    @pytest.mark.asyncio
-    async def test_unknown_deployment_type_logs_error_returns_empty(self) -> None:
-        gen = _make_generator()
-        gen.data = {"name": "server-1"}
-
-        result = await gen._resolve_target_interfaces("bogus")
-
-        assert result == []
-        gen.logger.error.assert_called_once()
 
 
 # ===========================================================================

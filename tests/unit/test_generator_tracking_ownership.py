@@ -470,8 +470,8 @@ class TestMlagWiringTrack:
         gen.client.create = AsyncMock(side_effect=[loopback, svi])
         device = _node("dev-1", "leaf-01")
 
-        await gen._ensure_virtual_peer_link(device, MagicMock(id="mlag-1"), "m", "eos", track=track)
-        await gen._ensure_control_svi(device, MagicMock(id="mlag-1"), "m", "ip-1", track=track)
+        await gen._ensure_virtual_peer_link(device, "m", "eos", track=track)
+        await gen._ensure_control_svi(device, "m", "ip-1", track=track)
 
         loopback.save.assert_awaited_once_with(**expected)
         svi.save.assert_awaited_once_with(**expected)
@@ -562,7 +562,6 @@ def _pod_payload() -> dict[str, Any]:
                 "id": "pod-1",
                 "name": "POD1",
                 "index": 1,
-                "deployment_type": "middle_rack",
                 "layout": "S_MIDDLE",
                 "fabric_templates": [
                     {

@@ -10,7 +10,7 @@ from ..connections import CablingMixin
 from ..devices import DeviceMixin
 from ..helpers.rack import RackRolesHelper, parse_rack_data, rack_sort_key
 from ..helpers.template_interfaces import template_interface_names_by_role
-from ..pod_config import pod_profile
+from ..pod_config import pod_deployment_type, pod_profile
 from ..pools import PoolMixin
 from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
 from ..rack import (
@@ -56,7 +56,6 @@ class TopologyRackPodData(TypedDict, total=False):
     id: str
     name: str
     index: int
-    deployment_type: Literal["middle_rack", "tor", "mixed"]
     layout: str
     parent: TopologyRackParentData
     fabric_templates: list[dict[str, Any]]
@@ -176,7 +175,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         generator name on both sides). Blocking here would keep this task RUNNING,
         which that guard would see as "still in flight" and wait on — deadlock.
         """
-        deployment_type = self.data["pod"]["deployment_type"]
+        deployment_type = pod_deployment_type(self.data["pod"]["layout"])
 
         # Only network racks in mixed deployment feed row-dependent racks.
         if deployment_type != "mixed" or self.data["rack_type"] != "network":
@@ -335,7 +334,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         data = self.data
         current_index = data["index"]
         pod = data["pod"]
-        deployment_type = pod["deployment_type"]
+        deployment_type = pod_deployment_type(pod["layout"])
         effective_rack_index = max(0, current_index - 1)
 
         # For middle_rack deployment ToRs: always offset=0 (ToRs connect to leafs in same rack)
@@ -380,10 +379,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
     def _pod_profile(self) -> dict[str, Any]:
         """Build this rack's pod's profile dict (was pod.profile)."""
         pod = self.data["pod"]
-        return pod_profile(
-            layout_name=pod["layout"],
-            deployment_type=pod["deployment_type"],
-        )
+        return pod_profile(pod["layout"])
 
     def _planned_previous_row_rack_slots(self) -> int:
         """Deterministic count of row-dependent rack slots before this row.
@@ -424,7 +420,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
                 f"(compute={profile['compute_racks_per_row']}, network={profile['network_racks_per_row']})"
             )
 
-        if pod["deployment_type"] in ("middle_rack", "mixed") and self.data["rack_type"] == "network":
+        if pod_deployment_type(pod["layout"]) in ("middle_rack", "mixed") and self.data["rack_type"] == "network":
             leaf_count = sum(role["quantity"] for role in self.data.get("leafs", []))
             if leaf_count > profile["max_leafs_per_network_rack"]:
                 errors.append(
@@ -432,7 +428,10 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
                     f"{profile['max_leafs_per_network_rack']}"
                 )
 
-        if pod["deployment_type"] in ("tor", "mixed") and self.data["rack_type"] in ROW_DEPENDENT_RACK_TYPES:
+        if (
+            pod_deployment_type(pod["layout"]) in ("tor", "mixed")
+            and self.data["rack_type"] in ROW_DEPENDENT_RACK_TYPES
+        ):
             tor_count = sum(role["quantity"] for role in self.data.get("tors", []))
             if tor_count > profile["max_tors_per_compute_rack"]:
                 errors.append(
@@ -502,14 +501,14 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
 
         # LocationRack.pod accepts any TopologyRackHosting peer, not just TopologyPod
         # (e.g. a colocation rack's pod is a TopologyColocationZone). Those don't carry
-        # DC-fabric fields like deployment_type — nothing for this generator to build.
+        # DC-fabric fields like layout — nothing for this generator to build.
         # Checked before anything reads pod["id"]: rack.gql's PodFields fragment is on
         # TopologyPod, so a colocation zone comes back as an empty pod dict and every
         # later access raises. Every LocationRack reaches this generator, since
         # trigger-rack-generator-on-created (data/events/99_actions.yml) fires on the
         # node kind and cannot filter on which topology the rack hangs off.
         pod = self.data.get("pod") or {}
-        if "deployment_type" not in pod:
+        if "layout" not in pod:
             self.logger.info(
                 "Rack %s: parent %s is not a DC-fabric pod, nothing to generate",
                 self.data["name"],
@@ -534,7 +533,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
                 spine_bgp_role,
             )
             return
-        deployment_type = pod["deployment_type"]
+        deployment_type = pod_deployment_type(pod["layout"])
 
         # The grandparent DC's controllers (queries/topology/add/rack.gql's
         # PodFields fragment), read by create_devices().
@@ -556,7 +555,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
                     if not self._load_rack_data(refreshed):
                         return
                     pod = self.data["pod"]
-                    deployment_type = pod["deployment_type"]
+                    deployment_type = pod_deployment_type(pod["layout"])
 
         self.logger.info(
             f"Starting rack generation: {self.data['name']} "

@@ -488,7 +488,7 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
         Only ever called on pods from the `include=["layout"]` fetch in
         generate() (see self._existing_pods), so layout is always hydrated —
         TopologyPod.layout is a mandatory attribute."""
-        return POD_LAYOUTS[pod.layout.value].get("max_border_leafs_per_pod", 0)
+        return POD_LAYOUTS[pod.layout.value]["max_border_leafs_per_pod"]
 
     async def _create_border_leaf_devices(self) -> list[str]:
         """Create border-leaf devices for every fabric_templates(role="border-leaf")

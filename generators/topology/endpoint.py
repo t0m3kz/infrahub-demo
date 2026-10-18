@@ -29,6 +29,7 @@ from ..endpoint import EndpointUplinkMixin
 from ..far_end import far_end_interface
 from ..helpers.cabling import cable_endpoint_device_names, pick_matched_switch_port_name
 from ..helpers.interface_naming import get_lag_name
+from ..pod_config import pod_deployment_type
 from ..pools import PoolMixin
 from ..protocols import (
     AppComponent,
@@ -87,7 +88,7 @@ class EndpointPodData(TypedDict, total=False):
 
     id: str
     name: str
-    deployment_type: Literal["middle_rack", "tor", "mixed"]
+    layout: str
     index: int
     parent: dict[str, Any]
 
@@ -188,7 +189,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, PoolMixin, CablingMixin
         rack = self.data["rack"]
         assert rack is not None
         pod = rack.get("pod") or {}
-        if "deployment_type" not in pod:
+        if "layout" not in pod:
             # Same shape as RackGenerator's guard: LocationRack.pod takes any
             # TopologyRackHosting peer, and endpoint.gql's PodFields fragment is on
             # TopologyPod, so a colocation cage rack (pod = TopologyColocationZone)
@@ -204,8 +205,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, PoolMixin, CablingMixin
                 rack.get("name"),
             )
             return
-        # deployment_type is derived from pod.design's layout (EndpointPod.deployment_type)
-        deployment_type = pod["deployment_type"]
+        deployment_type = pod_deployment_type(pod["layout"])
         self.pod_name = pod["name"].lower()
         pod_id = pod["id"]
         dc = pod["parent"]
@@ -397,10 +397,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, PoolMixin, CablingMixin
             return await self._connect_middle_rack_deployment()
         if deployment_type == "tor":
             return await self._connect_tor_deployment()
-        if deployment_type == "mixed":
-            return await self._connect_mixed_deployment()
-        self.logger.error(f"Unknown deployment type '{deployment_type}' for endpoint {self.data['name']}")
-        return []
+        return await self._connect_mixed_deployment()
 
     async def _connect_middle_rack_deployment(self) -> list[DcimPhysicalInterface]:
         """Resolve target interfaces for middle_rack deployment.
