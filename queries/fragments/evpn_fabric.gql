@@ -5,20 +5,13 @@ fragment EvpnRtAsOnSegmentHostingFields on TopologySegmentHosting {
     }
   }
   evpn_anycast_gateway_mac { value }
-  # Fabric flag read by every overlay-aware transform (bgp_evpn | lisp); riding
-  # this fragment puts it on every config query that already spreads
-  # EvpnRtAsOnDeploymentFields.
-  overlay_control_plane { value }
-  # LISP site inputs (lisp_fabric.gql documents the cleaned shape).
-  name { value }
-  lisp_site_key { node { password { value } } }
 }
 
 # ORDER MATTERS: spread EvpnRtAsOnDeploymentFields FIRST in the device's deployment selection. On the
 # pod -> parent hop Infrahub returns null for the TopologySegmentHosting fields of a spread that comes
-# after a TopologyDeviceHosting one (FirewallContexts/LoadbalancerVips) and for a second
+# after a TopologyDeviceHosting one (FirewallContexts) and for a second
 # SegmentHosting-typed fragment, so every field read from the DC lives in this one fragment. With the
-# spread after those two, a pod-tier VTEP got evpn_rt_as = null and derived its route-targets from its
+# spread after that one, a pod-tier VTEP got evpn_rt_as = null and derived its route-targets from its
 # own ASN (checked on the 30_all stack: every leaf/access-leaf of DC10-12 had it null).
 #
 # Fabric-wide EVPN constants, reached from a device's own `deployment`: the
@@ -26,9 +19,10 @@ fragment EvpnRtAsOnSegmentHostingFields on TopologySegmentHosting {
 # every VTEP in the fabric, which is why they live on TopologySegmentHosting and
 # are read here rather than per-device.
 #
-# Only TopologyDataCenter and TopologyColocationMetro inherit
-# TopologySegmentHosting (schemas/extensions/topology/topology.yml) — TopologyPod
-# does not. So DC-level tiers (border-leaf, border-spine) match the generic
+# Only TopologyDataCenter, TopologyColocationMetro and TopologyCustomerOffice
+# inherit TopologySegmentHosting (schemas/extensions/topology/topology.yml) —
+# TopologyPod does not. So DC-level tiers (border-leaf, border-spine) and an
+# office's switches (access-switch, distribution-switch) match the generic
 # directly, while pod-level tiers (leaf, tor, access-leaf) whose deployment IS
 # the pod need one `parent` hop to reach the DC. Same two-shape traversal as
 # FirewallContextsOnDeploymentFields in queries/fragments/firewall_contexts.gql.

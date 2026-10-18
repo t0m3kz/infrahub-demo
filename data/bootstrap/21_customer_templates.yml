@@ -1,12 +1,12 @@
 ---
 # Customer Deployment Templates - Boarding Blueprints
 # These define the reusable capacity/capability tiers applied when boarding
-# a customer into a DC, colocation metro, or cloud region.
+# a customer into a DC.
 # Loaded at bootstrap time, referenced by TopologyCustomer* instances.
 #
 # Naming convention: {SIZE}_{DEPLOYMENT_TYPE}
 #   size:            S, M, L, XL (t-shirt sizing — label only, see below)
-#   deployment_type: DC, COLO, CLOUD
+#   deployment_type: DC
 #
 # size is a naming-convention label, not an enforced default:
 #   S  - shared firewall/LB/proxy, single network segment
@@ -51,82 +51,6 @@ spec:
       description: >
         Extra large DC customer footprint. Dedicated firewall, load balancer,
         and proxy; many network segments.
-      size: "xl"
-      dedicated_firewall: true
-      dedicated_loadbalancer: true
-
----
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: TopologyCustomerTemplateColo
-  data:
-    - name: "S_COLO"
-      description: >
-        Small colocation customer footprint. Shared firewall/LB/proxy
-        capacity, single network segment.
-      size: "s"
-      dedicated_firewall: false
-      dedicated_loadbalancer: false
-
-    - name: "M_COLO"
-      description: >
-        Medium colocation customer footprint. Shared firewall/LB/proxy
-        capacity, a few network segments.
-      size: "m"
-      dedicated_firewall: false
-      dedicated_loadbalancer: false
-
-    - name: "L_COLO"
-      description: >
-        Large colocation customer footprint. Dedicated firewall and load
-        balancer, several network segments.
-      size: "l"
-      dedicated_firewall: true
-      dedicated_loadbalancer: true
-
-    - name: "XL_COLO"
-      description: >
-        Extra large colocation customer footprint. Dedicated firewall, load
-        balancer, and proxy; many network segments.
-      size: "xl"
-      dedicated_firewall: true
-      dedicated_loadbalancer: true
-
----
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: TopologyCustomerTemplateCloud
-  data:
-    - name: "S_CLOUD"
-      description: >
-        Small cloud customer footprint. Shared firewall/LB/proxy capacity,
-        single network segment.
-      size: "s"
-      dedicated_firewall: false
-      dedicated_loadbalancer: false
-
-    - name: "M_CLOUD"
-      description: >
-        Medium cloud customer footprint. Shared firewall/LB/proxy capacity,
-        a few network segments.
-      size: "m"
-      dedicated_firewall: false
-      dedicated_loadbalancer: false
-
-    - name: "L_CLOUD"
-      description: >
-        Large cloud customer footprint. Dedicated firewall and load
-        balancer, several network segments.
-      size: "l"
-      dedicated_firewall: true
-      dedicated_loadbalancer: true
-
-    - name: "XL_CLOUD"
-      description: >
-        Extra large cloud customer footprint. Dedicated firewall, load
-        balancer, and proxy; many network segments.
       size: "xl"
       dedicated_firewall: true
       dedicated_loadbalancer: true

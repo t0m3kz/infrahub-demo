@@ -16,14 +16,20 @@ vlan {{ vlan.vlan_id }}
 !
 {%- include 'common/cisco_xe_acl.j2' %}
 ! Interfaces
+{#- A port with dot1q sub-interfaces (an office's WAN exit) is routed itself: they hang off a routed parent. -#}
+{%- set routed_parents = interfaces | selectattr('dot1q_vlan') | selectattr('parent_interface') | map(attribute='parent_interface.name') | list %}
 {%- for interface in interfaces %}
 interface {{ interface.name }}
 {%- if interface.display_description %}
  description {{ interface.display_description }}
 {%- endif %}
 {%- if interface.dot1q_vlan %}
+ ! unverified-no-lab: routed dot1q sub-interface (an office's WAN exit handoff to its SD-WAN edge) in the tenant VRF
  encapsulation dot1Q {{ interface.dot1q_vlan }}
-{%- elif interface.ip_addresses and not interface.name.lower().startswith('loopback') %}
+{%- elif (interface.ip_addresses and not interface.name.lower().startswith('loopback')) or interface.name in routed_parents %}
+{%- if interface.name in routed_parents %}
+ ! unverified-no-lab: a routed port, the parent of the dot1q sub-interface
+{%- endif %}
  no switchport
 {%- endif %}
 {%- include 'common/cisco_xe_interface_ip.j2' %}
@@ -47,6 +53,9 @@ interface {{ interface.name }}
 {%- if bgp and bgp | length > 0 %}
 {%- set bgp_text %}{% include 'common/cisco_ios_bgp.j2' %}{% endset %}
 ! BGP Configuration
+{%- if lisp and lisp.wan_exit %}
+! unverified-no-lab: eBGP in the tenant VRF toward the SD-WAN edge (the office's WAN exit), over the dot1q sub-interface above
+{%- endif %}
 {{ bgp_text | trim }}
 {%- endif %}
 {%- if not lisp %}
@@ -61,11 +70,6 @@ route-map RM-CONN-2-BGP permit 10
 {%- include 'common/cisco_xe_lisp.j2' %}
 {%- endif %}
 {%- include 'common/cisco_xe_vrf_static.j2' %}
-{%- set ios_dialect = true %}
-{%- set management %}{% include 'common/cisco_nxos_management.j2' %}{% endset %}
-{%- if management | trim %}
-{{ management | trim }}
-{%- endif %}
 ! Management
 line console 0
 line vty 0 15

@@ -111,6 +111,6 @@ spec:
         - "eg-fr01-bgp-overlay"
         - "EXT-AWS-DX-FR2-bgp"
       password: "eqx-fr2-aws-vif-key"
-      interface_capabilities:
+      capabilities:
         - ["eg-fr01", "Ethernet1/13.1000"]
         - ["EXT-AWS-DX-FR2", "et-0/0/0.1000"]

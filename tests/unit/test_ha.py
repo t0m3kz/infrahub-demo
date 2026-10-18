@@ -2,7 +2,6 @@
 
 Covers:
 - get_ha() — domain extraction, HA link detection, missing-capability path
-- get_capabilities() HA flag — ManagedFirewallHA/ManagedLoadbalancerHA typename toggles ha_enabled
 - Integration with device data shapes used by BaseDeviceTransform
 """
 
@@ -398,118 +397,6 @@ class TestDC1FirewallHAScenario:
 
 
 # ---------------------------------------------------------------------------
-# get_capabilities HA flag
-# ---------------------------------------------------------------------------
-
-
-class TestGetCapabilitiesHAFlag:
-    def test_ha_enabled_when_firewall_ha_present(self) -> None:
-        from transforms.common import get_capabilities
-
-        result = get_capabilities(
-            {
-                "capabilities": [
-                    {"typename": "ManagedFirewallHA"},
-                ]
-            }
-        )
-        assert result["ha_enabled"] is True
-
-    def test_ha_enabled_when_lb_ha_present(self) -> None:
-        from transforms.common import get_capabilities
-
-        result = get_capabilities(
-            {
-                "capabilities": [
-                    {"typename": "ManagedLoadbalancerHA"},
-                ]
-            }
-        )
-        assert result["ha_enabled"] is True
-
-    def test_ha_disabled_without_managed_ha(self) -> None:
-        from transforms.common import get_capabilities
-
-        result = get_capabilities(
-            {
-                "capabilities": [
-                    {"typename": "ManagedBGP"},
-                ]
-            }
-        )
-        assert result["ha_enabled"] is False
-
-    def test_ha_enabled_alongside_bgp(self) -> None:
-        from transforms.common import get_capabilities
-
-        result = get_capabilities(
-            {
-                "capabilities": [
-                    {"typename": "ManagedBGP"},
-                    {"typename": "ManagedFirewallHA"},
-                ]
-            }
-        )
-        assert result["ha_enabled"] is True
-        assert result["bgp_enabled"] is True
-
-    def test_ha_enabled_does_not_affect_mlag_flag(self) -> None:
-        from transforms.common import get_capabilities
-
-        result = get_capabilities(
-            {
-                "capabilities": [
-                    {"typename": "ManagedFirewallHA"},
-                ]
-            }
-        )
-        assert result["ha_enabled"] is True
-        assert result["mlag_enabled"] is False
-
-    def test_ha_disabled_with_empty_capabilities(self) -> None:
-        from transforms.common import get_capabilities
-
-        result = get_capabilities({"capabilities": []})
-        assert result["ha_enabled"] is False
-
-    def test_ha_disabled_with_managed_mlag_only(self) -> None:
-        from transforms.common import get_capabilities
-
-        result = get_capabilities(
-            {
-                "capabilities": [
-                    {"typename": "ManagedMLAG"},
-                ]
-            }
-        )
-        assert result["ha_enabled"] is False
-
-    def test_ha_enabled_when_proxy_ha_present(self) -> None:
-        from transforms.common import get_capabilities
-
-        result = get_capabilities(
-            {
-                "capabilities": [
-                    {"typename": "ManagedProxyHA"},
-                ]
-            }
-        )
-        assert result["ha_enabled"] is True
-
-    def test_ha_enabled_when_cloud_proxy_ha_present(self) -> None:
-        from transforms.common import get_capabilities
-
-        result = get_capabilities(
-            {
-                "capabilities": [
-                    {"typename": "ManagedCloudProxy"},
-                ]
-            }
-        )
-        assert result["ha_enabled"] is True
-
-
-# ---------------------------------------------------------------------------
 # get_ha — ManagedProxyHA and ManagedCloudProxy are matched
 # ---------------------------------------------------------------------------
 
@@ -628,7 +515,7 @@ class TestInlineAddresses:
             "terminate_inline": True,
             "inline_service": {"name": "fw-ha"},
             "gateway": {"address": "10.1.0.1/24"},
-            "interface_capabilities": [
+            "capabilities": [
                 {"device": {"name": "fw-01"}, "ip_address": {"address": "10.1.0.2/24"}},
                 {"device": {"name": "fw-02"}, "ip_address": {"address": "10.1.0.3/24"}},
             ],

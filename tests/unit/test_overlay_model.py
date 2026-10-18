@@ -127,7 +127,7 @@ def _transit_peering() -> dict[str, Any]:
         "name": "TRANSIT",
         "session_type": "EBGP",
         "peering_role": "regular",
-        "interface_capabilities": [
+        "capabilities": [
             {
                 "name": "Ethernet1/14",
                 "device": {"name": "eg-fr01"},

@@ -29,7 +29,7 @@ def _edge(
                     {
                         "name": "TRANSIT-LUMEN-FRA1",
                         "password": "x",
-                        "interface_capabilities": [
+                        "capabilities": [
                             {
                                 "name": "Ethernet1/14",
                                 "device": {"name": "eg-fr01"},

@@ -47,7 +47,7 @@ query loadbalancer_config($device: String!) {
                 ip_address { node { address { value } ip_namespace { node { name { value } } } } }
                 parent_interface { node { name { value } } }
               }
-              interface_capabilities {
+              capabilities {
                 edges {
                   node {
                     __typename
@@ -69,22 +69,6 @@ query loadbalancer_config($device: String!) {
                             rise { value }
                             fall { value }
                             timeout { value }
-                          }
-                        }
-                      }
-                      members {
-                        edges {
-                          node {
-                            name { value }
-                            weight { value }
-                            pool_interfaces {
-                              edges {
-                                node {
-                                  port { value }
-                                  ip_address { node { address { value } } }
-                                }
-                              }
-                            }
                           }
                         }
                       }

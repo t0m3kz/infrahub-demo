@@ -314,6 +314,15 @@ ALL_DEMO_INTERNET_TRANSIT_CIRCUITS: frozenset[str] = frozenset(
     {"INET-LUMEN-EQXFR2", "INET-COGENT-EQXFR2", "INET-LUMEN-EQXPA4", "INET-COGENT-EQXPA4"}
 )
 
+# The SD-WAN offices' internet access (add_sdwan_edge): INET-<office> runs from the office edge's GE1 to a free
+# `customer` port of the one ISP access PE (30_all/04_internet), in the ISP's location. The offices board in one load and
+# take the first free port in natural order under a lock, so together they hold xe-0/1/[0..n-1] exactly.
+ALL_DEMO_SDWAN_UNDERLAY_CIRCUITS: dict[str, str] = {f"INET-{name(office)}": name(office) for office in _SDWAN_OFFICES}
+ALL_DEMO_SDWAN_EDGE_UPLINK = "GE1"
+ALL_DEMO_ISP_ACCESS_DEVICE = "EXT-ORANGE"
+ALL_DEMO_ISP_ACCESS_LOCATION = "ISP-ORANGE"
+ALL_DEMO_ISP_ACCESS_PORTS: frozenset[str] = frozenset(f"xe-0/1/{n}" for n in range(len(_SDWAN_OFFICES)))
+
 # INTERNET upstream (PR 4c, extended by the metro edge pair): the colo edges are
 # their metro's EVPN Multi-Site border gateways and export the ISP default route
 # as an EVPN type-5 route (L3 VNI 60002, one global route-target for the
@@ -352,6 +361,39 @@ ALL_DEMO_EDGE_INTERLINKS: dict[str, tuple[tuple[str, str], tuple[str, str]]] = {
 # metro -> the one FABRIC-<a>-<b> iBGP session (peering_role fabric) between the pair's overlay processes.
 ALL_DEMO_FABRIC_PEERINGS: dict[str, str] = {
     metro: f"FABRIC-{a}-{b}" for metro, (a, b) in ALL_DEMO_EDGE_PAIR_METROS.items()
+}
+
+# The offices with a fabric (add_office_fabric): office -> role -> the switch names the generator derives (a flat office
+# is named `<prefix>-<office>NN`: `ds-` for the distribution-switches, `as-` for the access-switches). Declared nowhere:
+# a fabric_templates line is the whole input.
+_OFFICE_SWITCH_PREFIXES = {"distribution-switch": "ds", "access-switch": "as"}
+ALL_DEMO_OFFICE_FABRICS: dict[str, dict[str, tuple[str, ...]]] = {
+    name(office): {
+        role: tuple(
+            f"{prefix}-{name(office).lower()}{index:02d}"
+            for index in range(
+                1,
+                1
+                + sum(
+                    int(quantity)
+                    for quantity, template_role, _ in office.item["fabric_templates"]
+                    if template_role == role
+                ),
+            )
+        )
+        for role, prefix in _OFFICE_SWITCH_PREFIXES.items()
+    }
+    for office in _all_demo("TopologyCustomerOffice")
+    if office.item.get("fabric_templates")
+}
+
+# The WAN exit of an office with both a fabric and an SD-WAN edge (add_office_fabric): office -> its
+# distribution-switches, each peered to `<office>-EDGE1` by one `WAN-EXIT-<switch>-<edge>` eBGP session in the
+# office's tenant VRF, over a dot1q sub-interface tagged utils.exchange_transit.wan_exit_vlan.
+ALL_DEMO_OFFICE_WAN_EXITS: dict[str, tuple[str, ...]] = {
+    name(office): ALL_DEMO_OFFICE_FABRICS[name(office)]["distribution-switch"]
+    for office in _SDWAN_OFFICES
+    if name(office) in ALL_DEMO_OFFICE_FABRICS
 }
 
 # The metro-owned slice of Technical-IPv6 the interlink /127 comes from: `{metro}-technical-ipv6-pool`.
@@ -416,7 +458,7 @@ def _sdwan_tunnel(office: Declared) -> tuple[str, VirtualCircuitExpectation]:
 
 # The full virtual-circuit fabric. `physical_circuits` is the underlay mapping
 # and `interfaces` the minimum number of terminating DcimInterfaces reached
-# through interface_capabilities — the one uniform "what is this port doing"
+# through capabilities — the one uniform "what is this port doing"
 # edge in the schema.
 ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
     "VC-C005-DC10-AWS-EUC1": {
@@ -721,15 +763,19 @@ ALL_DEMO_EXPECTED_OBJECTS["ManagedFirewallContext"] = ALL_DEMO_SHARED_FIREWALL_C
 )
 ALL_DEMO_EXPECTED_OBJECTS["TopologyRoutedExchange"] = ALL_DEMO_TRANSIT_EXCHANGES
 
-# Every VXLAN segment -> the sites (DC or colocation metro) of the
+# Every VXLAN segment -> the sites (DC, colocation metro or office) of the
 # deployments it is activated in: one ManagedSegmentDeployment record each
 # (a dc_pair "stretch" segment has two DC legs; C005's colo-services-stretch
 # one DC leg plus one colocation-metro leg, FR, reached over DF-DC10-EQXFR2
-# through the EVPN Multi-Site border gateways).
+# through the EVPN Multi-Site border gateways; C005's office-lan one leg, the
+# office itself: an office hosts its own segments, it has no site above it).
 _FOOTPRINT_SITES = {
-    name(deployment): _site(deployment)
-    for kind in ("TopologyCustomerDC", "TopologyCustomerColocation")
-    for deployment in _all_demo(kind)
+    **{
+        name(deployment): _site(deployment)
+        for kind in ("TopologyCustomerDC", "TopologyCustomerColocation")
+        for deployment in _all_demo(kind)
+    },
+    **{name(office): name(office) for office in _all_demo("TopologyCustomerOffice")},
 }
 ALL_DEMO_SEGMENT_LEGS: dict[str, tuple[str, ...]] = {
     name(segment): tuple(_FOOTPRINT_SITES[deployment] for deployment in segment.item.get("customer_deployments") or [])

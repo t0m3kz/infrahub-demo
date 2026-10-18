@@ -9,7 +9,7 @@ fragment FirewallContextLegFields on ManagedFirewallContext {
   # Deployments whose segments terminate here: a leaf sends a flow through
   # the firewall only when both its segments are served by one context.
   served_deployments { edges { node { id } } }
-  interface_capabilities {
+  capabilities {
     edges {
       node {
         name { value }

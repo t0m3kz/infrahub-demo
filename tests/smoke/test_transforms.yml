@@ -31,6 +31,20 @@ infrahub_tests:
           kind: python-transform-smoke
 
   - resource: PythonTransform
+    resource_name: access_switch
+    tests:
+      - name: syntax_check
+        spec:
+          kind: python-transform-smoke
+
+  - resource: PythonTransform
+    resource_name: distribution_switch
+    tests:
+      - name: syntax_check
+        spec:
+          kind: python-transform-smoke
+
+  - resource: PythonTransform
     resource_name: tor
     tests:
       - name: syntax_check

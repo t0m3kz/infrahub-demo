@@ -34,7 +34,7 @@ def _context(
             "name": _v(f"{ctx_id}-name"),
             "tenant": {"node": {"id": tenant, "display_label": tenant} if tenant else None},
             "served_deployments": {"edges": [{"node": {"id": d, "display_label": d}} for d in served or []]},
-            "interface_capabilities": {"edges": legs if legs is not None else [_leg()]},
+            "capabilities": {"edges": legs if legs is not None else [_leg()]},
         }
     }
 
@@ -48,7 +48,7 @@ def _port(device_role: str, context_ids: list[str], extra_kind: bool = False) ->
         "node": {
             "id": "port",
             "device": {"node": {"name": _v("dev"), "role": _v(device_role)}},
-            "interface_capabilities": {"edges": caps},
+            "capabilities": {"edges": caps},
         }
     }
 

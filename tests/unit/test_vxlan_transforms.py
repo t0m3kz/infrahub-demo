@@ -1163,11 +1163,6 @@ def _minimal_ctx(**overrides) -> dict:
         "bgp": None,
         "vxlan": {"enabled": False},
         "vrf_routes": [],
-        # Management-section variables expected by arista_eos_management.j2
-        "ntp": None,
-        "syslog": None,
-        "snmp": None,
-        "aaa": None,
         # MLAG section
         "mlag": None,
     }
@@ -1301,7 +1296,7 @@ def _make_ospf_interface(
     authentication_mode: str | None = None,
     password: str | None = None,
 ) -> dict:
-    """Build a cleaned RoutingOSPFInterface dict as it appears in interface_capabilities."""
+    """Build a cleaned RoutingOSPFInterface dict as it appears in capabilities."""
     entry: dict = {
         "typename": "RoutingOSPFInterface",
         "peering": {
@@ -1328,7 +1323,7 @@ class TestGetInterfacesOspfAuthentication:
     def test_password_and_mode_pass_through(self):
         iface = {
             "name": "Ethernet1",
-            "interface_capabilities": [
+            "capabilities": [
                 _make_ospf_interface(area=0, authentication_mode="md5", password="s3cr3t"),
             ],
         }
@@ -1339,7 +1334,7 @@ class TestGetInterfacesOspfAuthentication:
     def test_no_password_defaults_to_none(self):
         iface = {
             "name": "Ethernet1",
-            "interface_capabilities": [_make_ospf_interface(area=0)],
+            "capabilities": [_make_ospf_interface(area=0)],
         }
         result = get_interfaces([iface])
         assert result[0]["ospf"]["authentication_mode"] is None
@@ -1414,7 +1409,7 @@ class TestGetInterfacesFirewallContextDot1q:
         iface = {
             "name": "Ethernet1/49.150",
             "parent_interface": {"name": "Ethernet1/49"},
-            "interface_capabilities": [
+            "capabilities": [
                 {"typename": "ManagedFirewallContext", "name": "dc10-shared", "vlan_id": 150},
             ],
         }
@@ -1423,7 +1418,7 @@ class TestGetInterfacesFirewallContextDot1q:
         assert result[0]["parent_interface"] == {"name": "Ethernet1/49"}
 
     def test_no_firewall_context_capability_leaves_dot1q_vlan_none(self):
-        iface = {"name": "Ethernet1", "interface_capabilities": []}
+        iface = {"name": "Ethernet1", "capabilities": []}
         result = get_interfaces([iface])
         assert result[0]["dot1q_vlan"] is None
         assert result[0]["parent_interface"] is None
@@ -1457,7 +1452,7 @@ class TestSelectEvpnBgpProcess:
 
     def test_non_bgp_capabilities_are_ignored(self) -> None:
         caps = [
-            {"typename": "ManagedNTP", "name": "ntp"},
+            {"typename": "ManagedStandaloneVlanDomain", "name": "vlan-domain"},
             {"typename": "ManagedOSPF", "name": "ospf"},
         ]
         assert _select_evpn_bgp_process(caps) is None

@@ -13,7 +13,7 @@ version: "1.0"
 #                              two VRFs. Its legs are the context's firewall
 #                              VLAN sub-interfaces, one per VRF, each with an
 #                              address in that VRF's namespace (carried in
-#                              interface_capabilities). No leak: each VRF keeps
+#                              capabilities). No leak: each VRF keeps
 #                              its own routing table and statics point at the
 #                              context's leg VIP in that VRF. Created per
 #                              context by the customer boarding generators,
@@ -21,9 +21,9 @@ version: "1.0"
 #                              bootstrap exchanges.
 #
 # It inherits ManagedGenericInterfaces so it surfaces in
-# interface.interface_capabilities — the same capability list already used
+# interface.capabilities — the same capability list already used
 # by RoutingOSPFInterface and ManagedVxlanSegment (see
-# queries/fragments/interface_capabilities.gql). This is what lets a
+# queries/fragments/interface_capability_fields.gql). This is what lets a
 # device config query (e.g. border_leaf_config) discover "what is this
 # port doing" without a second, namespace-rooted query.
 #
@@ -32,10 +32,12 @@ version: "1.0"
 # as separate interface_a/interface_z fields, so the two can't disagree.
 #
 # TopologyRoutedExchange's interfaces (the legs) are unconstrained at the schema level
-# (min_count/max_count cannot be overridden per-node on a relationship
-# inherited from a generic — see identifier collision if attempted); the
-# "one leg per namespace on the gateway context's devices" invariant is
-# enforced by validate_exchange_gateways() in checks/common.py, not by the schema.
+# (no min_count/max_count). A node may re-declare an inherited relationship to add a
+# count, but only under the SAME name and the same peer (the node declaration then
+# replaces the generic's wholesale); a DIFFERENTLY named relationship carrying the
+# same identifier collides. The "one leg per namespace on the gateway context's
+# devices" invariant is enforced by validate_exchange_gateways() in
+# checks/common.py, not by the schema.
 
 generics:
   - name: ExchangeGateway

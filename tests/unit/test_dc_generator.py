@@ -106,7 +106,6 @@ def _deployment(
                 "underlay_protocol": underlay_protocol,
                 "naming_convention": "standard",
                 "fabric_interface_sorting_method": "bottom_up",
-                "spine_interface_sorting_method": "bottom_up",
                 "fabric_templates": _fabric_templates(
                     amount_of_super_spines=amount_of_super_spines,
                     super_spine_template=super_spine_template,

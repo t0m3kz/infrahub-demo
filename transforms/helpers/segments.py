@@ -76,7 +76,7 @@ def segment_hosting_candidates(deployment: Any) -> list[dict]:
     Only TopologyDataCenter and TopologyColocationMetro inherit
     TopologySegmentHosting: a border-leaf's deployment IS the DC, but a leaf's
     deployment is the pod, one hop below it. The device-scoped fragments
-    (evpn_fabric.gql, firewall_contexts.gql, loadbalancer_vips.gql) nest one
+    (evpn_fabric.gql, firewall_contexts.gql) nest one
     `parent` hop for that case.
     """
     parent = deployment.get("parent") if isinstance(deployment, dict) else None

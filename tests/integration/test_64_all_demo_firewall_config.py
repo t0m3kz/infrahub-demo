@@ -28,6 +28,10 @@ firewall config of every site (leg interface, VIP, default route via the INTERNE
 leg, PROD/NON-PROD isolation), a DC11 border-leaf config carrying the
 transit VRF routes, and the FR edges' config carrying the metro's transit legs. Everything is derived from the loaded graph and from
 test_constants' environment-driven expectations.
+
+A last step runs CheckLispFabric and renders every switch of the offices' LISP fabrics (add_office_fabric): the
+distribution-switches as map-servers and the access-switches as edges, with the WAN exit where the office has an
+SD-WAN edge.
 """
 
 from __future__ import annotations
@@ -42,9 +46,12 @@ import pytest
 from infrahub_sdk import InfrahubClient
 
 from checks.firewall import CheckFirewall
+from checks.lisp_fabric import CheckLispFabric
 from generators.protocols import DcimPhysicalDevice
 from transforms.config.access_leaf import AccessLeaf
+from transforms.config.access_switch import AccessSwitch
 from transforms.config.border_leaf import BorderLeaf
+from transforms.config.distribution_switch import DistributionSwitch
 from transforms.config.edge import Edge
 from transforms.config.leaf import Leaf
 from utils.exchange_transit import (
@@ -69,6 +76,8 @@ from .test_constants import (
     ALL_DEMO_INTERNET_BGWS,
     ALL_DEMO_INTERNET_EGRESS_RULES,
     ALL_DEMO_MANAGEMENT_RULES,
+    ALL_DEMO_OFFICE_FABRICS,
+    ALL_DEMO_OFFICE_WAN_EXITS,
     ALL_DEMO_SNAT_POOL_PREFIX,
     INTERNET_L3_VNI,
     INTERNET_ROUTE_TARGET,
@@ -1392,3 +1401,76 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
             f"Leaf PBR towards the services segment on branch '{scenario_branch}' is wrong:\n"
             + "\n".join(f"  - {e}" for e in errors)
         )
+
+    @pytest.mark.order(402)
+    @pytest.mark.dependency(scope="session", depends=["all_demo_firewall_transit_render"])
+    @pytest.mark.asyncio
+    async def test_08_office_fabric_check_passes_and_switches_render_lisp(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """CheckLispFabric finds nothing to report, and every switch of an office fabric renders its LISP site.
+
+        The distribution-switches are the co-located map-servers: ``router lisp``, ``map-server``, the office's
+        ``site`` with its key and the EID records of its segments, over the OSPF underlay. The access-switches are
+        the edges: ``router lisp`` with ``etr map-server ... key`` toward every map-server and no map-server role of
+        their own. An office with an SD-WAN edge adds the exit: ``proxy-etr`` on the borders, ``use-petr`` on the
+        edges. No office renders the EVPN control plane or VXLAN (the BGP process of the WAN exit is not EVPN). The
+        shape of the render is pinned, not device behaviour: every LISP line is unverified-no-lab.
+        """
+        logging.info("=== %s - Step 8: Office fabrics ===", SCENARIO_NAME)
+
+        check = CheckLispFabric(branch=scenario_branch, client=async_client_main, params={})
+        passed = await check.run()
+        check_errors = [str(entry.get("message") or "") for entry in check.errors]
+        assert passed and not check_errors, f"CheckLispFabric failed on branch '{scenario_branch}':\n" + "\n".join(
+            f"  - {e}" for e in check_errors
+        )
+        assert ALL_DEMO_OFFICE_FABRICS, "the 30_all data declares no office fabric"
+
+        errors: list[str] = []
+        for office, switches in sorted(ALL_DEMO_OFFICE_FABRICS.items()):
+            wan_exit = office in ALL_DEMO_OFFICE_WAN_EXITS
+            for role, query, transform_cls in (
+                ("distribution-switch", "distribution_switch_config", DistributionSwitch),
+                ("access-switch", "access_switch_config", AccessSwitch),
+            ):
+                assert switches[role], f"{office} has no {role}"
+                for device in switches[role]:
+                    rendered = await render_device_config(
+                        async_client_main, scenario_branch, device, query=query, transform_cls=transform_cls
+                    )
+                    expected = {
+                        "router lisp": r"^router lisp$",
+                        "OSPF underlay": r"^router ospf ",
+                        "etr map-server ... key": r"^\s+etr map-server \S+ key \S+$",
+                    }
+                    if role == "distribution-switch":
+                        expected |= {
+                            "map-server": r"^\s+map-server$",
+                            f"site {office}": rf"^\s+site {re.escape(office)}$",
+                            "site authentication-key": r"^\s+authentication-key \S+$",
+                            "L3 eid-record": r"^\s+eid-record instance-id \d+ \S+/\d+ accept-more-specifics$",
+                            "L2 eid-record": r"^\s+eid-record instance-id \d+ any-mac$",
+                        }
+                    if wan_exit:
+                        expected["proxy-etr" if role == "distribution-switch" else "use-petr"] = (
+                            r"^\s+proxy-etr$" if role == "distribution-switch" else r"^\s+use-petr \S+$"
+                        )
+                    errors += [
+                        f"{device}: no '{what}'"
+                        for what, pattern in expected.items()
+                        if not re.search(pattern, rendered, re.MULTILINE)
+                    ]
+                    if role == "access-switch" and re.search(r"^\s+map-server$", rendered, re.MULTILINE):
+                        errors.append(f"{device}: renders the map-server role (only distribution-switches are)")
+                    errors += [
+                        f"{device}: renders '{pattern}'"
+                        for pattern in (r"l2vpn evpn", r"\bnve1\b")
+                        if re.search(pattern, rendered, re.MULTILINE)
+                    ]
+        assert not errors, f"Office fabric renders on branch '{scenario_branch}' are wrong:\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
+        logging.info("Office fabrics verified: %s", sorted(ALL_DEMO_OFFICE_FABRICS))

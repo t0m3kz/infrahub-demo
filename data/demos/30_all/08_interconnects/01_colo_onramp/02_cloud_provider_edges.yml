@@ -1,0 +1,26 @@
+---
+# AWS's Direct Connect router at Equinix FR2, as seen from our side of the
+# transit VIF (01_transit_vif.yml). It is AWS's kit, not ours: owned by AWS
+# (P004), in no device group, so no config artifact or device check targets
+# it. It exists, like the ISP provider edges in ../06_internet/02_devices.yml,
+# so the VIF's eBGP session (03_vif_handoff.yml) has a second endpoint and a
+# remote AS. MX204_ISP_PE is the generic provider-edge stand-in template; only
+# its et-0/0/0 port is used, as the parent of the VIF sub-interface.
+#
+# Created before 03_vif_handoff.yml (../05_cloud_endpoints/), whose sub-interface references it by
+# device name, and before 03_physical_circuits.yml (this directory), whose cross-connects end on
+# these routers' et-0/0/0. The Azure router is the far end of XC-EQXPA4-AZURE-WEU only: no VIF
+# rides it.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: "EXT-AWS-DX-FR2"
+      object_template: MX204_ISP_PE
+      owner: "P004"
+      description: "AWS Direct Connect router at Equinix FR2 (far end of dx-eqx-fr2-euc1)"
+    - name: "EXT-AZURE-ER-PA4"
+      object_template: MX204_ISP_PE
+      owner: "P005"
+      description: "Azure ExpressRoute router at Equinix PA4 (far end of XC-EQXPA4-AZURE-WEU)"

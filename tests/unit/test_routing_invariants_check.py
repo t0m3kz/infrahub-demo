@@ -89,7 +89,7 @@ def _vif(vif_id: str, circuits: dict[str, list[str | None]], env: str | None = N
                     "node": {
                         "id": f"c-{circuit}",
                         "name": _v(circuit),
-                        "interface_capabilities": {
+                        "capabilities": {
                             "edges": [
                                 {
                                     "node": {

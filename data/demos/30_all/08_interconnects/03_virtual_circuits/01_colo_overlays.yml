@@ -8,7 +8,7 @@
 # becomes a customer-visible risk through the overlays bound to it. Editing
 # DF-DC10-EQXFR2 hits exactly the tenants whose virtual circuits list it.
 #
-# Termination is expressed through `interface_capabilities` (ManagedGenericInterfaces)
+# Termination is expressed through `capabilities` (ManagedGenericInterfaces)
 # rather than any circuit-specific relationship on the interface — that is the one
 # uniform answer to "what is this port doing", and the traversal walks outward from
 # a changed interface along it.
@@ -41,7 +41,7 @@ spec:
       physical_circuits:
         - "DF-DC10-EQXFR2"
         - "XC-EQXFR2-AWS-EUC1"
-      interface_capabilities:
+      capabilities:
         - ["bl-dc101101", "Ethernet1/35"]
         - ["eg-fr01", "Ethernet1/13"]
 
@@ -61,7 +61,7 @@ spec:
       physical_circuits:
         - "DF-DC11-EQXFR2"
         - "XC-EQXFR2-AWS-EUC1"
-      interface_capabilities:
+      capabilities:
         - ["bl-dc1111101", "Ethernet1/35"]
         - ["eg-fr01", "Ethernet1/13"]
 
@@ -85,7 +85,7 @@ spec:
       physical_circuits:
         - "DF-DC12-EQXPA4"
         - "XC-EQXPA4-AZURE-WEU"
-      interface_capabilities:
+      capabilities:
         - ["bl-dc1212101", "Ethernet1/35"]
         - ["eg-pa01", "Ethernet1/13"]
 
@@ -109,5 +109,5 @@ spec:
         - "eu-central-1"
       physical_circuits:
         - "XC-EQXFR2-AWS-EUC1"
-      interface_capabilities:
+      capabilities:
         - ["eg-fr01", "Ethernet1/13"]

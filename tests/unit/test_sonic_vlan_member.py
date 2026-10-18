@@ -75,8 +75,8 @@ def test_single_vlan_access_and_trunk_ports_are_distinguished() -> None:
     """Dropping the second VLAN of the trunk turns it into an untagged access member."""
     data = _load("leaf_sonic_ebgp_ibgp")
     port = _port(data, "Ethernet10")
-    caps = port["interface_capabilities"]["edges"]
-    port["interface_capabilities"]["edges"] = caps[:1]
+    caps = port["capabilities"]["edges"]
+    port["capabilities"]["edges"] = caps[:1]
     configdb = _render(Leaf, data)
     assert list(configdb["VLAN_MEMBER"].values()) == [_UNTAGGED]
 
@@ -84,7 +84,7 @@ def test_single_vlan_access_and_trunk_ports_are_distinguished() -> None:
 def test_no_vlan_on_any_port_renders_no_vlan_member_table() -> None:
     """Failure path: with no port carrying a VLAN the table is absent, not empty."""
     data = _load("leaf_sonic_ebgp_ibgp")
-    _port(data, "Ethernet10")["interface_capabilities"]["edges"] = []
+    _port(data, "Ethernet10")["capabilities"]["edges"] = []
     assert "VLAN_MEMBER" not in _render(Leaf, data)
 
 
@@ -100,8 +100,8 @@ def test_mlag_peer_link_membership_is_merged_not_replaced() -> None:
     node_interfaces = data["DcimDevice"]["edges"][0]["node"]["interfaces"]["edges"]
     index = next(i for i, e in enumerate(node_interfaces) if e["node"]["name"]["value"] == "Ethernet10")
     # The segments' local VLAN is allocated per VLAN domain: this device's is its MLAG.
-    node_interfaces[index]["node"]["interface_capabilities"] = json.loads(
-        json.dumps(host["interface_capabilities"]).replace("dev-dc1-leaf-01", "mlag-dom-1")
+    node_interfaces[index]["node"]["capabilities"] = json.loads(
+        json.dumps(host["capabilities"]).replace("dev-dc1-leaf-01", "mlag-dom-1")
     )
     members = _render(Leaf, data)["VLAN_MEMBER"]
     assert members["Vlan4094|PortChannel100"] == _TAGGED

@@ -9,7 +9,7 @@ Two edges get special attention because the schema deliberately has exactly one
 way to express each of them, and a regression would silently split the graph
 into islands:
 
-  * ``interface_capabilities`` — how a circuit surfaces on the port it
+  * ``capabilities`` — how a circuit surfaces on the port it
     terminates on. It is the single uniform "what is this port doing" edge, and
     replaced the bespoke ``interfaces`` relationship the node used to declare.
   * ``cloud_endpoints`` — how a circuit reaches its cloud side, which is a
@@ -29,8 +29,9 @@ import logging
 import pytest
 from infrahub_sdk import InfrahubClient
 
+from generators.helpers.naming import sdwan_edge_name
 from generators.helpers.pools import FW_CONTEXT_VLAN_END, FW_CONTEXT_VLAN_START
-from utils.exchange_transit import EXCHANGE_PEERS, TRANSIT_OFFSETS, transit_vlan
+from utils.exchange_transit import EXCHANGE_PEERS, TRANSIT_OFFSETS, transit_vlan, wan_exit_vlan
 
 from .conftest import TestInfrahubDockerWithClient
 from .test_constants import (
@@ -51,9 +52,15 @@ from .test_constants import (
     ALL_DEMO_INTERNET_TRANSIT_CIRCUITS,
     ALL_DEMO_INTERNET_TRANSIT_PEERINGS,
     ALL_DEMO_INTERNET_UPSTREAM_BY_DC,
+    ALL_DEMO_ISP_ACCESS_DEVICE,
+    ALL_DEMO_ISP_ACCESS_LOCATION,
+    ALL_DEMO_ISP_ACCESS_PORTS,
     ALL_DEMO_LEGACY_EXCHANGES,
     ALL_DEMO_METRO_SITE_VIPS,
+    ALL_DEMO_OFFICE_WAN_EXITS,
     ALL_DEMO_PHYSICAL_CIRCUIT_TYPES,
+    ALL_DEMO_SDWAN_EDGE_UPLINK,
+    ALL_DEMO_SDWAN_UNDERLAY_CIRCUITS,
     ALL_DEMO_SEGMENT_LEGS,
     ALL_DEMO_SHARED_FIREWALL_CONTEXTS,
     ALL_DEMO_SNAT_ADDRESSES,
@@ -99,7 +106,7 @@ query {
             vlan_id { value }
             tenant { node { id } }
             cluster { node { ... on ManagedFirewallHA { capabilities { edges { node { id } } } } } }
-            interface_capabilities { edges { node { name { value } } } }
+            capabilities { edges { node { name { value } } } }
           }
         }
       }
@@ -121,7 +128,7 @@ query ($names: [String]) {
         password { node { name { value } } }
         address_families { edges { node { afi { value } safi { value } } } }
         bgp_processes { edges { node { name { value } process_role { value } } } }
-        interface_capabilities {
+        capabilities {
           edges {
             node {
               name { value }
@@ -167,6 +174,40 @@ query ($ids: [ID]) {
 }
 """
 
+# The office WAN exit sessions add_office_fabric builds toward the SD-WAN edge (the VCO describes the edge's side
+# from the same peering): processes with their AS, the key, and the two dot1q sub-interfaces with their addresses.
+WAN_EXIT_SESSIONS_QUERY = """
+query ($names: [String]) {
+  ManagedBGPPeering(name__values: $names) {
+    edges {
+      node {
+        name { value }
+        peering_role { value }
+        session_type { value }
+        ttl { value }
+        password { node { name { value } } }
+        address_families { edges { node { afi { value } safi { value } } } }
+        bgp_processes {
+          edges { node { name { value } process_role { value } local_as { node { asn { value } } } } }
+        }
+        capabilities {
+          edges {
+            node {
+              name { value }
+              device { node { name { value } } }
+              ... on DcimVirtualInterface {
+                parent_interface { node { name { value } } }
+                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
 # The metro-owned slice of Technical-IPv6 the interlink /127 comes from.
 EDGE_PAIR_POOL_QUERY = """
 query ($name: String) {
@@ -204,7 +245,7 @@ query ($names: [String]) {
       node {
         name { value }
         session_type { value }
-        interface_capabilities {
+        capabilities {
           edges {
             node {
               name { value }
@@ -254,11 +295,13 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify the physical underlay: type mix, provider, and two endpoints.
+        """Verify the physical underlay: type mix, provider, two locations and two distinct ends.
 
-        Every circuit is point-to-point, so exactly two locations is a hard
-        invariant — a one-ended circuit is a dangling reference the loader
-        accepts silently.
+        Every circuit is point-to-point, so exactly two locations and exactly
+        two distinct ports (its capabilities, min and max count 2) are
+        hard invariants, and a port is an end of at most one circuit — the
+        SD-WAN offices' INET-<office> circuits, created concurrently, are where a
+        shared access port would show.
         """
         logging.info("=== %s - Step 1: Physical Circuits ===", SCENARIO_NAME)
 
@@ -296,11 +339,63 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             if circuit["circuit_type"] in ("dark_fiber", "cross_connect") and circuit["owner"]:
                 errors.append(f"{circuit_id}: shared {circuit['circuit_type']} circuit owned by '{circuit['owner']}'")
 
+        errors.extend(self._port_errors(physical))
+        errors.extend(self._sdwan_underlay_errors(physical))
+
         assert not errors, f"30_all physical circuits are wrong on branch '{scenario_branch}':\n" + "\n".join(
             f"  - {e}" for e in errors
         )
 
         logging.info("Physical circuits verified: %d (%s)", len(physical), dict(sorted(by_type.items())))
+
+    @staticmethod
+    def _port_errors(physical: list[dict]) -> list[str]:
+        """Every circuit has two distinct ends, and no port is an end of two circuits."""
+        errors: list[str] = []
+        circuit_of_port: dict[tuple[str, str], str] = {}
+        for circuit in sorted(physical, key=lambda c: c["circuit_id"]):
+            circuit_id = circuit["circuit_id"]
+            if len(circuit["end_ids"]) != 2 or len(set(circuit["end_ids"])) != 2:
+                errors.append(f"{circuit_id}: ends {circuit['ends']}, expected exactly 2 distinct ports")
+            for end in circuit["ends"]:
+                if end in circuit_of_port:
+                    errors.append(f"{end} is an end of both {circuit_of_port[end]} and {circuit_id}")
+                circuit_of_port[end] = circuit_id
+        return errors
+
+    @staticmethod
+    def _sdwan_underlay_errors(physical: list[dict]) -> list[str]:
+        """INET-<office>: the office edge's uplink to its own access-PE port, in the office and the ISP.
+
+        The offices board in one load and add_sdwan_edge picks the first free
+        port of the access PE under a lock, so the five circuits together
+        hold exactly xe-0/1/[0-4].
+        """
+        errors: list[str] = []
+        by_id = {circuit["circuit_id"]: circuit for circuit in physical}
+        isp_ports: list[str] = []
+        for circuit_id, office in sorted(ALL_DEMO_SDWAN_UNDERLAY_CIRCUITS.items()):
+            circuit = by_id.get(circuit_id)
+            if circuit is None:
+                errors.append(f"{circuit_id}: SD-WAN internet underlay of {office} was not created")
+                continue
+            if (sdwan_edge_name(office), ALL_DEMO_SDWAN_EDGE_UPLINK) not in circuit["ends"]:
+                errors.append(
+                    f"{circuit_id}: ends {circuit['ends']}, expected {sdwan_edge_name(office)} {ALL_DEMO_SDWAN_EDGE_UPLINK}"
+                )
+            isp_ends = [port for device, port in circuit["ends"] if device == ALL_DEMO_ISP_ACCESS_DEVICE]
+            if len(isp_ends) != 1:
+                errors.append(f"{circuit_id}: {len(isp_ends)} end(s) on {ALL_DEMO_ISP_ACCESS_DEVICE}, expected 1")
+            isp_ports.extend(isp_ends)
+            expected_locations = sorted([office, ALL_DEMO_ISP_ACCESS_LOCATION])
+            if circuit["locations"] != expected_locations:
+                errors.append(f"{circuit_id}: locations {circuit['locations']}, expected {expected_locations}")
+        if set(isp_ports) != ALL_DEMO_ISP_ACCESS_PORTS or len(isp_ports) != len(ALL_DEMO_ISP_ACCESS_PORTS):
+            errors.append(
+                f"{ALL_DEMO_ISP_ACCESS_DEVICE} ports {sorted(isp_ports)}, "
+                f"expected one circuit on each of {sorted(ALL_DEMO_ISP_ACCESS_PORTS)}"
+            )
+        return errors
 
     # ------------------------------------------------------------------
     # Virtual layer
@@ -353,7 +448,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             if len(circuit["interfaces"]) != expected["interfaces"]:
                 errors.append(
                     f"{name}: surfaces on {len(circuit['interfaces'])} interface(s) via "
-                    f"interface_capabilities, expected {expected['interfaces']}"
+                    f"capabilities, expected {expected['interfaces']}"
                 )
 
             expected_cloud = sorted(expected["cloud_endpoints"])
@@ -818,7 +913,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             # Sub-interfaces are `<uplink>.<vlan>`; the tagged edge ports (Ethernet1/15-16) have no dot.
             sub_vlans = sorted(
                 str(edge["node"]["name"]["value"]).rsplit(".", 1)[-1]
-                for edge in (context.get("interface_capabilities") or {}).get("edges", [])
+                for edge in (context.get("capabilities") or {}).get("edges", [])
                 if "." in str(edge["node"]["name"]["value"])
             )
             expected_vlans = sorted(
@@ -896,7 +991,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 (edge["node"]["device"]["node"]["name"]["value"], edge["node"]["name"]["value"]): (
                     ((edge["node"].get("ip_address") or {}).get("node") or {}).get("address", {}).get("value")
                 )
-                for edge in session["interface_capabilities"]["edges"]
+                for edge in session["capabilities"]["edges"]
             }
             if sorted(interfaces) != sorted(ends):
                 errors.append(f"{name}: on interfaces {sorted(interfaces)}, expected {sorted(ends)}")
@@ -951,7 +1046,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 errors.append(f"{name}: session type {session['session_type']['value']}, expected EBGP")
             local = [
                 edge["node"]
-                for edge in session["interface_capabilities"]["edges"]
+                for edge in session["capabilities"]["edges"]
                 if edge["node"]["device"]["node"]["name"]["value"] == edge_device
             ]
             if len(local) != 1:
@@ -979,7 +1074,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         for edge in dci["ManagedBGPPeering"]["edges"]:
             node = edge["node"]
             circuit_id = node["name"]["value"].removeprefix("DCI-")
-            devices = {i["node"]["device"]["node"]["name"]["value"] for i in node["interface_capabilities"]["edges"]}
+            devices = {i["node"]["device"]["node"]["name"]["value"] for i in node["capabilities"]["edges"]}
             landing.setdefault(ALL_DEMO_DCI_CIRCUITS[circuit_id][0], set()).update(
                 device for device in devices if device.startswith("eg-")
             )
@@ -1113,7 +1208,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                     errors.append(f"{name}: runs on {processes}")
                 session_ports = sorted(
                     (e["node"]["device"]["node"]["name"]["value"], e["node"]["name"]["value"])
-                    for e in session["interface_capabilities"]["edges"]
+                    for e in session["capabilities"]["edges"]
                 )
                 if session_ports != sorted(ends):
                     errors.append(f"{name}: on interfaces {session_ports}, expected {sorted(ends)}")
@@ -1148,4 +1243,93 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         )
 
         logging.info("Metro edge pairs verified: %s", sorted(ALL_DEMO_EDGE_INTERLINKS))
+        logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)
+
+    @pytest.mark.order(411)
+    @pytest.mark.dependency(scope="session", depends=["all_demo_physical_circuits"])
+    @pytest.mark.asyncio
+    async def test_09_verify_office_wan_exit(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """Verify each office with a fabric and an SD-WAN edge exits through it (add_office_fabric).
+
+        Per distribution-switch: one WAN-EXIT-<switch>-<edge> eBGP session (role regular, ttl 1, ipv4 unicast, keyed
+        with the office's wan-exit key) between a regular BGP process on the switch and one on the edge, over two
+        dot1q sub-interfaces <port>.<tag> in the office's tenant VRF (the tag is the VRF's wan_exit_vlan) addressed
+        from one /31. The switches of an office share one AS, the edge has another, both from the 32-bit private pool.
+        """
+        logging.info("=== %s - Step 9: Office WAN exit ===", SCENARIO_NAME)
+
+        errors: list[str] = []
+        for office, switches in sorted(ALL_DEMO_OFFICE_WAN_EXITS.items()):
+            edge = f"{office}-EDGE1"
+            namespace = deployment_namespace(office)
+            tag = wan_exit_vlan(transit_namespace_type(namespace))
+            expected = {f"WAN-EXIT-{switch}-{edge}": switch for switch in switches}
+            result = await async_client_main.execute_graphql(
+                query=WAN_EXIT_SESSIONS_QUERY, variables={"names": sorted(expected)}, branch_name=scenario_branch
+            )
+            sessions = {e["node"]["name"]["value"]: e["node"] for e in result["ManagedBGPPeering"]["edges"]}
+            if sorted(sessions) != sorted(expected):
+                errors.append(f"{office}: WAN exit sessions {sorted(sessions)}, expected {sorted(expected)}")
+
+            switch_asns: set[int] = set()
+            edge_asns: set[int] = set()
+            for name, switch in sorted(expected.items()):
+                session = sessions.get(name)
+                if session is None:
+                    continue
+                if (session["peering_role"]["value"], session["session_type"]["value"]) != ("regular", "EBGP"):
+                    errors.append(f"{name}: {session['peering_role']['value']}/{session['session_type']['value']}")
+                if session["ttl"]["value"] != 1:
+                    errors.append(f"{name}: ttl {session['ttl']['value']}, expected 1 (directly connected)")
+                key = ((session.get("password") or {}).get("node") or {}).get("name", {}).get("value")
+                if key != f"{office.lower()}-wan-exit-key":
+                    errors.append(f"{name}: keyed with '{key}', expected '{office.lower()}-wan-exit-key'")
+                families = sorted(
+                    (e["node"]["afi"]["value"], e["node"]["safi"]["value"])
+                    for e in session["address_families"]["edges"]
+                )
+                if families != [("ipv4", "unicast")]:
+                    errors.append(f"{name}: address families {families}")
+                processes = {e["node"]["name"]["value"]: e["node"] for e in session["bgp_processes"]["edges"]}
+                if sorted(processes) != sorted([f"{switch}-bgp-wan-exit", f"{edge}-bgp-wan-exit"]):
+                    errors.append(f"{name}: runs on {sorted(processes)}")
+                else:
+                    if {p["process_role"]["value"] for p in processes.values()} != {"regular"}:
+                        errors.append(
+                            f"{name}: process roles {[p['process_role']['value'] for p in processes.values()]}"
+                        )
+                    switch_asns.add(processes[f"{switch}-bgp-wan-exit"]["local_as"]["node"]["asn"]["value"])
+                    edge_asns.add(processes[f"{edge}-bgp-wan-exit"]["local_as"]["node"]["asn"]["value"])
+                ends = {
+                    e["node"]["device"]["node"]["name"]["value"]: e["node"] for e in session["capabilities"]["edges"]
+                }
+                if sorted(ends) != sorted([switch, edge]):
+                    errors.append(f"{name}: on devices {sorted(ends)}, expected {sorted([switch, edge])}")
+                    continue
+                networks = set()
+                for device, end in sorted(ends.items()):
+                    parent = ((end.get("parent_interface") or {}).get("node") or {}).get("name", {}).get("value")
+                    if not parent or end["name"]["value"] != f"{parent}.{tag}":
+                        errors.append(f"{name}: {device} interface {end['name']['value']}, expected <port>.{tag}")
+                    ip = ((end.get("ip_address") or {}).get("node")) or {}
+                    if ((ip.get("ip_namespace") or {}).get("node") or {}).get("name", {}).get("value") != namespace:
+                        errors.append(f"{name}: {device} address is not in {namespace}")
+                    if ip.get("address"):
+                        networks.add(ipaddress.IPv4Interface(ip["address"]["value"]).network)
+                if len(networks) != 1 or next(iter(networks)).prefixlen != 31:
+                    errors.append(f"{name}: the two ends are not one IPv4 /31 ({sorted(map(str, networks))})")
+            if len(switch_asns) > 1:
+                errors.append(f"{office}: the switches use several AS numbers {sorted(switch_asns)}, expected one")
+            if switch_asns & edge_asns or any(asn < 4200000000 for asn in switch_asns | edge_asns):
+                errors.append(f"{office}: AS numbers {sorted(switch_asns)} / {sorted(edge_asns)} (edge)")
+
+        assert not errors, f"30_all office WAN exits are wrong on branch '{scenario_branch}':\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
+
+        logging.info("Office WAN exits verified: %s", sorted(ALL_DEMO_OFFICE_WAN_EXITS))
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)

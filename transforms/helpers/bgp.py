@@ -77,15 +77,15 @@ def _extract_remote_asn_from_peering(peering_node: dict, remote_device_name: str
 
 
 def _peering_ends(peering_node: dict[str, Any], device_name: str) -> tuple[dict[str, Any], dict[str, Any]]:
-    """The peering's (local, remote) interface_capabilities entries, split by device name.
+    """The peering's (local, remote) capabilities entries, split by device name.
 
     Raises:
         ValueError: When the peering does not have exactly two ends, one on ``device_name``.
     """
-    peering_ifaces = peering_node.get("interface_capabilities", [])
+    peering_ifaces = peering_node.get("capabilities", [])
     if not isinstance(peering_ifaces, list) or len(peering_ifaces) != 2:
         raise ValueError(
-            f"Overlay peering '{peering_node.get('name')}' expected 2 interface_capabilities, "
+            f"Overlay peering '{peering_node.get('name')}' expected 2 capabilities, "
             f"got {len(peering_ifaces) if isinstance(peering_ifaces, list) else 'invalid'}"
         )
 
@@ -197,35 +197,9 @@ def _build_session_from_peering(
             if local_iface_name:
                 break
 
-        if not local_iface_name:
-            # Inter-site circuit with no DcimCable: a TopologyVirtualCircuit is a
-            # ManagedGenericInterfaces, so it shows up in its terminating port's
-            # interface_capabilities, and its own interface_capabilities are the
-            # circuit endpoints (local + remote). Only virtual circuits appear
-            # here — TopologyPhysicalCircuit deliberately does not inherit
-            # ManagedGenericInterfaces, keeping the customer/provider split that
-            # carries an endpoint role the flat capability edge cannot express.
-            # This path also needs the caller's query to select circuit fields
-            # under interface_capabilities; queries/fragments/*.gql do not yet,
-            # so today the fallback below resolves inter-site underlay IPs.
-            for iface in interfaces:
-                for svc in iface.get("interface_capabilities") or []:
-                    if svc.get("typename") != "TopologyVirtualCircuit":
-                        continue
-                    for other_iface in svc.get("interface_capabilities") or []:
-                        if (other_iface.get("device") or {}).get("name") == remote_device_name:
-                            local_interface_ip = iface.get("ip_address")
-                            remote_interface_ip = other_iface.get("ip_address")
-                            local_iface_name = iface.get("name")
-                            break
-                    if local_iface_name:
-                        break
-                if local_iface_name:
-                    break
-
         if not local_interface_ip and not local_iface_name:
-            # No cable or circuit resolved an IP — fall back to the IP already set
-            # directly on the peering's own interface_capabilities (e.g. a VTI/
+            # No cable resolved an IP — fall back to the IP already set
+            # directly on the peering's own capabilities (e.g. a VTI/
             # sub-interface addressed inline, with no DcimCable and no separate
             # TopologyCircuit object to traverse).
             local_interface_ip = local_iface.get("ip_address")
@@ -234,7 +208,7 @@ def _build_session_from_peering(
                 local_iface_name = local_iface.get("name")
 
         if not local_interface_ip and not local_iface_name:
-            return None  # No cable, circuit, or direct IP connects this device to the remote — skip session
+            return None  # No cable or direct IP connects this device to the remote — skip session
 
         if local_interface_ip:
             session["local_ip"] = local_interface_ip
@@ -378,16 +352,24 @@ def _far_end_devices(device_capabilities: list[dict[str, Any]] | None, device_na
 
 
 def _office_lans_by_gateway(offices: list[dict[str, Any]] | None) -> dict[str, list[dict[str, Any]]]:
-    """SD-WAN gateway name -> the lan_prefixes of every office footprint attached to it.
+    """SD-WAN gateway name -> the prefixes of every office footprint attached to it.
 
-    ``offices`` is the cleaned TopologyCustomerOffice query root. A gateway with
-    offices but no registered LAN is present with an empty list.
+    An office registers its ``lan_prefixes`` and, derived, the gateway prefix of
+    every segment it hosts itself (``segment_deployments``: an office with a
+    fabric hosts its LAN as a VXLAN segment, whose prefix comes from the tenant
+    pool, not from the office). ``offices`` is the cleaned TopologyCustomerOffice
+    query root. A gateway with offices but no registered LAN is present with an
+    empty list.
     """
     lans: dict[str, list[dict[str, Any]]] = {}
     for office in offices or []:
         gateway = (office.get("sdwan_gateway") or {}).get("name")
         if gateway:
-            lans.setdefault(gateway, []).extend(office.get("lan_prefixes") or [])
+            hosted = (
+                ((deployment.get("segment") or {}).get("gateway") or {}).get("ip_prefix")
+                for deployment in office.get("segment_deployments") or []
+            )
+            lans.setdefault(gateway, []).extend([*(office.get("lan_prefixes") or []), *filter(None, hosted)])
     return lans
 
 
@@ -405,8 +387,8 @@ def get_external_peer_prefixes(
 
     - The SD-WAN gateway: a handoff whose only BGP far end
       (``device_capabilities`` peerings) is the ``sdwan_gateway`` of some
-      office footprint accepts the ``lan_prefixes`` of every office behind that
-      gateway.
+      office footprint accepts the ``lan_prefixes`` and the hosted segments'
+      prefixes of every office behind that gateway (_office_lans_by_gateway).
     - A cloud VIF: it lands on the device through its Direct Connect
       (``physical_devices``) as the sub-interface ``<port>.<vif.vlan_id>`` and
       accepts its reachable VPC blocks (_vif_registered_blocks). Two VIFs of

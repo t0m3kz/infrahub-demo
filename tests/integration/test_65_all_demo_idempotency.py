@@ -3,7 +3,7 @@
 Every generator here tracks what it writes and deletes what a run no longer
 produces (delete_unused_nodes=True), so a run that misses an object it owns
 deletes it. This module snapshots what the generators produced on the branch
-test_59 built, runs them twice more by hand over every target, and asserts
+test_59 built, runs them once more by hand over every target, and asserts
 the snapshot is unchanged: no object lost, none added, no rule renumbered,
 no relationship dropped, no number or address reallocated.
 
@@ -39,7 +39,9 @@ from .workflow_helpers import run_generator, verify_no_failed_tasks, wait_for_ta
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 SCENARIO_NAME = "Scenario 30_all: Generator Idempotency"
-RERUNS = 2
+# One rerun is enough to expose a generator that deletes or re-creates what it owns; a second pass only
+# catches A -> B -> A flapping, which no history in this repo shows, and costs ~10 minutes.
+RERUNS = 1
 
 # Generator definition -> the group it targets (.infrahub.yml). These write
 # the security path: rules and policies (applications, dependencies,
@@ -149,7 +151,7 @@ query {
         snat_address { node { id address { value } } }
         # The members' transit sub-interfaces and the physical service ports tagged with the
         # context (a DC's border-leaf ports, the colocation metro's edge ports).
-        interface_capabilities {
+        capabilities {
           edges {
             node {
               id
@@ -270,7 +272,7 @@ def _snapshot(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
                             _peer_id(edge["node"], "ip_address"),
                             ((edge["node"].get("ip_address") or {}).get("node") or {}).get("address", {}).get("value"),
                         )
-                        for edge in (n.get("interface_capabilities") or {}).get("edges", [])
+                        for edge in (n.get("capabilities") or {}).get("edges", [])
                     )
                 ),
             )

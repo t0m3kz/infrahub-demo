@@ -154,26 +154,11 @@ infrahub_tests:
         spec:
           kind: python-transform-unit-process
           directory: configs/leaf_cisco_xe_ospf_ibgp
-      - name: cisco_xe_lisp_ospf_ibgp
-        expect: PASS
-        spec:
-          kind: python-transform-unit-process
-          directory: configs/leaf_cisco_xe_lisp_ospf_ibgp
-      - name: cisco_xe_lisp_hostless
-        expect: PASS
-        spec:
-          kind: python-transform-unit-process
-          directory: configs/leaf_cisco_xe_lisp_hostless
       - name: cisco_xe_with_acl
         expect: PASS
         spec:
           kind: python-transform-unit-process
           directory: configs/leaf_cisco_xe_with_acl
-      - name: cisco_xe_lisp_with_acl
-        expect: PASS
-        spec:
-          kind: python-transform-unit-process
-          directory: configs/leaf_cisco_xe_lisp_with_acl
       - name: cisco_xe_exchange_acl
         expect: PASS
         spec:
@@ -388,11 +373,6 @@ infrahub_tests:
         spec:
           kind: python-transform-unit-process
           directory: configs/border_leaf_cisco_xe_ospf_ibgp
-      - name: cisco_xe_lisp_ospf_ibgp
-        expect: PASS
-        spec:
-          kind: python-transform-unit-process
-          directory: configs/border_leaf_cisco_xe_lisp_ospf_ibgp
       - name: cisco_xe_exchange_transit
         expect: PASS
         spec:
@@ -416,11 +396,42 @@ infrahub_tests:
         spec:
           kind: python-transform-unit-process
           directory: configs/access_leaf_cisco_xe_ebgp_ibgp
-      - name: cisco_xe_lisp_ospf_ibgp
+  - resource: PythonTransform
+    resource_name: access_switch
+    tests:
+      - name: cisco_xe_lisp_ospf
         expect: PASS
         spec:
           kind: python-transform-unit-process
-          directory: configs/access_leaf_cisco_xe_lisp_ospf_ibgp
+          directory: configs/access_switch_cisco_xe_lisp_ospf
+      - name: cisco_xe_lisp_wan_exit
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/access_switch_cisco_xe_lisp_wan_exit
+      - name: cisco_xe_lisp_hostless
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/access_switch_cisco_xe_lisp_hostless
+      - name: cisco_xe_lisp_with_acl
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/access_switch_cisco_xe_lisp_with_acl
+  - resource: PythonTransform
+    resource_name: distribution_switch
+    tests:
+      - name: cisco_xe_lisp_ospf
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/distribution_switch_cisco_xe_lisp_ospf
+      - name: cisco_xe_lisp_wan_exit
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/distribution_switch_cisco_xe_lisp_wan_exit
   - resource: PythonTransform
     resource_name: tor
     tests:

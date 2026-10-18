@@ -25,7 +25,6 @@ spec:
           - index: 1
             layout: M_MIDDLE
             deployment_type: middle_rack
-            suites: [lon-1-s-1]
             fabric_templates:
               - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             member_of_groups:
@@ -45,7 +44,6 @@ spec:
           - index: 2
             layout: M_MIDDLE
             deployment_type: middle_rack
-            suites: [lon-1-s-2]
             fabric_templates:
               - ["2", "spine", "DCS-7050CX3-32C-R_SPINE"]
             member_of_groups:
@@ -65,7 +63,6 @@ spec:
           - index: 3
             layout: M_MIDDLE
             deployment_type: middle_rack
-            suites: [lon-1-s-3]
             fabric_templates:
               - ["2", "spine", "PowerSwitch-S5232F-ON_SPINE"]
             member_of_groups:
@@ -85,7 +82,6 @@ spec:
           - index: 4
             layout: M_MIDDLE
             deployment_type: middle_rack
-            suites: [lon-1-s-4]
             fabric_templates:
               - ["2", "spine", "Edgecore-7726-32X-O_SPINE"]
             member_of_groups:

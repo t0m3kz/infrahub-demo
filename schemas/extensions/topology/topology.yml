@@ -64,6 +64,20 @@ generics:
       - name: name
         kind: Text
         order_weight: 100
+    relationships:
+      - name: devices
+        peer: DcimDevice
+        kind: Generic
+        cardinality: many
+        identifier: "topology__devices"
+        order_weight: 1200
+        on_delete: cascade
+
+  - name: DeviceNaming
+    namespace: Topology
+    description: "Device naming convention for devices this deployment creates"
+    include_in_menu: false
+    attributes:
       - name: naming_convention
         label: "Naming Convention"
         description: "Device naming convention for devices created under this deployment"
@@ -88,14 +102,6 @@ generics:
             label: "Computed"
             description: "dc-roleNNNN, fixed-width digit run instead of a labeled path (e.g. dc1-lf0201)"
             color: "#BFBF7F"
-    relationships:
-      - name: devices
-        peer: DcimDevice
-        kind: Generic
-        cardinality: many
-        identifier: "topology__devices"
-        order_weight: 1200
-        on_delete: cascade
 
   - name: ClusterHosting
     namespace: Topology
@@ -126,28 +132,6 @@ generics:
       - name: name
         kind: Text
         order_weight: 100
-
-      # Selects the fabric's overlay control plane. bgp_evpn is the default and
-      # works under every routing_strategy. lisp (map-server/map-resolver on the
-      # border-leafs, ETRs on the edge) is only valid with routing_strategy ospf-ibgp;
-      # that pairing is enforced by the lisp_fabric check, not by the schema,
-      # because the strategy lives on the concrete deployment, not on this generic.
-      - name: overlay_control_plane
-        label: "Overlay Control Plane"
-        kind: Dropdown
-        optional: false
-        default_value: bgp_evpn
-        order_weight: 7550
-        description: "Overlay control plane for the fabric: BGP EVPN (default) or LISP map-server/map-resolver."
-        choices:
-          - name: bgp_evpn
-            label: "BGP EVPN"
-            description: "VXLAN overlay signalled by BGP EVPN."
-            color: "#6666ff"
-          - name: lisp
-            label: "LISP"
-            description: "LISP map-server/map-resolver overlay (ospf-ibgp only)."
-            color: "#aedcee"
 
       # Symmetric IRB needs the SAME gateway MAC on every VTEP: a host ARPs for
       # its gateway once and keeps that MAC as it moves or as its flows land on
@@ -200,21 +184,6 @@ generics:
         identifier: "segment_hosting__evpn_rt_as"
         order_weight: 7600
         description: "Fabric-wide administrative ASN stamped into EVPN route-targets. Must be identical for every VTEP in the fabric."  # yamllint disable-line rule:line-length
-
-      # LISP map-servers authenticate registrations from ETRs with one shared
-      # site key, so it must be identical fabric-wide. Only meaningful when
-      # overlay_control_plane is lisp, which is only valid with ospf-ibgp
-      # (enforced by the lisp_fabric check). Optional: the generator provisions
-      # it for LISP fabrics and leaves it unset for bgp_evpn.
-      - name: lisp_site_key
-        label: LISP Site Key
-        peer: RoutingPassword
-        kind: Attribute
-        cardinality: one
-        optional: true
-        identifier: "segment_hosting__lisp_site_key"
-        order_weight: 7700
-        description: "Authentication key shared by LISP map-servers and edge ETRs; set by the generator when overlay_control_plane is lisp."  # yamllint disable-line rule:line-length
 
 nodes:
   - name: Label

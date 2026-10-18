@@ -5,7 +5,7 @@
 # on an HA pair terminating the segment inline, the secondary member's
 # address is the ASA `standby` address (transforms/helpers/ha.py).
 fragment InlineSegmentMemberFields on ManagedGenericInterfaces {
-  interface_capabilities {
+  capabilities {
     edges {
       node {
         device { node { name { value } } }

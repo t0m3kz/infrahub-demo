@@ -158,8 +158,8 @@ router bgp 65001
 route-map RM-CONN-2-BGP permit 10
   match interface loopback0
 !
-ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN seq 10 permit 10.210.2.0/24
-ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN seq 20 permit 10.210.5.0/24
+ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN seq 10 permit 10.176.5.0/24
+ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN seq 20 permit 10.210.2.0/24
 route-map RM-VRF-PROD-EQXFR2-SDWAN-IN permit 10
   match ip address prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN
 !

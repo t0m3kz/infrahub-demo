@@ -9,11 +9,6 @@ from ..types import DeviceOptions, RoutingOptions
 from .naming import DeviceNameContext, DeviceNamingConfig
 
 
-def base_offset(numbering_start: int) -> int:
-    """Zero-based offset of a 1-based numbering start (rack/leaf/spine link numbering)."""
-    return max(0, numbering_start - 1)
-
-
 def rack_sort_key(rack: LocationRack) -> tuple[int, int, str]:
     """Deterministic rack ordering for stable idempotent selections."""
     return rack.row_index.value, rack.index.value, rack.name.value

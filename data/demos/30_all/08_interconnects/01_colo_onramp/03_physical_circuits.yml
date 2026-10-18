@@ -41,9 +41,8 @@ spec:
       locations:
         - "DC10"
         - "FR2"
-      customer_interfaces:
+      capabilities:
         - ["bl-dc101101", "Ethernet1/35"]
-      provider_interfaces:
         - ["eg-fr01", "Ethernet1/10"]
 
     - circuit_id: "DF-DC11-EQXFR2"
@@ -58,9 +57,8 @@ spec:
       locations:
         - "DC11"
         - "FR2"
-      customer_interfaces:
+      capabilities:
         - ["bl-dc1111101", "Ethernet1/35"]
-      provider_interfaces:
         - ["eg-fr01", "Ethernet1/11"]
 
     - circuit_id: "DF-DC12-EQXPA4"
@@ -75,9 +73,8 @@ spec:
       locations:
         - "DC12"
         - "PA4"
-      customer_interfaces:
+      capabilities:
         - ["bl-dc1212101", "Ethernet1/35"]
-      provider_interfaces:
         - ["eg-pa01", "Ethernet1/10"]
 
     - circuit_id: "DF-DC10-EQXFR2-B"
@@ -92,9 +89,8 @@ spec:
       locations:
         - "DC10"
         - "FR2"
-      customer_interfaces:
+      capabilities:
         - ["bl-dc101101", "Ethernet1/36"]
-      provider_interfaces:
         - ["eg-fr02", "Ethernet1/10"]
 
     - circuit_id: "DF-DC11-EQXFR2-B"
@@ -109,9 +105,8 @@ spec:
       locations:
         - "DC11"
         - "FR2"
-      customer_interfaces:
+      capabilities:
         - ["bl-dc1111101", "Ethernet1/36"]
-      provider_interfaces:
         - ["eg-fr02", "Ethernet1/11"]
 
     - circuit_id: "DF-DC12-EQXPA4-B"
@@ -126,9 +121,8 @@ spec:
       locations:
         - "DC12"
         - "PA4"
-      customer_interfaces:
+      capabilities:
         - ["bl-dc1212101", "Ethernet1/36"]
-      provider_interfaces:
         - ["eg-pa02", "Ethernet1/10"]
 
     # --- cage <-> cloud region cross-connects --------------------------------
@@ -145,8 +139,9 @@ spec:
       locations:
         - "FR2"
         - "eu-central-1"
-      customer_interfaces:
+      capabilities:
         - ["eg-fr01", "Ethernet1/13"]
+        - ["EXT-AWS-DX-FR2", "et-0/0/0"]
 
     - circuit_id: "XC-EQXPA4-AZURE-WEU"
       member_of_groups: [physical_circuits]
@@ -159,5 +154,6 @@ spec:
       locations:
         - "PA4"
         - "westeurope"
-      customer_interfaces:
+      capabilities:
         - ["eg-pa01", "Ethernet1/13"]
+        - ["EXT-AZURE-ER-PA4", "et-0/0/0"]

@@ -29,7 +29,6 @@ from tests.integration.demo_data import (
 # Data whose objects the integration suite loads with the trigger rules active.
 _TRIGGERED_DATA_DIRS = (
     ROOT / "data" / "demos" / "30_all",
-    ROOT / "data" / "demos" / "31_lisp_fabric",
     ROOT / "data" / "demos" / "32_arista_mssg",
     ROOT / "tests" / "integration" / "data",
 )

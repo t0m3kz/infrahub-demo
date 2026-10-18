@@ -2,7 +2,6 @@
 
 Covers:
 - get_mlag() — domain extraction, peer-link detection, missing-capability path
-- get_capabilities() MLAG flag — ManagedMLAG typename toggles mlag_enabled
 - Integration with device data shapes used by BaseDeviceTransform
 """
 
@@ -531,48 +530,3 @@ class TestDC1Pod2MLAGScenario:
         result = get_mlag(caps, [_peer_link_iface("Port-Channel100")])
         assert result is not None
         assert result["peer_link"] == "Port-Channel100"
-
-
-# ---------------------------------------------------------------------------
-# get_capabilities MLAG flag
-# ---------------------------------------------------------------------------
-
-
-class TestGetCapabilitiesMLAGFlag:
-    def test_mlag_enabled_when_managed_mlag_present(self) -> None:
-        from transforms.common import get_capabilities
-
-        result = get_capabilities(
-            {
-                "capabilities": [
-                    {"typename": "ManagedMLAG"},
-                ]
-            }
-        )
-        assert result["mlag_enabled"] is True
-
-    def test_mlag_disabled_without_managed_mlag(self) -> None:
-        from transforms.common import get_capabilities
-
-        result = get_capabilities(
-            {
-                "capabilities": [
-                    {"typename": "ManagedBGP"},
-                ]
-            }
-        )
-        assert result["mlag_enabled"] is False
-
-    def test_mlag_enabled_alongside_bgp(self) -> None:
-        from transforms.common import get_capabilities
-
-        result = get_capabilities(
-            {
-                "capabilities": [
-                    {"typename": "ManagedBGP"},
-                    {"typename": "ManagedMLAG"},
-                ]
-            }
-        )
-        assert result["mlag_enabled"] is True
-        assert result["bgp_enabled"] is True

@@ -32,12 +32,6 @@ resource "google_compute_backend_service" "{{ svc.name | tf_id }}" {
   protocol         = "{{ svc.protocol }}"
   session_affinity = "{{ svc.session_affinity }}"
   health_checks    = [google_compute_health_check.{{ svc.health_check | tf_id }}.id]
-{%- for target in svc.targets %}
-
-  backend {
-    group = google_compute_instance_group.{{ target.name | tf_id }}.id
-  }
-{%- endfor %}
 }
 {% endfor %}
 {% for rule in forwarding_rules %}

@@ -1,4 +1,4 @@
-{#- SONiC ConfigDB leaf PBR variable building (customer firewall / LB redirect).
+{#- SONiC ConfigDB leaf PBR variable building (customer firewall redirect).
     Populates pre-initialized dicts from parent scope via in-place .update():
     acl_table, acl_rule
 
@@ -8,7 +8,6 @@
     permit/deny filter and the steering both apply.
 
     Same evaluation order as the CLI route-map (higher PRIORITY matches first):
-      LB_<n>       9000-n  SRC_IP backend      -> REDIRECT:lb_nexthop (no-SNAT return path)
       BYPASS_<n>   8000-n  DST_IP permitted    -> FORWARD (normal routing)
       FW_REDIRECT  1000    everything else     -> REDIRECT:fw_nexthop
     Bypass rules only exist alongside a firewall redirect, as on the CLI side.
@@ -25,18 +24,6 @@
     'stage': 'ingress'
   }
 }) -%}
-{%- if rule.lb_nexthop -%}
-{%- for ip in rule.backend_ips -%}
-{%- set _ = acl_rule.update({
-  table ~ '|LB_' ~ loop.index: {
-    'PRIORITY': (9000 - loop.index)|string,
-    'IP_TYPE': _ip_type(ip),
-    'SRC_IP': _host(ip),
-    'PACKET_ACTION': 'REDIRECT:' ~ rule.lb_nexthop
-  }
-}) -%}
-{%- endfor -%}
-{%- endif -%}
 {%- if rule.fw_nexthop -%}
 {%- for prefix in rule.bypass_prefixes -%}
 {%- set _ = acl_rule.update({

@@ -12,7 +12,7 @@ query pbr_firewall_reachability {
         name { value }
         tenant { node { id display_label } }
         served_deployments { edges { node { id display_label } } }
-        interface_capabilities {
+        capabilities {
           edges {
             node {
               device { node { role { value } } }
@@ -31,7 +31,7 @@ query pbr_firewall_reachability {
       node {
         id
         device { node { name { value } role { value } } }
-        interface_capabilities {
+        capabilities {
           edges {
             node {
               __typename
@@ -48,7 +48,7 @@ query pbr_firewall_reachability {
       node {
         id
         device { node { name { value } role { value } } }
-        interface_capabilities {
+        capabilities {
           edges {
             node {
               __typename

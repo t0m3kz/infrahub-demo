@@ -3,8 +3,8 @@
 Covers:
   - _build_session_from_peering()  — ``external`` flag: peering_role regular in a prod/non_prod VRF
   - get_external_peer_prefixes()   — the far end's registered prefixes, per handoff sub-interface
-                                     (a cloud VIF's reachable VPC blocks, the LANs of the offices
-                                     behind an SD-WAN gateway)
+                                     (a cloud VIF's reachable VPC blocks, the LANs and hosted
+                                     segments of the offices behind an SD-WAN gateway)
   - get_onprem_prefixes()          — per-VRF on-prem segment prefixes announced to those peers
   - Edge transform                 — RM-<peer>-IN / RM-<VRF>-EXTERNAL-OUT on edges/cisco_nxos.j2
   - 30_all data                    — the cloud VIF and SD-WAN handoffs are wired for that mode; every
@@ -47,7 +47,7 @@ def _peering(namespace: dict[str, Any] | None, *, peering_role: str | None = "re
         "peering_role": peering_role,
         "ttl": 1,
         "maximum_routes": 100,
-        "interface_capabilities": [
+        "capabilities": [
             {
                 "name": "Ethernet1/13.1000",
                 "device": {"name": "eg-fr01"},
@@ -104,13 +104,13 @@ _NO_SDWAN: dict[str, Any] = {"device_capabilities": None, "offices": None}
 def _bgp_facing(*ends: tuple[str, str]) -> list[dict[str, Any]]:
     """Cleaned device capabilities: one ManagedBGP whose peerings run eg-fr01 (local iface) -> remote device."""
     return [
-        {"typename": "ManagedNTP", "name": "ntp"},
+        {"typename": "ManagedStandaloneVlanDomain", "name": "vlan-domain"},
         {
             "typename": "ManagedBGP",
             "peerings": [
                 {
                     "name": f"peering-{local}-{remote}",
-                    "interface_capabilities": [
+                    "capabilities": [
                         {"name": local, "device": {"name": "eg-fr01"}},
                         {"name": "eth0.1900", "device": {"name": remote}},
                     ],
@@ -121,9 +121,19 @@ def _bgp_facing(*ends: tuple[str, str]) -> list[dict[str, Any]]:
     ]
 
 
-def _office(gateway: str | None, *lans: tuple[str, str]) -> dict[str, Any]:
-    """A cleaned TopologyCustomerOffice root entry: its SD-WAN gateway and (prefix, namespace) LANs."""
-    return {"sdwan_gateway": {"name": gateway} if gateway else None, "lan_prefixes": _blocks(*lans)}
+def _office(gateway: str | None, *lans: tuple[str, str], hosted: tuple[tuple[str, str], ...] = ()) -> dict[str, Any]:
+    """A cleaned TopologyCustomerOffice root entry: its SD-WAN gateway, (prefix, namespace) LANs and hosted segments.
+
+    ``hosted`` are the (gateway prefix, namespace) of the segments the office hosts itself (segment_deployments).
+    """
+    return {
+        "sdwan_gateway": {"name": gateway} if gateway else None,
+        "lan_prefixes": _blocks(*lans),
+        "segment_deployments": [
+            {"segment": {"gateway": {"ip_prefix": {"prefix": prefix, "ip_namespace": {"name": namespace}}}}}
+            for prefix, namespace in hosted
+        ],
+    }
 
 
 def _segment(prefix: str, namespace: dict[str, Any], member_type: str = "address") -> dict[str, Any]:
@@ -365,6 +375,83 @@ class TestSdwanGatewayPrefixes:
         )
         assert found == {"Ethernet1/13.1900": []}
 
+    def test_segments_hosted_by_an_office_behind_the_gateway_are_accepted(self) -> None:
+        """An office that hosts its LAN as a segment registers the segment's prefix, not a typed lan_prefixes entry."""
+        offices = [
+            _office(_GW1, hosted=(("10.176.5.0/24", "PROD"),)),
+            _office(_GW1, ("10.210.2.0/24", "PROD")),
+        ]
+        found = get_external_peer_prefixes(
+            [_subif("Ethernet1/13.1900", "PROD")],
+            None,
+            "eg-fr01",
+            device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
+            offices=offices,
+        )
+        assert found == {"Ethernet1/13.1900": ["10.176.5.0/24", "10.210.2.0/24"]}
+
+    def test_hosted_segments_and_lans_of_one_office_are_one_deduplicated_set(self) -> None:
+        offices = [
+            _office(_GW1, ("10.176.5.0/24", "PROD"), hosted=(("10.176.5.0/24", "PROD"), ("10.176.6.0/24", "PROD")))
+        ]
+        found = get_external_peer_prefixes(
+            [_subif("Ethernet1/13.1900", "PROD")],
+            None,
+            "eg-fr01",
+            device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
+            offices=offices,
+        )
+        assert found == {"Ethernet1/13.1900": ["10.176.5.0/24", "10.176.6.0/24"]}
+
+    def test_hosted_segments_of_another_gateway_or_none_are_excluded(self) -> None:
+        offices = [
+            _office(_GW1, hosted=(("10.176.5.0/24", "PROD"),)),
+            _office("EQX-AM5-SDWAN-GW1", hosted=(("10.176.9.0/24", "PROD"),)),
+            _office(None, hosted=(("10.176.15.0/24", "PROD"),)),
+        ]
+        found = get_external_peer_prefixes(
+            [_subif("Ethernet1/13.1900", "PROD")],
+            None,
+            "eg-fr01",
+            device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
+            offices=offices,
+        )
+        assert found == {"Ethernet1/13.1900": ["10.176.5.0/24"]}
+
+    def test_hosted_segments_in_another_namespace_default_or_ipv6_never_reach_the_filter(self) -> None:
+        """A hosted NON-PROD segment, a segment without a gateway prefix and an IPv6 one are not accepted on PROD."""
+        offices = [
+            _office(
+                _GW1,
+                hosted=(
+                    ("10.176.5.0/24", "PROD"),
+                    ("10.184.5.0/24", "NON-PROD"),
+                    ("2001:db8:176::/64", "PROD"),
+                ),
+            )
+        ]
+        offices[0]["segment_deployments"].append({"segment": {"gateway": None}})
+        found = get_external_peer_prefixes(
+            [_subif("Ethernet1/13.1900", "PROD"), _subif("Ethernet1/13.1901", "NON-PROD")],
+            None,
+            "eg-fr01",
+            device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1), ("Ethernet1/13.1901", _GW1)),
+            offices=offices,
+        )
+        assert found == {"Ethernet1/13.1900": ["10.176.5.0/24"], "Ethernet1/13.1901": ["10.184.5.0/24"]}
+
+    def test_an_office_without_hosted_segments_keeps_its_lans(self) -> None:
+        """A footprint with no segment_deployments key at all (an older query) registers its lan_prefixes alone."""
+        office = {"sdwan_gateway": {"name": _GW1}, "lan_prefixes": _blocks(("10.210.2.0/24", "PROD"))}
+        found = get_external_peer_prefixes(
+            [_subif("Ethernet1/13.1900", "PROD")],
+            None,
+            "eg-fr01",
+            device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
+            offices=[office],
+        )
+        assert found == {"Ethernet1/13.1900": ["10.210.2.0/24"]}
+
     def test_no_offices_leaves_the_handoff_absent(self) -> None:
         """No office footprint at all: the gateway is not known, so the handoff accepts nothing."""
         found = get_external_peer_prefixes(
@@ -401,8 +488,8 @@ class TestSdwanGatewayPrefixes:
     def test_malformed_peering_raises(self) -> None:
         """A peering without exactly two ends is refused, as when the session itself is built."""
         capabilities = _bgp_facing(("Ethernet1/13.1900", _GW1))
-        capabilities[1]["peerings"][0]["interface_capabilities"].pop()
-        with pytest.raises(ValueError, match="expected 2 interface_capabilities"):
+        capabilities[1]["peerings"][0]["capabilities"].pop()
+        with pytest.raises(ValueError, match="expected 2 capabilities"):
             get_external_peer_prefixes(
                 [_subif("Ethernet1/13.1900", "PROD")],
                 None,
@@ -481,11 +568,11 @@ class TestEdgeRender:
         assert "0.0.0.0/0" not in _run_edge(data)
 
     def test_sdwan_peer_accepts_the_lans_of_the_offices_behind_its_gateway(self) -> None:
-        """The SD-WAN handoff permits exactly GW1's PROD office LANs, never another gateway's or NON-PROD."""
+        """The SD-WAN handoff permits exactly GW1's PROD office LANs and hosted segments, never another gateway's or NON-PROD."""
         output = _run_edge(_fixture())
         assert re.findall(r"^ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN .*$", output, re.M) == [
-            "ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN seq 10 permit 10.210.2.0/24",
-            "ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN seq 20 permit 10.210.5.0/24",
+            "ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN seq 10 permit 10.176.5.0/24",
+            "ip prefix-list PL-VRF-PROD-EQXFR2-SDWAN-IN seq 20 permit 10.210.2.0/24",
         ]
         assert "route-map RM-VRF-PROD-EQXFR2-SDWAN-IN permit 10\n" in output
         for excluded in ("10.211.2.0/24", "10.210.9.0/24", "10.210.15.0/24"):
@@ -547,10 +634,10 @@ def _external_handoffs() -> list[dict[str, Any]]:
         if (iface.get("ip_address") or {}).get("data")
     }
     return [
-        {**peering, "namespaces": [addresses.get(tuple(end)) for end in peering["interface_capabilities"]]}
+        {**peering, "namespaces": [addresses.get(tuple(end)) for end in peering["capabilities"]]}
         for peering in _objects(_INTERCONNECTS, "ManagedBGPPeering")
         if peering.get("peering_role") == "regular"
-        and any(addresses.get(tuple(end)) in ("PROD", "NON-PROD") for end in peering["interface_capabilities"])
+        and any(addresses.get(tuple(end)) in ("PROD", "NON-PROD") for end in peering["capabilities"])
     ]
 
 
@@ -571,10 +658,10 @@ class TestAllDemoData:
         (dx,) = [d for d in _objects(_INTERCONNECTS, "CloudDirectConnect") if d["name"] == vif["direct_connect"]]
         (peering,) = [p for p in _external_handoffs() if p["name"] == "VRF-PROD-EQXFR2-AWS-EUC1"]
         (xc,) = [c for c in _objects(_INTERCONNECTS, "TopologyPhysicalCircuit") if c["name"] == "XC-EQXFR2-AWS-EUC1"]
-        device, interface = peering["interface_capabilities"][0]
+        device, interface = peering["capabilities"][0]
         port, _, vlan = interface.rpartition(".")
         assert device in dx["physical_devices"]
-        assert [device, port] in xc["customer_interfaces"]
+        assert [device, port] in xc["capabilities"]
         assert int(vlan) == vif["vlan_id"]
         assert peering["namespaces"] == ["PROD", "PROD"]
 
@@ -607,7 +694,7 @@ class TestAllDemoData:
         inline (the gateway loads with the foundation stage). An office without a LAN adds nothing.
         """
         (peering,) = [p for p in _external_handoffs() if p["name"] == "VRF-PROD-EQXFR2-SDWAN"]
-        (gateway,) = [device for device, _ in peering["interface_capabilities"] if not device.startswith("eg-")]
+        (gateway,) = [device for device, _ in peering["capabilities"] if not device.startswith("eg-")]
         behind: list[list[list[str]]] = []
         for customer in _objects(
             _ROOT / "data" / "demos" / "30_all" / "06_customer_boarding", "TopologyOfficeCustomer"
@@ -621,3 +708,78 @@ class TestAllDemoData:
         registered = [prefix for office_lans in behind for prefix in office_lans]
         assert behind and registered
         assert {namespace for _, namespace in registered} == set(peering["namespaces"])
+
+
+class TestOfficeQuerySelection:
+    """The edge query selects what get_external_peer_prefixes reads off an office, in the shape it expects."""
+
+    def test_the_office_root_selects_the_gateway_the_lans_and_the_hosted_segment_prefixes(self) -> None:
+        text = (_ROOT / "queries" / "config" / "edge.gql").read_text()
+        office = text.split("  TopologyCustomerOffice {", 1)[1]
+
+        assert "sdwan_gateway { node { name { value } } }" in office
+        assert "lan_prefixes {" in office
+        deployments = office.split("segment_deployments(", 1)[1]
+        assert deployments.startswith('status__values: ["active", "provisioning"])')
+        assert (
+            "gateway { node { ip_prefix { node { prefix { value } ip_namespace { node { name { value } } } } } } }"
+            in (deployments)
+        )
+
+    def test_the_selected_fields_exist_on_the_office_schema(self) -> None:
+        """segment_deployments comes from TopologySegmentHosting, which the office inherits."""
+        from tests.integration.demo_data import relationship_names
+
+        assert {"sdwan_gateway", "lan_prefixes", "segment_deployments"} <= relationship_names("TopologyCustomerOffice")
+
+    def test_a_cleaned_query_response_has_the_shape_the_helper_reads(self) -> None:
+        """clean_data turns the selection into segment_deployments[i].segment.gateway.ip_prefix.{prefix, ip_namespace}."""
+        from utils.data_cleaning import clean_data
+
+        raw = {
+            "TopologyCustomerOffice": {
+                "edges": [
+                    {
+                        "node": {
+                            "sdwan_gateway": {"node": {"name": {"value": _GW1}}},
+                            "lan_prefixes": {"edges": []},
+                            "segment_deployments": {
+                                "edges": [
+                                    {
+                                        "node": {
+                                            "segment": {
+                                                "node": {
+                                                    "gateway": {
+                                                        "node": {
+                                                            "ip_prefix": {
+                                                                "node": {
+                                                                    "prefix": {"value": "10.176.5.0/24"},
+                                                                    "ip_namespace": {
+                                                                        "node": {"name": {"value": "PROD"}}
+                                                                    },
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                ]
+                            },
+                        }
+                    }
+                ]
+            }
+        }
+
+        offices = clean_data(raw)["TopologyCustomerOffice"]
+        found = get_external_peer_prefixes(
+            [_subif("Ethernet1/13.1900", "PROD")],
+            None,
+            "eg-fr01",
+            device_capabilities=_bgp_facing(("Ethernet1/13.1900", _GW1)),
+            offices=offices,
+        )
+
+        assert found == {"Ethernet1/13.1900": ["10.176.5.0/24"]}

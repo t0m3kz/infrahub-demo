@@ -1,0 +1,85 @@
+!
+! as-c005-p01 Configuration
+! Cisco IOS-XE (Catalyst 9000) LISP access-switch
+!
+hostname as-c005-p01
+!
+ip routing
+spanning-tree mode rapid-pvst
+!
+!
+! Interfaces
+interface Ethernet1
+ description to ds-c005-p01
+ no switchport
+ ip address 10.1.0.1 255.255.255.254
+ no shutdown
+!
+interface Ethernet2
+ description to ds-c005-p02
+ no switchport
+ ip address 10.1.0.3 255.255.255.254
+ no shutdown
+!
+interface Ethernet10
+ description to server-01
+ no shutdown
+!
+interface Loopback0
+ description Router ID
+ ip address 10.0.0.1 255.255.255.255
+ no shutdown
+!
+! OSPF Configuration
+router ospf 1
+ router-id 10.0.0.1
+ auto-cost reference-bandwidth 10000
+ passive-interface default
+ no passive-interface Ethernet1
+ no passive-interface Ethernet2
+!
+interface Ethernet1
+ ip ospf 1 area 0.0.0.0
+!
+interface Ethernet2
+ ip ospf 1 area 0.0.0.0
+!
+! LISP Configuration (Catalyst 9000, IOS-XE)
+! unverified-no-lab: `router lisp` and everything under it
+router lisp
+ ! unverified-no-lab: locator-set RLOC on the underlay loopback, used as the default locator and as the source locator
+ locator-table default
+ locator-set RLOC
+  IPv4-interface Loopback0 priority 10 weight 10
+  exit-locator-set
+ locator default-set RLOC
+ ipv4 source-locator Loopback0
+ ! unverified-no-lab: service ipv4: ITR and ETR toward every map-server, VXLAN encapsulation
+ service ipv4
+  encapsulation vxlan
+  itr map-resolver 10.250.5.1
+  itr map-resolver 10.250.5.2
+  etr map-server 10.250.5.1 key 0ff1c3-k3y
+  etr map-server 10.250.5.1 proxy-reply
+  etr map-server 10.250.5.2 key 0ff1c3-k3y
+  etr map-server 10.250.5.2 proxy-reply
+  itr
+  etr
+  exit-service-ipv4
+ ! unverified-no-lab: service ethernet: ITR and ETR toward every map-server
+ service ethernet
+  itr map-resolver 10.250.5.1
+  itr map-resolver 10.250.5.2
+  etr map-server 10.250.5.1 key 0ff1c3-k3y
+  etr map-server 10.250.5.1 proxy-reply
+  etr map-server 10.250.5.2 key 0ff1c3-k3y
+  etr map-server 10.250.5.2 proxy-reply
+  itr
+  etr
+  exit-service-ethernet
+!
+! Management
+line console 0
+line vty 0 15
+!
+end

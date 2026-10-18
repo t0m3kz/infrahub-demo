@@ -55,22 +55,6 @@ query loadbalancer_cloud($instance: String!) {
             }
           }
         }
-        members {
-          edges {
-            node {
-              name { value }
-              weight { value }
-              pool_interfaces {
-                edges {
-                  node {
-                    port { value }
-                    ip_address { node { address { value } } }
-                  }
-                }
-              }
-            }
-          }
-        }
       }
     }
   }

@@ -29,19 +29,10 @@ nodes:
         optional: true
         order_weight: 1000
         choices:
-          - name: core
-            label: Core Router
-            description: Central part of the network.
-            color: "#7f7fff"
           - name: edge
             label: Edge Router
             description: Network boundary with external networks.
             color: "#bf7fbf"
-          - name: cpe
-            label: Customer Premise Equipment
-            description: >
-              Devices located at the customer's premises.
-            color: "#bf7f7f"
           - name: leaf
             label: Leaf Switch
             description: Leaf Switch part of a Pod.
@@ -70,14 +61,6 @@ nodes:
             label: Load Balancer
             description: Load Balancer part of a Fabric.
             color: "#38e7fb"
-          - name: oob
-            label: OOB Switch
-            description: Out of Band Switch part of a Fabric.
-            color: "#e3e7fd"
-          - name: console
-            label: Console Server
-            description: Console Server part of a Fabric.
-            color: "#e9ebfd"
           - name: spine
             label: Spine Switch
             description: Spine switch part of a Pod fabric.
@@ -101,10 +84,6 @@ nodes:
               role) on one device. Sits in a pod's spine slot instead of
               "spine"; the two never coexist in the same pod.
             color: "#c58fdd"
-          - name: proxy
-            label: Proxy
-            description: "Forward, transparent, or reverse proxy appliance."
-            color: "#5ba85b"
           - name: access-switch
             label: Access Switch
             description: "Campus wiring-closet switch — a LISP fabric edge node in an office fabric."
@@ -131,6 +110,7 @@ nodes:
       - TopologyPhysicalDeployment
       - TopologyConnectableLocation
       - TopologyDeviceHosting
+      - TopologyDeviceNaming
       - TopologySegmentHosting
       - ManagedControllerAssignment
     label: Data Center
@@ -249,20 +229,6 @@ nodes:
             color: "#004E64"
         default_value: bottom_up
         order_weight: 1200
-      - name: spine_interface_sorting_method
-        kind: Dropdown
-        label: Spine interface assignment
-        choices:
-          - name: bottom_up
-            label: Bottom Up
-            description: Assign interfaces bottom-up.
-            color: "#869FB3"
-          - name: top_down
-            label: Top Down
-            description: Assign interfaces top-down.
-            color: "#004E64"
-        default_value: bottom_up
-        order_weight: 1300
       - name: connectivity_mode
         label: "Firewall/LB Connectivity"
         description: "How border-leaf-attached firewalls/load-balancers are cabled"
@@ -512,12 +478,3 @@ nodes:
         identifier: "pod__asn_pool"
         order_weight: 7100
         on_delete: cascade
-      - name: suites
-        label: "Suites"
-        description: "Physical suite(s) hosting this pod's racks, for real-capacity offset calculation"  # yamllint disable-line rule:line-length
-        peer: LocationSuite
-        kind: Attribute
-        cardinality: many
-        optional: true
-        identifier: "pod__suites"
-        order_weight: 7200

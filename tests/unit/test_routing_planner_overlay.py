@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from generators.helpers.routing import RoutingPlan, RoutingPlanInput, RoutingPlanner, overlay_control_plane_of
+from generators.helpers.routing import RoutingPlan, RoutingPlanInput, RoutingPlanner
 from generators.types import RoutingOptions
 
 # ================================================================
@@ -726,12 +726,12 @@ class TestOverlayIntegration:
 
 
 # ================================================================
-# LISP overlay control plane: OSPF underlay only, no overlay BGP
+# options.no_overlay (an office fabric): OSPF underlay only, no overlay BGP
 # ================================================================
 
 
-def _ospf_ibgp_plan(overlay_control_plane: str, *, overlay_as_id: str | None, existing_overlay: list | None = None):
-    """Plan a two-device ospf-ibgp fabric under the given overlay control plane."""
+def _ospf_ibgp_plan(*, no_overlay: bool, overlay_as_id: str | None, existing_overlay: list | None = None):
+    """Plan a two-device ospf-ibgp fabric, with or without the overlay half."""
     loopbacks = [
         _make_loopback("spine-1", "s1", "spine", "10.0.0.1"),
         _make_loopback("leaf-1", "l1", "leaf", "10.0.1.1"),
@@ -743,6 +743,8 @@ def _ospf_ibgp_plan(overlay_control_plane: str, *, overlay_as_id: str | None, ex
     options = RoutingOptions(ospf_area_id="area-0", design=_design())
     if overlay_as_id:
         options["overlay_as_id"] = overlay_as_id
+    if no_overlay:
+        options["no_overlay"] = True
     return RoutingPlanner(deployment_id="dc-1").build_routing_plan(
         RoutingPlanInput(
             bottom_devices=["spine-1", "leaf-1"],
@@ -752,17 +754,16 @@ def _ospf_ibgp_plan(overlay_control_plane: str, *, overlay_as_id: str | None, ex
             options=options,
             routing_strategy="ospf-ibgp",
             deployment_name="dc1",
-            overlay_control_plane=overlay_control_plane,
         )
     )
 
 
-class TestLispOverlayPlan:
-    """overlay_control_plane="lisp" keeps the OSPF underlay and drops every overlay BGP object."""
+class TestNoOverlayPlan:
+    """options.no_overlay keeps the OSPF underlay and drops every overlay BGP object."""
 
-    def test_lisp_plans_ospf_underlay_only(self) -> None:
-        """A lisp ospf-ibgp fabric gets OSPF processes/peerings and no BGP at all."""
-        plan = _ospf_ibgp_plan("lisp", overlay_as_id=None)
+    def test_no_overlay_plans_ospf_underlay_only(self) -> None:
+        """An ospf-ibgp fabric without an overlay gets OSPF processes/peerings and no BGP at all."""
+        plan = _ospf_ibgp_plan(no_overlay=True, overlay_as_id=None)
 
         assert sorted(p["name"] for p in plan.ospf_processes) == ["leaf-1-ospf-underlay", "spine-1-ospf-underlay"]
         assert len(plan.ospf_peerings) == 1
@@ -770,50 +771,36 @@ class TestLispOverlayPlan:
         assert plan.bgp_peerings == []
         assert plan.autonomous_systems == []
 
-    def test_lisp_needs_no_overlay_as(self) -> None:
-        """Without a shared overlay AS the iBGP overlay would raise; lisp must not."""
+    def test_no_overlay_needs_no_overlay_as(self) -> None:
+        """Without a shared overlay AS the iBGP overlay would raise; no_overlay must not."""
         with pytest.raises(ValueError, match="overlay_as_id is required"):
-            _ospf_ibgp_plan("bgp_evpn", overlay_as_id=None)
+            _ospf_ibgp_plan(no_overlay=False, overlay_as_id=None)
 
-        plan = _ospf_ibgp_plan("lisp", overlay_as_id=None)
+        plan = _ospf_ibgp_plan(no_overlay=True, overlay_as_id=None)
 
         assert plan.bgp_processes == []
 
-    def test_lisp_ignores_existing_overlay_processes(self) -> None:
-        """A stale overlay ManagedBGP on a flipped fabric gets no peering planned against it."""
+    def test_no_overlay_ignores_existing_overlay_processes(self) -> None:
+        """A stale overlay ManagedBGP gets no peering planned against it."""
         stale = []
         for name in ("spine-1", "leaf-1"):
             process = MagicMock(id=f"bgp-old-{name}")
             process.capabilities.peers = [MagicMock(display_label=name)]
             stale.append(process)
 
-        plan = _ospf_ibgp_plan("lisp", overlay_as_id=None, existing_overlay=stale)
+        plan = _ospf_ibgp_plan(no_overlay=True, overlay_as_id=None, existing_overlay=stale)
 
         assert plan.bgp_peerings == []
 
-    def test_bgp_evpn_ospf_ibgp_still_plans_overlay(self) -> None:
-        """The default control plane is unchanged: shared-AS iBGP overlay processes and peerings."""
-        plan = _ospf_ibgp_plan("bgp_evpn", overlay_as_id="overlay-as-1")
+    def test_the_default_still_plans_the_overlay(self) -> None:
+        """Without the option the strategy keeps its overlay: shared-AS iBGP processes and peerings."""
+        plan = _ospf_ibgp_plan(no_overlay=False, overlay_as_id="overlay-as-1")
 
         overlay = [b for b in plan.bgp_processes if b["process_role"] == "overlay"]
         assert len(overlay) == 2
         assert {p["session_type"] for p in plan.bgp_peerings} == {"IBGP"}
         assert len(plan.ospf_processes) == 2
 
-    def test_default_control_plane_is_bgp_evpn(self) -> None:
-        """RoutingPlanInput defaults to bgp_evpn so existing callers keep their behaviour."""
-        assert RoutingPlanInput().overlay_control_plane == "bgp_evpn"
-
-    @pytest.mark.parametrize(
-        ("data", "expected"),
-        [
-            ({"overlay_control_plane": "lisp"}, "lisp"),
-            ({"overlay_control_plane": "bgp_evpn"}, "bgp_evpn"),
-            ({}, "bgp_evpn"),
-            ({"overlay_control_plane": None}, "bgp_evpn"),
-            (None, "bgp_evpn"),
-        ],
-    )
-    def test_overlay_control_plane_of(self, data: dict | None, expected: str) -> None:
-        """A missing or empty flag reads as bgp_evpn."""
-        assert overlay_control_plane_of(data) == expected
+    def test_the_planner_input_has_no_overlay_flag_of_its_own(self) -> None:
+        """The underlay-only mode is driven by the options alone (no second knob on the input)."""
+        assert "overlay_control_plane" not in RoutingPlanInput.model_fields

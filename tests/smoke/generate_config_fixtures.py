@@ -24,8 +24,10 @@ from unittest.mock import AsyncMock, MagicMock
 import yaml
 
 from transforms.config.access_leaf import AccessLeaf
+from transforms.config.access_switch import AccessSwitch
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.border_spine import BorderSpine
+from transforms.config.distribution_switch import DistributionSwitch
 from transforms.config.edge import Edge
 from transforms.config.firewall import Firewall
 from transforms.config.l2_leaf import L2Leaf
@@ -106,7 +108,7 @@ def _make_bgp_peering(
         "password": _node({"password": _v(password)}) if password is not None else _node(None),
         "ttl": _v(ttl),
         "route_reflector_client": _v(route_reflector_client),
-        "interface_capabilities": _edges(
+        "capabilities": _edges(
             [
                 {
                     "__typename": local_iface_type,
@@ -252,7 +254,7 @@ def _make_interface(
     # rendering transform reads them from (_collect_activations_from_interfaces).
     if segments:
         services.extend(segments)
-    iface["interface_capabilities"] = _edges(services)
+    iface["capabilities"] = _edges(services)
     return iface
 
 
@@ -306,7 +308,7 @@ def _make_segment_node(
 ) -> dict:
     """Build a ManagedNetworkSegment node, as the query returns it.
 
-    This is the shape that hangs off ``interfaces[].interface_capabilities`` —
+    This is the shape that hangs off ``interfaces[].capabilities`` —
     the ONLY place BaseDeviceTransform._collect_activations_from_interfaces
     looks for segments, and therefore the only path that produces VXLAN/EVPN
     output for leaf/tor/access-leaf roles.
@@ -409,7 +411,7 @@ def _make_segment_deployment(**kwargs: Any) -> dict:
     This is the ``TopologySegmentHosting.segment_deployments`` shape, reached
     from a device's own ``deployment`` — used by border-leaf for DC-wide PBR
     rules (see transforms/config/border_leaf.py), NOT for VXLAN. VXLAN comes
-    exclusively from interface_capabilities via _make_segment_node.
+    exclusively from capabilities via _make_segment_node.
     """
     seg = _make_segment_node(**kwargs)
     return {
@@ -424,8 +426,8 @@ def _make_segment_deployment(**kwargs: Any) -> dict:
 # Scenario builders
 # ============================================================================
 # Roles that terminate customer segments, so their fixtures need segments attached.
-# Mirrors utils/fabric_roles.py's VTEP_ROLES (without edge) plus l2-leaf (pure L2, no VNI).
-SEGMENT_ROLES = ("leaf", "border-leaf", "border-spine", "tor", "l2-leaf", "access-leaf")
+# Mirrors utils/fabric_roles.py's VTEP_ROLES (without edge) plus l2-leaf (pure L2, no VNI) and an office's access-switch.
+SEGMENT_ROLES = ("leaf", "border-leaf", "border-spine", "tor", "l2-leaf", "access-leaf", "access-switch")
 
 # Fabric-wide EVPN route-target administrative ASN
 # (TopologySegmentHosting.evpn_rt_as). Deliberately NOT any device's own ASN:
@@ -445,8 +447,12 @@ def build_device_data(
     include_acls: bool = False,
     isolation_mode: str | None = None,
     security_fields: bool = False,
+    vlan_segment_vrf: bool = False,
 ) -> dict:
     """Build a complete raw GraphQL response for a device config query.
+
+    ``vlan_segment_vrf`` puts the VLAN-only seg-200 in VRF_A with an L3 VNI instead of the default
+    namespace: an office LISP fabric refuses a gateway outside a VRF with an L3 instance-id.
 
     Scenarios:
         ebgp_ebgp: eBGP underlay (TTL=1) + eBGP overlay (TTL=2), per-device ASN
@@ -813,13 +819,14 @@ def build_device_data(
                     "seg_name": "seg-200",
                     "seg_type": "ManagedVlanSegment",
                     "gateway_ip": "10.200.0.1/24",
+                    **({"ns_name": "VRF_A", "l3_vni": 50001} if vlan_segment_vrf else {}),
                     "security_policy": policy_vlan,
                     "isolation_mode": isolation_mode,
                     "num_deployments": 1,
                 }
             )
 
-    # VXLAN/EVPN is rendered ONLY from interface_capabilities, so the
+    # VXLAN/EVPN is rendered ONLY from capabilities, so the
     # customer-facing port must carry the segments. Attaching them solely to
     # deployment.segment_deployments (as this generator used to) left every
     # fixture with zero VXLAN output while still passing.
@@ -933,7 +940,7 @@ def build_inline_segment_data(*, device_name: str, role: str, platform: str) -> 
         )
     else:
         customer_port = next(e["node"] for e in interfaces if e["node"]["name"]["value"] == "Ethernet10")
-        customer_port["interface_capabilities"] = _edges([seg])
+        customer_port["capabilities"] = _edges([seg])
     # DC-wide view (border-leaf PBR / BGW): the same segment, still no PBR.
     device_node["deployment"]["node"]["segment_deployments"] = _edges(
         [{"vni": _v(_INLINE_SEGMENT_KWARGS["vni"]), "status": _v("active"), "segment": _node(seg)}]
@@ -1003,7 +1010,7 @@ def _make_firewall_interface(
             }
         ),
         "ha_domain": _node(None),
-        "interface_capabilities": _edges([seg_node]),
+        "capabilities": _edges([seg_node]),
     }
 
 
@@ -1358,7 +1365,7 @@ def build_leaf_pbr_data(*, device_name: str, platform: str) -> dict:
         "vlan_id": _v(3000),
         "tenant": _node(None),
         "served_deployments": _edges([]),
-        "interface_capabilities": _edges(legs),
+        "capabilities": _edges(legs),
     }
     firewall = {
         "node": {
@@ -1470,7 +1477,7 @@ def build_firewall_ha_data(*, device_name: str, platform: str) -> dict:
                 "status": _v("active"),
                 "role": _v("ha"),
                 "ip_address": _node(None),
-                "interface_capabilities": _edges([]),
+                "capabilities": _edges([]),
             }
         }
     )
@@ -1498,10 +1505,10 @@ def build_firewall_inline_data(*, device_name: str, platform: str) -> dict:
         namespace_name="PROD",
     )
     inline_iface["ip_address"] = _node({"address": _v("10.1.0.2/24"), "ip_namespace": _node({"name": _v("PROD")})})
-    segment = inline_iface["interface_capabilities"]["edges"][0]["node"]
+    segment = inline_iface["capabilities"]["edges"][0]["node"]
     segment["terminate_inline"] = _v(True)
     segment["inline_service"] = _node({"id": "ha-1", "name": _v("dc1-fw-ha")})
-    segment["interface_capabilities"] = _edges(
+    segment["capabilities"] = _edges(
         [
             {"device": _node({"name": _v("dc1-fw-01")}), "ip_address": _node({"address": _v("10.1.0.2/24")})},
             {"device": _node({"name": _v("dc1-fw-02")}), "ip_address": _node({"address": _v("10.1.0.3/24")})},
@@ -1639,7 +1646,7 @@ def build_exchange_transit_bl_data(
                                 "ip_namespace": _xchg_ns_node(ns_type),
                             }
                         ),
-                        "interface_capabilities": _edges(exchanges),
+                        "capabilities": _edges(exchanges),
                     }
                 )
         context_nodes.append(
@@ -1651,7 +1658,7 @@ def build_exchange_transit_bl_data(
                 "tenant": _node({"id": "tenant-acme"}) if ctx["tenant"] else _node(None),
                 "served_deployments": _edges([{"id": ctx["deployment"]}]),
                 "snat_address": _node({"address": _v(ctx["snat"])}),
-                "interface_capabilities": _edges(legs),
+                "capabilities": _edges(legs),
             }
         )
 
@@ -1668,13 +1675,13 @@ def build_exchange_transit_bl_data(
                 "mtu": _v(9000),
                 "ip_address": _node(None),
                 "cable": _node(None),
-                "interface_capabilities": _edges(context_nodes),
+                "capabilities": _edges(context_nodes),
             }
         }
     )
     if with_customer_port:
         customer_port = next(e["node"] for e in interfaces if e["node"]["name"]["value"] == "Ethernet10")
-        customer_port["interface_capabilities"] = _edges([shared])
+        customer_port["capabilities"] = _edges([shared])
     device_node["deployment"]["node"]["segment_deployments"] = _edges(
         [
             {"vni": _v(10100), "status": _v("active"), "segment": _node(shared)},
@@ -1755,9 +1762,7 @@ def build_border_leaf_bgw_stretched_data(*, device_name: str, platform: str) -> 
     fw_port = next(e["node"] for e in device_node["interfaces"]["edges"] if e["node"]["role"] == _v("firewall"))
     firewall = {
         "node": {
-            "capabilities": _edges(
-                [{"__typename": "ManagedFirewallHA", "contexts": fw_port["interface_capabilities"]}]
-            ),
+            "capabilities": _edges([{"__typename": "ManagedFirewallHA", "contexts": fw_port["capabilities"]}]),
         }
     }
     device_node["deployment"]["node"]["devices"] = {"edges": [firewall]}
@@ -1818,7 +1823,7 @@ def build_edge_internet_bgw_data(*, device_name: str, platform: str) -> dict:
         maximum_routes=100,
         password="isp-s3cr3t",
     )
-    for iface_edge in peering["interface_capabilities"]["edges"]:
+    for iface_edge in peering["capabilities"]["edges"]:
         node = iface_edge["node"]
         node["ip_address"]["node"]["ip_namespace"] = internet_ns
     # The INTERNET namespace's public space: aggregate + outbound filter.
@@ -1863,10 +1868,10 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
         10.150.0.0/16 propagates to rt-isolated only and is not.
       - .1001 NON-PROD: a private VIF whose VPC lists a NON-PROD and a PROD block;
         only the NON-PROD one is accepted.
-      - .1900 PROD: the SD-WAN gateway handoff. It accepts the PROD lan_prefixes
-        of the offices behind EQX-FR2-SDWAN-GW1 (10.210.2.0/24, 10.210.5.0/24);
-        a NON-PROD LAN of one of them, an office behind another gateway and an
-        office without a gateway are not accepted.
+      - .1900 PROD: the SD-WAN gateway handoff. It accepts the PROD lan_prefixes and the PROD
+        hosted-segment prefixes of the offices behind EQX-FR2-SDWAN-GW1 (10.210.2.0/24, and the
+        10.176.5.0/24 office-lan segment hosted by the fabric office); a NON-PROD LAN of one of
+        them, an office behind another gateway and an office without a gateway are not accepted.
     Out: per VRF, the prefixes behind its segment gateways (a PROD container,
     a MANAGEMENT segment and a cloud subnet are not on-prem tenant space). A VIF
     on another device with the same VLAN is ignored.
@@ -1924,7 +1929,7 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
         peering["name"] = _v(name)
         peering["peering_role"] = _v("regular")
         peering["address_families"] = _af_edges(("ipv4", "unicast"))
-        for iface_edge in peering["interface_capabilities"]["edges"]:
+        for iface_edge in peering["capabilities"]["edges"]:
             iface_edge["node"]["ip_address"]["node"]["ip_namespace"] = namespaces[ns]
         peerings.append(peering)
     device_node["capabilities"]["edges"].append(
@@ -2029,15 +2034,35 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
         ]
     )
 
-    def office(gateway: str | None, *lans: tuple[str, str]) -> dict:
+    def office(gateway: str | None, *lans: tuple[str, str], hosted: tuple[str, str] | None = None) -> dict:
+        """A footprint's gateway, its lan_prefixes and (``hosted``) the gateway prefix of a segment it hosts."""
+        segments = [] if hosted is None else [hosted]
         return {
             "sdwan_gateway": _node({"name": _v(gateway)} if gateway else None),
             "lan_prefixes": _cidr_blocks(*lans),
+            "segment_deployments": _edges(
+                [
+                    {
+                        "segment": _node(
+                            {
+                                "gateway": _node(
+                                    {
+                                        "ip_prefix": _node(
+                                            {"prefix": _v(prefix), "ip_namespace": _node({"name": _v(namespace)})}
+                                        )
+                                    }
+                                )
+                            }
+                        )
+                    }
+                    for prefix, namespace in segments
+                ]
+            ),
         }
 
     data["TopologyCustomerOffice"] = _edges(
         [
-            office("EQX-FR2-SDWAN-GW1", ("10.210.5.0/24", "PROD")),
+            office("EQX-FR2-SDWAN-GW1", hosted=("10.176.5.0/24", "PROD")),
             office("EQX-FR2-SDWAN-GW1", ("10.210.2.0/24", "PROD"), ("10.211.2.0/24", "NON-PROD")),
             office("EQX-AM5-SDWAN-GW1", ("10.210.9.0/24", "PROD")),
             office(None, ("10.210.15.0/24", "PROD")),
@@ -2247,7 +2272,7 @@ def build_firewall_exchange_data(*, device_name: str, platform: str) -> dict:
                         }
                     ),
                     "ha_domain": _node(None),
-                    "interface_capabilities": _edges([cap]),
+                    "capabilities": _edges([cap]),
                 }
             )
     # keep the HA sync port of the HA fixture, replace the zone legs by the context legs
@@ -2389,7 +2414,7 @@ def build_mlag_device_data(
                 {"name": _v(member2)},
             ]
         ),
-        "interface_capabilities": _edges([]),
+        "capabilities": _edges([]),
     }
 
     mem1 = _make_interface(
@@ -2597,7 +2622,7 @@ def _inline_segment_cap(*, ha_name: str, gateway: str, members: dict[str, str]) 
         "terminate_inline": _v(True),
         "inline_service": _node({"name": _v(ha_name)}),
         "gateway": _node({"address": _v(gateway)}),
-        "interface_capabilities": _edges(
+        "capabilities": _edges(
             [
                 {"device": _node({"name": _v(device)}), "ip_address": _node({"address": _v(address)})}
                 for device, address in members.items()
@@ -2616,7 +2641,7 @@ def _inline_member_interface(*, name: str, address: str, segment: dict) -> dict:
         "role": _v("service"),
         "ip_address": _node({"address": _v(address)}),
         "parent_interface": _node({"name": _v(name.split(".")[0])}),
-        "interface_capabilities": _edges([segment]),
+        "capabilities": _edges([segment]),
     }
 
 
@@ -2663,7 +2688,7 @@ def build_lb_inline_data(*, device_name: str, platform: str) -> dict:
             "status": _v("active"),
             "role": _v("management"),
             "ip_address": _node({"address": _v("192.168.2.1/24")}),
-            "interface_capabilities": _edges([]),
+            "capabilities": _edges([]),
         },
         _inline_member_interface(name="eth2.220", address="10.3.0.2/24", segment=segment),
     ]
@@ -2808,7 +2833,7 @@ def _gp_nic(
         "name": _v(nic),
         "role": _v("uplink"),
         "device": _node({"name": _v(host)}),
-        "interface_capabilities": _edges([]),
+        "capabilities": _edges([]),
         "lag": _node(None),
     }
     far = {
@@ -2816,8 +2841,8 @@ def _gp_nic(
         "name": _v(port),
         "role": _v(far_role or ("lag" if lag else "server")),
         "device": _node({"name": _v(switch)}),
-        "interface_capabilities": _edges([] if lag else tagged),
-        "lag": _node({"name": _v(lag), "interface_capabilities": _edges(tagged)} if lag else None),
+        "capabilities": _edges([] if lag else tagged),
+        "lag": _node({"name": _v(lag), "capabilities": _edges(tagged)} if lag else None),
     }
     return {"id": near["id"], "name": _v(nic), "cable": _node({"endpoints": _edges([near, far])})}
 
@@ -3527,17 +3552,26 @@ def write_cisco_xe_fixtures() -> tuple[int, int]:
     return generated, errors
 
 
-# LISP overlay fabric: the cisco_xe ospf_ibgp inputs with the BGP capability removed (a LISP fabric has no BGP
-# overlay) and the fabric flag, the two border-leaf map-servers (listed out of name order: the transform sorts
-# them) and the shared site key on the device's deployment (queries/fragments/lisp_fabric.gql).
-LISP_MAP_SERVERS = (("dc1-border-leaf-02", "10.255.0.2/32"), ("dc1-border-leaf-01", "10.255.0.1/32"))
-LISP_SITE_KEY = "s3cr3t"
+# Office LISP site (add_office_fabric, SD-Access style): an access-switch edge and a distribution-switch border-and-
+# map-server pair on one office footprint. The cisco_xe ospf_ibgp inputs without the BGP capability, the uplinks re-wired
+# to the pair, and the office's own deployment (queries/config/access_switch.gql): its name is the LISP site, its
+# site key and the two distribution-switch map-servers (listed out of name order: the transform sorts them).
+OFFICE_NAME = "C005-P"
+OFFICE_MAP_SERVERS = (("ds-c005-p02", "10.250.5.2/32"), ("ds-c005-p01", "10.250.5.1/32"))
+OFFICE_SITE_KEY = "0ff1c3-k3y"
 
 
-def build_lisp_device_data(
+def _rewire_uplink(iface: dict, *, role: str, peer: str) -> None:
+    """Point one P2P interface of the base fixture at the office peer ``peer`` (description, role, cable far end)."""
+    iface["role"] = _v(role)
+    iface["description"] = _v(f"to {peer}")
+    iface["cable"]["node"]["endpoints"]["edges"][1]["node"]["device"] = _node({"name": _v(peer)})
+
+
+def build_office_lisp_device_data(
     *, device_name: str, role: str, include_segments: bool = True, include_acls: bool = False
 ) -> dict:
-    """The raw cisco_xe device query response of a device in a fabric whose overlay_control_plane is `lisp`."""
+    """The raw cisco_xe device query response of an office access-switch or distribution-switch."""
     data = build_device_data(
         device_name=device_name,
         role=role,
@@ -3545,34 +3579,172 @@ def build_lisp_device_data(
         scenario="ospf_ibgp",
         include_segments=include_segments,
         include_acls=include_acls,
+        vlan_segment_vrf=True,
     )
     node = data["DcimDevice"]["edges"][0]["node"]
     node["capabilities"]["edges"] = [
         edge for edge in node["capabilities"]["edges"] if edge["node"].get("__typename") != "ManagedBGP"
     ]
+    by_name = {edge["node"]["name"]["value"]: edge["node"] for edge in node["interfaces"]["edges"]}
+    if role == "access-switch":
+        _rewire_uplink(by_name["Ethernet1"], role="uplink", peer="ds-c005-p01")
+        _rewire_uplink(by_name["Ethernet2"], role="uplink", peer="ds-c005-p02")
+    else:
+        _rewire_uplink(by_name["Ethernet1"], role="downlink", peer="as-c005-p01")
+        _rewire_uplink(by_name["Ethernet2"], role="interlink", peer="ds-c005-p02")
     deployment = node["deployment"]["node"]
-    deployment["overlay_control_plane"] = _v("lisp")
-    deployment["lisp_map_servers"] = _edges(
-        [
-            {"name": _v(name), "interfaces": _edges([{"ip_address": _node({"address": _v(address)})}])}
-            for name, address in LISP_MAP_SERVERS
-        ]
+    deployment.update(
+        {
+            "id": "office-1",
+            "name": _v(OFFICE_NAME),
+            "lisp_map_servers": _edges(
+                [
+                    {"name": _v(name), "interfaces": _edges([{"ip_address": _node({"address": _v(address)})}])}
+                    for name, address in OFFICE_MAP_SERVERS
+                ]
+            ),
+            "lisp_site_key": _node({"password": _v(OFFICE_SITE_KEY)}),
+        }
     )
-    deployment["lisp_site_key"] = _node({"password": _v(LISP_SITE_KEY)})
+    # An office has no EVPN route-target ASN (unset on TopologyCustomerOffice) and no overlay flag.
+    deployment.pop("evpn_rt_as", None)
     return data
 
 
-def write_cisco_xe_lisp_fixtures() -> tuple[int, int]:
-    """Write the Catalyst 9000 leaf / access-leaf / border-leaf LISP-overlay fixtures (OSPF underlay, no BGP).
+def write_office_lisp_fixtures() -> tuple[int, int]:
+    """Write the office access-switch and distribution-switch LISP fixtures (OSPF underlay, no BGP).
 
-    Plus a hostless leaf: an edge that hosts no segment yet still carries the edge LISP config.
+    Plus a hostless access-switch (an edge that hosts no segment yet still carries the edge LISP config) and one
+    whose tenant SVIs carry the zero-trust segment ACLs.
     """
     generated = errors = 0
-    hostless = build_lisp_device_data(device_name="dc1-leaf-01", role="leaf", include_segments=False)
-    generated, errors = _write_data_fixture(Leaf, "leaf_cisco_xe_lisp_hostless", hostless)
-    for transform_cls, role, type_prefix in CISCO_XE_DEVICE_CONFIGS:
-        data = build_lisp_device_data(device_name=f"dc1-{type_prefix.replace('_', '-')}-01", role=role)
-        g, e = _write_data_fixture(transform_cls, f"{type_prefix}_cisco_xe_lisp_ospf_ibgp", data)
+    acl_data = build_office_lisp_device_data(device_name="as-c005-p01", role="access-switch", include_acls=True)
+    _add_cisco_xe_acl_rules(_interface_segments(acl_data))
+    for dir_name, data in (
+        (
+            "access_switch_cisco_xe_lisp_hostless",
+            build_office_lisp_device_data(device_name="as-c005-p01", role="access-switch", include_segments=False),
+        ),
+        ("access_switch_cisco_xe_lisp_with_acl", acl_data),
+    ):
+        g, e = _write_data_fixture(AccessSwitch, dir_name, data)
+        generated += g
+        errors += e
+    for transform_cls, role, dir_name, device_name in (
+        (AccessSwitch, "access-switch", "access_switch_cisco_xe_lisp_ospf", "as-c005-p01"),
+        (DistributionSwitch, "distribution-switch", "distribution_switch_cisco_xe_lisp_ospf", "ds-c005-p01"),
+    ):
+        g, e = _write_data_fixture(
+            transform_cls, dir_name, build_office_lisp_device_data(device_name=device_name, role=role)
+        )
+        generated += g
+        errors += e
+    return generated, errors
+
+
+# The office's WAN exit (add_office_fabric): the office has its SD-WAN edge, so the distribution-switch is the exit (a
+# routed port with a dot1q sub-interface in the tenant VRF, an eBGP session to the edge, proxy-ETR/ITR) and the
+# access-switch uses it (use-petr). Same inputs as the two fixtures above plus what the generator writes: the edge on the
+# deployment, and on the border the port, its sub-interface and the BGP process with its peering. The tenant VRF is the
+# fixture's own (VRF_A, L3 instance-id 50001), the one its segment is in.
+OFFICE_EDGE_NAME = "C005-P-EDGE1"
+OFFICE_EXIT_PORT = "GigabitEthernet1/0/26"
+OFFICE_EXIT_VLAN = 3800
+OFFICE_EXIT_VRF = "VRF_A"
+OFFICE_EXIT_SWITCH_ASN = 4200000001
+OFFICE_EXIT_EDGE_ASN = 4200000002
+OFFICE_EXIT_SWITCH_ADDRESS = "100.66.0.0/31"
+OFFICE_EXIT_EDGE_ADDRESS = "100.66.0.1/31"
+OFFICE_EXIT_LOOPBACK = OFFICE_MAP_SERVERS[1][1]
+
+
+def build_office_wan_exit_data(*, device_name: str, role: str) -> dict:
+    """The raw device query response of an office access-switch or distribution-switch whose office has an SD-WAN edge."""
+    data = build_office_lisp_device_data(device_name=device_name, role=role)
+    node = data["DcimDevice"]["edges"][0]["node"]
+    node["deployment"]["node"]["lisp_wan_edges"] = _edges([{"name": _v(OFFICE_EDGE_NAME)}])
+    if role != "distribution-switch":
+        return data
+
+    namespace = _node(
+        {"name": _v(OFFICE_EXIT_VRF), "l3_vni": _v(50001), "namespace_type": _v("prod")},
+    )
+    # Loopback0 is the RLOC the edges register toward and the map-server address the other switches use.
+    loopback_address = _node(
+        {"address": _v(OFFICE_EXIT_LOOPBACK), "ip_namespace": _node({"name": _v("default")})},
+    )
+    for edge in node["interfaces"]["edges"]:
+        if edge["node"]["name"]["value"] == "Loopback0":
+            edge["node"]["ip_address"] = loopback_address
+    sub_interface = f"{OFFICE_EXIT_PORT}.{OFFICE_EXIT_VLAN}"
+    node["interfaces"]["edges"].append(
+        {
+            "node": _make_interface(
+                name=OFFICE_EXIT_PORT,
+                device_name=device_name,
+                description=f"{device_name}-{OFFICE_EXIT_PORT}__{OFFICE_EDGE_NAME}-GE3",
+                role="uplink",
+            )
+        }
+    )
+    node["interfaces"]["edges"].append(
+        {
+            "node": {
+                **_make_interface(
+                    name=sub_interface, device_name=device_name, role="uplink", typename="DcimVirtualInterface"
+                ),
+                "parent_interface": _node({"name": _v(OFFICE_EXIT_PORT)}),
+                "ip_address": _node({"address": _v(OFFICE_EXIT_SWITCH_ADDRESS), "ip_namespace": namespace}),
+            }
+        }
+    )
+    peering = _make_bgp_peering(
+        device_name=device_name,
+        device_ip=OFFICE_EXIT_SWITCH_ADDRESS,
+        device_asn=OFFICE_EXIT_SWITCH_ASN,
+        remote_name=OFFICE_EDGE_NAME,
+        remote_ip=OFFICE_EXIT_EDGE_ADDRESS,
+        remote_asn=OFFICE_EXIT_EDGE_ASN,
+        ttl=1,
+        local_iface_name=sub_interface,
+        remote_iface_name=f"GE3.{OFFICE_EXIT_VLAN}",
+        send_extended_community=True,
+        password="0ff1c3-w4n-k3y",
+    )
+    peering["name"] = _v(f"WAN-EXIT-{device_name}-{OFFICE_EDGE_NAME}")
+    peering["peering_role"] = _v("regular")
+    peering["address_families"] = _af_edges(("ipv4", "unicast"))
+    for iface_edge in peering["capabilities"]["edges"]:
+        iface_edge["node"]["ip_address"]["node"]["ip_namespace"] = namespace
+    node["capabilities"]["edges"].append(
+        {
+            "node": {
+                "__typename": "ManagedBGP",
+                "name": _v(f"{device_name}-bgp-wan-exit"),
+                "status": _v("active"),
+                "multipath": _v(False),
+                "graceful_restart": _v(True),
+                "confederation_identifier": _v(None),
+                "process_role": _v("regular"),
+                "local_as": _node({"asn": _v(OFFICE_EXIT_SWITCH_ASN)}),
+                "router_id": _node({"address": _v(OFFICE_EXIT_LOOPBACK)}),
+                "peerings": _edges([peering]),
+            }
+        }
+    )
+    return data
+
+
+def write_office_wan_exit_fixtures() -> tuple[int, int]:
+    """Write the office access-switch and distribution-switch fixtures of an office with a WAN exit."""
+    generated = errors = 0
+    for transform_cls, role, dir_name, device_name in (
+        (AccessSwitch, "access-switch", "access_switch_cisco_xe_lisp_wan_exit", "as-c005-p01"),
+        (DistributionSwitch, "distribution-switch", "distribution_switch_cisco_xe_lisp_wan_exit", "ds-c005-p01"),
+    ):
+        g, e = _write_data_fixture(
+            transform_cls, dir_name, build_office_wan_exit_data(device_name=device_name, role=role)
+        )
         generated += g
         errors += e
     return generated, errors
@@ -3620,22 +3792,19 @@ def _interface_segments(data: dict, interface_name: str = "Ethernet10") -> list[
     """The segment nodes carried by one interface of the first device of a raw device response."""
     node = data["DcimDevice"]["edges"][0]["node"]
     port = next(e["node"] for e in node["interfaces"]["edges"] if e["node"]["name"]["value"] == interface_name)
-    return [edge["node"] for edge in port["interface_capabilities"]["edges"]]
+    return [edge["node"] for edge in port["capabilities"]["edges"]]
 
 
-def build_cisco_xe_acl_data(*, device_name: str, role: str = "leaf", lisp: bool = False) -> dict:
+def build_cisco_xe_acl_data(*, device_name: str, role: str = "leaf") -> dict:
     """A cisco_xe leaf hosting seg-100 (VRF_A, VXLAN) and seg-200 (VLAN), each behind a zero-trust SVI ACL."""
-    if lisp:
-        data = build_lisp_device_data(device_name=device_name, role=role, include_acls=True)
-    else:
-        data = build_device_data(
-            device_name=device_name,
-            role=role,
-            platform="cisco_xe",
-            scenario="ebgp_ibgp",
-            include_segments=True,
-            include_acls=True,
-        )
+    data = build_device_data(
+        device_name=device_name,
+        role=role,
+        platform="cisco_xe",
+        scenario="ebgp_ibgp",
+        include_segments=True,
+        include_acls=True,
+    )
     _add_cisco_xe_acl_rules(_interface_segments(data))
     return data
 
@@ -3662,11 +3831,10 @@ def build_cisco_xe_exchange_data(*, device_name: str, role: str, with_acl: bool)
 
 
 def write_cisco_xe_acl_fixtures() -> tuple[int, int]:
-    """Write the Catalyst 9000 segment-ACL and exchange-static fixtures (EVPN-VXLAN and LISP)."""
+    """Write the Catalyst 9000 segment-ACL and exchange-static fixtures (EVPN-VXLAN)."""
     generated = errors = 0
     fixtures = (
         (Leaf, "leaf_cisco_xe_with_acl", build_cisco_xe_acl_data(device_name="dc1-leaf-01")),
-        (Leaf, "leaf_cisco_xe_lisp_with_acl", build_cisco_xe_acl_data(device_name="dc1-leaf-01", lisp=True)),
         (
             Leaf,
             "leaf_cisco_xe_exchange_acl",
@@ -3760,8 +3928,13 @@ def main() -> int:
     generated += g
     errors += e
 
-    print("\nGenerating Catalyst 9000 (cisco_xe) LISP overlay fixtures:")
-    g, e = write_cisco_xe_lisp_fixtures()
+    print("\nGenerating Catalyst 9000 (cisco_xe) office LISP site fixtures:")
+    g, e = write_office_lisp_fixtures()
+    generated += g
+    errors += e
+
+    print("\nGenerating Catalyst 9000 (cisco_xe) office WAN exit fixtures:")
+    g, e = write_office_wan_exit_fixtures()
     generated += g
     errors += e
 

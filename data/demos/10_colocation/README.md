@@ -67,8 +67,7 @@ From that the generator creates, per metro:
 - the metro's own **loopback / management / technical / ASN pools**, sliced out of the global bootstrap supernets
 - the **devices** — `eg-fr01`, `eg-fr02`, `fw-fr01`, `fw-fr02` — each with a management address, and a /32 loopback
   for the edge routers only
-- an **HA domain** for a firewall or load-balancer pair (`ManagedFirewallHA`), its two `ManagedHAInterface` nodes,
-  and the sync cable between the members
+- an **HA domain** for a firewall or load-balancer pair (`ManagedFirewallHA`) and the sync cable between the members
 - the **cabling** from the edge pair to that service pair, on the edge's `firewall`-role ports
   (`Ethernet1/[15-16]`) and the firewall's `uplink` ports
 - for a metro with exactly two physical edges, the **edge pair link**: a cable on the edge's `interlink`-role port
