@@ -137,8 +137,8 @@ nodes:
     relationships:
       # TopologyDeployment, not TopologyCustomer: a TopologyCustomerOffice hosts
       # its own segments (it is TopologySegmentHosting) but is not a
-      # TopologyCustomer (its owner is its parent's), so the narrower generic
-      # could not name it. checks/segment_placement.py is what limits the kinds.
+      # TopologyCustomer (it carries its own owner, and no environment), so the
+      # narrower generic could not name it. checks/segment_placement.py is what limits the kinds.
       - name: customer_deployments
         peer: TopologyDeployment
         cardinality: many
@@ -181,16 +181,6 @@ nodes:
         optional: true
         order_weight: 1050
         description: "L2 VNI for this deployment; stretched segments share one value across deployments."
-        parameters:
-          min_value: 1
-          max_value: 16777215
-
-      - name: local_vni_override
-        kind: Number
-        label: Local VNI Override
-        optional: true
-        order_weight: 1055
-        description: "Optional local VNI override for exceptional migration/interoperability cases."
         parameters:
           min_value: 1
           max_value: 16777215

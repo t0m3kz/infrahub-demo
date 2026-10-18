@@ -19,7 +19,6 @@ spec:
       criticality: high
       security_profile: internet_exposed
       fqdn: dispatch-hub.c002.demo.local
-      ingress_mode: frontend
       owner: C002
       member_of_groups:
         - app_applications

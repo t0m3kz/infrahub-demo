@@ -35,6 +35,9 @@ query GetTransitInventory {
               id
               ... on TopologyCustomer {
                 name { value }
+              }
+              # Only DC and colocation footprints state an environment (TopologyEnvironmentScoped).
+              ... on TopologyEnvironmentScoped {
                 environment { value }
               }
             }

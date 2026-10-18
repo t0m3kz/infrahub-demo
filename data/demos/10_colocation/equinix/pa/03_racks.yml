@@ -14,8 +14,6 @@ spec:
           - suite_name: PA4
             index: 4
             shortname: pa4-s1
-            rows: 1
-            racks_per_row: 2
             children:
               kind: LocationRack
               data:
@@ -36,8 +34,6 @@ spec:
           - suite_name: PA6
             index: 6
             shortname: pa6-s1
-            rows: 1
-            racks_per_row: 2
             children:
               kind: LocationRack
               data:

@@ -365,15 +365,3 @@ nodes:
         identifier: "virtual_circuit__physical_circuits"
         order_weight: 1075
         description: "Direct mapping to underlay circuits carrying this virtual circuit"
-
-extensions:
-  nodes:
-    - kind: TopologyConnectableLocation
-      relationships:
-        - name: circuits
-          label: "Circuits"
-          peer: TopologyCircuit
-          cardinality: many
-          identifier: "circuit__location"
-          order_weight: 5000
-          description: "All circuits (physical and virtual) terminating at this location"

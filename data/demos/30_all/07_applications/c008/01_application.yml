@@ -11,7 +11,6 @@ spec:
     - label: inventory-sync
       environment: d
       fqdn: inventory-sync.c008.demo.local
-      ingress_mode: dns
       application_orchestrator: github_actions
       owner: C008
       member_of_groups:
@@ -47,7 +46,6 @@ spec:
       environment: p
       criticality: high
       fqdn: trade-portal.c008.demo.local
-      ingress_mode: dns
       application_orchestrator: github_actions
       owner: C008
       member_of_groups:

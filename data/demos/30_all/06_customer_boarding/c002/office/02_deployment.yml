@@ -1,8 +1,7 @@
 ---
-# The Marseille Branch LAN, registered in the PROD VRF because the footprint
-# below is environment p (10.210.<customer>.0/24, see
-# ../../c005/office/02_deployment.yml). Created first: the footprint references
-# it by its [prefix, namespace] hfid.
+# The Marseille Branch LAN, registered in the PROD namespace (an office is always
+# PROD; 10.210.<customer>.0/24). Created first: the footprint references it by
+# its [prefix, namespace] hfid.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -13,27 +12,19 @@ spec:
       status: active
       description: "C002 Marseille Branch office LAN"
 ---
-# name is computed ({parent_owner_org_id}-{environment}) — read-only.
-#
 # sdwan_gateway opts this office into generators/topology/sdwan_edge.py's
 # SdwanEdgeGenerator (add_sdwan_edge) at creation: the gateway loads with the
 # foundation stage (../../../02_colo/equinix/fr/04_sdwan_gateway.yml).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: TopologyOfficeCustomer
+  kind: TopologyCustomerOffice
   data:
     - owner: "C002"
       parent: "Campus and Office"
-      children:
-        - kind: TopologyCustomerOffice
-          data:
-            environment: "p"
-            locations:
-              - "mar-branch"
-            lan_prefixes:
-              - ["10.210.2.0/24", "PROD"]
-            member_of_groups:
-              - customer_deployments_office
-            sdwan_gateway: "EQX-FR2-SDWAN-GW1"
-            branch_to_branch: full_mesh
+      locations: ["mar-branch"]
+      lan_prefixes:
+        - ["10.210.2.0/24", "PROD"]
+      member_of_groups: [customer_deployments_office]
+      sdwan_gateway: "EQX-FR2-SDWAN-GW1"
+      branch_to_branch: full_mesh

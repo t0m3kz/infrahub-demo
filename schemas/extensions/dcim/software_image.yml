@@ -7,7 +7,7 @@ version: "1.0"
 # Replaces the free-text os_version field on DcimDevice with a structured
 # relationship so that:
 #   - All devices on the same release share one node (queryable)
-#   - Full lifecycle metadata is tracked per image (dates, approval, CVEs)
+#   - Full lifecycle metadata is tracked per image (dates, approval)
 #   - The platform is implicit from the image (no mismatch possible)
 #   - Golden/approved image policy can be enforced via checks
 #
@@ -107,13 +107,6 @@ nodes:
         optional: true
         order_weight: 420
         description: "End of life date — no further security patches after this date"
-
-      - name: known_cve_count
-        kind: Number
-        label: "Known CVEs"
-        optional: true
-        order_weight: 500
-        description: "Number of known unpatched CVEs at last review (informational)"
 
       - name: release_notes_url
         kind: URL

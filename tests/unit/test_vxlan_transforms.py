@@ -1710,9 +1710,9 @@ class TestUnencodableVniWarning:
         """The VNI space is flat, not one namespace per VNI type.
 
         An L2 segment allocated on top of a VRF's L3 VNI makes the device reject
-        the `member vni ... associate` line. This is the symptom of the L2 and
-        L3 pool ranges overlapping, which is why the L2 pool is capped at 49999
-        below the 50001-59999 L3 range.
+        the `member vni ... associate` line. This is the symptom of an L2 pool
+        range reaching a namespace's fixed l3_vni, which is why the site L2
+        pool stops at 39999 and the stretched pool at 49999.
         """
         with caplog.at_level(logging.WARNING):
             _warn_unencodable_vnis([{"vni": 50001}], [{"l3_vni": 50001}], device_name="leaf-1")

@@ -4,13 +4,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from infrahub_sdk.checks import InfrahubCheck
-
 from utils.data_cleaning import clean_data
 from utils.exchange_transit import is_exchange_zone
 
+from .base import WarningCheck
 
-class CheckSegmentPlacement(InfrahubCheck):
+OFFICE_ENVIRONMENT = "p"
+"""An office is always PROD: it has no environment of its own, its segments must be `p`."""
+
+
+class CheckSegmentPlacement(WarningCheck):
     """Validate deployment-type compatibility and VXLAN stretch constraints.
 
     A tenant segment inside a data center is a VXLAN segment: only
@@ -20,6 +23,17 @@ class CheckSegmentPlacement(InfrahubCheck):
     TopologyCustomerDC is an error unless it sits in an exchange zone (the
     DC-local MANAGEMENT services, authored infra data), the exemption
     checks/segment_security.py makes with the same predicate.
+
+    A segment also agrees with every footprint it names. Its environment must
+    be the footprint's (an ERROR: the environment picks the segment's
+    namespace, zone and firewall leg, so a segment in another environment than
+    its footprint lands in the wrong VRF): DC and Colocation footprints state
+    one, an office is always PROD (`p`), and a cloud footprint has none (the
+    segment's environment against its CloudAccount's is
+    checks/routing_invariants.py's). The owner is a WARNING when it differs
+    from the footprint's: an exchange-zone segment is a shared service of
+    another owner by design, and a footprint owned by a provider hosts
+    customers' segments.
     """
 
     query = "segment_placement"
@@ -28,8 +42,9 @@ class CheckSegmentPlacement(InfrahubCheck):
     _VLAN_ALLOWED_DEPLOYMENTS = {
         "TopologyCustomerDC",
         "TopologyCustomerColocation",
-        "TopologyCustomerOffice",
     }
+    # Footprints that state the environment they represent (TopologyEnvironmentScoped).
+    _ENVIRONMENT_SCOPED_DEPLOYMENTS = {"TopologyCustomerDC", "TopologyCustomerColocation"}
     _VXLAN_ALLOWED_DEPLOYMENTS = {
         "TopologyCustomerDC",
         "TopologyCustomerColocation",
@@ -58,8 +73,48 @@ class CheckSegmentPlacement(InfrahubCheck):
         self._validate_vlan_segments(cleaned.get("ManagedVlanSegment") or [])
         self._validate_vxlan_segments(cleaned.get("ManagedVxlanSegment") or [])
         self._validate_cloud_segments(cleaned.get("CloudNetworkSegment") or [])
-        for segment in [*(cleaned.get("ManagedVlanSegment") or []), *(cleaned.get("ManagedVxlanSegment") or [])]:
+        for segment in cleaned.get("ManagedVlanSegment") or []:
+            deployment = segment.get("customer_deployment")
+            self._validate_deployment_agreement(segment, [deployment] if isinstance(deployment, dict) else [])
             self._validate_inline_termination(segment)
+        for segment in cleaned.get("ManagedVxlanSegment") or []:
+            self._validate_deployment_agreement(segment, segment.get("customer_deployments") or [])
+            self._validate_inline_termination(segment)
+
+    def _validate_deployment_agreement(self, segment: dict[str, Any], deployments: list[dict[str, Any]]) -> None:
+        """The segment's environment and owner against each footprint it names."""
+        seg_name = segment.get("name", "<unnamed-segment>")
+        seg_environment = segment.get("environment")
+        seg_owner = segment.get("owner") or {}
+        shared_service = is_exchange_zone((segment.get("security_zone") or {}).get("name"))
+        for deployment in deployments:
+            dep_kind = deployment.get("typename")
+            dep_name = deployment.get("name", "<unknown>")
+            if dep_kind in self._ENVIRONMENT_SCOPED_DEPLOYMENTS:
+                expected = deployment.get("environment")
+            elif dep_kind == "TopologyCustomerOffice":
+                expected = OFFICE_ENVIRONMENT
+            else:
+                continue
+            if expected and seg_environment != expected:
+                self.log_error(
+                    message=(
+                        f"Segment '{seg_name}' is environment '{seg_environment}' but {dep_kind} '{dep_name}' is "
+                        f"environment '{expected}': a segment shares the environment of every footprint it names"
+                    )
+                )
+            dep_owner = deployment.get("owner") or {}
+            if (
+                not shared_service
+                and dep_owner.get("typename") != "OrganizationProvider"
+                and dep_owner.get("id") != seg_owner.get("id")
+            ):
+                self.log_warning(
+                    message=(
+                        f"Segment '{seg_name}' is owned by '{seg_owner.get('org_id')}' but {dep_kind} '{dep_name}' "
+                        f"is owned by '{dep_owner.get('org_id')}'"
+                    )
+                )
 
     def _validate_inline_termination(self, segment: dict[str, Any]) -> None:
         """terminate_inline needs an on-prem HA pair as inline_service: leaves

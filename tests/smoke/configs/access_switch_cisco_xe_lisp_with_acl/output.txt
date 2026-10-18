@@ -1,8 +1,8 @@
 !
-! as-c005-p01 Configuration
+! as-c005-office01 Configuration
 ! Cisco IOS-XE (Catalyst 9000) LISP access-switch
 !
-hostname as-c005-p01
+hostname as-c005-office01
 !
 ip routing
 spanning-tree mode rapid-pvst
@@ -43,13 +43,13 @@ ip access-list extended ACL-VLAN200-IN
 !
 ! Interfaces
 interface Ethernet1
- description to ds-c005-p01
+ description to ds-c005-office01
  no switchport
  ip address 10.1.0.1 255.255.255.254
  no shutdown
 !
 interface Ethernet2
- description to ds-c005-p02
+ description to ds-c005-office02
  no switchport
  ip address 10.1.0.3 255.255.255.254
  no shutdown

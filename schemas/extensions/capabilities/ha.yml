@@ -146,8 +146,8 @@ nodes:
 
   # ── Firewall Context (VDOM/vsys) — tenant-scoped slice of a shared cluster ─
   # One ManagedFirewallHA cluster hosts many contexts: one dedicated context
-  # per high-risk tenant (critical/fintech_strict/dedicated_firewall), plus a
-  # shared "low-risk" context (tenant unset) for everyone else — see
+  # per customer whose design sets dedicated_firewall, plus a
+  # shared context (tenant unset) for everyone else — see
   # docs/firewall_service_insertion.md's namespace-per-zone pattern, now with
   # an explicit node instead of an implicit VDOM name. network_segment.
   # inline_service (peer: ManagedGeneric) can target this directly, the same
@@ -301,12 +301,6 @@ nodes:
         optional: true
         order_weight: 1500
         description: "Cloud region or availability zone"
-      - name: policy_arn
-        kind: Text
-        label: "Policy ARN / Resource ID"
-        optional: true
-        order_weight: 1600
-        description: "Cloud resource identifier for the firewall policy"
 
   # ── On-prem Proxy HA ─────────────────────────────────────────────────────
   - name: ProxyHA
@@ -513,20 +507,11 @@ extensions:
           order_weight: 1000
           description: "FirewallContexts (VDOMs/vsys) hosted on this HA cluster"
 
-    # Reverse lookups for FirewallContext.tenant / LoadbalancerHA.tenant
-    # (above) — lets a TopologyCustomerDC/Colocation query find its own
-    # dedicated FirewallContext/LoadbalancerHA (if any) in one hop.
+    # Deployment side of FirewallContext.served_deployments (above) — lets a
+    # TopologyCustomerDC/Colocation query find the FirewallContext its segments
+    # terminate on in one hop.
     - kind: ManagedTenantScoped
       relationships:
-        - name: firewall_context
-          label: "Dedicated Firewall Context"
-          peer: ManagedFirewallContext
-          kind: Generic
-          cardinality: one
-          optional: true
-          identifier: firewall_context__tenant
-          order_weight: 900
-          description: "Dedicated FirewallContext (VDOM/vsys), if any, this deployment is the tenant of."
         - name: serving_firewall_context
           label: "Serving Firewall Context"
           peer: ManagedFirewallContext
@@ -536,12 +521,3 @@ extensions:
           identifier: firewall_context__served_deployments
           order_weight: 925
           description: "FirewallContext its segments terminate on: its dedicated one, else the shared one."
-        - name: loadbalancer_ha
-          label: "Dedicated Load Balancer HA"
-          peer: ManagedLoadbalancerHA
-          kind: Generic
-          cardinality: one
-          optional: true
-          identifier: loadbalancer_ha__tenant
-          order_weight: 950
-          description: "Dedicated LoadbalancerHA domain, if any, this deployment is the tenant of."

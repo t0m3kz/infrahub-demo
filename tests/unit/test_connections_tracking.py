@@ -276,7 +276,11 @@ class TestEnsureVlanSubinterfaceWithoutCapability:
         gen.client.create = AsyncMock(return_value=node)
 
         result = await gen.ensure_vlan_subinterface(
-            device_id="ds-1", device_name="ds-c005-p01", trunk_iface=_trunk(), vlan_id_value=3800, ip_address_id="ip-a"
+            device_id="ds-1",
+            device_name="ds-c005-office01",
+            trunk_iface=_trunk(),
+            vlan_id_value=3800,
+            ip_address_id="ip-a",
         )
 
         assert result is node

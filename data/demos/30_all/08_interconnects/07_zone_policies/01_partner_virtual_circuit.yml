@@ -1,7 +1,7 @@
 ---
 # Partner-acme B2B extranet, modelled as a second IPsec tunnel riding C001's
-# existing internet underlay (INET-C001-P, which add_sdwan_edge built for the
-# C001-P office together with its C001-P-EDGE1 edge) rather than a new dedicated
+# existing internet underlay (INET-C001-OFFICE, which add_sdwan_edge built for the
+# C001-OFFICE together with its C001-OFFICE-EDGE1 edge) rather than a new dedicated
 # physical cross-connect.
 #
 # A dedicated 1:1 cross-connect was tried first and rejected:
@@ -16,13 +16,13 @@
 # realistic: most B2B partner integrations really are IPsec over internet, not
 # a private cross-connect.
 #
-# Terminates on the same shared SD-WAN gateway as C001-P-SDWAN-FR2, on its own
+# Terminates on the same shared SD-WAN gateway as C001-OFFICE-SDWAN-FR2, on its own
 # sub-interface: one gateway trunk carries several tunnels. Its tunnel id 1002
 # is hand-assigned, below the SD-WAN tunnel-id pool (2000-9999) the generated
 # office tunnels draw from, so the two never collide.
 #
 # Loaded with the interconnects, after the compute_and_customers stage whose
-# add_sdwan_edge runs created INET-C001-P and C001-P-EDGE1 (a later loader run,
+# add_sdwan_edge runs created INET-C001-OFFICE and C001-OFFICE-EDGE1 (a later loader run,
 # so these references are not same-run HFID lookups).
 apiVersion: infrahub.app/v1
 kind: Object
@@ -53,10 +53,10 @@ spec:
       owner: "C001"
       description: "Nordix to B2B extranet partner Acme Logistics, IPsec over the Warsaw HQ internet underlay"
       locations:
-        - "C001-P"
+        - "C001-OFFICE"
         - "FR2"
       physical_circuits:
-        - "INET-C001-P"
+        - "INET-C001-OFFICE"
       capabilities:
-        - ["C001-P-EDGE1", "GE1"]
+        - ["C001-OFFICE-EDGE1", "GE1"]
         - ["EQX-FR2-SDWAN-GW1", "eth0.1002"]

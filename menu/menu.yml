@@ -111,13 +111,6 @@ spec:
                   kind: DcimInterface
                   description: "Network and management interfaces"
 
-                - name: GenericSFP
-                  namespace: Dcim
-                  label: SFP Modules
-                  icon: "mdi:expansion-card"
-                  kind: DcimGenericSFP
-                  description: "Optical and network transceiver modules"
-
                 - name: Cables
                   namespace: Dcim
                   label: Cabling & Connections

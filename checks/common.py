@@ -24,6 +24,7 @@ TRANSIT_LEGS_PER_EXCHANGE = 2
 
 __all__ = [
     "BaseDeviceCheck",
+    "deployment_scope_ids",
     "validate_appliance",
     "validate_exchange_gateways",
     "validate_interfaces",
@@ -49,6 +50,20 @@ class BaseDeviceCheck(WarningCheck):
         errors = [error for validator in self.validators for error in validator(device_data)]
         for error in errors:
             self.log_error(message=error)
+
+
+def deployment_scope_ids(deployment: dict[str, Any] | None) -> set[str]:
+    """Ids of a device's deployment and of that deployment's parent: the pod and its DC, a colocation zone and its metro.
+
+    A device is deployed into a pod or a zone (a border leaf or an edge into the DC itself), while a customer
+    footprint hangs off the DC or the metro; the footprint's parent being in this set puts the device in its DC.
+    ``deployment`` is cleaned query data with the parent selected as ``id`` plus another field (clean_data collapses a
+    node with only an id to the bare id).
+    """
+    deployment = deployment or {}
+    parent = deployment.get("parent")
+    parent_id = parent.get("id") if isinstance(parent, dict) else None
+    return {i for i in (deployment.get("id"), parent_id) if i}
 
 
 def validate_interfaces(data: dict[str, Any]) -> list[str]:

@@ -51,10 +51,10 @@ DISTRIBUTION_INPUT = "distribution_switch_cisco_xe_lisp_ospf"
 MARKER = "unverified-no-lab:"
 OFFICE_SWITCHES = [(AccessSwitch, ACCESS_INPUT), (DistributionSwitch, DISTRIBUTION_INPUT)]
 
-_OFFICE = "C005-P"
+_OFFICE = "C005-OFFICE"
 _MAP_SERVERS: list[dict[str, Any]] = [
-    {"name": "ds-c005-p02", "interfaces": [{"ip_address": {"address": "10.250.5.2/32"}}]},
-    {"name": "ds-c005-p01", "interfaces": [{"ip_address": {"address": "10.250.5.1/32"}}]},
+    {"name": "ds-c005-office02", "interfaces": [{"ip_address": {"address": "10.250.5.2/32"}}]},
+    {"name": "ds-c005-office01", "interfaces": [{"ip_address": {"address": "10.250.5.1/32"}}]},
 ]
 
 
@@ -125,7 +125,7 @@ def _activation(
 
 def _device() -> dict[str, Any]:
     return {
-        "name": "as-c005-p01",
+        "name": "as-c005-office01",
         "interfaces": [{"name": "Loopback0", "role": "loopback", "ip_address": {"address": "10.0.0.1/32"}}],
     }
 
@@ -378,7 +378,7 @@ class TestRefusals:
         data = _raw(ACCESS_INPUT)
         _deployment(data)["lisp_map_servers"]["edges"][0]["node"]["interfaces"] = {"edges": []}
 
-        with pytest.raises(ValueError, match="LISP map-server ds-c005-p02 has no loopback address"):
+        with pytest.raises(ValueError, match="LISP map-server ds-c005-office02 has no loopback address"):
             _run_transform(AccessSwitch, data)
 
     @pytest.mark.parametrize("platform", ["cisco_nxos", "arista_eos", "nokia_sros"])

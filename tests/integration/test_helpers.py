@@ -1470,7 +1470,7 @@ TOPOLOGY_SNAPSHOT_KINDS = {
         "capabilities { edges { node { id } } }"
     ),
     "ManagedHA": "group_id { value }",
-    "ManagedSegmentDeployment": "vni { value } local_vni_override { value }",
+    "ManagedSegmentDeployment": "vni { value }",
     "ManagedVlanDomainSegment": "vlan_id { value }",
     "LocationRack": "name { value }",
     "TopologyPod": "name { value }",

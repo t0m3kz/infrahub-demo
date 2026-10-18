@@ -101,9 +101,9 @@ class TestTopologyOrchestratorRoutingGenerator:
                 {
                     "id": "dep-1",
                     "typename": "TopologyCustomerCloud",
-                    "name": "C003-VAULTEX-AWS-P-EU-CENTRAL-1",
+                    "name": "C003-VAULTEX-AWS-EU-CENTRAL-1",
                     "infrastructure_orchestrator": "terraform",
-                    "member_of_groups": [_group("g-base", "customer_deployments")],
+                    "member_of_groups": [_group("g-base", "customer_deployments_cloud")],
                 }
             ]
         }
@@ -129,7 +129,7 @@ class TestTopologyOrchestratorRoutingGenerator:
                     "name": "C005-P-DC10",
                     "infrastructure_orchestrator": "argocd",
                     "member_of_groups": [
-                        _group("g-base", "customer_deployments"),
+                        _group("g-base", "customer_deployments_dc"),
                         _group("g-topo-argo", "topology_argocd"),
                     ],
                 }

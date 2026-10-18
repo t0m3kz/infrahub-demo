@@ -471,8 +471,8 @@ def _warn_unencodable_vnis(
     2. A VNI used as BOTH an L2 VNI and an L3 VNI. The VNI space is a single
        flat 24-bit namespace per device, not one namespace per VNI type, so an
        L2 segment that lands on a VRF's L3 VNI makes the device reject the
-       `member vni ... associate` line. This is a pool-range overlap (the L2
-       and L3 pools must be disjoint), not a per-segment mistake.
+       `member vni ... associate` line. This is a range overlap (the L2 VNI
+       pools must stay clear of the fixed namespace l3_vni), not a per-segment mistake.
     """
     l2_vnis = {vni for m in l2_vni_mappings for vni in [m.get("vni")] if isinstance(vni, int)}
     l3_vnis = {vni for m in l3_vni_mappings for vni in [m.get("l3_vni")] if isinstance(vni, int)}
@@ -492,8 +492,9 @@ def _warn_unencodable_vnis(
     if collisions:
         _log.warning(
             "%s: VNI(s) %s are allocated as both an L2 VNI and an L3 VNI. The "
-            "VNI space is flat, so the device will reject the duplicate. The L2 "
-            "and L3 VNI pool ranges overlap and must be made disjoint.",
+            "VNI space is flat, so the device will reject the duplicate. l3_vni is "
+            "fixed per namespace (data/bootstrap/22_namespaces.yml); correct that "
+            "value or move the conflicting L2 pool.",
             device_name or "device",
             ", ".join(str(v) for v in collisions),
         )

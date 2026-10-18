@@ -36,9 +36,3 @@ nodes:
         optional: true
         order_weight: 750
         description: "Security groups attached to load balancer"
-      - name: public_ips
-        peer: CloudPublicIP
-        cardinality: many
-        optional: true
-        order_weight: 800
-        description: "Elastic IPs attached to load balancer"

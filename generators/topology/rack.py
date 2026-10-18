@@ -42,6 +42,7 @@ class TopologyRackParentData(TypedDict, total=False):
     routing_strategy: str
     underlay_protocol: str
     management_pool: dict[str, Any] | None
+    fabric_asn_pool: dict[str, Any] | None
     size: str
     fabric_controllers: list[dict[str, Any]]
     security_manager_controllers: list[dict[str, Any]]
@@ -64,7 +65,6 @@ class TopologyRackPodData(TypedDict, total=False):
     mlag_create: Literal["no", "back-to-back", "virtual"]
     loopback_pool: dict[str, Any] | None
     prefix_pool: dict[str, Any] | None
-    asn_pool: dict[str, Any] | None
     devices: list[Any]
 
 

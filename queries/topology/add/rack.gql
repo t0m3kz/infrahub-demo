@@ -106,6 +106,12 @@ fragment PodFields on TopologyPod {
             name { value }
           }
         }
+        fabric_asn_pool {
+          node {
+            id
+            name { value }
+          }
+        }
         size { value }
         fabric_controllers: controllers(controller_type__values: ["aci_apic", "dcnm", "nsx_manager", "ucs_manager"]) {
           edges {
@@ -189,12 +195,6 @@ fragment PodFields on TopologyPod {
   prefix_pool {
     node {
       id
-    }
-  }
-  asn_pool {
-    node {
-      id
-      name { value }
     }
   }
   # Spine (or border-spine, in micro-fabric mode — the two fill the same

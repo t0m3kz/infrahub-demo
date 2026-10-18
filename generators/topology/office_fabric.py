@@ -57,7 +57,7 @@ from infrahub_sdk.protocols import CoreIPPrefixPool, CoreNumberPool, IpamNamespa
 from typing_extensions import TypedDict
 
 from utils.data_cleaning import clean_data
-from utils.exchange_transit import namespace_type_for_environment, transit_pool_name, wan_exit_vlan
+from utils.exchange_transit import PROD_TYPE, transit_pool_name, wan_exit_vlan
 from utils.fabric_roles import CAMPUS_FABRIC_ROLES, LISP_BORDER_ROLES
 
 from ..common import CommonGenerator, DeviceOptions
@@ -126,7 +126,6 @@ class TopologyCustomerOfficeData(TypedDict, total=False):
     id: str
     name: str
     naming_convention: str
-    environment: str
     sdwan_gateway: dict[str, Any] | None
     fabric_templates: list[dict[str, Any]]
 
@@ -317,7 +316,7 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
         """Instantiate every fabric_templates entry as the office's switches; names by role.
 
         indexes=[] — an office is flat, so the "standard" naming strategy yields
-        "{role code}-{office}{NN}" (``ds-c005-p01``). Both roles get a Loopback0
+        "{role code}-{office}{NN}" (``ds-c005-office01``). Both roles get a Loopback0
         (the RLOC) and a management address, from the pools passed explicitly
         rather than re-resolved by name.
         """
@@ -462,11 +461,11 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
             )
             return
 
-        namespace_type = namespace_type_for_environment(self.data["environment"])
-        namespaces = await self.client.filters(kind=IpamNamespace, namespace_type__value=namespace_type)
+        # An office is always PROD: its exit lives in the PROD tenant VRF.
+        namespaces = await self.client.filters(kind=IpamNamespace, namespace_type__value=PROD_TYPE)
         if len(namespaces) != 1:
             self.fail(
-                f"Office {office_name}: expected one IpamNamespace of type {namespace_type}, found {len(namespaces)} "
+                f"Office {office_name}: expected one IpamNamespace of type {PROD_TYPE}, found {len(namespaces)} "
                 "— load data/bootstrap/22_namespaces.yml"
             )
         pool_name = transit_pool_name(namespaces[0].name.value)
@@ -486,7 +485,7 @@ class OfficeFabricGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, 
                 distribution_names=distribution_names,
                 switch_ports=switch_ports,
                 transit_pool=transit_pools[0],
-                vlan=wan_exit_vlan(namespace_type),
+                vlan=wan_exit_vlan(PROD_TYPE),
             )
 
     async def _build_wan_exit(

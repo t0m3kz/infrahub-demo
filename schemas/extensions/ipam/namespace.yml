@@ -40,7 +40,7 @@ version: "1.0"
 #   segment.prefix.ip_namespace → this node
 #   → VRF name:   ip_namespace.name (PROD or NON-PROD, derived from
 #                  segment.environment)
-#   → L3VNI:      ip_namespace.l3_vni (allocated from GLOBAL-L3VNI pool)
+#   → L3VNI:      ip_namespace.l3_vni (set by hand in data/bootstrap/22_namespaces.yml)
 #   → Customer:   derived from segment.owner (not stored on the namespace — a
 #                  namespace has no owner/status of its own; PROD/NON-PROD are
 #                  shared across every customer, not per-tenant)
@@ -55,7 +55,7 @@ extensions:
           label: L3 VNI
           description: >-
             EVPN L3VNI for this VRF namespace.
-            Allocated from GLOBAL-L3VNI pool.
+            Set by hand in data/bootstrap/22_namespaces.yml (fixed per namespace, no pool allocates it).
           optional: true
           order_weight: 1000
         - name: namespace_type

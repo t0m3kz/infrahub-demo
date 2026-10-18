@@ -71,7 +71,7 @@ def _gateway(
 def _office_payload(
     *,
     office_id: str | None = "office-1",
-    office_name: str = "C002-P",
+    office_name: str = "C002-OFFICE",
     owner_id: str | None = "org-c002",
     gateway: dict[str, Any] | None | Literal["__default__"] = _USE_DEFAULT_GATEWAY,
 ) -> dict[str, Any]:
@@ -88,9 +88,8 @@ def _office_payload(
             {
                 "id": office_id,
                 "name": office_name,
-                "environment": "p",
                 "branch_to_branch": "full_mesh",
-                "parent": {"id": "officecust-1", "owner": owner},
+                "owner": owner,
                 "sdwan_gateway": gateway,
             }
         ]
@@ -422,9 +421,9 @@ class TestGenerateHappyPath:
 
         assert payloads(first) == payloads(second)
         assert [p.get("name") for p in payloads(first)] == [
-            "C002-P-EDGE1",
-            "INET-C002-P",
-            "C002-P-SDWAN-FR2",
+            "C002-OFFICE-EDGE1",
+            "INET-C002-OFFICE",
+            "C002-OFFICE-SDWAN-FR2",
             "eth0.2000",
         ]
 
@@ -580,7 +579,7 @@ class TestIspAccessPort:
         isp_call, circuit_call, port_call = (call.kwargs for call in gen.client.filters.call_args_list[4:7])
         assert isp_call["provider__ids"] == ["provider-inet"]
         assert isp_call["include"] == ["devices"]
-        assert circuit_call["name__value"] == "INET-C002-P"
+        assert circuit_call["name__value"] == "INET-C002-OFFICE"
         assert circuit_call["include"] == ["capabilities"]
         assert port_call["device__ids"] == [_ISP_DEVICE_ID]
         assert port_call["role__value"] == "customer"

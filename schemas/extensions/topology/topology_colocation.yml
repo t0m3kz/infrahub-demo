@@ -132,14 +132,14 @@ nodes:
         identifier: "colocation_metro__management_pool"
         order_weight: 7100
         on_delete: cascade
-      - name: asn_pool
+      - name: fabric_asn_pool
         label: "Metro ASN Pool"
         description: "ASN pool for this metro's edge routers (eBGP towards the interconnected DCs)"
         peer: CoreNumberPool
         kind: Attribute
         cardinality: one
         optional: true
-        identifier: "colocation_metro__asn_pool"
+        identifier: "colocation_metro__fabric_asn_pool"
         order_weight: 7200
         on_delete: cascade
 

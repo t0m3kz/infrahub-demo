@@ -108,69 +108,6 @@ generics:
             label: Other
             description: "Other/Custom load balancer"
             color: "#95A5A6"
-      - name: lb_vendor
-        kind: Dropdown
-        optional: true
-        order_weight: 260
-        description: "Load balancer vendor/product"
-        choices:
-          - name: aws_alb
-            label: AWS Application Load Balancer
-            color: "#FF9900"
-          - name: aws_nlb
-            label: AWS Network Load Balancer
-            color: "#FF9900"
-          - name: aws_clb
-            label: AWS Classic Load Balancer
-            color: "#FF9900"
-          - name: aws_gwlb
-            label: AWS Gateway Load Balancer
-            color: "#FF9900"
-          - name: azure_lb
-            label: Azure Load Balancer
-            color: "#0078D4"
-          - name: azure_app_gateway
-            label: Azure Application Gateway
-            color: "#0078D4"
-          - name: gcp_lb
-            label: GCP Load Balancer
-            color: "#4285F4"
-          - name: gcp_alb
-            label: GCP Application Load Balancer
-            color: "#4285F4"
-          - name: haproxy
-            label: HAProxy
-            color: "#9B59B6"
-          - name: nginx
-            label: Nginx
-            color: "#009639"
-          - name: envoy
-            label: Envoy
-            color: "#AC6199"
-          - name: traefik
-            label: Traefik
-            color: "#24A1C1"
-          - name: f5_bigip
-            label: F5 BIG-IP
-            color: "#E67E22"
-          - name: citrix_netscaler
-            label: Citrix NetScaler/ADC
-            color: "#E67E22"
-          - name: a10_networks
-            label: A10 Networks
-            color: "#E67E22"
-          - name: kemp
-            label: Kemp LoadMaster
-            color: "#E67E22"
-          - name: istio
-            label: Istio
-            color: "#466BB0"
-          - name: linkerd
-            label: Linkerd
-            color: "#2DCEAA"
-          - name: other
-            label: Other
-            color: "#95A5A6"
       - name: scheme
         kind: Dropdown
         optional: true
@@ -328,20 +265,6 @@ nodes:
         kind: Text
         optional: true
         order_weight: 320
-      - name: ssl_redirect
-        kind: Boolean
-        optional: true
-        default_value: false
-        order_weight: 330
-        description: "Redirect HTTP to HTTPS"
-      - name: timeout_client
-        kind: Number
-        optional: true
-        order_weight: 400
-      - name: timeout_server
-        kind: Number
-        optional: true
-        order_weight: 410
       - name: max_connections
         kind: Number
         optional: true
@@ -422,16 +345,3 @@ nodes:
         optional: true
         order_weight: 800
         identifier: vip_service__health_checks
-
-extensions:
-  nodes:
-    - kind: LoadbalancerHealthCheck
-      relationships:
-        - name: vip_services
-          peer: LoadbalancerVIP
-          cardinality: many
-          kind: Generic
-          optional: true
-          order_weight: 2100
-          identifier: vip_service__health_checks
-          description: "VIP services using this health check"

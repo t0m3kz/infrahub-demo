@@ -790,16 +790,15 @@ def build_device_data(
         segment_kwargs.append(
             {
                 "vlan_id": 100,
-                # 10100 is inside the capped L2 range (10001-49999) and stays
-                # clear of the L3 VNI range at 50001-59999.
+                # 10100 is inside the per-site L2 pool range (10001-39999).
                 "vni": 10100,
                 "seg_name": "seg-100",
                 "seg_type": "ManagedVxlanSegment",
                 "gateway_ip": "10.100.0.1/24",
                 "ns_name": "VRF_A",
                 # Non-default namespace + l3_vni is what makes this a symmetric-IRB
-                # segment: it drives the L3 VNI / VRF stanza. 50001 is the bottom of
-                # the L3 VNI pool range, disjoint from the L2 range above.
+                # segment: it drives the L3 VNI / VRF stanza. 50001 is just a
+                # fixture value, disjoint from the L2 range above.
                 "l3_vni": 50001,
                 "security_policy": policy_vxlan,
                 "num_deployments": 1,
@@ -3556,8 +3555,8 @@ def write_cisco_xe_fixtures() -> tuple[int, int]:
 # map-server pair on one office footprint. The cisco_xe ospf_ibgp inputs without the BGP capability, the uplinks re-wired
 # to the pair, and the office's own deployment (queries/config/access_switch.gql): its name is the LISP site, its
 # site key and the two distribution-switch map-servers (listed out of name order: the transform sorts them).
-OFFICE_NAME = "C005-P"
-OFFICE_MAP_SERVERS = (("ds-c005-p02", "10.250.5.2/32"), ("ds-c005-p01", "10.250.5.1/32"))
+OFFICE_NAME = "C005-OFFICE"
+OFFICE_MAP_SERVERS = (("ds-c005-office02", "10.250.5.2/32"), ("ds-c005-office01", "10.250.5.1/32"))
 OFFICE_SITE_KEY = "0ff1c3-k3y"
 
 
@@ -3587,11 +3586,11 @@ def build_office_lisp_device_data(
     ]
     by_name = {edge["node"]["name"]["value"]: edge["node"] for edge in node["interfaces"]["edges"]}
     if role == "access-switch":
-        _rewire_uplink(by_name["Ethernet1"], role="uplink", peer="ds-c005-p01")
-        _rewire_uplink(by_name["Ethernet2"], role="uplink", peer="ds-c005-p02")
+        _rewire_uplink(by_name["Ethernet1"], role="uplink", peer="ds-c005-office01")
+        _rewire_uplink(by_name["Ethernet2"], role="uplink", peer="ds-c005-office02")
     else:
-        _rewire_uplink(by_name["Ethernet1"], role="downlink", peer="as-c005-p01")
-        _rewire_uplink(by_name["Ethernet2"], role="interlink", peer="ds-c005-p02")
+        _rewire_uplink(by_name["Ethernet1"], role="downlink", peer="as-c005-office01")
+        _rewire_uplink(by_name["Ethernet2"], role="interlink", peer="ds-c005-office02")
     deployment = node["deployment"]["node"]
     deployment.update(
         {
@@ -3618,12 +3617,12 @@ def write_office_lisp_fixtures() -> tuple[int, int]:
     whose tenant SVIs carry the zero-trust segment ACLs.
     """
     generated = errors = 0
-    acl_data = build_office_lisp_device_data(device_name="as-c005-p01", role="access-switch", include_acls=True)
+    acl_data = build_office_lisp_device_data(device_name="as-c005-office01", role="access-switch", include_acls=True)
     _add_cisco_xe_acl_rules(_interface_segments(acl_data))
     for dir_name, data in (
         (
             "access_switch_cisco_xe_lisp_hostless",
-            build_office_lisp_device_data(device_name="as-c005-p01", role="access-switch", include_segments=False),
+            build_office_lisp_device_data(device_name="as-c005-office01", role="access-switch", include_segments=False),
         ),
         ("access_switch_cisco_xe_lisp_with_acl", acl_data),
     ):
@@ -3631,8 +3630,8 @@ def write_office_lisp_fixtures() -> tuple[int, int]:
         generated += g
         errors += e
     for transform_cls, role, dir_name, device_name in (
-        (AccessSwitch, "access-switch", "access_switch_cisco_xe_lisp_ospf", "as-c005-p01"),
-        (DistributionSwitch, "distribution-switch", "distribution_switch_cisco_xe_lisp_ospf", "ds-c005-p01"),
+        (AccessSwitch, "access-switch", "access_switch_cisco_xe_lisp_ospf", "as-c005-office01"),
+        (DistributionSwitch, "distribution-switch", "distribution_switch_cisco_xe_lisp_ospf", "ds-c005-office01"),
     ):
         g, e = _write_data_fixture(
             transform_cls, dir_name, build_office_lisp_device_data(device_name=device_name, role=role)
@@ -3647,7 +3646,7 @@ def write_office_lisp_fixtures() -> tuple[int, int]:
 # access-switch uses it (use-petr). Same inputs as the two fixtures above plus what the generator writes: the edge on the
 # deployment, and on the border the port, its sub-interface and the BGP process with its peering. The tenant VRF is the
 # fixture's own (VRF_A, L3 instance-id 50001), the one its segment is in.
-OFFICE_EDGE_NAME = "C005-P-EDGE1"
+OFFICE_EDGE_NAME = "C005-OFFICE-EDGE1"
 OFFICE_EXIT_PORT = "GigabitEthernet1/0/26"
 OFFICE_EXIT_VLAN = 3800
 OFFICE_EXIT_VRF = "VRF_A"
@@ -3739,8 +3738,8 @@ def write_office_wan_exit_fixtures() -> tuple[int, int]:
     """Write the office access-switch and distribution-switch fixtures of an office with a WAN exit."""
     generated = errors = 0
     for transform_cls, role, dir_name, device_name in (
-        (AccessSwitch, "access-switch", "access_switch_cisco_xe_lisp_wan_exit", "as-c005-p01"),
-        (DistributionSwitch, "distribution-switch", "distribution_switch_cisco_xe_lisp_wan_exit", "ds-c005-p01"),
+        (AccessSwitch, "access-switch", "access_switch_cisco_xe_lisp_wan_exit", "as-c005-office01"),
+        (DistributionSwitch, "distribution-switch", "distribution_switch_cisco_xe_lisp_wan_exit", "ds-c005-office01"),
     ):
         g, e = _write_data_fixture(
             transform_cls, dir_name, build_office_wan_exit_data(device_name=device_name, role=role)

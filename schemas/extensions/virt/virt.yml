@@ -227,26 +227,6 @@ nodes:
         identifier: "virt_cluster__node_pools"
         order_weight: 2000
 
-      - name: vip_service
-        peer: LoadbalancerVIP
-        label: "VIP Service"
-        description: "External VIP fronting this cluster's ingress controller."
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: "virt_cluster__vip_service"
-        order_weight: 2100
-
-      - name: proxy_service
-        peer: ManagedProxyService
-        label: "Egress Proxy"
-        description: "Cluster-wide egress proxy — on-prem (ManagedProxyHA) or cloud SASE (ManagedCloudProxy)."
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: "virt_cluster__proxy_service"
-        order_weight: 2200
-
       - name: tags
         peer: BuiltinTag
         optional: true
@@ -258,7 +238,7 @@ nodes:
   # ── Node Pool / Scaling Group ─────────────────────────────────────────────────
   #
   # Bridges on-prem node pools and cloud ASGs via scaling_mode:
-  #   static      → on-prem, node_count is authoritative, physical_hosts is set
+  #   static      → on-prem, node_count is authoritative
   #   autoscaling → cloud ASG or Cluster API, min/max/desired are authoritative
   #   manual      → on-prem manual scaling, node_count updated by operator
 
@@ -324,7 +304,7 @@ nodes:
         choices:
           - name: static
             label: Static (on-prem)
-            description: "Fixed size — node_count is authoritative. physical_hosts lists the baremetal."
+            description: "Fixed size — node_count is authoritative."
             color: "#7fbf7f"
           - name: autoscaling
             label: Autoscaling (cloud / Cluster API)
@@ -468,17 +448,6 @@ nodes:
         optional: false
         order_weight: 1600
 
-      # On-prem: the actual baremetal servers in this pool
-      - name: physical_hosts
-        peer: DcimPhysicalDevice
-        label: "Physical Hosts"
-        description: "Baremetal servers backing this pool (on-prem / colo)."
-        cardinality: many
-        kind: Attribute
-        optional: true
-        identifier: "virt_pool__physical_hosts"
-        order_weight: 1700
-
       # Cloud ASG / on-prem: subnets or segments this pool deploys into
       - name: network_segments
         peer: ManagedNetworkSegment
@@ -510,15 +479,6 @@ nodes:
         identifier: "virt_pool__instances"
         description: "Cloud instances running in this pool (cloud ASG mode)."
         order_weight: 1840
-
-      - name: management_ip
-        peer: IpamIPAddress
-        label: "Management IP / VIP"
-        description: "Management address or representative IP for the pool."
-        cardinality: one
-        kind: Attribute
-        optional: true
-        order_weight: 1850
 
       - name: tags
         peer: BuiltinTag
