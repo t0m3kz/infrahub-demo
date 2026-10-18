@@ -5,12 +5,12 @@ Covers untested classes and methods in generators/helpers/cabling.py:
 - InterfaceSpeedMatcher.group_by_speed()         – matched speed groups
 - CableTypeDetector.detect_cable_type()          – copper/mmf/smf detection
 - ConnectionValidator.validate_plan()            – min/max/duplicate checks
-- PodCablingStrategy.build_plan()               – pod-to-pod with offset
-- RackCablingStrategy.build_plan()              – offset overflow → fail-fast + log
+- PodCablingStrategy.build_plan()               – pod-to-pod with offset, overflow → CablingPlanError
+- RackCablingStrategy.build_plan()              – offset overflow → CablingPlanError
 - IntraRackMiddleCablingStrategy._create_leaf_pairs()      – even/odd counts
-- IntraRackMiddleCablingStrategy._validate_min_top_devices() – < 2 logs warning
-- IntraRackMiddleCablingStrategy._connect_tor_to_leaf_pair() – insufficient intfs
-- CablingPlanner.build_cabling_plan()           – speed grouping, no groups → [] + log
+- IntraRackMiddleCablingStrategy._require_leaf_pair()      – < 2 leafs → CablingPlanError
+- IntraRackMiddleCablingStrategy._connect_tor_to_leaf_pair() – insufficient intfs → CablingPlanError
+- CablingPlanner.build_cabling_plan()           – speed grouping; no groups or a strategy error → CablingPlanError
 """
 
 from __future__ import annotations
@@ -255,13 +255,13 @@ class TestPodCablingStrategy:
         """Offset shifts which top interface is used per bottom device.
 
         PodCablingStrategy.build_plan appends (bottom_intf, top_intf).
-        top_intf_index = (bottom_index + cabling_offset) % len(top_interfaces)
-        offset=0: leaf-01→Eth1, leaf-02→Eth2  →  top intfs: ['Eth1','Eth2']
-        offset=1: leaf-01→Eth2, leaf-02→Eth1  →  top intfs: ['Eth2','Eth1']
+        top_intf_index = bottom_index + cabling_offset
+        offset=0: leaf-01→Eth1, leaf-02→Eth2
+        offset=1: leaf-01→Eth2, leaf-02→Eth3
         """
         planner = _make_planner(
             bottom_devices={"leaf-01": ["Eth1", "Eth2"], "leaf-02": ["Eth1", "Eth2"]},
-            top_devices={"spine-01": ["Eth1", "Eth2"]},
+            top_devices={"spine-01": ["Eth1", "Eth2", "Eth3"]},
         )
         strategy = PodCablingStrategy(planner)
 
@@ -269,9 +269,29 @@ class TestPodCablingStrategy:
         plan_offset1 = strategy.build_plan(cabling_offset=1)
 
         # Second element of each tuple is the top (spine) interface
-        top_intfs_offset0 = [top.name.value for _, top in plan_offset0]
-        top_intfs_offset1 = [top.name.value for _, top in plan_offset1]
-        assert top_intfs_offset0 != top_intfs_offset1
+        assert [top.name.value for _, top in plan_offset0] == ["Eth1", "Eth2"]
+        assert [top.name.value for _, top in plan_offset1] == ["Eth2", "Eth3"]
+
+    def test_pod_offset_past_last_top_port_raises_instead_of_wrapping(self) -> None:
+        """offset=1 with 2 top ports puts leaf-02 on index 2. The old modulo wrapped
+        it back onto Eth1 — the port another pod's spine already uses."""
+        planner = _make_planner(
+            bottom_devices={"leaf-01": ["Eth1"], "leaf-02": ["Eth1"]},
+            top_devices={"spine-01": ["Eth1", "Eth2"]},
+        )
+
+        with pytest.raises(CablingPlanError, match="OFFSET OVERFLOW"):
+            PodCablingStrategy(planner).build_plan(cabling_offset=1)
+
+    def test_pod_bottom_device_with_fewer_ports_than_top_devices_raises(self) -> None:
+        """A spine with 1 uplink cannot reach 2 super-spines: it used to IndexError."""
+        planner = _make_planner(
+            bottom_devices={"spine-01": ["Eth1"]},
+            top_devices={"super-spine-01": ["Eth1"], "super-spine-02": ["Eth1"]},
+        )
+
+        with pytest.raises(CablingPlanError, match="INSUFFICIENT INTERFACES"):
+            PodCablingStrategy(planner).build_plan()
 
     def test_pod_plan_empty_bottom(self) -> None:
         planner = _make_planner(
@@ -413,21 +433,18 @@ class TestChainCablingStrategy:
         assert len(plan) == 2
         assert all(b.name.value != "p3" for b, _ in plan)
 
-    def test_shared_device_exhausted_by_earlier_pair_logs_error(self) -> None:
+    def test_shared_device_exhausted_by_earlier_pair_raises(self) -> None:
         """2 firewalls (bottom) sharing 1 border-leaf (top) with only 1
         port: the first pair (fw-01<->bl-01) consumes bl-01's only port,
         leaving the second pair (fw-02<->bl-01) with zero free ports on
-        the border-leaf side — logged as an error, first pair still cabled."""
+        the border-leaf side — fw-02 would end up uncabled, so the plan fails."""
         planner = _make_planner(
             bottom_devices={"fw-01": ["eth1"], "fw-02": ["eth1"]},
             top_devices={"bl-01": ["Eth1/25"]},
         )
-        strategy = ChainCablingStrategy(planner)
-        strategy.logger = MagicMock()
-        plan = strategy.build_plan()
 
-        assert len(plan) == 1
-        strategy.logger.error.assert_called_once()
+        with pytest.raises(CablingPlanError, match="fw-02<->bl-01"):
+            ChainCablingStrategy(planner).build_plan()
 
     def test_empty_bottom_or_top_returns_empty(self) -> None:
         planner = _make_planner(bottom_devices={}, top_devices={"bl-01": ["Eth1"]})
@@ -471,47 +488,32 @@ class TestIntraRackMiddleCreateLeafPairs:
         assert pairs == [["leaf-01", "leaf-02"]]
 
 
-class TestIntraRackMiddleValidateMinDevices:
-    def test_below_minimum_logs_warning_and_returns_false(self) -> None:
+class TestIntraRackRequireLeafPair:
+    def test_exactly_minimum_builds_a_plan(self) -> None:
+        planner = _make_planner(
+            bottom_devices={"tor-01": ["Eth1", "Eth2"]},
+            top_devices={"leaf-01": ["Eth1"], "leaf-02": ["Eth1"]},
+        )
+
+        plan = IntraRackMiddleCablingStrategy(planner).build_plan()
+
+        assert len(plan) == 2
+
+    @pytest.mark.parametrize("scenario", ["intra_rack_middle", "intra_rack_mixed"])
+    def test_single_leaf_raises(self, scenario: str) -> None:
+        """One leaf (< MIN_LEAF_DEVICES_FOR_PAIRING=2) cannot dual-home a ToR: fail, not an empty plan."""
         planner = _make_planner(
             bottom_devices={"tor-01": ["Eth1"]},
             top_devices={"leaf-01": ["Eth1"]},
         )
-        strategy = IntraRackMiddleCablingStrategy(planner)
-        strategy.logger = MagicMock()
 
-        result = strategy._validate_min_top_devices(1, 2, "Middle rack")
-
-        assert result is False
-        strategy.logger.warning.assert_called_once()
-
-    def test_exactly_minimum_returns_true(self) -> None:
-        planner = _make_planner(
-            bottom_devices={"tor-01": ["Eth1"]},
-            top_devices={"leaf-01": ["Eth1"], "leaf-02": ["Eth1"]},
-        )
-        strategy = IntraRackMiddleCablingStrategy(planner)
-        strategy.logger = MagicMock()
-
-        result = strategy._validate_min_top_devices(2, 2, "Middle rack")
-
-        assert result is True
-        strategy.logger.warning.assert_not_called()
-
-    def test_build_plan_returns_empty_if_not_enough_top_devices(self) -> None:
-        planner = _make_planner(
-            bottom_devices={"tor-01": ["Eth1"]},
-            top_devices={"leaf-01": ["Eth1"]},  # only 1 leaf, < MIN_LEAF_DEVICES_FOR_PAIRING=2
-        )
-        strategy = IntraRackMiddleCablingStrategy(planner)
-        strategy.logger = MagicMock()
-        plan = strategy.build_plan()
-        assert plan == []
+        with pytest.raises(CablingPlanError, match="requires at least 2 leaf devices"):
+            planner._strategies[scenario].build_plan()
 
 
 class TestIntraRackMiddleConnectTorToLeafPairInsufficient:
-    def test_insufficient_interfaces_logs_error(self) -> None:
-        """When tors_using_same_pair >= len(top_interfaces), log error instead of connecting."""
+    def test_insufficient_interfaces_raises(self) -> None:
+        """When tors_using_same_pair >= len(top_interfaces), fail instead of connecting."""
         # 3 ToRs, 1 leaf pair → tors_using_same_pair=2 for the 3rd ToR, but top has only 1 interface
         planner = _make_planner(
             bottom_devices={
@@ -525,16 +527,15 @@ class TestIntraRackMiddleConnectTorToLeafPairInsufficient:
             },
         )
         strategy = IntraRackMiddleCablingStrategy(planner)
-        strategy.logger = MagicMock()
 
         cabling_plan: list[Any] = []
         leaf_pairs = [["leaf-01", "leaf-02"]]
         num_pairs = 1
 
         # tor_index=2 → tors_using_same_pair = 2 // 1 = 2 >= len(top_interfaces)=1 → error
-        strategy._connect_tor_to_leaf_pair("tor-03", 2, leaf_pairs, num_pairs, cabling_plan)
+        with pytest.raises(CablingPlanError, match="Leaf pair slot 2"):
+            strategy._connect_tor_to_leaf_pair("tor-03", 2, leaf_pairs, num_pairs, cabling_plan)
 
-        strategy.logger.error.assert_called()
         # No connection added to plan
         assert cabling_plan == []
 
@@ -549,18 +550,26 @@ def _make_speed_interface(name: str, device: str, intf_type: str) -> Any:
 
 
 class TestBuildSpeedAwarePlan:
-    def test_no_matching_speed_groups_returns_empty_and_logs(self) -> None:
-        """Bottom=100G, Top=25G → no matching speed groups → empty plan."""
+    def test_no_matching_speed_groups_raises(self) -> None:
+        """Bottom=100G, Top=25G → no matching speed groups → nothing can be cabled → fail."""
         bottom = [_make_speed_interface("Eth1", "leaf-01", "100GBASE-SR4")]
         top = [_make_speed_interface("Eth1", "spine-01", "25GBASE-CR")]
 
-        planner = CablingPlanner(bottom, top)
-        planner.logger = MagicMock()
+        with pytest.raises(CablingPlanError, match="INTERFACE TYPE MISMATCH"):
+            CablingPlanner(bottom, top).build_cabling_plan(scenario="rack")
 
-        result = planner.build_cabling_plan(scenario="rack")
+    def test_strategy_error_in_a_speed_group_propagates(self) -> None:
+        """Regression: build_cabling_plan used to catch the strategy's CablingPlanError,
+        log a warning and drop the speed group, so the devices stayed uncabled on a
+        green run. Offset 2 on a 2-port spine must fail the whole plan."""
+        bottom = [_make_speed_interface("Eth1", "leaf-01", "100GBASE-SR4")]
+        top = [
+            _make_speed_interface("Eth1", "spine-01", "100GBASE-LR4"),
+            _make_speed_interface("Eth2", "spine-01", "100GBASE-LR4"),
+        ]
 
-        assert result == []
-        planner.logger.error.assert_called()
+        with pytest.raises(CablingPlanError, match="OFFSET OVERFLOW"):
+            CablingPlanner(bottom, top).build_cabling_plan(scenario="rack", cabling_offset=2)
 
     def test_matching_speed_group_builds_plan(self) -> None:
         """Bottom=100G, Top=100G → matching group → plan returned."""
@@ -615,4 +624,5 @@ class TestGigabitCabling:
     def test_a_gigabit_port_does_not_pair_with_a_faster_one(self) -> None:
         bottom = [_make_interface("GE3", "edge", "1000base-t")]
         top = [_make_interface("HundredGigE1/0/1", "switch", "100gbase-x-qsfp28")]
-        assert CablingPlanner(bottom, top).build_cabling_plan(scenario="rack") == []
+        with pytest.raises(CablingPlanError, match="INTERFACE TYPE MISMATCH"):
+            CablingPlanner(bottom, top).build_cabling_plan(scenario="rack")

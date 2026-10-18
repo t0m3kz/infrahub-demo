@@ -185,8 +185,8 @@ class EndpointUplinkMixin:
                 pool=None,  # No IP allocation for endpoint connections
             ),
         )
-        # create_cabling only warns when it plans nothing (e.g. every pair is a
-        # speed mismatch); a planned connection that produced no cable is a failure.
+        # create_cabling already fails when it plans nothing; this also covers a
+        # planned connection that produced no cable.
         if not cabled:
             self.logger.error(
                 f"Endpoint {self.data['name']}: no cable created for {endpoint_intf_names} → "
@@ -262,7 +262,9 @@ class EndpointUplinkMixin:
                 server_intf_name = server_intf.name.value
 
                 if not available_switch_intfs:
-                    self.logger.warning(f"No available interfaces on {switch_name} for {server_intf_name}")
+                    # A server NIC that should be dual-homed but has no switch port
+                    # left is a failed deployment, not a partial success.
+                    self.logger.error(f"No available interfaces on {switch_name} for {server_intf_name}")
                     continue
 
                 if matched_name is not None:

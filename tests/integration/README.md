@@ -285,7 +285,7 @@ class TestScenarioName(TestInfrahubDockerWithClient):
             name="Scenario X: Description",
             source_branch=scenario_branch,
         )
-        wait_for_validations(client=client_main, pc_name="Scenario X: Description")
+        wait_for_validations(client=client_main, pc_id=pc_id, pc_name="Scenario X: Description")
         workflow_state["scenarioXX_pc_id"] = pc_id
         pass
 
@@ -415,7 +415,7 @@ result = await verify_cables_created(client, branch, expected_min_count=1)
 pc_id = create_proposed_change(client, "PC Name", source_branch)
 
 # Wait for validations
-wait_for_validations(client, "PC Name")
+wait_for_validations(client, pc_id, "PC Name")
 
 # Merge PC
 result = merge_proposed_change(client, pc_id)

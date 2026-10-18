@@ -29,14 +29,19 @@
 {%- set evpn_nvo = {} -%}
 {%- include 'common/sonic_vxlan.j2' %}
 
+{%- set static_route_table = {} -%}
+{%- set sag = {} -%}
+{%- set route_map = {} -%}
+{%- set prefix_set = {} -%}
+{%- set prefix_table = {} -%}
+{%- include 'common/sonic_tenant_l3.j2' %}
+
 {%- set acl_table = {} -%}
 {%- set acl_rule = {} -%}
 {%- if not sonic_border %}
 {%- include 'common/sonic_acl.j2' %}
 {%- include 'common/sonic_pbr.j2' %}
 {%- endif %}
-
-{%- set static_route_table = {} -%}
 
 {%- set configdb = {
   'DEVICE_METADATA': device_metadata,
@@ -66,6 +71,11 @@
 {%- if vlan_members -%}
 {%- set _ = configdb.update({'VLAN_MEMBER': vlan_members}) -%}
 {%- endif %}
+{#- Same for the tenant L3 tables of sonic_tenant_l3.j2: only a device with an
+    anycast gateway or a route map to install carries them. -#}
+{%- for table, entries in {'SAG': sag, 'ROUTE_MAP': route_map, 'PREFIX_SET': prefix_set, 'PREFIX': prefix_table}.items() if entries -%}
+{%- set _ = configdb.update({table: entries}) -%}
+{%- endfor %}
 {#- Per-table merge: MC-LAG contributes VLAN/VLAN_MEMBER/VLAN_INTERFACE
     entries that must not replace the tables built above. #}
 {%- for table, entries in (sonic_mlag | default({})).items() %}

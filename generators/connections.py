@@ -137,7 +137,12 @@ class CablingMixin:
         cabling_plan = planner.build_cabling_plan(scenario=strategy, cabling_offset=cabling_offset)
 
         if not cabling_plan:
-            self.logger.warning("No cabling connections planned")
+            # Both sides have interfaces (checked above), so an empty plan means
+            # devices that were asked to be cabled won't be — that's a failure.
+            self.logger.error(
+                f"No cabling connections planned for {sorted(bottom_devices)} -> {sorted(top_devices)} "
+                f"(strategy={strategy}, offset={cabling_offset})"
+            )
             return []
 
         # Resolve technical pool for P2P address allocation
@@ -377,11 +382,11 @@ class CablingMixin:
             planner = CablingPlanner(bottom_interfaces=bottom_interfaces, top_interfaces=top_interfaces)
             leg_plan = planner.build_cabling_plan(scenario="chain", cabling_offset=cabling_offset)
             if not leg_plan:
+                # A speed mismatch or a port shortfall already raised CablingPlanError
+                # inside build_cabling_plan; this guards any other empty plan.
                 self.logger.error(
                     f"create_chain_cabling: {sorted(top_devices)}<->{sorted(bottom_devices)} cabling produced "
-                    f"no connections — likely an interface speed mismatch between {top_role}-role and "
-                    f"{bottom_role}-role ports. Check the speed-mismatch log output above for the exact "
-                    "speed groups involved."
+                    f"no connections between {top_role}-role and {bottom_role}-role ports."
                 )
                 all_leg_pairs.append([])
                 continue

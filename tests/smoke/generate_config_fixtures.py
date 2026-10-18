@@ -3993,7 +3993,7 @@ def main() -> int:
     # Inter-VRF exchange through firewall contexts: border-leaf transit VLANs,
     # VNIs, anycast gateways and statics; firewall legs, VIPs, routes, zones.
     print("\nGenerating exchange-transit fixtures:")
-    for platform in ["cisco_nxos", "arista_eos", "nokia_sros"]:
+    for platform in ["cisco_nxos", "arista_eos", "nokia_sros", "sonic", "dell_sonic"]:
         g, e = _write_data_fixture(
             BorderLeaf,
             f"border_leaf_{platform}_exchange_transit",
@@ -4073,9 +4073,10 @@ def main() -> int:
     generated += g
     errors += e
 
-    # Leaf PBR (default-redirect to the context VIP, bypass for permits): NX-OS route-map, EOS policy-map type pbr
+    # Leaf PBR (default-redirect to the context VIP, bypass for permits): NX-OS route-map, EOS policy-map type pbr,
+    # SONiC PBR ACL table. The VIP's transit leg is local to the leaf, so this also covers its EVPN filter.
     print("\nGenerating leaf PBR fixtures:")
-    for platform in ("cisco_nxos", "arista_eos"):
+    for platform in ("cisco_nxos", "arista_eos", "sonic", "dell_sonic"):
         g, e = _write_data_fixture(
             Leaf,
             f"leaf_{platform}_pbr",

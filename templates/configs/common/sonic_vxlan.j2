@@ -2,7 +2,8 @@
     Populates pre-initialized dicts from parent scope via in-place .update():
     vxlan_tunnel, vxlan_tunnel_map, vrf_config, vrf_loopback_interfaces, evpn_nvo,
     bgp_evpn_rt
-    Also mutates loopback_interfaces (must be populated by sonic_common.j2 first). -#}
+    Also mutates loopback_interfaces, vlan_config and vlan_interfaces (must be
+    populated by sonic_common.j2 first). -#}
 {%- if vxlan and vxlan.enabled -%}
 {%- set _ = vxlan_tunnel.update({
   vxlan.interface: {
@@ -22,15 +23,22 @@
 }) -%}
 {%- endfor -%}
 {%- endif -%}
+{#- Symmetric IRB: SONiC binds an L3 VNI to its VRF through a VLAN — the VNI
+    maps to that VLAN, the VLAN's SVI sits in the VRF, and VRF.vni names the
+    L3 VNI. The VLAN is the mapping's svi_vlan_id (the per-VRF band reserved
+    for this SVI, see transforms/helpers/overlay.py); a VRF past the band has
+    none, and like NX-OS it gets no symmetric IRB. -#}
 {%- if vxlan.l3_vni_mappings -%}
-{%- for mapping in vxlan.l3_vni_mappings -%}
-{%- set key = vxlan.interface + '|map_' + mapping.l3_vni|string + '_' + mapping.vrf_name -%}
+{%- for mapping in vxlan.l3_vni_mappings if mapping.svi_vlan_id -%}
+{%- set l3_vlan = 'Vlan' + mapping.svi_vlan_id|string -%}
 {%- set _ = vxlan_tunnel_map.update({
-  key: {
-    'vrf': mapping.vrf_name,
+  (vxlan.interface + '|map_' + mapping.l3_vni|string + '_' + l3_vlan): {
+    'vlan': l3_vlan,
     'vni': mapping.l3_vni|string
   }
 }) -%}
+{%- set _ = vlan_config.update({l3_vlan: {'vlanid': mapping.svi_vlan_id|string}}) -%}
+{%- set _ = vlan_interfaces.update({l3_vlan: {'vrf_name': mapping.vrf_name}}) -%}
 {%- endfor -%}
 {%- endif -%}
 {%- endif -%}

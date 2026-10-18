@@ -55,6 +55,10 @@
     }
   },
   "BGP_GLOBALS": {
+    "VRF_A": {
+      "local_asn": 65000,
+      "router_id": "10.0.0.1"
+    },
     "default": {
       "graceful_restart_enable": "true",
       "local_asn": 65000,
@@ -63,6 +67,14 @@
     }
   },
   "BGP_GLOBALS_AF": {
+    "VRF_A|ipv4_unicast": {
+      "admin_status": "true",
+      "redistribute_connected": "true"
+    },
+    "VRF_A|l2vpn_evpn": {
+      "admin_status": "true",
+      "advertise-ipv4-unicast": "true"
+    },
     "default|ipv4_unicast": {
       "admin_status": "true",
       "redistribute_connected": "true",
@@ -170,6 +182,11 @@
   },
   "NTP_SERVER": {},
   "OSPF_ROUTER": {},
+  "SAG": {
+    "GLOBAL": {
+      "gateway_mac": "00:1c:73:00:dc:01"
+    }
+  },
   "STATIC_ROUTE": {},
   "SYSLOG_SERVER": {},
   "VLAN": {
@@ -178,11 +195,24 @@
     },
     "Vlan200": {
       "vlanid": "200"
+    },
+    "Vlan3900": {
+      "vlanid": "3900"
     }
   },
   "VLAN_INTERFACE": {
-    "Vlan100": {},
-    "Vlan200": {}
+    "Vlan100": {
+      "static_anycast_gateway": "true",
+      "vrf_name": "VRF_A"
+    },
+    "Vlan100|10.100.0.1/24": {},
+    "Vlan200": {
+      "static_anycast_gateway": "true"
+    },
+    "Vlan200|10.200.0.1/24": {},
+    "Vlan3900": {
+      "vrf_name": "VRF_A"
+    }
   },
   "VLAN_MEMBER": {
     "Vlan100|Ethernet10": {
@@ -207,9 +237,9 @@
       "vlan": "Vlan100",
       "vni": "10100"
     },
-    "vtep|map_50001_VRF_A": {
-      "vni": "50001",
-      "vrf": "VRF_A"
+    "vtep|map_50001_Vlan3900": {
+      "vlan": "Vlan3900",
+      "vni": "50001"
     }
   }
 }

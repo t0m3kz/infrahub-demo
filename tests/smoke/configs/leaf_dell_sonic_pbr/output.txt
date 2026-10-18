@@ -1,0 +1,378 @@
+
+
+{
+  "ACL_RULE": {
+    "ACL-VLAN100-IN|SEQ_10": {
+      "DESCRIPTION": "Zone: PROD-ZONE -\u003e PROD-ZONE",
+      "DST_IP": "10.200.0.0/24",
+      "IP_PROTOCOL": "6",
+      "IP_TYPE": "IPV4ANY",
+      "L4_DST_PORT": "22",
+      "PACKET_ACTION": "FORWARD",
+      "PRIORITY": "9990",
+      "SRC_IP": "10.100.0.0/24"
+    },
+    "ACL-VLAN100-IN|SEQ_6000": {
+      "DST_IP": "0.0.0.0/8",
+      "IP_TYPE": "IPV4ANY",
+      "PACKET_ACTION": "DROP",
+      "PRIORITY": "4000",
+      "SRC_IP": "10.100.0.0/24"
+    },
+    "ACL-VLAN100-IN|SEQ_6010": {
+      "DST_IP": "10.0.0.0/8",
+      "IP_TYPE": "IPV4ANY",
+      "PACKET_ACTION": "DROP",
+      "PRIORITY": "3990",
+      "SRC_IP": "10.100.0.0/24"
+    },
+    "ACL-VLAN100-IN|SEQ_6020": {
+      "DST_IP": "100.64.0.0/10",
+      "IP_TYPE": "IPV4ANY",
+      "PACKET_ACTION": "DROP",
+      "PRIORITY": "3980",
+      "SRC_IP": "10.100.0.0/24"
+    },
+    "ACL-VLAN100-IN|SEQ_6030": {
+      "DST_IP": "127.0.0.0/8",
+      "IP_TYPE": "IPV4ANY",
+      "PACKET_ACTION": "DROP",
+      "PRIORITY": "3970",
+      "SRC_IP": "10.100.0.0/24"
+    },
+    "ACL-VLAN100-IN|SEQ_6040": {
+      "DST_IP": "169.254.0.0/16",
+      "IP_TYPE": "IPV4ANY",
+      "PACKET_ACTION": "DROP",
+      "PRIORITY": "3960",
+      "SRC_IP": "10.100.0.0/24"
+    },
+    "ACL-VLAN100-IN|SEQ_6050": {
+      "DST_IP": "172.16.0.0/12",
+      "IP_TYPE": "IPV4ANY",
+      "PACKET_ACTION": "DROP",
+      "PRIORITY": "3950",
+      "SRC_IP": "10.100.0.0/24"
+    },
+    "ACL-VLAN100-IN|SEQ_6060": {
+      "DST_IP": "192.0.0.0/24",
+      "IP_TYPE": "IPV4ANY",
+      "PACKET_ACTION": "DROP",
+      "PRIORITY": "3940",
+      "SRC_IP": "10.100.0.0/24"
+    },
+    "ACL-VLAN100-IN|SEQ_6070": {
+      "DST_IP": "192.168.0.0/16",
+      "IP_TYPE": "IPV4ANY",
+      "PACKET_ACTION": "DROP",
+      "PRIORITY": "3930",
+      "SRC_IP": "10.100.0.0/24"
+    },
+    "ACL-VLAN100-IN|SEQ_6080": {
+      "DST_IP": "198.18.0.0/15",
+      "IP_TYPE": "IPV4ANY",
+      "PACKET_ACTION": "DROP",
+      "PRIORITY": "3920",
+      "SRC_IP": "10.100.0.0/24"
+    },
+    "ACL-VLAN100-IN|SEQ_6090": {
+      "DST_IP": "224.0.0.0/4",
+      "IP_TYPE": "IPV4ANY",
+      "PACKET_ACTION": "DROP",
+      "PRIORITY": "3910",
+      "SRC_IP": "10.100.0.0/24"
+    },
+    "ACL-VLAN100-IN|SEQ_6100": {
+      "DST_IP": "240.0.0.0/4",
+      "IP_TYPE": "IPV4ANY",
+      "PACKET_ACTION": "DROP",
+      "PRIORITY": "3900",
+      "SRC_IP": "10.100.0.0/24"
+    },
+    "ACL-VLAN100-IN|SEQ_6110": {
+      "DESCRIPTION": "Zone: PROD-ZONE -\u003e INTERNET-ZONE",
+      "IP_PROTOCOL": "6",
+      "IP_TYPE": "IPV4ANY",
+      "L4_DST_PORT": "443",
+      "PACKET_ACTION": "FORWARD",
+      "PRIORITY": "3890",
+      "SRC_IP": "10.100.0.0/24"
+    },
+    "ACL-VLAN100-IN|SEQ_9990": {
+      "IP_TYPE": "IPV4ANY",
+      "LOG_ACTION": "SYSLOG",
+      "PACKET_ACTION": "DROP",
+      "PRIORITY": "10"
+    },
+    "ACL-VLAN200-IN|SEQ_10": {
+      "IP_PROTOCOL": "6",
+      "IP_TYPE": "IPV4ANY",
+      "L4_DST_PORT": "22",
+      "PACKET_ACTION": "FORWARD",
+      "PRIORITY": "9990"
+    },
+    "ACL-VLAN200-IN|SEQ_9990": {
+      "IP_TYPE": "IPV4ANY",
+      "LOG_ACTION": "SYSLOG",
+      "PACKET_ACTION": "DROP",
+      "PRIORITY": "10"
+    },
+    "PBR-VLAN100|BYPASS_1": {
+      "DST_IP": "10.200.0.0/24",
+      "IP_TYPE": "IPV4ANY",
+      "PACKET_ACTION": "FORWARD",
+      "PRIORITY": "7999"
+    },
+    "PBR-VLAN100|FW_REDIRECT": {
+      "IP_TYPE": "IPV4ANY",
+      "PACKET_ACTION": "REDIRECT:100.66.0.4",
+      "PRIORITY": "1000"
+    }
+  },
+  "ACL_TABLE": {
+    "ACL-VLAN100-IN": {
+      "policy_desc": "Zero-trust ACL for Customer-A",
+      "ports": [
+        "Vlan100"
+      ],
+      "stage": "ingress",
+      "type": "L3"
+    },
+    "ACL-VLAN200-IN": {
+      "policy_desc": "Zero-trust ACL for Customer-A",
+      "ports": [
+        "Vlan200"
+      ],
+      "stage": "ingress",
+      "type": "L3"
+    },
+    "PBR-VLAN100": {
+      "policy_desc": "Leaf PBR for Customer-A/any",
+      "ports": [
+        "Vlan100"
+      ],
+      "stage": "ingress",
+      "type": "PBR"
+    }
+  },
+  "BGP_GLOBALS": {
+    "VRF_A": {
+      "local_asn": 65000,
+      "router_id": "10.0.0.1"
+    },
+    "default": {
+      "graceful_restart_enable": "true",
+      "local_asn": 65000,
+      "max_paths": "64",
+      "router_id": "10.0.0.1"
+    }
+  },
+  "BGP_GLOBALS_AF": {
+    "VRF_A|ipv4_unicast": {
+      "admin_status": "true",
+      "redistribute_connected": "true",
+      "route_map_redistribute_connected": "RM-VRF-CONN-2-EVPN"
+    },
+    "VRF_A|l2vpn_evpn": {
+      "admin_status": "true",
+      "advertise-ipv4-unicast": "true"
+    },
+    "default|ipv4_unicast": {
+      "admin_status": "true",
+      "redistribute_connected": "true",
+      "route_map_redistribute_connected": "RM-CONN-2-BGP"
+    },
+    "default|ipv4_unicast|UNDERLAY-PEERS": {
+      "admin_status": "true"
+    },
+    "default|l2vpn_evpn": {
+      "admin_status": "true"
+    },
+    "default|l2vpn_evpn|EVPN-PEERS": {
+      "admin_status": "true"
+    }
+  },
+  "BGP_GLOBALS_EVPN_RT": {},
+  "BGP_NEIGHBOR": {
+    "10.0.0.100": {
+      "admin_status": "true",
+      "asn": "65000",
+      "description": "spine-01",
+      "holdtime": "180",
+      "keepalive": "60",
+      "local_addr": "10.0.0.1",
+      "name": "EVPN-PEERS"
+    },
+    "10.0.0.101": {
+      "admin_status": "true",
+      "asn": "65000",
+      "description": "spine-02",
+      "holdtime": "180",
+      "keepalive": "60",
+      "local_addr": "10.0.0.1",
+      "name": "EVPN-PEERS"
+    },
+    "10.1.0.0": {
+      "admin_status": "true",
+      "asn": "65100",
+      "description": "spine-01",
+      "holdtime": "180",
+      "keepalive": "60",
+      "local_addr": "10.1.0.1",
+      "local_asn": "65001",
+      "local_asn_no_prepend_replace_as": "UNSUPPORTED_IN_CONFIGDB \u2014 set via FRR vtysh",
+      "name": "UNDERLAY-PEERS"
+    },
+    "10.1.0.2": {
+      "admin_status": "true",
+      "asn": "65101",
+      "description": "spine-02",
+      "holdtime": "180",
+      "keepalive": "60",
+      "local_addr": "10.1.0.3",
+      "local_asn": "65001",
+      "local_asn_no_prepend_replace_as": "UNSUPPORTED_IN_CONFIGDB \u2014 set via FRR vtysh",
+      "name": "UNDERLAY-PEERS"
+    }
+  },
+  "BGP_PEER_GROUP": {
+    "EVPN-PEERS": {
+      "asn": "65000",
+      "local_addr": "10.0.0.1",
+      "send_community": "standard"
+    },
+    "UNDERLAY-PEERS": {
+      "bfd": "true",
+      "send_community": "standard"
+    }
+  },
+  "DEVICE_METADATA": {
+    "localhost": {
+      "bgp_asn": 65000,
+      "hostname": "dc1-leaf-01",
+      "type": "LeafRouter"
+    }
+  },
+  "EVPN_NVO": {
+    "nvo1": {
+      "source_vtep": "vtep"
+    }
+  },
+  "INTERFACE": {
+    "Ethernet1": {
+      "admin_status": "up",
+      "description": "to spine-01",
+      "mtu": "9000"
+    },
+    "Ethernet10": {
+      "admin_status": "up",
+      "description": "to server-01",
+      "mtu": "9000"
+    },
+    "Ethernet2": {
+      "admin_status": "up",
+      "description": "to spine-02",
+      "mtu": "9000"
+    }
+  },
+  "INTERFACE_IP": {
+    "Ethernet1|10.1.0.1/31": {},
+    "Ethernet2|10.1.0.3/31": {}
+  },
+  "LOOPBACK_INTERFACE": {
+    "Loopback0|10.0.0.1/32": {}
+  },
+  "NTP_SERVER": {},
+  "OSPF_ROUTER": {},
+  "PREFIX": {
+    "PL-XCHG-TRANSIT|10|100.66.0.0/29|exact": {
+      "action": "permit"
+    }
+  },
+  "PREFIX_SET": {
+    "PL-XCHG-TRANSIT": {
+      "mode": "IPv4"
+    }
+  },
+  "ROUTE_MAP": {
+    "RM-VRF-CONN-2-EVPN|10": {
+      "route_operation": "permit"
+    },
+    "RM-VRF-CONN-2-EVPN|5": {
+      "match_prefix_set": "PL-XCHG-TRANSIT",
+      "route_operation": "deny"
+    }
+  },
+  "SAG": {
+    "GLOBAL": {
+      "gateway_mac": "00:1c:73:00:dc:01"
+    }
+  },
+  "STATIC_ROUTE": {},
+  "SYSLOG_SERVER": {},
+  "VLAN": {
+    "Vlan100": {
+      "vlanid": "100"
+    },
+    "Vlan200": {
+      "vlanid": "200"
+    },
+    "Vlan3000": {
+      "vlanid": "3000"
+    },
+    "Vlan3900": {
+      "vlanid": "3900"
+    }
+  },
+  "VLAN_INTERFACE": {
+    "Vlan100": {
+      "static_anycast_gateway": "true",
+      "vrf_name": "VRF_A"
+    },
+    "Vlan100|10.100.0.1/24": {},
+    "Vlan200": {
+      "static_anycast_gateway": "true"
+    },
+    "Vlan200|10.200.0.1/24": {},
+    "Vlan3000": {
+      "static_anycast_gateway": "true",
+      "vrf_name": "VRF_A"
+    },
+    "Vlan3000|100.66.0.1/29": {},
+    "Vlan3900": {
+      "vrf_name": "VRF_A"
+    }
+  },
+  "VLAN_MEMBER": {
+    "Vlan100|Ethernet10": {
+      "tagging_mode": "tagged"
+    },
+    "Vlan200|Ethernet10": {
+      "tagging_mode": "tagged"
+    }
+  },
+  "VRF": {
+    "VRF_A": {
+      "vni": "50001"
+    }
+  },
+  "VXLAN_TUNNEL": {
+    "vtep": {
+      "src_ip": "10.0.0.1"
+    }
+  },
+  "VXLAN_TUNNEL_MAP": {
+    "vtep|map_10100_Vlan100": {
+      "vlan": "Vlan100",
+      "vni": "10100"
+    },
+    "vtep|map_50001_Vlan3900": {
+      "vlan": "Vlan3900",
+      "vni": "50001"
+    },
+    "vtep|map_64000_Vlan3000": {
+      "vlan": "Vlan3000",
+      "vni": "64000"
+    }
+  }
+}

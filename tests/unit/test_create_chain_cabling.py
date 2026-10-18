@@ -17,6 +17,7 @@ import pytest
 
 from generators.common import CommonGenerator
 from generators.connections import CablingMixin
+from generators.helpers import CablingPlanError
 
 
 class _Gen(CablingMixin, CommonGenerator):
@@ -239,25 +240,24 @@ class TestCreateChainCabling:
         assert result == [[]]
 
     @pytest.mark.asyncio
-    async def test_speed_mismatch_producing_no_connections_errors(self) -> None:
-        """Ports exist on both sides but at incompatible speeds — the
-        speed-aware plan builder rejects them all rather than raising, so
-        this must be checked explicitly and logged."""
+    async def test_speed_mismatch_fails_the_run(self) -> None:
+        """Ports exist on both sides but at incompatible speeds — the speed-aware
+        plan builder raises, so no cable is created and the leg is never silently
+        returned as an empty (green) result."""
         gen = _make_generator()
         bl_iface = _iface("Eth1/25", device="bl-01", interface_type="100gbase-x-qsfp28")
         fw_iface = _iface("eth1", device="fw-01", interface_type="25gbase-x-sfp28")
         gen.client.filters = AsyncMock(side_effect=[[bl_iface], [fw_iface]])
 
-        result = await gen.create_chain_cabling(
-            [
-                {"devices": ["bl-01"], "down_role": "firewall"},
-                {"devices": ["fw-01"], "up_role": "uplink"},
-            ]
-        )
+        with pytest.raises(CablingPlanError, match="INTERFACE TYPE MISMATCH"):
+            await gen.create_chain_cabling(
+                [
+                    {"devices": ["bl-01"], "down_role": "firewall"},
+                    {"devices": ["fw-01"], "up_role": "uplink"},
+                ]
+            )
 
         gen.client.create.assert_not_awaited()
-        gen.logger.error.assert_called()
-        assert result == [[]]
 
     @pytest.mark.asyncio
     async def test_no_pool_skips_ip_allocation(self) -> None:
