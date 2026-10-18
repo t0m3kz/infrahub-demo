@@ -189,8 +189,8 @@ class TestPbrAndAclSkip:
 
 
 def _interface(name: str, role: str, segments: list[dict]) -> dict:
-    """A physical interface carrying `segments` as interface_capabilities."""
-    return {"name": name, "role": role, "typename": "DcimPhysicalInterface", "interface_capabilities": segments}
+    """A physical interface carrying `segments` as capabilities."""
+    return {"name": name, "role": role, "typename": "DcimPhysicalInterface", "capabilities": segments}
 
 
 class TestTrunkMode:

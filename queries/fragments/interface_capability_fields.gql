@@ -18,7 +18,7 @@ fragment OspfInterfaceCapabilityFields on RoutingOSPFInterface {
       ospf_area { node { area { value } area_type { value } } }
       network_type { value }
       cost { value }
-      interface_capabilities {
+      capabilities {
         edges {
           node {
             name { value }
@@ -44,7 +44,7 @@ fragment ExchangeGatewayInterfaceCapabilityFields on TopologyExchangeGateway {
 }
 
 fragment InterfaceCapabilitiesFields on DcimInterface {
-  interface_capabilities {
+  capabilities {
     edges {
       node {
         __typename
@@ -63,7 +63,7 @@ fragment FirewallContextInterfaceCapabilityFields on ManagedFirewallContext {
   snat_address { node { address { value } } }
   # The context's legs: each member's VLAN sub-interface, in the leg's VRF
   # namespace, tagged with the context and with the exchange(s) of that leg.
-  interface_capabilities {
+  capabilities {
     edges {
       node {
         name { value }
@@ -75,7 +75,7 @@ fragment FirewallContextInterfaceCapabilityFields on ManagedFirewallContext {
               ip_namespace { node { name { value } l3_vni { value } namespace_type { value } } }
             }
           }
-          interface_capabilities {
+          capabilities {
             edges {
               node {
                 ... on TopologyRoutedExchange {
@@ -92,7 +92,7 @@ fragment FirewallContextInterfaceCapabilityFields on ManagedFirewallContext {
 }
 
 fragment InterfaceCapabilitiesWithSegmentFields on DcimInterface {
-  interface_capabilities {
+  capabilities {
     edges {
       node {
         __typename

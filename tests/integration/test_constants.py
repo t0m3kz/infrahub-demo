@@ -458,7 +458,7 @@ def _sdwan_tunnel(office: Declared) -> tuple[str, VirtualCircuitExpectation]:
 
 # The full virtual-circuit fabric. `physical_circuits` is the underlay mapping
 # and `interfaces` the minimum number of terminating DcimInterfaces reached
-# through interface_capabilities — the one uniform "what is this port doing"
+# through capabilities — the one uniform "what is this port doing"
 # edge in the schema.
 ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
     "VC-C005-DC10-AWS-EUC1": {

@@ -108,7 +108,7 @@ def _make_bgp_peering(
         "password": _node({"password": _v(password)}) if password is not None else _node(None),
         "ttl": _v(ttl),
         "route_reflector_client": _v(route_reflector_client),
-        "interface_capabilities": _edges(
+        "capabilities": _edges(
             [
                 {
                     "__typename": local_iface_type,
@@ -254,7 +254,7 @@ def _make_interface(
     # rendering transform reads them from (_collect_activations_from_interfaces).
     if segments:
         services.extend(segments)
-    iface["interface_capabilities"] = _edges(services)
+    iface["capabilities"] = _edges(services)
     return iface
 
 
@@ -308,7 +308,7 @@ def _make_segment_node(
 ) -> dict:
     """Build a ManagedNetworkSegment node, as the query returns it.
 
-    This is the shape that hangs off ``interfaces[].interface_capabilities`` —
+    This is the shape that hangs off ``interfaces[].capabilities`` —
     the ONLY place BaseDeviceTransform._collect_activations_from_interfaces
     looks for segments, and therefore the only path that produces VXLAN/EVPN
     output for leaf/tor/access-leaf roles.
@@ -411,7 +411,7 @@ def _make_segment_deployment(**kwargs: Any) -> dict:
     This is the ``TopologySegmentHosting.segment_deployments`` shape, reached
     from a device's own ``deployment`` — used by border-leaf for DC-wide PBR
     rules (see transforms/config/border_leaf.py), NOT for VXLAN. VXLAN comes
-    exclusively from interface_capabilities via _make_segment_node.
+    exclusively from capabilities via _make_segment_node.
     """
     seg = _make_segment_node(**kwargs)
     return {
@@ -826,7 +826,7 @@ def build_device_data(
                 }
             )
 
-    # VXLAN/EVPN is rendered ONLY from interface_capabilities, so the
+    # VXLAN/EVPN is rendered ONLY from capabilities, so the
     # customer-facing port must carry the segments. Attaching them solely to
     # deployment.segment_deployments (as this generator used to) left every
     # fixture with zero VXLAN output while still passing.
@@ -940,7 +940,7 @@ def build_inline_segment_data(*, device_name: str, role: str, platform: str) -> 
         )
     else:
         customer_port = next(e["node"] for e in interfaces if e["node"]["name"]["value"] == "Ethernet10")
-        customer_port["interface_capabilities"] = _edges([seg])
+        customer_port["capabilities"] = _edges([seg])
     # DC-wide view (border-leaf PBR / BGW): the same segment, still no PBR.
     device_node["deployment"]["node"]["segment_deployments"] = _edges(
         [{"vni": _v(_INLINE_SEGMENT_KWARGS["vni"]), "status": _v("active"), "segment": _node(seg)}]
@@ -1010,7 +1010,7 @@ def _make_firewall_interface(
             }
         ),
         "ha_domain": _node(None),
-        "interface_capabilities": _edges([seg_node]),
+        "capabilities": _edges([seg_node]),
     }
 
 
@@ -1365,7 +1365,7 @@ def build_leaf_pbr_data(*, device_name: str, platform: str) -> dict:
         "vlan_id": _v(3000),
         "tenant": _node(None),
         "served_deployments": _edges([]),
-        "interface_capabilities": _edges(legs),
+        "capabilities": _edges(legs),
     }
     firewall = {
         "node": {
@@ -1477,7 +1477,7 @@ def build_firewall_ha_data(*, device_name: str, platform: str) -> dict:
                 "status": _v("active"),
                 "role": _v("ha"),
                 "ip_address": _node(None),
-                "interface_capabilities": _edges([]),
+                "capabilities": _edges([]),
             }
         }
     )
@@ -1505,10 +1505,10 @@ def build_firewall_inline_data(*, device_name: str, platform: str) -> dict:
         namespace_name="PROD",
     )
     inline_iface["ip_address"] = _node({"address": _v("10.1.0.2/24"), "ip_namespace": _node({"name": _v("PROD")})})
-    segment = inline_iface["interface_capabilities"]["edges"][0]["node"]
+    segment = inline_iface["capabilities"]["edges"][0]["node"]
     segment["terminate_inline"] = _v(True)
     segment["inline_service"] = _node({"id": "ha-1", "name": _v("dc1-fw-ha")})
-    segment["interface_capabilities"] = _edges(
+    segment["capabilities"] = _edges(
         [
             {"device": _node({"name": _v("dc1-fw-01")}), "ip_address": _node({"address": _v("10.1.0.2/24")})},
             {"device": _node({"name": _v("dc1-fw-02")}), "ip_address": _node({"address": _v("10.1.0.3/24")})},
@@ -1646,7 +1646,7 @@ def build_exchange_transit_bl_data(
                                 "ip_namespace": _xchg_ns_node(ns_type),
                             }
                         ),
-                        "interface_capabilities": _edges(exchanges),
+                        "capabilities": _edges(exchanges),
                     }
                 )
         context_nodes.append(
@@ -1658,7 +1658,7 @@ def build_exchange_transit_bl_data(
                 "tenant": _node({"id": "tenant-acme"}) if ctx["tenant"] else _node(None),
                 "served_deployments": _edges([{"id": ctx["deployment"]}]),
                 "snat_address": _node({"address": _v(ctx["snat"])}),
-                "interface_capabilities": _edges(legs),
+                "capabilities": _edges(legs),
             }
         )
 
@@ -1675,13 +1675,13 @@ def build_exchange_transit_bl_data(
                 "mtu": _v(9000),
                 "ip_address": _node(None),
                 "cable": _node(None),
-                "interface_capabilities": _edges(context_nodes),
+                "capabilities": _edges(context_nodes),
             }
         }
     )
     if with_customer_port:
         customer_port = next(e["node"] for e in interfaces if e["node"]["name"]["value"] == "Ethernet10")
-        customer_port["interface_capabilities"] = _edges([shared])
+        customer_port["capabilities"] = _edges([shared])
     device_node["deployment"]["node"]["segment_deployments"] = _edges(
         [
             {"vni": _v(10100), "status": _v("active"), "segment": _node(shared)},
@@ -1762,9 +1762,7 @@ def build_border_leaf_bgw_stretched_data(*, device_name: str, platform: str) -> 
     fw_port = next(e["node"] for e in device_node["interfaces"]["edges"] if e["node"]["role"] == _v("firewall"))
     firewall = {
         "node": {
-            "capabilities": _edges(
-                [{"__typename": "ManagedFirewallHA", "contexts": fw_port["interface_capabilities"]}]
-            ),
+            "capabilities": _edges([{"__typename": "ManagedFirewallHA", "contexts": fw_port["capabilities"]}]),
         }
     }
     device_node["deployment"]["node"]["devices"] = {"edges": [firewall]}
@@ -1825,7 +1823,7 @@ def build_edge_internet_bgw_data(*, device_name: str, platform: str) -> dict:
         maximum_routes=100,
         password="isp-s3cr3t",
     )
-    for iface_edge in peering["interface_capabilities"]["edges"]:
+    for iface_edge in peering["capabilities"]["edges"]:
         node = iface_edge["node"]
         node["ip_address"]["node"]["ip_namespace"] = internet_ns
     # The INTERNET namespace's public space: aggregate + outbound filter.
@@ -1931,7 +1929,7 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
         peering["name"] = _v(name)
         peering["peering_role"] = _v("regular")
         peering["address_families"] = _af_edges(("ipv4", "unicast"))
-        for iface_edge in peering["interface_capabilities"]["edges"]:
+        for iface_edge in peering["capabilities"]["edges"]:
             iface_edge["node"]["ip_address"]["node"]["ip_namespace"] = namespaces[ns]
         peerings.append(peering)
     device_node["capabilities"]["edges"].append(
@@ -2274,7 +2272,7 @@ def build_firewall_exchange_data(*, device_name: str, platform: str) -> dict:
                         }
                     ),
                     "ha_domain": _node(None),
-                    "interface_capabilities": _edges([cap]),
+                    "capabilities": _edges([cap]),
                 }
             )
     # keep the HA sync port of the HA fixture, replace the zone legs by the context legs
@@ -2416,7 +2414,7 @@ def build_mlag_device_data(
                 {"name": _v(member2)},
             ]
         ),
-        "interface_capabilities": _edges([]),
+        "capabilities": _edges([]),
     }
 
     mem1 = _make_interface(
@@ -2624,7 +2622,7 @@ def _inline_segment_cap(*, ha_name: str, gateway: str, members: dict[str, str]) 
         "terminate_inline": _v(True),
         "inline_service": _node({"name": _v(ha_name)}),
         "gateway": _node({"address": _v(gateway)}),
-        "interface_capabilities": _edges(
+        "capabilities": _edges(
             [
                 {"device": _node({"name": _v(device)}), "ip_address": _node({"address": _v(address)})}
                 for device, address in members.items()
@@ -2643,7 +2641,7 @@ def _inline_member_interface(*, name: str, address: str, segment: dict) -> dict:
         "role": _v("service"),
         "ip_address": _node({"address": _v(address)}),
         "parent_interface": _node({"name": _v(name.split(".")[0])}),
-        "interface_capabilities": _edges([segment]),
+        "capabilities": _edges([segment]),
     }
 
 
@@ -2690,7 +2688,7 @@ def build_lb_inline_data(*, device_name: str, platform: str) -> dict:
             "status": _v("active"),
             "role": _v("management"),
             "ip_address": _node({"address": _v("192.168.2.1/24")}),
-            "interface_capabilities": _edges([]),
+            "capabilities": _edges([]),
         },
         _inline_member_interface(name="eth2.220", address="10.3.0.2/24", segment=segment),
     ]
@@ -2835,7 +2833,7 @@ def _gp_nic(
         "name": _v(nic),
         "role": _v("uplink"),
         "device": _node({"name": _v(host)}),
-        "interface_capabilities": _edges([]),
+        "capabilities": _edges([]),
         "lag": _node(None),
     }
     far = {
@@ -2843,8 +2841,8 @@ def _gp_nic(
         "name": _v(port),
         "role": _v(far_role or ("lag" if lag else "server")),
         "device": _node({"name": _v(switch)}),
-        "interface_capabilities": _edges([] if lag else tagged),
-        "lag": _node({"name": _v(lag), "interface_capabilities": _edges(tagged)} if lag else None),
+        "capabilities": _edges([] if lag else tagged),
+        "lag": _node({"name": _v(lag), "capabilities": _edges(tagged)} if lag else None),
     }
     return {"id": near["id"], "name": _v(nic), "cable": _node({"endpoints": _edges([near, far])})}
 
@@ -3716,7 +3714,7 @@ def build_office_wan_exit_data(*, device_name: str, role: str) -> dict:
     peering["name"] = _v(f"WAN-EXIT-{device_name}-{OFFICE_EDGE_NAME}")
     peering["peering_role"] = _v("regular")
     peering["address_families"] = _af_edges(("ipv4", "unicast"))
-    for iface_edge in peering["interface_capabilities"]["edges"]:
+    for iface_edge in peering["capabilities"]["edges"]:
         iface_edge["node"]["ip_address"]["node"]["ip_namespace"] = namespace
     node["capabilities"]["edges"].append(
         {
@@ -3794,7 +3792,7 @@ def _interface_segments(data: dict, interface_name: str = "Ethernet10") -> list[
     """The segment nodes carried by one interface of the first device of a raw device response."""
     node = data["DcimDevice"]["edges"][0]["node"]
     port = next(e["node"] for e in node["interfaces"]["edges"] if e["node"]["name"]["value"] == interface_name)
-    return [edge["node"] for edge in port["interface_capabilities"]["edges"]]
+    return [edge["node"] for edge in port["capabilities"]["edges"]]
 
 
 def build_cisco_xe_acl_data(*, device_name: str, role: str = "leaf") -> dict:

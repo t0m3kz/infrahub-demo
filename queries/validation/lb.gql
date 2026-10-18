@@ -38,7 +38,7 @@ query loadbalancer_validation($device: String!) {
               ... on DcimVirtualInterface {
                 ip_address { node { address { value } } }
               }
-              interface_capabilities {
+              capabilities {
                 edges {
                   node {
                     __typename

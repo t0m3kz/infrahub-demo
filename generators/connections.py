@@ -425,7 +425,7 @@ class CablingMixin:
         """Upsert a VLAN-tagged DcimVirtualInterface (<trunk>.<vlan_id>) on
         trunk_iface, linked to capability_obj (and any extra_capability_objs,
         e.g. the exchanges a firewall-context leg belongs to) via
-        interface_capabilities. Capabilities are only ever added, never removed —
+        capabilities. Capabilities are only ever added, never removed —
         shared by customer_dc.py/customer_colocation.py's FirewallContext
         sub-interfaces and segment.py's inline VxlanSegment termination.
         Trunk-interface resolution stays with the caller since fallback
@@ -457,7 +457,7 @@ class CablingMixin:
             await sub_iface.save(**tracked_save_kwargs(track))
             capabilities = [cap for cap in (capability_obj, *extra_capability_objs) if cap is not None]
             if capabilities:
-                iface_capabilities = getattr(sub_iface, "interface_capabilities")
+                iface_capabilities = getattr(sub_iface, "capabilities")
                 await iface_capabilities.fetch()
                 linked = {peer.id for peer in iface_capabilities.peers}
                 missing = [cap for cap in capabilities if cap.id not in linked]

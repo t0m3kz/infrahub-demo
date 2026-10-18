@@ -95,7 +95,7 @@ def test_dark_fibres_are_the_dci_circuits() -> None:
 def test_dci_circuit_has_a_border_leaf_and_a_cage_edge_end(circuit_id: str) -> None:
     """add_circuit refuses anything but two endpoints on two devices, one of them a DC device."""
     circuit = next(e for _, e in _objects(_ONRAMP, "TopologyPhysicalCircuit") if e["circuit_id"] == circuit_id)
-    ends = [tuple(i) for i in circuit["interface_capabilities"]]
+    ends = [tuple(i) for i in circuit["capabilities"]]
     devices = sorted(device for device, _ in ends)
 
     assert len(set(ends)) == 2
@@ -123,7 +123,7 @@ def test_generated_peering_names_do_not_collide_with_data() -> None:
 
 def test_every_dci_fibre_lands_on_its_own_free_port() -> None:
     """No two fibres share a port: each DC border leaf uses Ethernet1/35 and 1/36, each cage edge its dci ports."""
-    ends = [tuple(i) for _, e in _objects(_ONRAMP, "TopologyPhysicalCircuit") for i in e["interface_capabilities"]]
+    ends = [tuple(i) for _, e in _objects(_ONRAMP, "TopologyPhysicalCircuit") for i in e["capabilities"]]
     assert len(ends) == len(set(ends))
     border_leaf_ports = {port for device, port in ends if device.startswith("bl-dc")}
     assert border_leaf_ports == {"Ethernet1/35", "Ethernet1/36"}
@@ -156,7 +156,7 @@ def test_every_physical_circuit_row_has_two_distinct_ends_and_no_port_is_in_two_
     assert rows
     seen: dict[tuple[str, str], str] = {}
     for _, row in rows:
-        ends = [tuple(end) for end in row["interface_capabilities"]]
+        ends = [tuple(end) for end in row["capabilities"]]
         assert len(ends) == 2 and len(set(ends)) == 2, f"{_circuit_name(row)}: {ends}"
         for end in ends:
             assert end not in seen, f"{end} is an end of {seen[end]} and {_circuit_name(row)}"
@@ -171,7 +171,7 @@ def test_every_cross_connect_far_end_is_a_declared_cloud_provider_edge() -> None
     ]
     assert sorted(_circuit_name(e) for e in cross_connects) == ["XC-EQXFR2-AWS-EUC1", "XC-EQXPA4-AZURE-WEU"]
     for circuit in cross_connects:
-        cage_end, cloud_end = circuit["interface_capabilities"]
+        cage_end, cloud_end = circuit["capabilities"]
         assert cage_end[0].startswith("eg-")
         assert cloud_end[0] in declared, f"{_circuit_name(circuit)}: {cloud_end[0]} is not declared"
 

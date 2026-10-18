@@ -1,4 +1,4 @@
-"""A TopologyPhysicalCircuit in a port's interface_capabilities must not change a rendered config.
+"""A TopologyPhysicalCircuit in a port's capabilities must not change a rendered config.
 
 TopologyPhysicalCircuit is a ManagedGenericInterfaces since step 5 of the caps series, so every circuit end
 port lists its circuit next to the OSPF/segment/firewall capabilities. The shared fragments select only
@@ -29,7 +29,7 @@ def _with_circuit_on_every_port(data: dict[str, Any]) -> tuple[dict[str, Any], i
     injected = 0
     for device in data["DcimDevice"]["edges"]:
         for interface in device["node"]["interfaces"]["edges"]:
-            interface["node"]["interface_capabilities"]["edges"].append(deepcopy(_CIRCUIT))
+            interface["node"]["capabilities"]["edges"].append(deepcopy(_CIRCUIT))
             injected += 1
     return data, injected
 

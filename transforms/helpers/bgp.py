@@ -77,15 +77,15 @@ def _extract_remote_asn_from_peering(peering_node: dict, remote_device_name: str
 
 
 def _peering_ends(peering_node: dict[str, Any], device_name: str) -> tuple[dict[str, Any], dict[str, Any]]:
-    """The peering's (local, remote) interface_capabilities entries, split by device name.
+    """The peering's (local, remote) capabilities entries, split by device name.
 
     Raises:
         ValueError: When the peering does not have exactly two ends, one on ``device_name``.
     """
-    peering_ifaces = peering_node.get("interface_capabilities", [])
+    peering_ifaces = peering_node.get("capabilities", [])
     if not isinstance(peering_ifaces, list) or len(peering_ifaces) != 2:
         raise ValueError(
-            f"Overlay peering '{peering_node.get('name')}' expected 2 interface_capabilities, "
+            f"Overlay peering '{peering_node.get('name')}' expected 2 capabilities, "
             f"got {len(peering_ifaces) if isinstance(peering_ifaces, list) else 'invalid'}"
         )
 
@@ -199,7 +199,7 @@ def _build_session_from_peering(
 
         if not local_interface_ip and not local_iface_name:
             # No cable resolved an IP — fall back to the IP already set
-            # directly on the peering's own interface_capabilities (e.g. a VTI/
+            # directly on the peering's own capabilities (e.g. a VTI/
             # sub-interface addressed inline, with no DcimCable and no separate
             # TopologyCircuit object to traverse).
             local_interface_ip = local_iface.get("ip_address")

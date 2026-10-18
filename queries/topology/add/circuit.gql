@@ -1,7 +1,7 @@
 # add_circuit (generators/topology/circuit.py). Filters on name, the
 # generator's registered parameter (.infrahub.yml `name: name__value`).
 #
-# A circuit's endpoints are one list, interface_capabilities: exactly two
+# A circuit's endpoints are one list, capabilities: exactly two
 # interfaces by schema (min_count = max_count = 2), one per end. Each endpoint
 # carries what a DCI session needs: its address, its device's deployment (a
 # TopologyDataCenter end names the fabric key and the address family) and the
@@ -16,7 +16,7 @@ query circuit_data($name: String!) {
         circuit_type { value }
         status { value }
         peering_role { value }
-        interface_capabilities {
+        capabilities {
           edges {
             node {
               ...CircuitEndpoint

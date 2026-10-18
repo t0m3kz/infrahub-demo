@@ -9,7 +9,7 @@ Two edges get special attention because the schema deliberately has exactly one
 way to express each of them, and a regression would silently split the graph
 into islands:
 
-  * ``interface_capabilities`` — how a circuit surfaces on the port it
+  * ``capabilities`` — how a circuit surfaces on the port it
     terminates on. It is the single uniform "what is this port doing" edge, and
     replaced the bespoke ``interfaces`` relationship the node used to declare.
   * ``cloud_endpoints`` — how a circuit reaches its cloud side, which is a
@@ -106,7 +106,7 @@ query {
             vlan_id { value }
             tenant { node { id } }
             cluster { node { ... on ManagedFirewallHA { capabilities { edges { node { id } } } } } }
-            interface_capabilities { edges { node { name { value } } } }
+            capabilities { edges { node { name { value } } } }
           }
         }
       }
@@ -128,7 +128,7 @@ query ($names: [String]) {
         password { node { name { value } } }
         address_families { edges { node { afi { value } safi { value } } } }
         bgp_processes { edges { node { name { value } process_role { value } } } }
-        interface_capabilities {
+        capabilities {
           edges {
             node {
               name { value }
@@ -190,7 +190,7 @@ query ($names: [String]) {
         bgp_processes {
           edges { node { name { value } process_role { value } local_as { node { asn { value } } } } }
         }
-        interface_capabilities {
+        capabilities {
           edges {
             node {
               name { value }
@@ -245,7 +245,7 @@ query ($names: [String]) {
       node {
         name { value }
         session_type { value }
-        interface_capabilities {
+        capabilities {
           edges {
             node {
               name { value }
@@ -298,7 +298,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         """Verify the physical underlay: type mix, provider, two locations and two distinct ends.
 
         Every circuit is point-to-point, so exactly two locations and exactly
-        two distinct ports (its interface_capabilities, min and max count 2) are
+        two distinct ports (its capabilities, min and max count 2) are
         hard invariants, and a port is an end of at most one circuit — the
         SD-WAN offices' INET-<office> circuits, created concurrently, are where a
         shared access port would show.
@@ -448,7 +448,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             if len(circuit["interfaces"]) != expected["interfaces"]:
                 errors.append(
                     f"{name}: surfaces on {len(circuit['interfaces'])} interface(s) via "
-                    f"interface_capabilities, expected {expected['interfaces']}"
+                    f"capabilities, expected {expected['interfaces']}"
                 )
 
             expected_cloud = sorted(expected["cloud_endpoints"])
@@ -913,7 +913,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             # Sub-interfaces are `<uplink>.<vlan>`; the tagged edge ports (Ethernet1/15-16) have no dot.
             sub_vlans = sorted(
                 str(edge["node"]["name"]["value"]).rsplit(".", 1)[-1]
-                for edge in (context.get("interface_capabilities") or {}).get("edges", [])
+                for edge in (context.get("capabilities") or {}).get("edges", [])
                 if "." in str(edge["node"]["name"]["value"])
             )
             expected_vlans = sorted(
@@ -991,7 +991,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 (edge["node"]["device"]["node"]["name"]["value"], edge["node"]["name"]["value"]): (
                     ((edge["node"].get("ip_address") or {}).get("node") or {}).get("address", {}).get("value")
                 )
-                for edge in session["interface_capabilities"]["edges"]
+                for edge in session["capabilities"]["edges"]
             }
             if sorted(interfaces) != sorted(ends):
                 errors.append(f"{name}: on interfaces {sorted(interfaces)}, expected {sorted(ends)}")
@@ -1046,7 +1046,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 errors.append(f"{name}: session type {session['session_type']['value']}, expected EBGP")
             local = [
                 edge["node"]
-                for edge in session["interface_capabilities"]["edges"]
+                for edge in session["capabilities"]["edges"]
                 if edge["node"]["device"]["node"]["name"]["value"] == edge_device
             ]
             if len(local) != 1:
@@ -1074,7 +1074,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         for edge in dci["ManagedBGPPeering"]["edges"]:
             node = edge["node"]
             circuit_id = node["name"]["value"].removeprefix("DCI-")
-            devices = {i["node"]["device"]["node"]["name"]["value"] for i in node["interface_capabilities"]["edges"]}
+            devices = {i["node"]["device"]["node"]["name"]["value"] for i in node["capabilities"]["edges"]}
             landing.setdefault(ALL_DEMO_DCI_CIRCUITS[circuit_id][0], set()).update(
                 device for device in devices if device.startswith("eg-")
             )
@@ -1208,7 +1208,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                     errors.append(f"{name}: runs on {processes}")
                 session_ports = sorted(
                     (e["node"]["device"]["node"]["name"]["value"], e["node"]["name"]["value"])
-                    for e in session["interface_capabilities"]["edges"]
+                    for e in session["capabilities"]["edges"]
                 )
                 if session_ports != sorted(ends):
                     errors.append(f"{name}: on interfaces {session_ports}, expected {sorted(ends)}")
@@ -1305,8 +1305,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                     switch_asns.add(processes[f"{switch}-bgp-wan-exit"]["local_as"]["node"]["asn"]["value"])
                     edge_asns.add(processes[f"{edge}-bgp-wan-exit"]["local_as"]["node"]["asn"]["value"])
                 ends = {
-                    e["node"]["device"]["node"]["name"]["value"]: e["node"]
-                    for e in session["interface_capabilities"]["edges"]
+                    e["node"]["device"]["node"]["name"]["value"]: e["node"] for e in session["capabilities"]["edges"]
                 }
                 if sorted(ends) != sorted([switch, edge]):
                     errors.append(f"{name}: on devices {sorted(ends)}, expected {sorted([switch, edge])}")

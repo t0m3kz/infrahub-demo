@@ -210,7 +210,7 @@ def test_services_segment_and_its_policy_rules(root_dir: Path) -> None:
     assert ipaddress.ip_interface(gateway["address"]).network == ipaddress.ip_network(
         gateway["ip_prefix"]["data"]["prefix"]
     )
-    assert len(segment["interface_capabilities"]) == 1
+    assert len(segment["capabilities"]) == 1
     # Computed segment name: {owner org_id}-{customer_name}-{environment}, lowercased.
     name = f"{customer['org_id']}-{segment['customer_name']}-{segment['environment']}".lower()
 

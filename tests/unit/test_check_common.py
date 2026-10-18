@@ -59,7 +59,7 @@ class TestValidateRoutingPassword:
                 "interfaces": [
                     {
                         "name": "Ethernet1",
-                        "interface_capabilities": [
+                        "capabilities": [
                             {"typename": "RoutingOSPFInterface", "password": ""},
                         ],
                     }
@@ -85,7 +85,7 @@ class TestValidateRoutingPassword:
                 "interfaces": [
                     {
                         "name": "Ethernet2",
-                        "interface_capabilities": [
+                        "capabilities": [
                             {"typename": "RoutingOSPFInterface", "password": "set"},
                         ],
                     }

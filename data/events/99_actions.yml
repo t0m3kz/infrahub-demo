@@ -649,7 +649,7 @@ spec:
       matches:
         kind: CoreNodeTriggerRelationshipMatch
         data:
-          - relationship_name: interface_capabilities
+          - relationship_name: capabilities
             modification_type: updated
 
     - name: trigger-circuit-on-status-updated
@@ -699,7 +699,7 @@ spec:
       matches:
         kind: CoreNodeTriggerRelationshipMatch
         data:
-          - relationship_name: interface_capabilities
+          - relationship_name: capabilities
             modification_type: updated
 
     - name: trigger-virtual-circuit-on-physical-circuits-updated

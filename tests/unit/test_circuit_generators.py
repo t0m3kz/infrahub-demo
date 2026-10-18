@@ -48,8 +48,8 @@ def _peerings(client: FakeClient) -> list[dict[str, Any]]:
 
 
 class TestEndpoints:
-    def test_both_ends_come_from_interface_capabilities_deduplicated(self) -> None:
-        """The circuit's ends are its interface_capabilities, one list; a port listed twice counts once."""
+    def test_both_ends_come_from_capabilities_deduplicated(self) -> None:
+        """The circuit's ends are its capabilities, one list; a port listed twice counts once."""
         circuit = clean_data(physical_payload(ends=[dc_border_leaf(), cage_edge(), cage_edge()]))
         endpoints = circuit_endpoints(circuit["TopologyPhysicalCircuit"][0])
 
@@ -265,7 +265,7 @@ class TestPhysicalCircuitDci:
             "address_families": [{"id": "af-ipv6-unicast"}, {"id": "af-l2vpn-evpn"}],
             "bgp_processes": [{"id": "eg-fr01-bgp-overlay"}, {"id": "bl-dc101101-bgp-overlay"}],
             "password": {"id": DC_KEY_ID},
-            "interface_capabilities": [{"id": "if-eg"}, {"id": "if-bl"}],
+            "capabilities": [{"id": "if-eg"}, {"id": "if-bl"}],
         }
         assert client.saves()[node.id] == TRACKED
 
@@ -436,7 +436,7 @@ class TestVirtualCircuitOverlay:
                 "address_families": [{"id": "af-ipv4-unicast"}],
                 "bgp_processes": [{"id": "C001-EDGE1-bgp-underlay"}, {"id": "bl-dc101101-bgp-regular"}],
                 "password": {"id": DC_KEY_ID},
-                "interface_capabilities": [{"id": "if-edge"}, {"id": "if-bl"}],
+                "capabilities": [{"id": "if-edge"}, {"id": "if-bl"}],
             }
         ]
 

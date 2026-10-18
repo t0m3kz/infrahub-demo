@@ -83,7 +83,7 @@ class TestValidateRoutingPasswordOspf:
     def test_interface_without_password_reports_error(self):
         data = {
             "interfaces": [
-                {"name": "Ethernet1", "interface_capabilities": [_ospf_interface_capability(None)]},
+                {"name": "Ethernet1", "capabilities": [_ospf_interface_capability(None)]},
             ],
         }
         errors = validate_routing_password(data)
@@ -95,7 +95,7 @@ class TestValidateRoutingPasswordOspf:
             "interfaces": [
                 {
                     "name": "Ethernet1",
-                    "interface_capabilities": [_ospf_interface_capability({"password": "s3cr3t"})],
+                    "capabilities": [_ospf_interface_capability({"password": "s3cr3t"})],
                 },
             ],
         }
@@ -104,7 +104,7 @@ class TestValidateRoutingPasswordOspf:
     def test_non_ospf_interface_capability_ignored(self):
         data = {
             "interfaces": [
-                {"name": "Ethernet1", "interface_capabilities": [{"typename": "ManagedVlanSegment"}]},
+                {"name": "Ethernet1", "capabilities": [{"typename": "ManagedVlanSegment"}]},
             ],
         }
         assert validate_routing_password(data) == []
@@ -118,7 +118,7 @@ class TestValidateRoutingPasswordCombined:
         data = {
             "capabilities": [_bgp_capability([{"name": "underlay-a", "password": None}])],
             "interfaces": [
-                {"name": "Ethernet1", "interface_capabilities": [_ospf_interface_capability(None)]},
+                {"name": "Ethernet1", "capabilities": [_ospf_interface_capability(None)]},
             ],
         }
         errors = validate_routing_password(data)
@@ -162,7 +162,7 @@ def _fw_leg(
     return {
         "name": name,
         "ip_address": ip_address,
-        "interface_capabilities": [_context(), _exchange()] if caps is None else caps,
+        "capabilities": [_context(), _exchange()] if caps is None else caps,
     }
 
 
@@ -183,7 +183,7 @@ class TestValidateExchangeGateways:
         assert validate_exchange_gateways({}) == []
 
     def test_non_exchange_capability_ignored(self):
-        data = {"interfaces": [{"name": "Vlan10", "interface_capabilities": [{"typename": "ManagedVxlanSegment"}]}]}
+        data = {"interfaces": [{"name": "Vlan10", "capabilities": [{"typename": "ManagedVxlanSegment"}]}]}
         assert validate_exchange_gateways(data) == []
 
     def test_one_leg_per_namespace_passes(self):
@@ -275,7 +275,7 @@ def _segment_port(vlan: int | None, seg_id: str = "seg-1", name: str = "web") ->
     return {
         "name": "Ethernet1",
         "role": "customer",
-        "interface_capabilities": [
+        "capabilities": [
             {"typename": "ManagedVlanSegment", "id": seg_id, "name": name, "status": "active", "vlan_id": vlan}
         ],
     }
@@ -284,7 +284,7 @@ def _segment_port(vlan: int | None, seg_id: str = "seg-1", name: str = "web") ->
 def _service_port() -> dict:
     context = {
         **_context(),
-        "interface_capabilities": [
+        "capabilities": [
             {
                 "device": {"role": "firewall"},
                 "ip_address": {
@@ -294,7 +294,7 @@ def _service_port() -> dict:
             }
         ],
     }
-    return {"name": "Ethernet49", "role": "firewall", "interface_capabilities": [context]}
+    return {"name": "Ethernet49", "role": "firewall", "capabilities": [context]}
 
 
 @pytest.fixture(params=[BorderLeaf, BorderSpine, Edge], ids=["border-leaf", "border-spine", "edge"])

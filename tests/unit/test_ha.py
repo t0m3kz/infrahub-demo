@@ -515,7 +515,7 @@ class TestInlineAddresses:
             "terminate_inline": True,
             "inline_service": {"name": "fw-ha"},
             "gateway": {"address": "10.1.0.1/24"},
-            "interface_capabilities": [
+            "capabilities": [
                 {"device": {"name": "fw-01"}, "ip_address": {"address": "10.1.0.2/24"}},
                 {"device": {"name": "fw-02"}, "ip_address": {"address": "10.1.0.3/24"}},
             ],

@@ -151,7 +151,7 @@ query {
         snat_address { node { id address { value } } }
         # The members' transit sub-interfaces and the physical service ports tagged with the
         # context (a DC's border-leaf ports, the colocation metro's edge ports).
-        interface_capabilities {
+        capabilities {
           edges {
             node {
               id
@@ -272,7 +272,7 @@ def _snapshot(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
                             _peer_id(edge["node"], "ip_address"),
                             ((edge["node"].get("ip_address") or {}).get("node") or {}).get("address", {}).get("value"),
                         )
-                        for edge in (n.get("interface_capabilities") or {}).get("edges", [])
+                        for edge in (n.get("capabilities") or {}).get("edges", [])
                     )
                 ),
             )

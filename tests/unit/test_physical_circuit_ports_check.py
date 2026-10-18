@@ -40,7 +40,7 @@ def _circuit(circuit_id: str, *ends: dict[str, Any]) -> dict[str, Any]:
         "node": {
             "id": f"id-{circuit_id}",
             "circuit_id": {"value": circuit_id},
-            "interface_capabilities": {"edges": list(ends)},
+            "capabilities": {"edges": list(ends)},
         }
     }
 

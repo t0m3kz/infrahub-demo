@@ -635,7 +635,7 @@ def _host_segment(data: dict[str, Any]) -> dict[str, Any]:
     """The raw first segment node carried by Ethernet10 of a golden input."""
     interfaces = data["DcimDevice"]["edges"][0]["node"]["interfaces"]["edges"]
     port = next(e["node"] for e in interfaces if e["node"]["name"]["value"] == "Ethernet10")
-    return port["interface_capabilities"]["edges"][0]["node"]
+    return port["capabilities"]["edges"][0]["node"]
 
 
 class TestCiscoXeAclTranslation:

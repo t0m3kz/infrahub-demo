@@ -557,13 +557,13 @@ class TestTransformDataRouting:
         assert "No configuration generated" in result
 
     @pytest.mark.asyncio
-    async def test_activation_from_interface_capabilities(self) -> None:
-        """Activations on segment.segment_deployments within interface_capabilities are collected."""
+    async def test_activation_from_capabilities(self) -> None:
+        """Activations on segment.segment_deployments within capabilities are collected."""
         t = _make_transform(device_role="leaf")
         interfaces = [
             {
                 "name": "Ethernet10",
-                "interface_capabilities": [
+                "capabilities": [
                     {
                         "id": "seg-1",
                         "typename": "ManagedVxlanSegment",
@@ -598,7 +598,7 @@ class TestTransformDataRouting:
         interfaces = [
             {
                 "name": "Ethernet10",
-                "interface_capabilities": [
+                "capabilities": [
                     {
                         "id": "seg-1",
                         "typename": "ManagedVlanSegment",
@@ -635,7 +635,7 @@ class TestTransformDataRouting:
         interfaces = [
             {
                 "name": "Ethernet10",
-                "interface_capabilities": [
+                "capabilities": [
                     {
                         "id": "seg-1",
                         "typename": "ManagedVlanSegment",
@@ -663,10 +663,10 @@ class TestTransformDataRouting:
 
     @pytest.mark.asyncio
     async def test_activation_missing_yields_no_vlans(self) -> None:
-        """No segment_deployments on interface_capabilities → vlans is empty in rendered config."""
+        """No segment_deployments on capabilities → vlans is empty in rendered config."""
         t = _make_transform(device_role="leaf")
-        # Interfaces with no interface_capabilities carrying segment_deployments
-        device = _device_data(interfaces=[{"name": "Ethernet1", "interface_capabilities": []}])
+        # Interfaces with no capabilities carrying segment_deployments
+        device = _device_data(interfaces=[{"name": "Ethernet1", "capabilities": []}])
 
         fake_template = MagicMock()
         fake_template.render.return_value = "! rendered"
@@ -792,7 +792,7 @@ class TestCollectActivationsVlanDomainMatching:
     @staticmethod
     def _vxlan_iface(vlan_domain_id: str, vlan_id: int = 100) -> dict:
         return {
-            "interface_capabilities": [
+            "capabilities": [
                 {
                     "typename": "ManagedVxlanSegment",
                     "id": "seg-1",

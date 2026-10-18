@@ -1046,7 +1046,7 @@ class TestEdgePair:
         assert peering["ttl"] == 1
         assert peering["password"] == {"id": "key-1"}
         assert peering["address_families"] == [{"id": "af-ipv6-unicast"}, {"id": "af-l2vpn-evpn"}]
-        assert peering["interface_capabilities"] == [{"id": "if-a"}, {"id": "if-b"}]
+        assert peering["capabilities"] == [{"id": "if-a"}, {"id": "if-b"}]
         assert gen._ensure_routing_password.await_args.kwargs["name"] == "fr-fabric-key"
 
     @pytest.mark.asyncio

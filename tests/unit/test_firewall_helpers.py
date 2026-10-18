@@ -401,7 +401,7 @@ def _leg(address: str, namespace: dict, exchanges: list[dict] | None = None, nam
         "name": name,
         "device": {"name": "dc-fw-1", "role": "firewall"},
         "ip_address": {"address": address, "ip_namespace": namespace},
-        "interface_capabilities": exchanges or [],
+        "capabilities": exchanges or [],
     }
 
 
@@ -420,12 +420,12 @@ def _context(legs: list[dict], *, tenant: str | None = None, served: list[str] |
         "vlan_id": vlan,
         "tenant": {"id": tenant} if tenant else None,
         "served_deployments": [{"id": d} for d in served or []],
-        "interface_capabilities": legs,
+        "capabilities": legs,
     }
 
 
 def _bl_port(ctx: dict, role: str = "firewall") -> list[dict]:
-    return [{"name": "Ethernet1/10", "role": role, "interface_capabilities": [ctx]}]
+    return [{"name": "Ethernet1/10", "role": role, "capabilities": [ctx]}]
 
 
 def _shared_context(*, tenant: str | None = None, served: list[str] | None = None) -> dict:
@@ -987,10 +987,10 @@ def _make_context_leg(
     _flatten_deployment_firewall_contexts() — device-scoped (this device's
     own deployment's firewall-role devices), not the rendered device's own
     interfaces. The firewall's OWN leg is what provides the nexthop, found
-    by filtering interface_capabilities legs to the one on a device with
+    by filtering capabilities legs to the one on a device with
     role="firewall"."""
     ctx: dict = {
-        "interface_capabilities": [
+        "capabilities": [
             {"device": {"role": "firewall"}, "ip_address": {"address": fw_ip, "ip_namespace": {"name": "PROD"}}}
         ],
     }
@@ -1157,7 +1157,7 @@ class TestGetCustomerPbrRules:
         """inline connectivity_mode never allocates an IP on the firewall leg —
         a context with no addressed firewall-role leg contributes no nexthop."""
         activations = [_make_pbr_activation(deployment_id="dep-a", security_policies=[])]
-        contexts = [{"interface_capabilities": [{"device": {"role": "firewall"}, "ip_address": {}}]}]
+        contexts = [{"capabilities": [{"device": {"role": "firewall"}, "ip_address": {}}]}]
         assert get_customer_pbr_rules(activations, contexts) == []
 
     def test_permit_rule_becomes_bypass_prefix(self) -> None:
@@ -1307,7 +1307,7 @@ def _make_fw_context_interface(
     iface: dict = {
         "name": iface_name,
         "parent_interface": {"name": parent_name},
-        "interface_capabilities": [cap],
+        "capabilities": [cap],
     }
     if ip_addr:
         iface["ip_address"] = {"address": ip_addr}
@@ -1319,7 +1319,7 @@ class TestGetFirewallContexts:
         plain = _make_fw_context_interface()
         assert get_firewall_contexts([plain])[0]["snat"] is None
         with_snat = _make_fw_context_interface()
-        with_snat["interface_capabilities"][0]["snat_address"] = {"address": "192.0.2.5/32"}
+        with_snat["capabilities"][0]["snat_address"] = {"address": "192.0.2.5/32"}
         assert get_firewall_contexts([with_snat])[0]["snat"] == "192.0.2.5"
 
     def test_none_returns_empty(self) -> None:
@@ -1329,7 +1329,7 @@ class TestGetFirewallContexts:
         assert get_firewall_contexts([]) == []
 
     def test_interface_without_context_capability_ignored(self) -> None:
-        iface = {"name": "eth0", "interface_capabilities": [{"typename": "ManagedVxlanSegment"}]}
+        iface = {"name": "eth0", "capabilities": [{"typename": "ManagedVxlanSegment"}]}
         assert get_firewall_contexts([iface]) == []
 
     def test_single_context_extracted(self) -> None:

@@ -187,9 +187,9 @@ nodes:
         order_weight: 610
 
     relationships:
-      # Re-declares ManagedGenericInterfaces.interface_capabilities with a count. The cap holds when the
+      # Re-declares ManagedGenericInterfaces.capabilities with a count. The cap holds when the
       # circuit side is written; checks/physical_circuit_ports.py holds it for interface-side writes.
-      - name: interface_capabilities
+      - name: capabilities
         peer: DcimInterface
         label: "Ends"
         kind: Generic
@@ -207,7 +207,7 @@ nodes:
     label: "Virtual Circuit"
     icon: "mdi:cloud-sync"
     include_in_menu: false
-    # ManagedGenericInterfaces puts this circuit into a terminating interface's `interface_capabilities` list,
+    # ManagedGenericInterfaces puts this circuit into a terminating interface's `capabilities` list,
     # alongside RoutingOSPFInterface, ManagedVxlanSegment and TopologyExchangeGateway: the one uniform way in this
     # schema to ask "what is this port doing", and the edge a walk outward from a changed interface follows. The
     # physical circuit uses the same edge with exactly two ends; a virtual circuit leaves it uncapped because a
@@ -355,7 +355,7 @@ nodes:
             color: "#9b59b6"
 
     relationships:
-      # interface_capabilities (many DcimInterface, via ManagedGenericInterfaces)
+      # capabilities (many DcimInterface, via ManagedGenericInterfaces)
       # — the A/Z (or more) technical interfaces this circuit terminates on.
       - name: physical_circuits
         label: "Physical Underlay Circuits"

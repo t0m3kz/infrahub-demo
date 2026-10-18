@@ -159,7 +159,7 @@ class ManagedGenericDevice(CoreNode):
 
 
 class ManagedGenericInterfaces(CoreNode):
-    interface_capabilities: RelationshipManager[DcimInterface]
+    capabilities: RelationshipManager[DcimInterface]
 
 
 class ManagedGenericVlanDomain(CoreNode):

@@ -21,17 +21,17 @@ def _build_lb_interfaces(interfaces: list[dict[str, Any]], ha: dict[str, Any] | 
                 "role": iface.get("role"),
                 "ip_address": ip_obj,
                 "parent_interface": iface.get("parent_interface"),
-                **inline_addresses(iface.get("interface_capabilities"), ha),
+                **inline_addresses(iface.get("capabilities"), ha),
             }
         )
     return lb_ifaces
 
 
 def _build_vips_from_interfaces(interfaces: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Build VIP list from interface_capabilities — LoadbalancerVIP is an interface capability."""
+    """Build VIP list from capabilities — LoadbalancerVIP is an interface capability."""
     vips = []
     for iface in interfaces or []:
-        for cap in iface.get("interface_capabilities") or []:
+        for cap in iface.get("capabilities") or []:
             if cap.get("typename") != "LoadbalancerVIP":
                 continue
             vip_ip_obj = cap.get("vip_ip") or {}

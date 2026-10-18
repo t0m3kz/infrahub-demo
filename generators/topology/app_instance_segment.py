@@ -167,7 +167,7 @@ class AppInstanceSegmentGenerator(PoolMixin, VlanDomainMixin, CommonGenerator):
             segment_obj = await self.client.get(
                 kind=ManagedVlanSegment,
                 id=segment_id,
-                include=["interface_capabilities"],
+                include=["capabilities"],
                 raise_when_missing=False,
             )
             if not segment_obj:
@@ -175,7 +175,7 @@ class AppInstanceSegmentGenerator(PoolMixin, VlanDomainMixin, CommonGenerator):
                 return 0, 0
             current_ids = {
                 peer.id
-                for peer in getattr(segment_obj, "interface_capabilities").peers
+                for peer in getattr(segment_obj, "capabilities").peers
                 if peer.typename in TAGGABLE_INTERFACE_KINDS
             }
             return await self._reconcile_segment_interface_tags(
@@ -206,7 +206,7 @@ class AppInstanceSegmentGenerator(PoolMixin, VlanDomainMixin, CommonGenerator):
         that moved, or a component that left). ``current_ids`` are the
         physical/port-channel interfaces tagged today. Written with
         RelationshipAdd/RelationshipRemove on the segment's
-        interface_capabilities — touches only this segment's edge on each
+        capabilities — touches only this segment's edge on each
         port and never enters this run's tracking group.
 
         Returns (interfaces tagged, interfaces untagged).
@@ -227,9 +227,9 @@ class AppInstanceSegmentGenerator(PoolMixin, VlanDomainMixin, CommonGenerator):
         to_add = sorted(desired_ids - current_ids)
         to_remove = sorted(current_ids - desired_ids)
         if to_add:
-            await segment_obj.add_relationships(relation_to_update="interface_capabilities", related_nodes=to_add)
+            await segment_obj.add_relationships(relation_to_update="capabilities", related_nodes=to_add)
         if to_remove:
-            await segment_obj.remove_relationships(relation_to_update="interface_capabilities", related_nodes=to_remove)
+            await segment_obj.remove_relationships(relation_to_update="capabilities", related_nodes=to_remove)
         self.logger.info(
             f"Segment {segment_name}: {len(desired_ids)} customer-facing port(s) from {len(components)} "
             f"component(s) — tagged {len(to_add)}, untagged {len(to_remove)}"

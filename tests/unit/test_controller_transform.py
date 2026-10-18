@@ -243,7 +243,7 @@ def _gateway_with_handoff(
             "ttl": {"value": 1},
             **({"password": {"node": {"password": {"value": password}}}} if password is not None else {}),
             "address_families": {"edges": [{"node": {"afi": {"value": "ipv4"}, "safi": {"value": "unicast"}}}]},
-            "interface_capabilities": {
+            "capabilities": {
                 "edges": [
                     _raw_iface("eg-fr01", "Ethernet1/13.1900", "10.255.5.0/31", namespace),
                     _raw_iface("EQX-FR2-SDWAN-GW1", local_iface, "10.255.5.1/31", namespace),
@@ -339,7 +339,7 @@ def _office_edge_with_wan_exit(password: str | None = "0ff1c3-w4n-k3y") -> dict:
             "ttl": {"value": 1},
             **({"password": {"node": {"password": {"value": password}}}} if password is not None else {}),
             "address_families": {"edges": [{"node": {"afi": {"value": "ipv4"}, "safi": {"value": "unicast"}}}]},
-            "interface_capabilities": {
+            "capabilities": {
                 "edges": [
                     _raw_iface("ds-c005-p01", "GigabitEthernet1/0/26.3800", "100.66.0.0/31", "PROD"),
                     _raw_iface("C005-P-EDGE1", "GE3.3800", "100.66.0.1/31", "PROD"),

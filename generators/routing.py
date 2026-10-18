@@ -760,7 +760,7 @@ class RoutingMixin:
                 "address_families": [{"id": af_id} for af_id in address_family_ids],
                 "bgp_processes": [{"id": process_id} for process_id in process_ids],
                 **({"password": {"id": password_id}} if password_id else {}),
-                "interface_capabilities": [{"id": interface_id} for interface_id in interface_ids],
+                "capabilities": [{"id": interface_id} for interface_id in interface_ids],
             },
         )
         await save_with_node_not_found_retry(peering, self.logger)

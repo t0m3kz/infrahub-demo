@@ -2,7 +2,7 @@
 
 PhysicalCircuitGenerator (add_circuit)
     ``peering_role: dci`` builds the EVPN Multi-Site DCI session over the
-    circuit's two endpoints (interface_capabilities, exactly two by schema): a
+    circuit's two endpoints (capabilities, exactly two by schema): a
     P2P prefix from the DCI pool, both addresses, the two interfaces
     addressed, and one directly connected eBGP peering between the two
     devices' overlay ManagedBGP processes, keyed with the DC fabric's
@@ -13,7 +13,7 @@ PhysicalCircuitGenerator (add_circuit)
 
 VirtualCircuitGenerator (add_virtual_circuit)
     ``peering_role: overlay`` on a tunnel link type builds one eBGP peering
-    between the two endpoint interfaces (interface_capabilities) over their
+    between the two endpoint interfaces (capabilities) over their
     existing addresses, after waiting for the add_circuit runs of the
     physical circuits it rides. It allocates nothing and never writes the
     interfaces: a tunnel port carries several virtual circuits.
@@ -161,8 +161,8 @@ def _parse_endpoints(interfaces: list[dict[str, Any]]) -> list[CircuitEndpoint]:
 
 
 def circuit_endpoints(circuit: dict[str, Any]) -> list[CircuitEndpoint]:
-    """The circuit's ends, from its one ``interface_capabilities`` edge (physical and virtual circuits alike)."""
-    return _parse_endpoints(circuit.get("interface_capabilities") or [])
+    """The circuit's ends, from its one ``capabilities`` edge (physical and virtual circuits alike)."""
+    return _parse_endpoints(circuit.get("capabilities") or [])
 
 
 def endpoint_problem(endpoints: list[CircuitEndpoint]) -> str | None:
@@ -514,7 +514,7 @@ class VirtualCircuitGenerator(_CircuitGenerator):
         """Log the circuit and warn where its transport and underlay disagree."""
         link_type: str = circuit.get("link_type") or ""
         transport_mode: str = circuit.get("transport_mode") or self._infer_transport_mode(link_type)
-        interfaces = circuit.get("interface_capabilities") or []
+        interfaces = circuit.get("capabilities") or []
         physical = circuit.get("physical_circuits") or []
         ends = " | ".join(
             f"{(iface.get('device') or {}).get('name') or '?'}/{iface.get('name', '?')}" for iface in interfaces

@@ -45,11 +45,11 @@ def _prefix(value: str = "100.65.0.0/31") -> Any:
 
 
 def _sub_iface(*, existing_peer_ids: list[str]) -> Any:
-    """A created DcimVirtualInterface whose interface_capabilities already hold existing_peer_ids."""
+    """A created DcimVirtualInterface whose capabilities already hold existing_peer_ids."""
     node = MagicMock(id="sub-1")
     node.save = AsyncMock()
-    node.interface_capabilities.fetch = AsyncMock()
-    node.interface_capabilities.peers = [MagicMock(id=peer_id) for peer_id in existing_peer_ids]
+    node.capabilities.fetch = AsyncMock()
+    node.capabilities.peers = [MagicMock(id=peer_id) for peer_id in existing_peer_ids]
     return node
 
 
@@ -281,7 +281,7 @@ class TestEnsureVlanSubinterfaceWithoutCapability:
 
         assert result is node
         node.save.assert_awaited_once_with(**_TRACKED)
-        node.interface_capabilities.fetch.assert_not_awaited()
+        node.capabilities.fetch.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_role_defaults_to_service_and_can_be_given(self) -> None:

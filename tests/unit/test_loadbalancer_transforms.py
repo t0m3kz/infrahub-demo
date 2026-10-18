@@ -630,7 +630,7 @@ def _cleaned_device(
                         "name": "1.1",
                         "role": "uplink",
                         "status": "active",
-                        "interface_capabilities": vip_services,
+                        "capabilities": vip_services,
                     }
                 ],
                 "capabilities": [
@@ -699,10 +699,10 @@ class TestLoadBalancerOnpremVipProcessing:
         assert vip["lb_name"] == "DC3-LB-C001"
 
     @pytest.mark.asyncio
-    async def test_no_vips_when_no_interface_capabilities(self) -> None:
+    async def test_no_vips_when_no_capabilities(self) -> None:
         transform = _make_onprem_transform()
         cleaned = _cleaned_device()
-        cleaned["DcimPhysicalDevice"][0]["interfaces"][0]["interface_capabilities"] = []
+        cleaned["DcimPhysicalDevice"][0]["interfaces"][0]["capabilities"] = []
         with patch(_LB_CLEAN_DATA_PATH, return_value=cleaned):
             with patch("transforms.helpers.templates.Environment") as mock_env:
                 mock_template = MagicMock()

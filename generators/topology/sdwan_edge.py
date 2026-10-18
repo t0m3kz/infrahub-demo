@@ -48,7 +48,7 @@ Ordering note: the Gateway's tunnel sub-interface is named "<trunk>.<tunnel_id>"
 so the overlay circuit is created FIRST (allocating tunnel_id from
 GLOBAL-SDWAN-TUNNEL-ID via a from_pool dict on the attribute) and its
 resolved value read back, THEN the sub-interface is created, THEN the
-circuit's interface_capabilities is updated to include it — there is no
+circuit's capabilities is updated to include it — there is no
 standalone "allocate a number" call for a CoreNumberPool, only from_pool
 applied to a real node's attribute.
 
@@ -298,7 +298,7 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
                     # locations peers TopologyConnectableLocation: the office
                     # itself (not the edge device) and the ISP the far end sits in.
                     "locations": [{"id": office_id}, {"id": isp_location_id}],
-                    "interface_capabilities": [{"id": edge_uplink_id}, {"id": isp_port_id}],
+                    "capabilities": [{"id": edge_uplink_id}, {"id": isp_port_id}],
                     "member_of_groups": [_target_group("physical_circuits")],
                 },
             )
@@ -309,20 +309,20 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
     async def _pick_isp_port(self, office_name: str, circuit_name: str, isp_device_id: str) -> str:
         """The access PE port for this circuit: the one it already ends on, else the first free ``customer`` port.
 
-        Free = no physical circuit among the port's interface_capabilities
+        Free = no physical circuit among the port's capabilities
         (a virtual circuit's tunnel port may be shared, a physical end may
         not). Fails, before anything is written, when none is left. Call
         inside the isp-access-port lock.
         """
         circuits = await self.client.filters(
-            kind=TopologyPhysicalCircuit, name__value=circuit_name, include=["interface_capabilities"]
+            kind=TopologyPhysicalCircuit, name__value=circuit_name, include=["capabilities"]
         )
-        own_ends = {peer.id for circuit in circuits for peer in getattr(circuit, "interface_capabilities").peers}
+        own_ends = {peer.id for circuit in circuits for peer in getattr(circuit, "capabilities").peers}
         ports = await self.client.filters(
             kind=DcimPhysicalInterface,
             device__ids=[isp_device_id],
             role__value="customer",
-            include=["interface_capabilities"],
+            include=["capabilities"],
         )
         for port in ports:
             if port.id in own_ends:
@@ -331,8 +331,7 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
             port.name.value: port.id
             for port in ports
             if not any(
-                peer.typename == TopologyPhysicalCircuit.__name__
-                for peer in getattr(port, "interface_capabilities").peers
+                peer.typename == TopologyPhysicalCircuit.__name__ for peer in getattr(port, "capabilities").peers
             )
         }
         if not free:
@@ -350,7 +349,7 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
         gateway_zone_name: str,
         internet_circuit_id: str,
     ) -> Any:
-        """Create/upsert the overlay VC without its interface_capabilities.
+        """Create/upsert the overlay VC without its capabilities.
 
         The gateway sub-interface doesn't exist yet (its name depends on the
         tunnel_id this same call allocates), and an upsert REPLACES a
@@ -416,12 +415,12 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
         finds nothing to change and saves nothing.
         """
         refreshed = await self.client.filters(
-            kind=TopologyVirtualCircuit, ids=[overlay_circuit.id], include=["interface_capabilities"]
+            kind=TopologyVirtualCircuit, ids=[overlay_circuit.id], include=["capabilities"]
         )
         if not refreshed:
             self.fail(f"{office_name}: overlay circuit vanished before linking its interfaces")
         circuit = refreshed[0]
-        iface_capabilities = getattr(circuit, "interface_capabilities")
+        iface_capabilities = getattr(circuit, "capabilities")
         current = {peer.id for peer in iface_capabilities.peers}
         desired = set(interface_ids)
         if current == desired:

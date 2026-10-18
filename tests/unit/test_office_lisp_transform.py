@@ -80,9 +80,7 @@ def _seg200_namespaces(data: dict[str, Any]) -> list[dict[str, Any]]:
     """The ip_namespace nodes of seg-200 everywhere it appears in the input (host port and activations)."""
     segments: list[dict[str, Any]] = []
     for iface in _node(data)["interfaces"]["edges"]:
-        segments += [
-            edge["node"] for edge in iface["node"]["interface_capabilities"]["edges"] if "gateway" in edge["node"]
-        ]
+        segments += [edge["node"] for edge in iface["node"]["capabilities"]["edges"] if "gateway" in edge["node"]]
     segments += [act["node"]["segment"]["node"] for act in _deployment(data)["segment_deployments"]["edges"]]
     return [
         seg["gateway"]["node"]["ip_prefix"]["node"]["ip_namespace"]["node"]

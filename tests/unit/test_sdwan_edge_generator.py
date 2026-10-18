@@ -122,14 +122,14 @@ def _port(port_id: str, name: str, *, held_by: str | None = None) -> Any:
     """An ISP access ``customer`` port; ``held_by`` is the typename of the one circuit already ending on it."""
     port = MagicMock(id=port_id)
     port.name.value = name
-    port.interface_capabilities = MagicMock(peers=[MagicMock(typename=held_by)] if held_by else [])
+    port.capabilities = MagicMock(peers=[MagicMock(typename=held_by)] if held_by else [])
     return port
 
 
 def _existing_circuit(*port_ids: str) -> Any:
     """A TopologyPhysicalCircuit as the by-name lookup returns it, ending on ``port_ids``."""
     circuit = MagicMock(id="inet-1")
-    circuit.interface_capabilities = MagicMock(peers=[MagicMock(id=port_id) for port_id in port_ids])
+    circuit.capabilities = MagicMock(peers=[MagicMock(id=port_id) for port_id in port_ids])
     return circuit
 
 
@@ -215,10 +215,10 @@ class TestGenerateHappyPath:
         overlay_circuit.tunnel_id = MagicMock(value=2000)
         iface_capabilities = MagicMock()
         iface_capabilities.peers = []
-        overlay_circuit.interface_capabilities = iface_capabilities
+        overlay_circuit.capabilities = iface_capabilities
         gateway_subiface = _node("subiface-1")
         # The server-side re-read of the overlay is a different node object from the upserted one.
-        refreshed_overlay = _node("vc-1", interface_capabilities=MagicMock(peers=[]))
+        refreshed_overlay = _node("vc-1", capabilities=MagicMock(peers=[]))
 
         gen.client.create = AsyncMock(side_effect=[edge, internet_circuit, overlay_circuit, gateway_subiface])
 
@@ -238,7 +238,7 @@ class TestGenerateHappyPath:
         # resolved; (3) VCE-610_EDGE template lookup; (4) edge uplink
         # interface lookup; (5-7) ISP topology, INET-<office> by name, the
         # access PE's customer ports; (8) re-read the just-created overlay
-        # circuit (full interface_capabilities peer list, see
+        # circuit (full capabilities peer list, see
         # _link_overlay_to_interfaces's docstring); (9) orchestrator
         # lookup (managed_devices included).
         gen.client.filters = AsyncMock(
@@ -317,7 +317,7 @@ class TestGenerateHappyPath:
         overlay_circuit.tunnel_id = MagicMock(value=2000)
         iface_capabilities = MagicMock()
         iface_capabilities.peers = []
-        overlay_circuit.interface_capabilities = iface_capabilities
+        overlay_circuit.capabilities = iface_capabilities
         gateway_subiface = _node("subiface-1")
         gen.client.create = AsyncMock(side_effect=[edge, internet_circuit, overlay_circuit, gateway_subiface])
 
@@ -332,9 +332,9 @@ class TestGenerateHappyPath:
         orchestrator.add_relationships = AsyncMock()
         # Existing-edge lookup now returns a match — no template lookup follows.
         # The 4th entry is the post-create re-fetch of the overlay circuit
-        # (real __typename for interface_capabilities peers, see
+        # (real __typename for capabilities peers, see
         # _link_overlay_to_interfaces's docstring) — reusing the
-        # same overlay_circuit mock, since only its .interface_capabilities
+        # same overlay_circuit mock, since only its .capabilities
         # matters here, not a distinct identity.
         gen.client.filters = AsyncMock(
             side_effect=[
@@ -446,13 +446,13 @@ class TestGenerateHappyPath:
 
         await gen.generate(_office_payload())
 
-        caps = self._refreshed_overlay.interface_capabilities
+        caps = self._refreshed_overlay.capabilities
         assert [c.args[0] for c in caps.add.call_args_list] == [{"id": "edge-uplink-1"}, {"id": "subiface-1"}]
         caps.remove.assert_not_called()
         self._refreshed_overlay.save.assert_awaited()
 
     @pytest.mark.asyncio
-    async def test_overlay_upsert_never_carries_interface_capabilities(self) -> None:
+    async def test_overlay_upsert_never_carries_capabilities(self) -> None:
         """An upsert replaces a many-relationship it carries: sending the edge side alone would
         drop the gateway link on every rerun. The link step owns the whole list."""
         gen = self._wire_full_success()
@@ -460,13 +460,13 @@ class TestGenerateHappyPath:
         await gen.generate(_office_payload())
 
         overlay_data = gen.client.create.call_args_list[2].kwargs["data"]
-        assert "interface_capabilities" not in overlay_data
+        assert "capabilities" not in overlay_data
 
     @pytest.mark.asyncio
     async def test_rerun_over_unchanged_data_removes_and_adds_nothing(self) -> None:
         """Rerun: both ends already linked, so the overlay is neither modified nor saved again."""
         gen = self._wire_full_success()
-        caps = self._refreshed_overlay.interface_capabilities
+        caps = self._refreshed_overlay.capabilities
         caps.peers = [MagicMock(id="edge-uplink-1"), MagicMock(id="subiface-1")]
 
         await gen.generate(_office_payload())
@@ -479,7 +479,7 @@ class TestGenerateHappyPath:
     async def test_only_the_missing_end_is_added(self) -> None:
         """Gateway side present, edge side missing: just the edge uplink is added, nothing removed."""
         gen = self._wire_full_success()
-        caps = self._refreshed_overlay.interface_capabilities
+        caps = self._refreshed_overlay.capabilities
         caps.peers = [MagicMock(id="subiface-1")]
 
         await gen.generate(_office_payload())
@@ -491,7 +491,7 @@ class TestGenerateHappyPath:
     async def test_a_stale_end_is_removed(self) -> None:
         """A replaced edge uplink leaves its old interface behind: the link step prunes it."""
         gen = self._wire_full_success()
-        caps = self._refreshed_overlay.interface_capabilities
+        caps = self._refreshed_overlay.capabilities
         caps.peers = [MagicMock(id="old-uplink"), MagicMock(id="edge-uplink-1"), MagicMock(id="subiface-1")]
 
         await gen.generate(_office_payload())
@@ -567,7 +567,7 @@ class TestIspAccessPort:
         await gen.generate(_office_payload())
 
         data = gen.client.create.call_args_list[1].kwargs["data"]
-        assert data["interface_capabilities"] == [{"id": "edge-uplink-1"}, {"id": "port-1"}]
+        assert data["capabilities"] == [{"id": "edge-uplink-1"}, {"id": "port-1"}]
         assert data["locations"] == [{"id": "office-1"}, {"id": _ISP_ID}]
 
     @pytest.mark.asyncio
@@ -581,10 +581,10 @@ class TestIspAccessPort:
         assert isp_call["provider__ids"] == ["provider-inet"]
         assert isp_call["include"] == ["devices"]
         assert circuit_call["name__value"] == "INET-C002-P"
-        assert circuit_call["include"] == ["interface_capabilities"]
+        assert circuit_call["include"] == ["capabilities"]
         assert port_call["device__ids"] == [_ISP_DEVICE_ID]
         assert port_call["role__value"] == "customer"
-        assert port_call["include"] == ["interface_capabilities"]
+        assert port_call["include"] == ["capabilities"]
 
     @pytest.mark.asyncio
     async def test_first_free_port_in_natural_order_is_taken(self) -> None:
@@ -595,7 +595,7 @@ class TestIspAccessPort:
         await gen.generate(_office_payload())
 
         data = gen.client.create.call_args_list[1].kwargs["data"]
-        assert data["interface_capabilities"][1] == {"id": "port-2"}
+        assert data["capabilities"][1] == {"id": "port-2"}
 
     @pytest.mark.asyncio
     async def test_a_port_held_by_another_physical_circuit_is_skipped(self) -> None:
@@ -606,7 +606,7 @@ class TestIspAccessPort:
         await gen.generate(_office_payload())
 
         data = gen.client.create.call_args_list[1].kwargs["data"]
-        assert data["interface_capabilities"][1] == {"id": "port-1"}
+        assert data["capabilities"][1] == {"id": "port-1"}
 
     @pytest.mark.asyncio
     async def test_a_port_with_only_a_virtual_circuit_is_still_free(self) -> None:
@@ -617,7 +617,7 @@ class TestIspAccessPort:
         await gen.generate(_office_payload())
 
         data = gen.client.create.call_args_list[1].kwargs["data"]
-        assert data["interface_capabilities"][1] == {"id": "port-0"}
+        assert data["capabilities"][1] == {"id": "port-0"}
 
     @pytest.mark.asyncio
     async def test_rerun_reuses_the_port_its_own_circuit_already_ends_on(self) -> None:
@@ -633,7 +633,7 @@ class TestIspAccessPort:
         await gen.generate(_office_payload())
 
         data = gen.client.create.call_args_list[1].kwargs["data"]
-        assert data["interface_capabilities"] == [{"id": "edge-uplink-1"}, {"id": "port-5"}]
+        assert data["capabilities"] == [{"id": "edge-uplink-1"}, {"id": "port-5"}]
 
     @pytest.mark.asyncio
     async def test_no_free_port_fails_before_any_circuit_is_written(self) -> None:

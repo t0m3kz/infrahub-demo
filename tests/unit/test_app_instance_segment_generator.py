@@ -60,9 +60,9 @@ _VLAN_SEGMENT: dict[str, Any] = {"id": "seg-vlan", "name": "c011-nordix-prod-p",
 
 
 def _vlan_segment_obj(*tags: tuple[str, str]) -> MagicMock:
-    """A ManagedVlanSegment fetched with interface_capabilities: one (id, typename) peer per tag."""
+    """A ManagedVlanSegment fetched with capabilities: one (id, typename) peer per tag."""
     obj = MagicMock(id="seg-vlan")
-    obj.interface_capabilities.peers = [MagicMock(id=tag_id, typename=typename) for tag_id, typename in tags]
+    obj.capabilities.peers = [MagicMock(id=tag_id, typename=typename) for tag_id, typename in tags]
     obj.add_relationships = AsyncMock()
     obj.remove_relationships = AsyncMock()
     obj.save = AsyncMock()
@@ -109,7 +109,7 @@ class TestGenerate:
         gen = _gen_with_lock()
         gen.client.get = AsyncMock(return_value=MagicMock(id="seg-1"))
         gen._fetch_segment_vlan_state = AsyncMock(
-            return_value={"segment": {"id": "seg-1", "interface_capabilities": []}, "activations": {}}
+            return_value={"segment": {"id": "seg-1", "capabilities": []}, "activations": {}}
         )
         gen._reconcile_segment_interface_tags = AsyncMock(return_value=(added, removed))
         gen._reconcile_segment_vlan_domains_locked = AsyncMock()
@@ -184,7 +184,7 @@ class TestGenerate:
         assert gen.client.get.call_args.kwargs == {
             "kind": ManagedVlanSegment,
             "id": "seg-vlan",
-            "include": ["interface_capabilities"],
+            "include": ["capabilities"],
             "raise_when_missing": False,
         }
         kwargs = gen._reconcile_segment_interface_tags.call_args.kwargs
@@ -345,7 +345,7 @@ class TestReconcileSegmentInterfaceTags:
         assert result == (2, 0)
         assert [c.args[0] for c in gen._customer_facing_target_ids.await_args_list] == ["dev-1", "dev-2"]
         segment_obj.add_relationships.assert_awaited_once_with(
-            relation_to_update="interface_capabilities", related_nodes=["if-a", "po-b"]
+            relation_to_update="capabilities", related_nodes=["if-a", "po-b"]
         )
         segment_obj.remove_relationships.assert_not_awaited()
         segment_obj.save.assert_not_called()
@@ -365,10 +365,10 @@ class TestReconcileSegmentInterfaceTags:
 
         assert result == (1, 1)
         segment_obj.add_relationships.assert_awaited_once_with(
-            relation_to_update="interface_capabilities", related_nodes=["if-new"]
+            relation_to_update="capabilities", related_nodes=["if-new"]
         )
         segment_obj.remove_relationships.assert_awaited_once_with(
-            relation_to_update="interface_capabilities", related_nodes=["if-old"]
+            relation_to_update="capabilities", related_nodes=["if-old"]
         )
 
     def test_port_still_used_by_another_component_is_kept(self) -> None:
@@ -441,7 +441,7 @@ class TestVlanSegmentFromCabling:
         assert asyncio.run(gen._reconcile_vlan_segment("seg-vlan", "c011-nordix-prod-p")) == (4, 0)
 
         segment_obj.add_relationships.assert_awaited_once_with(
-            relation_to_update="interface_capabilities",
+            relation_to_update="capabilities",
             related_nodes=["sw-eth1/1/1", "sw-eth1/1/2", "sw-eth1/1/3", "sw-eth1/1/4"],
         )
         segment_obj.remove_relationships.assert_not_awaited()
@@ -463,7 +463,7 @@ class TestVlanSegmentFromCabling:
         assert asyncio.run(gen._reconcile_vlan_segment("seg-vlan", "c011-nordix-prod-p")) == (0, 1)
 
         segment_obj.remove_relationships.assert_awaited_once_with(
-            relation_to_update="interface_capabilities", related_nodes=["sw-eth1/1/9"]
+            relation_to_update="capabilities", related_nodes=["sw-eth1/1/9"]
         )
 
 

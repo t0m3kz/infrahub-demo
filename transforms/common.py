@@ -583,7 +583,7 @@ class BaseDeviceTransform(InfrahubTransform):
         device_id: str | None = None,
         device_capabilities: list[dict] | None = None,
     ) -> list[dict]:
-        """Collect unique segment activations from interface_capabilities.
+        """Collect unique segment activations from capabilities.
 
         VlanSegment.vlan_id is a plain manual attribute directly on the segment
         (single-site, no realization record). VxlanSegment.segment_deployments
@@ -602,7 +602,7 @@ class BaseDeviceTransform(InfrahubTransform):
         seen: set[str] = set()
         activations: list[dict] = []
         for iface in interfaces:
-            for cap in iface.get("interface_capabilities") or []:
+            for cap in iface.get("capabilities") or []:
                 seg_id = cap.get("id") or cap.get("name")
                 if not seg_id or seg_id in seen:
                     continue
@@ -645,7 +645,7 @@ class BaseDeviceTransform(InfrahubTransform):
 
         A border gateway stitches each stretched segment between its fabric and
         the DCI without any customer-facing port carrying it, so
-        interface_capabilities never surface those segments. They come from the
+        capabilities never surface those segments. They come from the
         site's own TopologySegmentHosting.segment_deployments instead (queries/
         fragments/network_segment.gql SegmentDeploymentsOnDeploymentFields),
         keeping only stretch_scope != local. The local VLAN still has to be the

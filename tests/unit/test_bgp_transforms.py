@@ -81,7 +81,7 @@ def _make_peering(
         "password": {"password": password} if password is not None else None,
         "ttl": ttl,
         "route_reflector_client": route_reflector_client,
-        "interface_capabilities": _make_peering_interfaces(
+        "capabilities": _make_peering_interfaces(
             local_name="Ethernet1",
             local_ip=local_ip,
             local_device=local_device,
@@ -219,9 +219,9 @@ class TestBuildSessionFromPeering:
             "name": "bad",
             "session_type": "EBGP",
             "ttl": 1,
-            "interface_capabilities": [{"device": {"name": "leaf-01"}}],  # only 1
+            "capabilities": [{"device": {"name": "leaf-01"}}],  # only 1
         }
-        with pytest.raises(ValueError, match="expected 2 interface_capabilities"):
+        with pytest.raises(ValueError, match="expected 2 capabilities"):
             _build_session_from_peering(
                 peering,
                 device_name="leaf-01",
@@ -235,7 +235,7 @@ class TestBuildSessionFromPeering:
             "name": "bad-mapping",
             "session_type": "IBGP",
             "ttl": 255,
-            "interface_capabilities": [
+            "capabilities": [
                 {"device": {"name": "spine-01"}, "ip_address": {"address": "10.0.0.1/32"}},
                 {"device": {"name": "spine-02"}, "ip_address": {"address": "10.0.0.2/32"}},
             ],
@@ -467,7 +467,7 @@ class TestExtractRemoteAsnFromPeering:
 
 
 class TestDirectIpFallback:
-    """TTL=1 underlay sessions where the peering's own interface_capabilities
+    """TTL=1 underlay sessions where the peering's own capabilities
     already carry both sides' IPs directly (e.g. a VTI/sub-interface with no
     DcimCable and no separate TopologyCircuit object to traverse — external
     BGP peering over a fabric/MPLS-VPN virtual circuit handoff)."""
@@ -489,7 +489,7 @@ class TestDirectIpFallback:
             "send_community": True,
             "ttl": 1,
             "route_reflector_client": False,
-            "interface_capabilities": [
+            "capabilities": [
                 {"name": remote_iface, "ip_address": {"address": remote_ip}, "device": {"name": remote_device}},
                 {"name": local_iface, "ip_address": {"address": local_ip}, "device": {"name": local_device}},
             ],
@@ -506,7 +506,7 @@ class TestDirectIpFallback:
             "ip_address": {"address": "10.255.0.24/31"},
             "cable": None,
             "device": {"name": "FR2-EDGE-01"},
-            "interface_capabilities": [],
+            "capabilities": [],
         }
         peering = self._direct_ip_peering(
             local_device="FR2-EDGE-01",
@@ -530,7 +530,7 @@ class TestDirectIpFallback:
 
     def test_cable_still_takes_precedence_over_direct_ip(self):
         """A cable connecting the two sides is preferred even when the peering
-        interface_capabilities also carry an IP directly."""
+        capabilities also carry an IP directly."""
         cabled_iface = {
             "name": "Ethernet1/1",
             "ip_address": {"address": "10.0.0.1/31"},
@@ -549,7 +549,7 @@ class TestDirectIpFallback:
                     },  # noqa: E501
                 ]
             },
-            "interface_capabilities": [],
+            "capabilities": [],
         }
         peering = self._direct_ip_peering(
             local_device="FR6-EDGE-01",
@@ -579,7 +579,7 @@ class TestDirectIpFallback:
             "ip_address": {"address": "fd00::1/127"},
             "cable": None,
             "device": {"name": "dc1-super-spine-01"},
-            "interface_capabilities": [],
+            "capabilities": [],
         }
         peering = {
             "name": "dci-underlay--dc1-dc2-primary",
@@ -588,7 +588,7 @@ class TestDirectIpFallback:
             "send_community": True,
             "ttl": 1,
             "route_reflector_client": False,
-            "interface_capabilities": [
+            "capabilities": [
                 {"name": "Ethernet1/31", "ip_address": None, "device": {"name": "dc1-super-spine-01"}},
                 {"name": "Ethernet25/1", "ip_address": None, "device": {"name": "dc2-super-spine-01"}},
             ],

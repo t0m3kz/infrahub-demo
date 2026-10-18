@@ -41,11 +41,11 @@ def _context(
     served: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     """A ManagedFirewallContext as the leaf query returns it (legs on two HA members)."""
-    interface_capabilities = []
+    iface_caps = []
     for address, namespace in legs:
         network = address.rsplit(".", 1)[0]
         for member, host in (("fw-01", 5), ("fw-02", 6)):
-            interface_capabilities.append(
+            iface_caps.append(
                 {
                     "name": "eth1.3000",
                     "device": {"role": "firewall"},
@@ -58,7 +58,7 @@ def _context(
         "vlan_id": vlan,
         "tenant": {"id": tenant} if tenant else None,
         "served_deployments": [{"id": dep} for dep in served],
-        "interface_capabilities": interface_capabilities,
+        "capabilities": iface_caps,
     }
 
 
@@ -134,7 +134,7 @@ class TestGetExchangeTransitsLegs:
         ctx = _context()
         border = get_exchange_transits(
             _firewall_context_caps(
-                [{"role": "firewall", "interface_capabilities": [{**ctx, "typename": "ManagedFirewallContext"}]}]
+                [{"role": "firewall", "capabilities": [{**ctx, "typename": "ManagedFirewallContext"}]}]
             )
         )
         leaf = get_exchange_transits([ctx], legs={("PROD", "100.66.0.4")})
@@ -259,7 +259,7 @@ class TestLeafExtraConfig:
     def test_transit_vlan_is_not_bound_to_host_ports(self) -> None:
         """The transit VLAN never reaches get_interfaces (host trunk/access ports)."""
         device = _device([_context()], [_activation()])
-        host_port = {"name": "Ethernet1/1", "role": "customer", "status": "active", "interface_capabilities": []}
+        host_port = {"name": "Ethernet1/1", "role": "customer", "status": "active", "capabilities": []}
         device["interfaces"] = [host_port]
         transform = _transform()
         config = transform._build_config(device, "cisco_nxos")

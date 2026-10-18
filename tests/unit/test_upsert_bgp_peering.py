@@ -50,7 +50,7 @@ class TestUpsertBgpPeering:
         assert data["bfd_enabled"] is True
         assert data["bgp_processes"] == [{"id": "p1"}, {"id": "p2"}]
         assert data["address_families"] == [{"id": "af1"}]
-        assert data["interface_capabilities"] == [{"id": "i1"}, {"id": "i2"}]
+        assert data["capabilities"] == [{"id": "i1"}, {"id": "i2"}]
         m.peering.save.assert_awaited_once()
 
     @pytest.mark.asyncio

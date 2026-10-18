@@ -47,7 +47,7 @@ def _build_fw_interfaces(
 
         zone: dict | None = None
         vlan_id: int | None = None
-        capabilities = iface.get("interface_capabilities") or []
+        capabilities = iface.get("capabilities") or []
         for cap in capabilities:
             if cap.get("id") in seg_zone and zone is None:
                 zone = seg_zone[cap["id"]]

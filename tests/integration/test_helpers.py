@@ -1086,10 +1086,10 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
             "provider": (circuit.get("provider") or {}).get("name"),
             "owner": (circuit.get("owner") or {}).get("name"),
             "locations": sorted(str(loc.get("name") or "") for loc in circuit.get("locations", []) or []),
-            "end_ids": sorted(str(end.get("id") or "") for end in circuit.get("interface_capabilities", []) or []),
+            "end_ids": sorted(str(end.get("id") or "") for end in circuit.get("capabilities", []) or []),
             "ends": sorted(
                 (str((end.get("device") or {}).get("name") or ""), str(end.get("name") or ""))
-                for end in circuit.get("interface_capabilities", []) or []
+                for end in circuit.get("capabilities", []) or []
             ),
         }
         for circuit in result.get("TopologyPhysicalCircuit", []) or []
@@ -1107,7 +1107,7 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
             ),
             "interfaces": sorted(
                 (str((iface.get("device") or {}).get("name") or ""), str(iface.get("name") or ""))
-                for iface in circuit.get("interface_capabilities", []) or []
+                for iface in circuit.get("capabilities", []) or []
             ),
             "cloud_endpoints": sorted(
                 str(endpoint.get("name") or endpoint.get("typename") or "")
@@ -1295,7 +1295,7 @@ async def fetch_transit_inventory(client: InfrahubClient, branch: str) -> dict[s
     for node in _edge_nodes(raw["ManagedFirewallContext"]):
         legs: list[dict[str, Any]] = []
         border_ports: list[dict[str, Any]] = []
-        for cap in _edge_nodes(node.get("interface_capabilities")):
+        for cap in _edge_nodes(node.get("capabilities")):
             device = _rel_node(cap.get("device"))
             if cap["__typename"] == "DcimVirtualInterface":
                 address = _rel_node(cap.get("ip_address"))
@@ -1310,7 +1310,7 @@ async def fetch_transit_inventory(client: InfrahubClient, branch: str) -> dict[s
                         "namespace_type": _value(namespace.get("namespace_type")),
                         "exchanges": sorted(
                             _value(exchange.get("name"))
-                            for exchange in _edge_nodes(cap.get("interface_capabilities"))
+                            for exchange in _edge_nodes(cap.get("capabilities"))
                             if exchange.get("__typename") == "TopologyRoutedExchange"
                         ),
                     }
@@ -1450,10 +1450,10 @@ async def render_device_config(
 # changed value or a deleted-and-added id. The kinds after the generator
 # outputs are mostly data-loaded or owned by another generator: an id lost
 # there is a foreign deletion, i.e. a generator cleaned up a node it does not
-# own. interface_capabilities carries the segment tags on switch ports.
+# own. capabilities carries the segment tags on switch ports.
 TOPOLOGY_SNAPSHOT_KINDS = {
     "DcimDevice": "name { value }",
-    "DcimInterface": "name { value } interface_capabilities { edges { node { id } } }",
+    "DcimInterface": "name { value } capabilities { edges { node { id } } }",
     "DcimCable": "endpoints { edges { node { id } } }",
     "IpamIPAddress": "address { value }",
     "IpamPrefix": "prefix { value }",
@@ -1467,7 +1467,7 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     "ManagedBGPPeering": (
         "name { value } peering_role { value } session_type { value } ttl { value } "
         "bgp_processes { edges { node { id } } } address_families { edges { node { id } } } "
-        "interface_capabilities { edges { node { id } } }"
+        "capabilities { edges { node { id } } }"
     ),
     "ManagedHA": "group_id { value }",
     "ManagedSegmentDeployment": "vni { value } local_vni_override { value }",
@@ -1478,11 +1478,11 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     # add_circuit/add_virtual_circuit/add_sdwan_edge output: an SD-WAN overlay's tunnel_id is
     # Number-pool allocated per node id, so a rerun that re-created one shows up as a new tunnel_id.
     "TopologyPhysicalCircuit": (
-        "name { value } locations { edges { node { id } } } interface_capabilities { edges { node { id } } }"
+        "name { value } locations { edges { node { id } } } capabilities { edges { node { id } } }"
     ),
     "TopologyVirtualCircuit": (
         "name { value } tunnel_id { value } physical_circuits { edges { node { id } } } "
-        "interface_capabilities { edges { node { id } } } locations { edges { node { id } } }"
+        "capabilities { edges { node { id } } } locations { edges { node { id } } }"
     ),
     "ManagedController": "name { value } managed_devices { edges { node { id } } }",
     "ManagedFirewallHA": "name { value }",

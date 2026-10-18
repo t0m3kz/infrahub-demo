@@ -598,7 +598,7 @@ class RoutingPlanner:
                     "send_community": True,
                     "ttl": 1,
                     "peering_role": "underlay",
-                    "interface_capabilities": [{"id": a.id}, {"id": b.id}],
+                    "capabilities": [{"id": a.id}, {"id": b.id}],
                     "bgp_processes": [
                         {"hfid": f"{a_name}-bgp-underlay"},
                         {"hfid": f"{b_name}-bgp-underlay"},
@@ -791,7 +791,7 @@ class RoutingPlanner:
                     "name": ospf_iface_name,
                     "description": f"OSPF config for {dev_name}:{iname}",
                     "mode": "peer_to_peer",
-                    "interface_capabilities": [{"id": iface.id}],
+                    "capabilities": [{"id": iface.id}],
                     **({"password": {"id": password_id}} if password_id else {}),
                 }
             )
@@ -809,7 +809,7 @@ class RoutingPlanner:
                     "description": f"OSPF peering: {a_name} ({ia}) <-> {b_name} ({ib})",
                     "network_type": "point-to-point",
                     "ospf_area": area_ref,
-                    "interface_capabilities": [{"id": a.id}, {"id": b.id}],
+                    "capabilities": [{"id": a.id}, {"id": b.id}],
                     "ospf_process": [
                         {"hfid": f"{a_name}-ospf-underlay"},
                         {"hfid": f"{b_name}-ospf-underlay"},
@@ -931,7 +931,7 @@ class RoutingPlanner:
                 "bgp_processes": [_bgp_process_ref(bgp1), _bgp_process_ref(bgp2)],
             }
             if peering_interfaces:
-                peering["interface_capabilities"] = peering_interfaces
+                peering["capabilities"] = peering_interfaces
 
             plan.bgp_peerings.append(peering)
 

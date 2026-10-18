@@ -91,7 +91,7 @@ def physical_payload(
     ends: list[dict[str, Any]] | None = None,
     circuit_id: str = "DF-DC10-EQXFR2",
 ) -> dict[str, Any]:
-    """A physical circuit payload: its ends are one interface_capabilities list (default: DC border leaf, cage edge)."""
+    """A physical circuit payload: its ends are one capabilities list (default: DC border leaf, cage edge)."""
     ends = [dc_border_leaf(), cage_edge()] if ends is None else ends
     return {
         "TopologyPhysicalCircuit": {
@@ -104,7 +104,7 @@ def physical_payload(
                         "circuit_type": {"value": "dark_fiber"},
                         "status": {"value": status},
                         "peering_role": {"value": role},
-                        "interface_capabilities": {"edges": [{"node": i} for i in ends]},
+                        "capabilities": {"edges": [{"node": i} for i in ends]},
                     }
                 }
             ]
@@ -159,7 +159,7 @@ def virtual_payload(
                         "peering_role": {"value": role},
                         "vni": {"value": None},
                         "tunnel_id": {"value": 1001},
-                        "interface_capabilities": {"edges": [{"node": i} for i in interfaces]},
+                        "capabilities": {"edges": [{"node": i} for i in interfaces]},
                         "physical_circuits": {"edges": [{"node": pc} for pc in physical]},
                     }
                 }

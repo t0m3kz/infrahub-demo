@@ -67,7 +67,7 @@ def _firewall_input(vendor: str, *, snat: bool) -> dict[str, Any]:
     data = json.loads((_CONFIGS / f"firewall_{vendor}_exchange_transit" / "input.json").read_text())
     if not snat:
         for edge in data["DcimPhysicalDevice"]["edges"][0]["node"]["interfaces"]["edges"]:
-            for cap in edge["node"].get("interface_capabilities", {}).get("edges", []):
+            for cap in edge["node"].get("capabilities", {}).get("edges", []):
                 cap["node"].pop("snat_address", None)
     return data
 

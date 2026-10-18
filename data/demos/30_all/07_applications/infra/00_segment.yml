@@ -51,5 +51,5 @@ spec:
                     ip_namespace: "MANAGEMENT"
             customer_deployment: "C006-P-DC11"
             security_zone: "MANAGEMENT-ZONE"
-            interface_capabilities:
+            capabilities:
               - ["al-dc1111111501", "Ethernet1/2"]

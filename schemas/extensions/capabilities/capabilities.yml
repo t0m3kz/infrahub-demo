@@ -71,7 +71,7 @@ generics:
     label: "Segment Resource (Many Interfaces)"
     include_in_menu: false
     relationships:
-      - name: interface_capabilities
+      - name: capabilities
         peer: DcimInterface
         label: Assigned Interfaces
         cardinality: many
@@ -94,7 +94,7 @@ extensions:
           identifier: capabilities
     - kind: DcimInterface
       relationships:
-        - name: interface_capabilities
+        - name: capabilities
           peer: ManagedGenericInterfaces
           label: Interface capabilities
           identifier: interface_capabilities

@@ -233,7 +233,7 @@ class MyCheck(InfrahubCheck):
 
 | Namespace | Holds |
 | --------- | ----- |
-| Managed | On-prem services and the shared generics `ManagedGeneric` (name, description, status), `ManagedGenericDevice` (the device `capabilities` edge), `ManagedGenericInterfaces` (the `interface_capabilities` edge), `ManagedNetworkSegment` and `ManagedLoadBalancer` |
+| Managed | On-prem services and the shared generics `ManagedGeneric` (name, description, status), `ManagedGenericDevice` (the device `capabilities` edge), `ManagedGenericInterfaces` (the interface-side `capabilities` edge; its identifier stays `interface_capabilities`), `ManagedNetworkSegment` and `ManagedLoadBalancer` |
 | Cloud | Public-cloud resources; all inherit `CloudResource` |
 | Topology | Deployments (`TopologyDataCenter`, `TopologyPod`, `TopologyColocationMetro`, ...), design elements, circuits (`TopologyPhysicalCircuit`, `TopologyVirtualCircuit`) and the tenant footprints `TopologyCustomer*` |
 | Dcim, Ipam, Location, Organization | Devices/interfaces/cables, prefixes/addresses/namespaces, geography, providers/customers |
@@ -261,7 +261,7 @@ class MyCheck(InfrahubCheck):
 inherit_from:
   - ManagedGeneric           # name, description, status
   - ManagedNetworkSegment    # the concept generic (segment_type, ...)
-  - ManagedGenericInterfaces # edge generic: the interface_capabilities edge
+  - ManagedGenericInterfaces # edge generic: the interface-side capabilities edge (identifier interface_capabilities)
 ```
 
 **2. Uniqueness Constraints**:

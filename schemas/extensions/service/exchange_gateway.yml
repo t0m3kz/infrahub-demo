@@ -13,7 +13,7 @@ version: "1.0"
 #                              two VRFs. Its legs are the context's firewall
 #                              VLAN sub-interfaces, one per VRF, each with an
 #                              address in that VRF's namespace (carried in
-#                              interface_capabilities). No leak: each VRF keeps
+#                              capabilities). No leak: each VRF keeps
 #                              its own routing table and statics point at the
 #                              context's leg VIP in that VRF. Created per
 #                              context by the customer boarding generators,
@@ -21,9 +21,9 @@ version: "1.0"
 #                              bootstrap exchanges.
 #
 # It inherits ManagedGenericInterfaces so it surfaces in
-# interface.interface_capabilities — the same capability list already used
+# interface.capabilities — the same capability list already used
 # by RoutingOSPFInterface and ManagedVxlanSegment (see
-# queries/fragments/interface_capabilities.gql). This is what lets a
+# queries/fragments/interface_capability_fields.gql). This is what lets a
 # device config query (e.g. border_leaf_config) discover "what is this
 # port doing" without a second, namespace-rooted query.
 #

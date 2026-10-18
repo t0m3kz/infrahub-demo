@@ -63,7 +63,7 @@ class TestMlagCapabilitiesCount:
         assert "min_count" not in generic
         assert "max_count" not in generic
 
-    def test_mlag_no_longer_inherits_interface_capabilities(self, root_dir: Path) -> None:
+    def test_mlag_no_longer_inherits_capabilities(self, root_dir: Path) -> None:
         """The MLAG-to-interface edge was write-only and is gone; MLAG is a device capability only."""
         node = _capability_node(root_dir, "mlag.yml", "MLAG")
 

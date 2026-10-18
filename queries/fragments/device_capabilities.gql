@@ -30,7 +30,7 @@ fragment ManagedBGPServiceFields on ManagedBGP {
             }
           }
         }
-        interface_capabilities {
+        capabilities {
           edges {
             node {
               name { value }

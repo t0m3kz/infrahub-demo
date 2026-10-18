@@ -47,7 +47,7 @@ def _peering(namespace: dict[str, Any] | None, *, peering_role: str | None = "re
         "peering_role": peering_role,
         "ttl": 1,
         "maximum_routes": 100,
-        "interface_capabilities": [
+        "capabilities": [
             {
                 "name": "Ethernet1/13.1000",
                 "device": {"name": "eg-fr01"},
@@ -110,7 +110,7 @@ def _bgp_facing(*ends: tuple[str, str]) -> list[dict[str, Any]]:
             "peerings": [
                 {
                     "name": f"peering-{local}-{remote}",
-                    "interface_capabilities": [
+                    "capabilities": [
                         {"name": local, "device": {"name": "eg-fr01"}},
                         {"name": "eth0.1900", "device": {"name": remote}},
                     ],
@@ -488,8 +488,8 @@ class TestSdwanGatewayPrefixes:
     def test_malformed_peering_raises(self) -> None:
         """A peering without exactly two ends is refused, as when the session itself is built."""
         capabilities = _bgp_facing(("Ethernet1/13.1900", _GW1))
-        capabilities[1]["peerings"][0]["interface_capabilities"].pop()
-        with pytest.raises(ValueError, match="expected 2 interface_capabilities"):
+        capabilities[1]["peerings"][0]["capabilities"].pop()
+        with pytest.raises(ValueError, match="expected 2 capabilities"):
             get_external_peer_prefixes(
                 [_subif("Ethernet1/13.1900", "PROD")],
                 None,
@@ -634,10 +634,10 @@ def _external_handoffs() -> list[dict[str, Any]]:
         if (iface.get("ip_address") or {}).get("data")
     }
     return [
-        {**peering, "namespaces": [addresses.get(tuple(end)) for end in peering["interface_capabilities"]]}
+        {**peering, "namespaces": [addresses.get(tuple(end)) for end in peering["capabilities"]]}
         for peering in _objects(_INTERCONNECTS, "ManagedBGPPeering")
         if peering.get("peering_role") == "regular"
-        and any(addresses.get(tuple(end)) in ("PROD", "NON-PROD") for end in peering["interface_capabilities"])
+        and any(addresses.get(tuple(end)) in ("PROD", "NON-PROD") for end in peering["capabilities"])
     ]
 
 
@@ -658,10 +658,10 @@ class TestAllDemoData:
         (dx,) = [d for d in _objects(_INTERCONNECTS, "CloudDirectConnect") if d["name"] == vif["direct_connect"]]
         (peering,) = [p for p in _external_handoffs() if p["name"] == "VRF-PROD-EQXFR2-AWS-EUC1"]
         (xc,) = [c for c in _objects(_INTERCONNECTS, "TopologyPhysicalCircuit") if c["name"] == "XC-EQXFR2-AWS-EUC1"]
-        device, interface = peering["interface_capabilities"][0]
+        device, interface = peering["capabilities"][0]
         port, _, vlan = interface.rpartition(".")
         assert device in dx["physical_devices"]
-        assert [device, port] in xc["interface_capabilities"]
+        assert [device, port] in xc["capabilities"]
         assert int(vlan) == vif["vlan_id"]
         assert peering["namespaces"] == ["PROD", "PROD"]
 
@@ -694,7 +694,7 @@ class TestAllDemoData:
         inline (the gateway loads with the foundation stage). An office without a LAN adds nothing.
         """
         (peering,) = [p for p in _external_handoffs() if p["name"] == "VRF-PROD-EQXFR2-SDWAN"]
-        (gateway,) = [device for device, _ in peering["interface_capabilities"] if not device.startswith("eg-")]
+        (gateway,) = [device for device, _ in peering["capabilities"] if not device.startswith("eg-")]
         behind: list[list[list[str]]] = []
         for customer in _objects(
             _ROOT / "data" / "demos" / "30_all" / "06_customer_boarding", "TopologyOfficeCustomer"

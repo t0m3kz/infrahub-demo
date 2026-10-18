@@ -19,7 +19,7 @@ spec:
       locations:
         - "FR2"
         - "ISP-LUMEN"
-      interface_capabilities:
+      capabilities:
         - ["eg-fr01", "Ethernet1/14"]
         - ["EXT-LUMEN-FRA1", "et-0/0/0"]
 
@@ -34,7 +34,7 @@ spec:
       locations:
         - "FR2"
         - "ISP-COGENT"
-      interface_capabilities:
+      capabilities:
         - ["eg-fr02", "Ethernet1/14"]
         - ["EXT-COGENT-FRA1", "et-0/0/0"]
 
@@ -49,7 +49,7 @@ spec:
       locations:
         - "PA4"
         - "ISP-LUMEN"
-      interface_capabilities:
+      capabilities:
         - ["eg-pa01", "Ethernet1/14"]
         - ["EXT-LUMEN-PAR1", "et-0/0/0"]
 
@@ -64,6 +64,6 @@ spec:
       locations:
         - "PA4"
         - "ISP-COGENT"
-      interface_capabilities:
+      capabilities:
         - ["eg-pa02", "Ethernet1/14"]
         - ["EXT-COGENT-PAR1", "et-0/0/0"]

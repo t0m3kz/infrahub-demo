@@ -149,7 +149,7 @@ def validate_routing_password(data: dict[str, Any]) -> list[str]:
     """Validate that every BGP peering and OSPF interface has an authentication password set.
 
     BGP: password lives on each ManagedBGP.peerings[] entry (underlay + overlay).
-    OSPF: password lives on each RoutingOSPFInterface (per-interface, in interface_capabilities).
+    OSPF: password lives on each RoutingOSPFInterface (per-interface, in capabilities).
     A missing password is a hardening gap, not a connectivity failure — routing works
     without it — so this is reported as a check finding, not enforced at generation time.
     """
@@ -164,7 +164,7 @@ def validate_routing_password(data: dict[str, Any]) -> list[str]:
                 errors.append(f"BGP peering '{peering_name}' has no authentication password set.")
 
     for interface in data.get("interfaces", []):
-        for capability in interface.get("interface_capabilities", []):
+        for capability in interface.get("capabilities", []):
             if capability.get("typename") != "RoutingOSPFInterface":
                 continue
             if not capability.get("password"):
@@ -199,7 +199,7 @@ def validate_exchange_gateways(data: dict[str, Any]) -> list[str]:
     legs: dict[str, list[tuple[dict[str, Any], dict[str, Any] | None]]] = {}
 
     for interface in data.get("interfaces") or []:
-        caps = interface.get("interface_capabilities") or []
+        caps = interface.get("capabilities") or []
         context = next((c for c in caps if c.get("typename") == "ManagedFirewallContext"), None)
         for cap in caps:
             exchange_id = cap.get("id")
@@ -263,7 +263,7 @@ def validate_snat_addresses(data: dict[str, Any]) -> list[str]:
         namespace = (interface.get("ip_address") or {}).get("ip_namespace") or {}
         if namespace.get("namespace_type") != INTERNET_TYPE:
             continue
-        for cap in interface.get("interface_capabilities") or []:
+        for cap in interface.get("capabilities") or []:
             if cap.get("typename") == "ManagedFirewallContext":
                 contexts.setdefault(cap.get("id") or cap.get("name", "unknown"), cap)
 

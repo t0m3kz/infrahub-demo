@@ -49,7 +49,7 @@ def _leg(address: str, ns: dict, exchange: dict) -> dict:
         "name": _v("eth1.3001"),
         "device": _node({"name": _v("dc-fw-1"), "role": _v("firewall")}),
         "ip_address": _node({"address": _v(address), "ip_namespace": ns}),
-        "interface_capabilities": _edges([exchange]),
+        "capabilities": _edges([exchange]),
     }
 
 
@@ -74,7 +74,7 @@ def _transit_device_data(platform: str) -> dict:
         "tenant": _node(None),
         "served_deployments": _edges([{"id": "dep-a"}]),
         "snat_address": _node({"address": _v("192.0.2.5/32")}),
-        "interface_capabilities": _edges(legs),
+        "capabilities": _edges(legs),
     }
     port = {
         "__typename": "DcimPhysicalInterface",
@@ -85,7 +85,7 @@ def _transit_device_data(platform: str) -> dict:
         "interface_type": _v("10gbase-x-sfpp"),
         "mtu": _v(9000),
         "ip_address": _node(None),
-        "interface_capabilities": _edges([context]),
+        "capabilities": _edges([context]),
     }
     node["interfaces"]["edges"].append({"node": port})
     segment = {

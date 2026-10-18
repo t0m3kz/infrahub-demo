@@ -1,8 +1,8 @@
 """Validate the ports a physical circuit terminates on.
 
 A physical circuit is a cable-like link: two ends, each a physical port, and a port carries at most one of them.
-The schema caps the ends (``interface_capabilities``: min_count 2, max_count 2) only when the circuit side is
-written. A write from the interface side (``DcimInterface.interface_capabilities`` is declared by the generic
+The schema caps the ends (``capabilities``: min_count 2, max_count 2) only when the circuit side is
+written. A write from the interface side (``DcimInterface.capabilities`` is declared by the generic
 without counts) is never checked against the cap, and deleting a device leaves its circuits with one end, so the
 rules the schema cannot hold are held here, on the circuits as a whole:
 
@@ -46,7 +46,7 @@ class CheckPhysicalCircuitPorts(InfrahubCheck):
 
         for circuit in circuits:
             name = circuit.get("circuit_id") or circuit.get("id") or "<unnamed-circuit>"
-            ends = [end for end in circuit.get("interface_capabilities") or [] if isinstance(end, dict)]
+            ends = [end for end in circuit.get("capabilities") or [] if isinstance(end, dict)]
 
             if len(ends) != CIRCUIT_ENDS:
                 self._error(
