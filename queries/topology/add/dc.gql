@@ -13,7 +13,6 @@ query topology_dc($name: String!) {
           naming_convention { value }
           connectivity_mode { value }
           routing_strategy { value }
-          overlay_control_plane { value }
           underlay_protocol { value }
           size { value }
           loopback_pool {

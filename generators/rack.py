@@ -11,10 +11,8 @@ if TYPE_CHECKING:
 
 from .helpers import DeviceNameContext, DeviceNamingConfig
 from .helpers.routing import (
-    LISP_OVERLAY,
     RoutingStrategy,
     loopback_prefix_length,
-    overlay_control_plane_of,
     p2p_prefix_length,
 )
 from .helpers.template_interfaces import template_interface_names_by_role
@@ -37,23 +35,17 @@ _POD_POOL_FIELDS = ("loopback_pool", "prefix_pool", "asn_pool")
 _EBGP_UNDERLAY_STRATEGIES = frozenset({RoutingStrategy.EBGP_EBGP.value, RoutingStrategy.EBGP_IBGP.value})
 
 
-def spine_bgp_readiness_role(dc: Mapping[str, Any]) -> str | None:
+def spine_bgp_readiness_role(dc: Mapping[str, Any]) -> str:
     """The ManagedBGP process role the pod's spines must own before a rack bootstraps.
 
     The rack's leaf sessions peer with the spine process of this role, so only
     a role the strategy actually creates may be waited for:
-
-    * LISP overlay (overlay_control_plane "lisp"): ``None``. The underlay is
-      OSPF and there is no overlay BGP, so the spines own no BGP process at
-      all and the rack waits for none.
 
     * eBGP underlay (ebgp-ebgp, ebgp-ibgp): ``underlay``, pre-seeded by add_pod
       before cabling.
     * ospf-ibgp: no underlay BGP exists (the underlay is OSPF); the spines
       carry only the shared-AS ``overlay`` process.
     """
-    if overlay_control_plane_of(dc) == LISP_OVERLAY:
-        return None
     strategy = dc.get("routing_strategy", RoutingStrategy.EBGP_EBGP.value)
     return "underlay" if strategy in _EBGP_UNDERLAY_STRATEGIES else "overlay"
 

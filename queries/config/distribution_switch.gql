@@ -36,11 +36,10 @@ query distribution_switch_config(
           deployment {
             node {
               ...EvpnRtAsOnDeploymentFields
+              ...LispSiteOnOfficeFields
               ...FirewallContextsOnDeploymentFields
               ...LoadbalancerVipsOnDeploymentFields
               ...SegmentDeploymentsOnDeploymentFields
-              ...LispMapServersOnDeploymentFields
-              ...LispWanEdgesOnDeploymentFields
             }
           }
         }

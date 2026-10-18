@@ -354,24 +354,37 @@ ALL_DEMO_FABRIC_PEERINGS: dict[str, str] = {
     metro: f"FABRIC-{a}-{b}" for metro, (a, b) in ALL_DEMO_EDGE_PAIR_METROS.items()
 }
 
-# The WAN exit of an office with both a fabric and an SD-WAN edge (add_office_fabric): office -> its
-# distribution-switches (a flat office is named `ds-<office>NN`), each peered to `<office>-EDGE1` by one
-# `WAN-EXIT-<switch>-<edge>` eBGP session in the office's tenant VRF, over a dot1q sub-interface tagged
-# utils.exchange_transit.wan_exit_vlan. Declared nowhere: a fabric_templates line and an sdwan_gateway are the
-# whole input.
-ALL_DEMO_OFFICE_WAN_EXITS: dict[str, tuple[str, ...]] = {
-    name(office): tuple(
-        f"ds-{name(office).lower()}{index:02d}"
-        for index in range(
-            1,
-            1
-            + sum(
-                int(quantity) for quantity, role, _ in office.item["fabric_templates"] if role == "distribution-switch"
-            ),
+# The offices with a fabric (add_office_fabric): office -> role -> the switch names the generator derives (a flat office
+# is named `<prefix>-<office>NN`: `ds-` for the distribution-switches, `as-` for the access-switches). Declared nowhere:
+# a fabric_templates line is the whole input.
+_OFFICE_SWITCH_PREFIXES = {"distribution-switch": "ds", "access-switch": "as"}
+ALL_DEMO_OFFICE_FABRICS: dict[str, dict[str, tuple[str, ...]]] = {
+    name(office): {
+        role: tuple(
+            f"{prefix}-{name(office).lower()}{index:02d}"
+            for index in range(
+                1,
+                1
+                + sum(
+                    int(quantity)
+                    for quantity, template_role, _ in office.item["fabric_templates"]
+                    if template_role == role
+                ),
+            )
         )
-    )
-    for office in _SDWAN_OFFICES
+        for role, prefix in _OFFICE_SWITCH_PREFIXES.items()
+    }
+    for office in _all_demo("TopologyCustomerOffice")
     if office.item.get("fabric_templates")
+}
+
+# The WAN exit of an office with both a fabric and an SD-WAN edge (add_office_fabric): office -> its
+# distribution-switches, each peered to `<office>-EDGE1` by one `WAN-EXIT-<switch>-<edge>` eBGP session in the
+# office's tenant VRF, over a dot1q sub-interface tagged utils.exchange_transit.wan_exit_vlan.
+ALL_DEMO_OFFICE_WAN_EXITS: dict[str, tuple[str, ...]] = {
+    name(office): ALL_DEMO_OFFICE_FABRICS[name(office)]["distribution-switch"]
+    for office in _SDWAN_OFFICES
+    if name(office) in ALL_DEMO_OFFICE_FABRICS
 }
 
 # The metro-owned slice of Technical-IPv6 the interlink /127 comes from: `{metro}-technical-ipv6-pool`.

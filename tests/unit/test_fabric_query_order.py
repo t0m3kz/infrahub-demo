@@ -1,7 +1,8 @@
-"""The DC fields (EVPN route-target ASN, LISP site) only resolve on the pod -> parent hop in one shape.
+"""The DC fields (EVPN route-target ASN, anycast MAC) only resolve on the pod -> parent hop in one shape.
 
 An office's switches hang directly off the office (the direct shape of a border-leaf), where the order is not
-known to matter; the rule is kept for them so the fields never depend on it.
+known to matter; the rule is kept for them so the fields never depend on it. The office's own LISP fields sit in a
+fragment typed on the office, which the pod -> parent hop never matches, spread right after the EVPN one.
 """
 
 import re
@@ -49,12 +50,35 @@ def test_the_pod_tier_query_reads_the_dc_fields_from_a_single_segment_hosting_fr
 
 @pytest.mark.parametrize("query", ["access_switch", "distribution_switch"])
 def test_office_switch_queries_read_the_lisp_inputs_from_the_office(query: str) -> None:
-    """The office is the LISP site: its name, key and map-servers come from the one deployment selection."""
+    """The office is the LISP site: its name, key, map-servers and WAN edge come from one office-typed fragment.
+
+    Spread right after the EVPN fragment, before any DeviceHosting one, so a sibling-fragment quirk of the
+    direct hop could not null the key the switch refuses to render without.
+    """
     spreads = _deployment_spreads(query)
-    assert "LispMapServersOnDeploymentFields" in spreads, spreads
+    assert spreads[:2] == ["EvpnRtAsOnDeploymentFields", "LispSiteOnOfficeFields"], spreads
     # No fleet roots: an office has no data center, reference fabric or group policy.
     text = (QUERIES / "config" / f"{query}.gql").read_text()
     assert "TopologyDataCenter" not in text and "DcimGroupPolicyProfile" not in text
+
+
+def test_the_lisp_site_fragment_is_office_typed_and_in_no_dc_query() -> None:
+    """lisp_site_key lives on TopologyCustomerOffice: typing the fragment on SegmentHosting would be invalid.
+
+    A SegmentHosting-typed one would also join the pod -> parent hop quirk; the DC tiers do not spread it at all.
+    """
+    text = (QUERIES / "fragments" / "lisp_fabric.gql").read_text()
+    assert "fragment LispSiteOnOfficeFields on TopologyCustomerOffice" in text
+    assert re.findall(r"^fragment (\w+)", text, re.M) == ["LispSiteOnOfficeFields"]
+    for query in ("leaf", "border_leaf"):
+        assert "LispSiteOnOfficeFields" not in _deployment_spreads(query)
+
+
+def test_the_dc_fragment_and_the_dc_queries_know_nothing_of_lisp() -> None:
+    """The EVPN fragment carries the fabric constants only; no query of a DC tier asks for an overlay flag."""
+    assert "lisp" not in (QUERIES / "fragments" / "evpn_fabric.gql").read_text().split("# ORDER MATTERS")[0].lower()
+    for path in QUERIES.rglob("*.gql"):
+        assert "overlay_control_plane" not in path.read_text(), path
 
 
 def test_only_the_border_office_switch_reads_the_segment_activations() -> None:
@@ -63,24 +87,8 @@ def test_only_the_border_office_switch_reads_the_segment_activations() -> None:
     assert "SegmentDeploymentsOnDeploymentFields" not in _deployment_spreads("access_switch")
 
 
-def test_the_map_servers_are_the_border_leaves_and_the_distribution_switches() -> None:
-    """One fragment serves both fabrics: a footprint holds only its own kind of border."""
+def test_the_map_servers_are_the_distribution_switches_and_the_wan_edge_is_the_offices_edge() -> None:
+    """The office's map-servers (aliased: the firewall fragments select `devices` with another argument)."""
     text = (QUERIES / "fragments" / "lisp_fabric.gql").read_text()
-    assert 'lisp_map_servers: devices(role__values: ["border-leaf", "distribution-switch"])' in text
-
-
-@pytest.mark.parametrize("query", ["access_switch", "distribution_switch"])
-def test_office_switch_queries_read_the_offices_sdwan_edge_from_the_office(query: str) -> None:
-    """The WAN exit's signal (the office has an SD-WAN edge) rides a DeviceHosting fragment, after the SegmentHosting one."""
-    spreads = _deployment_spreads(query)
-    assert "LispWanEdgesOnDeploymentFields" in spreads, spreads
-    assert spreads.index("EvpnRtAsOnDeploymentFields") == 0
-
-
-def test_the_sdwan_edge_fragment_is_deployment_hosting_typed_and_in_no_dc_query() -> None:
-    """A SegmentHosting-typed fragment would join the pod -> parent hop quirk; and a DC's LISP fabric has no WAN exit."""
-    text = (QUERIES / "fragments" / "lisp_fabric.gql").read_text()
-    assert "fragment LispWanEdgesOnDeploymentFields on TopologyDeviceHosting" in text
+    assert 'lisp_map_servers: devices(role__value: "distribution-switch")' in text
     assert 'lisp_wan_edges: devices(role__value: "edge")' in text
-    for query in ("leaf", "border_leaf"):
-        assert "LispWanEdgesOnDeploymentFields" not in _deployment_spreads(query)

@@ -1,9 +1,9 @@
 # Config of an office's access-switch (fabric edge of its LISP site, cisco_xe): the leaf query without the
 # group-policy fleet roots (no DC, no reference fabric). The device hangs directly off its office, which
 # hosts segments itself (TopologySegmentHosting): EvpnRtAsOnDeploymentFields stays FIRST in the deployment
-# selection (queries/fragments/evpn_fabric.gql, tests/unit/test_fabric_query_order.py), and carries the
-# office name (LISP site), the anycast MAC and the site key. LispMapServersOnDeploymentFields lists the
-# office's distribution-switches, the map-servers to register with.
+# selection (queries/fragments/evpn_fabric.gql, tests/unit/test_fabric_query_order.py) and carries the
+# anycast MAC; LispSiteOnOfficeFields, spread right after it, carries the office name (LISP site), the site
+# key and the office's distribution-switches, the map-servers to register with.
 query access_switch_config(
   $device: String!
 ) {
@@ -39,10 +39,9 @@ query access_switch_config(
           deployment {
             node {
               ...EvpnRtAsOnDeploymentFields
+              ...LispSiteOnOfficeFields
               ...FirewallContextsOnDeploymentFields
               ...LoadbalancerVipsOnDeploymentFields
-              ...LispMapServersOnDeploymentFields
-              ...LispWanEdgesOnDeploymentFields
             }
           }
         }

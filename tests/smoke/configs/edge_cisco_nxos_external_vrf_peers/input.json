@@ -2165,16 +2165,31 @@
             }
           },
           "lan_prefixes": {
+            "edges": []
+          },
+          "segment_deployments": {
             "edges": [
               {
                 "node": {
-                  "prefix": {
-                    "value": "10.210.5.0/24"
-                  },
-                  "ip_namespace": {
+                  "segment": {
                     "node": {
-                      "name": {
-                        "value": "PROD"
+                      "gateway": {
+                        "node": {
+                          "ip_prefix": {
+                            "node": {
+                              "prefix": {
+                                "value": "10.176.5.0/24"
+                              },
+                              "ip_namespace": {
+                                "node": {
+                                  "name": {
+                                    "value": "PROD"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
                       }
                     }
                   }
@@ -2224,6 +2239,9 @@
                 }
               }
             ]
+          },
+          "segment_deployments": {
+            "edges": []
           }
         }
       },
@@ -2253,6 +2271,9 @@
                 }
               }
             ]
+          },
+          "segment_deployments": {
+            "edges": []
           }
         }
       },
@@ -2278,6 +2299,9 @@
                 }
               }
             ]
+          },
+          "segment_deployments": {
+            "edges": []
           }
         }
       }

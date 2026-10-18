@@ -452,7 +452,7 @@ def build_device_data(
     """Build a complete raw GraphQL response for a device config query.
 
     ``vlan_segment_vrf`` puts the VLAN-only seg-200 in VRF_A with an L3 VNI instead of the default
-    namespace: a LISP fabric refuses a gateway outside a VRF with an L3 instance-id.
+    namespace: an office LISP fabric refuses a gateway outside a VRF with an L3 instance-id.
 
     Scenarios:
         ebgp_ebgp: eBGP underlay (TTL=1) + eBGP overlay (TTL=2), per-device ASN
@@ -1870,10 +1870,10 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
         10.150.0.0/16 propagates to rt-isolated only and is not.
       - .1001 NON-PROD: a private VIF whose VPC lists a NON-PROD and a PROD block;
         only the NON-PROD one is accepted.
-      - .1900 PROD: the SD-WAN gateway handoff. It accepts the PROD lan_prefixes
-        of the offices behind EQX-FR2-SDWAN-GW1 (10.210.2.0/24, 10.210.5.0/24);
-        a NON-PROD LAN of one of them, an office behind another gateway and an
-        office without a gateway are not accepted.
+      - .1900 PROD: the SD-WAN gateway handoff. It accepts the PROD lan_prefixes and the PROD
+        hosted-segment prefixes of the offices behind EQX-FR2-SDWAN-GW1 (10.210.2.0/24, and the
+        10.176.5.0/24 office-lan segment hosted by the fabric office); a NON-PROD LAN of one of
+        them, an office behind another gateway and an office without a gateway are not accepted.
     Out: per VRF, the prefixes behind its segment gateways (a PROD container,
     a MANAGEMENT segment and a cloud subnet are not on-prem tenant space). A VIF
     on another device with the same VLAN is ignored.
@@ -2036,15 +2036,35 @@ def build_edge_external_vrf_peers_data(*, device_name: str, platform: str) -> di
         ]
     )
 
-    def office(gateway: str | None, *lans: tuple[str, str]) -> dict:
+    def office(gateway: str | None, *lans: tuple[str, str], hosted: tuple[str, str] | None = None) -> dict:
+        """A footprint's gateway, its lan_prefixes and (``hosted``) the gateway prefix of a segment it hosts."""
+        segments = [] if hosted is None else [hosted]
         return {
             "sdwan_gateway": _node({"name": _v(gateway)} if gateway else None),
             "lan_prefixes": _cidr_blocks(*lans),
+            "segment_deployments": _edges(
+                [
+                    {
+                        "segment": _node(
+                            {
+                                "gateway": _node(
+                                    {
+                                        "ip_prefix": _node(
+                                            {"prefix": _v(prefix), "ip_namespace": _node({"name": _v(namespace)})}
+                                        )
+                                    }
+                                )
+                            }
+                        )
+                    }
+                    for prefix, namespace in segments
+                ]
+            ),
         }
 
     data["TopologyCustomerOffice"] = _edges(
         [
-            office("EQX-FR2-SDWAN-GW1", ("10.210.5.0/24", "PROD")),
+            office("EQX-FR2-SDWAN-GW1", hosted=("10.176.5.0/24", "PROD")),
             office("EQX-FR2-SDWAN-GW1", ("10.210.2.0/24", "PROD"), ("10.211.2.0/24", "NON-PROD")),
             office("EQX-AM5-SDWAN-GW1", ("10.210.9.0/24", "PROD")),
             office(None, ("10.210.15.0/24", "PROD")),
@@ -3534,58 +3554,6 @@ def write_cisco_xe_fixtures() -> tuple[int, int]:
     return generated, errors
 
 
-# LISP overlay fabric: the cisco_xe ospf_ibgp inputs with the BGP capability removed (a LISP fabric has no BGP
-# overlay) and the fabric flag, the two border-leaf map-servers (listed out of name order: the transform sorts
-# them) and the shared site key on the device's deployment (queries/fragments/lisp_fabric.gql).
-LISP_MAP_SERVERS = (("dc1-border-leaf-02", "10.255.0.2/32"), ("dc1-border-leaf-01", "10.255.0.1/32"))
-LISP_SITE_KEY = "s3cr3t"
-
-
-def build_lisp_device_data(
-    *, device_name: str, role: str, include_segments: bool = True, include_acls: bool = False
-) -> dict:
-    """The raw cisco_xe device query response of a device in a fabric whose overlay_control_plane is `lisp`."""
-    data = build_device_data(
-        device_name=device_name,
-        role=role,
-        platform="cisco_xe",
-        scenario="ospf_ibgp",
-        include_segments=include_segments,
-        include_acls=include_acls,
-        vlan_segment_vrf=True,
-    )
-    node = data["DcimDevice"]["edges"][0]["node"]
-    node["capabilities"]["edges"] = [
-        edge for edge in node["capabilities"]["edges"] if edge["node"].get("__typename") != "ManagedBGP"
-    ]
-    deployment = node["deployment"]["node"]
-    deployment["overlay_control_plane"] = _v("lisp")
-    deployment["lisp_map_servers"] = _edges(
-        [
-            {"name": _v(name), "interfaces": _edges([{"ip_address": _node({"address": _v(address)})}])}
-            for name, address in LISP_MAP_SERVERS
-        ]
-    )
-    deployment["lisp_site_key"] = _node({"password": _v(LISP_SITE_KEY)})
-    return data
-
-
-def write_cisco_xe_lisp_fixtures() -> tuple[int, int]:
-    """Write the Catalyst 9000 leaf / access-leaf / border-leaf LISP-overlay fixtures (OSPF underlay, no BGP).
-
-    Plus a hostless leaf: an edge that hosts no segment yet still carries the edge LISP config.
-    """
-    generated = errors = 0
-    hostless = build_lisp_device_data(device_name="dc1-leaf-01", role="leaf", include_segments=False)
-    generated, errors = _write_data_fixture(Leaf, "leaf_cisco_xe_lisp_hostless", hostless)
-    for transform_cls, role, type_prefix in CISCO_XE_DEVICE_CONFIGS:
-        data = build_lisp_device_data(device_name=f"dc1-{type_prefix.replace('_', '-')}-01", role=role)
-        g, e = _write_data_fixture(transform_cls, f"{type_prefix}_cisco_xe_lisp_ospf_ibgp", data)
-        generated += g
-        errors += e
-    return generated, errors
-
-
 # Office LISP site (add_office_fabric, SD-Access style): an access-switch edge and a distribution-switch border-and-
 # map-server pair on one office footprint. The cisco_xe ospf_ibgp inputs without the BGP capability, the uplinks re-wired
 # to the pair, and the office's own deployment (queries/config/access_switch.gql): its name is the LISP site, its
@@ -3602,14 +3570,17 @@ def _rewire_uplink(iface: dict, *, role: str, peer: str) -> None:
     iface["cable"]["node"]["endpoints"]["edges"][1]["node"]["device"] = _node({"name": _v(peer)})
 
 
-def build_office_lisp_device_data(*, device_name: str, role: str) -> dict:
+def build_office_lisp_device_data(
+    *, device_name: str, role: str, include_segments: bool = True, include_acls: bool = False
+) -> dict:
     """The raw cisco_xe device query response of an office access-switch or distribution-switch."""
     data = build_device_data(
         device_name=device_name,
         role=role,
         platform="cisco_xe",
         scenario="ospf_ibgp",
-        include_segments=True,
+        include_segments=include_segments,
+        include_acls=include_acls,
         vlan_segment_vrf=True,
     )
     node = data["DcimDevice"]["edges"][0]["node"]
@@ -3643,8 +3614,24 @@ def build_office_lisp_device_data(*, device_name: str, role: str) -> dict:
 
 
 def write_office_lisp_fixtures() -> tuple[int, int]:
-    """Write the office access-switch and distribution-switch LISP fixtures (OSPF underlay, no BGP)."""
+    """Write the office access-switch and distribution-switch LISP fixtures (OSPF underlay, no BGP).
+
+    Plus a hostless access-switch (an edge that hosts no segment yet still carries the edge LISP config) and one
+    whose tenant SVIs carry the zero-trust segment ACLs.
+    """
     generated = errors = 0
+    acl_data = build_office_lisp_device_data(device_name="as-c005-p01", role="access-switch", include_acls=True)
+    _add_cisco_xe_acl_rules(_interface_segments(acl_data))
+    for dir_name, data in (
+        (
+            "access_switch_cisco_xe_lisp_hostless",
+            build_office_lisp_device_data(device_name="as-c005-p01", role="access-switch", include_segments=False),
+        ),
+        ("access_switch_cisco_xe_lisp_with_acl", acl_data),
+    ):
+        g, e = _write_data_fixture(AccessSwitch, dir_name, data)
+        generated += g
+        errors += e
     for transform_cls, role, dir_name, device_name in (
         (AccessSwitch, "access-switch", "access_switch_cisco_xe_lisp_ospf", "as-c005-p01"),
         (DistributionSwitch, "distribution-switch", "distribution_switch_cisco_xe_lisp_ospf", "ds-c005-p01"),
@@ -3810,19 +3797,16 @@ def _interface_segments(data: dict, interface_name: str = "Ethernet10") -> list[
     return [edge["node"] for edge in port["interface_capabilities"]["edges"]]
 
 
-def build_cisco_xe_acl_data(*, device_name: str, role: str = "leaf", lisp: bool = False) -> dict:
+def build_cisco_xe_acl_data(*, device_name: str, role: str = "leaf") -> dict:
     """A cisco_xe leaf hosting seg-100 (VRF_A, VXLAN) and seg-200 (VLAN), each behind a zero-trust SVI ACL."""
-    if lisp:
-        data = build_lisp_device_data(device_name=device_name, role=role, include_acls=True)
-    else:
-        data = build_device_data(
-            device_name=device_name,
-            role=role,
-            platform="cisco_xe",
-            scenario="ebgp_ibgp",
-            include_segments=True,
-            include_acls=True,
-        )
+    data = build_device_data(
+        device_name=device_name,
+        role=role,
+        platform="cisco_xe",
+        scenario="ebgp_ibgp",
+        include_segments=True,
+        include_acls=True,
+    )
     _add_cisco_xe_acl_rules(_interface_segments(data))
     return data
 
@@ -3849,11 +3833,10 @@ def build_cisco_xe_exchange_data(*, device_name: str, role: str, with_acl: bool)
 
 
 def write_cisco_xe_acl_fixtures() -> tuple[int, int]:
-    """Write the Catalyst 9000 segment-ACL and exchange-static fixtures (EVPN-VXLAN and LISP)."""
+    """Write the Catalyst 9000 segment-ACL and exchange-static fixtures (EVPN-VXLAN)."""
     generated = errors = 0
     fixtures = (
         (Leaf, "leaf_cisco_xe_with_acl", build_cisco_xe_acl_data(device_name="dc1-leaf-01")),
-        (Leaf, "leaf_cisco_xe_lisp_with_acl", build_cisco_xe_acl_data(device_name="dc1-leaf-01", lisp=True)),
         (
             Leaf,
             "leaf_cisco_xe_exchange_acl",
@@ -3944,11 +3927,6 @@ def main() -> int:
 
     print("\nGenerating Catalyst 9000 (cisco_xe) fixtures:")
     g, e = write_cisco_xe_fixtures()
-    generated += g
-    errors += e
-
-    print("\nGenerating Catalyst 9000 (cisco_xe) LISP overlay fixtures:")
-    g, e = write_cisco_xe_lisp_fixtures()
     generated += g
     errors += e
 

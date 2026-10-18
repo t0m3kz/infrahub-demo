@@ -260,3 +260,22 @@ class TestWanExitData:
         assert segments[0].item["environment"] == "p"
         assert "gateway" not in segments[0].item, "gateway and prefix are derived (tenant pool)"
         assert not segments[0].item.get("stretch_scope"), "an office never stretches a segment"
+
+    def test_the_hosted_segment_is_the_offices_only_lan_there_is_no_typed_lan_prefix(self) -> None:
+        """The office-lan segment's /24 is derived from the tenant pool and is what the SD-WAN handoff registers
+        (get_external_peer_prefixes): a typed lan_prefixes entry would be a second, unreachable LAN."""
+        (office,) = [office for office in declared("TopologyCustomerOffice", ALL_DEMO) if name(office) == "C005-P"]
+
+        assert not office.item.get("lan_prefixes")
+        assert office.item.get("sdwan_gateway")
+
+    def test_the_test_constants_derive_the_offices_switches_from_the_fabric_templates(self) -> None:
+        from tests.integration.test_constants import ALL_DEMO_OFFICE_FABRICS, ALL_DEMO_OFFICE_WAN_EXITS
+
+        assert ALL_DEMO_OFFICE_FABRICS == {
+            "C005-P": {
+                "distribution-switch": ("ds-c005-p01", "ds-c005-p02"),
+                "access-switch": ("as-c005-p01", "as-c005-p02"),
+            }
+        }
+        assert ALL_DEMO_OFFICE_WAN_EXITS == {"C005-P": ("ds-c005-p01", "ds-c005-p02")}

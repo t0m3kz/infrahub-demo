@@ -4,12 +4,12 @@
       {
         "node": {
           "__typename": "DcimPhysicalDevice",
-          "id": "dev-dc1-leaf-01",
+          "id": "dev-as-c005-p01",
           "name": {
-            "value": "dc1-leaf-01"
+            "value": "as-c005-p01"
           },
           "role": {
-            "value": "leaf"
+            "value": "access-switch"
           },
           "platform": {
             "node": {
@@ -122,13 +122,13 @@
                     "value": "Ethernet1"
                   },
                   "description": {
-                    "value": "to spine-01"
+                    "value": "to ds-c005-p01"
                   },
                   "status": {
                     "value": "active"
                   },
                   "role": {
-                    "value": "spine"
+                    "value": "uplink"
                   },
                   "interface_type": {
                     "value": "10gbase-x-sfpp"
@@ -171,7 +171,7 @@
                               "device": {
                                 "node": {
                                   "name": {
-                                    "value": "dc1-leaf-01"
+                                    "value": "as-c005-p01"
                                   }
                                 }
                               }
@@ -193,7 +193,7 @@
                               "device": {
                                 "node": {
                                   "name": {
-                                    "value": "spine-01"
+                                    "value": "ds-c005-p01"
                                   }
                                 }
                               }
@@ -244,7 +244,7 @@
                                           {
                                             "node": {
                                               "name": {
-                                                "value": "dc1-leaf-01"
+                                                "value": "as-c005-p01"
                                               }
                                             }
                                           }
@@ -285,13 +285,13 @@
                     "value": "Ethernet2"
                   },
                   "description": {
-                    "value": "to spine-02"
+                    "value": "to ds-c005-p02"
                   },
                   "status": {
                     "value": "active"
                   },
                   "role": {
-                    "value": "spine"
+                    "value": "uplink"
                   },
                   "interface_type": {
                     "value": "10gbase-x-sfpp"
@@ -334,7 +334,7 @@
                               "device": {
                                 "node": {
                                   "name": {
-                                    "value": "dc1-leaf-01"
+                                    "value": "as-c005-p01"
                                   }
                                 }
                               }
@@ -356,7 +356,7 @@
                               "device": {
                                 "node": {
                                   "name": {
-                                    "value": "spine-02"
+                                    "value": "ds-c005-p02"
                                   }
                                 }
                               }
@@ -407,7 +407,7 @@
                                           {
                                             "node": {
                                               "name": {
-                                                "value": "dc1-leaf-01"
+                                                "value": "as-c005-p01"
                                               }
                                             }
                                           }
@@ -536,7 +536,7 @@
                                   },
                                   "vlan_domain": {
                                     "node": {
-                                      "id": "dev-dc1-leaf-01"
+                                      "id": "dev-as-c005-p01"
                                     }
                                   }
                                 }
@@ -1016,16 +1016,9 @@
           },
           "deployment": {
             "node": {
-              "id": "dc-1",
+              "id": "office-1",
               "name": {
-                "value": "DC-1"
-              },
-              "evpn_rt_as": {
-                "node": {
-                  "asn": {
-                    "value": 65000
-                  }
-                }
+                "value": "C005-P"
               },
               "segment_deployments": {
                 "edges": [
@@ -1106,7 +1099,7 @@
                                   },
                                   "vlan_domain": {
                                     "node": {
-                                      "id": "dev-dc1-leaf-01"
+                                      "id": "dev-as-c005-p01"
                                     }
                                   }
                                 }
@@ -1474,15 +1467,12 @@
                   }
                 ]
               },
-              "overlay_control_plane": {
-                "value": "lisp"
-              },
               "lisp_map_servers": {
                 "edges": [
                   {
                     "node": {
                       "name": {
-                        "value": "dc1-border-leaf-02"
+                        "value": "ds-c005-p02"
                       },
                       "interfaces": {
                         "edges": [
@@ -1491,7 +1481,7 @@
                               "ip_address": {
                                 "node": {
                                   "address": {
-                                    "value": "10.255.0.2/32"
+                                    "value": "10.250.5.2/32"
                                   }
                                 }
                               }
@@ -1504,7 +1494,7 @@
                   {
                     "node": {
                       "name": {
-                        "value": "dc1-border-leaf-01"
+                        "value": "ds-c005-p01"
                       },
                       "interfaces": {
                         "edges": [
@@ -1513,7 +1503,7 @@
                               "ip_address": {
                                 "node": {
                                   "address": {
-                                    "value": "10.255.0.1/32"
+                                    "value": "10.250.5.1/32"
                                   }
                                 }
                               }
@@ -1528,7 +1518,7 @@
               "lisp_site_key": {
                 "node": {
                   "password": {
-                    "value": "s3cr3t"
+                    "value": "0ff1c3-k3y"
                   }
                 }
               }

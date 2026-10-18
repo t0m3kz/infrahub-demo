@@ -1,70 +1,7 @@
-# The LISP overlay rows (checks/lisp_fabric.py): every data center with the
-# fabric flag, strategy and underlay, its devices (its own and its pods': a
-# pod's devices belong to the pod's data center), the shared site key and the
-# segments active in it; every colocation metro with its flag (a metro
-# cannot run the LISP overlay); and every office with its fabric opt-in
-# (fabric_templates), buildings, site key, devices (with their capability kinds, for the SD-WAN edge's
-# BGP process) and active segments with
-# their VRF namespace and L3 VNI (an office is a LISP site by role, it has no
-# overlay flag).
+# The LISP rows (checks/lisp_fabric.py): every office with its fabric opt-in (fabric_templates), buildings, site
+# key, devices (with their capability kinds, for the SD-WAN edge's BGP process) and active segments with their VRF
+# namespace and L3 VNI (an office is a LISP site by role, it has no overlay flag).
 query lisp_fabric {
-  TopologyDataCenter {
-    edges {
-      node {
-        id
-        name { value }
-        overlay_control_plane { value }
-        routing_strategy { value }
-        underlay_protocol { value }
-        lisp_site_key { node { id } }
-        devices {
-          edges {
-            node {
-              name { value }
-              role { value }
-              platform { node { name { value } } }
-            }
-          }
-        }
-        segment_deployments(status__values: ["active", "provisioning"]) {
-          edges {
-            node {
-              vni { value }
-              segment { node { name { value } gateway { node { id } } } }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  TopologyPod {
-    edges {
-      node {
-        parent { node { id __typename } }
-        devices {
-          edges {
-            node {
-              name { value }
-              role { value }
-              platform { node { name { value } } }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  TopologyColocationMetro {
-    edges {
-      node {
-        id
-        name { value }
-        overlay_control_plane { value }
-      }
-    }
-  }
-
   TopologyCustomerOffice {
     edges {
       node {

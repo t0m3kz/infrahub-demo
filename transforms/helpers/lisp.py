@@ -1,7 +1,7 @@
 """LISP rendering of the control-plane-neutral overlay model (transforms/helpers/overlay.py).
 
-One renderer for both LISP fabrics: a data center's VTEPs (leaf, access-leaf, tor, border-leaf) and an
-office's switches (access-switch edge, distribution-switch border, utils/fabric_roles.OFFICE_LISP_ROLES).
+The renderer of an office's LISP site: its switches (access-switch edge, distribution-switch border,
+utils/fabric_roles.OFFICE_LISP_ROLES).
 
 The LISP counterpart of ``evpn_vxlan_context`` in transforms/helpers/vxlan.py: ``get_lisp_config``
 adds what LISP needs on top of the neutral model (the map-server set, the site and its key, the EID
@@ -11,9 +11,9 @@ EID prefixes and address families are not model fields: they come from ``L2Insta
 (IPv4) grouped by ``vrf``. A gateway with only an IPv6 address is refused because ``service ipv6``
 is not rendered. There is no flood mode, extranet or publisher/subscriber (see
 templates/configs/common/cisco_xe_lisp.j2); the map-server and map-resolver are co-located on the
-borders (the border leaves, or the distribution switches of an office). An office whose deployment has an
-SD-WAN edge (``wan_exit``) adds the exit: its borders are the proxy-ETR/ITR and the default route out, its
-edges ``use-petr`` the borders (the same locators as the map-servers). Only platforms in
+borders (the office's distribution switches). An office whose deployment has an SD-WAN edge
+(``wan_exit``) adds the exit: its borders are the proxy-ETR/ITR and the default route out, its edges
+``use-petr`` the borders (the same locators as the map-servers). Only platforms in
 ``OVERLAY_RENDERERS["lisp"]`` render the result (transforms/common.py).
 """
 
@@ -30,8 +30,8 @@ from transforms.helpers.overlay import (
 )
 from transforms.helpers.segments import _get_segment_gateways
 from transforms.helpers.segments import _get_segment_namespace as segment_namespace
-from transforms.helpers.segments import is_inline_terminated, segment_hosting_candidates
-from utils.fabric_roles import BORDER_ROLES, LISP_BORDER_ROLES, OFFICE_LISP_ROLES
+from transforms.helpers.segments import is_inline_terminated
+from utils.fabric_roles import LISP_BORDER_ROLES
 from utils.segment_addressing import segment_prefix
 
 
@@ -63,13 +63,8 @@ class LispInputs:
 
 
 def _is_border(device_role: str) -> bool:
-    """The roles that are the co-located map-server/map-resolver of their site: a DC border or an office's."""
-    return device_role in BORDER_ROLES or device_role in LISP_BORDER_ROLES
-
-
-def _first_of(candidates: Iterable[dict[str, Any]], key: str) -> Any:
-    """The value of ``key`` on the nearest candidate that has one (the device's deployment, else its parent)."""
-    return next((candidate[key] for candidate in candidates if candidate.get(key)), None)
+    """The role that is the co-located map-server/map-resolver of its site: the office's distribution-switch."""
+    return device_role in LISP_BORDER_ROLES
 
 
 def _map_server_addresses(servers: Iterable[dict[str, Any]]) -> tuple[str, ...]:
@@ -128,25 +123,23 @@ def _border_records(segment_deployments: Iterable[dict[str, Any]]) -> tuple[tupl
 
 
 def build_lisp_inputs(deployment: Any, device_role: str) -> LispInputs:
-    """This device's LISP inputs, read off its own deployment (the DC, the pod and its parent DC, or the office).
+    """This device's LISP inputs, read off its own deployment: the office, which hosts its devices directly.
 
-    Mirrors ``_fabric_rt_asn``: every device of a fabric resolves the same map-server set and key.
-    Only a border reads the site's segment activations and name (it renders the ``site``): the DC's, or
-    the office's, which hosts its devices directly.
+    Every switch of the office resolves the same map-server set and key. Only a border reads the site's
+    segment activations and name (it renders the ``site``).
     """
-    candidates = segment_hosting_candidates(deployment)
-    site_key = (_first_of(candidates, "lisp_site_key") or {}).get("password")
+    office = deployment if isinstance(deployment, dict) else {}
+    site_key = (office.get("lisp_site_key") or {}).get("password")
     border = _is_border(device_role)
-    l3_records, l2_ids = _border_records((deployment or {}).get("segment_deployments") or []) if border else ((), ())
+    l3_records, l2_ids = _border_records(office.get("segment_deployments") or []) if border else ((), ())
     return LispInputs(
-        map_servers=_map_server_addresses(_first_of(candidates, "lisp_map_servers") or []),
-        site_name=(deployment or {}).get("name") if border else None,
+        map_servers=_map_server_addresses(office.get("lisp_map_servers") or []),
+        site_name=office.get("name") if border else None,
         site_key=site_key,
         l3_records=l3_records,
         l2_instance_ids=l2_ids,
-        # An office's SD-WAN edge is the way out (add_office_fabric builds the BGP session to it). A DC's LISP
-        # fabric has none, whatever edge devices its deployment lists.
-        wan_exit=device_role in OFFICE_LISP_ROLES and bool(_first_of(candidates, "lisp_wan_edges")),
+        # The office's SD-WAN edge is the way out (add_office_fabric builds the BGP session to it).
+        wan_exit=bool(office.get("lisp_wan_edges")),
     )
 
 
@@ -196,7 +189,7 @@ def get_lisp_config(
     lisp_inputs: LispInputs,
     fabric_anycast_mac: str | None = None,
 ) -> dict[str, Any]:
-    """The ``lisp`` template context of one device of a LISP fabric: a DC VTEP or an office's access/distribution switch.
+    """The ``lisp`` template context of one switch of an office's LISP site (access-switch or distribution-switch).
 
     Every such device gets a context, whether or not it hosts anything yet: a fabric edge always carries
     the RLOC, the ITR/ETR and the map-server registration (hosts register with it later), with empty
@@ -216,7 +209,7 @@ def get_lisp_config(
         fabric_anycast_mac or _DEFAULT_ANYCAST_GATEWAY_MAC,
     )
     if not lisp_inputs.map_servers:
-        raise _refuse(device_role, "the fabric has no map-server (border-leaf or distribution-switch)")
+        raise _refuse(device_role, "the fabric has no map-server (distribution-switch)")
     if not lisp_inputs.site_key:
         raise _refuse(device_role, "the fabric has no LISP site key")
     if border and not lisp_inputs.site_name:

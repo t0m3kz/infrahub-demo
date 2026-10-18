@@ -486,6 +486,19 @@ nodes:
         kind: Attribute
         identifier: "customer_office__fabric_templates"
         order_weight: 1250
+      # LISP map-servers authenticate registrations from the edge ETRs with one
+      # shared site key, so it is identical across the office fabric. The
+      # office-fabric generator creates it and attaches it here; the config
+      # transforms and the lisp_fabric check read it.
+      - name: lisp_site_key
+        label: LISP Site Key
+        peer: RoutingPassword
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "customer_office__lisp_site_key"
+        order_weight: 1300
+        description: "Authentication key shared by this office fabric's LISP map-servers and edge ETRs; set by the office-fabric generator"  # yamllint disable-line rule:line-length
 
 
   - name: CustomerCloud

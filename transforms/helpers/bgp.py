@@ -378,16 +378,24 @@ def _far_end_devices(device_capabilities: list[dict[str, Any]] | None, device_na
 
 
 def _office_lans_by_gateway(offices: list[dict[str, Any]] | None) -> dict[str, list[dict[str, Any]]]:
-    """SD-WAN gateway name -> the lan_prefixes of every office footprint attached to it.
+    """SD-WAN gateway name -> the prefixes of every office footprint attached to it.
 
-    ``offices`` is the cleaned TopologyCustomerOffice query root. A gateway with
-    offices but no registered LAN is present with an empty list.
+    An office registers its ``lan_prefixes`` and, derived, the gateway prefix of
+    every segment it hosts itself (``segment_deployments``: an office with a
+    fabric hosts its LAN as a VXLAN segment, whose prefix comes from the tenant
+    pool, not from the office). ``offices`` is the cleaned TopologyCustomerOffice
+    query root. A gateway with offices but no registered LAN is present with an
+    empty list.
     """
     lans: dict[str, list[dict[str, Any]]] = {}
     for office in offices or []:
         gateway = (office.get("sdwan_gateway") or {}).get("name")
         if gateway:
-            lans.setdefault(gateway, []).extend(office.get("lan_prefixes") or [])
+            hosted = (
+                ((deployment.get("segment") or {}).get("gateway") or {}).get("ip_prefix")
+                for deployment in office.get("segment_deployments") or []
+            )
+            lans.setdefault(gateway, []).extend([*(office.get("lan_prefixes") or []), *filter(None, hosted)])
     return lans
 
 
@@ -405,8 +413,8 @@ def get_external_peer_prefixes(
 
     - The SD-WAN gateway: a handoff whose only BGP far end
       (``device_capabilities`` peerings) is the ``sdwan_gateway`` of some
-      office footprint accepts the ``lan_prefixes`` of every office behind that
-      gateway.
+      office footprint accepts the ``lan_prefixes`` and the hosted segments'
+      prefixes of every office behind that gateway (_office_lans_by_gateway).
     - A cloud VIF: it lands on the device through its Direct Connect
       (``physical_devices``) as the sub-interface ``<port>.<vif.vlan_id>`` and
       accepts its reachable VPC blocks (_vif_registered_blocks). Two VIFs of

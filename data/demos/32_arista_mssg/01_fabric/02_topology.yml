@@ -1,7 +1,6 @@
 ---
 # DC14 - the Arista EOS MSS-G reference fabric. Shaped like data/demos/30_all/03_dc/dc10 (the NX-OS
-# reference fabric) and data/demos/31_lisp_fabric's DC13 (size M, two S_MIDDLE pods, a DC-level
-# border-leaf pair), with these differences:
+# reference fabric), at size M with two S_MIDDLE pods and a DC-level border-leaf pair, with these differences:
 #
 #   - every VTEP is a 7280R3 on EOS 4.36.2F, the one platform/type/release the reference-arista-eos
 #     profile row (data/bootstrap/19b_group_policy_profile.yml) accepts. One VTEP outside the row

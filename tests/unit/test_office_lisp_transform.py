@@ -1,12 +1,12 @@
 """Unit tests for the render side of an office LISP site (access-switch and distribution-switch on cisco_xe).
 
-An office switch is a LISP device by role: there is no ``overlay_control_plane`` flag on an office, so
-``transforms/common.py:_runs_lisp`` gates on ``utils/fabric_roles.OFFICE_LISP_ROLES`` while a data center's VTEPs
-keep the flag. The renderer is the DC one (transforms/helpers/lisp.py) retargeted: map-servers are the
-distribution-switches of the office, the site is the office, the key is the office's lisp_site_key.
+An office switch is a LISP device by role: there is no overlay flag on an office, so ``transforms/common.py`` gates
+on ``utils/fabric_roles.OFFICE_LISP_ROLES`` and a data center's VTEPs never take the LISP path. The renderer is
+transforms/helpers/lisp.py: map-servers are the distribution-switches of the office, the site is the office, the key
+is the office's lisp_site_key.
 
 Covers:
-  - the role gate           — office roles always LISP, a DC VTEP only with the flag, other roles never
+  - the role gate           — office roles always LISP, whatever the deployment carries; other roles never
   - the rendered CLI        — access-switch is an edge, distribution-switch the co-located border with the office site
   - refusals                — no map-server / key / office name, other platform, a segment outside a VRF with an
                               L3 instance-id (also on a data center: the fix of the global-table SVI), IPv6 gateway
@@ -25,14 +25,13 @@ from unittest.mock import patch
 import pytest
 import yaml
 from graphql import parse
-from graphql.language import FragmentDefinitionNode, FragmentSpreadNode
+from graphql.language import FieldNode, FragmentDefinitionNode, FragmentSpreadNode
 
 from generators.devices import ROLE_GROUP_NAMES
 from tests.integration.demo_data import attribute_names, relationship_names
 from tests.smoke.test_configs_smoke import _run_transform
-from transforms.common import BaseDeviceTransform, _runs_lisp
+from transforms.common import BaseDeviceTransform
 from transforms.config.access_switch import AccessSwitch
-from transforms.config.border_leaf import BorderLeaf
 from transforms.config.distribution_switch import DistributionSwitch
 from transforms.helpers.lisp import EidRecord, LispInputs, build_lisp_inputs, get_lisp_config
 from transforms.helpers.overlay import build_overlay_node
@@ -49,7 +48,6 @@ ROOT = Path(__file__).resolve().parents[2]
 CONFIGS_DIR = ROOT / "tests" / "smoke" / "configs"
 ACCESS_INPUT = "access_switch_cisco_xe_lisp_ospf"
 DISTRIBUTION_INPUT = "distribution_switch_cisco_xe_lisp_ospf"
-DC_BORDER_INPUT = "border_leaf_cisco_xe_lisp_ospf_ibgp"
 MARKER = "unverified-no-lab:"
 OFFICE_SWITCHES = [(AccessSwitch, ACCESS_INPUT), (DistributionSwitch, DISTRIBUTION_INPUT)]
 
@@ -141,21 +139,30 @@ def _device() -> dict[str, Any]:
 
 class TestRoleGate:
     @pytest.mark.parametrize("role", sorted(OFFICE_LISP_ROLES))
-    @pytest.mark.parametrize("deployment", [None, {}, {"overlay_control_plane": "bgp_evpn"}, {"name": _OFFICE}])
+    @pytest.mark.parametrize("deployment", [None, {}, {"name": _OFFICE}])
     def test_an_office_role_is_lisp_whatever_the_deployment_says(self, role: str, deployment: Any) -> None:
         """An office has no overlay flag: the role alone selects the LISP overlay."""
-        assert _runs_lisp(role, deployment) is True
+        transform = BaseDeviceTransform.__new__(BaseDeviceTransform)
+        transform.device_role = role
+        data = {
+            "name": "dev-1",
+            "role": role,
+            "platform": {"netmiko_device_type": "cisco_xe"},
+            "interfaces": [],
+            "capabilities": [],
+            "deployment": {"name": _OFFICE, "lisp_map_servers": _MAP_SERVERS, "lisp_site_key": {"password": "k"}}
+            | (deployment or {}),
+        }
 
-    @pytest.mark.parametrize("role", sorted(DC_VTEP_ROLES))
-    def test_a_dc_vtep_is_lisp_only_with_the_fabric_flag(self, role: str) -> None:
-        assert _runs_lisp(role, {"overlay_control_plane": "lisp"}) is True
-        assert _runs_lisp(role, {"overlay_control_plane": "bgp_evpn"}) is False
-        assert _runs_lisp(role, {"parent": {"overlay_control_plane": "lisp"}}) is True
-        assert _runs_lisp(role, None) is False
+        with patch("transforms.common.get_vxlan_config") as vxlan:
+            config = transform._extra_config(data, "cisco_xe")
+
+        vxlan.assert_not_called()
+        assert config["lisp"]["enabled"] is True
 
     @pytest.mark.parametrize("role", ["spine", "super-spine", "hyper-spine", "l2-leaf", "edge", "firewall"])
     def test_other_roles_never_run_lisp(self, role: str) -> None:
-        assert _runs_lisp(role, {"overlay_control_plane": "lisp"}) is False
+        assert role not in OFFICE_LISP_ROLES
 
 
 class TestRoleSets:
@@ -301,18 +308,11 @@ class TestRenderedAccessSwitch:
         assert any(MARKER in line and "lisp mobility" in line for line in lines[section:first])
         assert sum(line.strip().startswith("lisp mobility") for line in lines) == 2
 
-    def test_the_golden_input_has_no_overlay_flag(self) -> None:
-        """An office is LISP by role: the input carries no flag and no EVPN route-target ASN."""
+    def test_the_golden_input_has_no_evpn_route_target_asn(self) -> None:
+        """An office is LISP by role: the input carries no EVPN route-target ASN (it is unset on an office)."""
         deployment = _deployment(_raw(ACCESS_INPUT))
 
-        assert "overlay_control_plane" not in deployment and "evpn_rt_as" not in deployment
-
-    def test_a_flag_on_the_deployment_does_not_change_the_render(self) -> None:
-        plain = _run_transform(AccessSwitch, _raw(ACCESS_INPUT))
-        data = _raw(ACCESS_INPUT)
-        _deployment(data)["overlay_control_plane"] = {"value": "bgp_evpn"}
-
-        assert _run_transform(AccessSwitch, data) == plain
+        assert "evpn_rt_as" not in deployment
 
 
 class TestRenderedDistributionSwitch:
@@ -346,22 +346,6 @@ class TestRenderedDistributionSwitch:
         assert checked >= 4
 
 
-class TestDataCenterIsUnchanged:
-    def test_a_dc_border_leaf_still_needs_the_fabric_flag(self) -> None:
-        """Without overlay_control_plane = lisp a border-leaf takes the EVPN path (here refused: the input has no
-        BGP); an office role never does."""
-        data = _raw(DC_BORDER_INPUT)
-        del _deployment(data)["overlay_control_plane"]
-
-        with pytest.raises(ValueError, match="VXLAN without an EVPN BGP process"):
-            _run_transform(BorderLeaf, data)
-
-    def test_a_dc_border_leaf_still_uses_its_own_name_as_the_site(self) -> None:
-        text = _run_transform(BorderLeaf, _raw(DC_BORDER_INPUT))
-
-        assert " site DC-1\n" in text
-
-
 # ---------------------------------------------------------------------------
 # Refusals
 # ---------------------------------------------------------------------------
@@ -374,7 +358,7 @@ class TestRefusals:
         data = _raw(directory)
         _deployment(data)["lisp_map_servers"] = {"edges": []}
 
-        with pytest.raises(ValueError, match=r"the fabric has no map-server \(border-leaf or distribution-switch\)"):
+        with pytest.raises(ValueError, match=r"the fabric has no map-server \(distribution-switch\)"):
             _run_transform(cls, data)
 
     @pytest.mark.parametrize(("cls", "directory"), OFFICE_SWITCHES)
@@ -470,20 +454,6 @@ class TestSegmentsOutsideAVrf:
         config = get_lisp_config(_device(), "access-switch", [activation], _inputs())
 
         assert config["l2_instances"][0]["instance_id"] == 10200 and config["l3_instances"] == []
-
-    def test_the_fix_applies_to_a_data_center_too(self) -> None:
-        """The DC border-leaf golden used to render seg-200 in the global table; it is refused now, so the golden
-        input puts seg-200 in VRF_A."""
-        data = _raw(DC_BORDER_INPUT)
-        assert {ns["name"]["value"] for ns in _seg200_namespaces(data)} == {"VRF_A"}
-        for namespace in _seg200_namespaces(data):
-            namespace["name"]["value"] = "default"
-            namespace["l3_vni"]["value"] = None
-
-        with pytest.raises(
-            ValueError, match=r"cisco_xe border-leaf cannot render the LISP overlay: the gateway of VLAN 200"
-        ):
-            _run_transform(BorderLeaf, data)
 
 
 # ---------------------------------------------------------------------------
@@ -597,6 +567,22 @@ class TestQueries:
             seen.add(name)
             pending |= _spreads(defined[name]) - seen
 
+    @pytest.mark.parametrize("directory", [ACCESS_INPUT, DISTRIBUTION_INPUT, "access_switch_cisco_xe_lisp_wan_exit"])
+    def test_the_goldens_carry_every_field_the_office_fragment_selects(self, directory: str) -> None:
+        """The goldens' raw deployment has the keys LispSiteOnOfficeFields returns (alias or name), so the cleaned
+        shape the transforms read (D["name"], D["lisp_site_key"]["password"], D["lisp_map_servers"], ...) is the
+        one the query produces; a field moved to another fragment would show here."""
+        fragment = _fragment_definitions()["LispSiteOnOfficeFields"]
+        selected = {
+            (field.alias or field.name).value
+            for field in fragment.selection_set.selections
+            if isinstance(field, FieldNode)
+        }
+        assert selected == {"name", "lisp_site_key", "lisp_map_servers", "lisp_wan_edges"}
+        deployment = _deployment(_raw(directory))
+
+        assert selected - {"lisp_wan_edges"} <= set(deployment)
+
     def test_the_lisp_fabric_check_query_parses_and_selects_the_office_inputs(self) -> None:
         text = (ROOT / "queries" / "validation" / "lisp_fabric.gql").read_text()
         parse(text)
@@ -612,12 +598,13 @@ class TestQueries:
             "l3_vni",
         ):
             assert selection in office
+        assert "overlay_control_plane" not in text and "TopologyDataCenter" not in text
 
     def test_the_office_schema_has_every_field_the_check_and_the_config_queries_read(self) -> None:
-        """name, the LISP key and the segment activations come from TopologySegmentHosting; the buildings, the
-        opt-in and the devices from the footprint itself."""
+        """The segment activations and the anycast MAC come from TopologySegmentHosting; the buildings, the opt-in,
+        the LISP site key and the devices from the footprint itself."""
         names = relationship_names("TopologyCustomerOffice")
         assert {"fabric_templates", "locations", "lisp_site_key", "devices", "segment_deployments"} <= names
-        assert {"name", "evpn_anycast_gateway_mac", "overlay_control_plane"} <= attribute_names(
-            "TopologyCustomerOffice"
-        )
+        assert {"name", "evpn_anycast_gateway_mac"} <= attribute_names("TopologyCustomerOffice")
+        assert "overlay_control_plane" not in attribute_names("TopologyCustomerOffice")
+        assert "lisp_site_key" not in relationship_names("TopologySegmentHosting")

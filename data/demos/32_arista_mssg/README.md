@@ -29,7 +29,7 @@ never merged to main (see [Why It Is Not in 30_all](#why-it-is-not-in-30_all)).
 - **The release dates of `arista_eos-4.36.2F` are placeholders.** Nothing reads them; the profile gate compares only
   the version.
 - **A stored proposed-change artifact is not compared with the in-process render.** The proposed-change helpers report
-  artifact status, not content, so the test renders in-process like `test_64` and `test_70`.
+  artifact status, not content, so the test renders in-process like `test_64`.
 
 ---
 
@@ -50,8 +50,8 @@ fabric. The device types come from `data/bootstrap/06_device_types.yml`; the sof
 
 ### The Fabric
 
-DC14 is shaped like [DC10](../30_all/03_dc/dc10/01_topology.yml) (the NX-OS reference fabric) and
-[DC13](../31_lisp_fabric/README.md) (size `M`, two `S_MIDDLE` pods, a DC-level border-leaf pair):
+DC14 is shaped like [DC10](../30_all/03_dc/dc10/01_topology.yml) (the NX-OS reference fabric), at size `M` with two
+`S_MIDDLE` pods and a DC-level border-leaf pair:
 
 | | |
 | --- | --- |
@@ -186,4 +186,4 @@ by `tests/unit/test_arista_mssg_scope.py`.
 A DC14 in `30_all` would break the expectations pinned to its three DCs (the DC role counts, the firewall-context and
 transit counts, the ASN grid, the reference-fabric pin), and it would put a lab-unverified renderer into `test_65`,
 the idempotency run that gates every release. The scope has its own test, `tests/integration/test_71_arista_mssg.py`,
-with its own rerun assertion, and, like `31_lisp_fabric`, it is loaded onto a branch that is never merged.
+with its own rerun assertion, and it is loaded onto a branch that is never merged.

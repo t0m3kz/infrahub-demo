@@ -1,8 +1,8 @@
 !
-! dc1-leaf-01 Configuration
-! Cisco IOS-XE (Catalyst 9000) LISP leaf
+! as-c005-p01 Configuration
+! Cisco IOS-XE (Catalyst 9000) LISP access-switch
 !
-hostname dc1-leaf-01
+hostname as-c005-p01
 !
 ip routing
 spanning-tree mode rapid-pvst
@@ -10,13 +10,13 @@ spanning-tree mode rapid-pvst
 !
 ! Interfaces
 interface Ethernet1
- description to spine-01
+ description to ds-c005-p01
  no switchport
  ip address 10.1.0.1 255.255.255.254
  no shutdown
 !
 interface Ethernet2
- description to spine-02
+ description to ds-c005-p02
  no switchport
  ip address 10.1.0.3 255.255.255.254
  no shutdown
@@ -57,23 +57,23 @@ router lisp
  ! unverified-no-lab: service ipv4: ITR and ETR toward every map-server, VXLAN encapsulation
  service ipv4
   encapsulation vxlan
-  itr map-resolver 10.255.0.1
-  itr map-resolver 10.255.0.2
-  etr map-server 10.255.0.1 key s3cr3t
-  etr map-server 10.255.0.1 proxy-reply
-  etr map-server 10.255.0.2 key s3cr3t
-  etr map-server 10.255.0.2 proxy-reply
+  itr map-resolver 10.250.5.1
+  itr map-resolver 10.250.5.2
+  etr map-server 10.250.5.1 key 0ff1c3-k3y
+  etr map-server 10.250.5.1 proxy-reply
+  etr map-server 10.250.5.2 key 0ff1c3-k3y
+  etr map-server 10.250.5.2 proxy-reply
   itr
   etr
   exit-service-ipv4
  ! unverified-no-lab: service ethernet: ITR and ETR toward every map-server
  service ethernet
-  itr map-resolver 10.255.0.1
-  itr map-resolver 10.255.0.2
-  etr map-server 10.255.0.1 key s3cr3t
-  etr map-server 10.255.0.1 proxy-reply
-  etr map-server 10.255.0.2 key s3cr3t
-  etr map-server 10.255.0.2 proxy-reply
+  itr map-resolver 10.250.5.1
+  itr map-resolver 10.250.5.2
+  etr map-server 10.250.5.1 key 0ff1c3-k3y
+  etr map-server 10.250.5.1 proxy-reply
+  etr map-server 10.250.5.2 key 0ff1c3-k3y
+  etr map-server 10.250.5.2 proxy-reply
   itr
   etr
   exit-service-ethernet

@@ -44,5 +44,5 @@ LISP_BORDER_ROLES = frozenset({"distribution-switch"})
 """Co-located border and control-plane (map-server/map-resolver) node of an office LISP site."""
 
 OFFICE_LISP_ROLES = CAMPUS_FABRIC_ROLES | LISP_BORDER_ROLES
-"""Every role of an office LISP site. They render as LISP whatever the fabric flag says: an office has no other
-overlay, so there is no flag to read (a data center's VTEPs are gated by overlay_control_plane instead)."""
+"""Every role of an office LISP site. They always render as LISP: an office has no other overlay, so the role is
+the whole gate."""

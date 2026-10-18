@@ -348,8 +348,8 @@ check_definitions:
   - name: validate_evpn_fabric
     class_name: CheckEvpnFabric
     file_path: checks/evpn_fabric.py
-  # Targetless: the LISP profile (strategy, underlay, border pair, platform,
-  # site key) is a property of a whole fabric, not of one device.
+  # Targetless: the LISP profile of an office (platform, map-server, site key,
+  # segment VRFs, WAN exit) is a property of a whole site, not of one device.
   - name: validate_lisp_fabric
     class_name: CheckLispFabric
     file_path: checks/lisp_fabric.py

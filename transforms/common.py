@@ -33,7 +33,7 @@ from transforms.helpers.segments import (
 from transforms.helpers.templates import load_template
 from transforms.helpers.vxlan import get_interfaces, get_vxlan_config
 from utils.data_cleaning import clean_data
-from utils.fabric_roles import BORDER_ROLES, DC_VTEP_ROLES, OFFICE_LISP_ROLES
+from utils.fabric_roles import BORDER_ROLES, OFFICE_LISP_ROLES
 
 
 def _fabric_rt_asn(deployment: Any) -> int | None:
@@ -50,30 +50,6 @@ def _fabric_rt_asn(deployment: Any) -> int | None:
         if isinstance(asn, int):
             return asn
     return None
-
-
-def _fabric_overlay_control_plane(deployment: Any) -> str:
-    """Return the fabric's overlay control plane: ``bgp_evpn`` (the default) or ``lisp``.
-
-    Reads ``TopologySegmentHosting.overlay_control_plane`` off the device's own deployment, with
-    the same two-shape resolution as _fabric_rt_asn: every device of a fabric resolves the same value.
-    """
-    for candidate in segment_hosting_candidates(deployment):
-        control_plane = candidate.get("overlay_control_plane")
-        if isinstance(control_plane, str) and control_plane:
-            return control_plane
-    return "bgp_evpn"
-
-
-def _runs_lisp(device_role: str, deployment: Any) -> bool:
-    """Whether the device renders the LISP overlay instead of EVPN-VXLAN.
-
-    An office's access/distribution switch always does: its site has no other overlay, so there is
-    no flag to read. A data center's VTEP does when the fabric's overlay_control_plane says lisp.
-    """
-    if device_role in OFFICE_LISP_ROLES:
-        return True
-    return device_role in DC_VTEP_ROLES and _fabric_overlay_control_plane(deployment) == "lisp"
 
 
 def _fabric_anycast_mac(deployment: Any) -> str | None:
@@ -448,8 +424,8 @@ class BaseDeviceTransform(InfrahubTransform):
             self._refuse_unprotected_tenant_svis(self.device_role, platform_name, acls, leaf_pbr_rules)
 
         lisp = None
-        if _runs_lisp(self.device_role, data.get("deployment")):
-            # The spines of a LISP fabric are underlay only: they keep taking the EVPN path below (no VXLAN).
+        if self.device_role in OFFICE_LISP_ROLES:
+            # An office's access/distribution switch always renders LISP: its site has no other overlay.
             if platform_name not in OVERLAY_RENDERERS["lisp"]:
                 raise ValueError(
                     f"{platform_name} {self.device_role} cannot render the LISP overlay; refusing incomplete config"

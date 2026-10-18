@@ -48,7 +48,7 @@ ACCESS_EXIT = "access_switch_cisco_xe_lisp_wan_exit"
 DISTRIBUTION_EXIT = "distribution_switch_cisco_xe_lisp_wan_exit"
 ACCESS_PLAIN = "access_switch_cisco_xe_lisp_ospf"
 DISTRIBUTION_PLAIN = "distribution_switch_cisco_xe_lisp_ospf"
-DC_BORDER = "border_leaf_cisco_xe_lisp_ospf_ibgp"
+DC_BORDER = "border_leaf_cisco_xe_ospf_ibgp"
 
 _MAP_SERVERS: list[dict[str, Any]] = [
     {"name": "ds-c005-p02", "interfaces": [{"ip_address": {"address": "10.250.5.2/32"}}]},
@@ -116,20 +116,12 @@ class TestTheSignal:
 
         assert build_lisp_inputs(deployment, "distribution-switch").wan_exit is False
 
-    @pytest.mark.parametrize("role", ["border-leaf", "leaf", "access-leaf", "tor"])
-    def test_a_data_center_never_has_one_whatever_its_deployment_lists(self, role: str) -> None:
-        deployment = {"lisp_map_servers": _MAP_SERVERS, "lisp_site_key": {"password": "k"}, "lisp_wan_edges": _EDGES}
-
-        assert build_lisp_inputs(deployment, role).wan_exit is False
-
     def test_the_default_is_no_exit(self) -> None:
         assert LispInputs(("1.1.1.1",), None, "k", (), ()).wan_exit is False
 
     def test_the_fragment_is_spread_by_the_office_queries_only(self) -> None:
         queries = Path(__file__).resolve().parents[2] / "queries" / "config"
-        spreading = sorted(
-            path.stem for path in queries.glob("*.gql") if "LispWanEdgesOnDeploymentFields" in path.read_text()
-        )
+        spreading = sorted(path.stem for path in queries.glob("*.gql") if "LispSiteOnOfficeFields" in path.read_text())
 
         assert spreading == ["access_switch", "distribution_switch"]
 
@@ -366,6 +358,7 @@ class TestRefusals:
 
 class TestDataCenterIsUnchanged:
     def test_a_dc_border_leaf_ignores_an_edge_on_its_deployment(self) -> None:
+        """A DC VTEP never takes the LISP path: an edge (or LISP keys) on its deployment changes nothing."""
         plain = _run_transform(BorderLeaf, _raw(DC_BORDER))
         data = _raw(DC_BORDER)
         _deployment(data)["lisp_wan_edges"] = {"edges": [{"node": {"name": {"value": OFFICE_EDGE_NAME}}}]}
@@ -374,8 +367,11 @@ class TestDataCenterIsUnchanged:
         assert "proxy-etr" not in plain and "use-petr" not in plain
 
     def test_a_dc_golden_has_no_exit_line(self) -> None:
-        for path in CONFIGS_DIR.glob("*_cisco_xe_lisp_*"):
+        checked = 0
+        for path in CONFIGS_DIR.glob("*_cisco_xe_*"):
             if path.name.startswith(("access_switch", "distribution_switch")):
                 continue
             text = (path / "output.txt").read_text()
-            assert not re.search(r"proxy-etr|use-petr|redistribute lisp|route-export", text), path.name
+            assert not re.search(r"proxy-etr|use-petr|redistribute lisp|route-export|router lisp", text), path.name
+            checked += 1
+        assert checked > 10
