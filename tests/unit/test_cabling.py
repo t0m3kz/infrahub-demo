@@ -436,8 +436,8 @@ class TestCablingEdgeCases:
         assert isinstance(cabling_plan, list)
         assert len(cabling_plan) >= 1
 
-    def test_insufficient_interfaces_logged(self) -> None:
-        """Test that insufficient interfaces are handled gracefully."""
+    def test_insufficient_interfaces_raises(self) -> None:
+        """A ToR uplink with no spine port left fails the plan instead of being skipped."""
         # 3 ToRs with 2 uplinks each (6 connections needed)
         tors = []
         for i in range(1, 4):
@@ -447,11 +447,8 @@ class TestCablingEdgeCases:
         spine = create_mock_interfaces("spine-01", ["Ethernet1/1", "Ethernet1/2"])
 
         planner = CablingPlanner(cast(list, tors), cast(list, spine))
-        cabling_plan = _build_strategy_plan(planner, "intra_rack")
-
-        # Should create as many connections as possible without failing
-        assert len(cabling_plan) >= 1
-        assert isinstance(cabling_plan, list)
+        with pytest.raises(CablingPlanError, match="INSUFFICIENT INTERFACES"):
+            _build_strategy_plan(planner, "intra_rack")
 
     def test_single_device_minimal_setup(self) -> None:
         """Test minimal deployment: 1 ToR, 1 Spine."""
