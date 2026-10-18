@@ -1,0 +1,112 @@
+{#- SONiC config-DB tenant L3: the anycast-gateway SVIs of the routed segments
+    (exchange transit legs included), each tenant VRF's BGP instance with its
+    EVPN type-5 export, the inter-VRF exchange statics and the route maps that
+    filter what reaches EVPN. Same semantics as the EOS/NX-OS templates:
+    - every VRF redistributes its connected subnets into EVPN, except a leaf's
+      own exchange transit /29s (leaf_transit_prefixes) — only the borders
+      originate those as type-5 routes;
+    - a border redistributes its exchange statics, except local_only ones
+      (they stay statics inside the VRF, see transforms/helpers/firewall.py).
+    Populates pre-initialized dicts from parent scope via in-place .update():
+    vlan_interfaces, sag, bgp_globals, bgp_globals_af, static_route_table,
+    route_map, prefix_set, prefix_table. Runs after sonic_common.j2 (VLAN_INTERFACE
+    entries, BGP globals) and sonic_vxlan.j2 (L3 VNI SVIs).
+    NOTE: SAG (static anycast gateway), the per-VRF BGP_GLOBALS_AF redistribute/
+    advertise fields and ROUTE_MAP/PREFIX_SET/PREFIX follow the frrcfgd ("unified"
+    mode) config-DB schema of its HLDs — unverified against a running device, like
+    the BGP keys in sonic_common.j2. -#}
+{%- set _anycast = vxlan and vxlan.enabled and vxlan.anycast_gateway and vxlan.anycast_gateway.enabled -%}
+{%- if _anycast -%}
+{%- set _ = sag.update({'GLOBAL': {'gateway_mac': vxlan.anycast_gateway.mac}}) -%}
+{%- endif -%}
+
+{#- Gateway SVIs: VRF binding, anycast flag and the gateway address(es). A
+    terminate_inline VLAN has no SVI (its HA pair is the L3 hop, see sonic_common.j2). -#}
+{%- for vlan in vlans | default([]) if not vlan.terminate_inline and (vlan.gateway_ip or vlan.gateway_ipv6) -%}
+{%- set svi = 'Vlan' ~ vlan.vlan_id -%}
+{%- set entry = dict(vlan_interfaces.get(svi) or {}) -%}
+{%- if vlan.vrf -%}
+{%- set _ = entry.update({'vrf_name': vlan.vrf}) -%}
+{%- endif -%}
+{%- if _anycast -%}
+{%- set _ = entry.update({'static_anycast_gateway': 'true'}) -%}
+{%- endif -%}
+{%- set _ = vlan_interfaces.update({svi: entry}) -%}
+{%- for address in [vlan.gateway_ip, vlan.gateway_ipv6] if address -%}
+{%- set _ = vlan_interfaces.update({svi ~ '|' ~ address: {}}) -%}
+{%- endfor -%}
+{%- endfor -%}
+
+{#- Inter-VRF exchange statics (TopologyRoutedExchange, via the firewall context):
+    one STATIC_ROUTE per VRF and prefix, ECMP next hops comma-separated. -#}
+{%- set _routes = vrf_routes | default([]) -%}
+{%- for vrf in _routes | map(attribute='vrf') | unique -%}
+{%- for prefix in _routes | selectattr('vrf', 'equalto', vrf) | map(attribute='prefix') | unique -%}
+{%- set hops = _routes | selectattr('vrf', 'equalto', vrf) | selectattr('prefix', 'equalto', prefix) | map(attribute='nexthop') | unique | list -%}
+{%- set _ = static_route_table.update({vrf ~ '|' ~ prefix: {'nexthop': hops | join(',')}}) -%}
+{%- endfor -%}
+{%- endfor -%}
+
+{#- A border exports its non-local_only statics per VRF (exact-match prefix set,
+    IPv4 like the EOS prefix-list). A leaf never redistributes statics. -#}
+{%- set _exported = (_routes | rejectattr('local_only') | list) if sonic_border else [] -%}
+{%- set _static_vrfs = _exported | map(attribute='vrf') | unique | list -%}
+{%- for vrf in _static_vrfs -%}
+{%- set set_name = 'PL-VRF-STATIC-' ~ vrf -%}
+{%- set _ = prefix_set.update({set_name: {'mode': 'IPv4'}}) -%}
+{%- for prefix in _exported | selectattr('vrf', 'equalto', vrf) | map(attribute='prefix') | unique -%}
+{%- set _ = prefix_table.update({set_name ~ '|' ~ (loop.index * 10) ~ '|' ~ prefix ~ '|exact': {'action': 'permit'}}) -%}
+{%- endfor -%}
+{%- set _ = route_map.update({('RM-VRF-STATIC-2-EVPN-' ~ vrf ~ '|10'): {
+  'route_operation': 'permit',
+  'match_prefix_set': set_name
+}}) -%}
+{%- endfor -%}
+
+{#- A leaf keeps its own exchange transit /29s out of EVPN. -#}
+{%- set _transit_filter = not sonic_border and leaf_transit_prefixes | default([]) -%}
+{%- if _transit_filter -%}
+{%- set _ = prefix_set.update({'PL-XCHG-TRANSIT': {'mode': 'IPv4'}}) -%}
+{%- for prefix in leaf_transit_prefixes -%}
+{%- set _ = prefix_table.update({'PL-XCHG-TRANSIT|' ~ (loop.index * 10) ~ '|' ~ prefix ~ '|exact': {'action': 'permit'}}) -%}
+{%- endfor -%}
+{%- set _ = route_map.update({
+  'RM-VRF-CONN-2-EVPN|5': {'route_operation': 'deny', 'match_prefix_set': 'PL-XCHG-TRANSIT'},
+  'RM-VRF-CONN-2-EVPN|10': {'route_operation': 'permit'}
+}) -%}
+{%- endif -%}
+
+{#- Per-VRF BGP instance: connected (and, on a border, exchange statics) into
+    the VRF's unicast table, advertised into EVPN as type-5 routes. Merged into
+    any entry sonic_common.j2 already made for a VRF-scoped handoff session. -#}
+{%- if bgp and (capabilities is not defined or capabilities.bgp_enabled is not defined or capabilities.bgp_enabled) and vxlan and vxlan.enabled -%}
+{%- for mapping in vxlan.l3_vni_mappings | default([]) -%}
+{%- set vrf = mapping.vrf_name -%}
+{%- set globals_entry = dict(bgp_globals.get(vrf) or {}) -%}
+{%- set _ = globals_entry.update({'local_asn': bgp[0].local_as.asn, 'router_id': bgp[0].router_ip}) -%}
+{%- set _ = bgp_globals.update({vrf: globals_entry}) -%}
+{%- set has_ipv6 = vlans | default([]) | selectattr('vrf', 'equalto', vrf) | selectattr('gateway_ipv6') | list | length > 0 -%}
+{%- for af in (['ipv4', 'ipv6'] if has_ipv6 else ['ipv4']) -%}
+{%- set af_key = vrf ~ '|' ~ af ~ '_unicast' -%}
+{%- set af_entry = dict(bgp_globals_af.get(af_key) or {}) -%}
+{%- set _ = af_entry.update({'admin_status': 'true', 'redistribute_connected': 'true'}) -%}
+{%- if _transit_filter -%}
+{%- set _ = af_entry.update({'route_map_redistribute_connected': 'RM-VRF-CONN-2-EVPN'}) -%}
+{%- endif -%}
+{%- if af == 'ipv4' and vrf in _static_vrfs -%}
+{%- set _ = af_entry.update({
+  'redistribute_static': 'true',
+  'route_map_redistribute_static': 'RM-VRF-STATIC-2-EVPN-' ~ vrf
+}) -%}
+{%- endif -%}
+{%- set _ = bgp_globals_af.update({af_key: af_entry}) -%}
+{%- endfor -%}
+{%- set evpn_key = vrf ~ '|l2vpn_evpn' -%}
+{%- set evpn_entry = dict(bgp_globals_af.get(evpn_key) or {}) -%}
+{%- set _ = evpn_entry.update({'admin_status': 'true', 'advertise-ipv4-unicast': 'true'}) -%}
+{%- if has_ipv6 -%}
+{%- set _ = evpn_entry.update({'advertise-ipv6-unicast': 'true'}) -%}
+{%- endif -%}
+{%- set _ = bgp_globals_af.update({evpn_key: evpn_entry}) -%}
+{%- endfor -%}
+{%- endif -%}

@@ -167,11 +167,23 @@ class TestExchangeTransitRendering:
         assert 'export-policy ["RM-VRF-STATIC-2-EVPN-INTERNET"]' in out
 
     @pytest.mark.parametrize("platform", ["sonic", "dell_sonic"])
-    def test_sonic_refuses_transit_legs(self, platform: str) -> None:
+    def test_sonic_renders_transit_legs_statics_and_redistribution(self, platform: str) -> None:
+        """SONiC used to refuse the transit legs; it now renders them as config-DB tables."""
         data = _transit_device_data("cisco_nxos")
         data["DcimDevice"]["edges"][0]["node"]["platform"]["node"]["netmiko_device_type"] = _v(platform)
-        with pytest.raises(ValueError, match="cannot render the inter-VRF exchange transit legs"):
-            _render(platform, data)
+        config = json.loads(_render(platform, data))
+        assert config["VLAN_INTERFACE"]["Vlan3001"]["vrf_name"] == "PROD"
+        assert config["VXLAN_TUNNEL_MAP"]["vtep|map_64001_Vlan3001"] == {"vlan": "Vlan3001", "vni": "64001"}
+        assert config["STATIC_ROUTE"]["PROD|0.0.0.0/0"] == {"nexthop": "100.66.0.4"}
+        assert config["STATIC_ROUTE"]["INTERNET|192.0.2.5/32"] == {"nexthop": "100.66.32.4"}
+        assert "INTERNET|10.1.0.0/24" not in config["STATIC_ROUTE"]
+        assert config["BGP_GLOBALS_AF"]["PROD|ipv4_unicast"]["route_map_redistribute_static"] == (
+            "RM-VRF-STATIC-2-EVPN-PROD"
+        )
+        assert config["BGP_GLOBALS_AF"]["INTERNET|ipv4_unicast"]["route_map_redistribute_static"] == (
+            "RM-VRF-STATIC-2-EVPN-INTERNET"
+        )
+        assert "PL-VRF-STATIC-PROD|10|0.0.0.0/0|exact" in config["PREFIX"]
 
     @pytest.mark.parametrize("platform", ["cisco_nxos", "arista_eos", "nokia_sros"])
     def test_no_pbr_is_rendered_on_the_border_leaf(self, platform: str) -> None:

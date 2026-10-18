@@ -358,10 +358,6 @@ class BaseDeviceTransform(InfrahubTransform):
         # on real segments. They are not bound to any host port (get_interfaces only
         # binds a transit VLAN to a port carrying the context).
         transits = (data.get("exchange_transits") or []) + leaf_transits
-        if transits and platform_name in {"sonic", "dell_sonic"}:
-            raise ValueError(
-                f"{platform_name} cannot render the inter-VRF exchange transit legs; refusing incomplete config"
-            )
         vlans = get_vlans(activations=(activations or []) + transits)
         transit_by_vlan = {act["vlan_id"]: act for act in transits}
         for vlan in vlans if transits else []:

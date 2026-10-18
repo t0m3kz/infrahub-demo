@@ -292,14 +292,15 @@ class TestLeafExtraConfig:
 
     @pytest.mark.parametrize("platform", ["sonic", "dell_sonic"])
     @pytest.mark.parametrize("role", ["leaf", "tor", "access-leaf"])
-    def test_sonic_leaf_with_firewall_pbr_refuses(self, platform: str, role: str) -> None:
-        """SONiC cannot render the transit leg: a firewall-PBR leaf is refused."""
+    def test_sonic_leaf_with_firewall_pbr_holds_the_transit_leg(self, platform: str, role: str) -> None:
+        """SONiC used to refuse a firewall-PBR leaf; it now gets the local leg like NX-OS/EOS
+        (rendered by templates/configs/common/sonic_tenant_l3.j2, see test_sonic_tenant_l3.py)."""
         device = _device([_context()], [_activation()])
-        with pytest.raises(ValueError, match="cannot render the inter-VRF exchange transit legs"):
-            _transform(role)._extra_config(device, platform)
+        config = _transform(role)._extra_config(device, platform)
+        assert 3000 in {v["vlan_id"] for v in config["vlans"]}
+        assert config["leaf_transit_prefixes"] == ["100.66.0.0/29"]
 
-    def test_sonic_leaf_without_firewall_pbr_still_renders(self) -> None:
-        """The refusal is scoped to firewall PBR: a SONiC leaf with no context renders."""
+    def test_sonic_leaf_without_firewall_pbr_has_no_transit(self) -> None:
         config = _transform()._extra_config(_device([], [_activation()]), "sonic")
         assert config["leaf_transit_prefixes"] == []
 
