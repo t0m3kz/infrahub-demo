@@ -420,18 +420,24 @@ def wait_for_validations(
 
     failures: list[str] = []
     for result in validation_results:
-        name = result.name.value if hasattr(result, "name") else str(result.id)
+        # Validators carry a label, not a name; the id is only the fallback.
+        label = result.label.value if hasattr(result, "label") else str(result.id)
         conclusion = result.conclusion.value if hasattr(result, "conclusion") else "unknown"
-        logger.info("  Validation: %s - %s", name, conclusion)
+        logger.info("  Validation: %s - %s", label, conclusion)
         if conclusion == "failure":
-            failures.append(name)
+            failures.append(label)
 
+    # The validator only says it failed; the check under it says why.
+    failed_checks = _fetch_failed_checks(client, pc_id) if failures else []
+    if failed_checks:
+        logger.error("Failing checks:\n  - %s", "\n  - ".join(failed_checks))
     if not allow_failures:
         assert not failures, (
-            f"Validations completed but {len(failures)} check(s) failed.\n"
+            f"Validations completed but {len(failures)} validation(s) failed.\n"
             f"  Proposed change: {pc_name}\n"
             f"  Failed validations: {', '.join(failures)}\n"
-            f"  Merge will be blocked. Check server logs for details."
+            f"  Failing checks: {'; '.join(failed_checks) or 'none reported'}\n"
+            f"  Merge will be blocked."
         )
 
     return validation_results
@@ -442,9 +448,10 @@ def _fetch_failed_checks(client: InfrahubClientSync, pc_id: str) -> list[str]:
 
     Infrahub's own merge task rejects a merge whose validators contain a
     failing check ("Unable to merge proposed change containing failing
-    checks") without saying which one — wait_for_validations() only sees a
-    validator's own conclusion, not the individual checks under it, and a
-    validator can still show "success" overall depending on aggregation. This
+    checks") without saying which one — a validator's own conclusion says
+    nothing about the individual checks under it, and a validator can still
+    show "success" overall depending on aggregation. Used by the merge path
+    and by wait_for_validations() when a validator fails. This
     is the only path to the actual self.log_error() message a check reported,
     which is the one piece of information that turns "the merge failed" into
     something actionable.
