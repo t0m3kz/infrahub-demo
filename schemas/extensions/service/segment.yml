@@ -185,16 +185,6 @@ nodes:
           min_value: 1
           max_value: 16777215
 
-      - name: local_vni_override
-        kind: Number
-        label: Local VNI Override
-        optional: true
-        order_weight: 1055
-        description: "Optional local VNI override for exceptional migration/interoperability cases."
-        parameters:
-          min_value: 1
-          max_value: 16777215
-
       - name: status
         kind: Dropdown
         label: Status

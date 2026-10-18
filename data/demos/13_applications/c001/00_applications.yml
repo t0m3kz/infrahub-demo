@@ -19,7 +19,6 @@ spec:
       criticality: high
       security_profile: internet_exposed
       fqdn: storefront.c001.demo.local
-      ingress_mode: frontend
       owner: C001
       member_of_groups:
         - app_applications

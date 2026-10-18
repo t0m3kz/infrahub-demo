@@ -20,9 +20,6 @@ spec:
   data:
     - name: c001-private-access-standard
       description: "C001 standard private-access controls"
-      mfa_required: true
-      device_posture_required: true
-      session_timeout_minutes: 480
       allowed_groups:
         - c001-engineering
 ---

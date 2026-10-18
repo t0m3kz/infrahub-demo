@@ -206,9 +206,9 @@ class TestAttachRefs:
         gen.client.get = AsyncMock(return_value=node)
 
         for _ in range(2):
-            await gen.attach_refs(kind="TopologyPod", node_id="pod-1", refs={"asn_pool": "asn-1"})
+            await gen.attach_refs(kind="TopologyPod", node_id="pod-1", refs={"loopback_pool": "lo-1"})
 
-        assert node.asn_pool == {"id": "asn-1"}
+        assert node.loopback_pool == {"id": "lo-1"}
         assert node.save.await_count == 2
 
     @pytest.mark.asyncio
@@ -219,7 +219,7 @@ class TestAttachRefs:
         )
 
         with pytest.raises(GeneratorError, match="TopologyPod pod-1: node not found"):
-            await gen.attach_refs(kind="TopologyPod", node_id="pod-1", refs={"asn_pool": "asn-1"})
+            await gen.attach_refs(kind="TopologyPod", node_id="pod-1", refs={"loopback_pool": "lo-1"})
 
         gen.logger.error.assert_called_once()
 
@@ -231,7 +231,7 @@ class TestAttachRefs:
         gen.client.get = AsyncMock(return_value=node)
 
         with pytest.raises(RuntimeError, match="write rejected"):
-            await gen.attach_refs(kind="TopologyPod", node_id="pod-1", refs={"asn_pool": "asn-1"})
+            await gen.attach_refs(kind="TopologyPod", node_id="pod-1", refs={"loopback_pool": "lo-1"})
 
     @pytest.mark.asyncio
     async def test_pod_strategy_attaches_loopback_and_prefix_pool_in_one_save(self) -> None:

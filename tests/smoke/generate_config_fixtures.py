@@ -790,16 +790,15 @@ def build_device_data(
         segment_kwargs.append(
             {
                 "vlan_id": 100,
-                # 10100 is inside the capped L2 range (10001-49999) and stays
-                # clear of the L3 VNI range at 50001-59999.
+                # 10100 is inside the per-site L2 pool range (10001-39999).
                 "vni": 10100,
                 "seg_name": "seg-100",
                 "seg_type": "ManagedVxlanSegment",
                 "gateway_ip": "10.100.0.1/24",
                 "ns_name": "VRF_A",
                 # Non-default namespace + l3_vni is what makes this a symmetric-IRB
-                # segment: it drives the L3 VNI / VRF stanza. 50001 is the bottom of
-                # the L3 VNI pool range, disjoint from the L2 range above.
+                # segment: it drives the L3 VNI / VRF stanza. 50001 is just a
+                # fixture value, disjoint from the L2 range above.
                 "l3_vni": 50001,
                 "security_policy": policy_vxlan,
                 "num_deployments": 1,

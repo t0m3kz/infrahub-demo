@@ -2,10 +2,10 @@
 # C002 (SwiftGo GmbH) — DC6 deployment footprint.
 #
 # TopologyCustomerDC is the customer's presence inside DC6 (parent = the DC
-# itself, not a pod — see data/demos/15_customer_deployments/*/dc/*/01_deployment.yml
-# for the reference pattern). Lives in the "default" namespace alongside
-# every other customer deployment — no per-customer VRF, no exchange
-# gateway needed to reach shared services.
+# itself, not a pod — see data/demos/30_all/06_customer_boarding/*/dc/*/01_deployment.yml
+# for the reference pattern). Its tenant namespace is derived from the
+# footprint's environment (one of the 4 fixed namespaces in
+# data/bootstrap/22_namespaces.yml) — no per-customer VRF.
 
 apiVersion: infrahub.app/v1
 kind: Object

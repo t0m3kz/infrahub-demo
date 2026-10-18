@@ -182,8 +182,8 @@ class ZtnaMixin(GetOrCreateByNameMixin):
         owning customer's private_access_service (ZTNA broker: e.g. Zscaler ZPA).
 
         The grant is an AppDependency whose source_profile is a
-        SecurityAccessProfile: it says which users (allowed_groups,
-        MFA/device posture) reach the component, and on which of its ports.
+        SecurityAccessProfile: it says which user groups (allowed_groups)
+        reach the component, and on which of its ports.
         A component nobody is granted to stays unpublished.
         """
         created = 0

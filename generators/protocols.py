@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 
 from infrahub_sdk.protocols import (
     BuiltinIPAddress,
-    BuiltinIPNamespace,
     BuiltinIPPrefix,
     BuiltinTag,
     CoreArtifactTarget,
@@ -53,11 +52,6 @@ class TopologyCircuit(CoreNode):
     provider: RelationshipAttribute[OrganizationProvider]
 
 
-class TopologyClusterHosting(CoreNode):
-    name: String
-    clusters: RelationshipManager[VirtCluster]
-
-
 class TopologyConnectableLocation(CoreNode):
     name: String
 
@@ -77,7 +71,6 @@ class TopologyCustomer(CoreNode):
     name: String
     org_id: String
     status: Dropdown
-    namespace: RelationshipAttribute[BuiltinIPNamespace]
     network_segments: RelationshipManager[ManagedNetworkSegment]
     owner: RelationshipAttribute[OrganizationEntity]
 
@@ -167,15 +160,6 @@ class ManagedGenericVlanDomain(CoreNode):
     vlan_pool: RelationshipAttribute[CoreNumberPool]
 
 
-class DcimGenericSFP(CoreNode):
-    form_factor: Dropdown
-    serial: StringOptional
-    sfp_type: Dropdown
-    status: Dropdown
-    interface: RelationshipAttribute[DcimInterface]
-    manufacturer: RelationshipAttribute[OrganizationManufacturer]
-
-
 class ManagedHA(CoreNode):
     group_id: IntegerOptional
     mode: Dropdown
@@ -204,7 +188,6 @@ class DcimInterface(CoreNode):
 class ManagedLoadBalancer(CoreNode):
     description: StringOptional
     lb_type: DropdownOptional
-    lb_vendor: DropdownOptional
     name: String
     scheme: DropdownOptional
     status: Dropdown
@@ -226,7 +209,6 @@ class ManagedNetworkSegment(CoreNode):
     isolation_mode: Dropdown
     name: String
     pbr_enabled: Boolean
-    segment_role: Dropdown
     segment_type: DropdownOptional
     status: Dropdown
     gateway: RelationshipAttribute[IpamIPAddress]
@@ -266,38 +248,24 @@ class CloudHybridAttachment(CoreNode):
 
 
 class ManagedTenantScoped(CoreNode):
-    firewall_context: RelationshipAttribute[ManagedFirewallContext]
-    loadbalancer_ha: RelationshipAttribute[ManagedLoadbalancerHA]
     serving_firewall_context: RelationshipAttribute[ManagedFirewallContext]
-
-
-class ManagedRouting(CoreNode):
-    name: String
 
 
 class ManagedSaasService(CoreNode):
     contract_end_date: StringOptional
-    data_classification: Dropdown
     description: StringOptional
     name: String
-    service_tier: Dropdown
     status: Dropdown
     tenant_id: StringOptional
 
 
 class TopologySegmentHosting(CoreNode):
     name: String
-    l3_vni_pool: RelationshipAttribute[CoreNumberPool]
     vni_pool: RelationshipAttribute[CoreNumberPool]
-
-
-class DcimSubInterface(CoreNode):
-    sub_interfaces: RelationshipManager[DcimVirtualInterface]
 
 
 class CloudAccount(CloudResource, CoreArtifactTarget):
     account_id: StringOptional
-    account_role: DropdownOptional
     environment: DropdownOptional
     owner: RelationshipAttribute[OrganizationEntity]
     provider: RelationshipAttribute[OrganizationProvider]
@@ -308,7 +276,6 @@ class AppApplication(AppGeneric):
     criticality: Dropdown
     environment: Dropdown
     fqdn: String
-    ingress_mode: Dropdown
     label: String
     name: StringOptional
     security_profile: Dropdown
@@ -319,11 +286,10 @@ class RoutingAutonomousSystem(CoreNode):
     asn: Integer
     description: StringOptional
     name: String
-    location: RelationshipAttribute[LocationGeneric]
     owner: RelationshipAttribute[OrganizationProvider]
 
 
-class ManagedBGP(ManagedGeneric, ManagedGenericDevice, ManagedRouting):
+class ManagedBGP(ManagedGeneric, ManagedGenericDevice):
     confederation_identifier: IntegerOptional
     graceful_restart: Boolean
     multipath: Boolean
@@ -335,7 +301,6 @@ class ManagedBGP(ManagedGeneric, ManagedGenericDevice, ManagedRouting):
 class RoutingBGPAddressFamily(CoreNode):
     advertise_all_vni: Boolean
     advertise_default_gw: Boolean
-    advertise_svi_ip: Boolean
     afi: Dropdown
     description: StringOptional
     safi: Dropdown
@@ -357,17 +322,6 @@ class ManagedBGPPeering(ManagedGeneric, ManagedPeering, ManagedGenericInterfaces
     password: RelationshipAttribute[RoutingPassword]
 
 
-class DcimBidiSFP(DcimGenericSFP):
-    wavelength_rx: Integer
-    wavelength_tx: Integer
-
-
-class ManagedCRMService(ManagedSaasService):
-    instance_url: StringOptional
-    provider: Dropdown
-    sandbox: Boolean
-
-
 class DcimCable(CoreNode):
     name: String
     type: Dropdown
@@ -379,7 +333,6 @@ class TopologyCloud(TopologyDeployment):
 
 
 class ManagedCloudFirewallHA(ManagedHA, ManagedGeneric, ManagedInlineService):
-    policy_arn: StringOptional
     provider: Dropdown
     region: StringOptional
 
@@ -392,15 +345,11 @@ class ManagedCloudProxy(ManagedSaasService, ManagedInlineService, ManagedProxySe
 
 class TopologyCloudRegion(TopologyDeployment, TopologyConnectableLocation):
     status: Dropdown
-    direct_connects: RelationshipManager[CloudDirectConnect]
     location: RelationshipAttribute[LocationMetro]
-    virtual_networks: RelationshipManager[CloudVirtualNetwork]
-    vpn_gateways: RelationshipManager[CloudVPNGateway]
 
 
 class TopologyCloudZone(TopologyDeployment):
-    instances: RelationshipManager[CloudInstance]
-    network_segments: RelationshipManager[CloudNetworkSegment]
+    pass
 
 
 class VirtCluster(CoreNode):
@@ -417,9 +366,7 @@ class VirtCluster(CoreNode):
     deployment: RelationshipAttribute[TopologyDeployment]
     ip_namespace: RelationshipAttribute[IpamNamespace]
     node_pools: RelationshipManager[VirtNodePool]
-    proxy_service: RelationshipAttribute[ManagedProxyService]
     tags: RelationshipManager[BuiltinTag]
-    vip_service: RelationshipAttribute[LoadbalancerVIP]
     virtual_network: RelationshipAttribute[CloudVirtualNetwork]
 
 
@@ -436,7 +383,7 @@ class TopologyColocationMetro(
     TopologySegmentHosting,
 ):
     deployment_type: Dropdown
-    asn_pool: RelationshipAttribute[CoreNumberPool]
+    fabric_asn_pool: RelationshipAttribute[CoreNumberPool]
     fabric_templates: RelationshipManager[TopologyElement]
     location: RelationshipAttribute[LocationMetro]
     loopback_pool: RelationshipAttribute[CoreIPAddressPool]
@@ -468,11 +415,6 @@ class AppComponent(AppGeneric):
     security_tag: RelationshipAttribute[SecurityTag]
 
 
-class ManagedConferencingService(ManagedSaasService):
-    media_optimization: Boolean
-    provider: Dropdown
-
-
 class DcimConsoleInterface(DcimInterface, DcimEndpoint, CoreArtifactTarget):
     port: Integer
     speed: Integer
@@ -499,22 +441,18 @@ class OrganizationCustomer(OrganizationGeneric, OrganizationEntity):
     pass
 
 
-class TopologyCustomerCloud(TopologyCustomer, TopologyDeployment, TopologyClusterHosting, TopologyConnectableLocation):
+class TopologyCustomerCloud(TopologyCustomer, TopologyDeployment, TopologyConnectableLocation):
     customer_name: String
     name: StringOptional
-    cloud_account: RelationshipAttribute[CloudAccount]
-    virtual_networks: RelationshipManager[CloudVirtualNetwork]
 
 
 class TopologyCustomerColocation(
-    TopologyCustomer, TopologyDeployment, TopologyClusterHosting, TopologyConnectableLocation, ManagedTenantScoped
+    TopologyCustomer, TopologyDeployment, TopologyConnectableLocation, ManagedTenantScoped
 ):
     name: StringOptional
 
 
-class TopologyCustomerDC(
-    TopologyCustomer, TopologyDeployment, TopologyClusterHosting, TopologyConnectableLocation, ManagedTenantScoped
-):
+class TopologyCustomerDC(TopologyCustomer, TopologyDeployment, TopologyConnectableLocation, ManagedTenantScoped):
     name: StringOptional
     design: RelationshipAttribute[TopologyCustomerTemplateDC]
 
@@ -524,13 +462,11 @@ class CloudCustomerGateway(CloudResource):
     account: RelationshipAttribute[CloudAccount]
     asn: RelationshipAttribute[RoutingAutonomousSystem]
     ip_address: RelationshipAttribute[IpamIPAddress]
-    physical_device: RelationshipAttribute[DcimDevice]
 
 
 class TopologyCustomerOffice(
     TopologyCustomer,
     TopologyDeployment,
-    TopologyClusterHosting,
     TopologyPhysicalDeployment,
     TopologyDeviceHosting,
     TopologyDeviceNaming,
@@ -598,10 +534,8 @@ class DcimDeviceType(CoreNode):
     part_number: StringOptional
     storage_gb: IntegerOptional
     tcam_entries: IntegerOptional
-    unit_price: IntegerOptional
     weight: IntegerOptional
     manufacturer: RelationshipAttribute[OrganizationManufacturer]
-    platform: RelationshipAttribute[DcimPlatform]
     tags: RelationshipManager[BuiltinTag]
 
 
@@ -626,7 +560,6 @@ class CloudDirectConnect(CloudResource):
     location: RelationshipAttribute[LocationFacility]
     physical_devices: RelationshipManager[DcimDevice]
     region: RelationshipAttribute[TopologyCloudRegion]
-    virtual_interfaces: RelationshipManager[CloudVirtualInterface]
 
 
 class TopologyElement(CoreNode):
@@ -647,7 +580,6 @@ class TopologyExternalProviders(TopologyDeployment, TopologyConnectableLocation,
 
 class LocationFacility(LocationGeneric):
     facility_id: StringOptional
-    is_cloud: Boolean
     physical_address: StringOptional
     owner: RelationshipAttribute[OrganizationGeneric]
 
@@ -692,7 +624,6 @@ class CloudInstance(CloudResource, DcimCapabilities, AppInstance):
     availability_zone: RelationshipAttribute[TopologyCloudZone]
     network_segment: RelationshipAttribute[CloudNetworkSegment]
     security_groups: RelationshipManager[CloudSecurityGroup]
-    virtual_network: RelationshipAttribute[CloudVirtualNetwork]
 
 
 class CloudInternetGateway(CloudResource):
@@ -711,7 +642,6 @@ class DcimLAGInterface(DcimInterface):
 
 class CloudLoadBalancer(ManagedLoadBalancer, CloudResource, CoreArtifactTarget):
     network_segments: RelationshipManager[CloudNetworkSegment]
-    public_ips: RelationshipManager[CloudPublicIP]
     security_groups: RelationshipManager[CloudSecurityGroup]
     virtual_network: RelationshipAttribute[CloudVirtualNetwork]
 
@@ -779,14 +709,12 @@ class VirtNodePool(CoreNode):
     storage_per_node_gb: IntegerOptional
     cluster: RelationshipAttribute[VirtCluster]
     instances: RelationshipManager[CloudInstance]
-    management_ip: RelationshipAttribute[IpamIPAddress]
     network_segments: RelationshipManager[ManagedNetworkSegment]
-    physical_hosts: RelationshipManager[DcimPhysicalDevice]
     security_groups: RelationshipManager[CloudSecurityGroup]
     tags: RelationshipManager[BuiltinTag]
 
 
-class ManagedOSPF(ManagedGeneric, ManagedGenericDevice, ManagedRouting):
+class ManagedOSPF(ManagedGeneric, ManagedGenericDevice):
     process_id: String
     reference_bandwidth: Integer
     router_type: Dropdown
@@ -844,7 +772,7 @@ class DcimPhysicalDevice(CoreArtifactTarget, DcimDevice, DcimCapabilities, AppIn
     serial: StringOptional
 
 
-class DcimPhysicalInterface(DcimInterface, DcimEndpoint, DcimSubInterface):
+class DcimPhysicalInterface(DcimInterface, DcimEndpoint):
     interface_type: Dropdown
     mtu: Integer
     ip_address: RelationshipAttribute[IpamIPAddress]
@@ -858,9 +786,7 @@ class DcimPlatform(CoreNode):
     name: String
     napalm_driver: StringOptional
     netmiko_device_type: StringOptional
-    nornir_platform: StringOptional
     devices: RelationshipManager[DcimDevice]
-    manufacturer: RelationshipAttribute[OrganizationManufacturer]
 
 
 class TopologyPod(TopologyDeployment, TopologyRackHosting, TopologyDeviceHosting):
@@ -872,7 +798,6 @@ class TopologyPod(TopologyDeployment, TopologyRackHosting, TopologyDeviceHosting
     name: String
     spine_interface_sorting_method: Dropdown
     status: Dropdown
-    asn_pool: RelationshipAttribute[CoreNumberPool]
     fabric_templates: RelationshipManager[TopologyElement]
     loopback_pool: RelationshipAttribute[CoreIPAddressPool]
     prefix_pool: RelationshipAttribute[CoreIPPrefixPool]
@@ -1004,7 +929,6 @@ class TopologySaasRegion(TopologyDeployment, TopologyConnectableLocation):
     region_name: String
     status: Dropdown
     location: RelationshipAttribute[LocationMetro]
-    saas_services: RelationshipManager[ManagedSaasService]
 
 
 class CloudSecurityGroup(CloudResource):
@@ -1034,7 +958,6 @@ class SecuritySecurityProfile(CoreNode):
 
 
 class ManagedSegmentDeployment(CoreNode):
-    local_vni_override: IntegerOptional
     status: Dropdown
     vni: IntegerOptional
     deployment: RelationshipAttribute[TopologySegmentHosting]
@@ -1053,7 +976,6 @@ class DcimSoftwareImage(CoreNode):
     end_of_support: DateTimeOptional
     is_approved: Boolean
     is_recommended: Boolean
-    known_cve_count: IntegerOptional
     name: String
     release_date: DateTimeOptional
     release_notes_url: URLOptional
@@ -1063,20 +985,9 @@ class DcimSoftwareImage(CoreNode):
     platform: RelationshipAttribute[DcimPlatform]
 
 
-class DcimStandardSFP(DcimGenericSFP):
-    pass
-
-
-class ManagedStorageService(ManagedSaasService):
-    encryption_at_rest: Boolean
-    provider: Dropdown
-
-
 class LocationSuite(LocationGeneric):
     index: Integer
     name: String
-    racks_per_row: Integer
-    rows: Integer
     suite_name: String
     owner: RelationshipAttribute[OrganizationGeneric]
 
@@ -1104,7 +1015,6 @@ class CloudTransitGatewayAttachment(CloudResource):
     attachment_type: Dropdown
     associated_route_table: RelationshipAttribute[CloudTransitGatewayRouteTable]
     hybrid_endpoint: RelationshipAttribute[CloudHybridAttachment]
-    network_segments: RelationshipManager[CloudNetworkSegment]
     owner_account: RelationshipAttribute[CloudAccount]
     propagates_to_route_tables: RelationshipManager[CloudTransitGatewayRouteTable]
     transit_gateway: RelationshipAttribute[CloudTransitGateway]
@@ -1113,13 +1023,10 @@ class CloudTransitGatewayAttachment(CloudResource):
 
 class CloudTransitGatewayRouteTable(CloudResource):
     is_default: Boolean
-    associated_attachments: RelationshipManager[CloudTransitGatewayAttachment]
-    propagated_attachments: RelationshipManager[CloudTransitGatewayAttachment]
     transit_gateway: RelationshipAttribute[CloudTransitGateway]
 
 
 class ProxyURLCategory(CoreNode):
-    category_type: Dropdown
     description: StringOptional
     entries: StringOptional
     name: String
@@ -1135,10 +1042,7 @@ class LoadbalancerVIP(ManagedGenericInterfaces):
     session_persistence: DropdownOptional
     snat_enabled: Boolean
     ssl_certificate: StringOptional
-    ssl_redirect: Boolean
     status: Dropdown
-    timeout_client: IntegerOptional
-    timeout_server: IntegerOptional
     backend_segment: RelationshipAttribute[ManagedNetworkSegment]
     health_checks: RelationshipManager[LoadbalancerHealthCheck]
     load_balancer: RelationshipAttribute[ManagedLoadBalancer]
@@ -1190,11 +1094,8 @@ class CloudVirtualNetwork(CloudResource):
     dns_hostnames: Boolean
     dns_support: Boolean
     is_default: Boolean
-    is_shared: BooleanOptional
     account: RelationshipAttribute[CloudAccount]
     cidr_blocks: RelationshipManager[IpamPrefix]
-    customer_deployment: RelationshipAttribute[TopologyCustomer]
-    instances: RelationshipManager[CloudInstance]
     network_segments: RelationshipManager[CloudNetworkSegment]
     region: RelationshipAttribute[TopologyCloudRegion]
 

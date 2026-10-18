@@ -86,42 +86,6 @@ generics:
             label: Azure VNet Subnet
             description: "Azure Virtual Network subnet"
             color: "#0078D4"
-      - name: segment_role
-        kind: Dropdown
-        label: Segment Role
-        optional: true
-        order_weight: 260
-        description: "Recommended segmentation model — defines the security and access requirements of this segment"  # yamllint disable-line rule:line-length
-        default_value: server_application
-        choices:
-          - name: enterprise_user
-            label: Enterprise User
-            description: "For employees and internal users accessing corporate resources"  # yamllint disable-line rule:line-length
-            color: "#5B9BD5"
-          - name: server_application
-            label: Server/Application
-            description: "Hosts servers and business-critical applications with high security requirements"  # yamllint disable-line rule:line-length
-            color: "#70AD47"
-          - name: management
-            label: Management Network
-            description: "Reserved for network administration and monitoring infrastructure"  # yamllint disable-line rule:line-length
-            color: "#FFC000"
-          - name: guest_visitor
-            label: Guest/Visitor
-            description: "Restricted access for guests and visitors, isolated from corporate resources"  # yamllint disable-line rule:line-length
-            color: "#FF7F50"
-          - name: iot_ot
-            label: IoT/OT
-            description: "Internet of Things and Operational Technology devices with specific protocol requirements"  # yamllint disable-line rule:line-length
-            color: "#A64D79"
-          - name: dmz
-            label: DMZ
-            description: "Demilitarized zone — perimeter network between untrusted external and internal networks"  # yamllint disable-line rule:line-length
-            color: "#E06C75"
-          - name: service_provider
-            label: Service Provider
-            description: "Dedicated connectivity for external partners and service providers"  # yamllint disable-line rule:line-length
-            color: "#8B6CE7"
       - name: pbr_enabled
         kind: Boolean
         label: PBR Enabled

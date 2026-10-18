@@ -6,7 +6,7 @@ version: "1.0"
 # topology deployment (DC, Colocation, or Cloud).
 #
 # One shared generic (TopologyCustomer) carries the common fields (owner,
-# environment, status, namespace), and one concrete node per parent
+# environment, status), and one concrete node per parent
 # deployment type (CustomerDC, CustomerColocation, CustomerCloud) sets
 # parent: to that specific deployment kind, so the hierarchy is explicit
 # in the schema rather than relying on the bare-generic TopologyDeployment
@@ -133,16 +133,6 @@ generics:
         identifier: "topology_customer__owner"
         description: "Customer or provider this footprint belongs to (e.g.
           an operator's own hub PoP has a Provider owner)."
-      - name: namespace
-        peer: BuiltinIPNamespace
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: "topology_customer__namespace"
-        order_weight: 160
-        description: "IPAM namespace (= VRF). Set on hub footprints (e.g.
-          the operator's own SD-WAN PoP) to make them an ExchangeGateway
-          side."
 
   - name: CustomerTemplate
     namespace: Topology
@@ -220,7 +210,6 @@ nodes:
       - CoreArtifactTarget
       - TopologyCustomer
       - TopologyDeployment
-      - TopologyClusterHosting
       - TopologyConnectableLocation
       - ManagedTenantScoped
     parent: TopologyDataCenter
@@ -260,7 +249,6 @@ nodes:
       - CoreArtifactTarget
       - TopologyCustomer
       - TopologyDeployment
-      - TopologyClusterHosting
       - TopologyConnectableLocation
       - ManagedTenantScoped
     parent: TopologyColocationMetro
@@ -291,7 +279,6 @@ nodes:
     inherit_from:
       - CoreArtifactTarget
       - TopologyDeployment
-      - TopologyClusterHosting
       - TopologyPhysicalDeployment
       - TopologyDeviceHosting
       - TopologyDeviceNaming
@@ -441,14 +428,6 @@ nodes:
         order_weight: 1000
         description: "Building locations backing this customer's office footprint
           (single for branch/regional, multiple for HQ/campus)"
-      - name: namespace
-        peer: BuiltinIPNamespace
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: "topology_customer_office__namespace"
-        order_weight: 1100
-        description: "IPAM namespace (= VRF) for this environment's footprint"
       # On the per-tenant footprint, not on the office location: the footprint knows
       # its environment (which decides the shared namespace a prefix lives in)
       # and its tenant (parent OfficeCustomer), while one building can host
@@ -511,7 +490,6 @@ nodes:
       - CoreArtifactTarget
       - TopologyCustomer
       - TopologyDeployment
-      - TopologyClusterHosting
       - TopologyConnectableLocation
     parent: TopologyCloudRegion
     children: ""
@@ -536,27 +514,10 @@ nodes:
         kind: Text
         optional: false
         order_weight: 100
-    relationships:
-      - name: cloud_account
-        peer: CloudAccount
-        label: "Cloud Account"
-        cardinality: one
-        kind: Attribute
-        optional: true
-        order_weight: 200
-      - name: virtual_networks
-        label: "Virtual Networks"
-        peer: CloudVirtualNetwork
-        cardinality: many
-        kind: Generic
-        optional: true
-        identifier: "virtual_network__customer_deployments"
-        description: "VPCs belonging to this customer deployment footprint."
-        order_weight: 300
 
   # Customer deployment footprint inside a SaaS provider region — same shape
   # as CustomerCloud (parent: a region, owner/environment/status from
-  # TopologyCustomer). Inherits TopologyClusterHosting/TopologyConnectableLocation
+  # TopologyCustomer). Inherits TopologyConnectableLocation
   # only for parity with the other TopologyCustomer* kinds (unused: a SaaS
   # tenant is reached over the internet/API, not a physical or virtual
   # circuit, so it has no fabric or transport connectivity to model).
@@ -569,7 +530,6 @@ nodes:
       - CoreArtifactTarget
       - TopologyCustomer
       - TopologyDeployment
-      - TopologyClusterHosting
       - TopologyConnectableLocation
     parent: TopologySaasRegion
     children: ""

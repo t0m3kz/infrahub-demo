@@ -103,25 +103,6 @@ generics:
             description: "dc-roleNNNN, fixed-width digit run instead of a labeled path (e.g. dc1-lf0201)"
             color: "#BFBF7F"
 
-  - name: ClusterHosting
-    namespace: Topology
-    human_friendly_id:
-      - name__value
-    include_in_menu: false
-    attributes:
-      - name: name
-        kind: Text
-        order_weight: 100
-    relationships:
-      - name: clusters
-        peer: VirtCluster
-        label: "Virtualisation Clusters"
-        description: "Clusters hosted in this deployment."
-        kind: Generic
-        cardinality: many
-        identifier: "virt_cluster__deployment"
-        order_weight: 1300
-
   - name: SegmentHosting
     namespace: Topology
     description: "VNI pools for network segments activated in this deployment"
@@ -156,16 +137,6 @@ generics:
         order_weight: 7400
         on_delete: cascade
         description: "L2 VNI pool for this deployment. Used when segment.vni is null and overlay is VXLAN-EVPN."  # yamllint disable-line rule:line-length
-
-      - name: l3_vni_pool
-        peer: CoreNumberPool
-        kind: Attribute
-        cardinality: one
-        optional: true
-        identifier: "segment_hosting__l3_vni_pool"
-        order_weight: 7500
-        on_delete: cascade
-        description: "L3 VNI pool for VRF allocation. Used when namespace.l3_vni is null."
 
       # EVPN route-targets must be identical on every VTEP in the fabric or the
       # VTEPs never import each other's routes. Under ebgp-ibgp/ospf-ibgp the

@@ -42,45 +42,6 @@ nodes:
         label: Description
         optional: true
         order_weight: 200
-      - name: category_type
-        kind: Dropdown
-        label: Category Type
-        optional: true
-        default_value: custom
-        order_weight: 300
-        choices:
-          - name: malware
-            label: "Malware / C2"
-            description: "Known malware distribution or command-and-control endpoints"
-            color: "#E74C3C"
-          - name: social_media
-            label: "Social Media"
-            description: "Social networking and messaging platforms"
-            color: "#F39C12"
-          - name: saas_allowed
-            label: "SaaS (Allowed)"
-            description: "Sanctioned SaaS services with SSL bypass"
-            color: "#2ECC71"
-          - name: internal_bypass
-            label: "Internal Bypass"
-            description: "Internal/private destinations that skip inspection"
-            color: "#3498DB"
-          - name: gambling
-            label: "Gambling"
-            description: "Online gambling and betting sites"
-            color: "#8E44AD"
-          - name: adult
-            label: "Adult Content"
-            description: "Adult or explicit content sites"
-            color: "#C0392B"
-          - name: streaming
-            label: "Streaming / Video"
-            description: "Video streaming and media delivery services"
-            color: "#16A085"
-          - name: custom
-            label: "Custom"
-            description: "Custom/organisation-specific category"
-            color: "#95A5A6"
       - name: entries
         kind: Text
         label: Entries

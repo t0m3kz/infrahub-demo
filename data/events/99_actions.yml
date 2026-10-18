@@ -562,7 +562,7 @@ spec:
       action: run-colocation-metro-generator
 
     # Only fabric_templates is watched, deliberately. The generator itself
-    # writes loopback_pool/management_pool/technical_pool/asn_pool back onto
+    # writes loopback_pool/management_pool/technical_pool/fabric_asn_pool back onto
     # the metro, so a rule matching those relationships — or an unguarded
     # `updated` rule — would re-fire itself on every run. No cascade generator
     # either: the cages nested below a metro declare no kit of their own.

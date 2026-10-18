@@ -44,11 +44,6 @@ nodes:
         optional: true
         cardinality: one
         kind: Attribute
-      - name: location
-        peer: LocationGeneric
-        optional: true
-        cardinality: one
-        kind: Attribute
 
   - name: BGPAddressFamily
     namespace: Routing
@@ -135,13 +130,6 @@ nodes:
         optional: true
         default_value: false
         order_weight: 1300
-      - name: advertise_svi_ip
-        kind: Boolean
-        label: "Advertise SVI IP"
-        description: "Advertise SVI IP addresses (EVPN specific)"
-        optional: true
-        default_value: false
-        order_weight: 1400
       - name: description
         kind: Text
         label: "Description"
@@ -159,7 +147,6 @@ nodes:
     inherit_from:
       - ManagedGeneric
       - ManagedGenericDevice
-      - ManagedRouting
     human_friendly_id:
       - "name__value"
     attributes:
@@ -372,15 +359,6 @@ nodes:
 
 extensions:
   nodes:
-    - kind: OrganizationProvider
-      relationships:
-        - name: asns
-          label: ASNs
-          peer: RoutingAutonomousSystem
-          optional: true
-          cardinality: many
-          kind: Component
-
     - kind: ManagedBGP
       relationships:
         - name: peerings

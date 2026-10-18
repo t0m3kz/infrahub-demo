@@ -216,7 +216,7 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
         # ~3900-value space instead of ~3900 per independent VLAN domain.
 
         # L2 VNI pool for the VXLAN overlay (VRF-lite: no VRF stretches over
-        # EVPN, so there's no L3 VNI pool — border-leaf VRFs are local-only).
+        # EVPN; the only L3 VNIs are the four fixed namespaces' hand-set ones).
         #
         # Capped at 39999 even though a VNI is a 24-bit field. Three independent
         # constraints, the first two of which the device enforces by rejecting
@@ -227,11 +227,12 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
         #      and every ASN here is a 4-byte private ASN — so both a type-1 RD
         #      (IPv4:assigned) and a type-2 RT (4-byte-ASN:assigned) leave only
         #      16 bits for the VNI.
-        #   2. Must stay disjoint from the L3 VNI range (50001-59999, supplied
-        #      by data — see data/demos/.../01_pools.yml `*-l3vni-pool`). The VNI
-        #      space is a single flat namespace per device, NOT one namespace per
-        #      VNI type, so an L2 segment allocated on top of a VRF's L3 VNI
-        #      collides and the `member vni ... associate` line fails.
+        #   2. Must stay disjoint from the fixed L3 VNIs (60000-60003, set by hand
+        #      on the four namespaces in data/bootstrap/22_namespaces.yml) and the
+        #      exchange transit band (61000+). The VNI space is a single flat
+        #      namespace per device, NOT one namespace per VNI type, so an L2
+        #      segment allocated on top of a VRF's L3 VNI collides and the
+        #      `member vni ... associate` line fails.
         #   3. Must stay disjoint from GLOBAL-L2VNI (40000-49999, data/bootstrap/
         #      18_vni_pools.yml), where stretched segments draw their one shared
         #      VNI. Every site pool hands out this same band, so a stretched VNI

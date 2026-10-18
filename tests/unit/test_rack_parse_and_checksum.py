@@ -122,7 +122,6 @@ class TestParseRackData:
                 "spine_template": {"id": "tmpl-1", "interfaces": []},
                 "prefix_pool": None,
                 "loopback_pool": None,
-                "asn_pool": None,
                 "parent": {
                     "id": "dc-1",
                     "name": "DC1",
@@ -166,7 +165,6 @@ class TestParseRackData:
                                     "spine_template": {"node": {"id": "tmpl-2", "interfaces": {"edges": []}}},
                                     "prefix_pool": None,
                                     "loopback_pool": None,
-                                    "asn_pool": None,
                                     "parent": {
                                         "node": {
                                             "id": "dc-2",

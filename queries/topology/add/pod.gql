@@ -138,7 +138,6 @@ query topology_pod($name: String!) {
         }
         loopback_pool { node { id name { value } } }
         prefix_pool { node { id name { value } } }
-        asn_pool { node { id name { value } } }
         spine_count: devices(role__value: "spine") {
           count
         }

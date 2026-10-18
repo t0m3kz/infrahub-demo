@@ -21,6 +21,5 @@ spec:
       customer_name: "Internet"
       description: "The public internet — any address outside the managed namespaces"
       segment_type: vlan
-      segment_role: dmz
       pbr_enabled: false
       security_zone: "INTERNET-ZONE"

@@ -113,21 +113,6 @@ nodes:
         optional: false
         order_weight: 725
         description: "Canonical FQDN for application access/identification"
-      - name: ingress_mode
-        kind: Dropdown
-        optional: true
-        order_weight: 750
-        default_value: frontend
-        description: "How this application is exposed at ingress"
-        choices:
-          - name: frontend
-            label: "Frontend"
-            color: "#61DAFB"
-            description: "Application is exposed by a frontend/VIP path"
-          - name: dns
-            label: "DNS"
-            color: "#4CAF50"
-            description: "Application exposure is DNS-driven (without frontend VIP mapping)"
       - name: application_orchestrator
         kind: Dropdown
         optional: false
@@ -252,17 +237,6 @@ nodes:
         description: "Health checks associated with this application component"
 extensions:
   nodes:
-    - kind: LoadbalancerVIP
-      relationships:
-        - name: app_components
-          peer: AppComponent
-          cardinality: many
-          kind: Attribute
-          optional: true
-          order_weight: 2200
-          identifier: "vip_service__app_components"
-          description: "Application components exposed by this VIP"
-
     - kind: OrganizationCustomer
       relationships:
         - name: applications

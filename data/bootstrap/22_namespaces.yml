@@ -19,13 +19,14 @@
 # permanent underlay/global-table namespace for EVPN-VXLAN VTEP loopbacks and
 # underlay BGP — never a VRF, unaffected by this model.
 #
-# L3 VNI band: 60000-60003, the FIXED-namespace band. A VNI is one flat 24-bit
-# field on the wire with no L2/L3 discriminator, so these four have to stay
-# disjoint from every dynamic pool, not just from each other:
+# L3 VNI band: 60000-60003, the FIXED-namespace band. No pool allocates L3
+# VNIs: these four are hand-set and are the only L3 VNIs. A VNI is one flat
+# 24-bit field on the wire with no L2/L3 discriminator, so these four have to
+# stay disjoint from every dynamic pool, not just from each other:
 #
 #   10001-39999  L2 VNI     dcN-vni-pool    (per-site, local segments)
 #   40000-49999  L2 VNI     GLOBAL-L2VNI    (stretched segments, all sites)
-#   50001-59999  L3 VNI     GLOBAL-L3VNI + dcN-l3vni-pool
+#   50000-59999  unused     (no pool allocates here)
 #   60000-60003  L3 VNI     these four, allocated by hand — pool-free on purpose
 #   64000-64799  L2 VNI     exchange transit VLANs (61000 + transit VLAN), derived
 #                           by utils/exchange_transit.py, never pool-allocated

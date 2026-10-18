@@ -44,7 +44,7 @@ query topology_colocation_metro($name: String!) {
             }
           }
         }
-        asn_pool {
+        fabric_asn_pool {
           node {
             id
             name {

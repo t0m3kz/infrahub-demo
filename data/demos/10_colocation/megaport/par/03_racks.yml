@@ -14,8 +14,6 @@ spec:
           - suite_name: MCR-PAR1
             index: 1
             shortname: mcr-par1-s1
-            rows: 1
-            racks_per_row: 1
             children:
               kind: LocationRack
               data:
