@@ -12,6 +12,7 @@ import time
 from typing import Any, cast
 
 from infrahub_sdk import InfrahubClient, InfrahubClientSync
+from infrahub_sdk.exceptions import NodeNotFoundError
 from infrahub_sdk.graphql import Mutation
 from infrahub_sdk.task.models import TaskFilter, TaskState
 
@@ -360,25 +361,36 @@ def wait_for_no_running_tasks(
 
 def wait_for_validations(
     client: InfrahubClientSync,
+    pc_id: str,
     pc_name: str,
     allow_failures: bool = False,
 ) -> list[Any]:
     """Wait for proposed change validations to complete.
 
+    Looks the proposed change up by the id create_proposed_change() returned
+    (pc_name is only for messages), and treats "not found" as not ready yet:
+    the first read can come straight after the create and miss it — observed
+    as a NodeNotFoundError on the first poll in test_16, after the same lookup
+    had worked for test_12 and test_14 in the same run.
+
     Returns:
         List of validation results
     """
-    logger.info("Waiting for validations to complete for PC: %s", pc_name)
+    logger.info("Waiting for validations to complete for PC: %s (%s)", pc_name, pc_id)
 
     def _check_validations() -> tuple[bool, list[Any]]:
-        pc = client.get(
-            "CoreProposedChange",
-            name__value=pc_name,
-            include=["validations"],
-            exclude=["reviewers", "approved_by", "created_by"],
-            prefetch_relationships=True,
-            populate_store=True,
-        )
+        try:
+            pc = client.get(
+                "CoreProposedChange",
+                id=pc_id,
+                include=["validations"],
+                exclude=["reviewers", "approved_by", "created_by"],
+                prefetch_relationships=True,
+                populate_store=True,
+            )
+        except NodeNotFoundError:
+            logger.info("PC %s (%s) not visible yet", pc_name, pc_id)
+            return False, []
 
         if hasattr(pc.validations, "peers") and pc.validations.peers:
             peers_list = cast(list, pc.validations.peers)
@@ -641,7 +653,7 @@ def create_and_validate_proposed_change(
         source_branch=source_branch,
         destination_branch=destination_branch,
     )
-    validations = wait_for_validations(client=client, pc_name=name)
+    validations = wait_for_validations(client=client, pc_id=pc_id, pc_name=name)
     return {
         "pc_id": pc_id,
         "validations": validations,
