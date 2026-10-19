@@ -55,13 +55,16 @@ class CheckLoadBalancer(InfrahubCheck):
 
     def validate(self, data: Any) -> None:
         cleaned = clean_data(data)
-        devices = cleaned.get("DcimPhysicalDevice") or cleaned.get("DcimVirtualDevice") or []
+        physical = cleaned.get("DcimPhysicalDevice") or []
+        devices = physical or cleaned.get("DcimVirtualDevice") or []
         if not devices:
             self.log_error(message="Load balancer device not found")
             return
 
         device = devices[0]
-        errors = validate_appliance(device, ha_kind="ManagedLoadbalancerHA", label="LB")
+        # A dedicated virtual instance has no platform readiness of its own (its uplinks stay planned; the
+        # physical host carries the cabling), so only its contexts are validated.
+        errors = validate_appliance(device, ha_kind="ManagedLoadbalancerHA", label="LB") if physical else []
         errors.extend(validate_loadbalancer_contexts(device))
         for error in errors:
             self.log_error(message=error)

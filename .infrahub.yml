@@ -264,7 +264,7 @@ check_definitions:
   - name: validate_loadbalancer
     class_name: CheckLoadBalancer
     file_path: checks/loadbalancer.py
-    targets: loadbalancer_devices
+    targets: loadbalancers
     parameters:
       device: name__value
   - name: validate_proxy

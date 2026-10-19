@@ -71,25 +71,12 @@ class TestLoadBalancerCheck:
         check.validate({"DcimPhysicalDevice": {"edges": []}, "DcimVirtualDevice": {"edges": []}})
         assert check._captured_errors == ["Load balancer device not found"]
 
-    def test_virtual_device_root_is_validated(self) -> None:
+    def test_virtual_device_skips_appliance_readiness_but_validates_contexts(self) -> None:
+        device = _device(status="planned", interfaces=[{"role": "uplink", "status": "planned"}])
+        device["capabilities"][0]["contexts"] = [_context(vlan_id=None)]
         check = _check()
-        check.validate(
-            {
-                "DcimPhysicalDevice": {"edges": []},
-                "DcimVirtualDevice": {
-                    "edges": [
-                        {
-                            "node": {
-                                "name": {"value": "lb-v"},
-                                "status": {"value": "planned"},
-                                "platform": {"node": {"netmiko_device_type": {"value": "f5_tmsh"}}},
-                            }
-                        }
-                    ]
-                },
-            }
-        )
-        assert any("status is 'planned'" in error for error in check._captured_errors)
+        check.validate({"DcimPhysicalDevice": [], "DcimVirtualDevice": [device]})
+        assert check._captured_errors == ["Context 'dc1-lb-PROD' on 'lb-1' has no leg VLAN"]
 
     def test_missing_platform_status_uplink_and_ha_emit_errors(self) -> None:
         bad = _device(
