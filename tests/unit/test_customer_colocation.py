@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.common import CommonGenerator
+from generators.firewall_context import FIREWALL_CONTEXT
 from generators.topology.customer_colocation import CustomerDeploymentColocationExchangeGenerator
 
 _T = TypeVar("_T", bound=CommonGenerator)
@@ -242,7 +243,7 @@ class TestFirewallContextProvisioning:
         cluster.name.value = cluster_name
         cluster.capabilities.peers = [MagicMock(id="fw-1")]
         gen.client.filters = AsyncMock(return_value=[cluster])
-        gen.link_serving_firewall_context = AsyncMock()
+        gen.link_serving_context = AsyncMock()
         return gen, fw_device, cluster
 
     @pytest.mark.asyncio
@@ -253,7 +254,7 @@ class TestFirewallContextProvisioning:
         await gen.generate(_colo_payload_with_parent(dedicated_firewall=False, fw_devices=[fw_device]))
 
         target = gen._ensure_transit_legs.await_args_list[-1].kwargs["target"]
-        assert (target.context_name, target.cluster_id, target.tenant_id, target.track) == (
+        assert (target.context_name("PROD"), target.cluster_id, target.tenant_id, target.track) == (
             f"{cluster.name.value}-shared",
             cluster.id,
             None,
@@ -274,7 +275,7 @@ class TestFirewallContextProvisioning:
         await gen.generate(_colo_payload_with_parent(customer_id="cust-1", dedicated_firewall=True))
 
         target = gen._ensure_transit_legs.await_args_list[-1].kwargs["target"]
-        assert (target.context_name, target.cluster_id, target.tenant_id, target.track) == (
+        assert (target.context_name("PROD"), target.cluster_id, target.tenant_id, target.track) == (
             f"{dedicated_cluster.name.value}-context",
             "dedicated-cluster-1",
             "cust-1",
@@ -306,7 +307,7 @@ class TestFirewallContextProvisioning:
         kwargs = gen._ensure_transit_legs.await_args_list[-1].kwargs
         assert kwargs["customer_id"] == "cust-1"
         assert kwargs["customer"]["id"] == "cust-1"
-        assert kwargs["target"].context_name.endswith("-shared")
+        assert kwargs["target"].context_name("PROD").endswith("-shared")
         assert not hasattr(gen, "_ensure_policy_only_context")
 
     @pytest.mark.asyncio
@@ -333,9 +334,7 @@ class TestLinkServingFirewallContext:
         deployment.save = AsyncMock()
         gen.client.get = AsyncMock(return_value=deployment)
 
-        await gen.link_serving_firewall_context(
-            kind="TopologyCustomerColocation", customer_id="cust-1", context_id="ctx-1"
-        )
+        await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-1")
 
         assert gen.client.get.call_args.kwargs == {"kind": "TopologyCustomerColocation", "id": "cust-1"}
         assert deployment.serving_firewall_context == "ctx-1"
@@ -350,9 +349,7 @@ class TestLinkServingFirewallContext:
         deployment.save = AsyncMock()
         gen.client.get = AsyncMock(return_value=deployment)
 
-        await gen.link_serving_firewall_context(
-            kind="TopologyCustomerColocation", customer_id="cust-1", context_id="ctx-1"
-        )
+        await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-1")
 
         deployment.save.assert_not_awaited()
 
@@ -362,26 +359,28 @@ class TestLinkServingFirewallContext:
         gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
         gen.client.get = AsyncMock(side_effect=RuntimeError("boom"))
 
-        await gen.link_serving_firewall_context(
-            kind="TopologyCustomerColocation", customer_id="cust-1", context_id="ctx-1"
-        )
+        await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-1")
 
         gen.logger.error.assert_called_once()
 
 
-class TestEnsureDedicatedLoadbalancer:
-    @pytest.mark.asyncio
-    async def test_not_requested_is_noop(self) -> None:
-        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+class TestNoLoadbalancerContext:
+    """A metro provisions FirewallContexts only (customer_colocation.py's docstring)."""
 
-        await gen.generate(_colo_payload_with_parent(dedicated_loadbalancer=False, fw_devices=[]))
-
-        gen.client.create.assert_not_called()
+    def test_only_the_firewall_spec_runs(self) -> None:
+        assert CustomerDeploymentColocationExchangeGenerator._context_specs == (FIREWALL_CONTEXT,)
 
     @pytest.mark.asyncio
-    async def test_no_loadbalancer_devices_is_noop(self) -> None:
+    async def test_load_balancers_on_the_metro_are_ignored(self) -> None:
+        """Even load-balancer devices in the payload, dedicated or not, never reach a lookup or a write."""
         gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        lbs = [
+            {"id": f"lb-{n}", "name": f"FR5-METRO-LB{n}", "kind": "DcimPhysicalDevice", "platform": {"name": "f5_tmos"}}
+            for n in (1, 2)
+        ]
 
-        await gen.generate(_colo_payload_with_parent(dedicated_loadbalancer=True, lb_devices=[], fw_devices=[]))
+        await gen.generate(_colo_payload_with_parent(fw_devices=[], dedicated_loadbalancer=True, lb_devices=lbs))
 
+        gen.client.filters.assert_not_called()
         gen.client.create.assert_not_called()
+        gen.logger.error.assert_not_called()

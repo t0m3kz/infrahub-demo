@@ -489,31 +489,8 @@ class TestEnsureHaPairs:
         gen.logger.error.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_tenant_id_sets_tenant_on_created_ha_domain(self) -> None:
-        """tenant_id (set by a dedicated customer LB/FW pair) is sent as
-        ManagedTenantScoped.tenant on the created HA domain."""
-        gen = self._gen()
-        gen.client.filters = AsyncMock(side_effect=[[], [_mock_device("lb-01"), _mock_device("lb-02")]])
-        gen.client.get = AsyncMock(return_value=_mock_group())
-        ha_obj = MagicMock()
-        ha_obj.id = "ha-1"
-        ha_obj.save = AsyncMock()
-        gen.client.create = AsyncMock(return_value=ha_obj)
-
-        await gen._ensure_ha_pairs(
-            ["lb-02", "lb-01"],
-            ha_kind="ManagedLoadbalancerHA",
-            role_label="load-balancer (dedicated C005)",
-            device_kind=DcimVirtualDevice,
-            tenant_id="cust-1",
-        )
-
-        create_kwargs = gen.client.create.call_args.kwargs
-        assert create_kwargs["data"]["tenant"] == {"id": "cust-1"}
-
-    @pytest.mark.asyncio
-    async def test_no_tenant_id_omits_tenant_from_data(self) -> None:
-        """Shared (non-dedicated) HA pairs never send a tenant field."""
+    async def test_created_ha_domain_carries_no_tenant(self) -> None:
+        """An HA domain never sends a tenant field: a dedicated customer is recorded on its context."""
         gen = self._gen()
         gen.client.filters = AsyncMock(side_effect=[[], [_mock_device("fw-01"), _mock_device("fw-02")]])
         gen.client.get = AsyncMock(return_value=_mock_group())

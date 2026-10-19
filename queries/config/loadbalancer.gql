@@ -1,84 +1,18 @@
+# A load balancer is a physical member of a shared ManagedLoadbalancerHA
+# cluster or a dedicated virtual instance: the transform renders the first
+# non-empty root (transforms/config/loadbalancer.py).
 query loadbalancer_config($device: String!) {
   DcimPhysicalDevice(name__value: $device) {
     edges {
       node {
-        name { value }
-        platform {
-          node {
-            name { value }
-            netmiko_device_type { value }
-            napalm_driver { value }
-            ansible_network_os { value }
-          }
-        }
-        ... on DcimCapabilities {
-        capabilities {
-          edges {
-            node {
-              __typename
-              ... on ManagedGeneric {
-                name { value }
-                status { value }
-              }
-              ... on ManagedLoadbalancerHA {
-                name { value }
-                group_id { value }
-                mode { value }
-                priority { value }
-                preempt { value }
-                capabilities { edges { node { name { value } } } }
-              }
-            }
-          }
-        }
-        }
-        interfaces {
-          edges {
-            node {
-              __typename
-              name { value }
-              description { value }
-              status { value }
-              role { value }
-              ... on DcimPhysicalInterface {
-                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
-              }
-              ... on DcimVirtualInterface {
-                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
-                parent_interface { node { name { value } } }
-              }
-              capabilities {
-                edges {
-                  node {
-                    __typename
-                    ...InlineTerminationFields
-                    ... on LoadbalancerVIP {
-                      hostname { value }
-                      protocol { value }
-                      port { value }
-                      status { value }
-                      description { value }
-                      load_balancing_algorithm { value }
-                      session_persistence { value }
-                      vip_ip { node { address { value } } }
-                      load_balancer { node { name { value } } }
-                      health_checks {
-                        edges {
-                          node {
-                            check { value }
-                            rise { value }
-                            fall { value }
-                            timeout { value }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
+        ...LoadbalancerDeviceFields
+      }
+    }
+  }
+  DcimVirtualDevice(name__value: $device) {
+    edges {
+      node {
+        ...LoadbalancerDeviceFields
       }
     }
   }

@@ -8,6 +8,7 @@ instead of ManagedMLAG.
 from ipaddress import ip_interface
 from typing import Any
 
+from transforms.helpers.addressing import host_ip
 from utils.exchange_transit import OFFSET_MEMBER_B, OFFSET_VIP
 
 # The HA sync link is a back-to-back cable between the two members, never
@@ -46,7 +47,9 @@ def get_ha(
 
     With device_name, ``unit`` is this device's role in the pair — "primary"
     for the first member by name, "secondary" for the other — the failover
-    unit ASA and the HA link addresses (HA_LINK_ADDRESSES) are keyed by.
+    unit ASA and the HA link addresses (HA_LINK_ADDRESSES) are keyed by, and
+    ``peer_management_ip`` the other member's management address (its
+    primary_address, where the query selects it: the NetScaler HA node).
     """
     for cap in device_capabilities or []:
         if cap.get("typename") not in _HA_TYPENAMES:
@@ -58,8 +61,11 @@ def get_ha(
                 break
         members = sorted(d.get("name") for d in (cap.get("capabilities") or []) if d.get("name"))
         unit = None
+        peer_management_ip = None
         if device_name in members:
             unit = "primary" if members.index(device_name) == 0 else "secondary"
+            peer = next((d for d in cap.get("capabilities") or [] if d.get("name") not in (None, device_name)), {})
+            peer_management_ip = host_ip((peer.get("primary_address") or {}).get("address"))
         return {
             "name": cap.get("name"),
             "group_id": cap.get("group_id"),
@@ -72,6 +78,7 @@ def get_ha(
             "ha_link": ha_link,
             "members": members,
             "unit": unit,
+            "peer_management_ip": peer_management_ip,
             "link_addresses": HA_LINK_ADDRESSES if ha_link else None,
         }
     return None

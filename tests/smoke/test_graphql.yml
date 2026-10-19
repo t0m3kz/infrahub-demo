@@ -244,6 +244,22 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: lb_segment_gateways
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/lb_segment_gateways.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: lb_serving_contexts
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/lb_serving_contexts.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: segment_components
     tests:
       - name: syntax_check
@@ -305,14 +321,6 @@ infrahub_tests:
       - name: syntax_check
         spec:
           path: queries/topology/add/mlag_domain.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
-    resource_name: loadbalancer_vip_data
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/topology/add/loadbalancer_vip.gql
           kind: graphql-query-smoke
 
   # ==================== VALIDATION QUERIES ====================

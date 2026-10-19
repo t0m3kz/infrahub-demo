@@ -32,6 +32,12 @@ test_constants' environment-driven expectations.
 A last step runs CheckLispFabric and renders every switch of the offices' LISP fabrics (add_office_fabric): the
 distribution-switches as map-servers and the access-switches as edges, with the WAN exit where the office has an
 SD-WAN edge.
+
+The load-balancer steps close the one-arm LB path of the two load_balanced components
+(ALL_DEMO_LOAD_BALANCED_COMPONENTS): CheckLoadBalancer on the members of the contexts holding
+their VIPs, the F5 render of those contexts (partition, strict route domain = namespace l3_vni,
+leg, virtual servers with SNAT automap), the border leafs' leg VLAN/VNI/anycast and VIP /26
+static, and the client leaf's PBR bypass of the VIP/32.
 """
 
 from __future__ import annotations
@@ -47,6 +53,7 @@ from infrahub_sdk import InfrahubClient
 
 from checks.firewall import CheckFirewall
 from checks.lisp_fabric import CheckLispFabric
+from checks.loadbalancer import CheckLoadBalancer
 from generators.protocols import DcimPhysicalDevice
 from transforms.config.access_leaf import AccessLeaf
 from transforms.config.access_switch import AccessSwitch
@@ -54,6 +61,7 @@ from transforms.config.border_leaf import BorderLeaf
 from transforms.config.distribution_switch import DistributionSwitch
 from transforms.config.edge import Edge
 from transforms.config.leaf import Leaf
+from transforms.config.loadbalancer import LoadBalancer
 from utils.exchange_transit import (
     EXCHANGE_PEERS,
     MANAGEMENT_TYPE,
@@ -68,16 +76,22 @@ from .conftest import TestInfrahubDockerWithClient
 from .test_constants import (
     ALL_DEMO_BRANCH,
     ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS,
+    ALL_DEMO_DC_LOADBALANCER_PLATFORMS,
     ALL_DEMO_DC_NAMES,
     ALL_DEMO_DCI_CIRCUITS,
     ALL_DEMO_DEDICATED_FIREWALL_TENANTS,
+    ALL_DEMO_DEDICATED_LOADBALANCER_TENANTS,
     ALL_DEMO_EDGE_INTERLINK_INTERFACE,
     ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS,
     ALL_DEMO_INTERNET_BGWS,
     ALL_DEMO_INTERNET_EGRESS_RULES,
+    ALL_DEMO_LB_CLIENT_DEPENDENCIES,
+    ALL_DEMO_LOAD_BALANCED_COMPONENTS,
     ALL_DEMO_MANAGEMENT_RULES,
+    ALL_DEMO_NAMESPACE_L3_VNI,
     ALL_DEMO_OFFICE_FABRICS,
     ALL_DEMO_OFFICE_WAN_EXITS,
+    ALL_DEMO_SEGMENT_LEGS,
     ALL_DEMO_SNAT_POOL_PREFIX,
     INTERNET_L3_VNI,
     INTERNET_ROUTE_TARGET,
@@ -89,9 +103,17 @@ from .test_constants import (
     MANAGEMENT_SERVICES_PREFIX,
     MANAGEMENT_SERVICES_VLAN,
     ExpectedTransitContext,
+    LoadbalancerContextKey,
     transit_namespace_type,
 )
-from .test_helpers import fetch_dc_topology, fetch_transit_inventory, match_transit_contexts, render_device_config
+from .test_helpers import (
+    fetch_dc_topology,
+    fetch_loadbalancer_inventory,
+    fetch_transit_inventory,
+    match_loadbalancer_contexts,
+    match_transit_contexts,
+    render_device_config,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -366,6 +388,15 @@ def _allowed_vlans(port_block: str) -> set[int]:
     return vlans
 
 
+def _interface_block(rendered: str, interface: str) -> str | None:
+    """The `interface <name>` stanza of an NX-OS render, None if absent.
+
+    An interface stanza may hold blank lines (empty includes), which _block would stop at.
+    """
+    match = re.search(rf"^interface {re.escape(interface)}\n((?:(?:[ \t]+.*)?\n)*)", rendered + "\n", re.MULTILINE)
+    return match.group(1) if match else None
+
+
 def _edge_transit_errors(device: str, rendered: str, context: dict[str, Any]) -> list[str]:
     """What a metro edge must render for the transit legs of its shared firewall context.
 
@@ -385,9 +416,7 @@ def _edge_transit_errors(device: str, rendered: str, context: dict[str, Any]) ->
     if not ports:
         return [f"{device}: no firewall port tagged with '{context['name']}'"]
     for port in ports:
-        # An interface stanza may hold blank lines (empty includes), which _block would stop at.
-        match = re.search(rf"^interface {re.escape(port)}\n((?:(?:[ \t]+.*)?\n)*)", rendered + "\n", re.MULTILINE)
-        block = match.group(1) if match else None
+        block = _interface_block(rendered, port)
         if block is None or "switchport mode trunk" not in block:
             errors.append(f"{device}: {port} is not a trunk")
         elif not set(vlans.values()) <= _allowed_vlans(block):
@@ -481,6 +510,79 @@ def _fabric_pair_errors(device: str, rendered: str) -> list[str]:
     }
     if not dci_ports <= tracking["dci"] or ALL_DEMO_EDGE_INTERLINK_INTERFACE in tracking["dci"]:
         errors.append(f"{device}: dci-tracking on {sorted(tracking['dci'])}, expected at least {sorted(dci_ports)}")
+    return errors
+
+
+async def _vip_contexts(client: InfrahubClient, branch: str) -> dict[LoadbalancerContextKey, dict[str, Any]]:
+    """The load-balancer contexts holding the VIPs of ALL_DEMO_LOAD_BALANCED_COMPONENTS, by key (test_62 checks them)."""
+    by_key, _ = match_loadbalancer_contexts(
+        await fetch_loadbalancer_inventory(client=client, branch=branch),
+        ALL_DEMO_DC_NAMES,
+        ALL_DEMO_DEDICATED_LOADBALANCER_TENANTS,
+    )
+    keys = {key for component in ALL_DEMO_LOAD_BALANCED_COMPONENTS.values() for key in component["contexts"]}
+    missing = sorted(map(str, keys - set(by_key)))
+    assert not missing, f"no load-balancer context for {missing} on branch '{branch}'"
+    return {key: by_key[key] for key in keys}
+
+
+def _f5_blocks(rendered: str, header: str) -> list[str]:
+    """The bodies of every top-level TMOS stanza `<header> {` ... `}` (header may end in an object name)."""
+    return re.findall(rf"^{re.escape(header)}(?: \S+)? \{{\n(.*?)^\}}", rendered, re.MULTILINE | re.DOTALL)
+
+
+def _f5_block(rendered: str, header: str) -> str | None:
+    """The body of the top-level TMOS stanza `<header> {`, None if absent."""
+    match = re.search(rf"^{re.escape(header)} \{{\n(.*?)^\}}", rendered, re.MULTILINE | re.DOTALL)
+    return None if match is None else match.group(1)
+
+
+def _border_leaf_lb_leg_errors(device: str, rendered: str, context: dict[str, Any]) -> list[str]:
+    """What an NX-OS border leaf must render for a load-balancer context tagged on its ports.
+
+    Nothing when none of its ports is tagged (it then carries no leg of the context). Otherwise the
+    tagged `load-balancer` port trunks the leg VLAN, the VLAN has its L2VNI, the SVI is the leg's
+    anycast .1 in the tenant VRF, and `vrf context <NS>` routes the VIP /26 to the floating .4,
+    exported through PL-VRF-STATIC-<NS>.
+    """
+    ports = [str(port["interface"]) for port in context["border_ports"] if port["device"] == device]
+    if not ports:
+        return []
+    name = str(context["name"])
+    namespace = str(context["legs"][0]["namespace"])
+    vlan = transit_vlan(int(context["vlan"]), transit_namespace_type(namespace))
+    addresses = transit_addresses(str(_leg_network(context, namespace)))
+    errors: list[str] = []
+    for port in ports:
+        block = _interface_block(rendered, port)
+        if block is None or vlan not in _allowed_vlans(block):
+            errors.append(f"{device}: {port} does not trunk the leg VLAN {vlan} of '{name}'")
+    if re.search(rf"^vlan {vlan}\n\s+vn-segment {transit_vni(vlan)}$", rendered, re.MULTILINE) is None:
+        errors.append(f"{device}: no 'vlan {vlan}' with 'vn-segment {transit_vni(vlan)}' ('{name}')")
+    svi = _block(rendered, f"interface Vlan{vlan}")
+    if svi is None:
+        errors.append(f"{device}: no 'interface Vlan{vlan}' ('{name}' leg)")
+    else:
+        errors += [
+            f"{device}: Vlan{vlan} lacks '{line}' ('{name}')"
+            for line in (
+                f"vrf member {namespace}",
+                f"ip address {addresses['anycast']}/29",
+                "fabric forwarding mode anycast-gateway",
+            )
+            if line not in svi
+        ]
+    route = f"ip route {context['vip_prefix']} {addresses['vip']}"
+    vrf_block = _block(rendered, f"vrf context {namespace}")
+    if vrf_block is None or route not in vrf_block:
+        errors.append(f"{device}: '{route}' is not inside 'vrf context {namespace}' ('{name}' VIP range)")
+    exported = (
+        rf"^ip prefix-list PL-VRF-STATIC-{re.escape(namespace)} seq \d+ permit {re.escape(str(context['vip_prefix']))}$"
+    )
+    if re.search(exported, rendered, re.MULTILINE) is None:
+        errors.append(
+            f"{device}: the VIP range {context['vip_prefix']} of '{name}' is not exported (PL-VRF-STATIC-{namespace})"
+        )
     return errors
 
 
@@ -1474,3 +1576,217 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
             f"  - {e}" for e in errors
         )
         logging.info("Office fabrics verified: %s", sorted(ALL_DEMO_OFFICE_FABRICS))
+
+    # ------------------------------------------------------------------
+    # Load-balancer contexts (one-arm, SNAT automap): the LB, the border leafs, the client leaf
+    # ------------------------------------------------------------------
+
+    @pytest.mark.order(403)
+    @pytest.mark.dependency(scope="session", name="all_demo_loadbalancer_check", depends=["all_demo_loadbalancer_vips"])
+    @pytest.mark.asyncio
+    async def test_09_check_loadbalancer_passes(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """CheckLoadBalancer finds no error on every member of a context holding VIPs: the
+        appliance is ready, and every context of its cluster has its VLAN, VIP range, a leg on
+        the member and VIPs inside the range with pool members."""
+        logging.info("=== %s - Step 9: CheckLoadBalancer ===", SCENARIO_NAME)
+
+        contexts = await _vip_contexts(async_client_main, scenario_branch)
+        errors: list[str] = []
+        for key, context in sorted(contexts.items(), key=repr):
+            members = sorted({str(leg["device"]) for leg in context["legs"]})
+            assert members, f"{key}: '{context['name']}' has no member with a leg"
+            for member in members:
+                check = CheckLoadBalancer(branch=scenario_branch, client=async_client_main, params={"device": member})
+                passed = await check.run()
+                found = [str(entry.get("message") or "") for entry in check.logs if entry.get("level") == "ERROR"]
+                if not passed or found:
+                    errors.append(f"{member} ({context['name']}): {found or 'check failed'}")
+
+        assert not errors, f"CheckLoadBalancer failed on branch '{scenario_branch}':\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
+
+    @pytest.mark.order(403)
+    @pytest.mark.dependency(scope="session", depends=["all_demo_loadbalancer_check"])
+    @pytest.mark.asyncio
+    async def test_09_loadbalancer_config_renders_contexts(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """Every member of a context holding VIPs renders the context (F5 TMOS, the DC10 and DC12 pairs).
+
+        The context's partition (`SHARED-<NS>` for a shared one) defaults to a strict route
+        domain whose id is the tenant namespace's l3_vni (PROD 60000, NON-PROD 60001, parent
+        none); the leg VLAN tagged on the uplink, the member's own self IP (.5/.6), the floating
+        .4 and the default route to the border anycast .1; per VIP a virtual server
+        `destination /<partition>/<vip>:<port>` with SNAT automap and a pool of its members.
+        """
+        logging.info("=== %s - Step 9: Render load-balancer contexts ===", SCENARIO_NAME)
+
+        contexts = await _vip_contexts(async_client_main, scenario_branch)
+        errors: list[str] = []
+        rendered_count = 0
+        for (dc, namespace, tenant), context in sorted(contexts.items(), key=repr):
+            platform = ALL_DEMO_DC_LOADBALANCER_PLATFORMS.get(dc)
+            assert platform == "f5_tmos", f"{dc}: load-balancer platform '{platform}', this test asserts the F5 render"
+            name = str(context["name"])
+            partition = f"SHARED-{namespace}" if tenant is None else "-".join(tenant.split("-")[:2]).upper()
+            route_domain = ALL_DEMO_NAMESPACE_L3_VNI[namespace]
+            p = f"/{partition}/"
+            vlan = transit_vlan(int(context["vlan"]), transit_namespace_type(namespace))
+            for leg in sorted(context["legs"], key=lambda leg: str(leg["device"])):
+                device = str(leg["device"])
+                rendered = await render_device_config(
+                    async_client_main, scenario_branch, device, query="loadbalancer_config", transform_cls=LoadBalancer
+                )
+                rendered_count += 1
+                addresses = transit_addresses(str(ipaddress.IPv4Interface(leg["address"]).network))
+                label = f"{dc}/{device} ({name})"
+                expected_blocks = {
+                    f"auth partition {partition}": (f"default-route-domain {route_domain}",),
+                    f"net route-domain /Common/rd{route_domain}": (
+                        f"id {route_domain}",
+                        "parent none",
+                        "strict enabled",
+                        f"/Common/vlan{vlan}",
+                    ),
+                    f"net vlan /Common/vlan{vlan}": (f"tag {vlan}", "tagged"),
+                    f"net self {p}self{vlan}": (f"address {leg['address']}",),
+                    f"net self {p}float{vlan}": (f"address {addresses['vip']}/29", "floating enabled"),
+                    f"net route {p}default": (f"gw {addresses['anycast']}", "network default"),
+                }
+                for header, lines in expected_blocks.items():
+                    block = _f5_block(rendered, header)
+                    if block is None:
+                        errors.append(f"{label}: no '{header}'")
+                        continue
+                    errors += [f"{label}: '{header}' lacks '{line}'" for line in lines if line not in block]
+                for vip in context["vips"]:
+                    vip_ip = str(ipaddress.IPv4Interface(vip["address"]).ip)
+                    virtuals = [
+                        block
+                        for block in _f5_blocks(rendered, "ltm virtual")
+                        if f"destination {p}{vip_ip}:{vip['port']}" in block
+                    ]
+                    if len(virtuals) != 1:
+                        errors.append(
+                            f"{label}: {len(virtuals)} virtual server(s) 'destination {p}{vip_ip}:{vip['port']}'"
+                        )
+                    elif "type automap" not in virtuals[0]:
+                        errors.append(f"{label}: the virtual server of {vip_ip}:{vip['port']} has no SNAT automap")
+                    for member in vip["members"]:
+                        member_ip = str(ipaddress.IPv4Interface(member).ip)
+                        if f"{p}{member_ip}:{vip['port']}" not in rendered:
+                            errors.append(
+                                f"{label}: pool member {member_ip}:{vip['port']} of {vip['hostname']} not rendered"
+                            )
+
+        assert rendered_count, "no load-balancer config was rendered"
+        assert not errors, f"loadbalancer_config on branch '{scenario_branch}' is wrong:\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
+        logging.info("Rendered load-balancer contexts on %d member(s)", rendered_count)
+
+    @pytest.mark.order(403)
+    @pytest.mark.dependency(scope="session", depends=["all_demo_loadbalancer_vips"])
+    @pytest.mark.asyncio
+    async def test_09_border_leaf_config_renders_loadbalancer_legs(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """The border leafs of a DC holding VIPs carry every load-balancer context of the DC.
+
+        Per context: the `load-balancer` port facing each member trunks the leg VLAN; the leg
+        VLAN has its L2VNI (transit_vni) and an anycast SVI (.1 of the leg /29) in the tenant
+        VRF; `vrf context <NS>` routes the VIP /26 to the leg's floating .4, and the static is
+        exported into EVPN (PL-VRF-STATIC-<NS>).
+        """
+        logging.info("=== %s - Step 9: Render border-leaf load-balancer legs ===", SCENARIO_NAME)
+
+        by_key, _ = match_loadbalancer_contexts(
+            await fetch_loadbalancer_inventory(client=async_client_main, branch=scenario_branch),
+            ALL_DEMO_DC_NAMES,
+            ALL_DEMO_DEDICATED_LOADBALANCER_TENANTS,
+        )
+        vip_dcs = sorted(
+            {key[0] for component in ALL_DEMO_LOAD_BALANCED_COMPONENTS.values() for key in component["contexts"]}
+        )
+        errors: list[str] = []
+        for dc in vip_dcs:
+            dc_contexts = [context for key, context in by_key.items() if key[0] == dc]
+            border_leafs = sorted({str(port["device"]) for context in dc_contexts for port in context["border_ports"]})
+            assert border_leafs, f"{dc}: no border leaf carries a load-balancer context"
+            for device in border_leafs:
+                rendered = await render_device_config(
+                    async_client_main, scenario_branch, device, query="border_leaf_config", transform_cls=BorderLeaf
+                )
+                for context in dc_contexts:
+                    errors += _border_leaf_lb_leg_errors(device, rendered, context)
+
+        assert not errors, f"border-leaf load-balancer legs on branch '{scenario_branch}' are wrong:\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
+        logging.info("Border-leaf load-balancer legs rendered in %s", vip_dcs)
+
+    @pytest.mark.order(403)
+    @pytest.mark.dependency(scope="session", depends=["all_demo_loadbalancer_vips"])
+    @pytest.mark.asyncio
+    async def test_09_client_leaf_bypasses_the_firewall_to_the_vip(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """A client of a load-balanced component reaches its VIP in its own VRF, never through the firewall.
+
+        Every leaf or access-leaf carrying the client's segment (ALL_DEMO_LB_CLIENT_DEPENDENCIES)
+        permits the VIP/32 in the PBR bypass ACL of the segment's VLAN.
+        """
+        logging.info("=== %s - Step 9: Client leaf bypass to the VIP ===", SCENARIO_NAME)
+
+        contexts = await _vip_contexts(async_client_main, scenario_branch)
+        leaf_classes = {"leaf": Leaf, "access-leaf": AccessLeaf}
+        errors: list[str] = []
+        for dependency, client in sorted(ALL_DEMO_LB_CLIENT_DEPENDENCIES.items()):
+            vips = [
+                str(ipaddress.IPv4Interface(vip["address"]).ip)
+                for key in ALL_DEMO_LOAD_BALANCED_COMPONENTS[client["target"]]["contexts"]
+                for vip in contexts[key]["vips"]
+                if vip["component"] == client["target"] and (vip["protocol"], vip["port"]) in client["ports"]
+            ]
+            assert vips, f"{dependency}: no VIP of {client['target']} on {client['ports']}"
+            source = await _segment_on_switches(async_client_main, scenario_branch, client["source_segment"])
+            carrying: list[str] = []
+            for dc in sorted(set(ALL_DEMO_SEGMENT_LEGS[client["source_segment"]]) & set(ALL_DEMO_DC_NAMES)):
+                topology = await fetch_dc_topology(async_client_main, scenario_branch, dc)
+                for device in sorted(topology["devices"], key=lambda d: str(d["name"])):
+                    vlan = source.vlan_on(str(device["name"]))
+                    if device.get("role") not in leaf_classes or vlan is None:
+                        continue
+                    rendered = await render_device_config(
+                        async_client_main,
+                        scenario_branch,
+                        str(device["name"]),
+                        query="leaf_config",
+                        transform_cls=leaf_classes[str(device["role"])],
+                    )
+                    if not re.search(rf"^vlan {vlan}$", rendered, re.MULTILINE):
+                        continue
+                    carrying.append(str(device["name"]))
+                    bypass = _block(rendered, f"ip access-list PBR-BYPASS-VLAN{vlan}") or ""
+                    errors += [
+                        f"{device['name']}: PBR-BYPASS-VLAN{vlan} of {client['source_segment']} does not permit {vip}/32"
+                        for vip in vips
+                        if not re.search(rf"\bpermit ip any {re.escape(vip)}/32$", bypass, re.MULTILINE)
+                    ]
+            if not carrying:
+                errors.append(f"{dependency}: no leaf renders the VLAN of {client['source_segment']}")
+
+        assert not errors, f"client leaf VIP bypass on branch '{scenario_branch}' is wrong:\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )

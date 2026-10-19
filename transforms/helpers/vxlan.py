@@ -8,6 +8,7 @@ from typing import Any
 from netutils.interface import sort_interface_list
 
 from transforms.helpers.addressing import host_ip
+from transforms.helpers.firewall import FIREWALL_CONTEXT_KIND, SERVICE_CONTEXT_ROLES
 
 # The neutral overlay model owns these (transforms/helpers/overlay.py); they stay importable from here.
 from transforms.helpers.overlay import (
@@ -32,7 +33,7 @@ _log = logging.getLogger(__name__)
 # values of generators/connections.py's BORDER_ROLE_FOR_SERVICES. Such a port
 # carrying segment VLANs is a tagged L2 trunk (never also the routed parent of
 # pbr-mode FirewallContext sub-interfaces; the segment generator refuses that).
-_SERVICE_TRUNK_ROLES = frozenset({"firewall", "load-balancer"})
+_SERVICE_TRUNK_ROLES = frozenset(SERVICE_CONTEXT_ROLES.values())
 
 
 def _stretch_rt_anchor(segment: dict[str, Any]) -> int | None:
@@ -181,8 +182,8 @@ def get_interfaces(
     for act in activations or []:
         vlan_isolation.setdefault(act.get("vlan_id"), (act.get("segment") or {}).get("isolation_mode") or "normal")
 
-    # Transit VLANs of the exchange legs (get_exchange_transits), per firewall
-    # context: a service port tagged with the context must trunk them.
+    # Transit VLANs of the context legs (get_exchange_transits), per firewall or
+    # load-balancer context: a service port tagged with the context must trunk them.
     transit_vlans: dict[str, list[int]] = {}
     for act in activations or []:
         if act.get("transit_context") and act.get("vlan_id"):
@@ -212,9 +213,11 @@ def get_interfaces(
         # PBR p2p link isn't part of any customer segment's own VLAN, so it
         # can't come from `segment_vlan` above like a trunk's access/trunk
         # VLANs do. The context capability carries its own vlan_id directly.
+        # Only a firewall context's: a load-balancer context's vlan_id is a pool
+        # value, never a tag (its one leg is a transit VLAN, port_transit_vlans).
+        contexts = [c for kind in SERVICE_CONTEXT_ROLES for c in by_type.get(kind, [])]
         context_vlan_id = next(
-            (s.get("vlan_id") for s in by_type.get("ManagedFirewallContext", []) if s.get("vlan_id")),
-            None,
+            (c.get("vlan_id") for c in by_type.get(FIREWALL_CONTEXT_KIND, []) if c.get("vlan_id")), None
         )
         # A plain routed sub-interface (e.g. the colocation edge's VRF handoff
         # to the SD-WAN gateway) has no context capability: its tag is the
@@ -225,9 +228,7 @@ def get_interfaces(
 
         # A port tagged with a context that has transit legs is a tagged trunk
         # for those VLANs; its context vlan_id is NOT a sub-interface tag here.
-        port_transit_vlans = sorted(
-            {v for c in by_type.get("ManagedFirewallContext", []) for v in transit_vlans.get(c.get("name"), [])}
-        )
+        port_transit_vlans = sorted({v for c in contexts for v in transit_vlans.get(c.get("name"), [])})
         if port_transit_vlans:
             vlans = vlans + [v for v in port_transit_vlans if v not in vlans]
             context_vlan_id = None

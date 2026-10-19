@@ -91,6 +91,34 @@ fragment FirewallContextInterfaceCapabilityFields on ManagedFirewallContext {
   }
 }
 
+# A load-balancer context on the border's load-balancer port: one leg in the
+# tenant VRF (the transit VLAN/VNI/anycast .1 come from vlan_id and the leg /29,
+# utils.exchange_transit), and the routed VIP range the border leaf statics to
+# the leg's floating .4 (transforms/helpers/firewall.py get_exchange_routes).
+fragment LoadbalancerContextInterfaceCapabilityFields on ManagedLoadbalancerContext {
+  id
+  name { value }
+  vlan_id { value }
+  vip_prefix { node { prefix { value } } }
+  # The leg: each member's VLAN sub-interface, addressed in the tenant VRF.
+  capabilities {
+    edges {
+      node {
+        name { value }
+        device { node { name { value } role { value } } }
+        ... on DcimVirtualInterface {
+          ip_address {
+            node {
+              address { value }
+              ip_namespace { node { name { value } l3_vni { value } namespace_type { value } } }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 fragment InterfaceCapabilitiesWithSegmentFields on DcimInterface {
   capabilities {
     edges {
@@ -100,6 +128,7 @@ fragment InterfaceCapabilitiesWithSegmentFields on DcimInterface {
         ...NetworkSegmentFields
         ...ExchangeGatewayInterfaceCapabilityFields
         ...FirewallContextInterfaceCapabilityFields
+        ...LoadbalancerContextInterfaceCapabilityFields
       }
     }
   }

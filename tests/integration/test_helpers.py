@@ -177,6 +177,7 @@ QUERY_GET_APPLICATION_GRAPH = _load_query("get_application_graph.gql")
 QUERY_GET_INTERCONNECT_INVENTORY = _load_query("get_interconnect_inventory.gql")
 QUERY_GET_TENANT_SERVICES = _load_query("get_tenant_services.gql")
 QUERY_GET_TRANSIT_INVENTORY = _load_query("get_transit_inventory.gql")
+QUERY_GET_LOADBALANCER_INVENTORY = _load_query("get_loadbalancer_inventory.gql")
 
 
 def _peering_participants(peering: dict[str, Any]) -> set[tuple[str, str]]:
@@ -1184,12 +1185,13 @@ def scope_tenant_services_to_dcs(
 
 
 async def fetch_tenant_services(client: InfrahubClient, branch: str) -> dict[str, list[dict[str, Any]]]:
-    """Fetch the tenant-scoped inline services and segment deployment legs.
+    """Fetch the tenant-scoped firewall contexts and segment deployment legs.
+
+    The load-balancer contexts have their own inventory (fetch_loadbalancer_inventory).
 
     Returns:
         {"firewall_contexts": [{"name", "cluster", "cluster_dcs", "tenant",
                                 "tenant_design"}],
-         "loadbalancer_ha": [{"name", "tenant"}],
          "segment_deployments": [{"segment", "segment_kind", "vni", "status",
                                   "deployment", "deployment_is_dc"}]}
 
@@ -1214,11 +1216,6 @@ async def fetch_tenant_services(client: InfrahubClient, branch: str) -> dict[str
         for context in result.get("ManagedFirewallContext", []) or []
     ]
 
-    loadbalancer_ha = [
-        {"name": str(domain.get("name") or ""), "tenant": (domain.get("tenant") or {}).get("name")}
-        for domain in result.get("ManagedLoadbalancerHA", []) or []
-    ]
-
     segment_deployments = [
         {
             "segment": (deployment.get("segment") or {}).get("name"),
@@ -1232,21 +1229,16 @@ async def fetch_tenant_services(client: InfrahubClient, branch: str) -> dict[str
     ]
 
     logger.info(
-        "Tenant services on branch '%s': %d firewall context(s), %d LB HA domain(s), %d segment leg(s)",
+        "Tenant services on branch '%s': %d firewall context(s), %d segment leg(s)",
         branch,
         len(firewall_contexts),
-        len(loadbalancer_ha),
         len(segment_deployments),
     )
     for context in sorted(firewall_contexts, key=lambda c: str(c["name"])):
         logger.info("  FW %s tenant=%s design=%s", context["name"], context["tenant"], context["tenant_design"])
     for leg in sorted(segment_deployments, key=lambda d: (str(d["segment"]), str(d["deployment"]))):
         logger.info("  SEG %s -> %s (vni=%s, %s)", leg["segment"], leg["deployment"], leg["vni"], leg["status"])
-    return {
-        "firewall_contexts": firewall_contexts,
-        "loadbalancer_ha": loadbalancer_ha,
-        "segment_deployments": segment_deployments,
-    }
+    return {"firewall_contexts": firewall_contexts, "segment_deployments": segment_deployments}
 
 
 def _edge_nodes(connection: dict[str, Any] | None) -> list[dict[str, Any]]:
@@ -1264,8 +1256,67 @@ def _value(attribute: dict[str, Any] | None) -> Any:
     return (attribute or {}).get("value")
 
 
-#: Device roles whose firewall-facing ports a context is tagged on: a DC's border leaf, a colocation metro's edge.
+#: Device roles whose service ports (firewall- or load-balancer-facing) a context is tagged on: a DC's border
+#: leaf, a colocation metro's edge.
 _SERVICE_PORT_DEVICE_ROLES = frozenset({"border-leaf", "edge"})
+
+
+def _context_legs_and_ports(node: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """A service context's legs and the service ports tagged with it, from its raw ``capabilities``.
+
+    A leg is a DcimVirtualInterface (a member's VLAN sub-interface): {"interface", "device",
+    "device_id", "address", "namespace", "namespace_type", "exchanges"}, ``exchanges`` the names of
+    the TopologyRoutedExchanges it is linked to (always empty for a load-balancer leg). A service port
+    is a DcimPhysicalInterface on a border leaf (DC) or an edge (colocation metro): {"id",
+    "interface", "device", "role"}, ``role`` the port's own role where the query selects it.
+    """
+    legs: list[dict[str, Any]] = []
+    border_ports: list[dict[str, Any]] = []
+    for cap in _edge_nodes(node.get("capabilities")):
+        device = _rel_node(cap.get("device"))
+        if cap["__typename"] == "DcimVirtualInterface":
+            address = _rel_node(cap.get("ip_address"))
+            namespace = _rel_node(address.get("ip_namespace"))
+            legs.append(
+                {
+                    "interface": _value(cap.get("name")),
+                    "device": _value(device.get("name")),
+                    "device_id": device.get("id"),
+                    "address": _value(address.get("address")),
+                    "namespace": _value(namespace.get("name")),
+                    "namespace_type": _value(namespace.get("namespace_type")),
+                    "exchanges": sorted(
+                        _value(exchange.get("name"))
+                        for exchange in _edge_nodes(cap.get("capabilities"))
+                        if exchange.get("__typename") == "TopologyRoutedExchange"
+                    ),
+                }
+            )
+        elif cap["__typename"] == "DcimPhysicalInterface" and _value(device.get("role")) in _SERVICE_PORT_DEVICE_ROLES:
+            border_ports.append(
+                {
+                    "id": cap["id"],
+                    "interface": _value(cap.get("name")),
+                    "device": _value(device.get("name")),
+                    "role": _value(cap.get("role")),
+                }
+            )
+    return legs, border_ports
+
+
+def _cluster_dcs(cluster: dict[str, Any]) -> list[str]:
+    """The TopologyDataCenter names a raw HA cluster's physical members are deployed in (see _deployed_dc_names)."""
+    return _deployed_dc_names(
+        [
+            {
+                "deployment": {
+                    "typename": _rel_node(member.get("deployment")).get("__typename"),
+                    "name": _value(_rel_node(member.get("deployment")).get("name")),
+                }
+            }
+            for member in _edge_nodes(cluster.get("capabilities"))
+        ]
+    )
 
 
 async def fetch_transit_inventory(client: InfrahubClient, branch: str) -> dict[str, list[dict[str, Any]]]:
@@ -1276,16 +1327,12 @@ async def fetch_transit_inventory(client: InfrahubClient, branch: str) -> dict[s
                        "served": [{"name", "environment"}],
                        "legs": [{"interface", "device", "device_id", "address",
                                  "namespace", "namespace_type", "exchanges"}],
-                       "border_ports": [{"id", "interface", "device"}]}],
+                       "border_ports": [{"id", "interface", "device", "role"}]}],
          "exchanges": [{"id", "name", "namespace_a", "namespace_a_type",
                         "namespace_z", "namespace_z_type", "gateway_id",
                         "gateway_name"}]}
 
-        ``legs`` are the context's DcimVirtualInterface capabilities (the
-        members' sub-interfaces), ``border_ports`` its DcimPhysicalInterface
-        ones on a border-leaf (DC) or an edge (colocation metro).
-        ``exchanges`` on a leg are
-        the names of the exchanges it is linked to.
+        ``legs`` and ``border_ports`` as _context_legs_and_ports returns them.
     """
     client.default_branch = branch
     await asyncio.sleep(DATA_PROPAGATION_DELAY)
@@ -1293,36 +1340,7 @@ async def fetch_transit_inventory(client: InfrahubClient, branch: str) -> dict[s
 
     contexts: list[dict[str, Any]] = []
     for node in _edge_nodes(raw["ManagedFirewallContext"]):
-        legs: list[dict[str, Any]] = []
-        border_ports: list[dict[str, Any]] = []
-        for cap in _edge_nodes(node.get("capabilities")):
-            device = _rel_node(cap.get("device"))
-            if cap["__typename"] == "DcimVirtualInterface":
-                address = _rel_node(cap.get("ip_address"))
-                namespace = _rel_node(address.get("ip_namespace"))
-                legs.append(
-                    {
-                        "interface": _value(cap.get("name")),
-                        "device": _value(device.get("name")),
-                        "device_id": device.get("id"),
-                        "address": _value(address.get("address")),
-                        "namespace": _value(namespace.get("name")),
-                        "namespace_type": _value(namespace.get("namespace_type")),
-                        "exchanges": sorted(
-                            _value(exchange.get("name"))
-                            for exchange in _edge_nodes(cap.get("capabilities"))
-                            if exchange.get("__typename") == "TopologyRoutedExchange"
-                        ),
-                    }
-                )
-            elif (
-                cap["__typename"] == "DcimPhysicalInterface"
-                and _value(device.get("role")) in _SERVICE_PORT_DEVICE_ROLES
-            ):
-                border_ports.append(
-                    {"id": cap["id"], "interface": _value(cap.get("name")), "device": _value(device.get("name"))}
-                )
-        cluster = _rel_node(node.get("cluster"))
+        legs, border_ports = _context_legs_and_ports(node)
         contexts.append(
             {
                 "id": node["id"],
@@ -1333,17 +1351,7 @@ async def fetch_transit_inventory(client: InfrahubClient, branch: str) -> dict[s
                     _rel_node(_rel_node(node.get("snat_address")).get("ip_namespace")).get("name")
                 ),
                 "tenant": _value(_rel_node(node.get("tenant")).get("name")),
-                "cluster_dcs": _deployed_dc_names(
-                    [
-                        {
-                            "deployment": {
-                                "typename": _rel_node(member.get("deployment")).get("__typename"),
-                                "name": _value(_rel_node(member.get("deployment")).get("name")),
-                            }
-                        }
-                        for member in _edge_nodes(cluster.get("capabilities"))
-                    ]
-                ),
+                "cluster_dcs": _cluster_dcs(_rel_node(node.get("cluster"))),
                 "served": [
                     {"name": _value(served.get("name")), "environment": _value(served.get("environment"))}
                     for served in _edge_nodes(node.get("served_deployments"))
@@ -1418,6 +1426,119 @@ def match_transit_contexts(
     return by_key, colocation
 
 
+async def fetch_loadbalancer_inventory(client: InfrahubClient, branch: str) -> list[dict[str, Any]]:
+    """Fetch every load-balancer context with its leg, service ports, VIP range and VIPs.
+
+    Returns:
+        [{"id", "name", "vlan", "tenant", "cluster", "cluster_member_ids", "cluster_dcs",
+          "served": [names], "vip_prefix", "vip_prefix_namespace",
+          "legs": [...], "border_ports": [...],
+          "vips": [{"hostname", "protocol", "port", "address", "members": [addresses],
+                    "component", "segment", "segment_prefix"}]}]
+
+        ``legs`` and ``border_ports`` as _context_legs_and_ports returns them;
+        ``component`` is the fronted AppComponent's fqdn, ``segment`` and
+        ``segment_prefix`` its network segment and that segment's gateway prefix.
+    """
+    client.default_branch = branch
+    await asyncio.sleep(DATA_PROPAGATION_DELAY)
+    raw = await client.execute_graphql(query=QUERY_GET_LOADBALANCER_INVENTORY, branch_name=branch)
+
+    contexts: list[dict[str, Any]] = []
+    for node in _edge_nodes(raw["ManagedLoadbalancerContext"]):
+        legs, border_ports = _context_legs_and_ports(node)
+        cluster = _rel_node(node.get("cluster"))
+        vip_prefix = _rel_node(node.get("vip_prefix"))
+        vips = []
+        for vip in _edge_nodes(node.get("vips")):
+            component = _rel_node(vip.get("component"))
+            segment = _rel_node(component.get("network_segment"))
+            vips.append(
+                {
+                    "hostname": _value(vip.get("hostname")),
+                    "protocol": _value(vip.get("protocol")),
+                    "port": _value(vip.get("port")),
+                    "address": _value(_rel_node(vip.get("vip_ip")).get("address")),
+                    "members": sorted(
+                        str(_value(member.get("address"))) for member in _edge_nodes(vip.get("pool_members"))
+                    ),
+                    "component": _value(component.get("fqdn")),
+                    "segment": _value(segment.get("name")),
+                    "segment_prefix": _value(
+                        _rel_node(_rel_node(segment.get("gateway")).get("ip_prefix")).get("prefix")
+                    ),
+                }
+            )
+        contexts.append(
+            {
+                "id": node["id"],
+                "name": _value(node.get("name")),
+                "vlan": _value(node.get("vlan_id")),
+                "tenant": _value(_rel_node(node.get("tenant")).get("name")),
+                "cluster": _value(cluster.get("name")),
+                "cluster_member_ids": sorted(member["id"] for member in _edge_nodes(cluster.get("capabilities"))),
+                "cluster_dcs": _cluster_dcs(cluster),
+                "served": sorted(str(_value(d.get("name"))) for d in _edge_nodes(node.get("served_deployments"))),
+                "vip_prefix": _value(vip_prefix.get("prefix")),
+                "vip_prefix_namespace": _value(_rel_node(vip_prefix.get("ip_namespace")).get("name")),
+                "legs": legs,
+                "border_ports": border_ports,
+                "vips": vips,
+            }
+        )
+    logger.info("Load-balancer inventory on branch '%s': %d context(s)", branch, len(contexts))
+    for context in sorted(contexts, key=lambda c: str(c["name"])):
+        logger.info(
+            "  LB %s vlan=%s tenant=%s vip_prefix=%s vips=%d",
+            context["name"],
+            context["vlan"],
+            context["tenant"],
+            context["vip_prefix"],
+            len(context["vips"]),
+        )
+    return contexts
+
+
+def match_loadbalancer_contexts(
+    contexts: list[dict[str, Any]], dc_names: Iterable[str], dedicated_tenants: Iterable[str]
+) -> tuple[dict[tuple[str, str, str | None], dict[str, Any]], list[dict[str, Any]]]:
+    """Key the load-balancer contexts the suite owns by (DC, tenant namespace, dedicated tenant or None).
+
+    The DC is found as match_transit_contexts finds it (the shared cluster's
+    members' DC, a dedicated tenant's trailing DC); contexts of another DC or of
+    a tenant outside ``dedicated_tenants`` are dropped. The namespace is not
+    stored on a context: it is the one namespace of its legs. Returns
+    (keyed, unkeyed): a shared context in no DC at all, an in-scope context
+    whose legs are in no single namespace, or one whose key another context
+    already holds, is unkeyed.
+    """
+    allowed = set(dc_names)
+    tenants = set(dedicated_tenants)
+    by_key: dict[tuple[str, str, str | None], dict[str, Any]] = {}
+    unkeyed: list[dict[str, Any]] = []
+    for context in contexts:
+        tenant = context["tenant"]
+        if tenant:
+            dc = str(tenant).rsplit("-", 1)[-1]
+            if tenant not in tenants or dc not in allowed:
+                continue
+        elif not context["cluster_dcs"]:
+            unkeyed.append(context)
+            continue
+        else:
+            dcs = sorted(set(context["cluster_dcs"]) & allowed)
+            if not dcs:
+                continue
+            dc = dcs[0]
+        namespaces = {str(leg["namespace"]) for leg in context["legs"] if leg["namespace"]}
+        key = (dc, next(iter(namespaces)), str(tenant) if tenant else None) if len(namespaces) == 1 else None
+        if key is None or key in by_key:
+            unkeyed.append(context)
+        else:
+            by_key[key] = context
+    return by_key, unkeyed
+
+
 # ======================================================================
 # In-process renders and graph snapshots (shared by test_64, test_65, test_71)
 # ======================================================================
@@ -1487,6 +1608,7 @@ TOPOLOGY_SNAPSHOT_KINDS = {
     "ManagedController": "name { value } managed_devices { edges { node { id } } }",
     "ManagedFirewallHA": "name { value }",
     "ManagedFirewallContext": "name { value }",
+    "ManagedLoadbalancerContext": "name { value }",
     "ManagedMLAG": "name { value }",
     "ManagedStandaloneVlanDomain": "name { value }",
     "RoutingOSPFArea": "name { value } area { value }",

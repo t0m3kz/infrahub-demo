@@ -191,7 +191,7 @@ interface Vlan3000
    vrf VRF_A
    ip address virtual 100.66.0.1/29
 !
-! Leaf PBR — LB return path first, then permitted firewall bypass,
+! Leaf PBR — permitted firewall bypass first (the LB is SNAT automap, so no return-path PBR: the firewall PBR is the only one),
 ! otherwise redirect to the firewall when a context is present.
 ! documented-not-lab-verified: policy-map type pbr / class-map type pbr / service-policy type pbr
 ! documented-not-lab-verified: a class without a set action (bypass) forwards by the normal route lookup

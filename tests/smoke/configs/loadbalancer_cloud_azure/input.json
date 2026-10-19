@@ -1,0 +1,141 @@
+{
+  "CloudLoadBalancer": {
+    "edges": [
+      {
+        "node": {
+          "id": "lb-azure",
+          "name": {
+            "value": "frontend-custody-api-c0-a9ea4206"
+          },
+          "lb_type": {
+            "value": "l4_cloud"
+          },
+          "scheme": {
+            "value": "internet_facing"
+          },
+          "virtual_network": {
+            "node": {
+              "id": "vnet-azure",
+              "name": {
+                "value": "c003-vaultex-azure-vpc-prod"
+              },
+              "account": {
+                "node": {
+                  "name": {
+                    "value": "c003-azure-prod"
+                  },
+                  "provider": {
+                    "node": {
+                      "name": {
+                        "value": "Azure"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "network_segments": {
+            "edges": [
+              {
+                "node": {
+                  "id": "seg-azure-1",
+                  "name": {
+                    "value": "c003-vaultex-subnet-prod-1"
+                  },
+                  "availability_zone": {
+                    "node": {
+                      "name": {
+                        "value": "euc1-az1"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "seg-azure-2",
+                  "name": {
+                    "value": "c003-vaultex-subnet-prod-2"
+                  },
+                  "availability_zone": {
+                    "node": {
+                      "name": {
+                        "value": "euc1-az2"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "LoadbalancerVIP": {
+    "edges": [
+      {
+        "node": {
+          "id": "vip-azure-tcp-443",
+          "hostname": {
+            "value": "frontend.custody-api.c003.demo.local"
+          },
+          "protocol": {
+            "value": "tcp"
+          },
+          "port": {
+            "value": 443
+          },
+          "ssl_certificate": {
+            "value": null
+          },
+          "load_balancing_algorithm": {
+            "value": null
+          },
+          "session_persistence": {
+            "value": null
+          },
+          "pool_members": {
+            "edges": [
+              {
+                "node": {
+                  "address": {
+                    "value": "10.20.2.11/24"
+                  }
+                }
+              },
+              {
+                "node": {
+                  "address": {
+                    "value": "10.20.1.10/24"
+                  }
+                }
+              }
+            ]
+          },
+          "health_checks": {
+            "edges": [
+              {
+                "node": {
+                  "check": {
+                    "value": "http"
+                  },
+                  "rise": {
+                    "value": 2
+                  },
+                  "fall": {
+                    "value": 4
+                  },
+                  "timeout": {
+                    "value": 1000
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

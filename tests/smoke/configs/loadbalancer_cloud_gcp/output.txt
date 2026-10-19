@@ -1,0 +1,62 @@
+locals {
+  frontend_custody_api_c0_a9ea4206_labels = {
+    name = "frontend_custody_api_c0_a9ea4206"
+    managed_by = "terraform"
+    infrahub = "true"
+  }
+}
+
+resource "google_compute_health_check" "frontend_custody_api_c003_demo_local_tcp_8443_health_check" {
+  name = "frontend.custody-api.c003.demo.local-tcp-8443-health-check"
+
+  tcp_health_check {
+    port = 8443
+  }
+
+  check_interval_sec  = 30
+  timeout_sec         = 1
+  healthy_threshold   = 3
+  unhealthy_threshold = 3
+}
+
+
+resource "google_compute_network_endpoint_group" "frontend_custody_api_c003_demo_local_tcp_8443" {
+  name                  = "frontend.custody-api.c003.demo.local-tcp-8443-neg"
+  network               = data.google_compute_network.c003_vaultex_gcp_vpc_prod.id
+  network_endpoint_type = "NON_GCP_PRIVATE_IP_PORT"
+  default_port          = 8443
+  zone                  = var.zone
+}
+
+resource "google_compute_network_endpoints" "frontend_custody_api_c003_demo_local_tcp_8443" {
+  network_endpoint_group = google_compute_network_endpoint_group.frontend_custody_api_c003_demo_local_tcp_8443.name
+  zone                   = var.zone
+
+  network_endpoints {
+    ip_address = "10.20.1.10"
+    port       = 8443
+  }
+
+  network_endpoints {
+    ip_address = "10.20.2.11"
+    port       = 8443
+  }
+}
+
+resource "google_compute_backend_service" "frontend_custody_api_c003_demo_local_tcp_8443" {
+  name             = "frontend.custody-api.c003.demo.local-tcp-8443"
+  protocol         = "TCP"
+  session_affinity = "NONE"
+  health_checks    = [google_compute_health_check.frontend_custody_api_c003_demo_local_tcp_8443_health_check.id]
+
+  backend {
+    group = google_compute_network_endpoint_group.frontend_custody_api_c003_demo_local_tcp_8443.id
+  }
+}
+
+
+resource "google_compute_forwarding_rule" "frontend_custody_api_c003_demo_local_tcp_8443" {
+  name       = "frontend.custody-api.c003.demo.local-TCP-8443"
+  port_range = "8443"
+  target     = google_compute_backend_service.frontend_custody_api_c003_demo_local_tcp_8443.id
+}

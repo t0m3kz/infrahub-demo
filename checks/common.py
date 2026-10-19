@@ -3,7 +3,7 @@ from ipaddress import ip_interface
 from typing import Any
 
 from transforms.common import BaseDeviceTransform
-from transforms.helpers.firewall import _firewall_context_caps, get_exchange_transits
+from transforms.helpers.firewall import _service_context_caps, get_exchange_transits
 from transforms.helpers.segments import routed_activations
 from utils.data_cleaning import get_data
 from utils.exchange_transit import (
@@ -106,7 +106,7 @@ def validate_transit_vlans(device: dict[str, Any], transform_cls: type[BaseDevic
         except ValueError as exc:
             return [str(exc)]
     else:
-        transits = get_exchange_transits(_firewall_context_caps(interfaces))
+        transits = get_exchange_transits(_service_context_caps(interfaces))
     if not transits:
         return []
 

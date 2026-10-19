@@ -22,6 +22,7 @@ spec:
             component_type: frontend
             ports:
               - tcp/443
+            load_balanced: true
             network_segment: c010-zindra-dev-d
             instances:
               - c010-portal-ui-dc12-1

@@ -541,7 +541,7 @@ class TestFindRuleByName:
 
         assert found is rule
         gen.client.filters.assert_awaited_once_with(
-            kind=ProxyPolicyRule, policy__ids=["policy-1"], name__value="rule-1"
+            kind=ProxyPolicyRule, policy__ids=["policy-1"], name__value="rule-1", include=None
         )
 
     def test_no_match_returns_none(self) -> None:

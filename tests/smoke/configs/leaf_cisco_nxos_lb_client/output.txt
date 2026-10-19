@@ -1,0 +1,289 @@
+!
+! dc1-leaf-01 Configuration
+!
+hostname dc1-leaf-01
+!
+!
+feature ospf
+feature bgp
+feature bfd
+feature interface-vlan
+feature lacp
+feature vpc
+feature lldp
+feature pbr
+!
+
+! VLANs
+vlan 110
+  name Customer-A
+!
+vlan 120
+  name Customer-A
+!
+vlan 3000
+  name XCHG-dc1-fw-shared-VRF_A
+!
+!
+! Zero-Trust ACLs (one per segment VLAN — inbound on SVI)
+!
+ip access-list ACL-VLAN110-IN
+  remark Customer: Customer-A/any -> any/any
+  100 permit tcp 10.110.0.0/24 100.68.0.10/32 eq 443 ! web-to-app-vip-tcp-443
+  9990 deny ip any any log ! implicit-deny-all
+!
+ip access-list ACL-VLAN120-IN
+  remark Customer: Customer-A/any -> any/any
+  5000 permit tcp 10.120.0.0/24 eq 8443 100.67.0.0/29 established ! return-to-any-lb-to-app-tcp-8443
+  9990 deny ip any any log ! implicit-deny-all
+!
+!
+! Interfaces
+interface Ethernet1
+  no shutdown
+  ip address 10.1.0.1/31
+
+!
+interface Ethernet2
+  no shutdown
+  ip address 10.1.0.3/31
+
+!
+interface Ethernet10
+  no shutdown
+
+  switchport
+  switchport mode trunk
+  switchport trunk allowed vlan 110,120
+!
+interface Loopback0
+  no shutdown
+  ip address 10.0.0.1/32
+
+!
+!
+! OSPF Configuration
+
+
+!
+! BGP Configuration
+
+router bgp 65000
+  router-id 10.0.0.1
+  graceful-restart
+  !
+  template peer-policy EVPN-PEERS-POLICY
+    send-community
+  !
+  template peer-session EVPN-PEERS-SESSION
+    update-source loopback0
+  !
+  !
+  template peer-policy UNDERLAY-PEERS-POLICY
+    send-community
+  !
+  template peer-session UNDERLAY-PEERS-SESSION
+    bfd
+  !
+  address-family ipv4 unicast
+    redistribute direct route-map RM-CONN-2-BGP
+    maximum-paths 8
+  !
+  address-family l2vpn evpn
+  !
+  neighbor 10.1.0.0
+    remote-as 65100
+    local-as 65001 no-prepend replace-as
+    description spine-01
+    inherit peer-session UNDERLAY-PEERS-SESSION
+    address-family ipv4 unicast
+      inherit peer-policy UNDERLAY-PEERS-POLICY
+    !
+  neighbor 10.1.0.2
+    remote-as 65101
+    local-as 65001 no-prepend replace-as
+    description spine-02
+    inherit peer-session UNDERLAY-PEERS-SESSION
+    address-family ipv4 unicast
+      inherit peer-policy UNDERLAY-PEERS-POLICY
+    !
+  neighbor 10.0.0.100
+    remote-as 65000
+    description spine-01
+    inherit peer-session EVPN-PEERS-SESSION
+    address-family l2vpn evpn
+      inherit peer-policy EVPN-PEERS-POLICY
+    !
+  neighbor 10.0.0.101
+    remote-as 65000
+    description spine-02
+    inherit peer-session EVPN-PEERS-SESSION
+    address-family l2vpn evpn
+      inherit peer-policy EVPN-PEERS-POLICY
+    !
+  vrf VRF_A
+    address-family ipv4 unicast
+      advertise l2vpn evpn
+      redistribute direct route-map RM-VRF-DIRECT-2-EVPN
+  !
+!
+
+!
+!
+! VXLAN Configuration (netlab-style multivendor)
+!
+feature nv overlay
+feature vn-segment-vlan-based
+feature nve
+feature fabric forwarding
+nv overlay evpn
+!
+!
+! VRF Contexts (symmetric IRB — one L3 VNI per tenant)
+!
+vrf context VRF_A
+  vni 50001
+  rd 10.0.0.1:50001
+  address-family ipv4 unicast
+    route-target both 65000:50001
+    route-target both 65000:50001 evpn
+!
+interface nve1
+  source-interface Loopback0
+  host-reachability protocol bgp
+  member vni 10110
+    suppress-arp
+    ingress-replication protocol bgp
+  member vni 10120
+    suppress-arp
+    ingress-replication protocol bgp
+  member vni 64000
+    suppress-arp
+    ingress-replication protocol bgp
+  member vni 50001 associate-vrf
+  no shutdown
+!
+!
+! EVPN Configuration
+!
+evpn
+  vni 10110 l2
+    rd 10.0.0.1:10110
+    route-target import 65000:10110
+    route-target export 65000:10110
+  vni 10120 l2
+    rd 10.0.0.1:10120
+    route-target import 65000:10120
+    route-target export 65000:10120
+  vni 64000 l2
+    rd 10.0.0.1:64000
+    route-target import 65000:64000
+    route-target export 65000:64000
+!
+!
+! VLAN to VNI mapping
+!
+vlan 110
+  vn-segment 10110
+vlan 120
+  vn-segment 10120
+vlan 3000
+  vn-segment 64000
+!
+! L3 VNI Transit SVIs (symmetric IRB — no host addressing, forwarding only)
+!
+vlan 3900
+  name L3VNI_VRF_A
+  vn-segment 50001
+!
+interface Vlan3900
+  description L3VNI transit SVI for VRF VRF_A
+  vrf member VRF_A
+  ip forward
+  mtu 9216
+  no shutdown
+!
+!
+! Route-maps
+route-map RM-CONN-2-BGP permit 10
+  match interface loopback0
+!
+! The firewall transit /29s this leaf holds locally for PBR are originated by the borders only
+! documented-not-lab-verified: deny sequence keeps the leaf's connected transit /29 out of the type-5 table
+ip prefix-list PL-XCHG-TRANSIT seq 10 permit 100.66.0.0/29
+route-map RM-VRF-DIRECT-2-EVPN deny 5
+  match ip address prefix-list PL-XCHG-TRANSIT
+route-map RM-VRF-DIRECT-2-EVPN permit 10
+!
+! Anycast Gateway — identical MAC on every leaf/border-leaf in the fabric
+fabric forwarding anycast-gateway-mac 001c7300dc01
+!
+! VLAN SVI Configuration
+!
+interface Vlan110
+  description Customer-A
+  vrf member VRF_A
+  ip address 10.110.0.1/24
+  fabric forwarding mode anycast-gateway
+  no shutdown
+  ip access-group ACL-VLAN110-IN in
+!
+interface Vlan120
+  description Customer-A
+  vrf member VRF_A
+  ip address 10.120.0.1/24
+  fabric forwarding mode anycast-gateway
+  no shutdown
+  ip access-group ACL-VLAN120-IN in
+!
+interface Vlan3000
+  description XCHG-dc1-fw-shared-VRF_A
+  vrf member VRF_A
+  ip address 100.66.0.1/29
+  fabric forwarding mode anycast-gateway
+  no shutdown
+!
+!
+!
+! Leaf PBR — permitted firewall bypass first (the LB is SNAT automap, so no return-path PBR: the firewall PBR is the only one),
+! otherwise redirect to the firewall when a context is present.
+! TODO(lab): TCAM carving for PBR (ing-sup / ifacl region) is platform-dependent
+!
+! Customer: Customer-A/any
+ip access-list PBR-BYPASS-VLAN110
+  permit ip any 100.68.0.10/32
+!
+! documented: deny sequence = forward by normal route lookup (NX-OS PBR); documented-not-lab-verified for VXLAN-routed traffic
+route-map RM-LEAF-PBR-VLAN110 deny 20
+  match ip address PBR-BYPASS-VLAN110
+!
+! documented-not-lab-verified: the next hop is the VIP of the local transit leg (connected anycast SVI, resolved over the L2VNI);
+! PBR falls back to normal routing when it is unresolved (fail-open), tracking over VXLAN needs lab validation
+route-map RM-LEAF-PBR-VLAN110 permit 30
+  set ip next-hop 100.66.0.4
+!
+interface Vlan110
+  ip policy route-map RM-LEAF-PBR-VLAN110
+!
+! Customer: Customer-A/any
+ip access-list PBR-BYPASS-VLAN120
+  permit ip any 100.67.0.0/29
+!
+! documented: deny sequence = forward by normal route lookup (NX-OS PBR); documented-not-lab-verified for VXLAN-routed traffic
+route-map RM-LEAF-PBR-VLAN120 deny 20
+  match ip address PBR-BYPASS-VLAN120
+!
+! documented-not-lab-verified: the next hop is the VIP of the local transit leg (connected anycast SVI, resolved over the L2VNI);
+! PBR falls back to normal routing when it is unresolved (fail-open), tracking over VXLAN needs lab validation
+route-map RM-LEAF-PBR-VLAN120 permit 30
+  set ip next-hop 100.66.0.4
+!
+interface Vlan120
+  ip policy route-map RM-LEAF-PBR-VLAN120
+!
+
+!
+! Management
+line console
+line vty
+!

@@ -10,6 +10,7 @@ from ..common import CommonGenerator, DeviceOptions
 from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
 from ..dc_config import host_bits_to_prefix_length, resolve_dc_size_layout
 from ..devices import DeviceMixin
+from ..firewall_context import FIREWALL_CONTEXT, LOADBALANCER_CONTEXT
 from ..helpers import name_to_asn_range
 from ..helpers.pools import SITE_VNI_END, SITE_VNI_START
 from ..helpers.routing import RoutingStrategy, loopback_prefix_length, p2p_prefix_length, underlay_pool_is_ipv6
@@ -594,16 +595,17 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
             indexes=[data["index"]],
         )
 
-        if firewall_names:
-            # This DC's own FirewallContext VLAN pool. Per-DC (not global) so each
-            # fabric's context sub-interfaces stay within its own numbering,
-            # matching the {fabric_name}-vlan-pool/{fabric_name}-vni-pool pattern
-            # above; the contexts' transit /29s come from the per-VRF
-            # FW-Transit-* bootstrap pools, so there is no per-DC P2P pool.
-            # generators/topology/customer_dc.py's _resolve_context_target
-            # allocates from it once a customer boards onto this DC. See
-            # PoolMixin.ensure_firewall_context_pools for the locking rationale.
-            await self.ensure_firewall_context_pools(name=self.fabric_name)
+        # This DC's own context VLAN pool per service role present. Per-DC (not
+        # global) so each fabric's context sub-interfaces stay within its own
+        # numbering, matching the {fabric_name}-vlan-pool/{fabric_name}-vni-pool
+        # pattern above; the contexts' leg /29s (and an LB context's VIP range)
+        # come from the per-VRF bootstrap pools, so there is no per-DC P2P pool.
+        # generators/firewall_context.py's _ensure_context_vlan allocates from
+        # it once a customer boards onto this DC. See
+        # PoolMixin.ensure_context_vlan_pool for the locking rationale.
+        for spec, names in ((FIREWALL_CONTEXT, firewall_names), (LOADBALANCER_CONTEXT, load_balancer_names)):
+            if names:
+                await self.ensure_context_vlan_pool(name=self.fabric_name, spec=spec)
 
         await self._cable_border_services(
             border_role_for=BORDER_ROLE_FOR_SERVICES,

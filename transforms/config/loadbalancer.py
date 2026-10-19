@@ -3,6 +3,7 @@ from typing import Any
 from transforms.common import BaseDeviceTransform
 from transforms.helpers.addressing import management_ip
 from transforms.helpers.ha import get_ha, inline_addresses
+from transforms.helpers.loadbalancer import get_loadbalancer_contexts
 
 
 def _build_lb_interfaces(interfaces: list[dict[str, Any]], ha: dict[str, Any] | None = None) -> list[dict[str, Any]]:
@@ -27,50 +28,15 @@ def _build_lb_interfaces(interfaces: list[dict[str, Any]], ha: dict[str, Any] | 
     return lb_ifaces
 
 
-def _build_vips_from_interfaces(interfaces: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Build VIP list from capabilities — LoadbalancerVIP is an interface capability."""
-    vips = []
-    for iface in interfaces or []:
-        for cap in iface.get("capabilities") or []:
-            if cap.get("typename") != "LoadbalancerVIP":
-                continue
-            vip_ip_obj = cap.get("vip_ip") or {}
-            lb_node = cap.get("load_balancer") or {}
-
-            health_checks = []
-            for hc in cap.get("health_checks") or []:
-                health_checks.append(
-                    {
-                        "check": hc.get("check"),
-                        "rise": hc.get("rise"),
-                        "fall": hc.get("fall"),
-                        "timeout": hc.get("timeout"),
-                    }
-                )
-
-            vips.append(
-                {
-                    "lb_name": lb_node.get("name", ""),
-                    "interface": iface.get("name"),
-                    "hostname": cap.get("hostname"),
-                    # Object-name stem: hostname with . and - as _, plus protocol and port.
-                    "slug": f"{str(cap.get('hostname')).replace('.', '_').replace('-', '_')}_{cap.get('protocol')}_{cap.get('port')}",
-                    "protocol": cap.get("protocol"),
-                    "port": cap.get("port"),
-                    "status": cap.get("status"),
-                    "description": cap.get("description"),
-                    "load_balancing_algorithm": cap.get("load_balancing_algorithm"),
-                    "session_persistence": cap.get("session_persistence"),
-                    "vip_ip": vip_ip_obj.get("address"),
-                    "health_checks": health_checks,
-                }
-            )
-    return vips
-
-
 class LoadBalancer(BaseDeviceTransform):
     query = "loadbalancer_config"
     template_subdir = "loadbalancers"
+
+    def _device_and_platform(self, data: Any) -> tuple[dict, dict, str | None]:
+        """The device is the first non-empty root: a physical member of a shared
+        cluster (DcimPhysicalDevice), else a dedicated virtual instance (DcimVirtualDevice)."""
+        roots = {key: value for key, value in (data or {}).items() if isinstance(value, dict) and value.get("edges")}
+        return super()._device_and_platform(roots or data)
 
     async def transform(self, data: Any) -> Any:
         device, _, platform_name = self._device_and_platform(data)
@@ -78,15 +44,21 @@ class LoadBalancer(BaseDeviceTransform):
             return self._no_platform_config(device)
 
         interfaces = device.get("interfaces") or []
-        ha = get_ha(device.get("capabilities") or [], interfaces, device.get("name"))
-        lb_interfaces = _build_lb_interfaces(interfaces, ha)
-        vips = _build_vips_from_interfaces(interfaces)
+        capabilities = device.get("capabilities") or []
+        ha = get_ha(capabilities, interfaces, device.get("name"))
+        contexts = get_loadbalancer_contexts(capabilities, device.get("name") or "", ha, platform_name)
+        # A context leg renders inside its context, not as a root interface.
+        leg_interfaces = {context["leg"]["name"] for context in contexts}
+        lb_interfaces = _build_lb_interfaces([i for i in interfaces if i.get("name") not in leg_interfaces], ha)
+        cluster = next((cap for cap in capabilities if cap.get("typename") == "ManagedLoadbalancerHA"), {})
         config = self._build_config(device, platform_name)
         config.update(
             {
                 "lb_interfaces": lb_interfaces,
                 "management_ip": management_ip(lb_interfaces),
-                "vips": vips,
+                "contexts": contexts,
+                "lb_type": cluster.get("lb_type"),
+                "scheme": cluster.get("scheme"),
                 "ha": ha,
             }
         )

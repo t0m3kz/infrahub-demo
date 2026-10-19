@@ -275,7 +275,7 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
         its target component (publish-{fqdn}); a target_fqdn dependency gets one
         proxy rule named after itself carrying its ports; every other dependency
         gets one SecurityPolicyRule per port it opens (cloud endpoints included),
-        named {dependency}-{protocol}-{port}. No generated sg-{app}
+        named {dependency}-{protocol}-{port} (a load-balanced target: {dependency}-{protocol}-{port}-vip-{context}, to its VIP). No generated sg-{app}
         CloudSecurityGroup exists any more.
         """
         logging.info("=== %s - Step 7: Every Dependency Has Its Rule ===", SCENARIO_NAME)
@@ -323,7 +323,12 @@ class TestAppCatalogue(TestInfrahubDockerWithClient):
             else:
                 for port in PortProfileHelper.resolve_dependency_ports(dep_ports, {"ports": value(target, "ports")}):
                     rule_name = f"{name}-{PortProfileHelper.format_port_spec(port).replace('/', '-')}"
-                    if port_rules.get(rule_name) != port:
+                    # A load-balanced target is reached through its VIP: the client's rule is
+                    # {rule_name}-vip-{context} (to the VIP /32) and replaces the direct one.
+                    via_vip = any(
+                        name.startswith(f"{rule_name}-vip-") and rule == port for name, rule in port_rules.items()
+                    )
+                    if port_rules.get(rule_name) != port and not via_vip:
                         missing.append(f"{rule_name}: {port} rule, got {port_rules.get(rule_name)}")
 
         assert not missing, "Dependencies without their rule:\n  " + "\n  ".join(missing)

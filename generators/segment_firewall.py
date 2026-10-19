@@ -20,6 +20,8 @@ RULE_INDEX_START = 100
 RULE_INDEX_STEP = 10
 RULE_SAVE_ATTEMPTS = 5
 RULE_DEFAULT_VALIDITY_DAYS = 180
+# The cardinality-many selectors a generated rule sets: R_client's VIPs, R_server's leg.
+_SELECTOR_FIELDS = ("destination_ip_addresses", "source_prefixes")
 
 
 def _default_expiry_iso() -> str:
@@ -82,11 +84,15 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
         segment_policies: dict[str, Any],
         rule_indexes: dict[str, set[int]],
         port: PortSpec,
+        vip: tuple[str, str] | None = None,
     ) -> tuple[bool, bool]:
         """Segment-to-segment dependency rule for one edge and port.
 
         ``segment_policies`` (source segment id -> policy) and ``rule_indexes``
         (policy id -> used rule indexes) are the caller's per-run caches.
+        ``vip`` (context name, VIP address id: one VIP of a load-balanced
+        target on this port) makes it R_client, which replaces the rule into
+        the target's segment; a target with VIPs on two contexts gets two.
         Returns (created, skipped) for the caller to fold into its running
         counters — a missing network_segment contributes to neither (matches
         the pre-extraction behaviour of silently `continue`-ing).
@@ -112,6 +118,11 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
 
         policy_id = policy.id
         rule_name = planner.rule_name(app_name, src_comp, dst_comp, dep, port)
+        if vip:
+            # Its own name per VIP: a dependency whose target turns
+            # load-balanced (or back) gets new rules, and the run's tracking
+            # deletes the others.
+            rule_name = f"{rule_name}-vip-{planner.name_part(vip[0])}"
         protocol, port_start, port_end = port
 
         src_zone, dst_zone, cross_zone = planner.zone_context(src_seg=src_seg, dst_seg=dst_seg)
@@ -136,6 +147,7 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
             port_start=port_start,
             port_end=port_end,
             cross_zone=cross_zone,
+            vip_id=vip[1] if vip else None,
         )
 
         profile_name = planner.pick_profile_name(app_security_profile, cross_zone)
@@ -143,11 +155,47 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
         if profile:
             rule_data["security_profile"] = {"id": profile.id}
 
-        existing_rule = await self._find_rule_by_name(SecurityPolicyRule, policy_id, rule_name)
+        # A profile that is named but not in the database is left as it is.
+        assigned_index = await self._upsert_policy_rule(
+            policy_id=policy_id,
+            rule_name=rule_name,
+            rule_data=rule_data,
+            rule_indexes=rule_indexes,
+            keep_profile=bool(profile_name) and profile is None,
+        )
+        if assigned_index is None:
+            return False, True
+        self.logger.info(
+            "  Created rule [%d] '%s' (%s -> %s, %s/%s)",
+            assigned_index,
+            rule_name,
+            src_seg.get("name", src_seg_id),
+            f"VIP on {vip[0]}" if vip else dst_seg.get("name", dst_seg_id),
+            protocol,
+            port_start or "any",
+        )
+        return True, False
+
+    async def _upsert_policy_rule(
+        self,
+        *,
+        policy_id: str,
+        rule_name: str,
+        rule_data: dict[str, Any],
+        rule_indexes: dict[str, set[int]],
+        keep_profile: bool = False,
+    ) -> int | None:
+        """Create the rule at the policy's next free index, or bring the existing
+        one of that name to ``rule_data``; the new rule's index, None when it existed.
+
+        Shared by the dependency rules and a load balancer context's R_server.
+        """
+        selectors = [field for field in _SELECTOR_FIELDS if field in rule_data]
+        existing_rule = await self._find_rule_by_name(SecurityPolicyRule, policy_id, rule_name, include=selectors)
         if existing_rule is not None:
             existing_index = existing_rule.index.value
             if existing_index is not None and int(existing_index) < RULE_INDEX_START:
-                # A hand-written rule of the segment (index < 100) with this
+                # A hand-written rule of the policy (index < 100) with this
                 # name: never adopt it into this application's group, whose
                 # cleanup would then delete it.
                 self.logger.error(
@@ -156,12 +204,9 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
                     existing_index,
                     policy_id,
                 )
-                return False, True
+                return None
             self.logger.info("  Rule '%s' already exists - registering with tracker", rule_name)
-            # A profile that is named but not in the database is left as it is.
-            changed = self._reconcile_rule_payload(
-                existing_rule, rule_data, keep_profile=bool(profile_name) and profile is None
-            )
+            changed = self._reconcile_rule_payload(existing_rule, rule_data, keep_profile=keep_profile)
             if changed:
                 self.logger.info("  Rule '%s' updated: %s", rule_name, ", ".join(changed))
             if _is_expired(existing_rule.expires_at.value) and not existing_rule.disabled.value:
@@ -171,7 +216,7 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
             # fields above only change when they differ, so a second pass
             # leaves the data untouched.
             await existing_rule.save(allow_upsert=True)
-            return False, True
+            return None
 
         # A failure propagates: the caller counts it and fails the run after the loop.
         _rule, assigned_index = await self._create_or_update_policy_rule(
@@ -180,26 +225,22 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
             rule_data=rule_data,
             rule_indexes=rule_indexes,
         )
-        self.logger.info(
-            "  Created rule [%d] '%s' (%s -> %s, %s/%s)",
-            assigned_index,
-            rule_name,
-            src_seg.get("name", src_seg_id),
-            dst_seg.get("name", dst_seg_id),
-            protocol,
-            port_start or "any",
-        )
-        return True, False
+        return assigned_index
 
     @staticmethod
     def _reconcile_rule_payload(rule: Any, rule_data: dict[str, Any], *, keep_profile: bool) -> list[str]:
-        """Set the derived fields (log, apply_on_switch, security_profile and the
-        tags) of an existing rule to what the planner now derives; return the
-        names that changed.
+        """Set the derived fields (log, apply_on_switch, the destination segment,
+        security_profile, the tags and the address/prefix selectors) of an
+        existing rule to what the planner now derives; return the names that
+        changed.
 
-        The component group tags of an intra-segment rule are relationships of
-        the same kind. Compares before assigning, so a rule already in the
-        desired state is not modified.
+        The destination segment follows a target that moved; a rule without
+        one (R_client) has it cleared. The component group tags of an
+        intra-segment rule are relationships of the same kind. A selector
+        (the VIPs of R_client, the leg of R_server) is reconciled only when the
+        payload has it: the rule was read with it (_upsert_policy_rule).
+        Compares before assigning, so a rule already in the desired state is
+        not modified.
         """
         changed: list[str] = []
         for field in ("log", "apply_on_switch"):
@@ -207,13 +248,24 @@ class SegmentFirewallMixin(GetOrCreateByNameMixin):
             if attribute.value != rule_data[field]:
                 attribute.value = rule_data[field]
                 changed.append(field)
-        relationships = ("source_security_tag", "destination_security_tag")
+        relationships = ("destination_segment", "source_security_tag", "destination_security_tag")
         for field in relationships if keep_profile else ("security_profile", *relationships):
             wanted = (rule_data.get(field) or {}).get("id")
             peer = getattr(rule, field)
             current = peer.id if peer.initialized else None
             if current != wanted:
                 setattr(rule, field, {"id": wanted} if wanted else None)
+                changed.append(field)
+        for field in _SELECTOR_FIELDS:
+            if field not in rule_data:
+                continue
+            wanted_ids = {peer["id"] for peer in rule_data[field]}
+            manager = getattr(rule, field)
+            current_ids = set(manager.peer_ids)
+            if current_ids != wanted_ids:
+                for peer_id in sorted(current_ids - wanted_ids):
+                    manager.remove(peer_id)
+                manager.extend(sorted(wanted_ids - current_ids))
                 changed.append(field)
         return changed
 

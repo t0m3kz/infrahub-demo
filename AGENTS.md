@@ -1122,10 +1122,10 @@ primary_ip:
 **Option 3**: **Nested object with explicit kind (for generics)**
 
 ```yaml
-load_balancer:
-  kind: ManagedLoadbalancerHA  # Specify concrete type when peer is generic
+network_segment:              # AppComponent.network_segment, peer: the ManagedNetworkSegment generic
+  kind: ManagedVxlanSegment   # Specify the concrete type when the peer is a generic
   data:
-    name: "my-lb"
+    name: "c001-web-p"
 ```
 
 #### Cardinality Many
@@ -1142,9 +1142,9 @@ tags:
 **Option 2**: **Array of multi-value HFIDs**
 
 ```yaml
-backend_pools:
-  - ["www.example.com", "https", "443"]  # Three-part HFID
-  - ["api.example.com", "tcp", "8080"]
+health_checks:
+  - ["http", "3", "3", "2000"]  # Four-part HFID [check, rise, fall, timeout]
+  - ["tcp", "2", "3", "1000"]
 ```
 
 **Option 3**: **Nested objects (dictionary format)**
@@ -1190,20 +1190,38 @@ spec:
             status: "active"
 ```
 
-#### VIP Services with HFID References
+#### Load-Balanced Components (VIPs are generated)
+
+A `LoadbalancerVIP` is never loaded from a file. The application generator (`generators/lb_vip.py`) produces one
+per port of a component with `load_balanced: true`, on the load balancer context serving its instances'
+deployment, with the VIP /32, the pool members and the component's `health_checks`. The data file only flags the
+component:
 
 ```yaml
 spec:
-  kind: LoadbalancerVIP
+  kind: AppApplication
   data:
-    - hostname: "www.example.com"
-      protocol: "https"
-      port: 443
-      load_balancer: "my-haproxy-lb"  # Simple HFID reference
-      vip_ip: ["10.1.1.10/32", "default"]  # Two-part HFID
-      health_checks:
-        - ["http", "3", "3", "2000"]  # Four-part HFID (all strings!)
+    - name: "payment-core"
+      owner: "C005"
+      children:
+        kind: AppComponent
+        data:
+          - name: "web-frontend"
+            fqdn: "api.payment-core.c005.demo.local"
+            component_type: "frontend"
+            ports:
+              - "tcp/443"          # One VIP per single port; a range is refused
+            load_balanced: true
+            network_segment: "c005-web-frontend-local-dc10-p"
+            instances:             # The pool members
+              - "c005-web-frontend-dc10-1"
+              - "c005-web-frontend-dc10-2"
+            health_checks:
+              - ["http", "3", "3", "2000"]  # Four-part HFID (all strings!)
 ```
+
+A generated VIP is referenced by its HFID `[load_balancer__name__value, hostname, protocol, port]`, where the
+load balancer is the `ManagedLoadbalancerContext` (for example `["DC10-LB1-LB2-ha-PROD", "api.payment-core.c005.demo.local", "tcp", "443"]`).
 
 ### Range Expansion
 

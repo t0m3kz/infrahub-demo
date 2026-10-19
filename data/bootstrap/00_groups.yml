@@ -34,8 +34,6 @@ spec:
       description: All firewalls
     - name: loadbalancers
       description: All load balancers
-    - name: loadbalancer_devices
-      description: Physical devices running load balancer software
     - name: cloud_loadbalancers
       description: All cloud load balancers (AWS/Azure/GCP)
     - name: oobs
@@ -76,8 +74,6 @@ spec:
       description: HA domains (firewall + load balancer) — membership tracking only, no generator dispatch
     - name: mlag_domains
       description: MLAG domains — generator target for MLAGWiringGenerator
-    - name: loadbalancer_vips
-      description: Load balancer VIP services — generator target for LoadbalancerBackendNexthopGenerator
     - name: app_applications
       description: Application instances — generator target for AppApplicationGenerator
     - name: app_components

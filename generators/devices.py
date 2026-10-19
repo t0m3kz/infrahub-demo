@@ -583,7 +583,6 @@ class DeviceMixin(MLAGWiringMixin):
         ha_kind: str,
         role_label: str,
         device_kind: type[Any] = DcimPhysicalDevice,
-        tenant_id: str | None = None,
     ) -> None:
         """Pair same-role devices two-at-a-time (sorted, odd one unpaired) into
         HA domains, then ensure each pair's HA sync interfaces/cable in the
@@ -599,12 +598,9 @@ class DeviceMixin(MLAGWiringMixin):
         non-production virtual instances dc.py provisions per physical HA
         pair — same pairing logic, no physical cabling involved (mirrors the
         skip _ensure_ha_interfaces itself applies for non-physical devices).
-        tenant_id sets .tenant on ha_kind for a dedicated pair (e.g.
-        ManagedLoadbalancerHA created for one customer) — only meaningful for
-        ha_kind's that carry a tenant relationship (LoadbalancerHA today;
-        FirewallHA itself has none — a firewall's dedicated tenant is
-        recorded one level down, on its ManagedFirewallContext). Ignored
-        (never sent) when None, matching every non-dedicated caller."""
+        An HA domain carries no tenant, not even a customer's dedicated pair:
+        the tenant is recorded one level down, on the dedicated
+        ManagedFirewallContext/ManagedLoadbalancerContext on it."""
         ha_group = None
         for first, second in pair_device_names(device_names):
             ha_name = f"{first}-{second}-ha"
@@ -632,7 +628,6 @@ class DeviceMixin(MLAGWiringMixin):
                             "status": "active",
                             "capabilities": [{"id": dev.id} for dev in devices],
                             "member_of_groups": [{"id": ha_group.id}],
-                            **({"tenant": {"id": tenant_id}} if tenant_id else {}),
                         },
                     )
                     await ha_obj.save(allow_upsert=True)

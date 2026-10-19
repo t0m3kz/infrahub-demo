@@ -10,7 +10,7 @@ locals {
 {% for hc in health_checks %}
 resource "google_compute_health_check" "{{ hc.name | tf_id }}" {
   name = "{{ hc.name }}"
-{%- if hc.protocol in ('HTTP', 'HTTPS') %}
+{%- if hc.protocol in ('HTTP', 'HTTPS', 'TCP', 'SSL') %}
 
   {{ hc.protocol | lower }}_health_check {
     port = {{ hc.port }}
@@ -27,11 +27,39 @@ resource "google_compute_health_check" "{{ hc.name | tf_id }}" {
 }
 {% endfor %}
 {% for svc in backend_services %}
+{%- if svc.endpoints %}
+resource "google_compute_network_endpoint_group" "{{ svc.name | tf_id }}" {
+  name                  = "{{ svc.name }}-neg"
+  network               = data.google_compute_network.{{ network_name | tf_id }}.id
+  network_endpoint_type = "NON_GCP_PRIVATE_IP_PORT"
+  default_port          = {{ svc.port }}
+  zone                  = var.zone
+}
+
+resource "google_compute_network_endpoints" "{{ svc.name | tf_id }}" {
+  network_endpoint_group = google_compute_network_endpoint_group.{{ svc.name | tf_id }}.name
+  zone                   = var.zone
+{%- for ip in svc.endpoints %}
+
+  network_endpoints {
+    ip_address = "{{ ip }}"
+    port       = {{ svc.port }}
+  }
+{%- endfor %}
+}
+
+{% endif -%}
 resource "google_compute_backend_service" "{{ svc.name | tf_id }}" {
   name             = "{{ svc.name }}"
   protocol         = "{{ svc.protocol }}"
   session_affinity = "{{ svc.session_affinity }}"
   health_checks    = [google_compute_health_check.{{ svc.health_check | tf_id }}.id]
+{%- if svc.endpoints %}
+
+  backend {
+    group = google_compute_network_endpoint_group.{{ svc.name | tf_id }}.id
+  }
+{%- endif %}
 }
 {% endfor %}
 {% for rule in forwarding_rules %}
@@ -40,4 +68,4 @@ resource "{{ 'google_compute_global_forwarding_rule' if rule.is_global else 'goo
   port_range = "{{ rule.port_range }}"
   target     = google_compute_backend_service.{{ rule.backend_service | tf_id }}.id
 }
-{% endfor %}
+{% endfor -%}
