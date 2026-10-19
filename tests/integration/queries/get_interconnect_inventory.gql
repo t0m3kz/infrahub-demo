@@ -1,7 +1,10 @@
+# The circuit layer of a branch. A location carries its kind, its parent (a cage's metro, a footprint's facility)
+# and a footprint's owner, an end its device's deployment: what test_62 checks circuit placement against.
 query GetInterconnectInventory {
   TopologyPhysicalCircuit {
     edges {
       node {
+        id
         circuit_id {
           value
         }
@@ -20,6 +23,7 @@ query GetInterconnectInventory {
         }
         owner {
           node {
+            id
             name {
               value
             }
@@ -28,9 +32,7 @@ query GetInterconnectInventory {
         locations {
           edges {
             node {
-              name {
-                value
-              }
+              ...CircuitLocation
             }
           }
         }
@@ -43,9 +45,7 @@ query GetInterconnectInventory {
               }
               device {
                 node {
-                  name {
-                    value
-                  }
+                  ...CircuitEndDevice
                 }
               }
             }
@@ -57,6 +57,7 @@ query GetInterconnectInventory {
   TopologyVirtualCircuit {
     edges {
       node {
+        id
         name {
           value
         }
@@ -68,6 +69,7 @@ query GetInterconnectInventory {
         }
         owner {
           node {
+            id
             name {
               value
             }
@@ -76,9 +78,7 @@ query GetInterconnectInventory {
         locations {
           edges {
             node {
-              name {
-                value
-              }
+              ...CircuitLocation
             }
           }
         }
@@ -99,9 +99,7 @@ query GetInterconnectInventory {
               }
               device {
                 node {
-                  name {
-                    value
-                  }
+                  ...CircuitEndDevice
                 }
               }
             }
@@ -121,6 +119,103 @@ query GetInterconnectInventory {
               }
             }
           }
+        }
+      }
+    }
+  }
+}
+
+fragment CircuitLocation on TopologyConnectableLocation {
+  id
+  __typename
+  name {
+    value
+  }
+  ... on TopologyColocationZone {
+    parent {
+      node {
+        id
+        __typename
+        name {
+          value
+        }
+      }
+    }
+  }
+  ... on TopologyCustomerDC {
+    parent {
+      node {
+        id
+        __typename
+        name {
+          value
+        }
+      }
+    }
+  }
+  ... on TopologyCustomerColocation {
+    parent {
+      node {
+        id
+        __typename
+        name {
+          value
+        }
+      }
+    }
+  }
+  ... on TopologyCustomerCloud {
+    parent {
+      node {
+        id
+        __typename
+        name {
+          value
+        }
+      }
+    }
+  }
+  ... on TopologyCustomer {
+    owner {
+      node {
+        id
+        __typename
+      }
+    }
+  }
+  ... on TopologyCustomerOffice {
+    owner {
+      node {
+        id
+        __typename
+      }
+    }
+  }
+}
+
+fragment CircuitEndDevice on DcimDevice {
+  id
+  name {
+    value
+  }
+  ... on DcimPhysicalDevice {
+    deployment {
+      node {
+        id
+        __typename
+        name {
+          value
+        }
+      }
+    }
+  }
+  ... on DcimVirtualDevice {
+    deployment {
+      node {
+        id
+        __typename
+        name {
+          value
         }
       }
     }

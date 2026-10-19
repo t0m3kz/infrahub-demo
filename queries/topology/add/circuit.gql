@@ -5,7 +5,9 @@
 # interfaces by schema (min_count = max_count = 2), one per end. Each endpoint
 # carries what a DCI session needs: its address, its device's deployment (a
 # TopologyDataCenter end names the fabric key and the address family) and the
-# device's BGP processes.
+# device's BGP processes. The deployment's kind also places that end (a DC,
+# ISP or cloud region deployment is the circuit's location there), checked
+# against the circuit's current locations.
 query circuit_data($name: String!) {
   TopologyPhysicalCircuit(name__value: $name) {
     edges {
@@ -16,6 +18,15 @@ query circuit_data($name: String!) {
         circuit_type { value }
         status { value }
         peering_role { value }
+        locations {
+          edges {
+            node {
+              id
+              __typename
+              display_label
+            }
+          }
+        }
         capabilities {
           edges {
             node {
@@ -69,6 +80,7 @@ fragment CircuitEndpoint on DcimInterface {
 fragment CircuitDeployment on TopologyDeployment {
   id
   __typename
+  display_label
   ... on TopologyDataCenter {
     name { value }
     underlay_protocol { value }

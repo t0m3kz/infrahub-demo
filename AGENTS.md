@@ -252,6 +252,15 @@ class MyCheck(InfrahubCheck):
 - **Office**: `TopologyCustomerOffice` is not a `TopologyCustomer`. The owner sits directly on it, its name is
   `{OWNER}-OFFICE` (for example `C005-OFFICE`), it is always PROD (no `environment`) and its parent is the
   "Campus and Office" `TopologyLabel`.
+- **Circuit placement**: a physical circuit's `locations` peer `TopologyFacility`:
+  the DC (never a pod, rack or footprint), the colocation cage `TopologyColocationZone` (never the metro), the
+  `TopologyCloudRegion` (never a zone or `TopologyCloud`), the ISP `TopologyExternalProviders`, the
+  `TopologySaasRegion` or the `TopologyCustomerOffice`. Data lists only the cage; `add_circuit` adds every end
+  whose endpoint device's `deployment` is a facility (border leaf -> DC, provider router -> region, ISP PE -> ISP).
+  A virtual circuit's `locations` peer `TopologyConnectableLocation`: an owned one ends on a footprint of its
+  `owner`, an unowned one on facilities, and its `physical_circuits` chain is contiguous end to end.
+  `checks/circuit_placement.py` guards what the schema cannot (cage parent = device metro, owner, chain).
+  `locations` is declared on each circuit node, not on `TopologyCircuit`: an inherited peer cannot be narrowed.
 - **DC service tier**: `TopologyCustomerTemplateDC` (referenced by the footprint's `design`, for example `M_DC`)
   holds `dedicated_firewall`, `dedicated_loadbalancer`, `max_segments`, `ports_25g` and `ports_100g` (0 = no
   host-facing ports of that speed). `checks/customer_quota.py` enforces the segment and port numbers; a footprint

@@ -107,6 +107,7 @@ nodes:
     inherit_from:
       - TopologyDeployment
       - TopologyConnectableLocation
+      - TopologyFacility
     parent: TopologySaas
     children: ""
     icon: "mdi:map-marker-network"

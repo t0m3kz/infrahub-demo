@@ -13,6 +13,32 @@ generics:
       - name: name
         kind: Text
         order_weight: 100
+    relationships:
+      - name: circuits
+        label: "Circuits"
+        peer: TopologyCircuit
+        cardinality: many
+        kind: Generic
+        optional: true
+        identifier: "circuit__location"
+        order_weight: 3000
+        description: "Physical and virtual circuits terminating here"
+
+  # A place a PHYSICAL circuit can terminate on: the facility itself, never a
+  # pod, rack, metro, cloud zone or tenant footprint. Inherited alongside
+  # TopologyConnectableLocation by DataCenter, ColocationZone, CloudRegion,
+  # ExternalProviders, SaasRegion and CustomerOffice.
+  - name: Facility
+    namespace: Topology
+    description: "A facility a physical circuit can terminate on"
+    label: "Facility"
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
 
   - name: Circuit
     namespace: Topology
@@ -64,16 +90,9 @@ generics:
         order_weight: 1000
         description: "Service provider for this connectivity"
 
-      - name: locations
-        label: "Endpoint Locations"
-        peer: TopologyConnectableLocation
-        cardinality: many
-        max_count: 2
-        optional: false
-        identifier: "circuit__location"
-        order_weight: 3000
-        description: "Topology locations where this circuit terminates"
-
+      # `locations` is declared on each node, not here: an inherited
+      # relationship's peer cannot be narrowed, and a physical circuit ends
+      # on a TopologyFacility while a virtual one may end on a footprint.
       - name: owner
         label: "Customer"
         peer: OrganizationCustomer
@@ -170,23 +189,20 @@ nodes:
             description: "IP transit session to the provider (not generated yet)"
             color: "#fdcb6e"
 
-      - name: committed_rate
-        kind: Number
-        label: "CIR (Mbps)"
-        optional: true
-        order_weight: 410
-
-      - name: install_date
-        kind: Text
-        optional: true
-        order_weight: 600
-
-      - name: contract_end_date
-        kind: Text
-        optional: true
-        order_weight: 610
-
     relationships:
+      # Data authors only the end that cannot be derived (the colocation cage);
+      # add_circuit adds each endpoint device's deployment that is a facility
+      # (DC, ISP, cloud region). So one location is valid on load: no min_count.
+      - name: locations
+        label: "Endpoint Locations"
+        peer: TopologyFacility
+        cardinality: many
+        max_count: 2
+        optional: false
+        identifier: "circuit__location"
+        order_weight: 3000
+        description: "Facilities where this circuit terminates"
+
       # Re-declares ManagedGenericInterfaces.capabilities with a count. The cap holds when the
       # circuit side is written; checks/physical_circuit_ports.py holds it for interface-side writes.
       - name: capabilities
@@ -327,13 +343,6 @@ nodes:
         order_weight: 430
         description: "Tunnel ID (for GRE/IPSec, if applicable)"
 
-      - name: cloud_resource_id
-        kind: Text
-        label: "Cloud Resource ID"
-        optional: true
-        order_weight: 600
-        description: "Provider resource ID (e.g., dxcon-xxxxx for AWS)"
-
       - name: transport_mode
         kind: Dropdown
         label: "Transport Mode"
@@ -355,6 +364,16 @@ nodes:
             color: "#9b59b6"
 
     relationships:
+      - name: locations
+        label: "Endpoint Locations"
+        peer: TopologyConnectableLocation
+        cardinality: many
+        max_count: 2
+        optional: false
+        identifier: "circuit__location"
+        order_weight: 3000
+        description: "Footprints or facilities where this circuit terminates"
+
       # capabilities (many DcimInterface, via ManagedGenericInterfaces)
       # — the A/Z (or more) technical interfaces this circuit terminates on.
       - name: physical_circuits

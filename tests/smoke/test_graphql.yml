@@ -397,6 +397,14 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: circuit_placement
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/circuit_placement.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: reference_fabric
     tests:
       - name: syntax_check

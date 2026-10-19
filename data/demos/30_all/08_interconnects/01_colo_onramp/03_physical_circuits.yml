@@ -14,6 +14,12 @@
 #
 # Without the second shape the traversal reaches the cage and stops, which is
 # the DC-boundary blind spot this whole leg exists to close.
+#
+# `locations` lists only the cage. The on-ramp edges deploy to the metro, and a
+# metro has several cages, so the cage end cannot be derived. add_circuit
+# (generators/topology/circuit.py) adds the other end from the far endpoint
+# device's deployment: the border leaf's DC, the provider router's cloud region
+# (02_cloud_provider_edges.yml).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -39,7 +45,6 @@ spec:
       provider: "P016"
       description: "DC10 border leaf to Equinix FR2 cage, 100G dark fibre"
       locations:
-        - "DC10"
         - "FR2"
       capabilities:
         - ["bl-dc101101", "Ethernet1/35"]
@@ -55,7 +60,6 @@ spec:
       provider: "P016"
       description: "DC11 border leaf to Equinix FR2 cage, 100G dark fibre"
       locations:
-        - "DC11"
         - "FR2"
       capabilities:
         - ["bl-dc1111101", "Ethernet1/35"]
@@ -71,7 +75,6 @@ spec:
       provider: "P016"
       description: "DC12 border leaf to Equinix PA4 cage, 100G dark fibre"
       locations:
-        - "DC12"
         - "PA4"
       capabilities:
         - ["bl-dc1212101", "Ethernet1/35"]
@@ -87,7 +90,6 @@ spec:
       provider: "P016"
       description: "DC10 border leaf to Equinix FR2 cage, second 100G dark fibre (second border gateway)"
       locations:
-        - "DC10"
         - "FR2"
       capabilities:
         - ["bl-dc101101", "Ethernet1/36"]
@@ -103,7 +105,6 @@ spec:
       provider: "P016"
       description: "DC11 border leaf to Equinix FR2 cage, second 100G dark fibre (second border gateway)"
       locations:
-        - "DC11"
         - "FR2"
       capabilities:
         - ["bl-dc1111101", "Ethernet1/36"]
@@ -119,7 +120,6 @@ spec:
       provider: "P016"
       description: "DC12 border leaf to Equinix PA4 cage, second 100G dark fibre (second border gateway)"
       locations:
-        - "DC12"
         - "PA4"
       capabilities:
         - ["bl-dc1212101", "Ethernet1/36"]
@@ -138,7 +138,6 @@ spec:
       description: "Equinix FR2 cage to AWS eu-central-1, shared 10G fabric port"
       locations:
         - "FR2"
-        - "eu-central-1"
       capabilities:
         - ["eg-fr01", "Ethernet1/13"]
         - ["EXT-AWS-DX-FR2", "et-0/0/0"]
@@ -153,7 +152,6 @@ spec:
       description: "Equinix PA4 cage to Azure westeurope, shared 10G fabric port"
       locations:
         - "PA4"
-        - "westeurope"
       capabilities:
         - ["eg-pa01", "Ethernet1/13"]
         - ["EXT-AZURE-ER-PA4", "et-0/0/0"]

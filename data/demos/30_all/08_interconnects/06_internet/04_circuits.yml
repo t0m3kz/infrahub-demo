@@ -3,6 +3,8 @@
 # (../01_colo_onramp/03_physical_circuits.yml): every tenant's internet traffic
 # leaves over these. The cage end is the zone the dark fibre also lands in, the
 # far end the ISP's endpoint in the INTERNET topology (../../04_internet/01_topology.yml).
+# Only the cage is listed: add_circuit derives the ISP end from the provider
+# edge's `deployment` (02_devices.yml).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -18,7 +20,6 @@ spec:
       description: "Lumen IP transit to the Equinix FR2 cage, 10G"
       locations:
         - "FR2"
-        - "ISP-LUMEN"
       capabilities:
         - ["eg-fr01", "Ethernet1/14"]
         - ["EXT-LUMEN-FRA1", "et-0/0/0"]
@@ -33,7 +34,6 @@ spec:
       description: "Cogent IP transit to the Equinix FR2 cage, 10G"
       locations:
         - "FR2"
-        - "ISP-COGENT"
       capabilities:
         - ["eg-fr02", "Ethernet1/14"]
         - ["EXT-COGENT-FRA1", "et-0/0/0"]
@@ -48,7 +48,6 @@ spec:
       description: "Lumen IP transit to the Equinix PA4 cage, 10G"
       locations:
         - "PA4"
-        - "ISP-LUMEN"
       capabilities:
         - ["eg-pa01", "Ethernet1/14"]
         - ["EXT-LUMEN-PAR1", "et-0/0/0"]
@@ -63,7 +62,6 @@ spec:
       description: "Cogent IP transit to the Equinix PA4 cage, 10G"
       locations:
         - "PA4"
-        - "ISP-COGENT"
       capabilities:
         - ["eg-pa02", "Ethernet1/14"]
         - ["EXT-COGENT-PAR1", "et-0/0/0"]

@@ -109,6 +109,7 @@ nodes:
       - TopologyDeployment
       - TopologyPhysicalDeployment
       - TopologyConnectableLocation
+      - TopologyFacility
       - TopologyDeviceHosting
       - TopologyDeviceNaming
       - TopologySegmentHosting

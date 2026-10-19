@@ -294,8 +294,8 @@ class SdwanEdgeGenerator(PoolMixin, CommonGenerator):
                     "provider": {"id": provider_id},
                     "owner": {"id": owner_id},
                     "description": f"{office_name} internet access (SD-WAN underlay)",
-                    # locations peers TopologyConnectableLocation: the office
-                    # itself (not the edge device) and the ISP the far end sits in.
+                    # locations peers TopologyFacility, and both the office itself
+                    # (not the edge device) and the ISP the far end sits in are facilities.
                     "locations": [{"id": office_id}, {"id": isp_location_id}],
                     "capabilities": [{"id": edge_uplink_id}, {"id": isp_port_id}],
                     "member_of_groups": [_target_group("physical_circuits")],
