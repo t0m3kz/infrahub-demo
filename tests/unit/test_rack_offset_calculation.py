@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from generators.topology.rack import RackGenerator, TopologyRackData
+from tests.unit.simulators.pod_layouts import LAYOUT_FOR_DEPLOYMENT_TYPE
 
 
 def _build_generator(
@@ -26,8 +27,8 @@ def _build_generator(
     numbers (rows, compute_racks_per_row, max_tors_per_compute_rack, etc).
     maximum_tors_per_row/rows/leafs_per_network_rack are therefore kept only
     as documentation of each scenario's intent and are NOT read by the
-    function under test; deployment_type is the only field that matters, and
-    layout is a placeholder ("S_MIXED") whose numbers are unused here.
+    function under test; the pod's deployment type is the only thing that
+    matters, and it is derived from the layout (one real layout per type).
     """
 
     parent = {
@@ -45,8 +46,7 @@ def _build_generator(
         "leaf_interface_sorting_method": "top_down",
         "spine_interface_sorting_method": "bottom_up",
         "fabric_templates": [{"role": "spine", "quantity": 2, "template": {"id": "tmpl-spine"}}],
-        "deployment_type": deployment_type,
-        "layout": "S_MIXED",
+        "layout": LAYOUT_FOR_DEPLOYMENT_TYPE[deployment_type],
     }
 
     suite = {"index": 1}

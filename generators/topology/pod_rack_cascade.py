@@ -27,6 +27,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..pod_config import pod_deployment_type
 from ..protocols import LocationRack
 from .pod import PodTopologyGenerator
 
@@ -66,7 +67,7 @@ class PodRackCascadeGenerator(PodTopologyGenerator):
             self.logger.info(f"Pod {pod_data['name']}: no existing racks to cascade to")
             return
 
-        if pod_data["deployment_type"] == "mixed":
+        if pod_deployment_type(pod_data["layout"]) == "mixed":
             fan_out_ids = [rack.id for rack in racks if rack.rack_type.value == "network"]
         else:
             fan_out_ids = [rack.id for rack in racks]

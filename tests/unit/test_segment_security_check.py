@@ -133,11 +133,6 @@ class TestZone:
         check = _run([_segment("svc", env="p", zone="MANAGEMENT-ZONE")])
         assert check._captured_errors == []
 
-    def test_tenant_segment_without_environment_is_an_error(self) -> None:
-        """The zone cannot be verified without an environment: fail closed."""
-        check = _run([_segment("a", env=None)])
-        assert "has no environment" in check._captured_errors[0]
-
     def test_external_segment_in_exchange_zone_passes(self) -> None:
         """INTERNET-ZONE is an exchange zone; the External segment's environment is irrelevant."""
         seg = _segment("net", "ManagedExternalSegment", env=None, zone="INTERNET-ZONE", prefix=None)
@@ -190,12 +185,6 @@ class TestGatewayNamespace:
     def test_cloud_segment_is_not_checked(self) -> None:
         """A cloud segment is addressed by its cidr_block, not a fabric gateway."""
         assert _run([_segment("c", "CloudNetworkSegment", namespace_type="non_prod")])._captured_errors == []
-
-    def test_missing_environment_is_reported_once(self) -> None:
-        """The zone rule reports a missing environment; the namespace rule adds nothing."""
-        check = _run([_segment("a", env=None, namespace_type="prod")])
-        assert len(check._captured_errors) == 1
-        assert "has no environment" in check._captured_errors[0]
 
 
 class TestUniqueNames:

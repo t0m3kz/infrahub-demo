@@ -6,6 +6,9 @@ by TopologyDataCenter.size (a Dropdown) instead of a schema node.
 
 from __future__ import annotations
 
+# technical_prefix_length and dc_fabric_loopback_host_bits are hand-picked per
+# size, not derivable by a formula, so they stay stored. The DC loopback and
+# management pool sizes ARE derived (see resolve_dc_size_layout).
 DC_SIZE_LAYOUTS: dict[str, dict[str, int]] = {
     "S": {
         "max_pods": 2,
@@ -13,9 +16,7 @@ DC_SIZE_LAYOUTS: dict[str, dict[str, int]] = {
         "max_hyper_spines_per_fabric": 0,
         "max_spines_per_pod": 2,
         "max_border_leafs_per_fabric": 0,
-        "loopback_prefix_length": 120,
         "technical_prefix_length": 117,
-        "management_prefix_length": 26,
         # Fixed DC-fabric loopback pool size (super-spine + border-leaf +
         # hyper-spine — all DC-level tiers) — sized generously for this DC
         # size's max fabric device counts, instead of computed dynamically.
@@ -38,9 +39,7 @@ DC_SIZE_LAYOUTS: dict[str, dict[str, int]] = {
         "max_hyper_spines_per_fabric": 0,
         "max_spines_per_pod": 4,
         "max_border_leafs_per_fabric": 2,
-        "loopback_prefix_length": 119,
         "technical_prefix_length": 115,
-        "management_prefix_length": 25,
         "dc_fabric_loopback_host_bits": 3,
     },
     "L": {
@@ -49,9 +48,7 @@ DC_SIZE_LAYOUTS: dict[str, dict[str, int]] = {
         "max_hyper_spines_per_fabric": 0,
         "max_spines_per_pod": 4,
         "max_border_leafs_per_fabric": 2,
-        "loopback_prefix_length": 118,
         "technical_prefix_length": 114,
-        "management_prefix_length": 24,
         "dc_fabric_loopback_host_bits": 4,
     },
     "XL": {
@@ -60,17 +57,24 @@ DC_SIZE_LAYOUTS: dict[str, dict[str, int]] = {
         "max_hyper_spines_per_fabric": 2,
         "max_spines_per_pod": 4,
         "max_border_leafs_per_fabric": 4,
-        "loopback_prefix_length": 117,
         "technical_prefix_length": 113,
-        "management_prefix_length": 23,
         "dc_fabric_loopback_host_bits": 4,
     },
 }
 
 
 def resolve_dc_size_layout(size: str) -> dict[str, int]:
-    """Look up one DC_SIZE_LAYOUTS entry by TopologyDataCenter.size."""
-    return DC_SIZE_LAYOUTS[size]
+    """Look up one DC_SIZE_LAYOUTS entry by TopologyDataCenter.size, with the
+    loopback and management pool sizes derived from max_pods: one slice per pod
+    (log2(max_pods) bits) plus 7 host bits of IPv6 loopback space and 5 host
+    bits of IPv4 management space."""
+    layout = DC_SIZE_LAYOUTS[size]
+    pod_bits = (layout["max_pods"] - 1).bit_length()
+    return {
+        **layout,
+        "loopback_prefix_length": 128 - (pod_bits + 7),
+        "management_prefix_length": 32 - (pod_bits + 5),
+    }
 
 
 def host_bits_to_prefix_length(host_bits: int, *, ipv6: bool) -> int:

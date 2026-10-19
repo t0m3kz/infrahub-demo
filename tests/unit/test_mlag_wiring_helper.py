@@ -301,12 +301,11 @@ class TestEnsureVirtualPeerLink:
     async def test_creates_new_loopback_with_full_state(self) -> None:
         gen = _gen()
         device_obj = _mock_mlag_device("leaf-01")
-        mlag_obj = _mock_mlag_obj()
         gen.client.filters = AsyncMock(return_value=[])
         virt_obj = MagicMock(id="virt-1", save=AsyncMock())
         gen.client.create = AsyncMock(return_value=virt_obj)
 
-        result = await gen._ensure_virtual_peer_link(device_obj, mlag_obj, "leaf-01-leaf-02-mlag", "nxos")
+        result = await gen._ensure_virtual_peer_link(device_obj, "leaf-01-leaf-02-mlag", "nxos")
 
         assert result is virt_obj
         create_kwargs = gen.client.create.call_args.kwargs
@@ -320,13 +319,12 @@ class TestEnsureVirtualPeerLink:
     async def test_existing_loopback_gets_upserted_by_id(self) -> None:
         gen = _gen()
         device_obj = _mock_mlag_device("leaf-01")
-        mlag_obj = _mock_mlag_obj()
         existing = MagicMock(id="virt-1")
         gen.client.filters = AsyncMock(return_value=[existing])
         virt_obj = MagicMock(id="virt-1", save=AsyncMock())
         gen.client.create = AsyncMock(return_value=virt_obj)
 
-        result = await gen._ensure_virtual_peer_link(device_obj, mlag_obj, "leaf-01-leaf-02-mlag", "nxos")
+        result = await gen._ensure_virtual_peer_link(device_obj, "leaf-01-leaf-02-mlag", "nxos")
 
         assert result is virt_obj
         create_kwargs = gen.client.create.call_args.kwargs
@@ -553,7 +551,7 @@ class TestEnsureControlSvi:
         dev = _mock_mlag_device("leaf-01")
         _control_client(gen, prefix="10.254.0.0/31", devices=[dev])
 
-        await gen._ensure_control_svi(dev, _mock_mlag_obj(), "m", "ip-7")
+        await gen._ensure_control_svi(dev, "m", "ip-7")
 
         (svi,) = gen._created
         assert svi.kind is DcimVirtualInterface
@@ -569,6 +567,6 @@ class TestEnsureControlSvi:
         dev = _mock_mlag_device("leaf-01")
         _control_client(gen, prefix="10.254.0.0/31", devices=[dev], existing_svi=_mock_iface("svi-1", "Vlan4094"))
 
-        await gen._ensure_control_svi(dev, _mock_mlag_obj(), "m", "ip-7")
+        await gen._ensure_control_svi(dev, "m", "ip-7")
 
         assert gen._created[0].data["id"] == "svi-1"

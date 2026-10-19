@@ -30,6 +30,7 @@ from generators.common import CommonGenerator
 from generators.pools import PoolMixin
 from generators.topology.dc_pod_cascade import DCPodCascadeGenerator
 from generators.topology.pod_rack_cascade import PodRackCascadeGenerator
+from tests.unit.simulators.pod_layouts import LAYOUT_FOR_DEPLOYMENT_TYPE
 
 
 class _CommonGen(PoolMixin, CommonGenerator):
@@ -351,21 +352,18 @@ def _mock_rack(name: str, rack_type: str) -> MagicMock:
 
 
 def _pod_data(*, deployment_type: str) -> dict[str, Any]:
-    """PodModel now carries deployment_type (explicit, no longer derived) plus a
-    `layout` key into POD_LAYOUTS (see generators/dc_config.py & generators/pod_config.py) instead of a
-    `design` relationship; PodParent (`parent`) carries `size` (a DC_SIZE_LAYOUTS
-    key) instead of its own `design` relationship. deployment_type here still
-    drives which real POD_LAYOUTS entry we pick, matching the fixture's original
-    intent (network_racks_per_row=0 for tor, max_tors_per_compute_rack=0 for
-    middle_rack)."""
-    layout = {"middle_rack": "S_MIDDLE", "tor": "S_TOR", "mixed": "S_MIXED"}[deployment_type]
+    """PodModel carries a `layout` key into POD_LAYOUTS (see generators/dc_config.py &
+    generators/pod_config.py) instead of a `design` relationship; PodParent (`parent`)
+    carries `size` (a DC_SIZE_LAYOUTS key) instead of its own `design` relationship.
+    deployment_type picks the real POD_LAYOUTS entry the generator derives it from
+    (network_racks_per_row=0 for tor, max_tors_per_compute_rack=0 for middle_rack)."""
+    layout = LAYOUT_FOR_DEPLOYMENT_TYPE[deployment_type]
     return {
         "TopologyPod": [
             {
                 "id": "pod-1",
                 "name": "pod-1",
                 "index": 1,
-                "deployment_type": deployment_type,
                 "layout": layout,
                 "fabric_templates": [{"role": "spine", "quantity": 2, "template": {"node": {"id": "tmpl-spine"}}}],
                 "parent": {

@@ -16,7 +16,7 @@ from .helpers.routing import (
     p2p_prefix_length,
 )
 from .helpers.template_interfaces import template_interface_names_by_role
-from .pod_config import spine_slot_role, spine_slot_templates
+from .pod_config import pod_deployment_type, spine_slot_role, spine_slot_templates
 from .protocols import TopologyDataCenter, TopologyPod
 from .types import RoutingOptions, naming_convention_of
 
@@ -283,7 +283,7 @@ class RackMixin:
             self.data["index"],
         ]
 
-        if pod["deployment_type"] == "tor":
+        if pod_deployment_type(pod["layout"]) == "tor":
             self.logger.info(
                 f"ToR rack {self.data['name']}: using suite={suite['index']}, row={self.data['row_index']}, "
                 f"rack_index={self.data['index']}"

@@ -352,25 +352,6 @@ nodes:
             index__value }}
         read_only: true
         optional: false
-      - name: deployment_type
-        label: "Deployment Type"
-        description: "Rack/leaf/ToR topology pattern — drives rack role compatibility"
-        kind: Dropdown
-        optional: false
-        order_weight: 130
-        choices:
-          - name: middle_rack
-            label: "Middle Rack"
-            description: "Dedicated network racks host leaf+ToR pairs serving all compute racks in their row."
-            color: "#7FBF7F"
-          - name: tor
-            label: "ToR"
-            description: "Every compute rack has its own ToR, cabled directly to the pod's spines."
-            color: "#FFD27F"
-          - name: mixed
-            label: "Mixed"
-            description: "Network racks host leafs; compute racks each have their own ToR cabled to those leafs."
-            color: "#869FB3"
       - name: layout
         label: "Layout"
         description: "Physical row/rack-count and device-density template for this pod (see POD_LAYOUTS)"
@@ -396,12 +377,6 @@ nodes:
           - name: M_MIDDLE
             label: "M Middle"
             color: "#A9DFBF"
-          - name: L_MIXED
-            label: "L Mixed"
-            color: "#D2B4DE"
-          - name: L_MIDDLE
-            label: "L Middle"
-            color: "#F4CCCC"
       - name: leaf_interface_sorting_method
         kind: Dropdown
         choices:

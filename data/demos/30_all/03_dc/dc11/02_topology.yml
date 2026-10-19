@@ -34,7 +34,6 @@ spec:
           # greenfield — spare fabric capacity.
           - index: 1
             layout: S_MIDDLE
-            deployment_type: middle_rack
             fabric_templates:
               - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             mlag_create: virtual
@@ -76,7 +75,6 @@ spec:
                   member_of_groups: [topologies_rack]
           - index: 2
             layout: S_MIDDLE
-            deployment_type: middle_rack
             fabric_templates:
               - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             member_of_groups:

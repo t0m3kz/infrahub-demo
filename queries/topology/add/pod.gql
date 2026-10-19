@@ -123,7 +123,6 @@ query topology_pod($name: String!) {
         id
         name { value }
         index { value }
-        deployment_type { value }
         layout { value }
         leaf_interface_sorting_method { value }
         spine_interface_sorting_method { value }

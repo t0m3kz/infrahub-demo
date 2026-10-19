@@ -8,6 +8,7 @@ import pytest
 from generators.helpers.rack import RackRolesHelper
 from generators.rack import spine_bgp_readiness_role
 from generators.topology.rack import RackGenerator, TopologyRackData
+from tests.unit.simulators.pod_layouts import LAYOUT_FOR_DEPLOYMENT_TYPE
 
 
 def _build_gen(*, deployment_type: Literal["middle_rack", "tor", "mixed"] = "mixed", rack_type: str = "network") -> Any:
@@ -30,8 +31,7 @@ def _build_gen(*, deployment_type: Literal["middle_rack", "tor", "mixed"] = "mix
         "spine_interface_sorting_method": "bottom_up",
         "loopback_pool": {"id": "lo-pool", "name": "lo"},
         "prefix_pool": {"id": "p2p-pool", "name": "p2p"},
-        "deployment_type": deployment_type,
-        "layout": "S_MIXED",
+        "layout": LAYOUT_FOR_DEPLOYMENT_TYPE[deployment_type],
         "fabric_templates": [
             {
                 "role": "spine",

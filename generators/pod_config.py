@@ -13,13 +13,16 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-# technical_host_bits/loopback_host_bits: fixed per-pod IP pool sizes,
-# stored as HOST BITS (bits reserved for host addressing, not an absolute
-# prefix length — see dc_config.host_bits_to_prefix_length for why: the
-# real prefix length depends on the DC's underlay_protocol, IPv4 /32 vs
-# IPv6 /128 address space). Sized generously for this layout's own
-# worst-case device count (spines + leafs + tors, +2 growth buffer),
-# instead of computed live per pod from its actual device counts.
+# technical_host_bits: fixed per-pod technical (P2P) pool size, stored as HOST
+# BITS (bits reserved for host addressing, not an absolute prefix length — see
+# dc_config.host_bits_to_prefix_length for why: the real prefix length depends
+# on the DC's underlay_protocol, IPv4 /32 vs IPv6 /128 address space). It is
+# hand-picked per layout, not derivable by a formula, so it stays stored. The
+# loopback pool size is derived (see resolve_pod_layout); the deployment type
+# is derived too (pod_deployment_type). The spine_downlink_ports_per_spine /
+# tor_uplinks_to_spine budget fields document where compute_racks_per_row comes
+# from for every layout that has ToRs; tests/unit/test_profiles_resolution.py
+# checks they agree.
 POD_LAYOUTS: dict[str, dict[str, Any]] = {
     "S_MIDDLE": {
         "rows": 2,
@@ -30,11 +33,9 @@ POD_LAYOUTS: dict[str, dict[str, Any]] = {
         "max_spines_per_pod": 2,
         "max_border_leafs_per_pod": 1,
         "technical_host_bits": 6,
-        "loopback_host_bits": 4,
     },
     "S_TOR": {
         "rows": 2,
-        # Hard-enforced by explicit spine/ToR port budget assumptions below.
         "compute_racks_per_row": 8,
         "network_racks_per_row": 0,
         "max_leafs_per_network_rack": 0,
@@ -43,14 +44,10 @@ POD_LAYOUTS: dict[str, dict[str, Any]] = {
         "max_border_leafs_per_pod": 1,
         "spine_downlink_ports_per_spine": 32,
         "tor_uplinks_to_spine": 4,
-        "reserved_spine_downlinks_per_spine": 0,
-        "enforce_compute_racks_from_spine_budget": True,
         "technical_host_bits": 9,
-        "loopback_host_bits": 6,
     },
     "S_MIXED": {
         "rows": 2,
-        # Hard-enforced by explicit spine/ToR port budget assumptions below.
         "compute_racks_per_row": 8,
         "network_racks_per_row": 1,
         "max_leafs_per_network_rack": 2,
@@ -59,10 +56,7 @@ POD_LAYOUTS: dict[str, dict[str, Any]] = {
         "max_border_leafs_per_pod": 1,
         "spine_downlink_ports_per_spine": 32,
         "tor_uplinks_to_spine": 4,
-        "reserved_spine_downlinks_per_spine": 0,
-        "enforce_compute_racks_from_spine_budget": True,
         "technical_host_bits": 9,
-        "loopback_host_bits": 6,
     },
     "S_BORDER_SPINE_POD": {
         "rows": 1,
@@ -73,11 +67,9 @@ POD_LAYOUTS: dict[str, dict[str, Any]] = {
         "max_spines_per_pod": 2,
         "max_border_leafs_per_pod": 0,
         "technical_host_bits": 6,
-        "loopback_host_bits": 4,
     },
     "M_MIXED": {
         "rows": 4,
-        # Hard-enforced by explicit spine/ToR port budget assumptions below.
         "compute_racks_per_row": 8,
         "network_racks_per_row": 1,
         "max_leafs_per_network_rack": 2,
@@ -86,10 +78,7 @@ POD_LAYOUTS: dict[str, dict[str, Any]] = {
         "max_border_leafs_per_pod": 1,
         "spine_downlink_ports_per_spine": 64,
         "tor_uplinks_to_spine": 3,
-        "reserved_spine_downlinks_per_spine": 0,
-        "enforce_compute_racks_from_spine_budget": True,
         "technical_host_bits": 10,
-        "loopback_host_bits": 7,
     },
     "M_MIDDLE": {
         "rows": 4,
@@ -100,50 +89,7 @@ POD_LAYOUTS: dict[str, dict[str, Any]] = {
         "max_spines_per_pod": 3,
         "max_border_leafs_per_pod": 1,
         "technical_host_bits": 7,
-        "loopback_host_bits": 5,
     },
-    "L_MIXED": {
-        "rows": 8,
-        # Hard-enforced by explicit spine/ToR port budget assumptions below.
-        "compute_racks_per_row": 8,
-        "network_racks_per_row": 1,
-        "max_leafs_per_network_rack": 2,
-        "max_tors_per_compute_rack": 2,
-        "max_spines_per_pod": 4,
-        "max_border_leafs_per_pod": 1,
-        "spine_downlink_ports_per_spine": 64,
-        "tor_uplinks_to_spine": 2,
-        "reserved_spine_downlinks_per_spine": 0,
-        "enforce_compute_racks_from_spine_budget": True,
-        "technical_host_bits": 12,
-        "loopback_host_bits": 8,
-    },
-    "L_MIDDLE": {
-        "rows": 8,
-        "compute_racks_per_row": 8,
-        "network_racks_per_row": 1,
-        "max_leafs_per_network_rack": 4,
-        "max_tors_per_compute_rack": 0,
-        "max_spines_per_pod": 4,
-        "max_border_leafs_per_pod": 1,
-        "technical_host_bits": 9,
-        "loopback_host_bits": 6,
-    },
-}
-
-_POD_LAYOUT_DEFAULTS: dict[str, Any] = {
-    "max_leafs_per_network_rack": 4,
-    "max_tors_per_compute_rack": 1,
-    "max_spines_per_pod": 2,
-    "max_border_leafs_per_pod": 1,
-    "spine_downlink_ports_per_spine": None,
-    "tor_uplinks_to_spine": None,
-    "reserved_spine_downlinks_per_spine": 0,
-    "enforce_compute_racks_from_spine_budget": False,
-    # Conservative fallback for any layout that doesn't declare its own —
-    # the largest real value above (L_MIXED's).
-    "technical_host_bits": 12,
-    "loopback_host_bits": 8,
 }
 
 
@@ -163,62 +109,45 @@ def spine_slot_role(templates: list[dict[str, Any]]) -> Literal["spine", "border
     return "border-spine" if templates_by_role(templates, "border-spine") else "spine"
 
 
+def pod_deployment_type(layout: str) -> Literal["middle_rack", "tor", "mixed"]:
+    """Rack/leaf/ToR pattern of a Pod, derived from its layout's device mix:
+    no ToRs -> middle_rack (network racks host the leafs serving every compute
+    rack), ToRs and no leafs -> tor (each compute rack's ToR cables straight to
+    the spines), ToRs and leafs -> mixed (ToRs cable to the network racks' leafs)."""
+    entry = POD_LAYOUTS[layout]
+    if entry["max_tors_per_compute_rack"] == 0:
+        return "middle_rack"
+    return "mixed" if entry["max_leafs_per_network_rack"] > 0 else "tor"
+
+
 def resolve_pod_layout(layout: str) -> dict[str, Any]:
-    """Look up one POD_LAYOUTS entry by TopologyPod.layout, filled with
-    defaults for any field the entry omits, with its own name attached.
+    """Look up one POD_LAYOUTS entry by TopologyPod.layout, with its own name,
+    its derived deployment_type and its derived loopback_host_bits attached.
 
-    Raises ValueError when the layout hard-enforces compute_racks_per_row
-    from its spine/ToR port budget and the declared value doesn't match —
-    same fail-fast check the old PodLayout.validate_budget_consistency did.
+    loopback_host_bits is sized for the layout's worst-case device count
+    (spines + leafs + tors, +2 growth buffer), instead of computed live per pod
+    from its actual device counts.
     """
-    resolved = {**_POD_LAYOUT_DEFAULTS, **POD_LAYOUTS[layout], "name": layout}
-
-    if resolved["enforce_compute_racks_from_spine_budget"]:
-        computed = _computed_max_compute_racks_per_row(resolved)
-        if computed is None:
-            raise ValueError(
-                f"Layout {layout}: enforce_compute_racks_from_spine_budget=True but spine budget fields are missing"
-            )
-        if resolved["compute_racks_per_row"] != computed:
-            raise ValueError(
-                f"Layout {layout}: compute_racks_per_row={resolved['compute_racks_per_row']} "
-                f"does not match spine budget derived value={computed}"
-            )
-
-    return resolved
+    entry = POD_LAYOUTS[layout]
+    leafs = entry["rows"] * entry["network_racks_per_row"] * entry["max_leafs_per_network_rack"]
+    tors = entry["rows"] * entry["compute_racks_per_row"] * entry["max_tors_per_compute_rack"]
+    worst_case_devices = entry["max_spines_per_pod"] + leafs + tors + 2
+    return {
+        **entry,
+        "name": layout,
+        "deployment_type": pod_deployment_type(layout),
+        "loopback_host_bits": (worst_case_devices - 1).bit_length(),
+    }
 
 
-def _computed_max_compute_racks_per_row(layout: dict[str, Any]) -> int | None:
-    """Compute per-row max from explicit spine/ToR port budget assumptions.
-
-    Returns None when budget assumptions are not provided for this layout.
-    """
-    spine_downlink_ports_per_spine = layout["spine_downlink_ports_per_spine"]
-    tor_uplinks_to_spine = layout["tor_uplinks_to_spine"]
-    if spine_downlink_ports_per_spine is None or tor_uplinks_to_spine is None:
-        return None
-
-    usable_downlinks_per_spine = max(0, spine_downlink_ports_per_spine - layout["reserved_spine_downlinks_per_spine"])
-    total_usable_downlinks = usable_downlinks_per_spine * layout["max_spines_per_pod"]
-    links_per_compute_rack = layout["max_tors_per_compute_rack"] * tor_uplinks_to_spine
-    if links_per_compute_rack <= 0 or layout["rows"] <= 0:
-        return 0
-
-    max_compute_racks_per_pod = total_usable_downlinks // links_per_compute_rack
-    return max_compute_racks_per_pod // layout["rows"]
-
-
-def pod_profile(
-    *,
-    layout_name: str,
-    deployment_type: Literal["middle_rack", "tor", "mixed"],
-) -> dict[str, Any]:
+def pod_profile(layout_name: str) -> dict[str, Any]:
     """Resolved per-Pod profile derived from a standard layout template —
     only the fields rack.py's capacity/offset checks actually read
     (deployment_type, rows, profile_template, compute_racks_per_row,
     network_racks_per_row, max_leafs_per_network_rack,
     max_tors_per_compute_rack, row_dependent_rack_slots_per_row)."""
     layout = resolve_pod_layout(layout_name)
+    deployment_type = layout["deployment_type"]
     return {
         "profile_template": layout_name,
         "deployment_type": deployment_type,

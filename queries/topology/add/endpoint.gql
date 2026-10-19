@@ -14,7 +14,7 @@ fragment PhysicalInterfaceFields on DcimPhysicalInterface {
 fragment PodFields on TopologyPod {
   id
   name { value }
-  deployment_type { value }
+  layout { value }
   index { value }
   parent {
     node {

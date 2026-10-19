@@ -144,12 +144,12 @@ class MLAGWiringMixin:
             control_ip_id = control_ip_ids.get(device_obj.id)
             if virtual_peer_link:
                 iface = await self._ensure_virtual_peer_link(
-                    device_obj, mlag_obj, mlag_name, platform_name, control_ip_id, track=track
+                    device_obj, mlag_name, platform_name, control_ip_id, track=track
                 )
             else:
                 iface = await self._ensure_lag_peer_link(device_obj, mlag_obj, platform_name, track=track)
                 if control_ip_id:
-                    await self._ensure_control_svi(device_obj, mlag_obj, mlag_name, control_ip_id, track=track)
+                    await self._ensure_control_svi(device_obj, mlag_name, control_ip_id, track=track)
             if iface is not None:
                 peer_link_ifaces.append(iface)
 
@@ -241,7 +241,6 @@ class MLAGWiringMixin:
     async def _ensure_virtual_peer_link(
         self,
         device_obj: Any,
-        mlag_obj: Any,
         mlag_name: str,
         platform_name: str,
         control_ip_id: str | None = None,
@@ -336,7 +335,7 @@ class MLAGWiringMixin:
         }
 
     async def _ensure_control_svi(
-        self, device_obj: Any, mlag_obj: Any, mlag_name: str, control_ip_id: str, *, track: bool = True
+        self, device_obj: Any, mlag_name: str, control_ip_id: str, *, track: bool = True
     ) -> None:
         """Create or upsert the Vlan4094 SVI that carries the MLAG control
         session over a back-to-back peer-link."""

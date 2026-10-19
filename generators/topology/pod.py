@@ -97,7 +97,6 @@ class TopologyPodData(TypedDict, total=False):
     id: str
     name: str
     index: int
-    deployment_type: Literal["middle_rack", "tor", "mixed"]
     layout: str
     leaf_interface_sorting_method: str
     spine_interface_sorting_method: str
@@ -207,7 +206,7 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
 
         design = resolve_pod_layout(self.data["layout"])
 
-        deployment_type = self.data["deployment_type"]
+        deployment_type = design["deployment_type"]
 
         # spine and border-spine fill the same slot in a pod's fabric — never
         # both (border-spine collapses spine+border-leaf into one device for
@@ -601,7 +600,7 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
             return
 
         design = resolve_pod_layout(self.data["layout"])
-        if self.data["deployment_type"] == "tor":
+        if design["deployment_type"] == "tor":
             offset = design["rows"] * design["compute_racks_per_row"] * design["max_tors_per_compute_rack"]
         else:
             offset = design["rows"] * design["network_racks_per_row"] * design["max_leafs_per_network_rack"]

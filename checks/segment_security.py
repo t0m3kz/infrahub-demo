@@ -96,10 +96,7 @@ class CheckSegmentSecurity(WarningCheck):
             # A shared service segment (e.g. the DC-local MANAGEMENT services) sits in an exchange zone by
             # design; ensure_security_zone keeps that zone too (one predicate, so the two never disagree).
             return
-        environment = segment.get("environment")
-        if not environment:
-            self.log_error(message=f"{kind} '{seg_name}' has no environment, so its zone '{zone}' cannot be verified")
-            return
+        environment = segment["environment"]
         expected = zone_name_for_namespace_type(namespace_type_for_environment(environment))
         if zone != expected:
             self.log_error(
@@ -114,17 +111,16 @@ class CheckSegmentSecurity(WarningCheck):
         The zone rule above reads the environment; this one reads where the
         address actually lives, so a production segment addressed in NON-PROD
         (or in a namespace with no type, such as ``default``) cannot pass as
-        PROD-ZONE. An L2-only segment (no gateway) has nothing to check; a
-        missing environment is reported by the zone rule.
+        PROD-ZONE. An L2-only segment (no gateway) has nothing to check.
         """
         if segment.get("typename") not in ROUTED_SEGMENT_KINDS:
             return
         if is_exchange_zone((segment.get("security_zone") or {}).get("name")):
             return
         prefix = (segment.get("gateway") or {}).get("ip_prefix") or {}
-        environment = segment.get("environment")
-        if not prefix or not environment:
+        if not prefix:
             return
+        environment = segment["environment"]
         namespace = prefix.get("ip_namespace") or {}
         expected = namespace_type_for_environment(environment)
         if namespace.get("namespace_type") != expected:

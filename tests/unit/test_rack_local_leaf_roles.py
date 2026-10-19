@@ -41,7 +41,6 @@ def _build_gen(*, mlag_create: Literal["no", "back-to-back", "virtual"] = "no") 
         "mlag_create": mlag_create,
         "loopback_pool": {"id": "lo-pool", "name": "lo"},
         "prefix_pool": {"id": "p2p-pool", "name": "p2p"},
-        "deployment_type": "mixed",
         "layout": "S_MIXED",
         "fabric_templates": [
             {

@@ -17,6 +17,7 @@ import pytest
 
 from generators.helpers.cabling import InterfaceSpeedMatcher
 from generators.types import ConnectionFingerprint
+from tests.unit.simulators.pod_layouts import LAYOUT_FOR_DEPLOYMENT_TYPE
 from utils.data_cleaning import clean_data
 
 # ============================================================================
@@ -28,7 +29,7 @@ from utils.data_cleaning import clean_data
 _POD_DATA = {
     "id": "pod-1",
     "name": "DC1-1-POD-1",
-    "deployment_type": "middle_rack",
+    "layout": "S_MIDDLE",
     "index": 1,
     "parent": {"id": "dc-1", "name": "DC1"},
 }
@@ -63,7 +64,7 @@ def _make_endpoint_data(
     deployment_type: str = "middle_rack",
 ) -> dict:
     """Build a complete raw (pre-clean_data) endpoint data dict."""
-    pod = {**_POD_DATA, "deployment_type": deployment_type}
+    pod = {**_POD_DATA, "layout": LAYOUT_FOR_DEPLOYMENT_TYPE[deployment_type]}
     rack = {
         **_RACK_BASE,
         "rack_type": rack_type,
@@ -99,7 +100,7 @@ class TestEndpointDataParsing:
         assert data["name"] == "server-111101"
         assert data["rack"] is not None
         assert data["rack"]["rack_type"] == "compute"
-        assert data["rack"]["pod"]["deployment_type"] == "middle_rack"
+        assert data["rack"]["pod"]["layout"] == "S_MIDDLE"
         assert len(data["rack"]["devices"]) == 0
         assert len(data["interfaces"]) == 4
 
@@ -128,7 +129,7 @@ class TestEndpointDataParsing:
         data = clean_data(_make_endpoint_data(rack_devices=tor_devices, deployment_type="tor"))
 
         assert data["rack"] is not None
-        assert data["rack"]["pod"]["deployment_type"] == "tor"
+        assert data["rack"]["pod"]["layout"] == "S_TOR"
         assert len(data["rack"]["devices"]) == 2
         assert data["rack"]["devices"][0]["name"] == "tor-01"
         assert len(data["rack"]["devices"][0]["interfaces"]) == 2
@@ -203,7 +204,7 @@ class TestEndpointDataParsing:
         data = clean_data(_make_endpoint_data(rack_devices=devices, deployment_type="mixed"))
 
         assert data["rack"] is not None
-        assert data["rack"]["pod"]["deployment_type"] == "mixed"
+        assert data["rack"]["pod"]["layout"] == "S_MIXED"
         assert len(data["rack"]["devices"]) == 2
         assert data["rack"]["devices"][0]["role"] == "leaf"
         assert data["rack"]["devices"][1]["role"] == "tor"

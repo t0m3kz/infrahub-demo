@@ -2,7 +2,7 @@
 
 One implementation for the generator that tags the switch ports of a component's
 instances (generators/topology/app_instance_segment.py) and the NX-OS GPO transform
-that classifies the same ports (transforms/helpers/group_policy.py component_coverage):
+that classifies the same ports (transforms/helpers/group_policy/ component_coverage):
 both must agree on which device an instance lands on, or a port is tagged for one host
 and classified for another.
 

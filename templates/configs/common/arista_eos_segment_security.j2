@@ -1,6 +1,6 @@
 {#- EOS Segment Security (MSS-G, `router segment-security`): match-lists, field-sets, applications, the feature.
 
-    `segment_security` (transforms/helpers/group_policy.py group_policy_device_view) is set only on a
+    `segment_security` (transforms/helpers/group_policy/ group_policy_device_view) is set only on a
     VTEP of a reference fabric that has a VRF with a segment to define; every block here is guarded by it, so
     a device without one renders exactly as before. Order (spec): global match-lists (one per segment, the
     segment's gateway prefix), application traffic recognition with its field-sets inside the block (custom

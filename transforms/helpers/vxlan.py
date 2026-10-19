@@ -156,32 +156,6 @@ def _l3_route_target(mapping: dict[str, Any], rt_asn: int | None) -> str | None:
     return f"{rt_asn}:{vni}" if rt_asn else None
 
 
-def _circuit_endpoint(service: dict[str, Any]) -> dict[str, Any]:
-    """The circuit service fields shared by physical and virtual circuits."""
-    return {
-        "name": service.get("name"),
-        "description": service.get("description"),
-        "status": service.get("status"),
-        "side": service.get("endpoint"),
-        "endpoint": service.get("endpoint"),
-    }
-
-
-def _display_description(
-    description: str | None, circuits: list[dict[str, Any]], virtual_links: list[dict[str, Any]]
-) -> str | None:
-    """The interface description, else one naming its first circuit or virtual link."""
-    if description:
-        return description
-    if circuits:
-        c = circuits[0]
-        return f"{str(c['circuit_type']).upper()} - {c['circuit_id']} - {c['provider']}"
-    if virtual_links:
-        v = virtual_links[0]
-        return f"{str(v['link_type']).upper()} - {v['link_name']} - {v['provider']}"
-    return None
-
-
 def get_interfaces(
     data: list,
     activations: list[dict[str, Any]] | None = None,
@@ -192,7 +166,6 @@ def get_interfaces(
     Returns a list of interface dictionaries sorted by interface name.
     Only includes 'ospf' key if OSPF area is present.
     Includes IP addresses, description, status, role, and other interface data.
-    Also includes circuit and virtual link service information for WAN connectivity.
 
     ``native_vlans`` (port name -> VLAN) are the host ports an NX-OS GPO interface selector names
     (transforms/helpers/group_policy.py): such a port must be a trunk, so a port that would be an
@@ -282,34 +255,6 @@ def get_interfaces(
         ospf_auth_modes = [s.get("authentication_mode") for s in ospf_configs if s.get("authentication_mode")]
         ospf_passwords = [(s.get("password") or {}).get("password") for s in ospf_configs if s.get("password")]
 
-        # Circuit services (physical circuits) and virtual circuit services (DCI / overlay links)
-        circuits = [
-            {
-                **_circuit_endpoint(s),
-                "circuit_id": c.get("circuit_id"),
-                "circuit_type": c.get("circuit_type"),
-                "bandwidth": c.get("bandwidth"),
-                "provider": c.get("provider", {}).get("name"),
-            }
-            for s in by_type.get("ManagedPhysicalCircuit", [])
-            for c in [s.get("topology_circuit")]
-            if c
-        ]
-        virtual_links = [
-            {
-                **_circuit_endpoint(s),
-                "link_name": c.get("name"),
-                "link_type": c.get("link_type"),
-                "bandwidth": c.get("bandwidth"),
-                "encryption": c.get("encryption"),
-                "cloud_resource_id": c.get("cloud_resource_id"),
-                "provider": c.get("provider", {}).get("name"),
-            }
-            for s in by_type.get("ManagedVirtualCircuit", [])
-            for c in [s.get("topology_circuit")]
-            if c
-        ]
-
         # Extract IP addresses - after clean_data, these are dicts with 'address' and 'ip_namespace'
         # Structure: {"address": "10.0.0.1/24", "ip_namespace": {"name": "default"}}
         # Note: Free interfaces may have ip_address: None
@@ -373,13 +318,7 @@ def get_interfaces(
                 "password": ospf_passwords[0] if ospf_passwords else None,
             }
 
-        iface_dict["display_description"] = _display_description(iface.get("description"), circuits, virtual_links)
-
-        if circuits:
-            iface_dict["circuits"] = circuits
-
-        if virtual_links:
-            iface_dict["virtual_links"] = virtual_links
+        iface_dict["display_description"] = iface.get("description") or None
 
         name_to_interface[name] = iface_dict
 

@@ -129,7 +129,7 @@ class TestPodLinkPrefixLengths:
     async def test_border_leaf_uplinks_use_the_technical_pool_family(self, protocol: str, p2p: int) -> None:
         gen = _make_generator()
         gen.fabric_name = "dc1"
-        gen.data.update({"name": "dc1-pod1", "layout": "S_MIXED", "deployment_type": "middle_rack"})
+        gen.data.update({"name": "dc1-pod1", "layout": "S_MIXED"})
         gen.create_cabling = AsyncMock(return_value=[])
         gen.create_routing = AsyncMock()
         border_leaf = MagicMock()

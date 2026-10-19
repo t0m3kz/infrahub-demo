@@ -24,7 +24,6 @@ spec:
         data:
           - index: 1
             layout: M_MIDDLE
-            deployment_type: middle_rack
             fabric_templates:
               - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             mlag_create: back-to-back
@@ -53,7 +52,6 @@ spec:
                     - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]
           - index: 2
             layout: S_TOR
-            deployment_type: tor
             # S_TOR's own design assumes 32 downlink ports per spine (2 rows
             # x 8 racks x 2 ToRs) before border-leaf even needs its own —
             # N9K-C9336C-FX2_SPINE only wires up 30 (Ethernet1/[1-30]), so
@@ -103,7 +101,6 @@ spec:
                     - ["2", "tor", "PowerSwitch-S5224F-ON_TOR"]
           - index: 3
             layout: M_MIXED
-            deployment_type: mixed
             fabric_templates:
               - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             mlag_create: virtual

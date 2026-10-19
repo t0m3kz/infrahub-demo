@@ -794,7 +794,6 @@ class DcimPlatform(CoreNode):
 
 
 class TopologyPod(TopologyDeployment, TopologyRackHosting, TopologyDeviceHosting):
-    deployment_type: Dropdown
     index: Integer
     layout: Dropdown
     leaf_interface_sorting_method: Dropdown

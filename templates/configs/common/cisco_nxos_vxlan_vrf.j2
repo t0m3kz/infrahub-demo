@@ -20,7 +20,7 @@
   statics of the inter-VRF exchange through a firewall context; they sit inside
   the VRF, not as a global `ip route ... vrf X`.
 
-  group_policy (transforms/helpers/group_policy.py group_policy_device_view; set on a
+  group_policy (transforms/helpers/group_policy/ group_policy_device_view; set on a
   VTEP of a reference fabric only) adds the VRF's `security contract` lines and
   `security enforce` here, after the statics and before the address-family: the
   contracts are configured per VRF, inside its `vrf context`. The group,

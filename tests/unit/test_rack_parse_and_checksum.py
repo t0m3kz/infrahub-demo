@@ -15,6 +15,7 @@ import pytest
 
 from generators.helpers.rack import parse_rack_data
 from generators.topology.rack import RackGenerator, TopologyRackData
+from tests.unit.simulators.pod_layouts import LAYOUT_FOR_DEPLOYMENT_TYPE
 
 # ---------------------------------------------------------------------------
 # Helpers (shared with test_rack_offset_calculation.py)
@@ -42,8 +43,7 @@ def _build_rack_generator(
         "leaf_interface_sorting_method": "top_down",
         "spine_interface_sorting_method": "bottom_up",
         "fabric_templates": [{"role": "spine", "quantity": 2, "template": {"id": "tmpl-spine"}}],
-        "deployment_type": deployment_type,
-        "layout": "S_MIXED",
+        "layout": LAYOUT_FOR_DEPLOYMENT_TYPE[deployment_type],
     }
     suite = {"index": 1}
     rack = {
@@ -115,7 +115,6 @@ class TestParseRackData:
                 "id": "pod-1",
                 "name": "pod-1",
                 "index": 1,
-                "deployment_type": "mixed",
                 "layout": "S_MIXED",
                 "leaf_interface_sorting_method": "top_down",
                 "spine_interface_sorting_method": "bottom_up",
@@ -158,7 +157,6 @@ class TestParseRackData:
                                     "id": "pod-2",
                                     "name": {"value": "pod-2"},
                                     "index": {"value": 2},
-                                    "deployment_type": {"value": "mixed"},
                                     "layout": {"value": "S_MIXED"},
                                     "leaf_interface_sorting_method": {"value": "bottom_up"},
                                     "spine_interface_sorting_method": {"value": "top_down"},

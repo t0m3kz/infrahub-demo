@@ -1,4 +1,4 @@
-"""Unit tests for the group contract builder and its platform views (transforms/helpers/group_policy.py)
+"""Unit tests for the group contract builder and its platform views (transforms/helpers/group_policy/)
 and the segmentation_matrix artifact (transforms/topology/segmentation_matrix.py)."""
 
 from __future__ import annotations
