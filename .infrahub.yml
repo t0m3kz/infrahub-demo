@@ -694,6 +694,10 @@ queries:
     file_path: queries/topology/add/app_component.gql
   - name: app_component_segment
     file_path: queries/topology/add/app_component_segment.gql
+  - name: lb_segment_gateways
+    file_path: queries/topology/add/lb_segment_gateways.gql
+  - name: lb_serving_contexts
+    file_path: queries/topology/add/lb_serving_contexts.gql
   - name: segment_components
     file_path: queries/topology/add/segment_components.gql
   - name: segment_vlan_domains
@@ -928,6 +932,9 @@ generator_definitions:
       files:
         - generators/
         - utils/
+        # Read at run time by the VIP producer (generators/lb_vip.py).
+        - queries/topology/add/lb_segment_gateways.gql
+        - queries/topology/add/lb_serving_contexts.gql
   # Same generator, entered from a dependency: the application trigger fires
   # before the dependencies of a freshly loaded application exist, and a
   # dependency added later changes no AppApplication at all. It only fans out

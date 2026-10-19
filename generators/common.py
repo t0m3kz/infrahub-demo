@@ -157,11 +157,21 @@ class CommonGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
 
         Used by a cascade generator that may run concurrently with the
         parent's own bootstrap (e.g. add_dc) before its writes have landed.
+        See wait_for_parent_generators.
+        """
+        if not await self.wait_for_parent_generators(generator_names, parent_id):
+            return None
+        return await self.collect_data()
+
+    async def wait_for_parent_generators(self, generator_names: str | Iterable[str], parent_id: str) -> bool:
+        """Wait for every run of ``generator_names`` in flight for parent_id; True when there was one.
+
         Checks for the parent's own generator tasks (other generator
         definitions, by title + related_node) — never this generator's own
         task, so it can't deadlock against itself. One task query covers
         every name; a name with nothing in flight whose latest run failed
-        logs an error instead.
+        logs an error instead. For a caller that re-reads only what it
+        waited for, not the whole query (wait_for_parent_generator_and_refetch).
         """
         names = [generator_names] if isinstance(generator_names, str) else list(generator_names)
         tasks = await self.client.task.filter(
@@ -201,10 +211,8 @@ class CommonGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
                     "cannot safely continue child generation until parent succeeds"
                 )
 
-        if not in_flight:
-            return None
         for task in in_flight:
             await self.client.task.wait_for_completion(
                 id=task.id, interval=_PARENT_WAIT_POLL_INTERVAL, timeout=_PARENT_WAIT_TIMEOUT
             )
-        return await self.collect_data()
+        return bool(in_flight)

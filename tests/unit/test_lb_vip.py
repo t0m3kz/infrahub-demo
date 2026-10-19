@@ -12,6 +12,8 @@
   tracking
 - SegmentFirewallMixin._reconcile_rule_payload: the selectors and the
   destination segment of an existing rule
+- LoadbalancerVipMixin._await_lb_inputs: the bounded re-read of a segment
+  prefix or serving context another generator of the same load still writes
 - queries/topology/add/application.gql: the serving context path
 """
 
@@ -40,7 +42,7 @@ from generators.helpers.lb_vip import (
     vip_ports,
 )
 from generators.helpers.rules import RulesPlanner
-from generators.lb_vip import CLOUD_LB_GROUP
+from generators.lb_vip import CLOUD_LB_GROUP, READ_ATTEMPTS, READ_INTERVAL
 from generators.logger import GeneratorError
 from generators.protocols import CloudLoadBalancer, LoadbalancerVIP, SecurityPolicy, SecurityPolicyRule
 from generators.segment_firewall import SegmentFirewallMixin
@@ -239,6 +241,10 @@ def _vip_gen() -> Any:
     gen.upsert_ip_address = AsyncMock(side_effect=lambda **kw: MagicMock(id=f"ip:{kw['address']}"))
     gen._get_or_create_by_name = AsyncMock(return_value=MagicMock(id="pol-lb"))
     gen._upsert_policy_rule = AsyncMock(return_value=100)
+    # Nothing in flight, nothing more on a re-read, and no real sleep between re-reads.
+    gen.wait_for_parent_generators = AsyncMock(return_value=False)
+    gen.client.execute_graphql = AsyncMock(return_value={})
+    gen.lb_reread_sleep = AsyncMock()
     return gen
 
 
@@ -592,6 +598,151 @@ class TestServerRule:
         assert payload["apply_on_switch"] is True
         assert payload["destination_security_tag"] == {"id": "tag-web"}
         assert "source_security_tag" not in payload
+
+
+# ===========================================================================
+# Concurrent inputs: re-read what another generator of the load still writes
+# ===========================================================================
+
+
+def _segment_read(seg_id: str, *, prefix: bool) -> dict[str, Any]:
+    """A lb_segment_gateways.gql response for one segment, with or without its gateway prefix yet."""
+    gateway = None
+    if prefix:
+        ip_prefix = {"id": f"pfx-{seg_id}", "prefix": {"value": "10.60.0.0/24"}, "ip_namespace": {"node": {"id": "ns"}}}
+        gateway = {"node": {"ip_prefix": {"node": ip_prefix}}}
+    return {"ManagedVxlanSegment": {"edges": [{"node": {"id": seg_id, "gateway": gateway}}]}}
+
+
+def _context_read(dep_id: str, *, linked: bool = True) -> dict[str, Any]:
+    """A lb_serving_contexts.gql response for one deployment: its complete context, or none linked yet."""
+    context = None
+    if linked:
+        leg = {"__typename": "DcimVirtualInterface", "ip_address": {"node": {"ip_prefix": {"node": {"id": "leg-1"}}}}}
+        context = {
+            "id": "ctx-1",
+            "name": {"value": "dc10-lb-PROD"},
+            "vip_prefix": {"node": {"id": "vip-pfx-1", "ip_namespace": {"node": {"id": "ns-prod"}}}},
+            "capabilities": {"edges": [{"node": leg}]},
+        }
+    node = {"id": dep_id, "serving_loadbalancer_context": {"node": context}}
+    return {"TopologyCustomerDC": {"edges": [{"node": node}]}}
+
+
+def _reads(gen: Any) -> list[dict[str, Any]]:
+    """The variables of every re-read query, in order."""
+    return [call.kwargs["variables"] for call in gen.client.execute_graphql.await_args_list]
+
+
+class TestConcurrentInputs:
+    def test_segment_prefix_written_by_the_second_read_gets_the_members(self) -> None:
+        """add_vxlan_segment addresses the segment while this run reads it: the second read sees the prefix."""
+        gen = _vip_gen()
+        gen.client.execute_graphql = AsyncMock(
+            side_effect=[_segment_read("seg-web", prefix=False), _segment_read("seg-web", prefix=True)]
+        )
+
+        _vips, errors = _reconcile(gen, [_web(segment=_segment("seg-web", prefix=False))])
+
+        assert errors == []
+        gen.wait_for_parent_generators.assert_awaited_once_with(("add_vxlan_segment",), "seg-web")
+        assert _reads(gen) == [{"ids": ["seg-web"]}, {"ids": ["seg-web"]}]
+        gen.lb_reread_sleep.assert_awaited_once_with(READ_INTERVAL)
+        assert _vip_payloads(gen)[0]["pool_members"] == ["ip:vm-1-seg-web-lb-member", "ip:vm-2-seg-web-lb-member"]
+
+    def test_segment_prefix_that_never_lands_is_the_error_after_the_last_read(self) -> None:
+        """Bounded: READ_ATTEMPTS reads with a sleep between two, then the error the payload alone gave."""
+        gen = _vip_gen()
+        gen.client.execute_graphql = AsyncMock(return_value=_segment_read("seg-web", prefix=False))
+
+        _vips, errors = _reconcile(gen, [_web(segment=_segment("seg-web", prefix=False))])
+
+        assert errors == ["web.c001.example: segment seg-web-name has no gateway prefix for the pool members"]
+        assert gen.client.execute_graphql.await_count == READ_ATTEMPTS
+        assert gen.lb_reread_sleep.await_count == READ_ATTEMPTS - 1
+        gen.client.create.assert_not_awaited()
+
+    def test_two_components_on_one_segment_share_one_read(self) -> None:
+        """One wait and one read per attempt for the segment, written into both components' dicts."""
+        gen = _vip_gen()
+        gen.client.execute_graphql = AsyncMock(return_value=_segment_read("seg-web", prefix=True))
+        api = {**_web(segment=_segment("seg-web", prefix=False)), "id": "comp-api", "fqdn": "api.c001.example"}
+
+        _vips, errors = _reconcile(gen, [_web(segment=_segment("seg-web", prefix=False)), api])
+
+        assert errors == []
+        gen.wait_for_parent_generators.assert_awaited_once()
+        assert _reads(gen) == [{"ids": ["seg-web"]}]
+        gen.lb_reread_sleep.assert_not_awaited()
+        assert {p["hostname"] for p in _vip_payloads(gen)} == {"web.c001.example", "api.c001.example"}
+
+    def test_ready_inputs_are_never_re_read(self) -> None:
+        """The normal run: the payload has the prefix and the context, no extra round trip."""
+        gen = _vip_gen()
+
+        _vips, errors = _reconcile(gen, [_web()])
+
+        assert errors == []
+        gen.wait_for_parent_generators.assert_not_awaited()
+        gen.client.execute_graphql.assert_not_awaited()
+
+    def test_vlan_segment_without_prefix_is_an_error_without_a_re_read(self) -> None:
+        """No generator addresses a VLAN segment: its gateway is authored, waiting cannot bring it."""
+        gen = _vip_gen()
+        segment = {**_segment("seg-vlan", prefix=False), "typename": "ManagedVlanSegment"}
+
+        _vips, errors = _reconcile(gen, [_web(segment=segment)])
+
+        assert "no gateway prefix" in errors[0]
+        gen.client.execute_graphql.assert_not_awaited()
+        gen.wait_for_parent_generators.assert_not_awaited()
+
+    def test_cloud_component_is_never_re_read(self) -> None:
+        """A cloud segment has no gateway prefix and a cloud instance no context: nothing to wait for."""
+        gen = _lb_gen()
+
+        _vips, errors = _reconcile(gen, [_cloud_frontend()])
+
+        assert errors == []
+        gen.wait_for_parent_generators.assert_not_awaited()
+        gen.client.execute_graphql.assert_not_awaited()
+        gen.lb_reread_sleep.assert_not_awaited()
+
+    def test_serving_context_linked_by_the_second_read_gets_the_vips(self) -> None:
+        """add_customer_deployment_dc boards the deployment while this run reads it."""
+        gen = _vip_gen()
+        gen.client.execute_graphql = AsyncMock(
+            side_effect=[_context_read("dep-c001", linked=False), _context_read("dep-c001")]
+        )
+
+        vips, errors = _reconcile(gen, [_web(instances=[_instance("vm-1", None), _instance("vm-2", None)])])
+
+        assert errors == []
+        gen.wait_for_parent_generators.assert_awaited_once_with(("add_customer_deployment_dc",), "dep-c001")
+        assert _reads(gen) == [{"ids": ["dep-c001"]}, {"ids": ["dep-c001"]}]
+        assert vips == {"comp-web": {("tcp", 443, None): {"dc10-lb-PROD": "ip:comp-web-tcp-443-vip"}}}
+        gen._upsert_policy_rule.assert_awaited_once()
+
+    def test_context_without_its_vip_range_yet_is_re_read(self) -> None:
+        """The boarding run links the context before it allocates the VIP range and wires the leg."""
+        gen = _vip_gen()
+        gen.client.execute_graphql = AsyncMock(return_value=_context_read("dep-c001"))
+
+        _vips, errors = _reconcile(gen, [_web(instances=[_instance("vm-1", _context(vip_prefix=None))])])
+
+        assert errors == []
+        assert _reads(gen) == [{"ids": ["dep-c001"]}]
+
+    def test_context_of_an_edge_target_is_re_read_for_its_vip_addresses(self) -> None:
+        """The target's VIPs are this run's R_client rules: its context is waited for too."""
+        gen = _vip_gen()
+        gen.client.execute_graphql = AsyncMock(return_value=_context_read("dep-c001"))
+        web = _web(instances=[_instance("vm-1", None)])
+
+        vips, errors = _reconcile(gen, [_client_comp(_dep(web))], edges=[({}, {}, web)])
+
+        assert errors == []
+        assert vips == {"comp-web": {("tcp", 443, None): {"dc10-lb-PROD": "ip:comp-web-tcp-443-vip"}}}
 
 
 # ===========================================================================
@@ -1152,6 +1303,21 @@ def test_application_query_reads_the_serving_context_of_instances_and_targets(ro
     assert "instances { edges { node { ...AppInstanceFields } } }" in target
     segment = query.split("fragment SegmentSecurityFields", 1)[1].split("fragment AppInstanceFields", 1)[0]
     assert "ip_prefix {\n        node {\n          id" in segment
+
+
+def test_re_read_queries_select_what_the_application_query_does(root_dir: Path) -> None:
+    """A re-read replaces the payload's dict: it must carry every field the producer reads from it."""
+    application = (root_dir / "queries/topology/add/application.gql").read_text()
+    contexts = (root_dir / "queries/topology/add/lb_serving_contexts.gql").read_text()
+    gateways = " ".join((root_dir / "queries/topology/add/lb_segment_gateways.gql").read_text().split())
+    for line in (
+        "vip_prefix { node { id ip_namespace { node { id } } } }",
+        "edges { node { __typename ... on DcimVirtualInterface { ip_address { node { ip_prefix { node { id } } } } } } }",
+    ):
+        assert line in application
+        assert line in contexts
+    assert "ManagedVxlanSegment(ids: $ids)" in gateways
+    assert "prefix { value } ip_namespace { node { id name { value } namespace_type { value } } }" in gateways
 
 
 class TestCloudTracking:

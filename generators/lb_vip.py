@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 from ipaddress import ip_network
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from infrahub_sdk.protocols import CoreIPAddressPool
 
+from utils.data_cleaning import clean_data
 from utils.ports import PortProfileHelper, PortSpec
 
 from .helpers.lb_vip import (
@@ -20,21 +23,39 @@ from .helpers.lb_vip import (
     cloud_members,
     cloud_placement,
     component_ref,
+    context_ready,
     is_cloud_component,
     leg_prefix_id,
     member_identifier,
     member_pool_name,
+    member_prefix,
     serving_contexts,
     vip_identifier,
     vip_pool_name,
     vip_ports,
+    vip_range,
 )
 from .helpers.rules import RulesPlanner
-from .protocols import CloudLoadBalancer, LoadbalancerVIP, SecurityPolicy
+from .protocols import (
+    CloudLoadBalancer,
+    LoadbalancerVIP,
+    ManagedVxlanSegment,
+    SecurityPolicy,
+    TopologyCustomerDC,
+)
 
 # The artifact group of cloud load balancers (data/bootstrap/00_groups.yml,
 # target of the cloud_lb_terraform artifact definition).
 CLOUD_LB_GROUP = {"hfid": ["cloud_loadbalancers"], "kind": "CoreStandardGroup"}
+
+# What another generator of the same load can still be writing when this run
+# reads it is re-read at most READ_ATTEMPTS times, READ_INTERVAL seconds apart
+# (_await_lb_inputs), after waiting for that generator's run in flight.
+READ_ATTEMPTS = 12
+READ_INTERVAL = 5.0
+_QUERIES = Path(__file__).resolve().parents[1] / "queries/topology/add"
+_SEGMENT_GATEWAYS_QUERY = _QUERIES / "lb_segment_gateways.gql"
+_SERVING_CONTEXTS_QUERY = _QUERIES / "lb_serving_contexts.gql"
 
 if TYPE_CHECKING:
     import logging
@@ -78,6 +99,7 @@ class LoadbalancerVipMixin:
     after its applications ran, so a dedicated -> shared move keeps stale VIPs.
 
     Expects the host class to provide: ``client``, ``logger``,
+    ``wait_for_parent_generators`` (CommonGenerator),
     ``resource_lock`` (PoolMixin), ``ensure_prefix_address_pool``,
     ``allocate_prefix_address`` and ``upsert_ip_address`` (CablingMixin),
     ``_get_or_create_by_name`` (GetOrCreateByNameMixin) and
@@ -86,12 +108,16 @@ class LoadbalancerVipMixin:
 
     client: Any
     logger: logging.Logger
+    wait_for_parent_generators: Callable[..., Awaitable[bool]]
     resource_lock: Callable[[str], AbstractAsyncContextManager[None]]
     ensure_prefix_address_pool: Callable[..., Awaitable[Any]]
     allocate_prefix_address: Callable[..., Awaitable[str | None]]
     upsert_ip_address: Callable[..., Awaitable[Any]]
     _get_or_create_by_name: Callable[..., Awaitable[Any]]
     _upsert_policy_rule: Callable[..., Awaitable[int | None]]
+
+    # Between two re-reads (_poll_until_ready); tests replace it.
+    lb_reread_sleep = staticmethod(asyncio.sleep)
 
     async def _reconcile_load_balancing(
         self,
@@ -119,6 +145,7 @@ class LoadbalancerVipMixin:
         cloud edge target.
         """
         own_ids = {component.get("id") for component in components}
+        await self._await_lb_inputs(components, edges)
         vips: dict[str, dict[PortSpec, dict[str, str]]] = {}
         errors: list[str] = []
         pools: dict[str, Any] = {}
@@ -140,6 +167,102 @@ class LoadbalancerVipMixin:
         for rules in server_rules.values():
             await self._reconcile_lb_server_rules(rules, rule_indexes)
         return vips, errors
+
+    async def _await_lb_inputs(self, components: list[dict[str, Any]], edges: list[Edge]) -> None:
+        """Re-read the segment prefixes and serving contexts a concurrent generator is still writing.
+
+        The load that triggers this run also triggers add_vxlan_segment, which
+        addresses a VXLAN segment (its gateway prefix holds the pool members),
+        and add_customer_deployment_dc, which links a customer DC to its
+        serving context before it allocates the context's VIP range and wires
+        its leg. So this run can read either before it lands. Each one still
+        missing it waits for its owner's run in flight, then all of a kind are
+        re-read together (_reread_until_ready) and the result is written into
+        every dict of them: a segment or deployment shared by two components
+        is read once. Whatever is still missing after the last read is the
+        component's error, as before.
+
+        Only the application's own components need their segment prefix (the
+        pool members); an edge target's contexts are re-read too, its VIPs
+        are this run's R_client rules. A VLAN segment (an authored gateway, no
+        generator writes it) and a cloud component (no prefix, no context) are
+        never re-read.
+        """
+        own_ids = {component.get("id") for component in components}
+        segments: dict[str, list[dict[str, Any]]] = {}
+        deployments: dict[str, list[dict[str, Any]]] = {}
+        for component in [*components, *(dst for _src, _dep, dst in edges)]:
+            if not component.get("load_balanced") or is_cloud_component(component):
+                continue
+            segment = component.get("network_segment") or {}
+            if (
+                component.get("id") in own_ids
+                and segment.get("id")
+                and segment.get("typename") == ManagedVxlanSegment.__name__
+                and member_prefix(segment) is None
+            ):
+                segments.setdefault(segment["id"], []).append(segment)
+            for instance in component.get("instances") or []:
+                deployment = instance.get("deployment") or {}
+                if (
+                    deployment.get("id")
+                    and deployment.get("typename") == TopologyCustomerDC.__name__
+                    and not context_ready(deployment.get("serving_loadbalancer_context"))
+                ):
+                    deployments.setdefault(deployment["id"], []).append(deployment)
+        await self._reread_until_ready(
+            segments,
+            owner="add_vxlan_segment",
+            query=_SEGMENT_GATEWAYS_QUERY,
+            kind=ManagedVxlanSegment.__name__,
+            field="gateway",
+            ready=lambda node: member_prefix(node) is not None,
+        )
+        await self._reread_until_ready(
+            deployments,
+            owner="add_customer_deployment_dc",
+            query=_SERVING_CONTEXTS_QUERY,
+            kind=TopologyCustomerDC.__name__,
+            field="serving_loadbalancer_context",
+            ready=lambda node: context_ready(node.get("serving_loadbalancer_context")),
+        )
+
+    async def _reread_until_ready(
+        self,
+        dicts: dict[str, list[dict[str, Any]]],
+        *,
+        owner: str,
+        query: Path,
+        kind: str,
+        field: str,
+        ready: Callable[[dict[str, Any]], bool],
+    ) -> None:
+        """Wait for ``owner``'s run in flight for each node of ``dicts`` (by id), then re-read
+        their ``field`` until ``ready``, into every dict of the node.
+
+        One query per read for every node still not ready, at most
+        READ_ATTEMPTS reads READ_INTERVAL seconds apart; no-op without a node.
+        """
+        if not dicts:
+            return
+        node_ids = sorted(dicts)
+        self.logger.info("Waiting for %s to write %s of %s", owner, field, ", ".join(node_ids))
+        for node_id in node_ids:
+            await self.wait_for_parent_generators((owner,), node_id)
+        text = query.read_text()
+        pending = node_ids
+        for attempt in range(READ_ATTEMPTS):
+            if attempt:
+                await self.lb_reread_sleep(READ_INTERVAL)
+            result = await self.client.execute_graphql(query=text, variables={"ids": pending})
+            for node in clean_data(result).get(kind) or []:
+                for target in dicts.get(node.get("id") or "", []):
+                    target[field] = node.get(field)
+                if ready(node):
+                    pending = [node_id for node_id in pending if node_id != node["id"]]
+            if not pending:
+                return
+        self.logger.warning("%s of %s still missing after %d reads", field, ", ".join(pending), READ_ATTEMPTS)
 
     async def _component_vips(
         self,
@@ -165,8 +288,8 @@ class LoadbalancerVipMixin:
         addresses: dict[PortSpec, dict[str, str]] = {}
         for context, instances in contexts.values():
             context_name = str(context.get("name") or context["id"])
-            vip_prefix = context.get("vip_prefix") or {}
-            if not vip_prefix.get("id") or not (vip_prefix.get("ip_namespace") or {}).get("id"):
+            vip_prefix = vip_range(context)
+            if vip_prefix is None:
                 errors.append(f"{fqdn}: load balancer context {context_name} has no VIP prefix in a namespace")
                 continue
             vip_pool = await self._shared_address_pool(
@@ -236,8 +359,8 @@ class LoadbalancerVipMixin:
         share the host's address.
         """
         fqdn = component_ref(component)
-        prefix = (segment.get("gateway") or {}).get("ip_prefix") or {}
-        if not segment.get("id") or not prefix.get("id") or not prefix.get("prefix") or not prefix.get("ip_namespace"):
+        prefix = member_prefix(segment)
+        if prefix is None:
             errors.append(f"{fqdn}: segment {segment.get('name', '<none>')} has no gateway prefix for the pool members")
             return None
         prefix_length = ip_network(prefix["prefix"], strict=False).prefixlen

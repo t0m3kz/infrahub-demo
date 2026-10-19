@@ -101,6 +101,27 @@ def leg_prefix_id(context: dict[str, Any]) -> str | None:
     return next(iter(prefix_ids)) if len(prefix_ids) == 1 else None
 
 
+def vip_range(context: dict[str, Any]) -> dict[str, Any] | None:
+    """The context's routed VIP range, or None unless it has an id and a namespace."""
+    prefix = context.get("vip_prefix") or {}
+    return prefix if prefix.get("id") and (prefix.get("ip_namespace") or {}).get("id") else None
+
+
+def context_ready(context: dict[str, Any] | None) -> bool:
+    """The context has its VIP range and its one leg: the boarding run that builds it has written both."""
+    if not context:
+        return False
+    return vip_range(context) is not None and leg_prefix_id(context) is not None
+
+
+def member_prefix(segment: dict[str, Any]) -> dict[str, Any] | None:
+    """The segment's gateway prefix the pool members are reserved in, or None unless complete."""
+    prefix = (segment.get("gateway") or {}).get("ip_prefix") or {}
+    if segment.get("id") and prefix.get("id") and prefix.get("prefix") and prefix.get("ip_namespace"):
+        return prefix
+    return None
+
+
 def vip_identifier(component_id: str, port: PortSpec) -> str:
     """The allocation identifier of a VIP /32: the same address on every run, in every caller's run."""
     protocol, port_start, _port_end = port
