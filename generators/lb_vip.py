@@ -13,8 +13,14 @@ from infrahub_sdk.protocols import CoreIPAddressPool
 from utils.ports import PortProfileHelper, PortSpec
 
 from .helpers.lb_vip import (
+    CLOUD_LB_TYPE,
     VIP_PREFIXLEN,
+    cloud_lb_name,
+    cloud_lb_scheme,
+    cloud_members,
+    cloud_placement,
     component_ref,
+    is_cloud_component,
     leg_prefix_id,
     member_identifier,
     member_pool_name,
@@ -24,7 +30,11 @@ from .helpers.lb_vip import (
     vip_ports,
 )
 from .helpers.rules import RulesPlanner
-from .protocols import LoadbalancerVIP, SecurityPolicy
+from .protocols import CloudLoadBalancer, LoadbalancerVIP, SecurityPolicy
+
+# The artifact group of cloud load balancers (data/bootstrap/00_groups.yml,
+# target of the cloud_lb_terraform artifact definition).
+CLOUD_LB_GROUP = {"hfid": ["cloud_loadbalancers"], "kind": "CoreStandardGroup"}
 
 if TYPE_CHECKING:
     import logging
@@ -57,13 +67,21 @@ class LoadbalancerVipMixin:
     segment, and the allocation identifier returns the same address when a
     VIP comes back.
 
+    A component whose instances are all in the cloud (is_cloud_component)
+    gets one CloudLoadBalancer in their virtual network instead, with a VIP
+    per port without an address (the cloud assigns it) and the instances'
+    own private addresses as pool members; the load balancer and its VIPs
+    are tracked the same way, the member addresses are the instances' and
+    untracked. No context, VIP range or rule: its callers reach it directly.
+
     Known gap: nothing re-runs this when a deployment's serving context changes
     after its applications ran, so a dedicated -> shared move keeps stale VIPs.
 
     Expects the host class to provide: ``client``, ``logger``,
-    ``resource_lock`` (PoolMixin), ``ensure_prefix_address_pool`` and
-    ``allocate_prefix_address`` (CablingMixin), ``_get_or_create_by_name``
-    (GetOrCreateByNameMixin) and ``_upsert_policy_rule`` (SegmentFirewallMixin).
+    ``resource_lock`` (PoolMixin), ``ensure_prefix_address_pool``,
+    ``allocate_prefix_address`` and ``upsert_ip_address`` (CablingMixin),
+    ``_get_or_create_by_name`` (GetOrCreateByNameMixin) and
+    ``_upsert_policy_rule`` (SegmentFirewallMixin).
     """
 
     client: Any
@@ -71,6 +89,7 @@ class LoadbalancerVipMixin:
     resource_lock: Callable[[str], AbstractAsyncContextManager[None]]
     ensure_prefix_address_pool: Callable[..., Awaitable[Any]]
     allocate_prefix_address: Callable[..., Awaitable[str | None]]
+    upsert_ip_address: Callable[..., Awaitable[Any]]
     _get_or_create_by_name: Callable[..., Awaitable[Any]]
     _upsert_policy_rule: Callable[..., Awaitable[int | None]]
 
@@ -79,10 +98,12 @@ class LoadbalancerVipMixin:
         components: list[dict[str, Any]],
         edges: list[Edge],
         rule_indexes: dict[str, set[int]],
+        *,
+        security_profile: str,
     ) -> tuple[dict[str, dict[PortSpec, dict[str, str]]], list[str]]:
-        """The VIP address ids of every load_balanced component of the run, by
-        component id, port and context name, and the errors (a range, no
-        serving context, ...) of the application's own components.
+        """The VIP address ids of every on-prem load_balanced component of the
+        run, by component id, port and context name, and the errors (a range,
+        no serving context, ...) of the application's own components.
 
         The application's own components get their VIPs produced, then the
         R_server rules of every context they use, one context at a time. An
@@ -92,18 +113,27 @@ class LoadbalancerVipMixin:
         first. What is wrong with such a target is its own run's error, never
         its callers' (a misconfigured component would fail every one of them);
         a caller reports only the used port that has no VIP
-        (application_security.py).
+        (application_security.py). A cloud component has no entry: its own
+        run writes its CloudLoadBalancer (``security_profile``, the
+        application's, decides the scheme), and nothing is resolved for a
+        cloud edge target.
         """
         own_ids = {component.get("id") for component in components}
         vips: dict[str, dict[PortSpec, dict[str, str]]] = {}
         errors: list[str] = []
         pools: dict[str, Any] = {}
         server_rules: dict[str, _ServerRules] = {}
+        seen: set[str] = set()
         for component in [*components, *(dst for _src, _dep, dst in edges)]:
             component_id = component.get("id")
-            if not component_id or component_id in vips or not component.get("load_balanced"):
+            if not component_id or component_id in seen or not component.get("load_balanced"):
                 continue
+            seen.add(component_id)
             produce = component_id in own_ids
+            if is_cloud_component(component):
+                if produce:
+                    await self._cloud_component_vips(component, security_profile=security_profile, errors=errors)
+                continue
             vips[component_id] = await self._component_vips(
                 component, produce=produce, pools=pools, errors=errors if produce else [], server_rules=server_rules
             )
@@ -166,7 +196,7 @@ class LoadbalancerVipMixin:
                 if vip_ip_id is None:
                     continue
                 addresses.setdefault(port, {})[context_name] = vip_ip_id
-                if produce and await self._save_vip(component, context, port, vip_ip_id, member_ids):
+                if produce and await self._save_vip(component, context, port, member_ids, vip_ip_id=vip_ip_id):
                     context_ports.append(port)
             if leg_id and context_ports:
                 rules = server_rules.setdefault(context["id"], _ServerRules(context=context, leg_id=leg_id))
@@ -226,18 +256,105 @@ class LoadbalancerVipMixin:
                 member_ids.append(member_id)
         return member_ids
 
+    async def _cloud_component_vips(
+        self, component: dict[str, Any], *, security_profile: str, errors: list[str]
+    ) -> None:
+        """Upsert the component's CloudLoadBalancer and its VIPs, one per port, tracked by this run.
+
+        No load balancer without its one virtual network; a member that
+        cannot be addressed is an error and left out.
+        """
+        ports, port_errors = vip_ports(component)
+        network, segments, placement_errors = cloud_placement(component)
+        errors.extend([*port_errors, *placement_errors])
+        if network is None:
+            return
+        member_ids = await self._cloud_pool_members(component, network, errors)
+        load_balancer = await self._save_cloud_lb(component, network, segments, security_profile, errors)
+        if load_balancer is None:
+            return
+        for port in ports:
+            await self._save_vip(component, load_balancer, port, member_ids)
+
+    async def _cloud_pool_members(
+        self, component: dict[str, Any], network: dict[str, Any], errors: list[str]
+    ) -> list[str]:
+        """The ids of the cloud instances' own addresses, each upserted untracked under its lock.
+
+        The address is the instance's, not the application's: two components
+        on one instance share it and no application run may delete it.
+        """
+        members, member_errors = cloud_members(component, network)
+        errors.extend(member_errors)
+        member_ids: list[str] = []
+        for instance_name, address, namespace_id in members:
+            try:
+                async with self.resource_lock(f"ip-address-{namespace_id}-{address}"):
+                    ip = await self.upsert_ip_address(
+                        address=address,
+                        ip_namespace={"id": namespace_id},
+                        description=f"Private address of cloud instance {instance_name}",
+                        track=False,
+                    )
+            except Exception as exc:
+                errors.append(f"{component_ref(component)}: address {address} of {instance_name}: {exc}")
+                continue
+            member_ids.append(ip.id)
+        return member_ids
+
+    async def _save_cloud_lb(
+        self,
+        component: dict[str, Any],
+        network: dict[str, Any],
+        segments: list[dict[str, Any]],
+        security_profile: str,
+        errors: list[str],
+    ) -> dict[str, str] | None:
+        """Upsert the component's CloudLoadBalancer under its name's lock, tracked by this run.
+
+        Returns its id and name, or None (an error) on failure.
+        """
+        name = cloud_lb_name(component)
+        try:
+            async with self.resource_lock(f"cloud-lb-{name}"):
+                load_balancer = await self.client.create(
+                    kind=CloudLoadBalancer,
+                    data={
+                        "name": name,
+                        "description": f"Cloud load balancer of {component_ref(component)}",
+                        "status": "active",
+                        "lb_type": CLOUD_LB_TYPE,
+                        "scheme": cloud_lb_scheme(security_profile),
+                        "virtual_network": {"id": network["id"]},
+                        "network_segments": [segment["id"] for segment in segments],
+                        "member_of_groups": [CLOUD_LB_GROUP],
+                    },
+                )
+                await load_balancer.save(allow_upsert=True)
+        except Exception as exc:
+            errors.append(f"{component_ref(component)}: cloud load balancer {name}: {exc}")
+            return None
+        self.logger.info("  Cloud load balancer %s in %s", name, network.get("name", network["id"]))
+        return {"id": load_balancer.id, "name": name}
+
     async def _save_vip(
         self,
         component: dict[str, Any],
-        context: dict[str, Any],
+        load_balancer: dict[str, Any],
         port: PortSpec,
-        vip_ip_id: str,
         member_ids: list[str],
+        *,
+        vip_ip_id: str | None = None,
     ) -> bool:
-        """Upsert the LoadbalancerVIP of (component, port) on ``context``, tracked by this run; False (logged) on failure."""
+        """Upsert the LoadbalancerVIP of (component, port) on ``load_balancer``, tracked by this run;
+        False (logged) on failure.
+
+        ``load_balancer`` is a context or a CloudLoadBalancer (id and name); a
+        cloud VIP has no ``vip_ip_id``, the cloud assigns its address.
+        """
         protocol, port_start, _port_end = port
         fqdn = component_ref(component)
-        listener = f"{fqdn} {PortProfileHelper.format_port_spec(port)} on {context.get('name')}"
+        listener = f"{fqdn} {PortProfileHelper.format_port_spec(port)} on {load_balancer.get('name')}"
         try:
             vip = await self.client.create(
                 kind=LoadbalancerVIP,
@@ -247,8 +364,8 @@ class LoadbalancerVipMixin:
                     "port": port_start,
                     "status": "active",
                     "description": listener,
-                    "load_balancer": {"id": context["id"]},
-                    "vip_ip": {"id": vip_ip_id},
+                    "load_balancer": {"id": load_balancer["id"]},
+                    **({"vip_ip": {"id": vip_ip_id}} if vip_ip_id else {}),
                     "component": {"id": component["id"]},
                     "pool_members": member_ids,
                     "health_checks": [check["id"] for check in component.get("health_checks") or [] if check.get("id")],

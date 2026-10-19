@@ -34,7 +34,10 @@ fragment SegmentSecurityFields on ManagedNetworkSegment {
 # on its member sub-interfaces (`capabilities`; the border service port it also
 # tags has no address). The two device kinds carry `deployment` each, so the
 # block is spelled out per kind (plain fields: a named spread inside an inline
-# fragment would not resolve).
+# fragment would not resolve). A cloud instance has no deployment: a
+# load_balanced component of cloud instances gets a CloudLoadBalancer in the
+# virtual network of their subnets, with their private_ip, in the namespace of
+# the CIDR block holding it, as pool members.
 fragment AppInstanceFields on AppInstance {
   id
   name { value }
@@ -82,6 +85,22 @@ fragment AppInstanceFields on AppInstance {
                 edges { node { __typename ... on DcimVirtualInterface { ip_address { node { ip_prefix { node { id } } } } } } }
               }
             }
+          }
+        }
+      }
+    }
+  }
+  ... on CloudInstance {
+    private_ip { value }
+    network_segment {
+      node {
+        id
+        name { value }
+        virtual_network {
+          node {
+            id
+            name { value }
+            cidr_blocks { edges { node { prefix { value } ip_namespace { node { id } } } } }
           }
         }
       }

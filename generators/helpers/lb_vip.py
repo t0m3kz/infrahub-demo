@@ -1,18 +1,31 @@
 """Pure planning for the load balancer VIP producer (generators/lb_vip.py).
 
 Inputs are cleaned application.gql data (utils.data_cleaning.clean_data): a
-component with ``ports``, ``instances`` (each with ``deployment`` and its
-``serving_loadbalancer_context``) and ``network_segment``.
+component with ``ports``, ``instances`` (an on-prem device with ``deployment``
+and its ``serving_loadbalancer_context``; a cloud instance with ``private_ip``
+and ``network_segment`` -> ``virtual_network`` -> ``cidr_blocks``) and
+``network_segment``.
 """
 
 from __future__ import annotations
 
+import hashlib
+import re
+from ipaddress import ip_interface, ip_network
 from typing import Any
 
 from utils.ports import PortProfileHelper, PortSpec
 
 VIP_PREFIXLEN = 32
 """A VIP is one host address of its context's routed VIP range."""
+
+CLOUD_INSTANCE_KIND = "CloudInstance"
+
+CLOUD_LB_NAME_MAX = 32
+"""The shortest provider limit on a load balancer name (AWS ALB/NLB: 32)."""
+
+CLOUD_LB_TYPE = "l4_cloud"
+"""A VIP's protocol is the tcp/udp of a component port (utils.ports), so a listener is layer 4."""
 
 
 def component_ref(component: dict[str, Any]) -> str:
@@ -52,9 +65,10 @@ def serving_contexts(
 
     Keyed by context id, each with the instances it serves (its pool members).
     The context of an instance is the one serving its customer deployment;
-    an instance without one (a deployment that has not boarded, a cloud or
-    provider device) is an error: strict load balancing has no direct path
-    to fall back on.
+    an instance without one (a deployment that has not boarded, a provider
+    device, a cloud instance next to on-prem ones) is an error: strict load
+    balancing has no direct path to fall back on. A component whose instances
+    are all in the cloud never comes here (is_cloud_component).
     """
     contexts: dict[str, tuple[dict[str, Any], list[dict[str, Any]]]] = {}
     errors: list[str] = []
@@ -106,3 +120,105 @@ def vip_pool_name(prefix_id: str) -> str:
 def member_pool_name(prefix_id: str) -> str:
     """The address pool the pool members of a segment's prefix are reserved from."""
     return f"lb-members-{prefix_id}"
+
+
+def is_cloud_component(component: dict[str, Any]) -> bool:
+    """Every instance of the component is a cloud instance.
+
+    Such a component is fronted by a managed cloud load balancer in its
+    virtual network: VPC-native and addressed by DNS, so it has no context,
+    no VIP range and no leg, and its callers keep their direct rule into its
+    segment (no R_client, no R_server).
+    """
+    instances = component.get("instances") or []
+    return bool(instances) and all(instance.get("typename") == CLOUD_INSTANCE_KIND for instance in instances)
+
+
+def cloud_lb_name(component: dict[str, Any]) -> str:
+    """The CloudLoadBalancer of a component: its fqdn as a slug, shortened with a hash of the fqdn when too long.
+
+    Within CLOUD_LB_NAME_MAX, alphanumerics and hyphens; unique per component
+    because the fqdn is.
+    """
+    ref = component_ref(component)
+    slug = re.sub(r"[^a-z0-9]+", "-", ref.lower()).strip("-")
+    if len(slug) <= CLOUD_LB_NAME_MAX:
+        return slug
+    digest = hashlib.sha256(ref.encode()).hexdigest()[:8]
+    return f"{slug[: CLOUD_LB_NAME_MAX - len(digest) - 1].rstrip('-')}-{digest}"
+
+
+def cloud_lb_scheme(security_profile: str | None) -> str:
+    """internet_facing for an internet_exposed application, else internal."""
+    return "internet_facing" if security_profile == "internet_exposed" else "internal"
+
+
+def cloud_placement(
+    component: dict[str, Any],
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]], list[str]]:
+    """The virtual network and the subnets of a cloud component's load balancer, and the errors.
+
+    The subnets are its instances' (where the targets are), in exactly one
+    virtual network; none or several is an error and leaves no load balancer.
+    An instance in no subnet is an error of its own.
+    """
+    fqdn = component_ref(component)
+    errors: list[str] = []
+    segments: dict[str, dict[str, Any]] = {}
+    networks: dict[str, dict[str, Any]] = {}
+    for instance in component.get("instances") or []:
+        segment = instance.get("network_segment") or {}
+        if not segment.get("id"):
+            errors.append(
+                f"{fqdn}: cloud instance {instance.get('name', instance.get('id', '?'))} is in no network segment"
+            )
+            continue
+        segments[segment["id"]] = segment
+        network = segment.get("virtual_network") or {}
+        if network.get("id"):
+            networks[network["id"]] = network
+    if len(networks) != 1:
+        if networks:
+            names = ", ".join(
+                sorted(str(network.get("name") or network_id) for network_id, network in networks.items())
+            )
+            errors.append(f"{fqdn}: cloud instances span several virtual networks ({names})")
+        else:
+            errors.append(f"{fqdn}: no virtual network for the cloud load balancer")
+        return None, [], errors
+    network = next(iter(networks.values()))
+    in_network = [segment for segment in segments.values() if (segment.get("virtual_network") or {}).get("id")]
+    return network, sorted(in_network, key=lambda item: str(item.get("name") or item["id"])), errors
+
+
+def cloud_members(component: dict[str, Any], network: dict[str, Any]) -> tuple[list[tuple[str, str, str]], list[str]]:
+    """(instance name, address, namespace id) of each cloud instance, sorted by name, and the errors.
+
+    The address is the instance's own private_ip, in the namespace of the
+    virtual network's CIDR block that holds it; an instance without one, or
+    outside every block, is an error.
+    """
+    fqdn = component_ref(component)
+    blocks = [
+        (ip_network(block["prefix"], strict=False), namespace_id)
+        for block in network.get("cidr_blocks") or []
+        if block.get("prefix") and (namespace_id := (block.get("ip_namespace") or {}).get("id"))
+    ]
+    members: list[tuple[str, str, str]] = []
+    errors: list[str] = []
+    for instance in sorted(component.get("instances") or [], key=lambda item: str(item.get("name") or item["id"])):
+        name = str(instance.get("name") or instance["id"])
+        address = instance.get("private_ip")
+        if not address:
+            errors.append(f"{fqdn}: cloud instance {name} has no private_ip for the pool members")
+            continue
+        host = ip_interface(address).ip
+        namespace_id = next((ns for block, ns in blocks if host in block), None)
+        if namespace_id is None:
+            errors.append(
+                f"{fqdn}: cloud instance {name} private_ip {address} is in no CIDR block of "
+                f"{network.get('name', network.get('id'))}"
+            )
+            continue
+        members.append((name, str(address), namespace_id))
+    return members, errors

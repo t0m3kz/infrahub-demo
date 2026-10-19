@@ -45,6 +45,7 @@ query loadbalancer_cloud($instance: String!) {
         ssl_certificate { value }
         load_balancing_algorithm { value }
         session_persistence { value }
+        pool_members { edges { node { address { value } } } }
         health_checks {
           edges {
             node {

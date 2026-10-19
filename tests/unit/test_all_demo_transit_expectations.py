@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from tests.integration.test_constants import (
     ALL_DEMO_BORDER_FIREWALL_PORTS,
+    ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS,
     ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS,
     ALL_DEMO_DC_LOADBALANCER_PLATFORMS,
     ALL_DEMO_EXPECTED_OBJECTS,
@@ -121,3 +122,19 @@ def test_load_balanced_components_and_their_clients() -> None:
             "ports": (("tcp", 443),),
         }
     }
+
+
+def test_cloud_load_balanced_component() -> None:
+    """c003 api-frontend: one internet-facing CloudLoadBalancer in its AWS VPC, its two instances' private
+    addresses as pool members; it is neither an on-prem VIP expectation nor anyone's R_client target."""
+    assert ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS == {
+        "frontend.custody-api.c003.demo.local": {
+            "load_balancer": "frontend-custody-api-c0-a9ea4206",
+            "virtual_network": "vaultex-vpc-prod",
+            "segments": ("c003-vaultex-subnet-prod-p",),
+            "scheme": "internet_facing",
+            "ports": (("tcp", 443),),
+            "members": ("10.30.1.11/24", "10.30.1.12/24"),
+        }
+    }
+    assert not set(ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS) & set(ALL_DEMO_LOAD_BALANCED_COMPONENTS)

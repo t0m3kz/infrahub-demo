@@ -1,10 +1,15 @@
 """Unit tests for the load balancer VIP producer and its rules.
 
-- generators/helpers/lb_vip.py: ports, serving contexts, leg prefix, identifiers
-- generators/lb_vip.py (LoadbalancerVipMixin): VIPs, pool members, R_server
+- generators/helpers/lb_vip.py: ports, serving contexts, leg prefix, identifiers,
+  and the cloud branch (cloud component, load balancer name/scheme, placement,
+  members)
+- generators/lb_vip.py (LoadbalancerVipMixin): VIPs, pool members, R_server;
+  a cloud component's CloudLoadBalancer and its address-less VIPs
 - AppApplicationGenerator: R_client replaces the direct rule (strict load
-  balancing), errors fail the run after the rules, and a component that stops
-  being load_balanced loses its VIPs and rules to the run's tracking
+  balancing) for an on-prem target, a cloud target keeps the direct rule,
+  errors fail the run after the rules, and a component that stops being
+  load_balanced loses its VIPs, rules and cloud load balancer to the run's
+  tracking
 - SegmentFirewallMixin._reconcile_rule_payload: the selectors and the
   destination segment of an existing rule
 - queries/topology/add/application.gql: the serving context path
@@ -22,6 +27,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.helpers.lb_vip import (
+    CLOUD_LB_NAME_MAX,
+    cloud_lb_name,
+    cloud_lb_scheme,
+    cloud_members,
+    cloud_placement,
+    is_cloud_component,
     leg_prefix_id,
     member_identifier,
     serving_contexts,
@@ -29,8 +40,9 @@ from generators.helpers.lb_vip import (
     vip_ports,
 )
 from generators.helpers.rules import RulesPlanner
+from generators.lb_vip import CLOUD_LB_GROUP
 from generators.logger import GeneratorError
-from generators.protocols import LoadbalancerVIP, SecurityPolicy, SecurityPolicyRule
+from generators.protocols import CloudLoadBalancer, LoadbalancerVIP, SecurityPolicy, SecurityPolicyRule
 from generators.segment_firewall import SegmentFirewallMixin
 from generators.topology.application_security import AppApplicationGenerator
 
@@ -224,6 +236,7 @@ def _vip_gen() -> Any:
     gen.resource_lock = _lock
     gen.ensure_prefix_address_pool = AsyncMock(side_effect=lambda **kw: MagicMock(name=kw["pool_name"]))
     gen.allocate_prefix_address = AsyncMock(side_effect=lambda **kw: f"ip:{kw['identifier']}")
+    gen.upsert_ip_address = AsyncMock(side_effect=lambda **kw: MagicMock(id=f"ip:{kw['address']}"))
     gen._get_or_create_by_name = AsyncMock(return_value=MagicMock(id="pol-lb"))
     gen._upsert_policy_rule = AsyncMock(return_value=100)
     return gen
@@ -233,8 +246,13 @@ def _vip_payloads(gen: Any) -> list[dict[str, Any]]:
     return [call.kwargs["data"] for call in gen.client.create.await_args_list if call.kwargs["kind"] is LoadbalancerVIP]
 
 
-def _reconcile(gen: Any, components: list[dict[str, Any]], edges: list[Any] | None = None) -> Any:
-    return asyncio.run(gen._reconcile_load_balancing(components, edges or [], {}))
+def _reconcile(
+    gen: Any,
+    components: list[dict[str, Any]],
+    edges: list[Any] | None = None,
+    security_profile: str = "internal_standard",
+) -> Any:
+    return asyncio.run(gen._reconcile_load_balancing(components, edges or [], {}, security_profile=security_profile))
 
 
 class TestVipProducer:
@@ -495,7 +513,7 @@ class TestServerRule:
         gen = _vip_gen()
         rule_indexes = {"pol-lb": {100}}
 
-        asyncio.run(gen._reconcile_load_balancing([_web()], [], rule_indexes))
+        asyncio.run(gen._reconcile_load_balancing([_web()], [], rule_indexes, security_profile="internal_standard"))
 
         assert "pol-lb" not in rule_indexes
 
@@ -513,7 +531,11 @@ class TestServerRule:
 
         gen._upsert_policy_rule = AsyncMock(side_effect=upsert)
 
-        asyncio.run(gen._reconcile_load_balancing([_web(), _second_backend()], [], rule_indexes))
+        asyncio.run(
+            gen._reconcile_load_balancing(
+                [_web(), _second_backend()], [], rule_indexes, security_profile="internal_standard"
+            )
+        )
 
         assert gen.locks.count("lb-policy-dc10-lb-PROD") == 1
         gen._get_or_create_by_name.assert_awaited_once()
@@ -748,8 +770,306 @@ class TestLoadBalancedFlip:
 
 
 # ===========================================================================
-# Existing-rule reconciliation of the selectors
+# Cloud: a CloudLoadBalancer per load_balanced component on cloud instances
 # ===========================================================================
+
+_CLOUD_FQDN = "frontend.custody-api.c003.demo.local"
+_CLOUD_LB = cloud_lb_name({"fqdn": _CLOUD_FQDN})
+
+
+def _vpc(vpc_id: str = "vpc-1") -> dict[str, Any]:
+    return {
+        "id": vpc_id,
+        "name": f"{vpc_id}-name",
+        "cidr_blocks": [{"prefix": "10.30.0.0/16", "ip_namespace": {"id": "ns-prod"}}],
+    }
+
+
+def _subnet(seg_id: str = "sub-a", vpc_id: str = "vpc-1") -> dict[str, Any]:
+    return {"id": seg_id, "name": f"{seg_id}-name", "virtual_network": _vpc(vpc_id)}
+
+
+def _cloud_instance(
+    instance_id: str, private_ip: str | None = "10.30.1.11/24", subnet: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    return {
+        "id": instance_id,
+        "name": instance_id,
+        "typename": "CloudInstance",
+        "private_ip": private_ip,
+        "network_segment": _subnet() if subnet is None else subnet,
+    }
+
+
+def _cloud_frontend(
+    *, ports: list[str] | None = None, instances: list[dict[str, Any]] | None = None, load_balanced: bool = True
+) -> dict[str, Any]:
+    """c003's api-frontend: two AWS instances in one subnet of one VPC."""
+    return {
+        "id": "comp-frontend",
+        "name": "api-frontend",
+        "fqdn": _CLOUD_FQDN,
+        "ports": ["tcp/443"] if ports is None else ports,
+        "component_type": "frontend",
+        "load_balanced": load_balanced,
+        "instances": (
+            [_cloud_instance("i-2", "10.30.1.12/24"), _cloud_instance("i-1", "10.30.1.11/24")]
+            if instances is None
+            else instances
+        ),
+        "health_checks": [{"id": "hc-1"}],
+        "network_segment": {
+            **_subnet(),
+            "typename": "CloudNetworkSegment",
+            "cidr_block": "10.30.1.0/24",
+            "environment": "p",
+        },
+    }
+
+
+def _cloud_lb_payloads(gen: Any) -> list[dict[str, Any]]:
+    return [
+        call.kwargs["data"] for call in gen.client.create.await_args_list if call.kwargs["kind"] is CloudLoadBalancer
+    ]
+
+
+class TestCloudPlanning:
+    def test_a_component_of_cloud_instances_only_is_a_cloud_component(self) -> None:
+        assert is_cloud_component(_cloud_frontend()) is True
+
+    def test_mixed_or_on_prem_or_no_instances_is_not(self) -> None:
+        """A cloud instance next to an on-prem one stays on the on-prem path, where it is an error."""
+        assert is_cloud_component(_cloud_frontend(instances=[_cloud_instance("i-1"), _instance("vm-1", None)])) is False
+        assert is_cloud_component(_web()) is False
+        assert is_cloud_component(_cloud_frontend(instances=[])) is False
+
+    def test_short_fqdn_is_its_slug(self) -> None:
+        assert cloud_lb_name({"fqdn": "web.c016.example"}) == "web-c016-example"
+
+    def test_long_fqdn_is_cut_to_the_provider_limit_with_a_hash(self) -> None:
+        name = cloud_lb_name({"fqdn": _CLOUD_FQDN})
+
+        assert len(name) == CLOUD_LB_NAME_MAX
+        assert name.startswith("frontend-custody-api-c0")
+        assert name == cloud_lb_name({"fqdn": _CLOUD_FQDN})  # deterministic
+        assert not name.startswith("-") and not name.endswith("-")
+
+    def test_two_long_fqdns_with_one_prefix_get_two_names(self) -> None:
+        """Unique per component: the hash is of the whole fqdn, not of the cut slug."""
+        first = cloud_lb_name({"fqdn": "frontend.custody-api.c003.demo.local"})
+        second = cloud_lb_name({"fqdn": "frontend.custody-api.c003.demo.other"})
+
+        assert first != second
+        assert first[:23] == second[:23]
+
+    @pytest.mark.parametrize(
+        ("profile", "scheme"),
+        [
+            ("internet_exposed", "internet_facing"),
+            ("internal_standard", "internal"),
+            ("fintech_strict", "internal"),
+            (None, "internal"),
+        ],
+    )
+    def test_scheme_follows_the_application_security_profile(self, profile: str | None, scheme: str) -> None:
+        assert cloud_lb_scheme(profile) == scheme
+
+    def test_placement_is_the_instances_subnets_in_their_one_vpc(self) -> None:
+        component = _cloud_frontend(
+            instances=[_cloud_instance("i-1", subnet=_subnet("sub-b")), _cloud_instance("i-2", subnet=_subnet("sub-a"))]
+        )
+
+        network, segments, errors = cloud_placement(component)
+
+        assert errors == []
+        assert network is not None and network["id"] == "vpc-1"
+        assert [segment["id"] for segment in segments] == ["sub-a", "sub-b"]
+
+    def test_instances_in_two_vpcs_are_an_error_and_place_nothing(self) -> None:
+        component = _cloud_frontend(
+            instances=[
+                _cloud_instance("i-1", subnet=_subnet("sub-a", "vpc-1")),
+                _cloud_instance("i-2", subnet=_subnet("sub-b", "vpc-2")),
+            ]
+        )
+
+        network, segments, errors = cloud_placement(component)
+
+        assert (network, segments) == (None, [])
+        assert "several virtual networks (vpc-1-name, vpc-2-name)" in errors[0]
+
+    def test_no_subnet_is_a_missing_virtual_network(self) -> None:
+        network, _segments, errors = cloud_placement(_cloud_frontend(instances=[_cloud_instance("i-1", subnet={})]))
+
+        assert network is None
+        assert errors == [
+            f"{_CLOUD_FQDN}: cloud instance i-1 is in no network segment",
+            f"{_CLOUD_FQDN}: no virtual network for the cloud load balancer",
+        ]
+
+    def test_members_are_the_private_ips_in_the_namespace_of_their_cidr_block(self) -> None:
+        members, errors = cloud_members(_cloud_frontend(), _vpc())
+
+        assert errors == []
+        assert members == [("i-1", "10.30.1.11/24", "ns-prod"), ("i-2", "10.30.1.12/24", "ns-prod")]
+
+    def test_member_without_private_ip_or_outside_every_block_is_an_error(self) -> None:
+        component = _cloud_frontend(
+            instances=[_cloud_instance("i-1", None), _cloud_instance("i-2", "192.0.2.10/24"), _cloud_instance("i-3")]
+        )
+
+        members, errors = cloud_members(component, _vpc())
+
+        assert members == [("i-3", "10.30.1.11/24", "ns-prod")]
+        assert "i-1 has no private_ip" in errors[0]
+        assert "i-2 private_ip 192.0.2.10/24 is in no CIDR block of vpc-1-name" in errors[1]
+
+
+def _lb_gen() -> Any:
+    """_vip_gen() whose created nodes carry their own id, so a VIP points at its load balancer."""
+    gen = _vip_gen()
+    gen.created = []
+
+    def create(kind: Any, data: dict[str, Any]) -> Any:
+        node = MagicMock(id=f"id-{data.get('name') or data.get('hostname')}", save=AsyncMock())
+        gen.created.append(node)
+        return node
+
+    gen.client.create = AsyncMock(side_effect=create)
+    return gen
+
+
+class TestCloudProducer:
+    def test_one_cloud_load_balancer_and_one_vip_per_port_without_an_address(self) -> None:
+        gen = _lb_gen()
+
+        vips, errors = _reconcile(
+            gen, [_cloud_frontend(ports=["tcp/443", "udp/53"])], security_profile="internet_exposed"
+        )
+
+        # Nothing for R_client: a cloud component is reached directly.
+        assert (vips, errors) == ({}, [])
+        assert _cloud_lb_payloads(gen) == [
+            {
+                "name": _CLOUD_LB,
+                "description": f"Cloud load balancer of {_CLOUD_FQDN}",
+                "status": "active",
+                "lb_type": "l4_cloud",
+                "scheme": "internet_facing",
+                "virtual_network": {"id": "vpc-1"},
+                "network_segments": ["sub-a"],
+                "member_of_groups": [CLOUD_LB_GROUP],
+            }
+        ]
+        assert CLOUD_LB_GROUP == {"hfid": ["cloud_loadbalancers"], "kind": "CoreStandardGroup"}
+        payloads = _vip_payloads(gen)
+        assert [(p["protocol"], p["port"]) for p in payloads] == [("tcp", 443), ("udp", 53)]
+        first = payloads[0]
+        assert first["hostname"] == _CLOUD_FQDN
+        assert first["load_balancer"] == {"id": f"id-{_CLOUD_LB}"}
+        assert "vip_ip" not in first
+        assert first["component"] == {"id": "comp-frontend"}
+        assert first["health_checks"] == ["hc-1"]
+        assert first["pool_members"] == ["ip:10.30.1.11/24", "ip:10.30.1.12/24"]
+        assert f"cloud-lb-{_CLOUD_LB}" in gen.locks
+
+    def test_no_context_pool_or_rule_for_a_cloud_component(self) -> None:
+        gen = _lb_gen()
+
+        _reconcile(gen, [_cloud_frontend()])
+
+        gen.ensure_prefix_address_pool.assert_not_awaited()
+        gen.allocate_prefix_address.assert_not_awaited()
+        gen._get_or_create_by_name.assert_not_awaited()
+        gen._upsert_policy_rule.assert_not_awaited()
+
+    def test_internal_application_gets_an_internal_load_balancer(self) -> None:
+        gen = _lb_gen()
+
+        _reconcile(gen, [_cloud_frontend()], security_profile="internal_standard")
+
+        assert _cloud_lb_payloads(gen)[0]["scheme"] == "internal"
+
+    def test_load_balancer_and_vips_are_tracked_by_the_run(self) -> None:
+        gen = _lb_gen()
+
+        _reconcile(gen, [_cloud_frontend()])
+
+        saved = [call.kwargs["kind"] for call in gen.client.create.await_args_list]
+        assert saved == [CloudLoadBalancer, LoadbalancerVIP]
+        for node in gen.created:
+            node.save.assert_awaited_once_with(allow_upsert=True)
+
+    def test_member_addresses_are_the_instances_and_untracked_under_their_lock(self) -> None:
+        gen = _lb_gen()
+
+        _reconcile(gen, [_cloud_frontend()])
+
+        calls = [call.kwargs for call in gen.upsert_ip_address.await_args_list]
+        assert [(c["address"], c["ip_namespace"], c["track"]) for c in calls] == [
+            ("10.30.1.11/24", {"id": "ns-prod"}, False),
+            ("10.30.1.12/24", {"id": "ns-prod"}, False),
+        ]
+        assert calls[0]["description"] == "Private address of cloud instance i-1"
+        assert "ip-address-ns-prod-10.30.1.11/24" in gen.locks
+
+    def test_second_run_writes_the_same_load_balancer_and_vips(self) -> None:
+        first, second = _lb_gen(), _lb_gen()
+
+        _reconcile(first, [_cloud_frontend()])
+        _reconcile(second, [_cloud_frontend()])
+
+        assert _cloud_lb_payloads(first) == _cloud_lb_payloads(second)
+        assert _vip_payloads(first) == _vip_payloads(second)
+        assert len(_cloud_lb_payloads(second)) == 1
+
+    def test_missing_virtual_network_is_an_error_and_writes_nothing(self) -> None:
+        gen = _lb_gen()
+
+        _vips, errors = _reconcile(gen, [_cloud_frontend(instances=[_cloud_instance("i-1", subnet={})])])
+
+        assert f"{_CLOUD_FQDN}: no virtual network for the cloud load balancer" in errors
+        gen.client.create.assert_not_awaited()
+        gen.upsert_ip_address.assert_not_awaited()
+
+    def test_range_is_refused_and_the_single_ports_still_get_their_vip(self) -> None:
+        gen = _lb_gen()
+
+        _vips, errors = _reconcile(gen, [_cloud_frontend(ports=["tcp/443", "udp/30000-30010"])])
+
+        assert [p["port"] for p in _vip_payloads(gen)] == [443]
+        assert len(errors) == 1
+        assert "udp/30000-30010" in errors[0]
+
+    def test_unaddressable_member_is_an_error_and_left_out(self) -> None:
+        gen = _lb_gen()
+
+        _vips, errors = _reconcile(
+            gen, [_cloud_frontend(instances=[_cloud_instance("i-1", None), _cloud_instance("i-2", "10.30.1.12/24")])]
+        )
+
+        assert "i-1 has no private_ip" in errors[0]
+        assert _vip_payloads(gen)[0]["pool_members"] == ["ip:10.30.1.12/24"]
+
+    def test_failed_load_balancer_save_is_an_error_and_gets_no_vip(self) -> None:
+        gen = _vip_gen()
+        gen.client.create.return_value.save = AsyncMock(side_effect=RuntimeError("boom"))
+
+        _vips, errors = _reconcile(gen, [_cloud_frontend()])
+
+        assert errors == [f"{_CLOUD_FQDN}: cloud load balancer {_CLOUD_LB}: boom"]
+        assert _vip_payloads(gen) == []
+
+    def test_cloud_target_of_another_application_writes_nothing_and_has_no_error(self) -> None:
+        """Its own run builds its load balancer; this run's rule into it is the direct one."""
+        gen = _lb_gen()
+        frontend = _cloud_frontend(ports=["udp/30000-30010"])
+
+        vips, errors = _reconcile(gen, [_client_comp(_dep(frontend))], edges=[({}, {}, frontend)])
+
+        assert (vips, errors) == ({}, [])
+        gen.client.create.assert_not_awaited()
+        gen.upsert_ip_address.assert_not_awaited()
 
 
 def _manager(peer_ids: list[str]) -> Any:
@@ -832,3 +1152,58 @@ def test_application_query_reads_the_serving_context_of_instances_and_targets(ro
     assert "instances { edges { node { ...AppInstanceFields } } }" in target
     segment = query.split("fragment SegmentSecurityFields", 1)[1].split("fragment AppInstanceFields", 1)[0]
     assert "ip_prefix {\n        node {\n          id" in segment
+
+
+class TestCloudTracking:
+    @staticmethod
+    def _tracked(load_balanced: bool) -> tuple[set[tuple[str, str]], set[tuple[str, str]]]:
+        gen = _vip_gen()
+        gen.client = _TrackingClient()
+        _reconcile(gen, [_cloud_frontend(load_balanced=load_balanced)])
+        return gen.client.tracked, gen.client.untracked
+
+    def test_turning_load_balanced_off_leaves_the_load_balancer_and_its_vips_to_the_cleanup(self) -> None:
+        """delete_unused_nodes removes what the earlier run tracked and this one did not save."""
+        on, on_untracked = self._tracked(load_balanced=True)
+        off, _ = self._tracked(load_balanced=False)
+
+        assert on == {
+            ("CloudLoadBalancer", _CLOUD_LB),
+            ("LoadbalancerVIP", f"{_CLOUD_FQDN}:443@id-{_CLOUD_LB}"),
+        }
+        assert off == set()
+        assert on_untracked == set()
+
+
+class TestCloudClientRule:
+    def test_dependency_into_a_cloud_target_keeps_the_direct_rule_and_no_vip_error(self) -> None:
+        """No R_client for a cloud target: the 'has no VIP on port' error is for an on-prem one only."""
+        gen = _app_gen({})
+
+        asyncio.run(gen._reconcile_application_rules(_application(_client_comp(_dep(_cloud_frontend())))))
+
+        rules = _rules(gen)
+        assert list(rules) == ["portal-to-web-tcp-443"]
+        assert rules["portal-to-web-tcp-443"]["destination_segment"] == {"id": "sub-a"}
+        assert "destination_ip_addresses" not in rules["portal-to-web-tcp-443"]
+
+    def test_the_application_security_profile_reaches_the_producer(self) -> None:
+        gen = _app_gen({})
+
+        asyncio.run(
+            gen._reconcile_application_rules(
+                {**_application(_cloud_frontend()), "security_profile": "internet_exposed"}
+            )
+        )
+
+        assert gen._reconcile_load_balancing.await_args.kwargs == {"security_profile": "internet_exposed"}
+
+
+def test_application_query_reads_the_cloud_placement_of_instances(root_dir: Path) -> None:
+    """A cloud instance's private_ip and its subnet's virtual network with the CIDR blocks' namespaces."""
+    query = (root_dir / "queries/topology/add/application.gql").read_text()
+    fragment = query.split("fragment AppInstanceFields", 1)[1].split("fragment AppComponentSecurityFields", 1)[0]
+    cloud = fragment.split("... on CloudInstance {", 1)[1]
+    assert "private_ip { value }" in cloud
+    assert "virtual_network {" in cloud
+    assert "cidr_blocks { edges { node { prefix { value } ip_namespace { node { id } } } } }" in cloud

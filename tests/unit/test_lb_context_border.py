@@ -314,7 +314,7 @@ class TestQueries:
             if isinstance(item, FragmentDefinitionNode) and item.name.value == name
         )
 
-    def test_interface_capabilities_carry_the_load_balancer_context(self, root_dir: Path) -> None:
+    def test_interface_edge_carries_the_load_balancer_context(self, root_dir: Path) -> None:
         path = "queries/fragments/interface_capability_fields.gql"
         spread = self._fragment(root_dir, path, "InterfaceCapabilitiesWithSegmentFields")
         assert "...LoadbalancerContextInterfaceCapabilityFields" in spread

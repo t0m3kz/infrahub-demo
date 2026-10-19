@@ -10,6 +10,7 @@ from utils.ports import PortProfileHelper
 
 from ..common import CommonGenerator
 from ..connections import CablingMixin
+from ..helpers.lb_vip import is_cloud_component
 from ..helpers.rules import RulesPlanner
 from ..helpers.security_tag import clear_component_tag, ensure_security_tag, ensure_segment_tag
 from ..lb_vip import LoadbalancerVipMixin
@@ -39,10 +40,10 @@ class AppApplicationGenerator(
     publishing for access-profile grants), SegmentFirewallMixin (every
     segment-to-segment SecurityPolicyRule, on-prem or cloud endpoint, plus
     zone handling), LoadbalancerVipMixin (the VIPs of load_balanced
-    components and their R_server rules; CablingMixin for the address
-    reservations). Every routed tenant segment it touches gets its segment
-    group tag, and each component of a microsegmented segment its component
-    tag (_ensure_component_tags; PoolMixin for the lock): this is the one
+    components and their R_server rules, or a cloud component's
+    CloudLoadBalancer; CablingMixin for the addresses). Every routed tenant
+    segment it touches gets its segment group tag, and each component of a
+    microsegmented segment its component tag (_ensure_component_tags; PoolMixin for the lock): this is the one
     generator that sees a VLAN segment, which has no generator of its own. A
     cloud flow is
     a SecurityPolicyRule like any other;
@@ -238,7 +239,9 @@ class AppApplicationGenerator(
         # the rules (R_client reads the VIPs). Its errors fail the run once
         # every other rule is written.
         rule_indexes: dict[str, set[int]] = {}
-        lb_vips, lb_errors = await self._reconcile_load_balancing(components, edges, rule_indexes)
+        lb_vips, lb_errors = await self._reconcile_load_balancing(
+            components, edges, rule_indexes, security_profile=app_security_profile
+        )
 
         # Access-profile grants hang off the target component, not a source
         # component, so they are published whether or not the app has edges.
@@ -299,9 +302,11 @@ class AppApplicationGenerator(
 
             src_seg = src_comp.get("network_segment") or {}
             dst_seg = dst_comp.get("network_segment") or {}
-            # Strict load balancing: a load_balanced target is reached through
-            # its VIPs only (R_client), never directly.
-            target_vips = lb_vips.get(dst_comp.get("id") or "", {}) if dst_comp.get("load_balanced") else None
+            # Strict load balancing: an on-prem load_balanced target is reached
+            # through its VIPs only (R_client), never directly. A cloud one
+            # keeps the direct rule: its managed load balancer is VPC-native.
+            strict = dst_comp.get("load_balanced") and not is_cloud_component(dst_comp)
+            target_vips = lb_vips.get(dst_comp.get("id") or "", {}) if strict else None
 
             for port in ports:
                 # One R_client per VIP (context) of the port; None is the direct rule.

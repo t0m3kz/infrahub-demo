@@ -28,9 +28,11 @@ class CheckAppDependency(InfrahubCheck):
     A load_balanced component gets one VIP per port with its instances as the
     pool members, so the generator refuses one that lists a port range, no
     port or no instance (generators/helpers/lb_vip.py); this check reports
-    the same. A dependency into a load_balanced component is ruled to the
-    VIPs (R_client) rather than to the component's segment; its ports are
-    validated the same way.
+    the same, on-prem or cloud (a cloud load balancer has a listener per
+    port and its instances as targets too). A dependency into an on-prem
+    load_balanced component is ruled to the VIPs (R_client) rather than to
+    the component's segment, into a cloud one to its segment as before; its
+    ports are validated the same way.
     """
 
     query = "app_dependency_validation"

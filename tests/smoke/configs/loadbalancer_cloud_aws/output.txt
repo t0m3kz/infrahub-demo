@@ -1,0 +1,84 @@
+resource "aws_lb" "frontend_custody_api_c0_a9ea4206" {
+  name               = "frontend-custody-api-c0-a9ea4206"
+  load_balancer_type = "network"
+  internal           = false
+  subnets            = ["c003-vaultex-subnet-prod-1", "c003-vaultex-subnet-prod-2"]
+
+  tags = {
+    Name = "frontend-custody-api-c0-a9ea4206"
+    ManagedBy = "Terraform"
+    Infrahub = "true"
+  }
+}
+
+resource "aws_lb_target_group" "frontend_custody_api_c003_demo_local_tcp_443" {
+  name        = "frontend.custody-api.c003.demo.local-tcp-443"
+  port        = 443
+  protocol    = "TCP"
+  target_type = "ip"
+  vpc_id      = data.aws_vpc.c003_vaultex_aws_vpc_prod.id
+
+  health_check {
+    protocol            = "TCP"
+    interval            = 30
+    healthy_threshold   = 3
+    unhealthy_threshold = 3
+  }
+}
+
+resource "aws_lb_target_group_attachment" "frontend_custody_api_c003_demo_local_tcp_443_10_20_1_10" {
+  target_group_arn = aws_lb_target_group.frontend_custody_api_c003_demo_local_tcp_443.arn
+  target_id        = "10.20.1.10"
+  port             = 443
+}
+
+resource "aws_lb_target_group_attachment" "frontend_custody_api_c003_demo_local_tcp_443_10_20_2_11" {
+  target_group_arn = aws_lb_target_group.frontend_custody_api_c003_demo_local_tcp_443.arn
+  target_id        = "10.20.2.11"
+  port             = 443
+}
+
+
+resource "aws_lb_target_group" "frontend_custody_api_c003_demo_local_udp_443" {
+  name        = "frontend.custody-api.c003.demo.local-udp-443"
+  port        = 443
+  protocol    = "UDP"
+  target_type = "ip"
+  vpc_id      = data.aws_vpc.c003_vaultex_aws_vpc_prod.id
+}
+
+resource "aws_lb_target_group_attachment" "frontend_custody_api_c003_demo_local_udp_443_10_20_1_10" {
+  target_group_arn = aws_lb_target_group.frontend_custody_api_c003_demo_local_udp_443.arn
+  target_id        = "10.20.1.10"
+  port             = 443
+}
+
+resource "aws_lb_target_group_attachment" "frontend_custody_api_c003_demo_local_udp_443_10_20_2_11" {
+  target_group_arn = aws_lb_target_group.frontend_custody_api_c003_demo_local_udp_443.arn
+  target_id        = "10.20.2.11"
+  port             = 443
+}
+
+
+
+resource "aws_lb_listener" "frontend_custody_api_c003_demo_local_tcp_443" {
+  load_balancer_arn = aws_lb.frontend_custody_api_c0_a9ea4206.arn
+  port              = 443
+  protocol          = "TCP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.frontend_custody_api_c003_demo_local_tcp_443.arn
+  }
+}
+
+resource "aws_lb_listener" "frontend_custody_api_c003_demo_local_udp_443" {
+  load_balancer_arn = aws_lb.frontend_custody_api_c0_a9ea4206.arn
+  port              = 443
+  protocol          = "UDP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.frontend_custody_api_c003_demo_local_udp_443.arn
+  }
+}

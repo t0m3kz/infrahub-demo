@@ -1,0 +1,57 @@
+resource "azurerm_lb" "frontend_custody_api_c0_a9ea4206" {
+  name                = "frontend-custody-api-c0-a9ea4206"
+  sku                 = "Standard"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+
+  frontend_ip_configuration {
+    name                 = "frontend_custody_api_c0_a9ea4206-frontend"
+    public_ip_address_id = azurerm_public_ip.frontend_custody_api_c0_a9ea4206.id
+  }
+
+  tags = {
+    Name = "frontend-custody-api-c0-a9ea4206"
+    ManagedBy = "Terraform"
+    Infrahub = "true"
+  }
+}
+
+resource "azurerm_lb_backend_address_pool" "frontend_custody_api_c003_demo_local_tcp_443" {
+  loadbalancer_id = azurerm_lb.frontend_custody_api_c0_a9ea4206.id
+  name            = "frontend.custody-api.c003.demo.local-tcp-443"
+}
+
+resource "azurerm_lb_backend_address_pool_address" "frontend_custody_api_c003_demo_local_tcp_443_10_20_1_10" {
+  name                    = "frontend.custody-api.c003.demo.local-tcp-443-10.20.1.10"
+  backend_address_pool_id = azurerm_lb_backend_address_pool.frontend_custody_api_c003_demo_local_tcp_443.id
+  virtual_network_id      = data.azurerm_virtual_network.c003_vaultex_azure_vpc_prod.id
+  ip_address              = "10.20.1.10"
+}
+
+resource "azurerm_lb_backend_address_pool_address" "frontend_custody_api_c003_demo_local_tcp_443_10_20_2_11" {
+  name                    = "frontend.custody-api.c003.demo.local-tcp-443-10.20.2.11"
+  backend_address_pool_id = azurerm_lb_backend_address_pool.frontend_custody_api_c003_demo_local_tcp_443.id
+  virtual_network_id      = data.azurerm_virtual_network.c003_vaultex_azure_vpc_prod.id
+  ip_address              = "10.20.2.11"
+}
+
+resource "azurerm_lb_probe" "frontend_custody_api_c003_demo_local_tcp_443" {
+  loadbalancer_id     = azurerm_lb.frontend_custody_api_c0_a9ea4206.id
+  name                = "frontend.custody-api.c003.demo.local-tcp-443-probe"
+  protocol            = "HTTP"
+  port                = 443
+  interval_in_seconds = 30
+  number_of_probes    = 4
+  request_path        = "/"
+}
+
+
+resource "azurerm_lb_rule" "frontend_custody_api_c003_demo_local_tcp_443_rule" {
+  loadbalancer_id                = azurerm_lb.frontend_custody_api_c0_a9ea4206.id
+  name                           = "frontend.custody-api.c003.demo.local-tcp-443-rule"
+  protocol                       = "Tcp"
+  frontend_port                  = 443
+  backend_port                   = 443
+  frontend_ip_configuration_name = "frontend_custody_api_c0_a9ea4206-frontend"
+  backend_address_pool_ids       = [azurerm_lb_backend_address_pool.frontend_custody_api_c003_demo_local_tcp_443.id]
+}

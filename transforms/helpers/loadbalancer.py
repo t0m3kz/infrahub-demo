@@ -46,6 +46,14 @@ HC_HTTP_PATH = "/health"
 _TLS_PROTOCOLS = frozenset({"https", "tls"})
 
 
+def pool_member_ips(vip: dict[str, Any]) -> list[str]:
+    """The distinct pool member IPs of a cleaned LoadbalancerVIP (no prefix length), in address order."""
+    return sorted(
+        {ip for member in vip.get("pool_members") or [] if (ip := host_ip(member.get("address")))},
+        key=ipaddress.ip_address,
+    )
+
+
 def _vip_name(vip: dict[str, Any]) -> str:
     """Object-name stem of a VIP: hostname with . and - as _, then protocol and port."""
     hostname = str(vip.get("hostname")).replace(".", "_").replace("-", "_")
@@ -207,10 +215,7 @@ def _vip(raw: dict[str, Any], platform: str, partition: str) -> dict[str, Any]:
         "protocol": raw.get("protocol"),
         "port": raw.get("port"),
         "address": host_ip((raw.get("vip_ip") or {}).get("address")),
-        "members": sorted(
-            {ip for member in raw.get("pool_members") or [] if (ip := host_ip(member.get("address")))},
-            key=ipaddress.ip_address,
-        ),
+        "members": pool_member_ips(raw),
         "algorithm": raw.get("load_balancing_algorithm") or "round_robin",
         "persistence": raw.get("session_persistence") or "none",
         "ssl": raw.get("ssl_certificate"),

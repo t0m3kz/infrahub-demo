@@ -2,6 +2,7 @@
 
 from typing import TypedDict
 
+from generators.helpers.lb_vip import cloud_lb_name, cloud_lb_scheme
 from utils.exchange_transit import (
     EXCHANGE_PEERS,
     PROD_TYPE,
@@ -882,11 +883,20 @@ def _single_ports(specs: list[str]) -> tuple[tuple[str, int], ...]:
     )
 
 
+_CLOUD_INSTANCES = {name(instance): instance.item for instance in _all_demo("CloudInstance")}
+
+
+def _on_cloud(component: Declared) -> bool:
+    """Every instance of the component is a CloudInstance (generators.helpers.lb_vip.is_cloud_component)."""
+    instances = component.item.get("instances") or []
+    return bool(instances) and all(instance in _CLOUD_INSTANCES for instance in instances)
+
+
 _LOAD_BALANCED = [component for component in _all_demo("AppComponent") if component.item.get("load_balanced")]
 
-# fqdn -> expectation, for every component 30_all declares load_balanced (c005
-# web-frontend on DC10's shared PROD context, c010 portal-ui on DC12's shared
-# NON-PROD one).
+# fqdn -> expectation, for every on-prem component 30_all declares
+# load_balanced (c005 web-frontend on DC10's shared PROD context, c010
+# portal-ui on DC12's shared NON-PROD one).
 ALL_DEMO_LOAD_BALANCED_COMPONENTS: dict[str, LoadBalancedComponent] = {
     str(component.item["fqdn"]): {
         "segment": str(component.item["network_segment"]),
@@ -899,6 +909,50 @@ ALL_DEMO_LOAD_BALANCED_COMPONENTS: dict[str, LoadBalancedComponent] = {
         ),
     }
     for component in _LOAD_BALANCED
+    if not _on_cloud(component)
+}
+
+
+class CloudLoadBalancedComponent(TypedDict):
+    """What one load_balanced AppComponent of 30_all on cloud instances must be fronted by."""
+
+    #: Its CloudLoadBalancer, the one load balancer of all its VIPs.
+    load_balancer: str
+    #: The virtual network of its instances' subnets.
+    virtual_network: str
+    #: Its instances' subnets: the load balancer's network_segments.
+    segments: tuple[str, ...]
+    #: internet_facing for an internet_exposed application, else internal.
+    scheme: str
+    #: (protocol, port) of every port it lists: one VIP each, without an address.
+    ports: tuple[tuple[str, int], ...]
+    #: The instances' private_ip: the pool members of every VIP.
+    members: tuple[str, ...]
+
+
+_CLOUD_SEGMENT_NETWORKS = {
+    name(segment): str(segment.item["virtual_network"]) for segment in _all_demo("CloudNetworkSegment")
+}
+
+
+def _cloud_load_balanced(component: Declared) -> CloudLoadBalancedComponent:
+    instances = [_CLOUD_INSTANCES[instance] for instance in component.item["instances"]]
+    segments = tuple(sorted({str(instance["network_segment"]) for instance in instances}))
+    application = component.enclosing.item if component.enclosing else {}
+    return {
+        "load_balancer": cloud_lb_name({"fqdn": component.item["fqdn"]}),
+        "virtual_network": _CLOUD_SEGMENT_NETWORKS[segments[0]],
+        "segments": segments,
+        "scheme": cloud_lb_scheme(application.get("security_profile")),
+        "ports": _single_ports(component.item["ports"]),
+        "members": tuple(sorted(str(instance["private_ip"]) for instance in instances)),
+    }
+
+
+# fqdn -> expectation, for every component on cloud instances 30_all declares
+# load_balanced (c003 api-frontend, on AWS).
+ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS: dict[str, CloudLoadBalancedComponent] = {
+    str(component.item["fqdn"]): _cloud_load_balanced(component) for component in _LOAD_BALANCED if _on_cloud(component)
 }
 
 

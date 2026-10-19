@@ -38,6 +38,7 @@ from generators.helpers.pools import (
     LB_CONTEXT_VLAN_END,
     LB_CONTEXT_VLAN_START,
 )
+from utils.data_cleaning import clean_data
 from utils.exchange_transit import (
     EXCHANGE_PEERS,
     LB_VIP_PREFIXLEN,
@@ -51,6 +52,7 @@ from .conftest import TestInfrahubDockerWithClient
 from .test_constants import (
     ALL_DEMO_BORDER_FIREWALL_PORTS,
     ALL_DEMO_BRANCH,
+    ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS,
     ALL_DEMO_COLOCATION_SERVED,
     ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS,
     ALL_DEMO_DC_NAMES,
@@ -310,6 +312,36 @@ RULES_BY_SOURCE_SEGMENT_QUERY = (
     + _RULE_FIELDS
     + "} } } }"
 )
+# The cloud load balancers of the cloud load_balanced components, and their VIPs.
+CLOUD_LOAD_BALANCERS_QUERY = """
+query ($names: [String]) {
+  CloudLoadBalancer(name__values: $names) {
+    edges {
+      node {
+        name { value }
+        lb_type { value }
+        scheme { value }
+        virtual_network { node { name { value } } }
+        network_segments { edges { node { name { value } } } }
+        member_of_groups { edges { node { name { value } } } }
+      }
+    }
+  }
+  LoadbalancerVIP(load_balancer__name__values: $names) {
+    edges {
+      node {
+        hostname { value }
+        protocol { value }
+        port { value }
+        load_balancer { node { name { value } } }
+        vip_ip { node { address { value } } }
+        component { node { fqdn { value } } }
+        pool_members { edges { node { address { value } } } }
+      }
+    }
+  }
+}
+"""
 
 
 def _rules(result: dict) -> list[dict]:
@@ -1057,7 +1089,9 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         the port. R_client (strict load balancing): a dependency into the
         component (ALL_DEMO_LB_CLIENT_DEPENDENCIES) is ruled from its source
         segment to the VIP/32 on the port, and never directly to the
-        component's segment on that port.
+        component's segment on that port. A component on cloud instances
+        (ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS) has one CloudLoadBalancer in
+        its instances' VPC instead, its VIPs without an address.
         """
         logging.info("=== %s - Step 3e: Load-balancer VIPs and rules ===", SCENARIO_NAME)
 
@@ -1193,13 +1227,57 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                         f"{target['segment']} on {protocol}/{port}; a load-balanced target is reached through its VIP only"
                     )
 
+        # Cloud (ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS): one CloudLoadBalancer per component in its instances'
+        # VPC and subnets, in the cloud_loadbalancers artifact group; one VIP per port on it, without an address
+        # (the cloud assigns it), the instances' private addresses as pool members. No context, leg or rule.
+        cloud = ALL_DEMO_CLOUD_LOAD_BALANCED_COMPONENTS
+        result = await async_client_main.execute_graphql(
+            query=CLOUD_LOAD_BALANCERS_QUERY,
+            variables={"names": sorted(c["load_balancer"] for c in cloud.values())},
+            branch_name=scenario_branch,
+        )
+        cleaned = clean_data(result)
+        cloud_lbs = {str(lb["name"]): lb for lb in cleaned.get("CloudLoadBalancer") or []}
+        cloud_vips = cleaned.get("LoadbalancerVIP") or []
+        for fqdn, component in sorted(cloud.items()):
+            name = component["load_balancer"]
+            lb = cloud_lbs.get(name)
+            if lb is None:
+                errors.append(f"cloud load balancer {name} of {fqdn} missing")
+                continue
+            found = (
+                lb.get("lb_type"),
+                lb.get("scheme"),
+                (lb.get("virtual_network") or {}).get("name"),
+                tuple(sorted(str(segment["name"]) for segment in lb.get("network_segments") or [])),
+            )
+            wanted = ("l4_cloud", component["scheme"], component["virtual_network"], component["segments"])
+            if found != wanted:
+                errors.append(f"cloud load balancer {name}: (lb_type, scheme, VPC, subnets) {found}, expected {wanted}")
+            if "cloud_loadbalancers" not in {group.get("name") for group in lb.get("member_of_groups") or []}:
+                errors.append(f"cloud load balancer {name} is not in the cloud_loadbalancers group")
+            vips = [vip for vip in cloud_vips if (vip.get("load_balancer") or {}).get("name") == name]
+            ports = sorted((str(vip["protocol"]), int(vip["port"])) for vip in vips)
+            if ports != sorted(component["ports"]):
+                errors.append(f"cloud load balancer {name}: VIPs on {ports}, expected {sorted(component['ports'])}")
+            for vip in vips:
+                label = f"cloud VIP {fqdn} {vip['protocol']}/{vip['port']} on {name}"
+                if vip.get("hostname") != fqdn or (vip.get("component") or {}).get("fqdn") != fqdn:
+                    errors.append(f"{label}: hostname/component is not {fqdn}")
+                if (vip.get("vip_ip") or {}).get("address"):
+                    errors.append(f"{label}: has a vip_ip, the cloud assigns it")
+                members = tuple(sorted(str(member["address"]) for member in vip.get("pool_members") or []))
+                if members != component["members"]:
+                    errors.append(f"{label}: pool members {members}, expected {component['members']}")
+
         assert not errors, f"30_all load-balancer VIPs are wrong on branch '{scenario_branch}':\n" + "\n".join(
             f"  - {e}" for e in errors
         )
         logging.info(
-            "Load-balancer VIPs verified: %d VIP(s), %d client dependency(ies)",
+            "Load-balancer VIPs verified: %d VIP(s), %d client dependency(ies), %d cloud load balancer(s)",
             len(actual),
             len(ALL_DEMO_LB_CLIENT_DEPENDENCIES),
+            len(cloud),
         )
 
     @pytest.mark.order(397)

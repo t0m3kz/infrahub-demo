@@ -33,6 +33,7 @@ from transforms.config.firewall import Firewall
 from transforms.config.l2_leaf import L2Leaf
 from transforms.config.leaf import Leaf
 from transforms.config.loadbalancer import LoadBalancer
+from transforms.config.loadbalancer_cloud import LoadBalancerCloud
 from transforms.config.proxy import Proxy
 from transforms.config.spine import Spine
 from transforms.config.super_spine import SuperSpine
@@ -3077,6 +3078,66 @@ def build_lb_context_data(*, device_name: str, platform: str) -> dict:
     return {"DcimPhysicalDevice": _edges([device_node]), "DcimVirtualDevice": _edges([])}
 
 
+# provider -> (OrganizationProvider name, scheme, [(protocol, port, health checks)])
+_LB_CLOUD_SPECS: dict[str, tuple[str, str, list[tuple[str, int, list[dict]]]]] = {
+    "aws": (
+        "AWS",
+        "internet_facing",
+        [("tcp", 443, [{"check": "tcp", "rise": 3, "fall": 3, "timeout": 2000}]), ("udp", 443, [])],
+    ),
+    "azure": ("Azure", "internet_facing", [("tcp", 443, [{"check": "http", "rise": 2, "fall": 4, "timeout": 1000}])]),
+    "gcp": ("Google Cloud", "internal", [("tcp", 8443, [{"check": "tcp", "rise": 3, "fall": 3, "timeout": 1000}])]),
+}
+
+
+def build_lb_cloud_data(*, provider: str) -> dict:
+    """The CloudLoadBalancer of a load_balanced cloud component as generators/lb_vip.py writes it
+    (queries/config/loadbalancer_cloud.gql): l4_cloud, one VIP per port without vip_ip, the
+    component's instance addresses as pool members, the component's health checks."""
+    provider_name, scheme, ports = _LB_CLOUD_SPECS[provider]
+    fqdn = "frontend.custody-api.c003.demo.local"
+    lb_name = "frontend-custody-api-c0-a9ea4206"
+    load_balancer = {
+        "id": f"lb-{provider}",
+        "name": _v(lb_name),
+        "lb_type": _v("l4_cloud"),
+        "scheme": _v(scheme),
+        "virtual_network": _node(
+            {
+                "id": f"vnet-{provider}",
+                "name": _v(f"c003-vaultex-{provider}-vpc-prod"),
+                "account": _node({"name": _v(f"c003-{provider}-prod"), "provider": _node({"name": _v(provider_name)})}),
+            }
+        ),
+        "network_segments": _edges(
+            [
+                {
+                    "id": f"seg-{provider}-{zone}",
+                    "name": _v(f"c003-vaultex-subnet-prod-{zone}"),
+                    "availability_zone": _node({"name": _v(f"euc1-az{zone}")}),
+                }
+                for zone in (1, 2)
+            ]
+        ),
+    }
+    vips = [
+        {
+            "id": f"vip-{provider}-{protocol}-{port}",
+            "hostname": _v(fqdn),
+            "protocol": _v(protocol),
+            "port": _v(port),
+            "ssl_certificate": _v(None),
+            "load_balancing_algorithm": _v(None),
+            "session_persistence": _v(None),
+            # unsorted on purpose: the renderers order the members by address
+            "pool_members": _edges([{"address": _v("10.20.2.11/24")}, {"address": _v("10.20.1.10/24")}]),
+            "health_checks": _edges([{key: _v(value) for key, value in check.items()} for check in checks]),
+        }
+        for protocol, port, checks in ports
+    ]
+    return {"CloudLoadBalancer": _edges([load_balancer]), "LoadbalancerVIP": _edges(vips)}
+
+
 # ============================================================================
 # segmentation_matrix artifact (one data center, queries/topology/segmentation_matrix.gql)
 # ============================================================================
@@ -4717,6 +4778,15 @@ def main() -> int:
             LoadBalancer,
             f"loadbalancer_{platform}_context",
             build_lb_context_data(device_name="DC3-LB-01", platform=platform),
+        )
+        generated += g
+        errors += e
+
+    # Cloud load balancer of a load_balanced cloud component, per provider (Terraform HCL)
+    print("\nGenerating cloud load-balancer fixtures:")
+    for provider in _LB_CLOUD_SPECS:
+        g, e = _write_data_fixture(
+            LoadBalancerCloud, f"loadbalancer_cloud_{provider}", build_lb_cloud_data(provider=provider)
         )
         generated += g
         errors += e

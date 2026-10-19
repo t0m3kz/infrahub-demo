@@ -26,6 +26,15 @@ resource "azurerm_lb_backend_address_pool" "{{ pool.name | tf_id }}" {
   loadbalancer_id = azurerm_lb.{{ lb_name | tf_id }}.id
   name            = "{{ pool.name }}"
 }
+{%- for address in pool.addresses %}
+
+resource "azurerm_lb_backend_address_pool_address" "{{ pool.name | tf_id }}_{{ address | tf_id }}" {
+  name                    = "{{ pool.name }}-{{ address }}"
+  backend_address_pool_id = azurerm_lb_backend_address_pool.{{ pool.name | tf_id }}.id
+  virtual_network_id      = data.azurerm_virtual_network.{{ vnet_name | tf_id }}.id
+  ip_address              = "{{ address }}"
+}
+{%- endfor %}
 {% if pool.health_probe %}
 resource "azurerm_lb_probe" "{{ pool.name | tf_id }}" {
   loadbalancer_id     = azurerm_lb.{{ lb_name | tf_id }}.id
@@ -50,4 +59,4 @@ resource "azurerm_lb_rule" "{{ rule.name | tf_id }}" {
   frontend_ip_configuration_name = "{{ lb_name | tf_id }}-frontend"
   backend_address_pool_ids       = [azurerm_lb_backend_address_pool.{{ rule.backend_pool_name | tf_id }}.id]
 }
-{% endfor %}
+{% endfor -%}
