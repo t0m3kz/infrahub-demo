@@ -16,6 +16,7 @@ from tests.integration import test_helpers
 from tests.integration.test_helpers import (
     compute_role_counts,
     compute_underlay_asn_by_role,
+    fetch_interconnect_inventory,
     fetch_loadbalancer_inventory,
     fetch_tenant_services,
     fetch_transit_inventory,
@@ -749,3 +750,140 @@ async def test_fetch_loadbalancer_inventory_parses_legs_ports_and_vips() -> None
             "segment_prefix": "10.0.0.0/24",
         }
     ]
+
+
+async def test_fetch_interconnect_inventory_parses_location_and_end_placement() -> None:
+    """A circuit location keeps its kind, parent (a cage's metro, a footprint's DC) and owner, and each end
+    its device's deployment: test_62 checks circuit placement on exactly these fields."""
+
+    def value(v: Any) -> dict:
+        return {"value": v}
+
+    def end(device: str, deployment: str, kind: str) -> dict:
+        return {
+            "node": {
+                "id": f"if-{device}",
+                "name": value("Ethernet1/35"),
+                "device": {
+                    "node": {
+                        "id": f"dev-{device}",
+                        "name": value(device),
+                        "deployment": {
+                            "node": {"id": f"id-{deployment}", "__typename": kind, "name": value(deployment)}
+                        },
+                    }
+                },
+            }
+        }
+
+    metro = {"node": {"id": "id-FR", "__typename": "TopologyColocationMetro", "name": value("FR")}}
+    dc = {"node": {"id": "id-DC10", "__typename": "TopologyDataCenter", "name": value("DC10")}}
+    owner = {"node": {"id": "org-C005", "name": value("Drentec BV")}}
+    physical = {
+        "id": "pc1",
+        "circuit_id": value("DF-DC10-EQXFR2"),
+        "circuit_type": value("dark_fiber"),
+        "status": value("active"),
+        "provider": {"node": {"name": value("P016")}},
+        "owner": {"node": None},
+        "locations": {
+            "edges": [
+                {
+                    "node": {
+                        "id": "id-FR2",
+                        "__typename": "TopologyColocationZone",
+                        "name": value("FR2"),
+                        "parent": metro,
+                    }
+                },
+                {"node": {"id": "id-DC10", "__typename": "TopologyDataCenter", "name": value("DC10")}},
+            ]
+        },
+        "capabilities": {
+            "edges": [
+                end("bl-dc101101", "DC10", "TopologyDataCenter"),
+                end("eg-fr01", "FR", "TopologyColocationMetro"),
+            ]
+        },
+    }
+    virtual = {
+        "id": "vc1",
+        "name": value("VC-C005-DC10-AWS-EUC1"),
+        "link_type": value("direct_connect_aws"),
+        "transport_mode": value("physical_backed"),
+        "owner": owner,
+        "locations": {
+            "edges": [
+                {
+                    "node": {
+                        "id": "id-C005-P-DC10",
+                        "__typename": "TopologyCustomerDC",
+                        "name": value("C005-P-DC10"),
+                        "parent": dc,
+                        "owner": {"node": {"id": "org-C005", "__typename": "OrganizationCustomer"}},
+                    }
+                },
+            ]
+        },
+        "physical_circuits": {"edges": [{"node": {"circuit_id": value("DF-DC10-EQXFR2")}}]},
+        "capabilities": {"edges": [end("bl-dc101101", "DC10", "TopologyDataCenter")]},
+        "cloud_endpoints": {"edges": []},
+    }
+    client = MagicMock()
+    client.execute_graphql = AsyncMock(
+        return_value={
+            "TopologyPhysicalCircuit": {"edges": [{"node": physical}]},
+            "TopologyVirtualCircuit": {"edges": [{"node": virtual}]},
+        }
+    )
+
+    inventory = await fetch_interconnect_inventory(client=client, branch="main")
+
+    (circuit,) = inventory["physical"]
+    assert (circuit["id"], circuit["owner_id"], circuit["locations"]) == ("pc1", None, ["DC10", "FR2"])
+    assert circuit["location_nodes"] == [
+        {
+            "id": "id-DC10",
+            "kind": "TopologyDataCenter",
+            "name": "DC10",
+            "parent_id": None,
+            "parent_kind": None,
+            "parent_name": None,
+            "owner_id": None,
+        },
+        {
+            "id": "id-FR2",
+            "kind": "TopologyColocationZone",
+            "name": "FR2",
+            "parent_id": "id-FR",
+            "parent_kind": "TopologyColocationMetro",
+            "parent_name": "FR",
+            "owner_id": None,
+        },
+    ]
+    assert circuit["end_devices"] == [
+        {
+            "device": "bl-dc101101",
+            "device_id": "dev-bl-dc101101",
+            "deployment_id": "id-DC10",
+            "deployment_kind": "TopologyDataCenter",
+            "deployment_name": "DC10",
+        },
+        {
+            "device": "eg-fr01",
+            "device_id": "dev-eg-fr01",
+            "deployment_id": "id-FR",
+            "deployment_kind": "TopologyColocationMetro",
+            "deployment_name": "FR",
+        },
+    ]
+    (overlay,) = inventory["virtual"]
+    assert (overlay["id"], overlay["owner"], overlay["owner_id"]) == ("vc1", "Drentec BV", "org-C005")
+    (footprint,) = overlay["location_nodes"]
+    assert (footprint["kind"], footprint["parent_id"], footprint["parent_name"], footprint["owner_id"]) == (
+        "TopologyCustomerDC",
+        "id-DC10",
+        "DC10",
+        "org-C005",
+    )
+    assert [device["deployment_name"] for device in overlay["end_devices"]] == ["DC10"]

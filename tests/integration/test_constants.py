@@ -13,7 +13,17 @@ from utils.exchange_transit import (
 )
 from utils.ports import PortProfileHelper
 
-from .demo_data import ROOT, Declared, created_dispatches, declared, distinct, name, object_templates, render
+from .demo_data import (
+    ROOT,
+    Declared,
+    created_dispatches,
+    declared,
+    distinct,
+    name,
+    object_templates,
+    render,
+    schema,
+)
 
 # ---------------------------------------------------------------------------
 # Demo data paths  (single source of truth — the same files the demos ship)
@@ -528,6 +538,44 @@ ALL_DEMO_VIRTUAL_CIRCUITS: dict[str, VirtualCircuitExpectation] = {
         "interfaces": 2,
         "cloud_endpoints": (),
     },
+}
+
+# Circuit placement (test_62 test_01/test_02). A physical circuit terminates on two facilities: the kinds that inherit
+# TopologyFacility (read from schemas/). A virtual circuit's tenant end is a footprint (a TopologyCustomer) or an
+# office of the circuit's owner, its far end a provider facility or another footprint.
+ALL_DEMO_FACILITY_KINDS: frozenset[str] = frozenset(
+    kind for kind, definition in schema().items() if "TopologyFacility" in definition.inherit_from
+)
+ALL_DEMO_FOOTPRINT_KINDS: frozenset[str] = frozenset(
+    kind for kind, definition in schema().items() if "TopologyCustomer" in definition.inherit_from
+)
+ALL_DEMO_TENANT_LOCATION_KINDS: frozenset[str] = ALL_DEMO_FOOTPRINT_KINDS | {"TopologyCustomerOffice"}
+ALL_DEMO_PROVIDER_FACILITY_KINDS: frozenset[str] = frozenset(
+    {"TopologyCloudRegion", "TopologySaasRegion", "TopologyColocationZone"}
+)
+
+_DECLARED_PHYSICAL_CIRCUITS = {str(c.value("circuit_id")): c for c in _all_demo("TopologyPhysicalCircuit")}
+_DECLARED_VIRTUAL_CIRCUITS = {name(c): c for c in _all_demo("TopologyVirtualCircuit")}
+
+# circuit_id / name -> the locations the 30_all data authors. A physical circuit's other end is derived by add_circuit
+# from its end devices' deployments, so the data lists only what is not derivable (a cage: its edge sits in the metro).
+ALL_DEMO_DECLARED_PHYSICAL_LOCATIONS: dict[str, tuple[str, ...]] = {
+    circuit_id: tuple(circuit.item.get("locations") or ())
+    for circuit_id, circuit in _DECLARED_PHYSICAL_CIRCUITS.items()
+}
+ALL_DEMO_DECLARED_VIRTUAL_LOCATIONS: dict[str, tuple[str, ...]] = {
+    circuit_name: tuple(circuit.item.get("locations") or ())
+    for circuit_name, circuit in _DECLARED_VIRTUAL_CIRCUITS.items()
+}
+
+# Virtual circuit -> its underlay in order, tenant end first: as declared, or the generated tunnel's one hop.
+ALL_DEMO_VIRTUAL_CIRCUIT_CHAINS: dict[str, tuple[str, ...]] = {
+    circuit_name: (
+        tuple(_DECLARED_VIRTUAL_CIRCUITS[circuit_name].item.get("physical_circuits") or ())
+        if circuit_name in _DECLARED_VIRTUAL_CIRCUITS
+        else expected["physical_circuits"]
+    )
+    for circuit_name, expected in ALL_DEMO_VIRTUAL_CIRCUITS.items()
 }
 
 

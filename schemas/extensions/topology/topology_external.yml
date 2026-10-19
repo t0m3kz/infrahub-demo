@@ -22,6 +22,7 @@ nodes:
     inherit_from:
       - TopologyDeployment
       - TopologyConnectableLocation
+      - TopologyFacility
       - TopologyDeviceHosting
     parent: TopologyExternal
     label: External Provider Endpoint

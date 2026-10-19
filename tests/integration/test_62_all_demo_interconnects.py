@@ -16,6 +16,11 @@ into islands:
     CloudVirtualInterface, not a device port. Without it the traversal walks
     from a border leaf out to the cage and then stops at an island boundary.
 
+Circuit placement is checked from both sides: a physical circuit ends on two
+facilities where its end devices sit (the end the data leaves out is the one
+add_circuit derived), an owned virtual circuit on its owner's footprint, and
+every location's reverse ``circuits`` lists exactly the circuits naming it.
+
 Also covered: the tenant-scoped firewall and load-balancer contexts (shared vs
 dedicated, driven by the customer design blueprint), the VIPs of the
 load_balanced components with their R_server/R_client rules, and the segment
@@ -57,6 +62,8 @@ from .test_constants import (
     ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS,
     ALL_DEMO_DC_NAMES,
     ALL_DEMO_DCI_CIRCUITS,
+    ALL_DEMO_DECLARED_PHYSICAL_LOCATIONS,
+    ALL_DEMO_DECLARED_VIRTUAL_LOCATIONS,
     ALL_DEMO_DEDICATED_FIREWALL_TENANTS,
     ALL_DEMO_DEDICATED_LOADBALANCER_TENANTS,
     ALL_DEMO_EDGE_INTERLINK_INTERFACE,
@@ -64,7 +71,9 @@ from .test_constants import (
     ALL_DEMO_EDGE_PAIR_POOL_TEMPLATE,
     ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS,
     ALL_DEMO_FABRIC_PEERINGS,
+    ALL_DEMO_FACILITY_KINDS,
     ALL_DEMO_FIREWALL_MEMBERS,
+    ALL_DEMO_FOOTPRINT_KINDS,
     ALL_DEMO_INTERNET_BGWS,
     ALL_DEMO_INTERNET_TRANSIT_CIRCUITS,
     ALL_DEMO_INTERNET_TRANSIT_PEERINGS,
@@ -82,6 +91,7 @@ from .test_constants import (
     ALL_DEMO_METRO_SITE_VIPS,
     ALL_DEMO_OFFICE_WAN_EXITS,
     ALL_DEMO_PHYSICAL_CIRCUIT_TYPES,
+    ALL_DEMO_PROVIDER_FACILITY_KINDS,
     ALL_DEMO_SDWAN_EDGE_UPLINK,
     ALL_DEMO_SDWAN_UNDERLAY_CIRCUITS,
     ALL_DEMO_SEGMENT_LEGS,
@@ -89,11 +99,13 @@ from .test_constants import (
     ALL_DEMO_SHARED_LOADBALANCER_CONTEXTS,
     ALL_DEMO_SNAT_ADDRESSES,
     ALL_DEMO_SNAT_POOL_PREFIX,
+    ALL_DEMO_TENANT_LOCATION_KINDS,
     ALL_DEMO_TRANSIT_EXCHANGES,
     ALL_DEMO_TRANSIT_LEGS,
     ALL_DEMO_TRANSIT_PREFIXES,
     ALL_DEMO_TRANSIT_RESOURCES,
     ALL_DEMO_TRANSIT_SUBINTERFACES,
+    ALL_DEMO_VIRTUAL_CIRCUIT_CHAINS,
     ALL_DEMO_VIRTUAL_CIRCUITS,
     OFFICE_NAMESPACE,
     deployment_environment,
@@ -343,6 +355,22 @@ query ($names: [String]) {
 }
 """
 
+# Every location with its reverse `circuits`: the same circuit__location edge as a circuit's `locations`.
+CIRCUIT_LOCATIONS_QUERY = """
+query {
+  TopologyConnectableLocation {
+    edges {
+      node {
+        id
+        __typename
+        name { value }
+        circuits { edges { node { id __typename } } }
+      }
+    }
+  }
+}
+"""
+
 
 def _rules(result: dict) -> list[dict]:
     """The SecurityPolicyRule nodes of a RULES_BY_* result, flattened."""
@@ -379,6 +407,52 @@ DCI_POOL_NETWORK = ipaddress.IPv6Network("fd00:2200::/40")
 _TRANSIT_PEER_NAMES = {"internet": "INTERNET", "management": "MANAGEMENT"}
 
 
+_ZONE_KIND = "TopologyColocationZone"
+_OFFICE_KIND = "TopologyCustomerOffice"
+
+
+def _label(location: dict[str, Any]) -> str:
+    """`FR2 (TopologyColocationZone)`."""
+    return f"{location['name']} ({location['kind']})"
+
+
+def _at(location: dict[str, Any], place_id: str | None) -> bool:
+    """Whether a location is the place ``place_id``, or a cage of it (a zone whose parent is that metro).
+
+    The place is where a device is deployed: a border leaf in its DC, a provider router in its region, an on-ramp
+    edge in its METRO, of which the circuit names one cage.
+    """
+    if not place_id:
+        return False
+    return location["id"] == place_id or (location["kind"] == _ZONE_KIND and location["parent_id"] == place_id)
+
+
+def _place(location: dict[str, Any]) -> tuple[str | None, str | None]:
+    """(id, name) of the facility a location stands for: a footprint's parent (DC, metro, region), else itself."""
+    if location["kind"] in ALL_DEMO_FOOTPRINT_KINDS:
+        return location["parent_id"], location["parent_name"]
+    return location["id"], location["name"]
+
+
+def _chain_joins(hops: list[list[dict[str, Any]]], near: dict[str, Any], far: dict[str, Any], internet: bool) -> bool:
+    """Whether an underlay (each hop's locations, in order) starts at ``near``'s facility and ends at ``far``'s.
+
+    An internet-backed overlay's underlay ends at an ISP instead: the far end is reached across the internet.
+    """
+    starts = any(_at(location, _place(near)[0]) for location in hops[0])
+    if internet:
+        return starts and any(location["kind"] == "TopologyExternalProviders" for location in hops[-1])
+    return starts and any(_at(location, _place(far)[0]) for location in hops[-1])
+
+
+def _deployments(circuit: dict[str, Any]) -> list[str]:
+    """`bl-dc101101 in DC10 (TopologyDataCenter)` for each end device of a circuit."""
+    return [
+        f"{device['device']} in {device['deployment_name']} ({device['deployment_kind']})"
+        for device in circuit["end_devices"]
+    ]
+
+
 def _exchange_ends(exchange_name: str, context_name: str) -> tuple[str, ...]:
     """The namespaces `{context}-{A}-{Z}` joins; namespace names may contain '-' (NON-PROD), so match known ones."""
     rest = exchange_name.removeprefix(f"{context_name}-")
@@ -406,13 +480,15 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify the physical underlay: type mix, provider, two locations and two distinct ends.
+        """Verify the physical underlay: type mix, provider, placement and two distinct ends.
 
         Every circuit is point-to-point, so exactly two locations and exactly
         two distinct ports (its capabilities, min and max count 2) are
         hard invariants, and a port is an end of at most one circuit — the
         SD-WAN offices' INET-<office> circuits, created concurrently, are where a
-        shared access port would show.
+        shared access port would show. Each location is a facility, and each
+        is where one end's device is deployed (_placement_errors); the ends the
+        data leaves out are the ones add_circuit derived (_derived_location_errors).
         """
         logging.info("=== %s - Step 1: Physical Circuits ===", SCENARIO_NAME)
 
@@ -437,8 +513,6 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             circuit_id = circuit["circuit_id"]
             if not circuit["provider"]:
                 errors.append(f"{circuit_id}: no provider")
-            if len(circuit["locations"]) != 2:
-                errors.append(f"{circuit_id}: terminates at {circuit['locations']}, expected exactly 2 locations")
             # The shared circuits (dark fibre, cross-connects, ISP transit) are
             # deliberately unowned; only a customer's own internet underlay
             # names an owner.
@@ -451,6 +525,8 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 errors.append(f"{circuit_id}: shared {circuit['circuit_type']} circuit owned by '{circuit['owner']}'")
 
         errors.extend(self._port_errors(physical))
+        errors.extend(self._placement_errors(physical))
+        errors.extend(self._derived_location_errors(physical))
         errors.extend(self._sdwan_underlay_errors(physical))
 
         assert not errors, f"30_all physical circuits are wrong on branch '{scenario_branch}':\n" + "\n".join(
@@ -472,6 +548,85 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
                 if end in circuit_of_port:
                     errors.append(f"{end} is an end of both {circuit_of_port[end]} and {circuit_id}")
                 circuit_of_port[end] = circuit_id
+        return errors
+
+    @staticmethod
+    def _placement_errors(physical: list[dict]) -> list[str]:
+        """Two distinct facilities, each the deployment of one end's device (a cage: a zone of its metro).
+
+        A facility is a TopologyFacility kind (DC, colocation zone, cloud region,
+        ISP, SaaS region, office); a pod, a metro or a footprint is never one, and an
+        office only ends its own internet access. The two ends' devices must account for
+        the two locations one-to-one: the border leaf's DC, the PE's ISP, the provider
+        router's region, and for the on-ramp edge (deployed to the metro) one cage of
+        that metro.
+        """
+        errors: list[str] = []
+        for circuit in sorted(physical, key=lambda c: c["circuit_id"]):
+            circuit_id = circuit["circuit_id"]
+            locations = circuit["location_nodes"]
+            if len({location["id"] for location in locations}) != 2:
+                errors.append(
+                    f"{circuit_id}: terminates at {circuit['locations']}, expected exactly 2 distinct locations"
+                )
+                continue
+            for location in locations:
+                if location["kind"] not in ALL_DEMO_FACILITY_KINDS:
+                    errors.append(
+                        f"{circuit_id}: ends at {_label(location)}, not a facility {sorted(ALL_DEMO_FACILITY_KINDS)}"
+                    )
+                elif location["kind"] == _OFFICE_KIND and circuit["circuit_type"] != "internet":
+                    errors.append(
+                        f"{circuit_id}: a {circuit['circuit_type']} circuit ends at office {location['name']}"
+                    )
+            devices = circuit["end_devices"]
+            if len(devices) != 2 or any(not device["deployment_id"] for device in devices):
+                errors.append(f"{circuit_id}: end devices {_deployments(circuit)}, expected 2, each with a deployment")
+                continue
+            (first, second), (left, right) = locations, devices
+            if not (
+                (_at(first, left["deployment_id"]) and _at(second, right["deployment_id"]))
+                or (_at(first, right["deployment_id"]) and _at(second, left["deployment_id"]))
+            ):
+                errors.append(
+                    f"{circuit_id}: locations {[_label(location) for location in locations]} are not where its ends "
+                    f"sit {_deployments(circuit)} (each end's deployment, or a cage of the edge's metro)"
+                )
+        return errors
+
+    @staticmethod
+    def _derived_location_errors(physical: list[dict]) -> list[str]:
+        """The data authors only what is not derivable; add_circuit wrote exactly the derived ends.
+
+        Derivable: an end device's deployment that is itself a facility (DC, ISP,
+        cloud region). The 30_all data must not list it, and the locations the branch
+        holds beyond the data's are exactly those. Circuits no data file declares
+        (INET-<office>, add_sdwan_edge) are written whole by their generator.
+        """
+        errors: list[str] = []
+        by_id = {circuit["circuit_id"]: circuit for circuit in physical}
+        for circuit_id, declared in sorted(ALL_DEMO_DECLARED_PHYSICAL_LOCATIONS.items()):
+            circuit = by_id.get(circuit_id)
+            if circuit is None:
+                errors.append(f"{circuit_id}: declared in 30_all but not on the branch")
+                continue
+            derivable = {
+                str(device["deployment_name"])
+                for device in circuit["end_devices"]
+                if device["deployment_kind"] in ALL_DEMO_FACILITY_KINDS
+            }
+            listed = sorted(set(declared) & derivable)
+            if listed:
+                errors.append(f"{circuit_id}: the data lists {listed}, which add_circuit derives from the end devices")
+            missing = sorted(set(declared) - set(circuit["locations"]))
+            if missing:
+                errors.append(f"{circuit_id}: declared location(s) {missing} are not on the branch")
+            written = set(circuit["locations"]) - set(declared)
+            if written != derivable - set(declared):
+                errors.append(
+                    f"{circuit_id}: the generator wrote {sorted(written)} beyond the data's {sorted(declared)}, "
+                    f"expected the end devices' facility deployments {sorted(derivable - set(declared))}"
+                )
         return errors
 
     @staticmethod
@@ -520,7 +675,7 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Verify each overlay circuit's underlay, ports and cloud termination."""
+        """Verify each overlay circuit's underlay, ports, cloud termination and placement (_virtual_placement_errors)."""
         logging.info("=== %s - Step 2: Virtual Circuits ===", SCENARIO_NAME)
 
         inventory = await fetch_interconnect_inventory(client=async_client_main, branch=scenario_branch)
@@ -566,11 +721,144 @@ class TestAllDemoInterconnects(TestInfrahubDockerWithClient):
             if circuit["cloud_endpoints"] != expected_cloud:
                 errors.append(f"{name}: cloud_endpoints {circuit['cloud_endpoints']}, expected {expected_cloud}")
 
+        errors.extend(self._virtual_placement_errors(inventory["virtual"], inventory["physical"]))
+
         assert not errors, f"30_all virtual circuits are wrong on branch '{scenario_branch}':\n" + "\n".join(
             f"  - {e}" for e in errors
         )
 
         logging.info("Virtual circuits verified: %d", len(by_name))
+
+    @staticmethod
+    def _virtual_placement_errors(virtual: list[dict], physical: list[dict]) -> list[str]:
+        """Where each overlay ends, and that its ordered underlay joins those two ends.
+
+        Owned: one end is a footprint (or the office) of the circuit's owner, whose
+        facility (a footprint's parent: its DC, metro or region; the office itself)
+        is where one of the circuit's end devices is deployed; the far end is a
+        provider facility (cloud/SaaS region, cage) or another footprint. Unowned
+        (a platform overlay): facilities at both ends. Nothing on a virtual circuit
+        is derived, so the branch holds exactly the declared locations.
+
+        The underlay (ALL_DEMO_VIRTUAL_CIRCUIT_CHAINS, tenant end first) is
+        contiguous: each hop shares a location with the next, the first hop reaches
+        the tenant end's facility (a metro through one of its cages) and the last the
+        far end. An internet-backed overlay's last hop ends at an ISP instead: past it,
+        the far end is reached across the internet.
+        """
+        errors: list[str] = []
+        physical_by_id = {circuit["circuit_id"]: circuit for circuit in physical}
+        for circuit in sorted(virtual, key=lambda c: c["name"]):
+            name = circuit["name"]
+            locations = circuit["location_nodes"]
+            if name in ALL_DEMO_DECLARED_VIRTUAL_LOCATIONS and circuit["locations"] != sorted(
+                ALL_DEMO_DECLARED_VIRTUAL_LOCATIONS[name]
+            ):
+                errors.append(
+                    f"{name}: locations {circuit['locations']}, declared "
+                    f"{sorted(ALL_DEMO_DECLARED_VIRTUAL_LOCATIONS[name])} (a virtual circuit derives none)"
+                )
+            if len({location["id"] for location in locations}) != 2:
+                errors.append(f"{name}: terminates at {circuit['locations']}, expected exactly 2 distinct locations")
+                continue
+
+            if circuit["owner_id"]:
+                tenant_ends = [
+                    location
+                    for location in locations
+                    if location["kind"] in ALL_DEMO_TENANT_LOCATION_KINDS
+                    and location["owner_id"] == circuit["owner_id"]
+                ]
+                if not tenant_ends:
+                    errors.append(
+                        f"{name}: owned by {circuit['owner']}, but neither end {[_label(loc) for loc in locations]} "
+                        "is a footprint or office of that owner"
+                    )
+                    continue
+                near = tenant_ends[0]
+                far = next(location for location in locations if location["id"] != near["id"])
+                if far["kind"] not in ALL_DEMO_PROVIDER_FACILITY_KINDS | ALL_DEMO_TENANT_LOCATION_KINDS:
+                    errors.append(f"{name}: far end {_label(far)} is neither a provider facility nor a footprint")
+                place_id, place_name = _place(near)
+                if not place_id or place_id not in {device["deployment_id"] for device in circuit["end_devices"]}:
+                    errors.append(
+                        f"{name}: tenant end {_label(near)} sits in {place_name}, where none of its end devices "
+                        f"{_deployments(circuit)} is deployed"
+                    )
+                orientations = [(near, far)]
+            else:
+                strays = [_label(location) for location in locations if location["kind"] not in ALL_DEMO_FACILITY_KINDS]
+                if strays:
+                    errors.append(f"{name}: unowned, so both ends must be facilities, but {strays} is not")
+                orientations = [(locations[0], locations[1]), (locations[1], locations[0])]
+
+            chain = ALL_DEMO_VIRTUAL_CIRCUIT_CHAINS.get(name, ())
+            missing = [circuit_id for circuit_id in chain if circuit_id not in physical_by_id]
+            if not chain or missing:
+                errors.append(f"{name}: underlay {list(chain)} is empty or {missing} are not on the branch")
+                continue
+            hops = [physical_by_id[circuit_id]["location_nodes"] for circuit_id in chain]
+            for index in range(1, len(hops)):
+                if not {location["id"] for location in hops[index - 1]} & {location["id"] for location in hops[index]}:
+                    errors.append(f"{name}: underlay hops {chain[index - 1]} and {chain[index]} share no location")
+            internet = circuit["transport_mode"] == "internet_backed"
+            if not any(_chain_joins(hops, near, far, internet) for near, far in orientations):
+                errors.append(
+                    f"{name}: underlay {list(chain)} does not run from {_label(orientations[0][0])} to "
+                    f"{'an ISP' if internet else _label(orientations[0][1])}"
+                )
+        return errors
+
+    @pytest.mark.order(395)
+    @pytest.mark.dependency(scope="session", depends=["all_demo_inventory"])
+    @pytest.mark.asyncio
+    async def test_02b_verify_location_circuits(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """Verify every location's `circuits` lists exactly the circuits that name it, physical and virtual.
+
+        `circuits` is the reverse of a circuit's `locations` (one identifier,
+        circuit__location), so the two directions must agree for every location on
+        the branch: a circuit missing from its location's list, or a location listing
+        a circuit that does not name it, is a schema or generator write that took
+        only one side.
+        """
+        logging.info("=== %s - Step 2b: Location circuits ===", SCENARIO_NAME)
+
+        inventory = await fetch_interconnect_inventory(client=async_client_main, branch=scenario_branch)
+        result = await async_client_main.execute_graphql(query=CIRCUIT_LOCATIONS_QUERY, branch_name=scenario_branch)
+        cleaned = clean_data(result)
+
+        names: dict[str, str] = {}
+        forward: dict[str, set[str]] = {}  # location id -> the circuits naming it
+        for circuit in [*inventory["physical"], *inventory["virtual"]]:
+            names[circuit["id"]] = circuit.get("circuit_id") or circuit["name"]
+            for location in circuit["location_nodes"]:
+                forward.setdefault(location["id"], set()).add(circuit["id"])
+        reverse: dict[str, set[str]] = {}  # location id -> its `circuits`
+        location_names: dict[str, str] = {}
+        for location in cleaned.get("TopologyConnectableLocation") or []:
+            location_names[str(location["id"])] = f"{location['name']} ({location['typename']})"
+            reverse[str(location["id"])] = {str(circuit["id"]) for circuit in location.get("circuits") or []}
+
+        errors: list[str] = []
+        for location_id in sorted(set(forward) | set(reverse), key=lambda i: location_names.get(i, i)):
+            named_by, listed = forward.get(location_id, set()), reverse.get(location_id, set())
+            if named_by != listed:
+                label = location_names.get(location_id, location_id)
+                errors.append(
+                    f"{label}: `circuits` lacks {sorted(names.get(c, c) for c in named_by - listed)} and lists "
+                    f"{sorted(names.get(c, c) for c in listed - named_by)} that do not name it"
+                )
+        if not forward:
+            errors.append("no circuit names any location")
+
+        assert not errors, f"30_all location circuits are wrong on branch '{scenario_branch}':\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
+        logging.info("Location circuits verified: %d location(s) with circuits", len(forward))
 
     # ------------------------------------------------------------------
     # Tenant-scoped services

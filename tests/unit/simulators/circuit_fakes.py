@@ -21,9 +21,28 @@ V4_POOL_ID = "pool-dci-v4"
 PREFIX_ID = "prefix-dci-1"
 
 
+CIRCUIT_ID = "circ-df10"
+
+
 def kind_name(kind: Any) -> str:
     """Protocol class or kind string -> kind name."""
     return kind if isinstance(kind, str) else kind.__name__
+
+
+def place(kind: str, name: str, place_id: str | None = None) -> dict[str, Any]:
+    """A location or deployment node, as the circuit query selects it (raw GraphQL)."""
+    return {"id": place_id or f"loc-{name}", "__typename": kind, "display_label": name}
+
+
+def dc_place(dc: str = "DC10") -> dict[str, Any]:
+    """The TopologyDataCenter a dc= interface's device is deployed in (same id)."""
+    return place("TopologyDataCenter", dc, f"dep-{dc}")
+
+
+CAGE = place("TopologyColocationZone", "FR2")
+METRO = place("TopologyColocationMetro", "FR", "dep-metro")
+ISP = place("TopologyExternalProviders", "ORANGE-FR")
+REGION = place("TopologyCloudRegion", "eu-central-1")
 
 
 def bgp_process(device: str, role: str) -> dict[str, Any]:
@@ -45,18 +64,20 @@ def interface(
     dc: str | None = None,
     underlay: str = "ipv6",
     roles: tuple[str, ...] = ("underlay", "overlay"),
+    deployment: dict[str, Any] | None = None,
+    no_deployment: bool = False,
 ) -> dict[str, Any]:
-    """One endpoint interface, as the circuit queries select it (raw GraphQL)."""
-    deployment = (
-        {
-            "id": f"dep-{dc}",
-            "__typename": "TopologyDataCenter",
-            "name": {"value": dc},
-            "underlay_protocol": {"value": underlay},
-        }
-        if dc
-        else {"id": "dep-metro", "__typename": "TopologyColocationMetro"}
-    )
+    """One endpoint interface, as the circuit queries select it (raw GraphQL).
+
+    The device is deployed in DC ``dc`` when given, else in ``deployment``
+    (default: the colocation metro); ``no_deployment`` leaves it unset.
+    """
+    if dc:
+        deployment = {**dc_place(dc), "name": {"value": dc}, "underlay_protocol": {"value": underlay}}
+    elif deployment is None:
+        deployment = METRO
+    if no_deployment:
+        deployment = None
     capabilities = [bgp_process(device, role) for role in roles] + [
         {"id": f"{device}-ospf", "__typename": "ManagedOSPF"}
     ]
@@ -90,20 +111,24 @@ def physical_payload(
     status: str = "active",
     ends: list[dict[str, Any]] | None = None,
     circuit_id: str = "DF-DC10-EQXFR2",
+    locations: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """A physical circuit payload: its ends are one capabilities list (default: DC border leaf, cage edge)."""
+    """A physical circuit payload: its ends are one capabilities list (default: DC border leaf, cage edge),
+    its locations already complete by default (the authored cage and the DC derived on an earlier run)."""
     ends = [dc_border_leaf(), cage_edge()] if ends is None else ends
+    locations = [CAGE, dc_place()] if locations is None else locations
     return {
         "TopologyPhysicalCircuit": {
             "edges": [
                 {
                     "node": {
-                        "id": "circ-df10",
+                        "id": CIRCUIT_ID,
                         "name": {"value": circuit_id},
                         "circuit_id": {"value": circuit_id},
                         "circuit_type": {"value": "dark_fiber"},
                         "status": {"value": status},
                         "peering_role": {"value": role},
+                        "locations": {"edges": [{"node": loc} for loc in locations]},
                         "capabilities": {"edges": [{"node": i} for i in ends]},
                     }
                 }
@@ -210,6 +235,20 @@ class FakeClient:
         self.interfaces[iface_id] = node
         return node
 
+    def circuit_node(self, circuit_id: str) -> MagicMock:
+        """A fetched circuit whose add_relationships() is logged as a ("relate", id, kwargs) write."""
+        node = self._node(circuit_id)
+
+        async def _relate(**kwargs: Any) -> None:
+            self.writes.append(("relate", circuit_id, kwargs))
+
+        node.add_relationships = AsyncMock(side_effect=_relate)
+        return node
+
+    def related(self) -> list[tuple[str, dict[str, Any]]]:
+        """(node id, kwargs) of every add_relationships() call, in order."""
+        return [(label, kwargs) for action, label, kwargs in self.writes if action == "relate"]
+
     async def get(self, kind: Any, raise_when_missing: bool = True, **kwargs: Any) -> Any:
         name = kind_name(kind)
         self.get_calls.append((name, kwargs))
@@ -222,6 +261,8 @@ class FakeClient:
         if name in ("DcimPhysicalInterface", "DcimVirtualInterface"):
             iface_id = kwargs["id"]
             return self.interfaces.get(iface_id) or self.interface_node(iface_id)
+        if name == "TopologyPhysicalCircuit":
+            return self.circuit_node(kwargs["id"])
         raise AssertionError(f"unexpected get({name}, {kwargs})")
 
     async def filters(self, kind: Any, **kwargs: Any) -> list[Any]:

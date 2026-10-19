@@ -1065,13 +1065,22 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
     """Fetch the physical and virtual circuit layer of a branch.
 
     Returns:
-        {"physical": [{"circuit_id", "circuit_type", "status", "provider",
-                       "owner", "locations": [str],
+        {"physical": [{"id", "circuit_id", "circuit_type", "status", "provider",
+                       "owner", "owner_id", "locations": [str],
+                       "location_nodes": [location], "end_devices": [device],
                        "end_ids": [str], "ends": [(device, interface)]}],
-         "virtual": [{"name", "link_type", "transport_mode", "owner",
-                      "locations": [str], "physical_circuits": [str],
+         "virtual": [{"id", "name", "link_type", "transport_mode", "owner",
+                      "owner_id", "locations": [str], "location_nodes": [location],
+                      "end_devices": [device], "physical_circuits": [str],
                       "interfaces": [(device, interface)],
                       "cloud_endpoints": [str]}]}
+
+        A location is {"id", "kind", "name", "parent_id", "parent_kind",
+        "parent_name", "owner_id"}: the parent of a colocation zone (its
+        metro) or of a TopologyCustomer footprint (its facility), the owner
+        of a footprint or an office, None where the kind has none. An end
+        device is {"device", "device_id", "deployment_id", "deployment_kind",
+        "deployment_name"}, one per circuit end, in end order.
     """
     client.default_branch = branch
     await asyncio.sleep(DATA_PROPAGATION_DELAY)
@@ -1081,12 +1090,16 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
 
     physical: list[dict[str, Any]] = [
         {
+            "id": str(circuit.get("id") or ""),
             "circuit_id": str(circuit.get("circuit_id") or ""),
             "circuit_type": str(circuit.get("circuit_type") or ""),
             "status": str(circuit.get("status") or ""),
             "provider": (circuit.get("provider") or {}).get("name"),
             "owner": (circuit.get("owner") or {}).get("name"),
+            "owner_id": (circuit.get("owner") or {}).get("id"),
             "locations": sorted(str(loc.get("name") or "") for loc in circuit.get("locations", []) or []),
+            "location_nodes": _circuit_locations(circuit),
+            "end_devices": _circuit_end_devices(circuit),
             "end_ids": sorted(str(end.get("id") or "") for end in circuit.get("capabilities", []) or []),
             "ends": sorted(
                 (str((end.get("device") or {}).get("name") or ""), str(end.get("name") or ""))
@@ -1098,11 +1111,15 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
 
     virtual: list[dict[str, Any]] = [
         {
+            "id": str(circuit.get("id") or ""),
             "name": str(circuit.get("name") or ""),
             "link_type": str(circuit.get("link_type") or ""),
             "transport_mode": str(circuit.get("transport_mode") or ""),
             "owner": (circuit.get("owner") or {}).get("name"),
+            "owner_id": (circuit.get("owner") or {}).get("id"),
             "locations": sorted(str(loc.get("name") or "") for loc in circuit.get("locations", []) or []),
+            "location_nodes": _circuit_locations(circuit),
+            "end_devices": _circuit_end_devices(circuit),
             "physical_circuits": sorted(
                 str(phys.get("circuit_id") or "") for phys in circuit.get("physical_circuits", []) or []
             ),
@@ -1145,6 +1162,44 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
             circuit["cloud_endpoints"],
         )
     return {"physical": physical, "virtual": virtual}
+
+
+def _circuit_locations(circuit: dict[str, Any]) -> list[dict[str, Any]]:
+    """The cleaned CircuitLocation nodes of one circuit, flattened (see fetch_interconnect_inventory)."""
+    locations = []
+    for location in circuit.get("locations", []) or []:
+        parent = location.get("parent") or {}
+        owner = location.get("owner") or {}
+        locations.append(
+            {
+                "id": str(location.get("id") or ""),
+                "kind": str(location.get("typename") or ""),
+                "name": str(location.get("name") or ""),
+                "parent_id": parent.get("id"),
+                "parent_kind": parent.get("typename"),
+                "parent_name": parent.get("name"),
+                "owner_id": owner.get("id"),
+            }
+        )
+    return sorted(locations, key=lambda location: location["name"])
+
+
+def _circuit_end_devices(circuit: dict[str, Any]) -> list[dict[str, Any]]:
+    """The device behind each end (capability) of one circuit, with its deployment."""
+    devices = []
+    for end in circuit.get("capabilities", []) or []:
+        device = end.get("device") or {}
+        deployment = device.get("deployment") or {}
+        devices.append(
+            {
+                "device": str(device.get("name") or ""),
+                "device_id": device.get("id"),
+                "deployment_id": deployment.get("id"),
+                "deployment_kind": deployment.get("typename"),
+                "deployment_name": deployment.get("name"),
+            }
+        )
+    return devices
 
 
 def _deployed_dc_names(devices: list[dict[str, Any]] | None) -> list[str]:
