@@ -3,7 +3,7 @@
 One implementation each, shared by checks/reference_fabric.py, checks/segment_security.py,
 the segmentation_matrix artifact (transforms/topology/segmentation_matrix.py), the
 group tag helper (generators/helpers/security_tag.py) and the contract builder
-(transforms/helpers/group_policy.py):
+(transforms/helpers/group_policy/):
 
 - ``profiles_by_platform``: platform -> its one usable DcimGroupPolicyProfile row,
   and why the other rows cannot be used;
@@ -110,7 +110,7 @@ def tag_pool(rows: Iterable[dict[str, Any]]) -> tuple[dict[str, Any] | None, str
 
 
 RESERVED_GROUPS = ("unclassified", "unaware")
-"""The reserved groups a profile row may name (``<name>_group_id``), read by transforms/helpers/group_policy.py."""
+"""The reserved groups a profile row may name (``<name>_group_id``), read by transforms/helpers/group_policy/."""
 
 
 def reserved_groups(profiles: Profiles, kind: str) -> dict[str, int | None]:

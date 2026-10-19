@@ -176,8 +176,7 @@ nodes:
       # with no racks of ours in it, `physical` is cage space we rent and rack.
       # The metro above carries an attribute of the same name that does gate its
       # declared fabric_templates — per-tier deployment_type with a tier-specific
-      # meaning, the same way TopologyPod's (middle_rack/tor/mixed) has nothing
-      # to do with this one.
+      # meaning.
       - name: deployment_type
         kind: Dropdown
         label: Strategy

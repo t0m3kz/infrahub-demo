@@ -151,7 +151,7 @@ def is_routed_tenant_segment(segment: dict[str, Any]) -> bool:
 
     The one definition of a tenant SVI in a shared VRF: the L0 SVI protection
     check and the segment group tags (generators/helpers/security_tag.py,
-    transforms/helpers/group_policy.py) read it. ``segment`` is cleaned query
+    transforms/helpers/group_policy/) read it. ``segment`` is cleaned query
     data with ``typename``, ``gateway.ip_prefix.ip_namespace.namespace_type``
     and ``security_zone.name``.
     """

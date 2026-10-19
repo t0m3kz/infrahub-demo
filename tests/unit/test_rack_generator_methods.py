@@ -37,7 +37,6 @@ def _build_gen() -> Any:
         "spine_interface_sorting_method": "bottom_up",
         "loopback_pool": {"id": "lo-pool", "name": "lo"},
         "prefix_pool": {"id": "p2p-pool", "name": "p2p"},
-        "deployment_type": "mixed",
         "layout": "S_MIXED",
         "fabric_templates": [
             {
@@ -100,23 +99,20 @@ class TestRackGeneratorMethods:
         gen = _build_gen()
 
         gen.data["row_index"] = 3
-        gen.data["pod"]["deployment_type"] = "mixed"
         gen.data["pod"]["layout"] = "S_MIXED"  # compute_racks_per_row = 8
         assert gen._planned_previous_row_rack_slots() == 16
 
         gen.data["row_index"] = 3
-        gen.data["pod"]["deployment_type"] = "tor"
         gen.data["pod"]["layout"] = "S_TOR"  # compute_racks_per_row = 8
         assert gen._planned_previous_row_rack_slots() == 16
 
         gen.data["row_index"] = 3
-        gen.data["pod"]["deployment_type"] = "middle_rack"
+        gen.data["pod"]["layout"] = "S_MIDDLE"
         assert gen._planned_previous_row_rack_slots() == 0
 
     def test_validate_profile_capacity_limits_accepts_valid_network_rack(self) -> None:
         gen = _build_gen()
         gen.data["pod"]["layout"] = "S_MIXED"
-        gen.data["pod"]["deployment_type"] = "mixed"
         gen.data["rack_type"] = "network"
         gen.data["row_index"] = 1
         gen.data["index"] = 1
@@ -131,7 +127,6 @@ class TestRackGeneratorMethods:
     def test_validate_profile_capacity_limits_rejects_excess_tors_per_compute_rack(self) -> None:
         gen = _build_gen()
         gen.data["pod"]["layout"] = "S_MIXED"  # max_tors_per_compute_rack = 2
-        gen.data["pod"]["deployment_type"] = "mixed"
         gen.data["rack_type"] = "compute"
         gen.data["tors"] = [
             {"role": "tor", "quantity": 3, "template": {"id": "tmpl-tor"}},
@@ -283,7 +278,6 @@ class TestRackGeneratorMethods:
     async def test_generate_tors_uses_planned_slots_without_live_sibling_query(self) -> None:
         gen = _build_gen()
         gen.data["row_index"] = 2
-        gen.data["pod"]["deployment_type"] = "mixed"
         gen.data["pod"]["layout"] = "S_MIXED"  # compute_racks_per_row = 8
         gen._spine_device_names = ["spine-01"]
 

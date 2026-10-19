@@ -73,7 +73,6 @@ fragment PodFields on TopologyPod {
   index {
     value
   }
-  deployment_type { value }
   layout { value }
   parent {
     node {

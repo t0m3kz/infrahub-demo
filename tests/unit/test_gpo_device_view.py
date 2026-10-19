@@ -1,4 +1,4 @@
-"""Unit tests for the NX-OS VXLAN GPO device view (transforms/helpers/group_policy.py _vxlan_gpo_build).
+"""Unit tests for the NX-OS VXLAN GPO device view (transforms/helpers/group_policy/ _vxlan_gpo_build).
 
 The fleet is the smoke fixture's (tests/smoke/generate_config_fixtures.py ``_gpo_fleet_roots``): DC10 with a
 leaf, an access leaf and a border leaf in the NX-OS row, a legacy DC12, NONPROD (fully classifiable by VLAN,
