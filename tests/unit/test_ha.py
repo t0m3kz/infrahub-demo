@@ -103,6 +103,24 @@ class TestGetHaDomainExtraction:
         assert result is not None
         assert result["preempt"] is False
 
+    def test_peer_management_ip_is_the_other_members_primary_address(self) -> None:
+        members = [
+            {"name": "lb-01", "primary_address": {"address": "192.168.2.1/32"}},
+            {"name": "lb-02", "primary_address": {"address": "192.168.2.2/32"}},
+        ]
+        cap = {"typename": "ManagedLoadbalancerHA", "name": "lb-ha", "capabilities": members}
+        for device, peer_ip in (("lb-01", "192.168.2.2"), ("lb-02", "192.168.2.1")):
+            result = get_ha([cap], device_name=device)
+            assert result is not None
+            assert result["peer_management_ip"] == peer_ip
+
+    def test_peer_management_ip_is_none_without_an_address_or_membership(self) -> None:
+        cap = {"typename": "ManagedLoadbalancerHA", "name": "lb-ha", "capabilities": [{"name": "a"}, {"name": "b"}]}
+        for device in ("a", "other"):
+            result = get_ha([cap], device_name=device)
+            assert result is not None
+            assert result["peer_management_ip"] is None
+
     def test_returns_ha_timer(self) -> None:
         result = get_ha([_ha_cap(ha_timer="aggressive")])
         assert result is not None

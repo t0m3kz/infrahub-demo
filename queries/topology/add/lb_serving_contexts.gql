@@ -1,0 +1,25 @@
+# The serving load balancer context of customer DC deployments, the context
+# selection of application.gql's AppInstanceFields. Re-read by the load
+# balancer VIP producer (generators/lb_vip.py) while add_customer_deployment_dc
+# of the same load is still boarding the deployment: it links the context
+# before it allocates the VIP range and wires the leg. Read by id from Python,
+# not a generator definition's own query.
+query lb_serving_contexts($ids: [ID!]!) {
+  TopologyCustomerDC(ids: $ids) {
+    edges {
+      node {
+        id
+        serving_loadbalancer_context {
+          node {
+            id
+            name { value }
+            vip_prefix { node { id ip_namespace { node { id } } } }
+            capabilities {
+              edges { node { __typename ... on DcimVirtualInterface { ip_address { node { ip_prefix { node { id } } } } } } }
+            }
+          }
+        }
+      }
+    }
+  }
+}

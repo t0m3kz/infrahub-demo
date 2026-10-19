@@ -1,8 +1,9 @@
 """Unit tests for CustomerDeploymentDCExchangeGenerator (generators/topology/customer_dc.py).
 
-Covers FirewallContext provisioning (shared + dedicated) and its transit legs
-(tests/unit/test_customer_dc_transit.py), dedicated load-balancer provisioning, and the _all_controllers wiring that lets
-create_devices() route dedicated FW/LB pairs to an existing ManagedController.
+Covers FirewallContext and LoadbalancerContext target resolution (shared +
+dedicated; their legs are tests/unit/test_customer_dc_transit.py), the dedicated
+pair step, and the _all_controllers wiring that lets create_devices() route
+dedicated FW/LB pairs to an existing ManagedController.
 TopologyCustomerDC never has a circuit of its own (DC customers reach
 everything over the fabric's own L2 domain), so there is no exchange-gateway
 logic here — see test_customer_colocation.py/test_customer_cloud.py/
@@ -17,6 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.common import CommonGenerator
+from generators.firewall_context import FIREWALL_CONTEXT, LOADBALANCER_CONTEXT
 from generators.topology.customer_dc import CustomerDeploymentDCExchangeGenerator
 
 _T = TypeVar("_T", bound=CommonGenerator)
@@ -290,7 +292,8 @@ class TestFirewallContextProvisioning:
         gen._ensure_transit_legs.assert_awaited_once()
         kwargs = gen._ensure_transit_legs.call_args.kwargs
         target = kwargs["target"]
-        assert target.context_name == f"{cluster.name.value}-shared"
+        assert target.spec is FIREWALL_CONTEXT
+        assert target.context_name("PROD") == target.context_name("NON-PROD") == f"{cluster.name.value}-shared"
         assert (target.cluster_id, target.tenant_id, target.track) == (cluster.id, None, False)
         assert kwargs["customer"]["environment"] == "p"
 
@@ -306,9 +309,9 @@ class TestFirewallContextProvisioning:
         await gen.generate(_dc_payload_with_parent(customer_id="cust-1", dedicated_firewall=True))
 
         target = gen._ensure_transit_legs.call_args.kwargs["target"]
-        assert target.context_name == f"{dedicated_cluster.name.value}-context"
+        assert target.context_name("PROD") == f"{dedicated_cluster.name.value}-context"
         assert (target.cluster_id, target.tenant_id, target.track) == ("dedicated-cluster-1", "cust-1", True)
-        assert target.fw_devices == dedicated_fws
+        assert target.devices == dedicated_fws
 
     @pytest.mark.asyncio
     async def test_virtual_instances_on_the_parent_are_ignored(self) -> None:
@@ -354,23 +357,27 @@ class TestFirewallContextProvisioning:
             gen._ensure_transit_legs.assert_awaited_once()
 
 
-class TestLinkServingFirewallContext:
-    """The deployment records the context its segments terminate on."""
+class TestLinkServingContext:
+    """The deployment records the context of each kind that serves it."""
 
     @pytest.mark.asyncio
-    async def test_link_is_saved_untracked(self) -> None:
+    @pytest.mark.parametrize(
+        ("spec", "field"),
+        [(FIREWALL_CONTEXT, "serving_firewall_context"), (LOADBALANCER_CONTEXT, "serving_loadbalancer_context")],
+    )
+    async def test_link_is_saved_untracked(self, spec: Any, field: str) -> None:
         """The deployment is the generator's target; tracking it would let
         delete_unused_nodes remove it on a later run."""
         gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
         deployment = MagicMock()
-        deployment.serving_firewall_context.id = None
+        getattr(deployment, field).id = None
         deployment.save = AsyncMock()
         gen.client.get = AsyncMock(return_value=deployment)
 
-        await gen.link_serving_firewall_context(kind="TopologyCustomerDC", customer_id="cust-1", context_id="ctx-1")
+        await gen.link_serving_context(spec, customer_id="cust-1", context_id="ctx-1")
 
         assert gen.client.get.call_args.kwargs == {"kind": "TopologyCustomerDC", "id": "cust-1"}
-        assert deployment.serving_firewall_context == "ctx-1"
+        assert getattr(deployment, field) == "ctx-1"
         deployment.save.assert_awaited_once_with(update_group_context=False)
 
     @pytest.mark.asyncio
@@ -382,7 +389,7 @@ class TestLinkServingFirewallContext:
         deployment.save = AsyncMock()
         gen.client.get = AsyncMock(return_value=deployment)
 
-        await gen.link_serving_firewall_context(kind="TopologyCustomerDC", customer_id="cust-1", context_id="ctx-1")
+        await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-1")
 
         deployment.save.assert_not_awaited()
 
@@ -392,7 +399,7 @@ class TestLinkServingFirewallContext:
         gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
         gen.client.get = AsyncMock(side_effect=RuntimeError("boom"))
 
-        await gen.link_serving_firewall_context(kind="TopologyCustomerDC", customer_id="cust-1", context_id="ctx-1")
+        await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-1")
 
         gen.logger.error.assert_called_once()
 
@@ -535,12 +542,12 @@ class TestEnsureDedicatedDevicePair:
         assert gen.create_devices.await_count == 2
         gen._ensure_ha_pairs.assert_awaited_once()
         assert gen._ensure_ha_pairs.call_args.kwargs["ha_kind"] == "ManagedFirewallHA"
-        assert gen._ensure_ha_pairs.call_args.kwargs["tenant_id"] is None
+        assert "tenant_id" not in gen._ensure_ha_pairs.call_args.kwargs
 
     @pytest.mark.asyncio
-    async def test_tenant_id_forwarded_to_ensure_ha_pairs(self) -> None:
-        """tenant_id (set by the dedicated load-balancer path) reaches
-        _ensure_ha_pairs so ManagedLoadbalancerHA.tenant gets recorded."""
+    async def test_load_balancer_pair_uses_the_lb_template_and_ha_kind(self) -> None:
+        """A dedicated load-balancer pair pairs into ManagedLoadbalancerHA; the
+        tenant goes on its dedicated context, never on the HA domain."""
         gen = self._make_gen()
         physical = self._physical_pair(platform="f5_tmos")
         template_obj = MagicMock(id="tmpl-1")
@@ -568,68 +575,115 @@ class TestEnsureDedicatedDevicePair:
             parent_name="DC10",
             dc_size="M",
             customer_name="C005",
-            tenant_id="cust-1",
         )
 
-        assert gen._ensure_ha_pairs.call_args.kwargs["tenant_id"] == "cust-1"
+        assert (
+            gen.client.filters.call_args_list[0].kwargs["template_name__value"] == "BIG-IP-VE_LOAD_BALANCER_CUSTOMER_M"
+        )
+        assert gen._ensure_ha_pairs.call_args.kwargs["ha_kind"] == "ManagedLoadbalancerHA"
+        assert "tenant_id" not in gen._ensure_ha_pairs.call_args.kwargs
 
 
-class TestEnsureDedicatedLoadbalancer:
-    """dedicated_loadbalancer is independent of dedicated_firewall/firewall
-    devices — a customer can request one without the other, or without any
-    firewalls on the parent DC at all."""
+def _lb_device(*, id: str, name: str) -> dict:
+    return {"id": id, "name": name, "kind": "DcimPhysicalDevice", "platform": {"name": "f5_tmos"}}
+
+
+class TestLoadbalancerContextTarget:
+    """The LoadbalancerContext run is independent of the firewall one — a
+    customer gets one on a DC with load balancers and no firewalls, and
+    dedicated_loadbalancer without dedicated_firewall."""
+
+    _LBS = [_lb_device(id="lb-1", name="DC10-LB1"), _lb_device(id="lb-2", name="DC10-LB2")]
+
+    def _make_gen(self) -> Any:
+        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        cluster = MagicMock(id="lb-cluster-1")
+        cluster.name.value = "DC10-LB1-LB2-ha"
+        cluster.capabilities.peers = [MagicMock(id="lb-1"), MagicMock(id="lb-2")]
+        gen.client.filters = AsyncMock(return_value=[cluster])
+        gen._ensure_transit_legs = AsyncMock()
+        return gen
+
+    def _lb_targets(self, gen: Any) -> list[Any]:
+        targets = [call.kwargs["target"] for call in gen._ensure_transit_legs.await_args_list]
+        return [target for target in targets if target.spec is LOADBALANCER_CONTEXT]
 
     @pytest.mark.asyncio
-    async def test_not_requested_is_noop(self) -> None:
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
-        gen._ensure_dedicated_device_pair = AsyncMock()
+    async def test_shared_context_per_cluster_and_tenant_namespace(self) -> None:
+        gen = self._make_gen()
 
-        await gen.generate(_dc_payload_with_parent(dedicated_loadbalancer=False))
+        await gen.generate(_dc_payload_with_parent(fw_devices=[], lb_devices=self._LBS))
 
-        gen._ensure_dedicated_device_pair.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_no_loadbalancer_devices_is_noop(self) -> None:
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
-        gen._ensure_dedicated_device_pair = AsyncMock()
-
-        await gen.generate(_dc_payload_with_parent(dedicated_loadbalancer=True, lb_devices=[]))
-
-        gen._ensure_dedicated_device_pair.assert_not_called()
+        (target,) = self._lb_targets(gen)
+        assert (target.cluster_id, target.tenant_id, target.track) == ("lb-cluster-1", None, False)
+        assert target.context_name("PROD") == "DC10-LB1-LB2-ha-PROD"
+        assert target.context_name("NON-PROD") == "DC10-LB1-LB2-ha-NON-PROD"
+        assert gen.client.filters.call_args.kwargs["capabilities__ids"] == ["lb-1"]
+        assert gen.client.filters.call_args.kwargs["kind"].__name__ == "ManagedLoadbalancerHA"
 
     @pytest.mark.asyncio
-    async def test_requested_with_devices_calls_ensure_dedicated_device_pair(self) -> None:
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
-        gen._ensure_dedicated_device_pair = AsyncMock()
-        lb1 = {"id": "lb-1", "name": "DC10-LB1", "kind": "DcimPhysicalDevice", "platform": {"name": "f5_tmos"}}
-        lb2 = {"id": "lb-2", "name": "DC10-LB2", "kind": "DcimPhysicalDevice", "platform": {"name": "f5_tmos"}}
+    async def test_no_loadbalancer_devices_is_skipped_with_an_info(self) -> None:
+        gen = self._make_gen()
 
-        await gen.generate(_dc_payload_with_parent(dedicated_loadbalancer=True, lb_devices=[lb1, lb2]))
+        await gen.generate(_dc_payload_with_parent(fw_devices=[], dedicated_loadbalancer=True, lb_devices=[]))
+
+        gen._ensure_transit_legs.assert_not_awaited()
+        gen.client.filters.assert_not_called()
+        gen.logger.error.assert_not_called()
+        assert any("no load-balancer devices" in call.args[0] for call in gen.logger.info.call_args_list)
+
+    @pytest.mark.asyncio
+    async def test_dedicated_request_builds_the_pair_and_a_tracked_tenant_context(self) -> None:
+        gen = self._make_gen()
+        dedicated_cluster = MagicMock(id="ded-lb-cluster")
+        dedicated_cluster.name.value = "DC10-LB1-C005-p-dedicated-DC10-LB2-C005-p-dedicated-ha"
+        dedicated_lbs = [MagicMock(id="virt-1"), MagicMock(id="virt-2")]
+        gen._ensure_dedicated_device_pair = AsyncMock(return_value=(dedicated_cluster, dedicated_lbs))
+
+        await gen.generate(_dc_payload_with_parent(fw_devices=[], dedicated_loadbalancer=True, lb_devices=self._LBS))
 
         gen._ensure_dedicated_device_pair.assert_awaited_once_with(
             role="load-balancer",
             ha_kind="ManagedLoadbalancerHA",
-            physical_devices=[lb1, lb2],
+            physical_devices=self._LBS,
             parent_id="dc10-id",
             parent_name="DC10",
             dc_size="M",
             customer_name="C005-p",
-            tenant_id="cust-1",
         )
+        (target,) = self._lb_targets(gen)
+        assert (target.cluster_id, target.tenant_id, target.track) == ("ded-lb-cluster", "cust-1", True)
+        assert target.context_name("PROD") == f"{dedicated_cluster.name.value}-context"
+        assert target.devices == dedicated_lbs
 
     @pytest.mark.asyncio
-    async def test_independent_of_firewall_devices(self) -> None:
-        """dedicated_loadbalancer must run even when the DC has zero firewall
-        devices — _resolve_context_target's own early-return must not gate it."""
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
-        gen._ensure_dedicated_device_pair = AsyncMock()
-        lb1 = {"id": "lb-1", "name": "DC10-LB1", "kind": "DcimPhysicalDevice", "platform": {"name": "f5_tmos"}}
-        lb2 = {"id": "lb-2", "name": "DC10-LB2", "kind": "DcimPhysicalDevice", "platform": {"name": "f5_tmos"}}
+    async def test_dedicated_flags_are_independent(self) -> None:
+        """dedicated_firewall alone leaves the LB context shared."""
+        gen = self._make_gen()
+        lb_cluster = gen.client.filters.return_value[0]
+        fw_cluster = MagicMock(id="fw-cluster-1")
+        fw_cluster.name.value = "DC10-FW1-ha"
+        fw_cluster.capabilities.peers = [MagicMock(id="fw-1")]
+        gen.client.filters = AsyncMock(
+            side_effect=lambda **kwargs: [fw_cluster if kwargs["kind"].__name__ == "ManagedFirewallHA" else lb_cluster]
+        )
+        gen._ensure_dedicated_device_pair = AsyncMock(return_value=None)
 
-        await gen.generate(_dc_payload_with_parent(fw_devices=[], dedicated_loadbalancer=True, lb_devices=[lb1, lb2]))
+        await gen.generate(_dc_payload_with_parent(dedicated_firewall=True, lb_devices=self._LBS))
+
+        assert [call.kwargs["role"] for call in gen._ensure_dedicated_device_pair.await_args_list] == ["firewall"]
+        (target,) = self._lb_targets(gen)
+        assert target.track is False
+
+    @pytest.mark.asyncio
+    async def test_dedicated_request_without_a_pair_provisions_no_lb_context(self) -> None:
+        gen = self._make_gen()
+        gen._ensure_dedicated_device_pair = AsyncMock(return_value=None)
+
+        await gen.generate(_dc_payload_with_parent(fw_devices=[], dedicated_loadbalancer=True, lb_devices=self._LBS))
 
         gen._ensure_dedicated_device_pair.assert_awaited_once()
-        assert gen._ensure_dedicated_device_pair.call_args.kwargs["role"] == "load-balancer"
+        gen._ensure_transit_legs.assert_not_awaited()
 
 
 class TestContextTrunk:
@@ -669,20 +723,21 @@ class TestContextTrunk:
         gen.logger.error.assert_not_called()
 
 
-class TestGetOrCreateFirewallContext:
-    """Always create+upsert, never pre-check-and-skip — ManagedFirewallContext's
-    uniqueness_constraints on name__value makes allow_upsert=True match the
+class TestGetOrCreateContext:
+    """Always create+upsert, never pre-check-and-skip — both context kinds'
+    uniqueness_constraints on name__value make allow_upsert=True match the
     existing node by name, same convention as dc.py/pools.py's pool creation."""
 
     @pytest.mark.asyncio
-    async def test_creates_shared_context_without_tenant(self) -> None:
+    @pytest.mark.parametrize("spec", [FIREWALL_CONTEXT, LOADBALANCER_CONTEXT])
+    async def test_creates_shared_context_of_the_spec_kind_without_tenant(self, spec: Any) -> None:
         gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
-        gen.client.filters = AsyncMock(return_value=[])
         created = AsyncMock()
         gen.client.create = AsyncMock(return_value=created)
 
-        await gen._get_or_create_firewall_context("dc10-shared", "cluster-1", None)
+        await gen._get_or_create_context(spec, "dc10-shared", "cluster-1", None)
 
+        assert gen.client.create.call_args.kwargs["kind"] is spec.context_kind
         data = gen.client.create.call_args.kwargs["data"]
         assert data["cluster"] == {"id": "cluster-1"}
         assert "tenant" not in data
@@ -695,18 +750,17 @@ class TestGetOrCreateFirewallContext:
         created = AsyncMock()
         gen.client.create = AsyncMock(return_value=created)
 
-        await gen._get_or_create_firewall_context("dc10-shared", "cluster-1", None, track=False)
+        await gen._get_or_create_context(FIREWALL_CONTEXT, "dc10-shared", "cluster-1", None, track=False)
 
         created.save.assert_awaited_once_with(allow_upsert=True, update_group_context=False)
 
     @pytest.mark.asyncio
     async def test_creates_dedicated_context_with_tenant(self) -> None:
         gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
-        gen.client.filters = AsyncMock(return_value=[])
         created = AsyncMock()
         gen.client.create = AsyncMock(return_value=created)
 
-        await gen._get_or_create_firewall_context("dc10-cust-1-dedicated", "cluster-1", "cust-1")
+        await gen._get_or_create_context(LOADBALANCER_CONTEXT, "dc10-cust-1-dedicated", "cluster-1", "cust-1")
 
         data = gen.client.create.call_args.kwargs["data"]
         assert data["tenant"] == {"id": "cust-1"}

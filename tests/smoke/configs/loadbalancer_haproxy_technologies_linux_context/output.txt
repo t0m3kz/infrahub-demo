@@ -1,0 +1,152 @@
+#
+# HAProxy Load Balancer Configuration
+# Device: DC3-LB-01
+# Type: l4_software
+# Scheme: internal
+# Management IP: 192.168.2.1
+# Device Role: load-balancer
+#
+
+# Global section
+global
+    log stdout local0
+    chroot /var/lib/haproxy
+    stats socket /run/haproxy/admin.sock mode 660 level admin
+    stats timeout 30s
+    user haproxy
+    group haproxy
+    daemon
+
+    # Default SSL material locations
+    ca-base /etc/ssl/certs
+    crt-base /etc/ssl/private
+
+    # SSL Configuration
+    ssl-default-bind-ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384
+    ssl-default-bind-options ssl-min-ver TLSv1.2 no-tls-tickets
+
+# Default section
+defaults
+    mode                    http
+    log                     global
+    option                  httplog
+    option                  dontlognull
+    option                  log-health-checks
+    option                  forwardfor       except 127.0.0.0/8
+    option                  redispatch
+    retries                 3
+    timeout http-request    10s
+    timeout queue           1m
+    timeout connect         10s
+    timeout client          1m
+    timeout server          1m
+    timeout http-keep-alive 10s
+    timeout check           10s
+    maxconn                 3000
+
+# HAProxy Stats
+listen haproxy-stats
+    bind 192.168.2.1:8404
+    mode http
+    stats enable
+    stats uri /stats
+    stats refresh 30s
+    stats admin if TRUE
+    acl network_allowed src 127.0.0.1 192.168.2.1
+    acl network_allowed src 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+    http-request deny unless network_allowed
+# --- HAProxy Peers (HA State Sync) ---
+peers haproxy_cluster
+    peer DC3-LB-01 DC3-LB-01:1024
+    peer DC3-LB-02 DC3-LB-02:1024
+# vrrp_instance DC3-LB-01-DC3-LB-02-ha-eth1.3100 {
+#     state MASTER
+#     interface eth1.3100
+#     virtual_router_id 2
+#     priority 100
+#     virtual_ipaddress {
+#         100.66.64.4/29
+#     }
+# }
+# vrrp_instance DC3-LB-01-DC3-LB-02-ha-eth1.3301 {
+#     state MASTER
+#     interface eth1.3301
+#     virtual_router_id 2
+#     priority 100
+#     virtual_ipaddress {
+#         100.66.80.4/29
+#     }
+# }
+#
+# --- LB context DC3-LB-01-DC3-LB-02-ha-PROD (shared, SHARED-PROD): VRF vrf-PROD table 60000 ---
+# documented-not-lab-verified: Linux VRF with `bind ... interface <vrf>` and `source ... interface <vrf>`, checks in a tracked backend; `ca-file @system-ca` needs HAProxy 2.6+
+# leg eth1.3100: VLAN 3100 (border VNI 64100), gateway 100.66.64.1; VIP range 100.66.96.0/26 routed to 100.66.64.4
+# Host networking (iproute2, outside haproxy.cfg):
+#   ip link add vrf-PROD type vrf table 60000
+#   ip link set dev vrf-PROD up
+#   ip link add link eth1 name eth1.3100 type vlan id 3100
+#   ip link set dev eth1.3100 master vrf-PROD up
+#   ip address add 100.66.64.5/29 dev eth1.3100
+#   ip route add table 60000 default via 100.66.64.1
+#   sysctl -w net.ipv4.ip_nonlocal_bind=1   (the backends source 100.66.64.4, which only the VRRP master holds)
+#   ip address add 100.66.96.10/32 dev vrf-PROD
+
+# web.c001.example.com
+frontend fe_SHARED-PROD_web_c001_example_com_tcp_443
+    bind 100.66.96.10:443 interface vrf-PROD
+    mode tcp
+    option tcplog
+    default_backend be_SHARED-PROD_web_c001_example_com_tcp_443
+
+backend chk_SHARED-PROD_web_c001_example_com_tcp_443
+    mode tcp
+    source 100.66.64.5 interface vrf-PROD
+    option httpchk
+    http-check send meth GET uri /health ver HTTP/1.1 hdr Host web.c001.example.com
+    http-check expect status 200
+    timeout check 2000ms
+    server 10.10.1.10 10.10.1.10:443 check inter 5s rise 2 fall 3
+    server 10.10.1.11 10.10.1.11:443 check inter 5s rise 2 fall 3
+
+backend be_SHARED-PROD_web_c001_example_com_tcp_443
+    mode tcp
+    balance leastconn
+    source 100.66.64.4 interface vrf-PROD
+    stick-table type ip size 200k expire 30m
+    stick on src
+    server 10.10.1.10 10.10.1.10:443 track chk_SHARED-PROD_web_c001_example_com_tcp_443/10.10.1.10
+    server 10.10.1.11 10.10.1.11:443 track chk_SHARED-PROD_web_c001_example_com_tcp_443/10.10.1.11
+#
+# --- LB context DC3-LB-01-DC3-LB-02-ha-NON-PROD (shared, SHARED-NON-PROD): VRF vrf-NON-PROD table 60001 ---
+# documented-not-lab-verified: Linux VRF with `bind ... interface <vrf>` and `source ... interface <vrf>`, checks in a tracked backend; `ca-file @system-ca` needs HAProxy 2.6+
+# leg eth1.3301: VLAN 3301 (border VNI 64301), gateway 100.66.80.1; VIP range 100.66.112.0/26 routed to 100.66.80.4
+# Host networking (iproute2, outside haproxy.cfg):
+#   ip link add vrf-NON-PROD type vrf table 60001
+#   ip link set dev vrf-NON-PROD up
+#   ip link add link eth1 name eth1.3301 type vlan id 3301
+#   ip link set dev eth1.3301 master vrf-NON-PROD up
+#   ip address add 100.66.80.5/29 dev eth1.3301
+#   ip route add table 60001 default via 100.66.80.1
+#   sysctl -w net.ipv4.ip_nonlocal_bind=1   (the backends source 100.66.80.4, which only the VRRP master holds)
+#   ip address add 100.66.112.10/32 dev vrf-NON-PROD
+
+# api.c002.example.com
+frontend fe_SHARED-NON-PROD_api_c002_example_com_tcp_8080
+    bind 100.66.112.10:8080 interface vrf-NON-PROD
+    mode tcp
+    option tcplog
+    default_backend be_SHARED-NON-PROD_api_c002_example_com_tcp_8080
+
+backend chk_SHARED-NON-PROD_api_c002_example_com_tcp_8080
+    mode tcp
+    source 100.66.80.5 interface vrf-NON-PROD
+    timeout check 1000ms
+    server 10.20.1.10 10.20.1.10:8080 check inter 5s rise 3 fall 3
+    server 10.20.1.11 10.20.1.11:8080 check inter 5s rise 3 fall 3
+
+backend be_SHARED-NON-PROD_api_c002_example_com_tcp_8080
+    mode tcp
+    balance roundrobin
+    source 100.66.80.4 interface vrf-NON-PROD
+    server 10.20.1.10 10.20.1.10:8080 track chk_SHARED-NON-PROD_api_c002_example_com_tcp_8080/10.20.1.10
+    server 10.20.1.11 10.20.1.11:8080 track chk_SHARED-NON-PROD_api_c002_example_com_tcp_8080/10.20.1.11

@@ -25,9 +25,9 @@ spec:
           - template_name: BIG-IP-VE_LOAD_BALANCER_CUSTOMER_S_mgmt
             name: mgmt
             role: management
-          - template_name: BIG-IP-VE_LOAD_BALANCER_CUSTOMER_S_eth[1-4]
-            name: eth[1-4]
-            role: customer
+          - template_name: BIG-IP-VE_LOAD_BALANCER_CUSTOMER_S_1-[1-4]
+            name: "1.[1-4]"
+            role: uplink
           - template_name: BIG-IP-VE_LOAD_BALANCER_CUSTOMER_S_ha
             name: ha
             role: ha
@@ -49,9 +49,9 @@ spec:
           - template_name: BIG-IP-VE_LOAD_BALANCER_CUSTOMER_M_mgmt
             name: mgmt
             role: management
-          - template_name: BIG-IP-VE_LOAD_BALANCER_CUSTOMER_M_eth[1-4]
-            name: eth[1-4]
-            role: customer
+          - template_name: BIG-IP-VE_LOAD_BALANCER_CUSTOMER_M_1-[1-4]
+            name: "1.[1-4]"
+            role: uplink
           - template_name: BIG-IP-VE_LOAD_BALANCER_CUSTOMER_M_ha
             name: ha
             role: ha
@@ -73,9 +73,9 @@ spec:
           - template_name: BIG-IP-VE_LOAD_BALANCER_CUSTOMER_L_mgmt
             name: mgmt
             role: management
-          - template_name: BIG-IP-VE_LOAD_BALANCER_CUSTOMER_L_eth[1-4]
-            name: eth[1-4]
-            role: customer
+          - template_name: BIG-IP-VE_LOAD_BALANCER_CUSTOMER_L_1-[1-4]
+            name: "1.[1-4]"
+            role: uplink
           - template_name: BIG-IP-VE_LOAD_BALANCER_CUSTOMER_L_ha
             name: ha
             role: ha
@@ -97,9 +97,9 @@ spec:
           - template_name: BIG-IP-VE_LOAD_BALANCER_CUSTOMER_XL_mgmt
             name: mgmt
             role: management
-          - template_name: BIG-IP-VE_LOAD_BALANCER_CUSTOMER_XL_eth[1-4]
-            name: eth[1-4]
-            role: customer
+          - template_name: BIG-IP-VE_LOAD_BALANCER_CUSTOMER_XL_1-[1-4]
+            name: "1.[1-4]"
+            role: uplink
           - template_name: BIG-IP-VE_LOAD_BALANCER_CUSTOMER_XL_ha
             name: ha
             role: ha

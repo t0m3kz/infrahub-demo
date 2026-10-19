@@ -8,7 +8,7 @@ enforcement point tracks sessions:
 
 | Consumer | Egress view (own rules) | Ingress view (rules into the segment) |
 | -------- | ----------------------- | ------------------------------------- |
-| Stateful: firewall rule table (``segment_rule_policies``), cloud SG | Own rules as written | Inbound rules as plain rules, no reply legs (the session carries the reply) |
+| Stateful: firewall rule table (``segment_rule_policies``), cloud SG | Own rules as written | Inbound rules as plain rules, no reply legs (the session carries the reply); none from a segment-less (LB context) policy |
 | Stateless: leaf ACL (``acl.py``), PBR bypass (``firewall.py``); later cloud NACL / edge VIF ACL | Own rules + ``default_action`` | Reply legs only. Leaf: seq >= 5000, tcp ``established``, excluding self-sourced and internet-sourced rules. A NACL would need ephemeral 1024-65535 |
 | Stateless: group contracts (``group_policy.py``) | Own permit rules: segment tag to segment tag, component tag to component tag inside one segment, and the same entries on the unclassified service legs; deny by default | None: forward rows only, replies are the renderer's (NX-OS ``bidir``) |
 
@@ -147,6 +147,12 @@ def segment_rule_policies(segments: Iterable[dict[str, Any]], exclude: set[str] 
     a policy left without rules is dropped, one that has none at all is kept.
     Policies are sorted by name, so the flat rule numbering of a rule table
     (get_zone_policies) does not depend on the query's order.
+
+    An inbound rule of a policy with no segment is left out: that is a
+    load-balancer context's ``lb-<context>`` policy (R_server, its leg /29 to
+    the backend), and the LB never sits behind a firewall — the leg is in the
+    backend's own VRF, so the flow is a PBR bypass and the leaf ACL's
+    ``established`` reply leg (segment_flows) is all it needs.
     """
     excluded = exclude or set()
     policies: dict[str, dict[str, Any]] = {}
@@ -170,5 +176,7 @@ def segment_rule_policies(segments: Iterable[dict[str, Any]], exclude: set[str] 
         for policy in segment_policies(segment):
             _add(policy, policy.get("rules") or [])
         for rule in segment.get("inbound_rules") or []:
-            _add(rule.get("policy") or {}, [rule])
+            policy = rule.get("policy") or {}
+            if policy.get("segment"):
+                _add(policy, [rule])
     return [policies[key] for key in sorted(policies) if policies[key]["rules"] or key not in offered]

@@ -26,7 +26,8 @@ from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool, CoreNumb
 if TYPE_CHECKING:
     import logging
 
-from .helpers.pools import FW_CONTEXT_VLAN_END, FW_CONTEXT_VLAN_START
+    from .firewall_context import ContextSpec
+
 from .helpers.routing import underlay_pool_is_ipv6
 from .logger import GeneratorError
 from .protocols import TopologyPod
@@ -290,27 +291,29 @@ class PoolMixin:
             identifier={"name__value": [parent_pool_name]},
         )
 
-    async def ensure_firewall_context_pools(self, *, name: str) -> None:
-        """Create a fabric's FirewallContext VLAN pool.
+    async def ensure_context_vlan_pool(self, *, name: str, spec: ContextSpec) -> None:
+        """Create a fabric's VLAN pool for the service contexts of spec's kind, `{name}-{spec.key}-vlan-pool`.
 
         Read by generators/firewall_context.py's _ensure_context_vlan, which
-        gives each DC and colocation-metro context the VLAN its transit legs derive from
-        (utils/exchange_transit.py). Per-fabric (not global) so each DC's or metro's
-        context VLANs stay within its own numbering. The legs' addresses come
-        from the per-VRF FW-Transit-* bootstrap pools, not from a fabric pool.
+        gives each DC and colocation-metro context the VLAN its legs derive
+        from (utils/exchange_transit.py); spec.vlan_range keeps the firewall
+        and load-balancer bands apart. Per-fabric (not global) so each DC's or
+        metro's context VLANs stay within its own numbering. The legs'
+        addresses come from the per-VRF bootstrap pools (FW-Transit-*,
+        LB-Leg-*, LB-VIP-*), not from a fabric pool.
 
         upsert_number_pool is idempotent for sequential re-runs only; two
         overlapping calls for the same `name` could both create a pool of that
         name (the race allocate_resource_pools() locks against), so the
-        upsert runs under a per-`name` lock for every caller.
+        upsert runs under a per-(`name`, kind) lock for every caller.
         """
-        async with self.resource_lock(f"fw-context-pools-{name}"):
+        async with self.resource_lock(f"{spec.key}-pools-{name}"):
             await self.upsert_number_pool(
-                pool_name=f"{name}-fw-context-vlan-pool",
-                description=f"FirewallContext sub-interface VLAN pool for {name.upper()}",
-                start_range=FW_CONTEXT_VLAN_START,
-                end_range=FW_CONTEXT_VLAN_END,
-                node="ManagedFirewallContext",
+                pool_name=f"{name}-{spec.key}-vlan-pool",
+                description=f"{spec.label} VLAN pool for {name.upper()}",
+                start_range=spec.vlan_range[0],
+                end_range=spec.vlan_range[1],
+                node=spec.context_kind.__name__,
                 node_attribute="vlan_id",
             )
 

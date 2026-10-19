@@ -13,8 +13,8 @@ Covers:
 from unittest.mock import patch
 
 from transforms.helpers.firewall import (
-    _firewall_context_caps,
     _flatten_deployment_firewall_contexts,
+    _service_context_caps,
     get_customer_pbr_rules,
     get_exchange_routes,
     get_exchange_transits,
@@ -442,7 +442,7 @@ def _shared_context(*, tenant: str | None = None, served: list[str] | None = Non
 
 def _border_transits(interfaces: list[dict] | None) -> list[dict]:
     """The transits a border device derives from the contexts on its firewall-role ports."""
-    return get_exchange_transits(_firewall_context_caps(interfaces))
+    return get_exchange_transits(_service_context_caps(interfaces))
 
 
 class TestGetExchangeTransits:
@@ -1557,6 +1557,22 @@ class TestPlacePoliciesInContexts:
         _, by_ctx = place_policies_in_contexts([_ctx("ctx-a", segs["s1"]), _ctx("ctx-b", segs["s2"])], [])
         assert _table(by_ctx["ctx-a"]) == [("seg-s1-egress", ["a-to-b"])]
         assert _table(by_ctx["ctx-b"]) == [("seg-s1-egress", ["a-to-b"])]
+
+    def test_lb_server_rule_into_a_served_segment_is_left_out(self) -> None:
+        """R_server of a load-balancer context (segment-less policy lb-<context>, leg /29 -> backend) is
+        an inbound rule of the backend segment, but the LB never sits behind a firewall: neither the
+        context's table nor the root table takes it."""
+        segs = _segments(_placement_rule("out", "s1", "s2"))
+        r_server = {
+            **_placement_rule("lb-r-server", "s1", "s1"),
+            "source_segment": None,
+            "source_prefixes": [{"prefix": "100.66.64.0/29"}],
+            "policy": {"id": "pol-lb", "name": "lb-dc1-lb-01-dc1-lb-02-ha-PROD", "enabled": True, "segment": None},
+        }
+        backend = {**segs["s1"], "inbound_rules": [r_server]}
+        root, by_ctx = place_policies_in_contexts([_ctx("ctx-a", backend)], [backend])
+        assert _table(by_ctx["ctx-a"]) == [("seg-s1-egress", ["out"])]
+        assert root == []
 
     def test_rule_between_two_served_segments_appears_once(self) -> None:
         """Reached as s1's egress rule and as s2's inbound rule: de-duplicated by id."""

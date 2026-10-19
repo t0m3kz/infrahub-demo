@@ -1,0 +1,137 @@
+# One load balancer (queries/config/loadbalancer.gql), physical or virtual.
+fragment LoadbalancerDeviceFields on DcimDevice {
+  name { value }
+  role { value }
+  platform {
+    node {
+      name { value }
+      netmiko_device_type { value }
+      napalm_driver { value }
+      ansible_network_os { value }
+    }
+  }
+  ... on DcimCapabilities {
+    capabilities {
+      edges {
+        node {
+          __typename
+          ... on ManagedGeneric {
+            name { value }
+            status { value }
+          }
+          ... on ManagedLoadbalancerHA {
+            name { value }
+            group_id { value }
+            mode { value }
+            priority { value }
+            preempt { value }
+            lb_type { value }
+            scheme { value }
+            # The members; the peer's management address is the NetScaler HA node.
+            capabilities {
+              edges {
+                node {
+                  name { value }
+                  ... on DcimDevice { primary_address { node { address { value } } } }
+                }
+              }
+            }
+            # The cluster's contexts; each one this device has a leg of renders
+            # (transforms/helpers/loadbalancer.py get_loadbalancer_contexts).
+            contexts { edges { node { ...LoadbalancerContextConfigFields } } }
+          }
+        }
+      }
+    }
+  }
+  interfaces {
+    edges {
+      node {
+        __typename
+        name { value }
+        description { value }
+        status { value }
+        role { value }
+        ... on DcimPhysicalInterface {
+          ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+        }
+        ... on DcimVirtualInterface {
+          ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+          parent_interface { node { name { value } } }
+        }
+        capabilities {
+          edges {
+            node {
+              __typename
+              ...InlineTerminationFields
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+# A context: its leg VLAN, partition inputs (dedicated tenant's org_id and
+# environment), VIP range, the interfaces carrying it and its VIPs. The leg
+# namespace (name, type, l3_vni) is read from the member's leg address.
+fragment LoadbalancerContextConfigFields on ManagedLoadbalancerContext {
+  id
+  name { value }
+  vlan_id { value }
+  tenant {
+    node {
+      id
+      ... on TopologyCustomer { owner { node { org_id { value } } } }
+      ... on TopologyEnvironmentScoped { environment { value } }
+    }
+  }
+  vip_prefix { node { prefix { value } } }
+  # Each member's `<uplink>.<leg vlan>` sub-interface, and the border service
+  # ports facing them (not a DcimVirtualInterface, so never taken for a leg).
+  # The role tells the members' legs apart (firewall.py transit_legs).
+  capabilities {
+    edges {
+      node {
+        __typename
+        name { value }
+        device { node { name { value } role { value } } }
+        ... on DcimVirtualInterface {
+          parent_interface { node { name { value } } }
+          ip_address {
+            node {
+              address { value }
+              ip_namespace { node { name { value } namespace_type { value } l3_vni { value } } }
+            }
+          }
+        }
+      }
+    }
+  }
+  vips {
+    edges {
+      node {
+        hostname { value }
+        description { value }
+        status { value }
+        protocol { value }
+        port { value }
+        load_balancing_algorithm { value }
+        session_persistence { value }
+        ssl_certificate { value }
+        vip_ip { node { address { value } } }
+        pool_members { edges { node { address { value } } } }
+        health_checks {
+          edges {
+            node {
+              check { value }
+              rise { value }
+              fall { value }
+              timeout { value }
+            }
+          }
+        }
+      }
+    }
+  }
+}

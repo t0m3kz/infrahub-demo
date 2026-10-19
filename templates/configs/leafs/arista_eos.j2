@@ -125,7 +125,7 @@ route-map RM-VRF-CONN-2-EVPN permit 10
 
 {%- if leaf_pbr_rules %}
 !
-! Leaf PBR — LB return path first, then permitted firewall bypass,
+! Leaf PBR — permitted firewall bypass first (the LB is SNAT automap, so no return-path PBR: the firewall PBR is the only one),
 ! otherwise redirect to the firewall when a context is present.
 ! documented-not-lab-verified: policy-map type pbr / class-map type pbr / service-policy type pbr
 ! documented-not-lab-verified: a class without a set action (bypass) forwards by the normal route lookup

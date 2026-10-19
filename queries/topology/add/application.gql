@@ -7,12 +7,15 @@ fragment SegmentSecurityFields on ManagedNetworkSegment {
   # The namespace type decides whether it is a routed tenant segment, which
   # gets its group tag here; present means nothing is written
   # (generators/helpers/security_tag.py).
+  # The ids are the load balancer's: its pool members are reserved in this
+  # prefix (generators/lb_vip.py).
   gateway {
     node {
       ip_prefix {
         node {
+          id
           prefix { value }
-          ip_namespace { node { name { value } namespace_type { value } } }
+          ip_namespace { node { id name { value } namespace_type { value } } }
         }
       }
     }
@@ -21,6 +24,88 @@ fragment SegmentSecurityFields on ManagedNetworkSegment {
   # The segment's one egress policy, whoever created it (this generator or a
   # hand-written data file): its rules are added there, never to a second one.
   security_policy { node { id name { value } } }
+}
+
+# An instance and the load balancer context serving its customer deployment
+# (TopologyCustomerDC.serving_loadbalancer_context, set when the customer
+# boards): a load_balanced component gets one VIP per port on each context its
+# instances are served by, with those instances as pool members
+# (generators/lb_vip.py). The context's leg /29 is the prefix of the addresses
+# on its member sub-interfaces (`capabilities`; the border service port it also
+# tags has no address). The two device kinds carry `deployment` each, so the
+# block is spelled out per kind (plain fields: a named spread inside an inline
+# fragment would not resolve). A cloud instance has no deployment: a
+# load_balanced component of cloud instances gets a CloudLoadBalancer in the
+# virtual network of their subnets, with their private_ip, in the namespace of
+# the CIDR block holding it, as pool members.
+fragment AppInstanceFields on AppInstance {
+  id
+  name { value }
+  __typename
+  ... on DcimPhysicalDevice {
+    role { value }
+    deployment {
+      node {
+        id
+        __typename
+        ... on TopologyCustomerDC {
+          serving_loadbalancer_context {
+            node {
+              id
+              name { value }
+              vip_prefix { node { id ip_namespace { node { id } } } }
+              capabilities {
+                edges { node { __typename ... on DcimVirtualInterface { ip_address { node { ip_prefix { node { id } } } } } } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  ... on DcimVirtualDevice {
+    role { value }
+    hosting_device {
+      node {
+        id
+        name { value }
+      }
+    }
+    deployment {
+      node {
+        id
+        __typename
+        ... on TopologyCustomerDC {
+          serving_loadbalancer_context {
+            node {
+              id
+              name { value }
+              vip_prefix { node { id ip_namespace { node { id } } } }
+              capabilities {
+                edges { node { __typename ... on DcimVirtualInterface { ip_address { node { ip_prefix { node { id } } } } } } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  ... on CloudInstance {
+    private_ip { value }
+    network_segment {
+      node {
+        id
+        name { value }
+        virtual_network {
+          node {
+            id
+            name { value }
+            cidr_blocks { edges { node { prefix { value } ip_namespace { node { id } } } } }
+          }
+        }
+      }
+    }
+  }
 }
 
 fragment AppComponentSecurityFields on AppComponent {
@@ -36,21 +121,7 @@ fragment AppComponentSecurityFields on AppComponent {
   instances {
     edges {
       node {
-        id
-        name { value }
-        __typename
-        ... on DcimPhysicalDevice {
-          role { value }
-        }
-        ... on DcimVirtualDevice {
-          role { value }
-          hosting_device {
-            node {
-              id
-              name { value }
-            }
-          }
-        }
+        ...AppInstanceFields
       }
     }
   }
@@ -93,6 +164,10 @@ fragment AppComponentSecurityFields on AppComponent {
               ports { value }
               component_type { value }
               security_tag { node { id } }
+              # A load_balanced target is reached through its VIPs (R_client):
+              # their addresses come from the contexts of its instances.
+              load_balanced { value }
+              instances { edges { node { ...AppInstanceFields } } }
               network_segment {
                 node {
                   id

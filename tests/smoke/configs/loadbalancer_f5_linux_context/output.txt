@@ -1,0 +1,216 @@
+sys global-settings {
+    hostname DC3-LB-01
+    gui-setup disabled
+    mgmt-dhcp disabled
+}
+sys ntp {
+    timezone UTC
+}
+sys dns {
+    name-servers { 8.8.8.8 8.8.4.4 }
+}
+sys snmp {
+    agent-addresses { udp:161 }
+    communities {
+        public {
+            access ro
+            source default
+        }
+    }
+}
+#
+#
+# --- Self IPs ---
+net self mgmt_self {
+    address 192.168.2.1/24
+    allow-service default
+    traffic-group traffic-group-local-only
+    vlan mgmt
+}
+# mgmt: OOB management
+#
+#
+# --- Device Service Clustering (DSC) ---
+cm device DC3-LB-01 {
+    configsync-ip 192.168.2.1
+    mirror-ip 192.168.2.1
+    unicast-address {
+        {
+            ip 192.168.2.1
+            port 1026
+        }
+    }
+}
+cm trust-domain Root {
+    ca-devices { /Common/DC3-LB-01 }
+    name Root
+}
+cm device-group DC3-LB-01-DC3-LB-02-ha_dg {
+    auto-sync enabled
+    network-failover enabled
+    type sync-failover
+    devices {
+        /Common/DC3-LB-01 { }
+        /Common/DC3-LB-02 { }
+    }
+}
+#
+# --- LB context DC3-LB-01-DC3-LB-02-ha-PROD (shared): partition SHARED-PROD, VRF PROD = route domain 60000 ---
+# documented-not-lab-verified: /Common VLAN and strict route domain per VRF, partition default-route-domain, partition-local self IPs/route
+# leg eth1.3100: VLAN 3100 (border VNI 64100), gateway 100.66.64.1; VIP range 100.66.96.0/26 routed to 100.66.64.4
+net vlan /Common/vlan3100 {
+    interfaces {
+        eth1 {
+            tagged
+        }
+    }
+    tag 3100
+}
+net route-domain /Common/rd60000 {
+    id 60000
+    parent none
+    strict enabled
+    vlans {
+        /Common/vlan3100
+    }
+}
+auth partition SHARED-PROD {
+    default-route-domain 60000
+    description "DC3-LB-01-DC3-LB-02-ha-PROD"
+}
+net self /SHARED-PROD/self3100 {
+    address 100.66.64.5/29
+    allow-service none
+    traffic-group /Common/traffic-group-local-only
+    vlan /Common/vlan3100
+}
+net self /SHARED-PROD/float3100 {
+    address 100.66.64.4/29
+    allow-service none
+    floating enabled
+    traffic-group /Common/traffic-group-1
+    vlan /Common/vlan3100
+}
+net route /SHARED-PROD/default {
+    gw 100.66.64.1
+    network default
+}
+ltm monitor http /SHARED-PROD/web_c001_example_com_tcp_443_mon1 {
+    defaults-from /Common/http
+    interval 5
+    recv "200 OK"
+    send "GET /health HTTP/1.1\r\nHost: web.c001.example.com\r\nConnection: Close\r\n\r\n"
+    time-until-up 10
+    timeout 16
+}
+ltm pool /SHARED-PROD/web_c001_example_com_tcp_443_pool {
+    load-balancing-mode least-connections-member
+    members {
+        /SHARED-PROD/10.10.1.10:443 {
+            address 10.10.1.10
+        }
+        /SHARED-PROD/10.10.1.11:443 {
+            address 10.10.1.11
+        }
+    }
+    monitor /SHARED-PROD/web_c001_example_com_tcp_443_mon1
+}
+ltm virtual /SHARED-PROD/web_c001_example_com_tcp_443 {
+    description "web.c001.example.com"
+    destination /SHARED-PROD/100.66.96.10:443
+    enabled
+    ip-protocol tcp
+    mask 255.255.255.255
+    persist {
+        /Common/source_addr {
+            default yes
+        }
+    }
+    pool /SHARED-PROD/web_c001_example_com_tcp_443_pool
+    profiles {
+        /Common/tcp { }
+    }
+    source 0.0.0.0/0
+    source-address-translation {
+        type automap
+    }
+    translate-address enabled
+    translate-port enabled
+}
+#
+# --- LB context DC3-LB-01-DC3-LB-02-ha-NON-PROD (shared): partition SHARED-NON-PROD, VRF NON-PROD = route domain 60001 ---
+# documented-not-lab-verified: /Common VLAN and strict route domain per VRF, partition default-route-domain, partition-local self IPs/route
+# leg eth1.3301: VLAN 3301 (border VNI 64301), gateway 100.66.80.1; VIP range 100.66.112.0/26 routed to 100.66.80.4
+net vlan /Common/vlan3301 {
+    interfaces {
+        eth1 {
+            tagged
+        }
+    }
+    tag 3301
+}
+net route-domain /Common/rd60001 {
+    id 60001
+    parent none
+    strict enabled
+    vlans {
+        /Common/vlan3301
+    }
+}
+auth partition SHARED-NON-PROD {
+    default-route-domain 60001
+    description "DC3-LB-01-DC3-LB-02-ha-NON-PROD"
+}
+net self /SHARED-NON-PROD/self3301 {
+    address 100.66.80.5/29
+    allow-service none
+    traffic-group /Common/traffic-group-local-only
+    vlan /Common/vlan3301
+}
+net self /SHARED-NON-PROD/float3301 {
+    address 100.66.80.4/29
+    allow-service none
+    floating enabled
+    traffic-group /Common/traffic-group-1
+    vlan /Common/vlan3301
+}
+net route /SHARED-NON-PROD/default {
+    gw 100.66.80.1
+    network default
+}
+ltm monitor tcp /SHARED-NON-PROD/api_c002_example_com_tcp_8080_mon1 {
+    defaults-from /Common/tcp
+    interval 5
+    time-until-up 15
+    timeout 16
+}
+ltm pool /SHARED-NON-PROD/api_c002_example_com_tcp_8080_pool {
+    load-balancing-mode round-robin
+    members {
+        /SHARED-NON-PROD/10.20.1.10:8080 {
+            address 10.20.1.10
+        }
+        /SHARED-NON-PROD/10.20.1.11:8080 {
+            address 10.20.1.11
+        }
+    }
+    monitor /SHARED-NON-PROD/api_c002_example_com_tcp_8080_mon1
+}
+ltm virtual /SHARED-NON-PROD/api_c002_example_com_tcp_8080 {
+    description "api.c002.example.com"
+    destination /SHARED-NON-PROD/100.66.112.10:8080
+    enabled
+    ip-protocol tcp
+    mask 255.255.255.255
+    pool /SHARED-NON-PROD/api_c002_example_com_tcp_8080_pool
+    profiles {
+        /Common/tcp { }
+    }
+    source 0.0.0.0/0
+    source-address-translation {
+        type automap
+    }
+    translate-address enabled
+    translate-port enabled
+}
+#

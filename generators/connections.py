@@ -299,30 +299,44 @@ class CablingMixin:
         """
         network = ipaddress.ip_network(prefix.prefix.value, strict=False)
         length = network.prefixlen if address_length is None else address_length
-        ip_namespace = prefix.ip_namespace
-        addresses: dict[int, Any] = {}
         # network[offset], not .hosts(): .hosts() yields one address for /31 and /127.
-        for offset in offsets:
-            address_value = f"{network[offset]}/{length}"
-            ip = await self.client.get(
-                kind=IpamIPAddress,
-                address__value=address_value,
-                ip_namespace__ids=[ip_namespace.id],
-                raise_when_missing=False,
+        return {
+            offset: await self.upsert_ip_address(
+                address=f"{network[offset]}/{length}",
+                ip_namespace=prefix.ip_namespace,
+                description=description,
+                track=track,
             )
-            if not ip or description is not None:
-                ip = await self.client.create(
-                    kind=IpamIPAddress,
-                    data={
-                        **({"id": ip.id} if ip else {}),
-                        "address": address_value,
-                        "ip_namespace": ip_namespace,
-                        **({"description": description} if description is not None else {}),
-                    },
-                )
-            await ip.save(**tracked_save_kwargs(track))
-            addresses[offset] = ip
-        return addresses
+            for offset in offsets
+        }
+
+    async def upsert_ip_address(
+        self, *, address: str, ip_namespace: Any, description: str | None = None, track: bool = True
+    ) -> Any:
+        """Upsert one IpamIPAddress in ``ip_namespace`` (a peer node, or ``{"id": ...}``); returns the node.
+
+        Queried before created, saved even when found, description and track
+        as in upsert_prefix_addresses().
+        """
+        namespace_id = ip_namespace["id"] if isinstance(ip_namespace, dict) else ip_namespace.id
+        ip = await self.client.get(
+            kind=IpamIPAddress,
+            address__value=address,
+            ip_namespace__ids=[namespace_id],
+            raise_when_missing=False,
+        )
+        if not ip or description is not None:
+            ip = await self.client.create(
+                kind=IpamIPAddress,
+                data={
+                    **({"id": ip.id} if ip else {}),
+                    "address": address,
+                    "ip_namespace": ip_namespace,
+                    **({"description": description} if description is not None else {}),
+                },
+            )
+        await ip.save(**tracked_save_kwargs(track))
+        return ip
 
     async def create_chain_cabling(
         self, hops: list[ChainHop], options: CablingOptions | None = None
@@ -478,13 +492,21 @@ class CablingMixin:
             return None
 
     async def ensure_prefix_address_pool(
-        self, *, pool_name: str, prefix_id: str, prefix_length: int, namespace_id: str | None = None
+        self,
+        *,
+        pool_name: str,
+        prefix_id: str,
+        prefix_length: int,
+        namespace_id: str | None = None,
+        track: bool = True,
     ) -> Any | None:
         """Wrap an EXISTING prefix in a CoreIPAddressPool named (and identified
         by) pool_name, so allocate_next_ip_address can hand out its addresses —
         IpamPrefix itself is not a CoreResourcePool, and the SDK only allocates
-        from a real CoreIPAddressPool. Upserted by name on every run (the
-        caller's run owns it), so a moved prefix re-points the pool's resources.
+        from a real CoreIPAddressPool. Upserted by name on every run, so a moved
+        prefix re-points the pool's resources. track=True: the caller's run owns
+        it; track=False for a pool several targets allocate from (a load
+        balancer context's VIP range), which no single run may delete.
         Addresses that already exist in the prefix (a gateway, another pool's
         reservation) are never handed out again. None on error."""
         try:
@@ -499,7 +521,7 @@ class CablingMixin:
                     "resources": [prefix_id],
                 },
             )
-            await pool.save(allow_upsert=True)
+            await pool.save(**tracked_save_kwargs(track))
             self.logger.info(f"Upserted IP address pool '{pool_name}'")
             return pool
         except Exception as exc:

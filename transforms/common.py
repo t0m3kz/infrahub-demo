@@ -10,8 +10,8 @@ from transforms.helpers.acl import get_acls
 from transforms.helpers.bgp import get_bgp_profile
 from transforms.helpers.cisco_xe import get_cisco_xe_acls, get_cisco_xe_vrf_routes, refuse_unfiltered_ipv6
 from transforms.helpers.firewall import (
-    _firewall_context_caps,
     _flatten_deployment_firewall_contexts,
+    _service_context_caps,
     get_customer_pbr_rules,
     get_exchange_routes,
     get_exchange_transits,
@@ -166,9 +166,9 @@ class BaseDeviceTransform(InfrahubTransform):
         activations = self._device_activations(device_data)
         if activations:
             device_data["segment_deployments"] = activations
-        # Transit legs of the firewall contexts tagged on this device's service
-        # ports: VLAN/VNI/VRF/anycast only, never segment policy input.
-        device_data["exchange_transits"] = get_exchange_transits(_firewall_context_caps(device_data.get("interfaces")))
+        # Transit legs of the firewall and load-balancer contexts tagged on this
+        # device's service ports: VLAN/VNI/VRF/anycast only, never segment policy input.
+        device_data["exchange_transits"] = get_exchange_transits(_service_context_caps(device_data.get("interfaces")))
 
         config = self._template_context(device_data, platform_name, extra_roots)
         self._refuse_cisco_xe_unrendered(platform_name, config)

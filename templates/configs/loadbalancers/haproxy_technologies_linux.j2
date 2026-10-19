@@ -2,8 +2,12 @@
 #
 # HAProxy Load Balancer Configuration
 # Device: {{ name }}
-# Type: {{ lb_type|default('software') }} Load Balancer
-# Scheme: {{ scheme|default('internal') }}
+{%- if lb_type %}
+# Type: {{ lb_type }}
+{%- endif %}
+{%- if scheme %}
+# Scheme: {{ scheme }}
+{%- endif %}
 # Management IP: {{ management_ip }}
 # Device Role: {{ device_role }}
 #
@@ -63,5 +67,82 @@ peers haproxy_cluster
 {%- for peer_name in ha.devices %}
     peer {{ peer_name }} {{ peer_name }}:1024
 {%- endfor %}
-{{- keepalived.vrrp_instances(lb_interfaces, ha) }}
+{#- The context legs' floating .4 is a VRRP address like an inline segment's gateway. #}
+{{- keepalived.vrrp_instances(lb_interfaces + contexts | map(attribute='leg') | list, ha) }}
 {%- endif %}
+{#- HAProxy has no partitions: a context is a Linux VRF (table = the VRF's
+    l3_vni) holding its leg and VIPs; every frontend binds its VIP in it and
+    every backend sources from the leg's floating .4 in it (SNAT automap's
+    equivalent), so member replies come back to the active node. The VIPs sit
+    on the VRF device of both nodes; only the VRRP master owns .4, the next
+    hop the border leaves route the VIP range to. A source applies to a
+    server's traffic and its checks alike, so the checks run in a check-only
+    backend sourced from this node's own leg address (the standby checks too,
+    and is warm on failover); the traffic servers track them. -#}
+{%- for ctx in contexts %}
+#
+# --- LB context {{ ctx.name }} ({{ 'dedicated' if ctx.dedicated else 'shared' }}, {{ ctx.partition }}): VRF {{ ctx.vrf_device }} table {{ ctx.route_domain }} ---
+# documented-not-lab-verified: Linux VRF with `bind ... interface <vrf>` and `source ... interface <vrf>`, checks in a tracked backend; `ca-file @system-ca` needs HAProxy 2.6+
+# leg {{ ctx.leg.name }}: VLAN {{ ctx.leg.vlan }} (border VNI {{ ctx.leg.vni }}), gateway {{ ctx.leg.anycast }}; VIP range {{ ctx.vip_prefix }} routed to {{ ctx.leg.floating }}
+# Host networking (iproute2, outside haproxy.cfg):
+#   ip link add {{ ctx.vrf_device }} type vrf table {{ ctx.route_domain }}
+#   ip link set dev {{ ctx.vrf_device }} up
+#   ip link add link {{ ctx.leg.parent_interface }} name {{ ctx.leg.name }} type vlan id {{ ctx.leg.vlan }}
+#   ip link set dev {{ ctx.leg.name }} master {{ ctx.vrf_device }} up
+#   ip address add {{ ctx.leg.own_address }} dev {{ ctx.leg.name }}
+#   ip route add table {{ ctx.route_domain }} default via {{ ctx.leg.anycast }}
+#   sysctl -w net.ipv4.ip_nonlocal_bind=1   (the backends source {{ ctx.leg.floating }}, which only the VRRP master holds)
+{%- for vip in ctx.vips %}
+#   ip address add {{ vip.address }}/32 dev {{ ctx.vrf_device }}
+{%- endfor %}
+{%- for vip in ctx.vips %}
+{%- set check = vip.tokens.check %}
+
+# {{ vip.description or vip.hostname }}
+frontend fe_{{ vip.tokens.proxy_name }}
+    bind {{ vip.address }}:{{ vip.port }}{% if vip.tokens.certificate %} ssl crt {{ vip.tokens.certificate }}{% endif %} interface {{ ctx.vrf_device }}
+    mode {{ vip.tokens.mode }}
+{%- if vip.tokens.mode == 'tcp' %}
+    option tcplog
+{%- endif %}
+{%- if not vip.enabled %}
+    disabled
+{%- endif %}
+    default_backend be_{{ vip.tokens.proxy_name }}
+
+{%- set tls = ' ssl verify required ca-file @system-ca' if vip.terminate_tls else '' %}
+{%- if check %}
+
+backend chk_{{ vip.tokens.proxy_name }}
+    mode {{ vip.tokens.mode }}
+    source {{ ctx.leg.own_ip }} interface {{ ctx.vrf_device }}
+{%- if check.path %}
+    option httpchk
+    http-check send meth GET uri {{ check.path }} ver HTTP/1.1 hdr Host {{ vip.hostname }}
+    http-check expect status 200
+{%- endif %}
+    timeout check {{ check.timeout_ms }}ms
+{%- for member in vip.members %}
+    server {{ member }} {{ member }}:{{ vip.port }}{{ tls }} check{% if check.tls %} check-ssl{% endif %} inter {{ check.interval_s }}s rise {{ check.rise }} fall {{ check.fall }}
+{%- endfor %}
+{%- endif %}
+
+backend be_{{ vip.tokens.proxy_name }}
+    mode {{ vip.tokens.mode }}
+    balance {{ vip.tokens.method }}
+    source {{ ctx.leg.floating }} interface {{ ctx.vrf_device }}
+{%- if vip.tokens.persist == 'source_ip' %}
+    stick-table type ip size 200k expire 30m
+    stick on src
+{%- elif vip.tokens.persist == 'cookie' %}
+    cookie SERVERID insert indirect nocache
+{%- endif %}
+{%- for member in vip.members %}
+    server {{ member }} {{ member }}:{{ vip.port }}{{ tls }}
+{%- if check %} track chk_{{ vip.tokens.proxy_name }}/{{ member }}{% endif %}
+{%- if vip.tokens.persist == 'cookie' %} cookie {{ member }}{% endif %}
+{%- else %}
+    # no pool members yet
+{%- endfor %}
+{%- endfor %}
+{%- endfor %}

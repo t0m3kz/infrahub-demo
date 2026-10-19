@@ -10,7 +10,12 @@ than a previous run if device counts change.
 
 from __future__ import annotations
 
-from utils.exchange_transit import CONTEXT_VLAN_MAX, CONTEXT_VLAN_MIN
+from utils.exchange_transit import (
+    FW_CONTEXT_VLAN_MAX,
+    FW_CONTEXT_VLAN_MIN,
+    LB_CONTEXT_VLAN_MAX,
+    LB_CONTEXT_VLAN_MIN,
+)
 
 DEFAULT_ASN_BASE_START = 4200000000
 
@@ -21,8 +26,8 @@ DEFAULT_ASN_BASE_START = 4200000000
 #   * 3968-4094 is Cisco NX-OS's default internally-reserved VLAN band
 #     (`system vlan reserve`), and 4094 is the conventional vPC peer-keepalive
 #     VLAN — a segment allocated there is rejected by the device.
-#   * 3000-3899 is not customer space either: 3000-3199 is the FirewallContext
-#     VLAN pool (FW_CONTEXT_VLAN_START/END below), and the firewall's per-VRF
+#   * 3000-3899 is not customer space either: 3000-3099 is the FirewallContext
+#     VLAN pool and 3100-3199 the LoadbalancerContext one (below), and the firewall's per-VRF
 #     transit VLANs (context VLAN + 200 per namespace slot) fill 3000-3799. A
 #     customer VLAN there would collide on a border leaf's service-port trunk,
 #     where get_vlans silently de-duplicates by VLAN ID.
@@ -45,8 +50,13 @@ SITE_VNI_END = 39999
 
 # FirewallContext VLAN pool of every fabric/metro (one context = one VLAN on the
 # firewall uplink and the border-leaf service port).
-FW_CONTEXT_VLAN_START = CONTEXT_VLAN_MIN
-FW_CONTEXT_VLAN_END = CONTEXT_VLAN_MAX
+FW_CONTEXT_VLAN_START = FW_CONTEXT_VLAN_MIN
+FW_CONTEXT_VLAN_END = FW_CONTEXT_VLAN_MAX
+
+# LoadbalancerContext VLAN pool of every fabric (one context = one VLAN on the load balancer uplink and the
+# border-leaf service port); the other half of the context band, so the two kinds' legs never share a tag.
+LB_CONTEXT_VLAN_START = LB_CONTEXT_VLAN_MIN
+LB_CONTEXT_VLAN_END = LB_CONTEXT_VLAN_MAX
 
 
 def calculate_fabric_asn_block_size(

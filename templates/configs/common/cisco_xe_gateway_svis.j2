@@ -21,7 +21,7 @@
 {%- endif %}
 {%- for vlan in vlans if vlan.gateway_ip or vlan.gateway_ipv6 %}
 interface Vlan{{ vlan.vlan_id }}
- description {{ vlan.name }}
+ description {{ vlan.description }}
 {%- if vlan.isolation_mode == 'isolated' %}
  ! Isolation Mode: ISOLATED — intra-segment host-to-host traffic is not blocked by this template
 {%- elif vlan.isolation_mode == 'microsegmented' %}

@@ -33,6 +33,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.dc_config import DC_SIZE_LAYOUTS
+from generators.firewall_context import FIREWALL_CONTEXT, LOADBALANCER_CONTEXT
 from generators.pod_config import POD_LAYOUTS
 from generators.topology.dc import DCTopologyGenerator
 
@@ -82,7 +83,7 @@ def _make_generator() -> Any:
     gen.create_devices = AsyncMock(return_value=[])
     gen.create_cabling = AsyncMock(return_value=[])
     gen.create_routing = AsyncMock()
-    # ensure_firewall_context_pools()/allocate_resource_pools() serialize
+    # ensure_context_vlan_pool()/allocate_resource_pools() serialize
     # concurrent callers via acquire_resource_lock/release_resource_lock — not
     # under test here, and the lock's own client.delete() call has no mock set
     # up on this plain MagicMock client.
@@ -433,7 +434,7 @@ class TestGenerateDcScopedFabricDevices:
         gen._create_border_leaf_devices = AsyncMock(return_value=["bl-01"])
         gen.create_firewall_and_load_balancer_devices = AsyncMock(return_value=(["fw-01"], ["lb-01"]))
         gen._cable_border_services = AsyncMock()
-        gen.ensure_firewall_context_pools = AsyncMock()
+        gen.ensure_context_vlan_pool = AsyncMock()
         gen.data["fabric_templates"] = [
             _entry("firewall", 1, _FW_TEMPLATE),
             _entry("load-balancer", 1, _LB_TEMPLATE),
@@ -443,7 +444,10 @@ class TestGenerateDcScopedFabricDevices:
 
         gen._create_border_leaf_devices.assert_awaited_once()
         gen.create_firewall_and_load_balancer_devices.assert_awaited_once()
-        gen.ensure_firewall_context_pools.assert_awaited_once_with(name="dc1")
+        assert [call.kwargs for call in gen.ensure_context_vlan_pool.await_args_list] == [
+            {"name": "dc1", "spec": FIREWALL_CONTEXT},
+            {"name": "dc1", "spec": LOADBALANCER_CONTEXT},
+        ]
         gen._cable_border_services.assert_awaited_once_with(
             border_role_for={"firewall": "firewall", "load-balancer": "load-balancer"},
             connectivity_mode=gen.data["connectivity_mode"],
@@ -451,6 +455,29 @@ class TestGenerateDcScopedFabricDevices:
             firewall_names=["fw-01"],
             load_balancer_names=["lb-01"],
         )
+
+
+class TestContextPoolsFollowTheServiceDevices:
+    """Each context VLAN pool exists exactly when the DC has devices of its role."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("firewalls", "load_balancers", "fw_pool", "lb_pool"),
+        [(["fw-01"], [], True, False), ([], ["lb-01"], False, True), ([], [], False, False)],
+    )
+    async def test_pool_per_role_present(
+        self, firewalls: list[str], load_balancers: list[str], fw_pool: bool, lb_pool: bool
+    ) -> None:
+        gen = _make_generator()
+        gen._create_border_leaf_devices = AsyncMock(return_value=["bl-01"])
+        gen.create_firewall_and_load_balancer_devices = AsyncMock(return_value=(firewalls, load_balancers))
+        gen._cable_border_services = AsyncMock()
+        gen.ensure_context_vlan_pool = AsyncMock()
+
+        await gen._generate_dc_scoped_fabric_devices()
+
+        specs = [call.kwargs["spec"] for call in gen.ensure_context_vlan_pool.await_args_list]
+        assert specs == [FIREWALL_CONTEXT] * fw_pool + [LOADBALANCER_CONTEXT] * lb_pool
 
 
 class TestEnsureFirewallContextPools:
@@ -471,7 +498,7 @@ class TestEnsureFirewallContextPools:
     async def test_creates_the_vlan_pool_and_no_p2p_slice(self, underlay_protocol: str) -> None:
         gen = self._make_gen(underlay_protocol=underlay_protocol)
 
-        await gen.ensure_firewall_context_pools(name="dc1")
+        await gen.ensure_context_vlan_pool(name="dc1", spec=FIREWALL_CONTEXT)
 
         gen.upsert_number_pool.assert_awaited_once()
         assert gen.upsert_number_pool.call_args.kwargs["pool_name"] == "dc1-fw-context-vlan-pool"
@@ -482,13 +509,13 @@ class TestEnsureFirewallContextPools:
     @pytest.mark.asyncio
     async def test_serializes_on_a_lock_scoped_to_this_dc(self) -> None:
         """Two overlapping calls for the SAME dc_name must not both create the
-        pool — see PoolMixin.ensure_firewall_context_pools for the reproduced
+        pool — see PoolMixin.ensure_context_vlan_pool for the reproduced
         collision this guards against."""
         gen = self._make_gen()
         calls: list[str] = []
         gen.acquire_resource_lock = AsyncMock(side_effect=lambda key: calls.append(f"acquire:{key}") or "lock-id")
         gen.release_resource_lock = AsyncMock(side_effect=lambda lock_id: calls.append(f"release:{lock_id}"))
 
-        await gen.ensure_firewall_context_pools(name="dc1")
+        await gen.ensure_context_vlan_pool(name="dc1", spec=FIREWALL_CONTEXT)
 
         assert calls == ["acquire:fw-context-pools-dc1", "release:lock-id"]

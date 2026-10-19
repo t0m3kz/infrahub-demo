@@ -1,0 +1,52 @@
+#- Citrix NetScaler ADC — load balancer configuration -#
+set ns config -IPAddress 192.168.2.1 -netmask 255.255.255.0
+set ns hostName DC3-LB-01
+#
+# --- High Availability (HA Node Pair) ---
+add ha node 1 192.168.2.2
+#
+# --- LB context DC3-LB-01-DC3-LB-02-ha-PROD (shared): admin partition SHARED-PROD, VRF PROD ---
+# documented-not-lab-verified: admin partition per context with its VLAN bound, partition-local SNIP bound to the VLAN and route
+# leg eth1.3100: VLAN 3100 (border VNI 64100), gateway 100.66.64.1; VIP range 100.66.96.0/26 routed to 100.66.64.4
+add ns partition SHARED-PROD
+add vlan 3100
+bind vlan 3100 -ifnum eth1 -tagged
+bind ns partition SHARED-PROD -vlan 3100
+switch ns partition SHARED-PROD
+add ns ip 100.66.64.4 255.255.255.248 -type SNIP
+bind vlan 3100 -IPAddress 100.66.64.4 255.255.255.248
+add route 0.0.0.0 0.0.0.0 100.66.64.1
+# web.c001.example.com
+add lb monitor web_c001_example_com_tcp_443_mon1 HTTP -httpRequest "GET /health" -respCode 200 -interval 5 -resptimeout 2000 -units4 MSEC -retries 3 -successRetries 2 -LRTM DISABLED
+add serviceGroup sg_web_c001_example_com_tcp_443 TCP
+bind serviceGroup sg_web_c001_example_com_tcp_443 10.10.1.10 443
+bind serviceGroup sg_web_c001_example_com_tcp_443 10.10.1.11 443
+bind serviceGroup sg_web_c001_example_com_tcp_443 -monitorName web_c001_example_com_tcp_443_mon1
+add lb vserver vs_web_c001_example_com_tcp_443 TCP 100.66.96.10 443 -lbMethod LEASTCONNECTION -persistenceType SOURCEIP
+bind lb vserver vs_web_c001_example_com_tcp_443 sg_web_c001_example_com_tcp_443
+enable lb vserver vs_web_c001_example_com_tcp_443
+switch ns partition default
+#
+# --- LB context DC3-LB-01-DC3-LB-02-ha-NON-PROD (shared): admin partition SHARED-NON-PROD, VRF NON-PROD ---
+# documented-not-lab-verified: admin partition per context with its VLAN bound, partition-local SNIP bound to the VLAN and route
+# leg eth1.3301: VLAN 3301 (border VNI 64301), gateway 100.66.80.1; VIP range 100.66.112.0/26 routed to 100.66.80.4
+add ns partition SHARED-NON-PROD
+add vlan 3301
+bind vlan 3301 -ifnum eth1 -tagged
+bind ns partition SHARED-NON-PROD -vlan 3301
+switch ns partition SHARED-NON-PROD
+add ns ip 100.66.80.4 255.255.255.248 -type SNIP
+bind vlan 3301 -IPAddress 100.66.80.4 255.255.255.248
+add route 0.0.0.0 0.0.0.0 100.66.80.1
+# api.c002.example.com
+add lb monitor api_c002_example_com_tcp_8080_mon1 TCP -interval 5 -resptimeout 1000 -units4 MSEC -retries 3 -successRetries 3 -LRTM DISABLED
+add serviceGroup sg_api_c002_example_com_tcp_8080 TCP
+bind serviceGroup sg_api_c002_example_com_tcp_8080 10.20.1.10 8080
+bind serviceGroup sg_api_c002_example_com_tcp_8080 10.20.1.11 8080
+bind serviceGroup sg_api_c002_example_com_tcp_8080 -monitorName api_c002_example_com_tcp_8080_mon1
+add lb vserver vs_api_c002_example_com_tcp_8080 TCP 100.66.112.10 8080 -lbMethod ROUNDROBIN -persistenceType NONE
+bind lb vserver vs_api_c002_example_com_tcp_8080 sg_api_c002_example_com_tcp_8080
+enable lb vserver vs_api_c002_example_com_tcp_8080
+switch ns partition default
+#
+save ns config

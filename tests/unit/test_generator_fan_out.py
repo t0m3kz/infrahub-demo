@@ -218,6 +218,24 @@ class TestWaitForParentGeneratorAndRefetch:
         assert await gen.wait_for_parent_generator_and_refetch("add_dc", "dc-1") is None
         gen.logger.error.assert_not_called()
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("state", "waited"), [(TaskState.RUNNING, True), (TaskState.COMPLETED, False)])
+    async def test_wait_only_reports_whether_it_waited_and_never_refetches(
+        self, state: TaskState, waited: bool
+    ) -> None:
+        """wait_for_parent_generators is the wait without the full re-collect, for a caller re-reading less."""
+        gen = _build_common_gen()
+        gen.client.task = MagicMock()
+        gen.client.task.filter = AsyncMock(
+            return_value=[_mock_task(id="t-1", title="Run generator add_dc", state=state)]
+        )
+        gen.client.task.wait_for_completion = AsyncMock()
+        gen.collect_data = AsyncMock()
+
+        assert await gen.wait_for_parent_generators(("add_dc",), "dc-1") is waited
+        assert gen.client.task.wait_for_completion.await_count == int(waited)
+        gen.collect_data.assert_not_awaited()
+
 
 class TestGetParentPoolWithRetry:
     @pytest.mark.asyncio

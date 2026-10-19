@@ -39,6 +39,10 @@ view of the leaf ACL, the PBR bypass and the firewall):
   MANAGEMENT services, another VRF, a cloud, a prefix selector, an untagged
   segment): the tagged side to or from UNCLASSIFIED, since such traffic
   reaches the fabric through a firewall exchange leg or a border;
+- **load-balancer legs.** A VIP and a context's leg are never groups: the
+  client's rule to the VIP /32 is client -> UNCLASSIFIED, and the rule of the
+  segment-less policy ``lb-<context>`` (leg /29 -> backend segment, read from
+  the backend's ``inbound_rules``) is UNCLASSIFIED -> backend;
 - nothing else. Two customers' segments with no rule between them have no
   row: denied. A deny rule is no row (the default denies); a deny ordered
   before an overlapping permit in one policy is not modelled (none in data).

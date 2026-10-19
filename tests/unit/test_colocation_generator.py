@@ -22,6 +22,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from infrahub_sdk.exceptions import NodeNotFoundError
 
+from generators.firewall_context import FIREWALL_CONTEXT
 from generators.helpers.naming import DeviceNameContext, DeviceNamingConfig
 from generators.logger import GeneratorError
 from generators.topology.colocation import (
@@ -389,14 +390,14 @@ class TestGenerateEntry:
         gen._cable_metro_services = AsyncMock()
         gen._ensure_metro_evpn = AsyncMock(return_value=_PROCESSES)
         gen._ensure_edge_pair = AsyncMock()
-        gen.ensure_firewall_context_pools = AsyncMock()
+        gen.ensure_context_vlan_pool = AsyncMock()
 
         await gen.generate({"TopologyColocationMetro": [_metro()]})
 
         if expected:
-            gen.ensure_firewall_context_pools.assert_awaited_once_with(name="fr")
+            gen.ensure_context_vlan_pool.assert_awaited_once_with(name="fr", spec=FIREWALL_CONTEXT)
         else:
-            gen.ensure_firewall_context_pools.assert_not_awaited()
+            gen.ensure_context_vlan_pool.assert_not_awaited()
 
 
 class TestPools:

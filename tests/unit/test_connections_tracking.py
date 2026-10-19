@@ -130,6 +130,40 @@ class TestUpsertP2pAddressesTrack:
             ip.save.assert_awaited_once_with(**_UNTRACKED)
 
 
+class TestUpsertIpAddress:
+    """upsert_ip_address() is the one find-or-create of an address, also for an address no prefix offset names."""
+
+    @pytest.mark.asyncio
+    async def test_namespace_by_id_is_queried_and_created_by_id(self) -> None:
+        """A cloud instance's own address: the namespace is known by id only."""
+        gen = _make_gen()
+        created = AsyncMock(id="ip-a")
+        gen.client.create = AsyncMock(return_value=created)
+
+        result = await gen.upsert_ip_address(
+            address="10.30.1.11/24", ip_namespace={"id": "ns-prod"}, description="instance", track=False
+        )
+
+        assert result is created
+        assert gen.client.get.await_args.kwargs["ip_namespace__ids"] == ["ns-prod"]
+        assert gen.client.create.await_args_list[0].kwargs["data"] == {
+            "address": "10.30.1.11/24",
+            "ip_namespace": {"id": "ns-prod"},
+            "description": "instance",
+        }
+        created.save.assert_awaited_once_with(**_UNTRACKED)
+
+    @pytest.mark.asyncio
+    async def test_existing_address_without_description_is_resaved_as_is(self) -> None:
+        gen = _make_gen()
+        existing = AsyncMock(id="ip-a")
+        gen.client.get = AsyncMock(return_value=existing)
+
+        assert await gen.upsert_ip_address(address="10.30.1.11/24", ip_namespace={"id": "ns-prod"}) is existing
+        gen.client.create.assert_not_called()
+        existing.save.assert_awaited_once_with(**_TRACKED)
+
+
 class TestEnsureVlanSubinterfaceTrack:
     """ensure_vlan_subinterface(track=...) covers the sub-interface save and its capability re-save."""
 

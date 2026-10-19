@@ -186,6 +186,19 @@ def rule_groups(
     return [tagged] if tagged is not None and tagged in groups else groups
 
 
+def _contract_rules(segment: dict[str, Any]) -> list[tuple[dict[str, Any], str]]:
+    """(rule, id of its default source segment) for the rules ``segment`` contributes rows for.
+
+    Its own rules, sourced by the segment unless a rule names another; and the
+    rules into it of a policy with no segment (a load-balancer context's
+    ``lb-<context>``: the leg /29 -> this segment), which no segment's own policy
+    holds. Such a rule has no source segment: its source is UNCLASSIFIED.
+    """
+    egress, ingress = segment_flows(segment)
+    own = [(rule, str(segment.get("id") or "")) for rule in egress["rules"]]
+    return own + [(rule, "") for rule in ingress if not (rule.get("policy") or {}).get("segment")]
+
+
 def get_vrf_contracts(
     segments: Iterable[dict[str, Any]],
     tags: Iterable[dict[str, Any]],
@@ -196,8 +209,9 @@ def get_vrf_contracts(
     """The permit rows of every VRF (module docstring), sorted by (vrf, src, dst).
 
     ``segments`` are every segment of the fleet whose rules may name a
-    classified segment (cleaned SegmentGroupPolicyFields: every rule lives in
-    its source segment's policy, so the rules of all segments are all rules);
+    classified segment (cleaned SegmentGroupPolicyFields: a rule lives in its
+    source segment's policy, or in a segment-less one and then is read from its
+    destination's inbound_rules, so the rules of all segments are all rules);
     ``tags`` every SecurityTag with its components. ``local`` (group names)
     keeps the rows with at least one local end: a data center or a device
     scope; None keeps all, and the local rows of any partition of the groups
@@ -207,11 +221,11 @@ def get_vrf_contracts(
     by_segment, by_tag = groups if groups is not None else segment_groups(segments, tags)
     rows = _Rows()
     for segment in segments:
-        for rule in segment_flows(segment)[0]["rules"]:
+        for rule, default_src in _contract_rules(segment):
             if rule.get("action") != "permit":
                 continue
             entry, name = _entry(rule), str(rule.get("name") or rule.get("id"))
-            src_id = str((rule.get("source_segment") or {}).get("id") or segment.get("id"))
+            src_id = str((rule.get("source_segment") or {}).get("id") or default_src)
             dst_id = str((rule.get("destination_segment") or {}).get("id") or "")
             src = rule_groups(rule, "source", src_id, by_segment, by_tag)
             dst = rule_groups(rule, "destination", dst_id, by_segment, by_tag)

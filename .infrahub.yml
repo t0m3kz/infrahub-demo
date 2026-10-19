@@ -264,7 +264,7 @@ check_definitions:
   - name: validate_loadbalancer
     class_name: CheckLoadBalancer
     file_path: checks/loadbalancer.py
-    targets: loadbalancer_devices
+    targets: loadbalancers
     parameters:
       device: name__value
   - name: validate_proxy
@@ -694,14 +694,16 @@ queries:
     file_path: queries/topology/add/app_component.gql
   - name: app_component_segment
     file_path: queries/topology/add/app_component_segment.gql
+  - name: lb_segment_gateways
+    file_path: queries/topology/add/lb_segment_gateways.gql
+  - name: lb_serving_contexts
+    file_path: queries/topology/add/lb_serving_contexts.gql
   - name: segment_components
     file_path: queries/topology/add/segment_components.gql
   - name: segment_vlan_domains
     file_path: queries/topology/add/segment_vlan_domains.gql
   - name: vxlan_segment_data
     file_path: queries/topology/add/vxlan_segment.gql
-  - name: loadbalancer_vip_data
-    file_path: queries/topology/add/loadbalancer_vip.gql
   - name: vrf_namespace_data
     file_path: queries/topology/add/vrf_namespace.gql
   - name: colocation_metro_data
@@ -917,19 +919,6 @@ generator_definitions:
       files:
         - generators/
         - utils/
-  - name: add_lb_backend_nexthop
-    file_path: generators/topology/loadbalancer.py
-    targets: loadbalancer_vips
-    query: loadbalancer_vip_data
-    class_name: LoadbalancerBackendNexthopGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      id: id
-    watch:
-      files:
-        - generators/
-        - utils/
   - name: add_app_application
     file_path: generators/topology/application_security.py
     targets: app_applications
@@ -943,6 +932,9 @@ generator_definitions:
       files:
         - generators/
         - utils/
+        # Read at run time by the VIP producer (generators/lb_vip.py).
+        - queries/topology/add/lb_segment_gateways.gql
+        - queries/topology/add/lb_serving_contexts.gql
   # Same generator, entered from a dependency: the application trigger fires
   # before the dependencies of a freshly loaded application exist, and a
   # dependency added later changes no AppApplication at all. It only fans out
@@ -960,10 +952,11 @@ generator_definitions:
       files:
         - generators/
         - utils/
-  # Same generator, entered from a component that moved to another segment
-  # or changed its ports: it fans out add_app_application to its own
-  # application and every application calling the component, and writes
-  # nothing itself (only add_app_application owns an application's rules).
+  # Same generator, entered from a component that moved to another segment,
+  # changed its ports or instances, or turned load_balanced (or back): it
+  # fans out add_app_application to its own application and every
+  # application calling the component, and writes nothing itself (only
+  # add_app_application owns an application's rules).
   - name: add_app_component
     file_path: generators/topology/application_security.py
     targets: app_components

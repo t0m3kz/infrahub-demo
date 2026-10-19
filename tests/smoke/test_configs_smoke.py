@@ -28,6 +28,7 @@ from transforms.config.firewall import Firewall
 from transforms.config.l2_leaf import L2Leaf
 from transforms.config.leaf import Leaf
 from transforms.config.loadbalancer import LoadBalancer
+from transforms.config.loadbalancer_cloud import LoadBalancerCloud
 from transforms.config.proxy import Proxy
 from transforms.config.spine import Spine
 from transforms.config.super_spine import SuperSpine
@@ -44,6 +45,7 @@ _PREFIX_TO_CLASS: list[tuple[str, type]] = sorted(
         ("border_leaf", BorderLeaf),
         ("border_spine", BorderSpine),
         ("loadbalancer", LoadBalancer),
+        ("loadbalancer_cloud", LoadBalancerCloud),
         ("cloud_terraform", CloudVpcTerraform),
         ("firewall", Firewall),
         ("spine", Spine),

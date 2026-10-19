@@ -132,13 +132,34 @@ fragment SecurityTagPlacementFields on SecurityTag {
   }
 }
 
+# One rule as the group contract builder reads it: its entry, its two segments
+# and the component tags it narrows them to.
+fragment GroupPolicyRuleFields on SecurityPolicyRule {
+  id
+  index { value }
+  name { value }
+  action { value }
+  protocol { value }
+  port_start { value }
+  port_end { value }
+  disabled { value }
+  apply_on_switch { value }
+  source_segment { node { id } }
+  destination_segment { node { id } }
+  source_security_tag { node { id } }
+  destination_security_tag { node { id } }
+}
+
 # One segment as the group contract builder reads it
 # (transforms/helpers/group_policy.py): whether it is a routed tenant segment
 # (kind, gateway namespace type, zone) and its group tag, its owner (the
 # customer label), where it is active (utils/group_policy.segment_sites: the
 # VXLAN deployments, the VLAN footprint's data center), its classification
 # (VLAN ID, prefix) and its own rules with the component tags they carry
-# (every rule lives in its source segment's policy). The inline fragments below
+# (every rule lives in its source segment's policy). The rules into it
+# (inbound_rules) carry their policy's segment: a rule of a segment-less policy
+# (a load-balancer context's lb-<context>: its leg -> this segment) is in no
+# segment's own policy, so it is read only here. The inline fragments below
 # select plain fields: a named fragment spread directly inside an inline fragment
 # (`... on X { ...F }`) resolves to nulls (commit 7a38de0e).
 fragment SegmentGroupPolicyFields on ManagedNetworkSegment {
@@ -164,24 +185,14 @@ fragment SegmentGroupPolicyFields on ManagedNetworkSegment {
       name { value }
       enabled { value }
       default_action { value }
-      rules {
-        edges {
-          node {
-            id
-            index { value }
-            name { value }
-            action { value }
-            protocol { value }
-            port_start { value }
-            port_end { value }
-            disabled { value }
-            apply_on_switch { value }
-            source_segment { node { id } }
-            destination_segment { node { id } }
-            source_security_tag { node { id } }
-            destination_security_tag { node { id } }
-          }
-        }
+      rules { edges { node { ...GroupPolicyRuleFields } } }
+    }
+  }
+  inbound_rules {
+    edges {
+      node {
+        ...GroupPolicyRuleFields
+        policy { node { enabled { value } segment { node { id } } } }
       }
     }
   }

@@ -15,7 +15,8 @@ class RulesPlanner:
     """Planner for dependency-driven rule preparation without DB side effects."""
 
     @staticmethod
-    def _name_part(value: Any, fallback: str) -> str:
+    def name_part(value: Any, fallback: str = "") -> str:
+        """``value`` as a lowercase, space-free part of a rule name."""
         return str(value or fallback).strip().lower().replace(" ", "-")
 
     @staticmethod
@@ -35,12 +36,12 @@ class RulesPlanner:
         """
         dep_name = str((dep or {}).get("name") or "").strip()
         if dep_name:
-            base = RulesPlanner._name_part(dep_name, "dependency")
+            base = RulesPlanner.name_part(dep_name, "dependency")
         else:
             src_label = src.get("label") or src.get("fqdn") or src.get("name", "src")
             dst_label = dst.get("label") or dst.get("fqdn") or dst.get("name", "dst")
-            src_part = RulesPlanner._name_part(src_label, "src")
-            dst_part = RulesPlanner._name_part(dst_label, "dst")
+            src_part = RulesPlanner.name_part(src_label, "src")
+            dst_part = RulesPlanner.name_part(dst_label, "dst")
             base = f"{app_name}-{src_part}-to-{dst_part}"
         if port is None:
             return base
@@ -186,7 +187,18 @@ class RulesPlanner:
         port_start: int | None,
         port_end: int | None,
         cross_zone: bool,
+        vip_id: str | None = None,
     ) -> dict[str, Any]:
+        """The rule of one dependency port: into the destination segment, or,
+        with ``vip_id``, R_client — into one VIP of a load-balanced target (one
+        rule per VIP: the leaf ACL and the firewall render one address selector).
+
+        The VIPs are UNCLASSIFIED service addresses (never a segment or a
+        group), so R_client names no destination segment, carries no
+        destination tag and is not forced onto the switch by the target's
+        isolation mode; the source side is the same as a direct rule's.
+        """
+        reached_seg = {} if vip_id else dst_seg
         payload: dict[str, Any] = {
             "policy": {"id": policy_id},
             "name": rule_name,
@@ -195,18 +207,71 @@ class RulesPlanner:
             "log": cross_zone,
             "disabled": False,
             "source_segment": {"id": src_seg.get("id")},
-            "destination_segment": {"id": dst_seg.get("id")},
-            "apply_on_switch": MICROSEGMENTED in (src_seg.get("isolation_mode"), dst_seg.get("isolation_mode")),
+            "apply_on_switch": MICROSEGMENTED in (src_seg.get("isolation_mode"), reached_seg.get("isolation_mode")),
             "description": f"{cls.rule_description(dep, src_comp, dst_comp)}{cls.governance_suffix(src_comp, dst_comp, dep)}",
         }
+        if vip_id:
+            payload["destination_ip_addresses"] = [{"id": vip_id}]
+        else:
+            payload["destination_segment"] = {"id": dst_seg.get("id")}
         if port_start is not None:
             payload["port_start"] = port_start
         if port_end is not None:
             payload["port_end"] = port_end
         if dep.get("access_expires_at"):
             payload["expires_at"] = dep["access_expires_at"]
-        payload.update(cls.rule_tags(src_comp=src_comp, dst_comp=dst_comp, src_seg=src_seg, dst_seg=dst_seg))
+        payload.update(cls.rule_tags(src_comp=src_comp, dst_comp=dst_comp, src_seg=src_seg, dst_seg=reached_seg))
         return payload
+
+    @staticmethod
+    def lb_policy_name(context_name: str) -> str:
+        """The segment-less policy of a load balancer context, holding its R_server rules."""
+        return f"lb-{context_name}"
+
+    @classmethod
+    def lb_server_rule_name(cls, component: dict[str, Any], port: PortSpec) -> str:
+        """R_server of one VIP: unique in its context's policy, as the VIP is per (fqdn, protocol, port)."""
+        fqdn = cls.name_part(component.get("fqdn") or component.get("name"), "component")
+        return f"{fqdn}-{PortProfileHelper.format_port_spec(port).replace('/', '-')}"
+
+    @classmethod
+    def build_lb_server_rule_payload(
+        cls,
+        *,
+        policy_id: str,
+        rule_name: str,
+        context_name: str,
+        component: dict[str, Any],
+        segment: dict[str, Any],
+        leg_prefix_id: str,
+        port: PortSpec,
+    ) -> dict[str, Any]:
+        """R_server: the context's leg /29 (the SNAT automap source of every
+        balanced connection) to the backend segment on the VIP port.
+
+        The leg is an UNCLASSIFIED service leg, so only the destination side
+        carries a component tag, where its segment is microsegmented. Never
+        expires: it lives exactly as long as its VIP.
+        """
+        protocol, port_start, _port_end = port
+        return {
+            "policy": {"id": policy_id},
+            "name": rule_name,
+            "action": "permit",
+            "protocol": protocol,
+            "port_start": port_start,
+            "log": False,
+            "disabled": False,
+            "expires_at": None,
+            "source_prefixes": [{"id": leg_prefix_id}],
+            "destination_segment": {"id": segment.get("id")},
+            "apply_on_switch": is_microsegmented(segment),
+            "description": (
+                f"Load balancer {context_name} -> {component.get('fqdn') or component.get('name')} "
+                f"({PortProfileHelper.format_port_spec(port)})"
+            ),
+            **cls.rule_tags(src_comp={}, dst_comp=component, src_seg={}, dst_seg=segment),
+        }
 
     @staticmethod
     def rule_tags(

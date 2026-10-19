@@ -50,25 +50,6 @@ query GetTenantServices {
       }
     }
   }
-  ManagedLoadbalancerHA {
-    edges {
-      node {
-        name {
-          value
-        }
-        tenant {
-          node {
-            __typename
-            ... on TopologyCustomerDC {
-              name {
-                value
-              }
-            }
-          }
-        }
-      }
-    }
-  }
   ManagedSegmentDeployment {
     edges {
       node {

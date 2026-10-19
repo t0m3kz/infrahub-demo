@@ -191,7 +191,6 @@ TOPOLOGY_RERUN_GENERATORS = {
     "add_circuit": "physical_circuits",
     "add_virtual_circuit": "virtual_circuits",
     "add_endpoint": "endpoints",
-    "add_lb_backend_nexthop": "loadbalancer_vips",
     "add_app_component_segment": "app_components",
     "add_sdwan_edge": "customer_deployments_office",
     "add_office_fabric": "customer_deployments_office",

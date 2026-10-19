@@ -14,25 +14,36 @@ resource "aws_lb" "{{ lb_name | tf_id }}" {
 }
 {% for pool in backend_pools %}
 resource "aws_lb_target_group" "{{ pool.name | tf_id }}" {
-  name     = "{{ pool.name }}"
-  port     = 80
-  protocol = "HTTP"
-  vpc_id   = data.aws_vpc.{{ vpc_name | tf_id }}.id
+  name        = "{{ pool.name }}"
+  port        = {{ pool.port }}
+  protocol    = "{{ pool.protocol }}"
+  target_type = "ip"
+  vpc_id      = data.aws_vpc.{{ vpc_name | tf_id }}.id
 {%- if pool.health_check %}
 
   health_check {
     protocol            = "{{ pool.health_check.protocol | upper }}"
-    path                = "{{ pool.health_check.path | default('/') }}"
+{%- if pool.health_check.path %}
+    path                = "{{ pool.health_check.path }}"
+{%- endif %}
     interval            = {{ pool.health_check.interval }}
     healthy_threshold   = {{ pool.health_check.healthy_threshold }}
     unhealthy_threshold = {{ pool.health_check.unhealthy_threshold }}
   }
 {%- endif %}
 }
+{%- for target in pool.targets %}
+
+resource "aws_lb_target_group_attachment" "{{ pool.name | tf_id }}_{{ target | tf_id }}" {
+  target_group_arn = aws_lb_target_group.{{ pool.name | tf_id }}.arn
+  target_id        = "{{ target }}"
+  port             = {{ pool.port }}
+}
+{%- endfor %}
 
 {% endfor %}
 {% for listener in listeners %}
-resource "aws_lb_listener" "{{ listener.hostname | tf_id }}_{{ listener.port }}" {
+resource "aws_lb_listener" "{{ (listener.hostname ~ '-' ~ listener.protocol ~ '-' ~ listener.port) | tf_id }}" {
   load_balancer_arn = aws_lb.{{ lb_name | tf_id }}.arn
   port              = {{ listener.port }}
   protocol          = "{{ listener.protocol | upper }}"
@@ -45,4 +56,4 @@ resource "aws_lb_listener" "{{ listener.hostname | tf_id }}_{{ listener.port }}"
     target_group_arn = aws_lb_target_group.{{ (listener.hostname ~ '-' ~ listener.protocol ~ '-' ~ listener.port) | tf_id }}.arn
   }
 }
-{% endfor %}
+{% endfor -%}

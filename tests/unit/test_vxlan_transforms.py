@@ -1417,6 +1417,20 @@ class TestGetInterfacesFirewallContextDot1q:
         assert result[0]["dot1q_vlan"] == 150
         assert result[0]["parent_interface"] == {"name": "Ethernet1/49"}
 
+    def test_loadbalancer_context_vlan_id_is_not_a_dot1q_tag(self):
+        """A load-balancer context's vlan_id is its pool value (3101), not the leg tag: a NON-PROD
+        leg is 3101 + 200 = 3301, which the sub-interface name carries."""
+        iface = {
+            "typename": "DcimVirtualInterface",
+            "name": "eth1.3301",
+            "parent_interface": {"name": "eth1"},
+            "capabilities": [
+                {"typename": "ManagedLoadbalancerContext", "name": "dc1-lb-ha-NON-PROD", "vlan_id": 3101},
+            ],
+        }
+        result = get_interfaces([iface])
+        assert result[0]["dot1q_vlan"] == 3301
+
     def test_no_firewall_context_capability_leaves_dot1q_vlan_none(self):
         iface = {"name": "Ethernet1", "capabilities": []}
         result = get_interfaces([iface])

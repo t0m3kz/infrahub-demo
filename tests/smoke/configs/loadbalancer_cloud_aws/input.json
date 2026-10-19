@@ -1,0 +1,185 @@
+{
+  "CloudLoadBalancer": {
+    "edges": [
+      {
+        "node": {
+          "id": "lb-aws",
+          "name": {
+            "value": "frontend-custody-api-c0-a9ea4206"
+          },
+          "lb_type": {
+            "value": "l4_cloud"
+          },
+          "scheme": {
+            "value": "internet_facing"
+          },
+          "virtual_network": {
+            "node": {
+              "id": "vnet-aws",
+              "name": {
+                "value": "c003-vaultex-aws-vpc-prod"
+              },
+              "account": {
+                "node": {
+                  "name": {
+                    "value": "c003-aws-prod"
+                  },
+                  "provider": {
+                    "node": {
+                      "name": {
+                        "value": "AWS"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "network_segments": {
+            "edges": [
+              {
+                "node": {
+                  "id": "seg-aws-1",
+                  "name": {
+                    "value": "c003-vaultex-subnet-prod-1"
+                  },
+                  "availability_zone": {
+                    "node": {
+                      "name": {
+                        "value": "euc1-az1"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "seg-aws-2",
+                  "name": {
+                    "value": "c003-vaultex-subnet-prod-2"
+                  },
+                  "availability_zone": {
+                    "node": {
+                      "name": {
+                        "value": "euc1-az2"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "LoadbalancerVIP": {
+    "edges": [
+      {
+        "node": {
+          "id": "vip-aws-tcp-443",
+          "hostname": {
+            "value": "frontend.custody-api.c003.demo.local"
+          },
+          "protocol": {
+            "value": "tcp"
+          },
+          "port": {
+            "value": 443
+          },
+          "ssl_certificate": {
+            "value": null
+          },
+          "load_balancing_algorithm": {
+            "value": null
+          },
+          "session_persistence": {
+            "value": null
+          },
+          "pool_members": {
+            "edges": [
+              {
+                "node": {
+                  "address": {
+                    "value": "10.20.2.11/24"
+                  }
+                }
+              },
+              {
+                "node": {
+                  "address": {
+                    "value": "10.20.1.10/24"
+                  }
+                }
+              }
+            ]
+          },
+          "health_checks": {
+            "edges": [
+              {
+                "node": {
+                  "check": {
+                    "value": "tcp"
+                  },
+                  "rise": {
+                    "value": 3
+                  },
+                  "fall": {
+                    "value": 3
+                  },
+                  "timeout": {
+                    "value": 2000
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "node": {
+          "id": "vip-aws-udp-443",
+          "hostname": {
+            "value": "frontend.custody-api.c003.demo.local"
+          },
+          "protocol": {
+            "value": "udp"
+          },
+          "port": {
+            "value": 443
+          },
+          "ssl_certificate": {
+            "value": null
+          },
+          "load_balancing_algorithm": {
+            "value": null
+          },
+          "session_persistence": {
+            "value": null
+          },
+          "pool_members": {
+            "edges": [
+              {
+                "node": {
+                  "address": {
+                    "value": "10.20.2.11/24"
+                  }
+                }
+              },
+              {
+                "node": {
+                  "address": {
+                    "value": "10.20.1.10/24"
+                  }
+                }
+              }
+            ]
+          },
+          "health_checks": {
+            "edges": []
+          }
+        }
+      }
+    ]
+  }
+}

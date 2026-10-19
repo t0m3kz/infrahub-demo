@@ -1,16 +1,25 @@
-"""FirewallContext (VDOM/vsys) provisioning shared by the customer boarding
-generators of every facility that owns a firewall pair.
+"""Service context provisioning (FirewallContext, LoadbalancerContext) shared
+by the customer boarding generators of every facility that owns a firewall or
+load-balancer pair.
 
 generators/topology/customer_dc.py (TopologyCustomerDC on a DataCenter) and
 generators/topology/customer_colocation.py (TopologyCustomerColocation on a
 ColocationMetro) board a customer the same way: a shared or dedicated context
-on the parent's ManagedFirewallHA cluster, a VLAN-tagged sub-interface per
-firewall, a transit leg per VRF the context serves (utils/exchange_transit.py)
-joined by a TopologyRoutedExchange, and an optional dedicated load-balancer
-pair. Both hosts call the same leg step (`_ensure_transit_legs`); the legs face
-the border leaf on a DC and the edge on a colocation metro. Only the customer
-kind and the parent's label differ, and the host class sets those as class
-attributes.
+on the parent's HA cluster, a VLAN-tagged sub-interface per member, a leg per
+VRF the context serves (utils/exchange_transit.py), and the deployment's
+serving link. One implementation for both kinds of context; a ContextSpec
+(FIREWALL_CONTEXT, LOADBALANCER_CONTEXT) holds what differs:
+
+* firewall: a leg in the tenant VRF and in each of its EXCHANGE_PEERS
+  (INTERNET, MANAGEMENT), joined by a TopologyRoutedExchange per pair, one
+  public SNAT /32 per context; one shared context per cluster.
+* load balancer (one-arm): a single leg in the tenant VRF, no exchanges, no
+  SNAT, a routed VIP /26 behind the leg's .4; one shared context per (cluster,
+  tenant namespace), since the LB never joins PROD and NON-PROD.
+
+The legs face the border leaf on a DC and the edge on a colocation metro. The
+customer kind, the parent's label and the specs to run are class attributes
+of the host.
 """
 
 from __future__ import annotations
@@ -26,10 +35,13 @@ from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool, CoreNumb
 from utils.exchange_transit import (
     EXCHANGE_PEERS,
     INTERNET_TYPE,
+    LB_VIP_PREFIXLEN,
     OFFSET_MEMBER_A,
     OFFSET_MEMBER_B,
     TRANSIT_OFFSETS,
     TRANSIT_PREFIXLEN,
+    lb_leg_pool_name,
+    lb_vip_pool_name,
     namespace_type_for_environment,
     transit_pool_name,
     transit_vlan,
@@ -38,6 +50,12 @@ from utils.exchange_transit import (
 from .connections import BORDER_ROLE_FOR_SERVICES, tracked_save_kwargs
 from .far_end import far_end_interface
 from .helpers.common import save_with_node_not_found_retry
+from .helpers.pools import (
+    FW_CONTEXT_VLAN_END,
+    FW_CONTEXT_VLAN_START,
+    LB_CONTEXT_VLAN_END,
+    LB_CONTEXT_VLAN_START,
+)
 from .protocols import (
     DcimPhysicalDevice,
     DcimPhysicalInterface,
@@ -47,31 +65,127 @@ from .protocols import (
     IpamPrefix,
     ManagedFirewallContext,
     ManagedFirewallHA,
+    ManagedLoadbalancerContext,
+    ManagedLoadbalancerHA,
     TopologyRoutedExchange,
 )
 from .types import DeviceOptions
 
-_SHARED_CONTEXT_NAME_SUFFIX = "shared"
 _MEMBER_OFFSETS = (OFFSET_MEMBER_A, OFFSET_MEMBER_B)
 _SNAT_POOL_NAME = "FW-SNAT-INTERNET-IPv4"
 _SNAT_PREFIX_LENGTH = 32
+_VIP_POOL_KEY = "vip"  # _prefix_pools key of the VIP range pool, next to the leg types
+
+
+def _firewall_leg_types(tenant_type: str) -> tuple[str, ...]:
+    """The tenant VRF and every VRF it exchanges with (EXCHANGE_PEERS), tenant first."""
+    return (tenant_type, *EXCHANGE_PEERS[tenant_type])
+
+
+def _no_skip(_parent: dict[str, Any]) -> str | None:
+    """Every parent with devices of the role gets the context."""
+    return None
+
+
+def _inline_parent(parent: dict[str, Any]) -> str | None:
+    """Why an inline DC gets no load-balancer context: its load balancers sit in the firewall chain
+    (CablingMixin._cable_border_services), so no uplink faces a border load-balancer service port."""
+    if parent.get("connectivity_mode") == "inline":
+        return "its load balancers are inline behind the firewall (connectivity_mode inline)"
+    return None
+
+
+@dataclass(frozen=True)
+class ContextSpec:
+    """What a kind of service context differs in; everything else is one flow.
+
+    key prefixes the context's resource lock (`{key}-{context}`) and names the
+    parent's VLAN pool (`{parent}-{key}-vlan-pool`, PoolMixin). leg_types maps
+    the tenant namespace type to the namespace types of the context's legs,
+    tenant first; the others are exchanged with it. leg_identifier ends a
+    leg's allocation identifier (`{context_id}-{namespace}-{leg_identifier}`).
+    shared_suffix names a shared context from the tenant namespace name
+    (`{cluster}-{suffix}`); a dedicated one is always `{cluster}-context`.
+    vlan_range bounds the parent's VLAN pool. skip_reason reads the parent
+    (customer.parent of the boarding query) and returns why it gets no
+    context of this kind, or None. vip_pool_name, when set, gives the context
+    a VIP prefix from that pool of the tenant namespace.
+    """
+
+    label: str
+    role: str
+    devices_key: str
+    dedicated_flag: str
+    ha_kind: type[Any]
+    context_kind: type[Any]
+    key: str
+    serving_field: str
+    leg_types: Callable[[str], tuple[str, ...]]
+    leg_pool_name: Callable[[str], str]
+    leg_identifier: str
+    shared_suffix: Callable[[str], str]
+    vlan_range: tuple[int, int]
+    skip_reason: Callable[[dict[str, Any]], str | None] = _no_skip
+    vip_pool_name: Callable[[str], str] | None = None
+
+
+FIREWALL_CONTEXT = ContextSpec(
+    label="FirewallContext",
+    role="firewall",
+    devices_key="firewall_devices",
+    dedicated_flag="dedicated_firewall",
+    ha_kind=ManagedFirewallHA,
+    context_kind=ManagedFirewallContext,
+    key="fw-context",
+    serving_field="serving_firewall_context",
+    leg_types=_firewall_leg_types,
+    leg_pool_name=transit_pool_name,
+    leg_identifier="transit",
+    shared_suffix=lambda _namespace: "shared",
+    vlan_range=(FW_CONTEXT_VLAN_START, FW_CONTEXT_VLAN_END),
+)
+
+LOADBALANCER_CONTEXT = ContextSpec(
+    label="LoadbalancerContext",
+    role="load-balancer",
+    devices_key="loadbalancer_devices",
+    dedicated_flag="dedicated_loadbalancer",
+    ha_kind=ManagedLoadbalancerHA,
+    context_kind=ManagedLoadbalancerContext,
+    key="lb-context",
+    serving_field="serving_loadbalancer_context",
+    leg_types=lambda tenant_type: (tenant_type,),
+    leg_pool_name=lb_leg_pool_name,
+    leg_identifier="lb-leg",
+    shared_suffix=lambda namespace: namespace,
+    vlan_range=(LB_CONTEXT_VLAN_START, LB_CONTEXT_VLAN_END),
+    skip_reason=_inline_parent,
+    vip_pool_name=lb_vip_pool_name,
+)
 
 
 @dataclass(frozen=True)
 class _ContextTarget:
-    """Where a customer's FirewallContext lives and who owns its writes."""
+    """Where a customer's context lives and who owns its writes."""
 
-    context_name: str
+    spec: ContextSpec
+    cluster_name: str
     cluster_id: str
     tenant_id: str | None
     track: bool
-    fw_devices: list[Any]
+    devices: list[Any]
     parent_name: str
+
+    def context_name(self, tenant_namespace: str) -> str:
+        """The context's name: `{cluster}-context` when dedicated (track), else the spec's shared name."""
+        if self.track:
+            return f"{self.cluster_name}-context"
+        return f"{self.cluster_name}-{self.spec.shared_suffix(tenant_namespace)}"
 
 
 @dataclass(frozen=True)
 class _TransitMember:
-    """A firewall HA member as a transit leg sees it.
+    """An HA member as a context leg sees it.
 
     offset is the member's /29 host offset: members sorted by name take
     .5 / .6, the order transforms/helpers/ha.py uses. bl_port is the border
@@ -87,7 +201,7 @@ class _TransitMember:
 
 @dataclass(frozen=True)
 class _TransitState:
-    """What a context already has of its transit legs (see _transit_state)."""
+    """What a context already has of its legs (see _transit_state)."""
 
     context: Any | None
     complete: bool
@@ -142,20 +256,22 @@ def _customer_short_id(customer: dict[str, Any], customer_id: str) -> str:
 
 
 class FirewallContextMixin:
-    """Shared/dedicated FirewallContext and dedicated load-balancer provisioning.
+    """Shared/dedicated service context provisioning, one flow per ContextSpec.
 
-    The host class sets ``_customer_kind`` and ``_parent_label``, and mixes in PoolMixin (``resource_lock``),
-    DeviceMixin (``create_devices``, ``_ensure_ha_pairs``) and CablingMixin
-    (``find_role_interface``, ``ensure_vlan_subinterface``,
+    The host class sets ``_customer_kind``, ``_parent_label``,
+    ``_parent_generators`` and ``_context_specs``, and mixes in PoolMixin
+    (``resource_lock``), DeviceMixin (``create_devices``, ``_ensure_ha_pairs``)
+    and CablingMixin (``find_role_interface``, ``ensure_vlan_subinterface``,
     ``upsert_prefix_addresses``).
     """
 
     # Per-facility configuration, set by the host class. _parent_generators
     # names the parent's own generator definitions — the ONLY owners of the
-    # parent's physical ManagedFirewallHA pair (see _resolve_parent_cluster).
+    # parent's physical HA pairs (see _resolve_parent_cluster).
     _customer_kind: str
     _parent_label: str
     _parent_generators: tuple[str, ...]
+    _context_specs: tuple[ContextSpec, ...]
 
     # Provided by the host class and its other mixins. Callable attributes,
     # not stub methods, so they never shadow the real ones via the MRO.
@@ -196,107 +312,106 @@ class FirewallContextMixin:
             "platform": {"id": template.platform.peer.id},
         }
 
-    async def link_serving_firewall_context(self, *, kind: str, customer_id: str, context_id: str) -> None:
-        """Point this deployment at the context its segments terminate on.
+    async def link_serving_context(self, spec: ContextSpec, *, customer_id: str, context_id: str) -> None:
+        """Point this deployment at the context of spec's kind that serves it (spec.serving_field).
 
-        Shared by generators/topology/customer_dc.py (kind=TopologyCustomerDC)
-        and generators/topology/customer_colocation.py
-        (kind=TopologyCustomerColocation) — same deployment-to-context link,
-        same race-free update, same facility-agnostic rationale.
-
-        The firewall transform reads the link to place each rule in the
-        contexts of its two segments. Only this deployment's own run writes
-        it, so boardings onto one shared context never race. Not tracked:
-        the deployment is the generator's target, not its output, and
+        The firewall transform reads serving_firewall_context to place each
+        rule in the contexts of its two segments; the VIP producer reads
+        serving_loadbalancer_context to place a VIP. Only this deployment's own
+        run writes it, so boardings onto one shared context never race. Not
+        tracked: the deployment is the generator's target, not its output, and
         tracking it would let delete_unused_nodes remove it.
         """
         try:
-            deployment = await self.client.get(kind=kind, id=customer_id)
-            if deployment.serving_firewall_context.id == context_id:
+            deployment = await self.client.get(kind=self._customer_kind, id=customer_id)
+            if getattr(deployment, spec.serving_field).id == context_id:
                 return
-            deployment.serving_firewall_context = context_id
+            setattr(deployment, spec.serving_field, context_id)
             await deployment.save(update_group_context=False)
-            self.logger.info(f"Deployment {customer_id} served by FirewallContext {context_id}")
+            self.logger.info(f"Deployment {customer_id} served by {spec.label} {context_id}")
         except Exception as exc:
-            self.logger.error(f"Failed to link deployment {customer_id} to FirewallContext {context_id}: {exc}")
+            self.logger.error(f"Failed to link deployment {customer_id} to {spec.label} {context_id}: {exc}")
 
-    async def _resolve_context_target(self, customer: dict[str, Any], customer_id: str) -> _ContextTarget | None:
-        """The cluster, context name and ownership for this customer's context; None (logged) when there is none."""
+    async def _resolve_context_target(
+        self, spec: ContextSpec, customer: dict[str, Any], customer_id: str
+    ) -> _ContextTarget | None:
+        """The cluster and ownership of this customer's context of spec's kind; None (logged) when there is none.
+
+        The caller guarantees customer.parent (CustomerFacilityMixin.generate).
+        """
         parent = customer.get("parent") or {}
         parent_id: str = parent.get("id", "")
         parent_name: str = parent.get("name", parent_id)
-        if not parent_id:
-            self.logger.error(
-                f"Deployment {customer.get('name', customer_id)}: no parent {self._parent_label} — "
-                "cannot provision FirewallContext"
-            )
+        skip_reason = spec.skip_reason(parent)
+        if skip_reason:
+            self.logger.info(f"{parent_name}: {skip_reason} — skipping {spec.label} provisioning")
             return None
 
-        # Firewall devices arrive with the deployment's own GraphQL response
-        # (customer.parent.firewall_devices) — no separate filters() round-trip.
-        fw_devices: list[Any] = _physical_devices(parent.get("firewall_devices") or [])
-        if not fw_devices:
-            self.logger.info(f"{parent_name} has no firewall devices — skipping FirewallContext provisioning")
+        # The devices arrive with the deployment's own GraphQL response
+        # (customer.parent.<devices_key>) — no separate filters() round-trip.
+        devices: list[Any] = _physical_devices(parent.get(spec.devices_key) or [])
+        if not devices:
+            self.logger.info(f"{parent_name} has no {spec.role} devices — skipping {spec.label} provisioning")
             return None
 
-        cluster = await self._resolve_parent_cluster(fw_devices, parent_id=parent_id, parent_name=parent_name)
+        cluster = await self._resolve_parent_cluster(spec, devices, parent_id=parent_id, parent_name=parent_name)
         if cluster is None:
             return None
 
-        # The parent can have several independent firewall HA clusters, and
-        # fw_devices is a flat, role-filtered list that can span them. A
-        # FirewallContext belongs to exactly one cluster, so its
-        # sub-interfaces must only be created on that cluster's own members.
+        # The parent can have several independent HA clusters of the role,
+        # and devices is a flat, role-filtered list that can span them. A
+        # context belongs to exactly one cluster, so its sub-interfaces must
+        # only be created on that cluster's own members.
         member_ids = {peer.id for peer in cluster.capabilities.peers}
-        fw_devices = [d for d in fw_devices if _dev_id(d) in member_ids]
-        if not fw_devices:
+        devices = [d for d in devices if _dev_id(d) in member_ids]
+        if not devices:
             self.logger.error(
-                f"{parent_name}: no firewall device resolved as a member of cluster '{cluster.name.value}'"
+                f"{parent_name}: no {spec.role} device resolved as a member of cluster '{cluster.name.value}'"
             )
             return None
 
-        dedicated_result = None
-        if (customer.get("design") or {}).get("dedicated_firewall"):
-            dedicated_result = await self._ensure_dedicated_device_pair(
-                role="firewall",
-                ha_kind="ManagedFirewallHA",
-                physical_devices=fw_devices,
-                parent_id=parent_id,
-                parent_name=parent_name,
-                dc_size=parent.get("size"),
-                customer_name=_customer_short_id(customer, customer_id),
-            )
+        dedicated = bool((customer.get("design") or {}).get(spec.dedicated_flag))
         # Ownership decides tracking. A dedicated context (on this customer's
         # own dedicated cluster, tenant = this customer) is reached by this
-        # customer's run only, so the run owns it and tracks every write. The
-        # shared context and its transit legs are reached by EVERY customer boarding
+        # customer's run only, so the run owns it and tracks every write. A
+        # shared context and its legs are reached by EVERY customer boarding
         # onto the cluster, so they belong to none of them: written untracked,
         # or one customer moving to dedicated (or being removed) would delete
         # what every other customer still uses. A dedicated request whose
         # dedicated pair cannot be provisioned is an error, never a silent
         # move onto the shared context.
-        if (customer.get("design") or {}).get("dedicated_firewall") and dedicated_result is None:
+        if not dedicated:
+            return _ContextTarget(
+                spec=spec,
+                cluster_name=cluster.name.value,
+                cluster_id=cluster.id,
+                tenant_id=None,
+                track=False,
+                devices=devices,
+                parent_name=parent_name,
+            )
+        dedicated_result = await self._ensure_dedicated_device_pair(
+            role=spec.role,
+            ha_kind=spec.ha_kind.__name__,
+            physical_devices=devices,
+            parent_id=parent_id,
+            parent_name=parent_name,
+            dc_size=parent.get("size"),
+            customer_name=_customer_short_id(customer, customer_id),
+        )
+        if dedicated_result is None:
             return None
-        if dedicated_result is not None:
-            cluster, fw_devices = dedicated_result
-            # cluster.name.value already carries customer_name (see
-            # _ensure_dedicated_device_pair's instance_name) — don't append
-            # it again here, or the context name grows with every extra
-            # "-dedicated" segment stacked on top of the cluster's own.
-            context_name = f"{cluster.name.value}-context"
-            tenant_id: str | None = customer_id
-            track = True
-        else:
-            context_name = f"{cluster.name.value}-{_SHARED_CONTEXT_NAME_SUFFIX}"
-            tenant_id = None
-            track = False
-
+        cluster, devices = dedicated_result
+        # cluster.name.value already carries customer_name (see
+        # _ensure_dedicated_device_pair's instance_name) — the context name
+        # only appends "-context" to it.
         return _ContextTarget(
-            context_name=context_name,
+            spec=spec,
+            cluster_name=cluster.name.value,
             cluster_id=cluster.id,
-            tenant_id=tenant_id,
-            track=track,
-            fw_devices=fw_devices,
+            tenant_id=customer_id,
+            track=True,
+            devices=devices,
             parent_name=parent_name,
         )
 
@@ -307,17 +422,20 @@ class FirewallContextMixin:
         customer_id: str,
         target: _ContextTarget,
     ) -> None:
-        """The context and its transit legs for the VRFs this customer is in.
+        """The context and its legs for the VRFs this customer is in.
 
-        A leg is (context, namespace): every firewall member's VLAN
-        sub-interface `<uplink>.<transit_vlan>` addressed from a /29 in that
-        VRF (utils/exchange_transit.py), linked to the context and to the
-        exchange(s) of the leg. The legs of the customer's tenant namespace
-        (from its environment) and of each of its EXCHANGE_PEERS (INTERNET,
-        MANAGEMENT) are joined by one TopologyRoutedExchange `{context}-{A}-{Z}`
-        per pair, so PROD is never paired with NON-PROD. Legs and exchanges are created
-        lazily: a shared context serving PROD and NON-PROD customers grows the
-        NON-PROD leg when the first NON-PROD customer boards.
+        A leg is (context, namespace): every member's VLAN sub-interface
+        `<uplink>.<transit_vlan>` addressed from a /29 in that VRF
+        (utils/exchange_transit.py), linked to the context and to the
+        exchange(s) of the leg. The tenant namespace (from the customer's
+        environment) is the first of spec.leg_types; a firewall context's
+        other legs (EXCHANGE_PEERS: INTERNET, MANAGEMENT) are joined to it by
+        one TopologyRoutedExchange `{context}-{A}-{Z}` per pair, so PROD is
+        never paired with NON-PROD. A load-balancer context has the tenant leg
+        only. Legs and exchanges are created lazily: a shared firewall context
+        serving PROD and NON-PROD customers grows the NON-PROD leg when the
+        first NON-PROD customer boards; a shared load-balancer context is per
+        tenant namespace, so the first NON-PROD customer creates its own.
 
         Shared context (track=False): a re-run, or a second customer on a
         context that is already complete, finds that out by reads alone
@@ -328,44 +446,46 @@ class FirewallContextMixin:
         A context with an INTERNET leg also gets ONE public SNAT /32 from
         FW-SNAT-INTERNET-IPv4 (context.snat_address), shared by every tenant
         VRF the context serves; no other peer gets one (MANAGEMENT is
-        translated to its own leg's VIP); the completeness check includes it, so a run
-        heals a context that lacks one.
+        translated to its own leg's VIP). A load-balancer context gets its
+        routed VIP /26 (context.vip_prefix) instead. The completeness check
+        includes both, so a run heals a context that lacks one.
 
         Writes run under the context's lock; the completeness check repeats
         inside it, so the run that waited on the lock finds the work done.
         """
-        context_name, track = target.context_name, target.track
+        spec, track = target.spec, target.track
         tenant_type = namespace_type_for_environment(customer.get("environment") or "")
-        leg_types = (tenant_type, *EXCHANGE_PEERS[tenant_type])
+        leg_types = spec.leg_types(tenant_type)
         namespaces = await self._transit_namespaces(leg_types)
         if namespaces is None:
             return
-        members = await self._resolve_transit_members(target.fw_devices, context_name=context_name)
+        tenant_namespace = namespaces[tenant_type]
+        context_name = target.context_name(tenant_namespace.name.value)
+        members = await self._resolve_transit_members(spec, target.devices, context_name=context_name)
         if not members:
-            self.logger.error(f"{context_name}: no firewall member has an uplink cabled to a border service port")
+            self.logger.error(f"{context_name}: no {spec.role} member has an uplink cabled to a border service port")
             return
         # (exchange name, A type, Z type): the tenant namespace to each peer.
         exchange_specs = [
-            (f"{context_name}-{namespaces[tenant_type].name.value}-{namespaces[peer].name.value}", tenant_type, peer)
+            (f"{context_name}-{tenant_namespace.name.value}-{namespaces[peer].name.value}", tenant_type, peer)
             for peer in leg_types[1:]
         ]
 
         if not track:
-            state = await self._transit_state(context_name, members, namespaces, leg_types, exchange_specs)
+            state = await self._transit_state(spec, context_name, members, namespaces, leg_types, exchange_specs)
             if state.complete and state.context is not None:
-                await self.link_serving_firewall_context(
-                    kind=self._customer_kind, customer_id=customer_id, context_id=state.context.id
-                )
+                await self.link_serving_context(spec, customer_id=customer_id, context_id=state.context.id)
                 return
 
-        async with self.resource_lock(f"fw-context-{context_name}"):
-            state = await self._transit_state(context_name, members, namespaces, leg_types, exchange_specs)
+        async with self.resource_lock(f"{spec.key}-{context_name}"):
+            state = await self._transit_state(spec, context_name, members, namespaces, leg_types, exchange_specs)
             if not track and state.complete and state.context is not None:
-                await self.link_serving_firewall_context(
-                    kind=self._customer_kind, customer_id=customer_id, context_id=state.context.id
-                )
+                await self.link_serving_context(spec, customer_id=customer_id, context_id=state.context.id)
                 return
-            pools = await self._transit_pools(namespaces)
+            pool_names = {leg_type: spec.leg_pool_name(ns.name.value) for leg_type, ns in namespaces.items()}
+            if spec.vip_pool_name is not None:
+                pool_names[_VIP_POOL_KEY] = spec.vip_pool_name(tenant_namespace.name.value)
+            pools = await self._prefix_pools(pool_names, context_name=context_name)
             if pools is None:
                 return
             snat_pool = None
@@ -373,25 +493,53 @@ class FirewallContextMixin:
                 snat_pool = await self._snat_pool()
                 if snat_pool is None:
                     return
-            context_obj = await self._get_or_create_firewall_context(
-                context_name, target.cluster_id, target.tenant_id, track=track
+            context_obj = await self._get_or_create_context(
+                spec, context_name, target.cluster_id, target.tenant_id, track=track
             )
             if context_obj is None:
                 return
-            await self.link_serving_firewall_context(
-                kind=self._customer_kind, customer_id=customer_id, context_id=context_obj.id
-            )
-            context_obj = await self._ensure_context_vlan(context_obj, target.parent_name, track=track)
+            await self.link_serving_context(spec, customer_id=customer_id, context_id=context_obj.id)
+            context_obj = await self._ensure_context_vlan(spec, context_obj, target.parent_name, track=track)
             if context_obj is None:
                 return
             vlan_id: int = context_obj.vlan_id.value
-            if snat_pool is not None and not await self._ensure_context_snat(context_obj, snat_pool, track=track):
+            if snat_pool is not None and not await self._ensure_context_allocation(
+                spec,
+                context_obj,
+                "snat_address",
+                snat_pool,
+                lambda pool: self.client.allocate_next_ip_address(
+                    resource_pool=pool,
+                    kind=IpamIPAddress,
+                    identifier=f"{context_obj.id}-snat",
+                    prefix_length=_SNAT_PREFIX_LENGTH,
+                    data={"description": f"SNAT address of {context_obj.name.value}"},
+                ),
+                track=track,
+            ):
+                return
+            vip_pool = pools.get(_VIP_POOL_KEY)
+            if vip_pool is not None and not await self._ensure_context_allocation(
+                spec,
+                context_obj,
+                "vip_prefix",
+                vip_pool,
+                lambda pool: self.client.allocate_next_ip_prefix(
+                    resource_pool=pool,
+                    kind=IpamPrefix,
+                    identifier=f"{context_obj.id}-{tenant_namespace.name.value}-lb-vip",
+                    prefix_length=LB_VIP_PREFIXLEN,
+                    member_type="address",
+                    data={"role": "technical"},
+                ),
+                track=track,
+            ):
                 return
 
             addresses: dict[str, dict[int, Any]] = {}
             for leg_type in leg_types:
                 leg_addresses = await self._allocate_transit_addresses(
-                    context_obj=context_obj, namespace=namespaces[leg_type], pool=pools[leg_type], track=track
+                    spec, context_obj=context_obj, namespace=namespaces[leg_type], pool=pools[leg_type], track=track
                 )
                 if leg_addresses is None:
                     return
@@ -451,20 +599,22 @@ class FirewallContextMixin:
             return None
         return by_type
 
-    async def _transit_pools(self, namespaces: dict[str, Any]) -> dict[str, Any] | None:
-        """The FW-Transit-<VRF>-IPv4 pool of each namespace (data/bootstrap), one query; None (logged) when one is missing."""
-        pool_names = {leg_type: transit_pool_name(ns.name.value) for leg_type, ns in namespaces.items()}
+    async def _prefix_pools(self, pool_names: dict[str, str], *, context_name: str) -> dict[str, Any] | None:
+        """key -> the bootstrap CoreIPPrefixPool named pool_names[key] (data/bootstrap/23_transit_pools.yml),
+        one query; None (logged) when one is missing."""
         pools = {
             pool.name.value: pool
             for pool in await self.client.filters(kind=CoreIPPrefixPool, name__values=sorted(pool_names.values()))
         }
         missing = sorted(name for name in pool_names.values() if name not in pools)
         if missing:
-            self.logger.error(f"Transit pool(s) {missing} not found — cannot allocate transit legs")
+            self.logger.error(f"Prefix pool(s) {missing} not found — cannot provision '{context_name}'")
             return None
-        return {leg_type: pools[name] for leg_type, name in pool_names.items()}
+        return {key: pools[name] for key, name in pool_names.items()}
 
-    async def _resolve_transit_members(self, fw_devices: list[Any], *, context_name: str) -> list[_TransitMember]:
+    async def _resolve_transit_members(
+        self, spec: ContextSpec, devices: list[Any], *, context_name: str
+    ) -> list[_TransitMember]:
         """The members that have both an uplink and a cabled border service port, with their /29 offsets.
 
         The offset follows the position among ALL members (sorted by name), not
@@ -472,38 +622,40 @@ class FirewallContextMixin:
         never shifts the other's address.
         """
         members: list[_TransitMember] = []
-        for fw_device, offset in zip(sorted(fw_devices, key=_dev_name), _MEMBER_OFFSETS, strict=False):
-            fw_name = _dev_name(fw_device)
-            trunk = await self._context_trunk(device_id=_dev_id(fw_device), device_name=fw_name, role="uplink")
+        for device, offset in zip(sorted(devices, key=_dev_name), _MEMBER_OFFSETS, strict=False):
+            device_name = _dev_name(device)
+            trunk = await self._context_trunk(device_id=_dev_id(device), device_name=device_name, role="uplink")
             if trunk is None:
                 continue
-            bl_port = await self._border_service_port(fw_device, context_name=context_name)
+            bl_port = await self._border_service_port(spec, device, context_name=context_name)
             if bl_port is None:
                 continue
             members.append(
-                _TransitMember(name=fw_name, device_id=_dev_id(fw_device), trunk=trunk, bl_port=bl_port, offset=offset)
+                _TransitMember(name=device_name, device_id=_dev_id(device), trunk=trunk, bl_port=bl_port, offset=offset)
             )
         return members
 
     async def _transit_state(
         self,
+        spec: ContextSpec,
         context_name: str,
         members: list[_TransitMember],
         namespaces: dict[str, Any],
         leg_types: tuple[str, ...],
         exchange_specs: list[tuple[str, str, str]],
     ) -> _TransitState:
-        """Read-only completeness check of a context's transit legs.
+        """Read-only completeness check of a context's legs.
 
-        Complete means: the context has its VLAN; every member's border port
-        carries the context; every exchange exists; every member has a
-        sub-interface per leg with an address in that leg's namespace, linked
-        to the leg's exchanges. Sub-interfaces are written last, so one with
-        its address implies the leg's other addresses exist. Also returns the
-        border ports still to tag with the context.
+        Complete means: the context has its VLAN (and its SNAT address / VIP
+        prefix where it takes one); every member's border port carries the
+        context; every exchange exists; every member has a sub-interface per
+        leg with an address in that leg's namespace, linked to the leg's
+        exchanges. Sub-interfaces are written last, so one with its address
+        implies the leg's other addresses exist. Also returns the border ports
+        still to tag with the context.
         """
         every_port = [member.bl_port.id for member in members]
-        contexts = await self.client.filters(kind=ManagedFirewallContext, name__value=context_name)
+        contexts = await self.client.filters(kind=spec.context_kind, name__value=context_name)
         if not contexts:
             return _TransitState(context=None, complete=False, untagged_port_ids=every_port)
         context = contexts[0]
@@ -516,12 +668,18 @@ class FirewallContextMixin:
             return incomplete
         if INTERNET_TYPE in leg_types and not getattr(context.snat_address, "id", None):
             return incomplete
+        if spec.vip_pool_name is not None and not getattr(context.vip_prefix, "id", None):
+            return incomplete
 
         exchange_names = [name for name, _, _ in exchange_specs]
-        exchange_ids = {
-            exchange.name.value: exchange.id
-            for exchange in await self.client.filters(kind=TopologyRoutedExchange, name__values=exchange_names)
-        }
+        exchange_ids = (
+            {
+                exchange.name.value: exchange.id
+                for exchange in await self.client.filters(kind=TopologyRoutedExchange, name__values=exchange_names)
+            }
+            if exchange_names
+            else {}
+        )
         if len(exchange_ids) != len(exchange_names):
             return incomplete
 
@@ -561,42 +719,49 @@ class FirewallContextMixin:
             self.logger.error(f"SNAT pool '{_SNAT_POOL_NAME}' not found — cannot allocate the SNAT address: {exc}")
             return None
 
-    async def _ensure_context_snat(self, context_obj: Any, snat_pool: Any, *, track: bool) -> bool:
-        """The context's one public SNAT /32, allocated from snat_pool; False (logged) when that fails.
+    async def _ensure_context_allocation(
+        self,
+        spec: ContextSpec,
+        context_obj: Any,
+        field: str,
+        pool: Any,
+        allocate: Callable[[Any], Awaitable[Any | None]],
+        *,
+        track: bool,
+    ) -> bool:
+        """The context's cardinality-one ``field`` pointed at what ``allocate(pool)`` hands out; False (logged) on failure.
 
-        The allocation identifier makes the address stable per context, so a
-        context that already has one is left untouched (never re-saved), like
-        its VLAN. The address itself is a pool mutation, never a tracked save;
-        the relationship write follows the context's ownership (track).
+        The firewall's public SNAT /32 (snat_address) and the load balancer's
+        routed VIP /26 (vip_prefix, member_type address: the VIP producer
+        reserves the VIP /32s in it). The allocation identifier makes it stable
+        per context, so a context that already has one is left untouched
+        (never re-saved), like its VLAN. The allocation is a pool mutation,
+        never a tracked save; the relationship write follows the context's
+        ownership (track).
         """
-        snat = getattr(context_obj, "snat_address", None)
-        if snat is not None and getattr(snat, "id", None):
+        current = getattr(context_obj, field, None)
+        if current is not None and getattr(current, "id", None):
             return True
         context_name = context_obj.name.value
         try:
-            address = await self.client.allocate_next_ip_address(
-                resource_pool=snat_pool,
-                kind=IpamIPAddress,
-                identifier=f"{context_obj.id}-snat",
-                prefix_length=_SNAT_PREFIX_LENGTH,
-                data={"description": f"SNAT address of {context_name}"},
-            )
-            if address is None:
-                self.logger.error(f"SNAT pool '{_SNAT_POOL_NAME}' returned no address for {context_name}")
-                return False
-            node = await self.client.create(
-                kind=ManagedFirewallContext, data={"id": context_obj.id, "snat_address": {"id": address.id}}
-            )
-            await node.save(**tracked_save_kwargs(track))
+            node = await allocate(pool)
+            if node is not None:
+                ref = await self.client.create(
+                    kind=spec.context_kind, data={"id": context_obj.id, field: {"id": node.id}}
+                )
+                await ref.save(**tracked_save_kwargs(track))
         except Exception as exc:
-            self.logger.error(f"Failed to set the SNAT address of FirewallContext '{context_name}': {exc}")
+            self.logger.error(f"Failed to set the {field} of {spec.label} '{context_name}': {exc}")
+            return False
+        if node is None:
+            self.logger.error(f"Pool '{pool.name.value}' returned nothing for the {field} of {context_name}")
             return False
         return True
 
     async def _allocate_transit_addresses(
-        self, *, context_obj: Any, namespace: Any, pool: Any, track: bool
+        self, spec: ContextSpec, *, context_obj: Any, namespace: Any, pool: Any, track: bool
     ) -> dict[int, Any] | None:
-        """The leg's /29 from the VRF's FW-Transit pool, with its fixed-offset addresses upserted.
+        """The leg's /29 from the VRF's leg pool, with its fixed-offset addresses upserted.
 
         The allocation identifier makes the prefix stable per (context,
         namespace). The prefix itself never enters the tracking group:
@@ -608,55 +773,58 @@ class FirewallContextMixin:
             prefix = await self.client.allocate_next_ip_prefix(
                 resource_pool=pool,
                 kind=IpamPrefix,
-                identifier=f"{context_obj.id}-{namespace.name.value}-transit",
+                identifier=f"{context_obj.id}-{namespace.name.value}-{spec.leg_identifier}",
                 prefix_length=TRANSIT_PREFIXLEN,
                 member_type="address",
                 data={"role": "technical"},
             )
         except Exception as exc:
-            self.logger.error(f"Failed to allocate the transit /29 for {label}: {exc}")
+            self.logger.error(f"Failed to allocate the leg /29 for {label}: {exc}")
             return None
         if prefix is None:
-            self.logger.error(f"Transit pool '{pool.name.value}' returned no prefix for {label}")
+            self.logger.error(f"Leg pool '{pool.name.value}' returned no prefix for {label}")
             return None
         return await self.upsert_prefix_addresses(prefix, offsets=TRANSIT_OFFSETS, track=track)
 
-    async def _resolve_parent_cluster(self, fw_devices: list[Any], *, parent_id: str, parent_name: str) -> Any | None:
-        """The parent's ManagedFirewallHA cluster holding fw_devices[0], the first physical firewall by name.
+    async def _resolve_parent_cluster(
+        self, spec: ContextSpec, devices: list[Any], *, parent_id: str, parent_name: str
+    ) -> Any | None:
+        """The parent's spec.ha_kind cluster holding devices[0], the first physical device of the role by name.
 
-        Never pairs the firewalls itself. The parent's own generator
+        Never pairs the devices itself. The parent's own generator
         (_parent_generators) is the only owner of that HA pair, its HA
         interfaces and sync cable: a customer run that paired them would claim
         all three for ITS tracking group, and its next run — finding the cluster
         and skipping the pairing — would delete the parent's HA. So an unpaired
         parent means the parent generator has not finished: wait for an
         in-flight run, re-query, and fail loudly (logger.error raises) if the
-        firewalls are still unpaired, leaving this run's group untouched.
+        devices are still unpaired, leaving this run's group untouched.
         """
-        cluster = await self._find_parent_cluster(fw_devices, parent_name=parent_name)
+        cluster = await self._find_parent_cluster(spec, devices, parent_name=parent_name)
         if cluster is not None:
             return cluster
         self.logger.info(
-            f"{parent_name}: firewall device(s) not yet HA-paired — waiting for "
+            f"{parent_name}: {spec.role} device(s) not yet HA-paired — waiting for "
             f"{'/'.join(self._parent_generators)} before re-checking"
         )
         await self.wait_for_parent_generator_and_refetch(self._parent_generators, parent_id)
-        cluster = await self._find_parent_cluster(fw_devices, parent_name=parent_name)
+        cluster = await self._find_parent_cluster(spec, devices, parent_name=parent_name)
         if cluster is None:
             self.logger.error(
-                f"{parent_name}: firewall device(s) {sorted(_dev_name(d) for d in fw_devices)} are not HA-paired into "
-                f"a ManagedFirewallHA cluster — run {'/'.join(self._parent_generators)} for {parent_name} first"
+                f"{parent_name}: {spec.role} device(s) {sorted(_dev_name(d) for d in devices)} are not HA-paired "
+                f"into a {spec.ha_kind.__name__} cluster — run {'/'.join(self._parent_generators)} for "
+                f"{parent_name} first"
             )
         return cluster
 
-    async def _find_parent_cluster(self, fw_devices: list[Any], *, parent_name: str) -> Any | None:
-        """One ManagedFirewallHA lookup by fw_devices[0]'s membership; None when unpaired or on error."""
+    async def _find_parent_cluster(self, spec: ContextSpec, devices: list[Any], *, parent_name: str) -> Any | None:
+        """One spec.ha_kind lookup by devices[0]'s membership; None when unpaired or on error."""
         try:
             clusters = await self.client.filters(
-                kind=ManagedFirewallHA, capabilities__ids=[_dev_id(fw_devices[0])], include=["capabilities"]
+                kind=spec.ha_kind, capabilities__ids=[_dev_id(devices[0])], include=["capabilities"]
             )
         except Exception as exc:
-            self.logger.error(f"Error looking up ManagedFirewallHA cluster on {parent_name}: {exc}")
+            self.logger.error(f"Error looking up {spec.ha_kind.__name__} cluster on {parent_name}: {exc}")
             return None
         return clusters[0] if clusters else None
 
@@ -670,18 +838,13 @@ class FirewallContextMixin:
         parent_name: str,
         dc_size: str | None,
         customer_name: str,
-        tenant_id: str | None = None,
     ) -> tuple[Any, list[Any]] | None:
         """Provision a dedicated virtual HA pair (firewall or load-balancer)
         for this customer, one virtual instance hosted on each of the shared
         cluster's physical peers, sourced from the *_CUSTOMER_* template
-        variant (data/bootstrap's 09_virtual_device_templates_*.yaml).
-
-        tenant_id sets ManagedTenantScoped.tenant on ha_kind — meaningful for
-        the load-balancer path (ManagedLoadbalancerHA carries that field);
-        the firewall path passes None here since a dedicated firewall's
-        tenant is recorded one level down, on its own ManagedFirewallContext
-        (see _get_or_create_firewall_context), not on ManagedFirewallHA itself.
+        variant (data/bootstrap's 09_virtual_device_templates_*.yaml). The
+        pair itself carries no tenant: the customer is recorded on the
+        dedicated context on it (_get_or_create_context).
 
         Returns (dedicated_cluster, dedicated_devices) on success. Returns
         None (logged as an error, never a fallback to shared capacity) when
@@ -737,7 +900,6 @@ class FirewallContextMixin:
             ha_kind=ha_kind,
             role_label=f"{role} (dedicated {customer_name})",
             device_kind=DcimVirtualDevice,
-            tenant_id=tenant_id,
         )
 
         try:
@@ -754,53 +916,18 @@ class FirewallContextMixin:
 
         return dedicated_clusters[0], virtual_devices
 
-    async def _ensure_dedicated_loadbalancer(self, customer: dict[str, Any], customer_id: str) -> None:
-        """Provision a dedicated virtual load-balancer HA pair when
-        design.dedicated_loadbalancer is set — mirrors the dedicated
-        firewall path, but load-balancers have no context-equivalent in the
-        schema, so there's nothing beyond the dedicated devices themselves.
-        The dedicated ManagedLoadbalancerHA's own .tenant records the owning
-        customer. Independent of _resolve_context_target: a customer can
-        have dedicated_loadbalancer set without dedicated_firewall (or
-        without any firewalls on the parent), so this must not be gated on
-        that method's early-returns."""
-        if not bool((customer.get("design") or {}).get("dedicated_loadbalancer")):
-            return
-
-        parent = customer.get("parent") or {}
-        parent_id: str = parent.get("id", "")
-        parent_name: str = parent.get("name", parent_id)
-        if not parent_id:
-            return
-
-        lb_devices: list[Any] = _physical_devices(parent.get("loadbalancer_devices") or [])
-        if not lb_devices:
-            self.logger.info(f"{parent_name} has no load-balancer devices — skipping dedicated LB provisioning")
-            return
-
-        await self._ensure_dedicated_device_pair(
-            role="load-balancer",
-            ha_kind="ManagedLoadbalancerHA",
-            physical_devices=lb_devices,
-            parent_id=parent_id,
-            parent_name=parent_name,
-            dc_size=parent.get("size"),
-            customer_name=_customer_short_id(customer, customer_id),
-            tenant_id=customer_id,
-        )
-
-    async def _get_or_create_firewall_context(
-        self, context_name: str, cluster_id: str, tenant_id: str | None, *, track: bool = True
+    async def _get_or_create_context(
+        self, spec: ContextSpec, context_name: str, cluster_id: str, tenant_id: str | None, *, track: bool = True
     ) -> Any | None:
-        # Always create+upsert, never pre-check-and-skip — ManagedFirewallContext's
+        # Always create+upsert, never pre-check-and-skip — both context kinds'
         # uniqueness_constraints on name__value (schemas/extensions/capabilities/
-        # ha.yml) makes allow_upsert=True match the existing node by name. A
+        # ha.yml) make allow_upsert=True match the existing node by name. A
         # pre-check-then-return would silently skip reconciling cluster/tenant.
-        # track=False (the shared context): written, never claimed by this
+        # track=False (a shared context): written, never claimed by this
         # customer's tracking group — see _resolve_context_target.
         try:
             context_obj = await self.client.create(
-                kind=ManagedFirewallContext,
+                kind=spec.context_kind,
                 data={
                     "name": context_name,
                     "cluster": {"id": cluster_id},
@@ -808,14 +935,16 @@ class FirewallContextMixin:
                 },
             )
             await context_obj.save(**tracked_save_kwargs(track))
-            self.logger.info(f"Ensured FirewallContext '{context_name}'")
+            self.logger.info(f"Ensured {spec.label} '{context_name}'")
             return context_obj
         except Exception as exc:
-            self.logger.error(f"Failed to create FirewallContext '{context_name}': {exc}")
+            self.logger.error(f"Failed to create {spec.label} '{context_name}': {exc}")
             return None
 
-    async def _ensure_context_vlan(self, context_obj: Any, parent_name: str, *, track: bool) -> Any | None:
-        """context_obj with its vlan_id allocated from the parent's pool; None (logged) when that fails.
+    async def _ensure_context_vlan(
+        self, spec: ContextSpec, context_obj: Any, parent_name: str, *, track: bool
+    ) -> Any | None:
+        """context_obj with its vlan_id allocated from the parent's `{key}-vlan-pool`; None (logged) when that fails.
 
         Number-pool allocation is idempotent per consumer node id, so a context
         that already has its VLAN is returned untouched and never re-saved.
@@ -824,16 +953,15 @@ class FirewallContextMixin:
         if vlan_id is not None and getattr(vlan_id, "value", None):
             return context_obj
         context_name = context_obj.name.value
+        pool_name = f"{parent_name.lower()}-{spec.key}-vlan-pool"
         try:
-            vlan_pool = await self.client.get(
-                kind=CoreNumberPool, name__value=f"{parent_name.lower()}-fw-context-vlan-pool"
-            )
+            vlan_pool = await self.client.get(kind=CoreNumberPool, name__value=pool_name)
         except Exception as exc:
-            self.logger.error(f"Cannot find FW context VLAN pool for {parent_name}: {exc}")
+            self.logger.error(f"Cannot find {spec.label} VLAN pool '{pool_name}' for {parent_name}: {exc}")
             return None
         try:
             node = await self.client.create(
-                kind=ManagedFirewallContext,
+                kind=spec.context_kind,
                 data={
                     "id": context_obj.id,
                     "vlan_id": {"from_pool": {"id": vlan_pool.id}},
@@ -841,9 +969,9 @@ class FirewallContextMixin:
             )
             await node.save(**tracked_save_kwargs(track))
         except Exception as exc:
-            self.logger.error(f"Failed to allocate VLAN for FirewallContext '{context_name}': {exc}")
+            self.logger.error(f"Failed to allocate VLAN for {spec.label} '{context_name}': {exc}")
             return None
-        return await self.client.get(kind=ManagedFirewallContext, id=context_obj.id)
+        return await self.client.get(kind=spec.context_kind, id=context_obj.id)
 
     async def _context_trunk(self, *, device_id: str, device_name: str, role: str) -> Any | None:
         """device_id's role interface, logging an error when it has none."""
@@ -856,33 +984,33 @@ class FirewallContextMixin:
             self.logger.error(f"{device_name}: no role={role} interface found — cannot create a context sub-interface")
         return trunk_iface
 
-    async def _border_service_port(self, fw_device: Any, *, context_name: str) -> Any | None:
-        """The border service port cabled to fw_device's uplink.
+    async def _border_service_port(self, spec: ContextSpec, device: Any, *, context_name: str) -> Any | None:
+        """The border service port cabled to device's uplink.
 
         A virtual instance has no cable of its own: its traffic leaves through
-        the uplink of the physical firewall hosting it, so that cable is the
-        one followed. The far end must be a border service port (role
-        firewall, BORDER_ROLE_FOR_SERVICES) on a border leaf or edge — the one
-        port the context's transit leg faces for this
-        firewall, whatever the number of border devices. Fetched with its
-        capabilities, the context tags read from it.
+        the uplink of the physical device hosting it, so that cable is the
+        one followed. The far end must be a border service port of the spec's
+        role (BORDER_ROLE_FOR_SERVICES) on a border leaf or edge — the one port
+        the context's legs face for this member, whatever the number of border
+        devices. Fetched with its capabilities, the context tags read from it.
         """
-        fw_name = _dev_name(fw_device)
-        hosting = None if isinstance(fw_device, dict) else getattr(fw_device, "hosting_device", None)
-        cabled_device_id = getattr(hosting, "id", None) or _dev_id(fw_device)
-        uplink = await self._context_trunk(device_id=cabled_device_id, device_name=fw_name, role="uplink")
+        device_name = _dev_name(device)
+        service_role = BORDER_ROLE_FOR_SERVICES[spec.role]
+        hosting = None if isinstance(device, dict) else getattr(device, "hosting_device", None)
+        cabled_device_id = getattr(hosting, "id", None) or _dev_id(device)
+        uplink = await self._context_trunk(device_id=cabled_device_id, device_name=device_name, role="uplink")
         if uplink is None:
             return None
         if not getattr(getattr(uplink, "cable", None), "id", None):
             self.logger.error(
-                f"{fw_name}: uplink {uplink.name.value} is not cabled — no border service port for '{context_name}'"
+                f"{device_name}: uplink {uplink.name.value} is not cabled — no border service port for '{context_name}'"
             )
             return None
         peer_port = await far_end_interface(self.client, uplink, include=["device", "capabilities"])
-        if peer_port is None or peer_port.role.value != BORDER_ROLE_FOR_SERVICES["firewall"]:
+        if peer_port is None or peer_port.role.value != service_role:
             self.logger.error(
-                f"{fw_name}: uplink {uplink.name.value} is not cabled to a "
-                f"{BORDER_ROLE_FOR_SERVICES['firewall']} service port for '{context_name}'"
+                f"{device_name}: uplink {uplink.name.value} is not cabled to a {service_role} service port for "
+                f"'{context_name}'"
             )
             return None
         return peer_port

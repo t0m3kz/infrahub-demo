@@ -81,7 +81,7 @@ fabric forwarding anycast-gateway-mac {{ vxlan.anycast_gateway.mac | replace(':'
 {%- for vlan in vlans if vlan.gateway_ip or vlan.gateway_ipv6 %}
 !
 interface Vlan{{ vlan.vlan_id }}
-  description {{ vlan.name }}
+  description {{ vlan.description }}
 {%- if vlan.vrf %}
   vrf member {{ vlan.vrf }}
 {%- endif %}

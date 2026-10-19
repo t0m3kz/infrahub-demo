@@ -1,11 +1,12 @@
-"""Shared ``generate()`` of the customer boarding generators that provision a
-FirewallContext on their parent facility's firewall pair.
+"""Shared ``generate()`` of the customer boarding generators that provision
+service contexts on their parent facility's firewall and load-balancer pairs.
 
 customer_dc.py (TopologyCustomerDC on a DataCenter) and customer_colocation.py
 (TopologyCustomerColocation on a ColocationMetro) differ only in the customer
-kind, the parent's label and the parent generators to wait for — class
-attributes the host sets (see FirewallContextMixin). The provisioning itself is
-generators/firewall_context.py's FirewallContextMixin.
+kind, the parent's label, the parent generators to wait for and the context
+kinds they provision — class attributes the host sets (see
+FirewallContextMixin). The provisioning itself is
+generators/firewall_context.py's FirewallContextMixin, one run per ContextSpec.
 """
 
 from __future__ import annotations
@@ -19,11 +20,11 @@ from ..firewall_context import FirewallContextMixin
 
 
 class CustomerFacilityMixin(FirewallContextMixin):
-    """``generate()`` for a customer boarding generator on a firewall-owning facility.
+    """``generate()`` for a customer boarding generator on a facility with service pairs.
 
     The host class also mixes in PoolMixin, DeviceMixin and CablingMixin (see
     FirewallContextMixin) and CommonGenerator, and sets ``_customer_kind``,
-    ``_parent_label`` and ``_parent_generators``.
+    ``_parent_label``, ``_parent_generators`` and ``_context_specs``.
     """
 
     # Provided by DeviceMixin.
@@ -47,8 +48,8 @@ class CustomerFacilityMixin(FirewallContextMixin):
         self.logger.info(f"Processing {kind} deployment {customer.get('name', customer_id)}")
 
         # This reads parent-level data (firewall_devices, loadbalancer_devices)
-        # written by the parent's own generator (the only owner of its firewall
-        # HA pair). A customer can board concurrently with (or immediately
+        # written by the parent's own generator (the only owner of its HA
+        # pairs). A customer can board concurrently with (or immediately
         # after) its parent's creation — e.g. a bulk load — so wait for an
         # in-flight parent generator and re-parse rather than risk provisioning
         # against a parent that has no firewall/LB devices yet (see pod.py's
@@ -69,8 +70,16 @@ class CustomerFacilityMixin(FirewallContextMixin):
         # contributes nothing, leaving the list empty.
         parent = customer.get("parent")
         self.set_controllers_from(parent if isinstance(parent, dict) else {})
+        if not (parent or {}).get("id"):
+            self.logger.error(
+                f"Deployment {customer.get('name', customer_id)}: no parent {self._parent_label} — "
+                "cannot provision its service contexts"
+            )
+            return
 
-        target = await self._resolve_context_target(customer, customer_id)
-        if target is not None:
-            await self._ensure_transit_legs(customer=customer, customer_id=customer_id, target=target)
-        await self._ensure_dedicated_loadbalancer(customer, customer_id)
+        # One run per context kind, independent of each other: a parent with
+        # load balancers and no firewalls (or the reverse) still gets the one.
+        for spec in self._context_specs:
+            target = await self._resolve_context_target(spec, customer, customer_id)
+            if target is not None:
+                await self._ensure_transit_legs(customer=customer, customer_id=customer_id, target=target)

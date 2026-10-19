@@ -279,17 +279,18 @@ nodes:
         optional: false
         order_weight: 2000
       # Micro-segmentation: segment-level match
-      # Every rule lives in its source segment's policy, so every rule has one;
-      # source_prefixes/source_ip_addresses only narrow it.
+      # A rule lives in its source segment's policy and has one; source_prefixes/
+      # source_ip_addresses only narrow it. A load balancer's rule (policy lb-<context>, no
+      # segment) has none: its source is the context's leg prefix.
       - name: source_segment
         peer: ManagedNetworkSegment
         label: Source Segment
         cardinality: one
         kind: Attribute
-        optional: false
+        optional: true
         order_weight: 2300
         identifier: policyrule_source_segment
-        description: "Source network segment — the segment whose policy holds this rule"
+        description: "Source network segment — the segment whose policy holds this rule; unset for a load balancer rule"  # yamllint disable-line rule:line-length
       - name: destination_segment
         peer: ManagedNetworkSegment
         label: Destination Segment

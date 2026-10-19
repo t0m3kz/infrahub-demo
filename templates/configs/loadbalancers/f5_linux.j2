@@ -37,49 +37,6 @@ net self {{ iface.name }}_self {
 {%- endfor %}
 #
 {%- endif %}
-# --- Health Monitors ---
-ltm monitor http http_monitor {
-    defaults-from http
-    interval 30
-    timeout 91
-    send "GET /health HTTP/1.1\r\nHost: \r\nConnection: Close\r\n\r\n"
-    recv "200 OK"
-}
-ltm monitor tcp tcp_monitor {
-    defaults-from tcp
-    interval 30
-    timeout 91
-}
-{%- if vips %}
-#
-# --- Nodes and Pools ---
-#
-# --- Virtual Servers (VIPs) ---
-{%- for vip in vips %}
-ltm virtual {{ vip.slug }} {
-    destination {{ vip.vip_ip if vip.vip_ip else '0.0.0.0' }}:{{ vip.port }}
-    ip-protocol {{ 'tcp' if vip.protocol in ['http', 'https', 'tls', 'tcp'] else 'udp' }}
-    {%- if vip.protocol == 'https' %}
-    profiles {
-        clientssl { context clientside }
-        serverssl { context serverside }
-        http { }
-    }
-    {%- elif vip.protocol == 'http' %}
-    profiles {
-        http { }
-    }
-    {%- endif %}
-    {%- if vip.status == 'active' %}
-    enabled
-    {%- else %}
-    disabled
-    {%- endif %}
-    # {{ vip.description if vip.description else vip.hostname }}  [tenant: {{ vip.lb_name }}]
-}
-{%- endfor %}
-#
-{%- endif %}
 {%- if ha %}
 #
 # --- Device Service Clustering (DSC) ---
@@ -99,7 +56,8 @@ cm trust-domain Root {
     ca-devices { /Common/{{ ha.devices[0] if ha.devices else name }} }
     name Root
 }
-cm device-group {{ name }}_dg {
+{#- Named after the cluster, so both units join the one group. #}
+cm device-group {{ ha.name or name }}_dg {
     auto-sync enabled
     network-failover enabled
     type sync-failover
@@ -131,3 +89,124 @@ net self {{ iface.name }}_float {
 {%- endif %}
 #
 {%- endif %}
+{#- Per load-balancer context: the leg VLAN tagged on the uplink and the
+    VRF's strict route domain, both in /Common (one route domain per VRF on
+    the box, declared before the partition that defaults to it), then the
+    context's partition, its objects in that route domain through
+    default-route-domain (so no %id on them): the member's own self IP and
+    the floating one (.4, traffic-group-1, the automap source), the default
+    route to the border anycast (.1), then a pool, its monitors and a
+    virtual server per VIP. -#}
+{%- for ctx in contexts %}
+{%- set p = '/' ~ ctx.partition ~ '/' %}
+{%- set vlan = '/Common/vlan' ~ ctx.leg.vlan %}
+# --- LB context {{ ctx.name }} ({{ 'dedicated' if ctx.dedicated else 'shared' }}): partition {{ ctx.partition }}, VRF {{ ctx.vrf }} = route domain {{ ctx.route_domain }} ---
+# documented-not-lab-verified: /Common VLAN and strict route domain per VRF, partition default-route-domain, partition-local self IPs/route
+# leg {{ ctx.leg.name }}: VLAN {{ ctx.leg.vlan }} (border VNI {{ ctx.leg.vni }}), gateway {{ ctx.leg.anycast }}; VIP range {{ ctx.vip_prefix }} routed to {{ ctx.leg.floating }}
+net vlan {{ vlan }} {
+    interfaces {
+        {{ ctx.leg.parent_interface }} {
+            tagged
+        }
+    }
+    tag {{ ctx.leg.vlan }}
+}
+net route-domain /Common/rd{{ ctx.route_domain }} {
+    id {{ ctx.route_domain }}
+    parent none
+    strict enabled
+    vlans {
+        {{ vlan }}
+    }
+}
+auth partition {{ ctx.partition }} {
+    default-route-domain {{ ctx.route_domain }}
+    description "{{ ctx.name }}"
+}
+net self {{ p }}self{{ ctx.leg.vlan }} {
+    address {{ ctx.leg.own_address }}
+    allow-service none
+    traffic-group /Common/traffic-group-local-only
+    vlan {{ vlan }}
+}
+net self {{ p }}float{{ ctx.leg.vlan }} {
+    address {{ ctx.leg.virtual_ip }}
+    allow-service none
+    floating enabled
+    traffic-group /Common/traffic-group-1
+    vlan {{ vlan }}
+}
+net route {{ p }}default {
+    gw {{ ctx.leg.anycast }}
+    network default
+}
+{%- for vip in ctx.vips %}
+{%- for check in vip.health_checks %}
+ltm monitor {{ check.type }} {{ p }}{{ check.name }} {
+    defaults-from /Common/{{ check.type }}
+    interval {{ check.interval_s }}
+{%- if check.path %}
+    recv "200 OK"
+    send "GET {{ check.path }} HTTP/1.1\r\nHost: {{ vip.hostname }}\r\nConnection: Close\r\n\r\n"
+{%- endif %}
+    time-until-up {{ check.up_after_s }}
+    timeout {{ check.down_after_s }}
+}
+{%- endfor %}
+ltm pool {{ p }}{{ vip.name }}_pool {
+    load-balancing-mode {{ vip.tokens.method }}
+{%- if vip.members %}
+    members {
+{%- for member in vip.members %}
+        {{ p }}{{ member }}:{{ vip.port }} {
+            address {{ member }}
+        }
+{%- endfor %}
+    }
+{%- else %}
+    # no pool members yet: the virtual server stays down
+{%- endif %}
+{%- if vip.health_checks %}
+    monitor {% for check in vip.health_checks %}{{ p }}{{ check.name }}{{ ' and ' if not loop.last }}{% endfor %}
+{%- endif %}
+}
+{%- if vip.tokens.client_ssl %}
+ltm profile client-ssl {{ vip.tokens.client_ssl }} {
+    cert-key-chain {
+        {{ vip.ssl }} {
+            cert /Common/{{ vip.ssl }}.crt
+            key /Common/{{ vip.ssl }}.key
+        }
+    }
+    defaults-from /Common/clientssl
+}
+{%- endif %}
+ltm virtual {{ p }}{{ vip.name }} {
+    description "{{ vip.description or vip.hostname }}"
+    destination {{ p }}{{ vip.address }}:{{ vip.port }}
+    {{ 'enabled' if vip.enabled else 'disabled' }}
+    ip-protocol {{ vip.tokens.ip_protocol }}
+    mask 255.255.255.255
+{%- if vip.tokens.persist %}
+    persist {
+        {{ vip.tokens.persist }} {
+            default yes
+        }
+    }
+{%- endif %}
+    pool {{ p }}{{ vip.name }}_pool
+    profiles {
+{%- for profile in vip.tokens.profiles %}
+        {{ profile.name }} {{ '{ context ' ~ profile.context ~ ' }' if profile.context else '{ }' }}
+{%- endfor %}
+    }
+    source 0.0.0.0/0
+    source-address-translation {
+        type automap
+    }
+    translate-address enabled
+    translate-port enabled
+}
+{%- endfor %}
+#
+{%- endfor %}

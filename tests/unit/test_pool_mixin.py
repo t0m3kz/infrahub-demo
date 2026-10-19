@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from infrahub_sdk.exceptions import NodeNotFoundError
 
+from generators.firewall_context import FIREWALL_CONTEXT, LOADBALANCER_CONTEXT
 from generators.logger import GeneratorError
 from generators.pools import PoolMixin
 
@@ -141,22 +142,36 @@ class TestAllocateResourcePoolsSerializesConcurrentCallers:
         gen.release_resource_lock.assert_awaited_once_with("lock-id")
 
 
-class TestEnsureFirewallContextPools:
-    """DC contexts need only the VLAN pool; their legs address from the FW-Transit-* bootstrap pools."""
+class TestEnsureContextVlanPool:
+    """A fabric's context VLAN pool per ContextSpec; the legs address from the per-VRF bootstrap pools."""
 
-    def _gen(self) -> Any:
+    def test_firewall_pool_is_only_the_vlan_pool(self) -> None:
         gen = _make_gen()
         gen.upsert_number_pool = AsyncMock()
         gen.ensure_sliced_pool = AsyncMock()
-        return gen
 
-    def test_creates_only_the_vlan_pool(self) -> None:
-        gen = self._gen()
+        asyncio.run(gen.ensure_context_vlan_pool(name="dc1", spec=FIREWALL_CONTEXT))
 
-        asyncio.run(gen.ensure_firewall_context_pools(name="dc1"))
-
-        assert gen.upsert_number_pool.await_args.kwargs["pool_name"] == "dc1-fw-context-vlan-pool"
+        kwargs = gen.upsert_number_pool.call_args.kwargs
+        assert kwargs["pool_name"] == "dc1-fw-context-vlan-pool"
+        assert (kwargs["start_range"], kwargs["end_range"]) == (3000, 3099)
+        assert (kwargs["node"], kwargs["node_attribute"]) == ("ManagedFirewallContext", "vlan_id")
         gen.ensure_sliced_pool.assert_not_awaited()
+
+    def test_lb_pool_is_the_upper_half_of_the_band_under_its_own_lock(self) -> None:
+        gen = _make_gen()
+        gen.upsert_number_pool = AsyncMock()
+        calls: list[str] = []
+        gen.acquire_resource_lock = AsyncMock(side_effect=lambda key: calls.append(key) or "lock-id")
+        gen.release_resource_lock = AsyncMock()
+
+        asyncio.run(gen.ensure_context_vlan_pool(name="dc1", spec=LOADBALANCER_CONTEXT))
+
+        kwargs = gen.upsert_number_pool.call_args.kwargs
+        assert kwargs["pool_name"] == "dc1-lb-context-vlan-pool"
+        assert (kwargs["start_range"], kwargs["end_range"]) == (3100, 3199)
+        assert (kwargs["node"], kwargs["node_attribute"]) == ("ManagedLoadbalancerContext", "vlan_id")
+        assert calls == ["lb-context-pools-dc1"]
 
 
 def _target_node() -> MagicMock:

@@ -1,5 +1,6 @@
 """Firewall zone and policy helpers for device transforms."""
 
+import hashlib
 from ipaddress import ip_interface, ip_network
 from typing import Any
 
@@ -147,18 +148,49 @@ def get_firewall_static_routes(
     return sorted(routes, key=lambda r: (r["vrf"], r["destination"]))
 
 
-def _firewall_context_caps(interfaces: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
-    """The ManagedFirewallContext capabilities on this device's firewall-role ports.
+FIREWALL_CONTEXT_KIND = "ManagedFirewallContext"
+LOADBALANCER_CONTEXT_KIND = "ManagedLoadbalancerContext"
 
-    On a border leaf these are the service ports facing the HA members; each is
-    tagged with the contexts whose legs the leaf has to carry. De-duplicated by id.
+SERVICE_CONTEXT_ROLES: dict[str, str] = {FIREWALL_CONTEXT_KIND: "firewall", LOADBALANCER_CONTEXT_KIND: "load-balancer"}
+"""Context kind -> the role of the border service port it is tagged on, which is also the role of the HA
+members holding its legs (generators/connections.py BORDER_ROLE_FOR_SERVICES)."""
+
+VLAN_NAME_MAX = 32
+"""Longest VLAN name NX-OS (and IOS XE, EOS) accepts."""
+
+
+def _transit_names(ctx: dict[str, Any], namespace: str) -> tuple[str, str]:
+    """(full name, VLAN name) of a context leg's pseudo segment.
+
+    A firewall leg is ``XCHG-<context>-<VRF>`` (both names). A load-balancer context has one leg and a
+    shared context's name already ends in its namespace, so its leg is ``LB-<context>``; past
+    VLAN_NAME_MAX the VLAN name is cut to fit with a 4-hex digest of the full name (deterministic, and
+    two long names sharing a stem still differ), and the full name stays in the SVI description. A
+    leaf's contexts come from the firewall HA traversal (FirewallContextLegFields, no typename): they
+    are firewall contexts.
+    """
+    if (ctx.get("typename") or FIREWALL_CONTEXT_KIND) == FIREWALL_CONTEXT_KIND:
+        name = f"XCHG-{ctx.get('name')}-{namespace}"
+        return name, name
+    name = f"LB-{ctx.get('name')}"
+    if len(name) <= VLAN_NAME_MAX:
+        return name, name
+    digest = hashlib.sha1(name.encode(), usedforsecurity=False).hexdigest()[:4]
+    return name, f"{name[: VLAN_NAME_MAX - len(digest) - 1]}-{digest}"
+
+
+def _service_context_caps(interfaces: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    """The service-context capabilities on this device's service ports (SERVICE_CONTEXT_ROLES).
+
+    On a border leaf these are the ports facing the HA members: a firewall-role
+    port is tagged with the firewall contexts, a load-balancer-role port with the
+    load-balancer contexts whose legs the leaf has to carry. De-duplicated by id.
     """
     found: dict[str, dict[str, Any]] = {}
     for iface in interfaces or []:
-        if iface.get("role") != "firewall":
-            continue
         for cap in iface.get("capabilities") or []:
-            if cap.get("typename") != "ManagedFirewallContext":
+            role = SERVICE_CONTEXT_ROLES.get(cap.get("typename") or "")
+            if role is None or role != iface.get("role"):
                 continue
             key = cap.get("id") or cap.get("name")
             if key:
@@ -166,16 +198,20 @@ def _firewall_context_caps(interfaces: list[dict[str, Any]] | None) -> list[dict
     return list(found.values())
 
 
-def _transit_legs(ctx: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def transit_legs(ctx: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """The context's legs in a non-default VRF namespace, keyed by namespace name.
 
-    Each carries the namespace type/l3_vni, the transit /29 and the transit VLAN
-    (utils.exchange_transit rules). Legs in the default namespace are skipped.
+    Each carries the namespace type/l3_vni, the transit /29, the transit VLAN and
+    VNI, and the fixed addresses (anycast .1, VIP .4, members .5/.6), all by the
+    utils.exchange_transit rules. A leg is a sub-interface of an HA member (a
+    firewall or a load balancer); the border ports tagged with the context and
+    legs in the default namespace are skipped.
     """
+    member_roles = SERVICE_CONTEXT_ROLES.values()
     legs: dict[str, dict[str, Any]] = {}
     context_vlan = ctx.get("vlan_id")
     for leg in ctx.get("capabilities") or []:
-        if (leg.get("device") or {}).get("role") != "firewall":
+        if (leg.get("device") or {}).get("role") not in member_roles:
             continue
         address = (leg.get("ip_address") or {}).get("address")
         namespace = (leg.get("ip_address") or {}).get("ip_namespace") or {}
@@ -192,9 +228,11 @@ def _transit_legs(ctx: dict[str, Any]) -> dict[str, dict[str, Any]]:
                 "l3_vni": namespace.get("l3_vni"),
                 "prefix": str(network),
                 "prefixlen": network.prefixlen,
-                "vlan": transit_vlan(context_vlan, ns_type),
+                "vlan": (vlan := transit_vlan(context_vlan, ns_type)),
+                "vni": transit_vni(vlan),
                 "anycast": addresses["anycast"],
                 "vip": addresses["vip"],
+                "members": addresses["members"],
             },
         )
     return legs
@@ -206,31 +244,34 @@ def get_exchange_transits(
     """Pseudo segment activations for the transit legs of ``contexts``.
 
     Every leg of a context becomes a VLAN + L2 VNI + anycast gateway (.1 of the
-    leg's /29) in the leg's VRF, so a VLAN sub-interface of the firewall (border
-    leaf, edge) or a PBR next hop (leaf) has something to attach to. Fed ONLY to
-    get_vlans / get_vxlan_config / get_interfaces (never ACL, SGT or PBR input).
-    ``transit_context`` names the context whose trunk ports must allow the VLAN.
+    leg's /29) in the leg's VRF, so a VLAN sub-interface of the firewall or load
+    balancer (border leaf, edge) or a PBR next hop (leaf) has something to attach
+    to. Fed ONLY to get_vlans / get_vxlan_config / get_interfaces (never ACL, SGT
+    or PBR input). ``transit_context`` names the context whose trunk ports must
+    allow the VLAN. A firewall leg is ``XCHG-<context>-<VRF>``, the one leg of a
+    load-balancer context ``LB-<context>`` (see _transit_names).
 
     ``legs`` restricts the result to the (namespace, VIP) pairs a leaf redirects
     to (the key of _context_leg_ip); None keeps every leg, as a border device does
-    for the contexts tagged on its firewall ports.
+    for the contexts tagged on its service ports.
     """
     transits: dict[int, dict[str, Any]] = {}
     for ctx in contexts:
-        for leg in _transit_legs(ctx).values():
+        for leg in transit_legs(ctx).values():
             if legs is not None and (leg["namespace"], leg["vip"]) not in legs:
                 continue
-            name = f"XCHG-{ctx.get('name')}-{leg['namespace']}"
+            name, vlan_name = _transit_names(ctx, leg["namespace"])
             transits.setdefault(
                 leg["vlan"],
                 {
                     "vlan_id": leg["vlan"],
-                    "vni": transit_vni(leg["vlan"]),
+                    "vni": leg["vni"],
                     "transit_context": ctx.get("name"),
                     "segment": {
                         "id": name,
                         "name": name,
-                        "customer_name": name,
+                        "customer_name": vlan_name,
+                        "vlan_description": name,
                         "gateway": {
                             "address": f"{leg['anycast']}/{leg['prefixlen']}",
                             "ip_prefix": {
@@ -322,6 +363,12 @@ def get_exchange_routes(
     into EVPN (a colocation edge resolves the VIP over its own transit L2VNI;
     exporting would make a DC import another site's PROD default).
 
+    A load-balancer context tagged on a load-balancer port adds its routed VIP
+    range: ``vip_prefix`` -> the floating .4 of its one leg, in the leg's
+    (tenant) VRF, always exported, so every VTEP of the VRF reaches the VIPs
+    through this border. Raises when the context has legs in more than one VRF:
+    the one-arm LB lives in one routing table.
+
     Returns [{vrf, l3_vni, prefix, nexthop}] sorted (+ ``local_only: True`` when not exported).
     """
     routes: dict[tuple[str, str, str], dict[str, Any]] = {}
@@ -335,8 +382,20 @@ def get_exchange_routes(
             **({"local_only": True} if local_only else {}),
         }
 
-    for ctx in _firewall_context_caps(interfaces):
-        legs = _transit_legs(ctx)
+    for ctx in _service_context_caps(interfaces):
+        legs = transit_legs(ctx)
+        if ctx.get("typename") == LOADBALANCER_CONTEXT_KIND:
+            vip_prefix = (ctx.get("vip_prefix") or {}).get("prefix")
+            if not vip_prefix:
+                continue
+            if len(legs) > 1:
+                raise ValueError(
+                    f"load-balancer context '{ctx.get('name')}' has legs in {len(legs)} VRFs ({', '.join(sorted(legs))}): "
+                    f"a one-arm context lives in one tenant VRF; refusing to route its VIP range {vip_prefix} into each"
+                )
+            for leg in legs.values():
+                _add(leg, vip_prefix, leg["vip"])
+            continue
         snat = _snat_host(ctx)
         # An exchange's sides are the namespaces of the legs carrying it: its own
         # namespace_a / namespace_z come back null through capabilities.
@@ -416,7 +475,7 @@ def get_firewall_contexts(
         ip_obj = iface.get("ip_address") or {}
         parent_iface = iface.get("parent_interface") or {}
         for cap in iface.get("capabilities") or []:
-            if cap.get("typename") != "ManagedFirewallContext":
+            if cap.get("typename") != FIREWALL_CONTEXT_KIND:
                 continue
             context_id = cap.get("id")
             if not context_id:

@@ -199,11 +199,10 @@ nodes:
     description: "Frontend service configuration for a load balancer (VIP address, protocol, port)"
     icon: mdi:ip-network
     include_in_menu: false
-    inherit_from:
-      - ManagedGenericInterfaces
     uniqueness_constraints:
       - [load_balancer, hostname__value, protocol__value, port__value]
     human_friendly_id:
+      - load_balancer__name__value
       - hostname__value
       - protocol__value
       - port__value
@@ -308,13 +307,6 @@ nodes:
           - name: application
             label: Application
             color: "#D2B4DE"
-      - name: snat_enabled
-        kind: Boolean
-        label: "Source NAT Enabled"
-        optional: true
-        default_value: true
-        order_weight: 450
-        description: "When false, backends see the real client IP — see backend_segment for the PBR return-path this requires."  # yamllint disable-line rule:line-length
     relationships:
       - name: load_balancer
         peer: ManagedLoadBalancer
@@ -330,14 +322,22 @@ nodes:
         optional: true
         order_weight: 600
         identifier: vip_service__ip
-      - name: backend_segment
-        peer: ManagedNetworkSegment
+      - name: component
+        peer: AppComponent
         cardinality: one
         kind: Attribute
         optional: true
         order_weight: 650
-        identifier: vip_service__backend_segment
-        description: "VLAN/VXLAN segment this VIP's backends live in — required when snat_enabled is false."  # yamllint disable-line rule:line-length
+        identifier: vip_service__component
+        description: "Application tier this VIP fronts; its instances are the pool members"
+      - name: pool_members
+        peer: IpamIPAddress
+        cardinality: many
+        kind: Attribute
+        optional: true
+        order_weight: 700
+        identifier: vip_service__pool_members
+        description: "Instance addresses (in the component's segment) the VIP balances across"
       - name: health_checks
         peer: LoadbalancerHealthCheck
         cardinality: many
