@@ -1,22 +1,15 @@
-from __future__ import annotations
+"""generators/pod_config.py: a pod's deployment type and rack-grid profile, derived from its design.
 
-from typing import Any
+The designs are the bootstrap rows (data/bootstrap/14b_fabric_templates.yml).
+"""
+
+from __future__ import annotations
 
 import pytest
 
-from generators.pod_config import POD_LAYOUTS, pod_deployment_type, pod_profile, resolve_pod_layout
+from generators.pod_config import pod_deployment_type, pod_profile
+from tests.unit.simulators.fabric_designs import POD_DESIGN_NAMES, custom_pod_design, pod_design
 
-# What the layout table used to store (and every pod was sized from) before the
-# loopback pool size and the deployment type were derived from the layout's
-# device mix.
-_EXPECTED_LOOPBACK_HOST_BITS = {
-    "S_MIDDLE": 4,
-    "S_TOR": 6,
-    "S_MIXED": 6,
-    "S_BORDER_SPINE_POD": 4,
-    "M_MIXED": 7,
-    "M_MIDDLE": 5,
-}
 _EXPECTED_DEPLOYMENT_TYPE = {
     "S_MIDDLE": "middle_rack",
     "S_TOR": "tor",
@@ -27,52 +20,62 @@ _EXPECTED_DEPLOYMENT_TYPE = {
 }
 
 
-def _spine_budget_compute_racks_per_row(entry: dict[str, Any]) -> int:
-    """compute_racks_per_row a layout's spine/ToR port budget allows: every
-    compute rack burns (ToRs per rack x uplinks per ToR) spine downlinks."""
-    total_downlinks = entry["spine_downlink_ports_per_spine"] * entry["max_spines_per_pod"]
-    links_per_compute_rack = entry["max_tors_per_compute_rack"] * entry["tor_uplinks_to_spine"]
-    return (total_downlinks // links_per_compute_rack) // entry["rows"]
+def test_every_design_is_covered_by_the_expected_table() -> None:
+    """A new pod design must add its expected deployment type here."""
+    assert set(POD_DESIGN_NAMES) == set(_EXPECTED_DEPLOYMENT_TYPE)
 
 
-def test_pod_profile_resolves_layout_fields() -> None:
-    profile = pod_profile("S_MIXED")
+@pytest.mark.parametrize("name", POD_DESIGN_NAMES)
+def test_deployment_type_is_derived_from_the_device_mix(name: str) -> None:
+    assert pod_deployment_type(pod_design(name)) == _EXPECTED_DEPLOYMENT_TYPE[name]
+
+
+@pytest.mark.parametrize(
+    ("leafs", "tors", "expected"),
+    [(4, 0, "middle_rack"), (0, 0, "middle_rack"), (0, 2, "tor"), (2, 2, "mixed")],
+)
+def test_deployment_type_rule(leafs: int, tors: int, expected: str) -> None:
+    """No ToRs -> middle_rack; ToRs and no leafs -> tor; ToRs and leafs -> mixed."""
+    design = custom_pod_design(max_leafs_per_network_rack=leafs, max_tors_per_compute_rack=tors)
+
+    assert pod_deployment_type(design) == expected
+
+
+def test_pod_profile_carries_the_design_rack_grid() -> None:
+    design = pod_design("S_MIXED")
+    profile = pod_profile(design)
 
     assert profile["profile_template"] == "S_MIXED"
     assert profile["deployment_type"] == "mixed"
-    assert profile["rows"] == resolve_pod_layout("S_MIXED")["rows"]
-    assert profile["compute_racks_per_row"] == resolve_pod_layout("S_MIXED")["compute_racks_per_row"]
+    for field in (
+        "max_rows",
+        "max_compute_racks_per_row",
+        "max_network_racks_per_row",
+        "max_leafs_per_network_rack",
+        "max_tors_per_compute_rack",
+    ):
+        assert profile[field] == design[field], field
 
 
 def test_pod_profile_row_dependent_rack_slots() -> None:
-    mixed_profile = pod_profile("S_MIXED")
-    middle_profile = pod_profile("S_MIDDLE")
+    mixed_profile = pod_profile(pod_design("S_MIXED"))
+    middle_profile = pod_profile(pod_design("S_MIDDLE"))
 
-    assert mixed_profile["row_dependent_rack_slots_per_row"] == mixed_profile["compute_racks_per_row"]
+    assert mixed_profile["row_dependent_rack_slots_per_row"] == mixed_profile["max_compute_racks_per_row"]
     assert middle_profile["row_dependent_rack_slots_per_row"] == 0
 
 
-def test_every_layout_is_covered_by_the_expected_tables() -> None:
-    """A new layout must add its expected derived values here."""
-    assert set(POD_LAYOUTS) == set(_EXPECTED_LOOPBACK_HOST_BITS) == set(_EXPECTED_DEPLOYMENT_TYPE)
+@pytest.mark.parametrize("name", POD_DESIGN_NAMES)
+def test_designs_with_tors_declare_a_spine_budget_matching_compute_racks_per_row(name: str) -> None:
+    """max_compute_racks_per_row is hard-enforced from the spine/ToR port budget for every
+    design that has ToRs (the others declare no budget at all)."""
+    design = pod_design(name)
+    has_budget = design.get("spine_downlink_ports_per_spine") is not None or (
+        design.get("tor_uplinks_to_spine") is not None
+    )
 
-
-@pytest.mark.parametrize("layout_name", sorted(POD_LAYOUTS))
-def test_derived_loopback_host_bits_and_deployment_type(layout_name: str) -> None:
-    layout = resolve_pod_layout(layout_name)
-
-    assert layout["name"] == layout_name
-    assert layout["loopback_host_bits"] == _EXPECTED_LOOPBACK_HOST_BITS[layout_name]
-    assert layout["deployment_type"] == pod_deployment_type(layout_name) == _EXPECTED_DEPLOYMENT_TYPE[layout_name]
-
-
-@pytest.mark.parametrize("layout_name", sorted(POD_LAYOUTS))
-def test_layouts_with_tors_declare_a_spine_budget_matching_compute_racks_per_row(layout_name: str) -> None:
-    """compute_racks_per_row is hard-enforced from the spine/ToR port budget for
-    every layout that has ToRs (the others declare no budget at all)."""
-    entry = POD_LAYOUTS[layout_name]
-    has_budget = "spine_downlink_ports_per_spine" in entry or "tor_uplinks_to_spine" in entry
-
-    assert has_budget == (entry["max_tors_per_compute_rack"] > 0)
+    assert has_budget == (design["max_tors_per_compute_rack"] > 0)
     if has_budget:
-        assert entry["compute_racks_per_row"] == _spine_budget_compute_racks_per_row(entry)
+        total_downlinks = design["spine_downlink_ports_per_spine"] * design["max_spines_per_pod"]
+        links_per_compute_rack = design["max_tors_per_compute_rack"] * design["tor_uplinks_to_spine"]
+        assert design["max_compute_racks_per_row"] == (total_downlinks // links_per_compute_rack) // design["max_rows"]

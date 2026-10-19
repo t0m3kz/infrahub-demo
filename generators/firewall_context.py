@@ -210,8 +210,8 @@ class _TransitState:
 
 # (physical template's platform name, device_role) -> matching virtual
 # template's name prefix — see data/bootstrap's 09_virtual_device_templates_
-# *.yaml, where every platform/role combination provides a _CUSTOMER_<size>
-# variant per DC size (e.g. "CloudGuard_EDGE_CUSTOMER_L").
+# *.yaml, where every platform/role combination provides a _CUSTOMER_<design>
+# variant per DC fabric design (e.g. "CloudGuard_EDGE_CUSTOMER_L").
 _VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE: dict[tuple[str, str], str] = {
     ("checkpoint_gaia", "firewall"): "CloudGuard_EDGE",
     ("panos", "firewall"): "PA-VM_EDGE",
@@ -396,7 +396,7 @@ class FirewallContextMixin:
             physical_devices=devices,
             parent_id=parent_id,
             parent_name=parent_name,
-            dc_size=parent.get("size"),
+            dc_design=(parent.get("design") or {}).get("name"),
             customer_name=_customer_short_id(customer, customer_id),
         )
         if dedicated_result is None:
@@ -836,7 +836,7 @@ class FirewallContextMixin:
         physical_devices: list[Any],
         parent_id: str,
         parent_name: str,
-        dc_size: str | None,
+        dc_design: str | None,
         customer_name: str,
     ) -> tuple[Any, list[Any]] | None:
         """Provision a dedicated virtual HA pair (firewall or load-balancer)
@@ -848,12 +848,12 @@ class FirewallContextMixin:
 
         Returns (dedicated_cluster, dedicated_devices) on success. Returns
         None (logged as an error, never a fallback to shared capacity) when
-        the parent has no size, does not have exactly 2 physical peers, the
+        the parent has no design, does not have exactly 2 physical peers, the
         physical template's platform has no dedicated variant mapped, or the
         *_CUSTOMER_* template itself doesn't exist.
         """
-        if not dc_size:
-            self.logger.error(f"{parent_name}: no size set — cannot resolve dedicated {role} template size")
+        if not dc_design:
+            self.logger.error(f"{parent_name}: no design set — cannot resolve dedicated {role} template size")
             return None
 
         # physical_devices already carries platform (customer.parent.
@@ -870,7 +870,7 @@ class FirewallContextMixin:
             virtual_template = await self.resolve_virtual_template(
                 platform=(physical_pair[0].get("platform") or {}).get("name"),
                 role=role,
-                size_suffix=f"CUSTOMER_{dc_size}",
+                size_suffix=f"CUSTOMER_{dc_design}",
             )
         except Exception as exc:
             self.logger.error(f"Error looking up dedicated {role} template: {exc}")

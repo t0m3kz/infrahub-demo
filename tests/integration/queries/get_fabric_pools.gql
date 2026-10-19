@@ -1,0 +1,67 @@
+# Every data center and pod with its fabric design and the slices (resources) of its pools, for
+# fetch_fabric_pools(). A DC's loopback slice holds its pods' loopback slices and, when the design has a
+# DC tier, the fabric-loopback slice: the child owned by an address pool that no pod owns.
+# `parent { node { id __typename } }`: a pod's hierarchical parent does not resolve without __typename.
+query get_fabric_pools {
+  TopologyDataCenter {
+    edges {
+      node {
+        id
+        name { value }
+        underlay_protocol { value }
+        design {
+          node {
+            name { value }
+            max_pods { value }
+            pod_templates { edges { node { name { value } } } }
+          }
+        }
+        technical_pool { node { ...FabricPrefixPool } }
+        loopback_pool {
+          node {
+            ...FabricPrefixPool
+            resources {
+              edges {
+                node {
+                  children {
+                    edges {
+                      node {
+                        prefix { value }
+                        resource_pool { edges { node { id __typename } } }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        management_pool { node { ...FabricAddressPool } }
+      }
+    }
+  }
+
+  TopologyPod {
+    edges {
+      node {
+        name { value }
+        design { node { name { value } } }
+        parent { node { id __typename } }
+        prefix_pool { node { ...FabricPrefixPool } }
+        loopback_pool { node { ...FabricAddressPool } }
+      }
+    }
+  }
+}
+
+fragment FabricPrefixPool on CoreIPPrefixPool {
+  id
+  name { value }
+  resources { edges { node { prefix { value } } } }
+}
+
+fragment FabricAddressPool on CoreIPAddressPool {
+  id
+  name { value }
+  resources { edges { node { prefix { value } } } }
+}

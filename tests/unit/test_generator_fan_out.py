@@ -30,7 +30,7 @@ from generators.common import CommonGenerator
 from generators.pools import PoolMixin
 from generators.topology.dc_pod_cascade import DCPodCascadeGenerator
 from generators.topology.pod_rack_cascade import PodRackCascadeGenerator
-from tests.unit.simulators.pod_layouts import LAYOUT_FOR_DEPLOYMENT_TYPE
+from tests.unit.simulators.fabric_designs import DESIGN_FOR_DEPLOYMENT_TYPE, pod_design
 
 
 class _CommonGen(PoolMixin, CommonGenerator):
@@ -325,7 +325,7 @@ class TestDCPodCascadeGenerator:
         pod1, pod2 = _mock_pod("POD-1"), _mock_pod("POD-2")
         gen.client.filters = AsyncMock(return_value=[pod1, pod2])
 
-        await gen.generate({"TopologyDeployment": [{"id": "dc-1", "name": "DC1", "index": 1, "size": "S"}]})
+        await gen.generate({"TopologyDeployment": [{"id": "dc-1", "name": "DC1", "index": 1}]})
 
         gen.run_generator.assert_awaited_once_with("pod_rack_cascade", [pod1.id, pod2.id], wait=False)
         assert gen.client.group_context.related_node_ids == []
@@ -339,7 +339,7 @@ class TestDCPodCascadeGenerator:
         )
         gen.client.filters = AsyncMock(return_value=[])
 
-        await gen.generate({"TopologyDeployment": [{"id": "dc-1", "name": "DC1", "index": 1, "size": "S"}]})
+        await gen.generate({"TopologyDeployment": [{"id": "dc-1", "name": "DC1", "index": 1}]})
 
         gen.run_generator.assert_not_awaited()
 
@@ -370,19 +370,15 @@ def _mock_rack(name: str, rack_type: str) -> MagicMock:
 
 
 def _pod_data(*, deployment_type: str) -> dict[str, Any]:
-    """PodModel carries a `layout` key into POD_LAYOUTS (see generators/dc_config.py &
-    generators/pod_config.py) instead of a `design` relationship; PodParent (`parent`)
-    carries `size` (a DC_SIZE_LAYOUTS key) instead of its own `design` relationship.
-    deployment_type picks the real POD_LAYOUTS entry the generator derives it from
-    (network_racks_per_row=0 for tor, max_tors_per_compute_rack=0 for middle_rack)."""
-    layout = LAYOUT_FOR_DEPLOYMENT_TYPE[deployment_type]
+    """deployment_type picks the real pod design the generator derives it from
+    (max_leafs_per_network_rack=0 for tor, max_tors_per_compute_rack=0 for middle_rack)."""
     return {
         "TopologyPod": [
             {
                 "id": "pod-1",
                 "name": "pod-1",
                 "index": 1,
-                "layout": layout,
+                "design": pod_design(DESIGN_FOR_DEPLOYMENT_TYPE[deployment_type]),
                 "fabric_templates": [{"role": "spine", "quantity": 2, "template": {"node": {"id": "tmpl-spine"}}}],
                 "parent": {
                     "node": {
@@ -390,7 +386,6 @@ def _pod_data(*, deployment_type: str) -> dict[str, Any]:
                         "name": "DC1",
                         "index": 1,
                         "devices": {"edges": []},
-                        "size": "S",
                     }
                 },
             }

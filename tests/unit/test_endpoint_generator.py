@@ -20,6 +20,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from generators.topology.endpoint import EndpointConnectivityGenerator
+from tests.unit.simulators.fabric_designs import pod_design
 
 # ---------------------------------------------------------------------------
 # Fixture builders
@@ -37,7 +38,7 @@ def _rack(*, rack_id: str = "rack-1", row_index: int = 1, rack_type: str = "comp
             "id": "pod-1",
             "name": "POD1",
             "index": 1,
-            "layout": "S_MIXED",
+            "design": pod_design("S_MIXED"),
             "parent": {"id": "dc-1", "name": "DC1"},
         },
     }
@@ -163,7 +164,7 @@ class TestGenerateGuardClauses:
         endpoint.gql's PodFields fragment is on TopologyPod, so a colocation cage
         rack (pod = TopologyColocationZone) arrives as an empty pod dict. There is
         no fabric to dual-home into — that kit is cabled explicitly in the object
-        data. The guard must fire before pod["layout"] is read, which sits
+        data. The guard must fire before pod["design"] is read, which sits
         outside the try/except and would otherwise raise KeyError and fail the task.
         Those hosts do reach this generator: trigger-endpoint-generator-on-created
         matches on role=endpoint, not on the site.

@@ -50,12 +50,12 @@ fabric. The device types come from `data/bootstrap/06_device_types.yml`; the sof
 
 ### The Fabric
 
-DC14 is shaped like [DC10](../30_all/03_dc/dc10/01_topology.yml) (the NX-OS reference fabric), at size `M` with two
+DC14 is shaped like [DC10](../30_all/03_dc/dc10/01_topology.yml) (the NX-OS reference fabric), with design `M`, two
 `S_MIDDLE` pods and a DC-level border-leaf pair:
 
 | | |
 | --- | --- |
-| Size / routing | `M`, `ebgp-ebgp`, IPv4 underlay (the schema default is IPv6) |
+| Design / routing | `M`, `ebgp-ebgp`, IPv4 underlay (the schema default is IPv6) |
 | Pod 1 | 2 spines (7050CX3, EOS 4.32.1F), `mlag_create: back-to-back` (never `virtual`: `arista_eos_mlag.j2` does not render a virtual peer link) |
 | Row 1 | a network rack with a leaf pair **and** an access-leaf pair, a compute rack with `dc14-pod1-server-1` |
 | Row 2 | a network rack with a leaf pair, a compute rack with `dc14-pod1-server-2` |

@@ -23,8 +23,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 import yaml
 
-from generators.pod_config import POD_LAYOUTS
 from tests.integration import test_71_arista_mssg as scenario
+from tests.unit.simulators.fabric_designs import pod_design
 from transforms.config.leaf import Leaf
 from utils.group_policy import fabric_reason, profiles_by_platform, release_key
 
@@ -239,7 +239,7 @@ class TestReferences:
     def test_two_pods_hold_the_two_border_leafs(self, topology: dict[str, Any]) -> None:
         """An S_MIDDLE pod takes one border-leaf (max_border_leafs_per_pod), so two need two pods."""
         wanted = next(int(q) for q, role, _t in topology["fabric_templates"] if role == "border-leaf")
-        capacity = sum(POD_LAYOUTS[pod["layout"]]["max_border_leafs_per_pod"] for pod in topology["children"]["data"])
+        capacity = sum(pod_design(pod["design"])["max_border_leafs_per_pod"] for pod in topology["children"]["data"])
         assert capacity >= wanted, f"{wanted} border-leafs but the pods offer room for {capacity}"
         pod_one = topology["children"]["data"][0]
         assert pod_one["mlag_create"] == "back-to-back"

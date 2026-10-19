@@ -24,7 +24,7 @@ Tests the `add_pod` generator's ability to:
 - **Index**: 4
 - **Deployment Type**: middle_rack (compute and storage, no direct server connections)
 - **Spines**: 2x N9K-C9336C-FX2_SPINE
-- **Layout**: M_MIDDLE (pod sizing: spines per pod, rows)
+- **Design**: M_MIDDLE (`TopologyTemplatePod`: rows, racks per row, spines per pod)
 - **Rows**: 2 (suite ktw-1-s-4)
 - **ToRs**: none (middle_rack deployment)
 - **Initial Racks**: 2 network racks (row 1 & 2, position 1), each with 2 leafs + 2 access leafs

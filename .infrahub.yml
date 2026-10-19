@@ -375,6 +375,11 @@ check_definitions:
   - name: validate_hypervisor_environment
     class_name: CheckHypervisorEnvironment
     file_path: checks/hypervisor_environment.py
+  # Targetless: a DC pool holds its pods' pools, so one query reads every
+  # data center and pod with the slices of their pools.
+  - name: validate_pool_utilization
+    class_name: CheckPoolUtilization
+    file_path: checks/pool_utilization.py
 
 python_transforms:
   - name: topology_cabling
@@ -745,6 +750,8 @@ queries:
     file_path: queries/validation/app_dependency.gql
   - name: hypervisor_environment
     file_path: queries/validation/hypervisor_environment.gql
+  - name: pool_utilization
+    file_path: queries/validation/pool_utilization.gql
   - name: loadbalancer_validation
     file_path: queries/validation/lb.gql
   - name: proxy_validation

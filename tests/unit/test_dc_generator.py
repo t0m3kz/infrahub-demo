@@ -8,60 +8,36 @@ overlay-AS/OSPF-area creation paths in _create_shared_routing_objects().
 
 from __future__ import annotations
 
-import uuid
-from collections.abc import Callable
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from infrahub_sdk.exceptions import NodeNotFoundError
 
-from generators.dc_config import DC_SIZE_LAYOUTS
 from generators.helpers.routing import RoutingStrategy
 from generators.logger import GeneratorError
 from generators.protocols import RoutingAutonomousSystem
 from generators.routing import _overlay_as_description
 from generators.topology.dc import DCTopologyGenerator
+from tests.unit.simulators.fabric_designs import custom_dc_design, dc_design
 
-DcSizeRegistrar = Callable[..., str]
 
-
-@pytest.fixture
-def register_dc_size(monkeypatch: pytest.MonkeyPatch) -> DcSizeRegistrar:
-    """Factory registering a throwaway DC_SIZE_LAYOUTS entry for a test scenario
-    and returning its key (a DCModel.size value). The entry is removed again when
-    the test ends (monkeypatch). routing_strategy/underlay_protocol live directly
-    on the DC instance (see _deployment()), not here. The loopback and management
-    pool sizes are derived from max_pods (max_pods=2: /120 and /26).
-
-    Each call gets a unique key so distinct tests' custom capacity numbers
-    never collide with each other or with the real S/M/L/XL entries."""
-
-    def register(
-        *,
-        max_super_spines_per_fabric: int = 2,
-        max_hyper_spines_per_fabric: int = 0,
-        max_border_leafs_per_fabric: int = 4,
-        max_pods: int = 2,
-        max_spines_per_pod: int = 4,
-    ) -> str:
-        key = f"TEST_{uuid.uuid4().hex}"
-        monkeypatch.setitem(
-            DC_SIZE_LAYOUTS,
-            key,
-            {
-                "max_pods": max_pods,
-                "max_super_spines_per_fabric": max_super_spines_per_fabric,
-                "max_hyper_spines_per_fabric": max_hyper_spines_per_fabric,
-                "max_border_leafs_per_fabric": max_border_leafs_per_fabric,
-                "max_spines_per_pod": max_spines_per_pod,
-                "technical_prefix_length": 117,
-                "dc_fabric_loopback_host_bits": 4,
-            },
-        )
-        return key
-
-    return register
+def _dc_design(
+    *,
+    max_super_spines_per_fabric: int = 2,
+    max_hyper_spines_per_fabric: int = 0,
+    max_border_leafs_per_fabric: int = 4,
+    max_pods: int = 2,
+) -> dict[str, Any]:
+    """A throwaway DC design (custom_dc_design: hosting one 2-spine, 2-leaf pod
+    design) with a test scenario's own tier caps. routing_strategy/underlay_protocol
+    live directly on the DC instance (see _deployment()), not here."""
+    return custom_dc_design(
+        max_super_spines_per_fabric=max_super_spines_per_fabric,
+        max_hyper_spines_per_fabric=max_hyper_spines_per_fabric,
+        max_border_leafs_per_fabric=max_border_leafs_per_fabric,
+        max_pods=max_pods,
+    )
 
 
 def _fabric_templates(
@@ -95,7 +71,7 @@ def _fabric_templates(
 
 def _deployment(
     *,
-    design: str | None = None,
+    design: dict[str, Any] | None = None,
     routing_strategy: str = "ebgp-ebgp",
     underlay_protocol: str = "ipv6",
     amount_of_super_spines: int = 0,
@@ -103,15 +79,14 @@ def _deployment(
     amount_of_hyper_spines: int = 0,
     hyper_spine_template: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """`design` is now a DC_SIZE_LAYOUTS key (see register_dc_size()) — kept as the
-    kwarg name so call sites read the same as before the refactor."""
+    """`design` is the DC's fabric design dict (see _dc_design()); the S design by default."""
     return {
         "TopologyDeployment": [
             {
                 "id": "dc-1",
                 "name": "DC1",
                 "index": 1,
-                "size": design if design is not None else "S",
+                "design": design if design is not None else dc_design("S"),
                 "routing_strategy": routing_strategy,
                 "underlay_protocol": underlay_protocol,
                 "naming_convention": "standard",
@@ -193,10 +168,10 @@ class TestGenerateGuardClauses:
         gen.allocate_resource_pools.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_super_spine_count_exceeding_design_max_raises(self, register_dc_size: DcSizeRegistrar) -> None:
+    async def test_super_spine_count_exceeding_design_max_raises(self) -> None:
         gen = _make_generator()
         data = _deployment(
-            design=register_dc_size(max_super_spines_per_fabric=2),
+            design=_dc_design(max_super_spines_per_fabric=2),
             amount_of_super_spines=4,
             super_spine_template={"id": "tmpl-ss", "interfaces": []},
         )
@@ -209,7 +184,7 @@ class TestGenerateGuardClauses:
 
 class TestGenerateExistingPodsTracking:
     @pytest.mark.asyncio
-    async def test_existing_pods_are_read_but_never_tracked(self, register_dc_size: DcSizeRegistrar) -> None:
+    async def test_existing_pods_are_read_but_never_tracked(self) -> None:
         """Pods are data, not add_dc's output: they are kept for border-leaf
         placement and the cascade, but never claimed, so a pod moved to
         another DC is not deleted by this DC's next run."""
@@ -220,7 +195,7 @@ class TestGenerateExistingPodsTracking:
         pod_b.index.value = 2
         gen.client.filters = AsyncMock(return_value=[pod_a, pod_b])
 
-        await gen.generate(_deployment(design=register_dc_size()))
+        await gen.generate(_deployment(design=_dc_design()))
 
         assert gen._existing_pods == [pod_a, pod_b]
         assert gen.client.group_context.related_node_ids == []
@@ -228,12 +203,12 @@ class TestGenerateExistingPodsTracking:
 
 class TestGenerateDesignModeDispatch:
     @pytest.mark.asyncio
-    async def test_back_to_back_mode_skips_super_spine_creation(self, register_dc_size: DcSizeRegistrar) -> None:
+    async def test_back_to_back_mode_skips_super_spine_creation(self) -> None:
         """max_super_spines_per_fabric == 0 on the design -> back-to-back mode,
         no super-spine devices created regardless of amount_of_super_spines."""
         gen = _make_generator()
         data = _deployment(
-            design=register_dc_size(max_super_spines_per_fabric=0),
+            design=_dc_design(max_super_spines_per_fabric=0),
             amount_of_super_spines=0,
         )
 
@@ -243,11 +218,11 @@ class TestGenerateDesignModeDispatch:
         gen.create_routing.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_super_spine_mode_creates_devices_and_routing(self, register_dc_size: DcSizeRegistrar) -> None:
+    async def test_super_spine_mode_creates_devices_and_routing(self) -> None:
         gen = _make_generator()
         gen.create_devices = AsyncMock(return_value=["dc1-ss-01", "dc1-ss-02"])
         data = _deployment(
-            design=register_dc_size(max_super_spines_per_fabric=2),
+            design=_dc_design(max_super_spines_per_fabric=2),
             amount_of_super_spines=2,
             super_spine_template={"id": "tmpl-ss", "interfaces": []},
         )
@@ -265,14 +240,12 @@ class TestGenerateDesignModeDispatch:
         assert routing_kwargs["bottom_role"] == "super-spine"
 
     @pytest.mark.asyncio
-    async def test_two_fabric_template_entries_yield_two_create_devices_calls(
-        self, register_dc_size: DcSizeRegistrar
-    ) -> None:
+    async def test_two_fabric_template_entries_yield_two_create_devices_calls(self) -> None:
         """fabric_templates with two super-spine entries loops create_devices once
         per entry (dc.py's per-entry loop), not once for the summed quantity."""
         gen = _make_generator()
         gen.create_devices = AsyncMock(side_effect=[["dc1-ss-01"], ["dc1-ss-02", "dc1-ss-03"]])
-        data = _deployment(design=register_dc_size(max_super_spines_per_fabric=3))
+        data = _deployment(design=_dc_design(max_super_spines_per_fabric=3))
         data["TopologyDeployment"][0]["fabric_templates"] = [
             {"role": "super-spine", "quantity": 1, "template": {"id": "tmpl-ss-a", "interfaces": []}},
             {"role": "super-spine", "quantity": 2, "template": {"id": "tmpl-ss-b", "interfaces": []}},
@@ -289,12 +262,12 @@ class TestGenerateDesignModeDispatch:
         assert routing_kwargs["bottom_devices"] == ["dc1-ss-01", "dc1-ss-02", "dc1-ss-03"]
 
     @pytest.mark.asyncio
-    async def test_zero_super_spines_with_template_skips_creation(self, register_dc_size: DcSizeRegistrar) -> None:
+    async def test_zero_super_spines_with_template_skips_creation(self) -> None:
         """amount_of_super_spines == 0 short-circuits device creation even
         though a template is present and design_mode is not back-to-back."""
         gen = _make_generator()
         data = _deployment(
-            design=register_dc_size(max_super_spines_per_fabric=2),
+            design=_dc_design(max_super_spines_per_fabric=2),
             amount_of_super_spines=0,
             super_spine_template={"id": "tmpl-ss", "interfaces": []},
         )
@@ -305,10 +278,10 @@ class TestGenerateDesignModeDispatch:
         gen.create_routing.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_super_spines_without_template_skips_creation(self, register_dc_size: DcSizeRegistrar) -> None:
+    async def test_super_spines_without_template_skips_creation(self) -> None:
         gen = _make_generator()
         data = _deployment(
-            design=register_dc_size(max_super_spines_per_fabric=2),
+            design=_dc_design(max_super_spines_per_fabric=2),
             amount_of_super_spines=2,
             super_spine_template=None,
         )
@@ -319,12 +292,12 @@ class TestGenerateDesignModeDispatch:
         gen.create_routing.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_ospf_ibgp_strategy_skips_underlay_for_super_spines(self, register_dc_size: DcSizeRegistrar) -> None:
+    async def test_ospf_ibgp_strategy_skips_underlay_for_super_spines(self) -> None:
         """super-spines sit above the OSPF domain — skip_underlay=True for ospf-ibgp."""
         gen = _make_generator()
         gen.create_devices = AsyncMock(return_value=["dc1-ss-01"])
         data = _deployment(
-            design=register_dc_size(max_super_spines_per_fabric=1),
+            design=_dc_design(max_super_spines_per_fabric=1),
             routing_strategy="ospf-ibgp",
             amount_of_super_spines=1,
             super_spine_template={"id": "tmpl-ss", "interfaces": []},
@@ -338,9 +311,7 @@ class TestGenerateDesignModeDispatch:
 
 class TestGenerateDCFabricLoopbackPoolAllocation:
     @pytest.mark.asyncio
-    async def test_back_to_back_with_border_leaf_capacity_still_allocates_pool(
-        self, register_dc_size: DcSizeRegistrar
-    ) -> None:
+    async def test_back_to_back_with_border_leaf_capacity_still_allocates_pool(self) -> None:
         """Regression test: a back-to-back design (max_super_spines_per_fabric=0)
         with border-leaf capacity must still get a dc-fabric-loopback pool —
         those border-leaf devices need a loopback IP for overlay BGP just like
@@ -348,7 +319,7 @@ class TestGenerateDCFabricLoopbackPoolAllocation:
         allocated when design_mode != "back-to-back", silently breaking
         border-leaf overlay BGP for any back-to-back + border-leaf design."""
         gen = _make_generator()
-        data = _deployment(design=register_dc_size(max_super_spines_per_fabric=0, max_border_leafs_per_fabric=2))
+        data = _deployment(design=_dc_design(max_super_spines_per_fabric=0, max_border_leafs_per_fabric=2))
 
         await gen.generate(data)
 
@@ -357,14 +328,12 @@ class TestGenerateDCFabricLoopbackPoolAllocation:
         assert "dc-fabric-loopback" in pools
 
     @pytest.mark.asyncio
-    async def test_back_to_back_with_no_border_leaf_capacity_skips_pool(
-        self, register_dc_size: DcSizeRegistrar
-    ) -> None:
+    async def test_back_to_back_with_no_border_leaf_capacity_skips_pool(self) -> None:
         """Back-to-back with zero border-leaf/hyper-spine capacity (e.g. the
         border-spine micro-fabric pattern) correctly allocates no
         dc-fabric-loopback pool — unchanged existing behavior."""
         gen = _make_generator()
-        data = _deployment(design=register_dc_size(max_super_spines_per_fabric=0, max_border_leafs_per_fabric=0))
+        data = _deployment(design=_dc_design(max_super_spines_per_fabric=0, max_border_leafs_per_fabric=0))
 
         await gen.generate(data)
 
@@ -372,10 +341,10 @@ class TestGenerateDCFabricLoopbackPoolAllocation:
         assert "dc-fabric-loopback" not in pools
 
     @pytest.mark.asyncio
-    async def test_hyper_spine_capacity_alone_allocates_pool(self, register_dc_size: DcSizeRegistrar) -> None:
+    async def test_hyper_spine_capacity_alone_allocates_pool(self) -> None:
         gen = _make_generator()
         data = _deployment(
-            design=register_dc_size(
+            design=_dc_design(
                 max_super_spines_per_fabric=0, max_border_leafs_per_fabric=0, max_hyper_spines_per_fabric=2
             )
         )
@@ -393,11 +362,12 @@ class TestUnderlayProtocolPrefixLengths:
     @pytest.mark.parametrize(
         ("protocol", "technical", "loopback", "fabric_loopback", "p2p", "device_loopback"),
         [
-            # IPv6-sized design values (/117, /120) are re-expressed per pool family.
-            ("ipv6", 117, 120, 124, 127, 128),
-            ("ipv4", 21, 24, 28, 31, 32),
+            # The design's host bits (technical 7, loopback 5, DC-tier loopback 4,
+            # management 4 — generators/fabric_sizing.py) re-expressed per pool family.
+            ("ipv6", 121, 123, 124, 127, 128),
+            ("ipv4", 25, 27, 28, 31, 32),
             # dual_stack: technical IPv6, loopback (and the pool sliced from it) IPv4.
-            ("dual_stack", 117, 24, 28, 127, 32),
+            ("dual_stack", 121, 27, 28, 127, 32),
         ],
     )
     async def test_pool_sizes_and_link_prefixes_per_underlay_protocol(
@@ -408,11 +378,10 @@ class TestUnderlayProtocolPrefixLengths:
         fabric_loopback: int,
         p2p: int,
         device_loopback: int,
-        register_dc_size: DcSizeRegistrar,
     ) -> None:
         gen = _make_generator()
         gen.create_devices = AsyncMock(side_effect=[["dc1-ss-01"], ["dc1-hs-01"]])
-        design = register_dc_size(max_super_spines_per_fabric=1, max_hyper_spines_per_fabric=1)
+        design = _dc_design(max_super_spines_per_fabric=1, max_hyper_spines_per_fabric=1)
         data = _deployment(
             design=design,
             underlay_protocol=protocol,
@@ -429,7 +398,7 @@ class TestUnderlayProtocolPrefixLengths:
         assert alloc["pools"] == {
             "technical": technical,
             "loopback": loopback,
-            "management": 26,
+            "management": 28,
             "dc-fabric-loopback": fabric_loopback,
         }
         for call in gen.create_devices.await_args_list:
@@ -439,11 +408,11 @@ class TestUnderlayProtocolPrefixLengths:
 
 class TestGenerateHyperSpineTier:
     @pytest.mark.asyncio
-    async def test_no_hyper_spine_templates_skips_creation(self, register_dc_size: DcSizeRegistrar) -> None:
+    async def test_no_hyper_spine_templates_skips_creation(self) -> None:
         gen = _make_generator()
         gen.create_devices = AsyncMock(return_value=["dc1-ss-01", "dc1-ss-02"])
         data = _deployment(
-            design=register_dc_size(max_super_spines_per_fabric=2, max_hyper_spines_per_fabric=0),
+            design=_dc_design(max_super_spines_per_fabric=2, max_hyper_spines_per_fabric=0),
             amount_of_super_spines=2,
             super_spine_template={"id": "tmpl-ss", "interfaces": []},
         )
@@ -455,10 +424,10 @@ class TestGenerateHyperSpineTier:
         gen.create_cabling.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_hyper_spine_count_exceeding_design_max_raises(self, register_dc_size: DcSizeRegistrar) -> None:
+    async def test_hyper_spine_count_exceeding_design_max_raises(self) -> None:
         gen = _make_generator()
         data = _deployment(
-            design=register_dc_size(max_super_spines_per_fabric=2, max_hyper_spines_per_fabric=1),
+            design=_dc_design(max_super_spines_per_fabric=2, max_hyper_spines_per_fabric=1),
             amount_of_hyper_spines=2,
             hyper_spine_template={"id": "tmpl-hs", "interfaces": []},
         )
@@ -467,9 +436,7 @@ class TestGenerateHyperSpineTier:
             await gen.generate(data)
 
     @pytest.mark.asyncio
-    async def test_hyper_spine_templates_creates_devices_and_cables_to_super_spine(
-        self, register_dc_size: DcSizeRegistrar
-    ) -> None:
+    async def test_hyper_spine_templates_creates_devices_and_cables_to_super_spine(self) -> None:
         gen = _make_generator()
         gen.create_devices = AsyncMock(
             side_effect=[
@@ -478,7 +445,7 @@ class TestGenerateHyperSpineTier:
             ]
         )
         data = _deployment(
-            design=register_dc_size(max_super_spines_per_fabric=2, max_hyper_spines_per_fabric=2),
+            design=_dc_design(max_super_spines_per_fabric=2, max_hyper_spines_per_fabric=2),
             amount_of_super_spines=2,
             super_spine_template={
                 "id": "tmpl-ss",
@@ -520,7 +487,7 @@ class TestGenerateHyperSpineTier:
         gen.release_resource_lock.assert_awaited_once_with("lock-id")
 
     @pytest.mark.asyncio
-    async def test_lock_is_held_only_around_the_cabling_call(self, register_dc_size: DcSizeRegistrar) -> None:
+    async def test_lock_is_held_only_around_the_cabling_call(self) -> None:
         """Acquired right before create_cabling, released right after — not
         held across create_routing, which does not share the race."""
         gen = _make_generator()
@@ -536,7 +503,7 @@ class TestGenerateHyperSpineTier:
         gen.create_cabling = AsyncMock(side_effect=lambda **_: calls.append("cabling") or [])
         gen.create_routing = AsyncMock(side_effect=lambda **_: calls.append("routing"))
         data = _deployment(
-            design=register_dc_size(max_super_spines_per_fabric=1, max_hyper_spines_per_fabric=1),
+            design=_dc_design(max_super_spines_per_fabric=1, max_hyper_spines_per_fabric=1),
             amount_of_super_spines=1,
             super_spine_template={"id": "tmpl-ss", "interfaces": [{"name": "Ethernet1", "role": "uplink"}]},
             amount_of_hyper_spines=1,
@@ -551,7 +518,7 @@ class TestGenerateHyperSpineTier:
         assert acquire_idx < cabling_idx < release_idx
 
     @pytest.mark.asyncio
-    async def test_missing_interfaces_logs_error_and_skips_cabling(self, register_dc_size: DcSizeRegistrar) -> None:
+    async def test_missing_interfaces_logs_error_and_skips_cabling(self) -> None:
         """No dynamic fallback anymore — templates with no interfaces skip
         super-spine<->hyper-spine cabling and log an error instead."""
         gen = _make_generator()
@@ -562,7 +529,7 @@ class TestGenerateHyperSpineTier:
             ]
         )
         data = _deployment(
-            design=register_dc_size(max_super_spines_per_fabric=1, max_hyper_spines_per_fabric=1),
+            design=_dc_design(max_super_spines_per_fabric=1, max_hyper_spines_per_fabric=1),
             amount_of_super_spines=1,
             super_spine_template={"id": "tmpl-ss", "interfaces": []},
             amount_of_hyper_spines=1,
@@ -577,30 +544,30 @@ class TestGenerateHyperSpineTier:
 
 class TestGeneratePoolAllocation:
     @pytest.mark.asyncio
-    async def test_asn_pool_created_for_ebgp_strategies(self, register_dc_size: DcSizeRegistrar) -> None:
+    async def test_asn_pool_created_for_ebgp_strategies(self) -> None:
         gen = _make_generator()
-        data = _deployment(design=register_dc_size(), routing_strategy="ebgp-ibgp")
+        data = _deployment(design=_dc_design(), routing_strategy="ebgp-ibgp")
 
         await gen.generate(data)
 
         gen.upsert_asn_pool.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_asn_pool_skipped_for_ospf_ibgp(self, register_dc_size: DcSizeRegistrar) -> None:
+    async def test_asn_pool_skipped_for_ospf_ibgp(self) -> None:
         """ospf-ibgp uses OSPF underlay + shared overlay AS — no per-device ASN pool."""
         gen = _make_generator()
-        data = _deployment(design=register_dc_size(), routing_strategy="ospf-ibgp")
+        data = _deployment(design=_dc_design(), routing_strategy="ospf-ibgp")
 
         await gen.generate(data)
 
         gen.upsert_asn_pool.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_vni_pool_always_created(self, register_dc_size: DcSizeRegistrar) -> None:
+    async def test_vni_pool_always_created(self) -> None:
         """VLAN ID pool creation moved off dc.py entirely — it's now per-VLAN-domain
         (MLAG pair or standalone device), created lazily in devices.py/segment.py."""
         gen = _make_generator()
-        data = _deployment(design=register_dc_size(), routing_strategy="ospf-ibgp")
+        data = _deployment(design=_dc_design(), routing_strategy="ospf-ibgp")
 
         await gen.generate(data)
 
@@ -609,11 +576,9 @@ class TestGeneratePoolAllocation:
         assert pool_names == ["dc1-vni-pool"]
 
     @pytest.mark.asyncio
-    async def test_shared_routing_objects_created_with_asn_end_plus_one(
-        self, register_dc_size: DcSizeRegistrar
-    ) -> None:
+    async def test_shared_routing_objects_created_with_asn_end_plus_one(self) -> None:
         gen = _make_generator()
-        data = _deployment(design=register_dc_size(max_pods=2, max_super_spines_per_fabric=2))
+        data = _deployment(design=_dc_design(max_pods=2, max_super_spines_per_fabric=2))
 
         await gen.generate(data)
 
@@ -624,7 +589,7 @@ class TestGeneratePoolAllocation:
 
 class TestGenerateDCPoolAttachment:
     @pytest.mark.asyncio
-    async def test_dc_updated_with_pool_references_when_found(self, register_dc_size: DcSizeRegistrar) -> None:
+    async def test_dc_updated_with_pool_references_when_found(self) -> None:
         gen = _make_generator()
         dc_obj = MagicMock()
         dc_obj.save = AsyncMock()
@@ -638,7 +603,7 @@ class TestGenerateDCPoolAttachment:
             }
         )
 
-        await gen.generate(_deployment(design=register_dc_size()))
+        await gen.generate(_deployment(design=_dc_design()))
 
         assert dc_obj.loopback_pool == {"id": "lo-1"}
         assert dc_obj.management_pool == {"id": "mgmt-1"}
@@ -650,7 +615,7 @@ class TestGenerateDCPoolAttachment:
         dc_obj.save.assert_awaited_once_with(update_group_context=False)
 
     @pytest.mark.asyncio
-    async def test_asn_and_vni_pools_ride_the_same_single_save(self, register_dc_size: DcSizeRegistrar) -> None:
+    async def test_asn_and_vni_pools_ride_the_same_single_save(self) -> None:
         """The ASN and VNI pools are attached on the DC's one save, not by the
         pool helpers fetching and saving the DC again."""
         gen = _make_generator()
@@ -658,7 +623,7 @@ class TestGenerateDCPoolAttachment:
         dc_obj.save = AsyncMock()
         gen.client.get = AsyncMock(return_value=dc_obj)
 
-        await gen.generate(_deployment(design=register_dc_size()))
+        await gen.generate(_deployment(design=_dc_design()))
 
         assert dc_obj.fabric_asn_pool == {"id": "asn-pool-1"}
         assert dc_obj.vni_pool == {"id": "num-pool-1"}
@@ -667,7 +632,7 @@ class TestGenerateDCPoolAttachment:
             assert "parent_id" not in call.kwargs
 
     @pytest.mark.asyncio
-    async def test_dc_not_found_fails_the_run(self, register_dc_size: DcSizeRegistrar) -> None:
+    async def test_dc_not_found_fails_the_run(self) -> None:
         """The DC is the generator's own target: if it cannot be re-fetched to
         attach the pools, that is a real fault, never a silent skip."""
         gen = _make_generator()
@@ -676,7 +641,7 @@ class TestGenerateDCPoolAttachment:
         )
 
         with pytest.raises(GeneratorError, match="node not found"):
-            await gen.generate(_deployment(design=register_dc_size()))
+            await gen.generate(_deployment(design=_dc_design()))
 
         gen.logger.error.assert_called_once()
 

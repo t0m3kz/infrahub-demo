@@ -67,7 +67,7 @@ def _dc_payload_with_parent(
     dedicated_firewall: bool = False,
     dedicated_loadbalancer: bool = False,
     connectivity_mode: str = "pbr",
-    dc_size: str = "M",
+    dc_design: str = "M",
     fw_devices: list[dict] | None = None,
     lb_devices: list[dict] | None = None,
     security_manager_controllers: list[dict] | None = None,
@@ -84,7 +84,7 @@ def _dc_payload_with_parent(
                     "id": "dc10-id",
                     "name": "DC10",
                     "connectivity_mode": {"value": connectivity_mode},
-                    "size": {"value": dc_size},
+                    "design": {"node": {"name": {"value": dc_design}}},
                     "firewall_devices": [_fw_device()] if fw_devices is None else fw_devices,
                     "loadbalancer_devices": lb_devices or [],
                     "security_manager_controllers": security_manager_controllers or [],
@@ -421,8 +421,8 @@ class TestEnsureDedicatedDevicePair:
         ]
 
     @pytest.mark.asyncio
-    async def test_no_dc_size_is_an_error(self) -> None:
-        """No parent size: logger.error (raises in production), None, nothing looked up."""
+    async def test_no_dc_design_is_an_error(self) -> None:
+        """No parent design: logger.error (raises in production), None, nothing looked up."""
         gen = self._make_gen()
         result = await gen._ensure_dedicated_device_pair(
             role="firewall",
@@ -430,12 +430,12 @@ class TestEnsureDedicatedDevicePair:
             physical_devices=self._physical_pair(),
             parent_id="dc-1",
             parent_name="DC10",
-            dc_size=None,
+            dc_design=None,
             customer_name="C005",
         )
         assert result is None
         gen.logger.error.assert_called_once()
-        assert "no size set" in gen.logger.error.call_args.args[0]
+        assert "no design set" in gen.logger.error.call_args.args[0]
         gen.client.filters.assert_not_called()
 
     @pytest.mark.asyncio
@@ -452,7 +452,7 @@ class TestEnsureDedicatedDevicePair:
             physical_devices=physical,
             parent_id="dc-1",
             parent_name="DC10",
-            dc_size="M",
+            dc_design="M",
             customer_name="C005",
         )
 
@@ -474,7 +474,7 @@ class TestEnsureDedicatedDevicePair:
             physical_devices=physical,
             parent_id="dc-1",
             parent_name="DC10",
-            dc_size="M",
+            dc_design="M",
             customer_name="C005",
         )
 
@@ -496,7 +496,7 @@ class TestEnsureDedicatedDevicePair:
             physical_devices=physical,
             parent_id="dc-1",
             parent_name="DC10",
-            dc_size="M",
+            dc_design="M",
             customer_name="C005",
         )
 
@@ -534,7 +534,7 @@ class TestEnsureDedicatedDevicePair:
             physical_devices=physical,
             parent_id="dc-1",
             parent_name="DC10",
-            dc_size="M",
+            dc_design="M",
             customer_name="C005",
         )
 
@@ -573,7 +573,7 @@ class TestEnsureDedicatedDevicePair:
             physical_devices=physical,
             parent_id="dc-1",
             parent_name="DC10",
-            dc_size="M",
+            dc_design="M",
             customer_name="C005",
         )
 
@@ -648,7 +648,7 @@ class TestLoadbalancerContextTarget:
             physical_devices=self._LBS,
             parent_id="dc10-id",
             parent_name="DC10",
-            dc_size="M",
+            dc_design="M",
             customer_name="C005-p",
         )
         (target,) = self._lb_targets(gen)

@@ -128,29 +128,6 @@ nodes:
       - name: index
         kind: Number
         order_weight: 110
-      - name: size
-        label: "Size"
-        description: "T-shirt size template — max pods/super-spines/border-leafs (see DC_SIZE_LAYOUTS)"
-        kind: Dropdown
-        optional: false
-        order_weight: 120
-        choices:
-          - name: "S"
-            label: "S"
-            description: "Micro-fabric, back-to-back (no super-spine tier), no DC-level border-leaf tier."
-            color: "#7FBF7F"
-          - name: "M"
-            label: "M"
-            description: "Back-to-back (no super-spine tier), with a dedicated DC-level border-leaf tier."
-            color: "#FFD27F"
-          - name: "L"
-            label: "L"
-            description: "Classic 3-tier Clos: leaf -> spine -> super-spine."
-            color: "#869FB3"
-          - name: "XL"
-            label: "XL"
-            description: "Classic 3-tier Clos plus a 4th hyper-spine tier above super-spine."
-            color: "#BF7F7F"
       - name: status
         kind: Dropdown
         label: Status
@@ -256,6 +233,17 @@ nodes:
           Render group-policy enforcement (NX-OS security enforce, EOS no shutdown);
           contracts always render.
     relationships:
+      # The fabric envelope (max pods and DC tiers) every pool size is derived
+      # from, and the pod designs this DC may host (data/bootstrap/14b_fabric_templates.yml).
+      - name: design
+        peer: TopologyTemplateDC
+        label: "Fabric Design"
+        description: "Fabric envelope (max pods, super-spines, hyper-spines, border-leafs) and the pod designs this DC may host"  # yamllint disable-line rule:line-length
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: "dc__design"
+        order_weight: 1050
       - name: fabric_templates
         peer: TopologyElement
         label: "Fabric Elements"
@@ -353,31 +341,6 @@ nodes:
             index__value }}
         read_only: true
         optional: false
-      - name: layout
-        label: "Layout"
-        description: "Physical row/rack-count and device-density template for this pod (see POD_LAYOUTS)"
-        kind: Dropdown
-        optional: false
-        order_weight: 135
-        choices:
-          - name: S_MIDDLE
-            label: "S Middle"
-            color: "#7FBF7F"
-          - name: S_TOR
-            label: "S ToR"
-            color: "#FFD27F"
-          - name: S_MIXED
-            label: "S Mixed"
-            color: "#869FB3"
-          - name: S_BORDER_SPINE_POD
-            label: "S Border-Spine"
-            color: "#BF7F7F"
-          - name: M_MIXED
-            label: "M Mixed"
-            color: "#A9CCE3"
-          - name: M_MIDDLE
-            label: "M Middle"
-            color: "#A9DFBF"
       - name: leaf_interface_sorting_method
         kind: Dropdown
         choices:
@@ -421,6 +384,17 @@ nodes:
         optional: true
         order_weight: 4500
     relationships:
+      # Row/rack grid and device envelope of the pod; must be one of its DC
+      # design's pod_templates (enforced by the pod generator).
+      - name: design
+        peer: TopologyTemplatePod
+        label: "Pod Design"
+        description: "Row/rack grid and device envelope of this pod; one of the DC design's pod templates"
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: "pod__design"
+        order_weight: 1050
       - name: fabric_templates
         peer: TopologyElement
         label: "Fabric Elements"
@@ -446,3 +420,170 @@ nodes:
         identifier: "pod__prefix_pool"
         order_weight: 7000
         on_delete: cascade
+
+  # Fabric designs: the ENVELOPE (max_*) of a DC and of a pod, referenced by
+  # TopologyDataCenter.design / TopologyPod.design. Pools and port offsets are
+  # sized before any rack exists, so they are derived from these maxima by
+  # generators/fabric_sizing.py, never from the live device counts. The rows
+  # live in data/bootstrap/14b_fabric_templates.yml.
+  - name: TemplateDC
+    namespace: Topology
+    description: "Fabric envelope of a data center: max pods and DC tiers, and the pod designs it may host"
+    label: "Fabric Template (Data Center)"
+    icon: "mdi:floor-plan"
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [name__value]
+    attributes:
+      - name: name
+        kind: Text
+        unique: true
+        optional: false
+        order_weight: 100
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 150
+      - name: max_pods
+        kind: Number
+        label: "Max Pods"
+        description: "Most pods the DC may hold; enforced when a pod is added"
+        optional: false
+        parameters:
+          min_value: 1
+        order_weight: 300
+      - name: max_super_spines_per_fabric
+        kind: Number
+        label: "Max Super-Spines"
+        description: "Super-spines of the DC fabric; 0 = no super-spine tier (pods mesh back-to-back)"
+        optional: false
+        parameters:
+          min_value: 0
+        order_weight: 310
+      - name: max_hyper_spines_per_fabric
+        kind: Number
+        label: "Max Hyper-Spines"
+        description: "Hyper-spines above the super-spine tier; 0 = no hyper-spine tier"
+        optional: false
+        parameters:
+          min_value: 0
+        order_weight: 320
+      - name: max_border_leafs_per_fabric
+        kind: Number
+        label: "Max Border-Leafs"
+        description: "Border-leafs of the whole DC fabric; 0 = no DC-level border-leaf tier"
+        optional: false
+        parameters:
+          min_value: 0
+        order_weight: 330
+    relationships:
+      - name: pod_templates
+        peer: TopologyTemplatePod
+        label: "Pod Designs"
+        description: "Pod designs a pod of this DC may use"
+        cardinality: many
+        kind: Attribute
+        optional: false
+        identifier: "template_dc__pod_templates"
+        order_weight: 1000
+
+  - name: TemplatePod
+    namespace: Topology
+    description: "Fabric envelope of a pod: row/rack grid, leafs per network rack, ToRs per compute rack, spines, border-leafs"  # yamllint disable-line rule:line-length
+    label: "Fabric Template (Pod)"
+    icon: "mdi:view-grid-outline"
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [name__value]
+    attributes:
+      - name: name
+        kind: Text
+        unique: true
+        optional: false
+        order_weight: 100
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 150
+      - name: max_rows
+        kind: Number
+        label: "Max Rows"
+        description: "Rows of racks in the pod"
+        optional: false
+        parameters:
+          min_value: 1
+        order_weight: 300
+      - name: max_compute_racks_per_row
+        kind: Number
+        label: "Max Compute Racks per Row"
+        optional: false
+        parameters:
+          min_value: 0
+        order_weight: 310
+      - name: max_network_racks_per_row
+        kind: Number
+        label: "Max Network Racks per Row"
+        optional: false
+        parameters:
+          min_value: 0
+        order_weight: 320
+      - name: max_leafs_per_network_rack
+        kind: Number
+        label: "Max Leafs per Network Rack"
+        description: "0 = no leafs (ToR pod)"
+        optional: false
+        parameters:
+          min_value: 0
+        order_weight: 330
+      - name: max_tors_per_compute_rack
+        kind: Number
+        label: "Max ToRs per Compute Rack"
+        description: "0 = no ToRs (middle-rack pod)"
+        optional: false
+        parameters:
+          min_value: 0
+        order_weight: 340
+      - name: max_spines_per_pod
+        kind: Number
+        label: "Max Spines"
+        optional: false
+        parameters:
+          min_value: 1
+        order_weight: 350
+      - name: max_border_leafs_per_pod
+        kind: Number
+        label: "Max Border-Leafs"
+        description: "Border-leafs of the DC fabric this pod may host"
+        optional: false
+        parameters:
+          min_value: 0
+        order_weight: 360
+      # Rack budget of a pod with ToRs: max_compute_racks_per_row =
+      # spine downlinks (ports x spines) / (ToRs per rack x uplinks per ToR) / rows,
+      # checked by a unit test. Set only on designs with ToRs.
+      - name: spine_downlink_ports_per_spine
+        kind: Number
+        label: "Spine Downlink Ports"
+        description: "Downlink ports per spine the ToR rack budget is computed from"
+        optional: true
+        parameters:
+          min_value: 1
+        order_weight: 500
+      - name: tor_uplinks_to_spine
+        kind: Number
+        label: "ToR Uplinks"
+        description: "Spine uplinks of each ToR (over all spines) in the ToR rack budget"
+        optional: true
+        parameters:
+          min_value: 1
+        order_weight: 510

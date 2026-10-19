@@ -16,6 +16,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.topology.pod import PodTopologyGenerator
+from tests.unit.simulators.fabric_designs import dc_design, pod_design
 
 _FW_TEMPLATE = {
     "id": "tmpl-fw",
@@ -129,7 +130,7 @@ class TestPodLinkPrefixLengths:
     async def test_border_leaf_uplinks_use_the_technical_pool_family(self, protocol: str, p2p: int) -> None:
         gen = _make_generator()
         gen.fabric_name = "dc1"
-        gen.data.update({"name": "dc1-pod1", "layout": "S_MIXED"})
+        gen.data.update({"name": "dc1-pod1", "design": pod_design("S_MIXED")})
         gen.create_cabling = AsyncMock(return_value=[])
         gen.create_routing = AsyncMock()
         border_leaf = MagicMock()
@@ -142,7 +143,7 @@ class TestPodLinkPrefixLengths:
         await gen._cable_border_leafs_to_spines(
             spines=["dc1-spine-01"],
             spine_downlink_interfaces=["Ethernet1/10"],
-            dc={"size": "M", "index": 1, "naming_convention": "standard"},
+            dc={"design": dc_design("M"), "index": 1, "naming_convention": "standard"},
             dc_asn_pool_id=None,
             pod_pools={"technical": technical_pool},
             underlay_protocol=protocol,

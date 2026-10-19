@@ -283,7 +283,7 @@ class RackMixin:
             self.data["index"],
         ]
 
-        if pod_deployment_type(pod["layout"]) == "tor":
+        if pod_deployment_type(pod["design"]) == "tor":
             self.logger.info(
                 f"ToR rack {self.data['name']}: using suite={suite['index']}, row={self.data['row_index']}, "
                 f"rack_index={self.data['index']}"

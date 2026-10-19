@@ -100,12 +100,13 @@ def _sibling(index: int) -> MagicMock:
 
 
 def _make_pod_gen(siblings: list[Any]) -> Any:
-    gen = PodTopologyGenerator.__new__(PodTopologyGenerator)
+    gen: Any = PodTopologyGenerator.__new__(PodTopologyGenerator)
     gen.logger = MagicMock()
     gen.data = {"name": "DC1-POD-2", "index": 2}
+    gen.siblings = siblings  # the DC's pods, listed once by generate() (its pod-count check)
     gen.client = MagicMock()
-    # First call lists the DC's pods; any later call (sibling spine lookup) finds nothing.
-    gen.client.filters = AsyncMock(side_effect=[siblings] + [[]] * 20)
+    # Every sibling spine lookup finds nothing.
+    gen.client.filters = AsyncMock(return_value=[])
     gen.create_cabling = AsyncMock(return_value=[])
     gen.create_routing = AsyncMock()
     return gen
@@ -113,6 +114,7 @@ def _make_pod_gen(siblings: list[Any]) -> Any:
 
 async def _mesh(gen: Any, *, spine_interfaces: list[str]) -> None:
     await gen._cable_to_existing_sibling_pods(
+        siblings=gen.siblings,
         spines=["spine-01", "spine-02"],
         spine_interfaces=spine_interfaces,
         spine_role="spine",
