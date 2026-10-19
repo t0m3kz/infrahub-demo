@@ -247,8 +247,9 @@ nodes:
   # ("Campus and Office") with no grouping node in between. Not a
   # TopologyCustomer: an office is always PROD (its prefixes live in the PROD
   # namespace), so it has no environment, and it carries its own `owner`.
-  # Circuits terminate on this footprint (TopologyConnectableLocation), never
-  # on a shared grouping node. `locations` is the building(s) it occupies; the
+  # Circuits terminate on this footprint, never on a shared grouping node: it
+  # is both a TopologyConnectableLocation and, for the WAN access circuit, a
+  # TopologyFacility. `locations` is the building(s) it occupies; the
   # devices and cables belong to the footprint.
   - name: CustomerOffice
     namespace: Topology
@@ -263,6 +264,7 @@ nodes:
       - TopologyDeviceNaming
       - TopologySegmentHosting
       - TopologyConnectableLocation
+      - TopologyFacility
     parent: TopologyLabel
     children: ""
     include_in_menu: false

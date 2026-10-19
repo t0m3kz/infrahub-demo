@@ -17,16 +17,23 @@ import pytest
 from generators.logger import GeneratorError
 from generators.topology.circuit import CircuitEndpoint, circuit_endpoints, endpoint_problem, order_endpoints
 from tests.unit.simulators.circuit_fakes import (
+    CAGE,
+    CIRCUIT_ID,
     DC_KEY_ID,
+    ISP,
+    METRO,
     PREFIX_ID,
+    REGION,
     V4_POOL_ID,
     V6_POOL_ID,
     FakeClient,
     cage_edge,
     dc_border_leaf,
+    dc_place,
     interface,
     physical_generator,
     physical_payload,
+    place,
     sdwan_edge,
     sdwan_gateway,
     underlay_circuit,
@@ -369,6 +376,173 @@ class TestPhysicalCircuitFanOut:
         await gen.generate(physical_payload())
 
         gen.run_generator.assert_not_awaited()
+
+
+def _aws_router(**kwargs: Any) -> dict[str, Any]:
+    """The provider router of a Direct Connect, deployed in its cloud region."""
+    return interface("if-aws", "Ethernet1", "EXT-AWS-DX-FR2", deployment=REGION, **kwargs)
+
+
+def _isp_pe(**kwargs: Any) -> dict[str, Any]:
+    """The ISP's access PE, deployed in its TopologyExternalProviders."""
+    return interface("if-pe", "xe-0/0/1", "pe-orange-fr", deployment=ISP, **kwargs)
+
+
+def _added_locations(client: FakeClient) -> list[tuple[str, dict[str, Any]]]:
+    return client.related()
+
+
+class TestPhysicalCircuitPlacement:
+    """Each end deployed in a DC, ISP or cloud region places itself; the rest is authored."""
+
+    @pytest.mark.parametrize(
+        ("ends", "authored", "derived"),
+        [
+            pytest.param([dc_border_leaf(), cage_edge()], [CAGE], ["dep-DC10"], id="cage-authored-dc-derived"),
+            pytest.param([cage_edge(), _aws_router()], [CAGE], ["loc-eu-central-1"], id="cloud-region-derived"),
+            pytest.param([cage_edge(), _isp_pe()], [CAGE], ["loc-ORANGE-FR"], id="isp-derived"),
+            pytest.param([dc_border_leaf(), _isp_pe()], [], ["dep-DC10", "loc-ORANGE-FR"], id="both-ends-derived"),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_derived_locations_are_added_in_one_relationship_add(
+        self, ends: list[dict[str, Any]], authored: list[dict[str, Any]], derived: list[str]
+    ) -> None:
+        """Only the derived locations the circuit lacks are sent; the authored ones are never re-sent."""
+        client = FakeClient()
+
+        await physical_generator(client).generate(physical_payload(role="none", ends=ends, locations=authored))
+
+        assert _added_locations(client) == [(CIRCUIT_ID, {"relation_to_update": "locations", "related_nodes": derived})]
+
+    @pytest.mark.asyncio
+    async def test_location_write_is_untracked(self) -> None:
+        """The circuit is the run's target: no save, nothing joins the tracking group."""
+        client = FakeClient()
+
+        await physical_generator(client).generate(physical_payload(role="none", locations=[CAGE]))
+
+        assert client.saves() == {}
+        assert list(client.group_context.related_node_ids) == []
+
+    @pytest.mark.parametrize("role", ["none", "dci"])
+    @pytest.mark.asyncio
+    async def test_already_complete_rerun_adds_nothing(self, role: str) -> None:
+        """Authored cage plus the DC an earlier run derived: the circuit is not even fetched."""
+        client = FakeClient()
+
+        await physical_generator(client).generate(physical_payload(role=role, locations=[CAGE, dc_place()]))
+
+        assert _added_locations(client) == []
+        assert not any(name == "TopologyPhysicalCircuit" for name, _ in client.get_calls)
+
+    @pytest.mark.asyncio
+    async def test_dci_session_and_derived_location_both_written(self) -> None:
+        """Placement does not change the DCI session; its location add comes after the session writes."""
+        client = FakeClient()
+
+        await physical_generator(client).generate(physical_payload(locations=[CAGE]))
+
+        assert len(_peerings(client)) == 1
+        assert client.writes[-1] == (
+            "relate",
+            CIRCUIT_ID,
+            {"relation_to_update": "locations", "related_nodes": ["dep-DC10"]},
+        )
+
+    @pytest.mark.asyncio
+    async def test_fan_out_still_runs_after_a_location_add(self) -> None:
+        client = FakeClient()
+        client.virtual_circuits = [MagicMock(id="vc-1")]
+        gen = physical_generator(client)
+
+        await gen.generate(physical_payload(role="none", locations=[CAGE]))
+
+        gen.run_generator.assert_awaited_once_with("add_virtual_circuit", ["vc-1"], wait=False)
+
+    @pytest.mark.asyncio
+    async def test_a_device_without_deployment_derives_nothing(self) -> None:
+        """Both ends authored: nothing to derive, nothing written."""
+        client = FakeClient()
+        ends = [cage_edge(), interface("if-x", "eth1", "dev-x", no_deployment=True)]
+
+        await physical_generator(client).generate(physical_payload(role="none", ends=ends, locations=[CAGE, ISP]))
+
+        assert client.writes == []
+
+
+class TestPhysicalCircuitPlacementRefusals:
+    """A placement problem fails the run before any write, session and fan-out included."""
+
+    @pytest.mark.parametrize(
+        ("ends", "authored", "message"),
+        [
+            pytest.param(
+                [dc_border_leaf(), cage_edge()],
+                [CAGE, dc_place("DC11")],
+                r"location DC11 \(TopologyDataCenter\) contradicts the endpoint devices' deployment: "
+                r"bl-dc101101 is in DC10",
+                id="authored-dc-contradicts-derived-dc",
+            ),
+            pytest.param(
+                [cage_edge(), _aws_router()],
+                [CAGE, place("TopologyCloudRegion", "eu-west-1")],
+                r"location eu-west-1 .* EXT-AWS-DX-FR2 is in eu-central-1",
+                id="authored-region-contradicts-derived-region",
+            ),
+            pytest.param([dc_border_leaf(), cage_edge()], [], r"found 1: DC10$", id="cage-not-authored"),
+            pytest.param(
+                [dc_border_leaf(), cage_edge()],
+                [CAGE, place("TopologyColocationZone", "FR6")],
+                r"found 3: FR2, FR6, DC10$",
+                id="more-than-two",
+            ),
+            pytest.param(
+                [cage_edge(), interface("if-x", "eth1", "dev-x", no_deployment=True)],
+                [CAGE],
+                r"found 1: FR2$",
+                id="device-without-deployment",
+            ),
+            pytest.param(
+                [cage_edge(), interface("if-y", "eth1", "dev-y", deployment=METRO)],
+                [CAGE],
+                r"found 1: FR2$",
+                id="metro-deployment-not-derived",
+            ),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_refusal_writes_nothing(
+        self, ends: list[dict[str, Any]], authored: list[dict[str, Any]], message: str
+    ) -> None:
+        client = FakeClient()
+        gen = physical_generator(client)
+
+        with pytest.raises(GeneratorError, match=message):
+            await gen.generate(physical_payload(ends=ends, locations=authored))
+
+        assert client.writes == []
+        assert client.created == []
+        gen.run_generator.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_error_names_the_circuit_and_its_endpoints(self) -> None:
+        with pytest.raises(GeneratorError) as excinfo:
+            await physical_generator(FakeClient()).generate(physical_payload(role="none", locations=[]))
+
+        assert str(excinfo.value).startswith(
+            "DF-DC10-EQXFR2 (bl-dc101101/Ethernet1/35 | eg-fr01/Ethernet1/10): needs exactly 2 distinct locations"
+        )
+
+    @pytest.mark.asyncio
+    async def test_session_refusal_writes_no_location_either(self) -> None:
+        """A DCI precondition failing after placement still leaves nothing written."""
+        client = FakeClient(key=False)
+
+        with pytest.raises(GeneratorError, match="'dc10-overlay-key' not found"):
+            await physical_generator(client).generate(physical_payload(locations=[CAGE]))
+
+        assert client.writes == []
 
 
 # ===========================================================================

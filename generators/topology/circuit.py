@@ -1,7 +1,16 @@
-"""Circuit generators: the BGP session a circuit's ``peering_role`` asks for.
+"""Circuit generators: a physical circuit's derived locations and the BGP session a circuit's ``peering_role`` asks for.
 
 PhysicalCircuitGenerator (add_circuit)
-    ``peering_role: dci`` builds the EVPN Multi-Site DCI session over the
+    First the circuit's placement: an endpoint device whose ``deployment``
+    is itself a facility (TopologyDataCenter, TopologyExternalProviders,
+    TopologyCloudRegion) places that end, so the circuit's locations are the
+    authored ones plus these derived ones, exactly two distinct. A colocation
+    end is never derived (the on-ramp edge deploys to the metro, which has
+    several cages) and stays authored. A derived facility that contradicts an
+    authored one of the same kind, or anything but two locations, fails the
+    run before any write; the missing derived ones are added with one
+    RelationshipAdd, so an already complete circuit writes nothing.
+    Then ``peering_role: dci`` builds the EVPN Multi-Site DCI session over the
     circuit's two endpoints (capabilities, exactly two by schema): a
     P2P prefix from the DCI pool, both addresses, the two interfaces
     addressed, and one directly connected eBGP peering between the two
@@ -21,7 +30,8 @@ VirtualCircuitGenerator (add_virtual_circuit)
 Ownership (the run's tracking group, delete_unused_nodes=True): a run owns
 what exists only because of its circuit — the DCI prefix, its two addresses
 and the peering. The interfaces it addresses come from the device templates
-and are written untracked; devices, BGP processes, the fabric key and the
+and are written untracked, as are the derived locations it adds to the
+circuit (its target, not its output); devices, BGP processes, the fabric key and the
 global address families are only referenced. Every precondition fails
 (``self.logger.error`` raises) before the first write, so a refused run never
 returns after a partial save, which its cleanup would turn into deletions.
@@ -39,7 +49,7 @@ from utils.data_cleaning import clean_data
 from ..common import CommonGenerator
 from ..connections import CablingMixin
 from ..pools import PoolMixin
-from ..protocols import RoutingPassword, TopologyVirtualCircuit
+from ..protocols import RoutingPassword, TopologyPhysicalCircuit, TopologyVirtualCircuit
 from ..routing import EVPN_AF, IPV4_UNICAST_AF, IPV6_UNICAST_AF, RoutingMixin, _overlay_key_name
 
 PHYSICAL_CIRCUIT_GENERATOR = "add_circuit"
@@ -83,6 +93,39 @@ _DECOMMISSIONED = "decommissioned"
 # Interface kinds that carry an ip_address relationship.
 _ADDRESSABLE_INTERFACE_KINDS = frozenset({"DcimPhysicalInterface", "DcimVirtualInterface"})
 
+# Device deployments that are themselves the facility a physical circuit end
+# terminates on, so that end's location is derived from its device. Not a
+# colocation zone (devices deploy to the metro, which has several cages) and
+# not an office (generators/topology/sdwan_edge.py authors its circuit's
+# locations); those ends stay authored.
+_DERIVABLE_FACILITY_KINDS = frozenset({"TopologyDataCenter", "TopologyExternalProviders", "TopologyCloudRegion"})
+
+
+@dataclass(frozen=True)
+class CircuitLocation:
+    """A place a circuit terminates on: a circuit location or an endpoint device's deployment."""
+
+    id: str
+    kind: str
+    label: str
+
+    @classmethod
+    def parse(cls, node: Any) -> CircuitLocation | None:
+        """From a cleaned node dict (id, typename, display_label); None for an empty slot."""
+        if not isinstance(node, dict) or not node.get("id"):
+            return None
+        return cls(id=node["id"], kind=node.get("typename") or "", label=node.get("display_label") or node["id"])
+
+
+def circuit_locations(circuit: dict[str, Any]) -> list[CircuitLocation]:
+    """The circuit's current (authored or earlier derived) locations, deduplicated by id."""
+    locations: dict[str, CircuitLocation] = {}
+    for node in circuit.get("locations") or []:
+        location = CircuitLocation.parse(node)
+        if location is not None:
+            locations.setdefault(location.id, location)
+    return list(locations.values())
+
 
 @dataclass(frozen=True)
 class CircuitEndpoint:
@@ -102,6 +145,8 @@ class CircuitEndpoint:
     underlay_protocol: str | None
     # (id, name, process_role) of every ManagedBGP process on the device.
     bgp_processes: tuple[tuple[str, str, str], ...]
+    # The device's deployment, whatever its kind; None when it has none.
+    deployment: CircuitLocation | None
 
     @property
     def label(self) -> str:
@@ -132,6 +177,7 @@ class CircuitEndpoint:
                 for cap in device.get("capabilities") or []
                 if isinstance(cap, dict) and cap.get("typename") == "ManagedBGP" and cap.get("id")
             ),
+            deployment=CircuitLocation.parse(deployment),
         )
 
     def bgp_process(self, role: str) -> str | None:
@@ -185,6 +231,42 @@ def order_endpoints(endpoints: list[CircuitEndpoint]) -> tuple[CircuitEndpoint, 
     return first, second
 
 
+def plan_locations(
+    current: list[CircuitLocation], endpoints: list[CircuitEndpoint]
+) -> tuple[list[CircuitLocation], str | None]:
+    """(derived locations the circuit still lacks, problem or None).
+
+    An endpoint device whose deployment is a derivable facility places its end.
+    A current location of a kind some end derives, but not derived itself
+    (DC10 authored while the device sits in DC11), is a contradiction. The
+    current and derived locations together must be exactly two distinct ones.
+    """
+    derived: dict[str, tuple[CircuitLocation, str]] = {}
+    for endpoint in endpoints:
+        deployment = endpoint.deployment
+        if deployment is not None and deployment.kind in _DERIVABLE_FACILITY_KINDS:
+            derived.setdefault(deployment.id, (deployment, endpoint.device_name))
+    for location in current:
+        if location.id in derived:
+            continue
+        sources = [f"{device} is in {loc.label}" for loc, device in derived.values() if loc.kind == location.kind]
+        if sources:
+            return [], (
+                f"location {location.label} ({location.kind}) contradicts the endpoint devices' deployment: "
+                + ", ".join(sources)
+            )
+    current_ids = {location.id for location in current}
+    missing = [location for location, _ in derived.values() if location.id not in current_ids]
+    placed = current + missing
+    if len(placed) != 2:
+        labels = ", ".join(location.label for location in placed) or "none"
+        return [], (
+            f"needs exactly 2 distinct locations (authored, plus a DC, ISP or cloud region derived from an "
+            f"endpoint device's deployment), found {len(placed)}: {labels}"
+        )
+    return missing, None
+
+
 class _CircuitGenerator(PoolMixin, RoutingMixin, CommonGenerator):
     """Shared plumbing: one circuit per run, its fabric key, address families."""
 
@@ -221,7 +303,7 @@ class _CircuitGenerator(PoolMixin, RoutingMixin, CommonGenerator):
 
 
 class PhysicalCircuitGenerator(CablingMixin, _CircuitGenerator):
-    """add_circuit — the session a TopologyPhysicalCircuit's peering_role asks for."""
+    """add_circuit — a TopologyPhysicalCircuit's derived locations and the session its peering_role asks for."""
 
     graphql_root_key = "TopologyPhysicalCircuit"
 
@@ -239,6 +321,10 @@ class PhysicalCircuitGenerator(CablingMixin, _CircuitGenerator):
         endpoints = circuit_endpoints(circuit)
         summary = " | ".join(e.label for e in endpoints) or "no endpoints"
         self.logger.info(f"Processing physical circuit {circuit_name} (role={role}, status={status}): {summary}")
+        missing_locations, problem = plan_locations(circuit_locations(circuit), endpoints)
+        if problem:
+            self.logger.error(f"{circuit_name} ({summary}): {problem}")
+            return
 
         if role == "dci":
             await self._build_dci_session(circuit, circuit_name, endpoints)
@@ -249,6 +335,7 @@ class PhysicalCircuitGenerator(CablingMixin, _CircuitGenerator):
             if problem:
                 self.logger.info(f"  {circuit_name}: a session would need {problem} (peering_role none, no session)")
 
+        await self._add_locations(circuit["id"], circuit_name, missing_locations)
         await self._fan_out_virtual_circuits(circuit["id"], circuit_name)
         self.logger.info(f"Physical circuit {circuit_name} — completed")
 
@@ -380,6 +467,20 @@ class PhysicalCircuitGenerator(CablingMixin, _CircuitGenerator):
             changed = True
         if changed:
             await node.save(update_group_context=False)
+
+    async def _add_locations(self, circuit_id: str, circuit_name: str, locations: list[CircuitLocation]) -> None:
+        """Add the derived locations the circuit lacks: one RelationshipAdd, untracked.
+
+        The circuit is the run's target, not its output (tracked, cleanup
+        could delete it), and a RelationshipAdd names only these peers, so it
+        never drops an authored location. Written after the session, whose
+        preconditions all fail before the first write.
+        """
+        if not locations:
+            return
+        node = await self.client.get(kind=TopologyPhysicalCircuit, id=circuit_id)
+        await node.add_relationships(relation_to_update="locations", related_nodes=[loc.id for loc in locations])
+        self.logger.info(f"  {circuit_name}: derived location(s) {', '.join(loc.label for loc in locations)}")
 
     async def _fan_out_virtual_circuits(self, circuit_id: str, circuit_name: str) -> None:
         """Re-run add_virtual_circuit for the overlay circuits riding this one.

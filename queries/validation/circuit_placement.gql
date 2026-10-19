@@ -1,0 +1,145 @@
+# The rows of checks/circuit_placement.py: every circuit with the places it terminates on (locations), the device
+# each end port sits on and where that device is deployed (capabilities), and for a virtual circuit its owner and
+# the locations of every physical circuit it rides. One global query: the underlay chain of a virtual circuit spans
+# several circuits.
+#
+# Concrete inline fragments only, so the query is valid whether physical `locations` peers TopologyConnectableLocation
+# or TopologyFacility: TopologyColocationZone implements both, the customer footprints only the first (they are
+# selected on virtual circuits alone). A zone carries its metro (parent): a cage end matches an edge deployed to
+# the metro, and a colocation footprint (parented by the metro) is reached through any cage of it.
+query circuit_placement {
+  TopologyPhysicalCircuit {
+    edges {
+      node {
+        id
+        name { value }
+        locations {
+          edges {
+            node {
+              id
+              __typename
+              name { value }
+              ... on TopologyColocationZone { parent { node { id __typename name { value } } } }
+            }
+          }
+        }
+        capabilities {
+          edges {
+            node {
+              id
+              name { value }
+              device {
+                node {
+                  id
+                  name { value }
+                  ... on DcimPhysicalDevice {
+                    deployment {
+                      node {
+                        id
+                        __typename
+                        name { value }
+                        ... on TopologyColocationZone { parent { node { id __typename name { value } } } }
+                      }
+                    }
+                  }
+                  ... on DcimVirtualDevice {
+                    deployment {
+                      node {
+                        id
+                        __typename
+                        name { value }
+                        ... on TopologyColocationZone { parent { node { id __typename name { value } } } }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  TopologyVirtualCircuit {
+    edges {
+      node {
+        id
+        name { value }
+        transport_mode { value }
+        owner { node { id org_id { value } } }
+        locations {
+          edges {
+            node {
+              id
+              __typename
+              name { value }
+              ... on TopologyColocationZone { parent { node { id __typename name { value } } } }
+              ... on TopologyCustomer {
+                owner { node { id org_id { value } } }
+              }
+              ... on TopologyCustomerOffice {
+                owner { node { id org_id { value } } }
+              }
+              ... on TopologyCustomerDC { parent { node { id __typename name { value } } } }
+              ... on TopologyCustomerColocation { parent { node { id __typename name { value } } } }
+              ... on TopologyCustomerCloud { parent { node { id __typename name { value } } } }
+            }
+          }
+        }
+        capabilities {
+          edges {
+            node {
+              id
+              name { value }
+              device {
+                node {
+                  id
+                  name { value }
+                  ... on DcimPhysicalDevice {
+                    deployment {
+                      node {
+                        id
+                        __typename
+                        name { value }
+                        ... on TopologyColocationZone { parent { node { id __typename name { value } } } }
+                      }
+                    }
+                  }
+                  ... on DcimVirtualDevice {
+                    deployment {
+                      node {
+                        id
+                        __typename
+                        name { value }
+                        ... on TopologyColocationZone { parent { node { id __typename name { value } } } }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        physical_circuits {
+          edges {
+            node {
+              id
+              name { value }
+              locations {
+                edges {
+                  node {
+                    id
+                    __typename
+                    name { value }
+                    ... on TopologyColocationZone { parent { node { id __typename name { value } } } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

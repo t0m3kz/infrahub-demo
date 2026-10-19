@@ -16,7 +16,8 @@ asynchronously after the load that triggers them:
 - `03_dc/*/05_servers.yml` puts hosts in compute racks. `add_endpoint` then looks for the access-leaf pair
   in the same row, and those leafs only exist once `add_rack` has run.
 - `08_interconnects/01_colo_onramp/03_physical_circuits.yml` lands the dark fibres on border leafs by name
-  (`bl-dc101101`). `add_dc` creates them, and `add_circuit` then builds each fibre's DCI session. Each DC has
+  (`bl-dc101101`). `add_dc` creates them, and `add_circuit` then builds each fibre's DCI session and adds the
+  border leaf's DC to the fibre's `locations` (the file lists only the cage end). Each DC has
   two fibres into its metro, one per cage edge (both edges are Multi-Site border gateways, linked by the
   `interlink` port and peered iBGP by `add_colocation_metro`).
 - `07_applications` references VMs and customer footprints declared in `06_customer_boarding`.

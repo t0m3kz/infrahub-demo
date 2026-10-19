@@ -47,12 +47,16 @@ class TopologyCircuit(CoreNode):
     description: StringOptional
     name: String
     status: Dropdown
-    locations: RelationshipManager[TopologyConnectableLocation]
     owner: RelationshipAttribute[OrganizationCustomer]
     provider: RelationshipAttribute[OrganizationProvider]
 
 
 class TopologyConnectableLocation(CoreNode):
+    name: String
+    circuits: RelationshipManager[TopologyCircuit]
+
+
+class TopologyFacility(CoreNode):
     name: String
 
 
@@ -343,7 +347,7 @@ class ManagedCloudProxy(ManagedSaasService, ManagedInlineService, ManagedProxySe
     region: StringOptional
 
 
-class TopologyCloudRegion(TopologyDeployment, TopologyConnectableLocation):
+class TopologyCloudRegion(TopologyDeployment, TopologyConnectableLocation, TopologyFacility):
     status: Dropdown
     location: RelationshipAttribute[LocationMetro]
 
@@ -397,6 +401,7 @@ class TopologyColocationZone(
     TopologyRackHosting,
     TopologyDeviceHosting,
     TopologyConnectableLocation,
+    TopologyFacility,
 ):
     deployment_type: Dropdown
 
@@ -474,6 +479,7 @@ class TopologyCustomerOffice(
     TopologyDeviceNaming,
     TopologySegmentHosting,
     TopologyConnectableLocation,
+    TopologyFacility,
 ):
     name: StringOptional
     fabric_templates: RelationshipManager[TopologyElement]
@@ -493,6 +499,7 @@ class TopologyDataCenter(
     TopologyDeployment,
     TopologyPhysicalDeployment,
     TopologyConnectableLocation,
+    TopologyFacility,
     TopologyDeviceHosting,
     TopologyDeviceNaming,
     TopologySegmentHosting,
@@ -577,7 +584,9 @@ class TopologyExternal(TopologyDeployment):
     pass
 
 
-class TopologyExternalProviders(TopologyDeployment, TopologyConnectableLocation, TopologyDeviceHosting):
+class TopologyExternalProviders(
+    TopologyDeployment, TopologyConnectableLocation, TopologyFacility, TopologyDeviceHosting
+):
     provider_type: Dropdown
     status: Dropdown
     provider: RelationshipAttribute[OrganizationProvider]
@@ -774,10 +783,8 @@ class RoutingPassword(CoreNode):
 class TopologyPhysicalCircuit(TopologyCircuit, ManagedGeneric, ManagedGenericInterfaces):
     circuit_id: String
     circuit_type: Dropdown
-    committed_rate: IntegerOptional
-    contract_end_date: StringOptional
-    install_date: StringOptional
     peering_role: DropdownOptional
+    locations: RelationshipManager[TopologyFacility]
 
 
 class DcimPhysicalDevice(CoreArtifactTarget, DcimDevice, DcimCapabilities, AppInstance):
@@ -937,7 +944,7 @@ class TopologySaas(TopologyDeployment, CoreArtifactTarget):
     status: Dropdown
 
 
-class TopologySaasRegion(TopologyDeployment, TopologyConnectableLocation):
+class TopologySaasRegion(TopologyDeployment, TopologyConnectableLocation, TopologyFacility):
     name: String
     region_name: String
     status: Dropdown
@@ -1072,13 +1079,13 @@ class CloudVPNGateway(CloudResource, CloudHybridAttachment):
 
 
 class TopologyVirtualCircuit(TopologyCircuit, ManagedGeneric, ManagedGenericInterfaces):
-    cloud_resource_id: StringOptional
     encryption: Boolean
     link_type: Dropdown
     peering_role: DropdownOptional
     transport_mode: DropdownOptional
     tunnel_id: IntegerOptional
     vni: IntegerOptional
+    locations: RelationshipManager[TopologyConnectableLocation]
     physical_circuits: RelationshipManager[TopologyPhysicalCircuit]
 
 
