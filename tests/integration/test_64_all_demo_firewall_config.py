@@ -1649,13 +1649,13 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                 label = f"{dc}/{device} ({name})"
                 expected_blocks = {
                     f"auth partition {partition}": (f"default-route-domain {route_domain}",),
-                    f"net route-domain {p}rd{route_domain}": (
+                    f"net route-domain /Common/rd{route_domain}": (
                         f"id {route_domain}",
                         "parent none",
                         "strict enabled",
-                        f"{p}vlan{vlan}",
+                        f"/Common/vlan{vlan}",
                     ),
-                    f"net vlan {p}vlan{vlan}": (f"tag {vlan}", "tagged"),
+                    f"net vlan /Common/vlan{vlan}": (f"tag {vlan}", "tagged"),
                     f"net self {p}self{vlan}": (f"address {leg['address']}",),
                     f"net self {p}float{vlan}": (f"address {addresses['vip']}/29", "floating enabled"),
                     f"net route {p}default": (f"gw {addresses['anycast']}", "network default"),
