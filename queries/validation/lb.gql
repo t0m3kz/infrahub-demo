@@ -1,60 +1,19 @@
+# One load balancer, physical or virtual: readiness (platform, status, uplink, HA) and its
+# cluster's contexts with their legs, VIP range and VIPs (fragments/loadbalancer.gql).
 query loadbalancer_validation($device: String!) {
   DcimPhysicalDevice(name__value: $device) {
     edges {
       node {
-        name { value }
         status { value }
-        platform {
-          node {
-            name { value }
-            netmiko_device_type { value }
-          }
-        }
-        ... on DcimCapabilities {
-          capabilities {
-            edges {
-              node {
-                __typename
-                ... on ManagedLoadbalancerHA {
-                  name { value }
-                  mode { value }
-                  group_id { value }
-                  capabilities { edges { node { name { value } } } }
-                }
-              }
-            }
-          }
-        }
-        interfaces {
-          edges {
-            node {
-              __typename
-              name { value }
-              status { value }
-              role { value }
-              ... on DcimPhysicalInterface {
-                ip_address { node { address { value } } }
-              }
-              ... on DcimVirtualInterface {
-                ip_address { node { address { value } } }
-              }
-              capabilities {
-                edges {
-                  node {
-                    __typename
-                    ... on LoadbalancerVIP {
-                      hostname { value }
-                      protocol { value }
-                      port { value }
-                      status { value }
-                      load_balancer { node { name { value } } }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
+        ...LoadbalancerDeviceFields
+      }
+    }
+  }
+  DcimVirtualDevice(name__value: $device) {
+    edges {
+      node {
+        status { value }
+        ...LoadbalancerDeviceFields
       }
     }
   }

@@ -1061,7 +1061,7 @@ def _make_segment_rule(
     protocol: str = "tcp",
     port_start: int | None = None,
     port_end: int | None = None,
-    src_segment: dict,
+    src_segment: dict | None,
     dst_segment: dict | None = None,
     log: bool = False,
     description: str = "",
@@ -1372,6 +1372,111 @@ def build_leaf_pbr_data(*, device_name: str, platform: str) -> dict:
         }
     }
     data["DcimDevice"]["edges"][0]["node"]["deployment"]["node"]["devices"] = {"edges": [firewall]}
+    return data
+
+
+def _lb_rule(
+    *,
+    policy: dict,
+    name: str,
+    port: int,
+    src_segment: dict | None,
+    dst_segment: dict | None,
+    src_prefix: str | None = None,
+    vip: str | None = None,
+) -> dict:
+    """A rule of ``policy`` (SecurityPolicyRuleFields) from a /29 leg selector or to a VIP /32 selector, in VRF_A."""
+    rule = _make_segment_rule(
+        policy=policy["name"]["value"],
+        index=100,
+        name=name,
+        port_start=port,
+        src_segment=src_segment,
+        dst_segment=dst_segment,
+    )
+    namespace = _node({"name": _v("VRF_A")})
+    if src_prefix:
+        rule["source_prefixes"] = _edges(
+            [{"id": f"pfx-{src_prefix}", "prefix": _v(src_prefix), "ip_namespace": namespace}]
+        )
+    if vip:
+        rule["destination_ip_addresses"] = _edges([{"id": f"ip-{vip}", "address": _v(vip), "ip_namespace": namespace}])
+    return rule
+
+
+def build_leaf_lb_client_data(*, device_name: str, platform: str) -> dict:
+    """A PBR leaf (shared firewall context, VRF_A leg) hosting both ends of a load-balanced flow.
+
+    seg-web (10.110.0.0/24) calls the VIP 100.68.0.10/32 of app on tcp/443 (R_client, its own policy: a selector
+    in its own VRF, so an ACL permit and a PBR bypass, never the firewall). seg-app (10.120.0.0/24) is the
+    backend: the segment-less policy lb-dc1-lb-01-PROD lets the leg 100.67.0.0/29 reach it on tcp/8443
+    (R_server, one of seg-app's inbound_rules), so seg-app's SVI ACL gets the established return leg to the
+    /29 and its PBR bypasses the /29. Nothing is redirected to the load balancer: it source-NATs to its leg.
+    """
+    data = build_device_data(device_name=device_name, role="leaf", platform=platform, include_segments=False)
+    node = data["DcimDevice"]["edges"][0]["node"]
+    domain = node["id"]
+    segments = {
+        name: _make_segment_node(
+            vlan_id=vlan,
+            vni=10000 + vlan,
+            seg_name=name,
+            seg_type="ManagedVxlanSegment",
+            gateway_ip=gateway,
+            ns_name="VRF_A",
+            l3_vni=50001,
+            vlan_domain_id=domain,
+        )
+        for name, vlan, gateway in (("seg-web", 110, "10.110.0.1/24"), ("seg-app", 120, "10.120.0.1/24"))
+    }
+    web, app = segments["seg-web"], segments["seg-app"]
+    web_policy = _make_policy_header(name="policy-web", segment=web)
+    lb_policy = {
+        "id": "policy-lb-dc1-lb-01-PROD",
+        "name": _v("lb-dc1-lb-01-PROD"),
+        "enabled": _v(True),
+        "default_action": _v("deny"),
+        "segment": _node(None),
+    }
+    # A rule end is the PolicyRuleSegmentFields of the segment, never the segment node itself (no cycle).
+    web_end, app_end = (
+        {key: seg[key] for key in ("id", "__typename", "name", "customer_name", "security_zone", "gateway")}
+        for seg in (web, app)
+    )
+    r_client = _lb_rule(
+        policy=web_policy,
+        name="web-to-app-vip-tcp-443",
+        port=443,
+        src_segment=web_end,
+        dst_segment=None,
+        vip="100.68.0.10/32",
+    )
+    r_server = _lb_rule(
+        policy=lb_policy,
+        name="lb-to-app-tcp-8443",
+        port=8443,
+        src_segment=None,
+        dst_segment=app_end,
+        src_prefix="100.67.0.0/29",
+    )
+    web["security_policy"] = _node({**web_policy, "rules": _edges([r_client])})
+    web["inbound_rules"] = _edges([])
+    app["security_policy"] = _node({**_make_policy_header(name="policy-app", segment=app), "rules": _edges([])})
+    app["inbound_rules"] = _edges([{**r_server, "policy": _node(lb_policy)}])
+    node["interfaces"]["edges"].append(
+        {
+            "node": _make_interface(
+                name="Ethernet10",
+                device_name=device_name,
+                description="to server-01",
+                role="server",
+                ip_address=None,
+                segments=[web, app],
+            )
+        }
+    )
+    pbr = build_leaf_pbr_data(device_name=device_name, platform=platform)
+    node["deployment"]["node"]["devices"] = pbr["DcimDevice"]["edges"][0]["node"]["deployment"]["node"]["devices"]
     return data
 
 
@@ -1719,6 +1824,78 @@ def build_edge_exchange_transit_data(*, device_name: str, platform: str) -> dict
                 )
             }
         )
+    return data
+
+
+# Load-balancer contexts of the pair dc1-lb-01/dc1-lb-02 (one-arm, SNAT automap): one /29 leg per context
+# in its tenant VRF (.1 border anycast, .4 floating, .5/.6 members) and a routed VIP /26 behind the floating
+# .4, the first of the bootstrap pools LB-Leg-<NS>-IPv4 / LB-VIP-<NS>-IPv4 (23_transit_pools.yml).
+# (context id, name, context VLAN, tenant namespace, leg /29, VIP /26)
+_LB_CONTEXTS: list[tuple[str, str, int, str, str, str]] = [
+    ("lbctx-prod", "dc1-lb-01-dc1-lb-02-ha-PROD", 3100, "PROD", "100.66.64.0/29", "100.66.96.0/26"),
+    ("lbctx-nonprod", "dc1-lb-01-dc1-lb-02-ha-NON-PROD", 3101, "NON-PROD", "100.66.80.0/29", "100.66.112.0/26"),
+]
+
+
+def _lb_context_cap(
+    ctx_id: str, name: str, vlan: int, namespace: str, leg: str, vip: str, *, border_port: dict
+) -> dict:
+    """A ManagedLoadbalancerContext as LoadbalancerContextInterfaceCapabilityFields returns it on a border port.
+
+    Its capabilities are the members' leg sub-interfaces (role load-balancer devices, addressed .5/.6 in the
+    tenant VRF) and ``border_port``, the border leaf's own load-balancer port tagged with the context.
+    """
+    net = ipaddress.ip_network(leg)
+    ns = _LB_CONTEXT_NAMESPACES[namespace]
+    leg_vlan = vlan + _XCHG_VLAN_OFFSET[ns["namespace_type"]]
+    ns_node = _node({"name": _v(namespace), "namespace_type": _v(ns["namespace_type"]), "l3_vni": _v(ns["l3_vni"])})
+    members = [
+        {
+            "name": _v(f"1.1.{leg_vlan}"),
+            "device": _node({"name": _v(member), "role": _v("load-balancer")}),
+            "ip_address": _node({"address": _v(f"{net[host]}/{net.prefixlen}"), "ip_namespace": ns_node}),
+        }
+        for member, host in (("dc1-lb-01", 5), ("dc1-lb-02", 6))
+    ]
+    return {
+        "__typename": "ManagedLoadbalancerContext",
+        "id": ctx_id,
+        "name": _v(name),
+        "vlan_id": _v(vlan),
+        "vip_prefix": _node({"prefix": _v(vip)}),
+        "capabilities": _edges([*members, border_port]),
+    }
+
+
+def build_lb_context_bl_data(*, device_name: str, platform: str) -> dict:
+    """A border leaf whose load-balancer port is tagged with the shared PROD and NON-PROD contexts of the
+    pair dc1-lb-01/dc1-lb-02.
+
+    Each context's one leg becomes a VLAN + L2VNI + anycast .1 in its tenant VRF (LB-<context>: PROD
+    3100 / VNI 64100, NON-PROD 3101 + 200 = 3301 / VNI 64301; the NON-PROD name is past 32 characters,
+    so its VLAN name is cut with a digest and the SVI description keeps it whole), the port a trunk of
+    both, and the VIP /26 a static to the leg's floating .4 in that VRF, redistributed to EVPN. No
+    exchange, no SNAT route, no 0/0: the LB never leaves its VRF.
+    """
+    data = build_device_data(device_name=device_name, role="border-leaf", platform=platform, include_segments=False)
+    border_port = {"name": _v("Ethernet21"), "device": _node({"name": _v(device_name), "role": _v("border-leaf")})}
+    contexts = [_lb_context_cap(*ctx, border_port=border_port) for ctx in _LB_CONTEXTS]
+    data["DcimDevice"]["edges"][0]["node"]["interfaces"]["edges"].append(
+        {
+            "node": {
+                "__typename": "DcimPhysicalInterface",
+                "name": _v("Ethernet21"),
+                "description": _v("to dc1-lb-01"),
+                "status": _v("active"),
+                "role": _v("load-balancer"),
+                "interface_type": _v("10gbase-x-sfpp"),
+                "mtu": _v(9000),
+                "ip_address": _node(None),
+                "cable": _node(None),
+                "capabilities": _edges(contexts),
+            }
+        }
+    )
     return data
 
 
@@ -2661,6 +2838,14 @@ def build_proxy_inline_data(*, device_name: str, platform: str) -> dict:
 LB_PLATFORMS = ["f5_linux", "haproxy_technologies_linux", "netscaler"]
 
 
+def _lb_members(device_name: str, peer_name: str) -> list[dict]:
+    """The HA members as LoadbalancerDeviceFields selects them: name and management address (192.168.2.1/.2)."""
+    return [
+        {"name": _v(member), "primary_address": _node({"address": _v(f"192.168.2.{host}/32")})}
+        for host, member in enumerate((device_name, peer_name), start=1)
+    ]
+
+
 def build_lb_inline_data(*, device_name: str, platform: str) -> dict:
     """Load-balancer HA pair (device = primary member) terminating a segment
     inline on eth2.220, next to a management port."""
@@ -2672,7 +2857,7 @@ def build_lb_inline_data(*, device_name: str, platform: str) -> dict:
         "mode": _v("active-passive"),
         "priority": _v(100),
         "preempt": _v(False),
-        "capabilities": _edges([{"name": _v(device_name)}, {"name": _v(peer_name)}]),
+        "capabilities": _edges(_lb_members(device_name, peer_name)),
     }
     segment = _inline_segment_cap(
         ha_name=f"{device_name}-{peer_name}-ha",
@@ -2711,6 +2896,185 @@ def build_lb_inline_data(*, device_name: str, platform: str) -> dict:
         "interfaces": _edges(interfaces),
     }
     return {"DcimPhysicalDevice": _edges([device_node])}
+
+
+_LB_CONTEXT_NAMESPACES: dict[str, dict[str, Any]] = {
+    "PROD": {"namespace_type": "prod", "l3_vni": 60000},
+    "NON-PROD": {"namespace_type": "non_prod", "l3_vni": 60001},
+}
+
+
+def _lb_leg_iface(*, device: str, name: str, address: str, namespace: str) -> dict:
+    """A member's leg sub-interface as LoadbalancerContextConfigFields selects it."""
+    ns = _LB_CONTEXT_NAMESPACES[namespace]
+    return {
+        "__typename": "DcimVirtualInterface",
+        "name": _v(name),
+        "device": _node({"name": _v(device), "role": _v("load-balancer")}),
+        "parent_interface": _node({"name": _v(name.split(".")[0])}),
+        "ip_address": _node(
+            {
+                "address": _v(address),
+                "ip_namespace": _node(
+                    {"name": _v(namespace), "namespace_type": _v(ns["namespace_type"]), "l3_vni": _v(ns["l3_vni"])}
+                ),
+            }
+        ),
+    }
+
+
+def _lb_vip(
+    *,
+    hostname: str,
+    address: str,
+    port: int,
+    members: list[str],
+    checks: list[dict],
+    algorithm: str | None,
+    persistence: str,
+) -> dict:
+    """A LoadbalancerVIP of a context (tcp, as the VIP producer writes them)."""
+    return {
+        "hostname": _v(hostname),
+        "description": _v(None),
+        "status": _v("active"),
+        "protocol": _v("tcp"),
+        "port": _v(port),
+        "load_balancing_algorithm": _v(algorithm),
+        "session_persistence": _v(persistence),
+        "ssl_certificate": _v(None),
+        "vip_ip": _node({"address": _v(address)}),
+        "pool_members": _edges([{"address": _v(member)} for member in members]),
+        "health_checks": _edges([{key: _v(value) for key, value in check.items()} for check in checks]),
+    }
+
+
+def build_lb_context_data(*, device_name: str, platform: str) -> dict:
+    """Shared load-balancer pair (device = primary member) hosting a shared PROD and a shared
+    NON-PROD context, one VIP each, next to a management port and the uplink trunk."""
+    peer_name = device_name.replace("01", "02")
+    cluster = f"{device_name}-{peer_name}-ha"
+    # (namespace, context VLAN, leg /29 base, VIP /26, VIP)
+    specs: list[tuple[str, int, str, str, dict[str, Any]]] = [
+        (
+            "PROD",
+            3100,
+            "100.66.64",
+            "100.66.96.0/26",
+            {
+                "hostname": "web.c001.example.com",
+                "address": "100.66.96.10/32",
+                "port": 443,
+                "members": ["10.10.1.11/24", "10.10.1.10/24"],
+                "checks": [{"check": "http", "rise": 2, "fall": 3, "timeout": 2000}],
+                "algorithm": "least_connections",
+                "persistence": "source_ip",
+            },
+        ),
+        (
+            "NON-PROD",
+            3101,
+            "100.66.80",
+            "100.66.112.0/26",
+            {
+                "hostname": "api.c002.example.com",
+                "address": "100.66.112.10/32",
+                "port": 8080,
+                "members": ["10.20.1.10/24", "10.20.1.11/24"],
+                "checks": [{"check": "tcp", "rise": None, "fall": None, "timeout": None}],
+                "algorithm": None,
+                "persistence": "none",
+            },
+        ),
+    ]
+    contexts = []
+    leg_ifaces = []
+    for namespace, vlan_id, leg_base, vip_prefix, vip in specs:
+        leg_name = f"eth1.{vlan_id + (200 if namespace == 'NON-PROD' else 0)}"
+        contexts.append(
+            {
+                "id": f"ctx-{namespace}",
+                "name": _v(f"{cluster}-{namespace}"),
+                "vlan_id": _v(vlan_id),
+                "tenant": _node(None),
+                "vip_prefix": _node({"prefix": _v(vip_prefix)}),
+                "capabilities": _edges(
+                    [
+                        _lb_leg_iface(
+                            device=device_name, name=leg_name, address=f"{leg_base}.5/29", namespace=namespace
+                        ),
+                        _lb_leg_iface(device=peer_name, name=leg_name, address=f"{leg_base}.6/29", namespace=namespace),
+                        {
+                            "__typename": "DcimPhysicalInterface",
+                            "name": _v("Ethernet1/10"),
+                            "device": _node({"name": _v("dc3-border-leaf-01")}),
+                        },
+                    ]
+                ),
+                "vips": _edges([_lb_vip(**vip)]),
+            }
+        )
+        leg_ifaces.append(
+            {
+                "__typename": "DcimVirtualInterface",
+                "name": _v(leg_name),
+                "description": _v(None),
+                "status": _v("active"),
+                "role": _v("uplink"),
+                "ip_address": _node({"address": _v(f"{leg_base}.5/29")}),
+                "parent_interface": _node({"name": _v("eth1")}),
+                "capabilities": _edges([{"__typename": "ManagedLoadbalancerContext"}]),
+            }
+        )
+    ha_cap = {
+        "__typename": "ManagedLoadbalancerHA",
+        "name": _v(cluster),
+        "group_id": _v(2),
+        "mode": _v("active-passive"),
+        "priority": _v(100),
+        "preempt": _v(False),
+        "lb_type": _v("l4_software" if platform.startswith("haproxy") else "l4_hardware"),
+        "scheme": _v("internal"),
+        "capabilities": _edges(_lb_members(device_name, peer_name)),
+        "contexts": _edges(contexts),
+    }
+    interfaces = [
+        {
+            "__typename": "DcimPhysicalInterface",
+            "name": _v("mgmt"),
+            "description": _v("OOB management"),
+            "status": _v("active"),
+            "role": _v("management"),
+            "ip_address": _node({"address": _v("192.168.2.1/24")}),
+            "capabilities": _edges([]),
+        },
+        {
+            "__typename": "DcimPhysicalInterface",
+            "name": _v("eth1"),
+            "description": _v("Uplink trunk to the border leaf"),
+            "status": _v("active"),
+            "role": _v("uplink"),
+            "ip_address": _node(None),
+            "capabilities": _edges([]),
+        },
+        *leg_ifaces,
+    ]
+    device_node: dict = {
+        "__typename": "DcimPhysicalDevice",
+        "name": _v(device_name),
+        "role": _v("load-balancer"),
+        "platform": _node(
+            {
+                "name": _v(platform),
+                "netmiko_device_type": _v(platform),
+                "napalm_driver": _v(platform),
+                "ansible_network_os": _v(platform),
+            }
+        ),
+        "capabilities": _edges([ha_cap]),
+        "interfaces": _edges(interfaces),
+    }
+    return {"DcimPhysicalDevice": _edges([device_node]), "DcimVirtualDevice": _edges([])}
 
 
 # ============================================================================
@@ -3111,7 +3475,7 @@ _GPO_EOS = {
 
 
 def _gpo_fleet_roots(
-    *, fleet: dict[str, str], version: str, leaf_type: str | None = None, enforce: bool = True
+    *, fleet: dict[str, str], version: str, leaf_type: str | None = None, enforce: bool = True, lb: bool = False
 ) -> dict:
     """The fleet roots of the GPO device queries: DC10's VTEPs (``leaf_type`` overrides the leaf's type)
     next to DC12 (a legacy border leaf: never policy-aware), the bootstrap profile rows, the segments
@@ -3121,6 +3485,11 @@ def _gpo_fleet_roots(
     on one pair), app-np calls db-np, db-np answers with any and icmp, web-np reaches the internet
     (a service leg); db-np is stretched to DC12. PROD: portal-p calls the web component of the
     microsegmented pay-p, whose web component calls its db component.
+
+    ``lb`` load-balances web-np on tcp/9443: app-np calls its VIP (a /32 selector: app-np ->
+    UNCLASSIFIED), and the segment-less policy lb-dc1-lb-01-NON-PROD lets the leg reach web-np
+    (UNCLASSIFIED -> web-np), read from web-np's inbound_rules next to an inbound rule of app-np's own
+    policy (already a row through app-np: not counted twice).
     """
     memory_gb = _gp_memory_gb()
     platform = fleet["platform"]
@@ -3172,6 +3541,7 @@ def _gpo_fleet_roots(
             rules=[
                 _gp_rule("app-np-to-web-np-udp-5000", "seg-web-np", 5000, protocol="udp"),
                 _gp_rule("app-np-to-db-np-tcp-5432", "seg-db-np", 5432, index=110),
+                *([_gp_rule("app-np-to-web-np-vip-tcp-9443", None, 9443, index=120)] if lb else []),
             ],
             tag=("app-np", 41),
         ),
@@ -3220,6 +3590,20 @@ def _gpo_fleet_roots(
             sites=(),
         ),
     ]
+    if lb:
+        web = next(segment for segment in segments if segment["id"] == "seg-web-np")
+        web["inbound_rules"] = _edges(
+            [
+                {
+                    **_gp_rule(name, "seg-web-np", port, protocol=protocol),
+                    "policy": _node({"enabled": _v(True), "segment": _node(owner)}),
+                }
+                for name, port, protocol, owner in (
+                    ("app-np-to-web-np-udp-5000", 5000, "udp", {"id": "seg-app-np"}),
+                    ("lb-to-web-np-tcp-9443", 9443, "tcp", None),
+                )
+            ]
+        )
     return {
         "DcimGroupPolicyProfile": _edges(_gp_profiles()),
         "TopologyDataCenter": _edges(
@@ -3286,10 +3670,11 @@ def build_gpo_device_data(
     leaf_type: str | None = None,
     host_ports: dict[str, tuple[str, ...]] | None = None,
     enforce: bool = True,
+    lb: bool = False,
 ) -> dict:
     """A VTEP of DC10 carrying ``segments`` (names of _GPO_SEGMENTS) on Ethernet10, plus one more server port
     per ``host_ports`` entry (name -> the segments it carries), with the fleet roots appended
-    (``enforce``: DC10's ``group_policy_enforce``, False for the staged variant)."""
+    (``enforce``: DC10's ``group_policy_enforce``, False for the staged variant; ``lb``: web-np load-balanced)."""
     data = build_device_data(
         device_name=device_name,
         role=role,
@@ -3323,7 +3708,7 @@ def build_gpo_device_data(
                 )
             }
         )
-    return {**data, **_gpo_fleet_roots(fleet=fleet, version=version, leaf_type=leaf_type, enforce=enforce)}
+    return {**data, **_gpo_fleet_roots(fleet=fleet, version=version, leaf_type=leaf_type, enforce=enforce, lb=lb)}
 
 
 def gpo_roots(raw: dict) -> dict[str, Any]:
@@ -3438,6 +3823,32 @@ GPO_FIXTURES: list[tuple[type, str, Any]] = [
             fleet=_GPO_EOS,
             version="4.36.2F",
             enforce=False,
+        ),
+    ),
+    # web-np load-balanced (segment-less lb-<context> policy): app-np -> UNCLASSIFIED and UNCLASSIFIED -> web-np
+    # gain tcp/9443 (NX-OS: the bidir contracts; MSS-G: web-np's fallback and app-np's to_unclassified reply).
+    (
+        Leaf,
+        "leaf_cisco_nxos_gpo_lb_context",
+        lambda: build_gpo_device_data(
+            device_name="dc1-leaf-01",
+            role="leaf",
+            segments=("web-np", "app-np", "pay-p", "portal-p"),
+            host_ports={"Ethernet11": _GPO_PAY_DB_TAGS},
+            lb=True,
+        ),
+    ),
+    (
+        Leaf,
+        "leaf_arista_eos_gpo_lb_context",
+        lambda: build_gpo_device_data(
+            device_name="dc1-leaf-01",
+            role="leaf",
+            segments=("web-np", "app-np", "pay-p", "portal-p"),
+            host_ports={"Ethernet11": _GPO_PAY_DB_TAGS},
+            fleet=_GPO_EOS,
+            version="4.36.2F",
+            lb=True,
         ),
     ),
     (
@@ -4001,6 +4412,16 @@ def main() -> int:
         )
         generated += g
         errors += e
+    # Load-balancer contexts: the leg's VLAN/VNI/anycast .1 in its tenant VRF, the VIP /26 static to the floating .4.
+    print("\nGenerating load-balancer context fixtures (border-leaf):")
+    for platform in ["cisco_nxos", "arista_eos", "nokia_sros", "sonic", "dell_sonic", "cisco_xe"]:
+        g, e = _write_data_fixture(
+            BorderLeaf,
+            f"border_leaf_{platform}_lb_context",
+            build_lb_context_bl_data(device_name="dc1-border-leaf-01", platform=platform),
+        )
+        generated += g
+        errors += e
     print("\nGenerating edge exchange-transit fixture:")
     g, e = _write_data_fixture(
         Edge,
@@ -4084,6 +4505,12 @@ def main() -> int:
         )
         generated += g
         errors += e
+    # Both ends of a load-balanced flow on a PBR leaf: the VIP /32 and the LB leg /29 are bypassed, never redirected.
+    g, e = _write_data_fixture(
+        Leaf, "leaf_cisco_nxos_lb_client", build_leaf_lb_client_data(device_name="dc1-leaf-01", platform="cisco_nxos")
+    )
+    generated += g
+    errors += e
 
     # Firewall scenarios: zone-based policy per vendor
     print("\nGenerating firewall fixtures:")
@@ -4279,6 +4706,17 @@ def main() -> int:
             LoadBalancer,
             f"loadbalancer_{platform}_inline_segment",
             build_lb_inline_data(device_name="DC3-LB-01", platform=platform),
+        )
+        generated += g
+        errors += e
+
+    # Load-balancer pair hosting a shared PROD and a shared NON-PROD context (one-arm leg, VIPs)
+    print("\nGenerating load-balancer context fixtures:")
+    for platform in LB_PLATFORMS:
+        g, e = _write_data_fixture(
+            LoadBalancer,
+            f"loadbalancer_{platform}_context",
+            build_lb_context_data(device_name="DC3-LB-01", platform=platform),
         )
         generated += g
         errors += e

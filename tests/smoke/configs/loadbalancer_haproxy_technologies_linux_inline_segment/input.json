@@ -60,6 +60,13 @@
                         "node": {
                           "name": {
                             "value": "DC3-LB-01"
+                          },
+                          "primary_address": {
+                            "node": {
+                              "address": {
+                                "value": "192.168.2.1/32"
+                              }
+                            }
                           }
                         }
                       },
@@ -67,6 +74,13 @@
                         "node": {
                           "name": {
                             "value": "DC3-LB-02"
+                          },
+                          "primary_address": {
+                            "node": {
+                              "address": {
+                                "value": "192.168.2.2/32"
+                              }
+                            }
                           }
                         }
                       }

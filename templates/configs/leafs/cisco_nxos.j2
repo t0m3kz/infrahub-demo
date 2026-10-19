@@ -107,7 +107,7 @@ route-map RM-VRF-DIRECT-2-EVPN permit 10
 !
 {%- if leaf_pbr_rules %}
 !
-! Leaf PBR — LB return path first, then permitted firewall bypass,
+! Leaf PBR — permitted firewall bypass first (the LB is SNAT automap, so no return-path PBR: the firewall PBR is the only one),
 ! otherwise redirect to the firewall when a context is present.
 ! TODO(lab): TCAM carving for PBR (ing-sup / ifacl region) is platform-dependent
 !

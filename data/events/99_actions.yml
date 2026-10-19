@@ -294,35 +294,6 @@ spec:
     # where two concurrent boarding customers could each fire the old
     # ha-generator action 2-3x per domain.
 
-    # ── LB Backend No-SNAT Return-Path ────────────────────────────────────────
-    - name: trigger-lb-backend-nexthop-on-created
-      branch_scope: "other_branches"
-      node_kind: LoadbalancerVIP
-      mutation_action: "created"
-      action: lb-backend-nexthop-generator
-
-    - name: trigger-lb-backend-nexthop-update-snat
-      branch_scope: "other_branches"
-      node_kind: LoadbalancerVIP
-      mutation_action: "updated"
-      action: lb-backend-nexthop-generator
-      matches:
-        kind: CoreNodeTriggerAttributeMatch
-        data:
-          - attribute_name: snat_enabled
-            value_match: any
-
-    - name: trigger-lb-backend-nexthop-update-backend-segment
-      branch_scope: "other_branches"
-      node_kind: LoadbalancerVIP
-      mutation_action: "updated"
-      action: lb-backend-nexthop-generator
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: backend_segment
-            modification_type: updated
-
     # ── App Security Rules ────────────────────────────────────────────────────
     # Three entry points into the same generator. An application is created
     # before its dependencies (they reference its components), so the
@@ -333,7 +304,10 @@ spec:
     # A component moved to another segment, or listening on other ports,
     # re-runs its own application and every application calling it, whose
     # rules name that segment and default to those ports; it targets
-    # app_components, so every AppComponent must be a member.
+    # app_components, so every AppComponent must be a member. A component that
+    # turns load_balanced (or back), or whose instances change, does the same:
+    # its VIPs follow its instances' serving contexts, and its callers' rules
+    # go to the VIPs (R_client) instead of its segment.
 
     - name: trigger-app-security-rules-on-application-created
       branch_scope: "other_branches"
@@ -374,6 +348,28 @@ spec:
         data:
           - attribute_name: ports
             value_match: any
+
+    - name: trigger-app-security-rules-on-component-load-balanced-updated
+      branch_scope: "other_branches"
+      node_kind: AppComponent
+      mutation_action: "updated"
+      action: run-app-component-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: load_balanced
+            value_match: any
+
+    - name: trigger-app-security-rules-on-component-instances-updated
+      branch_scope: "other_branches"
+      node_kind: AppComponent
+      mutation_action: "updated"
+      action: run-app-component-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: instances
+            modification_type: updated
 
     # ── App Component Segment Tagging ─────────────────────────────────────────
     # add_app_component_segment tags the switch ports a component's instances

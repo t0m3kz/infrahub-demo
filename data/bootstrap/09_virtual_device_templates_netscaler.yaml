@@ -25,9 +25,9 @@ spec:
           - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_S_mgmt
             name: eth0
             role: management
-          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_S_eth[1-4]
-            name: eth[1-4]
-            role: customer
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_S_1-[1-4]
+            name: "1/[1-4]"
+            role: uplink
           - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_S_ha
             name: eth5
             role: ha
@@ -49,9 +49,9 @@ spec:
           - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_M_mgmt
             name: eth0
             role: management
-          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_M_eth[1-4]
-            name: eth[1-4]
-            role: customer
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_M_1-[1-4]
+            name: "1/[1-4]"
+            role: uplink
           - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_M_ha
             name: eth5
             role: ha
@@ -73,9 +73,9 @@ spec:
           - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_L_mgmt
             name: eth0
             role: management
-          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_L_eth[1-4]
-            name: eth[1-4]
-            role: customer
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_L_1-[1-4]
+            name: "1/[1-4]"
+            role: uplink
           - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_L_ha
             name: eth5
             role: ha
@@ -97,9 +97,9 @@ spec:
           - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_XL_mgmt
             name: eth0
             role: management
-          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_XL_eth[1-4]
-            name: eth[1-4]
-            role: customer
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_XL_1-[1-4]
+            name: "1/[1-4]"
+            role: uplink
           - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_CUSTOMER_XL_ha
             name: eth5
             role: ha

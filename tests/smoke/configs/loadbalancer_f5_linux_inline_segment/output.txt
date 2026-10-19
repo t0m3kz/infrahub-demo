@@ -36,19 +36,6 @@ net self eth2.220_self {
 }
 # eth2.220: Inline web segment
 #
-# --- Health Monitors ---
-ltm monitor http http_monitor {
-    defaults-from http
-    interval 30
-    timeout 91
-    send "GET /health HTTP/1.1\r\nHost: \r\nConnection: Close\r\n\r\n"
-    recv "200 OK"
-}
-ltm monitor tcp tcp_monitor {
-    defaults-from tcp
-    interval 30
-    timeout 91
-}
 #
 # --- Device Service Clustering (DSC) ---
 cm device DC3-LB-01 {
@@ -65,7 +52,7 @@ cm trust-domain Root {
     ca-devices { /Common/DC3-LB-01 }
     name Root
 }
-cm device-group DC3-LB-01_dg {
+cm device-group DC3-LB-01-DC3-LB-02-ha_dg {
     auto-sync enabled
     network-failover enabled
     type sync-failover

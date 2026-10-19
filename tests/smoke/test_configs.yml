@@ -144,6 +144,21 @@ infrahub_tests:
         spec:
           kind: python-transform-unit-process
           directory: configs/leaf_arista_eos_gpo_reference_staged
+      - name: cisco_nxos_gpo_lb_context
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_cisco_nxos_gpo_lb_context
+      - name: arista_eos_gpo_lb_context
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_arista_eos_gpo_lb_context
+      - name: cisco_nxos_lb_client
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_cisco_nxos_lb_client
       - name: cisco_xe_ebgp_ibgp
         expect: PASS
         spec:
@@ -378,6 +393,36 @@ infrahub_tests:
         spec:
           kind: python-transform-unit-process
           directory: configs/border_leaf_cisco_xe_exchange_transit
+      - name: cisco_nxos_lb_context
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/border_leaf_cisco_nxos_lb_context
+      - name: arista_eos_lb_context
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/border_leaf_arista_eos_lb_context
+      - name: nokia_sros_lb_context
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/border_leaf_nokia_sros_lb_context
+      - name: sonic_lb_context
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/border_leaf_sonic_lb_context
+      - name: dell_sonic_lb_context
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/border_leaf_dell_sonic_lb_context
+      - name: cisco_xe_lb_context
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/border_leaf_cisco_xe_lb_context
   - resource: PythonTransform
     resource_name: access_leaf
     tests:

@@ -105,6 +105,18 @@ class TestFirewallCheck:
         assert len(check._captured_errors) == 1
         assert "is not the policy's segment" in check._captured_errors[0]
 
+    def test_lb_server_rule_into_a_carried_segment_passes(self) -> None:
+        """R_server (leg /29 -> backend, in the segment-less policy lb-<context>) reaches the backend
+        segment's inbound_rules, but the LB never sits behind a firewall: it is not validated as a
+        firewall rule, so it raises nothing."""
+        r_server = {
+            **_rule("lb-r-server", src=None, dst="seg-a"),
+            "source_prefixes": _edges([{"prefix": _v("100.66.64.0/29")}]),
+            "policy": _node({"id": "pol-lb", "name": _v("lb-dc1-lb-01-dc1-lb-02-ha-PROD"), "segment": _node(None)}),
+        }
+        check = _validate(_carried("seg-a", _policy([_rule("rule-1")]), inbound=[r_server]))
+        assert check._captured_errors == []
+
     def test_missing_destination_selector_raises_error(self) -> None:
         check = _validate(_carried("seg-a", _policy([_rule("rule-1", dst=None)])))
         assert len(check._captured_errors) == 1

@@ -65,7 +65,13 @@ class GetOrCreateByNameMixin:
             self.logger.error("Failed to create %s: %s", name, exc)
             return None
 
-    async def _find_rule_by_name(self, kind: Any, policy_id: str, rule_name: str) -> Any | None:
-        """The ``kind`` rule named ``rule_name`` in policy ``policy_id``, or None."""
-        rules = await self.client.filters(kind=kind, policy__ids=[policy_id], name__value=rule_name)
+    async def _find_rule_by_name(
+        self, kind: Any, policy_id: str, rule_name: str, include: list[str] | None = None
+    ) -> Any | None:
+        """The ``kind`` rule named ``rule_name`` in policy ``policy_id``, or None.
+
+        ``include`` names the cardinality-many relationships to read with it
+        (an address or prefix selector the caller reconciles in place).
+        """
+        rules = await self.client.filters(kind=kind, policy__ids=[policy_id], name__value=rule_name, include=include)
         return rules[0] if rules else None

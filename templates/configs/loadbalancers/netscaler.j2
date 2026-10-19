@@ -1,11 +1,11 @@
 #- Citrix NetScaler ADC — load balancer configuration -#
 set ns config -IPAddress {{ management_ip }} -netmask 255.255.255.0
 set ns hostName {{ name }}
-{%- if lb_interfaces %}
+{%- set snip_interfaces = lb_interfaces | rejectattr('role', 'equalto', 'management') | list %}
+{%- if snip_interfaces %}
 #
 # --- SNIPs (Subnet IPs) ---
-{%- for iface in lb_interfaces %}
-{%- if iface.role != 'management' %}
+{%- for iface in snip_interfaces %}
 {#- In an HA pair the SNIP floats with the primary node: on a segment the pair
     terminates inline it is the segment gateway (virtual_ip). -#}
 {%- set addr = iface.virtual_ip or iface.ip_address.address %}
@@ -13,43 +13,60 @@ add ns ip {{ addr.split('/')[0] }} {{ addr.split('/')[1] | int | cidr_to_netmask
 {%- if iface.description %}
 # {{ iface.name }}: {{ iface.description }}
 {%- endif %}
-{%- endif %}
-{%- endfor %}
-#
-{%- endif %}
-# --- Health Monitors ---
-add lb monitor http_monitor HTTP -httpRequest "HEAD /health" -respCode 200 -LRTM DISABLED
-add lb monitor tcp_monitor TCP -LRTM DISABLED
-{%- if vips %}
-#
-# --- Servers, Service Groups and Bindings ---
-#
-# --- Virtual Servers (VIPs) ---
-{%- for vip in vips %}
-{%- set vs_name = vip.slug %}
-add lb vserver {{ vs_name }} {{ 'TCP' if vip.protocol == 'tcp' else 'HTTP' }} {{ vip.vip_ip if vip.vip_ip else '0.0.0.0' }} {{ vip.port }} -persistenceType {{ 'SOURCEIP' if vip.session_persistence else 'NONE' }}
-{%- if vip.protocol == 'https' %}
-set ssl vserver {{ vs_name }} -tls1 ENABLED -tls11 ENABLED -tls12 ENABLED
-{%- endif %}
-{%- if vip.status == 'active' %}
-enable lb vserver {{ vs_name }}
-{%- else %}
-disable lb vserver {{ vs_name }}
-{%- endif %}
-# {{ vip.description if vip.description else vip.hostname }}  [tenant: {{ vip.lb_name }}]
 {%- endfor %}
 #
 {%- endif %}
 {%- if ha %}
 #
 # --- High Availability (HA Node Pair) ---
-{%- if ha.devices %}
-{%- for peer in ha.devices %}
-{%- if peer != name %}
-add ha node 1 {{ management_ip or peer }}
-{%- endif %}
-{%- endfor %}
+{#- The HA node is the peer's NSIP, its management address. #}
+{%- if ha.peer_management_ip %}
+add ha node 1 {{ ha.peer_management_ip }}
+{%- else %}
+# no HA node: the peer has no management address yet
 {%- endif %}
 #
 {%- endif %}
+{#- One admin partition per load-balancer context (no traffic domains): the
+    leg VLAN, created and tagged in the default partition, is bound to it;
+    inside it the SNIP (.4, floating with the HA primary, the source of the
+    member traffic under the default USNIP mode) bound to that VLAN, the
+    default route to the border anycast (.1), then monitors, a service group
+    and a vserver per VIP. -#}
+{%- for ctx in contexts %}
+# --- LB context {{ ctx.name }} ({{ 'dedicated' if ctx.dedicated else 'shared' }}): admin partition {{ ctx.partition }}, VRF {{ ctx.vrf }} ---
+# documented-not-lab-verified: admin partition per context with its VLAN bound, partition-local SNIP bound to the VLAN and route
+# leg {{ ctx.leg.name }}: VLAN {{ ctx.leg.vlan }} (border VNI {{ ctx.leg.vni }}), gateway {{ ctx.leg.anycast }}; VIP range {{ ctx.vip_prefix }} routed to {{ ctx.leg.floating }}
+add ns partition {{ ctx.partition }}
+add vlan {{ ctx.leg.vlan }}
+bind vlan {{ ctx.leg.vlan }} -ifnum {{ ctx.leg.parent_interface }} -tagged
+bind ns partition {{ ctx.partition }} -vlan {{ ctx.leg.vlan }}
+switch ns partition {{ ctx.partition }}
+add ns ip {{ ctx.leg.floating }} {{ ctx.leg.prefixlen | cidr_to_netmask }} -type SNIP
+bind vlan {{ ctx.leg.vlan }} -IPAddress {{ ctx.leg.floating }} {{ ctx.leg.prefixlen | cidr_to_netmask }}
+add route 0.0.0.0 0.0.0.0 {{ ctx.leg.anycast }}
+{%- for vip in ctx.vips %}
+# {{ vip.description or vip.hostname }}
+{%- for check in vip.health_checks %}
+add lb monitor {{ check.name }} {{ check.type }}{% if check.path %} -httpRequest "GET {{ check.path }}" -respCode 200{% endif %}{% if check.tls %} -secure YES{% endif %} -interval {{ check.interval_s }} -resptimeout {{ check.timeout_ms }} -units4 MSEC -retries {{ check.fall }} -successRetries {{ check.rise }} -LRTM DISABLED
+{%- endfor %}
+add serviceGroup sg_{{ vip.name }} {{ vip.tokens.service_type }}
+{%- for member in vip.members %}
+bind serviceGroup sg_{{ vip.name }} {{ member }} {{ vip.port }}
+{%- else %}
+# no pool members yet: the vserver stays down
+{%- endfor %}
+{%- for check in vip.health_checks %}
+bind serviceGroup sg_{{ vip.name }} -monitorName {{ check.name }}
+{%- endfor %}
+add lb vserver vs_{{ vip.name }} {{ vip.tokens.service_type }} {{ vip.address }} {{ vip.port }} -lbMethod {{ vip.tokens.method }} -persistenceType {{ vip.tokens.persist }}
+bind lb vserver vs_{{ vip.name }} sg_{{ vip.name }}
+{%- if vip.terminate_tls %}
+bind ssl vserver vs_{{ vip.name }} -certkeyName {{ vip.ssl }}
+{%- endif %}
+{{ 'enable' if vip.enabled else 'disable' }} lb vserver vs_{{ vip.name }}
+{%- endfor %}
+switch ns partition default
+#
+{%- endfor %}
 save ns config

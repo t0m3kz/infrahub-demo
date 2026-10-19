@@ -1,13 +1,17 @@
 # validate_app_dependency: every dependency names exactly one source and one
 # target, and opens ports that parse and that its target actually listens on;
 # an approved dependency between two owners' components lists its ports and
-# its decision_reason (each side's owner is its application's).
+# its decision_reason (each side's owner is its application's); a
+# load_balanced component lists ports, no port range (one VIP per port) and
+# has instances (its pool members).
 query app_dependency_validation {
   AppComponent {
     edges {
       node {
         fqdn { value }
         ports { value }
+        load_balanced { value }
+        instances { count }
       }
     }
   }

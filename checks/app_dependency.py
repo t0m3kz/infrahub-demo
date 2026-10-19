@@ -6,6 +6,7 @@ from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
 
+from generators.helpers.lb_vip import component_ref, vip_ports
 from utils.data_cleaning import clean_data
 from utils.dependency_access import component_owner_org_id, crosses_owners, dependency_access_status
 from utils.ports import PortProfileHelper, PortSpec
@@ -23,6 +24,13 @@ class CheckAppDependency(InfrahubCheck):
     without them it would open every port the target lists, including any
     added later) and why (``decision_reason``). RulesPlanner keeps it closed
     until it is approved (utils.dependency_access.crosses_owners).
+
+    A load_balanced component gets one VIP per port with its instances as the
+    pool members, so the generator refuses one that lists a port range, no
+    port or no instance (generators/helpers/lb_vip.py); this check reports
+    the same. A dependency into a load_balanced component is ruled to the
+    VIPs (R_client) rather than to the component's segment; its ports are
+    validated the same way.
     """
 
     query = "app_dependency_validation"
@@ -30,7 +38,15 @@ class CheckAppDependency(InfrahubCheck):
     def validate(self, data: Any) -> None:
         cleaned = clean_data(data)
         for component in cleaned.get("AppComponent") or []:
-            self._parse_ports(component.get("ports"), f"Component '{component.get('fqdn', '<unnamed>')}'")
+            ports = self._parse_ports(component.get("ports"), f"Component '{component.get('fqdn', '<unnamed>')}'")
+            # A port that does not parse is reported above already.
+            if ports is None or not component.get("load_balanced"):
+                continue
+            _vip_ports, errors = vip_ports(component)
+            if not component.get("instances"):
+                errors.append(f"{component_ref(component)} is load_balanced but has no instances")
+            for error in errors:
+                self.log_error(message=f"{error}.")
         for dep in cleaned.get("AppDependency") or []:
             self._validate_dependency(dep)
 

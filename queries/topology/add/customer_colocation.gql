@@ -21,23 +21,12 @@ query customer_colocation($name: String!) {
           node {
             id
             name { value }
-            # The metro's own firewall/load-balancer pair, which every cage in
-            # it shares — a FirewallContext for this deployment lives on that
-            # pair (generators/topology/customer_colocation.py).
+            # The metro's own firewall pair, which every cage in it shares — a
+            # FirewallContext for this deployment lives on that pair
+            # (generators/topology/customer_colocation.py; no LoadbalancerContext
+            # on a metro, so no load-balancer devices are read).
             ... on TopologyColocationMetro {
               firewall_devices: devices(role__value: "firewall") {
-                edges {
-                  node {
-                    id
-                    kind: __typename
-                    name { value }
-                    ... on DcimPhysicalDevice {
-                      platform { node { name { value } } }
-                    }
-                  }
-                }
-              }
-              loadbalancer_devices: devices(role__value: "load-balancer") {
                 edges {
                   node {
                     id

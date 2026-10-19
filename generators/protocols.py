@@ -457,6 +457,7 @@ class TopologyCustomerDC(
 ):
     name: StringOptional
     design: RelationshipAttribute[TopologyCustomerTemplateDC]
+    serving_loadbalancer_context: RelationshipAttribute[ManagedLoadbalancerContext]
 
 
 class CloudCustomerGateway(CloudResource):
@@ -652,7 +653,16 @@ class CloudLoadBalancer(ManagedLoadBalancer, CloudResource, CoreArtifactTarget):
 
 class ManagedLoadbalancerHA(ManagedHA, ManagedGeneric, ManagedGenericDevice, ManagedInlineService, ManagedLoadBalancer):
     capabilities: RelationshipManager[DcimCapabilities]
+    contexts: RelationshipManager[ManagedLoadbalancerContext]
+
+
+class ManagedLoadbalancerContext(ManagedGeneric, ManagedGenericInterfaces, ManagedLoadBalancer):
+    vlan_id: IntegerOptional
+    cluster: RelationshipAttribute[ManagedLoadbalancerHA]
     tenant: RelationshipAttribute[ManagedTenantScoped]
+    served_deployments: RelationshipManager[TopologyCustomerDC]
+    vip_prefix: RelationshipAttribute[IpamPrefix]
+    vips: RelationshipManager[LoadbalancerVIP]
 
 
 class ManagedMLAG(ManagedGeneric, ManagedGenericDevice, ManagedGenericVlanDomain):
@@ -1035,7 +1045,7 @@ class ProxyURLCategory(CoreNode):
     name: String
 
 
-class LoadbalancerVIP(ManagedGenericInterfaces):
+class LoadbalancerVIP(CoreNode):
     description: StringOptional
     hostname: String
     load_balancing_algorithm: DropdownOptional
@@ -1043,12 +1053,12 @@ class LoadbalancerVIP(ManagedGenericInterfaces):
     port: Integer
     protocol: Dropdown
     session_persistence: DropdownOptional
-    snat_enabled: Boolean
     ssl_certificate: StringOptional
     status: Dropdown
-    backend_segment: RelationshipAttribute[ManagedNetworkSegment]
+    component: RelationshipAttribute[AppComponent]
     health_checks: RelationshipManager[LoadbalancerHealthCheck]
     load_balancer: RelationshipAttribute[ManagedLoadBalancer]
+    pool_members: RelationshipManager[IpamIPAddress]
     vip_ip: RelationshipAttribute[IpamIPAddress]
 
 

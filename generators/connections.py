@@ -478,13 +478,21 @@ class CablingMixin:
             return None
 
     async def ensure_prefix_address_pool(
-        self, *, pool_name: str, prefix_id: str, prefix_length: int, namespace_id: str | None = None
+        self,
+        *,
+        pool_name: str,
+        prefix_id: str,
+        prefix_length: int,
+        namespace_id: str | None = None,
+        track: bool = True,
     ) -> Any | None:
         """Wrap an EXISTING prefix in a CoreIPAddressPool named (and identified
         by) pool_name, so allocate_next_ip_address can hand out its addresses —
         IpamPrefix itself is not a CoreResourcePool, and the SDK only allocates
-        from a real CoreIPAddressPool. Upserted by name on every run (the
-        caller's run owns it), so a moved prefix re-points the pool's resources.
+        from a real CoreIPAddressPool. Upserted by name on every run, so a moved
+        prefix re-points the pool's resources. track=True: the caller's run owns
+        it; track=False for a pool several targets allocate from (a load
+        balancer context's VIP range), which no single run may delete.
         Addresses that already exist in the prefix (a gateway, another pool's
         reservation) are never handed out again. None on error."""
         try:
@@ -499,7 +507,7 @@ class CablingMixin:
                     "resources": [prefix_id],
                 },
             )
-            await pool.save(allow_upsert=True)
+            await pool.save(**tracked_save_kwargs(track))
             self.logger.info(f"Upserted IP address pool '{pool_name}'")
             return pool
         except Exception as exc:

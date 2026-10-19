@@ -7,6 +7,7 @@ that edges/node/value shape and go through clean_data like the real query.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, cast
 
 import pytest
@@ -72,7 +73,10 @@ def _payload(
 ) -> dict[str, Any]:
     return {
         "AppComponent": {
-            "edges": [{"node": {"fqdn": c["fqdn"], "ports": c["ports"]}} for c in components or []],
+            "edges": [
+                {"node": {key: c[key] for key in ("fqdn", "ports", "load_balanced", "instances") if key in c}}
+                for c in components or []
+            ],
         },
         "AppDependency": {"edges": [{"node": dep} for dep in dependencies or []]},
     }
@@ -455,3 +459,72 @@ class TestCrossOwnerApproval:
         dep = _dependency("unknown", target=PAYMENT)
         dep["access_status"] = {"value": "approved"}
         assert _errors(dep) == []
+
+
+# ===========================================================================
+# Load-balanced components
+# ===========================================================================
+
+
+def _load_balanced(fqdn: str, ports: list[str] | None, instances: int = 2) -> dict[str, Any]:
+    """A component node with load_balanced set and ``instances`` instances."""
+    return {**_component(fqdn, ports), "load_balanced": {"value": True}, "instances": {"count": instances}}
+
+
+class TestLoadBalancedComponent:
+    """A load_balanced component gets one VIP per port over its instances: what the generator refuses, this shows."""
+
+    def test_single_ports_are_valid(self) -> None:
+        """tcp/443 and udp/53 each get their VIP."""
+        assert _errors(components=[_load_balanced("web.c001.example", ["tcp/443", "udp/53"])]) == []
+
+    def test_port_range_is_reported(self) -> None:
+        """A range on a load_balanced component has no VIP."""
+        errors = _errors(components=[_load_balanced("web.c001.example", ["tcp/443", "udp/30000-30010"])])
+
+        assert len(errors) == 1
+        assert "web.c001.example" in errors[0]
+        assert "udp/30000-30010" in errors[0]
+
+    @pytest.mark.parametrize("ports", [None, []])
+    def test_no_port_is_reported(self, ports: list[str] | None) -> None:
+        """No port means no VIP: the generator refuses it."""
+        errors = _errors(components=[_load_balanced("web.c001.example", ports)])
+
+        assert errors == ["web.c001.example is load_balanced but lists no port."]
+
+    def test_no_instance_is_reported(self) -> None:
+        """No instance means no pool member: the generator refuses it."""
+        errors = _errors(components=[_load_balanced("web.c001.example", ["tcp/443"], instances=0)])
+
+        assert errors == ["web.c001.example is load_balanced but has no instances."]
+
+    def test_no_port_and_no_instance_are_both_reported(self) -> None:
+        """Every refusal of one component is reported at once."""
+        assert len(_errors(components=[_load_balanced("web.c001.example", [], instances=0)])) == 2
+
+    def test_unparsable_port_is_reported_once(self) -> None:
+        """The component port check reports it; the load-balancing rules do not repeat it."""
+        assert len(_errors(components=[_load_balanced("web.c001.example", ["garbage"])])) == 1
+
+    def test_no_port_or_instance_on_a_component_that_is_not_load_balanced_is_valid(self) -> None:
+        """Only a load-balanced component needs ports and instances."""
+        component = {**_component("batch.c001.example", None), "instances": {"count": 0}}
+
+        assert _errors(components=[component]) == []
+
+    def test_range_on_a_component_that_is_not_load_balanced_is_valid(self) -> None:
+        """Only a load-balanced component is limited to single ports."""
+        assert _errors(components=[CACHE]) == []
+
+    def test_dependency_into_a_load_balanced_component_needs_no_segment_rule(self) -> None:
+        """R_client replaces the direct rule: a dependency on a VIP port validates like any other."""
+        web = _load_balanced("web.c001.example", ["tcp/443"])
+
+        assert _errors(_dependency("fe-to-web", ports=["tcp/443"], target=web), components=[web]) == []
+
+    def test_query_reads_load_balanced_and_instances(self, root_dir: Path) -> None:
+        """The validation query selects the flag and the instance count the rules read."""
+        components = (root_dir / "queries/validation/app_dependency.gql").read_text().split("AppDependency", 1)[0]
+        assert "load_balanced { value }" in components
+        assert "instances { count }" in components

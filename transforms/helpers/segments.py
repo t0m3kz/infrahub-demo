@@ -116,6 +116,9 @@ def _vlans_from_activations(activations: list[dict[str, Any]]) -> list[dict[str,
             {
                 "vlan_id": vlan_id,
                 "name": seg["customer_name"],
+                # The SVI description: the VLAN name, or the full name of a
+                # load-balancer leg whose VLAN name is cut to fit (firewall.py _transit_names).
+                "description": seg.get("vlan_description") or seg["customer_name"],
                 "gateway_ip": gateway_ip,
                 "gateway_ipv6": gateway_ipv6,
                 "arp_suppression": seg.get("arp_suppression", True),

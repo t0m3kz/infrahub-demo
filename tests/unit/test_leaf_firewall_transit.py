@@ -21,7 +21,7 @@ from checks.common import validate_transit_vlans
 from transforms.common import BaseDeviceTransform
 from transforms.config.leaf import Leaf
 from transforms.helpers.firewall import (
-    _firewall_context_caps,
+    _service_context_caps,
     get_customer_pbr_rules,
     get_exchange_transits,
     get_leaf_firewall_transits,
@@ -133,7 +133,7 @@ class TestGetExchangeTransitsLegs:
         """AC2: the leaf's transit for a leg equals the border's for the same context."""
         ctx = _context()
         border = get_exchange_transits(
-            _firewall_context_caps(
+            _service_context_caps(
                 [{"role": "firewall", "capabilities": [{**ctx, "typename": "ManagedFirewallContext"}]}]
             )
         )

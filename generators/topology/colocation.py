@@ -62,6 +62,7 @@ from utils.data_cleaning import clean_data
 from ..common import CommonGenerator, DeviceOptions
 from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
 from ..devices import DeviceMixin
+from ..firewall_context import FIREWALL_CONTEXT
 from ..helpers import get_loopback_name
 from ..helpers.pools import SITE_VNI_END, SITE_VNI_START, name_to_asn_range
 from ..helpers.routing import loopback_prefix_length, p2p_prefix_length
@@ -215,8 +216,8 @@ class ColocationMetroGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
             # pair and takes the context's transit VLAN from this pool by name
             # (the legs' addresses come from the per-VRF FW-Transit-* bootstrap
             # pools). Only a metro with physical firewalls gets it: without one
-            # no context is ever created. See PoolMixin.ensure_firewall_context_pools.
-            await self.ensure_firewall_context_pools(name=self.fabric_name)
+            # no context is ever created. See PoolMixin.ensure_context_vlan_pool.
+            await self.ensure_context_vlan_pool(name=self.fabric_name, spec=FIREWALL_CONTEXT)
         await self._cable_metro_services(physical_names_by_role=physical_names_by_role)
         overlay_process_ids = await self._ensure_metro_evpn(metro_id=metro_id, asn_pool_id=asn_pool_id)
         await self._ensure_edge_pair(

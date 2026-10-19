@@ -458,7 +458,7 @@ class TestMicrosegmentedRuleHasNoReturnRule:
         existing.save.assert_awaited_once_with(allow_upsert=True)
         gen._create_or_update_policy_rule.assert_not_awaited()
         gen._find_rule_by_name.assert_awaited_once_with(
-            SecurityPolicyRule, "policy-src", "frontend-to-backend-tcp-8443"
+            SecurityPolicyRule, "policy-src", "frontend-to-backend-tcp-8443", include=[]
         )
 
     def test_hand_written_rule_of_the_same_name_is_not_adopted(self) -> None:
@@ -512,6 +512,7 @@ class TestExistingRuleReconciliation:
         profile_id: str | None = None,
         src_tag: str | None = None,
         dst_tag: str | None = None,
+        dst_seg: str | None = "seg-dst",
     ) -> Any:
         rule = MagicMock()
         rule.index.value = 100
@@ -520,6 +521,7 @@ class TestExistingRuleReconciliation:
         rule.log.value = log
         rule.apply_on_switch.value = apply_on_switch
         for field, peer_id in (
+            ("destination_segment", dst_seg),
             ("security_profile", profile_id),
             ("source_security_tag", src_tag),
             ("destination_security_tag", dst_tag),
@@ -689,7 +691,9 @@ class TestExistingRuleGroupTags:
 
     def test_untagged_existing_rule_gains_both_tags(self) -> None:
         """A rule made before its components were tagged is given their tags."""
-        rule = TestExistingRuleReconciliation._rule(log=False, apply_on_switch=True, profile_id="profile-strict")
+        rule = TestExistingRuleReconciliation._rule(
+            log=False, apply_on_switch=True, profile_id="profile-strict", dst_seg="seg-1"
+        )
 
         self._run(
             rule,
@@ -703,7 +707,12 @@ class TestExistingRuleGroupTags:
     def test_tagged_rule_in_the_desired_state_is_not_modified(self) -> None:
         """Second pass: the tags already match, nothing is assigned or logged as updated."""
         rule = TestExistingRuleReconciliation._rule(
-            log=False, apply_on_switch=True, profile_id="profile-strict", src_tag="tag-a", dst_tag="tag-b"
+            log=False,
+            apply_on_switch=True,
+            profile_id="profile-strict",
+            dst_seg="seg-1",
+            src_tag="tag-a",
+            dst_tag="tag-b",
         )
         before = (rule.source_security_tag, rule.destination_security_tag)
 
@@ -719,7 +728,12 @@ class TestExistingRuleGroupTags:
     def test_tag_of_an_untagged_component_is_cleared(self) -> None:
         """A side whose component has no tag any more loses it on the rule."""
         rule = TestExistingRuleReconciliation._rule(
-            log=False, apply_on_switch=True, profile_id="profile-strict", src_tag="tag-a", dst_tag="tag-b"
+            log=False,
+            apply_on_switch=True,
+            profile_id="profile-strict",
+            dst_seg="seg-1",
+            src_tag="tag-a",
+            dst_tag="tag-b",
         )
 
         self._run(
@@ -734,7 +748,9 @@ class TestExistingRuleGroupTags:
 
     def test_cross_segment_rule_into_a_microsegmented_segment_gains_the_target_tag(self) -> None:
         """C008 -> C005's api component: only the microsegmented side is tagged, so only that component opens."""
-        rule = TestExistingRuleReconciliation._rule(log=False, apply_on_switch=True, profile_id="profile-strict")
+        rule = TestExistingRuleReconciliation._rule(
+            log=False, apply_on_switch=True, profile_id="profile-strict", dst_seg="seg-1"
+        )
         untagged_source = rule.source_security_tag
 
         self._run(
@@ -750,7 +766,7 @@ class TestExistingRuleGroupTags:
     def test_cross_segment_rule_tag_second_pass_writes_nothing(self) -> None:
         """The rule already carries the target's tag: nothing is assigned or logged as updated."""
         rule = TestExistingRuleReconciliation._rule(
-            log=False, apply_on_switch=True, profile_id="profile-strict", dst_tag="tag-web"
+            log=False, apply_on_switch=True, profile_id="profile-strict", dst_seg="seg-1", dst_tag="tag-web"
         )
         before = (rule.source_security_tag, rule.destination_security_tag)
 

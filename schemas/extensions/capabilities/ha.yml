@@ -248,15 +248,99 @@ nodes:
     order_by:
       - name__value
     relationships:
+      - name: contexts
+        label: "Load Balancer Contexts"
+        peer: ManagedLoadbalancerContext
+        kind: Generic
+        cardinality: many
+        optional: true
+        identifier: loadbalancer_context__cluster
+        order_weight: 1000
+        description: "LoadbalancerContexts hosted on this HA cluster"
+
+  # ── Load Balancer Context — tenant-scoped slice of a shared LB cluster ────
+  # One ManagedLoadbalancerHA cluster hosts one context per tenant namespace
+  # (PROD, NON-PROD: the LB never joins them, so each gets its own routing
+  # table on the box) plus one dedicated context per customer whose design
+  # sets dedicated_loadbalancer. The LB is one-arm: one /29 leg per context in
+  # the tenant VRF facing the border leaf, SNAT automap on the floating .4, so
+  # replies return to the LB with no PBR. VIPs are a routed /26 behind .4.
+  # The context is the load_balancer of its LoadbalancerVIP nodes.
+  - name: LoadbalancerContext
+    namespace: Managed
+    description: "Tenant-scoped load balancer context (partition/route domain) on a LoadbalancerHA cluster"
+    label: Load Balancer Context
+    icon: "mdi:scale-balance"
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedGeneric
+      - ManagedGenericInterfaces
+      - ManagedLoadBalancer
+    uniqueness_constraints:
+      - ["name__value"]
+    display_label: "{{name__value}}"
+    order_by:
+      - name__value
+    attributes:
+      - name: vlan_id
+        kind: Number
+        label: "Leg VLAN ID"
+        description: "Base 802.1Q tag of the leg on the cluster's uplink (+200 in NON-PROD), allocated from the DC's lb-context-vlan-pool"  # yamllint disable-line rule:line-length
+        optional: true
+        order_weight: 1450
+        parameters:
+          min_value: 1
+          max_value: 4094
+    relationships:
+      - name: cluster
+        peer: ManagedLoadbalancerHA
+        label: "Load Balancer Cluster"
+        description: "HA pair hosting this context"
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: loadbalancer_context__cluster
+        order_weight: 900
       - name: tenant
         peer: ManagedTenantScoped
         label: "Dedicated Tenant"
-        description: "Customer this HA domain is dedicated to; unset means shared capacity"
+        description: "Customer this context is dedicated to; unset means a shared context"
         cardinality: one
         kind: Attribute
         optional: true
-        identifier: loadbalancer_ha__tenant
+        identifier: loadbalancer_context__tenant
         order_weight: 950
+      # Written only from the deployment side (serving_loadbalancer_context),
+      # so concurrent boardings onto one shared context never race on a list.
+      - name: served_deployments
+        peer: TopologyCustomerDC
+        label: "Served Deployments"
+        description: "Deployments whose applications are load balanced by this context"
+        cardinality: many
+        kind: Generic
+        optional: true
+        identifier: loadbalancer_context__served_deployments
+        order_weight: 1000
+      - name: vip_prefix
+        peer: IpamPrefix
+        label: "VIP Prefix"
+        description: "Routed /26 the context's VIPs are allocated from; reached through the leg's floating .4"
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: loadbalancer_context__vip_prefix
+        order_weight: 1100
+      - name: vips
+        peer: LoadbalancerVIP
+        label: "VIPs"
+        description: "VIPs served by this context (reverse of LoadbalancerVIP.load_balancer)"
+        cardinality: many
+        kind: Generic
+        optional: true
+        identifier: load_balancer__vip_services
+        order_weight: 1200
 
   # ── Cloud Firewall HA ─────────────────────────────────────────────────────
   - name: CloudFirewallHA
@@ -521,3 +605,17 @@ extensions:
           identifier: firewall_context__served_deployments
           order_weight: 925
           description: "FirewallContext its segments terminate on: its dedicated one, else the shared one."
+
+    # Deployment side of LoadbalancerContext.served_deployments. Only a DC footprint is load balanced:
+    # a colocation metro has no LB uplinks (generators/topology/customer_colocation.py).
+    - kind: TopologyCustomerDC
+      relationships:
+        - name: serving_loadbalancer_context
+          label: "Serving Load Balancer Context"
+          peer: ManagedLoadbalancerContext
+          kind: Attribute
+          cardinality: one
+          optional: true
+          identifier: loadbalancer_context__served_deployments
+          order_weight: 926
+          description: "LoadbalancerContext load balancing its applications: its dedicated one, else the shared one of its namespace."  # yamllint disable-line rule:line-length

@@ -471,7 +471,13 @@ class TestEdgeTemplate:
 
     def test_anycast_svi_rendered_for_gateway_vlans(self, env: jinja2.Environment) -> None:
         vlans = [
-            {"vlan_id": 100, "name": "colo-services-stretch", "vrf": "PROD", "gateway_ip": "10.5.50.1/24"},
+            {
+                "vlan_id": 100,
+                "name": "colo-services-stretch",
+                "description": "colo-services-stretch",
+                "vrf": "PROD",
+                "gateway_ip": "10.5.50.1/24",
+            },
             {"vlan_id": 200, "name": "l2-only"},
         ]
         vxlan = {"enabled": False, "anycast_gateway": {"enabled": True, "mac": "00:00:22:22:33:33"}}

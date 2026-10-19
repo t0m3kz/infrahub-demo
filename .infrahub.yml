@@ -700,8 +700,6 @@ queries:
     file_path: queries/topology/add/segment_vlan_domains.gql
   - name: vxlan_segment_data
     file_path: queries/topology/add/vxlan_segment.gql
-  - name: loadbalancer_vip_data
-    file_path: queries/topology/add/loadbalancer_vip.gql
   - name: vrf_namespace_data
     file_path: queries/topology/add/vrf_namespace.gql
   - name: colocation_metro_data
@@ -917,19 +915,6 @@ generator_definitions:
       files:
         - generators/
         - utils/
-  - name: add_lb_backend_nexthop
-    file_path: generators/topology/loadbalancer.py
-    targets: loadbalancer_vips
-    query: loadbalancer_vip_data
-    class_name: LoadbalancerBackendNexthopGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      id: id
-    watch:
-      files:
-        - generators/
-        - utils/
   - name: add_app_application
     file_path: generators/topology/application_security.py
     targets: app_applications
@@ -960,10 +945,11 @@ generator_definitions:
       files:
         - generators/
         - utils/
-  # Same generator, entered from a component that moved to another segment
-  # or changed its ports: it fans out add_app_application to its own
-  # application and every application calling the component, and writes
-  # nothing itself (only add_app_application owns an application's rules).
+  # Same generator, entered from a component that moved to another segment,
+  # changed its ports or instances, or turned load_balanced (or back): it
+  # fans out add_app_application to its own application and every
+  # application calling the component, and writes nothing itself (only
+  # add_app_application owns an application's rules).
   - name: add_app_component
     file_path: generators/topology/application_security.py
     targets: app_components

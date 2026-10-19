@@ -9,8 +9,10 @@ from utils.group_policy import is_microsegmented
 from utils.ports import PortProfileHelper
 
 from ..common import CommonGenerator
+from ..connections import CablingMixin
 from ..helpers.rules import RulesPlanner
 from ..helpers.security_tag import clear_component_tag, ensure_security_tag, ensure_segment_tag
+from ..lb_vip import LoadbalancerVipMixin
 from ..named_objects import GetOrCreateByNameMixin
 from ..pools import PoolMixin
 from ..protocols import AppComponent
@@ -24,7 +26,9 @@ VXLAN_SEGMENT_KIND = "ManagedVxlanSegment"
 class AppApplicationGenerator(
     ZtnaMixin,
     SegmentFirewallMixin,
+    LoadbalancerVipMixin,
     GetOrCreateByNameMixin,
+    CablingMixin,
     PoolMixin,
     CommonGenerator,
 ):
@@ -34,7 +38,9 @@ class AppApplicationGenerator(
     dependency-edge shape: ZtnaMixin (target_fqdn egress and private-access
     publishing for access-profile grants), SegmentFirewallMixin (every
     segment-to-segment SecurityPolicyRule, on-prem or cloud endpoint, plus
-    zone handling). Every routed tenant segment it touches gets its segment
+    zone handling), LoadbalancerVipMixin (the VIPs of load_balanced
+    components and their R_server rules; CablingMixin for the address
+    reservations). Every routed tenant segment it touches gets its segment
     group tag, and each component of a microsegmented segment its component
     tag (_ensure_component_tags; PoolMixin for the lock): this is the one
     generator that sees a VLAN segment, which has no generator of its own. A
@@ -228,18 +234,24 @@ class AppApplicationGenerator(
         # the rules, which carry the tags of an intra-segment flow's components.
         await self._ensure_component_tags(components, edges)
 
+        # After the tags (R_server carries the backend component's) and before
+        # the rules (R_client reads the VIPs). Its errors fail the run once
+        # every other rule is written.
+        rule_indexes: dict[str, set[int]] = {}
+        lb_vips, lb_errors = await self._reconcile_load_balancing(components, edges, rule_indexes)
+
         # Access-profile grants hang off the target component, not a source
         # component, so they are published whether or not the app has edges.
         rules_created, rules_skipped = await self._reconcile_private_access_components(app_name, components)
 
         if not edges:
             self.logger.info("Application %s has no depends_on edges - no rules to generate", app_name)
+            self._fail_on_lb_errors(app_name, lb_errors)
             return
 
         self.logger.info("Found %d dependency edge(s) for %s", len(edges), app_name)
 
         segment_policies: dict[str, Any] = {}
-        rule_indexes: dict[str, set[int]] = {}
         proxy_policies: dict[str, Any] = {}
 
         rules_failed = 0
@@ -287,28 +299,44 @@ class AppApplicationGenerator(
 
             src_seg = src_comp.get("network_segment") or {}
             dst_seg = dst_comp.get("network_segment") or {}
+            # Strict load balancing: a load_balanced target is reached through
+            # its VIPs only (R_client), never directly.
+            target_vips = lb_vips.get(dst_comp.get("id") or "", {}) if dst_comp.get("load_balanced") else None
 
             for port in ports:
-                try:
-                    created, skipped = await self._reconcile_segment_rule(
-                        app_name=app_name,
-                        app_security_profile=app_security_profile,
-                        src_comp=src_comp,
-                        dst_comp=dst_comp,
-                        dep=dep,
-                        src_seg=src_seg,
-                        dst_seg=dst_seg,
-                        planner=planner,
-                        segment_policies=segment_policies,
-                        rule_indexes=rule_indexes,
-                        port=port,
-                    )
-                except Exception as exc:
-                    rules_failed += 1
-                    self.logger.error("  Dependency '%s' %s: rule failed: %s", dep_ref, port, exc)
-                    continue
-                rules_created += int(created)
-                rules_skipped += int(skipped)
+                # One R_client per VIP (context) of the port; None is the direct rule.
+                vips: list[tuple[str, str] | None] = [None]
+                if target_vips is not None:
+                    vips = list((target_vips.get(port) or {}).items())
+                    if not vips:
+                        lb_errors.append(
+                            f"dependency '{dep_ref}': load-balanced target {dst_comp.get('fqdn', '?')} has no VIP "
+                            f"on {PortProfileHelper.format_port_spec(port)}"
+                        )
+                        rules_skipped += 1
+                        continue
+                for vip in vips:
+                    try:
+                        created, skipped = await self._reconcile_segment_rule(
+                            app_name=app_name,
+                            app_security_profile=app_security_profile,
+                            src_comp=src_comp,
+                            dst_comp=dst_comp,
+                            dep=dep,
+                            src_seg=src_seg,
+                            dst_seg=dst_seg,
+                            planner=planner,
+                            segment_policies=segment_policies,
+                            rule_indexes=rule_indexes,
+                            port=port,
+                            vip=vip,
+                        )
+                    except Exception as exc:
+                        rules_failed += 1
+                        self.logger.error("  Dependency '%s' %s: rule failed: %s", dep_ref, port, exc)
+                        continue
+                    rules_created += int(created)
+                    rules_skipped += int(skipped)
 
         self.logger.info(
             "Application %s: %d rule(s) created, %d already existed, %d failed",
@@ -317,8 +345,18 @@ class AppApplicationGenerator(
             rules_skipped,
             rules_failed,
         )
+        self._fail_on_lb_errors(app_name, lb_errors)
         if rules_failed:
             raise RuntimeError(f"Application {app_name}: {rules_failed} rule(s) failed")
+
+    def _fail_on_lb_errors(self, app_name: str, errors: list[str]) -> None:
+        """Fail the run with every load balancing error at once; no-op without any.
+
+        A failed run leaves its tracking group as it was, so a VIP that a
+        broken component can no longer produce is kept, not deleted.
+        """
+        if errors:
+            self.fail(f"Application {app_name}: load balancing: {'; '.join(errors)}")
 
     async def _ensure_component_tags(
         self,

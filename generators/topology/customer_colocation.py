@@ -17,6 +17,11 @@ design, so its context is always the metro's shared one. The provisioning itself
 is generators/firewall_context.py's FirewallContextMixin, shared with
 customer_dc.py.
 
+No LoadbalancerContext: a metro's load balancers serve no customer VIPs (VIPs
+are placed by the DC hosting the component's instances), and the edge pair is
+not cabled to load balancers (its templates have no `load-balancer` ports, see
+colocation.py's _drop_uncablable_service_entries).
+
 Registered as add_customer_deployment_colocation in .infrahub.yml, targeting
 the customer_deployments_colocation group and querying customer_colocation.gql.
 """
@@ -26,6 +31,7 @@ from __future__ import annotations
 from ..common import CommonGenerator
 from ..connections import CablingMixin
 from ..devices import DeviceMixin
+from ..firewall_context import FIREWALL_CONTEXT
 from ..pools import PoolMixin
 from .customer_facility import CustomerFacilityMixin
 
@@ -40,3 +46,4 @@ class CustomerDeploymentColocationExchangeGenerator(
     _customer_kind = "TopologyCustomerColocation"
     _parent_label = "ColocationMetro"
     _parent_generators = ("add_colocation_metro",)
+    _context_specs = (FIREWALL_CONTEXT,)
