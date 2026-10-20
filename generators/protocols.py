@@ -580,10 +580,6 @@ class TopologyElement(CoreNode):
     template: RelationshipAttribute[CoreObjectTemplate]
 
 
-class TopologyExternal(TopologyDeployment):
-    pass
-
-
 class TopologyExternalProviders(
     TopologyDeployment, TopologyConnectableLocation, TopologyFacility, TopologyDeviceHosting
 ):

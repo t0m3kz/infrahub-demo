@@ -16,7 +16,7 @@ nodes:
       - ["name__value", "parent"]
     human_friendly_id:
       - name__value
-    display_label: "{{ name__value|upper}} SAAS"
+    display_label: "{{ name__value|upper }}"
     attributes:
       - name: provider
         kind: Dropdown
