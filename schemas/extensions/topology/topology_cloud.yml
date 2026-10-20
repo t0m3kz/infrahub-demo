@@ -60,7 +60,7 @@ nodes:
       - ["name__value", "parent"]
     human_friendly_id:
       - name__value
-    display_label: "{{ name__value|upper}} CLOUD"
+    display_label: "{{ name__value|upper }}"
 
   # A Direct Connect or an ExpressRoute lands in a region, so the region is the
   # cloud-side endpoint of a shared circuit. Not the zone (an AZ is finer than

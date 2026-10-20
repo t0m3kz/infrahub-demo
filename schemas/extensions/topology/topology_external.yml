@@ -2,21 +2,6 @@
 version: "1.0"
 
 nodes:
-  - name: External
-    namespace: Topology
-    inherit_from:
-      - TopologyDeployment
-    parent: TopologyLabel
-    label: External Topology
-    icon: "mdi:earth"
-    include_in_menu: false
-    children: TopologyExternalProviders
-    uniqueness_constraints:
-      - ["name__value", "parent"]
-    human_friendly_id:
-      - name__value
-    display_label: "{{ name__value|upper }}"
-
   - name: ExternalProviders
     namespace: Topology
     inherit_from:
@@ -24,7 +9,7 @@ nodes:
       - TopologyConnectableLocation
       - TopologyFacility
       - TopologyDeviceHosting
-    parent: TopologyExternal
+    parent: TopologyLabel
     label: External Provider Endpoint
     icon: "mdi:lan-connect"
     include_in_menu: false

@@ -155,7 +155,7 @@ Once stage 4 has settled, the branch should contain at least:
 
 ### Internet Transit
 
-`04_internet` (foundation stage) declares the `INTERNET` topology (`TopologyExternal`) with three ISPs, each a
+`04_internet` (foundation stage) declares three ISPs under the `Internet` label, each a
 `TopologyExternalProviders`: Lumen and Cogent sell transit to the colocation cages, Orange is the access ISP of the
 SD-WAN offices. Orange's access PE (`EXT-ORANGE`, template `MX204_ISP_ACCESS`) is the far end of every office's
 `INET-<office>` circuit: `add_sdwan_edge` takes a free `customer` port on it per office, so a new office adds no
