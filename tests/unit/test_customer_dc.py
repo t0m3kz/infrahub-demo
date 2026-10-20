@@ -686,40 +686,58 @@ class TestLoadbalancerContextTarget:
         gen._ensure_transit_legs.assert_not_awaited()
 
 
-class TestContextTrunk:
-    @pytest.mark.asyncio
-    async def test_missing_interface_logs_error_and_returns_none(self) -> None:
-        """No role interface on the device: error logged, None returned."""
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
-        gen.find_role_interface = AsyncMock(return_value=None)
+def _uplink(iface_id: str, device_id: str) -> MagicMock:
+    iface = MagicMock(id=iface_id)
+    iface.device.id = device_id
+    return iface
 
-        result = await gen._context_trunk(device_id="fw-1", device_name="fw-1", role="uplink")
+
+class TestUplinksByDevice:
+    @pytest.mark.asyncio
+    async def test_one_query_for_every_device_first_uplink_per_device(self) -> None:
+        """One filters() for all devices; a device's first uplink wins, as find_role_interface picks it."""
+        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        first, second, other = _uplink("up-1a", "fw-1"), _uplink("up-1b", "fw-1"), _uplink("up-2", "fw-2")
+        gen.client.filters = AsyncMock(return_value=[first, second, other])
+
+        result = await gen._uplinks_by_device([_fw_device()], ["fw-1", "fw-2"])
+
+        assert result == {"fw-1": first, "fw-2": other}
+        gen.client.filters.assert_awaited_once()
+        assert gen.client.filters.call_args.kwargs["device__ids"] == ["fw-1", "fw-2"]
+        assert gen.client.filters.call_args.kwargs["role__value"] == "uplink"
+        gen.logger.error.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_lookup_exception_is_logged_per_member_and_returns_none(self) -> None:
+        """A failing lookup is logged once per member, as a failing per-member lookup was, not raised."""
+        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen.client.filters = AsyncMock(side_effect=RuntimeError("boom"))
+        members = [_fw_device(), _fw_device(id="fw-2", name="DC10-FW2")]
+
+        result = await gen._uplinks_by_device(members, ["fw-1", "fw-2"])
 
         assert result is None
-        gen.logger.error.assert_called_once()
-        gen.find_role_interface.assert_awaited_once_with(device_id="fw-1", role="uplink")
+        assert [call.args[0] for call in gen.logger.error.call_args_list] == [
+            "Error resolving uplink interface on DC10-FW1: boom",
+            "Error resolving uplink interface on DC10-FW2: boom",
+        ]
 
-    @pytest.mark.asyncio
-    async def test_lookup_exception_logs_error_and_returns_none(self) -> None:
-        """A failing interface lookup is logged, not raised."""
+    def test_missing_uplink_logs_error_and_returns_none(self) -> None:
+        """No uplink on the device: error logged for the member, None returned."""
         gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
-        gen.find_role_interface = AsyncMock(side_effect=RuntimeError("boom"))
 
-        result = await gen._context_trunk(device_id="fw-1", device_name="fw-1", role="uplink")
+        assert gen._uplink_of({}, "fw-1", device_name="DC10-FW1") is None
+        gen.logger.error.assert_called_once_with(
+            "DC10-FW1: no role=uplink interface found — cannot create a context sub-interface"
+        )
 
-        assert result is None
-        gen.logger.error.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_found_interface_is_returned(self) -> None:
-        """The role interface is returned without logging."""
+    def test_found_uplink_is_returned_without_logging(self) -> None:
+        """The device's uplink is returned without logging."""
         gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
-        iface = MagicMock(id="up-1")
-        gen.find_role_interface = AsyncMock(return_value=iface)
+        iface = _uplink("up-1", "fw-1")
 
-        result = await gen._context_trunk(device_id="fw-1", device_name="fw-1", role="uplink")
-
-        assert result is iface
+        assert gen._uplink_of({"fw-1": iface}, "fw-1", device_name="DC10-FW1") is iface
         gen.logger.error.assert_not_called()
 
 
