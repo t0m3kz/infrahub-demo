@@ -11,6 +11,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, Literal
 
+from .helpers.naming import DeviceNamingConfig
+from .helpers.rack import expected_device_names
+from .types import naming_convention_of
+
 
 def templates_by_role(templates: list[dict[str, Any]], role: str) -> list[dict[str, Any]]:
     """Filter a fabric_templates list down to one role's positive-quantity entries."""
@@ -26,6 +30,26 @@ def spine_slot_templates(templates: list[dict[str, Any]]) -> list[dict[str, Any]
 
 def spine_slot_role(templates: list[dict[str, Any]]) -> Literal["spine", "border-spine"]:
     return "border-spine" if templates_by_role(templates, "border-spine") else "spine"
+
+
+def spine_slot_device_names(
+    *, dc: Mapping[str, Any], fabric_name: str, pod_index: int, role: str, quantity: int
+) -> list[str]:
+    """The spine-slot device names of pod ``pod_index`` in ``dc``, role_index 1..quantity.
+
+    The one way to attribute a spine-slot device to its pod: add_pod names
+    them with indexes [dc.index, pod.index] under the DC's naming_convention.
+    Not the device's deployment: a plain spine is deployed to its pod, but a
+    border-spine to the DC, shared by every pod's border-spines."""
+    return sorted(
+        expected_device_names(
+            naming_config=DeviceNamingConfig(strategy=naming_convention_of(dc, lower=False)),
+            fabric_name=fabric_name,
+            device_indexes=[dc["index"], pod_index],
+            role=role,
+            quantity=quantity,
+        )
+    )
 
 
 def pod_deployment_type(design: Mapping[str, Any]) -> Literal["middle_rack", "tor", "mixed"]:

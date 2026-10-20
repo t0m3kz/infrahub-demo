@@ -27,7 +27,13 @@ from ..helpers.routing import (
     underlay_pool_is_ipv6,
 )
 from ..helpers.template_interfaces import template_interface_names_by_role
-from ..pod_config import pod_deployment_type, spine_slot_role, spine_slot_templates, templates_by_role
+from ..pod_config import (
+    pod_deployment_type,
+    spine_slot_device_names,
+    spine_slot_role,
+    spine_slot_templates,
+    templates_by_role,
+)
 from ..pools import PoolMixin
 from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, TopologyPod
 from ..routing import RoutingMixin
@@ -698,6 +704,9 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
             )
 
         routing_opts = _routing_options(dc, dc_asn_pool_id, pod_spine_as_id)
+        # A sibling's design is not in this query, so look up the most spines
+        # any pod design of this DC may hold; only the ones that exist match.
+        sibling_spine_capacity = max_sibling_spines(dc["design"])
         sorted_lower_siblings = sorted(lower_siblings, key=lambda s: s.index.value)
         for sibling_slot, sibling in enumerate(sorted_lower_siblings):
             # Retry: during INITIAL bulk DC creation, every pod's TopologyPod object
@@ -708,13 +717,21 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
             # interface-readiness retry.
             sibling_spines: list[str] = []
             sibling_uplink_names: list[str] = []
+            # By name, not deployment: a border-spine is deployed to the DC.
+            candidate_names = spine_slot_device_names(
+                dc=dc,
+                fabric_name=self.fabric_name,
+                pod_index=sibling.index.value,
+                role=spine_role,
+                quantity=sibling_spine_capacity,
+            )
             for attempt in range(_SIBLING_SPINE_MAX_RETRIES):
                 sibling_spines_devices = await self.client.filters(
                     kind=DcimPhysicalDevice,
-                    deployment__ids=[sibling.id],
+                    name__values=candidate_names,
                     role__value=spine_role,
                 )
-                sibling_spines = [s.name.value for s in sibling_spines_devices]
+                sibling_spines = sorted(s.name.value for s in sibling_spines_devices)
                 if sibling_spines:
                     sibling_uplinks = await self.client.filters(
                         kind=DcimPhysicalInterface,
