@@ -156,26 +156,27 @@ class PoolMixin:
 
         ``refs`` maps relationship name -> peer id; a ``None`` id means "nothing
         to attach" and is skipped. The one place a generator writes pool (or
-        ``evpn_rt_as``) references onto its target node, shared by the DC, pod,
-        colocation-metro and VLAN-domain paths.
+        ``evpn_rt_as``) references onto a node it does not upsert itself (its
+        target: DC, pod, colocation metro, office). A node the run upserts
+        anyway (an MLAG or standalone VLAN domain) carries the reference in
+        that upsert's data instead.
 
         Missing-node policy: the node MUST exist. Every caller attaches to the
-        generator's own target (DC, pod, metro) or to a parent it upserted
-        earlier in this same run, and it is fetched by id, never by HFID, so
+        generator's own target (DC, pod, metro, office), and it is fetched by id, never by HFID, so
         neither a trigger race nor HFID index lag can hide it. A missing node
         is therefore a real fault: logged as an error (fatal under
         FailOnErrorLogger) and raised as GeneratorError — never skipped.
 
-        Idempotent: the same ids are written on every run. Re-saved even when
-        unchanged (delete_unused_nodes bookkeeping). Plain save(), not
-        allow_upsert=True: the node was just fetched, so update() sends only
-        the changed fields; the Upsert mutation would resend every attribute
+        Idempotent: the same ids are written on every run, without comparing
+        first. The save is not delete_unused_nodes bookkeeping (it is
+        update_group_context=False, so it never adds the node to the run's
+        group). Plain save(), not allow_upsert=True: the node was just
+        fetched, so update() sends only the changed fields; the Upsert
+        mutation would resend every attribute
         and relationship and spuriously re-fire unrelated ``updated`` triggers
         (index/fabric_templates/mlag_create/connectivity_mode/status) and
         double-fire dc_pod_cascade. Untracked: attaching a pool does not make
-        this run the node's owner — it is the run's target, or an owned one
-        (an MLAG or standalone VLAN domain just upserted) is already tracked
-        by its own save.
+        this run the node's owner — the node is the run's target.
         """
         attach = {attribute: ref_id for attribute, ref_id in refs.items() if ref_id}
         if not attach:
@@ -199,11 +200,11 @@ class PoolMixin:
         end_range: int,
         node: str,
         node_attribute: str,
-        parent_kind: str | None = None,
-        parent_id: str | None = None,
-        parent_attr: str | None = None,
     ) -> Any:
-        """Create or update a CoreNumberPool and optionally link it to a parent.
+        """Create or update a CoreNumberPool.
+
+        Pointing a node at the pool is the caller's job: put ``{"id": pool.id}``
+        into the node's own upsert, or use attach_refs for a node the run does not upsert.
 
         Args:
             pool_name: Name for the pool
@@ -212,9 +213,6 @@ class PoolMixin:
             end_range: Last value in range
             node: Infrahub node kind for allocation (e.g. "RoutingAutonomousSystem")
             node_attribute: Attribute on the node (e.g. "asn", "vlan_id", "vni")
-            parent_kind: Optional parent kind to link the pool to
-            parent_id: Optional parent ID
-            parent_attr: Optional attribute name on parent (e.g. "vlan_pool")
 
         Returns:
             The created/upserted CoreNumberPool SDK object
@@ -238,10 +236,6 @@ class PoolMixin:
             end_range,
             pool.id,
         )
-
-        if parent_kind and parent_id and parent_attr:
-            await self.attach_refs(kind=parent_kind, node_id=parent_id, refs={parent_attr: pool.id})
-
         return pool
 
     async def upsert_asn_pool(
@@ -250,9 +244,6 @@ class PoolMixin:
         description: str,
         start_range: int,
         end_range: int,
-        parent_kind: str | None = None,
-        parent_id: str | None = None,
-        parent_attr: str | None = None,
     ) -> Any:
         """Create or update an ASN CoreNumberPool. Convenience wrapper around upsert_number_pool."""
         return await self.upsert_number_pool(
@@ -262,9 +253,6 @@ class PoolMixin:
             end_range=end_range,
             node="RoutingAutonomousSystem",
             node_attribute="asn",
-            parent_kind=parent_kind,
-            parent_id=parent_id,
-            parent_attr=parent_attr,
         )
 
     async def _get_parent_pool_with_retry(self, parent_pool_name: str) -> CoreIPPrefixPool:

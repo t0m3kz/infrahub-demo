@@ -20,6 +20,7 @@ from generators.protocols import (
     DcimPhysicalInterface,
     DcimVirtualDevice,
     DcimVirtualInterface,
+    ManagedController,
     ManagedMLAG,
     ManagedStandaloneVlanDomain,
 )
@@ -516,9 +517,12 @@ def _mock_relmgr(peer_ids: list[str]) -> MagicMock:
     return rel
 
 
-def _mock_iface(iface_id: str, name: str, *, cable_id: str | None = None, status: str = "free") -> MagicMock:
+def _mock_iface(
+    iface_id: str, name: str, *, device_id: str, cable_id: str | None = None, status: str = "free"
+) -> MagicMock:
     iface = MagicMock()
     iface.id = iface_id
+    iface.device = MagicMock(id=device_id)
     iface.name = MagicMock(value=name)
     # `free` is DcimInterface's schema default, so that is what a sync port
     # inherited from a device's object_template really looks like before
@@ -574,14 +578,14 @@ class TestEnsureHaInterfaces:
         dev_1.name = MagicMock(value="fw-01")
         dev_2 = MagicMock(id="dev-2", deployment=MagicMock(initialized=False))
         dev_2.name = MagicMock(value="fw-02")
-        iface_1 = _mock_iface("iface-1", "sync0")
-        iface_2 = _mock_iface("iface-2", "sync0")
+        iface_1 = _mock_iface("iface-1", device_id="dev-1", name="sync0")
+        iface_2 = _mock_iface("iface-2", device_id="dev-2", name="sync0")
 
         async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
             if kind is DcimPhysicalDevice:
                 return [dev_1, dev_2]
             if kind is DcimPhysicalInterface:
-                return [iface_1] if kwargs.get("device__ids") == ["dev-1"] else [iface_2]
+                return [iface_1, iface_2]
             return []
 
         gen.client.filters = AsyncMock(side_effect=_filters)
@@ -602,14 +606,14 @@ class TestEnsureHaInterfaces:
         dev_1.name = MagicMock(value="fw-01")
         dev_2 = MagicMock(id="dev-2", deployment=MagicMock(initialized=False))
         dev_2.name = MagicMock(value="fw-02")
-        iface_1 = _mock_iface("iface-1", "sync0")
-        iface_2 = _mock_iface("iface-2", "sync0")
+        iface_1 = _mock_iface("iface-1", device_id="dev-1", name="sync0")
+        iface_2 = _mock_iface("iface-2", device_id="dev-2", name="sync0")
 
         async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
             if kind is DcimPhysicalDevice:
                 return [dev_1, dev_2]
             if kind is DcimPhysicalInterface:
-                return [iface_1] if kwargs.get("device__ids") == ["dev-1"] else [iface_2]
+                return [iface_1, iface_2]
             return []
 
         gen.client.filters = AsyncMock(side_effect=_filters)
@@ -625,6 +629,49 @@ class TestEnsureHaInterfaces:
         assert created[0][1]["endpoints"] == ["iface-1", "iface-2"]
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("device_kind", "iface_kind"),
+        [(DcimPhysicalDevice, DcimPhysicalInterface), (DcimVirtualDevice, DcimInterface)],
+    )
+    async def test_sync_ports_of_all_members_come_from_one_query(self, device_kind: Any, iface_kind: Any) -> None:
+        """One interface query covers both members (not one per device), and
+        each device keeps its first role=ha interface even when the other
+        member's sort ahead of its second one."""
+        gen = self._gen()
+        ha_obj = MagicMock(id="ha-1", capabilities=_mock_relmgr(["dev-1", "dev-2"]))
+        dev_1 = MagicMock(id="dev-1")
+        dev_1.name = MagicMock(value="fw-01")
+        dev_2 = MagicMock(id="dev-2")
+        dev_2.name = MagicMock(value="fw-02")
+        iface_1 = _mock_iface("iface-1", device_id="dev-1", name="HA1", status="active")
+        iface_1b = _mock_iface("iface-1b", device_id="dev-1", name="HA2", status="active")
+        iface_2 = _mock_iface("iface-2", device_id="dev-2", name="HA1", status="active")
+
+        async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:  # noqa: ARG001
+            if kind is device_kind:
+                return [dev_1, dev_2]
+            if kind is iface_kind:
+                return [iface_1, iface_1b, iface_2]
+            return []
+
+        gen.client.filters = AsyncMock(side_effect=_filters)
+        gen._ensure_ha_cable = AsyncMock()
+
+        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02-ha", device_kind=device_kind)
+
+        iface_calls = [c.kwargs for c in gen.client.filters.call_args_list if c.kwargs["kind"] is iface_kind]
+        assert len(iface_calls) == 1
+        assert iface_calls[0]["device__ids"] == ["dev-1", "dev-2"]
+        assert iface_calls[0]["role__value"] == "ha"
+        device_call = next(c.kwargs for c in gen.client.filters.call_args_list if c.kwargs["kind"] is device_kind)
+        assert device_call == {"kind": device_kind, "ids": ["dev-1", "dev-2"]}
+        if device_kind is DcimPhysicalDevice:
+            assert iface_calls[0]["include"] == ["cable"]
+            gen._ensure_ha_cable.assert_awaited_once_with("fw-01-fw-02-ha", [(dev_1, iface_1), (dev_2, iface_2)])
+        else:
+            gen.client.create.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_sync_ports_are_flipped_to_active(self) -> None:
         """A port carrying the HA sync link must not keep DcimInterface's
         `free` default — it is in service, exactly like both ends of any cable
@@ -636,15 +683,15 @@ class TestEnsureHaInterfaces:
         dev_1.name = MagicMock(value="fw-01")
         dev_2 = MagicMock(id="dev-2", deployment=MagicMock(initialized=False))
         dev_2.name = MagicMock(value="fw-02")
-        iface_1 = _mock_iface("iface-1", "HA1")
+        iface_1 = _mock_iface("iface-1", device_id="dev-1", name="HA1")
         # Already active — a re-run must not spend a write reaffirming it.
-        iface_2 = _mock_iface("iface-2", "HA1", status="active")
+        iface_2 = _mock_iface("iface-2", device_id="dev-2", name="HA1", status="active")
 
         async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
             if kind is DcimPhysicalDevice:
                 return [dev_1, dev_2]
             if kind is DcimPhysicalInterface:
-                return [iface_1] if kwargs.get("device__ids") == ["dev-1"] else [iface_2]
+                return [iface_1, iface_2]
             return []
 
         gen.client.filters = AsyncMock(side_effect=_filters)
@@ -729,14 +776,14 @@ class TestEnsureHaInterfaces:
         dev_1.name = MagicMock(value="vfw-01")
         dev_2 = MagicMock(id="dev-2", deployment=MagicMock(initialized=False))
         dev_2.name = MagicMock(value="vfw-02")
-        iface_1 = _mock_iface("iface-1", "eth7")
-        iface_2 = _mock_iface("iface-2", "eth7")
+        iface_1 = _mock_iface("iface-1", device_id="dev-1", name="eth7")
+        iface_2 = _mock_iface("iface-2", device_id="dev-2", name="eth7")
 
         async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
             if kind is DcimVirtualDevice:
                 return [dev_1, dev_2]
             if kind is DcimInterface:
-                return [iface_1] if kwargs.get("device__ids") == ["dev-1"] else [iface_2]
+                return [iface_1, iface_2]
             return []  # DcimVirtualInterface must not be queried
 
         gen.client.filters = AsyncMock(side_effect=_filters)
@@ -758,14 +805,14 @@ class TestEnsureHaInterfaces:
         dev_1.name = MagicMock(value="vfw-01")
         dev_2 = MagicMock(id="dev-2", deployment=MagicMock(initialized=False))
         dev_2.name = MagicMock(value="vfw-02")
-        iface_1 = _mock_iface("iface-1", "eth7")
-        iface_2 = _mock_iface("iface-2", "eth7")
+        iface_1 = _mock_iface("iface-1", device_id="dev-1", name="eth7")
+        iface_2 = _mock_iface("iface-2", device_id="dev-2", name="eth7")
 
         async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
             if kind is DcimVirtualDevice:
                 return [dev_1, dev_2]
             if kind is DcimVirtualInterface:
-                return [iface_1] if kwargs.get("device__ids") == ["dev-1"] else [iface_2]
+                return [iface_1, iface_2]
             return []
 
         gen.client.filters = AsyncMock(side_effect=_filters)
@@ -802,8 +849,8 @@ class TestEnsureHaCable:
         dev_1.name = MagicMock(value="fw-01")
         dev_2 = MagicMock()
         dev_2.name = MagicMock(value="fw-02")
-        iface_1 = _mock_iface("iface-1", "sync0")
-        iface_2 = _mock_iface("iface-2", "sync0")
+        iface_1 = _mock_iface("iface-1", device_id="dev-1", name="sync0")
+        iface_2 = _mock_iface("iface-2", device_id="dev-2", name="sync0")
 
         await gen._ensure_ha_cable("fw-01-fw-02-ha", [(dev_1, iface_1), (dev_2, iface_2)])
 
@@ -819,8 +866,8 @@ class TestEnsureHaCable:
         dev_1.name = MagicMock(value="fw-01")
         dev_2 = MagicMock()
         dev_2.name = MagicMock(value="fw-02")
-        iface_1 = _mock_iface("iface-1", "sync0", cable_id="orphan-cbl")
-        iface_2 = _mock_iface("iface-2", "sync0")
+        iface_1 = _mock_iface("iface-1", device_id="dev-1", name="sync0", cable_id="orphan-cbl")
+        iface_2 = _mock_iface("iface-2", device_id="dev-2", name="sync0")
 
         await gen._ensure_ha_cable("fw-01-fw-02-ha", [(dev_1, iface_1), (dev_2, iface_2)])
 
@@ -836,8 +883,8 @@ class TestEnsureHaCable:
         dev_1.name = MagicMock(value="fw-01")
         dev_2 = MagicMock()
         dev_2.name = MagicMock(value="fw-02")
-        iface_1 = _mock_iface("iface-1", "sync0")
-        iface_2 = _mock_iface("iface-2", "sync0")
+        iface_1 = _mock_iface("iface-1", device_id="dev-1", name="sync0")
+        iface_2 = _mock_iface("iface-2", device_id="dev-2", name="sync0")
 
         await gen._ensure_ha_cable("fw-01-fw-02-ha", [(dev_2, iface_2), (dev_1, iface_1)])
 
@@ -862,8 +909,8 @@ class TestEnsureHaCable:
         dev_1.deployment.peer = MagicMock(id="pod-1")  # device itself is pod-scoped
         dev_2 = MagicMock()
         dev_2.name = MagicMock(value="fw-02")
-        iface_1 = _mock_iface("iface-1", "sync0")
-        iface_2 = _mock_iface("iface-2", "sync0")
+        iface_1 = _mock_iface("iface-1", device_id="dev-1", name="sync0")
+        iface_2 = _mock_iface("iface-2", device_id="dev-2", name="sync0")
 
         await gen._ensure_ha_cable("fw-01-fw-02-ha", [(dev_2, iface_2), (dev_1, iface_1)])
 
@@ -980,7 +1027,6 @@ class TestCreateDevicesControllerRouting:
 
         controller_obj = MagicMock()
         controller_obj.hfid = "cp-sms-1"
-        controller_obj.managed_devices.fetch = AsyncMock()
         controller_obj.managed_devices.peers = []
         controller_obj.add_relationships = AsyncMock()
         controller_obj.save = AsyncMock()
@@ -1004,6 +1050,9 @@ class TestCreateDevicesControllerRouting:
             relation_to_update="managed_devices", related_nodes=[created_device.id]
         )
         controller_obj.save.assert_not_awaited()
+        # The peer ids arrive with the controller itself (include=), never via a
+        # managed_devices.fetch() re-get plus full-node read of every managed device.
+        gen.client.get.assert_awaited_once_with(kind=ManagedController, id="cp-sms-1", include=["managed_devices"])
 
     @pytest.mark.asyncio
     async def test_already_attached_device_is_not_added_again(self) -> None:
@@ -1014,7 +1063,6 @@ class TestCreateDevicesControllerRouting:
 
         controller_obj = MagicMock()
         controller_obj.hfid = "cp-sms-1"
-        controller_obj.managed_devices.fetch = AsyncMock()
         controller_obj.managed_devices.peers = [MagicMock(id=created_device.id)]
         controller_obj.add_relationships = AsyncMock()
         gen.client.get = AsyncMock(return_value=controller_obj)

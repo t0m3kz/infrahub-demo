@@ -261,53 +261,96 @@ class TestBgpProcessesReady:
 # ---------------------------------------------------------------------------
 
 
-def _mock_password_obj(obj_id: str) -> MagicMock:
+def _mock_password_obj(obj_id: str, name: str = "") -> MagicMock:
     obj = MagicMock()
     obj.id = obj_id
+    obj.name = MagicMock(value=name)
     return obj
 
 
 class TestResolveSharedPasswords:
     @pytest.mark.asyncio
-    async def test_returns_both_ids_when_found(self) -> None:
+    async def test_returns_both_ids_from_one_query(self) -> None:
+        """Both keys come back from one filters() call, matched by name, not by result order."""
         m = _make_mixin(fabric_name="dc1")
-        underlay_obj = _mock_password_obj("pw-underlay-1")
-        overlay_obj = _mock_password_obj("pw-overlay-1")
-        m.client.get = AsyncMock(side_effect=[underlay_obj, overlay_obj])
+        m.client.filters = AsyncMock(
+            return_value=[
+                _mock_password_obj("pw-overlay-1", "dc1-overlay-key"),
+                _mock_password_obj("pw-underlay-1", "dc1-underlay-key"),
+            ]
+        )
 
         underlay_id, overlay_id = await m._resolve_shared_passwords()
 
-        assert underlay_id == "pw-underlay-1"
-        assert overlay_id == "pw-overlay-1"
-        assert m.client.get.await_count == 2
-        first_call_kwargs = m.client.get.call_args_list[0][1]
-        assert first_call_kwargs["name__value"] == "dc1-underlay-key"
-        second_call_kwargs = m.client.get.call_args_list[1][1]
-        assert second_call_kwargs["name__value"] == "dc1-overlay-key"
+        assert (underlay_id, overlay_id) == ("pw-underlay-1", "pw-overlay-1")
+        m.client.filters.assert_awaited_once()
+        assert m.client.filters.call_args.kwargs["name__values"] == ["dc1-underlay-key", "dc1-overlay-key"]
 
     @pytest.mark.asyncio
     async def test_returns_none_when_not_found(self) -> None:
         m = _make_mixin()
-        m.client.get = AsyncMock(return_value=None)
+        m.client.filters = AsyncMock(return_value=[])
         underlay_id, overlay_id = await m._resolve_shared_passwords()
         assert underlay_id is None
         assert overlay_id is None
+
+    @pytest.mark.asyncio
+    async def test_only_one_found_leaves_the_other_none(self) -> None:
+        """A missing key is None on its own; the found one is still returned."""
+        m = _make_mixin(fabric_name="dc1")
+        m.client.filters = AsyncMock(return_value=[_mock_password_obj("pw-underlay-1", "dc1-underlay-key")])
+
+        assert await m._resolve_shared_passwords() == ("pw-underlay-1", None)
 
     @pytest.mark.asyncio
     async def test_returns_none_on_exception(self) -> None:
         m = _make_mixin()
-        m.client.get = AsyncMock(side_effect=Exception("db error"))
+        m.client.filters = AsyncMock(side_effect=Exception("db error"))
         underlay_id, overlay_id = await m._resolve_shared_passwords()
         assert underlay_id is None
         assert overlay_id is None
+        m.logger.debug.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_fabric_name_used_in_both_lookups(self) -> None:
         m = _make_mixin(fabric_name="berlin-dc")
-        m.client.get = AsyncMock(return_value=None)
+        m.client.filters = AsyncMock(return_value=[])
         await m._resolve_shared_passwords()
-        names = [call[1]["name__value"] for call in m.client.get.call_args_list]
-        assert names == ["berlin-dc-underlay-key", "berlin-dc-overlay-key"]
+        assert m.client.filters.call_args.kwargs["name__values"] == ["berlin-dc-underlay-key", "berlin-dc-overlay-key"]
+
+    @pytest.mark.asyncio
+    async def test_found_ids_are_reused_within_a_run(self) -> None:
+        """A pod run calls create_routing() once per tier; found keys are not queried again."""
+        m = _make_mixin(fabric_name="dc1")
+        m.client.filters = AsyncMock(
+            return_value=[
+                _mock_password_obj("pw-underlay-1", "dc1-underlay-key"),
+                _mock_password_obj("pw-overlay-1", "dc1-overlay-key"),
+            ]
+        )
+
+        first = await m._resolve_shared_passwords()
+        second = await m._resolve_shared_passwords()
+
+        assert first == second == ("pw-underlay-1", "pw-overlay-1")
+        m.client.filters.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_missing_key_is_looked_up_again(self) -> None:
+        """Only found ids are kept: a key add_dc had not created yet is queried on the next call, alone."""
+        m = _make_mixin(fabric_name="dc1")
+        m.client.filters = AsyncMock(
+            side_effect=[
+                [_mock_password_obj("pw-underlay-1", "dc1-underlay-key")],
+                [_mock_password_obj("pw-overlay-1", "dc1-overlay-key")],
+            ]
+        )
+
+        assert await m._resolve_shared_passwords() == ("pw-underlay-1", None)
+        assert await m._resolve_shared_passwords() == ("pw-underlay-1", "pw-overlay-1")
+
+        assert m.client.filters.await_count == 2
+        assert m.client.filters.call_args.kwargs["name__values"] == ["dc1-overlay-key"]
 
     @pytest.mark.asyncio
     async def test_does_not_regenerate_or_touch_existing_password_value(self) -> None:
@@ -315,8 +358,7 @@ class TestResolveSharedPasswords:
         RoutingPassword, since that would risk rotating an already-deployed
         BGP/OSPF auth key (secrets.token_urlsafe() is non-deterministic)."""
         m = _make_mixin()
-        underlay_obj = _mock_password_obj("pw-1")
-        m.client.get = AsyncMock(return_value=underlay_obj)
+        m.client.filters = AsyncMock(return_value=[_mock_password_obj("pw-1", "dc1-underlay-key")])
         m.client.create = AsyncMock()
 
         await m._resolve_shared_passwords()

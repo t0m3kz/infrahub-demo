@@ -253,7 +253,12 @@ class DeviceMixin(MLAGWiringMixin):
         controller_info = self._resolve_role_controller(device_role=device_role, template=template)
         controller = None
         if controller_info is not None:
-            controller = await self.client.get(kind=ManagedController, id=controller_info["id"])
+            # include= loads the managed_devices peer ids with the controller, so
+            # the attach below needs no fetch() (a re-get plus a full-node read
+            # of every device the controller manages).
+            controller = await self.client.get(
+                kind=ManagedController, id=controller_info["id"], include=["managed_devices"]
+            )
 
         device_group = None
         if controller is None:
@@ -410,9 +415,7 @@ class DeviceMixin(MLAGWiringMixin):
             )
 
             if controller is not None and created_devices:
-                managed_devices = controller.managed_devices
-                await managed_devices.fetch()
-                existing_managed_ids = {peer.id for peer in managed_devices.peers}
+                existing_managed_ids = {peer.id for peer in controller.managed_devices.peers}
                 missing_ids = [node.id for node in created_devices if node.id not in existing_managed_ids]
                 # A RelationshipAdd of just these devices, not a save of the whole peer list: every
                 # rack and pod of the deployments one controller manages attaches to it concurrently,
@@ -462,14 +465,17 @@ class DeviceMixin(MLAGWiringMixin):
         """
         for device in devices:
             domain_name = standalone_vlan_domain_name(device.name.value)
+            vlan_pool = await self._ensure_vlan_domain_pool(domain_name)
             domain = await self.client.create(
                 kind=ManagedStandaloneVlanDomain,
-                data={"name": domain_name, "status": "active", "capabilities": [{"id": device.id}]},
+                data={
+                    "name": domain_name,
+                    "status": "active",
+                    "capabilities": [{"id": device.id}],
+                    "vlan_pool": {"id": vlan_pool.id},
+                },
             )
             await domain.save(allow_upsert=True)
-            await self._ensure_vlan_domain_pool(
-                pool_owner_name=domain_name, parent_kind="ManagedStandaloneVlanDomain", parent_id=domain.id
-            )
 
     async def create_ha_role_devices(
         self,
@@ -661,25 +667,31 @@ class DeviceMixin(MLAGWiringMixin):
             return
 
         is_physical = device_kind is DcimPhysicalDevice
-        member_devices = await self.client.filters(kind=device_kind, ids=member_ids, include=["deployment"])
+        member_devices = await self.client.filters(kind=device_kind, ids=member_ids)
+
+        # One query for every member's sync interfaces, grouped by device. The
+        # result keeps one sort order, so each device's first one is the same
+        # as a per-device query's.
+        if is_physical:
+            ha_ifaces = await self.client.filters(
+                kind=DcimPhysicalInterface, device__ids=member_ids, role__value="ha", include=["cable"]
+            )
+        else:
+            # Query the generic DcimInterface kind, not DcimVirtualInterface
+            # — most virtual firewall/LB templates (every CloudGuard/PANOS/
+            # NetScaler/etc. template except *_CUSTOMER_*) provision eth7 as
+            # a TemplateDcimPhysicalInterface even on a virtual device, so
+            # assuming "virtual device -> virtual iface" here missed it and
+            # tried to create a colliding duplicate.
+            ha_ifaces = await self.client.filters(kind=DcimInterface, device__ids=member_ids, role__value="ha")
+        first_ha_iface_by_device: dict[str, Any] = {}
+        for iface in ha_ifaces:
+            # device is a mandatory Parent relationship (schemas/base/dcim.yml).
+            first_ha_iface_by_device.setdefault(iface.device.id, iface)
 
         sync_ifaces: list[Any] = []
         for device_obj in member_devices:
-            if is_physical:
-                device_sync_ifaces = await self.client.filters(
-                    kind=DcimPhysicalInterface, device__ids=[device_obj.id], role__value="ha", include=["cable"]
-                )
-            else:
-                # Query the generic DcimInterface kind, not DcimVirtualInterface
-                # — most virtual firewall/LB templates (every CloudGuard/PANOS/
-                # NetScaler/etc. template except *_CUSTOMER_*) provision eth7 as
-                # a TemplateDcimPhysicalInterface even on a virtual device, so
-                # assuming "virtual device -> virtual iface" here missed it and
-                # tried to create a colliding duplicate.
-                device_sync_ifaces = await self.client.filters(
-                    kind=DcimInterface, device__ids=[device_obj.id], role__value="ha"
-                )
-            sync_iface = device_sync_ifaces[0] if device_sync_ifaces else None
+            sync_iface = first_ha_iface_by_device.get(device_obj.id)
             if not is_physical and (sync_iface is None or _is_generated_sync_port(sync_iface)):
                 # Virtual devices from the *_CUSTOMER_* templates get a fixed
                 # eth7 HA sync port (see data/bootstrap's virtual device
@@ -846,6 +858,7 @@ class DeviceMixin(MLAGWiringMixin):
 
             if mlag_group is None:
                 mlag_group = await self.client.get(kind=CoreStandardGroup, name__value="mlag_domains")
+            vlan_pool = await self._ensure_vlan_domain_pool(mlag_name)
             mlag_obj = await self.client.create(
                 kind=ManagedMLAG,
                 data={
@@ -856,6 +869,7 @@ class DeviceMixin(MLAGWiringMixin):
                     "status": "active",
                     "capabilities": [{"id": first_dev.id}, {"id": second_dev.id}],
                     "member_of_groups": [{"id": mlag_group.id}],
+                    "vlan_pool": {"id": vlan_pool.id},
                 },
             )
             await mlag_obj.save(allow_upsert=True)
@@ -864,29 +878,27 @@ class DeviceMixin(MLAGWiringMixin):
             )
 
             await self.ensure_mlag_wiring(mlag_obj, mlag_name, member_ids=[first_dev.id, second_dev.id])
-            await self._ensure_vlan_domain_pool(
-                pool_owner_name=mlag_name, parent_kind="ManagedMLAG", parent_id=mlag_obj.id
-            )
             paired.update((first, second))
         return paired
 
-    async def _ensure_vlan_domain_pool(self, *, pool_owner_name: str, parent_kind: str, parent_id: str) -> None:
-        """Create/upsert this VLAN domain's own local VLAN ID pool.
+    async def _ensure_vlan_domain_pool(self, domain_name: str) -> Any:
+        """Create/upsert a VLAN domain's own local VLAN ID pool and return it.
 
         IEEE 802.1Q VLAN ID has only local significance (within one L2
         domain — an MLAG pair, or a standalone device). Each VLAN domain
         gets its own independent 100-2999 pool so unrelated domains can
         reuse the same numeric VLAN ID for different segments; the real
         DC-wide/fabric-wide segment identifier is ManagedSegmentDeployment.vni.
+
+        Upserted before its domain, so the domain's own upsert (which resends
+        every field anyway) carries ``vlan_pool`` — no separate get + save of
+        the domain just to point it at the pool.
         """
-        await self.upsert_number_pool(
-            pool_name=f"{pool_owner_name}-vlan-pool",
-            description=f"Local VLAN ID pool for VLAN domain {pool_owner_name}",
+        return await self.upsert_number_pool(
+            pool_name=f"{domain_name}-vlan-pool",
+            description=f"Local VLAN ID pool for VLAN domain {domain_name}",
             start_range=CUSTOMER_VLAN_ID_MIN,
             end_range=CUSTOMER_VLAN_ID_MAX,
             node="ManagedVlanDomainSegment",
             node_attribute="vlan_id",
-            parent_kind=parent_kind,
-            parent_id=parent_id,
-            parent_attr="vlan_pool",
         )

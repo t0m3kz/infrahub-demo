@@ -33,8 +33,9 @@ class MLAGGenerator(MLAGWiringMixin, CablingMixin, PoolMixin, CommonGenerator):
             return
 
         for mlag in mlag_nodes:
-            mlag_obj = await self.client.get(kind=ManagedMLAG, id=mlag["id"])
+            mlag_obj = await self.client.get(kind=ManagedMLAG, id=mlag["id"], include=["capabilities"])
+            member_ids = [peer.id for peer in getattr(mlag_obj, "capabilities").peers]
             # track=False: the wiring belongs to the device generator that
             # created this domain (DeviceMixin._ensure_mlag_pairs), which
             # re-tracks it on every run. This trigger only re-wires it.
-            await self.ensure_mlag_wiring(mlag_obj, mlag["name"], track=False)
+            await self.ensure_mlag_wiring(mlag_obj, mlag["name"], member_ids=member_ids, track=False)

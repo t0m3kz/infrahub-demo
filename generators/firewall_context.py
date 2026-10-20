@@ -48,7 +48,7 @@ from utils.exchange_transit import (
 )
 
 from .connections import BORDER_ROLE_FOR_SERVICES, tracked_save_kwargs
-from .far_end import far_end_interface
+from .far_end import far_end_interfaces
 from .helpers.common import save_with_node_not_found_retry
 from .helpers.pools import (
     FW_CONTEXT_VLAN_END,
@@ -75,6 +75,7 @@ _MEMBER_OFFSETS = (OFFSET_MEMBER_A, OFFSET_MEMBER_B)
 _SNAT_POOL_NAME = "FW-SNAT-INTERNET-IPv4"
 _SNAT_PREFIX_LENGTH = 32
 _VIP_POOL_KEY = "vip"  # _prefix_pools key of the VIP range pool, next to the leg types
+_UPLINK_ROLE = "uplink"  # the member interface its context sub-interfaces sit on, cabled to a border service port
 
 
 def _firewall_leg_types(tenant_type: str) -> tuple[str, ...]:
@@ -231,6 +232,18 @@ def _dev_name(device: Any) -> str:
     return device["name"] if isinstance(device, dict) else device.name.value
 
 
+def _cabled_device_id(device: Any) -> str:
+    """The device whose uplink cable a member's traffic leaves through: the
+    physical device hosting a virtual instance (an SDK node), else the member."""
+    hosting = None if isinstance(device, dict) else getattr(device, "hosting_device", None)
+    return getattr(hosting, "id", None) or _dev_id(device)
+
+
+def _cable_id(interface: Any) -> str | None:
+    """id of the cable on interface, None when it is not cabled."""
+    return getattr(getattr(interface, "cable", None), "id", None)
+
+
 def _physical_devices(devices: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """The parent's physical devices of a role, by name.
 
@@ -261,8 +274,7 @@ class FirewallContextMixin:
     The host class sets ``_customer_kind``, ``_parent_label``,
     ``_parent_generators`` and ``_context_specs``, and mixes in PoolMixin
     (``resource_lock``), DeviceMixin (``create_devices``, ``_ensure_ha_pairs``)
-    and CablingMixin (``find_role_interface``, ``ensure_vlan_subinterface``,
-    ``upsert_prefix_addresses``).
+    and CablingMixin (``ensure_vlan_subinterface``, ``upsert_prefix_addresses``).
     """
 
     # Per-facility configuration, set by the host class. _parent_generators
@@ -273,6 +285,10 @@ class FirewallContextMixin:
     _parent_generators: tuple[str, ...]
     _context_specs: tuple[ContextSpec, ...]
 
+    # _transit_namespaces' memo for the run (a generator instance runs once):
+    # namespace_type -> IpamNamespace, bootstrap data that a run never changes.
+    _namespaces_by_type: dict[str, Any] | None = None
+
     # Provided by the host class and its other mixins. Callable attributes,
     # not stub methods, so they never shadow the real ones via the MRO.
     client: Any
@@ -281,7 +297,6 @@ class FirewallContextMixin:
     resource_lock: Callable[[str], AbstractAsyncContextManager[None]]
     create_devices: Callable[..., Awaitable[list[str]]]
     _ensure_ha_pairs: Callable[..., Awaitable[None]]
-    find_role_interface: Callable[..., Awaitable[Any]]
     ensure_vlan_subinterface: Callable[..., Awaitable[Any]]
     upsert_prefix_addresses: Callable[..., Awaitable[dict[int, Any]]]
     wait_for_parent_generator_and_refetch: Callable[..., Awaitable[dict | None]]
@@ -590,14 +605,22 @@ class FirewallContextMixin:
                 self.logger.info(f"{context_name}: tagged {len(state.untagged_port_ids)} border service port(s)")
 
     async def _transit_namespaces(self, leg_types: tuple[str, ...]) -> dict[str, Any] | None:
-        """The VRF namespace of each leg type by namespace_type, one query; None (logged) when one is missing."""
-        nodes = await self.client.filters(kind=IpamNamespace, namespace_type__values=list(leg_types))
-        by_type = {getattr(node, "namespace_type").value: node for node in nodes}
-        missing = [leg_type for leg_type in leg_types if leg_type not in by_type]
+        """The VRF namespace of each leg type by namespace_type; None (logged) when one is missing.
+
+        One query, none when an earlier spec of the run already read them all:
+        a DC's load-balancer context (tenant leg only) reuses the firewall
+        context's read (tenant leg first).
+        """
+        cached = self._namespaces_by_type or {}
+        if not set(leg_types) <= cached.keys():
+            nodes = await self.client.filters(kind=IpamNamespace, namespace_type__values=list(leg_types))
+            cached = {**cached, **{getattr(node, "namespace_type").value: node for node in nodes}}
+            self._namespaces_by_type = cached
+        missing = [leg_type for leg_type in leg_types if leg_type not in cached]
         if missing:
             self.logger.error(f"No IpamNamespace with namespace_type {missing} — cannot provision transit legs")
             return None
-        return by_type
+        return {leg_type: cached[leg_type] for leg_type in leg_types}
 
     async def _prefix_pools(self, pool_names: dict[str, str], *, context_name: str) -> dict[str, Any] | None:
         """key -> the bootstrap CoreIPPrefixPool named pool_names[key] (data/bootstrap/23_transit_pools.yml),
@@ -620,18 +643,45 @@ class FirewallContextMixin:
         The offset follows the position among ALL members (sorted by name), not
         among the resolved ones, so a member that cannot be resolved this run
         never shifts the other's address.
+
+        At most three reads for the pair: the uplinks of the members and of
+        the devices cabled for them (_uplinks_by_device), then the cables and
+        their far ends (far_end_interfaces). All reads come first; the checks
+        then run member by member, in name order, so the members log the same
+        errors in the same order as a member-by-member lookup does.
         """
+        pairs = list(zip(sorted(devices, key=_dev_name), _MEMBER_OFFSETS, strict=False))
+        if not pairs:
+            return []
+        cabled_ids = {_dev_id(device): _cabled_device_id(device) for device, _ in pairs}
+        uplinks = await self._uplinks_by_device(
+            [device for device, _ in pairs], sorted({*cabled_ids, *cabled_ids.values()})
+        )
+        if uplinks is None:
+            return []
+        cabled_uplinks = [
+            uplinks[device_id]
+            for device_id in dict.fromkeys(cabled_ids.values())
+            if device_id in uplinks and _cable_id(uplinks[device_id])
+        ]
+        far_ends = await far_end_interfaces(self.client, cabled_uplinks, include=["device", "capabilities"])
+
         members: list[_TransitMember] = []
-        for device, offset in zip(sorted(devices, key=_dev_name), _MEMBER_OFFSETS, strict=False):
-            device_name = _dev_name(device)
-            trunk = await self._context_trunk(device_id=_dev_id(device), device_name=device_name, role="uplink")
+        for device, offset in pairs:
+            device_name, device_id = _dev_name(device), _dev_id(device)
+            trunk = self._uplink_of(uplinks, device_id, device_name=device_name)
             if trunk is None:
                 continue
-            bl_port = await self._border_service_port(spec, device, context_name=context_name)
+            uplink = self._uplink_of(uplinks, cabled_ids[device_id], device_name=device_name)
+            if uplink is None:
+                continue
+            bl_port = self._border_service_port(
+                spec, uplink, far_ends, device_name=device_name, context_name=context_name
+            )
             if bl_port is None:
                 continue
             members.append(
-                _TransitMember(name=device_name, device_id=_dev_id(device), trunk=trunk, bl_port=bl_port, offset=offset)
+                _TransitMember(name=device_name, device_id=device_id, trunk=trunk, bl_port=bl_port, offset=offset)
             )
         return members
 
@@ -973,40 +1023,56 @@ class FirewallContextMixin:
             return None
         return await self.client.get(kind=spec.context_kind, id=context_obj.id)
 
-    async def _context_trunk(self, *, device_id: str, device_name: str, role: str) -> Any | None:
-        """device_id's role interface, logging an error when it has none."""
-        try:
-            trunk_iface = await self.find_role_interface(device_id=device_id, role=role)
-        except Exception as exc:
-            self.logger.error(f"Error resolving {role} interface on {device_name}: {exc}")
-            return None
-        if trunk_iface is None:
-            self.logger.error(f"{device_name}: no role={role} interface found — cannot create a context sub-interface")
-        return trunk_iface
+    async def _uplinks_by_device(self, members: list[Any], device_ids: list[str]) -> dict[str, Any] | None:
+        """device id -> its role=uplink interface, one query for all of device_ids.
 
-    async def _border_service_port(self, spec: ContextSpec, device: Any, *, context_name: str) -> Any | None:
-        """The border service port cabled to device's uplink.
+        The first one per device, as find_role_interface picks it (interfaces
+        order by device name, then name, so a device's own order is the same
+        in one query for several devices). None when the lookup fails, logged
+        once per member like a failing per-member lookup.
+        """
+        try:
+            interfaces = await self.client.filters(
+                kind=DcimPhysicalInterface, device__ids=device_ids, role__value=_UPLINK_ROLE
+            )
+        except Exception as exc:
+            for member in members:
+                self.logger.error(f"Error resolving {_UPLINK_ROLE} interface on {_dev_name(member)}: {exc}")
+            return None
+        by_device: dict[str, Any] = {}
+        for interface in interfaces:
+            by_device.setdefault(interface.device.id, interface)
+        return by_device
+
+    def _uplink_of(self, uplinks: dict[str, Any], device_id: str, *, device_name: str) -> Any | None:
+        """device_id's uplink from _uplinks_by_device, logging an error (for member device_name) when it has none."""
+        uplink = uplinks.get(device_id)
+        if uplink is None:
+            self.logger.error(
+                f"{device_name}: no role={_UPLINK_ROLE} interface found — cannot create a context sub-interface"
+            )
+        return uplink
+
+    def _border_service_port(
+        self, spec: ContextSpec, uplink: Any, far_ends: dict[str, Any], *, device_name: str, context_name: str
+    ) -> Any | None:
+        """The border service port cabled to a member's uplink (far_ends: far_end_interfaces of the uplinks).
 
         A virtual instance has no cable of its own: its traffic leaves through
-        the uplink of the physical device hosting it, so that cable is the
-        one followed. The far end must be a border service port of the spec's
-        role (BORDER_ROLE_FOR_SERVICES) on a border leaf or edge — the one port
-        the context's legs face for this member, whatever the number of border
-        devices. Fetched with its capabilities, the context tags read from it.
+        the uplink of the physical device hosting it, so that is the uplink
+        given (_cabled_device_id). The far end must be a border service port of
+        the spec's role (BORDER_ROLE_FOR_SERVICES) on a border leaf or edge —
+        the one port the context's legs face for this member, whatever the
+        number of border devices. Fetched with its capabilities, the context
+        tags read from it.
         """
-        device_name = _dev_name(device)
         service_role = BORDER_ROLE_FOR_SERVICES[spec.role]
-        hosting = None if isinstance(device, dict) else getattr(device, "hosting_device", None)
-        cabled_device_id = getattr(hosting, "id", None) or _dev_id(device)
-        uplink = await self._context_trunk(device_id=cabled_device_id, device_name=device_name, role="uplink")
-        if uplink is None:
-            return None
-        if not getattr(getattr(uplink, "cable", None), "id", None):
+        if not _cable_id(uplink):
             self.logger.error(
                 f"{device_name}: uplink {uplink.name.value} is not cabled — no border service port for '{context_name}'"
             )
             return None
-        peer_port = await far_end_interface(self.client, uplink, include=["device", "capabilities"])
+        peer_port = far_ends.get(uplink.id)
         if peer_port is None or peer_port.role.value != service_role:
             self.logger.error(
                 f"{device_name}: uplink {uplink.name.value} is not cabled to a {service_role} service port for "
