@@ -509,10 +509,10 @@ class TopologyDataCenter(
     group_policy_enforce: BooleanOptional
     index: Integer
     routing_strategy: Dropdown
-    size: Dropdown
     status: Dropdown
     underlay_protocol: Dropdown
     controllers: RelationshipManager[ManagedController]
+    design: RelationshipAttribute[TopologyTemplateDC]
     fabric_asn_pool: RelationshipAttribute[CoreNumberPool]
     fabric_templates: RelationshipManager[TopologyElement]
     loopback_pool: RelationshipAttribute[CoreIPPrefixPool]
@@ -812,15 +812,39 @@ class DcimPlatform(CoreNode):
 
 class TopologyPod(TopologyDeployment, TopologyRackHosting, TopologyDeviceHosting):
     index: Integer
-    layout: Dropdown
     leaf_interface_sorting_method: Dropdown
     mlag_create: Dropdown
     name: String
     spine_interface_sorting_method: Dropdown
     status: Dropdown
+    design: RelationshipAttribute[TopologyTemplatePod]
     fabric_templates: RelationshipManager[TopologyElement]
     loopback_pool: RelationshipAttribute[CoreIPAddressPool]
     prefix_pool: RelationshipAttribute[CoreIPPrefixPool]
+
+
+class TopologyTemplateDC(CoreNode):
+    description: StringOptional
+    max_border_leafs_per_fabric: Integer
+    max_hyper_spines_per_fabric: Integer
+    max_pods: Integer
+    max_super_spines_per_fabric: Integer
+    name: String
+    pod_templates: RelationshipManager[TopologyTemplatePod]
+
+
+class TopologyTemplatePod(CoreNode):
+    description: StringOptional
+    max_border_leafs_per_pod: Integer
+    max_compute_racks_per_row: Integer
+    max_leafs_per_network_rack: Integer
+    max_network_racks_per_row: Integer
+    max_rows: Integer
+    max_spines_per_pod: Integer
+    max_tors_per_compute_rack: Integer
+    name: String
+    spine_downlink_ports_per_spine: IntegerOptional
+    tor_uplinks_to_spine: IntegerOptional
 
 
 class ProxyPolicy(CoreNode):

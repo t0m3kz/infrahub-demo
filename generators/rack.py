@@ -9,14 +9,13 @@ from typing import TYPE_CHECKING, Any, Literal
 if TYPE_CHECKING:
     import logging
 
-from .helpers import DeviceNameContext, DeviceNamingConfig
 from .helpers.routing import (
     RoutingStrategy,
     loopback_prefix_length,
     p2p_prefix_length,
 )
 from .helpers.template_interfaces import template_interface_names_by_role
-from .pod_config import pod_deployment_type, spine_slot_role, spine_slot_templates
+from .pod_config import pod_deployment_type, spine_slot_device_names, spine_slot_role, spine_slot_templates
 from .protocols import TopologyDataCenter, TopologyPod
 from .types import RoutingOptions, naming_convention_of
 
@@ -140,20 +139,16 @@ class RackMixin:
                 f"Rack {self.data['name']}: Cannot derive spine info - no spine/border-spine fabric_templates entries"
             )
 
-        naming = DeviceNamingConfig(strategy=naming_convention_of(dc, lower=False))
-        spine_indexes = [dc["index"], pod["index"]]
         device_names: list[str] = []
         for entry in spine_entries:
             device_names.extend(
-                naming.format_device_name(
-                    DeviceNameContext.from_indexes(
-                        fabric_name=self.fabric_name,
-                        device_role=spine_role,
-                        role_index=idx,
-                        indexes=spine_indexes,
-                    )
+                spine_slot_device_names(
+                    dc=dc,
+                    fabric_name=self.fabric_name,
+                    pod_index=pod["index"],
+                    role=spine_role,
+                    quantity=entry["quantity"],
                 )
-                for idx in range(1, entry["quantity"] + 1)
             )
         device_names = sorted(device_names)
 
@@ -283,7 +278,7 @@ class RackMixin:
             self.data["index"],
         ]
 
-        if pod_deployment_type(pod["layout"]) == "tor":
+        if pod_deployment_type(pod["design"]) == "tor":
             self.logger.info(
                 f"ToR rack {self.data['name']}: using suite={suite['index']}, row={self.data['row_index']}, "
                 f"rack_index={self.data['index']}"

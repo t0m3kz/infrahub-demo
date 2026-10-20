@@ -1,0 +1,150 @@
+---
+# Fabric designs - the envelope of a pod and of a data center
+# Referenced by TopologyPod.design and TopologyDataCenter.design. Every pool
+# size, port stride and loopback/technical prefix is derived from these maxima
+# by generators/fabric_sizing.py, before any rack exists; the physical truth
+# (suites, racks, devices) stays on LocationSuite/LocationRack.
+#
+# Pod designs ({SIZE}_{DEPLOYMENT}):
+#   max_rows x max_compute_racks_per_row x max_tors_per_compute_rack  = ToRs
+#   max_rows x max_network_racks_per_row x max_leafs_per_network_rack = leafs
+#   No ToRs -> middle_rack, ToRs and no leafs -> tor, ToRs and leafs -> mixed
+#   (the deployment type is derived, never stored).
+#   spine_downlink_ports_per_spine / tor_uplinks_to_spine: the rack budget of a
+#   design with ToRs, max_compute_racks_per_row = ports x spines /
+#   (ToRs per rack x uplinks per ToR) / rows. Absent on designs without ToRs.
+#
+# DC designs (S, M, L, XL): max pods and the DC-level tiers. Every DC design
+# lists all six pod designs; a pod's design must be one of its DC's.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyTemplatePod
+  data:
+    - name: "S_MIDDLE"
+      description: "Middle-rack pod: 2 rows of 8 compute racks, 1 network rack per row with up to 4 leafs, 2 spines."
+      max_rows: 2
+      max_compute_racks_per_row: 8
+      max_network_racks_per_row: 1
+      max_leafs_per_network_rack: 4
+      max_tors_per_compute_rack: 0
+      max_spines_per_pod: 2
+      max_border_leafs_per_pod: 1
+
+    - name: "S_TOR"
+      description: "ToR pod: 2 rows of 8 compute racks with 2 ToRs each cabled to up to 4 spines."
+      max_rows: 2
+      max_compute_racks_per_row: 8
+      max_network_racks_per_row: 0
+      max_leafs_per_network_rack: 0
+      max_tors_per_compute_rack: 2
+      max_spines_per_pod: 4
+      max_border_leafs_per_pod: 1
+      spine_downlink_ports_per_spine: 32
+      tor_uplinks_to_spine: 4
+
+    - name: "S_MIXED"
+      description: "Mixed pod: 2 rows of 8 compute racks with 2 ToRs, 1 network rack per row with 2 leafs, 4 spines."
+      max_rows: 2
+      max_compute_racks_per_row: 8
+      max_network_racks_per_row: 1
+      max_leafs_per_network_rack: 2
+      max_tors_per_compute_rack: 2
+      max_spines_per_pod: 4
+      max_border_leafs_per_pod: 1
+      spine_downlink_ports_per_spine: 32
+      tor_uplinks_to_spine: 4
+
+    - name: "S_BORDER_SPINE_POD"
+      description: "Micro-fabric pod: 1 network rack with up to 8 leafs, 2 (border-)spines, no compute racks."
+      max_rows: 1
+      max_compute_racks_per_row: 0
+      max_network_racks_per_row: 1
+      max_leafs_per_network_rack: 8
+      max_tors_per_compute_rack: 0
+      max_spines_per_pod: 2
+      max_border_leafs_per_pod: 0
+
+    - name: "M_MIXED"
+      description: "Mixed pod: 4 rows of 8 compute racks with 2 ToRs, 1 network rack per row with 2 leafs, 3 spines."
+      max_rows: 4
+      max_compute_racks_per_row: 8
+      max_network_racks_per_row: 1
+      max_leafs_per_network_rack: 2
+      max_tors_per_compute_rack: 2
+      max_spines_per_pod: 3
+      max_border_leafs_per_pod: 1
+      spine_downlink_ports_per_spine: 64
+      tor_uplinks_to_spine: 3
+
+    - name: "M_MIDDLE"
+      description: "Middle-rack pod: 4 rows of 8 compute racks, 1 network rack per row with up to 4 leafs, 3 spines."
+      max_rows: 4
+      max_compute_racks_per_row: 8
+      max_network_racks_per_row: 1
+      max_leafs_per_network_rack: 4
+      max_tors_per_compute_rack: 0
+      max_spines_per_pod: 3
+      max_border_leafs_per_pod: 1
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyTemplateDC
+  data:
+    - name: "S"
+      description: "Micro-fabric, pods back-to-back (no super-spine tier), no DC-level border-leaf tier. Up to 2 pods."
+      max_pods: 2
+      max_super_spines_per_fabric: 0
+      max_hyper_spines_per_fabric: 0
+      max_border_leafs_per_fabric: 0
+      pod_templates:
+        - "S_MIDDLE"
+        - "S_TOR"
+        - "S_MIXED"
+        - "S_BORDER_SPINE_POD"
+        - "M_MIXED"
+        - "M_MIDDLE"
+
+    - name: "M"
+      description: "Pods back-to-back (no super-spine tier), with a DC-level border-leaf tier. Up to 4 pods."
+      max_pods: 4
+      max_super_spines_per_fabric: 0
+      max_hyper_spines_per_fabric: 0
+      max_border_leafs_per_fabric: 2
+      pod_templates:
+        - "S_MIDDLE"
+        - "S_TOR"
+        - "S_MIXED"
+        - "S_BORDER_SPINE_POD"
+        - "M_MIXED"
+        - "M_MIDDLE"
+
+    - name: "L"
+      description: "Classic 3-tier Clos: leaf -> spine -> super-spine. Up to 8 pods."
+      max_pods: 8
+      max_super_spines_per_fabric: 4
+      max_hyper_spines_per_fabric: 0
+      max_border_leafs_per_fabric: 2
+      pod_templates:
+        - "S_MIDDLE"
+        - "S_TOR"
+        - "S_MIXED"
+        - "S_BORDER_SPINE_POD"
+        - "M_MIXED"
+        - "M_MIDDLE"
+
+    - name: "XL"
+      description: "3-tier Clos plus a hyper-spine tier above the super-spines. Up to 16 pods."
+      max_pods: 16
+      max_super_spines_per_fabric: 4
+      max_hyper_spines_per_fabric: 2
+      max_border_leafs_per_fabric: 4
+      pod_templates:
+        - "S_MIDDLE"
+        - "S_TOR"
+        - "S_MIXED"
+        - "S_BORDER_SPINE_POD"
+        - "M_MIXED"
+        - "M_MIDDLE"

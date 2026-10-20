@@ -88,7 +88,7 @@ class EndpointPodData(TypedDict, total=False):
 
     id: str
     name: str
-    layout: str
+    design: dict[str, Any]
     index: int
     parent: dict[str, Any]
 
@@ -189,7 +189,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, PoolMixin, CablingMixin
         rack = self.data["rack"]
         assert rack is not None
         pod = rack.get("pod") or {}
-        if "layout" not in pod:
+        if "design" not in pod:
             # Same shape as RackGenerator's guard: LocationRack.pod takes any
             # TopologyRackHosting peer, and endpoint.gql's PodFields fragment is on
             # TopologyPod, so a colocation cage rack (pod = TopologyColocationZone)
@@ -205,7 +205,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, PoolMixin, CablingMixin
                 rack.get("name"),
             )
             return
-        deployment_type = pod_deployment_type(pod["layout"])
+        deployment_type = pod_deployment_type(pod["design"])
         self.pod_name = pod["name"].lower()
         pod_id = pod["id"]
         dc = pod["parent"]

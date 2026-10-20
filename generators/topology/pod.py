@@ -9,8 +9,15 @@ from utils.data_cleaning import clean_data
 
 from ..common import CablingOptions, CommonGenerator, DeviceOptions, RoutingOptions
 from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
-from ..dc_config import host_bits_to_prefix_length, resolve_dc_size_layout
 from ..devices import DeviceMixin
+from ..fabric_sizing import (
+    host_bits_to_prefix_length,
+    max_sibling_spines,
+    pod_leafs,
+    pod_loopback_bits,
+    pod_technical_bits,
+    pod_tors,
+)
 from ..helpers.naming import DeviceNamingConfig
 from ..helpers.rack import expected_device_names
 from ..helpers.routing import (
@@ -20,7 +27,13 @@ from ..helpers.routing import (
     underlay_pool_is_ipv6,
 )
 from ..helpers.template_interfaces import template_interface_names_by_role
-from ..pod_config import resolve_pod_layout, spine_slot_role, spine_slot_templates, templates_by_role
+from ..pod_config import (
+    pod_deployment_type,
+    spine_slot_device_names,
+    spine_slot_role,
+    spine_slot_templates,
+    templates_by_role,
+)
 from ..pools import PoolMixin
 from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, TopologyPod
 from ..routing import RoutingMixin
@@ -78,7 +91,7 @@ class TopologyPodParentData(TypedDict, total=False):
     routing_strategy: str
     underlay_protocol: str
     fabric_templates: list[dict[str, Any]]
-    size: str
+    design: dict[str, Any]
     fabric_asn_pool: dict[str, Any] | None
     management_pool: dict[str, Any] | None
     devices: list[Any]
@@ -97,7 +110,7 @@ class TopologyPodData(TypedDict, total=False):
     id: str
     name: str
     index: int
-    layout: str
+    design: dict[str, Any]
     leaf_interface_sorting_method: str
     spine_interface_sorting_method: str
     fabric_templates: list[dict[str, Any]]
@@ -190,6 +203,10 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
                         return
                     self.data = cast(TopologyPodData, deployment_list[0])
                     dc = self.data["parent"]
+            # This pod's design (TopologyTemplatePod) and its DC's
+            # (TopologyTemplateDC): the envelope every check and pool size reads.
+            design = self.data["design"]
+            dc_design = dc["design"]
         except (ValueError, KeyError, IndexError) as exc:
             self.logger.error(f"Generation failed due to {exc}")
             return
@@ -204,9 +221,7 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
         self.pod_name = pod_name.lower()
         self.fabric_name = dc_name.lower()
 
-        design = resolve_pod_layout(self.data["layout"])
-
-        deployment_type = design["deployment_type"]
+        deployment_type = pod_deployment_type(design)
 
         # spine and border-spine fill the same slot in a pod's fabric — never
         # both (border-spine collapses spine+border-leaf into one device for
@@ -228,6 +243,25 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
             self.logger.error(
                 f"Pod {pod_name} requests {spine_count} {spine_role}s "
                 f"but pod design '{design['name']}' allows at most {design['max_spines_per_pod']}"
+            )
+            return
+
+        # The DC design's envelope, enforced before any write: the pod's design
+        # must be one the DC design may host, and the DC may not hold more pods
+        # than max_pods (this pod counted once, so a re-run is not refused).
+        allowed_designs = sorted(template["name"] for template in dc_design["pod_templates"])
+        if design["name"] not in allowed_designs:
+            self.logger.error(
+                f"Pod {pod_name}: design '{design['name']}' is not one of DC {dc_name}'s design "
+                f"'{dc_design['name']}' pod_templates {allowed_designs}"
+            )
+            return
+        siblings = await self.client.filters(kind=TopologyPod, parent__ids=[dc_id])
+        pod_count = len({sibling.id for sibling in siblings} | {pod_id})
+        if pod_count > dc_design["max_pods"]:
+            self.logger.error(
+                f"Pod {pod_name}: DC {dc_name} holds {pod_count} pods but its design '{dc_design['name']}' "
+                f"allows at most {dc_design['max_pods']}"
             )
             return
 
@@ -264,23 +298,20 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
         if super_spine_devices and not await self._wait_for_super_spine_overlay(super_spine_devices, dc_id, pod_name):
             return
 
-        # Fixed per-pod pool sizes from this pod's own layout (see
-        # pod_config.py's technical_host_bits/loopback_host_bits) — sized
-        # generously for the layout's own worst-case device count, instead of
-        # computed per pod from its live spine/leaf/tor counts. Host bits are
-        # protocol-agnostic — the real prefix length depends on this DC's
-        # underlay_protocol (IPv4 /32 vs IPv6 /128 address space).
+        # Per-pod pool sizes from this pod's design envelope in its DC's design
+        # (generators/fabric_sizing.py), never from its live spine/leaf/tor
+        # counts. Host bits are protocol-agnostic — the real prefix length
+        # depends on this DC's underlay_protocol (IPv4 /32 vs IPv6 /128).
         underlay_protocol = dc.get("underlay_protocol", "ipv6")
-        dc_design = resolve_dc_size_layout(dc["size"])
 
         # Each pool's address family is the one its DC-level parent was sliced
         # from (a dual-stack pod: IPv6 technical, IPv4 loopback).
         pool_sizes = {
             "technical": host_bits_to_prefix_length(
-                design["technical_host_bits"], ipv6=underlay_pool_is_ipv6(underlay_protocol, "technical")
+                pod_technical_bits(design, dc_design), ipv6=underlay_pool_is_ipv6(underlay_protocol, "technical")
             ),
             "loopback": host_bits_to_prefix_length(
-                design["loopback_host_bits"], ipv6=underlay_pool_is_ipv6(underlay_protocol, "loopback")
+                pod_loopback_bits(design), ipv6=underlay_pool_is_ipv6(underlay_protocol, "loopback")
             ),
         }
 
@@ -378,6 +409,7 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
             )
 
             await self._cable_to_existing_sibling_pods(
+                siblings=siblings,
                 spines=spines,
                 spine_interfaces=spine_interfaces,
                 spine_role=spine_role,
@@ -389,8 +421,8 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
             )
 
         if not skip_cabling:
-            dc_max_spines = dc_design["max_spines_per_pod"]
-            cabling_offset = (pod_index - 1) * dc_max_spines
+            # Every pod owns the widest pod design's spine count of super-spine ports.
+            cabling_offset = (pod_index - 1) * max_sibling_spines(dc_design)
             p2p_pairs = await self.create_cabling(
                 bottom_devices=spines,
                 bottom_interfaces=spine_interfaces,
@@ -558,7 +590,7 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
         to capacity; border-leaf's offset starts exactly where that capacity
         ends. No-ops if this pod has no border-leaf devices (the common case
         — most pods don't host any)."""
-        max_border_leafs_per_fabric = resolve_dc_size_layout(dc["size"])["max_border_leafs_per_fabric"]
+        max_border_leafs_per_fabric = dc["design"]["max_border_leafs_per_fabric"]
         if max_border_leafs_per_fabric <= 0:
             return
         naming = DeviceNamingConfig(strategy=naming_convention_of(dc, lower=False))
@@ -599,11 +631,8 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
             )
             return
 
-        design = resolve_pod_layout(self.data["layout"])
-        if design["deployment_type"] == "tor":
-            offset = design["rows"] * design["compute_racks_per_row"] * design["max_tors_per_compute_rack"]
-        else:
-            offset = design["rows"] * design["network_racks_per_row"] * design["max_leafs_per_network_rack"]
+        design = self.data["design"]
+        offset = pod_tors(design) if pod_deployment_type(design) == "tor" else pod_leafs(design)
 
         p2p_pairs = await self.create_cabling(
             bottom_devices=border_leaf_names,
@@ -631,6 +660,7 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
 
     async def _cable_to_existing_sibling_pods(
         self,
+        siblings: list[Any],
         spines: list[str],
         spine_interfaces: list[str],
         spine_role: str,
@@ -663,7 +693,6 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
         """
         pod_name = self.data["name"]
         pod_index = self.data["index"]
-        siblings = await self.client.filters(kind=TopologyPod, parent__ids=[dc["id"]])
         lower_siblings = [s for s in siblings if s.index.value < pod_index]
         if not lower_siblings:
             self.logger.info(f"Pod {pod_name}: no lower-index sibling pods yet — nothing to mesh-cable")
@@ -675,6 +704,9 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
             )
 
         routing_opts = _routing_options(dc, dc_asn_pool_id, pod_spine_as_id)
+        # A sibling's design is not in this query, so look up the most spines
+        # any pod design of this DC may hold; only the ones that exist match.
+        sibling_spine_capacity = max_sibling_spines(dc["design"])
         sorted_lower_siblings = sorted(lower_siblings, key=lambda s: s.index.value)
         for sibling_slot, sibling in enumerate(sorted_lower_siblings):
             # Retry: during INITIAL bulk DC creation, every pod's TopologyPod object
@@ -685,13 +717,21 @@ class PodTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingM
             # interface-readiness retry.
             sibling_spines: list[str] = []
             sibling_uplink_names: list[str] = []
+            # By name, not deployment: a border-spine is deployed to the DC.
+            candidate_names = spine_slot_device_names(
+                dc=dc,
+                fabric_name=self.fabric_name,
+                pod_index=sibling.index.value,
+                role=spine_role,
+                quantity=sibling_spine_capacity,
+            )
             for attempt in range(_SIBLING_SPINE_MAX_RETRIES):
                 sibling_spines_devices = await self.client.filters(
                     kind=DcimPhysicalDevice,
-                    deployment__ids=[sibling.id],
+                    name__values=candidate_names,
                     role__value=spine_role,
                 )
-                sibling_spines = [s.name.value for s in sibling_spines_devices]
+                sibling_spines = sorted(s.name.value for s in sibling_spines_devices)
                 if sibling_spines:
                     sibling_uplinks = await self.client.filters(
                         kind=DcimPhysicalInterface,

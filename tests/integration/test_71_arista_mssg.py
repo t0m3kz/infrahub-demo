@@ -53,8 +53,11 @@ from .test_helpers import (
     diff_snapshots,
     fetch_dc_topology,
     fetch_endpoint_cabling,
+    fetch_fabric_pools,
     fetch_generator_runs,
     fetch_object_counts,
+    find_fabric_design_errors,
+    find_fabric_pool_errors,
     render_device_config,
     snapshot_topology,
 )
@@ -552,6 +555,31 @@ class TestAristaMssg(TestInfrahubDockerWithClient):
         )
         virtual = [p["name"]["value"] for p in pairs if p["virtual_peer_link"]["value"]]
         assert not virtual, f"virtual MLAG peer link(s) {virtual}: arista_eos_mlag.j2 renders back-to-back only"
+
+    @pytest.mark.order(432)
+    @pytest.mark.dependency(scope="session", depends=["mssg_fabric"])
+    @pytest.mark.asyncio
+    async def test_03b_fabric_design_and_ipv4_pool_sizes(
+        self, async_client_main: InfrahubClient, scenario_branch: str
+    ) -> None:
+        """DC14 and its pods keep their design rules, and DC14's pools — an IPv4 underlay, unlike
+        30_all's IPv6 DCs — are exactly the IPv4 slices the bootstrap designs derive.
+
+        Scoped to DC14: other suites' DCs a branch from main inherits are not this scope's."""
+        logging.info("=== %s - Step 3b: Fabric Design and IPv4 Pool Sizes ===", SCENARIO_NAME)
+
+        inventory = await fetch_fabric_pools(client=async_client_main, branch=scenario_branch)
+        dcs = [dc for dc in inventory["dcs"] if dc["name"] == MSSG_DC]
+        assert len(dcs) == 1, f"{len(dcs)} data center(s) named {MSSG_DC} on branch '{scenario_branch}'"
+        assert dcs[0]["underlay_protocol"] == "ipv4", (
+            f"{MSSG_DC} underlay is {dcs[0]['underlay_protocol']}, the scope declares ipv4"
+        )
+        scoped = {"dcs": dcs, "pods": [pod for pod in inventory["pods"] if pod["dc_id"] == dcs[0]["id"]]}
+        assert scoped["pods"], f"{MSSG_DC} has no pod on branch '{scenario_branch}'"
+
+        errors = find_fabric_design_errors(scoped) + find_fabric_pool_errors(scoped)
+        assert not errors, f"{MSSG_DC} fabric design/pools are wrong:\n" + "\n".join(f"  - {e}" for e in errors)
+        logging.info("%s (%s, design %s): %s", MSSG_DC, dcs[0]["underlay_protocol"], dcs[0]["design"], dcs[0]["pools"])
 
     @pytest.mark.order(433)
     @pytest.mark.dependency(scope="session", name="mssg_tenant_load", depends=["mssg_fabric"])

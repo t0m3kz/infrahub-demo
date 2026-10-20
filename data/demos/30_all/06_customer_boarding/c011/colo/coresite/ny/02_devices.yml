@@ -8,7 +8,7 @@
 # fabric generator or device check touches it — colocation kit is hand-modelled
 # end to end, which is also why 03_cabling.yml declares the cables explicitly
 # instead of leaving it to add_endpoint (that generator needs
-# rack.pod.layout, and a TopologyColocationZone has none).
+# rack.pod.design, and a TopologyColocationZone has none).
 #
 # The hosts are in the endpoints group all the same. They carry role=endpoint
 # from their template, so trigger-endpoint-generator-on-created fires add_endpoint

@@ -405,6 +405,14 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: pool_utilization
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/pool_utilization.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: reference_fabric
     tests:
       - name: syntax_check

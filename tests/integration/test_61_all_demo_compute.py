@@ -13,6 +13,11 @@ distinct access-leafs, and the two hosts in a DC sit in different rack rows so
 their access-leaf pairs are disjoint. A colocation cage host is dual-homed to
 one switch — deliberately, as the shared-fate counter-example.
 
+The last steps check the fabric envelope under it: every DC and pod has a
+design within its DC design's limits, every fabric pool slice is exactly the
+size generators/fabric_sizing.py derives from the bootstrap designs, and
+CheckPoolUtilization finds every pool with room to spare.
+
 Runs against the branch test_59 builds; it never loads data of its own.
 """
 
@@ -20,6 +25,8 @@ import logging
 
 import pytest
 from infrahub_sdk import InfrahubClient
+
+from checks.pool_utilization import CheckPoolUtilization
 
 from .conftest import TestInfrahubDockerWithClient
 from .test_constants import (
@@ -43,6 +50,9 @@ from .test_helpers import (
     fetch_application_graph,
     fetch_dc_topology,
     fetch_endpoint_cabling,
+    fetch_fabric_pools,
+    find_fabric_design_errors,
+    find_fabric_pool_errors,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -337,3 +347,86 @@ class TestAllDemoCompute(TestInfrahubDockerWithClient):
         total_components = sum(len(app["components"]) for app in applications)
         logging.info("Application graph verified: %d app(s), %d component(s)", len(applications), total_components)
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)
+
+    # ------------------------------------------------------------------
+    # Fabric designs and the pools sized from them
+    # ------------------------------------------------------------------
+
+    @pytest.mark.order(393)
+    @pytest.mark.dependency(scope="session", name="all_demo_fabric_designs", depends=["all_demo_inventory"])
+    @pytest.mark.asyncio
+    async def test_05_verify_fabric_designs(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """Every DC and pod on the branch has a design, each pod's design is one of its DC
+        design's pod_templates, and no DC holds more pods than its design's max_pods.
+
+        Every DC on the branch, not only 30_all's three: a DC another suite merged
+        into main is built by the same generators and must keep the same rules.
+        """
+        logging.info("=== %s - Step 5: Fabric Designs ===", SCENARIO_NAME)
+
+        inventory = await fetch_fabric_pools(client=async_client_main, branch=scenario_branch)
+        missing = sorted(set(ALL_DEMO_DC_NAMES) - {dc["name"] for dc in inventory["dcs"]})
+        assert not missing, f"30_all DC(s) {missing} not found on branch '{scenario_branch}'"
+
+        errors = find_fabric_design_errors(inventory)
+        assert not errors, f"Fabric designs are wrong on branch '{scenario_branch}':\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
+        for dc in sorted(inventory["dcs"], key=lambda item: item["name"]):
+            pods = sorted(f"{pod['name']}={pod['design']}" for pod in inventory["pods"] if pod["dc_id"] == dc["id"])
+            logging.info("%s: design %s (max %s pods), pods %s", dc["name"], dc["design"], dc["max_pods"], pods)
+
+    @pytest.mark.order(393)
+    @pytest.mark.dependency(scope="session", name="all_demo_fabric_pools", depends=["all_demo_fabric_designs"])
+    @pytest.mark.asyncio
+    async def test_06_verify_fabric_pool_sizes(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """Every DC pool and every pod pool slice has exactly the family and prefix length
+        generators/fabric_sizing.py derives for its (DC design, pod design) and the DC's
+        underlay_protocol, from the bootstrap designs (test_constants.expected_*_pool_slices),
+        and every pod slice sits inside its DC's slice of the same pool.
+        """
+        logging.info("=== %s - Step 6: Fabric Pool Sizes ===", SCENARIO_NAME)
+
+        inventory = await fetch_fabric_pools(client=async_client_main, branch=scenario_branch)
+        errors = find_fabric_pool_errors(inventory)
+        assert not errors, f"Fabric pool slices are wrong on branch '{scenario_branch}':\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
+        for dc in sorted(inventory["dcs"], key=lambda item: item["name"]):
+            logging.info("%s (%s): %s", dc["name"], dc["underlay_protocol"], dc["pools"])
+
+    @pytest.mark.order(393)
+    @pytest.mark.dependency(scope="session", depends=["all_demo_inventory"])
+    @pytest.mark.asyncio
+    async def test_07_check_pool_utilization_passes(
+        self,
+        async_client_main: InfrahubClient,
+        scenario_branch: str,
+    ) -> None:
+        """CheckPoolUtilization, run in-process on the settled branch, reports no ERROR
+        and no WARNING: no pool is >= 80 % used and every next allocation is possible.
+
+        The check is targetless and reads every DC and pod on the branch.
+        """
+        logging.info("=== %s - Step 7: CheckPoolUtilization ===", SCENARIO_NAME)
+
+        check = CheckPoolUtilization(branch=scenario_branch, client=async_client_main, params={})
+        passed = await check.run()
+
+        messages = [str(entry.get("message") or "") for entry in check.logs]
+        for message in messages:
+            logging.info("check: %s", message)
+        errors = [str(entry.get("message") or "") for entry in check.logs if entry.get("level") == "ERROR"]
+        warnings = [message for message in messages if message.startswith("WARNING:")]
+        assert passed and not errors and not warnings, (
+            f"CheckPoolUtilization on branch '{scenario_branch}' is not clean:\n"
+            + "\n".join(f"  - {e}" for e in [*errors, *warnings])
+        )

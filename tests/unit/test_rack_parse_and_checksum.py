@@ -15,7 +15,7 @@ import pytest
 
 from generators.helpers.rack import parse_rack_data
 from generators.topology.rack import RackGenerator, TopologyRackData
-from tests.unit.simulators.pod_layouts import LAYOUT_FOR_DEPLOYMENT_TYPE
+from tests.unit.simulators.fabric_designs import DESIGN_FOR_DEPLOYMENT_TYPE, pod_design
 
 # ---------------------------------------------------------------------------
 # Helpers (shared with test_rack_offset_calculation.py)
@@ -34,7 +34,7 @@ def _build_rack_generator(
     leafs: list[dict[str, Any]] | None = None,
 ) -> Any:
     """Return a RackGenerator typed as Any so ty allows mock attribute assignments."""
-    parent = {"id": "parent-1", "name": "DC1", "index": 1, "size": "S"}
+    parent = {"id": "parent-1", "name": "DC1", "index": 1}
     pod = {
         "id": "pod-1",
         "name": "pod-1",
@@ -43,7 +43,7 @@ def _build_rack_generator(
         "leaf_interface_sorting_method": "top_down",
         "spine_interface_sorting_method": "bottom_up",
         "fabric_templates": [{"role": "spine", "quantity": 2, "template": {"id": "tmpl-spine"}}],
-        "layout": LAYOUT_FOR_DEPLOYMENT_TYPE[deployment_type],
+        "design": pod_design(DESIGN_FOR_DEPLOYMENT_TYPE[deployment_type]),
     }
     suite = {"index": 1}
     rack = {
@@ -115,7 +115,7 @@ class TestParseRackData:
                 "id": "pod-1",
                 "name": "pod-1",
                 "index": 1,
-                "layout": "S_MIXED",
+                "design": pod_design("S_MIXED"),
                 "leaf_interface_sorting_method": "top_down",
                 "spine_interface_sorting_method": "bottom_up",
                 "spine_template": {"id": "tmpl-1", "interfaces": []},
@@ -125,7 +125,6 @@ class TestParseRackData:
                     "id": "dc-1",
                     "name": "DC1",
                     "index": 1,
-                    "size": "S",
                     "naming_convention": "standard",
                     "management_pool": None,
                     "fabric_interface_sorting_method": "top_down",
@@ -157,7 +156,7 @@ class TestParseRackData:
                                     "id": "pod-2",
                                     "name": {"value": "pod-2"},
                                     "index": {"value": 2},
-                                    "layout": {"value": "S_MIXED"},
+                                    "design": {"node": {"name": {"value": "S_MIXED"}}},
                                     "leaf_interface_sorting_method": {"value": "bottom_up"},
                                     "spine_interface_sorting_method": {"value": "top_down"},
                                     "spine_template": {"node": {"id": "tmpl-2", "interfaces": {"edges": []}}},
@@ -168,7 +167,6 @@ class TestParseRackData:
                                             "id": "dc-2",
                                             "name": {"value": "DC2"},
                                             "index": {"value": 2},
-                                            "size": {"value": "S"},
                                             "naming_convention": {"value": "standard"},
                                             "management_pool": None,
                                             "fabric_interface_sorting_method": {"value": "top_down"},

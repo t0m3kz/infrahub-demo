@@ -23,7 +23,7 @@ query customer_dc($name: String!) {
             name { value }
             ... on TopologyDataCenter {
               connectivity_mode { value }
-              size { value }
+              design { node { name { value } } }
               firewall_devices: devices(role__value: "firewall") {
                 edges {
                   node {

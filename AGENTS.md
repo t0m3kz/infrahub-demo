@@ -265,6 +265,10 @@ class MyCheck(InfrahubCheck):
   holds `dedicated_firewall`, `dedicated_loadbalancer`, `max_segments`, `ports_25g` and `ports_100g` (0 = no
   host-facing ports of that speed). `checks/customer_quota.py` enforces the segment and port numbers; a footprint
   with no `design` is not metered.
+- **Fabric design**: `TopologyDataCenter.design` (`TopologyTemplateDC`: S, M, L, XL) and `TopologyPod.design`
+  (`TopologyTemplatePod`: S_MIDDLE, S_TOR, ...) are required and hold only the envelope (`max_*`); the rows live in
+  `data/bootstrap/14b_fabric_templates.yml`. Every fabric pool size is derived from them by
+  `generators/fabric_sizing.py`, and a pod's design must be one of its DC design's `pod_templates`.
 - **Capability edges**: a capability reaches devices via `ManagedGenericDevice` and interfaces via
   `ManagedGenericInterfaces`. Inherit the second only when something reads the interface edge.
 

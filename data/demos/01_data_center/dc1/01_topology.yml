@@ -6,7 +6,7 @@ spec:
   data:
     - name: DC1
       index: 1
-      size: L
+      design: L
       routing_strategy: ebgp-ebgp
       underlay_protocol: ipv6
       naming_convention: standard
@@ -24,7 +24,7 @@ spec:
         kind: TopologyPod
         data:
           - index: 1
-            layout: S_MIDDLE
+            design: S_MIDDLE
             fabric_templates:
               - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             member_of_groups:
@@ -51,7 +51,7 @@ spec:
                     - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MR"]
                     - ["2", "l2-leaf", "N9K-C9336C-FX2_TOR"]
           - index: 2
-            layout: S_MIDDLE
+            design: S_MIDDLE
             fabric_templates:
               - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             member_of_groups:
