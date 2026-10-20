@@ -215,8 +215,8 @@ def test_the_orange_access_pe_has_a_customer_port_for_every_sdwan_office() -> No
 
 def test_the_orange_isp_topology_is_the_foundation_isp_of_its_access_pe() -> None:
     """The generator resolves the ISP topology of the internet provider (Orange, P019); its one device is the PE."""
-    (topology,) = [e for _, e in _objects(_INTERNET / "01_topology.yml", "TopologyExternal")]
-    isps = {c["name"]: c for c in topology["children"]["data"]}
+    isps = {e["name"]: e for _, e in _objects(_INTERNET / "01_topology.yml", "TopologyExternalProviders")}
+    assert {isp["parent"] for isp in isps.values()} == {"Internet"}
     assert isps["ISP-ORANGE"]["provider"] == "P019"
     (device,) = [e for _, e in _objects(_INTERNET, "DcimPhysicalDevice")]
     assert device["deployment"] == "ISP-ORANGE" and device["owner"] == "P019"

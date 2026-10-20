@@ -1,6 +1,6 @@
 ---
 # The internet, as one topology: every ISP is a TopologyExternalProviders under
-# a single TopologyExternal, so their provider edges sit together in one place
+# the "Internet" label, so their provider edges sit together in one place
 # instead of being scattered across the colocation metros they happen to meet
 # us in. Lumen and Cogent sell transit to the cages (../08_interconnects/06_internet/);
 # Orange is the access ISP of the SD-WAN offices (02_access_edge.yml).
@@ -18,22 +18,20 @@
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: TopologyExternal
+  kind: TopologyExternalProviders
   data:
-    - name: INTERNET
+    - name: ISP-LUMEN
       parent: "Internet"
-      children:
-        kind: TopologyExternalProviders
-        data:
-          - name: ISP-LUMEN
-            provider_type: internet
-            status: active
-            provider: "P014"
-          - name: ISP-COGENT
-            provider_type: internet
-            status: active
-            provider: "P023"
-          - name: ISP-ORANGE
-            provider_type: internet
-            status: active
-            provider: "P019"
+      provider_type: internet
+      status: active
+      provider: "P014"
+    - name: ISP-COGENT
+      parent: "Internet"
+      provider_type: internet
+      status: active
+      provider: "P023"
+    - name: ISP-ORANGE
+      parent: "Internet"
+      provider_type: internet
+      status: active
+      provider: "P019"
