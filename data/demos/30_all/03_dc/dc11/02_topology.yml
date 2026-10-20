@@ -13,7 +13,7 @@ spec:
     - name: DC11
       parent: "DC"
       index: 11
-      size: L
+      design: L
       fabric_templates:
         - ["2", "super-spine", "N9K-C9336C-FX2_SUPER_SPINE"]
         - ["2", "border-leaf", "N9K-C9336C-FX2_BORDER_LEAF"]
@@ -33,7 +33,7 @@ spec:
           # holding the application servers (05_servers.yml). POD-2 stays
           # greenfield — spare fabric capacity.
           - index: 1
-            layout: S_MIDDLE
+            design: S_MIDDLE
             fabric_templates:
               - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             mlag_create: virtual
@@ -74,7 +74,7 @@ spec:
                   parent: lyo-1-s-1
                   member_of_groups: [topologies_rack]
           - index: 2
-            layout: S_MIDDLE
+            design: S_MIDDLE
             fabric_templates:
               - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             member_of_groups:

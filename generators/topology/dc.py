@@ -8,14 +8,20 @@ from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator, DeviceOptions
 from ..connections import BORDER_ROLE_FOR_SERVICES, CablingMixin
-from ..dc_config import host_bits_to_prefix_length, resolve_dc_size_layout
 from ..devices import DeviceMixin
+from ..fabric_sizing import (
+    dc_loopback_bits,
+    dc_management_bits,
+    dc_technical_bits,
+    fabric_loopback_bits,
+    host_bits_to_prefix_length,
+)
 from ..firewall_context import FIREWALL_CONTEXT, LOADBALANCER_CONTEXT
 from ..helpers import name_to_asn_range
 from ..helpers.pools import SITE_VNI_END, SITE_VNI_START
 from ..helpers.routing import RoutingStrategy, loopback_prefix_length, p2p_prefix_length, underlay_pool_is_ipv6
 from ..helpers.template_interfaces import template_interface_names_by_role
-from ..pod_config import POD_LAYOUTS, templates_by_role
+from ..pod_config import templates_by_role
 from ..pools import PoolMixin
 from ..protocols import (
     TopologyDataCenter,
@@ -46,7 +52,7 @@ class TopologyDcData(TypedDict, total=False):
     id: str
     name: str
     index: int
-    size: str
+    design: dict[str, Any]
     naming_convention: str
     connectivity_mode: str
     underlay_protocol: str
@@ -86,7 +92,13 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
             dc_id = self.data["id"]
             dc_name = self.data["name"]
             dc_index = self.data["index"]
-            dc_design = resolve_dc_size_layout(self.data["size"])
+            # The DC's fabric design (TopologyTemplateDC, with the pod designs it
+            # may host): every DC pool is sized from its envelope.
+            dc_design = self.data["design"]
+            technical_bits = dc_technical_bits(dc_design)
+            loopback_bits = dc_loopback_bits(dc_design)
+            management_bits = dc_management_bits(dc_design)
+            tier_loopback_bits = fabric_loopback_bits(dc_design)
         except (ValueError, KeyError, IndexError) as exc:
             self.logger.error(f"Generation failed due to {exc}")
             return
@@ -97,12 +109,12 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
 
         self.logger.info(f"Processing Data Center: {dc_name}")
 
-        # include=["layout"] lets _generate_dc_scoped_fabric_devices read each
-        # pod's own max_border_leafs_per_pod cap via _pod_border_leaf_capacity.
+        # include=["design"] lets _create_border_leaf_devices match each pod's
+        # design to the DC design's pod_templates (its max_border_leafs_per_pod).
         # The pods are read, never tracked: they are data, not this run's
         # output, and a tracked pod that moved to another DC would be deleted
         # by this DC's next run.
-        existing_pods = await self.client.filters(kind=TopologyPod, parent__ids=[dc_id], include=["layout"])
+        existing_pods = await self.client.filters(kind=TopologyPod, parent__ids=[dc_id], include=["design"])
         self._existing_pods = existing_pods
 
         self.deployment_id = dc_id  # Store for cable linking
@@ -120,19 +132,18 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
 
         underlay_protocol = self.data.get("underlay_protocol", "ipv6")
 
-        # The design table stores the technical/loopback pool sizes as IPv6
-        # prefix lengths; each is converted to the address family its pool is
-        # actually sliced from (underlay_pool_is_ipv6 — also what decides the
-        # parent pool in allocate_resource_pools), so an IPv4 or dual-stack DC
-        # never requests a /117 from an IPv4 parent. Management is always IPv4
-        # and stored as such.
+        # The sizes are host bits (generators/fabric_sizing.py); each becomes a
+        # prefix length in the address family its pool is actually sliced from
+        # (underlay_pool_is_ipv6 — also what decides the parent pool in
+        # allocate_resource_pools), so an IPv4 or dual-stack DC never requests an
+        # IPv6-sized prefix from an IPv4 parent. Management is always IPv4.
         technical_prefix = host_bits_to_prefix_length(
-            128 - dc_design["technical_prefix_length"], ipv6=underlay_pool_is_ipv6(underlay_protocol, "technical")
+            technical_bits, ipv6=underlay_pool_is_ipv6(underlay_protocol, "technical")
         )
         loopback_prefix = host_bits_to_prefix_length(
-            128 - dc_design["loopback_prefix_length"], ipv6=underlay_pool_is_ipv6(underlay_protocol, "loopback")
+            loopback_bits, ipv6=underlay_pool_is_ipv6(underlay_protocol, "loopback")
         )
-        management_prefix = dc_design["management_prefix_length"]
+        management_prefix = host_bits_to_prefix_length(management_bits, ipv6=False)
 
         # Always (re-)allocate every DC pool on every run — never skip an object just
         # because it already exists. allocate_resource_pools()'s identifier-keyed
@@ -155,17 +166,15 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
         # growing either tier later never exhausts it — same reasoning as every
         # other pool size in this generator, which are all design-capacity based.
         design_mode = "back-to-back" if dc_design["max_super_spines_per_fabric"] == 0 else "super-spine"
-        max_super_spines_cap = dc_design["max_super_spines_per_fabric"]
-        max_border_leafs_cap = dc_design["max_border_leafs_per_fabric"]
         max_hyper_spines_cap = dc_design["max_hyper_spines_per_fabric"]
         # Allocated whenever there's capacity for ANY DC-level tier that draws
         # from this pool — independent of design_mode. A back-to-back design
-        # (no super-spine tier) can still have border-leaf capacity (e.g.
-        # "M_BACK_TO_BACK"), and those border-leaf devices need a loopback IP
-        # for overlay BGP just like they would under a super-spine design.
-        if max_super_spines_cap > 0 or max_border_leafs_cap > 0 or max_hyper_spines_cap > 0:
+        # (no super-spine tier) can still have border-leaf capacity (the M
+        # design), and those border-leaf devices need a loopback IP for overlay
+        # BGP just like they would under a super-spine design.
+        if tier_loopback_bits is not None:
             pools_to_allocate["dc-fabric-loopback"] = host_bits_to_prefix_length(
-                dc_design["dc_fabric_loopback_host_bits"], ipv6=underlay_pool_is_ipv6(underlay_protocol, "loopback")
+                tier_loopback_bits, ipv6=underlay_pool_is_ipv6(underlay_protocol, "loopback")
             )
 
         self.logger.info(f"Allocating DC pools: {list(pools_to_allocate.keys())}")
@@ -479,17 +488,29 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
                     f"at DC level (expected one of {sorted(_DC_VALID_FABRIC_ROLES)}) — skipping this entry."
                 )
 
-    @staticmethod
-    def _pod_border_leaf_capacity(pod: Any) -> int:
-        """This pod's own layout cap on how many border-leaf devices it can
-        receive — a pod whose layout caps max_border_leafs_per_pod=0 is
-        deliberately skipped, which is how a specific subset of pods (e.g.
-        pod 1 and pod 3, not pod 2) can be chosen to host border-leafs.
+    def _pod_border_leaf_capacities(self, pods: list[Any]) -> dict[str, int]:
+        """Pod id -> how many border-leaf devices the pod can receive: its own
+        design's max_border_leafs_per_pod. A pod whose design caps it at 0 is
+        deliberately skipped, which is how a specific subset of pods (e.g. pod 1
+        and pod 3, not pod 2) can be chosen to host border-leafs.
 
-        Only ever called on pods from the `include=["layout"]` fetch in
-        generate() (see self._existing_pods), so layout is always hydrated —
-        TopologyPod.layout is a mandatory attribute."""
-        return POD_LAYOUTS[pod.layout.value]["max_border_leafs_per_pod"]
+        The pods come from the `include=["design"]` fetch in generate() (see
+        self._existing_pods); their design is matched by id against the DC
+        design's pod_templates. A pod whose design is not one of them gets none
+        (add_pod refuses to build such a pod)."""
+        cap_by_design = {
+            template["id"]: template["max_border_leafs_per_pod"] for template in self.data["design"]["pod_templates"]
+        }
+        capacities: dict[str, int] = {}
+        for pod in pods:
+            design_id = pod.design.id
+            if design_id not in cap_by_design:
+                self.logger.warning(
+                    f"DC {self.fabric_name}: pod {pod.name.value}'s design is not one of the DC design's "
+                    "pod_templates — no border-leafs are placed on it."
+                )
+            capacities[pod.id] = cap_by_design.get(design_id, 0)
+        return capacities
 
     async def _create_border_leaf_devices(self) -> list[str]:
         """Create border-leaf devices for every fabric_templates(role="border-leaf")
@@ -516,7 +537,8 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
             return []
         sorted_pods = sorted(existing_pods, key=lambda p: p.index.value)
 
-        max_border_leafs_per_fabric = resolve_dc_size_layout(self.data["size"])["max_border_leafs_per_fabric"]
+        max_border_leafs_per_fabric = self.data["design"]["max_border_leafs_per_fabric"]
+        capacities = self._pod_border_leaf_capacities(sorted_pods)
         all_names: list[str] = []
         for entry in entries:
             if entry["quantity"] > max_border_leafs_per_fabric:
@@ -530,7 +552,7 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
             for pod in sorted_pods:
                 if remaining <= 0:
                     break
-                pod_capacity = self._pod_border_leaf_capacity(pod)
+                pod_capacity = capacities[pod.id]
                 if pod_capacity <= 0:
                     continue
                 share = min(remaining, pod_capacity)
@@ -559,7 +581,7 @@ class DCTopologyGenerator(ServiceDevicesMixin, PoolMixin, DeviceMixin, CablingMi
                 # It is still a data error when the pods are all present, so name
                 # the numbers — the symptom otherwise surfaces much later as a
                 # border-leaf count that is short of what the DC declared.
-                capacity = sum(self._pod_border_leaf_capacity(pod) for pod in sorted_pods)
+                capacity = sum(capacities.values())
                 self.logger.warning(
                     f"DC {self.fabric_name}: border-leaf entry requested {entry['quantity']} device(s) but "
                     f"{remaining} are left unplaced — the DC's {len(sorted_pods)} pod(s) offer "

@@ -126,7 +126,7 @@ _COLO_DEFAULT_DEPLOYMENT_TYPE = "physical"
 
 # A metro's on-ramp is small and its addressing is not sliced further by any
 # child tier, so these are fixed rather than design-driven (contrast dc.py,
-# which reads every prefix length off the size table in dc_config.py).
+# which derives every prefix length from its design in fabric_sizing.py).
 _COLO_LOOPBACK_PREFIX_LENGTH = 28
 _COLO_TECHNICAL_PREFIX_LENGTH = 26
 _COLO_MANAGEMENT_PREFIX_LENGTH = 28

@@ -91,9 +91,9 @@ _UPLINK_ROLE = "uplink"
 _DOWNLINK_ROLE = "downlink"
 _INTERLINK_ROLE = "interlink"
 
-# The office underlay is IPv4 and not design-driven (contrast dc.py, which reads
-# every prefix length off the size table in dc_config.py). Sized for the campus
-# (a handful of switches), well inside the bootstrap supernets: a /28 holds the
+# The office underlay is IPv4 and not design-driven (contrast dc.py, which
+# derives every prefix length from its design in fabric_sizing.py). Sized for
+# the campus (a handful of switches), well inside the bootstrap supernets: a /28 holds the
 # loopbacks and the management addresses, a /27 the sixteen /31 links of two
 # distribution-switches and a few access-switches.
 _UNDERLAY_PROTOCOL = "ipv4"

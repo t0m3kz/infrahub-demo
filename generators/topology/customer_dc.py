@@ -24,8 +24,8 @@ load-balancer pairs (FirewallContextMixin, generators/firewall_context.py):
 * the footprint's serving_firewall_context and serving_loadbalancer_context
   links, which the firewall transform and the VIP producer read.
 
-A dedicated request that cannot be built (the DC has no size, not exactly two
-physical peers, no matching *_CUSTOMER_<size> virtual template) is an error,
+A dedicated request that cannot be built (the DC has no design, not exactly two
+physical peers, no matching *_CUSTOMER_<design> virtual template) is an error,
 never a silent move onto the shared context.
 
 Registered as add_customer_deployment_dc in .infrahub.yml, targeting the

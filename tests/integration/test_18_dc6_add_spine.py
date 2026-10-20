@@ -54,7 +54,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 SCENARIO_NAME = "Scenario 5: Add Spine to Pod"
 BRANCH_NAME = "dc6-add-spine"
 
-# M_MIDDLE caps a pod at 3 spines (generators/pod_config.py), so POD-1 can grow by one.
+# The M_MIDDLE design caps a pod at 3 spines (max_spines_per_pod in
+# data/bootstrap/14b_fabric_templates.yml), so POD-1 can grow by one.
 SPINES_ADDED = 1
 
 QUERY_POD_FABRIC_TEMPLATES = """

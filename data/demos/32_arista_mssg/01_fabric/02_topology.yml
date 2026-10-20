@@ -1,6 +1,6 @@
 ---
 # DC14 - the Arista EOS MSS-G reference fabric. Shaped like data/demos/30_all/03_dc/dc10 (the NX-OS
-# reference fabric), at size M with two S_MIDDLE pods and a DC-level border-leaf pair, with these differences:
+# reference fabric), with design M, two S_MIDDLE pods and a DC-level border-leaf pair, with these differences:
 #
 #   - every VTEP is a 7280R3 on EOS 4.36.2F, the one platform/type/release the reference-arista-eos
 #     profile row (data/bootstrap/19b_group_policy_profile.yml) accepts. One VTEP outside the row
@@ -26,7 +26,7 @@ spec:
     - name: DC14
       index: 14
       parent: DC
-      size: M
+      design: M
       routing_strategy: ebgp-ebgp
       underlay_protocol: ipv4
       naming_convention: hierarchical
@@ -40,7 +40,7 @@ spec:
         kind: TopologyPod
         data:
           - index: 1
-            layout: S_MIDDLE
+            design: S_MIDDLE
             fabric_templates:
               - ["2", "spine", "DCS-7050CX3-32C-R_SPINE"]
             mlag_create: back-to-back
@@ -80,7 +80,7 @@ spec:
                   parent: rom-1-s-1
                   member_of_groups: [topologies_rack]
           - index: 2
-            layout: S_MIDDLE
+            design: S_MIDDLE
             fabric_templates:
               - ["2", "spine", "DCS-7050CX3-32C-R_SPINE"]
             member_of_groups:

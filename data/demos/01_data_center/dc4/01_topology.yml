@@ -7,7 +7,7 @@ spec:
     - name: DC4
       index: 1
       parent: DC
-      size: XL
+      design: XL
       routing_strategy: ebgp-ebgp
       underlay_protocol: ipv6
       naming_convention: hierarchical
@@ -17,7 +17,7 @@ spec:
         # Two, matching the firewall/load-balancer pair below: the border-leaf
         # service chain is index-paired, and firewalls are deployed as HA pairs,
         # so an odd border-leaf has no firewall left to cable to. All three pod
-        # layouts here cap max_border_leafs_per_pod at 1, so these land one each
+        # designs here cap max_border_leafs_per_pod at 1, so these land one each
         # in pods 1 and 2.
         - ["2", "border-leaf", "DCS-7050CX3-32C-R_BORDER_LEAF"]
         - ["2", "firewall", "CP-26000_FIREWALL"]
@@ -29,7 +29,7 @@ spec:
         kind: TopologyPod
         data:
           - index: 1
-            layout: S_MIDDLE
+            design: S_MIDDLE
             fabric_templates:
               - ["2", "spine", "DCS-7050CX3-32C-R_SPINE"]
             member_of_groups:
@@ -47,7 +47,7 @@ spec:
                     - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
                     - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
           - index: 2
-            layout: S_MIXED
+            design: S_MIXED
             fabric_templates:
               - ["4", "spine", "DCS-7050CX3-32C-R_SPINE"]
             member_of_groups:
@@ -72,7 +72,7 @@ spec:
                   fabric_templates:
                     - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
           - index: 3
-            layout: S_TOR
+            design: S_TOR
             fabric_templates:
               - ["4", "spine", "DCS-7050CX3-32C-R_SPINE"]
             member_of_groups:

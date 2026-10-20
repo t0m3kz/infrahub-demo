@@ -20,6 +20,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.topology.rack import RackGenerator, TopologyRackData
+from tests.unit.simulators.fabric_designs import pod_design
 
 
 def _build_gen(*, mlag_create: Literal["no", "back-to-back", "virtual"] = "no") -> Any:
@@ -27,7 +28,6 @@ def _build_gen(*, mlag_create: Literal["no", "back-to-back", "virtual"] = "no") 
         "id": "dc-1",
         "name": "DC1",
         "index": 1,
-        "size": "S",
         "naming_convention": "standard",
         "management_pool": {"id": "mgmt-pool", "name": "mgmt"},
     }
@@ -41,7 +41,7 @@ def _build_gen(*, mlag_create: Literal["no", "back-to-back", "virtual"] = "no") 
         "mlag_create": mlag_create,
         "loopback_pool": {"id": "lo-pool", "name": "lo"},
         "prefix_pool": {"id": "p2p-pool", "name": "p2p"},
-        "layout": "S_MIXED",
+        "design": pod_design("S_MIXED"),
         "fabric_templates": [
             {
                 "role": "spine",

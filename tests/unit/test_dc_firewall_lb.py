@@ -25,46 +25,14 @@ border-leaf<->firewall<->load-balancer<->border-leaf.
 
 from __future__ import annotations
 
-import uuid
-from collections.abc import Callable
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.dc_config import DC_SIZE_LAYOUTS
 from generators.firewall_context import FIREWALL_CONTEXT, LOADBALANCER_CONTEXT
-from generators.pod_config import POD_LAYOUTS
 from generators.topology.dc import DCTopologyGenerator
-
-DcSizeRegistrar = Callable[..., str]
-PodLayoutRegistrar = Callable[..., str]
-
-
-@pytest.fixture
-def register_dc_size(monkeypatch: pytest.MonkeyPatch) -> DcSizeRegistrar:
-    """Factory registering a throwaway DC_SIZE_LAYOUTS entry (removed again when
-    the test ends) and returning its key (a self.data["size"] value) — mirrors
-    test_dc_generator.py's register_dc_size fixture."""
-
-    def register(*, max_border_leafs_per_fabric: int = 10) -> str:
-        key = f"TEST_{uuid.uuid4().hex}"
-        monkeypatch.setitem(
-            DC_SIZE_LAYOUTS,
-            key,
-            {
-                "max_pods": 2,
-                "max_super_spines_per_fabric": 2,
-                "max_hyper_spines_per_fabric": 0,
-                "max_border_leafs_per_fabric": max_border_leafs_per_fabric,
-                "max_spines_per_pod": 4,
-                "technical_prefix_length": 117,
-                "dc_fabric_loopback_host_bits": 4,
-            },
-        )
-        return key
-
-    return register
+from tests.unit.simulators.fabric_designs import custom_dc_design, custom_pod_design, dc_design
 
 
 def _make_generator() -> Any:
@@ -93,7 +61,7 @@ def _make_generator() -> Any:
     gen.data = {
         "id": "dc-1",
         "index": 1,
-        "size": "XL",
+        "design": dc_design("XL"),
         "naming_convention": "standard",
         "connectivity_mode": "pbr",
         "fabric_templates": [],
@@ -110,19 +78,20 @@ def _mock_pod(*, id: str, index: int, name: str = "pod-1", loopback_pool_id: str
     return pod
 
 
-@pytest.fixture
-def register_pod_layout(monkeypatch: pytest.MonkeyPatch) -> PodLayoutRegistrar:
-    """Factory registering a throwaway POD_LAYOUTS entry (removed again when the
-    test ends) and returning its key. Pod.layout is a plain Dropdown string (see
-    generators/pod_config.py POD_LAYOUTS) — `pod.layout.value` is read directly by
-    DCTopologyGenerator._pod_border_leaf_capacity, which only needs the one cap."""
-
-    def register(max_border_leafs_per_pod: int) -> str:
-        key = f"TEST_{uuid.uuid4().hex}"
-        monkeypatch.setitem(POD_LAYOUTS, key, {"max_border_leafs_per_pod": max_border_leafs_per_pod})
-        return key
-
-    return register
+def _pods_with_caps(gen: Any, caps: list[int], *, max_border_leafs_per_fabric: int = 10) -> list[MagicMock]:
+    """One pod per cap, index 1.., each on its own pod design (max_border_leafs_per_pod=cap)
+    that the DC design hosts — the pod's design comes back from filters(include=["design"])
+    as a related node with only its id, matched against the DC design's pod_templates."""
+    templates = [custom_pod_design(f"P{index}", max_border_leafs_per_pod=cap) for index, cap in enumerate(caps, 1)]
+    gen.data["design"] = custom_dc_design(
+        max_border_leafs_per_fabric=max_border_leafs_per_fabric, pod_templates=templates
+    )
+    pods = []
+    for index, template in enumerate(templates, 1):
+        pod = _mock_pod(id=f"pod-{index}", index=index, name=f"pod-{index}")
+        pod.design = MagicMock(id=template["id"])
+        pods.append(pod)
+    return pods
 
 
 _BL_TEMPLATE = {
@@ -147,15 +116,21 @@ def _entry(role: str, quantity: int, template: dict[str, Any]) -> dict[str, Any]
 
 
 class TestPodBorderLeafCapacity:
-    def test_returns_pod_designs_own_cap(self, register_pod_layout: PodLayoutRegistrar) -> None:
-        pod = _mock_pod(id="pod-1", index=1)
-        pod.layout = MagicMock(value=register_pod_layout(max_border_leafs_per_pod=2))
-        assert DCTopologyGenerator._pod_border_leaf_capacity(pod) == 2
+    def test_returns_pod_designs_own_cap(self) -> None:
+        gen = _make_generator()
+        pod_a, pod_b = _pods_with_caps(gen, [2, 0])
 
-    def test_zero_cap_pod_is_skippable(self, register_pod_layout: PodLayoutRegistrar) -> None:
-        pod = _mock_pod(id="pod-1", index=1)
-        pod.layout = MagicMock(value=register_pod_layout(max_border_leafs_per_pod=0))
-        assert DCTopologyGenerator._pod_border_leaf_capacity(pod) == 0
+        assert gen._pod_border_leaf_capacities([pod_a, pod_b]) == {pod_a.id: 2, pod_b.id: 0}
+        gen.logger.warning.assert_not_called()
+
+    def test_pod_on_a_design_the_dc_does_not_host_gets_none(self) -> None:
+        """A pod whose design is not one of the DC design's pod_templates (add_pod refuses it) hosts no border-leaf."""
+        gen = _make_generator()
+        (pod,) = _pods_with_caps(gen, [2])
+        pod.design = MagicMock(id="pod-design-ELSEWHERE")
+
+        assert gen._pod_border_leaf_capacities([pod]) == {pod.id: 0}
+        gen.logger.warning.assert_called_once()
 
 
 class TestCreateBorderLeafDevices:
@@ -181,16 +156,10 @@ class TestCreateBorderLeafDevices:
         gen.create_devices.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_walks_pods_by_index_filling_each_to_its_own_cap(
-        self, register_dc_size: DcSizeRegistrar, register_pod_layout: PodLayoutRegistrar
-    ) -> None:
+    async def test_walks_pods_by_index_filling_each_to_its_own_cap(self) -> None:
         gen = _make_generator()
-        gen.data["size"] = register_dc_size(max_border_leafs_per_fabric=10)
         gen.data["fabric_templates"] = [_entry("border-leaf", 3, _BL_TEMPLATE)]
-        pod_a = _mock_pod(id="pod-a", index=1)
-        pod_a.layout = MagicMock(value=register_pod_layout(max_border_leafs_per_pod=1))
-        pod_b = _mock_pod(id="pod-b", index=2)
-        pod_b.layout = MagicMock(value=register_pod_layout(max_border_leafs_per_pod=2))
+        pod_a, pod_b = _pods_with_caps(gen, [1, 2])
         gen._existing_pods = [pod_b, pod_a]  # unsorted on purpose
 
         gen.create_devices = AsyncMock(side_effect=[["bl-a-01"], ["bl-b-01", "bl-b-02"]])
@@ -209,19 +178,10 @@ class TestCreateBorderLeafDevices:
         assert second_call.kwargs["quantity"] == 2
 
     @pytest.mark.asyncio
-    async def test_pod_with_zero_capacity_is_skipped(
-        self, register_dc_size: DcSizeRegistrar, register_pod_layout: PodLayoutRegistrar
-    ) -> None:
+    async def test_pod_with_zero_capacity_is_skipped(self) -> None:
         gen = _make_generator()
-        gen.data["size"] = register_dc_size(max_border_leafs_per_fabric=10)
         gen.data["fabric_templates"] = [_entry("border-leaf", 2, _BL_TEMPLATE)]
-        pod_a = _mock_pod(id="pod-a", index=1)
-        pod_a.layout = MagicMock(value=register_pod_layout(max_border_leafs_per_pod=0))
-        pod_b = _mock_pod(id="pod-b", index=2)
-        pod_b.layout = MagicMock(value=register_pod_layout(max_border_leafs_per_pod=0))
-        pod_c = _mock_pod(id="pod-c", index=3)
-        pod_c.layout = MagicMock(value=register_pod_layout(max_border_leafs_per_pod=2))
-        gen._existing_pods = [pod_a, pod_b, pod_c]
+        gen._existing_pods = _pods_with_caps(gen, [0, 0, 2])
 
         gen.create_devices = AsyncMock(return_value=["bl-c-01", "bl-c-02"])
 
@@ -234,15 +194,10 @@ class TestCreateBorderLeafDevices:
         assert gen.create_devices.call_args.kwargs["deployment_id"] == gen.data["id"]
 
     @pytest.mark.asyncio
-    async def test_entry_exceeding_max_border_leafs_per_fabric_is_skipped(
-        self, register_dc_size: DcSizeRegistrar, register_pod_layout: PodLayoutRegistrar
-    ) -> None:
+    async def test_entry_exceeding_max_border_leafs_per_fabric_is_skipped(self) -> None:
         gen = _make_generator()
-        gen.data["size"] = register_dc_size(max_border_leafs_per_fabric=2)
         gen.data["fabric_templates"] = [_entry("border-leaf", 3, _BL_TEMPLATE)]
-        pod_a = _mock_pod(id="pod-a", index=1)
-        pod_a.layout = MagicMock(value=register_pod_layout(max_border_leafs_per_pod=3))
-        gen._existing_pods = [pod_a]
+        gen._existing_pods = _pods_with_caps(gen, [3], max_border_leafs_per_fabric=2)
 
         names = await gen._create_border_leaf_devices()
 
@@ -251,15 +206,10 @@ class TestCreateBorderLeafDevices:
         gen.logger.error.assert_called()
 
     @pytest.mark.asyncio
-    async def test_leftover_unplaced_devices_logs_warning(
-        self, register_dc_size: DcSizeRegistrar, register_pod_layout: PodLayoutRegistrar
-    ) -> None:
+    async def test_leftover_unplaced_devices_logs_warning(self) -> None:
         gen = _make_generator()
-        gen.data["size"] = register_dc_size(max_border_leafs_per_fabric=10)
         gen.data["fabric_templates"] = [_entry("border-leaf", 5, _BL_TEMPLATE)]
-        pod_a = _mock_pod(id="pod-a", index=1)
-        pod_a.layout = MagicMock(value=register_pod_layout(max_border_leafs_per_pod=2))
-        gen._existing_pods = [pod_a]
+        gen._existing_pods = _pods_with_caps(gen, [2])
         gen.create_devices = AsyncMock(return_value=["bl-a-01", "bl-a-02"])
 
         names = await gen._create_border_leaf_devices()

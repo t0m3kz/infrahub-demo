@@ -14,7 +14,32 @@ query topology_dc($name: String!) {
           connectivity_mode { value }
           routing_strategy { value }
           underlay_protocol { value }
-          size { value }
+          # The DC's fabric envelope and that of every pod design it may host:
+          # the DC pools are sized for the widest of them (generators/fabric_sizing.py).
+          design {
+            node {
+              name { value }
+              max_pods { value }
+              max_super_spines_per_fabric { value }
+              max_hyper_spines_per_fabric { value }
+              max_border_leafs_per_fabric { value }
+              pod_templates {
+                edges {
+                  node {
+                    id
+                    name { value }
+                    max_rows { value }
+                    max_compute_racks_per_row { value }
+                    max_network_racks_per_row { value }
+                    max_leafs_per_network_rack { value }
+                    max_tors_per_compute_rack { value }
+                    max_spines_per_pod { value }
+                    max_border_leafs_per_pod { value }
+                  }
+                }
+              }
+            }
+          }
           loopback_pool {
             node {
               id

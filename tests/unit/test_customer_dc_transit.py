@@ -343,7 +343,7 @@ def _payload(
                     "id": "dc10-id",
                     "name": "DC10",
                     "connectivity_mode": {"value": connectivity_mode},
-                    "size": {"value": "M"},
+                    "design": {"node": {"name": {"value": "M"}}},
                     "firewall_devices": devices if firewalls else [],
                     "loadbalancer_devices": lb_devices or [],
                     "security_manager_controllers": [],

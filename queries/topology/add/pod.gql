@@ -63,7 +63,24 @@ fragment DataCenterFields on TopologyDataCenter {
       }
     }
   }
-  size { value }
+  # The DC's fabric envelope, as far as a pod's own checks and pool sizes read it
+  # (generators/fabric_sizing.py): the pod designs it may host and their spine widths.
+  design {
+    node {
+      name { value }
+      max_pods { value }
+      max_super_spines_per_fabric { value }
+      max_border_leafs_per_fabric { value }
+      pod_templates {
+        edges {
+          node {
+            name { value }
+            max_spines_per_pod { value }
+          }
+        }
+      }
+    }
+  }
   fabric_asn_pool {
     node {
       id
@@ -123,7 +140,18 @@ query topology_pod($name: String!) {
         id
         name { value }
         index { value }
-        layout { value }
+        design {
+          node {
+            name { value }
+            max_rows { value }
+            max_compute_racks_per_row { value }
+            max_network_racks_per_row { value }
+            max_leafs_per_network_rack { value }
+            max_tors_per_compute_rack { value }
+            max_spines_per_pod { value }
+            max_border_leafs_per_pod { value }
+          }
+        }
         leaf_interface_sorting_method { value }
         spine_interface_sorting_method { value }
         fabric_templates {

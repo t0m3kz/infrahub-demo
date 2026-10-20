@@ -1,0 +1,76 @@
+# Utilisation of every fabric pool, read from the IPAM hierarchy under the pool's slice (its resource):
+#   prefix pool  -> used = the sizes of the slice's DIRECT children: a /127 or /31 link is 2 addresses, a
+#                   sub-pool (a pod's slice, the fabric-loopback slice) is its own size, what lies inside a
+#                   sub-pool is that sub-pool's own usage;
+#   address pool -> used = the addresses under the slice.
+# Pools are branch-agnostic but DCs, pods, prefixes and addresses are not: reading the pools through the
+# deployments counts this branch's allocations only.
+query pool_utilization {
+  TopologyDataCenter {
+    edges {
+      node {
+        id
+        name { value }
+        design { node { name { value } max_pods { value } } }
+        # Container pools: the pods' slices (and, in loopback, the fabric-loopback slice) are their children.
+        technical_pool { node { ...DataCenterPrefixPool } }
+        loopback_pool { node { ...DataCenterPrefixPool } }
+        management_pool { node { ...AddressPool } }
+      }
+    }
+  }
+
+  TopologyPod {
+    edges {
+      node {
+        id
+        name { value }
+        design { node { name { value } } }
+        parent { node { id __typename } }
+        prefix_pool {
+          node {
+            id
+            name { value }
+            resources { edges { node { prefix { value } children { edges { node { prefix { value } } } } } } }
+          }
+        }
+        loopback_pool { node { ...AddressPool } }
+      }
+    }
+  }
+
+  # A management pool hands out addresses in MANAGEMENT but its slice is a `default` prefix, so those addresses
+  # sit under no prefix: they are matched to the pool's slice by containment instead.
+  IpamIPAddress(ip_namespace__name__value: "MANAGEMENT") {
+    edges { node { address { value } ip_namespace { node { name { value } } } } }
+  }
+}
+
+fragment DataCenterPrefixPool on CoreIPPrefixPool {
+  id
+  name { value }
+  resources {
+    edges {
+      node {
+        prefix { value }
+        children {
+          edges {
+            node {
+              prefix { value }
+              # A child that is an address pool no pod owns is a DC-level pool (the fabric loopbacks).
+              ip_addresses { count }
+              resource_pool { edges { node { id __typename ... on CoreIPAddressPool { name { value } } } } }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment AddressPool on CoreIPAddressPool {
+  id
+  name { value }
+  ip_namespace { node { name { value } } }
+  resources { edges { node { prefix { value } ip_namespace { node { name { value } } } ip_addresses { count } } } }
+}

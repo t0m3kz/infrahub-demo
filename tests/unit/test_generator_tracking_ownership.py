@@ -42,6 +42,7 @@ from generators.routing import RoutingMixin
 from generators.topology.orchestrator_routing import ApplicationOrchestratorRoutingGenerator
 from generators.topology.pod import PodTopologyGenerator
 from tests.unit.simulators import circuit_fakes
+from tests.unit.simulators.fabric_designs import dc_design, pod_design
 
 UNTRACKED_UPSERT = {"allow_upsert": True, "update_group_context": False}
 
@@ -562,7 +563,7 @@ def _pod_payload() -> dict[str, Any]:
                 "id": "pod-1",
                 "name": "POD1",
                 "index": 1,
-                "layout": "S_MIDDLE",
+                "design": pod_design("S_MIDDLE"),
                 "fabric_templates": [
                     {
                         "role": "spine",
@@ -574,7 +575,7 @@ def _pod_payload() -> dict[str, Any]:
                     "id": "dc-1",
                     "name": "DC1",
                     "index": 1,
-                    "size": "S",
+                    "design": dc_design("S"),
                     "routing_strategy": "ebgp-ebgp",
                     "fabric_asn_pool": {"id": "asn-1", "name": "dc1-asn-pool"},
                     "fabric_templates": [
@@ -599,6 +600,7 @@ class TestPodDefersBeforeFirstSave:
         gen: Any = PodTopologyGenerator.__new__(PodTopologyGenerator)
         gen.logger = MagicMock()
         gen.client = _client()
+        gen.client.filters = AsyncMock(return_value=[])  # the DC's pods (pod-count check): none listed yet
         gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
         gen.bgp_processes_ready = AsyncMock(return_value=False)
         gen.allocate_resource_pools = AsyncMock()
@@ -640,6 +642,7 @@ class TestPodDefersBeforeFirstSave:
         gen: Any = PodTopologyGenerator.__new__(PodTopologyGenerator)
         gen.logger = MagicMock()
         gen.client = _client()
+        gen.client.filters = AsyncMock(return_value=[])  # the DC's pods (pod-count check): none listed yet
         gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
         gen.bgp_processes_ready = AsyncMock(return_value=True)
         gen.allocate_resource_pools = AsyncMock()

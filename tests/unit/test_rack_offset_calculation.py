@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from generators.topology.rack import RackGenerator, TopologyRackData
-from tests.unit.simulators.pod_layouts import LAYOUT_FOR_DEPLOYMENT_TYPE
+from tests.unit.simulators.fabric_designs import DESIGN_FOR_DEPLOYMENT_TYPE, pod_design
 
 
 def _build_generator(
@@ -23,19 +23,18 @@ def _build_generator(
 
     RackGenerator.calculate_cabling_offsets is now derived entirely from live
     rack position (row_index/index) and the caller-supplied device_count /
-    racks_in_previous_rows — it no longer reads any design/layout capacity
-    numbers (rows, compute_racks_per_row, max_tors_per_compute_rack, etc).
+    racks_in_previous_rows — it no longer reads any design capacity
+    numbers (max_rows, max_compute_racks_per_row, max_tors_per_compute_rack, etc).
     maximum_tors_per_row/rows/leafs_per_network_rack are therefore kept only
     as documentation of each scenario's intent and are NOT read by the
     function under test; the pod's deployment type is the only thing that
-    matters, and it is derived from the layout (one real layout per type).
+    matters, and it is derived from the design (one real design per type).
     """
 
     parent = {
         "id": "parent-1",
         "name": "DC1",
         "index": 1,
-        "size": "S",
     }
 
     pod = {
@@ -46,7 +45,7 @@ def _build_generator(
         "leaf_interface_sorting_method": "top_down",
         "spine_interface_sorting_method": "bottom_up",
         "fabric_templates": [{"role": "spine", "quantity": 2, "template": {"id": "tmpl-spine"}}],
-        "layout": LAYOUT_FOR_DEPLOYMENT_TYPE[deployment_type],
+        "design": pod_design(DESIGN_FOR_DEPLOYMENT_TYPE[deployment_type]),
     }
 
     suite = {"index": 1}

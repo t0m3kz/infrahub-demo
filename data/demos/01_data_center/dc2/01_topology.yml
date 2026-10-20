@@ -7,7 +7,7 @@ spec:
     - name: DC2
       index: 2
       parent: DC
-      size: M
+      design: M
       routing_strategy: ebgp-ebgp
       underlay_protocol: ipv6
       naming_convention: hierarchical
@@ -23,7 +23,7 @@ spec:
         kind: TopologyPod
         data:
           - index: 1
-            layout: S_MIDDLE
+            design: S_MIDDLE
             fabric_templates:
               - ["2", "spine", "DCS-7050CX3-32C-R_SPINE"]
             member_of_groups:
@@ -41,7 +41,7 @@ spec:
                     - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
                     - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
           - index: 2
-            layout: S_MIDDLE
+            design: S_MIDDLE
             fabric_templates:
               - ["2", "spine", "DCS-7050CX3-32C-R_SPINE"]
             member_of_groups:
@@ -59,7 +59,7 @@ spec:
                     - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
                     - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
           - index: 3
-            layout: S_MIDDLE
+            design: S_MIDDLE
             fabric_templates:
               - ["2", "spine", "DCS-7050CX3-32C-R_SPINE"]
             member_of_groups:
@@ -77,7 +77,7 @@ spec:
                     - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
                     - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
           - index: 4
-            layout: S_MIDDLE
+            design: S_MIDDLE
             fabric_templates:
               - ["2", "spine", "DCS-7050CX3-32C-R_SPINE"]
             member_of_groups:

@@ -14,7 +14,12 @@ fragment PhysicalInterfaceFields on DcimPhysicalInterface {
 fragment PodFields on TopologyPod {
   id
   name { value }
-  layout { value }
+  design {
+    node {
+      max_leafs_per_network_rack { value }
+      max_tors_per_compute_rack { value }
+    }
+  }
   index { value }
   parent {
     node {

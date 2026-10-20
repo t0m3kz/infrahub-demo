@@ -245,7 +245,7 @@ spec:
           # including this one's NX-OS counterpart N9K-C9336C-FX2_LEAF_MIXED; 2 was
           # the outlier. The downlink block is where the slack was: a mixed pod's
           # leaf pair fans out to ToRs at 1 port per ToR, so 16 is still far beyond
-          # any pod layout here.
+          # any pod design here.
           - template_name: DCS-7050CX3-32C-R_LEAF_MIXED_Ethernet[27-30]/1
             name: Ethernet[27-30]/1
             role: uplink
