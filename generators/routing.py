@@ -90,6 +90,8 @@ class RoutingMixin:
     resource_lock: Callable[[str], AbstractAsyncContextManager[None]]
     # PoolMixin.attach_refs — attaches the fabric AS (evpn_rt_as) or the office's LISP site key (lisp_site_key).
     attach_refs: Callable[..., Awaitable[None]]
+    # Shared RoutingPassword ids this run has found, by name (_resolve_shared_passwords).
+    _shared_password_ids: dict[str, str]
 
     async def create_routing(
         self,
@@ -776,17 +778,20 @@ class RoutingMixin:
         wasn't configured (e.g. DC generator hasn't run yet, or ran before this
         feature existed) — routing creation proceeds without it.
         """
-        password_ids: list[str | None] = []
-        for name in (_underlay_key_name(self.fabric_name), _overlay_key_name(self.fabric_name)):
-            password_id: str | None = None
+        underlay_name, overlay_name = _underlay_key_name(self.fabric_name), _overlay_key_name(self.fabric_name)
+        # Found ids only, per run: add_dc owns these keys and keeps them on every
+        # run, so a found id stays valid; a missing one is looked up again on the
+        # next call. A pod run calls create_routing() once per tier.
+        found: dict[str, str] = getattr(self, "_shared_password_ids", {})
+        missing = [name for name in (underlay_name, overlay_name) if name not in found]
+        if missing:
             try:
-                existing = await self.client.get(kind=RoutingPassword, name__value=name, raise_when_missing=False)
-                if existing:
-                    password_id = existing.id
+                for password in await self.client.filters(kind=RoutingPassword, name__values=missing):
+                    found[password.name.value] = password.id
             except Exception as e:
-                self.logger.debug(f"Error querying RoutingPassword {name}: {e}")
-            password_ids.append(password_id)
-        return password_ids[0], password_ids[1]
+                self.logger.debug(f"Error querying RoutingPassword {missing}: {e}")
+            self._shared_password_ids = found
+        return found.get(underlay_name), found.get(overlay_name)
 
     async def _resolve_shared_objects(self, routing_strategy: str) -> tuple[str | None, str | None]:
         """Find shared DC-level overlay AS and OSPF area. Returns (overlay_as_id, ospf_area_id).

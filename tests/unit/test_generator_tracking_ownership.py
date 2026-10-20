@@ -218,12 +218,12 @@ class TestStandaloneVlanDomains:
             "name": domain_name,
             "status": "active",
             "capabilities": [{"id": f"id-{names[0]}"}],
+            # The pool is upserted first and rides on the domain's own upsert.
+            "vlan_pool": {"id": "vlan-pool-1"},
         }
         pool_kwargs = gen.upsert_number_pool.call_args.kwargs
         assert pool_kwargs["pool_name"] == f"{domain_name}-vlan-pool"
-        assert pool_kwargs["parent_kind"] == "ManagedStandaloneVlanDomain"
-        assert pool_kwargs["parent_id"] == f"id-{domain_name}"
-        assert pool_kwargs["parent_attr"] == "vlan_pool"
+        assert "parent_kind" not in pool_kwargs
 
     @pytest.mark.asyncio
     async def test_domain_is_upserted_tracked_on_every_run(self) -> None:
@@ -323,6 +323,7 @@ class TestHaSyncPortOwnership:
         ha_obj.capabilities.peers = [MagicMock(id="dev-1")]
         device = _node("dev-1", "vfw-01")
         existing_eth7 = _node("eth7-1", "eth7")
+        existing_eth7.device = MagicMock(id="dev-1")
         existing_eth7.typename = DcimVirtualInterface.__name__
         existing_eth7.status = MagicMock(value="active")
 
@@ -354,6 +355,7 @@ class TestHaSyncPortOwnership:
         ha_obj.capabilities.peers = [MagicMock(id="dev-1")]
         device = _node("dev-1", "vfw-01")
         template_port = _node("eth7-1", "eth7")
+        template_port.device = MagicMock(id="dev-1")
         template_port.typename = DcimPhysicalInterface.__name__
         template_port.status = MagicMock(value="active")
 
@@ -389,29 +391,26 @@ def _pool_mixin() -> Any:
 
 class TestPoolParentOwnership:
     @pytest.mark.asyncio
-    async def test_number_pool_parent_attach_is_untracked(self) -> None:
-        """The parent (DC, pod, MLAG or standalone domain) is the run's target
-        or owned by its own save — the attach must not claim it."""
+    async def test_number_pool_upsert_is_tracked_and_touches_no_parent(self) -> None:
+        """The pool is this run's output (a tracked upsert); pointing a node at
+        it is the caller's job, so the upsert itself reads and saves nothing else."""
         gen = _pool_mixin()
         pool = _node("pool-1")
         gen.client.create = AsyncMock(return_value=pool)
-        parent = _node("mlag-1")
-        gen.client.get = AsyncMock(return_value=parent)
+        gen.client.get = AsyncMock()
 
-        await gen.upsert_number_pool(
+        result = await gen.upsert_number_pool(
             pool_name="x-vlan-pool",
             description="d",
             start_range=100,
             end_range=200,
             node="ManagedVlanDomainSegment",
             node_attribute="vlan_id",
-            parent_kind="ManagedMLAG",
-            parent_id="mlag-1",
-            parent_attr="vlan_pool",
         )
 
+        assert result is pool
         pool.save.assert_awaited_once_with(allow_upsert=True)
-        parent.save.assert_awaited_once_with(update_group_context=False)
+        gen.client.get.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_pod_pool_attach_is_untracked(self) -> None:
@@ -451,11 +450,12 @@ class TestMlagWiringTrack:
         gen = _wiring_mixin()
         member = _node("if-1", "Ethernet1/49")
         member.status = MagicMock(value="active")
-        gen.client.filters = AsyncMock(side_effect=[[member], []])
         lag = _node("lag-1", "Port-Channel100")
         gen.client.create = AsyncMock(return_value=lag)
 
-        await gen._ensure_lag_peer_link(_node("dev-1", "leaf-01"), MagicMock(id="mlag-1"), "eos", track=track)
+        await gen._ensure_lag_peer_link(
+            _node("dev-1", "leaf-01"), MagicMock(id="mlag-1"), "eos", [member], None, track=track
+        )
 
         lag.save.assert_awaited_once_with(**expected)
 
@@ -466,13 +466,12 @@ class TestMlagWiringTrack:
     async def test_virtual_peer_link_and_control_svi_follow_track(self, track: bool, expected: dict[str, bool]) -> None:
         """The virtual peer-link loopback and the control SVI follow the same flag."""
         gen = _wiring_mixin()
-        gen.client.filters = AsyncMock(return_value=[])
         loopback, svi = _node("lo-1"), _node("svi-1")
         gen.client.create = AsyncMock(side_effect=[loopback, svi])
         device = _node("dev-1", "leaf-01")
 
-        await gen._ensure_virtual_peer_link(device, "m", "eos", track=track)
-        await gen._ensure_control_svi(device, "m", "ip-1", track=track)
+        await gen._ensure_virtual_peer_link(device, "m", "eos", None, track=track)
+        await gen._ensure_control_svi(device, "m", "ip-1", None, track=track)
 
         loopback.save.assert_awaited_once_with(**expected)
         svi.save.assert_awaited_once_with(**expected)
@@ -498,11 +497,13 @@ class TestMlagWiringTrack:
         iface_a, iface_b = _node("if-a", "Ethernet1/49"), _node("if-b", "Ethernet1/49")
         iface_a.cable.initialized = False
         iface_b.cable.initialized = False
-        gen.client.filters = AsyncMock(side_effect=[[iface_a], [iface_b], []])
+        gen.client.filters = AsyncMock(return_value=[])  # no cable by that name yet
         cable = _node("cable-1")
         gen.client.create = AsyncMock(return_value=cable)
 
-        await gen._ensure_peer_link_cables("m", _node("dev-1", "a"), _node("dev-2", "b"), track=False)
+        await gen._ensure_peer_link_cables(
+            "m", _node("dev-1", "a"), _node("dev-2", "b"), [iface_a], [iface_b], track=False
+        )
 
         assert gen.client.create.call_args.kwargs["kind"] is DcimCable
         cable.save.assert_awaited_once_with(**UNTRACKED_UPSERT)

@@ -162,6 +162,33 @@ class TestEnsureMlagPairs:
         )
 
     @pytest.mark.asyncio
+    async def test_vlan_pool_rides_on_the_domain_upsert(self) -> None:
+        """The domain's local VLAN pool is upserted first and carried by the
+        MLAG upsert itself: no get + save of the domain afterwards to attach it."""
+        gen = _build_gen()
+        gen.client.filters = AsyncMock(return_value=[])
+        gen.client.get = AsyncMock(return_value=_mock_group())
+        mlag_obj = MagicMock(id="mlag-1", save=AsyncMock())
+        gen.client.create = AsyncMock(return_value=mlag_obj)
+        devices_by_name = {"leaf-01": _mock_device("leaf-01"), "leaf-02": _mock_device("leaf-02")}
+
+        await gen._ensure_mlag_pairs(
+            ["leaf-01", "leaf-02"],
+            devices_by_name=devices_by_name,
+            role_label="leaf",
+            template={},
+            mlag_create="virtual",
+        )
+
+        gen.upsert_number_pool.assert_awaited_once()
+        assert gen.upsert_number_pool.call_args.kwargs["pool_name"] == "leaf-01-leaf-02-mlag-vlan-pool"
+        assert gen.client.create.call_args.kwargs["data"]["vlan_pool"] == {"id": "vlan-pool-1"}
+        # The only get is the mlag_domains group: nothing re-reads the domain.
+        gen.client.get.assert_awaited_once()
+        assert gen.client.get.call_args.kwargs["name__value"] == "mlag_domains"
+        mlag_obj.save.assert_awaited_once_with(allow_upsert=True)
+
+    @pytest.mark.asyncio
     async def test_virtual_mode_creates_domain_without_interface_requirement(self) -> None:
         gen = _build_gen()
         gen.client.filters = AsyncMock(return_value=[])  # no existing MLAG domain

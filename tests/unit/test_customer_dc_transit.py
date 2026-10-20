@@ -117,6 +117,8 @@ class _World:
                 ("lb-2", "load-balancer"),
             )
         }
+        # device id -> its role=uplink interface, cabled (cable-<device>) to the border port bl-port-<device>.
+        self.uplinks: dict[str, Any] = {device_id: self.uplink(device_id) for device_id in self.bl_ports}
         self.contexts: dict[str, Any] = {}
         self.exchanges: dict[str, Any] = {}
         self.sub_interfaces: dict[tuple[str, str], Any] = {}
@@ -127,12 +129,41 @@ class _World:
         self.allocate_calls = 0
         self.vlan_pool_reads: list[str] = []
         self.fail_saves_of: set[str] = set()
+        self.fail_uplink_lookup = False
         self.executed_filters: list[str] = []
+        self.uplink_lookups: list[list[str]] = []
+        self.gets: list[str] = []
+
+    @staticmethod
+    def uplink(device_id: str, *, cabled_to: str | None = None) -> Any:
+        """A role=uplink interface of device_id, cabled to bl-port-<cabled_to> (default: its own device id)."""
+        return SimpleNamespace(
+            id=f"up-{device_id}",
+            name=SimpleNamespace(value="Ethernet1/25"),
+            device=SimpleNamespace(id=device_id),
+            cable=SimpleNamespace(id=f"cable-{cabled_to or device_id}"),
+        )
 
     # --- reads -----------------------------------------------------------
     async def filters(self, *, kind: Any, **kwargs: Any) -> list[Any]:
         name = kind.__name__
         self.executed_filters.append(name)
+        if name == "DcimPhysicalInterface" and "device__ids" in kwargs:
+            assert kwargs["role__value"] == "uplink"
+            self.uplink_lookups.append(list(kwargs["device__ids"]))
+            if self.fail_uplink_lookup:
+                raise RuntimeError("uplink lookup failed")
+            return [self.uplinks[device_id] for device_id in kwargs["device__ids"] if device_id in self.uplinks]
+        if name == "DcimCable":
+            assert kwargs["include"] == ["endpoints"]
+            cables = []
+            for uplink in self.uplinks.values():
+                cable_id = uplink.cable.id
+                if cable_id in kwargs["ids"] and cable_id not in {cable.id for cable in cables}:
+                    port = self.bl_ports.get(cable_id.removeprefix("cable-"))
+                    peers = [uplink.id, *([port.id] if port else [])]
+                    cables.append(SimpleNamespace(id=cable_id, endpoints=_Many(peers)))
+            return cables
         if name == "IpamNamespace":
             return [
                 ns for ns in self.namespaces.values() if ns.namespace_type.value in kwargs["namespace_type__values"]
@@ -159,6 +190,7 @@ class _World:
 
     async def get(self, *, kind: Any, **kwargs: Any) -> Any:
         name = kind.__name__
+        self.gets.append(name)
         if name == "CoreNumberPool":
             self.vlan_pool_reads.append(kwargs["name__value"])
             if kwargs["name__value"] not in self.vlan_pools:
@@ -368,25 +400,11 @@ def _make_gen(world: _World) -> tuple[Any, list[str]]:
     gen.release_resource_lock = AsyncMock(side_effect=lambda lock_id: events.append("release"))
     gen.link_serving_context = AsyncMock()
     gen.set_controllers_from = MagicMock()
-
-    async def find_role_interface(*, device_id: str, role: str) -> Any:
-        assert role == "uplink"
-        return SimpleNamespace(
-            id=f"up-{device_id}",
-            name=SimpleNamespace(value="Ethernet1/25"),
-            cable=SimpleNamespace(id=f"cable-{device_id}"),
-        )
-
-    gen.find_role_interface = find_role_interface
     return gen, events
 
 
 async def _run(gen: Any, world: _World, payload: dict[str, Any]) -> None:
-    async def far_end(_client: Any, uplink: Any, include: list[str]) -> Any:
-        return world.bl_ports[uplink.id.removeprefix("up-")]
-
-    with patch("generators.firewall_context.far_end_interface", far_end):
-        await gen.generate(payload)
+    await gen.generate(payload)
 
 
 def _sub_names(world: _World) -> dict[tuple[str, str], list[str]]:
@@ -1086,11 +1104,7 @@ class TestLoadbalancerFailures:
     async def test_member_without_an_uplink_is_an_error_without_writes(self) -> None:
         world = _World()
         gen, _ = _make_gen(world)
-
-        async def no_uplink(*, device_id: str, role: str) -> Any:
-            return None
-
-        gen.find_role_interface = no_uplink
+        world.uplinks.clear()
 
         await _run(gen, world, _lb_payload())
 
@@ -1125,3 +1139,109 @@ class TestLoadbalancerFailures:
         assert world.contexts == {}
         assert world.writes == 0
         assert events == [f"acquire:lb-context-{_LB_PROD}", "release"]
+
+
+class TestTransitMemberResolution:
+    """The members' uplinks, cables and border ports are read once per context kind, then checked member by member."""
+
+    @pytest.mark.asyncio
+    async def test_a_boarding_reads_uplinks_cables_and_namespaces_once_per_context_kind(self) -> None:
+        """Per spec: one uplink lookup for the pair, one cable read; one namespace read for the whole run."""
+        world = _World()
+        gen, _ = _make_gen(world)
+
+        await _run(gen, world, _payload(lb_devices=_LB_DEVICES))
+
+        assert world.uplink_lookups == [["fw-1", "fw-2"], ["lb-1", "lb-2"]]
+        assert world.executed_filters.count("DcimCable") == 2
+        assert world.executed_filters.count("IpamNamespace") == 1
+        assert "DcimCable" not in world.gets
+        assert "DcimPhysicalInterface" not in world.gets
+        assert sorted(world.contexts) == [_SHARED, _LB_PROD]
+        gen.logger.error.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_virtual_member_uses_its_own_uplink_and_its_hosts_cable(self) -> None:
+        """A hosted instance's sub-interfaces sit on its own uplink; its border port is the host uplink's far end."""
+        world = _World()
+        gen, _ = _make_gen(world)
+        for host in ("fw-1", "fw-2"):
+            world.uplinks[f"v{host}"] = SimpleNamespace(
+                id=f"up-v{host}",
+                name=SimpleNamespace(value="eth1"),
+                device=SimpleNamespace(id=f"v{host}"),
+                cable=SimpleNamespace(id=None),
+            )
+        cluster = SimpleNamespace(
+            id="ded-cluster", name=SimpleNamespace(value="DC10-ded-ha"), capabilities=SimpleNamespace(peers=[])
+        )
+        members = [
+            SimpleNamespace(
+                id=f"v{host}",
+                name=SimpleNamespace(value=f"DC10-FW{index}-C005-p-dedicated"),
+                hosting_device=SimpleNamespace(id=host),
+            )
+            for index, host in ((1, "fw-1"), (2, "fw-2"))
+        ]
+        gen._ensure_dedicated_device_pair = AsyncMock(return_value=(cluster, members))
+
+        await _run(gen, world, _payload(dedicated=True))
+
+        assert world.uplink_lookups == [["fw-1", "fw-2", "vfw-1", "vfw-2"]]
+        context = world.contexts["DC10-ded-ha-context"]
+        assert {key for key in world.sub_interfaces if key[1] == "eth1.3000"} == {
+            ("vfw-1", "eth1.3000"),
+            ("vfw-2", "eth1.3000"),
+        }
+        assert world.tags == [(context.id, ["bl-port-fw-1", "bl-port-fw-2"])]
+        gen.logger.error.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_uncabled_uplink_is_an_error_without_writes(self) -> None:
+        world = _World()
+        gen, _ = _make_gen(world)
+        for uplink in world.uplinks.values():
+            uplink.cable = SimpleNamespace(id=None)
+
+        await _run(gen, world, _payload())
+
+        messages = [call.args[0] for call in gen.logger.error.call_args_list]
+        assert messages[0] == f"DC10-FW1: uplink Ethernet1/25 is not cabled — no border service port for '{_SHARED}'"
+        assert "DcimCable" not in world.executed_filters
+        assert world.writes == 0
+
+    @pytest.mark.asyncio
+    async def test_members_are_checked_in_name_order_after_the_reads(self) -> None:
+        """The first member's error comes first, whichever of its checks fails."""
+        world = _World()
+        gen, _ = _make_gen(world)
+        world.bl_ports["fw-1"].role = SimpleNamespace(value="transit")
+        del world.uplinks["fw-2"]
+
+        await _run(gen, world, _payload())
+
+        messages = [call.args[0] for call in gen.logger.error.call_args_list]
+        assert messages == [
+            f"DC10-FW1: uplink Ethernet1/25 is not cabled to a firewall service port for '{_SHARED}'",
+            "DC10-FW2: no role=uplink interface found — cannot create a context sub-interface",
+            f"{_SHARED}: no firewall member has an uplink cabled to a border service port",
+        ]
+        assert world.writes == 0
+
+    @pytest.mark.asyncio
+    async def test_failing_uplink_lookup_is_logged_per_member_without_writes(self) -> None:
+        world = _World()
+        gen, events = _make_gen(world)
+        world.fail_uplink_lookup = True
+
+        await _run(gen, world, _payload())
+
+        messages = [call.args[0] for call in gen.logger.error.call_args_list]
+        assert messages == [
+            "Error resolving uplink interface on DC10-FW1: uplink lookup failed",
+            "Error resolving uplink interface on DC10-FW2: uplink lookup failed",
+            f"{_SHARED}: no firewall member has an uplink cabled to a border service port",
+        ]
+        assert "DcimCable" not in world.executed_filters
+        assert world.writes == 0
+        assert events == []
