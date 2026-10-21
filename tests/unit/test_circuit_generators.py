@@ -573,6 +573,26 @@ class TestVirtualCircuitOverlay:
         assert any("provider-managed" in str(c) for c in gen.logger.warning.call_args_list)
 
     @pytest.mark.asyncio
+    async def test_single_ended_provider_managed_circuit_is_not_warned(self) -> None:
+        """A cloud on-ramp from the cage surfaces on one port (VC-C001-EQXFR-AWS-EUC1): its far end is the provider's."""
+        client = FakeClient()
+        gen = virtual_generator(client)
+
+        await gen.generate(virtual_payload(role="none", link_type="equinix_fabric", interfaces=[sdwan_gateway()]))
+
+        assert not any("interfaces, found" in str(c) for c in gen.logger.warning.call_args_list)
+
+    @pytest.mark.asyncio
+    async def test_single_ended_tunnel_is_warned(self) -> None:
+        """A tunnel of ours has both ends."""
+        client = FakeClient()
+        gen = virtual_generator(client)
+
+        await gen.generate(virtual_payload(role="none", interfaces=[sdwan_gateway()]))
+
+        assert any("expected 2 interfaces, found 1" in str(c) for c in gen.logger.warning.call_args_list)
+
+    @pytest.mark.asyncio
     async def test_overlay_session_over_existing_addresses(self) -> None:
         """One tracked eBGP peering; nothing allocated, no interface fetched or written."""
         client = FakeClient()

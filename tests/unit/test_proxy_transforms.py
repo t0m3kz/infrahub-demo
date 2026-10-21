@@ -470,3 +470,32 @@ class TestProxyTransformProxyRules:
         rules = mock_template.render.call_args[1]["proxy_rules"]
         assert len(rules) == 1
         assert rules[0]["destinations"] == ["api.github.com"]
+
+
+class TestProxyTransformUnrenderableRules:
+    @pytest.mark.asyncio
+    async def test_inspect_rule_on_haproxy_is_refused_not_denied(self) -> None:
+        """HAProxy tunnels HTTPS without inspecting it: an inspect rule fails the artifact (it used to deny)."""
+        cleaned = _cleaned_device()
+        cleaned["DcimPhysicalDevice"][0]["capabilities"][0]["shared_policies"] = [
+            {
+                "name": "base-egress",
+                "default_action": "block",
+                "enabled": True,
+                "rules": [
+                    {
+                        "name": "inspect-stripe",
+                        "priority": 10,
+                        "action": "inspect",
+                        "destination_type": "fqdn",
+                        "destination": "api.stripe.com",
+                        "disabled": False,
+                    }
+                ],
+            }
+        ]
+        with patch(_PROXY_CLEAN_DATA_PATH, return_value=cleaned):
+            with pytest.raises(
+                ValueError, match="haproxy_technologies_linux cannot render proxy rule 'inspect-stripe'"
+            ):
+                await _make_proxy_transform().transform({})

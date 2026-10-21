@@ -61,7 +61,7 @@ def get_proxy_policies(policies_data: list[dict[str, Any]] | None = None) -> lis
                 {
                     "priority": rule.get("priority"),
                     "name": rule.get("name") or "",
-                    "action": rule.get("action", "block"),
+                    "action": rule.get("action") or "block",
                     "destination_type": destination_type,
                     "destinations": destinations,
                     "ports": _render_ports(rule.get("ports")),
@@ -97,12 +97,58 @@ def flatten_proxy_rules(policies: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return flat
 
 
+# The access verdict of each ProxyPolicyRule action. `bypass` (allow without TLS inspection) and `inspect`
+# (allow with it) are allows; _refuse_unrenderable decides whether the renderer honours the inspection.
+# `redirect` has none: the schema models no redirect target, so no renderer can express it.
+_VERDICTS = {"allow": "allow", "bypass": "allow", "inspect": "allow", "block": "block"}
+
+# Renderers (an on-prem proxy's netmiko platform, a cloud proxy's template name) whose config inspects TLS
+# on every allowed flow, so an `inspect` rule is a plain allow there: squid bumps all (`ssl_bump bump all`).
+_TLS_INSPECTING_RENDERERS = frozenset({"squid_cache_linux"})
+
+# The destination types each renderer matches. Every one matches hostnames (fqdn, category entries);
+# squid also has ACL types for an address range (`dst`) and a URL regex (`url_regex`), and the generic
+# and ZIA payloads list non-category destinations untyped. Anywhere else a CIDR would match as a hostname
+# and a regex as a literal string.
+_HOSTNAME_DESTINATIONS = frozenset({"fqdn", "category"})
+_DESTINATION_TYPES: dict[str, frozenset[str]] = {
+    "squid_cache_linux": _HOSTNAME_DESTINATIONS | {"cidr", "regex"},
+    "generic": _HOSTNAME_DESTINATIONS | {"cidr"},
+    "zscaler_zia": _HOSTNAME_DESTINATIONS | {"cidr"},
+}
+
+
 def proxy_rules(
-    shared_policies: list[dict[str, Any]] | None, customers: list[dict[str, Any]] | None
+    shared_policies: list[dict[str, Any]] | None, customers: list[dict[str, Any]] | None, renderer: str
 ) -> list[dict[str, Any]]:
-    """The flat rule list of one proxy: its shared policies plus each customer's own, merged by name."""
+    """The flat rule list of one proxy: its shared policies plus each customer's own, merged by name.
+
+    Each rule carries its access ``verdict`` (allow/block) for ``renderer`` (see _TLS_INSPECTING_RENDERERS).
+    Raises ValueError for a rule ``renderer`` cannot express, instead of rendering it as something else.
+    """
     customer_policies = [policy for customer in customers or [] for policy in customer.get("proxy_policies") or []]
-    return flatten_proxy_rules(get_proxy_policies(merge_policies(shared_policies or [], customer_policies)))
+    rules = flatten_proxy_rules(get_proxy_policies(merge_policies(shared_policies or [], customer_policies)))
+    for rule in rules:
+        _refuse_unrenderable(rule, renderer)
+        rule["verdict"] = _VERDICTS[rule["action"]]
+    return rules
+
+
+def _refuse_unrenderable(rule: dict[str, Any], renderer: str) -> None:
+    """Raise when ``renderer`` cannot express the rule's action or destination type."""
+    action, destination_type = rule["action"], rule["destination_type"]
+    if action not in _VERDICTS:
+        problem = f"action '{action}'" + (" (no redirect target is modelled)" if action == "redirect" else "")
+    elif action == "inspect" and renderer not in _TLS_INSPECTING_RENDERERS:
+        problem = "action 'inspect' (its config inspects no TLS)"
+    elif destination_type not in _DESTINATION_TYPES.get(renderer, _HOSTNAME_DESTINATIONS):
+        problem = f"destination_type '{destination_type}'"
+    else:
+        return
+    raise ValueError(
+        f"{renderer} cannot render proxy rule '{rule['name']}' of policy '{rule['policy_name']}': {problem}; "
+        "refusing a config that would apply a different rule"
+    )
 
 
 def _render_ports(specs: list[str] | None) -> list[dict[str, Any]]:

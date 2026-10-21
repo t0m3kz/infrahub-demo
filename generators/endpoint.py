@@ -128,12 +128,12 @@ class EndpointUplinkMixin:
             )
             return
 
-        self.logger.info(f"Found {len(speed_groups)} speed group(s): {sorted(speed_groups.keys())}Gbps")
+        self.logger.info(f"Found {len(speed_groups)} speed group(s): {sorted(speed_groups.keys())} Mbps")
 
         # Process each speed group independently
         for speed, (server_intfs, switch_intfs) in sorted(speed_groups.items()):
             self.logger.info(
-                f"Processing {speed}Gbps group: {len(server_intfs)} server interfaces, "
+                f"Processing {speed} Mbps group: {len(server_intfs)} server interfaces, "
                 f"{len(switch_intfs)} switch interfaces"
             )
 
@@ -145,16 +145,16 @@ class EndpointUplinkMixin:
             )
 
             if not connection_plan:
-                self.logger.warning(f"No connection plan created for {speed}Gbps group")
+                self.logger.warning(f"No connection plan created for {speed} Mbps group")
                 continue
 
             # Validate the plan (check for duplicates, no minimum requirement)
             is_valid, message = ConnectionValidator.validate_plan(connection_plan, min_connections=1)
             if not is_valid:
-                self.logger.error(f"Connection plan validation failed for {speed}Gbps: {message}")
+                self.logger.error(f"Connection plan validation failed for {speed} Mbps: {message}")
                 continue
 
-            self.logger.info(f"Connection plan for {speed}Gbps: {len(connection_plan)} connection(s) planned")
+            self.logger.info(f"Connection plan for {speed} Mbps: {len(connection_plan)} connection(s) planned")
 
             # Add to planned connections
             self.planned_connections.update(connection_plan)
@@ -162,7 +162,7 @@ class EndpointUplinkMixin:
             # Execute cabling
             await self._execute_cabling(connection_plan, target_device_names)
 
-            self.logger.info(f"Successfully created {len(connection_plan)} connections for {speed}Gbps group")
+            self.logger.info(f"Successfully created {len(connection_plan)} connections for {speed} Mbps group")
 
     async def _execute_cabling(
         self,

@@ -208,6 +208,12 @@ class ControllerPayload(InfrahubTransform):
         vendor = (controller.get("platform") or {}).get("name")
         builder = _BUILDERS.get((controller_type, vendor)) or _BUILDERS.get((controller_type, None))
         if builder is None:
-            return json.dumps({})
+            # e.g. wlc, meraki_dashboard, nsx_manager, ucs_manager: no payload is modelled for them yet, and an
+            # empty `{}` artifact would read as a controller with nothing to onboard.
+            raise ValueError(
+                f"Controller '{controller.get('name')}': no payload builder for controller_type '{controller_type}'"
+                f" on platform '{vendor}'; supported: "
+                + ", ".join(sorted(f"{ctype}/{platform or '*'}" for ctype, platform in _BUILDERS))
+            )
 
         return json.dumps(builder(controller), indent=2)

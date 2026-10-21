@@ -202,6 +202,7 @@ class DeviceMixin(MLAGWiringMixin):
             device_names: list[str] = [name_override]
         else:
             naming = DeviceNamingConfig(strategy=naming_convention)
+            first_role_index = options.get("role_index_start", 1)
             device_names = sorted(
                 [
                     naming.format_device_name(
@@ -212,7 +213,7 @@ class DeviceMixin(MLAGWiringMixin):
                             indexes=indexes or [],
                         )
                     )
-                    for idx in range(1, quantity + 1)
+                    for idx in range(first_role_index, first_role_index + quantity)
                 ]
             )
         management_pool_name = f"{fabric_name}-management-pool"
@@ -851,28 +852,34 @@ class DeviceMixin(MLAGWiringMixin):
                 self.logger.error(f"MLAG pair {first}/{second}: could not resolve both devices.")
                 continue
 
-            # Pass existing id so upsert matches by ID, not hfid lookup — mirrors
-            # create_devices()'s own upsert pattern.
-            existing = await self.client.filters(kind=ManagedMLAG, name__value=mlag_name)
-            existing_mlag = existing[0] if existing else None
-
             if mlag_group is None:
                 mlag_group = await self.client.get(kind=CoreStandardGroup, name__value="mlag_domains")
             vlan_pool = await self._ensure_vlan_domain_pool(mlag_name)
-            mlag_obj = await self.client.create(
-                kind=ManagedMLAG,
-                data={
-                    **({"id": existing_mlag.id} if existing_mlag else {}),
-                    "name": mlag_name,
-                    "domain_id": pair_index,
-                    "virtual_peer_link": mlag_create == "virtual",
-                    "status": "active",
-                    "capabilities": [{"id": first_dev.id}, {"id": second_dev.id}],
-                    "member_of_groups": [{"id": mlag_group.id}],
-                    "vlan_pool": {"id": vlan_pool.id},
-                },
-            )
-            await mlag_obj.save(allow_upsert=True)
+
+            # Two overlapping runs (a rack's inline run and its own trigger) can
+            # both find no domain and both create it: the lookup and the create
+            # sit inside one per-domain lock, like _ensure_ha_pairs. Released
+            # before ensure_mlag_wiring takes its own mlag-wiring-{id} lock, so
+            # the two are never held together.
+            async with self.resource_lock(f"mlag-domain-{mlag_name}"):
+                # Pass existing id so upsert matches by ID, not hfid lookup — mirrors
+                # create_devices()'s own upsert pattern.
+                existing = await self.client.filters(kind=ManagedMLAG, name__value=mlag_name)
+                existing_mlag = existing[0] if existing else None
+                mlag_obj = await self.client.create(
+                    kind=ManagedMLAG,
+                    data={
+                        **({"id": existing_mlag.id} if existing_mlag else {}),
+                        "name": mlag_name,
+                        "domain_id": pair_index,
+                        "virtual_peer_link": mlag_create == "virtual",
+                        "status": "active",
+                        "capabilities": [{"id": first_dev.id}, {"id": second_dev.id}],
+                        "member_of_groups": [{"id": mlag_group.id}],
+                        "vlan_pool": {"id": vlan_pool.id},
+                    },
+                )
+                await mlag_obj.save(allow_upsert=True)
             self.logger.info(
                 f"{'Updated' if existing_mlag else 'Created'} MLAG domain {mlag_name} ({mlag_create}) for {role_label}s"
             )

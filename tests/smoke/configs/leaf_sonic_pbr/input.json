@@ -1214,7 +1214,7 @@
                                           "id": "seg-internet",
                                           "__typename": "ManagedExternalSegment",
                                           "name": {
-                                            "value": "internet-internet-p"
+                                            "value": "internet"
                                           },
                                           "security_zone": {
                                             "node": {
@@ -1614,7 +1614,7 @@
                                           "id": "seg-internet",
                                           "__typename": "ManagedExternalSegment",
                                           "name": {
-                                            "value": "internet-internet-p"
+                                            "value": "internet"
                                           },
                                           "security_zone": {
                                             "node": {

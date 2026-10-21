@@ -1275,7 +1275,7 @@ def _make_internet_segment() -> dict:
     return {
         "id": "seg-internet",
         "__typename": "ManagedExternalSegment",
-        "name": _v("internet-internet-p"),
+        "name": _v("internet"),
         "security_zone": _node({"name": _v("INTERNET-ZONE")}),
         "gateway": _node(None),
         "customer_deployment": _node(None),
@@ -3463,7 +3463,7 @@ def _gpo_fleet_roots(
         ),
         _gp_segment(
             "seg-internet",
-            "internet-internet-p",
+            "internet",
             "INTERNET",
             prefix=None,
             zone="INTERNET-ZONE",

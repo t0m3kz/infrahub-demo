@@ -46,7 +46,7 @@ class Proxy(BaseDeviceTransform):
             None,
         )
 
-        rules = proxy_rules((proxy_ha or {}).get("shared_policies"), (proxy_ha or {}).get("customers"))
+        rules = proxy_rules((proxy_ha or {}).get("shared_policies"), (proxy_ha or {}).get("customers"), platform_name)
 
         config = self._build_config(device, platform_name)
         config.update(
