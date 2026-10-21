@@ -1,8 +1,7 @@
 """Group policy: VTEPs and data centers against the reference profile, and which segments need group policy.
 
 One implementation each, shared by checks/reference_fabric.py, checks/segment_security.py,
-the segmentation_matrix artifact (transforms/topology/segmentation_matrix.py), the
-group tag helper (generators/helpers/security_tag.py) and the contract builder
+the group tag helper (generators/helpers/security_tag.py) and the contract builder
 (transforms/helpers/group_policy/):
 
 - ``profiles_by_platform``: platform -> its one usable DcimGroupPolicyProfile row,

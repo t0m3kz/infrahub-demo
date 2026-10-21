@@ -39,12 +39,10 @@ from transforms.config.spine import Spine
 from transforms.config.super_spine import SuperSpine
 from transforms.config.tor import ToR
 from transforms.helpers.group_policy import group_policy_device_view
-from transforms.topology.segmentation_matrix import SegmentationMatrix
 from utils.data_cleaning import clean_data
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SMOKE_DIR = Path(__file__).resolve().parent / "configs"
-SEGMENTATION_MATRIX_DIR = Path(__file__).resolve().parent / "segmentation_matrix"
 
 # ============================================================================
 # GraphQL response builders (raw format, before clean_data)
@@ -3139,7 +3137,7 @@ def build_lb_cloud_data(*, provider: str) -> dict:
 
 
 # ============================================================================
-# segmentation_matrix artifact (one data center, queries/topology/segmentation_matrix.gql)
+# Group policy fleet builders (DeviceGroupPolicyFields, SegmentGroupPolicyFields, SecurityTagGroupPolicyFields)
 # ============================================================================
 
 
@@ -3324,184 +3322,6 @@ def _gp_profiles() -> list[dict]:
         }
         for row in profile_rows
     ]
-
-
-def build_segmentation_matrix_data() -> dict:
-    """DC10 as it is today, not a reference fabric (FX2 leafs and border leaf on 10.3(3) next to an EX
-    access leaf, and a spine, no VTEP), next to DC12 (legacy), against the bootstrap profile rows.
-
-    The 30_all shape: C008's trade portal calls the web component of C005's microsegmented web segment
-    (the one cross-customer rule, narrowed to that component's tag); the web segment has three tagged
-    components (one permit rule, one disabled rule, two un-ruled pairs) and its web component calls
-    the backend component of the segment stretched to DC12; C006's shop sits behind
-    an inline firewall and reaches the internet; the INFRA MANAGEMENT VLAN segment and an untagged
-    C007 segment are never classified; a DC12-only rule is out of scope; one tag is an orphan.
-    """
-    memory_gb = _gp_memory_gb()
-    profiles = _gp_profiles()
-    web = "seg-web"
-    segments = [
-        _gp_segment(
-            "seg-portal",
-            "c008-trade-portal-local-dc10-p",
-            "C008",
-            prefix="10.8.10.0/24",
-            # The dependency targets the web component: the generator writes its tag on the
-            # microsegmented destination side (RulesPlanner.rule_tags).
-            rules=[_gp_rule("c008-trade-portal-to-c005-payment-api-tcp-443", web, 443, dst_tag="tag-web")],
-            tag=("c008-trade-portal-local-dc10-p", 40),
-        ),
-        _gp_segment(
-            web,
-            "c005-web-frontend-local-dc10-p",
-            "C005",
-            prefix="10.5.10.0/24",
-            isolation_mode="microsegmented",
-            rules=[
-                _gp_rule("web-frontend-to-session-store-tcp-6379", web, 6379, src_tag="tag-web", dst_tag="tag-session"),
-                _gp_rule(
-                    "web-frontend-to-session-store-tcp-6380",
-                    web,
-                    6380,
-                    index=110,
-                    disabled=True,
-                    src_tag="tag-web",
-                    dst_tag="tag-session",
-                ),
-                _gp_rule(
-                    "c005-payment-web-to-backend-tcp-8443",
-                    "seg-backend",
-                    8443,
-                    index=120,
-                    src_tag="tag-web",
-                    dst_tag="tag-backend",
-                ),
-            ],
-            tag=("c005-web-frontend-local-dc10-p", 41),
-        ),
-        _gp_segment(
-            "seg-backend",
-            "c005-app-backend-stretch-p",
-            "C005",
-            prefix="10.5.20.0/24",
-            isolation_mode="microsegmented",
-            sites=("dc10", "dc12"),
-            tag=("c005-app-backend-stretch-p", 42),
-        ),
-        _gp_segment(
-            "seg-shop",
-            "c006-shop-p",
-            "C006",
-            prefix="10.6.10.0/24",
-            rules=[_gp_rule("shop-to-internet-https", "seg-internet", 443, apply_on_switch=False)],
-            tag=("c006-shop-p", 43),
-            inline="DC10-FW-CTX-C006",
-        ),
-        _gp_segment(
-            "seg-db",
-            "c005-database-local-dc12-p",
-            "C005",
-            prefix="10.5.30.0/24",
-            isolation_mode="microsegmented",
-            rules=[_gp_rule("db-replication", "seg-db", 5432)],
-            sites=("dc12",),
-            tag=("c005-database-local-dc12-p", 44),
-        ),
-        _gp_segment(
-            "seg-c007",
-            "c007-untagged-p",
-            "C007",
-            prefix="10.7.10.0/24",
-        ),
-        _gp_segment(
-            "seg-infra",
-            "infra-core-dns-ntp-p",
-            "INFRA",
-            prefix="10.250.0.0/24",
-            namespace=("MANAGEMENT", "management"),
-            zone="MANAGEMENT-ZONE",
-            kind="ManagedVlanSegment",
-        ),
-        _gp_segment(
-            "seg-internet",
-            "internet-internet-p",
-            "INTERNET",
-            prefix=None,
-            zone="INTERNET-ZONE",
-            kind="ManagedExternalSegment",
-            sites=(),
-        ),
-    ]
-    return {
-        "data": {
-            "target": _edges([{"id": "dc10", "name": _v("DC10"), "group_policy_enforce": _v(True)}]),
-            "TopologyDataCenter": _edges(
-                [
-                    {
-                        "id": "dc10",
-                        "name": _v("DC10"),
-                        "group_policy_enforce": _v(True),
-                        "devices": _edges(
-                            [_gp_device("bl-dc10-01", "border-leaf", "N9K-C9336C-FX2", "10.3(3)", memory_gb)]
-                        ),
-                    },
-                    {
-                        "id": "dc12",
-                        "name": _v("DC12"),
-                        "group_policy_enforce": _v(False),
-                        "devices": _edges(
-                            [_gp_device("bl-dc12-01", "border-leaf", "N9K-C9336C-FX2", "10.3(3)", memory_gb)]
-                        ),
-                    },
-                ]
-            ),
-            "TopologyPod": _edges(
-                [
-                    {
-                        "parent": _node({"id": "dc10", "__typename": "TopologyDataCenter"}),
-                        "devices": _edges(
-                            [
-                                _gp_device("lf-dc10-01", "leaf", "N9K-C9336C-FX2", "10.3(3)", memory_gb),
-                                _gp_device("al-dc10-01", "access-leaf", "N9K-C93180YC-EX", "10.3(3)", memory_gb),
-                                # Not a VTEP: the query returns every device, the transform keeps the VTEPs.
-                                _gp_device("sp-dc10-01", "spine", "N9K-C9336C-FX2", "10.3(3)", memory_gb),
-                            ]
-                        ),
-                    }
-                ]
-            ),
-            "DcimGroupPolicyProfile": _edges(profiles),
-            "ManagedNetworkSegment": _edges(segments),
-            "SecurityTag": _edges(
-                [
-                    _gp_tag("tag-web", 16, "api.payment-core.c005.demo.local", web),
-                    _gp_tag("tag-session", 20, "sessions.payment-core.c005.demo.local", web),
-                    _gp_tag("tag-audit", 21, "audit.payment-core.c005.demo.local", web),
-                    _gp_tag("tag-backend", 17, "backend.payment-core.c005.demo.local", "seg-backend"),
-                    _gp_tag("tag-orphan", 30, None, None),
-                ]
-            ),
-        }
-    }
-
-
-def write_segmentation_matrix_fixture() -> tuple[int, int]:
-    """Write tests/smoke/segmentation_matrix/{input,output}.json (test_segmentation_matrix.yml)."""
-    data = build_segmentation_matrix_data()
-    SEGMENTATION_MATRIX_DIR.mkdir(parents=True, exist_ok=True)
-    with open(SEGMENTATION_MATRIX_DIR / "input.json", "w") as f:
-        json.dump(data, f, indent=2)
-        f.write("\n")
-    try:
-        output = run_transform(SegmentationMatrix, data["data"])
-    except Exception as e:
-        print(f"  ✗ segmentation_matrix: {e}")
-        return 0, 1
-    with open(SEGMENTATION_MATRIX_DIR / "output.json", "w") as f:
-        json.dump(output, f, indent=2, sort_keys=True)
-        f.write("\n")
-    print("  ✓ segmentation_matrix")
-    return 1, 0
 
 
 # ============================================================================
@@ -4790,11 +4610,6 @@ def main() -> int:
         )
         generated += g
         errors += e
-
-    print("\nGenerating the segmentation_matrix artifact fixture:")
-    g, e = write_segmentation_matrix_fixture()
-    generated += g
-    errors += e
 
     # NX-OS VXLAN GPO: a reference fabric's VTEPs render the group policy, any other device nothing.
     print("\nGenerating the NX-OS and EOS group policy device fixtures:")

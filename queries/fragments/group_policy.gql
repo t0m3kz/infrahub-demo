@@ -3,9 +3,9 @@
 # device's role, platform, device type with its memory, and software image;
 # and the DcimGroupPolicyProfile rows it is compared with, with the reserved
 # groups the platform views render (transforms/helpers/group_policy.py). Read
-# by the reference_fabric check, the segmentation_matrix artifact and the NX-OS
-# VTEP configs (leaf_config, border_leaf_config, border_spine_config: the same
-# fleet roots as the artifact, transforms/helpers/group_policy.group_policy_device_view).
+# by the reference_fabric check and the VTEP configs (leaf_config,
+# border_leaf_config, border_spine_config: the same fleet roots in each,
+# transforms/helpers/group_policy.group_policy_device_view).
 
 fragment DeviceGroupPolicyFields on DcimDevice {
   name { value }
@@ -45,8 +45,8 @@ fragment SecurityTagGroupPolicyFields on SecurityTag {
 # Where the instances of each component of a tag sit (transforms/helpers/group_policy.py
 # component_coverage: a component group is classified by `match vlan <VLAN> interface
 # <port>` on the VTEP port its instances' hosts are cabled to). Spread next to
-# SecurityTagGroupPolicyFields (its `components` merge with this one) by the NX-OS VTEP
-# configs only: the segmentation_matrix artifact does not need it.
+# SecurityTagGroupPolicyFields (its `components` merge with this one) by the VTEP
+# configs only: the reference_fabric check does not need it.
 #
 # Per instance: a physical device/controller is its own host; a virtual one walks
 # hosting_device (utils/app_instances.physical_host). The host's uplink/lag NICs are

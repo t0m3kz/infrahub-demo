@@ -68,7 +68,6 @@ from transforms.helpers.group_policy import (
     vxlan_gpo_view,
 )
 from transforms.helpers.vxlan import get_interfaces, get_vxlan_config
-from transforms.topology.segmentation_matrix import SegmentationMatrix
 from utils.data_cleaning import clean_data
 from utils.fabric_roles import DC_VTEP_ROLES
 
@@ -281,23 +280,6 @@ class TestScope:
         assert view is not None
         assert {contract["src_name"] for contract in view["vrfs"]["NONPROD"]["contracts"]}.isdisjoint({"app-np"})
         assert next(group for group in view["groups"] if group["name"] == "app-np")["vlan_id"] == 120
-
-    def test_device_contracts_equal_the_matrix_contracts_of_its_vrfs(self) -> None:
-        """One truth: the artifact's vxlan_gpo contracts (ids, entries) are the device's (ids, policy)."""
-        raw = _raw()
-        payload = {**raw, "target": {"edges": [{"node": {"id": "dc10", "name": _v("DC10")}}]}}
-        matrix = asyncio.run(SegmentationMatrix.__new__(SegmentationMatrix).transform(payload))
-        view = _view(_roots(raw))
-        assert view is not None
-        policies = {item["name"]: item for item in view["class_maps"]}
-        for vrf, rendered in view["vrfs"].items():
-            from_matrix = {
-                (row["src_group_id"], row["dst_group_id"], class_map_name(row["entries"]))
-                for row in matrix["kinds"]["vxlan_gpo"]["contracts"]
-                if row["vrf"] == vrf
-            }
-            assert from_matrix == {(item["src"], item["dst"], item["policy"]) for item in rendered["contracts"]}
-            assert all(item["policy"] in policies for item in rendered["contracts"])
 
     def test_segment_vrf_is_the_vrf_name_of_the_l3_vni_mapping(self) -> None:
         """The VRF cut compares a group's vrf (segment_vrf) with the device's l3_vni_mappings vrf_name."""
@@ -727,7 +709,7 @@ class TestPairNotes:
         assert any("documented-not-lab-verified: reserved group 0 (UNCLASSIFIED)" in note for note in notes)
 
 
-class TestViewIsTheMatrixView:
+class TestViewIsTheDataCenterView:
     def test_a_group_is_unaware_where_it_is_also_active_outside_the_reference_sites(self) -> None:
         """db-np is stretched to DC12 (legacy): a row of it arrives as the unaware group too."""
         roots = _roots()

@@ -143,8 +143,8 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
 # that's genuinely DC-wide/fabric-wide unique). gateway.ip_prefix.prefix is
 # what a segment is matched on here. The segment's group tag is not read here:
 # the NX-OS GPO block reads it from the fleet roots of the device query
-# (fragments/group_policy.gql, transforms/helpers/group_policy.group_policy_device_view),
-# like the segmentation_matrix artifact (schemas/extensions/security/security_tags.yml).
+# (fragments/group_policy.gql, transforms/helpers/group_policy.group_policy_device_view;
+# schemas/extensions/security/security_tags.yml).
 fragment SegmentDeploymentsOnDeploymentFields on TopologySegmentHosting {
   segment_deployments(status__values: ["active", "provisioning"]) {
     edges {

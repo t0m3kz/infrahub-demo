@@ -21,7 +21,7 @@ version: "1.0"
 # the tag pool band (checks/segment_security.py).
 #
 # Read by checks/reference_fabric.py, checks/segment_security.py, the
-# segmentation_matrix artifact and the group tag generator helper.
+# NX-OS and EOS device configs and the group tag generator helper.
 # ============================================================================
 
 nodes:

@@ -73,7 +73,7 @@ class TestSegmentDeploymentIdsCoverCloud:
 
 
 class TestClassifierPrefix:
-    """The one prefix a segment is classified by (MSS-G, the segmentation matrix): IPv4, else IPv6."""
+    """The one prefix a segment is classified by (MSS-G): IPv4, else IPv6."""
 
     def test_ipv4_prefix_is_the_classifier(self) -> None:
         assert classifier_prefix(_gw("10.0.0.0/24")) == "10.0.0.0/24"
