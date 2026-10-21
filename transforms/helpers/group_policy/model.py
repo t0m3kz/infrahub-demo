@@ -60,18 +60,6 @@ class Group:
     intra_group: str
     sites: frozenset[str]
 
-    def as_dict(self) -> dict[str, Any]:
-        """The artifact view: everything but the site ids (id-free)."""
-        return {
-            "name": self.name,
-            "group_id": self.group_id,
-            "kind": self.kind,
-            "segment": self.segment,
-            "vrf": self.vrf,
-            "customer": self.customer,
-            "intra_group": self.intra_group,
-        }
-
 
 def segment_vrf(segment: dict[str, Any]) -> str | None:
     """The VRF (IPAM namespace name) of a segment's gateway."""
@@ -255,10 +243,8 @@ def get_vrf_contracts(
 class DataCenterContracts:
     """One data center's group contracts, from the fleet-wide query roots.
 
-    The one composition both readers share: the segmentation_matrix artifact and
-    the device renderers. ``reference_sites`` is the fleet as it is (every site
-    whose VTEPs are all in their platform's profile row); a reader that wants
-    this data center treated as one adds it itself.
+    The one composition of the device renderers. ``reference_sites`` is the fleet
+    as it is (every site whose VTEPs are all in their platform's profile row).
 
     ``enforce`` is the data center's staging switch (``group_policy_enforce``, A6): False renders the
     contracts but not ``security enforce``. ``name`` is the data center's, for that reason's text.
@@ -268,11 +254,9 @@ class DataCenterContracts:
     enforce: bool
     profiles: Profiles
     vteps: list[dict[str, Any]]
-    reason: str | None
     reference_sites: set[str]
     segments: list[dict[str, Any]]
     all_segments: list[dict[str, Any]]
-    tags: list[dict[str, Any]]
     components_of: dict[str, list[dict[str, Any]]]
     by_segment: dict[str, list[Group]]
     all_groups: list[Group]
@@ -323,11 +307,9 @@ def data_center_contracts(
         enforce=bool(data_center.get("group_policy_enforce")),
         profiles=profiles,
         vteps=vteps,
-        reason=reasons[dc_id] if dc_id in reasons else site_reason(vteps, profiles),
         reference_sites={site for site, reason in reasons.items() if reason is None},
         segments=segments,
         all_segments=all_segments,
-        tags=tags,
         components_of=tags_by_segment(tags),
         by_segment=by_segment,
         all_groups=all_groups,

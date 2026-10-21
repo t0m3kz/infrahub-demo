@@ -1,7 +1,7 @@
 """Group contracts of one fabric, deny by default: the segments' rules as rows between group tags.
 
-One builder for every reader (the segmentation_matrix artifact, the
-segment_security consistency check, and the device renderers to come).
+One builder for every reader (the segment_security consistency check and
+the device renderers).
 
 Groups (``segment_groups``):
 

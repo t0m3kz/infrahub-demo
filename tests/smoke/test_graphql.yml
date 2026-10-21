@@ -419,11 +419,3 @@ infrahub_tests:
         spec:
           path: queries/validation/reference_fabric.gql
           kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
-    resource_name: segmentation_matrix
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/topology/segmentation_matrix.gql
-          kind: graphql-query-smoke

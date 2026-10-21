@@ -377,12 +377,9 @@ class TestGbpRequired:
 class TestQueries:
     """The queries select what the profile functions read, and filter no role by literal."""
 
-    @pytest.mark.parametrize(
-        "query", ["queries/validation/reference_fabric.gql", "queries/topology/segmentation_matrix.gql"]
-    )
-    def test_queries_read_the_profile_rows_and_no_role_literal(self, root_dir: Path, query: str) -> None:
+    def test_check_query_reads_the_profile_rows_and_no_role_literal(self, root_dir: Path) -> None:
         """Rows through the shared fragment; VTEP roles come from utils/fabric_roles.py, not the query."""
-        text = (root_dir / query).read_text()
+        text = (root_dir / "queries/validation/reference_fabric.gql").read_text()
         assert "...GroupPolicyProfileFields" in text
         assert "...DeviceGroupPolicyFields" in text
         assert "role__values" not in text
@@ -408,36 +405,30 @@ class TestQueries:
         )
 
     DEVICE_QUERIES = ("queries/config/leaf.gql", "queries/config/border_leaf.gql", "queries/config/border_spine.gql")
+    FLEET_ROOTS = (
+        "DcimGroupPolicyProfile",
+        "TopologyDataCenter",
+        "TopologyPod",
+        "ManagedNetworkSegment",
+        "SecurityTag",
+    )
     PLACEMENT_SPREAD = "      ...SecurityTagPlacementFields\n"
 
     @pytest.mark.parametrize("query", DEVICE_QUERIES)
-    def test_device_queries_carry_the_fleet_roots_of_the_matrix_after_the_device_root(
-        self, root_dir: Path, query: str
-    ) -> None:
-        """The NX-OS GPO block reads the matrix's roots (minus ``target``) as top-level roots; DcimDevice stays first.
+    def test_device_queries_carry_the_same_fleet_roots_after_the_device_root(self, root_dir: Path, query: str) -> None:
+        """The GPO block reads the fleet roots as top-level roots, the same in every device query; DcimDevice stays first.
 
-        The SecurityTag root is the matrix's plus the placement of each component's instances
-        (``SecurityTagPlacementFields``, component_coverage): the only difference.
+        The SecurityTag root also spreads the placement of each component's instances
+        (``SecurityTagPlacementFields``, component_coverage).
         """
-        matrix = self._roots((root_dir / "queries/topology/segmentation_matrix.gql").read_text())
+        reference = self._roots((root_dir / self.DEVICE_QUERIES[0]).read_text())
         device = self._roots((root_dir / query).read_text())
-        fleet = {key: root for key, root in matrix.items() if key != "target"}
         assert list(device)[0] == "DcimDevice"
-        assert list(device)[1:] == list(fleet)
-        fleet["SecurityTag"] = fleet["SecurityTag"].replace(
-            "...SecurityTagGroupPolicyFields\n", "...SecurityTagGroupPolicyFields\n" + self.PLACEMENT_SPREAD
-        )
-        assert {key: device[key] for key in fleet} == fleet
+        assert list(device)[1:] == list(self.FLEET_ROOTS)
+        assert {key: device[key] for key in self.FLEET_ROOTS} == {key: reference[key] for key in self.FLEET_ROOTS}
+        assert self.PLACEMENT_SPREAD in device["SecurityTag"]
 
-    @pytest.mark.parametrize(
-        "query",
-        [
-            "queries/topology/segmentation_matrix.gql",
-            "queries/config/leaf.gql",
-            "queries/config/border_leaf.gql",
-            "queries/config/border_spine.gql",
-        ],
-    )
+    @pytest.mark.parametrize("query", DEVICE_QUERIES)
     def test_every_query_reads_the_tags_through_the_one_fragment(self, root_dir: Path, query: str) -> None:
         text = (root_dir / query).read_text()
         assert "...SecurityTagGroupPolicyFields" in text
@@ -445,17 +436,13 @@ class TestQueries:
         fragments = (root_dir / "queries/fragments/group_policy.gql").read_text()
         assert fragments.count("fragment SecurityTagGroupPolicyFields on SecurityTag") == 1
 
-    @pytest.mark.parametrize("query", ("queries/topology/segmentation_matrix.gql", *DEVICE_QUERIES))
-    def test_the_enforcement_switch_is_read_on_the_data_center_roots(self, root_dir: Path, query: str) -> None:
-        """``group_policy_enforce`` (A6) rides on the fleet TopologyDataCenter root of every query, and on the
-        matrix's ``target`` (the data center the artifact is for)."""
+    @pytest.mark.parametrize("query", DEVICE_QUERIES)
+    def test_the_enforcement_switch_is_read_on_the_data_center_root(self, root_dir: Path, query: str) -> None:
+        """``group_policy_enforce`` (A6) rides on the fleet TopologyDataCenter root of every device query."""
         roots = self._roots((root_dir / query).read_text())
-        assert ("target" in roots) == query.endswith("segmentation_matrix.gql")
-        for key in ("target", "TopologyDataCenter"):
-            if key in roots:
-                assert "group_policy_enforce {\n" in roots[key]
+        assert "group_policy_enforce {\n" in roots["TopologyDataCenter"]
 
-    @pytest.mark.parametrize("query", ("queries/topology/segmentation_matrix.gql", *DEVICE_QUERIES))
+    @pytest.mark.parametrize("query", DEVICE_QUERIES)
     def test_every_spread_resolves_against_the_fragments_directory(self, root_dir: Path, query: str) -> None:
         """.infrahub.yml loads the whole queries/fragments/ directory: every named spread, transitively
         (SecurityTagPlacementFields -> HostNicFields), must be defined there exactly once."""
@@ -486,16 +473,15 @@ class TestQueries:
             assert "HostNicFields" in seen
 
     def test_only_the_device_queries_read_the_instance_placement(self, root_dir: Path) -> None:
-        """The matrix artifact (and the check) must not pay for the NIC and cable walk of every instance."""
+        """The reference_fabric check must not pay for the NIC and cable walk of every instance."""
         for query in self.DEVICE_QUERIES:
             text = (root_dir / query).read_text()
             assert text.count("...SecurityTagPlacementFields") == 1
-        for query in ("queries/topology/segmentation_matrix.gql", "queries/validation/reference_fabric.gql"):
-            assert "SecurityTagPlacementFields" not in (root_dir / query).read_text()
+        assert "SecurityTagPlacementFields" not in (root_dir / "queries/validation/reference_fabric.gql").read_text()
         fragments = (root_dir / "queries/fragments/group_policy.gql").read_text()
         assert fragments.count("fragment SecurityTagPlacementFields on SecurityTag") == 1
         assert "instances" not in self._fragment(root_dir, "SecurityTagGroupPolicyFields"), (
-            "the shared fragment stays as the matrix reads it"
+            "the shared fragment stays as the check reads it"
         )
 
     def test_fragment_selects_memory_and_kind(self, root_dir: Path) -> None:

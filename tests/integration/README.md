@@ -175,7 +175,6 @@ rules -> transform -> rendered EOS Segment Security (MSS-G) text*:
 | Tenant load | servers, footprint, three VXLAN segments, hand-written policies and one application, each stage settled |
 | Tenant state | each server cabled to the intended tier; every segment has a gateway prefix, a group tag and one active deployment in DC14; the policies hold exactly the hand-written rules |
 | Checks | `CheckReferenceFabric` reports no error and `DC14 is a reference fabric (segment_security, N VTEPs)`; `CheckSegmentSecurity` reports no error |
-| Segmentation matrix | a staged `segment_security` reference site, prefixes equal to the live gateways, the db -> app any-reply in `unsupported` |
 | Renders | leaf, access-leaf and border-leaf: `router segment-security` with the live match-lists and VRF, the expected `from` / `fallback policy` lines, `field-set l4-port` indented inside `application traffic recognition`, the staged comment and a final `shutdown`, no `policy-drop-all default`; a spine and a leaf that hosts no segment render none |
 | Enforce | `group_policy_enforce` starts no generator and changes each render by the staged comment and `shutdown` -> `no shutdown` |
 | Negative gate | one access-leaf on EOS 4.32.1F makes DC14 no reference fabric and removes the block from every device; restoring the image brings it back |

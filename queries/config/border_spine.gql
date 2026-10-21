@@ -125,8 +125,8 @@ query border_spine_config(
     }
   }
 
-  # The fleet roots of queries/topology/segmentation_matrix.gql, minus its
-  # target: the group contracts of the device's data center and the reference
+  # The fleet roots (the same in leaf.gql, border_leaf.gql and border_spine.gql):
+  # the group contracts of the device's data center and the reference
   # fabric verdict of every site, for the NX-OS GPO block
   # (transforms/helpers/group_policy.group_policy_device_view). The device root
   # above must stay first (transforms/common.py _device_and_platform).

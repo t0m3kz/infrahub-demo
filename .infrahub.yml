@@ -139,17 +139,6 @@ artifact_definitions:
     parameters:
       id: id
 
-  # Vendor-neutral: the DC's segment and component group tags, their
-  # classification and deny-by-default contracts (with a section per
-  # group-policy kind), and whether its VTEPs could enforce them.
-  - name: Segmentation matrix for DC
-    artifact_name: segmentation-matrix
-    content_type: application/json
-    targets: topologies_dc
-    transformation: segmentation_matrix
-    parameters:
-      id: id
-
   # Equinix POP
   - name: equinix_pop_config
     artifact_name: equinix_pop
@@ -389,13 +378,6 @@ python_transforms:
       files:
         - transforms/
         - templates/
-        - utils/
-  - name: segmentation_matrix
-    class_name: SegmentationMatrix
-    file_path: transforms/topology/segmentation_matrix.py
-    watch:
-      files:
-        - transforms/
         - utils/
   - name: leaf
     class_name: Leaf
@@ -659,8 +641,6 @@ queries:
     file_path: queries/topology/clab.gql
   - name: topology_cabling
     file_path: queries/topology/cabling.gql
-  - name: segmentation_matrix
-    file_path: queries/topology/segmentation_matrix.gql
 
   - name: leaf_config
     file_path: queries/config/leaf.gql
