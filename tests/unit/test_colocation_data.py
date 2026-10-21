@@ -360,7 +360,7 @@ class TestVirtualColocationTerraform:
     def test_the_orchestrator_values_are_schema_choices(self) -> None:
         """A value outside the dropdown would fail the load; the object files only ever name a real choice."""
         schema = yaml.safe_load((ROOT / "schemas" / "extensions" / "topology" / "topology_customer.yml").read_text())
-        generic = next(g for g in schema["generics"] if g["name"] == "InfrastructureOrchestrated")
+        generic = next(g for g in schema["generics"] if g["name"] == "OrchestratorScoped")
         choices = {choice["name"] for choice in generic["attributes"][0]["choices"]}
         used = {
             obj.item["infrastructure_orchestrator"]

@@ -29,7 +29,7 @@ generics:
   # inherit it, and generators/topology/orchestrator_routing.py puts each into the
   # routing group of its value (artifact definitions target those groups). A
   # generic cannot inherit another generic, so every node lists it.
-  - name: InfrastructureOrchestrated
+  - name: OrchestratorScoped
     namespace: Topology
     description: "A deployment whose infrastructure is provisioned by an automation system"
     include_in_menu: false
@@ -190,7 +190,7 @@ nodes:
     inherit_from:
       - CoreArtifactTarget
       - TopologyCustomer
-      - TopologyInfrastructureOrchestrated
+      - TopologyOrchestratorScoped
       - TopologyEnvironmentScoped
       - TopologyDeployment
       - TopologyConnectableLocation
@@ -231,7 +231,7 @@ nodes:
     inherit_from:
       - CoreArtifactTarget
       - TopologyCustomer
-      - TopologyInfrastructureOrchestrated
+      - TopologyOrchestratorScoped
       - TopologyEnvironmentScoped
       - TopologyDeployment
       - TopologyConnectableLocation
@@ -286,7 +286,7 @@ nodes:
     icon: "mdi:office-building-outline"
     inherit_from:
       - CoreArtifactTarget
-      - TopologyInfrastructureOrchestrated
+      - TopologyOrchestratorScoped
       - TopologyDeployment
       - TopologyPhysicalDeployment
       - TopologyDeviceHosting
@@ -444,7 +444,7 @@ nodes:
     inherit_from:
       - CoreArtifactTarget
       - TopologyCustomer
-      - TopologyInfrastructureOrchestrated
+      - TopologyOrchestratorScoped
       - TopologyDeployment
       - TopologyConnectableLocation
     parent: TopologyCloudRegion

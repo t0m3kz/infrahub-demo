@@ -252,7 +252,7 @@ nodes:
       - CoreArtifactTarget
       - TopologyDeployment
       - TopologyDeviceHosting
-      - TopologyInfrastructureOrchestrated
+      - TopologyOrchestratorScoped
       - TopologyColocationFabric
       - TopologyConnectableLocation
       - TopologyFacility

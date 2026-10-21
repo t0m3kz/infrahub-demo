@@ -4,7 +4,7 @@ The schema is the single source of truth, and several generators, queries and ch
 states and Infrahub only rejects at load time (or never):
 
 - every touched schema file parses as a SchemaRoot;
-- ``infrastructure_orchestrator`` is defined once, on the generic TopologyInfrastructureOrchestrated, and every kind
+- ``infrastructure_orchestrator`` is defined once, on the generic TopologyOrchestratorScoped, and every kind
   an orchestrator-routing generator routes by it inherits that generic (a generic cannot inherit a generic, so each
   node lists it);
 - the colocation metro lost the kit (``deployment_type``, ``fabric_templates``); the zone and the virtual colocation
@@ -32,7 +32,7 @@ _TOPOLOGY = _SCHEMAS / "extensions" / "topology"
 _TOUCHED = sorted([*_TOPOLOGY.glob("*.yml"), _SCHEMAS / "base" / "dcim.yml"])
 _COLOCATION_FILE = _TOPOLOGY / "topology_colocation.yml"
 
-_ORCHESTRATED = "TopologyInfrastructureOrchestrated"
+_ORCHESTRATED = "TopologyOrchestratorScoped"
 _ORCHESTRATOR_ATTRIBUTE = "infrastructure_orchestrator"
 _FABRIC = "TopologyColocationFabric"
 
@@ -299,3 +299,16 @@ class TestRelationshipIdentifiers:
         assert relationship["cardinality"] == "one"
         assert relationship["optional"] is True
         assert relationship["peer"] == "TopologyColocationZone"
+
+
+def test_every_schema_kind_fits_the_infrahub_profile_name_limit() -> None:
+    """Infrahub derives a ProfileSchema from every node and generic and caps its name at 32 characters.
+
+    A longer kind passes SchemaRoot parsing and only fails at `infrahubctl schema load`, which is how
+    TopologyInfrastructureOrchestrated (34) broke the integration setup.
+    """
+    too_long = sorted(
+        entry["kind"] for path in _SCHEMAS.glob("**/*.y*ml") for entry in _entries(path) if len(entry["kind"]) > 32
+    )
+
+    assert too_long == []
