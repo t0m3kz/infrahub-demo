@@ -80,6 +80,24 @@ spec:
                   kind: TopologyCustomerTemplateDC
                   icon: "mdi:floor-plan"
 
+          - namespace: Topology
+            name: DesignFabricTemplateMenu
+            label: Fabric Templates
+            icon: "mdi:server-network"
+            children:
+              data:
+                - namespace: Topology
+                  name: DesignFabricTemplateDCItem
+                  label: Data Center
+                  kind: TopologyTemplateDC
+                  icon: "mdi:floor-plan"
+
+                - namespace: Topology
+                  name: DesignFabricTemplatePodItem
+                  label: Pod
+                  kind: TopologyTemplatePod
+                  icon: "mdi:view-grid-outline"
+
     # ──────────────────────────────────────────────────────────────────────────
     # INVENTORY — physical devices and hardware
     # ──────────────────────────────────────────────────────────────────────────
