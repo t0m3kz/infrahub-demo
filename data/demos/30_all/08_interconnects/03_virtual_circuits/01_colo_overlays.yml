@@ -94,6 +94,16 @@ spec:
     # a DC, so this circuit rides only the cross-connect. It shares that one
     # underlay with the two DC circuits above, which is what makes
     # XC-EQXFR2-AWS-EUC1 the highest-fan-out object in the leg.
+    #
+    # One capability on purpose. The DC circuits above end on a tenant port (the
+    # border leaf) and on the cage edge's hand-off port; C001 has no device of
+    # its own in the cage (the shared fw-fr01/02 serve it through a firewall
+    # context), so its tenant end IS the cage edge's hand-off port, and the
+    # cloud end is the transit VIF (cloud_endpoints), not a device port. A
+    # second capability would have to be AWS's own router port, which none of
+    # the overlays names. checks/circuit_placement.py places the tenant end
+    # from that one port (eg-fr01 is deployed to C001-P-FR's metro FR), and
+    # test_62 expects one interface (tests/integration/test_constants.py).
     - name: "VC-C001-EQXFR-AWS-EUC1"
       member_of_groups: [virtual_circuits]
       link_type: equinix_fabric

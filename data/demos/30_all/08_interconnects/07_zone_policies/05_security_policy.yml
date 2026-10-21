@@ -86,7 +86,7 @@ spec:
             protocol: tcp
             port_start: 443
             source_segment: "c006-nordix-prod-p"
-            destination_segment: "internet-internet-p"
+            destination_segment: "internet"
             apply_on_switch: false
             log: false
             description: "Lumivex ERP tier to the internet over https, through the DC11 firewall"

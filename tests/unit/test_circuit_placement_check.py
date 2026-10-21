@@ -2,7 +2,8 @@
 
 The payloads are raw GraphQL responses shaped like queries/validation/circuit_placement.gql; ``validate`` runs
 them through ``clean_data``. The places mirror data/demos/30_all: DC10/DC11 with their border leaves, the
-Equinix FR metro (edges eg-fr01/eg-fr02 deployed to it) with cages FR2/FR6, AWS eu-central-1, the ISP Orange.
+Equinix FR metro (edges eg-fr01/eg-fr02 deployed to it) with cages FR2/FR6, AWS eu-central-1, the ISP Orange,
+C001's office (owner of its access circuit INET-C001-OFFICE).
 """
 
 from __future__ import annotations
@@ -61,10 +62,18 @@ def _edges(nodes: list[dict[str, Any]]) -> dict[str, Any]:
     return {"edges": [{"node": node} for node in nodes]}
 
 
-def _physical(name: str, locations: list[dict[str, Any]], ends: list[dict[str, Any]]) -> dict[str, Any]:
+def _owner(owner: str | None) -> dict[str, Any]:
+    """A circuit's owner edge, as the query selects it (empty when unowned)."""
+    return {"node": {"id": f"id-{owner}", "org_id": {"value": owner}} if owner else None}
+
+
+def _physical(
+    name: str, locations: list[dict[str, Any]], ends: list[dict[str, Any]], owner: str | None = None
+) -> dict[str, Any]:
     return {
         "id": f"id-{name}",
         "name": {"value": name},
+        "owner": _owner(owner),
         "locations": _edges(locations),
         "capabilities": _edges(ends),
     }
@@ -73,7 +82,7 @@ def _physical(name: str, locations: list[dict[str, Any]], ends: list[dict[str, A
 DF10 = _physical("DF-DC10-EQXFR2", [DC10, FR2], [BL10, EG_FR])
 DF11 = _physical("DF-DC11-EQXFR2", [DC11, FR2], [BL11, EG_FR])
 XC = _physical("XC-EQXFR2-AWS-EUC1", [FR2, EUC1], [EG_FR, AWS])
-INET_OFFICE = _physical("INET-C001-OFFICE", [C001_OFFICE, ORANGE], [OFFICE_EDGE, ORANGE_PE])
+INET_OFFICE = _physical("INET-C001-OFFICE", [C001_OFFICE, ORANGE], [OFFICE_EDGE, ORANGE_PE], owner="C001")
 
 
 def _virtual(
@@ -88,7 +97,7 @@ def _virtual(
         "id": f"id-{name}",
         "name": {"value": name},
         "transport_mode": {"value": transport_mode},
-        "owner": {"node": {"id": f"id-{owner}", "org_id": {"value": owner}} if owner else None},
+        "owner": _owner(owner),
         "locations": _edges(locations),
         "capabilities": _edges(ends),
         "physical_circuits": _edges(
@@ -162,6 +171,39 @@ class TestPhysicalCircuitPlacement:
         assert _run(physical=[_physical("DF-DC10-EQXFR2", [DC10, FR2], [BL10])]) == []
 
 
+class TestPhysicalCircuitOwnership:
+    """Owned exactly when it is an office's access circuit (add_sdwan_edge's INET-<office>), then by the office's
+    owner; the rest is shared underlay."""
+
+    def test_office_access_circuit_owned_by_the_office_owner_passes(self) -> None:
+        assert _run(physical=[INET_OFFICE]) == []
+
+    @pytest.mark.parametrize(
+        ("owner", "ownership"), [(None, "unowned"), ("C005", "owned by 'C005'")], ids=["unowned", "other-customer"]
+    )
+    def test_office_access_circuit_not_owned_by_the_office_owner_fails(self, owner: str | None, ownership: str) -> None:
+        circuit = _physical("INET-C001-OFFICE", [C001_OFFICE, ORANGE], [OFFICE_EDGE, ORANGE_PE], owner=owner)
+        messages = _run(physical=[circuit])
+        assert messages == [
+            f"Physical circuit 'INET-C001-OFFICE' ends on TopologyCustomerOffice 'C001-OFFICE' of 'C001' but is "
+            f"{ownership}: an office's access circuit is owned by the office's owner."
+        ]
+
+    def test_owned_shared_underlay_fails(self) -> None:
+        """A dark fibre carries every tenant: owned, it would pin the shared underlay on one customer."""
+        messages = _run(physical=[_physical("DF-DC10-EQXFR2", [DC10, FR2], [BL10, EG_FR], owner="C005")])
+        assert len(messages) == 1
+        assert "Physical circuit 'DF-DC10-EQXFR2' is owned by 'C005' but ends on no office" in messages[0]
+
+    def test_ownership_is_checked_with_a_location_missing(self) -> None:
+        """The owner rule does not wait for the derived end: one location is enough to see the office."""
+        circuit = _physical("INET-C001-OFFICE", [C001_OFFICE], [OFFICE_EDGE, ORANGE_PE])
+        messages = _run(physical=[circuit])
+        assert len(messages) == 2
+        assert "an office's access circuit is owned by the office's owner" in messages[0]
+        assert "terminates on 1 location(s)" in messages[1]
+
+
 class TestVirtualCircuitTermination:
     def test_not_two_locations_fails(self) -> None:
         """A virtual circuit has exactly two distinct locations."""
@@ -174,6 +216,7 @@ class TestVirtualCircuitTermination:
         [
             _virtual("VC-C005-DC10-AWS-EUC1", [C005_DC10, EUC1], [BL10, EG_FR], [DF10, XC], owner="C005"),
             # A colocation footprint is parented by the metro: the FR edge places it, cage FR2 starts the chain.
+            # Single-ended on purpose: provider-managed, its cloud end is a CloudVirtualInterface, not a port.
             _virtual("VC-C001-EQXFR-AWS-EUC1", [C001_FR, EUC1], [EG_FR], [XC], owner="C001"),
             # Far end another footprint (of the same owner here).
             _virtual(

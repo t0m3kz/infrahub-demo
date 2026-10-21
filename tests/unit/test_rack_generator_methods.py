@@ -99,8 +99,9 @@ class TestRackGeneratorMethods:
         gen = _build_gen()
 
         gen.data["row_index"] = 3
-        gen.data["pod"]["design"] = pod_design("S_MIXED")  # compute_racks_per_row = 8
-        assert gen._planned_previous_row_rack_slots() == 16
+        # 8 compute + 1 network rack positions per row: a mixed row numbers both.
+        gen.data["pod"]["design"] = pod_design("S_MIXED")
+        assert gen._planned_previous_row_rack_slots() == 18
 
         gen.data["row_index"] = 3
         gen.data["pod"]["design"] = pod_design("S_TOR")  # compute_racks_per_row = 8
@@ -278,7 +279,7 @@ class TestRackGeneratorMethods:
     async def test_generate_tors_uses_planned_slots_without_live_sibling_query(self) -> None:
         gen = _build_gen()
         gen.data["row_index"] = 2
-        gen.data["pod"]["design"] = pod_design("S_MIXED")  # compute_racks_per_row = 8
+        gen.data["pod"]["design"] = pod_design("S_MIXED")  # 8 compute + 1 network rack positions per row
         gen._spine_device_names = ["spine-01"]
 
         gen.client.filters = AsyncMock(side_effect=AssertionError("live sibling query should not be used"))
@@ -290,7 +291,7 @@ class TestRackGeneratorMethods:
         gen.calculate_cabling_offsets.assert_called_once_with(
             device_count=1,
             device_type="tor",
-            racks_in_previous_rows=8,
+            racks_in_previous_rows=9,
         )
 
     # Border-leaf generation moved to DC-level (generators/topology/dc.py's

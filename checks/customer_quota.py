@@ -120,14 +120,14 @@ def _host_facing_ports(interface: dict[str, Any]) -> list[tuple[str, int, set[st
     """(port id, speed in Gbps, ids of the port's device deployment and its parent) of one tagged interface.
 
     A physical port is itself; a port-channel is its member ports. Anything that is not a host-facing port,
-    or whose speed its interface_type does not state, yields nothing.
+    or whose speed its interface_type does not state or is below 1G (no ``ports_<speed>g`` meters it), yields nothing.
     """
     if interface.get("typename") not in TAGGABLE_INTERFACE_KINDS or interface.get("role") in SERVICE_PORT_ROLES:
         return []
     scope = deployment_scope_ids((interface.get("device") or {}).get("deployment"))
     physical = [interface] if interface["typename"] == "DcimPhysicalInterface" else interface.get("member_interfaces")
     return [
-        (port["id"], speed, scope)
+        (port["id"], speed_mbps // 1000, scope)
         for port in physical or []
-        if (speed := InterfaceSpeedMatcher.extract_speed(port.get("interface_type")))
+        if (speed_mbps := InterfaceSpeedMatcher.extract_speed(port.get("interface_type"))) and speed_mbps >= 1000
     ]

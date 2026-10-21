@@ -41,30 +41,6 @@ fragment FabricTemplateFields on TopologyElement {
   }
 }
 
-fragment SpineInterfaceFields on DcimPhysicalInterface {
-  id
-  name { value }
-  cable {
-    node {
-      id
-      name { value }
-    }
-  }
-}
-
-fragment SpineDeviceFields on DcimPhysicalDevice {
-  id
-  name { value }
-  role { value }
-  interfaces(role__value: "downlink") {
-    edges {
-      node {
-        ...SpineInterfaceFields
-      }
-    }
-  }
-}
-
 fragment PodFields on TopologyPod {
   id
   name {
@@ -81,6 +57,7 @@ fragment PodFields on TopologyPod {
       max_network_racks_per_row { value }
       max_leafs_per_network_rack { value }
       max_tors_per_compute_rack { value }
+      max_border_leafs_per_pod { value }
     }
   }
   parent {
@@ -202,17 +179,6 @@ fragment PodFields on TopologyPod {
   prefix_pool {
     node {
       id
-    }
-  }
-  # Spine (or border-spine, in micro-fabric mode — the two fill the same
-  # pod slot, see PodModel.spine_slot_templates) devices with cable info —
-  # used by rack generator to detect already-cabled spine ports and avoid
-  # duplicate relationship upserts
-  devices(role__values: ["spine", "border-spine"]) {
-    edges {
-      node {
-        ...SpineDeviceFields
-      }
     }
   }
 }

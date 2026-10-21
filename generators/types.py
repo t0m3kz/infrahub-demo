@@ -24,6 +24,9 @@ class DeviceOptions(TypedDict, total=False):
     """Create virtual devices instead of physical (default: False)."""
     indexes: list[int]
     """Device indexes for hierarchical naming."""
+    role_index_start: int
+    """role_index of the first device (default 1): a role split over several
+    fabric_templates entries continues its numbering across them."""
     allocate_loopback: bool
     """Create Loopback0 interface with IP from loopback pool (default: False)."""
     loopback_pool: Any

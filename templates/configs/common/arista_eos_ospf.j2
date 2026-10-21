@@ -28,9 +28,9 @@ interface {{ interface.name }}
    ip ospf cost {{ ospf.metric }}
 {%- endif %}
 {%- if ospf.get('password') %}
-{%- if ospf.get('authentication_mode') == 'md5' %}
+{%- if ospf.get('authentication_mode') in ('md5', 'sha1') %}
    ip ospf authentication message-digest
-   ip ospf message-digest-key 1 md5 {{ ospf.password }}
+   ip ospf message-digest-key 1 {{ ospf.authentication_mode }} {{ ospf.password }}
 {%- else %}
    ip ospf authentication
    ip ospf authentication-key {{ ospf.password }}

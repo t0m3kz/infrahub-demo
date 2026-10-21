@@ -151,6 +151,12 @@ class _Batches:
         return batch
 
 
+@asynccontextmanager
+async def _no_lock(key: str) -> AsyncGenerator[None]:  # noqa: ARG001
+    """PoolMixin.resource_lock stand-in: no contention in a unit test."""
+    yield
+
+
 def _device_mixin() -> Any:
     """A DeviceMixin whose client creates a named node per create() call."""
     gen: Any = DeviceMixin.__new__(DeviceMixin)
@@ -165,6 +171,7 @@ def _device_mixin() -> Any:
     gen._resolve_pool = AsyncMock(return_value=MagicMock(id="pool-1"))
     gen.upsert_number_pool = AsyncMock(return_value=MagicMock(id="vlan-pool-1"))
     gen.ensure_mlag_wiring = AsyncMock()
+    gen.resource_lock = _no_lock
     gen._all_controllers = []
 
     async def _create(*, kind: Any, data: dict[str, Any]) -> MagicMock:

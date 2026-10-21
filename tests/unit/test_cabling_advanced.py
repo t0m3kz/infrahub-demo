@@ -86,14 +86,14 @@ def _make_connection(server_intf: str, switch_name: str, switch_intf: str) -> An
 
 class TestInterfaceSpeedMatcher:
     def test_extract_speed_plain_string(self) -> None:
-        assert InterfaceSpeedMatcher.extract_speed("100GBASE-SR4") == 100
+        assert InterfaceSpeedMatcher.extract_speed("100GBASE-SR4") == 100_000
 
     def test_extract_speed_lowercase(self) -> None:
-        assert InterfaceSpeedMatcher.extract_speed("25gbase-cr") == 25
+        assert InterfaceSpeedMatcher.extract_speed("25gbase-cr") == 25_000
 
     def test_extract_speed_with_value_attr(self) -> None:
         intf_type = Mock(value="40GBASE-LR4")
-        assert InterfaceSpeedMatcher.extract_speed(intf_type) == 40
+        assert InterfaceSpeedMatcher.extract_speed(intf_type) == 40_000
 
     def test_extract_speed_none_returns_none(self) -> None:
         assert InterfaceSpeedMatcher.extract_speed(None) is None
@@ -101,11 +101,24 @@ class TestInterfaceSpeedMatcher:
     @pytest.mark.parametrize("interface_type", ["1000base-t", "1000base-x-sfp", "1000base-x-gbic"])
     def test_extract_speed_gigabit_types_are_one_gbps(self, interface_type: str) -> None:
         """Gigabit Ethernet types are named in Mbps, so the <n>gbase pattern misses them."""
-        assert InterfaceSpeedMatcher.extract_speed(interface_type) == 1
+        assert InterfaceSpeedMatcher.extract_speed(interface_type) == 1000
 
-    @pytest.mark.parametrize("interface_type", ["100base-tx", "100base-t1", "unknown-type"])
-    def test_extract_speed_non_gigabit_types_return_none(self, interface_type: str) -> None:
+    @pytest.mark.parametrize("interface_type", ["100base-fx", "100base-lfx", "100base-tx", "100base-t1"])
+    def test_extract_speed_fast_ethernet_types_are_100_mbps(self, interface_type: str) -> None:
+        """Every 100BASE-* interface_type choice has a speed, so speed grouping can cable it."""
+        assert InterfaceSpeedMatcher.extract_speed(interface_type) == 100
+
+    @pytest.mark.parametrize("interface_type", ["lte", "other", "unknown-type"])
+    def test_extract_speed_types_without_a_line_rate_return_none(self, interface_type: str) -> None:
+        """LTE (a carrier-dependent radio, never cabled) and `other` state no line rate."""
         assert InterfaceSpeedMatcher.extract_speed(interface_type) is None
+
+    def test_group_by_speed_matches_fast_ethernet(self) -> None:
+        """100BASE-TX on both sides forms a speed group instead of being dropped from the plan."""
+        server = _make_interface("eth0", "server-01", "100base-tx")
+        switch = _make_interface("Fa0/1", "access-01", "100base-tx")
+
+        assert InterfaceSpeedMatcher.group_by_speed([server], [switch]) == {100: ([server], [switch])}
 
     def test_extract_speed_non_string_returns_none(self) -> None:
         assert InterfaceSpeedMatcher.extract_speed(12345) is None
@@ -123,8 +136,8 @@ class TestInterfaceSpeedMatcher:
 
         groups = InterfaceSpeedMatcher.group_by_speed([s1, s2], [sw1, sw2])
 
-        assert 100 in groups
-        server_list, switch_list = groups[100]
+        assert 100_000 in groups
+        server_list, switch_list = groups[100_000]
         assert s1 in server_list
         assert s2 in server_list
         assert sw1 in switch_list
@@ -137,8 +150,7 @@ class TestInterfaceSpeedMatcher:
         groups = InterfaceSpeedMatcher.group_by_speed([s1], [sw1])
 
         # 100G on server, 25G on switch → no overlapping speed
-        assert 100 not in groups
-        assert 25 not in groups
+        assert groups == {}
 
     def test_group_by_speed_skips_none_type(self) -> None:
         s_no_type = _make_interface("Eth1", "server-01", None)

@@ -37,7 +37,10 @@ from .helpers.lb_vip import (
 )
 from .helpers.rules import RulesPlanner
 from .protocols import (
+    AppComponent,
     CloudLoadBalancer,
+    DcimPhysicalDevice,
+    DcimVirtualDevice,
     LoadbalancerVIP,
     ManagedVxlanSegment,
     SecurityPolicy,
@@ -61,6 +64,31 @@ if TYPE_CHECKING:
     import logging
 
 Edge = tuple[dict[str, Any], dict[str, Any], dict[str, Any]]
+
+# Re-derives a component's application and every application calling it
+# (generators/topology/application_security.py), so it is the re-run for a
+# component whose VIPs moved to another context.
+APP_COMPONENT_GENERATOR = "add_app_component"
+
+
+async def load_balanced_components_in(client: Any, deployment_id: str) -> list[str]:
+    """Ids of the load_balanced AppComponents with an instance deployed to the customer DC ``deployment_id``.
+
+    Their VIPs and R_server rules sit on the deployment's serving context. The
+    two device kinds carry ``deployment`` each (a footprint lists no devices
+    of its own), read together, then the components running on them.
+    """
+    devices = await asyncio.gather(
+        *(
+            client.filters(kind=kind, deployment__ids=[deployment_id])
+            for kind in (DcimPhysicalDevice, DcimVirtualDevice)
+        )
+    )
+    device_ids = sorted({device.id for kind_devices in devices for device in kind_devices})
+    if not device_ids:
+        return []
+    components = await client.filters(kind=AppComponent, instances__ids=device_ids, load_balanced__value=True)
+    return sorted({component.id for component in components})
 
 
 @dataclass
@@ -95,8 +123,12 @@ class LoadbalancerVipMixin:
     are tracked the same way, the member addresses are the instances' and
     untracked. No context, VIP range or rule: its callers reach it directly.
 
-    Known gap: nothing re-runs this when a deployment's serving context changes
-    after its applications ran, so a dedicated -> shared move keeps stale VIPs.
+    A deployment that moves to another serving context after its applications
+    ran (dedicated <-> shared) re-runs them: add_customer_deployment_dc, the
+    one writer of serving_loadbalancer_context, fans out add_app_component to
+    load_balanced_components_in(deployment) on the relink (LOADBALANCER_CONTEXT
+    in generators/firewall_context.py), and that re-runs each component's
+    application and its callers, whose R_client rules name the VIPs.
 
     Expects the host class to provide: ``client``, ``logger``,
     ``wait_for_parent_generators`` (CommonGenerator),

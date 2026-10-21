@@ -56,8 +56,9 @@ nodes:
 
   # A network outside every customer's control (the internet): classified into
   # a zone and matched by policy rules like any segment. It has an owner (the
-  # Internet pseudo-customer) only because the segment name is computed from it;
-  # it is never activated, gatewayed or terminated anywhere.
+  # Internet pseudo-customer) only because the segment name is computed from it
+  # (org_id == customer_name, so the name is just "internet"); it is never
+  # activated, gatewayed or terminated anywhere.
   - name: ExternalSegment
     namespace: Managed
     description: "Network outside customer control (internet), matched by policy rules"

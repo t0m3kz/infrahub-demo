@@ -10,7 +10,11 @@ from ..connections import CablingMixin
 from ..devices import DeviceMixin
 from ..helpers.rack import RackRolesHelper, parse_rack_data, rack_sort_key
 from ..helpers.template_interfaces import template_interface_names_by_role
-from ..pod_config import pod_deployment_type, pod_profile
+from ..pod_config import (
+    pod_deployment_type,
+    pod_profile,
+    spine_downlink_layout,
+)
 from ..pools import PoolMixin
 from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
 from ..rack import (
@@ -63,7 +67,6 @@ class TopologyRackPodData(TypedDict, total=False):
     mlag_create: Literal["no", "back-to-back", "virtual"]
     loopback_pool: dict[str, Any] | None
     prefix_pool: dict[str, Any] | None
-    devices: list[Any]
 
 
 class TopologyRackParentSuiteData(TypedDict, total=False):
@@ -166,8 +169,9 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
     async def _fan_out_to_row_dependent_racks(self) -> None:
         """Fan out to the row-dependent (tor/compute) racks' own add_rack runs (mixed mode only).
 
-        Row-dependent racks have no local leaf — they cable to this network rack's
-        leafs, which this method only runs after they exist.
+        Row-dependent racks have no local leaf — their l2-leaf/access-leaf
+        switches cable to this network rack's leafs, which this method only runs
+        after they exist (their ToRs cable to the spines).
 
         wait=False, not wait=True: a row-dependent rack's own generate() waits for
         an in-flight add_rack task on this network rack (self-nesting guard — same
@@ -199,7 +203,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         await self.run_generator("add_rack", [rack.id for rack in row_dependent_racks], wait=False)
 
     async def _get_leaf_devices_in_row(self, pod_id: str, row_index: int) -> tuple[list[str], list[str]]:
-        """Query leaf devices in same row and their downlink interfaces, for ToR-to-leaf cabling.
+        """Query leaf devices in same row and their downlink interfaces, for l2-leaf/access-leaf-to-leaf cabling.
 
         Retries: a row-dependent (compute/tor) rack's created-trigger can fire
         and reach this before its row's network rack has created its leaf
@@ -246,13 +250,13 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         if not racks_in_row:
             self.logger.error(
                 f"Rack {self.data['name']}: No racks found in row {row_index}. "
-                "Cannot create ToR-to-leaf cabling for mixed deployment."
+                "Cannot cable the compute rack's switches to the row leafs for mixed deployment."
             )
 
         if not leaf_devices:
             self.logger.error(
                 f"Rack {self.data['name']}: No leaf devices found in row {row_index}. "
-                "Cannot create ToR-to-leaf cabling for mixed deployment."
+                "Cannot cable the compute rack's switches to the row leafs for mixed deployment."
             )
 
         device_names = [dev.name.value for dev in leaf_devices]
@@ -260,7 +264,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         if not leaf_interfaces:
             self.logger.error(
                 f"Rack {self.data['name']}: No downlink interfaces found on leaf devices in row {row_index}. "
-                "Cannot create ToR-to-leaf cabling for mixed deployment."
+                "Cannot cable the compute rack's switches to the row leafs for mixed deployment."
             )
 
         interface_names = sorted({iface.name.value for iface in leaf_interfaces})
@@ -353,19 +357,21 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
                 f"(row_index={data['row_index']}, leafs_per_rack={device_count}, mode={deployment_type})"
             )
 
-        # For mixed/tor deployment ToRs: cumulative offset across the pod, using
-        # the actual count of sibling racks already in previous rows (passed
-        # in by the caller via a live LocationRack query) rather than any
-        # design capacity — avoids exceeding real spine port capacity.
+        # For mixed/tor deployment ToRs: cumulative offset across the pod's ToR
+        # block on the spines (spine_downlink_layout: from port 0 in a tor pod,
+        # past the leafs and border-leafs in a mixed one), plus the rack slots
+        # of previous rows the caller passes in.
         elif deployment_type in ("mixed", "tor") and device_type == "tor":
+            tor_block_start = spine_downlink_layout(pod["design"])["tor"]
             tors_in_previous_rows = (racks_in_previous_rows or 0) * device_count
             offset_in_current_row = device_count * effective_rack_index
-            offset = tors_in_previous_rows + offset_in_current_row
+            offset = tor_block_start + tors_in_previous_rows + offset_in_current_row
 
             self.logger.info(
                 f"Calculated {device_type} offset={offset} for rack {data['name']} "
                 f"(row={data['row_index']}, index={current_index}, tors_in_rack={device_count}, "
-                f"tors_in_previous_rows={tors_in_previous_rows}, mode={deployment_type})"
+                f"tor_block_start={tor_block_start}, tors_in_previous_rows={tors_in_previous_rows}, "
+                f"mode={deployment_type})"
             )
 
         else:
@@ -518,7 +524,7 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
                 return
 
         pod = self.data["pod"]
-        spine_names = [device["name"] for device in pod.get("devices", [])]
+        spine_names = await self._existing_spine_slot_names()
         spine_bgp_role = spine_bgp_readiness_role(pod.get("parent") or {})
         if spine_names and not await self.bgp_processes_ready(spine_names, spine_bgp_role):
             self.logger.info(
@@ -533,8 +539,8 @@ class RackGenerator(RackMixin, PoolMixin, DeviceMixin, CablingMixin, RoutingMixi
         # PodFields fragment), read by create_devices().
         self.set_controllers_from(pod.get("parent", {}))
 
-        # A row-dependent (tor/compute) rack cables to its row's network rack's
-        # leafs. If triggered independently while that rack's add_rack is still
+        # A row-dependent (tor/compute) rack's l2-leaf/access-leaf switches cable
+        # to its row's network rack's leafs. If triggered independently while that rack's add_rack is still
         # running, wait for it rather than cabling against leafs that don't exist yet.
         if deployment_type == "mixed" and self.data["rack_type"] in ROW_DEPENDENT_RACK_TYPES:
             network_racks = await self.client.filters(

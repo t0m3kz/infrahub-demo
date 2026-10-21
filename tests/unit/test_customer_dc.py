@@ -12,6 +12,7 @@ test_customer_office.py for that.
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Any, TypeVar
 from unittest.mock import AsyncMock, MagicMock
 
@@ -19,6 +20,7 @@ import pytest
 
 from generators.common import CommonGenerator
 from generators.firewall_context import FIREWALL_CONTEXT, LOADBALANCER_CONTEXT
+from generators.lb_vip import load_balanced_components_in
 from generators.topology.customer_dc import CustomerDeploymentDCExchangeGenerator
 
 _T = TypeVar("_T", bound=CommonGenerator)
@@ -402,6 +404,93 @@ class TestLinkServingContext:
         await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="ctx-1")
 
         gen.logger.error.assert_called_once()
+
+
+class TestServingContextRelink:
+    """A deployment moved to another load-balancer context re-runs the components whose VIPs sat on the old one."""
+
+    def _gen(self, field: str, previous_id: str | None) -> tuple[Any, MagicMock]:
+        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        deployment = MagicMock()
+        getattr(deployment, field).id = previous_id
+        deployment.save = AsyncMock()
+        gen.client.get = AsyncMock(return_value=deployment)
+        gen.run_generator = AsyncMock()
+        return gen, deployment
+
+    @pytest.mark.asyncio
+    async def test_lb_relink_fans_out_add_app_component(self) -> None:
+        """dedicated -> shared (or back): the load_balanced components of the deployment re-run, without waiting."""
+        gen, deployment = self._gen("serving_loadbalancer_context", "ctx-dedicated")
+        consumers = AsyncMock(return_value=["comp-1", "comp-2"])
+        spec = dataclasses.replace(LOADBALANCER_CONTEXT, relink_consumers=consumers)
+
+        await gen.link_serving_context(spec, customer_id="cust-1", context_id="ctx-shared")
+
+        deployment.save.assert_awaited_once_with(update_group_context=False)
+        consumers.assert_awaited_once_with(gen.client, "cust-1")
+        gen.run_generator.assert_awaited_once_with("add_app_component", ["comp-1", "comp-2"], wait=False)
+
+    def test_lb_spec_re_runs_the_load_balanced_components(self) -> None:
+        """The load-balancer spec's consumers are lb_vip's load_balanced_components_in, re-run by add_app_component."""
+        assert LOADBALANCER_CONTEXT.relink_consumers is load_balanced_components_in
+        assert LOADBALANCER_CONTEXT.relink_generator == "add_app_component"
+        assert FIREWALL_CONTEXT.relink_consumers is None
+
+    @pytest.mark.asyncio
+    async def test_first_link_re_runs_nothing(self) -> None:
+        """A first link has no previous context: the same load's application runs wait for this boarding run."""
+        gen, deployment = self._gen("serving_loadbalancer_context", None)
+        consumers = AsyncMock(return_value=["comp-1"])
+
+        await gen.link_serving_context(
+            dataclasses.replace(LOADBALANCER_CONTEXT, relink_consumers=consumers),
+            customer_id="cust-1",
+            context_id="ctx-shared",
+        )
+
+        deployment.save.assert_awaited_once()
+        consumers.assert_not_awaited()
+        gen.run_generator.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_relink_without_consumers_runs_nothing(self) -> None:
+        """No load_balanced component on the deployment: no generator run."""
+        gen, _ = self._gen("serving_loadbalancer_context", "ctx-dedicated")
+
+        await gen.link_serving_context(
+            dataclasses.replace(LOADBALANCER_CONTEXT, relink_consumers=AsyncMock(return_value=[])),
+            customer_id="cust-1",
+            context_id="ctx-shared",
+        )
+
+        gen.run_generator.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_firewall_relink_re_runs_nothing(self) -> None:
+        """The firewall rules are placed by the transform at render time: nothing to re-run."""
+        gen, deployment = self._gen("serving_firewall_context", "fw-dedicated")
+
+        await gen.link_serving_context(FIREWALL_CONTEXT, customer_id="cust-1", context_id="fw-shared")
+
+        deployment.save.assert_awaited_once()
+        gen.run_generator.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_fan_out_failure_is_logged(self) -> None:
+        """The relink is saved; a failed re-run is the run's error, not a silent miss."""
+        gen, deployment = self._gen("serving_loadbalancer_context", "ctx-dedicated")
+        gen.run_generator = AsyncMock(side_effect=RuntimeError("boom"))
+
+        await gen.link_serving_context(
+            dataclasses.replace(LOADBALANCER_CONTEXT, relink_consumers=AsyncMock(return_value=["comp-1"])),
+            customer_id="cust-1",
+            context_id="ctx-shared",
+        )
+
+        deployment.save.assert_awaited_once()
+        gen.logger.error.assert_called_once()
+        assert "add_app_component could not be re-run" in gen.logger.error.call_args.args[0]
 
 
 class TestEnsureDedicatedDevicePair:
