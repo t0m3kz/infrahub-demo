@@ -301,6 +301,12 @@ class TestSegmentLessPolicyContracts:
             ("web", UNCLASSIFIED, ["web-to-app-tcp-443"]),
         ]
 
+    def test_a_deny_rule_is_never_a_contract(self) -> None:
+        """Only permit rules become contract rows: the deny-by-default contract needs no row for a deny."""
+        deny = {**_gp_rule("web-to-app-deny", "app", 443), "action": "deny"}
+        rows = get_vrf_contracts([_gp_seg("web", [deny]), _gp_seg("app", [])], [])
+        assert rows == []
+
 
 class TestQueries:
     """The fragments select what the border transform and the group contract builder read."""

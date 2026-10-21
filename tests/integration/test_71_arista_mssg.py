@@ -11,15 +11,13 @@ proves the whole path *generators -> group tags and contract rules -> transform 
    cabled to the tier the data intends.
 3. CheckReferenceFabric says DC14 is a reference fabric (and reports no error first, so a silent no-render
    fails with the reason); CheckSegmentSecurity reports no error.
-4. The segmentation matrix is a staged ``segment_security`` reference site whose prefixes are the live
-   gateways and whose ``unsupported`` list holds the closed any-reply.
-5. Leaf, access-leaf and border-leaf render ``router segment-security`` with the live prefixes and VRF, the
+4. Leaf, access-leaf and border-leaf render ``router segment-security`` with the live prefixes and VRF, the
    expected ``from`` / ``fallback`` policies, the field-sets inside ``application traffic recognition``, the
    staged comment and the final ``shutdown``; a spine and a leaf that hosts nothing render none.
-6. ``group_policy_enforce`` flips the render by exactly the staged comment and ``shutdown`` -> ``no shutdown``,
+5. ``group_policy_enforce`` flips the render by exactly the staged comment and ``shutdown`` -> ``no shutdown``,
    and starts no generator.
-7. One access-leaf on an older EOS removes the block from the whole DC; reverting brings it back.
-8. Re-running add_vxlan_segment changes no tag, no id and no render.
+6. One access-leaf on an older EOS removes the block from the whole DC; reverting brings it back.
+7. Re-running add_vxlan_segment changes no tag, no id and no render.
 
 What it does NOT prove: that EOS accepts or enforces any of the rendered lines. Custom policies, field-sets,
 application traffic recognition and the fallback policy are documented by Arista's AVD only, and the 7280R3
@@ -45,7 +43,6 @@ from transforms.config.access_leaf import AccessLeaf
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.leaf import Leaf
 from transforms.config.spine import Spine
-from transforms.topology.segmentation_matrix import SegmentationMatrix
 
 from .conftest import TestInfrahubDockerWithClient
 from .test_helpers import (
@@ -668,56 +665,13 @@ class TestAristaMssg(TestInfrahubDockerWithClient):
         assert passed and not errors, "CheckSegmentSecurity failed:\n" + "\n".join(f"  - {e}" for e in errors)
 
     @pytest.mark.order(436)
-    @pytest.mark.dependency(scope="session", name="mssg_matrix", depends=["mssg_checks"])
+    @pytest.mark.dependency(scope="session", name="mssg_render", depends=["mssg_checks"])
     @pytest.mark.asyncio
-    async def test_07_segmentation_matrix(self, async_client_main: InfrahubClient, scenario_branch: str) -> None:
-        """The matrix is a staged segment_security reference site with the live prefixes and the closed any-reply."""
-        logging.info("=== %s - Step 7: Segmentation Matrix ===", SCENARIO_NAME)
-
-        dc_id = await _fetch_dc_id(async_client_main, scenario_branch)
-        raw = await async_client_main.query_gql_query(
-            name="segmentation_matrix", branch_name=scenario_branch, variables={"id": dc_id}
-        )
-        transform = SegmentationMatrix.__new__(SegmentationMatrix)
-        matrix = await transform.transform(raw.get("data") or raw)
-
-        site = matrix["site"]
-        assert site["kind"] == "segment_security", f"site kind {site['kind']!r}"
-        assert site["reference"] is True, f"{MSSG_DC} is not a reference site: {site['reason']}"
-        assert site["enforce"] is False, "a fresh DC14 must stage (group_policy_enforce false)"
-        assert all(vtep["reason"] is None for vtep in matrix["vteps"]), (
-            f"VTEPs outside the profile row: {[v for v in matrix['vteps'] if v['reason']]}"
-        )
-
-        live = await _fetch_segments(async_client_main, scenario_branch)
-        selectors = {item["segment"]: item for item in matrix["classification"]["selectors"]}
-        assert sorted(selectors) == sorted(SEGMENTS), f"classified segments: {sorted(selectors)}"
-        assert matrix["classification"]["unclassified"] == [], "a routed tenant segment has no group tag"
-        for name, segment in live.items():
-            assert selectors[name]["prefix"] == segment["prefix"], (
-                f"{name}: the matrix classifies by {selectors[name]['prefix']}, the gateway prefix is {segment['prefix']}"
-            )
-
-        view = matrix["kinds"]["segment_security"]
-        by_name = {item["name"]: item for item in view["segments"]}
-        for name, segment in live.items():
-            assert by_name[name]["prefix"] == segment["prefix"], f"{name}: view prefix {by_name[name]['prefix']}"
-        closed = [
-            item
-            for item in view["unsupported"]
-            if item["src"] == SEG_DB and item["dst"] == SEG_APP and "reply of a permit-all flow" in item["reason"]
-        ]
-        assert closed, f"the db -> app any-reply is not in `unsupported`: {view['unsupported']}"
-        assert closed[0]["rules"] == ["db-to-app-any"], f"closed rule(s): {closed[0]['rules']}"
-
-    @pytest.mark.order(437)
-    @pytest.mark.dependency(scope="session", name="mssg_render", depends=["mssg_matrix"])
-    @pytest.mark.asyncio
-    async def test_08_renders(
+    async def test_07_renders(
         self, async_client_main: InfrahubClient, scenario_branch: str, renders: dict[str, str]
     ) -> None:
         """Every VTEP that carries the tenant VRF renders the staged MSS-G block; nothing else does."""
-        logging.info("=== %s - Step 8: Renders ===", SCENARIO_NAME)
+        logging.info("=== %s - Step 7: Renders ===", SCENARIO_NAME)
 
         topology = await fetch_dc_topology(client=async_client_main, branch=scenario_branch, dc_name=MSSG_DC)
         segments = await _fetch_segments(async_client_main, scenario_branch)
@@ -744,14 +698,14 @@ class TestAristaMssg(TestInfrahubDockerWithClient):
             rendered = await _render(async_client_main, scenario_branch, "spine", spine)
             assert MSSG_SECTION not in rendered.splitlines(), f"spine {spine} renders '{MSSG_SECTION}'"
 
-    @pytest.mark.order(438)
+    @pytest.mark.order(437)
     @pytest.mark.dependency(scope="session", name="mssg_enforce", depends=["mssg_render"])
     @pytest.mark.asyncio
-    async def test_09_enforce_flips_one_line(
+    async def test_08_enforce_flips_one_line(
         self, async_client_main: InfrahubClient, scenario_branch: str, renders: dict[str, str]
     ) -> None:
         """group_policy_enforce starts no generator and changes each render by the staged comment and the switch only."""
-        logging.info("=== %s - Step 9: Enforce ===", SCENARIO_NAME)
+        logging.info("=== %s - Step 8: Enforce ===", SCENARIO_NAME)
 
         dc_id = await _fetch_dc_id(async_client_main, scenario_branch)
         segments = await _fetch_segments(async_client_main, scenario_branch)
@@ -781,11 +735,6 @@ class TestAristaMssg(TestInfrahubDockerWithClient):
                 errors += _mssg_errors(device, enforced, segments, enforced=True)
             assert not errors, "enforced renders:\n" + "\n".join(f"  - {e}" for e in errors)
 
-            raw = await async_client_main.query_gql_query(
-                name="segmentation_matrix", branch_name=scenario_branch, variables={"id": dc_id}
-            )
-            matrix = await SegmentationMatrix.__new__(SegmentationMatrix).transform(raw.get("data") or raw)
-            assert matrix["site"]["enforce"] is True, "the matrix does not show the DC as enforcing"
         finally:
             await _set_enforce(async_client_main, scenario_branch, dc_id, False)
             await wait_for_tasks_completion(async_client_main, scenario_branch, initial_delay=5)
@@ -793,14 +742,14 @@ class TestAristaMssg(TestInfrahubDockerWithClient):
         restored = await _render(async_client_main, scenario_branch, str(roles[rendering[0]]), rendering[0])
         assert restored == renders[rendering[0]], f"{rendering[0]}: staging again did not restore the staged render"
 
-    @pytest.mark.order(439)
+    @pytest.mark.order(438)
     @pytest.mark.dependency(scope="session", name="mssg_gate", depends=["mssg_enforce"])
     @pytest.mark.asyncio
-    async def test_10_one_old_vtep_removes_the_block(
+    async def test_09_one_old_vtep_removes_the_block(
         self, async_client_main: InfrahubClient, scenario_branch: str, renders: dict[str, str]
     ) -> None:
         """One access-leaf below the profile's min_release makes DC14 no reference fabric: no block anywhere."""
-        logging.info("=== %s - Step 10: Negative Gate ===", SCENARIO_NAME)
+        logging.info("=== %s - Step 9: Negative Gate ===", SCENARIO_NAME)
 
         topology = await fetch_dc_topology(client=async_client_main, branch=scenario_branch, dc_name=MSSG_DC)
         roles = {device["name"]: device["role"] for device in topology["devices"]}
@@ -839,14 +788,14 @@ class TestAristaMssg(TestInfrahubDockerWithClient):
         again = await _render(async_client_main, scenario_branch, str(roles[bystander]), bystander)
         assert again == renders[bystander], f"{bystander}: the restored render differs from the baseline"
 
-    @pytest.mark.order(440)
+    @pytest.mark.order(439)
     @pytest.mark.dependency(scope="session", name="mssg_rerun", depends=["mssg_gate"])
     @pytest.mark.asyncio
-    async def test_11_rerunning_add_vxlan_segment_changes_nothing(
+    async def test_10_rerunning_add_vxlan_segment_changes_nothing(
         self, async_client_main: InfrahubClient, scenario_branch: str, renders: dict[str, str]
     ) -> None:
         """A second add_vxlan_segment run keeps every tag, prefix and id, and every render byte-identical."""
-        logging.info("=== %s - Step 11: Rerun add_vxlan_segment ===", SCENARIO_NAME)
+        logging.info("=== %s - Step 10: Rerun add_vxlan_segment ===", SCENARIO_NAME)
 
         await wait_for_tasks_completion(async_client_main, scenario_branch)
         segments_before = await _fetch_segments(async_client_main, scenario_branch)

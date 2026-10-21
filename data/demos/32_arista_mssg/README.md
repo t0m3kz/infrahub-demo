@@ -170,7 +170,6 @@ uv run invoke test-integration-arista-mssg
 | Fabric | the roles; three MLAG pairs, none virtual |
 | Tenant | the servers on the intended tier; gateway, group tag and deployment per segment; the policies hold exactly the hand-written rules |
 | Checks | `CheckReferenceFabric` says `DC14 is a reference fabric (segment_security, 8 VTEPs)` and no error; `CheckSegmentSecurity` no error |
-| Matrix | a staged `segment_security` reference site, prefixes equal to the live gateways, the closed any-reply in `unsupported` |
 | Renders | leaf, access-leaf and border-leaf: live match-lists and VRF, the `from` / `fallback policy` lines, the field-sets indented inside `application traffic recognition`, the staged comment, a final `shutdown`; a spine and the hostless leaf render none |
 | Enforce | `group_policy_enforce` starts no generator; each render differs by the staged comment and `shutdown` -> `no shutdown` |
 | Gate | one access-leaf on EOS 4.32.1F removes the block from the whole DC; restoring the image brings it back |

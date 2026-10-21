@@ -305,7 +305,7 @@ def test_integration_all_demo(
 def test_integration_arista_mssg(
     context: Context, basetemp: str = "~/.pytest-tmp/infrahub-demo", server_port: int = 8100
 ) -> None:
-    """Run the Arista EOS MSS-G suite (data/demos/32_arista_mssg): load, checks, matrix, renders, enforce, gate.
+    """Run the Arista EOS MSS-G suite (data/demos/32_arista_mssg): load, checks, renders, enforce, gate.
 
     The scope is not part of 30_all, so test_71 builds its own branch and needs only the setup and
     repository prerequisites. It proves the generators -> group tags -> transform -> EOS text path, not that
