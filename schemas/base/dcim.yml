@@ -812,6 +812,8 @@ nodes:
             label: Single-Mode Fibre
           - name: copper
             label: Copper
+          - name: dac
+            label: Direct Attach Copper (DAC)
     relationships:
       - name: endpoints
         peer: DcimEndpoint

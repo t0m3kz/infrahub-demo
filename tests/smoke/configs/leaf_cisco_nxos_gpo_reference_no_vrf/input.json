@@ -2299,7 +2299,7 @@
           "id": "seg-internet",
           "__typename": "ManagedExternalSegment",
           "name": {
-            "value": "internet-internet-p"
+            "value": "internet"
           },
           "isolation_mode": {
             "value": "normal"
@@ -2327,7 +2327,7 @@
           "security_policy": {
             "node": {
               "name": {
-                "value": "seg-internet-internet-p-egress"
+                "value": "seg-internet-egress"
               },
               "enabled": {
                 "value": true

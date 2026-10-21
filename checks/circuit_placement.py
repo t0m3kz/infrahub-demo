@@ -7,7 +7,9 @@ Physical circuits
     1. exactly two distinct locations (the authored cage plus the ends add_circuit derives),
     2. each location is where one end's device is deployed, one end per location: a DC, ISP or cloud-region end
        is the device's ``deployment``, a cage end a TopologyColocationZone of the metro the edge is deployed to
-       (or the zone itself, for a device racked in the cage).
+       (or the zone itself, for a device racked in the cage),
+    3. owned exactly when it is an office's access circuit: one ending on a TopologyCustomerOffice is owned by
+       that office's owner (add_sdwan_edge's INET-<office>); every other one is shared underlay, unowned.
 
 Virtual circuits
     1. exactly two distinct locations,
@@ -21,7 +23,9 @@ Virtual circuits
        order, so the path is searched over every order of the hops.
 
 A colocation footprint is parented by the METRO, not a cage, so a cage of that metro reaches it: the chain of
-VC-C001-EQXFR-AWS-EUC1 starts at FR2, a zone of C001-P-FR's metro FR. The ends' count and port kind are
+VC-C001-EQXFR-AWS-EUC1 starts at FR2, a zone of C001-P-FR's metro FR. A virtual circuit's end count is not checked:
+a provider-managed one may surface on a single port, its far end the provider's (VC-C001-EQXFR-AWS-EUC1 has only
+the cage edge's port, its cloud end is a CloudVirtualInterface). A physical circuit's end count and port kind are
 checks/physical_circuit_ports.py's.
 """
 
@@ -136,6 +140,7 @@ class CheckCircuitPlacement(InfrahubCheck):
     def _validate_physical(self, circuit: dict[str, Any]) -> None:
         name = circuit.get("name") or circuit.get("id") or "<unnamed-circuit>"
         locations = _locations(circuit)
+        self._validate_physical_owner(circuit, name, locations)
         if len(locations) != CIRCUIT_LOCATIONS:
             self._error(
                 circuit,
@@ -171,6 +176,31 @@ class CheckCircuitPlacement(InfrahubCheck):
             "each location is where one end's device is deployed (a DC, ISP or cloud-region end is the device's "
             "deployment, a cage end a zone of the metro the device is deployed to).",
         )
+
+    def _validate_physical_owner(self, circuit: dict[str, Any], name: str, locations: list[dict[str, Any]]) -> None:
+        """An office's access circuit is owned by the office's owner; any other physical circuit is unowned."""
+        owner = circuit.get("owner") if isinstance(circuit.get("owner"), dict) else None
+        owner_id = (owner or {}).get("id")
+        org = (owner or {}).get("org_id") or owner_id
+        ownership = f"owned by '{org}'" if owner_id else "unowned"
+        offices = [location for location in locations if location.get("typename") == OFFICE]
+        for office in offices:
+            office_owner = office.get("owner") or {}
+            if office_owner.get("id") != owner_id:
+                office_org = office_owner.get("org_id") or office_owner.get("id") or "<no owner>"
+                self._error(
+                    circuit,
+                    "TopologyPhysicalCircuit",
+                    f"Physical circuit '{name}' ends on {_label(office)} of '{office_org}' but is {ownership}: an "
+                    "office's access circuit is owned by the office's owner.",
+                )
+        if owner_id and not offices:
+            self._error(
+                circuit,
+                "TopologyPhysicalCircuit",
+                f"Physical circuit '{name}' is owned by '{org}' but ends on no office ({_labels(locations)}): a "
+                "physical circuit is shared underlay, unowned, unless it is an office's access circuit.",
+            )
 
     def _validate_virtual(self, circuit: dict[str, Any]) -> None:
         name = circuit.get("name") or circuit.get("id") or "<unnamed-circuit>"

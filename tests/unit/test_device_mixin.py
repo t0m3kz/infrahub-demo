@@ -85,6 +85,30 @@ def _mock_created_device(kind_name: str, name: str) -> MagicMock:
 
 class TestDeviceMixinCreateDevices:
     @pytest.mark.asyncio
+    async def test_role_index_start_continues_the_numbering(self) -> None:
+        """A role split over several fabric_templates entries: the second entry's devices
+        continue at role_index_start instead of re-creating the first entry's names."""
+        gen = _make_generator()
+        gen.client.create = AsyncMock(
+            side_effect=lambda **kw: _mock_created_device(kw["kind"].__name__, kw["data"]["name"])
+        )
+
+        first = await gen.create_devices(
+            device_role="spine", quantity=2, deployment_id="dep-1", template={}, options={"indexes": [1, 1]}
+        )
+        gen.client.create_batch = AsyncMock(side_effect=[_DummyBatch(), _DummyBatch()])
+        second = await gen.create_devices(
+            device_role="spine",
+            quantity=2,
+            deployment_id="dep-1",
+            template={},
+            options={"indexes": [1, 1], "role_index_start": 3},
+        )
+
+        assert first == ["dc111sp01", "dc111sp02"]
+        assert second == ["dc111sp03", "dc111sp04"]
+
+    @pytest.mark.asyncio
     async def test_uses_template_owner_when_no_owner_is_passed(self) -> None:
         """Existing callers that rely on the template owner should keep working."""
 

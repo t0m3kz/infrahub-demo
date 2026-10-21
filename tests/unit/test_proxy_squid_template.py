@@ -1,8 +1,8 @@
 """Unit tests for the application-derived egress rules in templates/configs/proxies/squid_cache_linux.j2.
 
 Renders the real template through Proxy._load_template, fed by the same
-get_proxy_policies()/flatten_proxy_rules() helpers the Proxy transform uses, so
-ProxyPolicyRule.ports is exercised from spec string to squid ACL line.
+proxy_rules() helper the Proxy transform uses, so ProxyPolicyRule.ports, action
+and destination_type are exercised from the rule to the squid ACL line.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from transforms.config.proxy import Proxy
-from transforms.helpers.proxy import flatten_proxy_rules, get_proxy_policies
+from transforms.helpers.proxy import proxy_rules
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -23,12 +23,13 @@ def _rule(
     ports: list[str] | None = None,
     description: str = "Stripe API",
     priority: int = 10,
+    destination_type: str = "fqdn",
 ) -> dict[str, Any]:
     return {
         "name": name,
         "priority": priority,
         "action": action,
-        "destination_type": "fqdn",
+        "destination_type": destination_type,
         "destination": destination,
         "ports": ports,
         "log": False,
@@ -42,13 +43,13 @@ def _render(rules: list[dict[str, Any]]) -> list[str]:
     transform = Proxy.__new__(Proxy)
     transform.root_directory = str(_REPO_ROOT)
     template = transform._load_template("squid_cache_linux")
-    policies = get_proxy_policies([{"name": "egress", "enabled": True, "default_action": "block", "rules": rules}])
+    policies = [{"name": "egress", "enabled": True, "default_action": "block", "rules": rules}]
     config = template.render(
         name="DC3-PRX-01",
         proxy_type="explicit",
         ha=None,
         proxy_interfaces=[],
-        proxy_rules=flatten_proxy_rules(policies),
+        proxy_rules=proxy_rules(policies, None, "squid_cache_linux"),
     )
     return config.splitlines()
 
@@ -100,3 +101,21 @@ class TestSquidEgressRulePorts:
         assert lines.index("acl rule_02_ports port 123") < lines.index(
             "http_access allow rule_02 rule_02_ports # Stripe API"
         )
+
+
+class TestSquidEgressRuleMatching:
+    def test_inspect_rule_is_allowed_and_left_to_the_global_bump(self) -> None:
+        """inspect is allow-with-TLS-inspection; squid bumps every flow, so it is an allow (it used to deny)."""
+        lines = _render([_rule(action="inspect", ports=None)])
+        assert "http_access allow rule_00 # Stripe API" in lines
+        assert "ssl_bump bump all" in lines
+
+    def test_regex_destination_uses_a_url_regex_acl(self) -> None:
+        """A regex rule is a url_regex ACL, not a dstdomain holding the pattern literally."""
+        lines = _render([_rule(destination=r"^https://[a-z]+\.stripe\.com/", destination_type="regex", ports=None)])
+        assert r"acl rule_00 url_regex -i ^https://[a-z]+\.stripe\.com/" in lines
+
+    def test_cidr_destination_uses_a_dst_acl(self) -> None:
+        """A CIDR rule is a dst ACL, not a dstdomain holding the prefix as a hostname."""
+        lines = _render([_rule(destination="203.0.113.0/24", destination_type="cidr", ports=None)])
+        assert "acl rule_00 dst 203.0.113.0/24" in lines

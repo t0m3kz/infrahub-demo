@@ -15,6 +15,8 @@
 - LoadbalancerVipMixin._await_lb_inputs: the bounded re-read of a segment
   prefix or serving context another generator of the same load still writes
 - queries/topology/add/application.gql: the serving context path
+- load_balanced_components_in: what a deployment moving to another serving
+  context re-runs (add_customer_deployment_dc's relink fan-out)
 """
 
 from __future__ import annotations
@@ -42,9 +44,17 @@ from generators.helpers.lb_vip import (
     vip_ports,
 )
 from generators.helpers.rules import RulesPlanner
-from generators.lb_vip import CLOUD_LB_GROUP, READ_ATTEMPTS, READ_INTERVAL
+from generators.lb_vip import CLOUD_LB_GROUP, READ_ATTEMPTS, READ_INTERVAL, load_balanced_components_in
 from generators.logger import GeneratorError
-from generators.protocols import CloudLoadBalancer, LoadbalancerVIP, SecurityPolicy, SecurityPolicyRule
+from generators.protocols import (
+    AppComponent,
+    CloudLoadBalancer,
+    DcimPhysicalDevice,
+    DcimVirtualDevice,
+    LoadbalancerVIP,
+    SecurityPolicy,
+    SecurityPolicyRule,
+)
 from generators.segment_firewall import SegmentFirewallMixin
 from generators.topology.application_security import AppApplicationGenerator
 
@@ -1373,3 +1383,42 @@ def test_application_query_reads_the_cloud_placement_of_instances(root_dir: Path
     assert "private_ip { value }" in cloud
     assert "virtual_network {" in cloud
     assert "cidr_blocks { edges { node { prefix { value } ip_namespace { node { id } } } } }" in cloud
+
+
+class TestLoadBalancedComponentsIn:
+    """The components a relinked deployment re-runs: load_balanced, with an instance deployed to it."""
+
+    @staticmethod
+    def _client(devices: dict[str, list[str]], component_ids: list[str]) -> MagicMock:
+        """``devices``: device ids by kind name, as filters(kind=..., deployment__ids=...) returns them."""
+
+        async def filters(*, kind: Any, **kwargs: Any) -> list[MagicMock]:
+            if kind is AppComponent:
+                return [MagicMock(id=component_id) for component_id in component_ids]
+            return [MagicMock(id=device_id) for device_id in devices.get(kind.__name__, [])]
+
+        client = MagicMock()
+        client.filters = AsyncMock(side_effect=filters)
+        return client
+
+    def test_components_running_on_the_deployment_devices(self) -> None:
+        """Physical and virtual devices of the deployment, then the load_balanced components on them; sorted, unique."""
+        client = self._client(
+            {"DcimPhysicalDevice": ["srv-2"], "DcimVirtualDevice": ["vm-1"]}, ["comp-b", "comp-a", "comp-b"]
+        )
+
+        assert asyncio.run(load_balanced_components_in(client, "dep-1")) == ["comp-a", "comp-b"]
+
+        calls = [call.kwargs for call in client.filters.await_args_list]
+        assert calls == [
+            {"kind": DcimPhysicalDevice, "deployment__ids": ["dep-1"]},
+            {"kind": DcimVirtualDevice, "deployment__ids": ["dep-1"]},
+            {"kind": AppComponent, "instances__ids": ["srv-2", "vm-1"], "load_balanced__value": True},
+        ]
+
+    def test_deployment_without_devices_reads_no_components(self) -> None:
+        client = self._client({}, ["comp-a"])
+
+        assert asyncio.run(load_balanced_components_in(client, "dep-1")) == []
+
+        assert all(call.kwargs["kind"] is not AppComponent for call in client.filters.await_args_list)

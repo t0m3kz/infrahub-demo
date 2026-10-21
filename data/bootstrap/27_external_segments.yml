@@ -4,6 +4,8 @@
 # no prefix, gateway or deployment; its owner is the Internet
 # pseudo-customer, because a segment's name is computed from its owner
 # (generators/segment_firewall.py resolves its zone like any segment's).
+# org_id and customer_name are the same token, so the computed name is just
+# "internet" (no env suffix) and policy rules reference it as "internet".
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

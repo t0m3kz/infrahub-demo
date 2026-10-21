@@ -72,11 +72,10 @@ class ProxyCloud(InfrahubTransform):
         return self._render_web_gateway(proxy, provider)
 
     def _render_web_gateway(self, proxy: dict[str, Any], provider: str) -> str:
-        rules = proxy_rules(proxy.get("shared_policies"), proxy.get("egress_customers"))
-        for rule in rules:
-            rule["verdict"] = "allow" if rule.get("action") in ("allow", "bypass") else "block"
+        template_name = _PROVIDER_TEMPLATES.get(provider, _DEFAULT_TEMPLATE)
+        rules = proxy_rules(proxy.get("shared_policies"), proxy.get("egress_customers"), template_name)
 
-        template = self._load_template(_PROVIDER_TEMPLATES.get(provider, _DEFAULT_TEMPLATE))
+        template = self._load_template(template_name)
         return template.render(
             name=proxy.get("name"),
             provider=provider,

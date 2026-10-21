@@ -20,7 +20,7 @@ from transforms.helpers.firewall import (
 from transforms.helpers.group_policy import GPO_CONFIG_KEYS, group_policy_device_view
 from transforms.helpers.lisp import build_lisp_inputs, get_lisp_config
 from transforms.helpers.mlag import get_mlag, get_sonic_mlag_config
-from transforms.helpers.ospf import get_ospf
+from transforms.helpers.ospf import get_ospf, refuse_unrenderable_ospf_auth
 from transforms.helpers.overlay import OVERLAY_CONFIG_KEYS, OVERLAY_RENDERERS
 from transforms.helpers.segments import (
     get_vlans,
@@ -282,6 +282,7 @@ class BaseDeviceTransform(InfrahubTransform):
         device_name = data.get("name", "")
         mlag = get_mlag(device_capabilities, interfaces, device_name=device_name)
         template_interfaces = self._template_interfaces(data, host_vlans=host_vlans)
+        refuse_unrenderable_ospf_auth(platform_name, template_interfaces)
         config = {
             "name": device_name,
             "hostname": device_name,

@@ -573,7 +573,7 @@ class TestAclRuleEndpointResolver:
 
 def _internet_ref() -> dict:
     """A rule end naming a prefix-less external segment (the Internet segment)."""
-    return {"id": "inet", "name": "internet-internet-p", "security_zone": {"name": "INTERNET-ZONE"}}
+    return {"id": "inet", "name": "internet", "security_zone": {"name": "INTERNET-ZONE"}}
 
 
 class TestGetAclsInternetBand:

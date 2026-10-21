@@ -10,6 +10,13 @@ PhysicalCircuitGenerator (add_circuit)
     authored one of the same kind, or anything but two locations, fails the
     run before any write; the missing derived ones are added with one
     RelationshipAdd, so an already complete circuit writes nothing.
+    Derived from the devices as they are when the circuit is created or its
+    ends change: no trigger watches an end device's ``deployment`` (a rule on
+    a device kind can only dispatch a generator targeting devices, and none
+    targets every device). Every producer sets it at device creation, before
+    any circuit names the device; a later edit is reported by
+    checks/circuit_placement.py, and a re-run of this generator adds a
+    deployment that was missing but never moves a derived location.
     Then ``peering_role: dci`` builds the EVPN Multi-Site DCI session over the
     circuit's two endpoints (capabilities, exactly two by schema): a
     P2P prefix from the DCI pool, both addresses, the two interfaces
@@ -625,8 +632,15 @@ class VirtualCircuitGenerator(_CircuitGenerator):
             f"Processing virtual circuit {circuit_name} (type={link_type or '?'}, transport={transport_mode}, "
             f"role={circuit.get('peering_role') or 'none'}): {ends or 'no interfaces'}; underlay: {underlay}"
         )
-        if len(interfaces) != 2:
-            self.logger.warning(f"  Virtual circuit {circuit_name}: expected 2 interfaces, found {len(interfaces)}")
+        # A tunnel of ours has both ends; a provider-managed circuit may surface
+        # on one port only, its far end the provider's (a cloud on-ramp from
+        # the cage: VC-C001-EQXFR-AWS-EUC1, its cloud end a CloudVirtualInterface).
+        expected_ends = (2,) if link_type in _TUNNEL_LINK_TYPES else (1, 2)
+        if len(interfaces) not in expected_ends:
+            self.logger.warning(
+                f"  Virtual circuit {circuit_name}: expected {' or '.join(map(str, expected_ends))} interfaces, "
+                f"found {len(interfaces)}"
+            )
         underlay_types = {(pc.get("circuit_type") or "").lower() for pc in physical}
         if transport_mode == "internet_backed" and physical and "internet" not in underlay_types:
             self.logger.warning(

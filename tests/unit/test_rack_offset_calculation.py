@@ -6,13 +6,15 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from generators.pod_config import spine_downlink_layout, tor_rack_slots_per_row
 from generators.topology.rack import RackGenerator, TopologyRackData
-from tests.unit.simulators.fabric_designs import DESIGN_FOR_DEPLOYMENT_TYPE, pod_design
+from tests.unit.simulators.fabric_designs import DESIGN_FOR_DEPLOYMENT_TYPE, POD_DESIGN_NAMES, pod_design
 
 
 def _build_generator(
     *,
-    deployment_type: Literal["middle_rack", "tor", "mixed"],
+    deployment_type: Literal["middle_rack", "tor", "mixed"] = "mixed",
+    design: str | None = None,
     rack_index: int = 1,
     row_index: int = 1,
     maximum_tors_per_row: int | None = None,
@@ -45,7 +47,7 @@ def _build_generator(
         "leaf_interface_sorting_method": "top_down",
         "spine_interface_sorting_method": "bottom_up",
         "fabric_templates": [{"role": "spine", "quantity": 2, "template": {"id": "tmpl-spine"}}],
-        "design": pod_design(DESIGN_FOR_DEPLOYMENT_TYPE[deployment_type]),
+        "design": pod_design(design or DESIGN_FOR_DEPLOYMENT_TYPE[deployment_type]),
     }
 
     suite = {"index": 1}
@@ -94,11 +96,12 @@ def test_mixed_tor_offset_scales_by_row_and_rack_index() -> None:
     producing tors_per_row=2 at device_count=2".
     """
 
-    # offset = racks_in_previous_rows * device_count + (rack_index-1) * device_count = 1*2 + 2*2 = 6
+    # offset = ToR block start (S_MIXED: 4 leafs + 1 border-leaf = 5)
+    #        + racks_in_previous_rows * device_count + (rack_index-1) * device_count = 5 + 1*2 + 2*2 = 11
     generator = _build_generator(deployment_type="mixed", rack_index=3, row_index=2)
     offset = generator.calculate_cabling_offsets(device_count=2, device_type="tor", racks_in_previous_rows=1)
 
-    assert offset == 6
+    assert offset == 11
 
 
 @pytest.mark.parametrize(
@@ -194,13 +197,13 @@ def test_dc1_pod3_tor_offset_with_actual_rack_count(
 @pytest.mark.parametrize(
     "row_index, rack_index, racks_in_previous_rows, device_count, expected",
     [
-        # racks_in_previous_rows is now an explicit, caller-supplied live count
-        # (no more implicit derivation from a design's per-row capacity).
-        (1, 1, 0, 2, 0),  # first rack, first row → 0
-        (1, 2, 0, 2, 2),  # second rack, first row → 2
-        (1, 8, 0, 2, 14),  # last compute rack in row 1 (index 8+1=9 in mixed: network=1, compute=8)
-        (2, 1, 8, 2, 16),  # first rack, second row, 8 racks in prior row → 8*2 + 0 = 16
-        (2, 5, 8, 2, 24),  # row 2, rack 5, 8 racks in prior row → 16 + 4*2 = 24
+        # racks_in_previous_rows is an explicit, caller-supplied count; every
+        # mixed ToR offset starts past S_MIXED's leafs (4) and border-leaf (1).
+        (1, 1, 0, 2, 5),  # first rack, first row → 5
+        (1, 2, 0, 2, 7),  # second rack, first row → 5 + 2
+        (1, 9, 0, 2, 21),  # last rack position in row 1 (mixed: network=1 + compute=8) → 5 + 8*2
+        (2, 1, 9, 2, 23),  # first rack, second row, 9 positions in prior row → 5 + 9*2 = 23
+        (2, 5, 9, 2, 31),  # row 2, rack 5 → 23 + 4*2 = 31
     ],
 )
 def test_mixed_tor_offset_row_and_rack(
@@ -210,7 +213,7 @@ def test_mixed_tor_offset_row_and_rack(
     device_count: int,
     expected: int,
 ) -> None:
-    """Mixed ToR offsets use both prior-row rack count and rack index to avoid cross-row collisions."""
+    """Mixed ToR offsets sit past the leafs and border-leafs and use both prior-row rack count and rack index."""
 
     generator = _build_generator(
         deployment_type="mixed",
@@ -293,3 +296,41 @@ def test_dc1_pod3_missing_racks_in_previous_rows_defaults_to_zero() -> None:
     )
     assert offset_actual == 22  # safely within 30 downlinks
     assert offset_actual < SPINE_DOWNLINKS
+
+
+@pytest.mark.parametrize("name", POD_DESIGN_NAMES)
+def test_every_envelope_position_gets_its_own_spine_downlink(name: str) -> None:
+    """Cable every device the design allows, with the generators' own offsets — leafs and ToRs
+    as add_rack places them, border-leafs at pod.py's spine_downlink_layout offset — and count
+    the spine downlink ports used: no port twice, and exactly spine_downlink_layout's total.
+
+    A mixed pod's ToRs used to start at port 0 (on its leafs) and its border-leaf at the
+    leafs' end (on its ToRs); the row stride ignored the network rack's position."""
+    design = pod_design(name)
+    layout = spine_downlink_layout(design)
+    used: list[tuple[str, int]] = []
+
+    def take(label: str, offset: int, count: int) -> None:
+        used.extend((label, port) for port in range(offset, offset + count))
+
+    for row in range(1, design["max_rows"] + 1):
+        for network_rack in range(1, design["max_network_racks_per_row"] + 1):
+            leafs = design["max_leafs_per_network_rack"]
+            generator = _build_generator(design=name, row_index=row, rack_index=network_rack)
+            take(f"leafs r{row}", generator.calculate_cabling_offsets(device_count=leafs, device_type="leaf"), leafs)
+        for rack_index in range(1, tor_rack_slots_per_row(design) + 1):
+            tors = design["max_tors_per_compute_rack"]
+            generator = _build_generator(design=name, row_index=row, rack_index=rack_index)
+            offset = generator.calculate_cabling_offsets(
+                device_count=tors,
+                device_type="tor",
+                racks_in_previous_rows=generator._planned_previous_row_rack_slots(),
+            )
+            take(f"tors r{row} i{rack_index}", offset, tors)
+    take("border-leafs", layout["border-leaf"], design["max_border_leafs_per_pod"])
+
+    ports = [port for _, port in used]
+    clashes = sorted({port for port in ports if ports.count(port) > 1})
+    assert not clashes, f"{name}: spine ports {clashes} are planned twice: {used}"
+    assert len(ports) == layout["total"]
+    assert max(ports, default=-1) + 1 == layout["total"]

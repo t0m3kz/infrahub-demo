@@ -1,6 +1,7 @@
 # The rows of checks/circuit_placement.py: every circuit with the places it terminates on (locations), the device
-# each end port sits on and where that device is deployed (capabilities), and for a virtual circuit its owner and
-# the locations of every physical circuit it rides. One global query: the underlay chain of a virtual circuit spans
+# each end port sits on and where that device is deployed (capabilities), the circuit's owner (with an office
+# location's owner: an office's access circuit is owned by it), and for a virtual circuit the locations of every
+# physical circuit it rides. One global query: the underlay chain of a virtual circuit spans
 # several circuits.
 #
 # Concrete inline fragments only, so the query is valid whether physical `locations` peers TopologyConnectableLocation
@@ -13,6 +14,7 @@ query circuit_placement {
       node {
         id
         name { value }
+        owner { node { id org_id { value } } }
         locations {
           edges {
             node {
@@ -20,6 +22,7 @@ query circuit_placement {
               __typename
               name { value }
               ... on TopologyColocationZone { parent { node { id __typename name { value } } } }
+              ... on TopologyCustomerOffice { owner { node { id org_id { value } } } }
             }
           }
         }

@@ -662,7 +662,7 @@ class TestGetZonePoliciesExternalSegment:
             index=10,
             name="to-internet",
             src_zone="PROD-ZONE",
-            dst_segment={"name": "internet-internet-p"},
+            dst_segment={"name": "internet"},
             dst_zone="INTERNET-ZONE",
             src_segment={"gateway": {"ip_prefix": {"prefix": "10.1.0.0/24"}}},
         )
@@ -1190,7 +1190,7 @@ class TestGetCustomerPbrRules:
 
     def test_permit_to_a_prefix_less_external_segment_is_no_bypass(self) -> None:
         """The internet segment has no prefix: the leaf keeps redirecting to the firewall."""
-        rule = {"action": "permit", "disabled": False, "destination_segment": {"name": "internet-internet-p"}}
+        rule = {"action": "permit", "disabled": False, "destination_segment": {"name": "internet"}}
         policies = [{"enabled": True, "rules": [rule]}]
         activations = [_make_pbr_activation(security_policies=policies)]
         result = get_customer_pbr_rules(activations, [_make_context_leg()])

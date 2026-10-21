@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from generators.pod_config import pod_deployment_type, pod_profile
+from generators.pod_config import pod_deployment_type, pod_profile, spine_downlink_layout
 from tests.unit.simulators.fabric_designs import POD_DESIGN_NAMES, custom_pod_design, pod_design
 
 _EXPECTED_DEPLOYMENT_TYPE = {
@@ -58,17 +58,25 @@ def test_pod_profile_carries_the_design_rack_grid() -> None:
 
 
 def test_pod_profile_row_dependent_rack_slots() -> None:
+    """A mixed row numbers its network racks among its compute racks, so every rack position
+    keeps a ToR slot; a tor row has compute racks only; a middle_rack row reserves none."""
     mixed_profile = pod_profile(pod_design("S_MIXED"))
+    tor_profile = pod_profile(pod_design("S_TOR"))
     middle_profile = pod_profile(pod_design("S_MIDDLE"))
 
-    assert mixed_profile["row_dependent_rack_slots_per_row"] == mixed_profile["max_compute_racks_per_row"]
+    assert mixed_profile["row_dependent_rack_slots_per_row"] == (
+        mixed_profile["max_compute_racks_per_row"] + mixed_profile["max_network_racks_per_row"]
+    )
+    assert tor_profile["row_dependent_rack_slots_per_row"] == tor_profile["max_compute_racks_per_row"]
     assert middle_profile["row_dependent_rack_slots_per_row"] == 0
 
 
 @pytest.mark.parametrize("name", POD_DESIGN_NAMES)
-def test_designs_with_tors_declare_a_spine_budget_matching_compute_racks_per_row(name: str) -> None:
-    """max_compute_racks_per_row is hard-enforced from the spine/ToR port budget for every
-    design that has ToRs (the others declare no budget at all)."""
+def test_designs_with_tors_declare_the_spine_downlinks_their_envelope_needs(name: str) -> None:
+    """spine_downlink_ports_per_spine is every downlink a spine of the design needs: one per
+    leaf, border-leaf and ToR slot (spine_downlink_layout); each ToR takes one uplink per spine.
+    Designs without ToRs declare no budget at all. The layout itself is checked against the
+    generators' real offsets in test_rack_offset_calculation.py."""
     design = pod_design(name)
     has_budget = design.get("spine_downlink_ports_per_spine") is not None or (
         design.get("tor_uplinks_to_spine") is not None
@@ -76,6 +84,19 @@ def test_designs_with_tors_declare_a_spine_budget_matching_compute_racks_per_row
 
     assert has_budget == (design["max_tors_per_compute_rack"] > 0)
     if has_budget:
-        total_downlinks = design["spine_downlink_ports_per_spine"] * design["max_spines_per_pod"]
-        links_per_compute_rack = design["max_tors_per_compute_rack"] * design["tor_uplinks_to_spine"]
-        assert design["max_compute_racks_per_row"] == (total_downlinks // links_per_compute_rack) // design["max_rows"]
+        assert design["spine_downlink_ports_per_spine"] == spine_downlink_layout(design)["total"]
+        assert design["tor_uplinks_to_spine"] == design["max_spines_per_pod"]
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        # 32 ToRs from port 0, the border-leaf after them.
+        ("S_TOR", {"leaf": 0, "tor": 0, "border-leaf": 32, "total": 33}),
+        # 4 leafs, the border-leaf, then 2 rows x 9 rack positions x 2 ToRs.
+        ("S_MIXED", {"leaf": 0, "tor": 5, "border-leaf": 4, "total": 41}),
+        ("S_MIDDLE", {"leaf": 0, "tor": 9, "border-leaf": 8, "total": 9}),
+    ],
+)
+def test_spine_downlink_layout(name: str, expected: dict[str, int]) -> None:
+    assert spine_downlink_layout(pod_design(name)) == expected

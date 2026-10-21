@@ -287,8 +287,13 @@ class TestPortQuota:
         assert _run([_footprint(ports_25g=0)], [_segment("s1", ["C005-P-DC10"], virtual)]) == []
 
     def test_unknown_speed_is_not_metered(self) -> None:
-        """No ports_10g attribute and a speed that cannot be read both count against nothing."""
-        ports = [_port("a", "10gbase-x-sfpp"), _port("b", "400gbase-x-qsfpdd"), _port("c", "virtual")]
+        """No ports_10g attribute, a sub-1G port and a speed that cannot be read all count against nothing."""
+        ports = [
+            _port("a", "10gbase-x-sfpp"),
+            _port("b", "400gbase-x-qsfpdd"),
+            _port("c", "virtual"),
+            _port("d", "100base-tx"),
+        ]
         assert _run([_footprint(ports_25g=0, ports_100g=0)], [_segment("s1", ["C005-P-DC10"], *ports)]) == []
 
     def test_stretched_segment_ports_count_in_their_own_dc(self) -> None:

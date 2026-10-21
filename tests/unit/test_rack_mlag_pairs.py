@@ -15,6 +15,8 @@ Covers:
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -25,8 +27,20 @@ from generators.protocols import ManagedMLAG
 
 
 def _build_gen() -> Any:
-    gen = DeviceMixin.__new__(DeviceMixin)
+    gen: Any = DeviceMixin.__new__(DeviceMixin)
     gen.logger = MagicMock()
+    # PoolMixin.resource_lock — records acquire/release in gen.events.
+    gen.events = []
+
+    @asynccontextmanager
+    async def _lock(key: str) -> AsyncGenerator[None]:
+        gen.events.append(f"acquire:{key}")
+        try:
+            yield
+        finally:
+            gen.events.append(f"release:{key}")
+
+    gen.resource_lock = _lock
     gen.client = MagicMock()
     gen.client.group_context = MagicMock()
     gen.client.group_context.related_node_ids = []
@@ -316,3 +330,46 @@ class TestEnsureMlagPairs:
         create_kwargs = gen.client.create.call_args.kwargs
         assert create_kwargs["data"]["virtual_peer_link"] is True
         mlag_obj.save.assert_awaited_once_with(allow_upsert=True)
+
+
+class TestEnsureMlagPairsLock:
+    @pytest.mark.asyncio
+    async def test_lookup_and_create_run_inside_the_per_domain_lock(self) -> None:
+        """Two overlapping runs (a rack's inline run and its trigger) would each find
+        no domain and each create one; the wiring lock is taken only after the
+        domain lock is released, so the two are never nested."""
+        gen = _build_gen()
+        events = gen.events
+
+        async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
+            events.append(f"query:{kind.__name__}")
+            return []
+
+        async def _save(**kwargs: Any) -> None:
+            events.append("save")
+
+        async def _wiring(*args: Any, **kwargs: Any) -> None:
+            events.append("wiring")
+
+        mlag_obj = MagicMock(id="mlag-1", save=AsyncMock(side_effect=_save))
+        gen.client.filters = AsyncMock(side_effect=_filters)
+        gen.client.get = AsyncMock(return_value=_mock_group())
+        gen.client.create = AsyncMock(return_value=mlag_obj)
+        gen.ensure_mlag_wiring = AsyncMock(side_effect=_wiring)
+        devices_by_name = {"leaf-01": _mock_device("leaf-01"), "leaf-02": _mock_device("leaf-02")}
+
+        await gen._ensure_mlag_pairs(
+            ["leaf-02", "leaf-01"],
+            devices_by_name=devices_by_name,
+            role_label="leaf",
+            template={"id": "tmpl", "interfaces": []},
+            mlag_create="virtual",
+        )
+
+        assert events == [
+            "acquire:mlag-domain-leaf-01-leaf-02-mlag",
+            "query:ManagedMLAG",
+            "save",
+            "release:mlag-domain-leaf-01-leaf-02-mlag",
+            "wiring",
+        ]

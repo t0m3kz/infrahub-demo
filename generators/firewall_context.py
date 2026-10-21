@@ -56,6 +56,7 @@ from .helpers.pools import (
     LB_CONTEXT_VLAN_END,
     LB_CONTEXT_VLAN_START,
 )
+from .lb_vip import APP_COMPONENT_GENERATOR, load_balanced_components_in
 from .protocols import (
     DcimPhysicalDevice,
     DcimPhysicalInterface,
@@ -110,7 +111,11 @@ class ContextSpec:
     vlan_range bounds the parent's VLAN pool. skip_reason reads the parent
     (customer.parent of the boarding query) and returns why it gets no
     context of this kind, or None. vip_pool_name, when set, gives the context
-    a VIP prefix from that pool of the tenant namespace.
+    a VIP prefix from that pool of the tenant namespace. relink_consumers,
+    when set, lists the nodes whose generated output sits on the context a
+    deployment is served by (client, deployment id -> node ids):
+    link_serving_context runs relink_generator for them when the deployment
+    moves from one context to another.
     """
 
     label: str
@@ -128,6 +133,8 @@ class ContextSpec:
     vlan_range: tuple[int, int]
     skip_reason: Callable[[dict[str, Any]], str | None] = _no_skip
     vip_pool_name: Callable[[str], str] | None = None
+    relink_consumers: Callable[[Any, str], Awaitable[list[str]]] | None = None
+    relink_generator: str = ""
 
 
 FIREWALL_CONTEXT = ContextSpec(
@@ -162,6 +169,11 @@ LOADBALANCER_CONTEXT = ContextSpec(
     vlan_range=(LB_CONTEXT_VLAN_START, LB_CONTEXT_VLAN_END),
     skip_reason=_inline_parent,
     vip_pool_name=lb_vip_pool_name,
+    # A VIP and its R_server rule live on the serving context and the callers'
+    # R_client rules name the VIP; the firewall's rules are placed by the
+    # transform at render time, so FIREWALL_CONTEXT has nothing to re-run.
+    relink_consumers=load_balanced_components_in,
+    relink_generator=APP_COMPONENT_GENERATOR,
 )
 
 
@@ -300,6 +312,7 @@ class FirewallContextMixin:
     ensure_vlan_subinterface: Callable[..., Awaitable[Any]]
     upsert_prefix_addresses: Callable[..., Awaitable[dict[int, Any]]]
     wait_for_parent_generator_and_refetch: Callable[..., Awaitable[dict | None]]
+    run_generator: Callable[..., Awaitable[None]]
 
     async def resolve_virtual_template(
         self, *, platform: str | None, role: str, size_suffix: str
@@ -336,16 +349,41 @@ class FirewallContextMixin:
         run writes it, so boardings onto one shared context never race. Not
         tracked: the deployment is the generator's target, not its output, and
         tracking it would let delete_unused_nodes remove it.
+
+        A move from one context to another (a re-run after the design switched
+        dedicated <-> shared) leaves what other runs generated on the previous
+        one stale, so it re-runs spec.relink_generator for spec.relink_consumers
+        without waiting. A first link re-runs nothing: the application runs of
+        the same load wait for this run before they read the context
+        (generators/lb_vip.py, _await_lb_inputs).
         """
         try:
             deployment = await self.client.get(kind=self._customer_kind, id=customer_id)
-            if getattr(deployment, spec.serving_field).id == context_id:
+            previous_id = getattr(deployment, spec.serving_field).id
+            if previous_id == context_id:
                 return
             setattr(deployment, spec.serving_field, context_id)
             await deployment.save(update_group_context=False)
             self.logger.info(f"Deployment {customer_id} served by {spec.label} {context_id}")
         except Exception as exc:
             self.logger.error(f"Failed to link deployment {customer_id} to {spec.label} {context_id}: {exc}")
+            return
+        consumers = spec.relink_consumers
+        if not previous_id or consumers is None:
+            return
+        try:
+            consumer_ids = await consumers(self.client, customer_id)
+            if consumer_ids:
+                self.logger.info(
+                    f"Deployment {customer_id} moved off {spec.label} {previous_id}: "
+                    f"re-running {spec.relink_generator} for {len(consumer_ids)} node(s)"
+                )
+                await self.run_generator(spec.relink_generator, consumer_ids, wait=False)
+        except Exception as exc:
+            self.logger.error(
+                f"Deployment {customer_id} moved off {spec.label} {previous_id}, "
+                f"but {spec.relink_generator} could not be re-run: {exc}"
+            )
 
     async def _resolve_context_target(
         self, spec: ContextSpec, customer: dict[str, Any], customer_id: str

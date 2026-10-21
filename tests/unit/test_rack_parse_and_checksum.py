@@ -14,6 +14,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from generators.helpers.rack import parse_rack_data
+from generators.pod_config import pod_spine_slot_device_names
+from generators.protocols import DcimPhysicalDevice
 from generators.topology.rack import RackGenerator, TopologyRackData
 from tests.unit.simulators.fabric_designs import DESIGN_FOR_DEPLOYMENT_TYPE, pod_design
 
@@ -67,6 +69,13 @@ def _build_rack_generator(
     gen.client.task = MagicMock()
     gen.client.task.filter = AsyncMock(return_value=[])
     return gen
+
+
+def _device(name: str) -> MagicMock:
+    """A DcimPhysicalDevice as client.filters returns it."""
+    device = MagicMock()
+    device.name.value = name
+    return device
 
 
 def _mock_rack(name: str, rack_type: str, row_index: int = 1, index: int = 1) -> MagicMock:
@@ -425,7 +434,7 @@ class TestGenerateRackGating:
         """
         gen = _build_rack_generator(deployment_type="mixed", rack_type="network")
         gen.data["pod"]["parent"]["routing_strategy"] = strategy
-        gen.data["pod"]["devices"] = [{"name": "spine-1"}, {"name": "spine-2"}]
+        gen.client.filters = AsyncMock(return_value=[_device("spine-2"), _device("spine-1")])
         gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
         gen.bgp_processes_ready = AsyncMock(return_value=False)
         gen._prepare_generation_context = MagicMock()
@@ -446,7 +455,7 @@ class TestGenerateRackGating:
         gen.data["l2_leafs"] = []
         gen.data["access_leafs"] = []
         gen.data["pod"]["parent"]["routing_strategy"] = "ospf-ibgp"
-        gen.data["pod"]["devices"] = [{"name": "spine-1"}]
+        gen.client.filters = AsyncMock(return_value=[_device("spine-1")])
         gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
         gen.bgp_processes_ready = AsyncMock(return_value=True)
 
@@ -454,6 +463,49 @@ class TestGenerateRackGating:
             await gen.generate({"any": "shape"})
 
         gen.bgp_processes_ready.assert_awaited_once_with(["spine-1"], "overlay")
+        assert any("endpoint-only rack" in str(call.args[0]) for call in gen.logger.info.call_args_list)
+
+    @pytest.mark.asyncio
+    async def test_border_spine_pod_gates_on_its_border_spines_by_name(self) -> None:
+        """A border-spine is deployed to the DC, so the pod's own device list never holds it and
+        the gate used to be skipped silently. The spine-slot names are looked up instead."""
+        gen = _build_rack_generator(deployment_type="mixed", rack_type="network")
+        gen.data["pod"]["fabric_templates"] = [
+            {"role": "border-spine", "quantity": 2, "template": {"id": "tmpl-bs"}},
+        ]
+        gen.data["pod"]["parent"]["routing_strategy"] = "ebgp-ebgp"
+        expected = pod_spine_slot_device_names(gen.data["pod"])
+        gen.client.filters = AsyncMock(return_value=[_device(name) for name in expected])
+        gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
+        gen.bgp_processes_ready = AsyncMock(return_value=False)
+        gen._prepare_generation_context = MagicMock()
+
+        with patch("generators.topology.rack.parse_rack_data", return_value=gen.data):
+            await gen.generate({"any": "shape"})
+
+        lookup = gen.client.filters.call_args.kwargs
+        assert lookup["kind"] is DcimPhysicalDevice
+        assert lookup["name__values"] == expected
+        assert lookup["role__value"] == "border-spine"
+        gen.bgp_processes_ready.assert_awaited_once_with(expected, "underlay")
+        gen._prepare_generation_context.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_spines_that_do_not_exist_yet_do_not_defer_the_rack(self) -> None:
+        """Only existing spine-slot devices are waited for: a rack whose spines are not created
+        yet goes on (create_cabling waits for their ports), as it did before the name lookup."""
+        gen = _build_rack_generator(deployment_type="mixed", rack_type="compute", leafs=[])
+        gen.data["tors"] = []
+        gen.data["l2_leafs"] = []
+        gen.data["access_leafs"] = []
+        gen.client.filters = AsyncMock(return_value=[])
+        gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
+        gen.bgp_processes_ready = AsyncMock(return_value=False)
+
+        with patch("generators.topology.rack.parse_rack_data", return_value=gen.data):
+            await gen.generate({"any": "shape"})
+
+        gen.bgp_processes_ready.assert_not_awaited()
         assert any("endpoint-only rack" in str(call.args[0]) for call in gen.logger.info.call_args_list)
 
     @pytest.mark.asyncio

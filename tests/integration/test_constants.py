@@ -667,7 +667,7 @@ ALL_DEMO_INTERNET_EGRESS_RULES: dict[str, InternetEgressRule] = {
     "nordix-prod-to-internet-https": {
         "dc": "DC11",
         "source_segment": "c006-nordix-prod-p",
-        "destination_segment": "internet-internet-p",
+        "destination_segment": "internet",
         "destination_zone": "INTERNET-ZONE",
         "protocol": "tcp",
         "port": 443,

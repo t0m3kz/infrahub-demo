@@ -308,6 +308,13 @@ spec:
     # turns load_balanced (or back), or whose instances change, does the same:
     # its VIPs follow its instances' serving contexts, and its callers' rules
     # go to the VIPs (R_client) instead of its segment.
+    # A customer DC moved to another load balancer context (dedicated <->
+    # shared) has no rule here: its one writer, add_customer_deployment_dc,
+    # fans add_app_component out to the deployment's load_balanced components
+    # on the relink (generators/firewall_context.py, link_serving_context). A
+    # rule on serving_loadbalancer_context could only dispatch a generator of
+    # customer_deployments_dc, and add_customer_deployment_dc writes that link
+    # on every first boarding, so it would run every boarding twice.
 
     - name: trigger-app-security-rules-on-application-created
       branch_scope: "other_branches"
@@ -621,7 +628,14 @@ spec:
     # both kinds) — must be a member, or its created-trigger raises (see the
     # endpoint note above). The `updated` rules watch only what defines a
     # circuit's ends and role. tunnel_id is deliberately absent: add_sdwan_edge
-    # writes it back onto the overlay circuit, so watching it would re-fire.
+    # writes it back onto the overlay circuit, so watching it would re-fire,
+    # and so is `locations`: add_circuit writes the derived ends there.
+    # An end device's `deployment` (what a derived end is read from) has no
+    # rule either: a rule on a device kind dispatches only a generator whose
+    # target group holds the device, and none targets every device (see the
+    # endpoint note above). Every producer sets it when it creates the device,
+    # before a circuit names it; checks/circuit_placement.py reports a later
+    # edit (generators/topology/circuit.py).
     - name: trigger-circuit-on-created
       branch_scope: "other_branches"
       node_kind: TopologyPhysicalCircuit

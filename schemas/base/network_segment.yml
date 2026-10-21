@@ -17,9 +17,13 @@ generics:
         kind: Text
         order_weight: 100
         description: "Network segment identifier"
+        # {org_id}-{customer_name}-{environment}, except a segment named after
+        # its owner (org_id == customer_name, the Internet pseudo-customer's
+        # ManagedExternalSegment): just that token, e.g. "internet". No real
+        # customer's org_id (C005, P012, INFRA, ...) is one of its segment names.
         computed_attribute:
           kind: Jinja2
-          jinja2_template: "{{owner__org_id__value|lower}}-{{customer_name__value|lower|replace(' ', '-')}}-{{environment__value}}"  # yamllint disable-line rule:line-length
+          jinja2_template: "{% if owner__org_id__value|lower == customer_name__value|lower|replace(' ', '-') %}{{owner__org_id__value|lower}}{% else %}{{owner__org_id__value|lower}}-{{customer_name__value|lower|replace(' ', '-')}}-{{environment__value}}{% endif %}"  # yamllint disable-line rule:line-length
         read_only: true
         optional: false
       - name: description

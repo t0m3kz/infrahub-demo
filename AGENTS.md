@@ -256,15 +256,23 @@ class MyCheck(InfrahubCheck):
   the DC (never a pod, rack or footprint), the colocation cage `TopologyColocationZone` (never the metro), the
   `TopologyCloudRegion` (never a zone or `TopologyCloud`), the ISP `TopologyExternalProviders`, the
   `TopologySaasRegion` or the `TopologyCustomerOffice`. Data lists only the cage; `add_circuit` adds every end
-  whose endpoint device's `deployment` is a facility (border leaf -> DC, provider router -> region, ISP PE -> ISP).
+  whose endpoint device's `deployment` is a facility (border leaf -> DC, provider router -> region, ISP PE -> ISP),
+  when the circuit is created or its ends change: nothing re-runs it on a later `deployment` edit (the check reports
+  it). A physical circuit is shared underlay, unowned, except an office's access circuit (`add_sdwan_edge`'s
+  `INET-<office>`), owned by the office's owner.
   A virtual circuit's `locations` peer `TopologyConnectableLocation`: an owned one ends on a footprint of its
-  `owner`, an unowned one on facilities, and its `physical_circuits` chain is contiguous end to end.
+  `owner`, an unowned one on facilities, and its `physical_circuits` chain is contiguous end to end. A
+  provider-managed one may surface on one port (`VC-C001-EQXFR-AWS-EUC1`: the cage edge; its cloud end is a
+  `CloudVirtualInterface`).
   `checks/circuit_placement.py` guards what the schema cannot (cage parent = device metro, owner, chain).
   `locations` is declared on each circuit node, not on `TopologyCircuit`: an inherited peer cannot be narrowed.
 - **DC service tier**: `TopologyCustomerTemplateDC` (referenced by the footprint's `design`, for example `M_DC`)
   holds `dedicated_firewall`, `dedicated_loadbalancer`, `max_segments`, `ports_25g` and `ports_100g` (0 = no
   host-facing ports of that speed). `checks/customer_quota.py` enforces the segment and port numbers; a footprint
-  with no `design` is not metered.
+  with no `design` is not metered. `add_customer_deployment_dc` (triggered on creation only) links the footprint's
+  `serving_loadbalancer_context`; when a re-run moves it to another context (dedicated <-> shared), it re-runs
+  `add_app_component` for the footprint's load-balanced components, so their VIPs, R_server and callers' R_client
+  rules follow. A `design` change alone re-runs nothing, and a hand edit of the link is not followed up.
 - **Fabric design**: `TopologyDataCenter.design` (`TopologyTemplateDC`: S, M, L, XL) and `TopologyPod.design`
   (`TopologyTemplatePod`: S_MIDDLE, S_TOR, ...) are required and hold only the envelope (`max_*`); the rows live in
   `data/bootstrap/14b_fabric_templates.yml`. Every fabric pool size is derived from them by

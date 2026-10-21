@@ -3,7 +3,7 @@
 Covers:
   - ControllerPayload.transform() — dispatch to the right vendor builder by
     (controller_type, platform-name) pulled straight out of the query result.
-  - No matching builder / no controller found → empty JSON object.
+  - No matching builder → ValueError; no controller found → empty JSON object.
 """
 
 from __future__ import annotations
@@ -11,6 +11,8 @@ from __future__ import annotations
 import asyncio
 import json
 from typing import Any
+
+import pytest
 
 from transforms.config.controller import ControllerPayload
 
@@ -405,11 +407,24 @@ class TestVelocloudOfficeEdgeWanExit:
 
 
 class TestNoMatch:
-    def test_unknown_platform_for_security_manager_returns_empty(self) -> None:
-        data = _raw_controller("SMS-X", "security_manager", platform_name="unknown_os")
-        result = asyncio.run(_make_transform().transform(data))
-
-        assert json.loads(result) == {}
+    @pytest.mark.parametrize(
+        ("controller_type", "platform_name"),
+        [
+            ("wlc", "cisco_ios"),
+            ("meraki_dashboard", None),
+            ("nsx_manager", None),
+            ("ucs_manager", None),
+            ("other", None),
+            ("security_manager", "unknown_os"),
+        ],
+    )
+    def test_controller_without_a_payload_builder_is_refused(
+        self, controller_type: str, platform_name: str | None
+    ) -> None:
+        """No builder means no onboarding payload: fail the artifact rather than publish an empty `{}`."""
+        data = _raw_controller("CTRL-X", controller_type, platform_name=platform_name)
+        with pytest.raises(ValueError, match=f"no payload builder for controller_type '{controller_type}'"):
+            asyncio.run(_make_transform().transform(data))
 
     def test_no_controller_in_result_returns_empty(self) -> None:
         result = asyncio.run(_make_transform().transform({"ManagedController": {"edges": []}}))

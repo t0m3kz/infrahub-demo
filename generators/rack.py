@@ -15,8 +15,8 @@ from .helpers.routing import (
     p2p_prefix_length,
 )
 from .helpers.template_interfaces import template_interface_names_by_role
-from .pod_config import pod_deployment_type, spine_slot_device_names, spine_slot_role, spine_slot_templates
-from .protocols import TopologyDataCenter, TopologyPod
+from .pod_config import pod_deployment_type, pod_spine_slot_device_names, spine_slot_role, spine_slot_templates
+from .protocols import DcimPhysicalDevice, TopologyDataCenter, TopologyPod
 from .types import RoutingOptions, naming_convention_of
 
 _POD_POOL_MAX_RETRIES = 10
@@ -58,11 +58,11 @@ _SPINE_DEPENDENT_ROLES: frozenset[str] = frozenset({"leaf", "tor", "access_leaf"
 
 # Which fabric_templates roles a pod's deployment_type knows how to cable.
 #
-# - "tor" cables to the pod spines: directly (tor deployment, cumulative
-#   offset across the pod) or to the middle rack's leafs in the same row
-#   (mixed deployment, calculate_cabling_offsets' mixed+tor branch). Neither
-#   path exists for middle_rack — there every leaf lives in the same rack as
-#   its ToRs, and _generate_tors() has no local-leaf cabling branch for it.
+# - "tor" cables to the pod spines in both tor and mixed deployments
+#   (calculate_cabling_offsets' tor branch; in a mixed pod its block starts
+#   past the leafs and border-leafs, see pod_config.spine_downlink_layout).
+#   middle_rack reserves no spine ports for ToRs (its design has none), and
+#   _generate_tors() has no local-leaf cabling branch.
 # - "l2_leaf"/"access_leaf" always cable to a local leaf pair — in the same
 #   rack for middle_rack/network racks, or the middle rack in the same row
 #   for mixed compute racks (_resolve_local_leaf_cabling_target). tor
@@ -129,28 +129,14 @@ class RackMixin:
             Tuple of (device_names, interface_names) for create_cabling
         """
         pod = self.data["pod"]
-        dc = pod["parent"]
-        fabric_templates = pod.get("fabric_templates", [])
-        spine_entries = spine_slot_templates(fabric_templates)
-        spine_role = spine_slot_role(fabric_templates)
+        spine_entries = spine_slot_templates(pod.get("fabric_templates", []))
 
         if not spine_entries:
             raise RuntimeError(
                 f"Rack {self.data['name']}: Cannot derive spine info - no spine/border-spine fabric_templates entries"
             )
 
-        device_names: list[str] = []
-        for entry in spine_entries:
-            device_names.extend(
-                spine_slot_device_names(
-                    dc=dc,
-                    fabric_name=self.fabric_name,
-                    pod_index=pod["index"],
-                    role=spine_role,
-                    quantity=entry["quantity"],
-                )
-            )
-        device_names = sorted(device_names)
+        device_names = pod_spine_slot_device_names(pod)
 
         # Interface names come from the first entry's template only — same accepted
         # limitation as dc.py's/pod.py's super-spine/spine device creation: assumes
@@ -175,6 +161,25 @@ class RackMixin:
             f"{len(interface_names)} downlink interface(s) from query data"
         )
         return device_names, interface_names
+
+    async def _existing_spine_slot_names(self) -> list[str]:
+        """The pod's spine-slot devices that already exist, sorted by name.
+
+        Looked up by name (pod_spine_slot_device_names), not read off the
+        pod's devices: a border-spine is deployed to the DC, so a border-spine
+        pod lists none. Only the existing ones: spines that are not there yet
+        do not hold the rack back here (create_cabling waits for their ports).
+        """
+        pod = self.data["pod"]
+        names = pod_spine_slot_device_names(pod)
+        if not names:
+            return []
+        devices = await self.client.filters(
+            kind=DcimPhysicalDevice,
+            name__values=names,
+            role__value=spine_slot_role(pod.get("fabric_templates") or []),
+        )
+        return sorted(device.name.value for device in devices)
 
     def _missing_pools(self, pod: dict[str, Any], dc: Mapping[str, Any], *, needs_asn_pool: bool) -> list[str]:
         """Which required pools are still unresolved, as ``pod.<field>`` / ``dc.fabric_asn_pool`` labels."""

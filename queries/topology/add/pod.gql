@@ -64,7 +64,8 @@ fragment DataCenterFields on TopologyDataCenter {
     }
   }
   # The DC's fabric envelope, as far as a pod's own checks and pool sizes read it
-  # (generators/fabric_sizing.py): the pod designs it may host and their spine widths.
+  # (generators/fabric_sizing.py): the pod designs it may host and their spine
+  # widths, by id for a sibling pod's design (the back-to-back mesh slot width).
   design {
     node {
       name { value }
@@ -74,6 +75,7 @@ fragment DataCenterFields on TopologyDataCenter {
       pod_templates {
         edges {
           node {
+            id
             name { value }
             max_spines_per_pod { value }
           }

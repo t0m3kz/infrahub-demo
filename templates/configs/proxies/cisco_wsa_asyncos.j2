@@ -49,7 +49,7 @@ accesspolicies
 {%- for rule in proxy_rules %}
   policy {{ rule.acl_name }}
     url-domain {{ rule.destinations | join(' ') }}
-    action {{ 'allow' if rule.action in ('allow', 'bypass') else 'block' }}
+    action {{ rule.verdict }}
   !
 {%- endfor %}
   policy block-malware

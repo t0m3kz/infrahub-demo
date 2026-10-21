@@ -275,13 +275,14 @@ class TestInterfaceSpeedMatching:
     @pytest.mark.parametrize(
         "interface_type,expected_speed",
         [
-            ("100gbase-x-qsfp28", 100),
-            ("25gbase-x-sfp28", 25),
-            ("10gbase-t", 10),
-            ("40gbase-x-qsfpplus", 40),
-            ("1000base-t", 1),
-            ("1000base-x-sfp", 1),
-            ("100base-tx", None),
+            ("100gbase-x-qsfp28", 100_000),
+            ("25gbase-x-sfp28", 25_000),
+            ("10gbase-t", 10_000),
+            ("40gbase-x-qsfpplus", 40_000),
+            ("1000base-t", 1000),
+            ("1000base-x-sfp", 1000),
+            ("100base-tx", 100),
+            ("lte", None),
             ("unknown-type", None),
         ],
     )

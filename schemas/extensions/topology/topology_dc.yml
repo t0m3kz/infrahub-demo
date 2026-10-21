@@ -568,9 +568,9 @@ nodes:
         parameters:
           min_value: 0
         order_weight: 360
-      # Rack budget of a pod with ToRs: max_compute_racks_per_row =
-      # spine downlinks (ports x spines) / (ToRs per rack x uplinks per ToR) / rows,
-      # checked by a unit test. Set only on designs with ToRs.
+      # Downlink budget of a pod with ToRs, per spine: the leafs, then the border-leafs, then one
+      # ToR slot per rack position (generators/pod_config.py spine_downlink_layout); a unit test
+      # checks it against that layout. Set only on designs with ToRs.
       - name: spine_downlink_ports_per_spine
         kind: Number
         label: "Spine Downlink Ports"

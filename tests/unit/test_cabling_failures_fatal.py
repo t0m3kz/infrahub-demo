@@ -123,6 +123,7 @@ async def _mesh(gen: Any, *, spine_interfaces: list[str]) -> None:
         dc_asn_pool_id=None,
         pod_pools={},
         underlay_protocol="ipv6",
+        slot_width=2,
     )
 
 

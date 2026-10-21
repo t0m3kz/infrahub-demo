@@ -346,3 +346,27 @@ class TestProxyCloudTransform:
         rule = payload["zia_url_filtering_rules"][0]
         assert rule["action"] == "BLOCK"
         assert rule["destinations"] == ["malicious.example.com"]
+
+
+class TestCloudProxyUnrenderableRules:
+    """A rule the payload cannot express fails the artifact instead of rendering as a block."""
+
+    @pytest.mark.parametrize("action", ["inspect", "redirect"])
+    @pytest.mark.parametrize("provider", ["zscaler_zia", "cloudflare_gateway", "netskope", "other"])
+    @pytest.mark.asyncio
+    async def test_inspect_and_redirect_are_refused(self, provider: str, action: str) -> None:
+        """The payloads carry an allow/block verdict only: no inspection flag and no redirect target."""
+        rule = {**_STRIPE_RULE, "action": action}
+        with patch(
+            _CLEAN_DATA_PATH, return_value=_cleaned_proxy(provider=provider, shared_policies=_shared_policy(rule))
+        ):
+            with pytest.raises(ValueError, match=f"action '{action}'"):
+                await _make_transform().transform({})
+
+    @pytest.mark.asyncio
+    async def test_regex_destination_is_refused(self) -> None:
+        """The ZIA payload lists destinations untyped, so a regex would be taken literally."""
+        rule = {**_STRIPE_RULE, "destination_type": "regex", "destination": r".*\.stripe\.com"}
+        with patch(_CLEAN_DATA_PATH, return_value=_cleaned_proxy(shared_policies=_shared_policy(rule))):
+            with pytest.raises(ValueError, match="zscaler_zia cannot render proxy rule 'allow-stripe'"):
+                await _make_transform().transform({})

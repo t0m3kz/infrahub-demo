@@ -593,7 +593,7 @@ class CablingPlanner:
             top_speeds_str = ", ".join(str(s) for s in sorted([s for s in top_speeds if s is not None]))
             message = (
                 f"INTERFACE TYPE MISMATCH - No matching speed groups found for speed-aware cabling. "
-                f"Bottom devices have: {bottom_speeds_str}Gbps, Top devices have: {top_speeds_str}Gbps. "
+                f"Bottom devices have: {bottom_speeds_str} Mbps, Top devices have: {top_speeds_str} Mbps. "
                 f"Cannot create any connections."
             )
             self.logger.error(message)
@@ -603,7 +603,7 @@ class CablingPlanner:
 
         for speed, (bottom_intfs, top_intfs) in sorted(speed_groups.items()):
             self.logger.info(
-                f"Building cabling plan for {speed}G interfaces ({len(bottom_intfs)} bottom, {len(top_intfs)} top)"
+                f"Building cabling plan for {speed} Mbps interfaces ({len(bottom_intfs)} bottom, {len(top_intfs)} top)"
             )
 
             temp_planner = CablingPlanner(
@@ -619,7 +619,7 @@ class CablingPlanner:
             speed_plan = temp_planner._strategies[scenario].build_plan(cabling_offset=cabling_offset)
 
             combined_plan.extend(speed_plan)
-            self.logger.info(f"Added {len(speed_plan)} connections for {speed}G group")
+            self.logger.info(f"Added {len(speed_plan)} connections for {speed} Mbps group")
 
         return combined_plan
 
