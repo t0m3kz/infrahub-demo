@@ -1,5 +1,6 @@
 """Base class and shared helpers for Infrahub device transforms."""
 
+import logging
 from typing import Any
 
 from infrahub_sdk.transforms import InfrahubTransform
@@ -31,6 +32,8 @@ from transforms.helpers.templates import load_template
 from transforms.helpers.vxlan import get_interfaces, get_vxlan_config
 from utils.data_cleaning import clean_data
 from utils.fabric_roles import BORDER_ROLES, OFFICE_LISP_ROLES
+
+_log = logging.getLogger(__name__)
 
 
 def _fabric_rt_asn(deployment: Any) -> int | None:
@@ -148,9 +151,22 @@ class BaseDeviceTransform(InfrahubTransform):
             interfaces, device_id=device.get("id"), device_capabilities=capabilities
         )
         if any(iface.get("role") == "multisite-vip" for iface in interfaces):
+            # The site hosting the segments: the DC for a border-leaf, the metro (one `parent` hop
+            # above the zone the edge is deployed to) for a colocation edge.
+            site = next(
+                (c for c in segment_hosting_candidates(device.get("deployment")) if "segment_deployments" in c), None
+            )
+            if site is None or site.get("segment_deployments") is None:
+                # The query returned no site that carries segment_deployments (a SegmentHosting fragment on the
+                # zone -> metro hop can come back null): stretched segments would vanish from the config silently.
+                _log.warning(
+                    "%s: multi-site border gateway without a site carrying segment_deployments; "
+                    "stretched segments are not rendered.",
+                    device.get("name") or "device",
+                )
             activations.extend(
                 self._collect_border_gateway_activations(
-                    device.get("deployment"),
+                    site,
                     device_id=device.get("id"),
                     device_capabilities=capabilities,
                     seen={(act.get("segment") or {}).get("id") for act in activations},

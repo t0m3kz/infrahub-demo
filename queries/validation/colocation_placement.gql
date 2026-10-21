@@ -1,0 +1,120 @@
+# The rows of checks/colocation_placement.py: every colocation metro, zone (cage) and virtual colocation with its
+# parent, and the kit it declares (fabric_templates, with the kind of each template: the check wants a physical
+# template on a zone and a virtual one on a virtual colocation), plus every colocation footprint with the zone that
+# serves it (serving_zone), its parent and whether that zone holds a firewall.
+#
+# The design rules read the envelope: a zone / virtual colocation carries its `design` (max_edges, max_firewalls,
+# max_load_balancers; the quantities of its fabric_templates are summed per role against them) and a metro its
+# `design` (max_zones, and the zone_templates a zone or virtual colocation of it may use). Both are unset-able: a
+# null `design` is skipped by the rules that name it. `zone_templates` selects id and name so clean_data() keeps
+# each as a dict (an id-only selection would collapse to a string).
+#
+# `template_kind` and `firewall_devices` are aliases on purpose: clean_data() strips "__" out of any key, so a
+# bare __typename would arrive as "typename", and the alias says what the field is for. Concrete kinds only, so
+# the query stays valid whichever generic a relationship peers.
+query colocation_placement {
+  TopologyColocationMetro {
+    edges {
+      node {
+        id
+        name { value }
+        design {
+          node {
+            id
+            name { value }
+            max_zones { value }
+            zone_templates { edges { node { id name { value } } } }
+          }
+        }
+      }
+    }
+  }
+
+  TopologyColocationZone {
+    edges {
+      node {
+        id
+        name { value }
+        design {
+          node {
+            id
+            name { value }
+            max_edges { value }
+            max_firewalls { value }
+            max_load_balancers { value }
+          }
+        }
+        parent { node { id name { value } } }
+        fabric_templates {
+          edges {
+            node {
+              role { value }
+              quantity { value }
+              template {
+                node {
+                  id
+                  template_kind: __typename
+                  display_label
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  TopologyVirtualColocation {
+    edges {
+      node {
+        id
+        name { value }
+        design {
+          node {
+            id
+            name { value }
+            max_edges { value }
+            max_firewalls { value }
+            max_load_balancers { value }
+          }
+        }
+        parent { node { id name { value } } }
+        fabric_templates {
+          edges {
+            node {
+              role { value }
+              quantity { value }
+              template {
+                node {
+                  id
+                  template_kind: __typename
+                  display_label
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  TopologyCustomerColocation {
+    edges {
+      node {
+        id
+        name { value }
+        parent { node { id name { value } } }
+        serving_zone {
+          node {
+            id
+            name { value }
+            parent { node { id name { value } } }
+            firewall_devices: devices(role__value: "firewall") {
+              edges { node { id } }
+            }
+          }
+        }
+      }
+    }
+  }
+}

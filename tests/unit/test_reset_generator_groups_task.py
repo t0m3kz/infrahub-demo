@@ -49,8 +49,8 @@ def groups() -> dict[str, MagicMock]:
     return {
         "aware": _group(f"add_dc-{HASH}", "CoreGeneratorAwareGroup", ["DcimPhysicalDevice", "DcimCable", "DcimCable"]),
         "generator": _group(f"add_app_component_segment-{HASH}", "CoreGeneratorGroup", ["ManagedVlanDomainSegment"]),
-        # Bootstrap target group of a generator kind: no params-hash suffix.
-        "target": _group("customer_deployments_dc", "CoreGeneratorGroup", ["TopologyCustomerDC"]),
+        # Bootstrap target group (CoreStandardGroup): no params-hash suffix.
+        "target": _group("customer_deployments_dc", "CoreStandardGroup", ["TopologyCustomerDC"]),
         # Hash-suffixed, but no generator definition by that name.
         "unknown": _group(f"retired_generator-{HASH}", "CoreGeneratorAwareGroup", ["DcimCable"]),
         "standard": _group(f"add_dc-{HASH}", "CoreStandardGroup", ["TopologyDataCenter"]),

@@ -2,11 +2,13 @@
 (generators/topology/customer_colocation.py).
 
 Mirrors test_customer_dc.py's structure — the two generators share nearly
-identical logic — but focuses on what's colocation-specific: the parent is a
-TopologyColocationMetro, not a TopologyDataCenter, and its fabric-tier devices
-carry role=edge, never border-leaf (see _COLO_VALID_FABRIC_ROLES in
-generators/topology/colocation.py). Colocation boards through the same leg step
-as a DC; its legs face the edge pair's firewall ports.
+identical logic — but focuses on what's colocation-specific: the footprint's
+``parent`` key is its serving_zone (a TopologyColocationZone, customer_colocation.gql
+aliases ``parent: serving_zone``), not a TopologyDataCenter, and an unset
+serving_zone is not an error: the footprint simply gets no context. The zone's
+fabric-tier devices carry role=edge, never border-leaf (see _COLO_VALID_FABRIC_ROLES
+in generators/topology/colocation_fabric.py). Colocation boards through the same
+leg step as a DC; its legs face the edge pair's firewall ports.
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ import pytest
 from generators.common import CommonGenerator
 from generators.firewall_context import FIREWALL_CONTEXT
 from generators.topology.customer_colocation import CustomerDeploymentColocationExchangeGenerator
+from generators.topology.customer_dc import CustomerDeploymentDCExchangeGenerator
 
 _T = TypeVar("_T", bound=CommonGenerator)
 
@@ -31,8 +34,8 @@ def _make_generator(cls: type[_T]) -> Any:
     gen.client.get = AsyncMock()
     gen.client.create = AsyncMock()
     gen.client.execute_graphql = AsyncMock()
-    # generate() waits for an in-flight add_colocation_metro on the parent
-    # metro before reading firewall_devices — none in flight here, so no-op.
+    # generate() waits for an in-flight add_colocation_zone on the serving
+    # zone before reading firewall_devices — none in flight here, so no-op.
     gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
     # The shared FirewallContext is provisioned under a resource lock; the
     # lock itself is PoolMixin's, tested in test_dc_firewall_lb.py.
@@ -54,7 +57,7 @@ def _colo_payload(*, customer_id: str = "cust-1") -> dict:
     }
 
 
-def _fw_device(*, id: str = "fw-1", name: str = "FR5-METRO-FW1", platform: str = "checkpoint_gaia") -> dict:
+def _fw_device(*, id: str = "fw-1", name: str = "fw-fr201", platform: str = "checkpoint_gaia") -> dict:
     return {"id": id, "name": name, "kind": "DcimPhysicalDevice", "platform": {"name": platform}}
 
 
@@ -63,7 +66,6 @@ def _colo_payload_with_parent(
     customer_id: str = "cust-1",
     dedicated_firewall: bool = False,
     dedicated_loadbalancer: bool = False,
-    metro_size: str = "M",
     fw_devices: list[dict] | None = None,
     lb_devices: list[dict] | None = None,
 ) -> dict:
@@ -71,13 +73,12 @@ def _colo_payload_with_parent(
         "TopologyCustomerColocation": [
             {
                 "id": customer_id,
-                "name": "C005-P-FR5",
+                "name": "C005-P-FR",
                 "environment": "p",
                 "owner": {"org_id": "C005", "name": "Drentec BV"},
                 "parent": {
-                    "id": "fr5-metro-id",
-                    "name": "FR5-METRO",
-                    "size": {"value": metro_size},
+                    "id": "fr2-zone-id",
+                    "name": "FR2",
                     "firewall_devices": [_fw_device()] if fw_devices is None else fw_devices,
                     "loadbalancer_devices": lb_devices or [],
                 },
@@ -119,24 +120,24 @@ class TestColocationDeployment:
         assert gen._all_controllers == []
 
 
-class TestWaitsForParentMetroGenerator:
-    """add_colocation_metro writes the metro's firewall devices and owns their
+class TestWaitsForServingZoneGenerator:
+    """add_colocation_zone writes the zone's firewall devices and owns their
     HA pair — a customer boarding concurrently with it waits first."""
 
     @pytest.mark.asyncio
-    async def test_waits_on_add_colocation_metro_when_parent_present(self) -> None:
-        """The wait targets the parent metro's own generator by the metro id."""
+    async def test_waits_on_add_colocation_zone_when_serving_zone_present(self) -> None:
+        """The wait targets the serving zone's own generator by the zone id."""
         gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
 
         await gen.generate(_colo_payload_with_parent(fw_devices=[]))
 
         assert gen.wait_for_parent_generator_and_refetch.await_args_list == [
-            ((("add_colocation_metro",), "fr5-metro-id"), {}),
+            ((("add_colocation_zone",), "fr2-zone-id"), {}),
         ]
 
     @pytest.mark.asyncio
     async def test_no_parent_id_skips_wait(self) -> None:
-        """No parent metro, nothing to wait for."""
+        """No serving zone, nothing to wait for."""
         gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
 
         await gen.generate(_colo_payload())
@@ -150,7 +151,7 @@ class TestWaitsForParentMetroGenerator:
         refreshed = _colo_payload_with_parent(fw_devices=[_fw_device()])
         gen.wait_for_parent_generator_and_refetch = AsyncMock(side_effect=[refreshed, None])
         cluster = MagicMock(id="cluster-1")
-        cluster.name.value = "FR5-METRO-FW1-ha"
+        cluster.name.value = "fw-fr201-ha"
         cluster.capabilities.peers = [MagicMock(id="fw-1")]
         gen.client.filters = AsyncMock(return_value=[cluster])
         gen._ensure_transit_legs = AsyncMock()
@@ -173,13 +174,58 @@ class TestWaitsForParentMetroGenerator:
 
 class TestFirewallContextNoFirewallOrCluster:
     @pytest.mark.asyncio
-    async def test_no_parent_is_a_hard_error(self) -> None:
+    async def test_unset_serving_zone_is_an_info_not_an_error(self) -> None:
+        """No serving_zone: the footprint has no context by design — info log, nothing written, no error."""
         gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        gen._ensure_transit_legs = AsyncMock()
 
         await gen.generate(_colo_payload())  # no "parent" key
 
         gen.client.filters.assert_not_called()
+        gen.client.create.assert_not_called()
+        gen._ensure_transit_legs.assert_not_awaited()
+        gen.logger.error.assert_not_called()
+        assert any("no parent ColocationZone" in call.args[0] for call in gen.logger.info.call_args_list)
+
+    @pytest.mark.asyncio
+    async def test_null_serving_zone_from_graphql_is_also_unset(self) -> None:
+        """The aliased `parent: serving_zone` arrives as None when unset (cleaned from {"node": null})."""
+        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        payload = _colo_payload()
+        payload["TopologyCustomerColocation"][0]["parent"] = None
+        gen._ensure_transit_legs = AsyncMock()
+
+        await gen.generate(payload)
+
+        gen.wait_for_parent_generator_and_refetch.assert_not_awaited()
+        gen._ensure_transit_legs.assert_not_awaited()
+        gen.logger.error.assert_not_called()
+
+    def test_serving_zone_is_optional_unlike_a_dcs_parent(self) -> None:
+        """The colocation footprint tolerates a missing parent; the DC footprint does not."""
+        assert CustomerDeploymentColocationExchangeGenerator._parent_required is False
+        assert CustomerDeploymentDCExchangeGenerator._parent_required is True
+
+    def test_colocation_footprint_waits_for_the_zone_generator_not_the_metro(self) -> None:
+        assert CustomerDeploymentColocationExchangeGenerator._parent_label == "ColocationZone"
+        assert CustomerDeploymentColocationExchangeGenerator._parent_generators == ("add_colocation_zone",)
+
+    @pytest.mark.asyncio
+    async def test_dc_footprint_without_a_parent_is_still_a_hard_error(self) -> None:
+        """Counterpart to the unset serving_zone: a DC footprint with no parent DC is an ERROR, not an info."""
+        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+
+        await gen.generate(
+            {
+                "TopologyCustomerDC": [
+                    {"id": "cust-1", "name": "C001-P", "environment": "p", "owner": {"org_id": "C001", "name": "C1"}}
+                ]
+            }
+        )
+
+        gen.client.filters.assert_not_called()
         gen.logger.error.assert_called_once()
+        assert "no parent DC" in gen.logger.error.call_args.args[0]
 
     @pytest.mark.asyncio
     async def test_no_firewall_devices_on_parent_is_noop(self) -> None:
@@ -191,12 +237,12 @@ class TestFirewallContextNoFirewallOrCluster:
         gen.client.create.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_unpaired_firewalls_wait_for_metro_then_use_its_cluster(self) -> None:
-        """add_colocation_metro owns the metro's HA pair: the customer waits
+    async def test_unpaired_firewalls_wait_for_zone_then_use_its_cluster(self) -> None:
+        """add_colocation_zone owns the zone's HA pair: the customer waits
         for it and re-queries, never pairing the firewalls itself."""
         gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
         cluster = MagicMock(id="cluster-1")
-        cluster.name.value = "FR5-METRO-FW1-FW2-ha"
+        cluster.name.value = "fw-fr201-fw-fr202-ha"
         cluster.capabilities.peers = [MagicMock(id="fw-1"), MagicMock(id="fw-2")]
         gen.client.filters = AsyncMock(side_effect=[[], [cluster]])
         gen._ensure_ha_pairs = AsyncMock()
@@ -204,15 +250,15 @@ class TestFirewallContextNoFirewallOrCluster:
 
         await gen.generate(
             _colo_payload_with_parent(
-                fw_devices=[_fw_device(id="fw-1", name="FR5-METRO-FW1"), _fw_device(id="fw-2", name="FR5-METRO-FW2")]
+                fw_devices=[_fw_device(id="fw-1", name="fw-fr201"), _fw_device(id="fw-2", name="fw-fr202")]
             )
         )
 
         gen._ensure_ha_pairs.assert_not_awaited()
         assert gen.wait_for_parent_generator_and_refetch.await_count == 2
         assert gen.wait_for_parent_generator_and_refetch.await_args_list[-1].args == (
-            ("add_colocation_metro",),
-            "fr5-metro-id",
+            ("add_colocation_zone",),
+            "fr2-zone-id",
         )
         gen._ensure_transit_legs.assert_awaited_once()
         gen.logger.error.assert_not_called()
@@ -232,13 +278,14 @@ class TestFirewallContextNoFirewallOrCluster:
         gen._ensure_transit_legs.assert_not_awaited()
         gen.client.create.assert_not_called()
         gen.logger.error.assert_called_once()
-        assert "add_colocation_metro" in gen.logger.error.call_args.args[0]
+        assert "add_colocation_zone" in gen.logger.error.call_args.args[0]
+        assert "FR2" in gen.logger.error.call_args.args[0]
 
 
 class TestFirewallContextProvisioning:
-    def _make_gen_with_cluster(self, *, cluster_name: str = "FR5-METRO-FW1-FW2-ha") -> Any:
+    def _make_gen_with_cluster(self, *, cluster_name: str = "fw-fr201-fw-fr202-ha") -> Any:
         gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
-        fw_device = _fw_device(id="fw-1", name="FR5-METRO-FW1")
+        fw_device = _fw_device(id="fw-1", name="fw-fr201")
         cluster = MagicMock(id="cluster-1")
         cluster.name.value = cluster_name
         cluster.capabilities.peers = [MagicMock(id="fw-1")]
@@ -267,7 +314,7 @@ class TestFirewallContextProvisioning:
         gen, _, _ = self._make_gen_with_cluster()
         gen._ensure_transit_legs = AsyncMock()
         dedicated_cluster = MagicMock(id="dedicated-cluster-1")
-        dedicated_cluster.name.value = "FR5-METRO-FW1-C005-p-dedicated-ha"
+        dedicated_cluster.name.value = "fw-fr201-C005-p-dedicated-ha"
         gen._ensure_dedicated_device_pair = AsyncMock(
             return_value=(dedicated_cluster, [MagicMock(id="virt-1"), MagicMock(id="virt-2")])
         )
@@ -312,7 +359,7 @@ class TestFirewallContextProvisioning:
 
     @pytest.mark.asyncio
     async def test_no_target_skips_the_leg_step(self) -> None:
-        """A metro without firewalls gets no context and no legs."""
+        """A serving zone without firewalls gets no context and no legs."""
         gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
         gen._ensure_transit_legs = AsyncMock()
 
@@ -365,17 +412,17 @@ class TestLinkServingFirewallContext:
 
 
 class TestNoLoadbalancerContext:
-    """A metro provisions FirewallContexts only (customer_colocation.py's docstring)."""
+    """A colocation footprint provisions FirewallContexts only (customer_colocation.py's docstring)."""
 
     def test_only_the_firewall_spec_runs(self) -> None:
         assert CustomerDeploymentColocationExchangeGenerator._context_specs == (FIREWALL_CONTEXT,)
 
     @pytest.mark.asyncio
-    async def test_load_balancers_on_the_metro_are_ignored(self) -> None:
+    async def test_load_balancers_on_the_zone_are_ignored(self) -> None:
         """Even load-balancer devices in the payload, dedicated or not, never reach a lookup or a write."""
         gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
         lbs = [
-            {"id": f"lb-{n}", "name": f"FR5-METRO-LB{n}", "kind": "DcimPhysicalDevice", "platform": {"name": "f5_tmos"}}
+            {"id": f"lb-{n}", "name": f"lb-fr20{n}", "kind": "DcimPhysicalDevice", "platform": {"name": "f5_tmos"}}
             for n in (1, 2)
         ]
 
@@ -384,3 +431,64 @@ class TestNoLoadbalancerContext:
         gen.client.filters.assert_not_called()
         gen.client.create.assert_not_called()
         gen.logger.error.assert_not_called()
+
+
+class TestContextLivesOnTheServingZone:
+    """The context is keyed by the serving ZONE (FR2), while the footprint keeps its metro-based name (C005-P-FR)."""
+
+    @pytest.mark.asyncio
+    async def test_target_parent_name_is_the_serving_zone(self) -> None:
+        """The leg step receives the zone's name as parent_name, which names the zone's context VLAN pool."""
+        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        cluster = MagicMock(id="cluster-1")
+        cluster.name.value = "fw-fr201-fw-fr202-ha"
+        cluster.capabilities.peers = [MagicMock(id="fw-1")]
+        gen.client.filters = AsyncMock(return_value=[cluster])
+        gen._ensure_transit_legs = AsyncMock()
+
+        await gen.generate(_colo_payload_with_parent())
+
+        kwargs = gen._ensure_transit_legs.await_args_list[-1].kwargs
+        assert kwargs["target"].parent_name == "FR2"
+        assert kwargs["customer"]["name"] == "C005-P-FR"
+
+    @pytest.mark.asyncio
+    async def test_context_vlan_comes_from_the_zones_firewall_vlan_pool(self) -> None:
+        """`{zone}-fw-context-vlan-pool`: the pool add_colocation_zone created with ensure_context_vlan_pool(name="fr2")."""
+        gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+        context = MagicMock(id="ctx-1")
+        context.name.value = "fw-fr201-ha-shared"
+        context.vlan_id.value = None
+        pool = MagicMock(id="pool-1")
+        pool.name.value = "fr2-fw-context-vlan-pool"
+        gen.client.get = AsyncMock(side_effect=[pool, MagicMock()])
+        saved = MagicMock()
+        saved.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=saved)
+
+        await gen._ensure_context_vlan(FIREWALL_CONTEXT, context, "FR2", track=False)
+
+        first_lookup = gen.client.get.await_args_list[0].kwargs
+        assert first_lookup["name__value"] == "fr2-fw-context-vlan-pool"
+        assert first_lookup["name__value"] == f"fr2-{FIREWALL_CONTEXT.key}-vlan-pool"
+        assert gen.client.create.await_args_list[-1].kwargs["data"]["vlan_id"] == {"from_pool": {"id": "pool-1"}}
+
+    @pytest.mark.asyncio
+    async def test_two_footprints_of_one_zone_resolve_the_same_shared_context(self) -> None:
+        """C001 and C005 both name FR2 as serving zone: one shared context name, never one per footprint."""
+        names: list[str] = []
+        for footprint in ("C001-P-FR", "C005-P-FR"):
+            gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
+            cluster = MagicMock(id="cluster-1")
+            cluster.name.value = "fw-fr201-fw-fr202-ha"
+            cluster.capabilities.peers = [MagicMock(id="fw-1")]
+            gen.client.filters = AsyncMock(return_value=[cluster])
+            gen._ensure_transit_legs = AsyncMock()
+            payload = _colo_payload_with_parent()
+            payload["TopologyCustomerColocation"][0]["name"] = footprint
+
+            await gen.generate(payload)
+
+            names.append(gen._ensure_transit_legs.await_args_list[-1].kwargs["target"].context_name("PROD"))
+
+        assert names == ["fw-fr201-fw-fr202-ha-shared"] * 2

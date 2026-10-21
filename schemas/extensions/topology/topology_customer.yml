@@ -23,6 +23,41 @@ version: "1.0"
 # ============================================================================
 
 generics:
+  # The automation system that provisions the infrastructure of a deployment:
+  # one definition for everything that is routed by it. The customer footprints
+  # (TopologyCustomerDC / Colocation / Cloud / Office) and TopologyVirtualColocation
+  # inherit it, and generators/topology/orchestrator_routing.py puts each into the
+  # routing group of its value (artifact definitions target those groups). A
+  # generic cannot inherit another generic, so every node lists it.
+  - name: InfrastructureOrchestrated
+    namespace: Topology
+    description: "A deployment whose infrastructure is provisioned by an automation system"
+    include_in_menu: false
+    attributes:
+      - name: infrastructure_orchestrator
+        kind: Dropdown
+        label: "Infrastructure Orchestrator"
+        description: "Primary automation system used to provision infrastructure for this deployment"
+        optional: false
+        default_value: manual
+        order_weight: 350
+        choices:
+          - name: ansible_automation_platform
+            label: "Ansible Automation Platform"
+            color: "#EE0000"
+          - name: github_actions
+            label: "GitHub Actions"
+            color: "#24292F"
+          - name: terraform
+            label: "Terraform / OpenTofu"
+            color: "#7B42BC"
+          - name: argocd
+            label: "Argo CD"
+            color: "#EF7B4D"
+          - name: manual
+            label: "Manual"
+            color: "#808080"
+
   - name: Customer
     namespace: Topology
     description: "A customer's deployment footprint within a parent topology deployment (DC, Colocation, or Cloud)"  # yamllint disable-line rule:line-length
@@ -51,30 +86,6 @@ generics:
           jinja2_template: "{{ owner__org_id__value|upper }}"
         read_only: true
         optional: false
-
-      - name: infrastructure_orchestrator
-        kind: Dropdown
-        label: "Infrastructure Orchestrator"
-        description: "Primary automation system used to provision infrastructure for this deployment"
-        optional: false
-        default_value: manual
-        order_weight: 350
-        choices:
-          - name: ansible_automation_platform
-            label: "Ansible Automation Platform"
-            color: "#EE0000"
-          - name: github_actions
-            label: "GitHub Actions"
-            color: "#24292F"
-          - name: terraform
-            label: "Terraform / OpenTofu"
-            color: "#7B42BC"
-          - name: argocd
-            label: "Argo CD"
-            color: "#EF7B4D"
-          - name: manual
-            label: "Manual"
-            color: "#808080"
 
     relationships:
       - name: owner
@@ -175,10 +186,11 @@ nodes:
     namespace: Topology
     description: "Customer deployment footprint inside a data center"
     label: "Customer (Data Center)"
-    icon: "mdi:account-server-outline"
+    icon: "mdi:account-network-outline"
     inherit_from:
       - CoreArtifactTarget
       - TopologyCustomer
+      - TopologyInfrastructureOrchestrated
       - TopologyEnvironmentScoped
       - TopologyDeployment
       - TopologyConnectableLocation
@@ -215,10 +227,11 @@ nodes:
     namespace: Topology
     description: "Customer deployment footprint inside a colocation metro"
     label: "Customer (Colocation)"
-    icon: "mdi:account-building-outline"
+    icon: "mdi:account-group"
     inherit_from:
       - CoreArtifactTarget
       - TopologyCustomer
+      - TopologyInfrastructureOrchestrated
       - TopologyEnvironmentScoped
       - TopologyDeployment
       - TopologyConnectableLocation
@@ -242,6 +255,21 @@ nodes:
           jinja2_template: "{{ owner__org_id__value|upper }}-{{ environment__value|upper }}-{{ parent__name__value|upper }}"  # yamllint disable-line rule:line-length
         read_only: true
         optional: false
+    relationships:
+      # The zone of the parent metro whose firewall pair hosts this footprint's
+      # FirewallContext. Firewalls are per zone now (the metro owns none), so the
+      # footprint says which cage's pair serves it; unset means no context.
+      # checks/colocation_placement.py requires the zone to be a child of
+      # `parent`, which the schema cannot express.
+      - name: serving_zone
+        peer: TopologyColocationZone
+        label: "Serving Zone"
+        description: "Zone of the parent metro whose firewall pair serves this footprint (unset: no firewall context)"
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "customer_colocation__serving_zone"
+        order_weight: 200
 
   # A customer's office: exactly one per customer, directly under TopologyLabel
   # ("Campus and Office") with no grouping node in between. Not a
@@ -258,6 +286,7 @@ nodes:
     icon: "mdi:office-building-outline"
     inherit_from:
       - CoreArtifactTarget
+      - TopologyInfrastructureOrchestrated
       - TopologyDeployment
       - TopologyPhysicalDeployment
       - TopologyDeviceHosting
@@ -290,29 +319,6 @@ nodes:
           jinja2_template: "{{ owner__org_id__value|upper }}-OFFICE"
         read_only: true
         optional: false
-      - name: infrastructure_orchestrator
-        kind: Dropdown
-        label: "Infrastructure Orchestrator"
-        description: "Primary automation system used to provision infrastructure for this deployment"
-        optional: false
-        default_value: manual
-        order_weight: 350
-        choices:
-          - name: ansible_automation_platform
-            label: "Ansible Automation Platform"
-            color: "#EE0000"
-          - name: github_actions
-            label: "GitHub Actions"
-            color: "#24292F"
-          - name: terraform
-            label: "Terraform / OpenTofu"
-            color: "#7B42BC"
-          - name: argocd
-            label: "Argo CD"
-            color: "#EF7B4D"
-          - name: manual
-            label: "Manual"
-            color: "#808080"
       - name: site_type
         kind: Dropdown
         optional: true
@@ -402,7 +408,7 @@ nodes:
         order_weight: 1200
       # The office's own switching fabric, the opt-in of add_office_fabric
       # (generators/topology/office_fabric.py): the same intent surface as a
-      # colocation metro's fabric_templates ("2 x distribution-switch on template
+      # colocation zone's fabric_templates ("2 x distribution-switch on template
       # X"), validated against the campus roles only. Absent means the office has
       # no fabric and the generator no-ops, as add_sdwan_edge does without a
       # gateway.
@@ -434,10 +440,11 @@ nodes:
     namespace: Topology
     description: "Customer deployment footprint inside a cloud region"
     label: "Customer (Cloud)"
-    icon: "mdi:account-cloud-outline"
+    icon: "mdi:cloud"
     inherit_from:
       - CoreArtifactTarget
       - TopologyCustomer
+      - TopologyInfrastructureOrchestrated
       - TopologyDeployment
       - TopologyConnectableLocation
     parent: TopologyCloudRegion

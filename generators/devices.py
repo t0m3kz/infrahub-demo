@@ -152,9 +152,9 @@ class DeviceMixin(MLAGWiringMixin):
     # means "no controllers", not an error.
     _all_controllers: list[dict[str, Any]]
     # Attribute declaration only, no default — set once per generator run by
-    # dc.py/pod.py/rack.py/colocation.py/endpoint.py's generate() to the
+    # dc.py/pod.py/rack.py/colocation_fabric.py/endpoint.py's generate() to the
     # enclosing physical facility's id (TopologyDataCenter/
-    # TopologyColocationMetro — never a Pod or Rack). _ensure_ha_cable below
+    # TopologyColocationZone — never a Pod or Rack). _ensure_ha_cable below
     # reads this for the HA-sync cable's own `deployment`, deliberately NOT
     # the HA member device's own `deployment` relationship: pod.py's
     # border-spine pods scope their firewall/load-balancer *devices* to the
@@ -491,18 +491,18 @@ class DeviceMixin(MLAGWiringMixin):
         """Create HA-paired firewall/load-balancer devices for one fabric_templates role.
 
         Shared shape used by dc.py (DC-wide), pod.py (per-pod border-spine),
-        and colocation.py (metro on-ramp): each entry's devices are paired
+        and colocation_fabric.py (zone / virtual colocation on-ramp): each entry's devices are paired
         into an HA domain two-at-a-time by create_devices() itself (any
         quantity — an odd device is left unpaired). No loopback allocation —
         these appliances sit off the underlay/overlay, not in it.
 
         Returns (entry, created_names) per fabric_templates entry rather than
-        one flat list, so a caller that needs per-entry follow-up (colocation.py
+        one flat list, so a caller that needs per-entry follow-up (colocation_fabric.py
         registers virtual and physical entries apart) still has the entry at hand.
 
         virtual_template_kind: when given, an entry whose own
         template["template_kind"] matches it gets DeviceOptions.virtual=True
-        (colocation.py's on-ramp appliances can themselves be provider-hosted,
+        (colocation_fabric.py's on-ramp appliances can themselves be provider-hosted,
         unlike dc.py's/pod.py's, which are always physical).
         """
         options = DeviceOptions(indexes=indexes, ha_kind=HA_KIND_BY_ROLE[role])

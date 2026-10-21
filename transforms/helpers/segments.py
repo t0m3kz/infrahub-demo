@@ -73,11 +73,11 @@ def _get_segment_namespace(seg: dict) -> dict:
 def segment_hosting_candidates(deployment: Any) -> list[dict]:
     """The device's deployment and its parent, nearest first.
 
-    Only TopologyDataCenter and TopologyColocationMetro inherit
-    TopologySegmentHosting: a border-leaf's deployment IS the DC, but a leaf's
-    deployment is the pod, one hop below it. The device-scoped fragments
-    (evpn_fabric.gql, firewall_contexts.gql) nest one
-    `parent` hop for that case.
+    Only TopologyDataCenter, TopologyColocationMetro and TopologyCustomerOffice
+    inherit TopologySegmentHosting: a border-leaf's deployment IS the DC, but a
+    leaf's deployment is the pod and a colocation edge's is its zone or virtual
+    colocation, one hop below the DC or metro. The device-scoped fragments
+    (evpn_fabric.gql, firewall_contexts.gql) nest one `parent` hop for that case.
     """
     parent = deployment.get("parent") if isinstance(deployment, dict) else None
     return [c for c in (deployment, parent) if isinstance(c, dict)]

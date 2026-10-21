@@ -3,11 +3,11 @@
 PhysicalCircuitGenerator (add_circuit)
     First the circuit's placement: an endpoint device whose ``deployment``
     is itself a facility (TopologyDataCenter, TopologyExternalProviders,
-    TopologyCloudRegion) places that end, so the circuit's locations are the
-    authored ones plus these derived ones, exactly two distinct. A colocation
-    end is never derived (the on-ramp edge deploys to the metro, which has
-    several cages) and stays authored. A derived facility that contradicts an
-    authored one of the same kind, or anything but two locations, fails the
+    TopologyCloudRegion, TopologyColocationZone, TopologyVirtualColocation)
+    places that end, so the circuit's locations are the authored ones plus
+    these derived ones, exactly two distinct. An on-ramp edge deploys to its
+    zone or virtual colocation, which is the facility the circuit ends on. A
+    derived facility that contradicts an authored one of the same kind, or anything but two locations, fails the
     run before any write; the missing derived ones are added with one
     RelationshipAdd, so an already complete circuit writes nothing.
     Derived from the devices as they are when the circuit is created or its
@@ -101,11 +101,19 @@ _DECOMMISSIONED = "decommissioned"
 _ADDRESSABLE_INTERFACE_KINDS = frozenset({"DcimPhysicalInterface", "DcimVirtualInterface"})
 
 # Device deployments that are themselves the facility a physical circuit end
-# terminates on, so that end's location is derived from its device. Not a
-# colocation zone (devices deploy to the metro, which has several cages) and
-# not an office (generators/topology/sdwan_edge.py authors its circuit's
+# terminates on, so that end's location is derived from its device. A colocation
+# zone or virtual colocation is one: the on-ramp edge deploys to it, not to the
+# metro. Not an office (generators/topology/sdwan_edge.py authors its circuit's
 # locations); those ends stay authored.
-_DERIVABLE_FACILITY_KINDS = frozenset({"TopologyDataCenter", "TopologyExternalProviders", "TopologyCloudRegion"})
+_DERIVABLE_FACILITY_KINDS = frozenset(
+    {
+        "TopologyDataCenter",
+        "TopologyExternalProviders",
+        "TopologyCloudRegion",
+        "TopologyColocationZone",
+        "TopologyVirtualColocation",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -268,7 +276,7 @@ def plan_locations(
     if len(placed) != 2:
         labels = ", ".join(location.label for location in placed) or "none"
         return [], (
-            f"needs exactly 2 distinct locations (authored, plus a DC, ISP or cloud region derived from an "
+            f"needs exactly 2 distinct locations (authored, plus a DC, ISP, cloud region or colocation derived from an "
             f"endpoint device's deployment), found {len(placed)}: {labels}"
         )
     return missing, None
@@ -381,7 +389,7 @@ class PhysicalCircuitGenerator(CablingMixin, _CircuitGenerator):
             if process_id is None:
                 self.logger.error(
                     f"{circuit_name}: {endpoint.device_name} has no single overlay ManagedBGP process for the DCI "
-                    "session (add_dc/add_pod or add_colocation_metro creates it)"
+                    "session (add_dc/add_pod, add_colocation_zone or add_virtual_colocation creates it)"
                 )
                 return
             processes.append(process_id)

@@ -35,8 +35,8 @@ spec:
     - quantity: 2
       role: edge
       template: N9K-C9316D-GX_EDGE
-    # ... and its virtual counterpart, for a colocation metro with
-    # deployment_type: virtual (data/demos/10_colocation/equinix/am) — a
+    # ... and its virtual counterpart, for a virtual colocation
+    # (data/demos/10_colocation/equinix/am, AM-NE) — a
     # provider-hosted instance we rent rather than hardware we rack, so the
     # template is a TemplateDcimVirtualDevice and the generator builds
     # DcimVirtualDevices from it.

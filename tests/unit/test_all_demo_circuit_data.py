@@ -71,11 +71,11 @@ def test_every_circuit_is_in_its_generator_target_group(kind: str) -> None:
 
 
 def test_circuit_target_groups_are_generator_groups() -> None:
-    """Target groups are CoreGeneratorGroups, like the other generator targets."""
+    """Target groups are CoreStandardGroups, like the other generator targets (the SDK tracks runs in its own groups)."""
     generator_groups = {
         entry["name"]
         for doc in yaml.safe_load_all(_BOOTSTRAP_GROUPS.read_text())
-        if doc and doc["spec"]["kind"] == "CoreGeneratorGroup"
+        if doc and doc["spec"]["kind"] == "CoreStandardGroup"
         for entry in doc["spec"]["data"]
     }
     assert set(_TARGET_GROUPS.values()) <= generator_groups
@@ -135,16 +135,16 @@ def test_both_edges_of_a_metro_share_one_multisite_vip_address() -> None:
     for _, entry in _objects(_ONRAMP, "DcimVirtualInterface"):
         if entry["role"] == "multisite-vip" and entry["device"].startswith("eg-"):
             vips.setdefault(entry["device"][:-2], set()).add(entry["ip_address"]["data"]["address"])
-    assert vips == {"eg-fr": {"fd00:2500:ff::f1/128"}, "eg-pa": {"fd00:2500:ff::f2/128"}}
+    assert vips == {"eg-fr2": {"fd00:2500:ff::f1/128"}, "eg-pa4": {"fd00:2500:ff::f2/128"}}
     devices = [e["device"] for _, e in _objects(_ONRAMP, "DcimVirtualInterface") if e["device"].startswith("eg-")]
-    assert sorted(devices) == ["eg-fr01", "eg-fr02", "eg-pa01", "eg-pa02"]
+    assert sorted(devices) == ["eg-fr201", "eg-fr202", "eg-pa401", "eg-pa402"]
 
 
 def test_generated_fabric_peering_names_do_not_collide_with_data() -> None:
     """FABRIC-<a>-<b> shares the peering/circuit name space."""
     names = {e["name"] for _, e in _objects(_DEMOS, "ManagedBGPPeering")}
     names |= {_circuit_name(e) for kind in _TARGET_GROUPS for _, e in _objects(_DEMOS, kind)}
-    assert not {"FABRIC-eg-fr01-eg-fr02", "FABRIC-eg-pa01-eg-pa02"} & names
+    assert not {"FABRIC-eg-fr201-eg-fr202", "FABRIC-eg-pa401-eg-pa402"} & names
 
 
 def test_every_physical_circuit_row_has_two_distinct_ends_and_no_port_is_in_two_rows() -> None:

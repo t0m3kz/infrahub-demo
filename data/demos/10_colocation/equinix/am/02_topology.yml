@@ -1,11 +1,13 @@
 ---
-# Amsterdam colocation metro and zones (nested from colocation root)
+# Amsterdam colocation metro and its virtual colocation (nested from colocation root)
 #
-# deployment_type: virtual twice over, and the two say different things: on the
-# metro it means anything add_colocation_metro builds here has to be
-# provider-hosted kit (Equinix Network Edge), never our own hardware (see
-# _COLO_ALLOWED_TEMPLATE_KINDS in generators/topology/colocation.py); on each
-# cage it means that footprint holds no racks of ours.
+# Equinix Amsterdam is one provider-hosted presence, not cages: the metro AM
+# (the Multi-Site site) has a single TopologyVirtualColocation child, AM-NE
+# (Equinix Network Edge). It is named differently from its metro because metro,
+# zone and virtual colocation names share the device-name and pool-name space.
+# A virtual colocation can only host virtual templates (TemplateDcimVirtualDevice),
+# so add_virtual_colocation creates DcimVirtualDevices — instances we rent, not
+# hardware we rack — and a `physical` template would be rejected here.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -16,23 +18,25 @@ spec:
       children:
         kind: TopologyColocationMetro
         data:
-          # C8000V_EDGE, not the N9K the other metros use: this is the virtual
-          # half of that gate. It is a TemplateDcimVirtualDevice, so the
-          # generator creates DcimVirtualDevices — an Equinix Network Edge
-          # instance we rent, not hardware we rack — and a `physical` template
-          # would be rejected here. The one metro in the demo data that
-          # exercises the virtual path at all.
+          # C8000V_EDGE, not the N9K the other metros use: AM-NE can only host
+          # virtual kit. It is a TemplateDcimVirtualDevice, so the generator
+          # creates DcimVirtualDevices (eg-am-ne01, eg-am-ne02) — an Equinix
+          # Network Edge instance we rent, not hardware we rack. The one
+          # presence in the demo data that exercises the virtual path at all.
           - name: AM
+            design: "S"
             location: ["ams"]
-            deployment_type: virtual
             member_of_groups:
               - colocation_metros
-            fabric_templates:
-              - ["2", "edge", "C8000V_EDGE"]
             children:
-              kind: TopologyColocationZone
+              kind: TopologyVirtualColocation
               data:
-                - name: AM1
-                  deployment_type: virtual
-                - name: AM4
-                  deployment_type: virtual
+                - name: AM-NE
+                  design: "EDGE"
+                  # Routed to the virtual_colocation_terraform group: one Equinix Network Edge
+                  # Terraform artifact for eg-am-ne01/02 (an HA pair).
+                  infrastructure_orchestrator: terraform
+                  member_of_groups:
+                    - virtual_colocations
+                  fabric_templates:
+                    - ["2", "edge", "C8000V_EDGE"]

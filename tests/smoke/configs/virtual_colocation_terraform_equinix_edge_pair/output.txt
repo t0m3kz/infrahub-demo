@@ -1,0 +1,33 @@
+terraform {
+  required_providers {
+    equinix = {
+      source = "equinix/equinix"
+    }
+  }
+}
+
+variable "equinix_account_number" {
+  type = string
+}
+
+variable "notification_emails" {
+  type = list(string)
+}
+
+resource "equinix_network_device" "am_ne_eg_am_ne01" {
+  name           = "eg-am-ne01"
+  metro_code     = "AM"
+  type_code      = "C8000V"
+  package_code   = "network-essentials"
+  version        = "17.12.01a"
+  core_count     = 2
+  term_length    = 12
+  account_number = var.equinix_account_number
+  notifications  = var.notification_emails
+  secondary_device {
+    name           = "eg-am-ne02"
+    metro_code     = "AM"
+    account_number = var.equinix_account_number
+    notifications  = var.notification_emails
+  }
+}

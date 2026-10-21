@@ -205,6 +205,20 @@ class TestEnsureSharedAs:
         assert "ss-as-new" in m.client.group_context.related_node_ids
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("existing", [True, False])
+    async def test_track_false_leaves_the_as_out_of_the_run_group(self, existing: bool) -> None:
+        """An AS several runs share (a colocation metro's site AS) is found or drawn but owned by none of them."""
+        m = _make_mixin()
+        found = _mock_as_obj(obj_id="shared-as")
+        m.client.filters = AsyncMock(return_value=[found] if existing else [])
+        m.client.create = AsyncMock(return_value=found)
+
+        result = await m.ensure_shared_as(description="fr EVPN site ASN", asn_pool_id="pool-1", track=False)
+
+        assert result == "shared-as"
+        assert "shared-as" not in m.client.group_context.related_node_ids
+
+    @pytest.mark.asyncio
     async def test_no_pool_and_no_existing_returns_none(self) -> None:
         """Nothing to reuse and no pool to draw from returns None."""
         m = _make_mixin()

@@ -1,0 +1,151 @@
+{
+  "TopologyVirtualColocation": {
+    "edges": [
+      {
+        "node": {
+          "id": "vc-1",
+          "name": {
+            "value": "AM-NE"
+          },
+          "infrastructure_orchestrator": {
+            "value": "terraform"
+          },
+          "parent": {
+            "node": {
+              "id": "m-1",
+              "name": {
+                "value": "AM"
+              },
+              "parent": {
+                "node": {
+                  "id": "c-1",
+                  "name": {
+                    "value": "EQUINIX"
+                  }
+                }
+              }
+            }
+          },
+          "fabric_templates": {
+            "edges": [
+              {
+                "node": {
+                  "role": {
+                    "value": "edge"
+                  },
+                  "quantity": {
+                    "value": 2
+                  },
+                  "template": {
+                    "node": {
+                      "id": "t-C8000V_EDGE",
+                      "template_name": {
+                        "value": "C8000V_EDGE"
+                      },
+                      "cpu": {
+                        "value": 2
+                      },
+                      "provider_type_code": {
+                        "value": "C8000V"
+                      },
+                      "provider_package_code": {
+                        "value": "network-essentials"
+                      },
+                      "provider_version": {
+                        "value": "17.12.01a"
+                      },
+                      "provider_term_length": {
+                        "value": 12
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "role": {
+                    "value": "firewall"
+                  },
+                  "quantity": {
+                    "value": 2
+                  },
+                  "template": {
+                    "node": {
+                      "id": "t-PA-VM_EDGE_CUSTOMER_S",
+                      "template_name": {
+                        "value": "PA-VM_EDGE_CUSTOMER_S"
+                      },
+                      "cpu": {
+                        "value": 2
+                      },
+                      "provider_type_code": {
+                        "value": "PA-VM"
+                      },
+                      "provider_package_code": {
+                        "value": "VM100"
+                      },
+                      "provider_version": {
+                        "value": "11.1.3"
+                      },
+                      "provider_term_length": {
+                        "value": 12
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "devices": {
+            "edges": [
+              {
+                "node": {
+                  "id": "d-eg-am-ne01",
+                  "name": {
+                    "value": "eg-am-ne01"
+                  },
+                  "role": {
+                    "value": "edge"
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "d-eg-am-ne02",
+                  "name": {
+                    "value": "eg-am-ne02"
+                  },
+                  "role": {
+                    "value": "edge"
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "d-fw-am-ne01",
+                  "name": {
+                    "value": "fw-am-ne01"
+                  },
+                  "role": {
+                    "value": "firewall"
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "d-fw-am-ne02",
+                  "name": {
+                    "value": "fw-am-ne02"
+                  },
+                  "role": {
+                    "value": "firewall"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

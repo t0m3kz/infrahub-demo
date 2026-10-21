@@ -1085,10 +1085,11 @@ async def fetch_interconnect_inventory(client: InfrahubClient, branch: str) -> d
 
         A location is {"id", "kind", "name", "parent_id", "parent_kind",
         "parent_name", "owner_id"}: the parent of a colocation zone (its
-        metro) or of a TopologyCustomer footprint (its facility), the owner
+        metro; likewise a virtual colocation's) or of a TopologyCustomer footprint (its facility), the owner
         of a footprint or an office, None where the kind has none. An end
         device is {"device", "device_id", "deployment_id", "deployment_kind",
-        "deployment_name"}, one per circuit end, in end order.
+        "deployment_name", "deployment_parent_id"}, one per circuit end, in end order; the parent is the metro
+        of a zone or virtual colocation deployment, None otherwise.
     """
     client.default_branch = branch
     await asyncio.sleep(DATA_PROPAGATION_DELAY)
@@ -1205,6 +1206,7 @@ def _circuit_end_devices(circuit: dict[str, Any]) -> list[dict[str, Any]]:
                 "deployment_id": deployment.get("id"),
                 "deployment_kind": deployment.get("typename"),
                 "deployment_name": deployment.get("name"),
+                "deployment_parent_id": (deployment.get("parent") or {}).get("id"),
             }
         )
     return devices
@@ -1461,7 +1463,7 @@ def match_transit_contexts(
     outside ``dc_names`` (the DC6 chain's) and dedicated contexts of tenants outside
     ``dedicated_tenants`` are dropped. A colocation context is one with neither
     tenant nor DC: when its served deployments are exactly those of a metro in
-    ``colocation_sites`` (metro -> deployment names) it is keyed (metro, None),
+    ``colocation_sites`` (serving zone -> deployment names) it is keyed (zone, None),
     otherwise it is returned in the list.
     """
     allowed = set(dc_names)

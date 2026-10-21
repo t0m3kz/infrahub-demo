@@ -1,0 +1,88 @@
+# Feeds the Equinix Network Edge Terraform artifact of one virtual colocation
+# (transforms/colocation/virtual_colocation.py). The ordering parameters of a device live on the virtual device
+# template that produced it, and a device does not link back to that template, so the template is read through the
+# presence's fabric_templates entries and matched to the devices by role. The parent metro gives the Equinix metro
+# code (its name) and, one level up, the colocation operator that decides the provider.
+query virtual_colocation_config($instance: String!) {
+  TopologyVirtualColocation(name__value: $instance) {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        infrastructure_orchestrator {
+          value
+        }
+        parent {
+          node {
+            id
+            name {
+              value
+            }
+            ... on TopologyColocationMetro {
+              parent {
+                node {
+                  id
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+        fabric_templates {
+          edges {
+            node {
+              role {
+                value
+              }
+              quantity {
+                value
+              }
+              template {
+                node {
+                  id
+                  ... on TemplateDcimVirtualDevice {
+                    template_name {
+                      value
+                    }
+                    cpu {
+                      value
+                    }
+                    provider_type_code {
+                      value
+                    }
+                    provider_package_code {
+                      value
+                    }
+                    provider_version {
+                      value
+                    }
+                    provider_term_length {
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        devices {
+          edges {
+            node {
+              id
+              name {
+                value
+              }
+              role {
+                value
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

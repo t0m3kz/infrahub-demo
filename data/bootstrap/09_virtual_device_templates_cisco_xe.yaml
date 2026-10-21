@@ -14,6 +14,13 @@ spec:
       cpu: 2
       memory: 8
       storage: 100
+      # How Equinix Network Edge orders this instance (read by the virtual colocation Terraform
+      # artifact, transforms/colocation/virtual_colocation.py). DEMO VALUES: not verified against
+      # the Equinix API, check type/package/version/term in the Equinix portal before applying.
+      provider_type_code: C8000V
+      provider_package_code: network-essentials
+      provider_version: 17.12.01a
+      provider_term_length: 12
       interfaces:
         kind: TemplateDcimPhysicalInterface
         parameters:

@@ -1,0 +1,71 @@
+terraform {
+  required_providers {
+    equinix = {
+      source = "equinix/equinix"
+    }
+  }
+}
+
+variable "equinix_account_number" {
+  type = string
+}
+
+variable "notification_emails" {
+  type = list(string)
+}
+
+variable "am_ne_fw_am_ne_node0_license_token" {
+  type      = string
+  sensitive = true
+}
+
+variable "am_ne_fw_am_ne_node1_license_token" {
+  type      = string
+  sensitive = true
+}
+
+resource "equinix_network_device" "am_ne_eg_am_ne01" {
+  name           = "eg-am-ne01"
+  metro_code     = "AM"
+  type_code      = "C8000V"
+  package_code   = "network-essentials"
+  version        = "17.12.01a"
+  core_count     = 2
+  term_length    = 12
+  account_number = var.equinix_account_number
+  notifications  = var.notification_emails
+  secondary_device {
+    name           = "eg-am-ne02"
+    metro_code     = "AM"
+    account_number = var.equinix_account_number
+    notifications  = var.notification_emails
+  }
+}
+
+resource "equinix_network_device" "am_ne_fw_am_ne" {
+  name           = "fw-am-ne"
+  metro_code     = "AM"
+  type_code      = "PA-VM"
+  package_code   = "VM100"
+  version        = "11.1.3"
+  core_count     = 2
+  term_length    = 12
+  account_number = var.equinix_account_number
+  notifications  = var.notification_emails
+  byol           = true
+  cluster_details {
+    cluster_name = "fw-am-ne-cluster"
+    node0 {
+      vendor_configuration {
+        hostname = "fw-am-ne01"
+      }
+      license_token = var.am_ne_fw_am_ne_node0_license_token
+    }
+    node1 {
+      vendor_configuration {
+        hostname = "fw-am-ne02"
+      }
+      license_token = var.am_ne_fw_am_ne_node1_license_token
+    }
+  }
+}

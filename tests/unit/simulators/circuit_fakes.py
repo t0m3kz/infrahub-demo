@@ -40,6 +40,8 @@ def dc_place(dc: str = "DC10") -> dict[str, Any]:
 
 
 CAGE = place("TopologyColocationZone", "FR2")
+SIBLING_CAGE = place("TopologyColocationZone", "FR6")
+VIRTUAL_COLOCATION = place("TopologyVirtualColocation", "AM-NE")
 METRO = place("TopologyColocationMetro", "FR", "dep-metro")
 ISP = place("TopologyExternalProviders", "ORANGE-FR")
 REGION = place("TopologyCloudRegion", "eu-central-1")
@@ -70,12 +72,13 @@ def interface(
     """One endpoint interface, as the circuit queries select it (raw GraphQL).
 
     The device is deployed in DC ``dc`` when given, else in ``deployment``
-    (default: the colocation metro); ``no_deployment`` leaves it unset.
+    (default: the colocation zone FR2, where the on-ramp edges are deployed);
+    ``no_deployment`` leaves it unset.
     """
     if dc:
         deployment = {**dc_place(dc), "name": {"value": dc}, "underlay_protocol": {"value": underlay}}
     elif deployment is None:
-        deployment = METRO
+        deployment = CAGE
     if no_deployment:
         deployment = None
     capabilities = [bgp_process(device, role) for role in roles] + [
@@ -102,7 +105,7 @@ def dc_border_leaf(**kwargs: Any) -> dict[str, Any]:
 
 
 def cage_edge(**kwargs: Any) -> dict[str, Any]:
-    return interface("if-eg", "Ethernet1/10", "eg-fr01", **kwargs)
+    return interface("if-eg", "Ethernet1/10", "eg-fr201", **kwargs)
 
 
 def physical_payload(

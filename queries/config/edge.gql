@@ -33,12 +33,20 @@ query edge_config($device: String!) {
         # Device Services (BGP, OSPF) with nested peerings
         ...DeviceCapabilitiesOnDeviceFields
 
-        # EVPN Multi-Site: the metro edge is its site's border gateway, so it
+        # EVPN Multi-Site: the colocation edge is its metro's border gateway, so it
         # needs the metro's stretched segments and fabric RT ASN (site-id).
         ... on DcimPhysicalDevice {
           deployment {
             node {
-              ...SegmentDeploymentsOnDeploymentFields
+              # The edge is deployed to its zone; the metro above it is the site. The metro's stretched
+              # segments are selected BEFORE EvpnRtAsOnDeploymentFields adds its own zone -> metro hop: on that
+              # hop Infrahub may return null for a SegmentHosting-typed fragment that comes second (see the
+              # ORDER MATTERS note in fragments/evpn_fabric.gql), and a lost evpn_rt_as only falls back to the
+              # edge's own AS, which IS the site AS, while lost segment_deployments would silently drop every
+              # stretched VNI. Verify both on a settled stack (AGENTS.md: run a changed query on real data).
+              ... on TopologyColocationZone {
+                parent { node { ...SegmentDeploymentsOnDeploymentFields } }
+              }
               ...EvpnRtAsOnDeploymentFields
             }
           }

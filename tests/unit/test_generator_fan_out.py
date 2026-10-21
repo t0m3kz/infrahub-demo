@@ -24,6 +24,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from infrahub_sdk.exceptions import NodeNotFoundError
+from infrahub_sdk.protocols import CoreIPPrefixPool, CoreNumberPool
 from infrahub_sdk.task.models import TaskState
 
 from generators.common import CommonGenerator
@@ -277,6 +278,61 @@ class TestGetParentPoolWithRetry:
 
         with pytest.raises(NodeNotFoundError):
             await gen._get_parent_pool_with_retry("dc5-technical-pool")
+
+        assert gen.client.get.await_count == 10
+
+
+class TestGetParentPoolWithRetryKind:
+    """The retry is not tied to prefix pools: a zone waits for its metro's ASN pool (a CoreNumberPool)."""
+
+    @pytest.mark.asyncio
+    async def test_default_kind_is_the_ip_prefix_pool(self) -> None:
+        gen = _build_common_gen()
+        gen.client.get = AsyncMock(return_value=MagicMock())
+
+        await gen._get_parent_pool_with_retry("dc5-technical-pool")
+
+        assert gen.client.get.await_args_list[-1].kwargs["kind"] is CoreIPPrefixPool
+
+    @pytest.mark.asyncio
+    async def test_kind_is_passed_to_the_lookup(self) -> None:
+        gen = _build_common_gen()
+        pool = MagicMock()
+        gen.client.get = AsyncMock(return_value=pool)
+
+        result = await gen._get_parent_pool_with_retry("fr-asn-pool", kind=CoreNumberPool)
+
+        assert result is pool
+        gen.client.get.assert_awaited_once_with(kind=CoreNumberPool, name__value="fr-asn-pool")
+
+    @pytest.mark.asyncio
+    async def test_number_pool_that_appears_after_the_metro_generator_finishes_is_found(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """add_colocation_metro has not attached its ASN pool on the first lookup; the second finds it."""
+        gen = _build_common_gen()
+        pool = MagicMock()
+        gen.client.get = AsyncMock(side_effect=[NodeNotFoundError(identifier={"name__value": ["fr-asn-pool"]}), pool])
+        sleep_mock = AsyncMock()
+        monkeypatch.setattr("generators.pools.asyncio.sleep", sleep_mock)
+
+        result = await gen._get_parent_pool_with_retry("fr-asn-pool", kind=CoreNumberPool)
+
+        assert result is pool
+        sleep_mock.assert_awaited_once()
+        assert {call.kwargs["kind"] for call in gen.client.get.await_args_list} == {CoreNumberPool}
+
+    @pytest.mark.asyncio
+    async def test_number_pool_that_never_appears_raises_not_found_after_ten_attempts(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The caller (the zone generator) turns the final NodeNotFoundError into a failed run."""
+        gen = _build_common_gen()
+        gen.client.get = AsyncMock(side_effect=NodeNotFoundError(identifier={"name__value": ["fr-asn-pool"]}))
+        monkeypatch.setattr("generators.pools.asyncio.sleep", AsyncMock())
+
+        with pytest.raises(NodeNotFoundError):
+            await gen._get_parent_pool_with_retry("fr-asn-pool", kind=CoreNumberPool)
 
         assert gen.client.get.await_count == 10
 

@@ -848,7 +848,7 @@ class TestCircuitOwnership:
 
         written = {label for _, label, _ in client.writes}
         assert circuit_fakes.DC_KEY_ID not in written
-        assert not any(label.startswith(("dev-", "bl-dc101101-bgp", "eg-fr01-bgp")) for label in written)
+        assert not any(label.startswith(("dev-", "bl-dc101101-bgp", "eg-fr201-bgp")) for label in written)
         assert {name for name, _, _ in client.created} == {"IpamIPAddress", "ManagedBGPPeering"}
 
     @pytest.mark.asyncio

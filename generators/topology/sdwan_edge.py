@@ -30,7 +30,7 @@ The shared Gateway/VCO themselves stay hand-authored and load with the
 foundation stage (data/demos/30_all/02_colo/equinix/fr/04_sdwan_gateway.yml),
 so an office can opt in when it is created — this generator only ever reads
 them, mirroring how CustomerDeploymentColocationExchangeGenerator
-(generators/topology/customer_colocation.py) assumes the shared metro fabric
+(generators/topology/customer_colocation.py) assumes the shared colocation fabric
 already exists and only handles the per-tenant slice.
 
 Deliberately does NOT reuse DeviceMixin.create_devices()/CablingMixin.
@@ -99,7 +99,7 @@ def _target_group(name: str) -> dict[str, Any]:
     Membership is what lets add_circuit/add_virtual_circuit run for the
     circuits this generator creates, as for the data-declared ones.
     """
-    return {"hfid": [name], "kind": "CoreGeneratorGroup"}
+    return {"hfid": [name], "kind": "CoreStandardGroup"}
 
 
 class SdwanEdgeGenerator(PoolMixin, CommonGenerator):

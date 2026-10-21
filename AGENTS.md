@@ -253,8 +253,8 @@ class MyCheck(InfrahubCheck):
   `{OWNER}-OFFICE` (for example `C005-OFFICE`), it is always PROD (no `environment`) and its parent is the
   "Campus and Office" `TopologyLabel`.
 - **Circuit placement**: a physical circuit's `locations` peer `TopologyFacility`:
-  the DC (never a pod, rack or footprint), the colocation cage `TopologyColocationZone` (never the metro), the
-  `TopologyCloudRegion` (never a zone or `TopologyCloud`), the ISP `TopologyExternalProviders`, the
+  the DC (never a pod, rack or footprint), the colocation cage `TopologyColocationZone` or the provider-hosted
+  `TopologyVirtualColocation` (never the metro), the `TopologyCloudRegion` (never a zone or `TopologyCloud`), the ISP `TopologyExternalProviders`, the
   `TopologySaasRegion` or the `TopologyCustomerOffice`. Data lists only the cage; `add_circuit` adds every end
   whose endpoint device's `deployment` is a facility (border leaf -> DC, provider router -> region, ISP PE -> ISP),
   when the circuit is created or its ends change: nothing re-runs it on a later `deployment` edit (the check reports

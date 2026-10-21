@@ -37,9 +37,9 @@ from .devices import standalone_vlan_domain_name
 from .protocols import DcimPhysicalDevice, ManagedStandaloneVlanDomain, ManagedVlanDomainSegment
 
 # Devices that act as a deployment's EVPN Multi-Site border gateway for a
-# stretched segment: the DC's border leaves and the metro's edges. `edge` is
-# also the colocation metro's on-ramp router — its only VTEP, so it is both
-# the metro's border gateway and (via AppInstance resolution, not here) where
+# stretched segment: the DC's border leaves and the colocation edges. `edge` is
+# also the on-ramp router of a colocation zone or virtual colocation — its only
+# VTEP, so it is both the metro site's border gateway and (via AppInstance resolution, not here) where
 # a stretched segment's customer ports land.
 BORDER_GATEWAY_ROLES = frozenset({"border-leaf", "edge"})
 # Interface kinds whose segment tag puts the device's VLAN domain in scope. A
@@ -178,9 +178,12 @@ class VlanDomainMixin:
     @staticmethod
     def _device_deployment_ids(hosting_parent: dict[str, Any]) -> list[str]:
         """Deployment ids whose devices a segment can land on: the hosting
-        parent itself (border leaves, a metro's edges) plus, for a DC, each of
-        its pods — leafs and ToRs are deployed into the pod, not the DC. The
-        queries select ids only on TopologyPod children."""
+        parent itself (a DC's border leaves) plus its children that deploy
+        devices: each pod of a DC (leafs and ToRs are deployed into the pod, not
+        the DC), each zone and virtual colocation of a metro (the edges are
+        deployed into those, the metro owns none). The queries select ids only
+        on TopologyPod, TopologyColocationZone and TopologyVirtualColocation
+        children."""
         pod_ids = [child["id"] for child in hosting_parent.get("children") or [] if child.get("id")]
         return [hosting_parent["id"], *pod_ids]
 

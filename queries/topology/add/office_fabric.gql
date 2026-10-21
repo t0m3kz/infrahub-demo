@@ -9,8 +9,8 @@ query topology_office_fabric($name: String!) {
         # instead of skipping the exit on a race. An office is always PROD (no environment).
         sdwan_gateway { node { id } }
         # The opt-in: an office with no fabric_templates has no fabric and the
-        # generator no-ops (the same entries as a colocation metro's, see
-        # colocation_metro.gql). template_kind is aliased because clean_data()
+        # generator no-ops (the same entries as a colocation zone's, see
+        # colocation_zone.gql). template_kind is aliased because clean_data()
         # strips "__" out of any key it finds, so a bare __typename would arrive
         # as "typename".
         fabric_templates {

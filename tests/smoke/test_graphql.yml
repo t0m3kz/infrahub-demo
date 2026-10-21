@@ -59,6 +59,14 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: virtual_colocation_config
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/config/virtual_colocation.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: oob_config
     tests:
       - name: syntax_check

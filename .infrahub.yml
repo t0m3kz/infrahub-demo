@@ -181,6 +181,16 @@ artifact_definitions:
     transformation: cloud-vpc-terraform
     parameters:
       account: name__value
+  # One Equinix Network Edge Terraform file per virtual colocation routed to
+  # terraform (infrastructure_orchestrator): the virtual_colocation_terraform
+  # group. Not topology_terraform (a customer footprint's tfvars).
+  - name: virtual_colocation_terraform
+    artifact_name: terraform
+    content_type: text/plain
+    targets: virtual_colocation_terraform
+    transformation: virtual-colocation-terraform
+    parameters:
+      instance: name__value
   - name: topology_orchestrator_ansible_inventory
     artifact_name: ansible-inventory
     content_type: text/plain
@@ -354,6 +364,11 @@ check_definitions:
   - name: validate_circuit_placement
     class_name: CheckCircuitPlacement
     file_path: checks/circuit_placement.py
+  # Targetless: a name must be unique across metros, zones and virtual
+  # colocations, and a footprint's serving zone is judged against its metro.
+  - name: validate_colocation_placement
+    class_name: CheckColocationPlacement
+    file_path: checks/colocation_placement.py
   # Targetless: a dependency spans two applications, and an external target
   # is no object at all.
   - name: validate_app_dependency
@@ -587,6 +602,16 @@ python_transforms:
         - transforms/
         - templates/
         - utils/
+  - name: virtual-colocation-terraform
+    class_name: VirtualColocationTerraform
+    file_path: transforms/colocation/virtual_colocation.py
+    watch:
+      files:
+        - transforms/colocation/virtual_terraform.py
+        - transforms/cloud/terraform_common.py
+        - transforms/helpers/templates.py
+        - templates/configs/equinix/virtual_colocation.tf.j2
+        - utils/data_cleaning.py
   - name: cloud-vpc-terraform
     class_name: CloudVpcTerraform
     file_path: transforms/cloud/vpc_terraform.py
@@ -698,6 +723,10 @@ queries:
     file_path: queries/topology/add/vrf_namespace.gql
   - name: colocation_metro_data
     file_path: queries/topology/add/colocation_metro.gql
+  - name: colocation_zone_data
+    file_path: queries/topology/add/colocation_zone.gql
+  - name: virtual_colocation_data
+    file_path: queries/topology/add/colocation_virtual.gql
   - name: office_fabric_data
     file_path: queries/topology/add/office_fabric.gql
   - name: circuit_data
@@ -726,6 +755,8 @@ queries:
     file_path: queries/validation/physical_circuit_ports.gql
   - name: circuit_placement
     file_path: queries/validation/circuit_placement.gql
+  - name: colocation_placement
+    file_path: queries/validation/colocation_placement.gql
   - name: app_dependency_validation
     file_path: queries/validation/app_dependency.gql
   - name: hypervisor_environment
@@ -741,6 +772,8 @@ queries:
     file_path: queries/topology/rack.gql
   - name: cloud_vpc_config
     file_path: queries/config/cloud_vpc.gql
+  - name: virtual_colocation_config
+    file_path: queries/config/virtual_colocation.gql
   - name: proposed_change_artifacts
     file_path: queries/topology/add/proposed_change_artifacts.gql
   - name: mlag_domain_data
@@ -755,6 +788,8 @@ queries:
     file_path: queries/topology/add/application_orchestrator_routing.gql
   - name: customer_deployment_orchestrator_routing
     file_path: queries/topology/add/customer_deployment_orchestrator_routing.gql
+  - name: virtual_colocation_orchestrator_routing
+    file_path: queries/topology/add/virtual_colocation_orchestrator_routing.gql
   - name: topology_orchestrator_routing_data
     file_path: queries/topology/add/topology_orchestrator_routing_data.gql
   - name: application_orchestrator_routing_data
@@ -1019,6 +1054,32 @@ generator_definitions:
       files:
         - generators/
         - utils/
+  - name: add_colocation_zone
+    file_path: generators/topology/colocation_fabric.py
+    targets: colocation_zones
+    query: colocation_zone_data
+    class_name: ColocationZoneGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
+  - name: add_virtual_colocation
+    file_path: generators/topology/colocation_fabric.py
+    targets: virtual_colocations
+    query: virtual_colocation_data
+    class_name: VirtualColocationGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
   - name: add_office_fabric
     file_path: generators/topology/office_fabric.py
     targets: customer_deployments_office
@@ -1059,7 +1120,7 @@ generator_definitions:
         - generators/
         - utils/
   # One definition per customer deployment kind, each targeting the kind's
-  # own CoreGeneratorGroup: every footprint is already a member of that group
+  # own target group: every footprint is already a member of that group
   # (the per-kind created-triggers require it). Same class and query; the
   # query reads all four kinds by name and the footprint's computed name is
   # unique across them.
@@ -1107,6 +1168,21 @@ generator_definitions:
     targets: customer_deployments_office
     query: customer_deployment_orchestrator_routing
     class_name: TopologyOrchestratorRoutingGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+    watch:
+      files:
+        - generators/
+        - utils/
+  # A provider-hosted colocation presence: only `terraform` has an artifact
+  # (group virtual_colocation_terraform); every VC is already in virtual_colocations.
+  - name: add_virtual_colocation_orchestrator_routing
+    file_path: generators/topology/orchestrator_routing.py
+    targets: virtual_colocations
+    query: virtual_colocation_orchestrator_routing
+    class_name: VirtualColocationOrchestratorRoutingGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:

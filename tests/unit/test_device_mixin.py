@@ -700,7 +700,7 @@ class TestEnsureHaInterfaces:
         """A port carrying the HA sync link must not keep DcimInterface's
         `free` default — it is in service, exactly like both ends of any cable
         create_connections() lays. Caught live on a colocation metro, where
-        fw-fr01:HA1 sat at `free` while cabled to fw-fr02:HA1."""
+        fw-fr201:HA1 sat at `free` while cabled to fw-fr202:HA1."""
         gen = self._gen()
         ha_obj = MagicMock(id="ha-1", capabilities=_mock_relmgr(["dev-1", "dev-2"]))
         dev_1 = MagicMock(id="dev-1", deployment=MagicMock(initialized=False))

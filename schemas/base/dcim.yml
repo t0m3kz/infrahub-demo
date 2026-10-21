@@ -594,6 +594,35 @@ nodes:
         kind: Number
         optional: true
         order_weight: 2200
+      # How a provider-hosted instance is ORDERED from the platform that runs it
+      # (Equinix Network Edge today), read from the virtual device template by the
+      # virtual colocation Terraform transform (transforms/colocation/). Set on
+      # templates; accounts, notification lists and licence tokens are never
+      # stored here, they are Terraform variables.
+      - name: provider_type_code
+        label: Provider Type Code
+        kind: Text
+        optional: true
+        order_weight: 2300
+        description: "Provider's device type code (Equinix Network Edge type_code, e.g. C8000V, PA-VM)"
+      - name: provider_package_code
+        label: Provider Package Code
+        kind: Text
+        optional: true
+        order_weight: 2310
+        description: "Provider's software package code (Equinix Network Edge package_code, e.g. network-essentials)"
+      - name: provider_version
+        label: Provider Version
+        kind: Text
+        optional: true
+        order_weight: 2320
+        description: "Software version as the provider names it (Equinix Network Edge version, e.g. 17.12.01a)"
+      - name: provider_term_length
+        label: Provider Term (months)
+        kind: Number
+        optional: true
+        order_weight: 2330
+        description: "Contract term in months (Equinix Network Edge term_length: 1, 12, 24, 36)"
     relationships:
       - name: hosting_device
         peer: DcimPhysicalDevice

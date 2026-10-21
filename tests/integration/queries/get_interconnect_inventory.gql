@@ -1,5 +1,6 @@
-# The circuit layer of a branch. A location carries its kind, its parent (a cage's metro, a footprint's facility)
-# and a footprint's owner, an end its device's deployment: what test_62 checks circuit placement against.
+# The circuit layer of a branch. A location carries its kind, its parent (a cage's or virtual colocation's metro, a
+# footprint's facility) and a footprint's owner, an end its device's deployment (an on-ramp edge: its zone or virtual
+# colocation, with that one's metro): what test_62 checks circuit placement against.
 query GetInterconnectInventory {
   TopologyPhysicalCircuit {
     edges {
@@ -142,6 +143,17 @@ fragment CircuitLocation on TopologyConnectableLocation {
       }
     }
   }
+  ... on TopologyVirtualColocation {
+    parent {
+      node {
+        id
+        __typename
+        name {
+          value
+        }
+      }
+    }
+  }
   ... on TopologyCustomerDC {
     parent {
       node {
@@ -206,6 +218,26 @@ fragment CircuitEndDevice on DcimDevice {
         name {
           value
         }
+        ... on TopologyColocationZone {
+          parent {
+            node {
+              id
+              name {
+                value
+              }
+            }
+          }
+        }
+        ... on TopologyVirtualColocation {
+          parent {
+            node {
+              id
+              name {
+                value
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -216,6 +248,26 @@ fragment CircuitEndDevice on DcimDevice {
         __typename
         name {
           value
+        }
+        ... on TopologyColocationZone {
+          parent {
+            node {
+              id
+              name {
+                value
+              }
+            }
+          }
+        }
+        ... on TopologyVirtualColocation {
+          parent {
+            node {
+              id
+              name {
+                value
+              }
+            }
+          }
         }
       }
     }

@@ -15,18 +15,18 @@ the segments it serves and the rules into them. The render is not
 device-agnostic: place_policies_in_contexts() (transforms/helpers/firewall.py)
 gives a context only the rules of the segments of the deployments it serves,
 so the render runs on every member of the cluster serving the policy's source
-segment (c001-nordix-prod-p, deployment C001-P-FR — the FR metro's firewall
+segment (c001-nordix-prod-p, deployment C001-P-FR — the FR2 zone's firewall
 pair), whose rules are in that segment's own policy
 (seg-c001-nordix-prod-p-egress), and once on a firewall outside it that must
 not carry the rules.
 
 The same module then covers the inter-VRF exchange legs the customer boarding
 generators build through each firewall context (utils/exchange_transit.py), a
-DC's and the FR colocation metro's alike:
-CheckFirewall on a DC10 (Check Point), DC11 and FR (PAN-OS) member, the rendered
+DC's and the FR2 colocation zone's alike:
+CheckFirewall on a DC10 (Check Point), DC11 and FR2 (PAN-OS) member, the rendered
 firewall config of every site (leg interface, VIP, default route via the INTERNET
 leg, PROD/NON-PROD isolation), a DC11 border-leaf config carrying the
-transit VRF routes, and the FR edges' config carrying the metro's transit legs. Everything is derived from the loaded graph and from
+transit VRF routes, and the FR edges' config carrying the zone's transit legs. Everything is derived from the loaded graph and from
 test_constants' environment-driven expectations.
 
 A last step runs CheckLispFabric and renders every switch of the offices' LISP fabrics (add_office_fabric): the
@@ -129,7 +129,7 @@ EXPECTED_DESTINATION_CIDRS = ("10.40.0.0/16", "198.18.0.0/24", "198.51.100.0/24"
 EXPECTED_RULE_NAMES = ("nordix-prod-to-aws", "nordix-prod-to-partner-acme", "nordix-prod-to-saas-zscaler")
 
 # The policy's source segment -> its colocation deployment -> the serving
-# context's HA cluster, plus the firewalls of the metro the deployment sits in.
+# context's HA cluster, plus the firewalls of the serving zone the deployment names.
 SOURCE_SEGMENT = "c001-nordix-prod-p"
 SERVING_CLUSTER_QUERY = """
 query ($segment: String!) {
@@ -142,11 +142,9 @@ query ($segment: String!) {
               serving_firewall_context { node { name { value } cluster { node { id } } } }
             }
             ... on TopologyCustomerColocation {
-              parent {
+              serving_zone {
                 node {
-                  ... on TopologyColocationMetro {
-                    devices(role__value: "firewall") { edges { node { name { value } } } }
-                  }
+                  devices(role__value: "firewall") { edges { node { name { value } } } }
                 }
               }
             }
@@ -293,7 +291,7 @@ def _management_border_leaf_errors(device: str, rendered: str, contexts: list[di
 
 
 def _site_contexts(inventory: dict[str, list[dict[str, Any]]]) -> dict[tuple[str, str | None], dict[str, Any]]:
-    """The 30_all firewall contexts keyed (site, tenant): a DC or a served colocation metro (FR), tenant None for the shared one."""
+    """The 30_all firewall contexts keyed (site, tenant): a DC or a serving colocation zone (FR2), tenant None for the shared one."""
     by_key, _ = match_transit_contexts(
         inventory["contexts"],
         ALL_DEMO_DC_NAMES,
@@ -398,7 +396,7 @@ def _interface_block(rendered: str, interface: str) -> str | None:
 
 
 def _edge_transit_errors(device: str, rendered: str, context: dict[str, Any]) -> list[str]:
-    """What a metro edge must render for the transit legs of its shared firewall context.
+    """What a zone's edge must render for the transit legs of its shared firewall context.
 
     The firewall-role ports tagged with the context are trunks of every transit VLAN; each VLAN has
     its L2VNI (`vn-segment` of transit_vni) and an `interface Vlan<N>` in the leg's VRF with the
@@ -463,7 +461,7 @@ def _edge_transit_errors(device: str, rendered: str, context: dict[str, Any]) ->
 
 
 def _fabric_pair_errors(device: str, rendered: str) -> list[str]:
-    """What an edge of a two-edge metro must render for its FABRIC iBGP session and Multi-Site tracking.
+    """What an edge of a two-edge zone must render for its FABRIC iBGP session and Multi-Site tracking.
 
     Exactly one neighbour inherits FABRIC-PEERS-SESSION: iBGP (remote-as equal to the
     process's own AS, the site AS), no peer-type, no update-source, `RM-FABRIC-OUT` out on
@@ -600,7 +598,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         scenario_branch: str,
     ) -> dict[str, Any]:
         """The firewall cluster whose context serves the policy's source
-        segment: {"members", "metro_firewalls", "outsider", "context"}, names sorted.
+        segment: {"members", "zone_firewalls", "outsider", "context"}, names sorted.
         outsider is a firewall outside the cluster on the members' platform,
         so its template renders rule names too. Function-scoped: an async
         fixture can't be class-scoped under this suite's function-scoped
@@ -614,10 +612,8 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         context = (deployment.get("serving_firewall_context") or {}).get("node") or {}
         cluster_id = ((context.get("cluster") or {}).get("node") or {}).get("id")
         assert cluster_id, f"no serving firewall context with a cluster for '{SOURCE_SEGMENT}'"
-        metro = (deployment.get("parent") or {}).get("node") or {}
-        metro_firewalls = sorted(
-            edge["node"]["name"]["value"] for edge in (metro.get("devices") or {}).get("edges", [])
-        )
+        zone = (deployment.get("serving_zone") or {}).get("node") or {}
+        zone_firewalls = sorted(edge["node"]["name"]["value"] for edge in (zone.get("devices") or {}).get("edges", []))
 
         devices = await async_client_main.filters(
             kind=DcimPhysicalDevice, role__value="firewall", capabilities__ids=[cluster_id], branch=scenario_branch
@@ -638,7 +634,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         )
         return {
             "members": members,
-            "metro_firewalls": metro_firewalls,
+            "zone_firewalls": zone_firewalls,
             "outsider": outsiders[0] if outsiders else None,
             "context": str((context.get("name") or {}).get("value") or ""),
         }
@@ -646,15 +642,15 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
     @pytest.mark.order(398)
     @pytest.mark.dependency(scope="session", name="all_demo_firewall_cluster", depends=["all_demo_inventory"])
     @pytest.mark.asyncio
-    async def test_00_serving_cluster_is_the_metro_pair(self, serving_cluster: dict[str, Any]) -> None:
+    async def test_00_serving_cluster_is_the_zone_pair(self, serving_cluster: dict[str, Any]) -> None:
         """The context serving a colocation deployment lives on the firewall
-        pair of the metro the deployment sits in, not on some DC's cluster."""
+        pair of its serving zone, not on some DC's cluster."""
         logging.info("=== %s - Step 0: Serving Cluster ===", SCENARIO_NAME)
 
         assert len(serving_cluster["members"]) == 2, f"serving cluster is not a pair: {serving_cluster['members']}"
-        assert serving_cluster["members"] == serving_cluster["metro_firewalls"], (
+        assert serving_cluster["members"] == serving_cluster["zone_firewalls"], (
             f"'{SOURCE_SEGMENT}' is served by cluster {serving_cluster['members']}, "
-            f"expected its metro's firewalls {serving_cluster['metro_firewalls']}"
+            f"expected its serving zone's firewalls {serving_cluster['zone_firewalls']}"
         )
         logging.info("Serving cluster: %s", serving_cluster["members"])
 
@@ -727,7 +723,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
             ("", None),
         )
         assert inventory_context is not None and site in ALL_DEMO_COLOCATION_SITE_DEPLOYMENTS, (
-            f"serving context '{context}' is not a served colocation metro's shared context"
+            f"serving context '{context}' is not a serving colocation zone's shared context"
         )
         expected = next(e for e in ALL_DEMO_EXPECTED_TRANSIT_CONTEXTS if e["site"] == site and e["tenant"] is None)
         platform_by_name = await _platform_by_name(async_client_main, scenario_branch)
@@ -761,7 +757,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
     @pytest.mark.order(400)
     @pytest.mark.dependency(scope="session", depends=["all_demo_exchange_transit"])
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("dc", ["DC10", "DC11", "FR"])
+    @pytest.mark.parametrize("dc", ["DC10", "DC11", "FR2"])
     async def test_03_check_firewall_passes_on_transit_dcs(
         self,
         async_client_main: InfrahubClient,
@@ -769,7 +765,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         dc: str,
     ) -> None:
         """CheckFirewall (incl. validate_exchange_gateways) passes on a member of
-        DC10's Check Point pair, DC11's PAN-OS pair and the FR metro's PAN-OS
+        DC10's Check Point pair, DC11's PAN-OS pair and the FR2 zone's PAN-OS
         pair: one local leg per exchange namespace, in a /29, tagged with the
         transit VLAN."""
         logging.info("=== %s - Step 3: CheckFirewall (%s transit legs) ===", SCENARIO_NAME, dc)
@@ -1142,13 +1138,13 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """All four metro edges are BGWs: INTERNET type-5 upstream, and the FABRIC pair session.
+        """All four colocation edges are BGWs: INTERNET type-5 upstream, and the FABRIC pair session.
 
-        Every edge (ALL_DEMO_INTERNET_BGWS: eg-fr01/02, eg-pa01/02) carries the
+        Every edge (ALL_DEMO_INTERNET_BGWS: eg-fr201/202, eg-pa401/402) carries the
         INTERNET L3 VNI and the global route-target in `vrf context INTERNET`,
         advertises it into EVPN under `vrf INTERNET`, and filters the transit
         session (default-only in, only the public SNAT block out, aggregated
-        with summary-only). Each edge also peers its metro partner over the
+        with summary-only). Each edge also peers its zone partner over the
         interlink: one `FABRIC-PEERS` neighbour (iBGP, remote-as = the site AS,
         no peer-type, no update-source, `RM-FABRIC-OUT` out), `evpn multisite
         fabric-tracking` on the interlink port only and `dci-tracking` on the
@@ -1215,12 +1211,12 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
         async_client_main: InfrahubClient,
         scenario_branch: str,
     ) -> None:
-        """Each FR metro edge renders the shared context's transit legs; the PA edges render none.
+        """Each FR2 edge renders the shared context's transit legs; the PA edges render none.
 
         The edges are the border leafs' counterpart for a colocation context (a trunk of the
         transit VLANs on the firewall-role port, transit L2VNI, anycast SVI per VRF, the 0/0 and SNAT
         /32 statics inside their `vrf context`); see _edge_transit_errors. The statics stay local:
-        INTERNET's SNAT /32 is redistributed into EVPN, PROD's 0/0 is not. The edges of a metro
+        INTERNET's SNAT /32 is redistributed into EVPN, PROD's 0/0 is not. The edges of a zone
         without a firewall pair carry no transit VLAN, SVI or static-route map.
         """
         logging.info("=== %s - Step 6: Render edge firewall transit legs ===", SCENARIO_NAME)
@@ -1232,7 +1228,7 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
             context = contexts.get((site, None))
             assert context is not None, f"{site}: no shared firewall context"
             edges = sorted({str(port["device"]) for port in context["border_ports"]})
-            assert len(edges) == 2, f"{site}: service ports on {edges}, expected both edges of the metro"
+            assert len(edges) == 2, f"{site}: service ports on {edges}, expected both edges of the zone"
             served_edges.update(edges)
             for device in edges:
                 rendered = await render_device_config(
@@ -1245,9 +1241,9 @@ class TestAllDemoFirewallConfig(TestInfrahubDockerWithClient):
                 async_client_main, scenario_branch, device, query="edge_config", transform_cls=Edge
             )
             if re.search(r"^interface Vlan3[0-7]\d{2}$", rendered, re.MULTILINE):
-                errors.append(f"{device}: renders a transit SVI, its metro has no firewall pair")
+                errors.append(f"{device}: renders a transit SVI, its zone has no firewall pair")
             if "switchport trunk allowed vlan" in rendered or "PL-VRF-STATIC" in rendered:
-                errors.append(f"{device}: renders a transit trunk or exchange static, its metro has no firewall pair")
+                errors.append(f"{device}: renders a transit trunk or exchange static, its zone has no firewall pair")
 
         assert served_edges, "no edge carries a firewall context"
         assert not errors, f"Edge firewall transit legs on branch '{scenario_branch}' are wrong:\n" + "\n".join(

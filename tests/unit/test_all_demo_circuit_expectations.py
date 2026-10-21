@@ -19,10 +19,11 @@ _ZONES = {name(zone) for zone in distinct(declared("TopologyColocationZone", ROO
 
 
 def test_facility_and_tenant_kinds_come_from_the_schema() -> None:
-    """A physical circuit ends on the six TopologyFacility kinds; a footprint is a TopologyCustomer, never a facility."""
+    """A physical circuit ends on the seven TopologyFacility kinds; a footprint is a TopologyCustomer, never a facility."""
     assert ALL_DEMO_FACILITY_KINDS == {
         "TopologyDataCenter",
         "TopologyColocationZone",
+        "TopologyVirtualColocation",
         "TopologyCloudRegion",
         "TopologyExternalProviders",
         "TopologySaasRegion",

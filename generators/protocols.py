@@ -112,6 +112,14 @@ class TopologyDeviceHosting(CoreNode):
     devices: RelationshipManager[DcimDevice]
 
 
+class TopologyColocationFabric(CoreNode):
+    design: RelationshipAttribute[TopologyTemplateColocationZone]
+    fabric_templates: RelationshipManager[TopologyElement]
+    loopback_pool: RelationshipAttribute[CoreIPAddressPool]
+    management_pool: RelationshipAttribute[CoreIPAddressPool]
+    technical_pool: RelationshipAttribute[CoreIPPrefixPool]
+
+
 class TopologyDeviceNaming(CoreNode):
     naming_convention: Dropdown
 
@@ -386,12 +394,11 @@ class TopologyColocationMetro(
     TopologyDeviceNaming,
     TopologySegmentHosting,
 ):
-    deployment_type: Dropdown
+    design: RelationshipAttribute[TopologyTemplateColocationMetro]
     fabric_asn_pool: RelationshipAttribute[CoreNumberPool]
-    fabric_templates: RelationshipManager[TopologyElement]
     location: RelationshipAttribute[LocationMetro]
-    loopback_pool: RelationshipAttribute[CoreIPAddressPool]
-    management_pool: RelationshipAttribute[CoreIPAddressPool]
+    loopback_pool: RelationshipAttribute[CoreIPPrefixPool]
+    management_pool: RelationshipAttribute[CoreIPPrefixPool]
     technical_pool: RelationshipAttribute[CoreIPPrefixPool]
 
 
@@ -400,10 +407,21 @@ class TopologyColocationZone(
     TopologyPhysicalDeployment,
     TopologyRackHosting,
     TopologyDeviceHosting,
+    TopologyColocationFabric,
     TopologyConnectableLocation,
     TopologyFacility,
 ):
-    deployment_type: Dropdown
+    pass
+
+
+class TopologyVirtualColocation(
+    TopologyDeployment,
+    TopologyDeviceHosting,
+    TopologyColocationFabric,
+    TopologyConnectableLocation,
+    TopologyFacility,
+):
+    pass
 
 
 class AppComponent(AppGeneric):
@@ -455,6 +473,7 @@ class TopologyCustomerColocation(
     TopologyCustomer, TopologyEnvironmentScoped, TopologyDeployment, TopologyConnectableLocation, ManagedTenantScoped
 ):
     name: StringOptional
+    serving_zone: RelationshipAttribute[TopologyColocationZone]
 
 
 class TopologyCustomerDC(
@@ -841,6 +860,21 @@ class TopologyTemplatePod(CoreNode):
     name: String
     spine_downlink_ports_per_spine: IntegerOptional
     tor_uplinks_to_spine: IntegerOptional
+
+
+class TopologyTemplateColocationMetro(CoreNode):
+    description: StringOptional
+    max_zones: Integer
+    name: String
+    zone_templates: RelationshipManager[TopologyTemplateColocationZone]
+
+
+class TopologyTemplateColocationZone(CoreNode):
+    description: StringOptional
+    max_edges: Integer
+    max_firewalls: Integer
+    max_load_balancers: Integer
+    name: String
 
 
 class ProxyPolicy(CoreNode):
